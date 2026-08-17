@@ -1,6 +1,3 @@
-# BMAD generated artifacts
-_bmad-output/
-
 # Environment / secrets
 .env
 .env.*
