@@ -1,6 +1,6 @@
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import type { Presentation } from '../core/presentation';
+import type { Presentation } from '../domain/presentation';
 import './PresentationPreview.css';
 
 interface Props {

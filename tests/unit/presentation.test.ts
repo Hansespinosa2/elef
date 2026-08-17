@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { parseMarkdown } from './markdown';
-import { readUtf8Markdown } from './file';
-import { hasUnsavedChanges } from './document';
+import { parseMarkdown } from '../../src/domain/presentation/markdown';
+import { readUtf8Markdown } from '../../src/core/file';
+import { hasUnsavedChanges } from '../../src/domain/presentation/document';
 
 describe('parseMarkdown', () => {
   it('splits ordered slides on standalone separators', () => {
