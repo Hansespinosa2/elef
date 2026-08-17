@@ -8,8 +8,7 @@
   },
   "package": {
     "productName": "Elef",
-    "version": "0.1.0",
-    "identifier": "com.elef.presentation"
+    "version": "0.1.0"
   },
   "tauri": {
     "allowlist": {
@@ -17,6 +16,7 @@
       "fs": { "readFile": true, "scope": ["$HOME/**", "$DOCUMENT/**", "$DOWNLOAD/**"] }
     },
     "windows": [{ "title": "Elef", "width": 1280, "height": 800, "resizable": true }],
+    "bundle": { "identifier": "com.elef.presentation" },
     "security": { "csp": "default-src 'self' ipc: http://ipc.localhost; img-src 'self' data: https:;" }
   }
 }
