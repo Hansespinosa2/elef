@@ -2,7 +2,8 @@
 title: 'Desktop Markdown presentation renderer'
 type: 'feature'
 created: '2026-08-17'
-status: 'draft'
+status: 'in-progress'
+baseline_commit: '47aa32bf92031f3a46bb1de8c0595f595b191889'
 review_loop_iteration: 0
 context: []
 ---
@@ -67,4 +68,3 @@ context: []
 - `npm test` -- expected: parser and UI-adjacent unit tests pass.
 - `npm run build` -- expected: browser production build completes with no TypeScript errors.
 - `npm run tauri build` -- expected: desktop bundle completes when the local Tauri toolchain is available.
-
