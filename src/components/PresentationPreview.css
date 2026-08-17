@@ -1,0 +1,8 @@
+.slide-list { display: grid; gap: 2rem; width: min(100%, 1100px); margin: 0 auto; }
+.slide { position: relative; aspect-ratio: 16 / 9; overflow: auto; padding: clamp(1.5rem, 5vw, 5rem); background: #fff; color: #162033; border-radius: 8px; box-shadow: 0 16px 40px #050b1630; font-size: clamp(.75rem, 1.5vw, 1.5rem); }
+.slide h1, .slide h2, .slide h3 { margin-top: 0; color: #0e7490; }
+.slide img { max-width: 100%; max-height: 45%; object-fit: contain; }
+.slide pre { overflow: auto; padding: 1rem; border-radius: 6px; background: #edf2f7; font-size: .75em; }
+.slide blockquote { border-left: 4px solid #67e8f9; padding-left: 1rem; }
+.slide-number { position: absolute; right: 1.5rem; bottom: 1rem; color: #64748b; font-size: .65em; }
+.empty-slide { color: #64748b; font-style: italic; }

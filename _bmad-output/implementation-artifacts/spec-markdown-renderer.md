@@ -2,7 +2,7 @@
 title: 'Desktop Markdown presentation renderer'
 type: 'feature'
 created: '2026-08-17'
-status: 'in-progress'
+status: 'done'
 baseline_commit: '47aa32bf92031f3a46bb1de8c0595f595b191889'
 review_loop_iteration: 0
 context: []
@@ -40,6 +40,7 @@ context: []
 - `package.json` -- Node/Vite/React/TypeScript scripts and runtime dependencies to establish the frontend build.
 - `src/core/presentation.ts` -- framework-agnostic presentation and slide types.
 - `src/core/markdown.ts` -- deterministic Markdown-to-slide parsing and rendering input preparation; no Tauri or Rails imports.
+- `src/core/file.ts` -- UTF-8 file-reading boundary shared by browser loading and its tests.
 - `src/core/*.test.ts` -- unit coverage for separators, empty slides, ordering, and supported Markdown input.
 - `src/App.tsx` -- application state, file loading boundary, and error presentation.
 - `src/components/PresentationPreview.tsx` -- 16:9 slide canvas and ordered slide rendering.
@@ -49,11 +50,11 @@ context: []
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `package.json`, `vite.config.*`, `tsconfig*.json`, `index.html` -- establish reproducible React/TypeScript/Vite scripts and dependencies -- provide browser and desktop build inputs.
-- [ ] `src/core/presentation.ts`, `src/core/markdown.ts` -- define the portable model and Markdown slide parser -- make the renderer testable without a desktop shell.
-- [ ] `src/core/*.test.ts` -- cover the I/O matrix and deterministic ordering -- prevent regressions in the source contract.
-- [ ] `src/components/PresentationPreview.tsx`, `src/App.tsx` -- render slides and expose local-file loading plus errors -- deliver the usable vertical slice.
-- [ ] `src-tauri/` -- add the minimal Tauri shell and file-open bridge -- make desktop the primary runtime without coupling the core.
+- [x] `package.json`, `vite.config.*`, `tsconfig*.json`, `index.html` -- establish reproducible React/TypeScript/Vite scripts and dependencies -- provide browser and desktop build inputs.
+- [x] `src/core/presentation.ts`, `src/core/markdown.ts`, `src/core/file.ts` -- define the portable model, Markdown slide parser, and UTF-8 file boundary -- make the renderer testable without a desktop shell.
+- [x] `src/core/*.test.ts` -- cover the I/O matrix and deterministic ordering -- prevent regressions in the source contract.
+- [x] `src/components/PresentationPreview.tsx`, `src/App.tsx` -- render slides and expose local-file loading plus errors -- deliver the usable vertical slice.
+- [x] `src-tauri/` -- add the minimal Tauri shell and file-open bridge -- make desktop the primary runtime without coupling the core.
 
 **Acceptance Criteria:**
 - Given a valid Markdown file with `---` separators, when it is opened, then the app renders the same number of ordered slides and preserves supported Markdown semantics.
@@ -68,3 +69,29 @@ context: []
 - `npm test` -- expected: parser and UI-adjacent unit tests pass.
 - `npm run build` -- expected: browser production build completes with no TypeScript errors.
 - `npm run tauri build` -- expected: desktop bundle completes when the local Tauri toolchain is available.
+
+## Suggested Review Order
+
+**Application boundary**
+
+- The app routes browser and native file inputs through one parser and explicit error state.
+  [`App.tsx:27`](../../src/App.tsx#L27)
+
+- Native file bytes use the same strict UTF-8 boundary as browser files.
+  [`App.tsx:36`](../../src/App.tsx#L36)
+
+**Portable rendering core**
+
+- The parser defines deterministic slide boundaries while protecting fenced code content.
+  [`markdown.ts:8`](../../src/core/markdown.ts#L8)
+
+- The preview renders the portable model as ordered 16:9 Markdown slides.
+  [`PresentationPreview.tsx:10`](../../src/components/PresentationPreview.tsx#L10)
+
+**Desktop shell and verification**
+
+- Tauri permissions and packaging identify the desktop runtime without embedding Rails.
+  [`tauri.conf.json:2`](../../src-tauri/tauri.conf.json#L2)
+
+- Tests cover ordering, empty slides, fenced content, and invalid or valid UTF-8 input.
+  [`markdown.test.ts:4`](../../src/core/markdown.test.ts#L4)

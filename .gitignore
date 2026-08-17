@@ -13,3 +13,11 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Build artifacts and dependencies
+node_modules/
+dist/
+src-tauri/target/
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts
