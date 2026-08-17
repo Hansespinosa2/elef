@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseMarkdown } from './markdown';
 import { readUtf8Markdown } from './file';
+import { hasUnsavedChanges } from './document';
 
 describe('parseMarkdown', () => {
   it('splits ordered slides on standalone separators', () => {
@@ -10,6 +11,14 @@ describe('parseMarkdown', () => {
 
   it('returns one slide when no separator exists', () => {
     expect(parseMarkdown('hello').slides).toHaveLength(1);
+  });
+
+  it('returns one empty slide for a blank document', () => {
+    expect(parseMarkdown('').slides.map((slide) => slide.markdown)).toEqual(['']);
+  });
+
+  it('updates ordered slides when source gains a separator', () => {
+    expect(parseMarkdown('# One\n---\n# Two').slides.map((slide) => slide.markdown)).toEqual(['# One', '# Two']);
   });
 
   it('preserves leading, consecutive, and trailing empty slides', () => {
@@ -39,5 +48,11 @@ describe('parseMarkdown', () => {
     await expect(readUtf8Markdown(async () => {
       throw new Error('read failed');
     })).rejects.toThrow('read failed');
+  });
+
+  it('tracks unsaved changes only for an active document', () => {
+    expect(hasUnsavedChanges('', '', 'Untitled presentation')).toBe(false);
+    expect(hasUnsavedChanges('# Draft', '', 'Untitled presentation')).toBe(true);
+    expect(hasUnsavedChanges('# Draft', '', null)).toBe(false);
   });
 });
