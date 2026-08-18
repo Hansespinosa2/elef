@@ -274,6 +274,7 @@ function handleMarkdownShortcut(element: HTMLElement, event: ReactKeyboardEvent<
 
 export function PresentationPreview({ presentation, theme, source, onSourceChange }: Props) {
   const [editingSlide, setEditingSlide] = useState<number | null>(null);
+  const [editingBlock, setEditingBlock] = useState<number | null>(null);
   const [sourceBlock, setSourceBlock] = useState<{ slideIndex: number; blockIndex: number } | null>(null);
   const [sourceDraft, setSourceDraft] = useState('');
   const [overflowPrompt, setOverflowPrompt] = useState<number | null>(null);
@@ -333,14 +334,23 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
                 }
                 return;
               }
-              if (editingSlide === slide.index) return;
+              const blockElement = event.target instanceof Element
+                ? event.target.closest<HTMLElement>('[data-block-index]')
+                : null;
+              const blockIndex = blockElement ? Number(blockElement.dataset.blockIndex) : null;
+              if (editingSlide === slide.index) {
+                if (editingBlock !== blockIndex) setEditingBlock(blockIndex);
+                if (blockElement) focusEditableSlide(blockElement);
+                return;
+              }
               if (editClickTimer.current) clearTimeout(editClickTimer.current);
               const article = event.currentTarget;
               editClickTimer.current = setTimeout(() => {
                 editingSource.current = { slideIndex: slide.index, markdown: slide.markdown };
+                setEditingBlock(blockIndex);
                 setEditingSlide(slide.index);
                 requestAnimationFrame(() => {
-                  focusEditableSlide(article);
+                  focusEditableSlide(blockElement || article);
                 });
               }, 180);
             }}
@@ -354,6 +364,7 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
                   onSourceChange(replaceSlideMarkdown(source, slide.index, markdown));
                 }
                 editingSource.current = null;
+                setEditingBlock(null);
                 setEditingSlide(null);
                 if (isSlideOverBudget(markdown)) setOverflowPrompt(slide.index);
               }
@@ -384,6 +395,7 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
               ) : (
                 <div
                   className="slide-preview-block"
+                  data-block-index={blockIndex}
                   key={`preview-${blockIndex}`}
                   onDoubleClick={(event) => {
                     event.stopPropagation();
@@ -391,6 +403,7 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
                     editClickTimer.current = null;
                     setSourceBlock({ slideIndex: slide.index, blockIndex });
                     setSourceDraft(block);
+                    setEditingBlock(null);
                     setEditingSlide(null);
                   }}
                 >
@@ -398,8 +411,8 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
                     let taskIndex = 0;
                     return (
                       <ReactMarkdown
-                        remarkPlugins={editingSlide === slide.index ? [remarkGfm] : [remarkGfm, remarkMath]}
-                        rehypePlugins={editingSlide === slide.index ? [] : [rehypeKatex]}
+                        remarkPlugins={editingSlide === slide.index && editingBlock === blockIndex ? [remarkGfm] : [remarkGfm, remarkMath]}
+                        rehypePlugins={editingSlide === slide.index && editingBlock === blockIndex ? [] : [rehypeKatex]}
                         components={{
                           input: ({ checked, ...props }) => {
                             const index = taskIndex++;

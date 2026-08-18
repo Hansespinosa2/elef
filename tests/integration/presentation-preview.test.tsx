@@ -89,10 +89,25 @@ describe('PresentationPreview interactions', () => {
     vi.useFakeTimers();
     const slide = render('How does TeX work? $x=3$.');
     act(() => {
-      slide.click();
+      slide.querySelector<HTMLElement>('.slide-preview-block')!.click();
       vi.advanceTimersByTime(180);
     });
     expect(slide.querySelector('.katex')).toBeNull();
     expect(slide.textContent).toContain('$x=3$');
+  });
+
+  it('restores rendered math when focus moves to another block', () => {
+    vi.useFakeTimers();
+    const slide = render('$x=3$\n\nA separate paragraph.');
+    const blocks = slide.querySelectorAll<HTMLElement>('.slide-preview-block');
+    act(() => {
+      blocks[0].click();
+      vi.advanceTimersByTime(180);
+    });
+    expect(blocks[0].querySelector('.katex')).toBeNull();
+    act(() => {
+      blocks[1].click();
+    });
+    expect(blocks[0].querySelector('.katex')).not.toBeNull();
   });
 });
