@@ -146,13 +146,14 @@ function slideRangeForPosition(ranges: SlideSourceRange[], position: number): nu
 
 function renderSlide(markdown: string): JSX.Element {
   const math = findMathRanges(markdown);
-  if (math.some((range) => !range.valid)) {
-    return <pre className="slide-invalid-tex" role="alert">{markdown}</pre>;
-  }
+  const hasInvalidMath = math.some((range) => !range.valid);
   return (
-    <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
-      {markdown || '\u00a0'}
-    </ReactMarkdown>
+    <div className={hasInvalidMath ? 'slide-invalid-tex' : undefined}>
+      <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[[rehypeKatex, { throwOnError: false }]]}>
+        {markdown || '\u00a0'}
+      </ReactMarkdown>
+      {hasInvalidMath && <small role="status">TeX is incomplete or invalid. The original source is preserved below.</small>}
+    </div>
   );
 }
 
@@ -170,19 +171,6 @@ export function ObsidianStyleEditor({ presentation, theme, source, onSourceChang
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return undefined;
-    const rangePrototype = Range.prototype as Range & {
-      getClientRects?: () => DOMRectList;
-      getBoundingClientRect?: () => DOMRect;
-    };
-    const originalClientRects = rangePrototype.getClientRects;
-    const originalBoundingRect = rangePrototype.getBoundingClientRect;
-    const hadClientRects = typeof rangePrototype.getClientRects === 'function';
-    const hadBoundingRect = typeof rangePrototype.getBoundingClientRect === 'function';
-    if (!hadClientRects) Object.defineProperty(rangePrototype, 'getClientRects', { configurable: true, value: () => [] });
-    if (!hadBoundingRect) Object.defineProperty(rangePrototype, 'getBoundingClientRect', {
-      configurable: true,
-      value: () => ({ top: 0, bottom: 0, left: 0, right: 0, width: 0, height: 0, x: 0, y: 0, toJSON: () => ({}) }),
-    });
     const editor = new EditorView({
       state: EditorState.create({
         doc: source,
@@ -193,6 +181,15 @@ export function ObsidianStyleEditor({ presentation, theme, source, onSourceChang
           EditorView.lineWrapping,
           EditorView.decorations.compute(['doc', 'selection'], mathDecorations),
           EditorView.domEventHandlers({
+            mousedown(event, view) {
+              const position = view.posAtCoords({ x: event.clientX, y: event.clientY });
+              if (position === null) return false;
+              const match = findMathRanges(view.state.doc.toString()).find((range) => position >= range.from && position <= range.to);
+              if (!match) return false;
+              view.dispatch({ selection: { anchor: match.from } });
+              view.focus();
+              return true;
+            },
             dblclick(event, view) {
               const position = view.posAtCoords({ x: event.clientX, y: event.clientY });
               if (position === null) return false;
@@ -237,8 +234,6 @@ export function ObsidianStyleEditor({ presentation, theme, source, onSourceChang
     return () => {
       editor.destroy();
       viewRef.current = null;
-      if (!hadClientRects) Object.defineProperty(rangePrototype, 'getClientRects', { configurable: true, value: originalClientRects });
-      if (!hadBoundingRect) Object.defineProperty(rangePrototype, 'getBoundingClientRect', { configurable: true, value: originalBoundingRect });
     };
   }, []);
 
