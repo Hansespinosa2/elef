@@ -757,7 +757,7 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
             <span className="slide-number" contentEditable={false} aria-hidden="true">{slide.index + 1}</span>
           </article>
           {activeSlide === slide.index && (
-            <div className="slide-actions" aria-label={`Actions for slide ${slide.index + 1}`}>
+            <div className="slide-actions" role="group" aria-label={`Actions for slide ${slide.index + 1}`}>
               <button
                 type="button"
                 className="slide-delete-button"
@@ -770,7 +770,7 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
                   setOverflowPrompt(null);
                   changeSlide(replacement < 0 ? 0 : replacement, deleteSlideMarkdown(source, slide.index), true);
                 }}
-              >Delete slide</button>
+              >−</button>
             </div>
           )}
           {overflowSlides.has(slide.index) && (
@@ -799,11 +799,12 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
           <button
             type="button"
             className="slide-add-button"
+            aria-label={`Add slide after slide ${slide.index + 1}`}
             onClick={() => {
               setUndoDelete(null);
               changeSlide(slide.index + 1, insertSlideMarkdown(source, slide.index), true);
             }}
-          >Add slide</button>
+          >+</button>
         </div>
       ))}
       {undoDelete && (

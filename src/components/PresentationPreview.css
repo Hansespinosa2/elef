@@ -6,24 +6,34 @@
 }
 .slide-viewport { width: 100%; overflow: visible; }
 .slide-shell { position: relative; flex: 0 0 auto; }
-.slide-actions { position: absolute; top: .75rem; right: .75rem; z-index: 3; }
+.slide-actions { position: absolute; top: -.05rem; right: .7rem; z-index: 3; }
 .slide-delete-button, .slide-add-button, .slide-undo-notice button {
   min-height: 2.25rem; padding: .45rem .7rem; border: 1px solid transparent; border-radius: 6px;
   font: 600 .8rem/1.2 'DM Sans', ui-sans-serif, system-ui, sans-serif; cursor: pointer;
 }
-.slide-delete-button { color: #a33b35; background: #f8e7e3; border-color: #e2bbb5; }
-.slide-add-button { display: block; justify-self: center; color: #f7fff9; background: #2f7655; }
+.slide-delete-button {
+  width: 2.75rem; height: 2.75rem; min-height: 0; padding: 0; border-radius: 7px 0 7px 7px;
+  color: #792b27; background: #f8e7e3; border-color: #e2bbb5; font-size: 1.25rem; line-height: 1;
+}
+.slide-add-button {
+  display: block; justify-self: center; width: 2.75rem; height: 2.75rem; min-height: 0; padding: 0;
+  border: 1px solid #3d8a64; border-radius: 50%; color: #f7fff9; background: #2f7655;
+  box-shadow: 0 0 0 .3rem var(--app-bg); font-size: 1.35rem; line-height: 1;
+}
+.slide-add-button:hover { background: #255f45; transform: scale(1.08); transition: transform .15s ease, background-color .15s ease; }
 .slide-delete-button:focus-visible, .slide-add-button:focus-visible, .slide-undo-notice button:focus-visible {
   outline: 3px solid color-mix(in srgb, #2f7655 35%, transparent); outline-offset: 2px;
 }
 .slide-undo-notice { display: flex; align-items: center; justify-content: center; gap: .75rem; color: #a33b35; }
 .slide-undo-notice button { color: #f7fff9; background: #2f7655; }
 @media (max-width: 700px) {
-  .slide-actions { top: .45rem; right: .45rem; }
-  .slide-delete-button, .slide-add-button { font-size: .75rem; }
+  .slide-actions { top: 0; right: .55rem; }
+  .slide-delete-button { font-size: 1.1rem; }
 }
+
 @media (prefers-reduced-motion: reduce) {
-  .slide-undo-notice { transition: none; }
+  .slide-undo-notice, .slide-add-button { transition: none; }
+  .slide-add-button:hover { transform: none; }
 }
 
 .presentation-theme-light {

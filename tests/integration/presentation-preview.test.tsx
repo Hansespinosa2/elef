@@ -40,9 +40,14 @@ describe('PresentationPreview interactions', () => {
     render('# One\n---\n# Two', (source) => changes.push(source));
     const addButtons = Array.from(container.querySelectorAll<HTMLButtonElement>('.slide-add-button'));
     expect(addButtons).toHaveLength(2);
+    expect(addButtons[0].textContent).toBe('+');
+    expect(addButtons[0].getAttribute('aria-label')).toBe('Add slide after slide 1');
     act(() => addButtons[0].click());
     expect(changes.at(-1)).toBe('# One\n---\n\n---\n# Two');
-    act(() => container.querySelector<HTMLButtonElement>('.slide-delete-button')!.click());
+    const deleteButton = container.querySelector<HTMLButtonElement>('.slide-delete-button')!;
+    expect(deleteButton.textContent).toBe('−');
+    expect(deleteButton.getAttribute('aria-label')).toBe('Delete slide 2');
+    act(() => deleteButton.click());
     expect(changes.at(-1)).toBe('# One');
     expect(container.querySelector('.slide-undo-notice')).not.toBeNull();
   });
