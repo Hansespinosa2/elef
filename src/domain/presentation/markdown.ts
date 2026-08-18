@@ -183,6 +183,43 @@ export function splitSlideMarkdown(source: string, slideIndex: number): string |
   return `${prefix}${sections.join('\n---\n')}`;
 }
 
+export function slideContentBudget(markdown: string): number {
+  let budget = 0;
+  let fence = false;
+  for (const line of markdown.replace(/\r\n?/g, '\n').split('\n')) {
+    const trimmed = line.trim();
+    if (/^(`{3,}|~{3,})/.test(trimmed)) {
+      fence = !fence;
+      budget += 4;
+    } else if (fence) {
+      budget += 1.5;
+    } else if (!trimmed) {
+      budget += .25;
+    } else if (/^#{1}\s+/.test(trimmed)) {
+      budget += 4;
+    } else if (/^#{2}\s+/.test(trimmed)) {
+      budget += 3;
+    } else if (/^#{3}\s+/.test(trimmed)) {
+      budget += 2;
+    } else if (/^!\[.*\]\(.+\)/.test(trimmed)) {
+      budget += 4;
+    } else if (/^\|.*\|$/.test(trimmed)) {
+      budget += 2;
+    } else if (/^>\s?/.test(trimmed)) {
+      budget += 1.5;
+    } else if (/^([-*+]|\d+\.)\s+/.test(trimmed)) {
+      budget += 1;
+    } else {
+      budget += 1;
+    }
+  }
+  return budget;
+}
+
+export function isSlideOverBudget(markdown: string): boolean {
+  return slideContentBudget(markdown) > 18;
+}
+
 export function extractFirstH1(source: string): string | null {
   const frontMatter = initialFrontMatter(source);
   const content = frontMatter ? source.slice(frontMatter.bodyStart) : source;

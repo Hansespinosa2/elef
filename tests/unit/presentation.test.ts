@@ -4,6 +4,7 @@ import {
   presentationThemeFromSource,
   replaceSlideMarkdown,
   setPresentationTheme,
+  slideContentBudget,
   splitSlideMarkdown,
 } from '../../src/domain/presentation/markdown';
 import {
@@ -93,6 +94,11 @@ describe('parseMarkdown', () => {
     const updated = splitSlideMarkdown(source, 0);
     expect(updated).toBe('# One\n\nBody\n---\n## Two\n\nMore');
     expect(splitSlideMarkdown('Paragraph only', 0)).toBeNull();
+  });
+
+  it('calculates a viewport-independent weighted content budget', () => {
+    expect(slideContentBudget('# Heading')).toBe(4);
+    expect(slideContentBudget('# Heading\n\n```ts\nconst value = 1;\n```')).toBe(13.75);
   });
 
   it('normalizes stored editor choices and resolves system changes deterministically', () => {

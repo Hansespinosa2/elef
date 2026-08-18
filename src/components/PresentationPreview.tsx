@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { replaceSlideMarkdown, splitSlideMarkdown } from '../domain/presentation';
+import { isSlideOverBudget, replaceSlideMarkdown, splitSlideMarkdown } from '../domain/presentation';
 import type { Presentation, ThemeMode } from '../domain/presentation';
 import './PresentationPreview.css';
+
+const slideWidth = 1280;
+const slideHeight = 720;
 
 interface Props {
   presentation: Presentation;
@@ -73,22 +76,22 @@ function serializeSlide(element: HTMLElement): string {
 export function PresentationPreview({ presentation, theme, source, onSourceChange }: Props) {
   const [editingSlide, setEditingSlide] = useState<number | null>(null);
   const [sourceSlide, setSourceSlide] = useState<number | null>(null);
-  const [overflowSlides, setOverflowSlides] = useState<Set<number>>(new Set());
   const [overflowPrompt, setOverflowPrompt] = useState<number | null>(null);
-  const slideRefs = useRef(new Map<number, HTMLElement>());
+  const previewRef = useRef<HTMLElement>(null);
+  const [availableWidth, setAvailableWidth] = useState(slideWidth);
+  const slideScale = Math.min(1, availableWidth / slideWidth);
+  const overflowSlides = new Set(
+    presentation.slides.filter((slide) => isSlideOverBudget(slide.markdown)).map((slide) => slide.index),
+  );
   useEffect(() => {
-    const measure = () => {
-      const next = new Set<number>();
-      slideRefs.current.forEach((element, index) => {
-        if (element.scrollHeight > element.clientHeight + 4) next.add(index);
-      });
-      setOverflowSlides(next);
-    };
-    measure();
-    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
-    slideRefs.current.forEach((element) => observer?.observe(element));
+    const preview = previewRef.current;
+    if (!preview) return;
+    const updateWidth = () => setAvailableWidth(preview.clientWidth);
+    updateWidth();
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(updateWidth);
+    observer?.observe(preview);
     return () => observer?.disconnect();
-  }, [presentation.slides, sourceSlide]);
+  }, []);
   useEffect(() => {
     if (sourceSlide === null) return;
     const exitSourceMode = (event: KeyboardEvent) => {
@@ -98,15 +101,13 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
     return () => window.removeEventListener('keydown', exitSourceMode);
   }, [sourceSlide]);
   return (
-    <main className={`slide-list presentation-theme-${theme}`} aria-label={`${presentation.sourceName} slides`}>
+    <main ref={previewRef} className={`slide-list presentation-theme-${theme}`} aria-label={`${presentation.sourceName} slides`}>
       {presentation.slides.map((slide) => (
-        <div className="slide-shell" key={slide.id}>
+        <div className="slide-viewport" key={slide.id}>
+          <div className="slide-shell" style={{ width: slideWidth * slideScale, height: slideHeight * slideScale }}>
           <article
-            ref={(element) => {
-              if (element) slideRefs.current.set(slide.index, element);
-              else slideRefs.current.delete(slide.index);
-            }}
             className={`slide${editingSlide === slide.index ? ' editing' : ''}${sourceSlide === slide.index ? ' source-mode' : ''}`}
+            style={{ width: slideWidth, height: slideHeight, transform: `scale(${slideScale})` }}
             aria-label={`Slide ${slide.index + 1}`}
             contentEditable={editingSlide === slide.index}
             suppressContentEditableWarning
@@ -116,7 +117,7 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
               if (editingSlide === slide.index) {
                 onSourceChange(replaceSlideMarkdown(source, slide.index, serializeSlide(event.currentTarget)));
                 setEditingSlide(null);
-                if (event.currentTarget.scrollHeight > event.currentTarget.clientHeight + 4) setOverflowPrompt(slide.index);
+                if (isSlideOverBudget(serializeSlide(event.currentTarget))) setOverflowPrompt(slide.index);
               }
             }}
           >
@@ -132,9 +133,8 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
                 value={slide.markdown}
                 onChange={(event) => onSourceChange(replaceSlideMarkdown(source, slide.index, event.target.value))}
                 onKeyDown={(event) => { if (event.key === 'Escape') setSourceSlide(null); }}
-                onBlur={() => {
-                  const element = slideRefs.current.get(slide.index);
-                  if (element && element.scrollHeight > element.clientHeight + 4) setOverflowPrompt(slide.index);
+                onBlur={(event) => {
+                  if (isSlideOverBudget(event.currentTarget.value)) setOverflowPrompt(slide.index);
                 }}
               />
             </div>
@@ -167,6 +167,7 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
               <button type="button" className="slide-overflow-keep" onClick={() => setOverflowPrompt(null)}>Keep as is</button>
             </div>
           )}
+          </div>
         </div>
       ))}
     </main>

@@ -4,7 +4,8 @@
   width: min(100%, 1100px);
   margin: 0 auto;
 }
-.slide-shell { position: relative; }
+.slide-viewport { width: 100%; overflow: hidden; }
+.slide-shell { position: relative; flex: 0 0 auto; }
 
 .presentation-theme-light {
   --slide-bg: #fbfaf4;
@@ -30,16 +31,17 @@
 
 .slide {
   position: relative;
+  transform-origin: top left;
   aspect-ratio: 16 / 9;
   overflow: hidden;
-  padding: clamp(1.5rem, 5vw, 5rem);
+  padding: 5rem;
   border: 1px solid var(--slide-border);
   border-radius: 8px;
   color: var(--slide-text);
   background: var(--slide-bg);
   box-shadow: 0 16px 40px var(--slide-shadow);
   font-family: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
-  font-size: clamp(.75rem, 1.5vw, 1.5rem);
+  font-size: 1.5rem;
   line-height: 1.45;
   cursor: text;
 }

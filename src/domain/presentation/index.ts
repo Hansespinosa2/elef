@@ -12,11 +12,13 @@ export {
 } from './presentation';
 export {
   extractFirstH1,
+  isSlideOverBudget,
   normalizeFolderName,
   parseMarkdown,
   presentationThemeFromSource,
   replaceSlideMarkdown,
   setPresentationTheme,
+  slideContentBudget,
   splitSlideMarkdown,
   upsertFirstH1,
 } from './markdown';
