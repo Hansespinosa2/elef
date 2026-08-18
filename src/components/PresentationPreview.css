@@ -52,6 +52,11 @@
 .slide h3 { margin: 1em 0 .45em; font-size: 1.2em; }
 .slide p, .slide ul, .slide ol { margin-block: .65em; }
 .slide li + li { margin-top: .25em; }
+.slide ul.contains-task-list, .slide ul:has(> li > input[type='checkbox']) { padding-left: 0; }
+.slide li.task-list-item, .slide li:has(> input[type='checkbox']) { padding-left: 0; list-style: none; }
+.slide .task-checkbox { display: inline-flex; align-items: center; margin-right: .55em; vertical-align: middle; }
+.slide .task-checkbox > input[type='checkbox'] { width: 1.35em; height: 1.35em; margin: 0; padding: 0; border: 2px solid var(--slide-accent); border-radius: 5px; appearance: none; cursor: pointer; }
+.slide .task-checkbox > input[type='checkbox']:checked { background-color: var(--slide-accent); background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='m2 6 2.3 2.3L10 2.8' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); background-position: center; background-repeat: no-repeat; background-size: 85%; }
 .slide a { color: var(--slide-accent); text-underline-offset: .15em; }
 .slide img { max-width: 100%; max-height: 45%; object-fit: contain; }
 .slide code { color: inherit; background: var(--slide-code-bg); }
@@ -63,7 +68,7 @@
 .slide th, .slide td { border-bottom: 1px solid var(--slide-border); padding: .4em .55em; text-align: left; }
 .slide th { color: var(--slide-heading); }
 .slide hr { border: 0; border-top: 2px solid var(--slide-border); }
-.slide-number { position: absolute; right: 1.5rem; bottom: 1rem; color: var(--slide-muted); font-size: .65em; }
+.slide-number { position: absolute; right: 1.5rem; bottom: 1rem; color: var(--slide-muted); font-size: .65em; pointer-events: none; user-select: none; }
 .empty-slide { color: var(--slide-muted); font-style: italic; }
 .slide-overflow-trigger { position: absolute; top: .75rem; right: -.75rem; z-index: 2; width: 1.6rem; height: 1.6rem; padding: 0; border: 1px solid var(--slide-border); border-radius: 50%; color: var(--slide-bg); background: var(--slide-accent); font-size: .8rem; line-height: 1; }
 .slide-overflow-trigger:hover { filter: brightness(1.1); }

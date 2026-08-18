@@ -75,6 +75,20 @@ function serializeSlide(element: HTMLElement): string {
   return serializeNode(clone).replace(/\n{3,}/g, '\n\n').trim();
 }
 
+function toggleTaskItem(markdown: string, taskIndex: number): string {
+  let fence = false;
+  let currentTask = 0;
+  return markdown.split('\n').map((line) => {
+    if (/^(\s*)(`{3,}|~{3,})/.test(line)) {
+      fence = !fence;
+      return line;
+    }
+    if (fence || !/^\s*[-*+]\s+\[[ xX]\]/.test(line)) return line;
+    if (currentTask++ !== taskIndex) return line;
+    return line.replace(/(\s*[-*+]\s+)\[([ xX])\]/, (_, prefix: string, state: string) => `${prefix}[${state.trim() ? ' ' : 'x'}]`);
+  }).join('\n');
+}
+
 function placeCaretAtEnd(element: HTMLElement): void {
   const selection = window.getSelection();
   if (!selection) return;
@@ -108,8 +122,16 @@ function handleMarkdownShortcut(element: HTMLElement, event: ReactKeyboardEvent<
     checkbox.type = 'checkbox';
     checkbox.checked = marker === '[x]';
     checkbox.setAttribute('contenteditable', 'false');
-    block.replaceChildren(checkbox, document.createTextNode(' '), document.createElement('br'));
-    placeCaretAtEnd(block as HTMLElement);
+    block.classList.add('task-list-item');
+    const checkboxWrapper = document.createElement('span');
+    checkboxWrapper.className = 'task-checkbox';
+    checkboxWrapper.setAttribute('contenteditable', 'false');
+    checkboxWrapper.append(checkbox);
+    const taskText = document.createElement('span');
+    taskText.className = 'task-text';
+    taskText.append(document.createElement('br'));
+    block.replaceChildren(checkboxWrapper, taskText);
+    placeCaretAtEnd(taskText);
     return;
   }
   if (heading) {
@@ -123,11 +145,20 @@ function handleMarkdownShortcut(element: HTMLElement, event: ReactKeyboardEvent<
   const list = document.createElement(ordered ? 'ol' : 'ul');
   const item = document.createElement('li');
   if (task) {
+    list.classList.add('contains-task-list');
+    item.classList.add('task-list-item');
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
     checkbox.checked = marker.endsWith('[x]');
     checkbox.setAttribute('contenteditable', 'false');
-    item.append(checkbox, document.createTextNode(' '));
+    const checkboxWrapper = document.createElement('span');
+    checkboxWrapper.className = 'task-checkbox';
+    checkboxWrapper.setAttribute('contenteditable', 'false');
+    checkboxWrapper.append(checkbox);
+    const taskText = document.createElement('span');
+    taskText.className = 'task-text';
+    taskText.append(document.createElement('br'));
+    item.append(checkboxWrapper, taskText);
   }
   item.append(document.createElement('br'));
   list.append(item);
@@ -207,11 +238,41 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
               />
             </div>
             ) : slide.markdown ? (
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{slide.markdown}</ReactMarkdown>
+              (() => {
+                let taskIndex = 0;
+                return (
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      input: ({ checked, ...props }) => {
+                        const index = taskIndex++;
+                        return (
+                          <span className="task-checkbox" contentEditable={false}>
+                            <input
+                              {...props}
+                              type="checkbox"
+                              checked={checked}
+                              disabled={false}
+                              contentEditable={false}
+                              onChange={() => undefined}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                onSourceChange(replaceSlideMarkdown(source, slide.index, toggleTaskItem(slide.markdown, index)));
+                              }}
+                            />
+                          </span>
+                        );
+                      },
+                    }}
+                  >
+                    {slide.markdown}
+                  </ReactMarkdown>
+                );
+              })()
             ) : (
               <p className="empty-slide">This slide is empty.</p>
             )}
-            <span className="slide-number">{slide.index + 1}</span>
+            <span className="slide-number" contentEditable={false} aria-hidden="true">{slide.index + 1}</span>
           </article>
           {overflowSlides.has(slide.index) && (
             <button
