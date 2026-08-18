@@ -119,6 +119,40 @@ describe('PresentationPreview interactions', () => {
     expect(changes).toEqual(['# One', '# One\n---\n# Two']);
   });
 
+  it('keeps source and rendered slides coherent across rapid parent rerenders', () => {
+    let currentSource = '# One';
+    const update = (source: string) => {
+      currentSource = source;
+      act(() => {
+        root.render(
+          <PresentationPreview
+            presentation={parseMarkdown(currentSource)}
+            theme="light"
+            source={currentSource}
+            onSourceChange={update}
+          />,
+        );
+      });
+    };
+    container = document.createElement('div');
+    document.body.append(container);
+    root = createRoot(container);
+    act(() => {
+      root.render(
+        <PresentationPreview
+          presentation={parseMarkdown(currentSource)}
+          theme="light"
+          source={currentSource}
+          onSourceChange={update}
+        />,
+      );
+    });
+    act(() => container.querySelector<HTMLButtonElement>('.slide-add-button')!.click());
+    act(() => container.querySelectorAll<HTMLButtonElement>('.slide-add-button')[1].click());
+    expect(currentSource).toBe('# One\n---\n\n---\n');
+    expect(container.querySelectorAll('.slide')).toHaveLength(3);
+  });
+
   it('activates inline editing from a single click', () => {
     vi.useFakeTimers();
     const slide = render('# Heading');

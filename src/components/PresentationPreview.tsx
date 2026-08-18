@@ -408,10 +408,12 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
     setActiveSlide(index);
   };
   const changeSlide = (index: number, nextSource: string, start: boolean) => {
+    if (import.meta.env.DEV) console.debug('[elef] preview mutation', { action: 'changeSlide', phase: 'before-source-change', slideIndex: index });
     setSourceBlock(null);
     setOverflowPrompt(null);
     focusSlide(index, start);
     onSourceChange(nextSource);
+    if (import.meta.env.DEV) console.debug('[elef] preview mutation', { action: 'changeSlide', phase: 'source-change-dispatched', slideIndex: index });
   };
   return (
     <main ref={previewRef} className={`slide-list presentation-theme-${theme}`} aria-label={`${presentation.sourceName} slides`}>
