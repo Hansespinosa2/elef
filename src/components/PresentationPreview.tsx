@@ -268,8 +268,6 @@ function handleMarkdownShortcut(element: HTMLElement, event: ReactKeyboardEvent<
 }
 
 export function PresentationPreview({ presentation, theme, source, onSourceChange }: Props) {
-  const [editingSlide, setEditingSlide] = useState<number | null>(null);
-  const [editingBlock, setEditingBlock] = useState<number | null>(null);
   const [sourceBlock, setSourceBlock] = useState<{ slideIndex: number; blockIndex: number } | null>(null);
   const [sourceDraft, setSourceDraft] = useState('');
   const [overflowPrompt, setOverflowPrompt] = useState<number | null>(null);
@@ -313,7 +311,7 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
         <div className="slide-viewport" key={slide.id}>
           <div className="slide-shell" style={{ width: slideWidth * slideScale, height: slideHeight * slideScale }}>
           <article
-            className={`slide${editingSlide === slide.index ? ' editing' : ''}${sourceBlock?.slideIndex === slide.index ? ' source-mode' : ''}`}
+            className={`slide${sourceBlock?.slideIndex === slide.index ? ' source-mode' : ''}`}
             style={{ width: slideWidth, height: slideHeight, transform: `scale(${slideScale})` }}
             aria-label={`Slide ${slide.index + 1}`}
             contentEditable={sourceBlock?.slideIndex === slide.index ? undefined : true}
@@ -345,8 +343,6 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
                     const blocks = splitMarkdownBlocks(slide.markdown);
                     setSourceBlock({ slideIndex: slide.index, blockIndex });
                     setSourceDraft(blocks[blockIndex] || '');
-                    setEditingBlock(null);
-                    setEditingSlide(null);
                     return;
                   }
                 }
@@ -360,8 +356,6 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
                   onSourceChange(replaceSlideMarkdown(source, slide.index, markdown));
                 }
                 editingSource.current = null;
-                setEditingBlock(null);
-                setEditingSlide(null);
                 if (isSlideOverBudget(markdown)) setOverflowPrompt(slide.index);
               }
             }}
@@ -397,16 +391,14 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
                     event.stopPropagation();
                     setSourceBlock({ slideIndex: slide.index, blockIndex });
                     setSourceDraft(block);
-                    setEditingBlock(null);
-                    setEditingSlide(null);
                   }}
                 >
                   {(() => {
                     let taskIndex = 0;
                     return (
                       <ReactMarkdown
-                        remarkPlugins={editingSlide === slide.index && editingBlock === blockIndex ? [remarkGfm] : [remarkGfm, remarkMath]}
-                        rehypePlugins={editingSlide === slide.index && editingBlock === blockIndex ? [] : [rehypeKatex]}
+                        remarkPlugins={[remarkGfm, remarkMath]}
+                        rehypePlugins={[rehypeKatex]}
                         components={{
                           input: ({ checked, ...props }) => {
                             const index = taskIndex++;
