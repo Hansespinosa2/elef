@@ -99,6 +99,32 @@ function placeCaretAtEnd(element: HTMLElement): void {
   selection.addRange(range);
 }
 
+function placeCaretAtPoint(element: HTMLElement, x: number, y: number): void {
+  const selection = window.getSelection();
+  if (!selection) return;
+  let range: Range | null = null;
+  const documentWithCaret = document as Document & {
+    caretRangeFromPoint?: (x: number, y: number) => Range | null;
+    caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null;
+  };
+  if (documentWithCaret.caretRangeFromPoint) {
+    range = documentWithCaret.caretRangeFromPoint(x, y);
+  } else if (documentWithCaret.caretPositionFromPoint) {
+    const position = documentWithCaret.caretPositionFromPoint(x, y);
+    if (position) {
+      range = document.createRange();
+      range.setStart(position.offsetNode, position.offset);
+      range.collapse(true);
+    }
+  }
+  if (!range || !element.contains(range.startContainer)) {
+    placeCaretAtEnd(element);
+    return;
+  }
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
 function splitMarkdownBlocks(markdown: string): string[] {
   type BlockKind = 'fence' | 'list' | 'quote' | 'table' | 'text';
   const lines = markdown.replace(/\r\n/g, '\n').split('\n');
@@ -307,10 +333,18 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
             aria-label={`Slide ${slide.index + 1}`}
             contentEditable={sourceBlock?.slideIndex === slide.index ? undefined : editingSlide === slide.index}
             suppressContentEditableWarning
-            onClick={() => {
+            onClick={(event) => {
               if (sourceBlock) return;
+              if (editingSlide === slide.index) return;
               if (editClickTimer.current) clearTimeout(editClickTimer.current);
-              editClickTimer.current = setTimeout(() => setEditingSlide(slide.index), 180);
+              const article = event.currentTarget;
+              const { clientX, clientY } = event;
+              editClickTimer.current = setTimeout(() => {
+                setEditingSlide(slide.index);
+                requestAnimationFrame(() => {
+                  placeCaretAtPoint(article, clientX, clientY);
+                });
+              }, 180);
             }}
             onKeyDown={editingSlide === slide.index && !sourceBlock
               ? (event) => handleMarkdownShortcut(event.currentTarget, event)
