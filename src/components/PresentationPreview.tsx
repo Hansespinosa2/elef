@@ -169,6 +169,7 @@ function handleMarkdownShortcut(element: HTMLElement, event: ReactKeyboardEvent<
 export function PresentationPreview({ presentation, theme, source, onSourceChange }: Props) {
   const [editingSlide, setEditingSlide] = useState<number | null>(null);
   const [sourceSlide, setSourceSlide] = useState<number | null>(null);
+  const [sourceDraft, setSourceDraft] = useState('');
   const [overflowPrompt, setOverflowPrompt] = useState<number | null>(null);
   const previewRef = useRef<HTMLElement>(null);
   const editClickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -218,6 +219,7 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
               if (editClickTimer.current) clearTimeout(editClickTimer.current);
               editClickTimer.current = null;
               setSourceSlide(slide.index);
+              setSourceDraft(slide.markdown);
               setEditingSlide(null);
             }}
             onKeyDown={editingSlide === slide.index && sourceSlide !== slide.index
@@ -240,8 +242,11 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
               <textarea
                 autoFocus
                 aria-label={`Markdown source for slide ${slide.index + 1}`}
-                value={slide.markdown}
-                onChange={(event) => onSourceChange(replaceSlideMarkdown(source, slide.index, event.target.value))}
+                value={sourceDraft}
+                onChange={(event) => {
+                  setSourceDraft(event.target.value);
+                  onSourceChange(replaceSlideMarkdown(source, slide.index, event.target.value));
+                }}
                 onKeyDown={(event) => {
                   event.stopPropagation();
                   if (event.key === 'Escape') setSourceSlide(null);
