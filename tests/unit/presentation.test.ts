@@ -98,7 +98,7 @@ describe('parseMarkdown', () => {
 
   it('calculates a viewport-independent weighted content budget', () => {
     expect(slideContentBudget('# Heading')).toBe(4);
-    expect(slideContentBudget('# Heading\n\n```ts\nconst value = 1;\n```')).toBe(13.75);
+    expect(slideContentBudget('# Heading\n\n```ts\nconst value = 1;\n```')).toBe(7);
   });
 
   it('normalizes stored editor choices and resolves system changes deterministically', () => {

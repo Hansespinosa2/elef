@@ -189,10 +189,14 @@ export function slideContentBudget(markdown: string): number {
   for (const line of markdown.replace(/\r\n?/g, '\n').split('\n')) {
     const trimmed = line.trim();
     if (/^(`{3,}|~{3,})/.test(trimmed)) {
-      fence = !fence;
-      budget += 4;
+      if (fence) {
+        fence = false;
+      } else {
+        fence = true;
+        budget += 1.5;
+      }
     } else if (fence) {
-      budget += 1.5;
+      budget += 1.25;
     } else if (!trimmed) {
       budget += .25;
     } else if (/^#{1}\s+/.test(trimmed)) {
