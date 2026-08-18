@@ -353,6 +353,7 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
   const [overflowPrompt, setOverflowPrompt] = useState<number | null>(null);
   const [activeSlide, setActiveSlide] = useState(0);
   const [undoDelete, setUndoDelete] = useState<{ source: string; slideIndex: number; scrollY: number } | null>(null);
+  const [contentVersion, setContentVersion] = useState(0);
   const previewRef = useRef<HTMLElement>(null);
   const slideRefs = useRef(new Map<number, HTMLElement>());
   const pendingFocus = useRef<{ index: number; start: boolean } | null>(null);
@@ -426,6 +427,7 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
         <div className="slide-viewport" key={slide.id}>
           <div className="slide-shell" style={{ width: slideWidth * slideScale, height: slideHeight * slideScale }}>
           <article
+            key={`${slide.id}-${contentVersion}`}
             ref={(element) => {
               if (element) slideRefs.current.set(slide.index, element);
               else slideRefs.current.delete(slide.index);
@@ -476,10 +478,10 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
                 ) {
                   event.preventDefault();
                   const markdown = serializeSlide(event.currentTarget).replace(/(^|\n)--(?=\n|$)/, '$1---');
-                  typingSlideSeparatorBlock(event.currentTarget)?.replaceChildren();
                   const nextSource = splitSlideAtSeparator(source, slide.index, markdown);
                   if (nextSource !== source) {
                     setUndoDelete(null);
+                    setContentVersion((version) => version + 1);
                     changeSlide(slide.index + 1, nextSource, true);
                   }
                   return;
