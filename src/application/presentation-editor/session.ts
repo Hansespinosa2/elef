@@ -26,7 +26,7 @@ export class PresentationEditorSession {
   private request = 0;
 
   getState(): EditorState {
-    return { ...this.state };
+    return this.state;
   }
 
   subscribe(listener: () => void): () => void {
