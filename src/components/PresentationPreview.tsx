@@ -2,9 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
 import { isSlideOverBudget, replaceSlideMarkdown, splitSlideMarkdown } from '../domain/presentation';
 import type { Presentation, ThemeMode } from '../domain/presentation';
 import './PresentationPreview.css';
+import 'katex/dist/katex.min.css';
 
 const slideWidth = 1280;
 const slideHeight = 720;
@@ -99,30 +102,9 @@ function placeCaretAtEnd(element: HTMLElement): void {
   selection.addRange(range);
 }
 
-function placeCaretAtPoint(element: HTMLElement, x: number, y: number): void {
-  const selection = window.getSelection();
-  if (!selection) return;
-  let range: Range | null = null;
-  const documentWithCaret = document as Document & {
-    caretRangeFromPoint?: (x: number, y: number) => Range | null;
-    caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null;
-  };
-  if (documentWithCaret.caretRangeFromPoint) {
-    range = documentWithCaret.caretRangeFromPoint(x, y);
-  } else if (documentWithCaret.caretPositionFromPoint) {
-    const position = documentWithCaret.caretPositionFromPoint(x, y);
-    if (position) {
-      range = document.createRange();
-      range.setStart(position.offsetNode, position.offset);
-      range.collapse(true);
-    }
-  }
-  if (!range || !element.contains(range.startContainer)) {
-    placeCaretAtEnd(element);
-    return;
-  }
-  selection.removeAllRanges();
-  selection.addRange(range);
+function focusEditableSlide(element: HTMLElement): void {
+  element.focus({ preventScroll: true });
+  placeCaretAtEnd(element);
 }
 
 function splitMarkdownBlocks(markdown: string): string[] {
@@ -137,6 +119,7 @@ function splitMarkdownBlocks(markdown: string): string[] {
     const value = current.join('\n').trim();
     if (value) blocks.push(value);
     current = [];
+    blockKind = 'text';
   };
 
   for (const line of lines) {
@@ -296,6 +279,7 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
   const [overflowPrompt, setOverflowPrompt] = useState<number | null>(null);
   const previewRef = useRef<HTMLElement>(null);
   const editClickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const editingSource = useRef<{ slideIndex: number; markdown: string } | null>(null);
   const [availableWidth, setAvailableWidth] = useState(slideWidth);
   const slideScale = Math.max(minimumSlideScale, Math.min(1, availableWidth / slideWidth));
   const overflowSlides = new Set(
@@ -352,11 +336,11 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
               if (editingSlide === slide.index) return;
               if (editClickTimer.current) clearTimeout(editClickTimer.current);
               const article = event.currentTarget;
-              const { clientX, clientY } = event;
               editClickTimer.current = setTimeout(() => {
+                editingSource.current = { slideIndex: slide.index, markdown: slide.markdown };
                 setEditingSlide(slide.index);
                 requestAnimationFrame(() => {
-                  placeCaretAtPoint(article, clientX, clientY);
+                  focusEditableSlide(article);
                 });
               }, 180);
             }}
@@ -365,9 +349,13 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
               : undefined}
             onBlur={(event) => {
               if (editingSlide === slide.index) {
-                onSourceChange(replaceSlideMarkdown(source, slide.index, serializeSlide(event.currentTarget)));
+                const markdown = serializeSlide(event.currentTarget);
+                if (editingSource.current?.slideIndex === slide.index && editingSource.current.markdown !== markdown) {
+                  onSourceChange(replaceSlideMarkdown(source, slide.index, markdown));
+                }
+                editingSource.current = null;
                 setEditingSlide(null);
-                if (isSlideOverBudget(serializeSlide(event.currentTarget))) setOverflowPrompt(slide.index);
+                if (isSlideOverBudget(markdown)) setOverflowPrompt(slide.index);
               }
             }}
           >
@@ -410,7 +398,8 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
                     let taskIndex = 0;
                     return (
                       <ReactMarkdown
-                        remarkPlugins={[remarkGfm]}
+                        remarkPlugins={[remarkGfm, remarkMath]}
+                        rehypePlugins={[rehypeKatex]}
                         components={{
                           input: ({ checked, ...props }) => {
                             const index = taskIndex++;

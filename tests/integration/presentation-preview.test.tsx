@@ -79,4 +79,9 @@ describe('PresentationPreview interactions', () => {
     expect(slide.querySelectorAll('li')).toHaveLength(1);
     expect(slide.querySelector('ul + p')).not.toBeNull();
   });
+
+  it('renders inline math as KaTeX', () => {
+    const slide = render('How does TeX work? $x=3$.');
+    expect(slide.querySelector('.katex')).not.toBeNull();
+  });
 });
