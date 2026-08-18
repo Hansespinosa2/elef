@@ -5,7 +5,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { redo, undo } from '@codemirror/commands';
 import { EditorView } from '@codemirror/view';
 import { PresentationPreview } from '../../src/components/PresentationPreview';
-import { findMathRanges, markdownBlockRanges } from '../../src/components/ObsidianStyleEditor';
+import { findMathRanges, markdownBlockRanges } from '../../src/components/PresentationEditor';
 import { parseMarkdown, slideSourceRanges } from '../../src/domain/presentation';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -297,9 +297,9 @@ describe('Obsidian-style presentation editor', () => {
     const editor = EditorView.findFromDOM(container.querySelector<HTMLElement>('.cm-editor')!);
     act(() => editor.dispatch({ selection: { anchor: source.indexOf('# Two') } }));
 
-    act(() => container.querySelector<HTMLButtonElement>('.obsidian-editor-toolbar button')?.click());
+    act(() => container.querySelector<HTMLButtonElement>('.presentation-editor-toolbar button')?.click());
     expect(container.querySelector('.presentation-playback')).not.toBeNull();
-    act(() => Array.from(container.querySelectorAll<HTMLButtonElement>('.obsidian-editor-toolbar button'))
+    act(() => Array.from(container.querySelectorAll<HTMLButtonElement>('.presentation-editor-toolbar button'))
       .find((button) => button.textContent === 'Back to editor')?.click());
 
     expect(changes).toHaveLength(0);
@@ -311,7 +311,7 @@ describe('Obsidian-style presentation editor', () => {
     act(() => container.querySelector<HTMLButtonElement>('button')!.click());
     expect(container.querySelector('.presentation-playback')).not.toBeNull();
     expect(container.querySelector('.presentation-playback [contenteditable="true"]')).toBeNull();
-    expect(container.querySelector('.obsidian-live-canvas')?.classList.contains('hidden')).toBe(true);
+    expect(container.querySelector('.presentation-live-canvas')?.classList.contains('hidden')).toBe(true);
   });
 
   it('previews an automatic split without changing source, then supports confirmation and undo', () => {

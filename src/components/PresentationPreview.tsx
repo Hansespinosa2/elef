@@ -1,5 +1,5 @@
 import type { Presentation, ThemeMode } from '../domain/presentation';
-import { ObsidianStyleEditor } from './ObsidianStyleEditor';
+import { PresentationEditor } from './PresentationEditor';
 
 interface Props {
   presentation: Presentation;
@@ -9,5 +9,5 @@ interface Props {
 }
 
 export function PresentationPreview(props: Props) {
-  return <ObsidianStyleEditor {...props} />;
+  return <PresentationEditor {...props} />;
 }

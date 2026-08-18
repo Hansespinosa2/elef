@@ -120,60 +120,60 @@
 .slide-overflow-popover .slide-overflow-keep { color: var(--slide-text); background: transparent; }
 .slide-overflow-empty { font-size: .75rem; }
 
-.obsidian-editor { display: flex; width: min(100%, 1100px); flex-direction: column; gap: 1rem; }
-.obsidian-editor-toolbar {
+.presentation-editor { display: flex; width: min(100%, 1100px); flex-direction: column; gap: 1rem; }
+.presentation-editor-toolbar {
   display: flex; align-items: baseline; justify-content: space-between; gap: 1rem;
   color: var(--text-muted); font-size: .82rem;
 }
-.obsidian-editor-toolbar > div { display: flex; align-items: baseline; gap: .65rem; }
-.obsidian-editor-toolbar strong { color: var(--text-strong); font-size: .95rem; }
-.obsidian-editor-toolbar button, .slide-split-button, .slide-split-preview button, .presentation-playback-controls button {
+.presentation-editor-toolbar > div { display: flex; align-items: baseline; gap: .65rem; }
+.presentation-editor-toolbar strong { color: var(--text-strong); font-size: .95rem; }
+.presentation-editor-toolbar button, .slide-split-button, .slide-split-preview button, .presentation-playback-controls button {
   padding: .45rem .75rem; border: 1px solid var(--slide-border); border-radius: 6px;
   color: var(--slide-text); background: var(--slide-bg); cursor: pointer;
 }
-.obsidian-live-canvas.hidden { display: none; }
-.obsidian-live-canvas, .obsidian-codemirror, .obsidian-codemirror .cm-editor,
-.obsidian-codemirror .cm-scroller, .obsidian-codemirror .cm-content { overflow: visible; }
-.obsidian-codemirror .cm-editor {
+.presentation-live-canvas.hidden { display: none; }
+.presentation-live-canvas, .presentation-codemirror, .presentation-codemirror .cm-editor,
+.presentation-codemirror .cm-scroller, .presentation-codemirror .cm-content { overflow: visible; }
+.presentation-codemirror .cm-editor {
   color: var(--slide-text); background: transparent; outline: 0;
 }
-.obsidian-codemirror .cm-focused { outline: none; }
-.obsidian-codemirror .cm-content {
+.presentation-codemirror .cm-focused { outline: none; }
+.presentation-codemirror .cm-content {
   width: 100%; padding: 0; caret-color: var(--slide-accent);
 }
-.obsidian-codemirror .cm-gutters { display: none; }
-.obsidian-codemirror .cm-slide-line, .cm-rendered-block {
+.presentation-codemirror .cm-gutters { display: none; }
+.presentation-codemirror .cm-slide-line, .cm-rendered-block {
   position: relative; z-index: 1; box-sizing: border-box; width: 100%; padding-inline: 5rem;
   color: var(--slide-text); background: transparent;
 }
-.obsidian-codemirror .cm-slide-first {
+.presentation-codemirror .cm-slide-first {
   --slide-page-height: 618.75px;
   position: relative; isolation: isolate; margin-top: 1.25rem; padding-top: 4rem; overflow: visible;
 }
-.obsidian-codemirror .cm-slide-first::before {
+.presentation-codemirror .cm-slide-first::before {
   content: ''; position: absolute; z-index: -1; top: 0; right: 0; left: 0;
   height: var(--slide-page-height); box-sizing: border-box;
   border: 1px solid var(--slide-border); border-radius: 10px;
   background: var(--slide-bg); box-shadow: 0 16px 40px var(--slide-shadow);
   pointer-events: none;
 }
-.obsidian-codemirror .cm-slide-first::after {
+.presentation-codemirror .cm-slide-first::after {
   content: attr(data-slide-label); position: absolute; top: 1rem; left: 1.25rem;
   color: var(--slide-muted); font: 700 .72rem/1.2 'DM Sans', ui-sans-serif, system-ui, sans-serif;
   letter-spacing: .08em; text-transform: uppercase; pointer-events: none; user-select: none;
 }
-.obsidian-codemirror .cm-slide-first.cm-slide-measured-overflow::before {
+.presentation-codemirror .cm-slide-first.cm-slide-measured-overflow::before {
   border-bottom-color: #d7a340;
   box-shadow: 0 16px 40px var(--slide-shadow), inset 0 -3px #d7a340;
 }
-.obsidian-codemirror .cm-slide-last { padding-bottom: .75rem; }
-.obsidian-codemirror .cm-source-revealed {
+.presentation-codemirror .cm-slide-last { padding-bottom: .75rem; }
+.presentation-codemirror .cm-source-revealed {
   color: var(--slide-text); background: var(--slide-source-bg);
   box-shadow: inset 3px 0 var(--slide-accent);
   font: .96rem/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
-.obsidian-codemirror .cm-selectionBackground,
-.obsidian-codemirror .cm-content ::selection {
+.presentation-codemirror .cm-selectionBackground,
+.presentation-codemirror .cm-content ::selection {
   background: color-mix(in srgb, var(--slide-accent) 24%, transparent);
 }
 .cm-rendered-block {
@@ -243,17 +243,17 @@
   text-align: left; cursor: text;
 }
 .cm-frontmatter-widget:hover { border-color: var(--focus); color: var(--text-strong); }
-.obsidian-codemirror .cm-frontmatter-line {
+.presentation-codemirror .cm-frontmatter-line {
   box-sizing: border-box; width: 100%; padding: .05rem .85rem;
   color: var(--text); background: var(--panel-bg);
   border-inline: 1px solid var(--border);
   font: .82rem/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
-.obsidian-codemirror .cm-frontmatter-first {
+.presentation-codemirror .cm-frontmatter-first {
   margin-top: .25rem; padding-top: .6rem; border-top: 1px solid var(--border);
   border-radius: 7px 7px 0 0;
 }
-.obsidian-codemirror .cm-frontmatter-last {
+.presentation-codemirror .cm-frontmatter-last {
   margin-bottom: .75rem; padding-bottom: .6rem; border-bottom: 1px solid var(--border);
   border-radius: 0 0 7px 7px;
 }
@@ -270,11 +270,11 @@
 .presentation-playback-controls { display: flex; align-items: center; justify-content: center; gap: 1rem; }
 .presentation-playback-controls button:disabled { cursor: not-allowed; opacity: .45; }
 @media (max-width: 700px) {
-  .obsidian-editor-toolbar { align-items: flex-start; flex-direction: column; gap: .25rem; }
-  .obsidian-codemirror .cm-slide-line, .cm-rendered-block { padding-inline: 2rem; }
+  .presentation-editor-toolbar { align-items: flex-start; flex-direction: column; gap: .25rem; }
+  .presentation-codemirror .cm-slide-line, .cm-rendered-block { padding-inline: 2rem; }
   .cm-rendered-block.slide-invalid-tex { padding-inline: 2rem; }
-  .obsidian-codemirror .cm-slide-first { padding-top: 2rem; }
-  .obsidian-codemirror .cm-slide-first::after { top: .55rem; left: .75rem; }
+  .presentation-codemirror .cm-slide-first { padding-top: 2rem; }
+  .presentation-codemirror .cm-slide-first::after { top: .55rem; left: .75rem; }
   .slide-boundary-label { display: none; }
   .slide-boundary { justify-content: flex-end; }
 }
