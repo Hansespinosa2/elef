@@ -5,7 +5,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { EditorView } from '@codemirror/view';
 import { PresentationPreview } from '../../src/components/PresentationPreview';
 import { findMathRanges, markdownBlockRanges } from '../../src/components/ObsidianStyleEditor';
-import { parseMarkdown } from '../../src/domain/presentation';
+import { parseMarkdown, slideSourceRanges } from '../../src/domain/presentation';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -42,6 +42,15 @@ describe('Obsidian-style presentation editor', () => {
     expect(container.querySelector('.obsidian-editor-pages')).toBeNull();
     expect(container.querySelectorAll('.cm-slide-first')).toHaveLength(2);
     expect(container.querySelectorAll('.cm-rendered-block')).not.toHaveLength(0);
+  });
+
+  it('keeps front matter out of the rendered slide canvas', () => {
+    const source = '---\npresentationTheme: light\n---\n# One';
+    expect(slideSourceRanges(source)[0]?.start).toBeGreaterThan(0);
+    render(source);
+    expect(container.querySelector('.cm-frontmatter-widget')).not.toBeNull();
+    expect(Array.from(container.querySelectorAll('.cm-line')).map((line) => line.textContent)).not.toContain('presentationTheme: light');
+    expect(container.querySelector('.cm-line')?.textContent).toContain('# One');
   });
 
   it('reveals only the clicked rendered Markdown block in the CodeMirror canvas', () => {

@@ -294,6 +294,34 @@ class SlideBoundaryWidget extends WidgetType {
   }
 }
 
+class FrontMatterWidget extends WidgetType {
+  constructor(
+    private readonly from: number,
+    private readonly to: number,
+  ) {
+    super();
+  }
+
+  toDOM(): HTMLElement {
+    const element = document.createElement('button');
+    element.type = 'button';
+    element.className = 'cm-frontmatter-widget';
+    element.dataset.blockFrom = String(this.from);
+    element.dataset.blockTo = String(this.to);
+    element.textContent = 'Presentation settings';
+    element.title = 'Click to edit presentation settings';
+    return element;
+  }
+
+  eq(other: WidgetType): boolean {
+    return other instanceof FrontMatterWidget && other.from === this.from && other.to === this.to;
+  }
+
+  ignoreEvent(): boolean {
+    return false;
+  }
+}
+
 function activeBlockForSelection(blocks: MarkdownBlockRange[], state: EditorState): MarkdownBlockRange | null {
   const selection = state.selection.main;
   return blocks.find((block) => selection.head >= block.from && selection.head <= block.to) || null;
@@ -309,7 +337,20 @@ function livePreviewDecorations(state: EditorState): DecorationSet {
   const slides = slideSourceRanges(source);
   const blocks = markdownBlockRanges(source);
   const activeBlock = activeBlockForSelection(blocks, state);
+  const frontMatterEnd = slides[0]?.start ?? 0;
+  const editingFrontMatter = frontMatterEnd > 0 && state.selection.main.head < frontMatterEnd;
   const decorations: Array<{ from: number; to?: number; value: Decoration }> = [];
+
+  if (frontMatterEnd > 0 && !editingFrontMatter) {
+    decorations.push({
+      from: 0,
+      to: frontMatterEnd,
+      value: Decoration.replace({
+        widget: new FrontMatterWidget(0, frontMatterEnd),
+        block: true,
+      }),
+    });
+  }
 
   for (const slide of slides) {
     const firstLine = state.doc.lineAt(Math.min(slide.start, state.doc.length));
@@ -476,6 +517,7 @@ export function ObsidianStyleEditor({ presentation, theme, source, onSourceChang
     const editor = new EditorView({
       state: EditorState.create({
         doc: source,
+        selection: { anchor: slideSourceRanges(source)[0]?.start ?? 0 },
         extensions: [
           history(),
           keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),

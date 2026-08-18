@@ -184,6 +184,13 @@
 .slide-invalid-tex { margin: 0; padding: 0; color: #a33b35; background: color-mix(in srgb, #d96a5f 10%, transparent); white-space: pre-wrap; font: inherit; }
 .cm-rendered-block.slide-invalid-tex { padding-inline: 5rem; }
 .cm-invalid-tex-warning { display: block; margin-top: .35rem; font-size: .72em; }
+.cm-frontmatter-widget {
+  display: block; width: calc(100% - 2rem); margin: .75rem 1rem 0; padding: .45rem .75rem;
+  border: 1px solid var(--slide-border); border-radius: 6px; color: var(--slide-muted);
+  background: var(--slide-code-bg); font: 600 .8rem/1.2 'DM Sans', ui-sans-serif, system-ui, sans-serif;
+  text-align: left; cursor: text;
+}
+.cm-frontmatter-widget:hover { border-color: var(--slide-accent); color: var(--slide-text); }
 .slide-split-preview {
   position: sticky; z-index: 8; bottom: 1rem; display: grid; gap: .5rem; max-height: 50vh; overflow: auto;
   padding: 1rem; border: 1px solid var(--slide-accent); border-radius: 8px;
