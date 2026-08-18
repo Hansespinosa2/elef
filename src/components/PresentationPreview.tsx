@@ -388,11 +388,16 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
     const timer = window.setTimeout(() => setUndoDelete(null), 6000);
     return () => window.clearTimeout(timer);
   }, [undoDelete]);
+  useEffect(() => {
+    setActiveSlide((index) => Math.min(index, Math.max(0, presentation.slides.length - 1)));
+  }, [presentation.slides.length]);
   const focusSlide = (index: number, start: boolean) => {
     pendingFocus.current = { index, start };
     setActiveSlide(index);
   };
   const changeSlide = (index: number, nextSource: string, start: boolean) => {
+    setSourceBlock(null);
+    setOverflowPrompt(null);
     focusSlide(index, start);
     onSourceChange(nextSource);
   };
@@ -442,7 +447,14 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
                     return;
                   }
                 }
-                if ((event.key === 'ArrowUp' || event.key === 'ArrowDown') && !event.shiftKey && !event.altKey) {
+                if (
+                  (event.key === 'ArrowUp' || event.key === 'ArrowDown')
+                  && !event.shiftKey
+                  && !event.altKey
+                  && !event.ctrlKey
+                  && !event.metaKey
+                  && window.getSelection()?.isCollapsed
+                ) {
                   const position = selectionOffset(event.currentTarget);
                   const atStart = position && !position.before.includes('\n');
                   const atEnd = position && !position.after.includes('\n');
@@ -559,6 +571,8 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
                   const scrollY = window.scrollY;
                   const replacement = Math.min(slide.index, presentation.slides.length - 2);
                   setUndoDelete({ source, slideIndex: slide.index, scrollY });
+                  setSourceBlock(null);
+                  setOverflowPrompt(null);
                   changeSlide(replacement < 0 ? 0 : replacement, deleteSlideMarkdown(source, slide.index), true);
                 }}
               >Delete slide</button>
@@ -590,7 +604,10 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
           <button
             type="button"
             className="slide-add-button"
-            onClick={() => changeSlide(slide.index + 1, insertSlideMarkdown(source, slide.index), true)}
+            onClick={() => {
+              setUndoDelete(null);
+              changeSlide(slide.index + 1, insertSlideMarkdown(source, slide.index), true);
+            }}
           >Add slide</button>
         </div>
       ))}
@@ -599,6 +616,11 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
           <span>Slide deleted.</span>
           <button type="button" onClick={() => {
             const restore = undoDelete;
+            const deletedSource = deleteSlideMarkdown(restore.source, restore.slideIndex);
+            if (source !== deletedSource) {
+              setUndoDelete(null);
+              return;
+            }
             setUndoDelete(null);
             changeSlide(restore.slideIndex, restore.source, false);
             window.scrollTo?.({ top: restore.scrollY, behavior: 'auto' });

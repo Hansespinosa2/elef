@@ -101,6 +101,18 @@ describe('parseMarkdown', () => {
     expect(updated).toBe('---\npresentationTheme: dark\n---\n```yaml\n---\n```\n---\n## Updated');
   });
 
+  it('inserts slides without disturbing front matter or fenced separators', () => {
+    const source = '---\npresentationTheme: dark\n---\n```yaml\n---\n```\n---\n# Two';
+    expect(insertSlideMarkdown(source, 0)).toBe(
+      '---\npresentationTheme: dark\n---\n```yaml\n---\n```\n---\n\n---\n# Two',
+    );
+  });
+
+  it('deletes slides while retaining one blank slide', () => {
+    expect(deleteSlideMarkdown('# One\n---\n# Two', 0)).toBe('# Two');
+    expect(deleteSlideMarkdown('# One', 0)).toBe('');
+  });
+
   it('splits an overflowing slide at top-level headings', () => {
     const source = '# One\n\nBody\n\n## Two\n\nMore';
     const updated = splitSlideMarkdown(source, 0);

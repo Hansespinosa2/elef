@@ -54,6 +54,40 @@ describe('PresentationPreview interactions', () => {
     expect(container.querySelector('.slide-undo-notice')).not.toBeNull();
   });
 
+  it('restores the exact source when Undo is activated', () => {
+    const changes: string[] = [];
+    let currentSource = '# One\n---\n# Two';
+    container = document.createElement('div');
+    document.body.append(container);
+    root = createRoot(container);
+    const update = (source: string) => {
+      currentSource = source;
+      changes.push(source);
+      root.render(
+        <PresentationPreview
+          presentation={parseMarkdown(currentSource)}
+          theme="light"
+          source={currentSource}
+          onSourceChange={update}
+        />,
+      );
+    };
+    act(() => {
+      root.render(
+        <PresentationPreview
+          presentation={parseMarkdown(currentSource)}
+          theme="light"
+          source={currentSource}
+          onSourceChange={update}
+        />,
+      );
+    });
+    act(() => container.querySelectorAll<HTMLElement>('.slide')[1].click());
+    act(() => container.querySelector<HTMLButtonElement>('.slide-delete-button')!.click());
+    act(() => container.querySelector<HTMLButtonElement>('.slide-undo-notice button')!.click());
+    expect(changes).toEqual(['# One', '# One\n---\n# Two']);
+  });
+
   it('activates inline editing from a single click', () => {
     vi.useFakeTimers();
     const slide = render('# Heading');
@@ -148,6 +182,34 @@ describe('PresentationPreview interactions', () => {
     expect(slide.getAttribute('contenteditable')).toBe('true');
     expect(window.getSelection()?.anchorNode).toBe(text);
     expect(window.getSelection()?.anchorOffset).toBe(3);
+  });
+
+  it('moves the caret across slide boundaries with Up and Down', () => {
+    const slide = render('# One\n---\n# Two');
+    const slides = container.querySelectorAll<HTMLElement>('.slide');
+    const secondHeading = slides[1].querySelector('h1')!.firstChild!;
+    const start = document.createRange();
+    start.setStart(secondHeading, 0);
+    start.collapse(true);
+    window.getSelection()!.removeAllRanges();
+    window.getSelection()!.addRange(start);
+
+    act(() => {
+      slides[1].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
+    });
+    expect(slides[0].classList.contains('editing')).toBe(true);
+
+    const firstHeading = slides[0].querySelector('h1')!.firstChild!;
+    const end = document.createRange();
+    end.setStart(firstHeading, firstHeading.textContent?.length ?? 0);
+    end.collapse(true);
+    window.getSelection()!.removeAllRanges();
+    window.getSelection()!.addRange(end);
+
+    act(() => {
+      slides[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    });
+    expect(slides[1].classList.contains('editing')).toBe(true);
   });
 
   it('preserves inline and display math when preview content is serialized', () => {
