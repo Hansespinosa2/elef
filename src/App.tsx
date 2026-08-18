@@ -7,6 +7,67 @@ import { TauriDocumentReader, TauriFileSelector, TauriWorldFileSystem } from './
 import { WorldWorkspace } from './application/world/workspace';
 import { PresentationPreview } from './components/PresentationPreview';
 import { MarkdownEditor } from './components/MarkdownEditor';
+import {
+  normalizeEditorThemePreference,
+  resolveEditorTheme,
+  resolvePresentationTheme,
+} from './domain/presentation';
+import type {
+  EditorThemePreference,
+  PresentationTheme,
+  ThemeMode,
+} from './domain/presentation';
+
+const editorThemeKey = 'elef.editor-theme';
+
+interface ThemeMenuProps {
+  editorPreference: EditorThemePreference;
+  presentationTheme: PresentationTheme;
+  presentationDisabled?: boolean;
+  onEditorChange: (theme: EditorThemePreference) => void;
+  onPresentationChange: (theme: PresentationTheme) => void;
+}
+
+function ThemeMenu({
+  editorPreference,
+  presentationTheme,
+  presentationDisabled,
+  onEditorChange,
+  onPresentationChange,
+}: ThemeMenuProps) {
+  return (
+    <details className="theme-menu">
+      <summary>Theme</summary>
+      <div className="theme-menu-panel">
+        <label>
+          Editor
+          <select
+            aria-label="Editor theme"
+            value={editorPreference}
+            onChange={(event) => onEditorChange(event.target.value as EditorThemePreference)}
+          >
+            <option value="system">System</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </select>
+        </label>
+        <label>
+          Presentation
+          <select
+            aria-label="Presentation theme"
+            disabled={presentationDisabled}
+            value={presentationTheme}
+            onChange={(event) => onPresentationChange(event.target.value as PresentationTheme)}
+          >
+            <option value="match">Match editor</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </select>
+        </label>
+      </div>
+    </details>
+  );
+}
 
 function App() {
   const [session] = useState(() => new PresentationEditorSession());
@@ -20,9 +81,44 @@ function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
+  const [editorPreference, setEditorPreferenceState] = useState<EditorThemePreference>(() => {
+    try {
+      return normalizeEditorThemePreference(localStorage.getItem(editorThemeKey));
+    } catch {
+      return 'system';
+    }
+  });
+  const [systemPrefersDark, setSystemPrefersDark] = useState(() => (
+    typeof window.matchMedia === 'function' && window.matchMedia('(prefers-color-scheme: dark)').matches
+  ));
+  const editorTheme: ThemeMode = resolveEditorTheme(editorPreference, systemPrefersDark);
   const tauri = isTauri();
   const [world] = useState(() => new WorldWorkspace(new TauriWorldFileSystem()));
   const worldState = useSyncExternalStore(world.subscribe.bind(world), world.getState.bind(world), world.getState.bind(world));
+  const setEditorPreference = (preference: EditorThemePreference) => {
+    setEditorPreferenceState(preference);
+    try {
+      if (preference === 'system') localStorage.removeItem(editorThemeKey);
+      else localStorage.setItem(editorThemeKey, preference);
+    } catch {
+      // The active choice still applies when storage is unavailable.
+    }
+  };
+  useEffect(() => {
+    document.documentElement.dataset.editorTheme = editorTheme;
+  }, [editorTheme]);
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return;
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const update = () => setSystemPrefersDark(media.matches);
+    update();
+    if (typeof media.addEventListener === 'function') {
+      media.addEventListener('change', update);
+      return () => media.removeEventListener('change', update);
+    }
+    media.addListener(update);
+    return () => media.removeListener(update);
+  }, []);
   useEffect(() => { if (tauri && worldState.root) void world.rescan(); }, [tauri]);
   useEffect(() => {
     if (!tauri) return;
@@ -49,7 +145,7 @@ function App() {
 
   if (tauri) {
     const active = worldState.activeId ? worldState.presentations.find((item) => item.id === worldState.activeId) : null;
-    if (!worldState.root) return <div className="app"><section className="setup"><h1>Create your Elef World</h1><p>Choose or create a dedicated folder where Elef will keep your presentations.</p><button type="button" onClick={() => void world.setup()}>Create Elef World folder</button></section></div>;
+    if (!worldState.root) return <div className={`app theme-${editorTheme}`}><section className="setup"><h1>Create your Elef World</h1><p>Choose or create a dedicated folder where Elef will keep your presentations.</p><button type="button" onClick={() => void world.setup()}>Create Elef World folder</button></section></div>;
     const presentations = worldState.presentations.slice().sort((a, b) => b.lastOpened - a.lastOpened);
     const remove = (id: string, title: string) => {
       if (window.confirm(`Delete "${title}"? This cannot be undone.`)) void world.deletePresentation(id);
@@ -66,12 +162,21 @@ function App() {
         {!item.missing && <span className="item-actions"><button type="button" aria-label={`Rename ${item.title}`} onClick={() => { setRenamingId(item.id); setRenameValue(item.title); }}>Rename</button><button type="button" aria-label={`Delete ${item.title}`} onClick={() => remove(item.id, item.title)}>Delete</button></span>}</>}
       </div>)}</nav>
     </aside>;
-    return <div className="app world-app"><button className={`sidebar-toggle${sidebarOpen ? ' hidden' : ''}`} type="button" aria-label="Expand sidebar" onClick={() => setSidebarOpen(true)}>›</button>{sidebar}{worldState.error && <div className="error" role="alert">{worldState.error}</div>}{active ? <main className="world-main"><header className="document-toolbar"><span className="document-name">{active.title}</span></header><div className="workspace"><MarkdownEditor source={world.editorSource(active.id)} onChange={(source) => world.updateSource(active.id, source)} /><PresentationPreview presentation={world.presentation(active.id)!} /></div></main> : <main className="world-main empty-world"><h1>Your presentations</h1><p>Select a presentation from the sidebar or create a new one.</p></main>}</div>;
+    const presentation = active ? world.presentation(active.id) : null;
+    const presentationTheme = presentation?.presentationTheme ?? 'match';
+    return <div className={`app world-app theme-${editorTheme}`}><button className={`sidebar-toggle${sidebarOpen ? ' hidden' : ''}`} type="button" aria-label="Expand sidebar" onClick={() => setSidebarOpen(true)}>›</button>{sidebar}{worldState.error && <div className="error" role="alert">{worldState.error}</div>}{active && presentation ? <main className="world-main"><header className="document-toolbar"><span className="document-name">{active.title}</span><ThemeMenu editorPreference={editorPreference} presentationTheme={presentationTheme} onEditorChange={setEditorPreference} onPresentationChange={(theme) => world.updatePresentationTheme(active.id, theme)} /></header><div className="workspace"><MarkdownEditor source={world.editorSource(active.id)} onChange={(source) => world.updateSource(active.id, source)} /><PresentationPreview presentation={presentation} theme={resolvePresentationTheme(presentationTheme, editorTheme)} /></div></main> : <main className="world-main empty-world"><h1>Your presentations</h1><p>Select a presentation from the sidebar or create a new one.</p></main>}</div>;
   }
   return (
-    <div className="app">
+    <div className={`app theme-${editorTheme}`}>
       <header className="toolbar">
         <div><strong>Elef</strong><span className="subtitle">Markdown presentation</span>{state.sourceName && <span className="document-name">{state.sourceName}{state.source !== state.baseline && ' *'}</span>}</div>
+        <ThemeMenu
+          editorPreference={editorPreference}
+          presentationTheme={state.presentation?.presentationTheme ?? 'match'}
+          presentationDisabled={!state.presentation}
+          onEditorChange={setEditorPreference}
+          onPresentationChange={(theme) => session.updatePresentationTheme(theme)}
+        />
         <button type="button" onClick={() => session.newDocument(confirmation)}>New Markdown</button>
         <button type="button" onClick={openFile}>Open Markdown</button>
         <input ref={inputRef} hidden type="file" accept=".md,.markdown,text/markdown,text/plain" />
@@ -79,7 +184,7 @@ function App() {
       {state.error && <div className="error" role="alert"><strong>Could not open file.</strong> {state.error}</div>}
       {state.presentation ? <div className="workspace">
         <MarkdownEditor source={state.source} onChange={(source) => session.updateSource(source)} />
-        <PresentationPreview presentation={state.presentation} />
+        <PresentationPreview presentation={state.presentation} theme={resolvePresentationTheme(state.presentation.presentationTheme, editorTheme)} />
       </div> : !state.error && (
         <section className="welcome"><h1>Open a Markdown file</h1><p>Use <code>---</code> on its own line to create a new slide.</p></section>
       )}

@@ -20,6 +20,25 @@ describe('PresentationEditorSession', () => {
     expect(session.getState().presentation?.slides).toHaveLength(2);
   });
 
+  it('writes presentation theme metadata through the browser session and marks it dirty', () => {
+    const session = new PresentationEditorSession();
+    session.newDocument(confirmation);
+    session.updateSource('# One\n---\n# Two');
+    session.updatePresentationTheme('dark');
+    expect(session.getState().source).toBe('---\npresentationTheme: dark\n---\n# One\n---\n# Two');
+    expect(session.getState().presentation?.presentationTheme).toBe('dark');
+    expect(session.getState().source).not.toBe(session.getState().baseline);
+  });
+
+  it('preserves existing front matter when changing the presentation theme', async () => {
+    const session = new PresentationEditorSession();
+    const source = '---\ntitle: Demo\npresentationTheme: light\n---\n# One';
+    await session.open({ select: async () => selection('demo.md', source) }, reader, confirmation);
+    session.updatePresentationTheme('match');
+    expect(session.getState().source).toContain('title: Demo\npresentationTheme: match');
+    expect(session.getState().presentation?.slides[0].markdown).toBe('# One');
+  });
+
   it('preserves the active document when an open fails', async () => {
     const session = new PresentationEditorSession();
     session.newDocument(confirmation);

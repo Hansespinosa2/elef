@@ -4,21 +4,22 @@
   flex-direction: column;
   gap: .65rem;
   padding: 1rem;
-  border: 1px solid #334155;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: #172235;
+  background: var(--panel-bg);
+  box-shadow: 0 8px 24px var(--shadow);
 }
-.markdown-editor label { color: #f8fafc; font-weight: 700; }
+.markdown-editor label { color: var(--text-strong); font-weight: 700; }
 .markdown-editor textarea {
   width: 100%;
   min-height: 24rem;
   resize: vertical;
   padding: 1rem;
-  border: 1px solid #475569;
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
-  color: #e2e8f0;
-  background: #0f172a;
+  color: var(--text);
+  background: var(--input-bg);
   font: .95rem/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
-.markdown-editor textarea:focus { outline: 2px solid #67e8f9; outline-offset: 1px; }
-.markdown-editor p { margin: 0; color: #94a3b8; font-size: .85rem; }
+.markdown-editor textarea:focus { outline: 2px solid var(--focus); outline-offset: 1px; }
+.markdown-editor p { margin: 0; color: var(--text-muted); font-size: .85rem; }

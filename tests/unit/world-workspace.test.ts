@@ -39,6 +39,18 @@ describe('presentation workspace', () => {
     expect(workspace.editorSource(draft!.id)).toBe('# Visible title');
     expect(workspace.getState().presentations[0].source).toMatch(/^<!-- elef-id:/);
   });
+  it('persists presentation theme metadata while retaining Elef identity and content', async () => {
+    const fs = new MemoryWorld(); const workspace = new WorldWorkspace(fs, storage());
+    await workspace.setup(); const draft = await workspace.createDraft();
+    workspace.updateSource(draft!.id, '---\ntitle: Demo\n---\n# One\n---\n# Two');
+    workspace.updatePresentationTheme(draft!.id, 'dark');
+    expect(workspace.editorSource(draft!.id)).toContain('title: Demo\npresentationTheme: dark');
+    expect(workspace.presentation(draft!.id)?.presentationTheme).toBe('dark');
+    expect(workspace.presentation(draft!.id)?.slides.map((slide) => slide.markdown)).toEqual(['# One', '# Two']);
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    const saved = [...fs.files.values()].find((source) => source.includes('presentationTheme: dark'));
+    expect(saved).toMatch(/^<!-- elef-id:/);
+  });
   it('marks moved entries missing and removes them recoverably', async () => {
     const fs = new MemoryWorld(); const workspace = new WorldWorkspace(fs, storage());
     await workspace.setup(); const draft = await workspace.createDraft(); fs.files.delete(`${draft!.path}/presentation.md`);
@@ -73,5 +85,14 @@ describe('presentation workspace', () => {
     await workspace.deletePresentation(draft!.id);
     expect(workspace.getState().presentations).toHaveLength(0);
     expect(fs.files.size).toBe(0);
+  });
+  it('keeps theme front matter initial when renaming a presentation without a heading', async () => {
+    const fs = new MemoryWorld(); const workspace = new WorldWorkspace(fs, storage());
+    await workspace.setup(); const draft = await workspace.createDraft();
+    workspace.updatePresentationTheme(draft!.id, 'dark');
+    await workspace.renamePresentation(draft!.id, 'Themed');
+    const source = workspace.editorSource(draft!.id);
+    expect(source).toMatch(/^---\npresentationTheme: dark\n---\n# Themed/);
+    expect(workspace.presentation(draft!.id)?.presentationTheme).toBe('dark');
   });
 });

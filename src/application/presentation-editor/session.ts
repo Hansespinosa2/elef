@@ -1,5 +1,5 @@
-import { hasUnsavedChanges, parseMarkdown } from '../../domain/presentation';
-import type { Presentation } from '../../domain/presentation';
+import { hasUnsavedChanges, parseMarkdown, setPresentationTheme } from '../../domain/presentation';
+import type { Presentation, PresentationTheme } from '../../domain/presentation';
 import type { DocumentReader, FileSelector, ReplacementConfirmation } from '../ports/documents';
 
 export interface EditorState {
@@ -68,6 +68,11 @@ export class PresentationEditorSession {
         error: reason instanceof Error ? reason.message : 'Unable to parse this Markdown source.',
       });
     }
+  }
+
+  updatePresentationTheme(theme: PresentationTheme): void {
+    if (!this.state.sourceName) return;
+    this.updateSource(setPresentationTheme(this.state.source, theme));
   }
 
   async open(

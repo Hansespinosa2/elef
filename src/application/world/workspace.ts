@@ -1,4 +1,11 @@
-import { extractFirstH1, normalizeFolderName, parseMarkdown } from '../../domain/presentation';
+import {
+  extractFirstH1,
+  normalizeFolderName,
+  parseMarkdown,
+  setPresentationTheme,
+  upsertFirstH1,
+} from '../../domain/presentation';
+import type { PresentationTheme } from '../../domain/presentation';
 import type { WorldFileSystem } from '../ports/documents';
 
 export interface WorldPresentation {
@@ -127,9 +134,7 @@ export class WorldWorkspace {
     const nextTitle = normalizeFolderName(title);
     if (!nextTitle) return;
     const source = stripWorldMetadata(entry.source);
-    const renamedSource = extractFirstH1(source)
-      ? source.replace(/^\s{0,3}#(?!#)\s+(.+?)\s*#*\s*$/m, `# ${nextTitle}`)
-      : `# ${nextTitle}\n\n${source}`;
+    const renamedSource = upsertFirstH1(source, nextTitle);
     this.updateSource(idToRename, renamedSource);
     const timer = this.timers.get(idToRename);
     if (timer) clearTimeout(timer);
@@ -208,6 +213,11 @@ export class WorldWorkspace {
       this.timers.delete(idToUpdate);
       void this.save(idToUpdate);
     }, 350));
+  }
+  updatePresentationTheme(idToUpdate: string, theme: PresentationTheme) {
+    const source = this.editorSource(idToUpdate);
+    if (!this.state.presentations.some((item) => item.id === idToUpdate)) return;
+    this.updateSource(idToUpdate, setPresentationTheme(source, theme));
   }
   private async save(idToSave: string) {
     const entry = this.state.presentations.find((item) => item.id === idToSave);
