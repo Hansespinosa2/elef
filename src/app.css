@@ -16,7 +16,7 @@ button:hover { background: #a5f3fc; }
 .icon-button, .sidebar-toggle { padding: .25rem .6rem; color: #cbd5e1; background: transparent; font-size: 1.4rem; line-height: 1; }
 .icon-button:hover, .sidebar-toggle:hover { background: #243247; }
 .sidebar-toggle { position: fixed; z-index: 1; top: 1rem; left: .5rem; }
-.sidebar-toggle.hidden { display: block; }
+.sidebar-toggle.hidden { display: none; }
 .new-presentation { width: 100%; margin-bottom: 1rem; text-align: left; }
 .presentation-item { display: flex; align-items: center; gap: .25rem; margin: .2rem 0; border-radius: 5px; }
 .presentation-item.active { background: #243247; }

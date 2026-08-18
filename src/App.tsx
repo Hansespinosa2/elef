@@ -24,6 +24,17 @@ function App() {
   const [world] = useState(() => new WorldWorkspace(new TauriWorldFileSystem()));
   const worldState = useSyncExternalStore(world.subscribe.bind(world), world.getState.bind(world), world.getState.bind(world));
   useEffect(() => { if (tauri && worldState.root) void world.rescan(); }, [tauri]);
+  useEffect(() => {
+    if (!tauri) return;
+    const toggleSidebar = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'b') {
+        event.preventDefault();
+        setSidebarOpen((open) => !open);
+      }
+    };
+    window.addEventListener('keydown', toggleSidebar);
+    return () => window.removeEventListener('keydown', toggleSidebar);
+  }, [tauri]);
 
   const openFile = () => {
     const selector = tauri
