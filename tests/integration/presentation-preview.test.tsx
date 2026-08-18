@@ -358,6 +358,7 @@ describe('PresentationPreview interactions', () => {
       slides[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
     });
     expect(slides[1].classList.contains('editing')).toBe(true);
+    expect(window.getSelection()?.anchorNode?.parentElement?.closest('.slide-number')).toBeNull();
   });
 
   it('moves down from the end of a paragraph into the next slide', () => {
@@ -375,6 +376,24 @@ describe('PresentationPreview interactions', () => {
     });
 
     expect(slides[1].classList.contains('editing')).toBe(true);
+  });
+
+  it('leaves arrow movement between lines to the native editor', () => {
+    render('First line\n\nSecond line\n---\n# Two');
+    const slide = container.querySelector<HTMLElement>('.slide')!;
+    const paragraph = slide.querySelector('p')!.firstChild!;
+    const end = document.createRange();
+    end.setStart(paragraph, paragraph.textContent?.length ?? 0);
+    end.collapse(true);
+    window.getSelection()!.removeAllRanges();
+    window.getSelection()!.addRange(end);
+    const event = new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true });
+
+    act(() => {
+      slide.dispatchEvent(event);
+    });
+
+    expect(event.defaultPrevented).toBe(false);
   });
 
   it('preserves inline and display math when preview content is serialized', () => {

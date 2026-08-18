@@ -139,8 +139,14 @@ function placeCaretAtEnd(element: HTMLElement): void {
   const selection = window.getSelection();
   if (!selection) return;
   const range = document.createRange();
-  range.selectNodeContents(element);
-  range.collapse(false);
+  const slideNumber = element.querySelector('.slide-number');
+  if (slideNumber) {
+    range.setStartBefore(slideNumber);
+    range.collapse(true);
+  } else {
+    range.selectNodeContents(element);
+    range.collapse(false);
+  }
   selection.removeAllRanges();
   selection.addRange(range);
 }
