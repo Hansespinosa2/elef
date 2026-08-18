@@ -84,4 +84,15 @@ describe('PresentationPreview interactions', () => {
     const slide = render('How does TeX work? $x=3$.');
     expect(slide.querySelector('.katex')).not.toBeNull();
   });
+
+  it('reveals math source while inline editing', () => {
+    vi.useFakeTimers();
+    const slide = render('How does TeX work? $x=3$.');
+    act(() => {
+      slide.click();
+      vi.advanceTimersByTime(180);
+    });
+    expect(slide.querySelector('.katex')).toBeNull();
+    expect(slide.textContent).toContain('$x=3$');
+  });
 });

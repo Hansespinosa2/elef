@@ -398,8 +398,8 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
                     let taskIndex = 0;
                     return (
                       <ReactMarkdown
-                        remarkPlugins={[remarkGfm, remarkMath]}
-                        rehypePlugins={[rehypeKatex]}
+                        remarkPlugins={editingSlide === slide.index ? [remarkGfm] : [remarkGfm, remarkMath]}
+                        rehypePlugins={editingSlide === slide.index ? [] : [rehypeKatex]}
                         components={{
                           input: ({ checked, ...props }) => {
                             const index = taskIndex++;
