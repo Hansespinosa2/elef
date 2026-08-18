@@ -107,6 +107,39 @@ function focusEditableSlide(element: HTMLElement): void {
   placeCaretAtEnd(element);
 }
 
+function placeCaretAtPoint(element: HTMLElement, x: number, y: number): void {
+  const documentWithCaret = document as Document & {
+    caretRangeFromPoint?: (x: number, y: number) => Range | null;
+    caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null;
+  };
+  try {
+    const range = documentWithCaret.caretRangeFromPoint?.(x, y);
+    if (range && element.contains(range.startContainer)) {
+      const selection = window.getSelection();
+      if (selection) {
+        selection.removeAllRanges();
+        selection.addRange(range);
+        return;
+      }
+    }
+    const position = documentWithCaret.caretPositionFromPoint?.(x, y);
+    if (position && element.contains(position.offsetNode)) {
+      const selection = window.getSelection();
+      if (selection) {
+        const caret = document.createRange();
+        caret.setStart(position.offsetNode, position.offset);
+        caret.collapse(true);
+        selection.removeAllRanges();
+        selection.addRange(caret);
+        return;
+      }
+    }
+  } catch (error) {
+    if (!(error instanceof DOMException)) throw error;
+  }
+  placeCaretAtEnd(element);
+}
+
 function splitMarkdownBlocks(markdown: string): string[] {
   type BlockKind = 'fence' | 'list' | 'quote' | 'table' | 'text';
   const lines = markdown.replace(/\r\n/g, '\n').split('\n');
@@ -345,12 +378,15 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
               }
               if (editClickTimer.current) clearTimeout(editClickTimer.current);
               const article = event.currentTarget;
+              const { clientX, clientY } = event;
               editClickTimer.current = setTimeout(() => {
                 editingSource.current = { slideIndex: slide.index, markdown: slide.markdown };
                 setEditingBlock(blockIndex);
                 setEditingSlide(slide.index);
                 requestAnimationFrame(() => {
-                  focusEditableSlide(blockElement || article);
+                  const target = blockElement || article;
+                  target.focus({ preventScroll: true });
+                  placeCaretAtPoint(target, clientX, clientY);
                 });
               }, 180);
             }}

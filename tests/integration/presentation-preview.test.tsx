@@ -128,4 +128,35 @@ describe('PresentationPreview interactions', () => {
     });
     expect(slide.querySelector('textarea')?.value).toBe('A paragraph.');
   });
+
+  it('places the caret at the clicked position within a line', () => {
+    vi.useFakeTimers();
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      callback(0);
+      return 0;
+    });
+    const slide = render('A paragraph.');
+    const block = slide.querySelector<HTMLElement>('.slide-preview-block')!;
+    Object.defineProperty(document, 'caretRangeFromPoint', {
+      configurable: true,
+      value: () => {
+        const text = block.querySelector('p')!.firstChild!;
+        const range = document.createRange();
+        range.setStart(text, 3);
+        range.collapse(true);
+        return range;
+      },
+    });
+
+    act(() => {
+      block.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 120, clientY: 120 }));
+      vi.advanceTimersByTime(180);
+      vi.runAllTimers();
+    });
+
+    const text = block.querySelector('p')!.firstChild!;
+    expect(window.getSelection()?.anchorNode).toBe(text);
+    expect(window.getSelection()?.anchorOffset).toBe(3);
+    delete (document as Document & { caretRangeFromPoint?: unknown }).caretRangeFromPoint;
+  });
 });
