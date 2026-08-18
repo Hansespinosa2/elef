@@ -102,11 +102,6 @@ function placeCaretAtEnd(element: HTMLElement): void {
   selection.addRange(range);
 }
 
-function focusEditableSlide(element: HTMLElement): void {
-  element.focus({ preventScroll: true });
-  placeCaretAtEnd(element);
-}
-
 function placeCaretAtPoint(element: HTMLElement, x: number, y: number): void {
   const documentWithCaret = document as Document & {
     caretRangeFromPoint?: (x: number, y: number) => Range | null;
@@ -312,7 +307,6 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
   const [sourceDraft, setSourceDraft] = useState('');
   const [overflowPrompt, setOverflowPrompt] = useState<number | null>(null);
   const previewRef = useRef<HTMLElement>(null);
-  const editClickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const editingSource = useRef<{ slideIndex: number; markdown: string } | null>(null);
   const [availableWidth, setAvailableWidth] = useState(slideWidth);
   const slideScale = Math.max(minimumSlideScale, Math.min(1, availableWidth / slideWidth));
@@ -346,9 +340,6 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
       window.removeEventListener('pointerdown', exitOnOutsideClick, true);
     };
   }, [sourceBlock]);
-  useEffect(() => () => {
-    if (editClickTimer.current) clearTimeout(editClickTimer.current);
-  }, []);
   return (
     <main ref={previewRef} className={`slide-list presentation-theme-${theme}`} aria-label={`${presentation.sourceName} slides`}>
       {presentation.slides.map((slide) => (
@@ -358,7 +349,7 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
             className={`slide${editingSlide === slide.index ? ' editing' : ''}${sourceBlock?.slideIndex === slide.index ? ' source-mode' : ''}`}
             style={{ width: slideWidth, height: slideHeight, transform: `scale(${slideScale})` }}
             aria-label={`Slide ${slide.index + 1}`}
-            contentEditable={sourceBlock?.slideIndex === slide.index ? undefined : editingSlide === slide.index}
+            contentEditable={sourceBlock?.slideIndex === slide.index ? undefined : true}
             suppressContentEditableWarning
             onClick={(event) => {
               if (sourceBlock) {
@@ -373,22 +364,19 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
               const blockIndex = blockElement ? Number(blockElement.dataset.blockIndex) : null;
               if (editingSlide === slide.index) {
                 if (editingBlock !== blockIndex) setEditingBlock(blockIndex);
-                if (blockElement) focusEditableSlide(blockElement);
                 return;
               }
-              if (editClickTimer.current) clearTimeout(editClickTimer.current);
               const article = event.currentTarget;
-              const { clientX, clientY } = event;
-              editClickTimer.current = setTimeout(() => {
-                editingSource.current = { slideIndex: slide.index, markdown: slide.markdown };
-                setEditingBlock(blockIndex);
-                setEditingSlide(slide.index);
-                requestAnimationFrame(() => {
-                  const target = blockElement || article;
-                  target.focus({ preventScroll: true });
-                  placeCaretAtPoint(target, clientX, clientY);
-                });
-              }, 180);
+              editingSource.current = { slideIndex: slide.index, markdown: slide.markdown };
+              setEditingBlock(blockIndex);
+              setEditingSlide(slide.index);
+              requestAnimationFrame(() => {
+                const target = blockElement || article;
+                const selection = window.getSelection();
+                if (selection?.anchorNode && target.contains(selection.anchorNode)) return;
+                target.focus({ preventScroll: true });
+                placeCaretAtPoint(target, event.clientX, event.clientY);
+              });
             }}
             onKeyDown={editingSlide === slide.index && !sourceBlock
               ? (event) => {
@@ -454,8 +442,6 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
                   key={`preview-${blockIndex}`}
                   onDoubleClick={(event) => {
                     event.stopPropagation();
-                    if (editClickTimer.current) clearTimeout(editClickTimer.current);
-                    editClickTimer.current = null;
                     setSourceBlock({ slideIndex: slide.index, blockIndex });
                     setSourceDraft(block);
                     setEditingBlock(null);
