@@ -181,6 +181,30 @@ function selectionOffset(element: HTMLElement): { before: string; after: string 
   };
 }
 
+const editableBlockSelector = 'h1, h2, h3, p, blockquote, pre, table, ul, ol, li, div:not(.slide)';
+
+function adjacentEditableBlock(block: HTMLElement, direction: -1 | 1): HTMLElement | null {
+  let sibling = direction < 0 ? block.previousElementSibling : block.nextElementSibling;
+  while (sibling) {
+    if (sibling instanceof HTMLElement && sibling.matches(editableBlockSelector)) return sibling;
+    sibling = direction < 0 ? sibling.previousElementSibling : sibling.nextElementSibling;
+  }
+  return null;
+}
+
+function skipEmptyAdjacentBlock(
+  block: HTMLElement,
+  direction: -1 | 1,
+  atBoundary: boolean,
+): HTMLElement | null {
+  if (!atBoundary) return null;
+  const emptyBlock = adjacentEditableBlock(block, direction);
+  if (!emptyBlock || emptyBlock.textContent?.trim()) return null;
+  let target = adjacentEditableBlock(emptyBlock, direction);
+  while (target && !target.textContent?.trim()) target = adjacentEditableBlock(target, direction);
+  return target;
+}
+
 function typingSlideSeparatorBlock(element: HTMLElement): HTMLElement | null {
   const selection = window.getSelection();
   if (!selection?.isCollapsed) return null;
@@ -525,6 +549,20 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
                   && !event.metaKey
                   && window.getSelection()?.isCollapsed
                 ) {
+                  const anchor = window.getSelection()?.anchorNode;
+                  const anchorElement = anchor instanceof Element ? anchor : anchor?.parentElement;
+                  const block = anchorElement?.closest<HTMLElement>(editableBlockSelector);
+                  if (block && block !== event.currentTarget) {
+                    const blockPosition = selectionOffset(block);
+                    const target = event.key === 'ArrowUp'
+                      ? skipEmptyAdjacentBlock(block, -1, blockPosition?.after.trim() === '')
+                      : skipEmptyAdjacentBlock(block, 1, blockPosition?.before.trim() === '');
+                    if (target) {
+                      event.preventDefault();
+                      (event.key === 'ArrowUp' ? placeCaretAtEnd : placeCaretAtStart)(target);
+                      return;
+                    }
+                  }
                   const position = selectionOffset(event.currentTarget);
                   const atStart = position && position.before.trim() === '';
                   const atEnd = position && position.after.trim() === '';

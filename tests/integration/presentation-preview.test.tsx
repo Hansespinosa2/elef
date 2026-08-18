@@ -395,6 +395,42 @@ describe('PresentationPreview interactions', () => {
     expect(slides[1].classList.contains('editing')).toBe(true);
   });
 
+  it('skips an empty contentEditable block when moving up through slide lines', () => {
+    const slide = render('# First\n\nSecond');
+    slide.innerHTML = '<h1>First</h1><div><br></div><div>Second</div><span class="slide-number">1</span>';
+    const secondLine = slide.querySelectorAll('div')[1].firstChild!;
+    const end = document.createRange();
+    end.setStart(secondLine, secondLine.textContent?.length ?? 0);
+    end.collapse(true);
+    window.getSelection()!.removeAllRanges();
+    window.getSelection()!.addRange(end);
+    const event = new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true });
+
+    act(() => {
+      slide.dispatchEvent(event);
+    });
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(window.getSelection()?.anchorNode).toBe(slide.querySelector('h1'));
+    expect(window.getSelection()?.anchorOffset).toBe(1);
+
+    const firstLine = slide.querySelector('h1')!.firstChild!;
+    const start = document.createRange();
+    start.setStart(firstLine, 0);
+    start.collapse(true);
+    window.getSelection()!.removeAllRanges();
+    window.getSelection()!.addRange(start);
+    const down = new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true });
+
+    act(() => {
+      slide.dispatchEvent(down);
+    });
+
+    expect(down.defaultPrevented).toBe(true);
+    expect(window.getSelection()?.anchorNode).toBe(slide.querySelectorAll('div')[1]);
+    expect(window.getSelection()?.anchorOffset).toBe(0);
+  });
+
   it('leaves arrow movement between lines to the native editor', () => {
     render('First line\n\nSecond line\n---\n# Two');
     const slide = container.querySelector<HTMLElement>('.slide')!;
