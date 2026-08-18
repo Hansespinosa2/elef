@@ -4,7 +4,13 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
-import { isSlideOverBudget, replaceSlideMarkdown, splitSlideMarkdown } from '../domain/presentation';
+import {
+  deleteSlideMarkdown,
+  insertSlideMarkdown,
+  isSlideOverBudget,
+  replaceSlideMarkdown,
+  splitSlideMarkdown,
+} from '../domain/presentation';
 import type { Presentation, ThemeMode } from '../domain/presentation';
 import './PresentationPreview.css';
 import 'katex/dist/katex.min.css';
@@ -135,6 +141,29 @@ function placeCaretAtEnd(element: HTMLElement): void {
   range.collapse(false);
   selection.removeAllRanges();
   selection.addRange(range);
+}
+
+function placeCaretAtStart(element: HTMLElement): void {
+  const selection = window.getSelection();
+  if (!selection) return;
+  const range = document.createRange();
+  range.selectNodeContents(element);
+  range.collapse(true);
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
+function selectionOffset(element: HTMLElement): { before: string; after: string } | null {
+  const selection = window.getSelection();
+  if (!selection?.rangeCount || !selection.anchorNode || !element.contains(selection.anchorNode)) return null;
+  const range = selection.getRangeAt(0);
+  const before = document.createRange();
+  before.selectNodeContents(element);
+  before.setEnd(selection.anchorNode, selection.anchorOffset);
+  const after = document.createRange();
+  after.selectNodeContents(element);
+  after.setStart(selection.focusNode || selection.anchorNode, selection.focusOffset);
+  return { before: before.toString(), after: after.toString() };
 }
 
 function splitMarkdownBlocks(markdown: string): string[] {
@@ -306,7 +335,11 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
   const [sourceBlock, setSourceBlock] = useState<{ slideIndex: number; blockIndex: number } | null>(null);
   const [sourceDraft, setSourceDraft] = useState('');
   const [overflowPrompt, setOverflowPrompt] = useState<number | null>(null);
+  const [activeSlide, setActiveSlide] = useState(0);
+  const [undoDelete, setUndoDelete] = useState<{ source: string; slideIndex: number; scrollY: number } | null>(null);
   const previewRef = useRef<HTMLElement>(null);
+  const slideRefs = useRef(new Map<number, HTMLElement>());
+  const pendingFocus = useRef<{ index: number; start: boolean } | null>(null);
   const editingSource = useRef<{ slideIndex: number; markdown: string } | null>(null);
   const [availableWidth, setAvailableWidth] = useState(slideWidth);
   const slideScale = Math.max(minimumSlideScale, Math.min(1, availableWidth / slideWidth));
@@ -340,13 +373,40 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
       window.removeEventListener('pointerdown', exitOnOutsideClick, true);
     };
   }, [sourceBlock]);
+  useEffect(() => {
+    const pending = pendingFocus.current;
+    if (!pending) return;
+    const element = slideRefs.current.get(pending.index);
+    if (!element) return;
+    element.focus();
+    (pending.start ? placeCaretAtStart : placeCaretAtEnd)(element);
+    pendingFocus.current = null;
+    window.scrollTo?.({ top: undoDelete?.scrollY ?? window.scrollY, behavior: 'auto' });
+  }, [presentation.slides, undoDelete]);
+  useEffect(() => {
+    if (!undoDelete) return;
+    const timer = window.setTimeout(() => setUndoDelete(null), 6000);
+    return () => window.clearTimeout(timer);
+  }, [undoDelete]);
+  const focusSlide = (index: number, start: boolean) => {
+    pendingFocus.current = { index, start };
+    setActiveSlide(index);
+  };
+  const changeSlide = (index: number, nextSource: string, start: boolean) => {
+    focusSlide(index, start);
+    onSourceChange(nextSource);
+  };
   return (
     <main ref={previewRef} className={`slide-list presentation-theme-${theme}`} aria-label={`${presentation.sourceName} slides`}>
       {presentation.slides.map((slide) => (
         <div className="slide-viewport" key={slide.id}>
           <div className="slide-shell" style={{ width: slideWidth * slideScale, height: slideHeight * slideScale }}>
           <article
-            className={`slide${sourceBlock?.slideIndex === slide.index ? ' source-mode' : ''}`}
+            ref={(element) => {
+              if (element) slideRefs.current.set(slide.index, element);
+              else slideRefs.current.delete(slide.index);
+            }}
+            className={`slide${sourceBlock?.slideIndex === slide.index ? ' source-mode' : ''}${activeSlide === slide.index ? ' editing' : ''}`}
             style={{ width: slideWidth, height: slideHeight, transform: `scale(${slideScale})` }}
             aria-label={`Slide ${slide.index + 1}`}
             contentEditable={sourceBlock?.slideIndex === slide.index ? undefined : true}
@@ -363,6 +423,7 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
                 : null;
               const blockIndex = blockElement ? Number(blockElement.dataset.blockIndex) : null;
               editingSource.current = { slideIndex: slide.index, markdown: slide.markdown };
+              setActiveSlide(slide.index);
             }}
             onKeyDown={!sourceBlock
               ? (event) => {
@@ -378,6 +439,21 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
                     const blocks = splitMarkdownBlocks(slide.markdown);
                     setSourceBlock({ slideIndex: slide.index, blockIndex });
                     setSourceDraft(blocks[blockIndex] || '');
+                    return;
+                  }
+                }
+                if ((event.key === 'ArrowUp' || event.key === 'ArrowDown') && !event.shiftKey && !event.altKey) {
+                  const position = selectionOffset(event.currentTarget);
+                  const atStart = position && !position.before.includes('\n');
+                  const atEnd = position && !position.after.includes('\n');
+                  if (event.key === 'ArrowUp' && atStart && slide.index > 0) {
+                    event.preventDefault();
+                    focusSlide(slide.index - 1, false);
+                    return;
+                  }
+                  if (event.key === 'ArrowDown' && atEnd && slide.index < presentation.slides.length - 1) {
+                    event.preventDefault();
+                    focusSlide(slide.index + 1, true);
                     return;
                   }
                 }
@@ -473,6 +549,21 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
             )}
             <span className="slide-number" contentEditable={false} aria-hidden="true">{slide.index + 1}</span>
           </article>
+          {activeSlide === slide.index && (
+            <div className="slide-actions" aria-label={`Actions for slide ${slide.index + 1}`}>
+              <button
+                type="button"
+                className="slide-delete-button"
+                aria-label={`Delete slide ${slide.index + 1}`}
+                onClick={() => {
+                  const scrollY = window.scrollY;
+                  const replacement = Math.min(slide.index, presentation.slides.length - 2);
+                  setUndoDelete({ source, slideIndex: slide.index, scrollY });
+                  changeSlide(replacement < 0 ? 0 : replacement, deleteSlideMarkdown(source, slide.index), true);
+                }}
+              >Delete slide</button>
+            </div>
+          )}
           {overflowSlides.has(slide.index) && (
             <button
               className="slide-overflow-trigger"
@@ -496,8 +587,24 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
             </div>
           )}
           </div>
+          <button
+            type="button"
+            className="slide-add-button"
+            onClick={() => changeSlide(slide.index + 1, insertSlideMarkdown(source, slide.index), true)}
+          >Add slide</button>
         </div>
       ))}
+      {undoDelete && (
+        <div className="slide-undo-notice" role="status">
+          <span>Slide deleted.</span>
+          <button type="button" onClick={() => {
+            const restore = undoDelete;
+            setUndoDelete(null);
+            changeSlide(restore.slideIndex, restore.source, false);
+            window.scrollTo?.({ top: restore.scrollY, behavior: 'auto' });
+          }}>Undo</button>
+        </div>
+      )}
     </main>
   );
 }

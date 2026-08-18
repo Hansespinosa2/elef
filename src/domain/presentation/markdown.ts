@@ -159,6 +159,23 @@ export function replaceSlideMarkdown(source: string, slideIndex: number, markdow
   return `${prefix}${sections.join('\n---\n')}`;
 }
 
+/** Inserts one blank slide immediately after the requested slide. */
+export function insertSlideMarkdown(source: string, slideIndex: number): string {
+  const { prefix, sections } = markdownSections(source);
+  if (slideIndex < 0 || slideIndex >= sections.length) return source;
+  sections.splice(slideIndex + 1, 0, '');
+  return `${prefix}${sections.join('\n---\n')}`;
+}
+
+/** Deletes a slide while always retaining one editable slide in the document. */
+export function deleteSlideMarkdown(source: string, slideIndex: number): string {
+  const { prefix, sections } = markdownSections(source);
+  if (slideIndex < 0 || slideIndex >= sections.length) return source;
+  if (sections.length === 1) sections[0] = '';
+  else sections.splice(slideIndex, 1);
+  return `${prefix}${sections.join('\n---\n')}`;
+}
+
 export function splitSlideMarkdown(source: string, slideIndex: number): string | null {
   const { prefix, sections } = markdownSections(source);
   const current = sections[slideIndex];

@@ -34,6 +34,26 @@ describe('PresentationPreview interactions', () => {
     return container.querySelector<HTMLElement>('.slide')!;
   }
 
+  it('renders Add and Delete controls and sends canonical source updates', () => {
+    const changes: string[] = [];
+    render('# One\n---\n# Two', (source) => changes.push(source));
+    const addButtons = Array.from(container.querySelectorAll<HTMLButtonElement>('.slide-add-button'));
+    expect(addButtons).toHaveLength(2);
+    act(() => addButtons[0].click());
+    expect(changes.at(-1)).toBe('# One\n---\n\n---\n# Two');
+    act(() => container.querySelector<HTMLButtonElement>('.slide-delete-button')!.click());
+    expect(changes.at(-1)).toBe('# One');
+    expect(container.querySelector('.slide-undo-notice')).not.toBeNull();
+  });
+
+  it('keeps one blank slide after deleting the only slide', () => {
+    const changes: string[] = [];
+    render('# One', (source) => changes.push(source));
+    act(() => container.querySelector<HTMLButtonElement>('.slide-delete-button')!.click());
+    expect(changes).toEqual(['']);
+    expect(container.querySelector('.slide-undo-notice')).not.toBeNull();
+  });
+
   it('activates inline editing from a single click', () => {
     vi.useFakeTimers();
     const slide = render('# Heading');

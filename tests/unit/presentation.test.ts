@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   parseMarkdown,
+  deleteSlideMarkdown,
+  insertSlideMarkdown,
   presentationThemeFromSource,
   replaceSlideMarkdown,
   setPresentationTheme,
@@ -16,6 +18,16 @@ import { readUtf8Markdown } from '../../src/domain/presentation/utf8';
 import { hasUnsavedChanges } from '../../src/domain/presentation/document';
 
 describe('parseMarkdown', () => {
+  it('inserts and deletes slides without touching front matter or fenced separators', () => {
+    const source = '---\ntitle: Demo\n---\n```yaml\n---\n```\n---\n# Two';
+    expect(insertSlideMarkdown(source, 0)).toBe('---\ntitle: Demo\n---\n```yaml\n---\n```\n---\n\n---\n# Two');
+    expect(deleteSlideMarkdown(insertSlideMarkdown(source, 0), 1)).toBe(source);
+  });
+
+  it('clears the only slide instead of producing zero slides', () => {
+    expect(deleteSlideMarkdown('---\ntitle: Demo\n---\n# One', 0)).toBe('---\ntitle: Demo\n---\n');
+    expect(parseMarkdown(deleteSlideMarkdown('# One', 0)).slides.map((slide) => slide.markdown)).toEqual(['']);
+  });
   it('splits ordered slides on standalone separators', () => {
     const result = parseMarkdown('# One\n\n---\n\n## Two');
     expect(result.slides.map((slide) => slide.markdown)).toEqual(['# One', '## Two']);

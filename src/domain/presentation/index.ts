@@ -12,6 +12,8 @@ export {
 } from './presentation';
 export {
   extractFirstH1,
+  deleteSlideMarkdown,
+  insertSlideMarkdown,
   isSlideOverBudget,
   normalizeFolderName,
   parseMarkdown,
