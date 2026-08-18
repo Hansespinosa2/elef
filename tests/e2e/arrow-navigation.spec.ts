@@ -18,6 +18,8 @@ interface Diagnostics {
   selection: { anchor: string; anchorOffset: number; before: string; after: string } | null;
   scroll: { top: number; height: number; clientHeight: number; rect: DOMRect | null } | null;
   blockRect: DOMRect | null;
+  caretRect: { top: number; bottom: number; left: number; width: number; height: number } | null;
+  caretRangeFromPoint: boolean;
 }
 
 async function diagnostics(): Promise<Diagnostics> {
@@ -38,6 +40,7 @@ async function diagnostics(): Promise<Diagnostics> {
     }
     const slide = anchorElement?.closest<HTMLElement>('.slide')
       || document.querySelector<HTMLElement>('.slide.editing');
+    const caretRange = selection?.rangeCount ? selection.getRangeAt(0).getBoundingClientRect() : null;
     return {
       slides: [...document.querySelectorAll<HTMLElement>('.slide')].map((item) => ({
         className: item.className,
@@ -57,6 +60,14 @@ async function diagnostics(): Promise<Diagnostics> {
         rect: slide.getBoundingClientRect(),
       } : null,
       blockRect: block?.getBoundingClientRect() || null,
+      caretRect: caretRange && {
+        top: caretRange.top,
+        bottom: caretRange.bottom,
+        left: caretRange.left,
+        width: caretRange.width,
+        height: caretRange.height,
+      },
+      caretRangeFromPoint: typeof document.caretRangeFromPoint === 'function',
     };
   }) as unknown as Diagnostics;
 }
@@ -105,7 +116,7 @@ async function placeCaret(selector: string, offset: number): Promise<void> {
 }
 
 async function pressDown(): Promise<void> {
-  await browser.keys(['ArrowDown']);
+  await browser.action('key').down('\uE015').up('\uE015').perform();
   await browser.pause(50);
 }
 

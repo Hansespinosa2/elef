@@ -222,6 +222,49 @@ function caretAtVisibleBottom(element: HTMLElement): boolean {
   return caretRect.bottom >= elementRect.bottom - 4;
 }
 
+function moveCaretByVisualLine(block: HTMLElement, direction: -1 | 1): boolean {
+  const selection = window.getSelection();
+  if (!selection?.rangeCount || !selection.anchorNode) return false;
+  const current = document.createRange();
+  current.setStart(selection.anchorNode, selection.anchorOffset);
+  current.collapse(true);
+  if (typeof current.getBoundingClientRect !== 'function') return false;
+  const caretRect = current.getBoundingClientRect();
+  if (!caretRect.height && !caretRect.bottom) return false;
+  const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+  const candidates: Array<{ node: Text; offset: number; rect: DOMRect }> = [];
+  let node = walker.nextNode();
+  while (node) {
+    const text = node as Text;
+    for (let offset = 0; offset <= text.length; offset += 1) {
+      const candidate = document.createRange();
+      candidate.setStart(text, offset);
+      candidate.collapse(true);
+      if (typeof candidate.getBoundingClientRect !== 'function') continue;
+      const rect = candidate.getBoundingClientRect();
+      const onTargetLine = direction > 0
+        ? rect.top > caretRect.top + caretRect.height / 2
+        : rect.bottom < caretRect.bottom - caretRect.height / 2;
+      if (onTargetLine && rect.height) candidates.push({ node: text, offset, rect });
+    }
+    node = walker.nextNode();
+  }
+  if (!candidates.length) return false;
+  const targetLine = direction > 0
+    ? Math.min(...candidates.map(({ rect }) => rect.top))
+    : Math.max(...candidates.map(({ rect }) => rect.bottom));
+  const target = candidates
+    .filter(({ rect }) => (direction > 0 ? rect.top : rect.bottom) === targetLine)
+    .sort((left, right) => Math.abs(left.rect.left - caretRect.left) - Math.abs(right.rect.left - caretRect.left))[0];
+  if (!target) return false;
+  const next = document.createRange();
+  next.setStart(target.node, target.offset);
+  next.collapse(true);
+  selection.removeAllRanges();
+  selection.addRange(next);
+  return true;
+}
+
 function typingSlideSeparatorBlock(element: HTMLElement): HTMLElement | null {
   const selection = window.getSelection();
   if (!selection?.isCollapsed) return null;
@@ -580,6 +623,15 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
                     ) {
                       event.preventDefault();
                       placeCaretAtBlockBoundary(block, false);
+                      return;
+                    }
+                    if (
+                      blockPosition
+                      && blockPosition.before.trim()
+                      && blockPosition.after.trim()
+                      && moveCaretByVisualLine(block, direction)
+                    ) {
+                      event.preventDefault();
                       return;
                     }
                     const emptyTarget = skipEmptyAdjacentBlock(
