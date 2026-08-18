@@ -32,11 +32,11 @@ export class RecoverableErrorBoundary extends Component<Props, State> {
 }
 
 export function RecoveryScreen({ error }: { error: Error }) {
-  const detail = import.meta.env.DEV && error.stack ? error.stack : error.message;
+  const detail = import.meta.env.DEV && error.stack ? error.stack : 'Unexpected application error.';
   return (
     <main className="recovery-screen" role="alert">
       <h1>Elef needs to recover</h1>
-      <p>The application hit an unexpected error. Your Markdown source was not discarded.</p>
+      <p>The application stopped rendering safely. Reload Elef to continue.</p>
       <pre>{detail}</pre>
       <button type="button" onClick={() => window.location.reload()}>Reload Elef</button>
     </main>
@@ -44,8 +44,13 @@ export function RecoveryScreen({ error }: { error: Error }) {
 }
 
 export function installGlobalErrorReporter(onError: (error: Error) => void) {
-  const handleError = (event: ErrorEvent) => onError(errorFrom(event.error || event.message));
-  const handleRejection = (event: PromiseRejectionEvent) => onError(errorFrom(event.reason));
+  const handleError = (event: ErrorEvent) => {
+    if (event.error) onError(errorFrom(event.error));
+  };
+  const handleRejection = (event: PromiseRejectionEvent) => {
+    if (event.reason instanceof DOMException && event.reason.name === 'AbortError') return;
+    onError(errorFrom(event.reason));
+  };
   window.addEventListener('error', handleError);
   window.addEventListener('unhandledrejection', handleRejection);
   return () => {

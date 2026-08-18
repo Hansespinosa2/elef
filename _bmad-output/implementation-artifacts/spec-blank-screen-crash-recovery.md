@@ -100,3 +100,29 @@ The first implementation pass must instrument before changing parser semantics. 
 
 - Controlled parent rerenders exercise rapid slide additions against canonical source.
   [`presentation-preview.test.tsx:122`](../../tests/integration/presentation-preview.test.tsx#L122)
+
+## Suggested Review Order
+
+**Failure containment**
+
+- The bootstrap keeps render and global async failures visible instead of leaving an empty root.
+  [`main.tsx:6`](../../src/main.tsx#L6)
+
+- The boundary presents safe production details and a reload recovery action.
+  [`RecoverableErrorBoundary.tsx:15`](../../src/components/RecoverableErrorBoundary.tsx#L15)
+
+**Source safety**
+
+- Source updates validate parsing before publishing and retain failed edits.
+  [`workspace.ts:205`](../../src/application/world/workspace.ts#L205)
+
+- Render-time parse failures become an actionable workspace state.
+  [`App.tsx:181`](../../src/App.tsx#L181)
+
+**Regression coverage**
+
+- Boundary and global-handler behavior is exercised directly in jsdom.
+  [`recoverable-error-boundary.test.tsx:10`](../../tests/integration/recoverable-error-boundary.test.tsx#L10)
+
+- Rapid source mutations are verified through real parent rerenders.
+  [`presentation-preview.test.tsx:122`](../../tests/integration/presentation-preview.test.tsx#L122)
