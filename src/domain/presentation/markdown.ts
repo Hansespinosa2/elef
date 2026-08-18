@@ -176,6 +176,35 @@ export function deleteSlideMarkdown(source: string, slideIndex: number): string 
   return `${prefix}${sections.join('\n---\n')}`;
 }
 
+export function splitSlideAtSeparator(
+  source: string,
+  slideIndex: number,
+  markdown: string,
+): string {
+  const { prefix, sections } = markdownSections(source);
+  if (slideIndex < 0 || slideIndex >= sections.length) return source;
+
+  const pieces: string[] = [];
+  let piece: string[] = [];
+  let fence: { marker: string; length: number } | null = null;
+  for (const line of markdown.replace(/\r\n?/g, '\n').split('\n')) {
+    const nextFence = isFenceStart(line);
+    if (nextFence) {
+      fence = fence && fence.marker === nextFence.marker && nextFence.length >= fence.length ? null : nextFence;
+    }
+    if (!fence && /^---[ \t]*$/.test(line)) {
+      pieces.push(piece.join('\n').trim());
+      piece = [];
+    } else {
+      piece.push(line);
+    }
+  }
+  pieces.push(piece.join('\n').trim());
+  if (pieces.length < 2) return source;
+  sections.splice(slideIndex, 1, ...pieces);
+  return `${prefix}${sections.join('\n---\n')}`;
+}
+
 export function splitSlideMarkdown(source: string, slideIndex: number): string | null {
   const { prefix, sections } = markdownSections(source);
   const current = sections[slideIndex];

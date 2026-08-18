@@ -54,6 +54,37 @@ describe('PresentationPreview interactions', () => {
     expect(container.querySelector('.slide-undo-notice')).not.toBeNull();
   });
 
+  it('creates a slide when the third dash is typed on an empty line', () => {
+    const changes: string[] = [];
+    const slide = render('# One', (source) => changes.push(source));
+    const paragraph = document.createElement('p');
+    const text = document.createTextNode('--');
+    paragraph.append(text);
+    slide.append(paragraph);
+    const range = document.createRange();
+    range.setStart(text, 2);
+    range.collapse(true);
+    window.getSelection()!.removeAllRanges();
+    window.getSelection()!.addRange(range);
+
+    act(() => {
+      slide.dispatchEvent(new KeyboardEvent('keydown', { key: '-', bubbles: true }));
+    });
+
+    expect(changes.at(-1)).toBe('# One\n---\n');
+  });
+
+  it('deletes an empty slide when Backspace is pressed', () => {
+    const changes: string[] = [];
+    render('# One\n---\n', (source) => changes.push(source));
+    const slide = container.querySelectorAll<HTMLElement>('.slide')[1];
+    act(() => slide.click());
+    act(() => {
+      slide.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true }));
+    });
+    expect(changes.at(-1)).toBe('# One');
+  });
+
   it('restores the exact source when Undo is activated', () => {
     const changes: string[] = [];
     let currentSource = '# One\n---\n# Two';

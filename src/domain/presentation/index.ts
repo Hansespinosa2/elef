@@ -21,6 +21,7 @@ export {
   replaceSlideMarkdown,
   setPresentationTheme,
   slideContentBudget,
+  splitSlideAtSeparator,
   splitSlideMarkdown,
   upsertFirstH1,
 } from './markdown';

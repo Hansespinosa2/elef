@@ -7,6 +7,7 @@ import {
   replaceSlideMarkdown,
   setPresentationTheme,
   slideContentBudget,
+  splitSlideAtSeparator,
   splitSlideMarkdown,
 } from '../../src/domain/presentation/markdown';
 import {
@@ -111,6 +112,13 @@ describe('parseMarkdown', () => {
   it('deletes slides while retaining one blank slide', () => {
     expect(deleteSlideMarkdown('# One\n---\n# Two', 0)).toBe('# Two');
     expect(deleteSlideMarkdown('# One', 0)).toBe('');
+  });
+
+  it('splits a slide at a typed separator without splitting fenced code', () => {
+    expect(splitSlideAtSeparator('# One', 0, '# One\n\n---\n\n# Two')).toBe(
+      '# One\n---\n# Two',
+    );
+    expect(splitSlideAtSeparator('```yaml\n---\n```', 0, '```yaml\n---\n```')).toBe('```yaml\n---\n```');
   });
 
   it('splits an overflowing slide at top-level headings', () => {

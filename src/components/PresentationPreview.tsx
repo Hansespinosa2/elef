@@ -9,6 +9,7 @@ import {
   insertSlideMarkdown,
   isSlideOverBudget,
   replaceSlideMarkdown,
+  splitSlideAtSeparator,
   splitSlideMarkdown,
 } from '../domain/presentation';
 import type { Presentation, ThemeMode } from '../domain/presentation';
@@ -164,6 +165,17 @@ function selectionOffset(element: HTMLElement): { before: string; after: string 
   after.selectNodeContents(element);
   after.setStart(selection.focusNode || selection.anchorNode, selection.focusOffset);
   return { before: before.toString(), after: after.toString() };
+}
+
+function isTypingSlideSeparator(element: HTMLElement): boolean {
+  const selection = window.getSelection();
+  if (!selection?.isCollapsed) return false;
+  const anchor = selection.anchorNode;
+  const anchorElement = anchor instanceof Element ? anchor : anchor?.parentElement;
+  const block = anchorElement?.closest<HTMLElement>('p, div, h1, h2, h3, blockquote, li');
+  if (!block || !element.contains(block) || block.textContent !== '--') return false;
+  const position = selectionOffset(block);
+  return position?.before === '--' && position.after === '';
 }
 
 function splitMarkdownBlocks(markdown: string): string[] {
@@ -446,6 +458,39 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
                     setSourceDraft(blocks[blockIndex] || '');
                     return;
                   }
+                }
+                if (
+                  event.key === '-'
+                  && !event.shiftKey
+                  && !event.altKey
+                  && !event.ctrlKey
+                  && !event.metaKey
+                  && isTypingSlideSeparator(event.currentTarget)
+                ) {
+                  event.preventDefault();
+                  const markdown = serializeSlide(event.currentTarget).replace(/(^|\n)--(?=\n|$)/, '$1---');
+                  const nextSource = splitSlideAtSeparator(source, slide.index, markdown);
+                  if (nextSource !== source) {
+                    setUndoDelete(null);
+                    changeSlide(slide.index + 1, nextSource, true);
+                  }
+                  return;
+                }
+                if (
+                  event.key === 'Backspace'
+                  && !event.shiftKey
+                  && !event.altKey
+                  && !event.ctrlKey
+                  && !event.metaKey
+                  && !slide.markdown.trim()
+                  && slide.index > 0
+                  && window.getSelection()?.isCollapsed
+                ) {
+                  event.preventDefault();
+                  const scrollY = window.scrollY;
+                  setUndoDelete({ source, slideIndex: slide.index, scrollY });
+                  changeSlide(slide.index - 1, deleteSlideMarkdown(source, slide.index), false);
+                  return;
                 }
                 if (
                   (event.key === 'ArrowUp' || event.key === 'ArrowDown')
