@@ -171,6 +171,7 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
   const [sourceSlide, setSourceSlide] = useState<number | null>(null);
   const [overflowPrompt, setOverflowPrompt] = useState<number | null>(null);
   const previewRef = useRef<HTMLElement>(null);
+  const editClickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [availableWidth, setAvailableWidth] = useState(slideWidth);
   const slideScale = Math.max(minimumSlideScale, Math.min(1, availableWidth / slideWidth));
   const overflowSlides = new Set(
@@ -193,6 +194,9 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
     window.addEventListener('keydown', exitSourceMode);
     return () => window.removeEventListener('keydown', exitSourceMode);
   }, [sourceSlide]);
+  useEffect(() => () => {
+    if (editClickTimer.current) clearTimeout(editClickTimer.current);
+  }, []);
   return (
     <main ref={previewRef} className={`slide-list presentation-theme-${theme}`} aria-label={`${presentation.sourceName} slides`}>
       {presentation.slides.map((slide) => (
@@ -204,8 +208,18 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
             aria-label={`Slide ${slide.index + 1}`}
             contentEditable={sourceSlide === slide.index ? undefined : editingSlide === slide.index}
             suppressContentEditableWarning
-            onClick={() => { if (sourceSlide === null) setEditingSlide(slide.index); }}
-            onDoubleClick={(event) => { event.stopPropagation(); setSourceSlide(slide.index); setEditingSlide(null); }}
+            onClick={() => {
+              if (sourceSlide !== null) return;
+              if (editClickTimer.current) clearTimeout(editClickTimer.current);
+              editClickTimer.current = setTimeout(() => setEditingSlide(slide.index), 180);
+            }}
+            onDoubleClick={(event) => {
+              event.stopPropagation();
+              if (editClickTimer.current) clearTimeout(editClickTimer.current);
+              editClickTimer.current = null;
+              setSourceSlide(slide.index);
+              setEditingSlide(null);
+            }}
             onKeyDown={editingSlide === slide.index && sourceSlide !== slide.index
               ? (event) => handleMarkdownShortcut(event.currentTarget, event)
               : undefined}
