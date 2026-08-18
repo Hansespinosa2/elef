@@ -41,3 +41,22 @@ export function parseMarkdown(source: string, sourceName = 'Untitled presentatio
 
   return { sourceName, slides };
 }
+
+export function extractFirstH1(source: string): string | null {
+  let fence: { marker: string; length: number } | null = null;
+  for (const line of source.replace(/\r\n?/g, '\n').split('\n')) {
+    const nextFence = isFenceStart(line);
+    if (nextFence) { fence = fence && fence.marker === nextFence.marker && nextFence.length >= fence.length ? null : nextFence; continue; }
+    if (!fence) {
+      const match = line.match(/^\s{0,3}#(?!#)\s+(.+?)\s*#*\s*$/);
+      if (match) return match[1].trim();
+    }
+  }
+  return null;
+}
+
+export function normalizeFolderName(title: string | null | undefined, fallback = 'Untitled presentation'): string {
+  const value = (title || fallback).normalize('NFKC').replace(/[<>:"/\\|?*\u0000-\u001f]/g, ' ').replace(/\s+/g, ' ').replace(/[. ]+$/g, '').trim();
+  if (!value || value === '.' || value === '..') return fallback;
+  return value.slice(0, 120);
+}

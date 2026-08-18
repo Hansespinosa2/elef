@@ -1,3 +1,3 @@
 export type { Presentation, Slide } from './presentation';
-export { parseMarkdown } from './markdown';
+export { extractFirstH1, normalizeFolderName, parseMarkdown } from './markdown';
 export { hasUnsavedChanges } from './document';

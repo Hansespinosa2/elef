@@ -13,7 +13,7 @@
   "tauri": {
     "allowlist": {
       "dialog": { "open": true },
-      "fs": { "readFile": true, "scope": ["$HOME/**", "$DOCUMENT/**", "$DOWNLOAD/**"] }
+      "fs": { "readFile": true, "writeFile": true, "createDir": true, "renameFile": true, "readDir": true, "exists": true, "scope": ["$HOME/**", "$DOCUMENT/**", "$DOWNLOAD/**"] }
     },
     "windows": [{ "title": "Elef", "width": 1280, "height": 800, "resizable": true }],
     "bundle": { "identifier": "com.elef.presentation" },

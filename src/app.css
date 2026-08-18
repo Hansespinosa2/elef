@@ -13,6 +13,14 @@ button:hover { background: #a5f3fc; }
 .workspace .slide-list { width: 100%; margin: 0; }
 .welcome { display: grid; place-content: center; min-height: 60vh; text-align: center; color: #cbd5e1; }
 .welcome h1 { color: #f8fafc; }
+.setup { display: grid; place-content: center; min-height: 80vh; text-align: center; }
+.setup h1 { color: #f8fafc; }
+.dashboard { display: grid; grid-template-columns: 15rem minmax(0, 1fr); gap: 2rem; max-width: 1400px; margin: 0 auto; }
+.sidebar { display: flex; flex-direction: column; gap: .5rem; }
+.sidebar h2, .resume h1 { color: #f8fafc; }
+.recent-item { color: #cbd5e1; background: #1e293b; text-align: left; }
+.resume-card { padding: 1rem; border: 1px solid #334155; border-radius: 8px; background: #172033; margin-bottom: 1rem; }
+.resume-card .slide-list { max-height: 34rem; overflow: auto; margin: 0 0 1rem; }
 .error { max-width: 1100px; margin: 0 auto 1.5rem; padding: 1rem; border: 1px solid #f87171; border-radius: 6px; color: #fecaca; background: #451a1a; }
 code { color: #67e8f9; }
 @media (max-width: 800px) {

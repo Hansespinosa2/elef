@@ -2,8 +2,9 @@
 title: 'Build the Elef World presentation workspace'
 type: 'feature'
 created: '2026-08-17'
-status: 'draft'
+status: 'done'
 review_loop_iteration: 0
+baseline_commit: '9db3391a894af66aa8500af5853db9f4da316482'
 context:
   - '{project-root}/_bmad-output/brainstorming/brainstorm-presentation-workspace-save-model-2026-08-17/.memlog.md'
 ---
@@ -39,28 +40,27 @@ context:
 
 ## Code Map
 
-- `src/App.tsx:9-50` -- current editor-only composition root; evolve into Tauri workspace/dashboard routing while preserving editor components.
-- `src/application/presentation-editor/session.ts:5-98` -- current source/presentation session; extend or coordinate with workspace persistence without leaking filesystem APIs into the domain.
-- `src/application/ports/documents.ts:1-16` -- existing platform-neutral document ports; add narrow World/persistence contracts here.
-- `src/infrastructure/tauri/documents.ts:1-25` -- current Tauri file adapter; add World folder, read/write, rename, and recursive-discovery operations in a focused adapter/module.
-- `src-tauri/src/main.rs:3-7` -- Tauri bootstrap; preserve the shell and add only narrowly scoped commands/permissions required for workspace persistence.
-- `src-tauri/tauri.conf.json` -- current Tauri v1 allowlist and filesystem scope; update for the minimum required desktop operations.
-- `src/domain/presentation/markdown.ts:9-43` -- stable parser contract to reuse for previews and title extraction context.
-- `src/domain/presentation/presentation.ts:1-10` -- presentation/slide types; extend with stable identity only if required by the World model.
-- `src/components/PresentationPreview.tsx:10-25` -- reusable rendered preview for the dashboard resume card and editor.
-- `src/components/MarkdownEditor.tsx:8-21` -- controlled editor to preserve as the editing surface.
-- `src/app.css:4-24` -- current application layout; extend for sidebar, dashboard, missing-target, and editor states.
-- `tests/unit/` and `tests/integration/` -- current layered test locations; add domain naming, application persistence, Tauri adapter, collision, autosave, and missing-target coverage.
+- `src/App.tsx:9-50` -- editor-only composition root; branch on Tauri capability to add World setup, dashboard, and editor navigation while preserving browser file opening.
+- `src/application/presentation-editor/session.ts:5-98` -- cached external-store editor state and source replacement workflow; retain its platform-neutral API and coordinate autosave outside the domain.
+- `src/application/ports/documents.ts:1-16` -- existing selector/reader/confirmation ports; extend with narrow World selection and persistence contracts so application code has no Tauri imports.
+- `src/domain/presentation/markdown.ts:9-43` -- deterministic `---` slide parser; add pure first-H1 extraction and safe folder-name normalization without changing parsing behavior.
+- `src/domain/presentation/presentation.ts:1-10` and `index.ts` -- presentation/slide types and public exports; add a stable draft identity helper only if the World record requires it.
+- `src/infrastructure/tauri/documents.ts:1-25` -- current Tauri v1 dialog/filesystem adapter; add folder selection, recursive `readDir`, UTF-8 read/write, create, rename, and missing-path normalization here.
+- `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml` -- current Tauri v1 allowlist/features; enable only the filesystem operations and scopes required by the adapter.
+- `src/components/PresentationPreview.tsx:10-25` and `src/components/MarkdownEditor.tsx:8-21` -- reusable preview/editor surfaces; do not duplicate Markdown rendering or editor state in the dashboard.
+- `src/app.css:1-24` -- current editor layout; extend it for sidebar/dashboard/resume, setup, missing-target, and quiet persistence-error states.
+- `tests/unit/presentation.test.ts`, `tests/unit/editor-session.test.ts`, `tests/integration/editor-workflow.test.ts` -- existing layered coverage and mocks; extend these patterns and add focused World domain/application/adapter tests.
+- `package.json` -- existing `test`, `build`, and `tauri` scripts; no dependency or script changes are expected.
 - `_bmad-output/brainstorming/brainstorm-presentation-workspace-save-model-2026-08-17/.memlog.md` -- approved product direction and explicit deferred scope.
 
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `src/domain/presentation/` -- add pure title extraction, filename sanitization, stable presentation identity, and collision-safe naming rules -- keep workspace policy framework-independent.
-- [ ] `src/application/world/` and `src/application/ports/` -- add World setup, presentation lifecycle, recent records, autosave coordination, resume state, and missing-target actions -- centralize workflow state.
-- [ ] `src/infrastructure/tauri/` and `src-tauri/` -- implement World folder selection, presentation file creation/read/write/rename, persistence, and recursive rematching -- isolate desktop APIs and permissions.
-- [ ] `src/App.tsx`, `src/components/`, and `src/app.css` -- add the split dashboard/sidebar/resume-preview experience and connect the editor -- make persistence invisible during normal use.
-- [ ] `tests/unit/` and `tests/integration/` -- cover every matrix row plus collisions, failed writes, moved/deleted entries, and draft recovery -- protect the filesystem workflow.
+- [x] `src/domain/presentation/markdown.ts` and related exports -- add pure H1 extraction and filesystem-safe title normalization, preserving the existing slide parser -- keep naming rules testable without platform APIs.
+- [x] `src/application/ports/` and `src/application/world/` -- define World records and orchestrate setup, draft creation, recent state, debounced autosave, title-driven rename, rescan, and missing-target recovery -- centralize workflow policy.
+- [x] `src/infrastructure/tauri/documents.ts`, `src-tauri/tauri.conf.json`, and `src-tauri/Cargo.toml` -- implement the Tauri v1 filesystem adapter and minimum permissions -- isolate desktop I/O and normalize failures.
+- [x] `src/App.tsx`, `src/components/`, and `src/app.css` -- add setup/dashboard/editor views with sidebar, resume preview, new-presentation action, and recoverable missing states -- preserve the current browser single-file experience.
+- [x] `tests/unit/` and `tests/integration/` -- cover every matrix row, collision behavior, failed writes, moved/deleted entries, stable rematching, and browser regression -- protect the workflow at each layer.
 
 **Acceptance Criteria:**
 - Given first launch in Tauri, when the user chooses a World folder, then Elef remembers it and opens the workspace dashboard on later launches.
@@ -86,3 +86,40 @@ New drafts need a temporary stable identity so they can be written before a titl
 
 **Manual checks:**
 - In Tauri, configure a World, create a draft, type a first H1, close/reopen it, rename it, and simulate a moved/deleted presentation. Expected: edits persist quietly and missing entries remain recoverable.
+
+## Suggested Review Order
+
+**Workspace entry point**
+
+- Tauri routing keeps desktop World behavior separate from browser single-file editing.
+  [`App.tsx:19`](../../src/App.tsx#L19)
+
+- The dashboard and editor share the same workspace state and reusable preview.
+  [`App.tsx:35`](../../src/App.tsx#L35)
+
+**Persistence workflow**
+
+- World state coordinates durable records, autosave, safe renames, rescans, and recovery.
+  [`workspace.ts:25`](../../src/application/world/workspace.ts#L25)
+
+- Collision suffixes prevent title changes from overwriting another presentation.
+  [`workspace.ts:178`](../../src/application/world/workspace.ts#L178)
+
+- Stable IDs embedded in Markdown enable moved-folder rematching.
+  [`documents.ts:48`](../../src/infrastructure/tauri/documents.ts#L48)
+
+**Domain and platform boundaries**
+
+- Pure H1 extraction and folder normalization preserve renderer behavior without filesystem dependencies.
+  [`markdown.ts:45`](../../src/domain/presentation/markdown.ts#L45)
+
+- Narrow ports keep Tauri APIs isolated from application policy.
+  [`documents.ts:18`](../../src/application/ports/documents.ts#L18)
+
+**Verification and configuration**
+
+- Workspace tests cover immediate creation, autosave, persistence, recovery, and collisions.
+  [`world-workspace.test.ts:18`](../../tests/unit/world-workspace.test.ts#L18)
+
+- Tauri permissions enable the filesystem operations required by the adapter.
+  [`tauri.conf.json:14`](../../src-tauri/tauri.conf.json#L14)
