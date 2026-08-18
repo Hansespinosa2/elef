@@ -121,6 +121,35 @@ export class WorldWorkspace {
       return null;
     }
   }
+    async renamePresentation(idToRename: string, title: string): Promise<void> {
+      const entry = this.state.presentations.find((item) => item.id === idToRename);
+      if (!entry) return;
+      const nextTitle = normalizeFolderName(title);
+      if (!nextTitle) return;
+      const source = stripWorldMetadata(entry.source);
+      const renamedSource = extractFirstH1(source)
+        ? source.replace(/^\s{0,3}#(?!#)\s+(.+?)\s*#*\s*$/m, `# ${nextTitle}`)
+        : `# ${nextTitle}\n\n${source}`;
+      this.updateSource(idToRename, renamedSource);
+    }
+    async deletePresentation(idToDelete: string): Promise<void> {
+      const entry = this.state.presentations.find((item) => item.id === idToDelete);
+      if (!entry) return;
+      try {
+        await this.fs.remove(entry.path);
+        this.timers.get(idToDelete) && clearTimeout(this.timers.get(idToDelete));
+        this.timers.delete(idToDelete);
+        this.setState({
+          ...this.state,
+          presentations: this.state.presentations.filter((item) => item.id !== idToDelete),
+          activeId: this.state.activeId === idToDelete ? null : this.state.activeId,
+          error: null,
+        });
+        this.persist();
+      } catch (reason) {
+        this.setState({ ...this.state, error: reason instanceof Error ? reason.message : 'Could not delete the presentation.' });
+      }
+    }
   open(idToOpen: string) {
     const entry = this.state.presentations.find((item) => item.id === idToOpen);
     if (!entry) return;

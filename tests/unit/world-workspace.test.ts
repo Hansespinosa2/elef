@@ -12,6 +12,7 @@ class MemoryWorld implements WorldFileSystem {
   async readText(path: string) { const value = this.files.get(path); if (value === undefined) throw new Error('missing'); return value; }
   async writeText(path: string, content: string) { this.files.set(path, content); }
   async rename(path: string, nextPath: string) { if (this.files.has(`${path}/presentation.md`)) { const value = this.files.get(`${path}/presentation.md`)!; this.files.delete(`${path}/presentation.md`); this.files.set(`${nextPath}/presentation.md`, value); } }
+  async remove(path: string) { for (const key of this.files.keys()) if (key === path || key.startsWith(`${path}/`)) this.files.delete(key); }
   async exists(path: string) { return [...this.files.keys()].some((key) => key.startsWith(`${path}/`)); }
   async scanPresentations(): Promise<WorldPresentationFile[]> { return [...this.files].filter(([path]) => path.endsWith('/presentation.md')).map(([path, text]) => ({ path: path.slice(0, -17), name: 'presentation.md', presentationId: text.match(/elef-id:\s*([^\s]+)/)?.[1] || '' })); }
 }
@@ -61,5 +62,16 @@ describe('presentation workspace', () => {
     const paths = workspace.getState().presentations.map((item) => item.path);
     expect(new Set(paths).size).toBe(2);
     expect(paths.some((path) => path.endsWith('/Same title 2'))).toBe(true);
+  });
+  it('renames and deletes presentations from the workspace', async () => {
+    const fs = new MemoryWorld(); const workspace = new WorldWorkspace(fs, storage());
+    await workspace.setup(); const draft = await workspace.createDraft();
+    await workspace.renamePresentation(draft!.id, 'Renamed');
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(workspace.getState().presentations[0].title).toBe('Renamed');
+    expect(workspace.getState().presentations[0].source).toContain('# Renamed');
+    await workspace.deletePresentation(draft!.id);
+    expect(workspace.getState().presentations).toHaveLength(0);
+    expect(fs.files.size).toBe(0);
   });
 });

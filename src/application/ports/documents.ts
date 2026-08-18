@@ -28,6 +28,7 @@ export interface WorldFileSystem {
   readText(path: string): Promise<string>;
   writeText(path: string, content: string): Promise<void>;
   rename(path: string, nextPath: string): Promise<void>;
+  remove(path: string): Promise<void>;
   scanPresentations(root: string): Promise<WorldPresentationFile[]>;
   exists(path: string): Promise<boolean>;
 }

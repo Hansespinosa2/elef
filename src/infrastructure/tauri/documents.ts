@@ -1,5 +1,5 @@
 import { open } from '@tauri-apps/plugin-dialog';
-import { exists, mkdir, readDir, readFile, readTextFile, rename, writeTextFile } from '@tauri-apps/plugin-fs';
+import { exists, mkdir, readDir, readFile, readTextFile, remove, rename, writeTextFile } from '@tauri-apps/plugin-fs';
 import type { DocumentReader, DocumentSelection, FileSelector, WorldFileSystem, WorldPresentationFile } from '../../application/ports/documents';
 import { readUtf8Markdown } from '../../domain/presentation/utf8';
 
@@ -43,6 +43,7 @@ export class TauriWorldFileSystem implements WorldFileSystem {
       async readText(path: string) { return readTextFile(path); }
       async writeText(path: string, content: string) { await writeTextFile(path, content); }
       async rename(path: string, nextPath: string) { await rename(path, nextPath); }
+      async remove(path: string) { await remove(path, { recursive: true }); }
     async exists(path: string) { return exists(path); }
     async scanPresentations(root: string): Promise<WorldPresentationFile[]> {
       const found: WorldPresentationFile[] = [];
