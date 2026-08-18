@@ -476,6 +476,7 @@ describe('PresentationPreview interactions', () => {
     expect(window.getSelection()?.anchorOffset).toBe(0);
   });
 
+  // Geometry is mocked here; acceptance of the native Tauri/WebView behavior lives in tests/e2e.
   it('snaps to the end of an overflowing paragraph before allowing editor scrolling', () => {
     const slide = render('A paragraph with enough content to overflow the visible slide area.\n---\n# Two');
     const paragraph = slide.querySelector('p')!.firstChild!;
