@@ -329,15 +329,16 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
                 ? event.target.closest<HTMLElement>('[data-block-index]')
                 : null;
               const blockIndex = blockElement ? Number(blockElement.dataset.blockIndex) : null;
-              if (editingSlide === slide.index) {
-                if (editingBlock !== blockIndex) setEditingBlock(blockIndex);
-                return;
-              }
               editingSource.current = { slideIndex: slide.index, markdown: slide.markdown };
-              setEditingBlock(blockIndex);
-              setEditingSlide(slide.index);
+              if (blockElement?.querySelector('.katex')) {
+                setEditingBlock(blockIndex);
+                setEditingSlide(slide.index);
+              } else if (editingSlide === slide.index) {
+                setEditingBlock(null);
+                setEditingSlide(null);
+              }
             }}
-            onKeyDown={editingSlide === slide.index && !sourceBlock
+            onKeyDown={!sourceBlock
               ? (event) => {
                 if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
                   const target = event.target instanceof Element ? event.target : null;
@@ -360,7 +361,7 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
               }
               : undefined}
             onBlur={(event) => {
-              if (editingSlide === slide.index) {
+              if (editingSource.current?.slideIndex === slide.index) {
                 const markdown = serializeSlide(event.currentTarget);
                 if (editingSource.current?.slideIndex === slide.index && editingSource.current.markdown !== markdown) {
                   onSourceChange(replaceSlideMarkdown(source, slide.index, markdown));
