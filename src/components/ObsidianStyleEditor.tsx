@@ -196,6 +196,8 @@ class RenderedBlockWidget extends WidgetType {
     element.dataset.blockFrom = String(this.block.from);
     element.dataset.blockTo = String(this.block.to);
     element.dataset.slideIndex = String(this.block.slideIndex);
+    element.dataset.slideSurface = String(this.block.slideIndex);
+    if (this.firstInSlide) element.dataset.slideLabel = `Slide ${this.block.slideIndex + 1}`;
     element.innerHTML = renderedMarkdown(this.block.markdown);
     annotateRenderedMath(element, this.block);
     if (findMathRanges(this.block.markdown).some((range) => !range.valid)) {
@@ -274,9 +276,12 @@ class SlideBoundaryWidget extends WidgetType {
       <div class="cm-slide-page-fill" aria-hidden="true"></div>
       <div class="cm-slide-overflow-warning" role="status">Slide may overflow its 16:9 page.</div>
       <div class="slide-boundary" role="group" aria-label="Actions for slide ${this.slideIndex + 1}">
-        <button class="slide-delete-button" type="button" data-slide-action="delete" aria-label="Delete slide ${this.slideIndex + 1}">−</button>
-        ${this.canSplit ? `<button class="slide-split-button" type="button" data-slide-action="preview-split" aria-label="Preview automatic split for slide ${this.slideIndex + 1}">Preview split</button>` : ''}
-        <button class="slide-add-button" type="button" data-slide-action="add" aria-label="Add slide after slide ${this.slideIndex + 1}">+</button>
+        <span class="slide-boundary-label">Slide ${this.slideIndex + 1}</span>
+        <div class="slide-boundary-actions">
+          <button class="slide-delete-button" type="button" data-slide-action="delete" aria-label="Delete slide ${this.slideIndex + 1}">−</button>
+          ${this.canSplit ? `<button class="slide-split-button" type="button" data-slide-action="preview-split" aria-label="Preview automatic split for slide ${this.slideIndex + 1}">Preview split</button>` : ''}
+          <button class="slide-add-button" type="button" data-slide-action="add" aria-label="Add slide after slide ${this.slideIndex + 1}">+</button>
+        </div>
       </div>
     `;
     return element;
@@ -350,6 +355,23 @@ function livePreviewDecorations(state: EditorState): DecorationSet {
         block: true,
       }),
     });
+  } else if (editingFrontMatter) {
+    const firstLine = state.doc.lineAt(0);
+    const lastLine = state.doc.lineAt(Math.max(0, frontMatterEnd - 1));
+    for (let number = firstLine.number; number <= lastLine.number; number += 1) {
+      const line = state.doc.line(number);
+      decorations.push({
+        from: line.from,
+        value: Decoration.line({
+          class: [
+            'cm-frontmatter-line',
+            number === firstLine.number ? 'cm-frontmatter-first' : '',
+            number === lastLine.number ? 'cm-frontmatter-last' : '',
+          ].filter(Boolean).join(' '),
+          attributes: { 'data-frontmatter-source': 'true' },
+        }),
+      });
+    }
   }
 
   for (const slide of slides) {
@@ -362,8 +384,19 @@ function livePreviewDecorations(state: EditorState): DecorationSet {
         'cm-slide-line',
         number === firstLine.number ? 'cm-slide-first' : '',
         number === lastLine.number ? 'cm-slide-last' : '',
+        activeBlock && line.from >= activeBlock.from && line.from < activeBlock.to ? 'cm-source-revealed' : '',
       ].filter(Boolean).join(' ');
-      decorations.push({ from: line.from, value: Decoration.line({ class: classes, attributes: { 'data-slide-index': String(slide.index) } }) });
+      decorations.push({
+        from: line.from,
+        value: Decoration.line({
+          class: classes,
+          attributes: {
+            'data-slide-index': String(slide.index),
+            'data-slide-surface': String(slide.index),
+            ...(number === firstLine.number ? { 'data-slide-label': `Slide ${slide.index + 1}` } : {}),
+          },
+        }),
+      });
     }
   }
 
@@ -406,18 +439,23 @@ function livePreviewDecorations(state: EditorState): DecorationSet {
   for (const slide of slides) {
     const markdownSource = source.slice(slide.start, slide.end).replace(/^\r?\n|\r?\n$/g, '');
     const overBudget = isSlideOverBudget(markdownSource);
-    decorations.push({
-      from: slide.end,
-      value: Decoration.widget({
-        widget: new SlideBoundaryWidget(
-          slide.index,
-          overBudget,
-          overBudget && splitSlideMarkdown(source, slide.index) !== null,
-        ),
-        block: true,
-        side: 1,
-      }),
-    });
+    const widget = new SlideBoundaryWidget(
+      slide.index,
+      overBudget,
+      overBudget && splitSlideMarkdown(source, slide.index) !== null,
+    );
+    if (slide.delimiterStart !== null && slide.delimiterEnd !== null) {
+      decorations.push({
+        from: slide.delimiterStart,
+        to: slide.delimiterEnd,
+        value: Decoration.replace({ widget, block: true }),
+      });
+    } else {
+      decorations.push({
+        from: slide.end,
+        value: Decoration.widget({ widget, block: true, side: 1 }),
+      });
+    }
   }
 
   return Decoration.set(
@@ -442,16 +480,34 @@ const fixedPageMeasurements = ViewPlugin.fromClass(class {
         return Array.from(this.view.dom.querySelectorAll<HTMLElement>('.cm-slide-boundary')).map((boundary) => {
           const index = boundary.dataset.slideIndex;
           const start = this.view.dom.querySelector<HTMLElement>(`.cm-slide-first[data-slide-index="${index}"]`);
-          if (!start || !width) return { boundary, fill: 0, overflowing: boundary.classList.contains('may-overflow') };
+          if (!start || !width) {
+            return {
+              boundary,
+              start,
+              fill: 0,
+              pageHeight: 0,
+              overflowing: boundary.classList.contains('may-overflow'),
+            };
+          }
           const contentHeight = boundary.getBoundingClientRect().top - start.getBoundingClientRect().top;
           const pageHeight = width * 9 / 16;
-          return { boundary, fill: Math.max(0, pageHeight - contentHeight), overflowing: contentHeight > pageHeight + 1 };
+          return {
+            boundary,
+            start,
+            fill: Math.max(0, pageHeight - contentHeight),
+            pageHeight,
+            overflowing: contentHeight > pageHeight + 1,
+          };
         });
       },
       write: (measurements) => {
-        measurements.forEach(({ boundary, fill, overflowing }) => {
+        measurements.forEach(({ boundary, start, fill, pageHeight, overflowing }) => {
           boundary.style.setProperty('--slide-page-fill', `${fill}px`);
           boundary.classList.toggle('measured-overflow', overflowing);
+          if (start) {
+            start.style.setProperty('--slide-page-height', `${pageHeight}px`);
+            start.classList.toggle('cm-slide-measured-overflow', overflowing);
+          }
         });
       },
     });
@@ -596,8 +652,11 @@ export function ObsidianStyleEditor({ presentation, theme, source, onSourceChang
             },
           }),
           EditorView.theme({
-            '&': { minHeight: '18rem' },
-            '.cm-scroller': { overflow: 'visible', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace' },
+            '&': { minHeight: '18rem', backgroundColor: 'transparent' },
+            '.cm-scroller': {
+              overflow: 'visible',
+              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+            },
           }),
           EditorView.updateListener.of((update) => {
             if (!update.docChanged) return;

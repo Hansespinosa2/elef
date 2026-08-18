@@ -44,6 +44,30 @@ describe('Obsidian-style presentation editor', () => {
     expect(container.querySelectorAll('.cm-rendered-block')).not.toHaveLength(0);
   });
 
+  it('presents blocks as members of coherent fixed slide surfaces', () => {
+    render('# One\n\nFirst body\n---\n# Two\n\nSecond body');
+    const surfaces = Array.from(container.querySelectorAll<HTMLElement>('.cm-slide-first'));
+    expect(surfaces).toHaveLength(2);
+    expect(surfaces.map((surface) => surface.dataset.slideLabel)).toEqual(['Slide 1', 'Slide 2']);
+
+    const renderedBlocks = Array.from(container.querySelectorAll<HTMLElement>('.cm-rendered-block'));
+    expect(renderedBlocks.length).toBeGreaterThanOrEqual(2);
+    expect(renderedBlocks.every((block) => block.dataset.slideSurface === block.dataset.slideIndex)).toBe(true);
+    expect(container.querySelectorAll('.cm-slide-boundary')).toHaveLength(2);
+    expect(container.querySelectorAll('.cm-slide-page-fill')).toHaveLength(2);
+    const editor = EditorView.findFromDOM(container.querySelector<HTMLElement>('.cm-editor')!);
+    expect(editor.state.doc.toString()).toContain('\n---\n');
+    expect(container.querySelector('.cm-content')?.textContent).not.toContain('---');
+  });
+
+  it('keeps the continuous editor and slide surfaces free of nested scrollbars', () => {
+    render('# One\n\nBody\n---\n# Two');
+    const scroller = container.querySelector<HTMLElement>('.cm-scroller')!;
+    expect(getComputedStyle(scroller).overflow).toBe('visible');
+    expect(container.querySelectorAll('.cm-slide-first .cm-scroller')).toHaveLength(0);
+    expect(container.querySelectorAll('.cm-slide-first [style*="overflow"]')).toHaveLength(0);
+  });
+
   it('keeps front matter out of the rendered slide canvas', () => {
     const source = '---\npresentationTheme: light\n---\n# One';
     expect(slideSourceRanges(source)[0]?.start).toBeGreaterThan(0);
@@ -51,6 +75,18 @@ describe('Obsidian-style presentation editor', () => {
     expect(container.querySelector('.cm-frontmatter-widget')).not.toBeNull();
     expect(Array.from(container.querySelectorAll('.cm-line')).map((line) => line.textContent)).not.toContain('presentationTheme: light');
     expect(container.querySelector('.cm-line')?.textContent).toContain('# One');
+  });
+
+  it('reveals compact front matter as settings source without turning it into a slide', () => {
+    render('---\npresentationTheme: light\n---\n# One');
+    const settings = container.querySelector<HTMLButtonElement>('.cm-frontmatter-widget')!;
+    act(() => settings.click());
+
+    const metadataLines = Array.from(container.querySelectorAll<HTMLElement>('.cm-frontmatter-line'));
+    expect(metadataLines.map((line) => line.textContent)).toContain('presentationTheme: light');
+    expect(metadataLines.every((line) => !line.classList.contains('cm-slide-line'))).toBe(true);
+    expect(container.querySelectorAll('.cm-slide-first')).toHaveLength(1);
+    expect(container.querySelector('.cm-frontmatter-widget')).toBeNull();
   });
 
   it('reveals only the clicked rendered Markdown block in the CodeMirror canvas', () => {
@@ -67,6 +103,9 @@ describe('Obsidian-style presentation editor', () => {
     expect(sourceLines).toContain('Second paragraph');
     expect(container.querySelector(`[data-block-from="${secondBlock.from}"]`)).toBeNull();
     expect(container.querySelectorAll('.cm-rendered-block')).toHaveLength(2);
+    expect(Array.from(container.querySelectorAll<HTMLElement>('.cm-source-revealed'))
+      .map((line) => line.textContent)).toContain('Second paragraph');
+    expect(container.querySelectorAll('.cm-source-revealed')).toHaveLength(1);
   });
 
   it('keeps slide controls source-backed and preserves the delimiter', () => {
