@@ -56,7 +56,36 @@ describe('PresentationPreview interactions', () => {
 
   it('creates a slide when the third dash is typed on an empty line', () => {
     const changes: string[] = [];
-    const slide = render('# One', (source) => changes.push(source));
+    let currentSource = '# One';
+    const update = (source: string) => {
+      currentSource = source;
+      changes.push(source);
+      act(() => {
+        root.render(
+          <PresentationPreview
+            presentation={parseMarkdown(currentSource)}
+            theme="light"
+            source={currentSource}
+            onSourceChange={update}
+          />,
+        );
+      });
+    };
+    container = document.createElement('div');
+    document.body.append(container);
+    root = createRoot(container);
+    act(() => {
+      root.render(
+        <PresentationPreview
+          presentation={parseMarkdown(currentSource)}
+          theme="light"
+          source={currentSource}
+          onSourceChange={update}
+        />,
+      );
+    });
+    const slide = container.querySelector<HTMLElement>('.slide')!;
+    act(() => slide.click());
     const paragraph = document.createElement('p');
     const text = document.createTextNode('--');
     paragraph.append(text);
@@ -72,6 +101,10 @@ describe('PresentationPreview interactions', () => {
     });
 
     expect(changes.at(-1)).toBe('# One\n---\n');
+    expect(currentSource).toBe('# One\n---\n');
+    expect(container.querySelectorAll<HTMLElement>('.slide')).toHaveLength(2);
+    expect(container.querySelectorAll<HTMLElement>('.slide')[0].textContent).not.toContain('--');
+    expect(container.querySelectorAll<HTMLElement>('.slide')[1].textContent).toContain('This slide is empty.');
   });
 
   it('deletes an empty slide when Backspace is pressed', () => {

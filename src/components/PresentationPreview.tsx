@@ -167,15 +167,19 @@ function selectionOffset(element: HTMLElement): { before: string; after: string 
   return { before: before.toString(), after: after.toString() };
 }
 
-function isTypingSlideSeparator(element: HTMLElement): boolean {
+function typingSlideSeparatorBlock(element: HTMLElement): HTMLElement | null {
   const selection = window.getSelection();
-  if (!selection?.isCollapsed) return false;
+  if (!selection?.isCollapsed) return null;
   const anchor = selection.anchorNode;
   const anchorElement = anchor instanceof Element ? anchor : anchor?.parentElement;
   const block = anchorElement?.closest<HTMLElement>('p, div, h1, h2, h3, blockquote, li');
-  if (!block || !element.contains(block) || block.textContent !== '--') return false;
+  if (!block || !element.contains(block) || block.textContent !== '--') return null;
   const position = selectionOffset(block);
-  return position?.before === '--' && position.after === '';
+  return position?.before === '--' && position.after === '' ? block : null;
+}
+
+function isTypingSlideSeparator(element: HTMLElement): boolean {
+  return typingSlideSeparatorBlock(element) !== null;
 }
 
 function splitMarkdownBlocks(markdown: string): string[] {
@@ -409,6 +413,7 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
   };
   const changeSlide = (index: number, nextSource: string, start: boolean) => {
     if (import.meta.env.DEV) console.debug('[elef] preview mutation', { action: 'changeSlide', phase: 'before-source-change', slideIndex: index });
+    editingSource.current = null;
     setSourceBlock(null);
     setOverflowPrompt(null);
     focusSlide(index, start);
@@ -471,6 +476,7 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
                 ) {
                   event.preventDefault();
                   const markdown = serializeSlide(event.currentTarget).replace(/(^|\n)--(?=\n|$)/, '$1---');
+                  typingSlideSeparatorBlock(event.currentTarget)?.replaceChildren();
                   const nextSource = splitSlideAtSeparator(source, slide.index, markdown);
                   if (nextSource !== source) {
                     setUndoDelete(null);
