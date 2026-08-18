@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   parseMarkdown,
   presentationThemeFromSource,
+  replaceSlideMarkdown,
   setPresentationTheme,
 } from '../../src/domain/presentation/markdown';
 import {
@@ -78,6 +79,12 @@ describe('parseMarkdown', () => {
     const updated = setPresentationTheme(existing, 'match');
     expect(updated).toContain('title: Demo\npresentationTheme: match\nowner: Ada');
     expect(parseMarkdown(updated).slides.map((slide) => slide.markdown)).toEqual(['# One', '# Two']);
+  });
+
+  it('replaces a slide without splitting separators inside fenced code', () => {
+    const source = '---\npresentationTheme: dark\n---\n```yaml\n---\n```\n---\n# Two';
+    const updated = replaceSlideMarkdown(source, 1, '## Updated');
+    expect(updated).toBe('---\npresentationTheme: dark\n---\n```yaml\n---\n```\n---\n## Updated');
   });
 
   it('normalizes stored editor choices and resolves system changes deterministically', () => {

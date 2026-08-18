@@ -15,6 +15,7 @@ export {
   normalizeFolderName,
   parseMarkdown,
   presentationThemeFromSource,
+  replaceSlideMarkdown,
   setPresentationTheme,
   upsertFirstH1,
 } from './markdown';

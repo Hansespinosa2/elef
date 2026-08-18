@@ -6,7 +6,6 @@ import { BrowserDocumentReader, BrowserFileSelector, BrowserReplacementConfirmat
 import { TauriDocumentReader, TauriFileSelector, TauriWorldFileSystem } from './infrastructure/tauri/documents';
 import { WorldWorkspace } from './application/world/workspace';
 import { PresentationPreview } from './components/PresentationPreview';
-import { MarkdownEditor } from './components/MarkdownEditor';
 import {
   normalizeEditorThemePreference,
   resolveEditorTheme,
@@ -180,7 +179,7 @@ function App() {
     </aside>;
     const presentation = active ? world.presentation(active.id) : null;
     const presentationTheme = presentation?.presentationTheme ?? 'match';
-    return <div className={`app world-app theme-${editorTheme}`}><button className={`sidebar-toggle${sidebarOpen ? ' hidden' : ''}`} type="button" aria-label="Expand sidebar" onClick={() => setSidebarOpen(true)}>›</button>{sidebar}{worldState.error && <div className="error" role="alert">{worldState.error}</div>}{active && presentation ? <main className="world-main"><header className="document-toolbar"><span className="document-name">{active.title}</span><ThemeMenu editorPreference={editorPreference} presentationTheme={presentationTheme} onEditorChange={setEditorPreference} onPresentationChange={(theme) => world.updatePresentationTheme(active.id, theme)} /></header><div className="workspace"><MarkdownEditor source={world.editorSource(active.id)} onChange={(source) => world.updateSource(active.id, source)} /><PresentationPreview presentation={presentation} theme={resolvePresentationTheme(presentationTheme, editorTheme)} /></div></main> : <main className="world-main empty-world"><h1>Your presentations</h1><p>Select a presentation from the sidebar or create a new one.</p></main>}</div>;
+    return <div className={`app world-app theme-${editorTheme}`}><button className={`sidebar-toggle${sidebarOpen ? ' hidden' : ''}`} type="button" aria-label="Expand sidebar" onClick={() => setSidebarOpen(true)}>›</button>{sidebar}{worldState.error && <div className="error" role="alert">{worldState.error}</div>}{active && presentation ? <main className="world-main"><header className="document-toolbar"><span className="document-name">{active.title}</span><ThemeMenu editorPreference={editorPreference} presentationTheme={presentationTheme} onEditorChange={setEditorPreference} onPresentationChange={(theme) => world.updatePresentationTheme(active.id, theme)} /></header><div className="workspace"><PresentationPreview presentation={presentation} theme={resolvePresentationTheme(presentationTheme, editorTheme)} source={world.editorSource(active.id)} onSourceChange={(source) => world.updateSource(active.id, source)} /></div></main> : <main className="world-main empty-world"><h1>Your presentations</h1><p>Select a presentation from the sidebar or create a new one.</p></main>}</div>;
   }
   return (
     <div className={`app theme-${editorTheme}`}>
@@ -199,8 +198,12 @@ function App() {
       </header>
       {state.error && <div className="error" role="alert"><strong>Could not open file.</strong> {state.error}</div>}
       {state.presentation ? <div className="workspace">
-        <MarkdownEditor source={state.source} onChange={(source) => session.updateSource(source)} />
-        <PresentationPreview presentation={state.presentation} theme={resolvePresentationTheme(state.presentation.presentationTheme, editorTheme)} />
+        <PresentationPreview
+          presentation={state.presentation}
+          theme={resolvePresentationTheme(state.presentation.presentationTheme, editorTheme)}
+          source={state.source}
+          onSourceChange={(source) => session.updateSource(source)}
+        />
       </div> : !state.error && (
         <section className="welcome"><h1>Open a Markdown file</h1><p>Use <code>---</code> on its own line to create a new slide.</p></section>
       )}

@@ -129,6 +129,31 @@ export function parseMarkdown(source: string, sourceName = 'Untitled presentatio
   return { sourceName, presentationTheme, slides };
 }
 
+export function replaceSlideMarkdown(source: string, slideIndex: number, markdown: string): string {
+  const frontMatter = initialFrontMatter(source);
+  const prefix = frontMatter ? source.slice(0, frontMatter.bodyStart) : '';
+  const content = frontMatter ? source.slice(frontMatter.bodyStart) : source;
+  const sections: string[] = [];
+  let section: string[] = [];
+  let fence: { marker: string; length: number } | null = null;
+  for (const line of content.replace(/\r\n?/g, '\n').split('\n')) {
+    const nextFence = isFenceStart(line);
+    if (nextFence) {
+      fence = fence && fence.marker === nextFence.marker && nextFence.length >= fence.length ? null : nextFence;
+    }
+    if (!fence && /^---[ \t]*$/.test(line)) {
+      sections.push(section.join('\n'));
+      section = [];
+    } else {
+      section.push(line);
+    }
+  }
+  sections.push(section.join('\n'));
+  if (slideIndex < 0 || slideIndex >= sections.length) return source;
+  sections[slideIndex] = markdown;
+  return `${prefix}${sections.join('\n---\n')}`;
+}
+
 export function extractFirstH1(source: string): string | null {
   const frontMatter = initialFrontMatter(source);
   const content = frontMatter ? source.slice(frontMatter.bodyStart) : source;
