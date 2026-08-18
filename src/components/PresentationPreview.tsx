@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { isSlideOverBudget, replaceSlideMarkdown, splitSlideMarkdown } from '../domain/presentation';
@@ -74,6 +75,66 @@ function serializeSlide(element: HTMLElement): string {
   return serializeNode(clone).replace(/\n{3,}/g, '\n\n').trim();
 }
 
+function placeCaretAtEnd(element: HTMLElement): void {
+  const selection = window.getSelection();
+  if (!selection) return;
+  const range = document.createRange();
+  range.selectNodeContents(element);
+  range.collapse(false);
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
+function handleMarkdownShortcut(element: HTMLElement, event: ReactKeyboardEvent<HTMLElement>): void {
+  if (event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLInputElement) return;
+  if (event.key !== ' ') return;
+  const selection = window.getSelection();
+  const anchor = selection?.anchorNode;
+  const anchorElement = anchor instanceof Element ? anchor : anchor?.parentElement;
+  const block = anchorElement?.closest('p, div, h1, h2, h3, blockquote, li');
+  if (!block || !element.contains(block)) return;
+
+  const marker = block.textContent || '';
+  const listTask = block.tagName.toLowerCase() === 'li' && (marker === '[ ]' || marker === '[x]');
+  const heading = marker.match(/^(#{1,3})$/);
+  const task = marker === '- [ ]' || marker === '- [x]';
+  const unordered = marker === '-';
+  const ordered = /^\d+\.$/.test(marker);
+  if (!heading && !task && !listTask && !unordered && !ordered) return;
+
+  event.preventDefault();
+  if (listTask) {
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = marker === '[x]';
+    checkbox.setAttribute('contenteditable', 'false');
+    block.replaceChildren(checkbox, document.createTextNode(' '), document.createElement('br'));
+    placeCaretAtEnd(block as HTMLElement);
+    return;
+  }
+  if (heading) {
+    const headingElement = document.createElement(`h${heading[1].length}`);
+    headingElement.append(document.createElement('br'));
+    block.replaceWith(headingElement);
+    placeCaretAtEnd(headingElement);
+    return;
+  }
+
+  const list = document.createElement(ordered ? 'ol' : 'ul');
+  const item = document.createElement('li');
+  if (task) {
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = marker.endsWith('[x]');
+    checkbox.setAttribute('contenteditable', 'false');
+    item.append(checkbox, document.createTextNode(' '));
+  }
+  item.append(document.createElement('br'));
+  list.append(item);
+  block.replaceWith(list);
+  placeCaretAtEnd(item);
+}
+
 export function PresentationPreview({ presentation, theme, source, onSourceChange }: Props) {
   const [editingSlide, setEditingSlide] = useState<number | null>(null);
   const [sourceSlide, setSourceSlide] = useState<number | null>(null);
@@ -110,10 +171,13 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
             className={`slide${editingSlide === slide.index ? ' editing' : ''}${sourceSlide === slide.index ? ' source-mode' : ''}`}
             style={{ width: slideWidth, height: slideHeight, transform: `scale(${slideScale})` }}
             aria-label={`Slide ${slide.index + 1}`}
-            contentEditable={editingSlide === slide.index}
+            contentEditable={sourceSlide === slide.index ? undefined : editingSlide === slide.index}
             suppressContentEditableWarning
             onClick={() => { if (sourceSlide === null) setEditingSlide(slide.index); }}
             onDoubleClick={(event) => { event.stopPropagation(); setSourceSlide(slide.index); setEditingSlide(null); }}
+            onKeyDown={editingSlide === slide.index && sourceSlide !== slide.index
+              ? (event) => handleMarkdownShortcut(event.currentTarget, event)
+              : undefined}
             onBlur={(event) => {
               if (editingSlide === slide.index) {
                 onSourceChange(replaceSlideMarkdown(source, slide.index, serializeSlide(event.currentTarget)));
@@ -133,7 +197,10 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
                 aria-label={`Markdown source for slide ${slide.index + 1}`}
                 value={slide.markdown}
                 onChange={(event) => onSourceChange(replaceSlideMarkdown(source, slide.index, event.target.value))}
-                onKeyDown={(event) => { if (event.key === 'Escape') setSourceSlide(null); }}
+                onKeyDown={(event) => {
+                  event.stopPropagation();
+                  if (event.key === 'Escape') setSourceSlide(null);
+                }}
                 onBlur={(event) => {
                   if (isSlideOverBudget(event.currentTarget.value)) setOverflowPrompt(slide.index);
                 }}
