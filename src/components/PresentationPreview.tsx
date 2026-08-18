@@ -116,7 +116,8 @@ function serializeNode(node: Node, depth = 0): string {
 export function serializeSlide(element: HTMLElement): string {
   const clone = element.cloneNode(true) as HTMLElement;
   clone.querySelector('.slide-number')?.remove();
-  clone.querySelector('.empty-slide')?.remove();
+  const emptyHeading = clone.querySelector('.empty-slide-heading');
+  if (emptyHeading && !emptyHeading.textContent?.trim()) emptyHeading.remove();
   return serializeNode(clone).replace(/\n{3,}/g, '\n\n').trim();
 }
 
@@ -398,6 +399,7 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
     element.focus();
     (pending.start ? placeCaretAtStart : placeCaretAtEnd)(element);
     pendingFocus.current = null;
+    element.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
     window.scrollTo?.({ top: undoDelete?.scrollY ?? window.scrollY, behavior: 'auto' });
   }, [presentation.slides, undoDelete]);
   useEffect(() => {
@@ -492,7 +494,7 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
                   && !event.altKey
                   && !event.ctrlKey
                   && !event.metaKey
-                  && !slide.markdown.trim()
+                  && !serializeSlide(event.currentTarget).trim()
                   && slide.index > 0
                   && window.getSelection()?.isCollapsed
                 ) {
@@ -611,9 +613,7 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
                   })()}
                 </div>
               )
-            )) : (
-              <p className="empty-slide">This slide is empty.</p>
-            )}
+            )            ) : <h1 className="empty-slide-heading"><br /></h1>}
             <span className="slide-number" contentEditable={false} aria-hidden="true">{slide.index + 1}</span>
           </article>
           {activeSlide === slide.index && (

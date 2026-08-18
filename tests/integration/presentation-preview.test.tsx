@@ -104,7 +104,7 @@ describe('PresentationPreview interactions', () => {
     expect(currentSource).toBe('# One\n---\n');
     expect(container.querySelectorAll<HTMLElement>('.slide')).toHaveLength(2);
     expect(container.querySelectorAll<HTMLElement>('.slide')[0].textContent).not.toContain('--');
-    expect(container.querySelectorAll<HTMLElement>('.slide')[1].textContent).toContain('This slide is empty.');
+    expect(container.querySelectorAll<HTMLElement>('.slide')[1].querySelector('.empty-slide-heading')).not.toBeNull();
   });
 
   it('deletes an empty slide when Backspace is pressed', () => {
@@ -116,6 +116,56 @@ describe('PresentationPreview interactions', () => {
       slide.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true }));
     });
     expect(changes.at(-1)).toBe('# One');
+  });
+
+  it('keeps a newly added slide when Backspace follows visible text', () => {
+    let currentSource = '# One';
+    const update = (source: string) => {
+      currentSource = source;
+      act(() => {
+        root.render(
+          <PresentationPreview
+            presentation={parseMarkdown(currentSource)}
+            theme="light"
+            source={currentSource}
+            onSourceChange={update}
+          />,
+        );
+      });
+    };
+    container = document.createElement('div');
+    document.body.append(container);
+    root = createRoot(container);
+    act(() => {
+      root.render(
+        <PresentationPreview
+          presentation={parseMarkdown(currentSource)}
+          theme="light"
+          source={currentSource}
+          onSourceChange={update}
+        />,
+      );
+    });
+
+    act(() => container.querySelector<HTMLButtonElement>('.slide-add-button')!.click());
+    const newSlide = container.querySelectorAll<HTMLElement>('.slide')[1];
+    const paragraph = document.createElement('p');
+    const text = document.createTextNode('--');
+    paragraph.append(text);
+    newSlide.append(paragraph);
+    const range = document.createRange();
+    range.setStart(text, 2);
+    range.collapse(true);
+    window.getSelection()!.removeAllRanges();
+    window.getSelection()!.addRange(range);
+
+    act(() => {
+      newSlide.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true }));
+    });
+
+    expect(currentSource).toBe('# One\n---\n');
+    expect(container.querySelectorAll('.slide')).toHaveLength(2);
+    expect(container.querySelector('.empty-slide-heading')).not.toBeNull();
   });
 
   it('restores the exact source when Undo is activated', () => {
