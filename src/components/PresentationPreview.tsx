@@ -513,8 +513,9 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
                   && window.getSelection()?.isCollapsed
                 ) {
                   const position = selectionOffset(event.currentTarget);
-                  const atStart = position && !position.before.includes('\n');
-                  const atEnd = position && !position.after.includes('\n');
+                  const slideNumber = event.currentTarget.querySelector('.slide-number')?.textContent || '';
+                  const atStart = position && position.before.trim() === '';
+                  const atEnd = position && position.after.replace(slideNumber, '').trim() === '';
                   if (event.key === 'ArrowUp' && atStart && slide.index > 0) {
                     event.preventDefault();
                     focusSlide(slide.index - 1, false);

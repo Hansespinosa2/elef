@@ -360,6 +360,23 @@ describe('PresentationPreview interactions', () => {
     expect(slides[1].classList.contains('editing')).toBe(true);
   });
 
+  it('moves down from the end of a paragraph into the next slide', () => {
+    render('First line\n\nSecond line\n---\n# Two');
+    const slides = container.querySelectorAll<HTMLElement>('.slide');
+    const paragraph = slides[0].querySelectorAll('p')[1].firstChild!;
+    const end = document.createRange();
+    end.setStart(paragraph, paragraph.textContent?.length ?? 0);
+    end.collapse(true);
+    window.getSelection()!.removeAllRanges();
+    window.getSelection()!.addRange(end);
+
+    act(() => {
+      slides[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    });
+
+    expect(slides[1].classList.contains('editing')).toBe(true);
+  });
+
   it('preserves inline and display math when preview content is serialized', () => {
     const markdown = 'Before $x=3$.\n\n$$\ny = mx + b\n$$\n\nAfter.';
     const slide = render(markdown);
