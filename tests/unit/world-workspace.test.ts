@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { extractFirstH1, normalizeFolderName } from '../../src/domain/presentation';
+import { stripWorldMetadata } from '../../src/application/world/workspace';
 import { WorldWorkspace } from '../../src/application/world/workspace';
 import type { WorldFileSystem, WorldPresentationFile } from '../../src/application/ports/documents';
 
@@ -26,6 +27,16 @@ describe('presentation workspace', () => {
     await workspace.setup(); const draft = await workspace.createDraft(); expect(draft).not.toBeNull();
     workspace.updateSource(draft!.id, '# My Talk'); await new Promise((resolve) => setTimeout(resolve, 400));
     expect([...fs.files.keys()].some((path) => path.includes('/My Talk/presentation.md'))).toBe(true);
+  });
+  it('keeps the Elef id out of the editor source and preview', async () => {
+    const fs = new MemoryWorld(); const workspace = new WorldWorkspace(fs, storage());
+    await workspace.setup(); const draft = await workspace.createDraft();
+    expect(workspace.editorSource(draft!.id)).toBe('');
+    expect(stripWorldMetadata(draft!.source)).toBe('');
+    expect(workspace.presentation(draft!.id)?.slides[0].markdown).toBe('');
+    workspace.updateSource(draft!.id, '# Visible title');
+    expect(workspace.editorSource(draft!.id)).toBe('# Visible title');
+    expect(workspace.getState().presentations[0].source).toMatch(/^<!-- elef-id:/);
   });
   it('marks moved entries missing and removes them recoverably', async () => {
     const fs = new MemoryWorld(); const workspace = new WorldWorkspace(fs, storage());

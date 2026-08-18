@@ -22,6 +22,15 @@ const key = 'elef.world';
 const id = () => globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 const join = (a: string, b: string) => `${a.replace(/[\\/]+$/, '')}/${b}`;
 const presentationFile = (path: string) => join(path, 'presentation.md');
+const metadataPattern = /^\s*<!--\s*elef-id:\s*[a-zA-Z0-9_-]+\s*-->\s*\n?/;
+
+export function stripWorldMetadata(source: string): string {
+  return source.replace(metadataPattern, '');
+}
+
+function addWorldMetadata(source: string, presentationId: string): string {
+  return `<!-- elef-id: ${presentationId} -->\n${stripWorldMetadata(source)}`;
+}
 
 export class WorldWorkspace {
   private state: WorldState = { root: null, presentations: [], activeId: null, error: null };
@@ -103,7 +112,7 @@ export class WorldWorkspace {
     try {
       await this.fs.ensureDir(path);
       await this.fs.writeText(join(path, 'presentation.md'), `<!-- elef-id: ${presentationId} -->\n`);
-      const entry = { id: presentationId, path, title: 'Untitled presentation', source: `<!-- elef-id: ${presentationId} -->\n`, lastOpened: Date.now() };
+      const entry = { id: presentationId, path, title: 'Untitled presentation', source: addWorldMetadata('', presentationId), lastOpened: Date.now() };
       this.setState({ ...this.state, presentations: [entry, ...this.state.presentations], activeId: presentationId, error: null });
       this.persist();
       return entry;
@@ -157,7 +166,8 @@ export class WorldWorkspace {
   updateSource(idToUpdate: string, source: string) {
     const entry = this.state.presentations.find((item) => item.id === idToUpdate);
     if (!entry) return;
-    this.setState({ ...this.state, presentations: this.state.presentations.map((item) => item.id === idToUpdate ? { ...item, source, title: extractFirstH1(source) || item.title, missing: false } : item) });
+    const persistedSource = addWorldMetadata(source, idToUpdate);
+    this.setState({ ...this.state, presentations: this.state.presentations.map((item) => item.id === idToUpdate ? { ...item, source: persistedSource, title: extractFirstH1(stripWorldMetadata(source)) || item.title, missing: false } : item) });
     this.persist();
     const oldTimer = this.timers.get(idToUpdate); if (oldTimer) clearTimeout(oldTimer);
     this.timers.set(idToUpdate, setTimeout(() => {
@@ -169,7 +179,8 @@ export class WorldWorkspace {
     const entry = this.state.presentations.find((item) => item.id === idToSave);
     if (!entry || entry.missing) return;
     try {
-      const nextTitle = normalizeFolderName(extractFirstH1(entry.source), entry.title);
+      const editorSource = stripWorldMetadata(entry.source);
+      const nextTitle = normalizeFolderName(extractFirstH1(editorSource), entry.title);
       const currentName = entry.path.split(/[\\/]/).pop() || '';
       let path = entry.path;
       if (nextTitle !== currentName) {
@@ -179,8 +190,8 @@ export class WorldWorkspace {
         await this.fs.rename(entry.path, nextPath);
         path = nextPath;
       }
-      await this.fs.writeText(join(path, 'presentation.md'), entry.source);
-      this.setState({ ...this.state, presentations: this.state.presentations.map((item) => item.id === idToSave ? { ...item, path, title: extractFirstH1(entry.source) || item.title, error: undefined } : item), error: null });
+      await this.fs.writeText(join(path, 'presentation.md'), addWorldMetadata(editorSource, idToSave));
+      this.setState({ ...this.state, presentations: this.state.presentations.map((item) => item.id === idToSave ? { ...item, path, title: extractFirstH1(editorSource) || item.title, error: undefined } : item), error: null });
       this.persist();
     } catch (reason) {
       this.setState({ ...this.state, error: reason instanceof Error ? reason.message : 'Could not save the presentation.' });
@@ -192,5 +203,6 @@ export class WorldWorkspace {
       }
     }
   }
-  presentation(idToRead: string) { const entry = this.state.presentations.find((item) => item.id === idToRead); return entry ? parseMarkdown(entry.source, entry.title) : null; }
+  editorSource(idToRead: string) { const entry = this.state.presentations.find((item) => item.id === idToRead); return entry ? stripWorldMetadata(entry.source) : ''; }
+  presentation(idToRead: string) { const entry = this.state.presentations.find((item) => item.id === idToRead); return entry ? parseMarkdown(stripWorldMetadata(entry.source), entry.title) : null; }
 }
