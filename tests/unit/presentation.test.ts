@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseMarkdown } from '../../src/domain/presentation/markdown';
-import { readUtf8Markdown } from '../../src/core/file';
+import { readUtf8Markdown } from '../../src/domain/presentation/utf8';
 import { hasUnsavedChanges } from '../../src/domain/presentation/document';
 
 describe('parseMarkdown', () => {

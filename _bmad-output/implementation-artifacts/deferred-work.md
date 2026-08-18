@@ -19,3 +19,9 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-live-markdown-editor.md`
   summary: Improve accessible dirty-state communication and long-document-name toolbar behavior.
   evidence: Dirty state is currently conveyed with a visual asterisk and long source names have no overflow treatment, which can reduce clarity or toolbar usability.
+- source_spec: `_bmad-output/implementation-artifacts/spec-domain-inspired-editor-architecture.md`
+  summary: Add browser and Tauri adapter integration coverage for picker cancellation and platform-specific read failures.
+  evidence: The refactor now isolates both adapters, but current tests cover only browser document loading through a simplified integration path and do not exercise cancellation or Tauri error normalization.
+- source_spec: `_bmad-output/implementation-artifacts/spec-domain-inspired-editor-architecture.md`
+  summary: Add UI-level coverage for replacement cancellation and the hidden browser input wiring.
+  evidence: Application session tests cover core synchronization, but no rendered App test verifies that user cancellation preserves the editor or that browser file selection reaches the session.

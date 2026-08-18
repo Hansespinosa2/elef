@@ -1,6 +1,7 @@
 import { open } from '@tauri-apps/api/dialog';
 import { readBinaryFile } from '@tauri-apps/api/fs';
 import type { DocumentReader, DocumentSelection, FileSelector } from '../../application/ports/documents';
+import { readUtf8Markdown } from '../../domain/presentation/utf8';
 
 export class TauriFileSelector implements FileSelector {
   async select(): Promise<DocumentSelection | null> {
@@ -15,6 +16,10 @@ export class TauriFileSelector implements FileSelector {
 
 export class TauriDocumentReader implements DocumentReader {
   async read(selection: DocumentSelection): Promise<string> {
-    return new TextDecoder('utf-8', { fatal: true }).decode(await selection.read());
+    try {
+      return await readUtf8Markdown(selection.read);
+    } catch {
+      throw new Error('Could not read the selected file. Select a UTF-8 Markdown file and try again.');
+    }
   }
 }

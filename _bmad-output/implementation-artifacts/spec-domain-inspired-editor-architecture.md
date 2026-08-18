@@ -85,27 +85,30 @@ The target is domain-inspired layering, not full tactical DDD. Prefer plain type
 
 **Application composition**
 
-- The composition root now selects adapters while delegating workflow state to one session.
+- The composition root selects adapters while delegating workflow state to one session.
   [`App.tsx:9`](../../src/App.tsx#L9)
 
 - The session owns synchronized source, presentation, replacement, errors, and stale-open protection.
-  [`session.ts:21`](../../src/application/presentation-editor/session.ts#L21)
+  [`session.ts:23`](../../src/application/presentation-editor/session.ts#L23)
 
 **Platform boundaries**
 
 - These ports keep document selection, reading, and confirmation independent of host APIs.
   [`documents.ts:1`](../../src/application/ports/documents.ts#L1)
 
-- Browser file input and UTF-8 decoding stay isolated in the browser adapter.
-  [`documents.ts:3`](../../src/infrastructure/browser/documents.ts#L3)
+- Browser file input cancellation and UTF-8 decoding stay isolated in the browser adapter.
+  [`documents.ts:4`](../../src/infrastructure/browser/documents.ts#L4)
 
 - Tauri dialog and filesystem access stay isolated in the Tauri adapter.
-  [`documents.ts:5`](../../src/infrastructure/tauri/documents.ts#L5)
+  [`documents.ts:6`](../../src/infrastructure/tauri/documents.ts#L6)
 
 **Domain and verification**
 
 - Markdown splitting remains a framework-independent domain function with the existing contract.
   [`markdown.ts:9`](../../src/domain/presentation/markdown.ts#L9)
 
-- Application and adapter tests cover synchronization, failures, stale opens, and browser loading.
+- Shared UTF-8 decoding remains a domain utility reused by both platform adapters.
+  [`utf8.ts:1`](../../src/domain/presentation/utf8.ts#L1)
+
+- Application tests cover synchronization, failures, and stale opens across the new session boundary.
   [`editor-session.test.ts:14`](../../tests/unit/editor-session.test.ts#L14)

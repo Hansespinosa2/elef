@@ -10,21 +10,23 @@ export interface EditorState {
   error: string | null;
 }
 
-const initialState: EditorState = {
-  source: '',
-  sourceName: null,
-  baseline: '',
-  presentation: null,
-  error: null,
-};
+function createInitialState(): EditorState {
+  return {
+    source: '',
+    sourceName: null,
+    baseline: '',
+    presentation: null,
+    error: null,
+  };
+}
 
 export class PresentationEditorSession {
-  private state: EditorState = initialState;
+  private state: EditorState = createInitialState();
   private listeners = new Set<() => void>();
   private request = 0;
 
   getState(): EditorState {
-    return this.state;
+    return { ...this.state };
   }
 
   subscribe(listener: () => void): () => void {

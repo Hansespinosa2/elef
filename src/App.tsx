@@ -14,7 +14,7 @@ function App() {
     session.getState.bind(session),
     session.getState.bind(session),
   );
-  const confirmation = new BrowserReplacementConfirmation();
+  const [confirmation] = useState(() => new BrowserReplacementConfirmation());
   const tauri = Boolean(window.__TAURI__);
 
   const openFile = () => {
