@@ -102,39 +102,6 @@ function placeCaretAtEnd(element: HTMLElement): void {
   selection.addRange(range);
 }
 
-function placeCaretAtPoint(element: HTMLElement, x: number, y: number): void {
-  const documentWithCaret = document as Document & {
-    caretRangeFromPoint?: (x: number, y: number) => Range | null;
-    caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null;
-  };
-  try {
-    const range = documentWithCaret.caretRangeFromPoint?.(x, y);
-    if (range && element.contains(range.startContainer)) {
-      const selection = window.getSelection();
-      if (selection) {
-        selection.removeAllRanges();
-        selection.addRange(range);
-        return;
-      }
-    }
-    const position = documentWithCaret.caretPositionFromPoint?.(x, y);
-    if (position && element.contains(position.offsetNode)) {
-      const selection = window.getSelection();
-      if (selection) {
-        const caret = document.createRange();
-        caret.setStart(position.offsetNode, position.offset);
-        caret.collapse(true);
-        selection.removeAllRanges();
-        selection.addRange(caret);
-        return;
-      }
-    }
-  } catch (error) {
-    if (!(error instanceof DOMException)) throw error;
-  }
-  placeCaretAtEnd(element);
-}
-
 function splitMarkdownBlocks(markdown: string): string[] {
   type BlockKind = 'fence' | 'list' | 'quote' | 'table' | 'text';
   const lines = markdown.replace(/\r\n/g, '\n').split('\n');
@@ -366,17 +333,9 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
                 if (editingBlock !== blockIndex) setEditingBlock(blockIndex);
                 return;
               }
-              const article = event.currentTarget;
               editingSource.current = { slideIndex: slide.index, markdown: slide.markdown };
               setEditingBlock(blockIndex);
               setEditingSlide(slide.index);
-              requestAnimationFrame(() => {
-                const target = blockElement || article;
-                const selection = window.getSelection();
-                if (selection?.anchorNode && target.contains(selection.anchorNode)) return;
-                target.focus({ preventScroll: true });
-                placeCaretAtPoint(target, event.clientX, event.clientY);
-              });
             }}
             onKeyDown={editingSlide === slide.index && !sourceBlock
               ? (event) => {
