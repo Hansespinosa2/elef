@@ -335,6 +335,9 @@ describe('PresentationPreview interactions', () => {
   it('moves the caret across slide boundaries with Up and Down', () => {
     const slide = render('# One\n---\n# Two');
     const slides = container.querySelectorAll<HTMLElement>('.slide');
+    act(() => {
+      slides[1].click();
+    });
     const secondHeading = slides[1].querySelector('h1')!.firstChild!;
     const start = document.createRange();
     start.setStart(secondHeading, 0);
@@ -346,6 +349,7 @@ describe('PresentationPreview interactions', () => {
       slides[1].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
     });
     expect(slides[0].classList.contains('editing')).toBe(true);
+    expect(document.activeElement).toBe(slides[0]);
 
     const firstHeading = slides[0].querySelector('h1')!.firstChild!;
     const end = document.createRange();
@@ -358,6 +362,7 @@ describe('PresentationPreview interactions', () => {
       slides[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
     });
     expect(slides[1].classList.contains('editing')).toBe(true);
+    expect(document.activeElement).toBe(slides[1]);
     expect(window.getSelection()?.anchorNode?.parentElement?.closest('.slide-number')).toBeNull();
   });
 
@@ -376,6 +381,7 @@ describe('PresentationPreview interactions', () => {
     });
 
     expect(slides[1].classList.contains('editing')).toBe(true);
+    expect(document.activeElement).toBe(slides[1]);
   });
 
   it('recognizes the end of multi-line slide content without confusing text for the slide number', () => {
@@ -393,6 +399,7 @@ describe('PresentationPreview interactions', () => {
     });
 
     expect(slides[1].classList.contains('editing')).toBe(true);
+    expect(document.activeElement).toBe(slides[1]);
   });
 
   it('skips an empty contentEditable block when moving up through slide lines', () => {

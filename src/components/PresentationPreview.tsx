@@ -438,7 +438,7 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
     pendingFocus.current = null;
     element.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
     window.scrollTo?.({ top: undoDelete?.scrollY ?? window.scrollY, behavior: 'auto' });
-  }, [presentation.slides, undoDelete]);
+  }, [activeSlide, presentation.slides, undoDelete]);
   useEffect(() => {
     if (!undoDelete) return;
     const timer = window.setTimeout(() => setUndoDelete(null), 6000);
