@@ -796,15 +796,17 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
             </div>
           )}
           </div>
-          <button
-            type="button"
-            className="slide-add-button"
-            aria-label={`Add slide after slide ${slide.index + 1}`}
-            onClick={() => {
-              setUndoDelete(null);
-              changeSlide(slide.index + 1, insertSlideMarkdown(source, slide.index), true);
-            }}
-          >+</button>
+          <div className="slide-insert-control">
+            <button
+              type="button"
+              className="slide-add-button"
+              aria-label={`Add slide after slide ${slide.index + 1}`}
+              onClick={() => {
+                setUndoDelete(null);
+                changeSlide(slide.index + 1, insertSlideMarkdown(source, slide.index), true);
+              }}
+            >+</button>
+          </div>
         </div>
       ))}
       {undoDelete && (
