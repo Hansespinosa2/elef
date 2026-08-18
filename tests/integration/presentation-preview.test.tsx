@@ -443,7 +443,7 @@ describe('PresentationPreview interactions', () => {
     const slide = container.querySelector<HTMLElement>('.slide')!;
     const paragraph = slide.querySelector('p')!.firstChild!;
     const end = document.createRange();
-    end.setStart(paragraph, paragraph.textContent?.length ?? 0);
+    end.setStart(paragraph, 5);
     end.collapse(true);
     window.getSelection()!.removeAllRanges();
     window.getSelection()!.addRange(end);
@@ -454,6 +454,25 @@ describe('PresentationPreview interactions', () => {
     });
 
     expect(event.defaultPrevented).toBe(false);
+  });
+
+  it('moves down from the end of a paragraph to the next block', () => {
+    const slide = render('First paragraph\n\n## Next block\n---\n# Two');
+    const paragraph = slide.querySelector('p')!.firstChild!;
+    const end = document.createRange();
+    end.setStart(paragraph, paragraph.textContent?.length ?? 0);
+    end.collapse(true);
+    window.getSelection()!.removeAllRanges();
+    window.getSelection()!.addRange(end);
+    const event = new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true });
+
+    act(() => {
+      slide.dispatchEvent(event);
+    });
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(window.getSelection()?.anchorNode).toBe(slide.querySelector('h2'));
+    expect(window.getSelection()?.anchorOffset).toBe(0);
   });
 
   it('preserves inline and display math when preview content is serialized', () => {

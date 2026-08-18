@@ -205,6 +205,13 @@ function skipEmptyAdjacentBlock(
   return target;
 }
 
+function placeCaretAtBlockBoundary(block: HTMLElement, start: boolean): void {
+  const content = block.matches('h1, h2, h3, p, blockquote, pre, table, ul, ol, li')
+    ? block
+    : block.querySelector<HTMLElement>('h1, h2, h3, p, blockquote, pre, table, ul, ol, li') || block;
+  (start ? placeCaretAtStart : placeCaretAtEnd)(content);
+}
+
 function typingSlideSeparatorBlock(element: HTMLElement): HTMLElement | null {
   const selection = window.getSelection();
   if (!selection?.isCollapsed) return null;
@@ -551,15 +558,26 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
                 ) {
                   const anchor = window.getSelection()?.anchorNode;
                   const anchorElement = anchor instanceof Element ? anchor : anchor?.parentElement;
-                  const block = anchorElement?.closest<HTMLElement>(editableBlockSelector);
+                  const block = anchorElement?.closest<HTMLElement>('[data-block-index]')
+                    || anchorElement?.closest<HTMLElement>(editableBlockSelector);
                   if (block && block !== event.currentTarget) {
                     const blockPosition = selectionOffset(block);
-                    const target = event.key === 'ArrowUp'
-                      ? skipEmptyAdjacentBlock(block, -1, blockPosition?.after.trim() === '')
-                      : skipEmptyAdjacentBlock(block, 1, blockPosition?.before.trim() === '');
+                    const direction = event.key === 'ArrowUp' ? -1 : 1;
+                    const emptyTarget = skipEmptyAdjacentBlock(
+                      block,
+                      direction,
+                      direction < 0
+                        ? blockPosition?.after.trim() === ''
+                        : blockPosition?.before.trim() === '',
+                    );
+                    const blockBoundary = direction < 0
+                      ? blockPosition?.before.trim() === ''
+                      : blockPosition?.after.trim() === '';
+                    const target = emptyTarget
+                      || (blockBoundary ? adjacentEditableBlock(block, direction) : null);
                     if (target) {
                       event.preventDefault();
-                      (event.key === 'ArrowUp' ? placeCaretAtEnd : placeCaretAtStart)(target);
+                      placeCaretAtBlockBoundary(target, direction > 0);
                       return;
                     }
                   }
