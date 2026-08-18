@@ -330,13 +330,6 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
                 : null;
               const blockIndex = blockElement ? Number(blockElement.dataset.blockIndex) : null;
               editingSource.current = { slideIndex: slide.index, markdown: slide.markdown };
-              if (blockElement?.querySelector('.katex')) {
-                setEditingBlock(blockIndex);
-                setEditingSlide(slide.index);
-              } else if (editingSlide === slide.index) {
-                setEditingBlock(null);
-                setEditingSlide(null);
-              }
             }}
             onKeyDown={!sourceBlock
               ? (event) => {
