@@ -11,6 +11,7 @@
       "identifier": "fs:scope",
       "allow": [
         { "path": "$HOME/**" },
+        { "path": "$DESKTOP/**" },
         { "path": "$DOCUMENT/**" },
         { "path": "$DOWNLOAD/**" }
       ]
