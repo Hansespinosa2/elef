@@ -2,7 +2,7 @@
 import { act } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
-import { PresentationPreview } from '../../src/components/PresentationPreview';
+import { PresentationPreview, serializeSlide } from '../../src/components/PresentationPreview';
 import { parseMarkdown } from '../../src/domain/presentation';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -17,7 +17,7 @@ describe('PresentationPreview interactions', () => {
     vi.useRealTimers();
   });
 
-  function render(markdown: string) {
+  function render(markdown: string, onSourceChange = () => undefined) {
     container = document.createElement('div');
     document.body.append(container);
     root = createRoot(container);
@@ -27,7 +27,7 @@ describe('PresentationPreview interactions', () => {
           presentation={parseMarkdown(markdown)}
           theme="light"
           source={markdown}
-          onSourceChange={() => undefined}
+          onSourceChange={onSourceChange}
         />,
       );
     });
@@ -128,5 +128,12 @@ describe('PresentationPreview interactions', () => {
     expect(slide.getAttribute('contenteditable')).toBe('true');
     expect(window.getSelection()?.anchorNode).toBe(text);
     expect(window.getSelection()?.anchorOffset).toBe(3);
+  });
+
+  it('preserves inline and display math when preview content is serialized', () => {
+    const markdown = 'Before $x=3$.\n\n$$\ny = mx + b\n$$\n\nAfter.';
+    const slide = render(markdown);
+    expect(serializeSlide(slide)).toContain('$x=3$');
+    expect(serializeSlide(slide)).toContain('$$\ny = mx + b\n$$');
   });
 });

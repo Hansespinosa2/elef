@@ -9,6 +9,36 @@ import type { Presentation, ThemeMode } from '../domain/presentation';
 import './PresentationPreview.css';
 import 'katex/dist/katex.min.css';
 
+function preserveRenderedMath() {
+  return (tree: { type?: string; tagName?: string; properties?: Record<string, unknown>; children?: unknown[] }) => {
+    const visit = (node: typeof tree) => {
+      const classes = Array.isArray(node.properties?.className) ? node.properties.className : [];
+      if (node.tagName === 'span' && (classes.includes('katex') || classes.includes('katex-display'))) {
+        const findAnnotation = (child: unknown): string | null => {
+          if (!child || typeof child !== 'object') return null;
+          const candidate = child as { tagName?: string; value?: string; children?: unknown[] };
+          if (candidate.tagName === 'annotation') return candidate.children?.find((item) => typeof item === 'object' && item !== null && 'value' in item) instanceof Object
+            ? String((candidate.children?.find((item) => typeof item === 'object' && item !== null && 'value' in item) as { value: string }).value)
+            : null;
+          return candidate.children?.map(findAnnotation).find((value): value is string => value !== null) || null;
+        };
+        const source = findAnnotation(node);
+        if (source !== null) {
+          node.properties = {
+            ...node.properties,
+            'data-math-source': source,
+            'data-math-display': classes.includes('katex-display') ? 'true' : 'false',
+          };
+        }
+      }
+      node.children?.forEach((child) => {
+        if (typeof child === 'object' && child !== null) visit(child as typeof tree);
+      });
+    };
+    visit(tree);
+  };
+}
+
 const slideWidth = 1280;
 const slideHeight = 720;
 const minimumSlideScale = 0.75;
@@ -23,6 +53,11 @@ interface Props {
 function serializeNode(node: Node, depth = 0): string {
   if (node.nodeType === Node.TEXT_NODE) return node.textContent || '';
   if (!(node instanceof HTMLElement)) return Array.from(node.childNodes).map((child) => serializeNode(child, depth)).join('');
+  if (node.dataset.mathSource !== undefined) {
+    return node.dataset.mathDisplay === 'true'
+      ? `$$\n${node.dataset.mathSource}\n$$\n\n`
+      : `$${node.dataset.mathSource}$`;
+  }
   const children = Array.from(node.childNodes).map((child) => serializeNode(child, depth)).join('');
   switch (node.tagName.toLowerCase()) {
     case 'h1': return `# ${children.trim()}\n\n`;
@@ -71,7 +106,7 @@ function serializeNode(node: Node, depth = 0): string {
   }
 }
 
-function serializeSlide(element: HTMLElement): string {
+export function serializeSlide(element: HTMLElement): string {
   const clone = element.cloneNode(true) as HTMLElement;
   clone.querySelector('.slide-number')?.remove();
   clone.querySelector('.empty-slide')?.remove();
@@ -397,9 +432,15 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
                     let taskIndex = 0;
                     return (
                       <ReactMarkdown
+                        rehypePlugins={[rehypeKatex, preserveRenderedMath]}
                         remarkPlugins={[remarkGfm, remarkMath]}
-                        rehypePlugins={[rehypeKatex]}
                         components={{
+                          span: ({ className, node: _node, ...props }) => {
+                            const classes = Array.isArray(className) ? className.join(' ') : className || '';
+                            return classes.includes('katex')
+                              ? <span className={className} contentEditable={false} {...props} />
+                              : <span className={className} {...props} />;
+                          },
                           input: ({ checked, ...props }) => {
                             const index = taskIndex++;
                             return (
