@@ -355,7 +355,26 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
               }, 180);
             }}
             onKeyDown={editingSlide === slide.index && !sourceBlock
-              ? (event) => handleMarkdownShortcut(event.currentTarget, event)
+              ? (event) => {
+                if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+                  const target = event.target instanceof Element ? event.target : null;
+                  const anchor = window.getSelection()?.anchorNode;
+                  const anchorElement = anchor instanceof Element ? anchor : anchor?.parentElement;
+                  const block = target?.closest<HTMLElement>('[data-block-index]')
+                    || anchorElement?.closest<HTMLElement>('[data-block-index]');
+                  const blockIndex = block ? Number(block.dataset.blockIndex) : null;
+                  if (blockIndex !== null) {
+                    event.preventDefault();
+                    const blocks = splitMarkdownBlocks(slide.markdown);
+                    setSourceBlock({ slideIndex: slide.index, blockIndex });
+                    setSourceDraft(blocks[blockIndex] || '');
+                    setEditingBlock(null);
+                    setEditingSlide(null);
+                    return;
+                  }
+                }
+                handleMarkdownShortcut(event.currentTarget, event);
+              }
               : undefined}
             onBlur={(event) => {
               if (editingSlide === slide.index) {

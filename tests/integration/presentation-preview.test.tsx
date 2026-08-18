@@ -110,4 +110,22 @@ describe('PresentationPreview interactions', () => {
     });
     expect(blocks[0].querySelector('.katex')).not.toBeNull();
   });
+
+  it('opens the active block source with Command-Enter', () => {
+    vi.useFakeTimers();
+    const slide = render('A paragraph.\n\n$x=3$');
+    const block = slide.querySelector<HTMLElement>('.slide-preview-block')!;
+    act(() => {
+      block.click();
+      vi.advanceTimersByTime(180);
+    });
+    act(() => {
+      block.dispatchEvent(new KeyboardEvent('keydown', {
+        key: 'Enter',
+        metaKey: true,
+        bubbles: true,
+      }));
+    });
+    expect(slide.querySelector('textarea')?.value).toBe('A paragraph.');
+  });
 });
