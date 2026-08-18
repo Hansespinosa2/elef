@@ -99,6 +99,59 @@ function placeCaretAtEnd(element: HTMLElement): void {
   selection.addRange(range);
 }
 
+function splitMarkdownBlocks(markdown: string): string[] {
+  type BlockKind = 'fence' | 'list' | 'quote' | 'table' | 'text';
+  const lines = markdown.replace(/\r\n/g, '\n').split('\n');
+  const blocks: string[] = [];
+  let current: string[] = [];
+  let fence = false;
+  let blockKind: BlockKind = 'text';
+
+  const flush = () => {
+    const value = current.join('\n').trim();
+    if (value) blocks.push(value);
+    current = [];
+  };
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    const startsFence = /^(`{3,}|~{3,})/.test(trimmed);
+    if (startsFence) {
+      if (!fence) {
+        flush();
+        blockKind = 'fence';
+      }
+      current.push(line);
+      fence = !fence;
+      if (!fence) flush();
+      continue;
+    }
+    if (fence) {
+      current.push(line);
+      continue;
+    }
+    if (!trimmed) {
+      flush();
+      continue;
+    }
+
+    const nextKind: BlockKind = /^>\s?/.test(trimmed)
+      ? 'quote'
+      : /^([-*+]|\d+[.)])\s+/.test(trimmed)
+        ? 'list'
+        : /^\|/.test(trimmed)
+          ? 'table'
+          : /^(#{1,3})\s+/.test(trimmed) || /^---+$/.test(trimmed)
+            ? 'text'
+            : blockKind;
+    if (current.length && nextKind !== blockKind && !(blockKind === 'text' && nextKind === 'text')) flush();
+    blockKind = nextKind;
+    current.push(line);
+  }
+  flush();
+  return blocks;
+}
+
 function handleListEnter(element: HTMLElement, event: ReactKeyboardEvent<HTMLElement>): boolean {
   if (event.key !== 'Enter') return false;
   const selection = window.getSelection();
@@ -213,7 +266,7 @@ function handleMarkdownShortcut(element: HTMLElement, event: ReactKeyboardEvent<
 
 export function PresentationPreview({ presentation, theme, source, onSourceChange }: Props) {
   const [editingSlide, setEditingSlide] = useState<number | null>(null);
-  const [sourceSlide, setSourceSlide] = useState<number | null>(null);
+  const [sourceBlock, setSourceBlock] = useState<{ slideIndex: number; blockIndex: number } | null>(null);
   const [sourceDraft, setSourceDraft] = useState('');
   const [overflowPrompt, setOverflowPrompt] = useState<number | null>(null);
   const previewRef = useRef<HTMLElement>(null);
@@ -233,13 +286,13 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
     return () => observer?.disconnect();
   }, []);
   useEffect(() => {
-    if (sourceSlide === null) return;
+    if (!sourceBlock) return;
     const exitSourceMode = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setSourceSlide(null);
+      if (event.key === 'Escape') setSourceBlock(null);
     };
     window.addEventListener('keydown', exitSourceMode);
     return () => window.removeEventListener('keydown', exitSourceMode);
-  }, [sourceSlide]);
+  }, [sourceBlock]);
   useEffect(() => () => {
     if (editClickTimer.current) clearTimeout(editClickTimer.current);
   }, []);
@@ -249,25 +302,17 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
         <div className="slide-viewport" key={slide.id}>
           <div className="slide-shell" style={{ width: slideWidth * slideScale, height: slideHeight * slideScale }}>
           <article
-            className={`slide${editingSlide === slide.index ? ' editing' : ''}${sourceSlide === slide.index ? ' source-mode' : ''}`}
+            className={`slide${editingSlide === slide.index ? ' editing' : ''}${sourceBlock?.slideIndex === slide.index ? ' source-mode' : ''}`}
             style={{ width: slideWidth, height: slideHeight, transform: `scale(${slideScale})` }}
             aria-label={`Slide ${slide.index + 1}`}
-            contentEditable={sourceSlide === slide.index ? undefined : editingSlide === slide.index}
+            contentEditable={sourceBlock?.slideIndex === slide.index ? undefined : editingSlide === slide.index}
             suppressContentEditableWarning
             onClick={() => {
-              if (sourceSlide !== null) return;
+              if (sourceBlock) return;
               if (editClickTimer.current) clearTimeout(editClickTimer.current);
               editClickTimer.current = setTimeout(() => setEditingSlide(slide.index), 180);
             }}
-            onDoubleClick={(event) => {
-              event.stopPropagation();
-              if (editClickTimer.current) clearTimeout(editClickTimer.current);
-              editClickTimer.current = null;
-              setSourceSlide(slide.index);
-              setSourceDraft(slide.markdown);
-              setEditingSlide(null);
-            }}
-            onKeyDown={editingSlide === slide.index && sourceSlide !== slide.index
+            onKeyDown={editingSlide === slide.index && !sourceBlock
               ? (event) => handleMarkdownShortcut(event.currentTarget, event)
               : undefined}
             onBlur={(event) => {
@@ -278,62 +323,75 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
               }
             }}
           >
-            {sourceSlide === slide.index ? (
-            <div className="slide-source-inline">
-              <div className="slide-source-inline-toolbar">
-                <strong>Slide {slide.index + 1} Markdown</strong>
-                <button type="button" onClick={() => setSourceSlide(null)}>Preview</button>
-              </div>
-              <textarea
-                autoFocus
-                aria-label={`Markdown source for slide ${slide.index + 1}`}
-                value={sourceDraft}
-                onChange={(event) => {
-                  setSourceDraft(event.target.value);
-                  onSourceChange(replaceSlideMarkdown(source, slide.index, event.target.value));
-                }}
-                onKeyDown={(event) => {
-                  event.stopPropagation();
-                  if (event.key === 'Escape') setSourceSlide(null);
-                }}
-                onBlur={(event) => {
-                  if (isSlideOverBudget(event.currentTarget.value)) setOverflowPrompt(slide.index);
-                }}
-              />
-            </div>
-            ) : slide.markdown ? (
-              (() => {
-                let taskIndex = 0;
-                return (
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    components={{
-                      input: ({ checked, ...props }) => {
-                        const index = taskIndex++;
-                        return (
-                          <span className="task-checkbox" contentEditable={false}>
-                            <input
-                              {...props}
-                              type="checkbox"
-                              checked={checked}
-                              disabled={false}
-                              contentEditable={false}
-                              onChange={() => undefined}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                onSourceChange(replaceSlideMarkdown(source, slide.index, toggleTaskItem(slide.markdown, index)));
-                              }}
-                            />
-                          </span>
-                        );
-                      },
+            {slide.markdown ? splitMarkdownBlocks(slide.markdown).map((block, blockIndex) => (
+              sourceBlock?.slideIndex === slide.index && sourceBlock.blockIndex === blockIndex ? (
+                <div className="slide-source-block" key={`source-${blockIndex}`}>
+                  <textarea
+                    autoFocus
+                    aria-label={`Markdown source for slide ${slide.index + 1}, block ${blockIndex + 1}`}
+                    value={sourceDraft}
+                    onChange={(event) => {
+                      setSourceDraft(event.target.value);
+                      const blocks = splitMarkdownBlocks(slide.markdown);
+                      blocks[blockIndex] = event.target.value;
+                      onSourceChange(replaceSlideMarkdown(source, slide.index, blocks.join('\n\n')));
                     }}
-                  >
-                    {slide.markdown}
-                  </ReactMarkdown>
-                );
-              })()
-            ) : (
+                    onKeyDown={(event) => {
+                      event.stopPropagation();
+                      if (event.key === 'Escape') setSourceBlock(null);
+                    }}
+                    onBlur={(event) => {
+                      if (isSlideOverBudget(event.currentTarget.value)) setOverflowPrompt(slide.index);
+                    }}
+                  />
+                </div>
+              ) : (
+                <div
+                  className="slide-preview-block"
+                  key={`preview-${blockIndex}`}
+                  onDoubleClick={(event) => {
+                    event.stopPropagation();
+                    if (editClickTimer.current) clearTimeout(editClickTimer.current);
+                    editClickTimer.current = null;
+                    setSourceBlock({ slideIndex: slide.index, blockIndex });
+                    setSourceDraft(block);
+                    setEditingSlide(null);
+                  }}
+                >
+                  {(() => {
+                    let taskIndex = 0;
+                    return (
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          input: ({ checked, ...props }) => {
+                            const index = taskIndex++;
+                            return (
+                              <span className="task-checkbox" contentEditable={false}>
+                                <input
+                                  {...props}
+                                  type="checkbox"
+                                  checked={checked}
+                                  disabled={false}
+                                  contentEditable={false}
+                                  onChange={() => undefined}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    onSourceChange(replaceSlideMarkdown(source, slide.index, toggleTaskItem(slide.markdown, index)));
+                                  }}
+                                />
+                              </span>
+                            );
+                          },
+                        }}
+                      >
+                        {block}
+                      </ReactMarkdown>
+                    );
+                  })()}
+                </div>
+              )
+            )) : (
               <p className="empty-slide">This slide is empty.</p>
             )}
             <span className="slide-number" contentEditable={false} aria-hidden="true">{slide.index + 1}</span>
@@ -353,7 +411,7 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
               <strong>This slide is getting crowded.</strong>
               <p>Split it at its top-level headings?</p>
               {splitSlideMarkdown(source, slide.index) ? (
-                <button type="button" onClick={() => { onSourceChange(splitSlideMarkdown(source, slide.index)!); setOverflowPrompt(null); setSourceSlide(null); }}>Split slide</button>
+                <button type="button" onClick={() => { onSourceChange(splitSlideMarkdown(source, slide.index)!); setOverflowPrompt(null); setSourceBlock(null); }}>Split slide</button>
               ) : (
                 <p className="slide-overflow-empty">No safe heading split was found. Use Markdown Source to add a <code>---</code> separator.</p>
               )}
