@@ -191,16 +191,15 @@ function handleListEnter(element: HTMLElement, event: ReactKeyboardEvent<HTMLEle
   event.preventDefault();
   const hasCheckbox = Boolean(item.querySelector('input[type="checkbox"]'));
   if (!item.textContent?.trim()) {
-    if (list.children.length > 1) {
-      item.remove();
-      const previous = list.lastElementChild;
-      if (previous instanceof HTMLElement) placeCaretAtEnd(previous);
+    const paragraph = document.createElement('p');
+    paragraph.append(document.createElement('br'));
+    item.remove();
+    if (list.children.length) {
+      list.after(paragraph);
     } else {
-      const paragraph = document.createElement('p');
-      paragraph.append(document.createElement('br'));
       list.replaceWith(paragraph);
-      placeCaretAtEnd(paragraph);
     }
+    placeCaretAtEnd(paragraph);
     return true;
   }
 
