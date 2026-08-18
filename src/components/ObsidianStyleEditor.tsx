@@ -206,6 +206,15 @@ class RenderedBlockWidget extends WidgetType {
     element.dataset.slideSurface = String(this.block.slideIndex);
     if (this.firstInSlide) element.dataset.slideLabel = `Slide ${this.block.slideIndex + 1}`;
     element.innerHTML = renderedMarkdown(this.block.markdown);
+    element.querySelectorAll<HTMLInputElement>('input[type="checkbox"]').forEach((checkbox, index) => {
+      const taskLines = lineOffsets(this.block.markdown, 0, this.block.markdown.length)
+        .filter((line) => /^\s*[-*+]\s+\[[ xX]\]\s+/.test(line.text));
+      const line = taskLines[index];
+      if (!line) return;
+      const marker = line.text.search(/\[[ xX]\]/);
+      checkbox.disabled = false;
+      checkbox.dataset.taskFrom = String(this.block.from + line.from + marker);
+    });
     annotateRenderedMath(element, this.block);
     if (findMathRanges(this.block.markdown).some((range) => !range.valid)) {
       element.classList.add('slide-invalid-tex');
@@ -343,6 +352,9 @@ function activeBlockForSelection(blocks: MarkdownBlockRange[], state: EditorStat
 function activeRevealRange(state: EditorState, block: MarkdownBlockRange | null, math: MathRange[]): SourceRevealRange | null {
   if (!block) return null;
   if (/^\s*(`{3,}|~{3,})/.test(block.markdown)) return { from: block.from, to: block.to };
+  if (/^\s*\|.*\|\s*(?:\n|$)/.test(block.markdown) && block.markdown.split('\n').filter(Boolean).length > 1) {
+    return { from: block.from, to: block.to };
+  }
 
   const selection = state.selection.main;
   const selectedMath = math.find((range) => selection.head >= range.from && selection.head <= range.to);
@@ -648,6 +660,10 @@ export function ObsidianStyleEditor({ presentation, theme, source, onSourceChang
           EditorView.domEventHandlers({
             mousedown(event, view) {
               if ((event.target as Element | null)?.closest('button')) return false;
+              if ((event.target as Element | null)?.closest('input[type="checkbox"][data-task-from]')) {
+                event.preventDefault();
+                return true;
+              }
               const previous = lastRevealedMath;
               const repeatedMathClick = previous
                 && Date.now() - previous.time < 600
@@ -663,6 +679,17 @@ export function ObsidianStyleEditor({ presentation, theme, source, onSourceChang
               return selectWidgetRange(event.target, view, false, event);
             },
             click(event, view) {
+              const checkbox = (event.target as Element | null)?.closest<HTMLInputElement>('input[type="checkbox"][data-task-from]');
+              if (checkbox) {
+                const from = Number(checkbox.dataset.taskFrom);
+                const marker = view.state.sliceDoc(from, from + 3);
+                if (Number.isFinite(from) && /^\[[ xX]\]$/.test(marker)) {
+                  event.preventDefault();
+                  view.dispatch({ changes: { from, to: from + 3, insert: marker.toLowerCase() === '[x]' ? '[ ]' : '[x]' } });
+                  view.focus();
+                  return true;
+                }
+              }
               const action = (event.target as Element | null)?.closest<HTMLElement>('[data-slide-action]');
               if (!action) return selectWidgetRange(event.target, view, false, event);
               const boundary = action.closest<HTMLElement>('.cm-slide-boundary');

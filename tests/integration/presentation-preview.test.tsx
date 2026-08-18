@@ -224,6 +224,88 @@ describe('Obsidian-style presentation editor', () => {
     expect(container.querySelector('.cm-content')?.textContent).toContain('Broken $x^2');
   });
 
+  it('toggles a task marker through the source transaction without exposing the line', () => {
+    const changes: string[] = [];
+    const source = '# Tasks\n\n- [ ] Ship the editor';
+    render(source, (next) => changes.push(next));
+    const editor = EditorView.findFromDOM(container.querySelector<HTMLElement>('.cm-editor')!);
+    act(() => editor.dispatch({ selection: { anchor: 0 } }));
+    const checkbox = container.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
+    expect(checkbox).not.toBeNull();
+
+    act(() => {
+      checkbox.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+      checkbox.click();
+    });
+
+    expect(changes.at(-1)).toBe('# Tasks\n\n- [x] Ship the editor');
+    expect(container.querySelector('.cm-content')?.textContent).not.toContain('- [ ]');
+    expect(Array.from(container.querySelectorAll<HTMLElement>('.cm-source-revealed'))
+      .every((line) => !line.textContent?.includes('Ship the editor'))).toBe(true);
+  });
+
+  it('keeps overflow inline with a scrollbar and non-blocking warning', () => {
+    const source = ['# One', ...Array.from({ length: 40 }, (_, index) => `Line ${index}`)].join('\n');
+    render(source);
+    const boundary = container.querySelector<HTMLElement>('.cm-slide-boundary')!;
+
+    expect(boundary.querySelector('.cm-slide-overflow-warning')).not.toBeNull();
+    expect(getComputedStyle(boundary).overflowY).toBe('auto');
+    expect(boundary.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it('reveals a table as one bounded structured unit', () => {
+    const markdown = '# Data\n\n| A | B |\n| --- | --- |\n| 1 | 2 |\n| 3 | 4 |';
+    render(markdown);
+    const editor = EditorView.findFromDOM(container.querySelector<HTMLElement>('.cm-editor')!);
+    act(() => editor.dispatch({ selection: { anchor: 0 } }));
+    const table = container.querySelector<HTMLElement>('.cm-rendered-block table')!;
+    expect(table).not.toBeNull();
+
+    act(() => table.click());
+
+    expect(Array.from(container.querySelectorAll<HTMLElement>('.cm-source-revealed'))
+      .map((line) => line.textContent)).toEqual([
+        '| A | B |',
+        '| --- | --- |',
+        '| 1 | 2 |',
+        '| 3 | 4 |',
+      ]);
+  });
+
+  it('cancels split inspection without changing source, selection, or history', () => {
+    const changes: string[] = [];
+    const source = ['# One', ...Array.from({ length: 19 }, (_, index) => `Body ${index}`), '## Two', 'More'].join('\n');
+    render(source, (next) => changes.push(next));
+    const editor = EditorView.findFromDOM(container.querySelector<HTMLElement>('.cm-editor')!);
+    act(() => editor.dispatch({ selection: { anchor: source.indexOf('Body') } }));
+    const before = editor.state.selection.main;
+
+    act(() => container.querySelector<HTMLButtonElement>('[data-slide-action="preview-split"]')!.click());
+    act(() => Array.from(container.querySelectorAll<HTMLButtonElement>('[role="dialog"] button'))
+      .find((button) => button.textContent === 'Cancel')!.click());
+
+    expect(changes).toHaveLength(0);
+    expect(editor.state.doc.toString()).toBe(source);
+    expect(editor.state.selection.main).toEqual(before);
+  });
+
+  it('does not change source when entering and leaving presentation mode', () => {
+    const source = '# One\n---\n# Two';
+    const changes: string[] = [];
+    render(source, (next) => changes.push(next));
+    const editor = EditorView.findFromDOM(container.querySelector<HTMLElement>('.cm-editor')!);
+    act(() => editor.dispatch({ selection: { anchor: source.indexOf('# Two') } }));
+
+    act(() => container.querySelector<HTMLButtonElement>('.obsidian-editor-toolbar button')?.click());
+    expect(container.querySelector('.presentation-playback')).not.toBeNull();
+    act(() => Array.from(container.querySelectorAll<HTMLButtonElement>('.obsidian-editor-toolbar button'))
+      .find((button) => button.textContent === 'Back to editor')?.click());
+
+    expect(changes).toHaveLength(0);
+    expect(editor.state.doc.toString()).toBe(source);
+  });
+
   it('keeps playback separate from the editing authority', () => {
     render('# One\n---\n# Two');
     act(() => container.querySelector<HTMLButtonElement>('button')!.click());

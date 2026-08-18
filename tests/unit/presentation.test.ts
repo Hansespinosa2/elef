@@ -56,6 +56,11 @@ describe('parseMarkdown', () => {
     expect(parseMarkdown('before\n---\nafter').slides).toHaveLength(2);
   });
 
+  it('keeps alternate horizontal-rule syntax inside one slide', () => {
+    expect(parseMarkdown('before\n***\nafter').slides).toHaveLength(1);
+    expect(parseMarkdown('before\n___\nafter').slides).toHaveLength(1);
+  });
+
   it('does not split standalone separators inside fenced code', () => {
     const result = parseMarkdown('```yaml\n---\n```');
     expect(result.slides).toHaveLength(1);
