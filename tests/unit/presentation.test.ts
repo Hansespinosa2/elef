@@ -9,6 +9,7 @@ import {
   slideContentBudget,
   splitSlideAtSeparator,
   splitSlideMarkdown,
+  slideSourceRanges,
 } from '../../src/domain/presentation/markdown';
 import {
   normalizeEditorThemePreference,
@@ -131,6 +132,15 @@ describe('parseMarkdown', () => {
   it('calculates a viewport-independent weighted content budget', () => {
     expect(slideContentBudget('# Heading')).toBe(4);
     expect(slideContentBudget('# Heading\n\n```ts\nconst value = 1;\n```')).toBe(7);
+  });
+
+  it('returns stable source ranges while ignoring front matter and fenced separators', () => {
+    const source = '---\ntitle: Demo\n---\n```yaml\n---\n```\n---\n# Two';
+    const ranges = slideSourceRanges(source);
+    expect(ranges).toHaveLength(2);
+    expect(source.slice(ranges[0].start, ranges[0].end)).toContain('```yaml\n---\n```');
+    expect(source.slice(ranges[1].start, ranges[1].end)).toBe('# Two');
+    expect(source.slice(ranges[0].delimiterStart!, ranges[0].delimiterEnd!)).toBe('---\n');
   });
 
   it('normalizes stored editor choices and resolves system changes deterministically', () => {

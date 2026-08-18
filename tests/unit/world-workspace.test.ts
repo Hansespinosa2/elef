@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { extractFirstH1, normalizeFolderName } from '../../src/domain/presentation';
 import { stripWorldMetadata } from '../../src/application/world/workspace';
 import { WorldWorkspace } from '../../src/application/world/workspace';
@@ -17,6 +17,8 @@ class MemoryWorld implements WorldFileSystem {
   async scanPresentations(): Promise<WorldPresentationFile[]> { return [...this.files].filter(([path]) => path.endsWith('/presentation.md')).map(([path, text]) => ({ path: path.slice(0, -17), name: 'presentation.md', presentationId: text.match(/elef-id:\s*([^\s]+)/)?.[1] || '' })); }
 }
 const storage = () => ({ data: new Map<string, string>(), getItem(key: string) { return this.data.get(key) || null; }, setItem(key: string, value: string) { this.data.set(key, value); } }) as unknown as Storage;
+
+afterEach(() => vi.useRealTimers());
 
 describe('presentation workspace', () => {
   it('extracts and sanitizes titles without touching slide parsing', () => {
@@ -94,5 +96,19 @@ describe('presentation workspace', () => {
     const source = workspace.editorSource(draft!.id);
     expect(source).toMatch(/^---\npresentationTheme: dark\n---\n# Themed/);
     expect(workspace.presentation(draft!.id)?.presentationTheme).toBe('dark');
+  });
+
+  it('retains a debounced recovery snapshot that can be restored or discarded', async () => {
+    vi.useFakeTimers();
+    const fs = new MemoryWorld(); const workspace = new WorldWorkspace(fs, storage());
+    await workspace.setup(); const draft = await workspace.createDraft();
+    workspace.updateSource(draft!.id, '# Recovered');
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(workspace.recoverySnapshot(draft!.id)?.source).toBe('# Recovered');
+    workspace.updateSource(draft!.id, '# Newer');
+    expect(workspace.restoreRecovery(draft!.id)).toBe(true);
+    expect(workspace.editorSource(draft!.id)).toBe('# Recovered');
+    workspace.discardRecovery(draft!.id);
+    expect(workspace.recoverySnapshot(draft!.id)).toBeNull();
   });
 });

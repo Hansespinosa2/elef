@@ -110,6 +110,7 @@ function App() {
   const tauri = isTauri();
   const [world] = useState(() => new WorldWorkspace(new TauriWorldFileSystem()));
   const worldState = useSyncExternalStore(world.subscribe.bind(world), world.getState.bind(world), world.getState.bind(world));
+  const browserRecovery = session.recoverySnapshot();
   const setEditorPreference = (preference: EditorThemePreference) => {
     setEditorPreferenceState(preference);
     try {
@@ -181,7 +182,8 @@ function App() {
     const presentation = active ? world.presentation(active.id) : null;
     const presentationTheme = presentation?.presentationTheme ?? 'match';
     const worldError = worldState.error || active?.error || (active && !presentation ? 'Unable to render this presentation. The current source was retained.' : null);
-    return <div className={`app world-app theme-${editorTheme}`}><button className={`sidebar-toggle${sidebarOpen ? ' hidden' : ''}`} type="button" aria-label="Expand sidebar" onClick={() => setSidebarOpen(true)}>›</button>{sidebar}{worldError && <div className="error" role="alert">{worldError}</div>}{active && presentation ? <main className="world-main"><header className="document-toolbar"><span className="document-name">{active.title}</span><ThemeMenu editorPreference={editorPreference} presentationTheme={presentationTheme} onEditorChange={setEditorPreference} onPresentationChange={(theme) => world.updatePresentationTheme(active.id, theme)} /></header><div className="workspace"><PresentationPreview presentation={presentation} theme={resolvePresentationTheme(presentationTheme, editorTheme)} source={world.editorSource(active.id)} onSourceChange={(source) => world.updateSource(active.id, source)} /></div></main> : <main className="world-main empty-world"><h1>Your presentations</h1><p>{active ? 'Fix the Markdown and try again.' : 'Select a presentation from the sidebar or create a new one.'}</p></main>}</div>;
+    const recovery = active ? world.recoverySnapshot(active.id) : null;
+    return <div className={`app world-app theme-${editorTheme}`}><button className={`sidebar-toggle${sidebarOpen ? ' hidden' : ''}`} type="button" aria-label="Expand sidebar" onClick={() => setSidebarOpen(true)}>›</button>{sidebar}{worldError && <div className="error" role="alert">{worldError}</div>}{recovery && <div className="recovery-notice" role="status">A local recovery snapshot is available.<button type="button" onClick={() => world.restoreRecovery(active!.id)}>Restore</button><button type="button" onClick={() => world.discardRecovery(active!.id)}>Discard</button></div>}{active && presentation ? <main className="world-main"><header className="document-toolbar"><span className="document-name">{active.title}</span><ThemeMenu editorPreference={editorPreference} presentationTheme={presentationTheme} onEditorChange={setEditorPreference} onPresentationChange={(theme) => world.updatePresentationTheme(active.id, theme)} /></header><div className="workspace"><PresentationPreview presentation={presentation} theme={resolvePresentationTheme(presentationTheme, editorTheme)} source={world.editorSource(active.id)} onSourceChange={(source) => world.updateSource(active.id, source)} /></div></main> : <main className="world-main empty-world"><h1>Your presentations</h1><p>{active ? 'Fix the Markdown and try again.' : 'Select a presentation from the sidebar or create a new one.'}</p></main>}</div>;
   }
   return (
     <div className={`app theme-${editorTheme}`}>
@@ -199,6 +201,7 @@ function App() {
         <input ref={inputRef} hidden type="file" accept=".md,.markdown,text/markdown,text/plain" />
       </header>
       {state.error && <div className="error" role="alert"><strong>Could not open file.</strong> {state.error}</div>}
+      {browserRecovery && !state.presentation && <div className="recovery-notice" role="status">A local recovery snapshot is available for {browserRecovery.sourceName}. <button type="button" onClick={() => session.restoreRecovery(confirmation)}>Restore</button><button type="button" onClick={() => session.discardRecovery()}>Discard</button></div>}
       {state.presentation ? <div className="workspace">
         <PresentationPreview
           presentation={state.presentation}

@@ -10,6 +10,12 @@ export interface EditorState {
   error: string | null;
 }
 
+export interface EditorRecoverySnapshot {
+  sourceName: string;
+  source: string;
+  updatedAt: number;
+}
+
 function createInitialState(): EditorState {
   return {
     source: '',
@@ -24,6 +30,16 @@ export class PresentationEditorSession {
   private state: EditorState = createInitialState();
   private listeners = new Set<() => void>();
   private request = 0;
+  private recoveryTimer: ReturnType<typeof setTimeout> | null = null;
+  private recovery: EditorRecoverySnapshot | null = null;
+
+  constructor() {
+    try {
+      const raw = localStorage.getItem('elef.editor.recovery');
+      const parsed = raw ? JSON.parse(raw) : null;
+      if (parsed && typeof parsed.sourceName === 'string' && typeof parsed.source === 'string') this.recovery = parsed;
+    } catch { /* recovery is best effort */ }
+  }
 
   getState(): EditorState {
     return this.state;
@@ -61,6 +77,12 @@ export class PresentationEditorSession {
     const sourceName = this.state.sourceName || 'Untitled presentation';
     try {
       this.setState({ ...this.state, source, presentation: parseMarkdown(source, sourceName), error: null });
+      if (this.recoveryTimer) clearTimeout(this.recoveryTimer);
+      this.recoveryTimer = setTimeout(() => {
+        this.recoveryTimer = null;
+        this.recovery = { sourceName, source, updatedAt: Date.now() };
+        try { localStorage.setItem('elef.editor.recovery', JSON.stringify(this.recovery)); } catch { /* best effort */ }
+      }, 1000);
     } catch (reason) {
       this.setState({
         ...this.state,
@@ -68,6 +90,28 @@ export class PresentationEditorSession {
         error: reason instanceof Error ? reason.message : 'Unable to parse this Markdown source.',
       });
     }
+
+  }
+
+  recoverySnapshot(): EditorRecoverySnapshot | null {
+    return this.recovery;
+  }
+
+  restoreRecovery(confirm: ReplacementConfirmation): boolean {
+    if (!this.recovery || !this.canReplace(confirm)) return false;
+    this.setState({
+      source: this.recovery.source,
+      sourceName: this.recovery.sourceName,
+      baseline: '',
+      presentation: parseMarkdown(this.recovery.source, this.recovery.sourceName),
+      error: null,
+    });
+    return true;
+  }
+
+  discardRecovery(): void {
+    this.recovery = null;
+    try { localStorage.removeItem('elef.editor.recovery'); } catch { /* best effort */ }
   }
 
   updatePresentationTheme(theme: PresentationTheme): void {
