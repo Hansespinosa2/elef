@@ -1,5 +1,5 @@
-import { open } from '@tauri-apps/api/dialog';
-import { createDir, exists, readBinaryFile, readDir, readTextFile, renameFile, writeTextFile } from '@tauri-apps/api/fs';
+import { open } from '@tauri-apps/plugin-dialog';
+import { exists, mkdir, readDir, readFile, readTextFile, rename, writeTextFile } from '@tauri-apps/plugin-fs';
 import type { DocumentReader, DocumentSelection, FileSelector, WorldFileSystem, WorldPresentationFile } from '../../application/ports/documents';
 import { readUtf8Markdown } from '../../domain/presentation/utf8';
 
@@ -9,7 +9,7 @@ export class TauriFileSelector implements FileSelector {
     if (typeof selected !== 'string') return null;
     return {
       name: selected.split(/[\\/]/).pop() || selected,
-      read: async () => Uint8Array.from(await readBinaryFile(selected)).buffer,
+      read: async () => (await readFile(selected)).buffer,
     };
   }
 }
@@ -26,30 +26,37 @@ export class TauriDocumentReader implements DocumentReader {
 
 export class TauriWorldFileSystem implements WorldFileSystem {
       async selectWorld(): Promise<string | null> {
-        const selected = await open({ directory: true, multiple: false });
+        const selected = await open({
+          directory: true,
+          multiple: false,
+          recursive: true,
+          canCreateDirectories: true,
+          title: 'Choose or create your Elef World folder',
+        });
         return typeof selected === 'string' ? selected : null;
       }
       async locatePresentation(): Promise<string | null> {
         const selected = await open({ directory: false, multiple: false, filters: [{ name: 'Elef presentation', extensions: ['md'] }] });
         return typeof selected === 'string' ? selected : null;
       }
-      async ensureDir(path: string) { await createDir(path, { recursive: true }); }
+      async ensureDir(path: string) { await mkdir(path, { recursive: true }); }
       async readText(path: string) { return readTextFile(path); }
       async writeText(path: string, content: string) { await writeTextFile(path, content); }
-      async rename(path: string, nextPath: string) { await renameFile(path, nextPath); }
+      async rename(path: string, nextPath: string) { await rename(path, nextPath); }
     async exists(path: string) { return exists(path); }
     async scanPresentations(root: string): Promise<WorldPresentationFile[]> {
       const found: WorldPresentationFile[] = [];
-      const visit = async (entries: Awaited<ReturnType<typeof readDir>>): Promise<void> => {
+      const visit = async (directory: string, entries: Awaited<ReturnType<typeof readDir>>): Promise<void> => {
         for (const entry of entries) {
-          if (entry.children) { await visit(entry.children); continue; }
+          const entryPath = `${directory.replace(/[\\/]+$/, '')}/${entry.name}`;
+          if (entry.isDirectory) { await visit(entryPath, await readDir(entryPath)); continue; }
           if (entry.name !== 'presentation.md') continue;
-          const text = await readTextFile(entry.path);
+          const text = await readTextFile(entryPath);
           const match = text.match(/<!--\s*elef-id:\s*([a-zA-Z0-9_-]+)\s*-->/);
-          if (match) found.push({ path: entry.path.replace(/[\\/]+presentation\.md$/, ''), name: entry.name, presentationId: match[1] });
+          if (match) found.push({ path: directory, name: entry.name, presentationId: match[1] });
         }
       };
-      await visit(await readDir(root, { recursive: true }));
+      await visit(root, await readDir(root));
       return found;
     }
 }

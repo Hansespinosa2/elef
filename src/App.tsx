@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { isTauri } from '@tauri-apps/api/core';
 import './app.css';
 import { PresentationEditorSession } from './application/presentation-editor/session';
 import { BrowserDocumentReader, BrowserFileSelector, BrowserReplacementConfirmation } from './infrastructure/browser/documents';
@@ -16,7 +17,7 @@ function App() {
     session.getState.bind(session),
   );
   const [confirmation] = useState(() => new BrowserReplacementConfirmation());
-  const tauri = Boolean(window.__TAURI__);
+  const tauri = isTauri();
   const [world] = useState(() => new WorldWorkspace(new TauriWorldFileSystem()));
   const worldState = useSyncExternalStore(world.subscribe.bind(world), world.getState.bind(world), world.getState.bind(world));
   useEffect(() => { if (tauri && worldState.root) void world.rescan(); }, [tauri]);
@@ -34,7 +35,7 @@ function App() {
 
   if (tauri) {
     const active = worldState.activeId ? worldState.presentations.find((item) => item.id === worldState.activeId) : null;
-    if (!worldState.root) return <div className="app"><section className="setup"><h1>Welcome to Elef World</h1><p>Choose a folder to keep your presentations together.</p><button type="button" onClick={() => void world.setup()}>Choose World folder</button></section></div>;
+    if (!worldState.root) return <div className="app"><section className="setup"><h1>Create your Elef World</h1><p>Choose or create a dedicated folder where Elef will keep your presentations.</p><button type="button" onClick={() => void world.setup()}>Create Elef World folder</button></section></div>;
     if (!active) return <div className="app"><header className="toolbar"><div><strong>Elef World</strong><span className="subtitle">{worldState.root}</span></div><button type="button" onClick={() => void world.createDraft()}>New Presentation</button></header>{worldState.error && <div className="error" role="alert">{worldState.error}</div>}<main className="dashboard"><aside className="sidebar"><h2>Recent</h2>{worldState.presentations.map((item) => <button className="recent-item" type="button" key={item.id} onClick={() => item.missing ? void world.locate(item.id) : world.open(item.id)}>{item.title}{item.missing && ' (missing)'}</button>)}</aside><section className="resume"><h1>Your presentations</h1>{worldState.presentations.length ? worldState.presentations.slice().sort((a, b) => b.lastOpened - a.lastOpened).map((item) => <article className="resume-card" key={item.id}><h2>{item.title}</h2>{item.missing ? <p>Presentation not found. <button type="button" onClick={() => void world.locate(item.id)}>Locate</button> <button type="button" onClick={() => world.removeMissing(item.id)}>Remove</button></p> : <><PresentationPreview presentation={world.presentation(item.id)!} /><button type="button" onClick={() => world.open(item.id)}>Open</button></>}</article>) : <p>No presentations yet.</p>}</section></main></div>;
     return <div className="app"><header className="toolbar"><div><strong>Elef World</strong><span className="document-name">{active.title}</span></div><button type="button" onClick={() => void world.createDraft()}>New Presentation</button><button type="button" onClick={() => world.close()}>Dashboard</button></header>{worldState.error && <div className="error" role="alert">{worldState.error}</div>}<div className="workspace"><MarkdownEditor source={active.source} onChange={(source) => world.updateSource(active.id, source)} /><PresentationPreview presentation={world.presentation(active.id)!} /></div></div>;
   }

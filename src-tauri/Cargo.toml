@@ -6,10 +6,12 @@ authors = ["Elef"]
 edition = "2021"
 
 [build-dependencies]
-tauri-build = { version = "1.5", features = [] }
+tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "1.7", features = ["dialog-open", "fs-read-file", "fs-write-file", "fs-create-dir", "fs-rename-file", "fs-read-dir", "fs-exists"] }
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]

@@ -25,3 +25,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-domain-inspired-editor-architecture.md`
   summary: Add UI-level coverage for replacement cancellation and the hidden browser input wiring.
   evidence: Application session tests cover core synchronization, but no rendered App test verifies that user cancellation preserves the editor or that browser file selection reaches the session.
+- source_spec: none
+  summary: Add an in-app flow for creating a new Elef World folder from the setup screen.
+  evidence: The user chose to handle the Rust future-incompatibility warning before returning to folder creation.

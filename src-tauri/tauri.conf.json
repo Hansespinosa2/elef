@@ -1,22 +1,16 @@
 {
+  "$schema": "https://schema.tauri.app/config/2",
   "build": {
     "beforeBuildCommand": "npm run build",
     "beforeDevCommand": "npm run dev",
-    "devPath": "http://localhost:5173",
-    "distDir": "../dist",
-    "withGlobalTauri": true
+    "devUrl": "http://localhost:5173",
+    "frontendDist": "../dist"
   },
-  "package": {
-    "productName": "Elef",
-    "version": "0.1.0"
-  },
-  "tauri": {
-    "allowlist": {
-      "dialog": { "open": true },
-      "fs": { "readFile": true, "writeFile": true, "createDir": true, "renameFile": true, "readDir": true, "exists": true, "scope": ["$HOME/**", "$DOCUMENT/**", "$DOWNLOAD/**"] }
-    },
+  "productName": "Elef",
+  "version": "0.1.0",
+  "identifier": "com.elef.presentation",
+  "app": {
     "windows": [{ "title": "Elef", "width": 1280, "height": 800, "resizable": true }],
-    "bundle": { "identifier": "com.elef.presentation" },
     "security": { "csp": "default-src 'self' ipc: http://ipc.localhost; img-src 'self' data: https:;" }
   }
 }
