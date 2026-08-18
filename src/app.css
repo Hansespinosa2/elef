@@ -26,6 +26,9 @@ button:hover { background: #a5f3fc; }
 .presentation-item:hover .item-actions, .presentation-item:focus-within .item-actions { display: flex; }
 .item-actions button { padding: .2rem .3rem; color: #94a3b8; background: transparent; font-size: .7rem; font-weight: 500; }
 .item-actions button:hover { color: #f8fafc; background: #334155; }
+.rename-form { display: flex; width: 100%; gap: .25rem; padding: .25rem; }
+.rename-form input { min-width: 0; flex: 1; border: 1px solid #67e8f9; border-radius: 4px; padding: .35rem; color: #e2e8f0; background: #0f172a; font: inherit; }
+.rename-form button { padding: .35rem .45rem; font-size: .75rem; }
 .world-main { min-width: 0; flex: 1; padding: 1.25rem; }
 .document-toolbar { max-width: 1400px; margin: 0 auto 1.5rem; }
 .empty-world { display: grid; place-content: center; text-align: center; color: #94a3b8; }
