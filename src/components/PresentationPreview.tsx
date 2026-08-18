@@ -7,6 +7,7 @@ import './PresentationPreview.css';
 
 const slideWidth = 1280;
 const slideHeight = 720;
+const minimumSlideScale = 0.75;
 
 interface Props {
   presentation: Presentation;
@@ -79,7 +80,7 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
   const [overflowPrompt, setOverflowPrompt] = useState<number | null>(null);
   const previewRef = useRef<HTMLElement>(null);
   const [availableWidth, setAvailableWidth] = useState(slideWidth);
-  const slideScale = Math.min(1, availableWidth / slideWidth);
+  const slideScale = Math.max(minimumSlideScale, Math.min(1, availableWidth / slideWidth));
   const overflowSlides = new Set(
     presentation.slides.filter((slide) => isSlideOverBudget(slide.markdown)).map((slide) => slide.index),
   );

@@ -4,7 +4,7 @@
   width: min(100%, 1100px);
   margin: 0 auto;
 }
-.slide-viewport { width: 100%; overflow: hidden; }
+.slide-viewport { width: 100%; overflow: visible; }
 .slide-shell { position: relative; flex: 0 0 auto; }
 
 .presentation-theme-light {
