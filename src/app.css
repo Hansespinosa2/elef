@@ -1,7 +1,7 @@
 :root,
 [data-editor-theme='light'],
 .theme-light {
-  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  font-family: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
   color-scheme: light;
   --app-bg: #f4f3ed;
   --chrome-bg: #e9e8e1;
@@ -49,6 +49,7 @@
 * { box-sizing: border-box; }
 html, body, #root { min-height: 100%; background: var(--app-bg); }
 body { margin: 0; min-width: 320px; color: var(--text); }
+h1, h2, h3 { font-family: 'Cormorant Garamond', Georgia, serif; }
 .app { min-height: 100vh; padding: 1.25rem; color: var(--text); background: var(--app-bg); }
 .toolbar { display: flex; align-items: center; gap: 1rem; max-width: 1400px; margin: 0 auto 2rem; }
 .toolbar > div:first-child { margin-right: auto; }
@@ -97,14 +98,25 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
 code { color: var(--accent); }
 
 .theme-menu { position: relative; flex: 0 0 auto; }
-.theme-menu summary { border: 1px solid var(--border); border-radius: 6px; padding: .55rem .75rem; color: var(--text); background: var(--panel-bg); cursor: pointer; font-weight: 700; list-style: none; }
+.theme-menu summary { display: flex; align-items: center; gap: .4rem; border: 1px solid var(--border); border-radius: 999px; padding: .55rem .85rem; color: var(--text); background: var(--panel-bg); cursor: pointer; font-weight: 700; list-style: none; box-shadow: 0 2px 8px var(--shadow); }
 .theme-menu summary::-webkit-details-marker { display: none; }
-.theme-menu summary::after { content: ' ▾'; color: var(--text-muted); }
-.theme-menu[open] summary { border-color: var(--focus); }
-.theme-menu-panel { position: absolute; z-index: 5; top: calc(100% + .4rem); right: 0; display: grid; min-width: 13rem; gap: .75rem; padding: .9rem; border: 1px solid var(--border); border-radius: 8px; background: var(--panel-bg); box-shadow: 0 12px 28px var(--shadow); }
-.theme-menu-panel label { display: grid; gap: .3rem; color: var(--text-muted); font-size: .78rem; font-weight: 700; }
-.theme-menu-panel select { width: 100%; border: 1px solid var(--border-strong); border-radius: 5px; padding: .45rem .55rem; color: var(--text); background: var(--input-bg); font: inherit; }
-.theme-menu-panel select:disabled { cursor: not-allowed; opacity: .55; }
+.theme-menu summary::after { content: '⌄'; margin-left: .15rem; color: var(--text-muted); font-size: .9em; }
+.theme-menu[open] summary { border-color: var(--focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 18%, transparent), 0 4px 12px var(--shadow); }
+.theme-menu-icon { color: var(--accent); font-size: 1.1rem; line-height: 1; }
+.theme-menu-panel { position: absolute; z-index: 5; top: calc(100% + .55rem); right: 0; display: grid; min-width: 18rem; gap: 1rem; padding: 1rem; border: 1px solid var(--border); border-radius: 14px; background: var(--panel-bg); box-shadow: 0 18px 42px var(--shadow); }
+.theme-group { min-width: 0; margin: 0; padding: 0; border: 0; }
+.theme-group:disabled { opacity: .5; }
+.theme-group legend { margin-bottom: .45rem; padding: 0; color: var(--text-muted); font-size: .72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.theme-choices { display: grid; grid-template-columns: repeat(3, 1fr); gap: .35rem; }
+.theme-choice { display: grid; justify-items: center; gap: .35rem; min-width: 0; padding: .55rem .35rem; border: 1px solid transparent; border-radius: 9px; color: var(--text); background: transparent; font-size: .75rem; font-weight: 600; white-space: nowrap; }
+.theme-choice:hover { background: var(--panel-muted); }
+.theme-choice.selected { border-color: var(--focus); color: var(--text-strong); background: var(--panel-muted); box-shadow: inset 0 0 0 1px var(--focus); }
+.theme-choice:disabled { cursor: not-allowed; }
+.theme-swatch { width: 2rem; height: 1.35rem; border: 1px solid var(--border-strong); border-radius: 5px; background: var(--panel-bg); box-shadow: inset 0 0 0 3px var(--app-bg); }
+.theme-swatch-system { background: linear-gradient(135deg, var(--app-bg) 50%, var(--text-strong) 50%); }
+.theme-swatch-light { background: #fbfaf4; }
+.theme-swatch-dark { background: #1d2421; }
+.theme-swatch-match { background: linear-gradient(135deg, var(--accent) 50%, var(--panel-bg) 50%); }
 
 @media (max-width: 800px) {
   .app { padding: .75rem; }

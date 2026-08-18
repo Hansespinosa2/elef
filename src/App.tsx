@@ -28,6 +28,31 @@ interface ThemeMenuProps {
   onPresentationChange: (theme: PresentationTheme) => void;
 }
 
+interface ThemeChoiceProps {
+  label: string;
+  value: string;
+  selected: boolean;
+  disabled?: boolean;
+  onSelect: () => void;
+}
+
+function ThemeChoice({ label, value, selected, disabled, onSelect }: ThemeChoiceProps) {
+  return (
+    <button
+      className={`theme-choice${selected ? ' selected' : ''}`}
+      type="button"
+      role="radio"
+      aria-checked={selected}
+      aria-label={label}
+      disabled={disabled}
+      onClick={onSelect}
+    >
+      <span className={`theme-swatch theme-swatch-${value}`} aria-hidden="true" />
+      <span>{label}</span>
+    </button>
+  );
+}
+
 function ThemeMenu({
   editorPreference,
   presentationTheme,
@@ -37,33 +62,24 @@ function ThemeMenu({
 }: ThemeMenuProps) {
   return (
     <details className="theme-menu">
-      <summary>Theme</summary>
+      <summary><span className="theme-menu-icon" aria-hidden="true">◐</span> Theme</summary>
       <div className="theme-menu-panel">
-        <label>
-          Editor
-          <select
-            aria-label="Editor theme"
-            value={editorPreference}
-            onChange={(event) => onEditorChange(event.target.value as EditorThemePreference)}
-          >
-            <option value="system">System</option>
-            <option value="light">Light</option>
-            <option value="dark">Dark</option>
-          </select>
-        </label>
-        <label>
-          Presentation
-          <select
-            aria-label="Presentation theme"
-            disabled={presentationDisabled}
-            value={presentationTheme}
-            onChange={(event) => onPresentationChange(event.target.value as PresentationTheme)}
-          >
-            <option value="match">Match editor</option>
-            <option value="light">Light</option>
-            <option value="dark">Dark</option>
-          </select>
-        </label>
+        <fieldset className="theme-group" role="radiogroup" aria-label="Editor theme">
+          <legend>Editor</legend>
+          <div className="theme-choices">
+            <ThemeChoice label="System" value="system" selected={editorPreference === 'system'} onSelect={() => onEditorChange('system')} />
+            <ThemeChoice label="Light" value="light" selected={editorPreference === 'light'} onSelect={() => onEditorChange('light')} />
+            <ThemeChoice label="Dark" value="dark" selected={editorPreference === 'dark'} onSelect={() => onEditorChange('dark')} />
+          </div>
+        </fieldset>
+        <fieldset className="theme-group" role="radiogroup" aria-label="Presentation theme" disabled={presentationDisabled}>
+          <legend>Presentation</legend>
+          <div className="theme-choices">
+            <ThemeChoice label="Match editor" value="match" selected={presentationTheme === 'match'} disabled={presentationDisabled} onSelect={() => onPresentationChange('match')} />
+            <ThemeChoice label="Light" value="light" selected={presentationTheme === 'light'} disabled={presentationDisabled} onSelect={() => onPresentationChange('light')} />
+            <ThemeChoice label="Dark" value="dark" selected={presentationTheme === 'dark'} disabled={presentationDisabled} onSelect={() => onPresentationChange('dark')} />
+          </div>
+        </fieldset>
       </div>
     </details>
   );
