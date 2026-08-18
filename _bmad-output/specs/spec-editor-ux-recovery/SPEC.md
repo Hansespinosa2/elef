@@ -2,6 +2,7 @@
 id: SPEC-editor-ux-recovery
 companions:
   - behavior-matrix.md
+  - test-plan.md
 sources: []
 ---
 

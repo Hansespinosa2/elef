@@ -4,7 +4,7 @@ This matrix is the red-test backlog. Each item must become a deterministic unit,
 integration, or browser smoke test before the corresponding implementation is
 considered recovered.
 
-## Editing authority and selection
+## Editing authority and selection (`AUTH-*`, `REVEAL-*`)
 
 - [ ] One CodeMirror document contains the exact canonical Markdown source.
 - [ ] React rendering never mutates the CodeMirror-owned editable DOM.
@@ -40,7 +40,7 @@ considered recovered.
 - [ ] Command/Ctrl-Shift-Z or Ctrl-Y reapplies the exact undone source.
 - [ ] Undo remains coherent after rendered/source transitions.
 
-## Slide surfaces and navigation
+## Slide surfaces and navigation (`SURFACE-*`, `NAV-*`, `BOUNDARY-*`)
 
 - [ ] Every parsed slide renders as one coherent visual surface.
 - [ ] Slide surfaces use the active light/dark presentation theme consistently.
@@ -70,7 +70,7 @@ considered recovered.
 - [ ] An incomplete `--` remains editable text.
 - [ ] Backspace after a newly inserted boundary follows the documented invariant.
 
-## Markdown rendering and source preservation
+## Markdown rendering and source preservation (`MD-*`)
 
 - [ ] Headings render with the established slide typography.
 - [ ] Paragraphs render with the established slide spacing.
@@ -93,7 +93,7 @@ considered recovered.
 - [ ] Presentation theme metadata remains valid after editing.
 - [ ] Malformed Markdown remains editable and does not crash rendering.
 
-## TeX behavior
+## TeX behavior (`TEX-*`)
 
 - [ ] Inline TeX renders with KaTeX when the source is valid.
 - [ ] Display TeX renders with KaTeX when the source is valid.
@@ -108,7 +108,7 @@ considered recovered.
 - [ ] Repeated TeX click/edit/re-render cycles do not duplicate or delete source.
 - [ ] Display-math line breaks remain exact across reveal and rerender.
 
-## Overflow and splitting
+## Overflow and splitting (`OVERFLOW-*`, `SPLIT-*`)
 
 - [ ] Overflow is detected without requiring a slow Tauri E2E run.
 - [ ] Overflow warning does not automatically modify source.
@@ -122,7 +122,7 @@ considered recovered.
 - [ ] Split can be undone once with exact source restoration.
 - [ ] Split preview remains usable while the editor is scrolled.
 
-## Persistence and recovery
+## Persistence and recovery (`SAVE-*`, `RECOVERY-*`)
 
 - [ ] Source changes are persisted in the background after the debounce.
 - [ ] Rapid typing coalesces into one persistence sequence.
@@ -137,7 +137,7 @@ considered recovered.
 - [ ] Renaming a presentation does not lose a pending source edit.
 - [ ] Browser and Tauri persistence share the same editor behavior.
 
-## Resilience and accessibility
+## Resilience and accessibility (`RESILIENCE-*`)
 
 - [ ] Repeated click, type, undo, preview, and slide navigation never causes a
   React placement/reconciliation crash.
@@ -151,7 +151,7 @@ considered recovered.
 - [ ] Very long slides remain navigable without trapping the caret.
 - [ ] The editor remains usable when KaTeX or Markdown rendering fails.
 
-## Presentation mode
+## Presentation mode (`PRESENT-*`)
 
 - [ ] Present mode is separate from edit mode.
 - [ ] Present mode renders fixed 16:9 pages without editor controls.
