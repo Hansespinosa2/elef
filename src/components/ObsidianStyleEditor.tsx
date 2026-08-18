@@ -56,6 +56,11 @@ interface SplitPreview {
   slideIndex: number;
 }
 
+interface SourceRevealRange {
+  from: number;
+  to: number;
+}
+
 function findMathRanges(source: string): MathRange[] {
   const ranges: MathRange[] = [];
   let index = 0;
@@ -181,6 +186,7 @@ class RenderedBlockWidget extends WidgetType {
     private readonly block: MarkdownBlockRange,
     private readonly firstInSlide: boolean,
     private readonly lastInSlide: boolean,
+    private readonly sourceFragment = false,
   ) {
     super();
   }
@@ -190,6 +196,7 @@ class RenderedBlockWidget extends WidgetType {
     element.className = [
       'cm-rendered-block',
       'slide-preview-block',
+      this.sourceFragment ? 'cm-rendered-fragment' : '',
       this.firstInSlide ? 'cm-slide-first' : '',
       this.lastInSlide ? 'cm-slide-last' : '',
     ].filter(Boolean).join(' ');
@@ -216,7 +223,8 @@ class RenderedBlockWidget extends WidgetType {
       && other.block.to === this.block.to
       && other.block.markdown === this.block.markdown
       && other.firstInSlide === this.firstInSlide
-      && other.lastInSlide === this.lastInSlide;
+      && other.lastInSlide === this.lastInSlide
+      && other.sourceFragment === this.sourceFragment;
   }
 
   ignoreEvent(): boolean {
@@ -332,6 +340,35 @@ function activeBlockForSelection(blocks: MarkdownBlockRange[], state: EditorStat
   return blocks.find((block) => selection.head >= block.from && selection.head <= block.to) || null;
 }
 
+function activeRevealRange(state: EditorState, block: MarkdownBlockRange | null, math: MathRange[]): SourceRevealRange | null {
+  if (!block) return null;
+  if (/^\s*(`{3,}|~{3,})/.test(block.markdown)) return { from: block.from, to: block.to };
+
+  const selection = state.selection.main;
+  const selectedMath = math.find((range) => selection.head >= range.from && selection.head <= range.to);
+  const from = Math.max(block.from, selectedMath ? selectedMath.from : selection.from);
+  const to = Math.min(block.to, selectedMath ? selectedMath.to : selection.to);
+  return {
+    from: state.doc.lineAt(from).from,
+    to: state.doc.lineAt(Math.max(from, to)).to,
+  };
+}
+
+function renderedFragment(
+  source: string,
+  block: MarkdownBlockRange,
+  from: number,
+  to: number,
+): MarkdownBlockRange | null {
+  if (to <= from) return null;
+  return {
+    from,
+    to,
+    slideIndex: block.slideIndex,
+    markdown: source.slice(from, to),
+  };
+}
+
 function slideRangeForPosition(ranges: SlideSourceRange[], position: number): number {
   const match = ranges.find((range) => position >= range.start && position <= range.end);
   return match?.index ?? Math.max(0, ranges.length - 1);
@@ -341,7 +378,9 @@ function livePreviewDecorations(state: EditorState): DecorationSet {
   const source = state.doc.toString();
   const slides = slideSourceRanges(source);
   const blocks = markdownBlockRanges(source);
+  const math = findMathRanges(source);
   const activeBlock = activeBlockForSelection(blocks, state);
+  const reveal = activeRevealRange(state, activeBlock, math);
   const frontMatterEnd = slides[0]?.start ?? 0;
   const editingFrontMatter = frontMatterEnd > 0 && state.selection.main.head < frontMatterEnd;
   const decorations: Array<{ from: number; to?: number; value: Decoration }> = [];
@@ -384,7 +423,7 @@ function livePreviewDecorations(state: EditorState): DecorationSet {
         'cm-slide-line',
         number === firstLine.number ? 'cm-slide-first' : '',
         number === lastLine.number ? 'cm-slide-last' : '',
-        activeBlock && line.from >= activeBlock.from && line.from < activeBlock.to ? 'cm-source-revealed' : '',
+        reveal && line.to >= reveal.from && line.from <= reveal.to ? 'cm-source-revealed' : '',
       ].filter(Boolean).join(' ');
       decorations.push({
         from: line.from,
@@ -401,25 +440,33 @@ function livePreviewDecorations(state: EditorState): DecorationSet {
   }
 
   for (const block of blocks) {
-    if (activeBlock?.from === block.from && activeBlock.to === block.to) continue;
     const slide = slides[block.slideIndex];
-    decorations.push({
-      from: block.from,
-      to: block.to,
-      value: Decoration.replace({
-        widget: new RenderedBlockWidget(
-          block,
-          block.from === slide.start,
-          block.to === slide.end,
-        ),
-        block: true,
-      }),
-    });
+    const fragments = activeBlock?.from === block.from && activeBlock.to === block.to && reveal
+      ? [
+        renderedFragment(source, block, block.from, Math.max(block.from, reveal.from - 1)),
+        renderedFragment(source, block, Math.min(block.to, reveal.to + 1), block.to),
+      ].filter((fragment): fragment is MarkdownBlockRange => fragment !== null)
+      : [block];
+    for (const fragment of fragments) {
+      decorations.push({
+        from: fragment.from,
+        to: fragment.to,
+        value: Decoration.replace({
+          widget: new RenderedBlockWidget(
+            fragment,
+            fragment.from === slide.start,
+            fragment.to === slide.end,
+            fragment !== block,
+          ),
+          block: true,
+        }),
+      });
+    }
   }
 
-  for (const range of findMathRanges(source)) {
+  for (const range of math) {
     const block = blocks.find((candidate) => range.from >= candidate.from && range.to <= candidate.to);
-    if (block && block !== activeBlock) continue;
+    if (block && (block !== activeBlock || !reveal || range.from < reveal.from || range.to > reveal.to)) continue;
     const editing = state.selection.main.from >= range.from && state.selection.main.to <= range.to;
     if (range.valid && !editing) {
       decorations.push({
@@ -565,7 +612,24 @@ export function ObsidianStyleEditor({ presentation, theme, source, onSourceChang
       if (mathElement && Number.isFinite(to) && event) {
         lastRevealedMath = { from, to, time: Date.now(), x: event.clientX, y: event.clientY };
       }
-      view.dispatch({ selection: selectMath && Number.isFinite(to) ? { anchor: from, head: to } : { anchor: from }, scrollIntoView: true });
+      let anchor = from;
+      if (!mathElement && blockElement && event && Number.isFinite(to)) {
+        const lines = lineOffsets(view.state.doc.toString(), from, to);
+        const bounds = blockElement.getBoundingClientRect();
+        if (lines.length > 1 && bounds.height > 0) {
+          const ratio = Math.max(0, Math.min(0.999, (event.clientY - bounds.top) / bounds.height));
+          anchor = lines[Math.floor(ratio * lines.length)]?.from ?? from;
+        }
+        const line = view.state.doc.lineAt(anchor);
+        if (bounds.width > 0) {
+          const ratio = Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width));
+          anchor = Math.min(line.to, line.from + Math.round(line.length * ratio));
+        }
+      }
+      view.dispatch({
+        selection: selectMath && Number.isFinite(to) ? { anchor: from, head: to } : { anchor },
+        scrollIntoView: true,
+      });
       view.focus();
       return true;
     };

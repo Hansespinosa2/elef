@@ -195,6 +195,9 @@
 .cm-rendered-block img { max-width: 100%; max-height: 20rem; object-fit: contain; }
 .cm-rendered-block > :first-child { margin-top: 0; }
 .cm-rendered-block > :last-child { margin-bottom: 0; }
+.cm-rendered-block.cm-rendered-fragment p {
+  margin-block: .2em;
+}
 .cm-slide-boundary {
   --slide-page-fill: 0px; box-sizing: border-box; width: 100%;
   color: var(--slide-text); font-size: 0; line-height: 0;

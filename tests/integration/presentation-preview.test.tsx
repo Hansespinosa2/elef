@@ -2,6 +2,7 @@
 import { act } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
+import { redo, undo } from '@codemirror/commands';
 import { EditorView } from '@codemirror/view';
 import { PresentationPreview } from '../../src/components/PresentationPreview';
 import { findMathRanges, markdownBlockRanges } from '../../src/components/ObsidianStyleEditor';
@@ -105,6 +106,77 @@ describe('Obsidian-style presentation editor', () => {
     expect(container.querySelectorAll('.cm-rendered-block')).toHaveLength(2);
     expect(Array.from(container.querySelectorAll<HTMLElement>('.cm-source-revealed'))
       .map((line) => line.textContent)).toContain('Second paragraph');
+    expect(container.querySelectorAll('.cm-source-revealed')).toHaveLength(1);
+  });
+
+  it('reveals one source line from a clicked paragraph while the rest of the slide stays rendered', () => {
+    const markdown = '# One\n\nFirst paragraph line\nContinuation line\n\nNeighboring block';
+    render(markdown);
+    const paragraph = markdownBlockRanges(markdown)[1];
+    const rendered = container.querySelector<HTMLElement>(`[data-block-from="${paragraph.from}"]`)!;
+    rendered.getBoundingClientRect = () => ({
+      x: 0, y: 0, top: 0, right: 100, bottom: 100, left: 0, width: 100, height: 100,
+      toJSON: () => undefined,
+    });
+
+    act(() => rendered.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 0, clientY: 75 })));
+
+    const revealed = Array.from(container.querySelectorAll<HTMLElement>('.cm-source-revealed'));
+    expect(revealed).toHaveLength(1);
+    expect(revealed[0].textContent).toBe('Continuation line');
+    const remainingRendered = Array.from(container.querySelectorAll<HTMLElement>('.cm-rendered-block'));
+    expect(remainingRendered.some((block) => block.textContent?.includes('First paragraph line'))).toBe(true);
+    expect(remainingRendered.some((block) => block.textContent?.includes('Neighboring block'))).toBe(true);
+    expect(remainingRendered.some((block) => block.textContent?.includes('One'))).toBe(true);
+  });
+
+  it('shows heading syntax only while its source line is active', () => {
+    const markdown = 'Intro paragraph\n\n## Heading\n\nAfter heading';
+    render(markdown);
+    const editor = EditorView.findFromDOM(container.querySelector<HTMLElement>('.cm-editor')!);
+    const headingFrom = markdown.indexOf('## Heading');
+    const afterFrom = markdown.indexOf('After heading');
+
+    expect(container.querySelector('.cm-content')?.textContent).not.toContain('## Heading');
+    act(() => editor.dispatch({ selection: { anchor: headingFrom } }));
+    expect(Array.from(container.querySelectorAll<HTMLElement>('.cm-source-revealed'))
+      .map((line) => line.textContent)).toEqual(['## Heading']);
+    expect(container.querySelectorAll('.cm-rendered-block')).toHaveLength(2);
+
+    act(() => editor.dispatch({ selection: { anchor: afterFrom } }));
+    expect(container.querySelector('.cm-content')?.textContent).not.toContain('## Heading');
+    expect(Array.from(container.querySelectorAll<HTMLElement>('.cm-rendered-block'))
+      .some((block) => block.textContent?.includes('Heading'))).toBe(true);
+  });
+
+  it('reveals a fenced code block as one coherent source unit', () => {
+    const markdown = '# One\n\n```ts\nconst value = 1;\n```\n\nAfter code';
+    render(markdown);
+    const fence = markdownBlockRanges(markdown)[1];
+    const rendered = container.querySelector<HTMLElement>(`[data-block-from="${fence.from}"]`)!;
+
+    act(() => rendered.click());
+
+    expect(Array.from(container.querySelectorAll<HTMLElement>('.cm-source-revealed'))
+      .map((line) => line.textContent)).toEqual(['```ts', 'const value = 1;', '```']);
+    expect(Array.from(container.querySelectorAll<HTMLElement>('.cm-rendered-block'))
+      .some((block) => block.textContent?.includes('After code'))).toBe(true);
+  });
+
+  it('keeps edits in CodeMirror history while source fragments rerender', () => {
+    const changes: string[] = [];
+    const markdown = '# One\n\nEditable line\nContinuation line\n\nAfter';
+    render(markdown, (next) => changes.push(next));
+    const editor = EditorView.findFromDOM(container.querySelector<HTMLElement>('.cm-editor')!);
+    const from = markdown.indexOf('Editable line');
+    act(() => editor.dispatch({ selection: { anchor: from } }));
+
+    act(() => editor.dispatch({ changes: { from, to: from + 'Editable'.length, insert: 'Changed' } }));
+    expect(changes.at(-1)).toContain('Changed line');
+    act(() => { expect(undo(editor)).toBe(true); });
+    expect(editor.state.doc.toString()).toBe(markdown);
+    act(() => { expect(redo(editor)).toBe(true); });
+    expect(editor.state.doc.toString()).toContain('Changed line');
     expect(container.querySelectorAll('.cm-source-revealed')).toHaveLength(1);
   });
 
