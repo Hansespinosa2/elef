@@ -316,8 +316,18 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
     const exitSourceMode = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setSourceBlock(null);
     };
+    const exitOnOutsideClick = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element) || !target.closest('.slide-source-block')) {
+        setSourceBlock(null);
+      }
+    };
     window.addEventListener('keydown', exitSourceMode);
-    return () => window.removeEventListener('keydown', exitSourceMode);
+    window.addEventListener('pointerdown', exitOnOutsideClick, true);
+    return () => {
+      window.removeEventListener('keydown', exitSourceMode);
+      window.removeEventListener('pointerdown', exitOnOutsideClick, true);
+    };
   }, [sourceBlock]);
   useEffect(() => () => {
     if (editClickTimer.current) clearTimeout(editClickTimer.current);
@@ -334,7 +344,12 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
             contentEditable={sourceBlock?.slideIndex === slide.index ? undefined : editingSlide === slide.index}
             suppressContentEditableWarning
             onClick={(event) => {
-              if (sourceBlock) return;
+              if (sourceBlock) {
+                if (!(event.target instanceof Element) || !event.target.closest('.slide-source-block')) {
+                  setSourceBlock(null);
+                }
+                return;
+              }
               if (editingSlide === slide.index) return;
               if (editClickTimer.current) clearTimeout(editClickTimer.current);
               const article = event.currentTarget;
