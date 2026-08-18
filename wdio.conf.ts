@@ -1,10 +1,11 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname);
 const fixtureRoot = resolve(root, '.wdio-fixtures');
 const fixturePath = resolve(fixtureRoot, 'Arrow navigation', 'presentation.md');
+const appBinaryPath = resolve(root, 'src-tauri/target/debug/elef');
 
 export const config = {
   runner: 'local',
@@ -14,7 +15,7 @@ export const config = {
     '@wdio/tauri-service',
     {
       driverProvider: 'embedded',
-      appBinaryPath: resolve(root, 'src-tauri/target/debug/elef'),
+      appBinaryPath,
       startTimeout: 120000,
       commandTimeout: 30000,
     },
@@ -22,7 +23,7 @@ export const config = {
   capabilities: [{
     browserName: 'tauri',
     'tauri:options': {
-      application: resolve(root, 'src-tauri/target/debug/elef'),
+      application: appBinaryPath,
     },
   }],
   framework: 'mocha',
@@ -37,7 +38,12 @@ export const config = {
   onPrepare: () => {
     mkdirSync(resolve(fixtureRoot, 'Arrow navigation'), { recursive: true });
     writeFileSync(fixturePath, '<!-- elef-id: e2e-arrow-navigation -->\n# Arrow navigation\n\nfixture\n');
-    execFileSync('npm', ['run', 'tauri', '--', 'build', '--debug', '--features', 'wdio'], { cwd: root, stdio: 'inherit' });
+    if (process.env.WDIO_BUILD === '1' || !existsSync(appBinaryPath)) {
+      console.log(`[wdio] Building Tauri app (${process.env.WDIO_BUILD === '1' ? 'WDIO_BUILD=1' : 'debug binary missing'})`);
+      execFileSync('npm', ['run', 'tauri', '--', 'build', '--debug', '--features', 'wdio'], { cwd: root, stdio: 'inherit' });
+    } else {
+      console.log(`[wdio] Reusing existing Tauri app at ${appBinaryPath}`);
+    }
   },
   onComplete: () => {
     rmSync(fixtureRoot, { recursive: true, force: true });
