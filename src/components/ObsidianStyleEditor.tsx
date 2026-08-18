@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { markdown } from '@codemirror/lang-markdown';
 import { EditorState } from '@codemirror/state';
@@ -7,6 +8,8 @@ import {
   EditorView,
   keymap,
   type DecorationSet,
+  ViewPlugin,
+  type ViewUpdate,
   WidgetType,
 } from '@codemirror/view';
 import katex from 'katex';
@@ -17,7 +20,9 @@ import remarkMath from 'remark-math';
 import {
   deleteSlideMarkdown,
   insertSlideMarkdown,
+  isSlideOverBudget,
   slideSourceRanges,
+  splitSlideMarkdown,
 } from '../domain/presentation';
 import type { Presentation, SlideSourceRange, ThemeMode } from '../domain/presentation';
 import './PresentationPreview.css';
@@ -36,6 +41,19 @@ interface MathRange {
   source: string;
   display: boolean;
   valid: boolean;
+}
+
+export interface MarkdownBlockRange {
+  from: number;
+  to: number;
+  slideIndex: number;
+  markdown: string;
+}
+
+interface SplitPreview {
+  original: string;
+  proposed: string;
+  slideIndex: number;
 }
 
 function findMathRanges(source: string): MathRange[] {
@@ -77,6 +95,133 @@ function findMathRanges(source: string): MathRange[] {
   return ranges;
 }
 
+function lineOffsets(source: string, start: number, end: number): Array<{ from: number; to: number; text: string }> {
+  const lines: Array<{ from: number; to: number; text: string }> = [];
+  let from = start;
+  while (from <= end) {
+    const newline = source.indexOf('\n', from);
+    const to = newline < 0 || newline >= end ? end : newline;
+    lines.push({ from, to, text: source.slice(from, to).replace(/\r$/, '') });
+    if (newline < 0 || newline >= end) break;
+    from = newline + 1;
+  }
+  return lines;
+}
+
+/**
+ * Produces source-backed Markdown blocks without interpreting or rewriting them.
+ * Blank lines separate prose, while fences and adjacent list/table/quote lines
+ * stay together so revealing a block exposes the useful editing unit.
+ */
+export function markdownBlockRanges(source: string): MarkdownBlockRange[] {
+  const blocks: MarkdownBlockRange[] = [];
+  for (const slide of slideSourceRanges(source)) {
+    const lines = lineOffsets(source, slide.start, slide.end);
+    let start: number | null = null;
+    let end = slide.start;
+    let fence: { marker: string; length: number } | null = null;
+
+    const flush = () => {
+      if (start === null) return;
+      blocks.push({
+        from: start,
+        to: end,
+        slideIndex: slide.index,
+        markdown: source.slice(start, end),
+      });
+      start = null;
+    };
+
+    for (const line of lines) {
+      const trimmed = line.text.trim();
+      const fenceMatch = trimmed.match(/^(`{3,}|~{3,})/);
+      const heading = !fence && /^#{1,6}\s+/.test(trimmed);
+      if (!fence && !trimmed) {
+        flush();
+        continue;
+      }
+      if (heading && start !== null) flush();
+      if (start === null) start = line.from;
+      end = line.to;
+      if (fenceMatch) {
+        const next = { marker: fenceMatch[1][0], length: fenceMatch[1].length };
+        fence = fence && fence.marker === next.marker && next.length >= fence.length ? null : next;
+      }
+      if (heading || (fenceMatch && !fence)) flush();
+    }
+    flush();
+  }
+  return blocks.filter((block) => block.to > block.from);
+}
+
+function renderedMarkdown(markdownSource: string): string {
+  return renderToStaticMarkup(
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm, remarkMath]}
+      rehypePlugins={[[rehypeKatex, { throwOnError: false }]]}
+    >
+      {markdownSource || '\u00a0'}
+    </ReactMarkdown>,
+  );
+}
+
+function annotateRenderedMath(element: HTMLElement, block: MarkdownBlockRange): void {
+  const math = findMathRanges(block.markdown);
+  element.querySelectorAll<HTMLElement>('.katex').forEach((node, index) => {
+    const range = math[index];
+    if (!range) return;
+    node.dataset.mathFrom = String(block.from + range.from);
+    node.dataset.mathTo = String(block.from + range.to);
+    node.title = range.valid ? 'Click to edit TeX; double-click to select it' : 'Invalid TeX — source retained';
+  });
+}
+
+class RenderedBlockWidget extends WidgetType {
+  constructor(
+    private readonly block: MarkdownBlockRange,
+    private readonly firstInSlide: boolean,
+    private readonly lastInSlide: boolean,
+  ) {
+    super();
+  }
+
+  toDOM(): HTMLElement {
+    const element = document.createElement('div');
+    element.className = [
+      'cm-rendered-block',
+      'slide-preview-block',
+      this.firstInSlide ? 'cm-slide-first' : '',
+      this.lastInSlide ? 'cm-slide-last' : '',
+    ].filter(Boolean).join(' ');
+    element.dataset.blockFrom = String(this.block.from);
+    element.dataset.blockTo = String(this.block.to);
+    element.dataset.slideIndex = String(this.block.slideIndex);
+    element.innerHTML = renderedMarkdown(this.block.markdown);
+    annotateRenderedMath(element, this.block);
+    if (findMathRanges(this.block.markdown).some((range) => !range.valid)) {
+      element.classList.add('slide-invalid-tex');
+      const warning = document.createElement('small');
+      warning.className = 'cm-invalid-tex-warning';
+      warning.textContent = 'TeX is incomplete or invalid. Click to edit the preserved source.';
+      element.append(warning);
+    }
+    return element;
+  }
+
+  eq(other: WidgetType): boolean {
+    return other instanceof RenderedBlockWidget
+      && other.block.from === this.block.from
+      && other.block.to === this.block.to
+      && other.block.markdown === this.block.markdown
+      && other.firstInSlide === this.firstInSlide
+      && other.lastInSlide === this.lastInSlide;
+  }
+
+  ignoreEvent(): boolean {
+    return false;
+  }
+}
+
 class MathWidget extends WidgetType {
   constructor(private readonly range: MathRange) {
     super();
@@ -86,19 +231,16 @@ class MathWidget extends WidgetType {
     const element = document.createElement(this.range.display ? 'div' : 'span');
     element.className = `cm-math-widget${this.range.valid ? '' : ' cm-math-invalid'}`;
     element.dataset.mathSource = this.range.source;
-    element.title = this.range.valid ? 'Double-click to edit TeX' : 'Invalid TeX — source retained';
+    element.dataset.mathFrom = String(this.range.from);
+    element.dataset.mathTo = String(this.range.to);
+    element.title = this.range.valid ? 'Click to edit TeX; double-click to select it' : 'Invalid TeX — source retained';
     if (this.range.valid) {
-      try {
-        element.innerHTML = katex.renderToString(this.range.source, {
-          displayMode: this.range.display,
-          throwOnError: true,
-        });
-      } catch {
-        element.textContent = this.range.source;
-        element.classList.add('cm-math-invalid');
-      }
+      element.innerHTML = katex.renderToString(this.range.source, {
+        displayMode: this.range.display,
+        throwOnError: false,
+      });
     } else {
-      element.textContent = element.dataset.mathSource;
+      element.textContent = this.range.source;
     }
     return element;
   }
@@ -115,28 +257,46 @@ class MathWidget extends WidgetType {
   }
 }
 
-function mathDecorations(state: EditorState): DecorationSet {
-  const builder: { from: number; to: number; decoration: Decoration }[] = [];
-  const source = state.doc.toString();
-  const cursor = state.selection.main;
-  for (const range of findMathRanges(source)) {
-    const editing = cursor.from >= range.from && cursor.to <= range.to;
-    if (range.valid && !editing) {
-      builder.push({
-        from: range.from,
-        to: range.to,
-        decoration: Decoration.replace({ widget: new MathWidget(range), inclusive: false }),
-      });
-    } else if (!range.valid) {
-      if (range.from === range.to) continue;
-      builder.push({
-        from: range.from,
-        to: range.to,
-        decoration: Decoration.mark({ class: 'cm-math-invalid-source' }),
-      });
-    }
+class SlideBoundaryWidget extends WidgetType {
+  constructor(
+    private readonly slideIndex: number,
+    private readonly overBudget: boolean,
+    private readonly canSplit: boolean,
+  ) {
+    super();
   }
-  return Decoration.set(builder.map(({ from, to, decoration }) => decoration.range(from, to)), true);
+
+  toDOM(): HTMLElement {
+    const element = document.createElement('div');
+    element.className = `cm-slide-boundary${this.overBudget ? ' may-overflow' : ''}`;
+    element.dataset.slideIndex = String(this.slideIndex);
+    element.innerHTML = `
+      <div class="cm-slide-page-fill" aria-hidden="true"></div>
+      <div class="cm-slide-overflow-warning" role="status">Slide may overflow its 16:9 page.</div>
+      <div class="slide-boundary" role="group" aria-label="Actions for slide ${this.slideIndex + 1}">
+        <button class="slide-delete-button" type="button" data-slide-action="delete" aria-label="Delete slide ${this.slideIndex + 1}">−</button>
+        ${this.canSplit ? `<button class="slide-split-button" type="button" data-slide-action="preview-split" aria-label="Preview automatic split for slide ${this.slideIndex + 1}">Preview split</button>` : ''}
+        <button class="slide-add-button" type="button" data-slide-action="add" aria-label="Add slide after slide ${this.slideIndex + 1}">+</button>
+      </div>
+    `;
+    return element;
+  }
+
+  eq(other: WidgetType): boolean {
+    return other instanceof SlideBoundaryWidget
+      && other.slideIndex === this.slideIndex
+      && other.overBudget === this.overBudget
+      && other.canSplit === this.canSplit;
+  }
+
+  ignoreEvent(): boolean {
+    return false;
+  }
+}
+
+function activeBlockForSelection(blocks: MarkdownBlockRange[], state: EditorState): MarkdownBlockRange | null {
+  const selection = state.selection.main;
+  return blocks.find((block) => selection.head >= block.from && selection.head <= block.to) || null;
 }
 
 function slideRangeForPosition(ranges: SlideSourceRange[], position: number): number {
@@ -144,33 +304,175 @@ function slideRangeForPosition(ranges: SlideSourceRange[], position: number): nu
   return match?.index ?? Math.max(0, ranges.length - 1);
 }
 
-function renderSlide(markdown: string): JSX.Element {
-  const math = findMathRanges(markdown);
-  const hasInvalidMath = math.some((range) => !range.valid);
-  return (
-    <div className={hasInvalidMath ? 'slide-invalid-tex' : undefined}>
-      <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[[rehypeKatex, { throwOnError: false }]]}>
-        {markdown || '\u00a0'}
-      </ReactMarkdown>
-      {hasInvalidMath && <small role="status">TeX is incomplete or invalid. The original source is preserved below.</small>}
-    </div>
+function livePreviewDecorations(state: EditorState): DecorationSet {
+  const source = state.doc.toString();
+  const slides = slideSourceRanges(source);
+  const blocks = markdownBlockRanges(source);
+  const activeBlock = activeBlockForSelection(blocks, state);
+  const decorations: Array<{ from: number; to?: number; value: Decoration }> = [];
+
+  for (const slide of slides) {
+    const firstLine = state.doc.lineAt(Math.min(slide.start, state.doc.length));
+    const lastPosition = Math.max(slide.start, Math.min(slide.end, state.doc.length));
+    const lastLine = state.doc.lineAt(lastPosition);
+    for (let number = firstLine.number; number <= lastLine.number; number += 1) {
+      const line = state.doc.line(number);
+      const classes = [
+        'cm-slide-line',
+        number === firstLine.number ? 'cm-slide-first' : '',
+        number === lastLine.number ? 'cm-slide-last' : '',
+      ].filter(Boolean).join(' ');
+      decorations.push({ from: line.from, value: Decoration.line({ class: classes, attributes: { 'data-slide-index': String(slide.index) } }) });
+    }
+  }
+
+  for (const block of blocks) {
+    if (activeBlock?.from === block.from && activeBlock.to === block.to) continue;
+    const slide = slides[block.slideIndex];
+    decorations.push({
+      from: block.from,
+      to: block.to,
+      value: Decoration.replace({
+        widget: new RenderedBlockWidget(
+          block,
+          block.from === slide.start,
+          block.to === slide.end,
+        ),
+        block: true,
+      }),
+    });
+  }
+
+  for (const range of findMathRanges(source)) {
+    const block = blocks.find((candidate) => range.from >= candidate.from && range.to <= candidate.to);
+    if (block && block !== activeBlock) continue;
+    const editing = state.selection.main.from >= range.from && state.selection.main.to <= range.to;
+    if (range.valid && !editing) {
+      decorations.push({
+        from: range.from,
+        to: range.to,
+        value: Decoration.replace({ widget: new MathWidget(range), inclusive: false }),
+      });
+    } else if (!range.valid && range.to > range.from) {
+      decorations.push({
+        from: range.from,
+        to: range.to,
+        value: Decoration.mark({ class: 'cm-math-invalid-source' }),
+      });
+    }
+  }
+
+  for (const slide of slides) {
+    const markdownSource = source.slice(slide.start, slide.end).replace(/^\r?\n|\r?\n$/g, '');
+    const overBudget = isSlideOverBudget(markdownSource);
+    decorations.push({
+      from: slide.end,
+      value: Decoration.widget({
+        widget: new SlideBoundaryWidget(
+          slide.index,
+          overBudget,
+          overBudget && splitSlideMarkdown(source, slide.index) !== null,
+        ),
+        block: true,
+        side: 1,
+      }),
+    });
+  }
+
+  return Decoration.set(
+    decorations.map(({ from, to, value }) => (to === undefined ? value.range(from) : value.range(from, to))),
+    true,
   );
+}
+
+const fixedPageMeasurements = ViewPlugin.fromClass(class {
+  constructor(private readonly view: EditorView) {
+    this.measure();
+  }
+
+  update(update: ViewUpdate) {
+    if (update.docChanged || update.selectionSet || update.geometryChanged || update.viewportChanged) this.measure();
+  }
+
+  private measure() {
+    this.view.requestMeasure({
+      read: () => {
+        const width = this.view.contentDOM.clientWidth;
+        return Array.from(this.view.dom.querySelectorAll<HTMLElement>('.cm-slide-boundary')).map((boundary) => {
+          const index = boundary.dataset.slideIndex;
+          const start = this.view.dom.querySelector<HTMLElement>(`.cm-slide-first[data-slide-index="${index}"]`);
+          if (!start || !width) return { boundary, fill: 0, overflowing: boundary.classList.contains('may-overflow') };
+          const contentHeight = boundary.getBoundingClientRect().top - start.getBoundingClientRect().top;
+          const pageHeight = width * 9 / 16;
+          return { boundary, fill: Math.max(0, pageHeight - contentHeight), overflowing: contentHeight > pageHeight + 1 };
+        });
+      },
+      write: (measurements) => {
+        measurements.forEach(({ boundary, fill, overflowing }) => {
+          boundary.style.setProperty('--slide-page-fill', `${fill}px`);
+          boundary.classList.toggle('measured-overflow', overflowing);
+        });
+      },
+    });
+  }
+});
+
+function playbackSlide(markdownSource: string): string {
+  return renderedMarkdown(markdownSource || '\u00a0');
 }
 
 export function ObsidianStyleEditor({ presentation, theme, source, onSourceChange }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
-  const pendingFocusRef = useRef<number | null>(null);
-  const sourceRef = useRef(source);
   const onSourceChangeRef = useRef(onSourceChange);
+  const splitPreviewRef = useRef<(preview: SplitPreview) => void>(() => undefined);
+  const [mode, setMode] = useState<'edit' | 'playback'>('edit');
+  const [playbackIndex, setPlaybackIndex] = useState(0);
+  const [splitPreview, setSplitPreview] = useState<SplitPreview | null>(null);
+  const [splitUndo, setSplitUndo] = useState<{ source: string; slideIndex: number } | null>(null);
   onSourceChangeRef.current = onSourceChange;
-  sourceRef.current = source;
+  splitPreviewRef.current = setSplitPreview;
 
-  const ranges = useMemo(() => slideSourceRanges(source), [source]);
+  const replaceDocument = (next: string, focusSlide: number) => {
+    const view = viewRef.current;
+    if (!view) {
+      onSourceChangeRef.current(next);
+      return;
+    }
+    const range = slideSourceRanges(next)[focusSlide];
+    view.dispatch({
+      changes: { from: 0, to: view.state.doc.length, insert: next },
+      selection: { anchor: range?.start ?? 0 },
+      scrollIntoView: true,
+    });
+    view.focus();
+  };
 
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return undefined;
+    let lastRevealedMath: { from: number; to: number; time: number; x: number; y: number } | null = null;
+
+    const selectWidgetRange = (
+      target: EventTarget | null,
+      view: EditorView,
+      selectMath: boolean,
+      event?: MouseEvent,
+    ) => {
+      const element = target instanceof Element ? target : null;
+      const mathElement = element?.closest<HTMLElement>('[data-math-from]');
+      const blockElement = element?.closest<HTMLElement>('[data-block-from]');
+      const from = Number((mathElement || blockElement)?.dataset[mathElement ? 'mathFrom' : 'blockFrom']);
+      const to = Number((mathElement || blockElement)?.dataset[mathElement ? 'mathTo' : 'blockTo']);
+      if (!Number.isFinite(from)) return false;
+      if (mathElement && Number.isFinite(to) && event) {
+        lastRevealedMath = { from, to, time: Date.now(), x: event.clientX, y: event.clientY };
+      }
+      view.dispatch({ selection: selectMath && Number.isFinite(to) ? { anchor: from, head: to } : { anchor: from }, scrollIntoView: true });
+      view.focus();
+      return true;
+    };
+
     const editor = new EditorView({
       state: EditorState.create({
         doc: source,
@@ -179,51 +481,85 @@ export function ObsidianStyleEditor({ presentation, theme, source, onSourceChang
           keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
           markdown(),
           EditorView.lineWrapping,
-          EditorView.decorations.compute(['doc', 'selection'], mathDecorations),
+          EditorView.decorations.compute(['doc', 'selection'], livePreviewDecorations),
+          fixedPageMeasurements,
           EditorView.domEventHandlers({
             mousedown(event, view) {
-              const position = view.posAtCoords({ x: event.clientX, y: event.clientY });
-              if (position === null) return false;
-              const match = findMathRanges(view.state.doc.toString()).find((range) => position >= range.from && position <= range.to);
-              if (!match) return false;
-              view.dispatch({ selection: { anchor: match.from } });
+              if ((event.target as Element | null)?.closest('button')) return false;
+              const previous = lastRevealedMath;
+              const repeatedMathClick = previous
+                && Date.now() - previous.time < 600
+                && Math.abs(event.clientX - previous.x) < 8
+                && Math.abs(event.clientY - previous.y) < 8;
+              if (repeatedMathClick) {
+                event.preventDefault();
+                view.dispatch({ selection: { anchor: previous.from, head: previous.to }, scrollIntoView: true });
+                view.focus();
+                lastRevealedMath = null;
+                return true;
+              }
+              return selectWidgetRange(event.target, view, false, event);
+            },
+            click(event, view) {
+              const action = (event.target as Element | null)?.closest<HTMLElement>('[data-slide-action]');
+              if (!action) return selectWidgetRange(event.target, view, false, event);
+              const boundary = action.closest<HTMLElement>('.cm-slide-boundary');
+              const slideIndex = Number(boundary?.dataset.slideIndex);
+              if (!Number.isInteger(slideIndex)) return false;
+              const current = view.state.doc.toString();
+              if (action.dataset.slideAction === 'add') {
+                const next = insertSlideMarkdown(current, slideIndex);
+                const range = slideSourceRanges(next)[slideIndex + 1];
+                view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: next }, selection: { anchor: range?.start ?? next.length }, scrollIntoView: true });
+              } else if (action.dataset.slideAction === 'delete') {
+                const next = deleteSlideMarkdown(current, slideIndex);
+                const target = Math.max(0, Math.min(slideIndex, slideSourceRanges(next).length - 1));
+                const range = slideSourceRanges(next)[target];
+                view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: next }, selection: { anchor: range?.start ?? 0 }, scrollIntoView: true });
+              } else {
+                const proposed = splitSlideMarkdown(current, slideIndex);
+                if (proposed) splitPreviewRef.current({ original: current, proposed, slideIndex });
+              }
               view.focus();
               return true;
             },
             dblclick(event, view) {
+              if (selectWidgetRange(event.target, view, true, event)) return true;
               const position = view.posAtCoords({ x: event.clientX, y: event.clientY });
               if (position === null) return false;
-              const match = findMathRanges(view.state.doc.toString()).find((range) => position >= range.from && position <= range.to);
-              if (!match) return false;
-              view.dispatch({ selection: { anchor: match.from, head: match.to } });
+              const range = findMathRanges(view.state.doc.toString())
+                .find((candidate) => position >= candidate.from && position <= candidate.to);
+              if (!range) return false;
+              view.dispatch({ selection: { anchor: range.from, head: range.to }, scrollIntoView: true });
               view.focus();
               return true;
             },
             keydown(event, view) {
               if (!['ArrowUp', 'ArrowDown'].includes(event.key) || event.shiftKey || event.metaKey || event.ctrlKey || event.altKey) return false;
               const position = view.state.selection.main.head;
-              const currentRanges = slideSourceRanges(view.state.doc.toString());
-              const index = slideRangeForPosition(currentRanges, position);
-              const current = currentRanges[index];
+              const slides = slideSourceRanges(view.state.doc.toString());
+              const index = slideRangeForPosition(slides, position);
+              const current = slides[index];
               if (!current) return false;
               const atBoundary = event.key === 'ArrowUp' ? position <= current.start : position >= current.end;
               const nextIndex = index + (event.key === 'ArrowUp' ? -1 : 1);
-              if (!atBoundary || nextIndex < 0 || nextIndex >= currentRanges.length) return false;
-              const next = currentRanges[nextIndex];
-              const target = event.key === 'ArrowUp' ? next.end : next.start;
+              if (!atBoundary || nextIndex < 0 || nextIndex >= slides.length) return false;
               event.preventDefault();
-              view.dispatch({ selection: { anchor: target }, scrollIntoView: true });
+              const next = slides[nextIndex];
+              view.dispatch({
+                selection: { anchor: event.key === 'ArrowUp' ? next.end : next.start },
+                scrollIntoView: true,
+              });
               return true;
             },
           }),
           EditorView.theme({
-            '&': { height: '100%', minHeight: '18rem' },
-            '.cm-scroller': { overflow: 'auto', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace' },
+            '&': { minHeight: '18rem' },
+            '.cm-scroller': { overflow: 'visible', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace' },
           }),
           EditorView.updateListener.of((update) => {
             if (!update.docChanged) return;
             const next = update.state.doc.toString();
-            sourceRef.current = next;
             onSourceChangeRef.current(next);
           }),
         ],
@@ -243,75 +579,66 @@ export function ObsidianStyleEditor({ presentation, theme, source, onSourceChang
     view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: source } });
   }, [source]);
 
-  const focusSlide = (index: number) => {
-    const view = viewRef.current;
-    const range = slideSourceRanges(view?.state.doc.toString() || source)[index];
-    pendingFocusRef.current = index;
-    if (!view || !range) return;
-    view.dispatch({ selection: { anchor: range.start }, scrollIntoView: true });
-    view.focus();
-    pendingFocusRef.current = null;
-  };
-
   useEffect(() => {
-    const index = pendingFocusRef.current;
-    const view = viewRef.current;
-    if (index === null || !view) return;
-    const range = slideSourceRanges(view.state.doc.toString())[index];
-    if (!range) return;
-    view.dispatch({ selection: { anchor: range.start }, scrollIntoView: true });
-    view.focus();
-    pendingFocusRef.current = null;
-  }, [source]);
+    setPlaybackIndex((index) => Math.min(index, Math.max(0, presentation.slides.length - 1)));
+  }, [presentation.slides.length]);
+
+  const confirmSplit = () => {
+    if (!splitPreview) return;
+    setSplitUndo({ source: splitPreview.original, slideIndex: splitPreview.slideIndex });
+    replaceDocument(splitPreview.proposed, splitPreview.slideIndex);
+    setSplitPreview(null);
+  };
 
   return (
     <main className={`slide-list presentation-theme-${theme} obsidian-editor`} aria-label={`${presentation.sourceName} slides`}>
-      <section className="obsidian-editor-toolbar" aria-label="Markdown editor">
-        <strong>Markdown</strong>
-        <span>One document · {presentation.slides.length} {presentation.slides.length === 1 ? 'slide' : 'slides'}</span>
+      <section className="obsidian-editor-toolbar" aria-label="Editor mode">
+        <div>
+          <strong>{mode === 'edit' ? 'Live preview' : 'Presentation'}</strong>
+          <span>{presentation.slides.length} {presentation.slides.length === 1 ? 'slide' : 'slides'}</span>
+        </div>
+        <button type="button" onClick={() => setMode(mode === 'edit' ? 'playback' : 'edit')}>
+          {mode === 'edit' ? 'Present' : 'Back to editor'}
+        </button>
       </section>
-      <div className="obsidian-editor-pages">
-        {presentation.slides.map((slide) => {
-          const range = ranges[slide.index];
-          return (
-            <div className="slide-viewport" key={slide.id}>
-              <article
-                className="slide obsidian-slide-page"
-                aria-label={`Slide ${slide.index + 1}`}
-                tabIndex={0}
-                onClick={() => focusSlide(slide.index)}
-              >
-                {renderSlide(slide.markdown)}
-                <span className="slide-number" aria-hidden="true">{slide.index + 1}</span>
-              </article>
-              <div className="slide-boundary" role="group" aria-label={`Actions for slide ${slide.index + 1}`}>
-                <button
-                  className="slide-delete-button"
-                  type="button"
-                  aria-label={`Delete slide ${slide.index + 1}`}
-                  onClick={() => {
-                    onSourceChange(deleteSlideMarkdown(source, slide.index));
-                    focusSlide(Math.max(0, Math.min(slide.index, presentation.slides.length - 2)));
-                  }}
-                >−</button>
-                <button
-                  className="slide-add-button"
-                  type="button"
-                  aria-label={`Add slide after slide ${slide.index + 1}`}
-                  onClick={() => {
-                    onSourceChange(insertSlideMarkdown(source, slide.index));
-                    focusSlide(slide.index + 1);
-                  }}
-                >+</button>
-              </div>
-              {range && <span className="slide-source-range" aria-hidden="true">{range.start}:{range.end}</span>}
-            </div>
-          );
-        })}
+
+      <div className={mode === 'edit' ? 'obsidian-live-canvas' : 'obsidian-live-canvas hidden'} aria-hidden={mode !== 'edit'}>
+        <div ref={hostRef} className="obsidian-codemirror" aria-label="Live-preview Markdown editor" />
       </div>
-      <section className="obsidian-source-panel" aria-label="Continuous Markdown source">
-        <div ref={hostRef} className="obsidian-codemirror" />
-      </section>
+
+      {mode === 'playback' && (
+        <section className="presentation-playback" aria-label="Presentation playback">
+          <article
+            className="slide presentation-playback-slide"
+            aria-label={`Slide ${playbackIndex + 1}`}
+            dangerouslySetInnerHTML={{ __html: playbackSlide(presentation.slides[playbackIndex]?.markdown || '') }}
+          />
+          <nav className="presentation-playback-controls" aria-label="Slide navigation">
+            <button type="button" disabled={playbackIndex === 0} onClick={() => setPlaybackIndex((index) => index - 1)}>Previous</button>
+            <span>{playbackIndex + 1} / {presentation.slides.length}</span>
+            <button type="button" disabled={playbackIndex >= presentation.slides.length - 1} onClick={() => setPlaybackIndex((index) => index + 1)}>Next</button>
+          </nav>
+        </section>
+      )}
+
+      {splitPreview && (
+        <section className="slide-split-preview" role="dialog" aria-label={`Automatic split preview for slide ${splitPreview.slideIndex + 1}`}>
+          <strong>Preview only — your Markdown has not changed.</strong>
+          <p>This would create {slideSourceRanges(splitPreview.proposed).length - slideSourceRanges(splitPreview.original).length + 1} slides from slide {splitPreview.slideIndex + 1}.</p>
+          <pre>{splitPreview.proposed}</pre>
+          <div>
+            <button type="button" onClick={confirmSplit}>Confirm split</button>
+            <button type="button" onClick={() => setSplitPreview(null)}>Cancel</button>
+          </div>
+        </section>
+      )}
+
+      {splitUndo && !splitPreview && (
+        <div className="slide-undo-notice" role="status">
+          Automatic split applied.
+          <button type="button" onClick={() => { replaceDocument(splitUndo.source, splitUndo.slideIndex); setSplitUndo(null); }}>Undo</button>
+        </div>
+      )}
     </main>
   );
 }
