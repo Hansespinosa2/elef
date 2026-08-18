@@ -170,8 +170,15 @@ function selectionOffset(element: HTMLElement): { before: string; after: string 
   before.setEnd(selection.anchorNode, selection.anchorOffset);
   const after = document.createRange();
   after.selectNodeContents(element);
-  after.setStart(selection.focusNode || selection.anchorNode, selection.focusOffset);
-  return { before: before.toString(), after: after.toString() };
+  after.setStart(selection.anchorNode, selection.anchorOffset);
+  const withoutSlideNumber = (content: DocumentFragment): string => {
+    content.querySelector('.slide-number')?.remove();
+    return content.textContent || '';
+  };
+  return {
+    before: withoutSlideNumber(before.cloneContents()),
+    after: withoutSlideNumber(after.cloneContents()),
+  };
 }
 
 function typingSlideSeparatorBlock(element: HTMLElement): HTMLElement | null {
@@ -519,9 +526,8 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
                   && window.getSelection()?.isCollapsed
                 ) {
                   const position = selectionOffset(event.currentTarget);
-                  const slideNumber = event.currentTarget.querySelector('.slide-number')?.textContent || '';
                   const atStart = position && position.before.trim() === '';
-                  const atEnd = position && position.after.replace(slideNumber, '').trim() === '';
+                  const atEnd = position && position.after.trim() === '';
                   if (event.key === 'ArrowUp' && atStart && slide.index > 0) {
                     event.preventDefault();
                     focusSlide(slide.index - 1, false);
