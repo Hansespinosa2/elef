@@ -212,6 +212,16 @@ function placeCaretAtBlockBoundary(block: HTMLElement, start: boolean): void {
   (start ? placeCaretAtStart : placeCaretAtEnd)(content);
 }
 
+function caretAtVisibleBottom(element: HTMLElement): boolean {
+  const selection = window.getSelection();
+  if (!selection?.rangeCount) return false;
+  const range = selection.getRangeAt(0);
+  if (typeof range.getBoundingClientRect !== 'function') return false;
+  const caretRect = range.getBoundingClientRect();
+  const elementRect = element.getBoundingClientRect();
+  return caretRect.bottom >= elementRect.bottom - 4;
+}
+
 function typingSlideSeparatorBlock(element: HTMLElement): HTMLElement | null {
   const selection = window.getSelection();
   if (!selection?.isCollapsed) return null;
@@ -563,6 +573,15 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
                   if (block && block !== event.currentTarget) {
                     const blockPosition = selectionOffset(block);
                     const direction = event.key === 'ArrowUp' ? -1 : 1;
+                    if (
+                      direction > 0
+                      && blockPosition?.after.trim()
+                      && caretAtVisibleBottom(event.currentTarget)
+                    ) {
+                      event.preventDefault();
+                      placeCaretAtBlockBoundary(block, false);
+                      return;
+                    }
                     const emptyTarget = skipEmptyAdjacentBlock(
                       block,
                       direction,

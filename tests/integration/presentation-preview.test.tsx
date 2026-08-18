@@ -14,6 +14,7 @@ describe('PresentationPreview interactions', () => {
   afterEach(() => {
     act(() => root?.unmount());
     container?.remove();
+    delete (Range.prototype as Range & { getBoundingClientRect?: unknown }).getBoundingClientRect;
     vi.useRealTimers();
   });
 
@@ -473,6 +474,51 @@ describe('PresentationPreview interactions', () => {
     expect(event.defaultPrevented).toBe(true);
     expect(window.getSelection()?.anchorNode).toBe(slide.querySelector('h2'));
     expect(window.getSelection()?.anchorOffset).toBe(0);
+  });
+
+  it('snaps to the end of an overflowing paragraph before allowing editor scrolling', () => {
+    const slide = render('A paragraph with enough content to overflow the visible slide area.\n---\n# Two');
+    const paragraph = slide.querySelector('p')!.firstChild!;
+    const position = 5;
+    const caret = document.createRange();
+    caret.setStart(paragraph, position);
+    caret.collapse(true);
+    window.getSelection()!.removeAllRanges();
+    window.getSelection()!.addRange(caret);
+    vi.spyOn(slide, 'getBoundingClientRect').mockReturnValue({
+      top: 0,
+      bottom: 100,
+      height: 100,
+      left: 0,
+      right: 100,
+      width: 100,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
+    Object.defineProperty(Range.prototype, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({
+        top: 80,
+        bottom: 100,
+        height: 20,
+        left: 0,
+        right: 20,
+        width: 20,
+        x: 0,
+        y: 80,
+        toJSON: () => ({}),
+      }),
+    });
+    const event = new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true });
+
+    act(() => {
+      slide.dispatchEvent(event);
+    });
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(window.getSelection()?.anchorNode).toBe(slide.querySelector('p'));
+    expect(window.getSelection()?.anchorOffset).toBe(1);
   });
 
   it('preserves inline and display math when preview content is serialized', () => {
