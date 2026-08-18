@@ -99,8 +99,53 @@ function placeCaretAtEnd(element: HTMLElement): void {
   selection.addRange(range);
 }
 
+function handleListEnter(element: HTMLElement, event: ReactKeyboardEvent<HTMLElement>): boolean {
+  if (event.key !== 'Enter') return false;
+  const selection = window.getSelection();
+  const anchor = selection?.anchorNode;
+  const anchorElement = anchor instanceof Element ? anchor : anchor?.parentElement;
+  const item = anchorElement?.closest('li');
+  if (!item || !element.contains(item)) return false;
+  const list = item.parentElement;
+  if (!list || !/^(UL|OL)$/.test(list.tagName)) return false;
+
+  event.preventDefault();
+  const hasCheckbox = Boolean(item.querySelector('input[type="checkbox"]'));
+  if (!item.textContent?.trim()) {
+    if (list.children.length > 1) {
+      item.remove();
+      const previous = list.lastElementChild;
+      if (previous instanceof HTMLElement) placeCaretAtEnd(previous);
+    } else {
+      const paragraph = document.createElement('p');
+      paragraph.append(document.createElement('br'));
+      list.replaceWith(paragraph);
+      placeCaretAtEnd(paragraph);
+    }
+    return true;
+  }
+
+  const next = document.createElement('li');
+  if (hasCheckbox) {
+    next.className = 'task-list-item';
+    const wrapper = document.createElement('span');
+    wrapper.className = 'task-checkbox';
+    wrapper.setAttribute('contenteditable', 'false');
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.setAttribute('contenteditable', 'false');
+    wrapper.append(checkbox);
+    next.append(wrapper);
+  }
+  next.append(document.createElement('br'));
+  item.after(next);
+  placeCaretAtEnd(next);
+  return true;
+}
+
 function handleMarkdownShortcut(element: HTMLElement, event: ReactKeyboardEvent<HTMLElement>): void {
   if (event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLInputElement) return;
+  if (handleListEnter(element, event)) return;
   if (event.key !== ' ') return;
   const selection = window.getSelection();
   const anchor = selection?.anchorNode;
