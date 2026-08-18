@@ -4,6 +4,7 @@ import {
   presentationThemeFromSource,
   replaceSlideMarkdown,
   setPresentationTheme,
+  splitSlideMarkdown,
 } from '../../src/domain/presentation/markdown';
 import {
   normalizeEditorThemePreference,
@@ -85,6 +86,13 @@ describe('parseMarkdown', () => {
     const source = '---\npresentationTheme: dark\n---\n```yaml\n---\n```\n---\n# Two';
     const updated = replaceSlideMarkdown(source, 1, '## Updated');
     expect(updated).toBe('---\npresentationTheme: dark\n---\n```yaml\n---\n```\n---\n## Updated');
+  });
+
+  it('splits an overflowing slide at top-level headings', () => {
+    const source = '# One\n\nBody\n\n## Two\n\nMore';
+    const updated = splitSlideMarkdown(source, 0);
+    expect(updated).toBe('# One\n\nBody\n---\n## Two\n\nMore');
+    expect(splitSlideMarkdown('Paragraph only', 0)).toBeNull();
   });
 
   it('normalizes stored editor choices and resolves system changes deterministically', () => {

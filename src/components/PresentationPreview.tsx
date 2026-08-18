@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { replaceSlideMarkdown } from '../domain/presentation';
+import { replaceSlideMarkdown, splitSlideMarkdown } from '../domain/presentation';
 import type { Presentation, ThemeMode } from '../domain/presentation';
 import './PresentationPreview.css';
 
@@ -73,6 +73,22 @@ function serializeSlide(element: HTMLElement): string {
 export function PresentationPreview({ presentation, theme, source, onSourceChange }: Props) {
   const [editingSlide, setEditingSlide] = useState<number | null>(null);
   const [sourceSlide, setSourceSlide] = useState<number | null>(null);
+  const [overflowSlides, setOverflowSlides] = useState<Set<number>>(new Set());
+  const [overflowPrompt, setOverflowPrompt] = useState<number | null>(null);
+  const slideRefs = useRef(new Map<number, HTMLElement>());
+  useEffect(() => {
+    const measure = () => {
+      const next = new Set<number>();
+      slideRefs.current.forEach((element, index) => {
+        if (element.scrollHeight > element.clientHeight + 4) next.add(index);
+      });
+      setOverflowSlides(next);
+    };
+    measure();
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
+    slideRefs.current.forEach((element) => observer?.observe(element));
+    return () => observer?.disconnect();
+  }, [presentation.slides, sourceSlide]);
   useEffect(() => {
     if (sourceSlide === null) return;
     const exitSourceMode = (event: KeyboardEvent) => {
@@ -84,22 +100,27 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
   return (
     <main className={`slide-list presentation-theme-${theme}`} aria-label={`${presentation.sourceName} slides`}>
       {presentation.slides.map((slide) => (
-        <article
-          className={`slide${editingSlide === slide.index ? ' editing' : ''}${sourceSlide === slide.index ? ' source-mode' : ''}`}
-          key={slide.id}
-          aria-label={`Slide ${slide.index + 1}`}
-          contentEditable={editingSlide === slide.index}
-          suppressContentEditableWarning
-          onClick={() => { if (sourceSlide === null) setEditingSlide(slide.index); }}
-          onDoubleClick={(event) => { event.stopPropagation(); setSourceSlide(slide.index); setEditingSlide(null); }}
-          onBlur={(event) => {
-            if (editingSlide === slide.index) {
-              onSourceChange(replaceSlideMarkdown(source, slide.index, serializeSlide(event.currentTarget)));
-              setEditingSlide(null);
-            }
-          }}
-        >
-          {sourceSlide === slide.index ? (
+        <div className="slide-shell" key={slide.id}>
+          <article
+            ref={(element) => {
+              if (element) slideRefs.current.set(slide.index, element);
+              else slideRefs.current.delete(slide.index);
+            }}
+            className={`slide${editingSlide === slide.index ? ' editing' : ''}${sourceSlide === slide.index ? ' source-mode' : ''}`}
+            aria-label={`Slide ${slide.index + 1}`}
+            contentEditable={editingSlide === slide.index}
+            suppressContentEditableWarning
+            onClick={() => { if (sourceSlide === null) setEditingSlide(slide.index); }}
+            onDoubleClick={(event) => { event.stopPropagation(); setSourceSlide(slide.index); setEditingSlide(null); }}
+            onBlur={(event) => {
+              if (editingSlide === slide.index) {
+                onSourceChange(replaceSlideMarkdown(source, slide.index, serializeSlide(event.currentTarget)));
+                setEditingSlide(null);
+                if (event.currentTarget.scrollHeight > event.currentTarget.clientHeight + 4) setOverflowPrompt(slide.index);
+              }
+            }}
+          >
+            {sourceSlide === slide.index ? (
             <div className="slide-source-inline">
               <div className="slide-source-inline-toolbar">
                 <strong>Slide {slide.index + 1} Markdown</strong>
@@ -111,15 +132,42 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
                 value={slide.markdown}
                 onChange={(event) => onSourceChange(replaceSlideMarkdown(source, slide.index, event.target.value))}
                 onKeyDown={(event) => { if (event.key === 'Escape') setSourceSlide(null); }}
+                onBlur={() => {
+                  const element = slideRefs.current.get(slide.index);
+                  if (element && element.scrollHeight > element.clientHeight + 4) setOverflowPrompt(slide.index);
+                }}
               />
             </div>
-          ) : slide.markdown ? (
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{slide.markdown}</ReactMarkdown>
-          ) : (
-            <p className="empty-slide">This slide is empty.</p>
+            ) : slide.markdown ? (
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{slide.markdown}</ReactMarkdown>
+            ) : (
+              <p className="empty-slide">This slide is empty.</p>
+            )}
+            <span className="slide-number">{slide.index + 1}</span>
+          </article>
+          {overflowSlides.has(slide.index) && (
+            <button
+              className="slide-overflow-trigger"
+              type="button"
+              aria-label={`Slide ${slide.index + 1} has overflow`}
+              onClick={() => setOverflowPrompt(slide.index)}
+            >
+              ↗
+            </button>
           )}
-          <span className="slide-number">{slide.index + 1}</span>
-        </article>
+          {overflowPrompt === slide.index && (
+            <div className="slide-overflow-popover" role="dialog" aria-label={`Slide ${slide.index + 1} overflow`}>
+              <strong>This slide is getting crowded.</strong>
+              <p>Split it at its top-level headings?</p>
+              {splitSlideMarkdown(source, slide.index) ? (
+                <button type="button" onClick={() => { onSourceChange(splitSlideMarkdown(source, slide.index)!); setOverflowPrompt(null); setSourceSlide(null); }}>Split slide</button>
+              ) : (
+                <p className="slide-overflow-empty">No safe heading split was found. Use Markdown Source to add a <code>---</code> separator.</p>
+              )}
+              <button type="button" className="slide-overflow-keep" onClick={() => setOverflowPrompt(null)}>Keep as is</button>
+            </div>
+          )}
+        </div>
       ))}
     </main>
   );

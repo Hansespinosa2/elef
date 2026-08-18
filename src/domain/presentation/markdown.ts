@@ -89,6 +89,29 @@ function isFenceStart(line: string): { marker: string; length: number } | null {
   return match ? { marker: match[1][0], length: match[1].length } : null;
 }
 
+function markdownSections(source: string): { prefix: string; sections: string[] } {
+  const frontMatter = initialFrontMatter(source);
+  const prefix = frontMatter ? source.slice(0, frontMatter.bodyStart) : '';
+  const content = frontMatter ? source.slice(frontMatter.bodyStart) : source;
+  const sections: string[] = [];
+  let section: string[] = [];
+  let fence: { marker: string; length: number } | null = null;
+  for (const line of content.replace(/\r\n?/g, '\n').split('\n')) {
+    const nextFence = isFenceStart(line);
+    if (nextFence) {
+      fence = fence && fence.marker === nextFence.marker && nextFence.length >= fence.length ? null : nextFence;
+    }
+    if (!fence && /^---[ \t]*$/.test(line)) {
+      sections.push(section.join('\n'));
+      section = [];
+    } else {
+      section.push(line);
+    }
+  }
+  sections.push(section.join('\n'));
+  return { prefix, sections };
+}
+
 /** Splits on standalone `---` lines outside fenced code blocks. */
 export function parseMarkdown(source: string, sourceName = 'Untitled presentation'): Presentation {
   if (typeof source !== 'string') {
@@ -130,27 +153,33 @@ export function parseMarkdown(source: string, sourceName = 'Untitled presentatio
 }
 
 export function replaceSlideMarkdown(source: string, slideIndex: number, markdown: string): string {
-  const frontMatter = initialFrontMatter(source);
-  const prefix = frontMatter ? source.slice(0, frontMatter.bodyStart) : '';
-  const content = frontMatter ? source.slice(frontMatter.bodyStart) : source;
-  const sections: string[] = [];
-  let section: string[] = [];
+  const { prefix, sections } = markdownSections(source);
+  if (slideIndex < 0 || slideIndex >= sections.length) return source;
+  sections[slideIndex] = markdown;
+  return `${prefix}${sections.join('\n---\n')}`;
+}
+
+export function splitSlideMarkdown(source: string, slideIndex: number): string | null {
+  const { prefix, sections } = markdownSections(source);
+  const current = sections[slideIndex];
+  if (current === undefined) return null;
+  const pieces: string[] = [];
+  let piece: string[] = [];
   let fence: { marker: string; length: number } | null = null;
-  for (const line of content.replace(/\r\n?/g, '\n').split('\n')) {
+  for (const line of current.split('\n')) {
     const nextFence = isFenceStart(line);
     if (nextFence) {
       fence = fence && fence.marker === nextFence.marker && nextFence.length >= fence.length ? null : nextFence;
     }
-    if (!fence && /^---[ \t]*$/.test(line)) {
-      sections.push(section.join('\n'));
-      section = [];
-    } else {
-      section.push(line);
+    if (!fence && /^\s{0,3}#{1,2}\s+/.test(line) && piece.length) {
+      pieces.push(piece.join('\n').trim());
+      piece = [];
     }
+    piece.push(line);
   }
-  sections.push(section.join('\n'));
-  if (slideIndex < 0 || slideIndex >= sections.length) return source;
-  sections[slideIndex] = markdown;
+  pieces.push(piece.join('\n').trim());
+  if (pieces.length < 2) return null;
+  sections.splice(slideIndex, 1, ...pieces);
   return `${prefix}${sections.join('\n---\n')}`;
 }
 

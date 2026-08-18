@@ -17,6 +17,7 @@ export {
   presentationThemeFromSource,
   replaceSlideMarkdown,
   setPresentationTheme,
+  splitSlideMarkdown,
   upsertFirstH1,
 } from './markdown';
 export { hasUnsavedChanges } from './document';
