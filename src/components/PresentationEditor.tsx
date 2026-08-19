@@ -786,6 +786,16 @@ export function PresentationEditor({ presentation, theme, source, onSourceChange
                 event.preventDefault();
                 return true;
               }
+              const activeHeading = (event.target as Element | null)?.closest('.cm-heading-source-active');
+              if (activeHeading) {
+                const position = view.posAtCoords({ x: event.clientX, y: event.clientY });
+                if (position !== null) {
+                  event.preventDefault();
+                  view.dispatch({ selection: { anchor: position }, scrollIntoView: true });
+                  view.focus();
+                  return true;
+                }
+              }
               const surface = (event.target as Element | null)?.closest<HTMLElement>(
                 '.cm-slide-first, .cm-slide-anchor',
               );

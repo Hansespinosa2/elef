@@ -270,6 +270,25 @@ describe('Obsidian-style presentation editor', () => {
     expect(container.querySelector('.cm-heading-source-active')?.textContent).toBe('Hello');
   });
 
+  it('keeps a second click inside an already active intro H1', () => {
+    const markdown = ':::slide-layout{intro}\n# ThisTitle';
+    render(markdown);
+    const editor = EditorView.findFromDOM(container.querySelector<HTMLElement>('.cm-editor')!);
+    const firstPosition = markdown.indexOf('This') + 3;
+    const secondPosition = markdown.indexOf('Title') + 2;
+
+    act(() => editor.dispatch({ selection: { anchor: firstPosition } }));
+    const activeHeading = container.querySelector<HTMLElement>('.cm-heading-source-active')!;
+    const posAtCoords = vi.spyOn(editor, 'posAtCoords').mockReturnValue(secondPosition);
+
+    act(() => activeHeading.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, clientX: 10, clientY: 10 })));
+
+    expect(posAtCoords).toHaveBeenCalled();
+    expect(editor.state.selection.main.head).toBe(secondPosition);
+    expect(editor.state.selection.main.head).toBeGreaterThan(markdown.indexOf('\n# ') + 3);
+    posAtCoords.mockRestore();
+  });
+
   it('keeps active body-slide headings rendered in place at every heading level', () => {
     const markdown = '# First slide\n---\n## Body heading\n\nBody text';
     render(markdown);
