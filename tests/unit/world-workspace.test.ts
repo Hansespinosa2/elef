@@ -14,7 +14,7 @@ class MemoryWorld implements WorldFileSystem {
   async rename(path: string, nextPath: string) { if (this.files.has(`${path}/presentation.md`)) { const value = this.files.get(`${path}/presentation.md`)!; this.files.delete(`${path}/presentation.md`); this.files.set(`${nextPath}/presentation.md`, value); } }
   async remove(path: string) { for (const key of this.files.keys()) if (key === path || key.startsWith(`${path}/`)) this.files.delete(key); }
   async exists(path: string) { return [...this.files.keys()].some((key) => key.startsWith(`${path}/`)); }
-  async scanPresentations(): Promise<WorldPresentationFile[]> { return [...this.files].filter(([path]) => path.endsWith('/presentation.md')).map(([path, text]) => ({ path: path.slice(0, -17), name: 'presentation.md', presentationId: text.match(/elef-id:\s*([^\s]+)/)?.[1] || '' })); }
+  async scanPresentations(): Promise<WorldPresentationFile[]> { return [...this.files].filter(([path]) => path.endsWith('/presentation.md')).map(([path, text]) => ({ path: path.slice(0, -16), name: 'presentation.md', presentationId: text.match(/elef-id:\s*([^\s]+)/)?.[1] || '' })); }
 }
 const storage = () => ({ data: new Map<string, string>(), getItem(key: string) { return this.data.get(key) || null; }, setItem(key: string, value: string) { this.data.set(key, value); } }) as unknown as Storage;
 
@@ -44,7 +44,7 @@ describe('presentation workspace', () => {
     await workspace.setup(); const draft = await workspace.createDraft();
     expect(workspace.editorSource(draft!.id)).toBe(':::slide-layout{intro}\n# ');
     expect(stripWorldMetadata(draft!.source)).toBe(':::slide-layout{intro}\n# ');
-    expect(workspace.presentation(draft!.id)?.slides[0].markdown).toBe('');
+    expect(workspace.presentation(draft!.id)?.slides[0].markdown).toBe('# ');
     workspace.updateSource(draft!.id, '# Visible title');
     expect(workspace.editorSource(draft!.id)).toBe('# Visible title');
     expect(workspace.getState().presentations[0].source).toMatch(/^<!-- elef-id:/);
@@ -61,11 +61,21 @@ describe('presentation workspace', () => {
     const saved = [...fs.files.values()].find((source) => source.includes('presentationTheme: dark'));
     expect(saved).toMatch(/^<!-- elef-id:/);
   });
-  it('marks moved entries missing and removes them recoverably', async () => {
+  it('removes presentations that are no longer in the selected World folder', async () => {
     const fs = new MemoryWorld(); const workspace = new WorldWorkspace(fs, storage());
     await workspace.setup(); const draft = await workspace.createDraft(); fs.files.delete(`${draft!.path}/presentation.md`);
-    await workspace.rescan(); expect(workspace.getState().presentations[0].missing).toBe(true);
-    workspace.removeMissing(draft!.id); expect(workspace.getState().presentations).toHaveLength(0);
+    await workspace.rescan(); expect(workspace.getState().presentations).toHaveLength(0);
+  });
+  it('discovers folders containing presentation.md without Elef metadata', async () => {
+    const fs = new MemoryWorld();
+    fs.files.set('/world/fixture/presentation.md', '# Fixture deck');
+    const workspace = new WorldWorkspace(fs, storage());
+
+    await workspace.setup();
+
+    expect(workspace.getState().presentations).toHaveLength(1);
+    expect(workspace.getState().presentations[0].title).toBe('Fixture deck');
+    expect(workspace.getState().presentations[0].missing).toBeUndefined();
   });
   it('restores persisted presentations and loads their latest source', async () => {
     const fs = new MemoryWorld(); const persisted = storage();

@@ -37,6 +37,14 @@ const id = () => globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.rand
 const join = (a: string, b: string) => `${a.replace(/[\\/]+$/, '')}/${b}`;
 const presentationFile = (path: string) => join(path, 'presentation.md');
 const metadataPattern = /^\s*<!--\s*elef-id:\s*[a-zA-Z0-9_-]+\s*-->\s*\n?/;
+function stablePresentationId(path: string): string {
+  let hash = 2166136261;
+  for (const character of path) {
+    hash ^= character.charCodeAt(0);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `path-${(hash >>> 0).toString(36)}`;
+}
 
 export function stripWorldMetadata(source: string): string {
   return source.replace(metadataPattern, '');
@@ -135,16 +143,20 @@ export class WorldWorkspace {
     if (!this.state.root) return;
     try {
       const found = await this.fs.scanPresentations(this.state.root);
-      const byId = new Map(found.map((item) => [item.presentationId, item]));
-      const entries = await Promise.all(this.state.presentations.map(async (entry) => {
+      const normalizedFound = found.map((item) => ({
+        ...item,
+        presentationId: item.presentationId || stablePresentationId(item.path),
+      }));
+      const byId = new Map(normalizedFound.map((item) => [item.presentationId, item]));
+      const entries = (await Promise.all(this.state.presentations.map(async (entry) => {
         const match = byId.get(entry.id);
-        if (!match) return { ...entry, missing: true };
+        if (!match) return null;
         const source = await this.fs.readText(presentationFile(match.path)).catch(() => entry.source);
         return { ...entry, path: match.path, source, title: extractFirstH1(source) || entry.title, missing: false };
-      }));
+      }))).filter((entry): entry is NonNullable<typeof entry> => entry !== null);
       const knownIds = new Set(entries.map((entry) => entry.id));
-      const discovered = await Promise.all(found
-        .filter((item) => item.presentationId && !knownIds.has(item.presentationId))
+      const discovered = await Promise.all(normalizedFound
+        .filter((item) => !knownIds.has(item.presentationId))
         .map(async (item) => {
           const source = await this.fs.readText(presentationFile(item.path));
           return {

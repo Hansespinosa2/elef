@@ -54,7 +54,7 @@ export class TauriWorldFileSystem implements WorldFileSystem {
           if (entry.name !== 'presentation.md') continue;
           const text = await readTextFile(entryPath);
           const match = text.match(/<!--\s*elef-id:\s*([a-zA-Z0-9_-]+)\s*-->/);
-          if (match) found.push({ path: directory, name: entry.name, presentationId: match[1] });
+          found.push({ path: directory, name: entry.name, presentationId: match?.[1] || '' });
         }
       };
       await visit(root, await readDir(root));
