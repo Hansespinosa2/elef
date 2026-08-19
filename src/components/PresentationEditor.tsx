@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { markdown } from '@codemirror/lang-markdown';
-import { EditorState } from '@codemirror/state';
+import { Compartment, EditorState } from '@codemirror/state';
 import {
   Decoration,
   EditorView,
@@ -580,9 +580,11 @@ function playbackSlide(markdownSource: string): string {
 export function PresentationEditor({ presentation, theme, source, onSourceChange }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
+  const decorationMode = useRef(new Compartment());
   const onSourceChangeRef = useRef(onSourceChange);
   const splitPreviewRef = useRef<(preview: SplitPreview) => void>(() => undefined);
   const [mode, setMode] = useState<'edit' | 'playback'>('edit');
+  const [sourceMode, setSourceMode] = useState(false);
   const [playbackIndex, setPlaybackIndex] = useState(0);
   const [splitPreview, setSplitPreview] = useState<SplitPreview | null>(null);
   const [splitUndo, setSplitUndo] = useState<{ source: string; slideIndex: number } | null>(null);
@@ -655,7 +657,7 @@ export function PresentationEditor({ presentation, theme, source, onSourceChange
           keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
           markdown(),
           EditorView.lineWrapping,
-          EditorView.decorations.compute(['doc', 'selection'], livePreviewDecorations),
+          decorationMode.current.of(EditorView.decorations.compute(['doc', 'selection'], livePreviewDecorations)),
           fixedPageMeasurements,
           EditorView.domEventHandlers({
             mousedown(event, view) {
@@ -772,6 +774,16 @@ export function PresentationEditor({ presentation, theme, source, onSourceChange
   }, [source]);
 
   useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    view.dispatch({
+      effects: decorationMode.current.reconfigure(
+        sourceMode ? [] : EditorView.decorations.compute(['doc', 'selection'], livePreviewDecorations),
+      ),
+    });
+  }, [sourceMode]);
+
+  useEffect(() => {
     setPlaybackIndex((index) => Math.min(index, Math.max(0, presentation.slides.length - 1)));
   }, [presentation.slides.length]);
 
@@ -789,12 +801,26 @@ export function PresentationEditor({ presentation, theme, source, onSourceChange
           <strong>{mode === 'edit' ? 'Live preview' : 'Presentation'}</strong>
           <span>{presentation.slides.length} {presentation.slides.length === 1 ? 'slide' : 'slides'}</span>
         </div>
-        <button type="button" onClick={() => setMode(mode === 'edit' ? 'playback' : 'edit')}>
-          {mode === 'edit' ? 'Present' : 'Back to editor'}
-        </button>
+        <div className="presentation-editor-actions">
+          <button type="button" onClick={() => setMode(mode === 'edit' ? 'playback' : 'edit')}>
+            {mode === 'edit' ? 'Present' : 'Back to editor'}
+          </button>
+          {mode === 'edit' && (
+            <button
+              className={`source-mode-toggle${sourceMode ? ' active' : ''}`}
+              type="button"
+              role="switch"
+              aria-checked={sourceMode}
+              onClick={() => setSourceMode((enabled) => !enabled)}
+            >
+              <span className="source-mode-toggle-track" aria-hidden="true"><span /></span>
+              <span>{sourceMode ? 'Full source' : 'Inline source'}</span>
+            </button>
+          )}
+        </div>
       </section>
 
-      <div className={mode === 'edit' ? 'presentation-live-canvas' : 'presentation-live-canvas hidden'} aria-hidden={mode !== 'edit'}>
+      <div className={`${mode === 'edit' ? 'presentation-live-canvas' : 'presentation-live-canvas hidden'}${sourceMode ? ' source-mode' : ''}`} aria-hidden={mode !== 'edit'}>
         <div ref={hostRef} className="presentation-codemirror" aria-label="Live-preview Markdown editor" />
       </div>
 
