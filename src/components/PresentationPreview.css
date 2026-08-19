@@ -186,6 +186,7 @@
 .presentation-codemirror .cm-slide-first[data-slide-layout="intro"],
 .presentation-codemirror .cm-slide-anchor[data-slide-layout="intro"] { padding-top: 7rem; }
 .presentation-codemirror .cm-rendered-block.cm-slide-intro { padding-inline: 9rem; text-align: left; }
+.presentation-codemirror .cm-slide-line.cm-slide-intro { padding-inline: 9rem; text-align: left; }
 .presentation-codemirror .cm-slide-intro h1 { font-size: 3.5em; }
 .presentation-codemirror .cm-slide-first::before,
 .presentation-codemirror .cm-slide-anchor::before {

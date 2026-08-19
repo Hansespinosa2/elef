@@ -220,6 +220,8 @@ describe('Obsidian-style presentation editor', () => {
 
     const activeHeading = container.querySelector('.cm-heading-source-active');
     expect(activeHeading?.closest('.cm-slide-first[data-slide-layout="intro"]')).not.toBeNull();
+    expect(activeHeading?.closest('.cm-rendered-block')).not.toBeNull();
+    expect(activeHeading?.closest('.cm-slide-intro')).not.toBeNull();
     expect(container.querySelector('.cm-slide-line')?.textContent).not.toContain(':::slide-layout{intro}');
   });
 

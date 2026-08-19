@@ -498,6 +498,8 @@ function livePreviewDecorations(state: EditorState): DecorationSet {
       }
       const classes = [
         'cm-slide-line',
+        activeHeadingSurface ? 'cm-rendered-block' : '',
+        slideSurfaceLine ? `cm-slide-${parsedSlides[slide.index]?.layout || 'body'}` : '',
         slideSurfaceLine
           ? (activeBlock?.slideIndex === slide.index ? 'cm-slide-first' : 'cm-slide-anchor')
           : '',
