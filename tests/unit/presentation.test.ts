@@ -52,6 +52,11 @@ describe('parseMarkdown', () => {
     expect(parseMarkdown(':::slide-layout{unsupported}\n# Safe').slides[0].layout).toBe('body');
   });
 
+  it('parses layouts after document front matter', () => {
+    const result = parseMarkdown('---\ntitle: Demo\n---\n:::slide-layout{intro}\n# Welcome');
+    expect(result.slides[0]).toMatchObject({ layout: 'intro', markdown: '# Welcome' });
+  });
+
   it('does not treat directive-like text in fences as metadata', () => {
     const result = parseMarkdown('```md\n:::slide-layout{intro}\n---\n```');
     expect(result.slides[0].layout).toBe('body');
@@ -126,6 +131,11 @@ describe('parseMarkdown', () => {
       ':::slide-layout{intro}\n# One\n---\n## Two',
     );
     expect(parseMarkdown(replaceSlideMarkdown(source, 0, '# Updated')).slides[0].layout).toBe('intro');
+  });
+
+  it('preserves unsupported layout metadata through source replacement', () => {
+    expect(replaceSlideMarkdown(':::slide-layout{unsupported}\n# One', 0, '# Updated'))
+      .toBe(':::slide-layout{unsupported}\n# Updated');
   });
 
   it('inserts slides without disturbing front matter or fenced separators', () => {

@@ -68,6 +68,16 @@ describe('PresentationPreview interactions', () => {
     expect(changes.at(-1)).toContain('# Updated');
   });
 
+  it('preserves layout metadata when edited content is blurred', () => {
+    const changes: string[] = [];
+    const slide = render(':::slide-layout{intro}\n# Welcome', (source) => changes.push(source));
+    act(() => slide.click());
+    slide.querySelector('h1')!.textContent = 'Updated';
+    act(() => slide.dispatchEvent(new FocusEvent('focusout', { bubbles: true })));
+    expect(changes.at(-1)).toContain(':::slide-layout{intro}');
+    expect(changes.at(-1)).toContain('# Updated');
+  });
+
   it('keeps one blank slide after deleting the only slide', () => {
     const changes: string[] = [];
     render('# One', (source) => changes.push(source));
