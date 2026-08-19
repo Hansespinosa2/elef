@@ -208,7 +208,7 @@ describe('Obsidian-style presentation editor', () => {
   it('renders an editable surface for empty slides', () => {
     render('');
     expect(container.querySelectorAll('.cm-rendered-block')).toHaveLength(1);
-    expect(container.querySelector('.cm-slide-first')).not.toBeNull();
+    expect(container.querySelector('.cm-slide-first, .cm-slide-anchor')).not.toBeNull();
   });
 
   it('hides layout metadata and applies intro layout hooks', () => {

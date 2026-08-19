@@ -212,7 +212,10 @@ class RenderedBlockWidget extends WidgetType {
     element.dataset.blockTo = String(this.block.to);
     element.dataset.slideIndex = String(this.block.slideIndex);
     element.dataset.slideSurface = String(this.block.slideIndex);
-    if (this.firstInSlide) element.dataset.slideLabel = `Slide ${this.block.slideIndex + 1}`;
+    if (this.firstInSlide) {
+      element.dataset.slideLabel = `Slide ${this.block.slideIndex + 1}`;
+      element.dataset.slideLayout = this.layout;
+    }
     element.innerHTML = renderedMarkdown(this.block.markdown);
     element.querySelectorAll<HTMLInputElement>('input[type="checkbox"]').forEach((checkbox, index) => {
       const taskLines = lineOffsets(this.block.markdown, 0, this.block.markdown.length)
@@ -445,6 +448,23 @@ function livePreviewDecorations(state: EditorState): DecorationSet {
   }
 
   for (const slide of slides) {
+    if (blocks.some((block) => block.slideIndex === slide.index)) continue;
+    decorations.push({
+      from: slide.start,
+      value: Decoration.widget({
+        widget: new RenderedBlockWidget(
+          { from: slide.start, to: slide.start, slideIndex: slide.index, markdown: '' },
+          parsedSlides[slide.index]?.layout || 'body',
+          false,
+          true,
+        ),
+        block: true,
+        side: 1,
+      }),
+    });
+  }
+
+  for (const slide of slides) {
     const firstLine = state.doc.lineAt(Math.min(slide.start, state.doc.length));
     const lastPosition = Math.max(slide.start, Math.min(slide.end, state.doc.length));
     const lastLine = state.doc.lineAt(lastPosition);
@@ -452,7 +472,9 @@ function livePreviewDecorations(state: EditorState): DecorationSet {
       const line = state.doc.line(number);
       const classes = [
         'cm-slide-line',
-        number === firstLine.number ? 'cm-slide-first' : '',
+        number === firstLine.number
+          ? (activeBlock?.slideIndex === slide.index ? 'cm-slide-first' : 'cm-slide-anchor')
+          : '',
         number === lastLine.number ? 'cm-slide-last' : '',
         reveal && line.to >= reveal.from && line.from <= reveal.to ? 'cm-source-revealed' : '',
       ].filter(Boolean).join(' ');
@@ -500,23 +522,6 @@ function livePreviewDecorations(state: EditorState): DecorationSet {
         }),
       });
     }
-  }
-
-  for (const slide of slides) {
-    if (blocks.some((block) => block.slideIndex === slide.index)) continue;
-    decorations.push({
-      from: slide.start,
-      value: Decoration.widget({
-        widget: new RenderedBlockWidget(
-          { from: slide.start, to: slide.start, slideIndex: slide.index, markdown: '' },
-          parsedSlides[slide.index]?.layout || 'body',
-          true,
-          true,
-        ),
-        block: true,
-        side: 1,
-      }),
-    });
   }
 
   for (const range of math) {
