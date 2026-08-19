@@ -211,6 +211,18 @@ describe('Obsidian-style presentation editor', () => {
     expect(container.querySelector('.cm-slide-first, .cm-slide-anchor')).not.toBeNull();
   });
 
+  it('focuses the Markdown document when an empty area of a slide is clicked', () => {
+    const changes: string[] = [];
+    render('# One', (next) => changes.push(next));
+    const editor = EditorView.findFromDOM(container.querySelector<HTMLElement>('.cm-editor')!);
+    const surface = container.querySelector<HTMLElement>('.cm-slide-first')!;
+
+    act(() => surface.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })));
+    act(() => editor.dispatch({ changes: { from: editor.state.selection.main.head, insert: ' title' } }));
+
+    expect(changes.at(-1)).toBe(' title# One');
+  });
+
   it('hides layout metadata and applies intro layout hooks', () => {
     const changes: string[] = [];
     render(':::slide-layout{intro}\n# Welcome\n\nSubtitle', (source) => changes.push(source));

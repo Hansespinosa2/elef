@@ -713,6 +713,19 @@ export function PresentationEditor({ presentation, theme, source, onSourceChange
                 event.preventDefault();
                 return true;
               }
+              const surface = (event.target as Element | null)?.closest<HTMLElement>(
+                '.cm-slide-first, .cm-slide-anchor',
+              );
+              if (surface && !surface.closest('[data-block-from]')) {
+                const slideIndex = Number(surface.dataset.slideIndex);
+                const range = slideSourceRanges(view.state.doc.toString())[slideIndex];
+                if (range) {
+                  event.preventDefault();
+                  view.dispatch({ selection: { anchor: range.start }, scrollIntoView: true });
+                  view.focus();
+                  return true;
+                }
+              }
               const previous = lastRevealedMath;
               const repeatedMathClick = previous
                 && Date.now() - previous.time < 600
