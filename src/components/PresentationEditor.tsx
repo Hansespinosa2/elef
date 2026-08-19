@@ -488,7 +488,7 @@ function livePreviewDecorations(state: EditorState): DecorationSet {
         && activeHeadingBlock.from === line.from;
       const slideSurfaceLine = number === firstLine.number || activeHeadingSurface;
       const layoutDirective = /^:{3}slide-layout\{[^}\s]+\}[ \t]*$/.test(line.text.trim());
-      if (layoutDirective && activeHeadingBlock?.slideIndex === slide.index) {
+      if (layoutDirective) {
         decorations.push({
           from: line.from,
           to: line.to,

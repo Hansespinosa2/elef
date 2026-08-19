@@ -289,6 +289,15 @@ describe('Obsidian-style presentation editor', () => {
     posAtCoords.mockRestore();
   });
 
+  it('renders a typed intro H1 with a trailing newline as one slide', () => {
+    const markdown = ':::slide-layout{intro}\n# Hello\n';
+    render(markdown);
+
+    expect(container.querySelectorAll('.cm-slide-first')).toHaveLength(1);
+    expect(container.querySelectorAll('.cm-slide-anchor')).toHaveLength(0);
+    expect(container.textContent).not.toContain(':::slide-layout{intro}');
+  });
+
   it('keeps active body-slide headings rendered in place at every heading level', () => {
     const markdown = '# First slide\n---\n## Body heading\n\nBody text';
     render(markdown);
