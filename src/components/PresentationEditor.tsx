@@ -484,9 +484,21 @@ function livePreviewDecorations(state: EditorState): DecorationSet {
     const lastLine = state.doc.lineAt(lastPosition);
     for (let number = firstLine.number; number <= lastLine.number; number += 1) {
       const line = state.doc.line(number);
+      const activeHeadingSurface = activeHeadingBlock?.slideIndex === slide.index
+        && activeHeadingBlock.from === line.from;
+      const slideSurfaceLine = number === firstLine.number || activeHeadingSurface;
+      const layoutDirective = /^:{3}slide-layout\{[^}\s]+\}[ \t]*$/.test(line.text.trim());
+      if (layoutDirective && activeHeadingBlock?.slideIndex === slide.index) {
+        decorations.push({
+          from: line.from,
+          to: line.to,
+          value: Decoration.replace({ widget: new HiddenMarkdownSyntaxWidget() }),
+        });
+        continue;
+      }
       const classes = [
         'cm-slide-line',
-        number === firstLine.number
+        slideSurfaceLine
           ? (activeBlock?.slideIndex === slide.index ? 'cm-slide-first' : 'cm-slide-anchor')
           : '',
         number === lastLine.number ? 'cm-slide-last' : '',
@@ -504,7 +516,7 @@ function livePreviewDecorations(state: EditorState): DecorationSet {
           attributes: {
             'data-slide-index': String(slide.index),
             'data-slide-surface': String(slide.index),
-            ...(number === firstLine.number
+            ...(slideSurfaceLine
               ? {
                 'data-slide-label': `Slide ${slide.index + 1}`,
                 'data-slide-layout': parsedSlides[slide.index]?.layout || 'body',

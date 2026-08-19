@@ -211,6 +211,18 @@ describe('Obsidian-style presentation editor', () => {
     expect(container.querySelector('.cm-heading-source-active')?.textContent).not.toContain('# ');
   });
 
+  it('keeps an active intro H1 inside the slide surface and hides its layout directive', () => {
+    const markdown = ':::slide-layout{intro}\n# ThisHeader';
+    render(markdown);
+    const editor = EditorView.findFromDOM(container.querySelector<HTMLElement>('.cm-editor')!);
+
+    act(() => editor.dispatch({ selection: { anchor: markdown.indexOf('Header') } }));
+
+    const activeHeading = container.querySelector('.cm-heading-source-active');
+    expect(activeHeading?.closest('.cm-slide-first[data-slide-layout="intro"]')).not.toBeNull();
+    expect(container.querySelector('.cm-slide-line')?.textContent).not.toContain(':::slide-layout{intro}');
+  });
+
   it('reveals a fenced code block as one coherent source unit', () => {
     const markdown = '# One\n\n```ts\nconst value = 1;\n```\n\nAfter code';
     render(markdown);
