@@ -427,7 +427,7 @@ function livePreviewDecorations(state: EditorState): DecorationSet {
   const blocks = markdownBlockRanges(source);
   const math = findMathRanges(source);
   const activeBlock = activeBlockForSelection(blocks, state);
-  const activeHeadingBlock = activeBlock && /^#\s+/.test(activeBlock.markdown) ? activeBlock : null;
+  const activeHeadingBlock = activeBlock && /^#{1,6}\s+/.test(activeBlock.markdown) ? activeBlock : null;
   const reveal = activeRevealRange(state, activeBlock, math);
   const frontMatterEnd = slides[0]?.start ?? 0;
   const editingFrontMatter = frontMatterEnd > 0 && state.selection.main.head < frontMatterEnd;
@@ -534,8 +534,10 @@ function livePreviewDecorations(state: EditorState): DecorationSet {
     const slide = slides[block.slideIndex];
     const firstBlock = blocks.find((candidate) => candidate.slideIndex === block.slideIndex);
     if (activeHeadingBlock?.from === block.from) {
-      const prefix = block.markdown.match(/^#\s+/)?.[0];
+      const prefix = block.markdown.match(/^#{1,6}\s+/)?.[0];
       if (prefix) {
+        const level = prefix.match(/^#+/)?.[0].length || 1;
+        const layout = parsedSlides[block.slideIndex]?.layout || 'body';
         decorations.push({
           from: block.from,
           to: block.from + prefix.length,
@@ -545,7 +547,20 @@ function livePreviewDecorations(state: EditorState): DecorationSet {
           decorations.push({
             from: block.from + prefix.length,
             to: block.to,
-            value: Decoration.mark({ class: 'cm-heading-source-active' }),
+            value: Decoration.mark({
+              class: [
+                'cm-heading-source-active',
+                `cm-heading-source-level-${level}`,
+                'cm-rendered-block',
+                'slide-preview-block',
+                `cm-slide-${layout}`,
+              ].join(' '),
+              attributes: {
+                'data-slide-index': String(block.slideIndex),
+                'data-slide-surface': String(block.slideIndex),
+                'data-slide-layout': layout,
+              },
+            }),
           });
         }
         continue;
@@ -899,7 +914,15 @@ export function PresentationEditor({ presentation, theme, source, onSourceChange
   useEffect(() => {
     const view = viewRef.current;
     if (!view || view.state.doc.toString() === source) return;
-    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: source } });
+    const isNewIntroPresentation = source === ':::slide-layout{intro}\n# '
+      && view.state.doc.length === 0;
+    view.dispatch({
+      changes: { from: 0, to: view.state.doc.length, insert: source },
+      ...(isNewIntroPresentation
+        ? { selection: { anchor: source.length }, scrollIntoView: true }
+        : {}),
+    });
+    if (isNewIntroPresentation) view.focus();
   }, [source]);
 
   useEffect(() => {

@@ -219,10 +219,24 @@ describe('Obsidian-style presentation editor', () => {
     act(() => editor.dispatch({ selection: { anchor: markdown.indexOf('Header') } }));
 
     const activeHeading = container.querySelector('.cm-heading-source-active');
-    expect(activeHeading?.closest('.cm-slide-first[data-slide-layout="intro"]')).not.toBeNull();
+    expect(container.querySelector('.cm-slide-first[data-slide-layout="intro"]')).not.toBeNull();
     expect(activeHeading?.closest('.cm-rendered-block')).not.toBeNull();
     expect(activeHeading?.closest('.cm-slide-intro')).not.toBeNull();
+    expect(container.querySelectorAll('.cm-slide-first')).toHaveLength(1);
     expect(container.querySelector('.cm-slide-line')?.textContent).not.toContain(':::slide-layout{intro}');
+  });
+
+  it('keeps active body-slide headings rendered in place at every heading level', () => {
+    const markdown = '# First slide\n---\n## Body heading\n\nBody text';
+    render(markdown);
+    const editor = EditorView.findFromDOM(container.querySelector<HTMLElement>('.cm-editor')!);
+
+    act(() => editor.dispatch({ selection: { anchor: markdown.indexOf('Body heading') } }));
+
+    const activeHeading = container.querySelector('.cm-heading-source-active');
+    expect(activeHeading?.closest('.cm-rendered-block.cm-slide-body')).not.toBeNull();
+    expect(activeHeading?.classList.contains('cm-heading-source-level-2')).toBe(true);
+    expect(container.querySelector('.cm-source-revealed')).toBeNull();
   });
 
   it('reveals a fenced code block as one coherent source unit', () => {
@@ -311,6 +325,16 @@ describe('Obsidian-style presentation editor', () => {
   it('focuses a new intro presentation after its editable H1 prefix', () => {
     const source = ':::slide-layout{intro}\n# ';
     render(source);
+    const editor = EditorView.findFromDOM(container.querySelector<HTMLElement>('.cm-editor')!);
+
+    expect(editor.state.selection.main.head).toBe(source.length);
+    expect(document.activeElement).toBe(editor.contentDOM);
+  });
+
+  it('preserves new intro focus when the source arrives after the editor mounts', () => {
+    const source = ':::slide-layout{intro}\n# ';
+    render('');
+    rerender(source);
     const editor = EditorView.findFromDOM(container.querySelector<HTMLElement>('.cm-editor')!);
 
     expect(editor.state.selection.main.head).toBe(source.length);

@@ -217,11 +217,23 @@
   display: inline-block; width: 0; overflow: hidden;
 }
 .presentation-codemirror .cm-heading-source-active {
+  display: block; box-sizing: border-box; width: 100%;
   color: var(--slide-heading); font-family: 'Cormorant Garamond', Georgia, serif;
-  font-size: 2.35em; font-weight: 700; line-height: 1.02; letter-spacing: -.035em;
+  font-weight: 700; line-height: 1.02;
 }
-.presentation-codemirror .cm-slide-first[data-slide-layout="intro"] .cm-heading-source-active,
-.presentation-codemirror .cm-slide-anchor[data-slide-layout="intro"] .cm-heading-source-active {
+.presentation-codemirror .cm-heading-source-level-1 {
+  font-size: 2.35em; letter-spacing: -.035em;
+}
+.presentation-codemirror .cm-heading-source-level-2 {
+  font-size: 1.65em; letter-spacing: -.02em;
+}
+.presentation-codemirror .cm-heading-source-level-3 { font-size: 1.2em; }
+.presentation-codemirror .cm-heading-source-level-4 { font-size: 1em; }
+.presentation-codemirror .cm-heading-source-level-5 { font-size: .83em; }
+.presentation-codemirror .cm-heading-source-level-6 { font-size: .67em; }
+.presentation-codemirror .cm-slide-first[data-slide-layout="intro"] .cm-heading-source-level-1,
+.presentation-codemirror .cm-slide-anchor[data-slide-layout="intro"] .cm-heading-source-level-1,
+.presentation-codemirror .cm-slide-intro.cm-heading-source-level-1 {
   font-size: 3.5em;
 }
 .presentation-codemirror .cm-selectionBackground,
