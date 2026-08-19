@@ -2,12 +2,12 @@
 title: 'Command center sidebar actions'
 type: 'feature'
 created: '2026-08-18'
-status: 'done'
+status: 'in-review'
 review_loop_iteration: 0
 baseline_commit: '714f4d2488021b50d3181b9ff982fb5488e06cb7'
 context:
-  - '/Users/andresespinosa/Documents/GitHub/copilot-worktrees/elef/hansespinosa2-expert-succotash/_bmad-output/planning-artifacts/ux-elef-2026-08-18/EXPERIENCE.md'
-  - '/Users/andresespinosa/Documents/GitHub/copilot-worktrees/elef/hansespinosa2-expert-succotash/_bmad-output/planning-artifacts/ux-elef-2026-08-18/DESIGN.md'
+  - '../../planning-artifacts/ux-elef-2026-08-18/EXPERIENCE.md'
+  - '../../planning-artifacts/ux-elef-2026-08-18/DESIGN.md'
 ---
 
 <frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
@@ -72,7 +72,7 @@ The Command center is a behavior and chrome refinement, not a second design syst
 ## Verification
 
 **Commands:**
-- `npm test -- --runInBand` -- expected: existing unit and integration tests pass.
+- `npm test` -- expected: existing unit and integration tests pass.
 - `npm run build` -- expected: TypeScript and Vite build succeed.
 
 **Manual checks (if no CLI):**

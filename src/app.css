@@ -69,6 +69,9 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
 .sidebar-toggle.hidden { display: none; }
 .new-presentation { width: 100%; margin-bottom: 1rem; text-align: left; }
 .sidebar-search { display: flex; align-items: center; gap: .5rem; margin-bottom: .8rem; padding: .45rem .6rem; border: 1px solid var(--border); border-radius: 5px; color: var(--text-muted); background: var(--panel-bg); font-size: .8rem; }
+.sidebar-search:focus-within { border-color: var(--focus); box-shadow: 0 0 0 2px color-mix(in srgb, var(--focus) 18%, transparent); }
+.sidebar-search input { min-width: 0; flex: 1; border: 0; color: var(--text); background: transparent; font: inherit; outline: 0; }
+.sidebar-search input::placeholder { color: var(--text-muted); }
 .sidebar-search kbd { margin-left: auto; border: 1px solid var(--border); border-radius: 3px; padding: .05rem .25rem; color: var(--text-muted); background: var(--panel-muted); font: inherit; font-size: .7rem; }
 .sidebar-section-title { display: flex; align-items: center; justify-content: space-between; margin: .8rem .35rem .35rem; color: var(--text-muted); font-size: .7rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .sidebar-count { color: var(--accent); font-size: .75rem; letter-spacing: 0; }
@@ -84,7 +87,7 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
 .item-menu { position: relative; flex: 0 0 auto; padding-right: .25rem; }
 .overflow-trigger { padding: .2rem .35rem; color: var(--text-muted); background: transparent; font-size: 1rem; line-height: 1; }
 .overflow-trigger:hover { color: var(--text-strong); background: var(--panel-muted); }
-.context-menu { position: absolute; z-index: 10; top: calc(100% + .2rem); right: .25rem; display: grid; min-width: 8rem; padding: .25rem; border: 1px solid var(--border); border-radius: 5px; background: var(--panel-bg); box-shadow: 0 8px 20px var(--shadow); }
+.context-menu { position: absolute; z-index: 10; right: .25rem; bottom: calc(100% + .2rem); display: grid; min-width: 8rem; padding: .25rem; border: 1px solid var(--border); border-radius: 5px; background: var(--panel-bg); box-shadow: 0 8px 20px var(--shadow); }
 .context-menu button { padding: .45rem .55rem; color: var(--text); background: transparent; text-align: left; font-size: .8rem; font-weight: 500; }
 .context-menu button:hover, .context-menu button:focus-visible { background: var(--panel-muted); }
 .context-menu .destructive { color: var(--danger); }

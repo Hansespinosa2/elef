@@ -97,7 +97,11 @@ function App() {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [sidebarQuery, setSidebarQuery] = useState('');
   const menuRef = useRef<HTMLDivElement>(null);
+  const menuItemRef = useRef<HTMLButtonElement>(null);
+  const sidebarSearchRef = useRef<HTMLInputElement>(null);
+  const menuTriggerRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const [editorPreference, setEditorPreferenceState] = useState<EditorThemePreference>(() => {
     try {
       return normalizeEditorThemePreference(localStorage.getItem(editorThemeKey));
@@ -149,13 +153,29 @@ function App() {
     return () => window.removeEventListener('keydown', toggleSidebar);
   }, [tauri]);
   useEffect(() => {
+    if (!tauri) return;
+    const focusQuickOpen = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        sidebarSearchRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', focusQuickOpen);
+    return () => window.removeEventListener('keydown', focusQuickOpen);
+  }, [tauri]);
+  useEffect(() => {
+    if (!sidebarOpen) setOpenMenuId(null);
+  }, [sidebarOpen]);
+  useEffect(() => {
     if (!openMenuId) return;
+    menuItemRef.current?.focus();
     const dismissMenu = (event: PointerEvent) => {
       if (!menuRef.current?.contains(event.target as Node)) setOpenMenuId(null);
     };
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
+        menuTriggerRefs.current[openMenuId]?.focus();
         setOpenMenuId(null);
       }
     };
@@ -181,7 +201,10 @@ function App() {
   if (tauri) {
     const active = worldState.activeId ? worldState.presentations.find((item) => item.id === worldState.activeId) : null;
     if (!worldState.root) return <div className={`app theme-${editorTheme}`}><section className="setup"><h1>Create your Elef World</h1><p>Choose or create a dedicated folder where Elef will keep your presentations.</p><button type="button" onClick={() => void world.setup()}>Create Elef World folder</button></section></div>;
-    const presentations = worldState.presentations.slice().sort((a, b) => b.lastOpened - a.lastOpened);
+    const presentations = worldState.presentations
+      .slice()
+      .sort((a, b) => b.lastOpened - a.lastOpened)
+      .filter((item) => item.title.toLowerCase().includes(sidebarQuery.trim().toLowerCase()));
     const remove = (id: string, title: string) => {
       if (window.confirm(`Delete "${title}"? This cannot be undone.`)) void world.deletePresentation(id);
     };
@@ -194,16 +217,16 @@ function App() {
     };
     const sidebar = sidebarOpen && <aside className="world-sidebar">
       <div className="sidebar-header"><strong>Elef World</strong><button className="icon-button" type="button" aria-label="Collapse sidebar" onClick={() => setSidebarOpen(false)}>‹</button></div>
-      <div className="sidebar-search" role="search"><span aria-hidden="true">⌕</span><span>Quick open</span><kbd>⌘K</kbd></div>
+      <label className="sidebar-search" role="search"><span aria-hidden="true">⌕</span><input ref={sidebarSearchRef} aria-label="Quick open presentations" placeholder="Quick open" value={sidebarQuery} onChange={(event) => setSidebarQuery(event.target.value)} /><kbd>⌘K</kbd></label>
       <button className="new-presentation" type="button" onClick={() => void world.createDraft()}>＋ New presentation</button>
       <div className="sidebar-section-title"><span>Open editors</span><span className="sidebar-count">{active ? 1 : 0}</span></div>
       <nav className="open-editors" aria-label="Open editors">{active && <button className="editor-tab" type="button" onClick={() => world.open(active.id)}><span aria-hidden="true">●</span>{active.title}<span aria-hidden="true">×</span></button>}</nav>
       <div className="sidebar-section-title"><span>All files</span><span className="sidebar-count">{presentations.length}</span></div>
       <nav aria-label="All presentations">{presentations.map((item) => <div className={`presentation-item${active?.id === item.id ? ' active' : ''}`} key={item.id}>
-        {renamingId === item.id ? <form className="rename-form" onSubmit={(event) => { event.preventDefault(); submitRename(item.id); }}><input aria-label={`New name for ${item.title}`} autoFocus value={renameValue} onChange={(event) => setRenameValue(event.target.value)} onKeyDown={(event) => { if (event.key === 'Escape') setRenamingId(null); }} /><button type="submit">Save</button></form> : <><button className="presentation-link" type="button" onClick={() => item.missing ? void world.locate(item.id) : world.open(item.id)}><span aria-hidden="true">▱</span><span className="presentation-title">{item.title}{item.missing && ' (missing)'}</span>{!item.missing && slideCount(item) !== undefined && <small>{slideCount(item)}</small>}</button>
-        {!item.missing && <div className="item-menu" ref={openMenuId === item.id ? menuRef : undefined}><button className="overflow-trigger" type="button" aria-label={`Actions for ${item.title}`} aria-expanded={openMenuId === item.id} aria-haspopup="menu" onClick={() => setOpenMenuId((id) => id === item.id ? null : item.id)}>⋯</button>{openMenuId === item.id && <div className="context-menu" role="menu"><button type="button" role="menuitem" onClick={() => { setOpenMenuId(null); setRenamingId(item.id); setRenameValue(item.title); }}>Rename</button><button className="destructive" type="button" role="menuitem" onClick={() => { setOpenMenuId(null); remove(item.id, item.title); }}>Delete</button></div>}</div>}</>}
+        {renamingId === item.id ? <form className="rename-form" onSubmit={(event) => { event.preventDefault(); submitRename(item.id); }}><input aria-label={`New name for ${item.title}`} autoFocus value={renameValue} onChange={(event) => setRenameValue(event.target.value)} onKeyDown={(event) => { if (event.key === 'Escape') setRenamingId(null); }} /><button type="submit">Save</button></form> : <><button className="presentation-link" type="button" onClick={() => item.missing ? void world.locate(item.id) : world.open(item.id)}><span aria-hidden="true">▱</span><span className="presentation-title">{item.title}{item.missing && ' (missing)'}</span>{!item.missing && slideCount(item) !== undefined && <small aria-label={`${slideCount(item)} slides`}>{slideCount(item)}</small>}</button>
+        {!item.missing && <div className="item-menu" ref={openMenuId === item.id ? menuRef : undefined}><button ref={(element) => { menuTriggerRefs.current[item.id] = element; }} className="overflow-trigger" type="button" aria-label={`Actions for ${item.title}`} aria-expanded={openMenuId === item.id} aria-haspopup="menu" onClick={() => setOpenMenuId((id) => id === item.id ? null : item.id)}>⋯</button>{openMenuId === item.id && <div className="context-menu" role="menu"><button ref={menuItemRef} type="button" role="menuitem" onClick={() => { setOpenMenuId(null); setRenamingId(item.id); setRenameValue(item.title); }}>Rename</button><button className="destructive" type="button" role="menuitem" onClick={() => { setOpenMenuId(null); remove(item.id, item.title); }}>Delete</button></div>}</div>}</>}
       </div>)}</nav>
-      <footer className="sidebar-footer"><span>Elef World</span><span>⌘B Sidebar</span></footer>
+      <footer className="sidebar-footer"><span>Elef World</span><span>Ctrl/Cmd+B Sidebar</span></footer>
     </aside>;
     if (import.meta.env.DEV && active) console.debug('[elef] workspace render', { action: 'presentation', phase: 'parse', presentationId: active.id });
     const presentation = active ? world.presentation(active.id) : null;
