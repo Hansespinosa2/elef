@@ -3,6 +3,7 @@ import {
   parseMarkdown,
   deleteSlideMarkdown,
   insertSlideMarkdown,
+  isSlideOverBudget,
   presentationThemeFromSource,
   replaceSlideMarkdown,
   setPresentationTheme,
@@ -168,5 +169,114 @@ describe('parseMarkdown', () => {
     expect(hasUnsavedChanges('', '', 'Untitled presentation')).toBe(false);
     expect(hasUnsavedChanges('# Draft', '', 'Untitled presentation')).toBe(true);
     expect(hasUnsavedChanges('# Draft', '', null)).toBe(false);
+  });
+});
+
+// Behavior-matrix model-layer coverage. Test names are prefixed with the
+// matrix IDs from _bmad-output/specs/spec-editor-ux-recovery/behavior-matrix.md
+// so failures can be traced back to a specific unchecked behavior.
+describe('BOUNDARY model invariants', () => {
+  it('BOUNDARY-5: deleting an empty slide does not delete an adjacent non-empty slide', () => {
+    const source = '# One\n---\n\n---\n# Three';
+    const updated = deleteSlideMarkdown(source, 1);
+    expect(parseMarkdown(updated).slides.map((slide) => slide.markdown)).toEqual(['# One', '# Three']);
+  });
+
+  it('BOUNDARY-8/BOUNDARY-9: standalone --- never creates a slide inside fenced code or front matter', () => {
+    expect(slideSourceRanges('```yaml\n---\n```')).toHaveLength(1);
+    const withFrontMatter = slideSourceRanges('---\ntitle: Demo\n---\n# One');
+    expect(withFrontMatter).toHaveLength(1);
+  });
+
+  it('BOUNDARY-10: typing the third dash on an otherwise empty line creates a slide', () => {
+    expect(parseMarkdown('# One\n-').slides).toHaveLength(1);
+    expect(parseMarkdown('# One\n--').slides).toHaveLength(1);
+    expect(parseMarkdown('# One\n---').slides).toHaveLength(2);
+  });
+
+  it('BOUNDARY-11: an incomplete -- remains editable text and is never treated as a delimiter', () => {
+    const result = parseMarkdown('# One\n--\n# Two');
+    expect(result.slides).toHaveLength(1);
+    expect(result.slides[0].markdown).toContain('--');
+  });
+});
+
+describe('SPLIT model invariants', () => {
+  it('SPLIT-6: split supports top-level heading boundaries', () => {
+    const source = '# One\n\nBody\n\n## Two\n\nMore';
+    expect(splitSlideMarkdown(source, 0)).toBe('# One\n\nBody\n---\n## Two\n\nMore');
+  });
+
+  it('SPLIT-7: refuses to split when no safe split point exists', () => {
+    expect(splitSlideMarkdown('Paragraph only, no headings here.', 0)).toBeNull();
+    expect(splitSlideMarkdown('# Only one heading\n\nBody text', 0)).toBeNull();
+  });
+
+  it('SPLIT-4: confirming a split preserves every content line from the original slide', () => {
+    const source = '# One\n\nBody line one\nBody line two\n\n## Two\n\nMore content here';
+    const updated = splitSlideMarkdown(source, 0)!;
+    const pieces = parseMarkdown(updated).slides.map((slide) => slide.markdown);
+    expect(pieces).toEqual(['# One\n\nBody line one\nBody line two', '## Two\n\nMore content here']);
+  });
+});
+
+describe('OVERFLOW model invariants', () => {
+  it('OVERFLOW-1: overflow detection is a pure, viewport-independent computation', () => {
+    const shortSlide = '# Title\n\nOne short line.';
+    const longSlide = ['# Title', ...Array.from({ length: 20 }, (_, index) => `Body line ${index}`)].join('\n\n');
+    expect(isSlideOverBudget(shortSlide)).toBe(false);
+    expect(isSlideOverBudget(longSlide)).toBe(true);
+    // Deterministic and reproducible without measuring real layout or a Tauri WebView.
+    expect(slideContentBudget(longSlide)).toBe(slideContentBudget(longSlide));
+  });
+});
+
+describe('MD model-level source preservation', () => {
+  it('MD-3: strong, emphasis, and deletion markers survive unrelated slide operations', () => {
+    const source = '**bold** *em* ~~gone~~ text';
+    expect(parseMarkdown(source).slides[0].markdown).toBe(source);
+    expect(replaceSlideMarkdown(`${source}\n---\n# Two`, 0, source)).toBe(`${source}\n---\n# Two`);
+  });
+
+  it('MD-4: inline code backticks are preserved exactly', () => {
+    const source = 'Use `const x = 1;` in code.';
+    expect(parseMarkdown(source).slides[0].markdown).toBe(source);
+  });
+
+  it('MD-5: fenced code fence marker, language, and body survive slide splitting', () => {
+    const source = '# One\n\n```ts\nconst value = 1;\n```\n---\n# Two';
+    expect(parseMarkdown(source).slides[0].markdown).toBe('# One\n\n```ts\nconst value = 1;\n```');
+  });
+
+  it('MD-6: block quote markers are preserved exactly', () => {
+    const source = '> Quoted line one\n> Quoted line two';
+    expect(parseMarkdown(source).slides[0].markdown).toBe(source);
+  });
+
+  it('MD-7: ordered list numbering and indentation are preserved exactly', () => {
+    const source = '1. First\n   1. Nested\n2. Second';
+    expect(parseMarkdown(source).slides[0].markdown).toBe(source);
+  });
+
+  it('MD-8: unordered list marker style and indentation are preserved exactly', () => {
+    const source = '- First\n  - Nested\n* Second';
+    expect(parseMarkdown(source).slides[0].markdown).toBe(source);
+  });
+
+  it('MD-13: editing a table through replaceSlideMarkdown preserves pipes and alignment markers', () => {
+    const source = '| A | B |\n| --- | --- |\n| 1 | 2 |';
+    const withSlide = `${source}\n---\n# Two`;
+    expect(replaceSlideMarkdown(withSlide, 0, source)).toBe(withSlide);
+  });
+
+  it('MD-14: links remain exact, source-editable Markdown', () => {
+    const source = 'See [Elef](https://example.com/elef) for details.';
+    expect(parseMarkdown(source).slides[0].markdown).toBe(source);
+  });
+
+  it('MD-20: malformed Markdown remains editable and parseMarkdown never throws', () => {
+    const malformed = '# Unclosed\n\n```ts\nconst missing = 1;\n\n| a | b\n|---\n> broken *emphasis';
+    expect(() => parseMarkdown(malformed)).not.toThrow();
+    expect(parseMarkdown(malformed).slides[0].markdown).toBe(malformed);
   });
 });
