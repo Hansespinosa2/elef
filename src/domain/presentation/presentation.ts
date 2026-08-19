@@ -1,7 +1,10 @@
+export type SlideLayout = 'body' | 'intro';
+
 export interface Slide {
   id: string;
   index: number;
   markdown: string;
+  layout: SlideLayout;
 }
 
 export type ThemeMode = 'light' | 'dark';

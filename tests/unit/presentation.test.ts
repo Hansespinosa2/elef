@@ -7,6 +7,7 @@ import {
   presentationThemeFromSource,
   replaceSlideMarkdown,
   setPresentationTheme,
+  setSlideLayout,
   slideContentBudget,
   splitSlideAtSeparator,
   splitSlideMarkdown,
@@ -42,6 +43,35 @@ describe('parseMarkdown', () => {
 
   it('returns one empty slide for a blank document', () => {
     expect(parseMarkdown('').slides.map((slide) => slide.markdown)).toEqual(['']);
+  });
+
+  it('parses slide layouts and removes only the leading directive from content', () => {
+    const result = parseMarkdown(':::slide-layout{intro}\n# Welcome\n---\n# Body');
+    expect(result.slides.map(({ layout, markdown }) => ({ layout, markdown }))).toEqual([
+      { layout: 'intro', markdown: '# Welcome' },
+      { layout: 'body', markdown: '# Body' },
+    ]);
+    expect(parseMarkdown('# Default').slides[0].layout).toBe('body');
+    expect(parseMarkdown(':::slide-layout{unsupported}\n# Safe').slides[0].layout).toBe('body');
+  });
+
+  it('parses layouts after document front matter', () => {
+    const result = parseMarkdown('---\ntitle: Demo\n---\n:::slide-layout{intro}\n# Welcome');
+    expect(result.slides[0]).toMatchObject({ layout: 'intro', markdown: '# Welcome' });
+  });
+
+  it('sets a slide layout without changing other slide content', () => {
+    const source = '# One\n---\n# Two';
+    expect(setSlideLayout(source, 1, 'intro')).toBe('# One\n---\n:::slide-layout{intro}\n# Two');
+    expect(setSlideLayout(setSlideLayout(source, 1, 'intro'), 1, 'body'))
+      .toBe('# One\n---\n:::slide-layout{body}\n# Two');
+  });
+
+  it('does not treat directive-like text in fences as metadata', () => {
+    const result = parseMarkdown('```md\n:::slide-layout{intro}\n---\n```');
+    expect(result.slides[0].layout).toBe('body');
+    expect(result.slides[0].markdown).toContain(':::slide-layout{intro}');
+    expect(result.slides).toHaveLength(1);
   });
 
   it('updates ordered slides when source gains a separator', () => {
@@ -107,6 +137,20 @@ describe('parseMarkdown', () => {
     const source = '---\npresentationTheme: dark\n---\n```yaml\n---\n```\n---\n# Two';
     const updated = replaceSlideMarkdown(source, 1, '## Updated');
     expect(updated).toBe('---\npresentationTheme: dark\n---\n```yaml\n---\n```\n---\n## Updated');
+  });
+
+  it('preserves layout metadata through source replacement and splitting', () => {
+    const source = ':::slide-layout{intro}\n# One\n\nBody';
+    expect(replaceSlideMarkdown(source, 0, '# Updated')).toBe(':::slide-layout{intro}\n# Updated');
+    expect(splitSlideAtSeparator(source, 0, '# One\n---\n## Two')).toBe(
+      ':::slide-layout{intro}\n# One\n---\n## Two',
+    );
+    expect(parseMarkdown(replaceSlideMarkdown(source, 0, '# Updated')).slides[0].layout).toBe('intro');
+  });
+
+  it('preserves unsupported layout metadata through source replacement', () => {
+    expect(replaceSlideMarkdown(':::slide-layout{unsupported}\n# One', 0, '# Updated'))
+      .toBe(':::slide-layout{unsupported}\n# Updated');
   });
 
   it('inserts slides without disturbing front matter or fenced separators', () => {

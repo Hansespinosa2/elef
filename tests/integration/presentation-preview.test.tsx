@@ -221,6 +221,56 @@ describe('Obsidian-style presentation editor', () => {
     expect(deleted.at(-1)).toBe('# One');
   });
 
+  it('changes a slide layout from the slide controls', () => {
+    const changes: string[] = [];
+    render('# One\n---\n# Two', (next) => changes.push(next));
+    const layout = container.querySelector<HTMLSelectElement>('select[aria-label="Layout for slide 2"]')!;
+    act(() => {
+      layout.value = 'intro';
+      layout.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(changes.at(-1)).toBe('# One\n---\n:::slide-layout{intro}\n# Two');
+    expect(container.querySelector<HTMLSelectElement>('select[aria-label="Layout for slide 2"]')?.value).toBe('intro');
+  });
+
+  it('renders an editable surface for empty slides', () => {
+    render('');
+    expect(container.querySelectorAll('.cm-rendered-block')).toHaveLength(1);
+    expect(container.querySelector('.cm-slide-first, .cm-slide-anchor')).not.toBeNull();
+  });
+
+  it('focuses the Markdown document when an empty area of a slide is clicked', () => {
+    const changes: string[] = [];
+    render('# One', (next) => changes.push(next));
+    const editor = EditorView.findFromDOM(container.querySelector<HTMLElement>('.cm-editor')!);
+    const surface = container.querySelector<HTMLElement>('.cm-slide-first')!;
+
+    act(() => surface.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })));
+    act(() => editor.dispatch({ changes: { from: editor.state.selection.main.head, insert: ' title' } }));
+
+    expect(changes.at(-1)).toBe(' title# One');
+  });
+
+  it('hides layout metadata and applies intro layout hooks', () => {
+    const changes: string[] = [];
+    render(':::slide-layout{intro}\n# Welcome\n\nSubtitle', (source) => changes.push(source));
+    expect(container.querySelector('.cm-slide-first[data-slide-layout="intro"]')).not.toBeNull();
+    const rendered = container.querySelector<HTMLElement>('.cm-rendered-block')!;
+    expect(rendered.textContent).toContain('Welcome');
+    expect(rendered.textContent).not.toContain('slide-layout');
+  });
+
+  it('preserves layout metadata when source content is edited', () => {
+    const changes: string[] = [];
+    const source = ':::slide-layout{intro}\n# Welcome';
+    render(source, (next) => changes.push(next));
+    const editor = EditorView.findFromDOM(container.querySelector<HTMLElement>('.cm-editor')!);
+    const from = source.indexOf('Welcome');
+    act(() => editor.dispatch({ changes: { from, to: from + 'Welcome'.length, insert: 'Updated' } }));
+    expect(changes.at(-1)).toContain(':::slide-layout{intro}');
+    expect(changes.at(-1)).toContain('# Updated');
+  });
+
   it('renders valid inline and display TeX without changing source', () => {
     render('Before $x=3$.\n\n$$\ny = mx + b\n$$');
     expect(container.querySelectorAll('.katex')).not.toHaveLength(0);
@@ -278,7 +328,7 @@ describe('Obsidian-style presentation editor', () => {
     const boundary = container.querySelector<HTMLElement>('.cm-slide-boundary')!;
 
     expect(boundary.querySelector('.cm-slide-overflow-warning')).not.toBeNull();
-    expect(getComputedStyle(boundary).overflowY).toBe('auto');
+    expect(getComputedStyle(boundary).overflowY).toBe('visible');
     expect(boundary.querySelector('[role="dialog"]')).toBeNull();
   });
 

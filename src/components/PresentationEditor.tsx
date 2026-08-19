@@ -21,10 +21,12 @@ import {
   deleteSlideMarkdown,
   insertSlideMarkdown,
   isSlideOverBudget,
+  parseMarkdown,
+  setSlideLayout,
   slideSourceRanges,
   splitSlideMarkdown,
 } from '../domain/presentation';
-import type { Presentation, SlideSourceRange, ThemeMode } from '../domain/presentation';
+import type { Presentation, SlideLayout, SlideSourceRange, ThemeMode } from '../domain/presentation';
 import './PresentationPreview.css';
 import 'katex/dist/katex.min.css';
 
@@ -145,6 +147,9 @@ export function markdownBlockRanges(source: string): MarkdownBlockRange[] {
         flush();
         continue;
       }
+      if (!fence && start === null && /^:{3}slide-layout\{[^}\s]+\}[ \t]*$/.test(trimmed)) {
+        continue;
+      }
       if (heading && start !== null) flush();
       if (start === null) start = line.from;
       end = line.to;
@@ -160,12 +165,13 @@ export function markdownBlockRanges(source: string): MarkdownBlockRange[] {
 }
 
 function renderedMarkdown(markdownSource: string): string {
+  const content = markdownSource.replace(/^\s{0,3}:::slide-layout\{[^}\s]+\}[ \t]*(?:\r?\n|$)/, '');
   return renderToStaticMarkup(
     <ReactMarkdown
       remarkPlugins={[remarkGfm, remarkMath]}
       rehypePlugins={[[rehypeKatex, { throwOnError: false }]]}
     >
-      {markdownSource || '\u00a0'}
+      {content || '\u00a0'}
     </ReactMarkdown>,
   );
 }
@@ -184,6 +190,7 @@ function annotateRenderedMath(element: HTMLElement, block: MarkdownBlockRange): 
 class RenderedBlockWidget extends WidgetType {
   constructor(
     private readonly block: MarkdownBlockRange,
+    private readonly layout: SlideLayout,
     private readonly firstInSlide: boolean,
     private readonly lastInSlide: boolean,
     private readonly sourceFragment = false,
@@ -196,6 +203,7 @@ class RenderedBlockWidget extends WidgetType {
     element.className = [
       'cm-rendered-block',
       'slide-preview-block',
+      `cm-slide-${this.layout}`,
       this.sourceFragment ? 'cm-rendered-fragment' : '',
       this.firstInSlide ? 'cm-slide-first' : '',
       this.lastInSlide ? 'cm-slide-last' : '',
@@ -204,7 +212,10 @@ class RenderedBlockWidget extends WidgetType {
     element.dataset.blockTo = String(this.block.to);
     element.dataset.slideIndex = String(this.block.slideIndex);
     element.dataset.slideSurface = String(this.block.slideIndex);
-    if (this.firstInSlide) element.dataset.slideLabel = `Slide ${this.block.slideIndex + 1}`;
+    if (this.firstInSlide) {
+      element.dataset.slideLabel = `Slide ${this.block.slideIndex + 1}`;
+      element.dataset.slideLayout = this.layout;
+    }
     element.innerHTML = renderedMarkdown(this.block.markdown);
     element.querySelectorAll<HTMLInputElement>('input[type="checkbox"]').forEach((checkbox, index) => {
       const taskLines = lineOffsets(this.block.markdown, 0, this.block.markdown.length)
@@ -231,6 +242,7 @@ class RenderedBlockWidget extends WidgetType {
       && other.block.from === this.block.from
       && other.block.to === this.block.to
       && other.block.markdown === this.block.markdown
+      && other.layout === this.layout
       && other.firstInSlide === this.firstInSlide
       && other.lastInSlide === this.lastInSlide
       && other.sourceFragment === this.sourceFragment;
@@ -279,6 +291,7 @@ class MathWidget extends WidgetType {
 class SlideBoundaryWidget extends WidgetType {
   constructor(
     private readonly slideIndex: number,
+    private readonly layout: SlideLayout,
     private readonly overBudget: boolean,
     private readonly canSplit: boolean,
   ) {
@@ -297,6 +310,13 @@ class SlideBoundaryWidget extends WidgetType {
         <div class="slide-boundary-actions">
           <button class="slide-delete-button" type="button" data-slide-action="delete" aria-label="Delete slide ${this.slideIndex + 1}">−</button>
           ${this.canSplit ? `<button class="slide-split-button" type="button" data-slide-action="preview-split" aria-label="Preview automatic split for slide ${this.slideIndex + 1}">Preview split</button>` : ''}
+          <label class="slide-layout-control">
+            <span class="sr-only">Layout for slide ${this.slideIndex + 1}</span>
+            <select data-slide-action="layout" aria-label="Layout for slide ${this.slideIndex + 1}">
+              <option value="body" ${this.layout === 'body' ? 'selected' : ''}>Body</option>
+              <option value="intro" ${this.layout === 'intro' ? 'selected' : ''}>Intro</option>
+            </select>
+          </label>
           <button class="slide-add-button" type="button" data-slide-action="add" aria-label="Add slide after slide ${this.slideIndex + 1}">+</button>
         </div>
       </div>
@@ -307,6 +327,7 @@ class SlideBoundaryWidget extends WidgetType {
   eq(other: WidgetType): boolean {
     return other instanceof SlideBoundaryWidget
       && other.slideIndex === this.slideIndex
+      && other.layout === this.layout
       && other.overBudget === this.overBudget
       && other.canSplit === this.canSplit;
   }
@@ -389,6 +410,7 @@ function slideRangeForPosition(ranges: SlideSourceRange[], position: number): nu
 function livePreviewDecorations(state: EditorState): DecorationSet {
   const source = state.doc.toString();
   const slides = slideSourceRanges(source);
+  const parsedSlides = parseMarkdown(source).slides;
   const blocks = markdownBlockRanges(source);
   const math = findMathRanges(source);
   const activeBlock = activeBlockForSelection(blocks, state);
@@ -426,6 +448,23 @@ function livePreviewDecorations(state: EditorState): DecorationSet {
   }
 
   for (const slide of slides) {
+    if (blocks.some((block) => block.slideIndex === slide.index)) continue;
+    decorations.push({
+      from: slide.start,
+      value: Decoration.widget({
+        widget: new RenderedBlockWidget(
+          { from: slide.start, to: slide.start, slideIndex: slide.index, markdown: '' },
+          parsedSlides[slide.index]?.layout || 'body',
+          false,
+          true,
+        ),
+        block: true,
+        side: 1,
+      }),
+    });
+  }
+
+  for (const slide of slides) {
     const firstLine = state.doc.lineAt(Math.min(slide.start, state.doc.length));
     const lastPosition = Math.max(slide.start, Math.min(slide.end, state.doc.length));
     const lastLine = state.doc.lineAt(lastPosition);
@@ -433,7 +472,9 @@ function livePreviewDecorations(state: EditorState): DecorationSet {
       const line = state.doc.line(number);
       const classes = [
         'cm-slide-line',
-        number === firstLine.number ? 'cm-slide-first' : '',
+        number === firstLine.number
+          ? (activeBlock?.slideIndex === slide.index ? 'cm-slide-first' : 'cm-slide-anchor')
+          : '',
         number === lastLine.number ? 'cm-slide-last' : '',
         reveal && line.to >= reveal.from && line.from <= reveal.to ? 'cm-source-revealed' : '',
       ].filter(Boolean).join(' ');
@@ -444,7 +485,12 @@ function livePreviewDecorations(state: EditorState): DecorationSet {
           attributes: {
             'data-slide-index': String(slide.index),
             'data-slide-surface': String(slide.index),
-            ...(number === firstLine.number ? { 'data-slide-label': `Slide ${slide.index + 1}` } : {}),
+            ...(number === firstLine.number
+              ? {
+                'data-slide-label': `Slide ${slide.index + 1}`,
+                'data-slide-layout': parsedSlides[slide.index]?.layout || 'body',
+              }
+              : {}),
           },
         }),
       });
@@ -453,6 +499,7 @@ function livePreviewDecorations(state: EditorState): DecorationSet {
 
   for (const block of blocks) {
     const slide = slides[block.slideIndex];
+    const firstBlock = blocks.find((candidate) => candidate.slideIndex === block.slideIndex);
     const fragments = activeBlock?.from === block.from && activeBlock.to === block.to && reveal
       ? [
         renderedFragment(source, block, block.from, Math.max(block.from, reveal.from - 1)),
@@ -466,7 +513,8 @@ function livePreviewDecorations(state: EditorState): DecorationSet {
         value: Decoration.replace({
           widget: new RenderedBlockWidget(
             fragment,
-            fragment.from === slide.start,
+            parsedSlides[fragment.slideIndex]?.layout || 'body',
+            block.from === firstBlock?.from,
             fragment.to === slide.end,
             fragment !== block,
           ),
@@ -500,6 +548,7 @@ function livePreviewDecorations(state: EditorState): DecorationSet {
     const overBudget = isSlideOverBudget(markdownSource);
     const widget = new SlideBoundaryWidget(
       slide.index,
+      parsedSlides[slide.index]?.layout || 'body',
       overBudget,
       overBudget && splitSlideMarkdown(source, slide.index) !== null,
     );
@@ -664,6 +713,19 @@ export function PresentationEditor({ presentation, theme, source, onSourceChange
                 event.preventDefault();
                 return true;
               }
+              const surface = (event.target as Element | null)?.closest<HTMLElement>(
+                '.cm-slide-first, .cm-slide-anchor',
+              );
+              if (surface && !surface.closest('[data-block-from]')) {
+                const slideIndex = Number(surface.dataset.slideIndex);
+                const range = slideSourceRanges(view.state.doc.toString())[slideIndex];
+                if (range) {
+                  event.preventDefault();
+                  view.dispatch({ selection: { anchor: range.start }, scrollIntoView: true });
+                  view.focus();
+                  return true;
+                }
+              }
               const previous = lastRevealedMath;
               const repeatedMathClick = previous
                 && Date.now() - previous.time < 600
@@ -705,10 +767,21 @@ export function PresentationEditor({ presentation, theme, source, onSourceChange
                 const target = Math.max(0, Math.min(slideIndex, slideSourceRanges(next).length - 1));
                 const range = slideSourceRanges(next)[target];
                 view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: next }, selection: { anchor: range?.start ?? 0 }, scrollIntoView: true });
-              } else {
+              } else if (action.dataset.slideAction === 'preview-split') {
                 const proposed = splitSlideMarkdown(current, slideIndex);
                 if (proposed) splitPreviewRef.current({ original: current, proposed, slideIndex });
               }
+              view.focus();
+              return true;
+            },
+            change(event, view) {
+              const select = (event.target as Element | null)?.closest<HTMLSelectElement>('[data-slide-action="layout"]');
+              if (!select) return false;
+              const boundary = select.closest<HTMLElement>('.cm-slide-boundary');
+              const slideIndex = Number(boundary?.dataset.slideIndex);
+              if (!Number.isInteger(slideIndex) || !['body', 'intro'].includes(select.value)) return false;
+              const next = setSlideLayout(view.state.doc.toString(), slideIndex, select.value as SlideLayout);
+              view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: next }, scrollIntoView: false });
               view.focus();
               return true;
             },

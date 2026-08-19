@@ -1,4 +1,4 @@
-import type { Presentation, PresentationTheme, Slide } from './presentation';
+import type { Presentation, PresentationTheme, Slide, SlideLayout } from './presentation';
 
 interface SourceLine {
   start: number;
@@ -137,6 +137,36 @@ function isFenceStart(line: string): { marker: string; length: number } | null {
   return match ? { marker: match[1][0], length: match[1].length } : null;
 }
 
+const slideLayoutDirective = /^\s{0,3}:::slide-layout\{([^}\s]+)\}[ \t]*$/;
+
+function slideMetadata(markdown: string): { layout: SlideLayout; directive: string | null; content: string } {
+  const normalized = markdown.replace(/\r\n?/g, '\n');
+  const lines = normalized.split('\n');
+  const firstContentLine = lines.findIndex((line) => line.trim() !== '');
+  if (firstContentLine < 0) return { layout: 'body', directive: null, content: normalized };
+  const match = lines[firstContentLine].match(slideLayoutDirective);
+  if (!match) return { layout: 'body', directive: null, content: normalized };
+  const directive = lines[firstContentLine];
+  const layout: SlideLayout = match[1] === 'intro' || match[1] === 'body' ? match[1] : 'body';
+  const contentLines = [...lines.slice(0, firstContentLine), ...lines.slice(firstContentLine + 1)];
+  if (contentLines[firstContentLine] === '') contentLines.splice(firstContentLine, 1);
+  return { layout, directive, content: contentLines.join('\n') };
+}
+
+function withSlideMetadata(existing: string, markdown: string): string {
+  const existingMetadata = slideMetadata(existing);
+  const incoming = slideMetadata(markdown).content;
+  return existingMetadata.directive ? `${existingMetadata.directive}\n${incoming}` : incoming;
+}
+
+export function setSlideLayout(source: string, slideIndex: number, layout: SlideLayout): string {
+  const { prefix, sections } = markdownSections(source);
+  if (slideIndex < 0 || slideIndex >= sections.length) return source;
+  const current = slideMetadata(sections[slideIndex]).content;
+  sections[slideIndex] = `:::slide-layout{${layout}}\n${current}`;
+  return `${prefix}${sections.join('\n---\n')}`;
+}
+
 function markdownSections(source: string): { prefix: string; sections: string[] } {
   const frontMatter = initialFrontMatter(source);
   const prefix = frontMatter ? source.slice(0, frontMatter.bodyStart) : '';
@@ -191,11 +221,15 @@ export function parseMarkdown(source: string, sourceName = 'Untitled presentatio
   }
   sections.push(normalizeSection(section.join('\n')));
 
-  const slides: Slide[] = sections.map((markdown, index) => ({
+  const slides: Slide[] = sections.map((section, index) => {
+    const { layout, content: markdown } = slideMetadata(section);
+    return {
     id: `${sourceName}-${index + 1}`,
     index,
     markdown,
-  }));
+    layout,
+    };
+  });
 
   return { sourceName, presentationTheme, slides };
 }
@@ -203,7 +237,7 @@ export function parseMarkdown(source: string, sourceName = 'Untitled presentatio
 export function replaceSlideMarkdown(source: string, slideIndex: number, markdown: string): string {
   const { prefix, sections } = markdownSections(source);
   if (slideIndex < 0 || slideIndex >= sections.length) return source;
-  sections[slideIndex] = markdown;
+  sections[slideIndex] = withSlideMetadata(sections[slideIndex], markdown);
   return `${prefix}${sections.join('\n---\n')}`;
 }
 
@@ -249,7 +283,9 @@ export function splitSlideAtSeparator(
   }
   pieces.push(piece.join('\n').trim());
   if (pieces.length < 2) return source;
-  sections.splice(slideIndex, 1, ...pieces);
+  sections.splice(slideIndex, 1, ...pieces.map((piece, index) => index === 0
+    ? withSlideMetadata(sections[slideIndex], piece)
+    : piece));
   return `${prefix}${sections.join('\n---\n')}`;
 }
 
@@ -273,7 +309,9 @@ export function splitSlideMarkdown(source: string, slideIndex: number): string |
   }
   pieces.push(piece.join('\n').trim());
   if (pieces.length < 2) return null;
-  sections.splice(slideIndex, 1, ...pieces);
+  sections.splice(slideIndex, 1, ...pieces.map((piece, index) => index === 0
+    ? withSlideMetadata(current, piece)
+    : piece));
   return `${prefix}${sections.join('\n---\n')}`;
 }
 

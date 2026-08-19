@@ -3,6 +3,7 @@ export type {
   Presentation,
   PresentationTheme,
   Slide,
+  SlideLayout,
   ThemeMode,
 } from './presentation';
 export type { SlideSourceRange } from './markdown';
@@ -21,6 +22,7 @@ export {
   presentationThemeFromSource,
   replaceSlideMarkdown,
   setPresentationTheme,
+  setSlideLayout,
   slideSourceRanges,
   slideContentBudget,
   splitSlideAtSeparator,
