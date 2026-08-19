@@ -52,6 +52,22 @@ describe('PresentationPreview interactions', () => {
     expect(container.querySelector('.slide-undo-notice')).not.toBeNull();
   });
 
+  it('hides layout metadata, applies the intro class, and preserves it on visual edits', () => {
+    const changes: string[] = [];
+    const slide = render(':::slide-layout{intro}\n# Welcome\n\nSubtitle', (source) => changes.push(source));
+    expect(slide.classList.contains('slide-intro')).toBe(true);
+    expect(slide.textContent).toContain('Welcome');
+    expect(slide.textContent).not.toContain('slide-layout');
+    act(() => slide.querySelector<HTMLElement>('.slide-preview-block')!.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })));
+    const textarea = slide.querySelector<HTMLTextAreaElement>('textarea')!;
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(textarea, '# Updated');
+      textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(changes.at(-1)).toContain(':::slide-layout{intro}');
+    expect(changes.at(-1)).toContain('# Updated');
+  });
+
   it('keeps one blank slide after deleting the only slide', () => {
     const changes: string[] = [];
     render('# One', (source) => changes.push(source));

@@ -3,6 +3,7 @@ export type {
   Presentation,
   PresentationTheme,
   Slide,
+  SlideLayout,
   ThemeMode,
 } from './presentation';
 export {

@@ -42,6 +42,23 @@ describe('parseMarkdown', () => {
     expect(parseMarkdown('').slides.map((slide) => slide.markdown)).toEqual(['']);
   });
 
+  it('parses slide layouts and removes only the leading directive from content', () => {
+    const result = parseMarkdown(':::slide-layout{intro}\n# Welcome\n---\n# Body');
+    expect(result.slides.map(({ layout, markdown }) => ({ layout, markdown }))).toEqual([
+      { layout: 'intro', markdown: '# Welcome' },
+      { layout: 'body', markdown: '# Body' },
+    ]);
+    expect(parseMarkdown('# Default').slides[0].layout).toBe('body');
+    expect(parseMarkdown(':::slide-layout{unsupported}\n# Safe').slides[0].layout).toBe('body');
+  });
+
+  it('does not treat directive-like text in fences as metadata', () => {
+    const result = parseMarkdown('```md\n:::slide-layout{intro}\n---\n```');
+    expect(result.slides[0].layout).toBe('body');
+    expect(result.slides[0].markdown).toContain(':::slide-layout{intro}');
+    expect(result.slides).toHaveLength(1);
+  });
+
   it('updates ordered slides when source gains a separator', () => {
     expect(parseMarkdown('# One\n---\n# Two').slides.map((slide) => slide.markdown)).toEqual(['# One', '# Two']);
   });
@@ -100,6 +117,15 @@ describe('parseMarkdown', () => {
     const source = '---\npresentationTheme: dark\n---\n```yaml\n---\n```\n---\n# Two';
     const updated = replaceSlideMarkdown(source, 1, '## Updated');
     expect(updated).toBe('---\npresentationTheme: dark\n---\n```yaml\n---\n```\n---\n## Updated');
+  });
+
+  it('preserves layout metadata through source replacement and splitting', () => {
+    const source = ':::slide-layout{intro}\n# One\n\nBody';
+    expect(replaceSlideMarkdown(source, 0, '# Updated')).toBe(':::slide-layout{intro}\n# Updated');
+    expect(splitSlideAtSeparator(source, 0, '# One\n---\n## Two')).toBe(
+      ':::slide-layout{intro}\n# One\n---\n## Two',
+    );
+    expect(parseMarkdown(replaceSlideMarkdown(source, 0, '# Updated')).slides[0].layout).toBe('intro');
   });
 
   it('inserts slides without disturbing front matter or fenced separators', () => {

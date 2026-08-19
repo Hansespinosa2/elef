@@ -531,7 +531,7 @@ export function PresentationPreview({ presentation, theme, source, onSourceChang
               if (element) slideRefs.current.set(slide.index, element);
               else slideRefs.current.delete(slide.index);
             }}
-            className={`slide${sourceBlock?.slideIndex === slide.index ? ' source-mode' : ''}${activeSlide === slide.index ? ' editing' : ''}`}
+            className={`slide slide-${slide.layout}${sourceBlock?.slideIndex === slide.index ? ' source-mode' : ''}${activeSlide === slide.index ? ' editing' : ''}`}
             style={{ width: slideWidth, height: slideHeight, transform: `scale(${slideScale})` }}
             aria-label={`Slide ${slide.index + 1}`}
             contentEditable={sourceBlock?.slideIndex === slide.index ? undefined : true}
