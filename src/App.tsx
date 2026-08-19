@@ -6,6 +6,7 @@ import { PresentationEditorSession } from './application/presentation-editor/ses
 import { BrowserDocumentReader, BrowserFileSelector, BrowserReplacementConfirmation } from './infrastructure/browser/documents';
 import { TauriDocumentReader, TauriFileSelector, TauriWorldFileSystem } from './infrastructure/tauri/documents';
 import { WorldWorkspace } from './application/world/workspace';
+import { confirmPresentationDeletion } from './application/world/delete-confirmation';
 import { PresentationPreview } from './components/PresentationPreview';
 import { SourceModeMockups } from './components/SourceModeMockups';
 import {
@@ -209,8 +210,10 @@ function App() {
       .slice()
       .sort((a, b) => b.lastOpened - a.lastOpened)
       .filter((item) => item.title.toLowerCase().includes(sidebarQuery.trim().toLowerCase()));
-    const remove = (id: string, title: string) => {
-      if (window.confirm(`Delete "${title}"? This cannot be undone.`)) void world.deletePresentation(id);
+    const remove = async (id: string, title: string) => {
+      if (await confirmPresentationDeletion(tauri, `Delete "${title}"? This cannot be undone.`)) {
+        await world.deletePresentation(id);
+      }
     };
     const submitRename = (id: string) => {
       if (renameValue.trim()) void world.renamePresentation(id, renameValue.trim());
@@ -231,7 +234,7 @@ function App() {
         beginRename(item);
       } else if (event.key === 'Delete' && !item.missing) {
         event.preventDefault();
-        remove(item.id, item.title);
+        void remove(item.id, item.title);
       }
     };
     const renderPresentationRow = (item: typeof presentations[number], showMenu = true) => (
@@ -285,7 +288,7 @@ function App() {
         {showMenu && !item.missing && renamingId !== item.id && <div className="item-menu" ref={openMenuId === item.id ? menuRef : undefined}>
           {openMenuId === item.id && <div className="context-menu" role="menu" aria-label={`Actions for ${item.title}`}>
             <button ref={menuItemRef} type="button" role="menuitem" onClick={() => beginRename(item)}>Rename</button>
-            <button className="destructive" type="button" role="menuitem" onClick={() => { setOpenMenuId(null); remove(item.id, item.title); }}>Delete</button>
+             <button className="destructive" type="button" role="menuitem" onClick={() => { setOpenMenuId(null); void remove(item.id, item.title); }}>Delete</button>
           </div>}
         </div>}
       </div>
