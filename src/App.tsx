@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { isTauri } from '@tauri-apps/api/core';
 import './app.css';
 import { PresentationEditorSession } from './application/presentation-editor/session';
@@ -101,7 +102,8 @@ function App() {
   const menuRef = useRef<HTMLDivElement>(null);
   const menuItemRef = useRef<HTMLButtonElement>(null);
   const sidebarSearchRef = useRef<HTMLInputElement>(null);
-  const menuTriggerRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const presentationButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const presentationClickTimers = useRef<Record<string, number>>({});
   const [editorPreference, setEditorPreferenceState] = useState<EditorThemePreference>(() => {
     try {
       return normalizeEditorThemePreference(localStorage.getItem(editorThemeKey));
@@ -175,7 +177,7 @@ function App() {
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
-        menuTriggerRefs.current[openMenuId]?.focus();
+        presentationButtonRefs.current[openMenuId]?.focus();
         setOpenMenuId(null);
       }
     };
@@ -212,6 +214,80 @@ function App() {
       if (renameValue.trim()) void world.renamePresentation(id, renameValue.trim());
       setRenamingId(null);
     };
+    const beginRename = (item: typeof presentations[number]) => {
+      if (item.missing) return;
+      setOpenMenuId(null);
+      setRenamingId(item.id);
+      setRenameValue(item.title);
+    };
+    const handlePresentationKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>, item: typeof presentations[number]) => {
+      if (event.key === 'F2' && !item.missing) {
+        event.preventDefault();
+        beginRename(item);
+      } else if (event.key === 'Enter' && !item.missing) {
+        event.preventDefault();
+        beginRename(item);
+      } else if (event.key === 'Delete' && !item.missing) {
+        event.preventDefault();
+        remove(item.id, item.title);
+      }
+    };
+    const renderPresentationRow = (item: typeof presentations[number], showMenu = true) => (
+      <div
+        className={`presentation-item${active?.id === item.id ? ' active' : ''}`}
+        key={item.id}
+        onContextMenu={(event) => {
+          if (item.missing || !showMenu) return;
+          event.preventDefault();
+          setOpenMenuId(item.id);
+        }}
+      >
+        {renamingId === item.id ? <form className="rename-form" onSubmit={(event) => { event.preventDefault(); submitRename(item.id); }}>
+          <input
+            aria-label={`New name for ${item.title}`}
+            autoFocus
+            value={renameValue}
+            onChange={(event) => setRenameValue(event.target.value)}
+            onFocus={(event) => event.currentTarget.select()}
+            onKeyDown={(event) => { if (event.key === 'Escape') { event.preventDefault(); setRenamingId(null); } }}
+          />
+          <button type="submit">Save</button>
+        </form> : <button
+          className="presentation-link"
+          type="button"
+          ref={(element) => { presentationButtonRefs.current[item.id] = element; }}
+          onClick={() => {
+            if (item.missing) {
+              void world.locate(item.id);
+              return;
+            }
+            const pendingClick = presentationClickTimers.current[item.id];
+            if (pendingClick) {
+              window.clearTimeout(pendingClick);
+              delete presentationClickTimers.current[item.id];
+              beginRename(item);
+              return;
+            }
+            presentationClickTimers.current[item.id] = window.setTimeout(() => {
+              delete presentationClickTimers.current[item.id];
+              void world.open(item.id);
+            }, 220);
+          }}
+          onKeyDown={(event) => handlePresentationKeyDown(event, item)}
+          aria-label={item.missing ? `Locate missing presentation ${item.title}` : `${item.title}, ${slideCount(item) ?? 0} slides`}
+        >
+          <span aria-hidden="true">▱</span>
+          <span className="presentation-title">{item.title}{item.missing && ' (missing)'}</span>
+          {!item.missing && slideCount(item) !== undefined && <small aria-hidden="true">{slideCount(item)}</small>}
+        </button>}
+        {showMenu && !item.missing && renamingId !== item.id && <div className="item-menu" ref={openMenuId === item.id ? menuRef : undefined}>
+          {openMenuId === item.id && <div className="context-menu" role="menu" aria-label={`Actions for ${item.title}`}>
+            <button ref={menuItemRef} type="button" role="menuitem" onClick={() => beginRename(item)}>Rename</button>
+            <button className="destructive" type="button" role="menuitem" onClick={() => { setOpenMenuId(null); remove(item.id, item.title); }}>Delete</button>
+          </div>}
+        </div>}
+      </div>
+    );
     const slideCount = (item: typeof presentations[number]) => {
       try { return world.presentation(item.id)?.slides.length; } catch { return undefined; }
     };
@@ -219,13 +295,10 @@ function App() {
       <div className="sidebar-header"><strong>Elef World</strong><button className="icon-button" type="button" aria-label="Collapse sidebar" onClick={() => setSidebarOpen(false)}>‹</button></div>
       <label className="sidebar-search" role="search"><span aria-hidden="true">⌕</span><input ref={sidebarSearchRef} aria-label="Quick open presentations" placeholder="Quick open" value={sidebarQuery} onChange={(event) => setSidebarQuery(event.target.value)} /><kbd>⌘K</kbd></label>
       <button className="new-presentation" type="button" onClick={() => void world.createDraft()}>＋ New presentation</button>
-      <div className="sidebar-section-title"><span>Open editors</span><span className="sidebar-count">{active ? 1 : 0}</span></div>
-      <nav className="open-editors" aria-label="Open editors">{active && <button className="editor-tab" type="button" onClick={() => world.open(active.id)}><span aria-hidden="true">●</span>{active.title}<span aria-hidden="true">×</span></button>}</nav>
+      <div className="sidebar-section-title"><span>Current presentation</span><span className="sidebar-count">{active ? 1 : 0}</span></div>
+      <nav className="current-presentation" aria-label="Current presentation">{active && renderPresentationRow(active, false)}</nav>
       <div className="sidebar-section-title"><span>All files</span><span className="sidebar-count">{presentations.length}</span></div>
-      <nav aria-label="All presentations">{presentations.map((item) => <div className={`presentation-item${active?.id === item.id ? ' active' : ''}`} key={item.id}>
-        {renamingId === item.id ? <form className="rename-form" onSubmit={(event) => { event.preventDefault(); submitRename(item.id); }}><input aria-label={`New name for ${item.title}`} autoFocus value={renameValue} onChange={(event) => setRenameValue(event.target.value)} onKeyDown={(event) => { if (event.key === 'Escape') setRenamingId(null); }} /><button type="submit">Save</button></form> : <><button className="presentation-link" type="button" onClick={() => item.missing ? void world.locate(item.id) : world.open(item.id)}><span aria-hidden="true">▱</span><span className="presentation-title">{item.title}{item.missing && ' (missing)'}</span>{!item.missing && slideCount(item) !== undefined && <small aria-label={`${slideCount(item)} slides`}>{slideCount(item)}</small>}</button>
-        {!item.missing && <div className="item-menu" ref={openMenuId === item.id ? menuRef : undefined}><button ref={(element) => { menuTriggerRefs.current[item.id] = element; }} className="overflow-trigger" type="button" aria-label={`Actions for ${item.title}`} aria-expanded={openMenuId === item.id} aria-haspopup="menu" onClick={() => setOpenMenuId((id) => id === item.id ? null : item.id)}>⋯</button>{openMenuId === item.id && <div className="context-menu" role="menu"><button ref={menuItemRef} type="button" role="menuitem" onClick={() => { setOpenMenuId(null); setRenamingId(item.id); setRenameValue(item.title); }}>Rename</button><button className="destructive" type="button" role="menuitem" onClick={() => { setOpenMenuId(null); remove(item.id, item.title); }}>Delete</button></div>}</div>}</>}
-      </div>)}</nav>
+      <nav aria-label="All presentations">{presentations.map((item) => renderPresentationRow(item))}</nav>
       <footer className="sidebar-footer"><span>Elef World</span><span>Ctrl/Cmd+B Sidebar</span></footer>
     </aside>;
     if (import.meta.env.DEV && active) console.debug('[elef] workspace render', { action: 'presentation', phase: 'parse', presentationId: active.id });
