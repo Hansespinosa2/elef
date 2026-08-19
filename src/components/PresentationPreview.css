@@ -212,6 +212,17 @@
   box-shadow: inset 3px 0 var(--slide-accent);
   font: .96rem/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
+.presentation-codemirror .cm-hidden-markdown-syntax {
+  display: inline-block; width: 0; overflow: hidden;
+}
+.presentation-codemirror .cm-heading-source-active {
+  color: var(--slide-heading); font-family: 'Cormorant Garamond', Georgia, serif;
+  font-size: 2.35em; font-weight: 700; line-height: 1.02; letter-spacing: -.035em;
+}
+.presentation-codemirror .cm-slide-first[data-slide-layout="intro"] .cm-heading-source-active,
+.presentation-codemirror .cm-slide-anchor[data-slide-layout="intro"] .cm-heading-source-active {
+  font-size: 3.5em;
+}
 .presentation-codemirror .cm-selectionBackground,
 .presentation-codemirror .cm-content ::selection {
   background: color-mix(in srgb, var(--slide-accent) 24%, transparent);

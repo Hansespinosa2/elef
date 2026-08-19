@@ -199,6 +199,18 @@ describe('Obsidian-style presentation editor', () => {
       .some((block) => block.textContent?.includes('Heading'))).toBe(true);
   });
 
+  it('keeps an active H1 rendered at presentation size without exposing Markdown syntax', () => {
+    const markdown = '# ThisHeader';
+    render(markdown);
+    const editor = EditorView.findFromDOM(container.querySelector<HTMLElement>('.cm-editor')!);
+
+    act(() => editor.dispatch({ selection: { anchor: markdown.indexOf('Header') } }));
+
+    expect(container.querySelector('.cm-source-revealed')).toBeNull();
+    expect(container.querySelector('.cm-heading-source-active')).not.toBeNull();
+    expect(container.querySelector('.cm-heading-source-active')?.textContent).not.toContain('# ');
+  });
+
   it('reveals a fenced code block as one coherent source unit', () => {
     const markdown = '# One\n\n```ts\nconst value = 1;\n```\n\nAfter code';
     render(markdown);
@@ -289,6 +301,10 @@ describe('Obsidian-style presentation editor', () => {
 
     expect(editor.state.selection.main.head).toBe(source.length);
     expect(document.activeElement).toBe(editor.contentDOM);
+  });
+
+  it('renders an empty new intro H1 without creating an invalid decoration range', () => {
+    expect(() => render(':::slide-layout{intro}\n# ')).not.toThrow();
   });
 
   it('preserves layout metadata when source content is edited', () => {

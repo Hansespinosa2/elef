@@ -365,6 +365,19 @@ class FrontMatterWidget extends WidgetType {
   }
 }
 
+class HiddenMarkdownSyntaxWidget extends WidgetType {
+  toDOM(): HTMLElement {
+    const element = document.createElement('span');
+    element.className = 'cm-hidden-markdown-syntax';
+    element.setAttribute('aria-hidden', 'true');
+    return element;
+  }
+
+  ignoreEvent(): boolean {
+    return true;
+  }
+}
+
 function activeBlockForSelection(blocks: MarkdownBlockRange[], state: EditorState): MarkdownBlockRange | null {
   const selection = state.selection.main;
   return blocks.find((block) => selection.head >= block.from && selection.head <= block.to) || null;
@@ -414,6 +427,7 @@ function livePreviewDecorations(state: EditorState): DecorationSet {
   const blocks = markdownBlockRanges(source);
   const math = findMathRanges(source);
   const activeBlock = activeBlockForSelection(blocks, state);
+  const activeHeadingBlock = activeBlock && /^#\s+/.test(activeBlock.markdown) ? activeBlock : null;
   const reveal = activeRevealRange(state, activeBlock, math);
   const frontMatterEnd = slides[0]?.start ?? 0;
   const editingFrontMatter = frontMatterEnd > 0 && state.selection.main.head < frontMatterEnd;
@@ -476,7 +490,12 @@ function livePreviewDecorations(state: EditorState): DecorationSet {
           ? (activeBlock?.slideIndex === slide.index ? 'cm-slide-first' : 'cm-slide-anchor')
           : '',
         number === lastLine.number ? 'cm-slide-last' : '',
-        reveal && line.to >= reveal.from && line.from <= reveal.to ? 'cm-source-revealed' : '',
+        reveal
+          && activeHeadingBlock?.from !== activeBlock?.from
+          && line.to >= reveal.from
+          && line.from <= reveal.to
+          ? 'cm-source-revealed'
+          : '',
       ].filter(Boolean).join(' ');
       decorations.push({
         from: line.from,
@@ -500,6 +519,24 @@ function livePreviewDecorations(state: EditorState): DecorationSet {
   for (const block of blocks) {
     const slide = slides[block.slideIndex];
     const firstBlock = blocks.find((candidate) => candidate.slideIndex === block.slideIndex);
+    if (activeHeadingBlock?.from === block.from) {
+      const prefix = block.markdown.match(/^#\s+/)?.[0];
+      if (prefix) {
+        decorations.push({
+          from: block.from,
+          to: block.from + prefix.length,
+          value: Decoration.replace({ widget: new HiddenMarkdownSyntaxWidget() }),
+        });
+        if (block.from + prefix.length < block.to) {
+          decorations.push({
+            from: block.from + prefix.length,
+            to: block.to,
+            value: Decoration.mark({ class: 'cm-heading-source-active' }),
+          });
+        }
+        continue;
+      }
+    }
     const fragments = activeBlock?.from === block.from && activeBlock.to === block.to && reveal
       ? [
         renderedFragment(source, block, block.from, Math.max(block.from, reveal.from - 1)),
