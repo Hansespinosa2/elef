@@ -22,6 +22,12 @@ interface Diagnostics {
   caretRangeFromPoint: boolean;
 }
 
+interface KeyOutcome {
+  key: string;
+  defaultPrevented: boolean;
+  target: string;
+}
+
 async function diagnostics(): Promise<Diagnostics> {
   return browser.execute(() => {
     const selection = window.getSelection();
@@ -115,9 +121,35 @@ async function placeCaret(selector: string, offset: number): Promise<void> {
   }, selector, offset);
 }
 
-async function pressDown(): Promise<void> {
+async function pressDown(): Promise<KeyOutcome> {
+  await browser.execute(() => {
+    const state = window as Window & {
+      __elefArrowOutcome?: KeyOutcome;
+      __elefArrowListener?: (event: KeyboardEvent) => void;
+    };
+    state.__elefArrowOutcome = undefined;
+    state.__elefArrowListener = (event) => {
+      if (event.key !== 'ArrowDown') return;
+      queueMicrotask(() => {
+        state.__elefArrowOutcome = {
+          key: event.key,
+          defaultPrevented: event.defaultPrevented,
+          target: event.target instanceof Element ? event.target.tagName.toLowerCase() : 'unknown',
+        };
+      });
+    };
+    document.addEventListener('keydown', state.__elefArrowListener, true);
+  });
   await browser.action('key').down('\uE015').up('\uE015').perform();
   await browser.pause(50);
+  return browser.execute(() => {
+    const state = window as Window & {
+      __elefArrowOutcome?: KeyOutcome;
+      __elefArrowListener?: (event: KeyboardEvent) => void;
+    };
+    if (state.__elefArrowListener) document.removeEventListener('keydown', state.__elefArrowListener, true);
+    return state.__elefArrowOutcome || { key: 'ArrowDown', defaultPrevented: false, target: 'unknown' };
+  }) as unknown as KeyOutcome;
 }
 
 describe('Arrow navigation in the real Tauri WebView', () => {
@@ -180,6 +212,87 @@ describe('Arrow navigation in the real Tauri WebView', () => {
       || result.selection?.after !== ''
     ) {
       throw new Error(`Slide boundary navigation failed: ${JSON.stringify(result)}`);
+    }
+  });
+
+  it('moves to the end of the last visual paragraph line without scrolling', async () => {
+    const overflowingSource = `${longParagraph} `.repeat(12);
+    await resetDocument(sourceFor(overflowingSource));
+    const viewport = await browser.$('.slide-viewport');
+    const clickPoint = await browser.execute(() => {
+      const slide = document.querySelector<HTMLElement>('article[aria-label="Slide 1"]');
+      const paragraph = slide?.querySelector<HTMLElement>('p');
+      if (!slide || !paragraph) throw new Error('Missing real slide paragraph for visual-line click');
+      const slideRect = slide.getBoundingClientRect();
+      const paragraphRect = paragraph.getBoundingClientRect();
+      const lineHeight = Number.parseFloat(getComputedStyle(paragraph).lineHeight);
+      const visibleBottom = Math.min(slideRect.bottom, paragraphRect.bottom);
+      const viewportRect = slide.parentElement?.getBoundingClientRect();
+      if (!viewportRect) throw new Error('Missing slide viewport for visual-line click');
+      const scale = window.devicePixelRatio || 1;
+      return {
+        x: Math.round((paragraphRect.left - viewportRect.left + Math.max(1, Math.min(paragraphRect.width - 1, 12))) / scale),
+        y: Math.round((paragraphRect.top - viewportRect.top + Math.max(1, Math.min(paragraphRect.height - 1, visibleBottom - paragraphRect.top - lineHeight / 2))) / scale),
+        paragraph: {
+          left: paragraphRect.left,
+          top: paragraphRect.top,
+          right: paragraphRect.right,
+          bottom: paragraphRect.bottom,
+        },
+        slide: {
+          top: slideRect.top,
+          bottom: slideRect.bottom,
+          scrollTop: slide.scrollTop,
+          scrollHeight: slide.scrollHeight,
+          clientHeight: slide.clientHeight,
+        },
+        viewport: { left: viewportRect.left, top: viewportRect.top },
+        window: {
+          innerWidth,
+          innerHeight,
+          outerWidth,
+          outerHeight,
+          devicePixelRatio: window.devicePixelRatio,
+        },
+        lineHeight,
+      };
+    }) as unknown as {
+      x: number;
+      y: number;
+      paragraph: { left: number; top: number; right: number; bottom: number };
+      slide: { top: number; bottom: number; scrollTop: number; scrollHeight: number; clientHeight: number };
+      lineHeight: number;
+    };
+    await viewport.click({ x: clickPoint.x, y: clickPoint.y });
+    const before = await diagnostics();
+    if (
+      !before.selection
+      || !before.caretRect
+      || !before.scroll
+      || before.selection.after === ''
+      || before.caretRect.bottom > clickPoint.slide.bottom + 1
+      || before.scroll.height <= before.scroll.clientHeight
+    ) {
+      throw new Error(`Click did not place the caret on the final visible line before its end: ${JSON.stringify({ clickPoint, before })}`);
+    }
+    const outcome = await pressDown();
+    const after = await diagnostics();
+    if (
+      !after.selection
+      || !after.caretRect
+      || !after.scroll
+      || after.selection.before === before.selection.before
+      || after.selection.after === ''
+      || after.caretRect.top < before.caretRect.top - 1
+      || after.caretRect.bottom > clickPoint.slide.bottom + 1
+      || after.scroll.top > before.scroll.top + 1
+    ) {
+      throw new Error(`Down failed to reach the end of the last visible line without scrolling: ${JSON.stringify({
+        click: clickPoint,
+        before,
+        after,
+        outcome,
+      })}`);
     }
   });
 });

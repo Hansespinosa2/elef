@@ -14,6 +14,14 @@ interface InitialFrontMatter {
   eol: string;
 }
 
+export interface SlideSourceRange {
+  index: number;
+  start: number;
+  end: number;
+  delimiterStart: number | null;
+  delimiterEnd: number | null;
+}
+
 function sourceLines(source: string): SourceLine[] {
   const lines: SourceLine[] = [];
   const pattern = /([^\r\n]*)(\r\n|\n|\r|$)/g;
@@ -38,6 +46,46 @@ function initialFrontMatter(source: string): InitialFrontMatter | null {
   if (!metadataLines.some((line) => /^[A-Za-z_][\w-]*\s*:/.test(line.text))) return null;
   const eol = lines.find((line) => line.ending)?.ending || '\n';
   return { lines, closingLine, bodyStart: lines[closingLine].end, eol };
+}
+
+/**
+ * Returns the exact source ranges for slides. Separators inside fenced code and
+ * the initial metadata block are intentionally excluded from slide content.
+ */
+export function slideSourceRanges(source: string): SlideSourceRange[] {
+  const frontMatter = initialFrontMatter(source);
+  const bodyStart = frontMatter?.bodyStart ?? 0;
+  const lines = sourceLines(source);
+  const ranges: SlideSourceRange[] = [];
+  let slideStart = bodyStart;
+  let fence: { marker: string; length: number } | null = null;
+
+  for (const line of lines) {
+    if (line.end <= bodyStart) continue;
+    const nextFence = isFenceStart(line.text);
+    if (nextFence) {
+      fence = fence && fence.marker === nextFence.marker && nextFence.length >= fence.length ? null : nextFence;
+    }
+    if (!fence && /^---[ \t]*$/.test(line.text)) {
+      ranges.push({
+        index: ranges.length,
+        start: slideStart,
+        end: line.start,
+        delimiterStart: line.start,
+        delimiterEnd: line.end,
+      });
+      slideStart = line.end;
+    }
+  }
+
+  ranges.push({
+    index: ranges.length,
+    start: slideStart,
+    end: source.length,
+    delimiterStart: null,
+    delimiterEnd: null,
+  });
+  return ranges;
 }
 
 function normalizeThemeValue(value: string): PresentationTheme {

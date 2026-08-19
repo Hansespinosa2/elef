@@ -1,21 +1,22 @@
 // @vitest-environment jsdom
 import { act } from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
-import { PresentationPreview, serializeSlide } from '../../src/components/PresentationPreview';
-import { parseMarkdown } from '../../src/domain/presentation';
+import { redo, undo } from '@codemirror/commands';
+import { EditorView } from '@codemirror/view';
+import { PresentationPreview } from '../../src/components/PresentationPreview';
+import { findMathRanges, markdownBlockRanges } from '../../src/components/PresentationEditor';
+import { parseMarkdown, slideSourceRanges } from '../../src/domain/presentation';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-describe('PresentationPreview interactions', () => {
+describe('Obsidian-style presentation editor', () => {
   let container: HTMLDivElement;
   let root: Root;
 
   afterEach(() => {
     act(() => root?.unmount());
     container?.remove();
-    delete (Range.prototype as Range & { getBoundingClientRect?: unknown }).getBoundingClientRect;
-    vi.useRealTimers();
   });
 
   function render(markdown: string, onSourceChange = () => undefined) {
@@ -32,531 +33,324 @@ describe('PresentationPreview interactions', () => {
         />,
       );
     });
-    return container.querySelector<HTMLElement>('.slide')!;
   }
 
-  it('renders Add and Delete controls and sends canonical source updates', () => {
+  it('uses one CodeMirror live-preview canvas with no separate source panel', () => {
+    render('# One\n\nFirst body\n---\n# Two');
+    expect(container.querySelectorAll('.cm-editor')).toHaveLength(1);
+    expect(container.querySelectorAll('.slide[contenteditable="true"]')).toHaveLength(0);
+    expect(container.querySelector('.obsidian-source-panel')).toBeNull();
+    expect(container.querySelector('.obsidian-editor-pages')).toBeNull();
+    expect(container.querySelectorAll('.cm-slide-first')).toHaveLength(2);
+    expect(container.querySelectorAll('.cm-rendered-block')).not.toHaveLength(0);
+  });
+
+  it('presents blocks as members of coherent fixed slide surfaces', () => {
+    render('# One\n\nFirst body\n---\n# Two\n\nSecond body');
+    const surfaces = Array.from(container.querySelectorAll<HTMLElement>('.cm-slide-first'));
+    expect(surfaces).toHaveLength(2);
+    expect(surfaces.map((surface) => surface.dataset.slideLabel)).toEqual(['Slide 1', 'Slide 2']);
+
+    const renderedBlocks = Array.from(container.querySelectorAll<HTMLElement>('.cm-rendered-block'));
+    expect(renderedBlocks.length).toBeGreaterThanOrEqual(2);
+    expect(renderedBlocks.every((block) => block.dataset.slideSurface === block.dataset.slideIndex)).toBe(true);
+    expect(container.querySelectorAll('.cm-slide-boundary')).toHaveLength(2);
+    expect(container.querySelectorAll('.cm-slide-page-fill')).toHaveLength(2);
+    const editor = EditorView.findFromDOM(container.querySelector<HTMLElement>('.cm-editor')!);
+    expect(editor.state.doc.toString()).toContain('\n---\n');
+    expect(container.querySelector('.cm-content')?.textContent).not.toContain('---');
+  });
+
+  it('keeps the continuous editor and slide surfaces free of nested scrollbars', () => {
+    render('# One\n\nBody\n---\n# Two');
+    const scroller = container.querySelector<HTMLElement>('.cm-scroller')!;
+    expect(getComputedStyle(scroller).overflow).toBe('visible');
+    expect(container.querySelectorAll('.cm-slide-first .cm-scroller')).toHaveLength(0);
+    expect(container.querySelectorAll('.cm-slide-first [style*="overflow"]')).toHaveLength(0);
+  });
+
+  it('keeps front matter out of the rendered slide canvas', () => {
+    const source = '---\npresentationTheme: light\n---\n# One';
+    expect(slideSourceRanges(source)[0]?.start).toBeGreaterThan(0);
+    render(source);
+    expect(container.querySelector('.cm-frontmatter-widget')).not.toBeNull();
+    expect(Array.from(container.querySelectorAll('.cm-line')).map((line) => line.textContent)).not.toContain('presentationTheme: light');
+    expect(container.querySelector('.cm-line')?.textContent).toContain('# One');
+  });
+
+  it('reveals compact front matter as settings source without turning it into a slide', () => {
+    render('---\npresentationTheme: light\n---\n# One');
+    const settings = container.querySelector<HTMLButtonElement>('.cm-frontmatter-widget')!;
+    act(() => settings.click());
+
+    const metadataLines = Array.from(container.querySelectorAll<HTMLElement>('.cm-frontmatter-line'));
+    expect(metadataLines.map((line) => line.textContent)).toContain('presentationTheme: light');
+    expect(metadataLines.every((line) => !line.classList.contains('cm-slide-line'))).toBe(true);
+    expect(container.querySelectorAll('.cm-slide-first')).toHaveLength(1);
+    expect(container.querySelector('.cm-frontmatter-widget')).toBeNull();
+  });
+
+  it('reveals only the clicked rendered Markdown block in the CodeMirror canvas', () => {
+    const markdown = '# One\n\nSecond paragraph\n\nThird paragraph';
+    render(markdown);
+    const secondBlock = markdownBlockRanges(markdown)[1];
+    const rendered = container.querySelector<HTMLElement>(`[data-block-from="${secondBlock.from}"]`)!;
+    expect(rendered.textContent).toContain('Second paragraph');
+
+    act(() => rendered.click());
+
+    const sourceLines = Array.from(container.querySelectorAll<HTMLElement>('.cm-line'))
+      .map((line) => line.textContent);
+    expect(sourceLines).toContain('Second paragraph');
+    expect(container.querySelector(`[data-block-from="${secondBlock.from}"]`)).toBeNull();
+    expect(container.querySelectorAll('.cm-rendered-block')).toHaveLength(2);
+    expect(Array.from(container.querySelectorAll<HTMLElement>('.cm-source-revealed'))
+      .map((line) => line.textContent)).toContain('Second paragraph');
+    expect(container.querySelectorAll('.cm-source-revealed')).toHaveLength(1);
+  });
+
+  it('reveals one source line from a clicked paragraph while the rest of the slide stays rendered', () => {
+    const markdown = '# One\n\nFirst paragraph line\nContinuation line\n\nNeighboring block';
+    render(markdown);
+    const paragraph = markdownBlockRanges(markdown)[1];
+    const rendered = container.querySelector<HTMLElement>(`[data-block-from="${paragraph.from}"]`)!;
+    rendered.getBoundingClientRect = () => ({
+      x: 0, y: 0, top: 0, right: 100, bottom: 100, left: 0, width: 100, height: 100,
+      toJSON: () => undefined,
+    });
+
+    act(() => rendered.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 0, clientY: 75 })));
+
+    const revealed = Array.from(container.querySelectorAll<HTMLElement>('.cm-source-revealed'));
+    expect(revealed).toHaveLength(1);
+    expect(revealed[0].textContent).toBe('Continuation line');
+    const remainingRendered = Array.from(container.querySelectorAll<HTMLElement>('.cm-rendered-block'));
+    expect(remainingRendered.some((block) => block.textContent?.includes('First paragraph line'))).toBe(true);
+    expect(remainingRendered.some((block) => block.textContent?.includes('Neighboring block'))).toBe(true);
+    expect(remainingRendered.some((block) => block.textContent?.includes('One'))).toBe(true);
+  });
+
+  it('shows heading syntax only while its source line is active', () => {
+    const markdown = 'Intro paragraph\n\n## Heading\n\nAfter heading';
+    render(markdown);
+    const editor = EditorView.findFromDOM(container.querySelector<HTMLElement>('.cm-editor')!);
+    const headingFrom = markdown.indexOf('## Heading');
+    const afterFrom = markdown.indexOf('After heading');
+
+    expect(container.querySelector('.cm-content')?.textContent).not.toContain('## Heading');
+    act(() => editor.dispatch({ selection: { anchor: headingFrom } }));
+    expect(Array.from(container.querySelectorAll<HTMLElement>('.cm-source-revealed'))
+      .map((line) => line.textContent)).toEqual(['## Heading']);
+    expect(container.querySelectorAll('.cm-rendered-block')).toHaveLength(2);
+
+    act(() => editor.dispatch({ selection: { anchor: afterFrom } }));
+    expect(container.querySelector('.cm-content')?.textContent).not.toContain('## Heading');
+    expect(Array.from(container.querySelectorAll<HTMLElement>('.cm-rendered-block'))
+      .some((block) => block.textContent?.includes('Heading'))).toBe(true);
+  });
+
+  it('reveals a fenced code block as one coherent source unit', () => {
+    const markdown = '# One\n\n```ts\nconst value = 1;\n```\n\nAfter code';
+    render(markdown);
+    const fence = markdownBlockRanges(markdown)[1];
+    const rendered = container.querySelector<HTMLElement>(`[data-block-from="${fence.from}"]`)!;
+
+    act(() => rendered.click());
+
+    expect(Array.from(container.querySelectorAll<HTMLElement>('.cm-source-revealed'))
+      .map((line) => line.textContent)).toEqual(['```ts', 'const value = 1;', '```']);
+    expect(Array.from(container.querySelectorAll<HTMLElement>('.cm-rendered-block'))
+      .some((block) => block.textContent?.includes('After code'))).toBe(true);
+  });
+
+  it('keeps edits in CodeMirror history while source fragments rerender', () => {
     const changes: string[] = [];
-    render('# One\n---\n# Two', (source) => changes.push(source));
-    const addButtons = Array.from(container.querySelectorAll<HTMLButtonElement>('.slide-add-button'));
-    expect(addButtons).toHaveLength(2);
-    expect(addButtons[0].textContent).toBe('+');
-    expect(addButtons[0].getAttribute('aria-label')).toBe('Add slide after slide 1');
-    act(() => addButtons[0].click());
+    const markdown = '# One\n\nEditable line\nContinuation line\n\nAfter';
+    render(markdown, (next) => changes.push(next));
+    const editor = EditorView.findFromDOM(container.querySelector<HTMLElement>('.cm-editor')!);
+    const from = markdown.indexOf('Editable line');
+    act(() => editor.dispatch({ selection: { anchor: from } }));
+
+    act(() => editor.dispatch({ changes: { from, to: from + 'Editable'.length, insert: 'Changed' } }));
+    expect(changes.at(-1)).toContain('Changed line');
+    act(() => { expect(undo(editor)).toBe(true); });
+    expect(editor.state.doc.toString()).toBe(markdown);
+    act(() => { expect(redo(editor)).toBe(true); });
+    expect(editor.state.doc.toString()).toContain('Changed line');
+    expect(container.querySelectorAll('.cm-source-revealed')).toHaveLength(1);
+  });
+
+  it('keeps slide controls source-backed and preserves the delimiter', () => {
+    const changes: string[] = [];
+    render('# One\n---\n# Two', (next) => changes.push(next));
+    act(() => container.querySelector<HTMLButtonElement>('[aria-label="Add slide after slide 1"]')!.click());
     expect(changes.at(-1)).toBe('# One\n---\n\n---\n# Two');
-    const deleteButton = container.querySelector<HTMLButtonElement>('.slide-delete-button')!;
-    expect(deleteButton.textContent).toBe('−');
-    expect(deleteButton.getAttribute('aria-label')).toBe('Delete slide 2');
-    act(() => deleteButton.click());
-    expect(changes.at(-1)).toBe('# One');
-    expect(container.querySelector('.slide-undo-notice')).not.toBeNull();
+    act(() => root.unmount());
+    container.remove();
+    const deleted: string[] = [];
+    render('# One\n---\n# Two', (next) => deleted.push(next));
+    act(() => container.querySelector<HTMLButtonElement>('[aria-label="Delete slide 2"]')!.click());
+    expect(deleted.at(-1)).toBe('# One');
   });
 
-  it('hides layout metadata, applies the intro class, and preserves it on visual edits', () => {
+  it('hides layout metadata and applies intro layout hooks', () => {
     const changes: string[] = [];
-    const slide = render(':::slide-layout{intro}\n# Welcome\n\nSubtitle', (source) => changes.push(source));
-    expect(slide.classList.contains('slide-intro')).toBe(true);
-    expect(slide.textContent).toContain('Welcome');
-    expect(slide.textContent).not.toContain('slide-layout');
-    act(() => slide.querySelector<HTMLElement>('.slide-preview-block')!.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })));
-    const textarea = slide.querySelector<HTMLTextAreaElement>('textarea')!;
-    act(() => {
-      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(textarea, '# Updated');
-      textarea.dispatchEvent(new Event('input', { bubbles: true }));
-    });
+    render(':::slide-layout{intro}\n# Welcome\n\nSubtitle', (source) => changes.push(source));
+    expect(container.querySelector('.cm-slide-first[data-slide-layout="intro"]')).not.toBeNull();
+    const rendered = container.querySelector<HTMLElement>('.cm-rendered-block')!;
+    expect(rendered.textContent).toContain('Welcome');
+    expect(rendered.textContent).not.toContain('slide-layout');
+  });
+
+  it('preserves layout metadata when source content is edited', () => {
+    const changes: string[] = [];
+    const source = ':::slide-layout{intro}\n# Welcome';
+    render(source, (next) => changes.push(next));
+    const editor = EditorView.findFromDOM(container.querySelector<HTMLElement>('.cm-editor')!);
+    const from = source.indexOf('Welcome');
+    act(() => editor.dispatch({ changes: { from, to: from + 'Welcome'.length, insert: 'Updated' } }));
     expect(changes.at(-1)).toContain(':::slide-layout{intro}');
     expect(changes.at(-1)).toContain('# Updated');
   });
 
-  it('preserves layout metadata when edited content is blurred', () => {
+  it('renders valid inline and display TeX without changing source', () => {
+    render('Before $x=3$.\n\n$$\ny = mx + b\n$$');
+    expect(container.querySelectorAll('.katex')).not.toHaveLength(0);
+    expect(findMathRanges('Before $x=3$.')).toEqual([
+      { from: 7, to: 12, source: 'x=3', display: false, valid: true },
+    ]);
+  });
+
+  it('reveals clicked math source and selects its exact range on double-click', () => {
+    const markdown = '# Intro\n\nMath $x=3$ here.';
+    render(markdown);
+    const editor = EditorView.findFromDOM(container.querySelector<HTMLElement>('.cm-editor')!);
+    const from = markdown.indexOf('$x=3$');
+    const math = container.querySelector<HTMLElement>('.cm-rendered-block .katex')!;
+
+    act(() => math.click());
+    expect(editor.state.selection.main).toMatchObject({ from, to: from });
+    expect(container.querySelector('.cm-content')?.textContent).toContain('Math $x=3$ here.');
+
+    act(() => editor.dispatch({ selection: { anchor: 0 } }));
+    const renderedAgain = container.querySelector<HTMLElement>('.cm-rendered-block .katex')!;
+    act(() => renderedAgain.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })));
+    expect(editor.state.selection.main).toMatchObject({ from, to: from + '$x=3$'.length });
+  });
+
+  it('leaves incomplete or invalid TeX visible with an error state', () => {
+    render('Broken $x^2');
+    expect(container.querySelector('.cm-math-invalid-source')).not.toBeNull();
+    expect(container.querySelector('.cm-content')?.textContent).toContain('Broken $x^2');
+  });
+
+  it('toggles a task marker through the source transaction without exposing the line', () => {
     const changes: string[] = [];
-    const slide = render(':::slide-layout{intro}\n# Welcome', (source) => changes.push(source));
-    act(() => slide.click());
-    slide.querySelector('h1')!.textContent = 'Updated';
-    act(() => slide.dispatchEvent(new FocusEvent('focusout', { bubbles: true })));
-    expect(changes.at(-1)).toContain(':::slide-layout{intro}');
-    expect(changes.at(-1)).toContain('# Updated');
+    const source = '# Tasks\n\n- [ ] Ship the editor';
+    render(source, (next) => changes.push(next));
+    const editor = EditorView.findFromDOM(container.querySelector<HTMLElement>('.cm-editor')!);
+    act(() => editor.dispatch({ selection: { anchor: 0 } }));
+    const checkbox = container.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
+    expect(checkbox).not.toBeNull();
+
+    act(() => {
+      checkbox.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+      checkbox.click();
+    });
+
+    expect(changes.at(-1)).toBe('# Tasks\n\n- [x] Ship the editor');
+    expect(container.querySelector('.cm-content')?.textContent).not.toContain('- [ ]');
+    expect(Array.from(container.querySelectorAll<HTMLElement>('.cm-source-revealed'))
+      .every((line) => !line.textContent?.includes('Ship the editor'))).toBe(true);
   });
 
-  it('keeps one blank slide after deleting the only slide', () => {
+  it('keeps overflow inline with a scrollbar and non-blocking warning', () => {
+    const source = ['# One', ...Array.from({ length: 40 }, (_, index) => `Line ${index}`)].join('\n');
+    render(source);
+    const boundary = container.querySelector<HTMLElement>('.cm-slide-boundary')!;
+
+    expect(boundary.querySelector('.cm-slide-overflow-warning')).not.toBeNull();
+    expect(getComputedStyle(boundary).overflowY).toBe('visible');
+    expect(boundary.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it('reveals a table as one bounded structured unit', () => {
+    const markdown = '# Data\n\n| A | B |\n| --- | --- |\n| 1 | 2 |\n| 3 | 4 |';
+    render(markdown);
+    const editor = EditorView.findFromDOM(container.querySelector<HTMLElement>('.cm-editor')!);
+    act(() => editor.dispatch({ selection: { anchor: 0 } }));
+    const table = container.querySelector<HTMLElement>('.cm-rendered-block table')!;
+    expect(table).not.toBeNull();
+
+    act(() => table.click());
+
+    expect(Array.from(container.querySelectorAll<HTMLElement>('.cm-source-revealed'))
+      .map((line) => line.textContent)).toEqual([
+        '| A | B |',
+        '| --- | --- |',
+        '| 1 | 2 |',
+        '| 3 | 4 |',
+      ]);
+  });
+
+  it('cancels split inspection without changing source, selection, or history', () => {
     const changes: string[] = [];
-    render('# One', (source) => changes.push(source));
-    act(() => container.querySelector<HTMLButtonElement>('.slide-delete-button')!.click());
-    expect(changes).toEqual(['']);
-    expect(container.querySelector('.slide-undo-notice')).not.toBeNull();
+    const source = ['# One', ...Array.from({ length: 19 }, (_, index) => `Body ${index}`), '## Two', 'More'].join('\n');
+    render(source, (next) => changes.push(next));
+    const editor = EditorView.findFromDOM(container.querySelector<HTMLElement>('.cm-editor')!);
+    act(() => editor.dispatch({ selection: { anchor: source.indexOf('Body') } }));
+    const before = editor.state.selection.main;
+
+    act(() => container.querySelector<HTMLButtonElement>('[data-slide-action="preview-split"]')!.click());
+    act(() => Array.from(container.querySelectorAll<HTMLButtonElement>('[role="dialog"] button'))
+      .find((button) => button.textContent === 'Cancel')!.click());
+
+    expect(changes).toHaveLength(0);
+    expect(editor.state.doc.toString()).toBe(source);
+    expect(editor.state.selection.main).toEqual(before);
   });
 
-  it('creates a slide when the third dash is typed on an empty line', () => {
+  it('does not change source when entering and leaving presentation mode', () => {
+    const source = '# One\n---\n# Two';
     const changes: string[] = [];
-    let currentSource = '# One';
-    const update = (source: string) => {
-      currentSource = source;
-      changes.push(source);
-      act(() => {
-        root.render(
-          <PresentationPreview
-            presentation={parseMarkdown(currentSource)}
-            theme="light"
-            source={currentSource}
-            onSourceChange={update}
-          />,
-        );
-      });
-    };
-    container = document.createElement('div');
-    document.body.append(container);
-    root = createRoot(container);
-    act(() => {
-      root.render(
-        <PresentationPreview
-          presentation={parseMarkdown(currentSource)}
-          theme="light"
-          source={currentSource}
-          onSourceChange={update}
-        />,
-      );
-    });
-    const slide = container.querySelector<HTMLElement>('.slide')!;
-    act(() => slide.click());
-    const paragraph = document.createElement('p');
-    const text = document.createTextNode('--');
-    paragraph.append(text);
-    slide.append(paragraph);
-    const range = document.createRange();
-    range.setStart(text, 2);
-    range.collapse(true);
-    window.getSelection()!.removeAllRanges();
-    window.getSelection()!.addRange(range);
+    render(source, (next) => changes.push(next));
+    const editor = EditorView.findFromDOM(container.querySelector<HTMLElement>('.cm-editor')!);
+    act(() => editor.dispatch({ selection: { anchor: source.indexOf('# Two') } }));
 
-    act(() => {
-      slide.dispatchEvent(new KeyboardEvent('keydown', { key: '-', bubbles: true }));
-    });
+    act(() => container.querySelector<HTMLButtonElement>('.presentation-editor-toolbar button')?.click());
+    expect(container.querySelector('.presentation-playback')).not.toBeNull();
+    act(() => Array.from(container.querySelectorAll<HTMLButtonElement>('.presentation-editor-toolbar button'))
+      .find((button) => button.textContent === 'Back to editor')?.click());
 
-    expect(changes.at(-1)).toBe('# One\n---\n');
-    expect(currentSource).toBe('# One\n---\n');
-    expect(container.querySelectorAll<HTMLElement>('.slide')).toHaveLength(2);
-    expect(container.querySelectorAll<HTMLElement>('.slide')[0].textContent).not.toContain('--');
-    expect(container.querySelectorAll<HTMLElement>('.slide')[1].querySelector('.empty-slide-heading')).not.toBeNull();
+    expect(changes).toHaveLength(0);
+    expect(editor.state.doc.toString()).toBe(source);
   });
 
-  it('deletes an empty slide when Backspace is pressed', () => {
+  it('keeps playback separate from the editing authority', () => {
+    render('# One\n---\n# Two');
+    act(() => container.querySelector<HTMLButtonElement>('button')!.click());
+    expect(container.querySelector('.presentation-playback')).not.toBeNull();
+    expect(container.querySelector('.presentation-playback [contenteditable="true"]')).toBeNull();
+    expect(container.querySelector('.presentation-live-canvas')?.classList.contains('hidden')).toBe(true);
+  });
+
+  it('previews an automatic split without changing source, then supports confirmation and undo', () => {
     const changes: string[] = [];
-    render('# One\n---\n', (source) => changes.push(source));
-    const slide = container.querySelectorAll<HTMLElement>('.slide')[1];
-    act(() => slide.click());
-    act(() => {
-      slide.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true }));
-    });
-    expect(changes.at(-1)).toBe('# One');
-  });
+    const overflowing = ['# One', ...Array.from({ length: 19 }, (_, index) => `Line ${index}`), '## Two', 'Ending'].join('\n');
+    render(overflowing, (next) => changes.push(next));
+    const preview = container.querySelector<HTMLButtonElement>('[data-slide-action="preview-split"]')!;
+    expect(preview).not.toBeNull();
+    expect(container.querySelector('.cm-slide-boundary.may-overflow')).not.toBeNull();
 
-  it('keeps a newly added slide when Backspace follows visible text', () => {
-    let currentSource = '# One';
-    const update = (source: string) => {
-      currentSource = source;
-      act(() => {
-        root.render(
-          <PresentationPreview
-            presentation={parseMarkdown(currentSource)}
-            theme="light"
-            source={currentSource}
-            onSourceChange={update}
-          />,
-        );
-      });
-    };
-    container = document.createElement('div');
-    document.body.append(container);
-    root = createRoot(container);
-    act(() => {
-      root.render(
-        <PresentationPreview
-          presentation={parseMarkdown(currentSource)}
-          theme="light"
-          source={currentSource}
-          onSourceChange={update}
-        />,
-      );
-    });
+    act(() => preview.click());
+    expect(changes).toHaveLength(0);
+    expect(container.querySelector('[role="dialog"]')?.textContent).toContain('has not changed');
 
-    act(() => container.querySelector<HTMLButtonElement>('.slide-add-button')!.click());
-    const newSlide = container.querySelectorAll<HTMLElement>('.slide')[1];
-    const paragraph = document.createElement('p');
-    const text = document.createTextNode('--');
-    paragraph.append(text);
-    newSlide.append(paragraph);
-    const range = document.createRange();
-    range.setStart(text, 2);
-    range.collapse(true);
-    window.getSelection()!.removeAllRanges();
-    window.getSelection()!.addRange(range);
+    act(() => Array.from(container.querySelectorAll<HTMLButtonElement>('[role="dialog"] button'))
+      .find((button) => button.textContent === 'Confirm split')!.click());
+    expect(changes.at(-1)).toContain('\n---\n## Two');
 
-    act(() => {
-      newSlide.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true }));
-    });
-
-    expect(currentSource).toBe('# One\n---\n');
-    expect(container.querySelectorAll('.slide')).toHaveLength(2);
-    expect(container.querySelector('.empty-slide-heading')).not.toBeNull();
-  });
-
-  it('restores the exact source when Undo is activated', () => {
-    const changes: string[] = [];
-    let currentSource = '# One\n---\n# Two';
-    container = document.createElement('div');
-    document.body.append(container);
-    root = createRoot(container);
-    const update = (source: string) => {
-      currentSource = source;
-      changes.push(source);
-      root.render(
-        <PresentationPreview
-          presentation={parseMarkdown(currentSource)}
-          theme="light"
-          source={currentSource}
-          onSourceChange={update}
-        />,
-      );
-    };
-    act(() => {
-      root.render(
-        <PresentationPreview
-          presentation={parseMarkdown(currentSource)}
-          theme="light"
-          source={currentSource}
-          onSourceChange={update}
-        />,
-      );
-    });
-    act(() => container.querySelectorAll<HTMLElement>('.slide')[1].click());
-    act(() => container.querySelector<HTMLButtonElement>('.slide-delete-button')!.click());
-    act(() => container.querySelector<HTMLButtonElement>('.slide-undo-notice button')!.click());
-    expect(changes).toEqual(['# One', '# One\n---\n# Two']);
-  });
-
-  it('keeps source and rendered slides coherent across rapid parent rerenders', () => {
-    let currentSource = '# One';
-    const update = (source: string) => {
-      currentSource = source;
-      act(() => {
-        root.render(
-          <PresentationPreview
-            presentation={parseMarkdown(currentSource)}
-            theme="light"
-            source={currentSource}
-            onSourceChange={update}
-          />,
-        );
-      });
-    };
-    container = document.createElement('div');
-    document.body.append(container);
-    root = createRoot(container);
-    act(() => {
-      root.render(
-        <PresentationPreview
-          presentation={parseMarkdown(currentSource)}
-          theme="light"
-          source={currentSource}
-          onSourceChange={update}
-        />,
-      );
-    });
-    act(() => container.querySelector<HTMLButtonElement>('.slide-add-button')!.click());
-    act(() => container.querySelectorAll<HTMLButtonElement>('.slide-add-button')[1].click());
-    expect(currentSource).toBe('# One\n---\n\n---\n');
-    expect(container.querySelectorAll('.slide')).toHaveLength(3);
-  });
-
-  it('activates inline editing from a single click', () => {
-    vi.useFakeTimers();
-    const slide = render('# Heading');
-    act(() => {
-      slide.click();
-      vi.advanceTimersByTime(180);
-    });
-    expect(slide.getAttribute('contenteditable')).toBe('true');
-  });
-
-  it('exits contextual source mode when clicking outside the active block', () => {
-    const slide = render('# Heading\n\nBody');
-    const block = slide.querySelector<HTMLElement>('.slide-preview-block')!;
-    act(() => {
-      block.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
-    });
-    expect(slide.querySelector('textarea')).not.toBeNull();
-
-    act(() => {
-      slide.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
-    });
-    expect(slide.querySelector('textarea')).toBeNull();
-  });
-
-  it('turns an empty list item into a normal paragraph', () => {
-    vi.useFakeTimers();
-    const slide = render('- one\n- ');
-    act(() => {
-      slide.click();
-      vi.advanceTimersByTime(180);
-    });
-    const emptyItem = slide.querySelectorAll('li')[1];
-    const selection = window.getSelection()!;
-    const range = document.createRange();
-    range.selectNodeContents(emptyItem);
-    range.collapse(false);
-    selection.removeAllRanges();
-    selection.addRange(range);
-
-    act(() => {
-      slide.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-    });
-    expect(slide.querySelectorAll('li')).toHaveLength(1);
-    expect(slide.querySelector('ul + p')).not.toBeNull();
-  });
-
-  it('renders inline math as KaTeX', () => {
-    const slide = render('How does TeX work? $x=3$.');
-    expect(slide.querySelector('.katex')).not.toBeNull();
-  });
-
-  it('reveals math source while inline editing', () => {
-    const slide = render('How does TeX work? $x=3$.');
-    act(() => {
-      slide.querySelector<HTMLElement>('.slide-preview-block')!.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
-    });
-    expect(slide.querySelector('textarea')?.value).toContain('$x=3$');
-  });
-
-  it('opens the active block source with Command-Enter', () => {
-    vi.useFakeTimers();
-    const slide = render('A paragraph.\n\n$x=3$');
-    const block = slide.querySelector<HTMLElement>('.slide-preview-block')!;
-    act(() => {
-      block.click();
-      vi.advanceTimersByTime(180);
-    });
-    act(() => {
-      block.dispatchEvent(new KeyboardEvent('keydown', {
-        key: 'Enter',
-        metaKey: true,
-        bubbles: true,
-      }));
-    });
-    expect(slide.querySelector('textarea')?.value).toBe('A paragraph.');
-  });
-
-  it('does not override the native caret position within a line', () => {
-    const slide = render('A paragraph.');
-    const block = slide.querySelector<HTMLElement>('.slide-preview-block')!;
-    const text = block.querySelector('p')!.firstChild!;
-    const range = document.createRange();
-    range.setStart(text, 3);
-    range.collapse(true);
-    window.getSelection()!.removeAllRanges();
-    window.getSelection()!.addRange(range);
-
-    act(() => {
-      block.click();
-    });
-
-    expect(slide.getAttribute('contenteditable')).toBe('true');
-    expect(window.getSelection()?.anchorNode).toBe(text);
-    expect(window.getSelection()?.anchorOffset).toBe(3);
-  });
-
-  it('moves the caret across slide boundaries with Up and Down', () => {
-    const slide = render('# One\n---\n# Two');
-    const slides = container.querySelectorAll<HTMLElement>('.slide');
-    act(() => {
-      slides[1].click();
-    });
-    const secondHeading = slides[1].querySelector('h1')!.firstChild!;
-    const start = document.createRange();
-    start.setStart(secondHeading, 0);
-    start.collapse(true);
-    window.getSelection()!.removeAllRanges();
-    window.getSelection()!.addRange(start);
-
-    act(() => {
-      slides[1].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
-    });
-    expect(slides[0].classList.contains('editing')).toBe(true);
-    expect(document.activeElement).toBe(slides[0]);
-
-    const firstHeading = slides[0].querySelector('h1')!.firstChild!;
-    const end = document.createRange();
-    end.setStart(firstHeading, firstHeading.textContent?.length ?? 0);
-    end.collapse(true);
-    window.getSelection()!.removeAllRanges();
-    window.getSelection()!.addRange(end);
-
-    act(() => {
-      slides[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
-    });
-    expect(slides[1].classList.contains('editing')).toBe(true);
-    expect(document.activeElement).toBe(slides[1]);
-    expect(window.getSelection()?.anchorNode?.parentElement?.closest('.slide-number')).toBeNull();
-  });
-
-  it('moves down from the end of a paragraph into the next slide', () => {
-    render('First line\n\nSecond line\n---\n# Two');
-    const slides = container.querySelectorAll<HTMLElement>('.slide');
-    const paragraph = slides[0].querySelectorAll('p')[1].firstChild!;
-    const end = document.createRange();
-    end.setStart(paragraph, paragraph.textContent?.length ?? 0);
-    end.collapse(true);
-    window.getSelection()!.removeAllRanges();
-    window.getSelection()!.addRange(end);
-
-    act(() => {
-      slides[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
-    });
-
-    expect(slides[1].classList.contains('editing')).toBe(true);
-    expect(document.activeElement).toBe(slides[1]);
-  });
-
-  it('recognizes the end of multi-line slide content without confusing text for the slide number', () => {
-    render('Line 1\n\nLine 2\n---\n# Two');
-    const slides = container.querySelectorAll<HTMLElement>('.slide');
-    const paragraph = slides[0].querySelectorAll('p')[1].firstChild!;
-    const end = document.createRange();
-    end.setStart(paragraph, paragraph.textContent?.length ?? 0);
-    end.collapse(true);
-    window.getSelection()!.removeAllRanges();
-    window.getSelection()!.addRange(end);
-
-    act(() => {
-      slides[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
-    });
-
-    expect(slides[1].classList.contains('editing')).toBe(true);
-    expect(document.activeElement).toBe(slides[1]);
-  });
-
-  it('skips an empty contentEditable block when moving up through slide lines', () => {
-    const slide = render('# First\n\nSecond');
-    slide.innerHTML = '<h1>First</h1><div><br></div><div>Second</div><span class="slide-number">1</span>';
-    const secondLine = slide.querySelectorAll('div')[1].firstChild!;
-    const end = document.createRange();
-    end.setStart(secondLine, secondLine.textContent?.length ?? 0);
-    end.collapse(true);
-    window.getSelection()!.removeAllRanges();
-    window.getSelection()!.addRange(end);
-    const event = new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true });
-
-    act(() => {
-      slide.dispatchEvent(event);
-    });
-
-    expect(event.defaultPrevented).toBe(true);
-    expect(window.getSelection()?.anchorNode).toBe(slide.querySelector('h1'));
-    expect(window.getSelection()?.anchorOffset).toBe(1);
-
-    const firstLine = slide.querySelector('h1')!.firstChild!;
-    const start = document.createRange();
-    start.setStart(firstLine, 0);
-    start.collapse(true);
-    window.getSelection()!.removeAllRanges();
-    window.getSelection()!.addRange(start);
-    const down = new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true });
-
-    act(() => {
-      slide.dispatchEvent(down);
-    });
-
-    expect(down.defaultPrevented).toBe(true);
-    expect(window.getSelection()?.anchorNode).toBe(slide.querySelectorAll('div')[1]);
-    expect(window.getSelection()?.anchorOffset).toBe(0);
-  });
-
-  it('leaves arrow movement between lines to the native editor', () => {
-    render('First line\n\nSecond line\n---\n# Two');
-    const slide = container.querySelector<HTMLElement>('.slide')!;
-    const paragraph = slide.querySelector('p')!.firstChild!;
-    const end = document.createRange();
-    end.setStart(paragraph, 5);
-    end.collapse(true);
-    window.getSelection()!.removeAllRanges();
-    window.getSelection()!.addRange(end);
-    const event = new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true });
-
-    act(() => {
-      slide.dispatchEvent(event);
-    });
-
-    expect(event.defaultPrevented).toBe(false);
-  });
-
-  it('moves down from the end of a paragraph to the next block', () => {
-    const slide = render('First paragraph\n\n## Next block\n---\n# Two');
-    const paragraph = slide.querySelector('p')!.firstChild!;
-    const end = document.createRange();
-    end.setStart(paragraph, paragraph.textContent?.length ?? 0);
-    end.collapse(true);
-    window.getSelection()!.removeAllRanges();
-    window.getSelection()!.addRange(end);
-    const event = new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true });
-
-    act(() => {
-      slide.dispatchEvent(event);
-    });
-
-    expect(event.defaultPrevented).toBe(true);
-    expect(window.getSelection()?.anchorNode).toBe(slide.querySelector('h2'));
-    expect(window.getSelection()?.anchorOffset).toBe(0);
-  });
-
-  // Geometry is mocked here; acceptance of the native Tauri/WebView behavior lives in tests/e2e.
-  it('snaps to the end of an overflowing paragraph before allowing editor scrolling', () => {
-    const slide = render('A paragraph with enough content to overflow the visible slide area.\n---\n# Two');
-    const paragraph = slide.querySelector('p')!.firstChild!;
-    const position = 5;
-    const caret = document.createRange();
-    caret.setStart(paragraph, position);
-    caret.collapse(true);
-    window.getSelection()!.removeAllRanges();
-    window.getSelection()!.addRange(caret);
-    vi.spyOn(slide, 'getBoundingClientRect').mockReturnValue({
-      top: 0,
-      bottom: 100,
-      height: 100,
-      left: 0,
-      right: 100,
-      width: 100,
-      x: 0,
-      y: 0,
-      toJSON: () => ({}),
-    });
-    Object.defineProperty(Range.prototype, 'getBoundingClientRect', {
-      configurable: true,
-      value: () => ({
-        top: 80,
-        bottom: 100,
-        height: 20,
-        left: 0,
-        right: 20,
-        width: 20,
-        x: 0,
-        y: 80,
-        toJSON: () => ({}),
-      }),
-    });
-    const event = new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true });
-
-    act(() => {
-      slide.dispatchEvent(event);
-    });
-
-    expect(event.defaultPrevented).toBe(true);
-    expect(window.getSelection()?.anchorNode).toBe(slide.querySelector('p'));
-    expect(window.getSelection()?.anchorOffset).toBe(1);
-  });
-
-  it('preserves inline and display math when preview content is serialized', () => {
-    const markdown = 'Before $x=3$.\n\n$$\ny = mx + b\n$$\n\nAfter.';
-    const slide = render(markdown);
-    expect(serializeSlide(slide)).toContain('$x=3$');
-    expect(serializeSlide(slide)).toContain('$$\ny = mx + b\n$$');
+    act(() => Array.from(container.querySelectorAll<HTMLButtonElement>('.slide-undo-notice button'))[0].click());
+    expect(changes.at(-1)).toBe(overflowing);
   });
 });

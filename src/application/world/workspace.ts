@@ -25,7 +25,14 @@ export interface WorldState {
   error: string | null;
 }
 
+export interface RecoverySnapshot {
+  presentationId: string;
+  source: string;
+  updatedAt: number;
+}
+
 const key = 'elef.world';
+const recoveryKey = 'elef.world.recovery';
 const id = () => globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 const join = (a: string, b: string) => `${a.replace(/[\\/]+$/, '')}/${b}`;
 const presentationFile = (path: string) => join(path, 'presentation.md');
@@ -43,6 +50,8 @@ export class WorldWorkspace {
   private state: WorldState = { root: null, presentations: [], activeId: null, error: null };
   private listeners = new Set<() => void>();
   private timers = new Map<string, ReturnType<typeof setTimeout>>();
+  private recoveryTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private recoveries = new Map<string, RecoverySnapshot>();
   private storage: Storage | null;
 
   constructor(private readonly fs: WorldFileSystem, storage?: Storage | null) {
@@ -59,6 +68,23 @@ export class WorldWorkspace {
         };
       } catch { /* recover on setup */ }
     }
+    try {
+      const savedRecovery = this.storage?.getItem(recoveryKey);
+      const parsedRecovery = savedRecovery ? JSON.parse(savedRecovery) : {};
+      if (parsedRecovery && typeof parsedRecovery === 'object') {
+        for (const [presentationId, snapshot] of Object.entries(parsedRecovery)) {
+          if (snapshot && typeof snapshot === 'object' && typeof (snapshot as RecoverySnapshot).source === 'string') {
+            this.recoveries.set(presentationId, {
+              presentationId,
+              source: (snapshot as RecoverySnapshot).source,
+              updatedAt: typeof (snapshot as RecoverySnapshot).updatedAt === 'number'
+                ? (snapshot as RecoverySnapshot).updatedAt
+                : Date.now(),
+            });
+          }
+        }
+      }
+    } catch { /* recovery is best effort */ }
   }
   getState(): WorldState { return this.state; }
   subscribe(listener: () => void): () => void { this.listeners.add(listener); return () => this.listeners.delete(listener); }
@@ -67,6 +93,30 @@ export class WorldWorkspace {
     if (this.storage && this.state.root) {
       try { this.storage.setItem(key, JSON.stringify({ root: this.state.root, presentations: this.state.presentations })); } catch { /* persistence is best effort */ }
     }
+  }
+  private persistRecoveries() {
+    if (!this.storage) return;
+    try {
+      this.storage.setItem(recoveryKey, JSON.stringify(Object.fromEntries(this.recoveries)));
+    } catch { /* recovery is best effort */ }
+  }
+  private retainRecovery(idToRecover: string, source: string) {
+    const snapshot = { presentationId: idToRecover, source, updatedAt: Date.now() };
+    this.recoveries.set(idToRecover, snapshot);
+    this.persistRecoveries();
+  }
+  recoverySnapshot(idToRead: string): RecoverySnapshot | null {
+    return this.recoveries.get(idToRead) || null;
+  }
+  discardRecovery(idToDiscard: string): void {
+    this.recoveries.delete(idToDiscard);
+    this.persistRecoveries();
+  }
+  restoreRecovery(idToRestore: string): boolean {
+    const snapshot = this.recoverySnapshot(idToRestore);
+    if (!snapshot) return false;
+    this.updateSource(idToRestore, snapshot.source);
+    return true;
   }
   async setup(): Promise<boolean> {
     try {
@@ -149,6 +199,10 @@ export class WorldWorkspace {
       const timer = this.timers.get(idToDelete);
       if (timer) clearTimeout(timer);
       this.timers.delete(idToDelete);
+      const recoveryTimer = this.recoveryTimers.get(idToDelete);
+      if (recoveryTimer) clearTimeout(recoveryTimer);
+      this.recoveryTimers.delete(idToDelete);
+      this.discardRecovery(idToDelete);
       this.setState({
         ...this.state,
         presentations: this.state.presentations.filter((item) => item.id !== idToDelete),
@@ -206,6 +260,12 @@ export class WorldWorkspace {
     const entry = this.state.presentations.find((item) => item.id === idToUpdate);
     if (!entry) return;
     const persistedSource = addWorldMetadata(source, idToUpdate);
+    const oldRecoveryTimer = this.recoveryTimers.get(idToUpdate);
+    if (oldRecoveryTimer) clearTimeout(oldRecoveryTimer);
+    this.recoveryTimers.set(idToUpdate, setTimeout(() => {
+      this.recoveryTimers.delete(idToUpdate);
+      this.retainRecovery(idToUpdate, source);
+    }, 1000));
     let parsedTitle = entry.title;
     try {
       parsedTitle = extractFirstH1(stripWorldMetadata(source)) || entry.title;

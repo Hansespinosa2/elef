@@ -6,6 +6,7 @@ export type {
   SlideLayout,
   ThemeMode,
 } from './presentation';
+export type { SlideSourceRange } from './markdown';
 export {
   normalizeEditorThemePreference,
   resolveEditorTheme,
@@ -21,6 +22,7 @@ export {
   presentationThemeFromSource,
   replaceSlideMarkdown,
   setPresentationTheme,
+  slideSourceRanges,
   slideContentBudget,
   splitSlideAtSeparator,
   splitSlideMarkdown,

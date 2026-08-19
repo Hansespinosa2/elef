@@ -186,7 +186,7 @@ function App() {
   return (
     <div className={`app theme-${editorTheme}`}>
       <header className="toolbar">
-        <div><strong>Elef</strong><span className="subtitle">Markdown presentation</span>{state.sourceName && <span className="document-name">{state.sourceName}{state.source !== state.baseline && ' *'}</span>}</div>
+        <div><strong>Elef</strong><span className="subtitle">Markdown presentation</span>{state.sourceName && <span className="document-name">{state.sourceName}</span>}</div>
         <ThemeMenu
           editorPreference={editorPreference}
           presentationTheme={state.presentation?.presentationTheme ?? 'match'}
