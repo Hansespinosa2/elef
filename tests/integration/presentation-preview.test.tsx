@@ -73,6 +73,28 @@ describe('Obsidian-style presentation editor', () => {
     expect(container.querySelectorAll('.cm-rendered-block')).not.toHaveLength(0);
   });
 
+  it('switches between inline preview and full Markdown source without changing the document', () => {
+    const source = '# One\n\nFirst body\n---\n# Two';
+    const changes: string[] = [];
+    render(source, (next) => changes.push(next));
+    const toggle = container.querySelector<HTMLButtonElement>('.source-mode-toggle')!;
+
+    act(() => toggle.click());
+
+    expect(toggle.getAttribute('aria-checked')).toBe('true');
+    expect(container.querySelector('.presentation-live-canvas')?.classList.contains('source-mode')).toBe(true);
+    expect(container.querySelectorAll('.cm-slide-first')).toHaveLength(0);
+    expect(container.querySelector('.cm-content')?.textContent).toContain('---');
+    expect(EditorView.findFromDOM(container.querySelector<HTMLElement>('.cm-editor')!).state.doc.toString()).toBe(source);
+    expect(changes).toHaveLength(0);
+
+    act(() => toggle.click());
+
+    expect(toggle.getAttribute('aria-checked')).toBe('false');
+    expect(container.querySelectorAll('.cm-slide-first')).toHaveLength(2);
+    expect(changes).toHaveLength(0);
+  });
+
   it('presents blocks as members of coherent fixed slide surfaces', () => {
     render('# One\n\nFirst body\n---\n# Two\n\nSecond body');
     const surfaces = Array.from(container.querySelectorAll<HTMLElement>('.cm-slide-first'));
