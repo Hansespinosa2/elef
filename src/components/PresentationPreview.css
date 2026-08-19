@@ -233,6 +233,14 @@
   position: relative; z-index: 1; display: flex; align-items: center; gap: .55rem;
   padding-left: .65rem; background: var(--app-bg);
 }
+.slide-layout-control select {
+  min-height: 2.25rem; padding: .35rem .55rem; border: 1px solid var(--slide-border); border-radius: 6px;
+  color: var(--slide-text); background: var(--slide-bg); font: 600 .8rem/1.2 'DM Sans', ui-sans-serif, system-ui, sans-serif;
+}
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
 .slide-boundary button { position: relative; z-index: 1; }
 .slide-split-button { color: var(--slide-accent); font-weight: 700; }
 .cm-math-widget { display: inline-block; padding: 0 .12em; cursor: text; }

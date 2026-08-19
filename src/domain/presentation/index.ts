@@ -22,6 +22,7 @@ export {
   presentationThemeFromSource,
   replaceSlideMarkdown,
   setPresentationTheme,
+  setSlideLayout,
   slideSourceRanges,
   slideContentBudget,
   splitSlideAtSeparator,

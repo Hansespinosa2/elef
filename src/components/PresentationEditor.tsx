@@ -22,6 +22,7 @@ import {
   insertSlideMarkdown,
   isSlideOverBudget,
   parseMarkdown,
+  setSlideLayout,
   slideSourceRanges,
   splitSlideMarkdown,
 } from '../domain/presentation';
@@ -144,6 +145,9 @@ export function markdownBlockRanges(source: string): MarkdownBlockRange[] {
       const heading = !fence && /^#{1,6}\s+/.test(trimmed);
       if (!fence && !trimmed) {
         flush();
+        continue;
+      }
+      if (!fence && start === null && /^:{3}slide-layout\{[^}\s]+\}[ \t]*$/.test(trimmed)) {
         continue;
       }
       if (heading && start !== null) flush();
@@ -284,6 +288,7 @@ class MathWidget extends WidgetType {
 class SlideBoundaryWidget extends WidgetType {
   constructor(
     private readonly slideIndex: number,
+    private readonly layout: SlideLayout,
     private readonly overBudget: boolean,
     private readonly canSplit: boolean,
   ) {
@@ -302,6 +307,13 @@ class SlideBoundaryWidget extends WidgetType {
         <div class="slide-boundary-actions">
           <button class="slide-delete-button" type="button" data-slide-action="delete" aria-label="Delete slide ${this.slideIndex + 1}">−</button>
           ${this.canSplit ? `<button class="slide-split-button" type="button" data-slide-action="preview-split" aria-label="Preview automatic split for slide ${this.slideIndex + 1}">Preview split</button>` : ''}
+          <label class="slide-layout-control">
+            <span class="sr-only">Layout for slide ${this.slideIndex + 1}</span>
+            <select data-slide-action="layout" aria-label="Layout for slide ${this.slideIndex + 1}">
+              <option value="body" ${this.layout === 'body' ? 'selected' : ''}>Body</option>
+              <option value="intro" ${this.layout === 'intro' ? 'selected' : ''}>Intro</option>
+            </select>
+          </label>
           <button class="slide-add-button" type="button" data-slide-action="add" aria-label="Add slide after slide ${this.slideIndex + 1}">+</button>
         </div>
       </div>
@@ -312,6 +324,7 @@ class SlideBoundaryWidget extends WidgetType {
   eq(other: WidgetType): boolean {
     return other instanceof SlideBoundaryWidget
       && other.slideIndex === this.slideIndex
+      && other.layout === this.layout
       && other.overBudget === this.overBudget
       && other.canSplit === this.canSplit;
   }
@@ -464,6 +477,7 @@ function livePreviewDecorations(state: EditorState): DecorationSet {
 
   for (const block of blocks) {
     const slide = slides[block.slideIndex];
+    const firstBlock = blocks.find((candidate) => candidate.slideIndex === block.slideIndex);
     const fragments = activeBlock?.from === block.from && activeBlock.to === block.to && reveal
       ? [
         renderedFragment(source, block, block.from, Math.max(block.from, reveal.from - 1)),
@@ -478,7 +492,7 @@ function livePreviewDecorations(state: EditorState): DecorationSet {
           widget: new RenderedBlockWidget(
             fragment,
             parsedSlides[fragment.slideIndex]?.layout || 'body',
-            fragment.from === slide.start,
+            block.from === firstBlock?.from,
             fragment.to === slide.end,
             fragment !== block,
           ),
@@ -486,6 +500,23 @@ function livePreviewDecorations(state: EditorState): DecorationSet {
         }),
       });
     }
+  }
+
+  for (const slide of slides) {
+    if (blocks.some((block) => block.slideIndex === slide.index)) continue;
+    decorations.push({
+      from: slide.start,
+      value: Decoration.widget({
+        widget: new RenderedBlockWidget(
+          { from: slide.start, to: slide.start, slideIndex: slide.index, markdown: '' },
+          parsedSlides[slide.index]?.layout || 'body',
+          true,
+          true,
+        ),
+        block: true,
+        side: 1,
+      }),
+    });
   }
 
   for (const range of math) {
@@ -512,6 +543,7 @@ function livePreviewDecorations(state: EditorState): DecorationSet {
     const overBudget = isSlideOverBudget(markdownSource);
     const widget = new SlideBoundaryWidget(
       slide.index,
+      parsedSlides[slide.index]?.layout || 'body',
       overBudget,
       overBudget && splitSlideMarkdown(source, slide.index) !== null,
     );
@@ -717,10 +749,21 @@ export function PresentationEditor({ presentation, theme, source, onSourceChange
                 const target = Math.max(0, Math.min(slideIndex, slideSourceRanges(next).length - 1));
                 const range = slideSourceRanges(next)[target];
                 view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: next }, selection: { anchor: range?.start ?? 0 }, scrollIntoView: true });
-              } else {
+              } else if (action.dataset.slideAction === 'preview-split') {
                 const proposed = splitSlideMarkdown(current, slideIndex);
                 if (proposed) splitPreviewRef.current({ original: current, proposed, slideIndex });
               }
+              view.focus();
+              return true;
+            },
+            change(event, view) {
+              const select = (event.target as Element | null)?.closest<HTMLSelectElement>('[data-slide-action="layout"]');
+              if (!select) return false;
+              const boundary = select.closest<HTMLElement>('.cm-slide-boundary');
+              const slideIndex = Number(boundary?.dataset.slideIndex);
+              if (!Number.isInteger(slideIndex) || !['body', 'intro'].includes(select.value)) return false;
+              const next = setSlideLayout(view.state.doc.toString(), slideIndex, select.value as SlideLayout);
+              view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: next }, scrollIntoView: false });
               view.focus();
               return true;
             },

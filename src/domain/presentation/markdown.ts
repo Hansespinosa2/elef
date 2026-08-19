@@ -159,6 +159,14 @@ function withSlideMetadata(existing: string, markdown: string): string {
   return existingMetadata.directive ? `${existingMetadata.directive}\n${incoming}` : incoming;
 }
 
+export function setSlideLayout(source: string, slideIndex: number, layout: SlideLayout): string {
+  const { prefix, sections } = markdownSections(source);
+  if (slideIndex < 0 || slideIndex >= sections.length) return source;
+  const current = slideMetadata(sections[slideIndex]).content;
+  sections[slideIndex] = `:::slide-layout{${layout}}\n${current}`;
+  return `${prefix}${sections.join('\n---\n')}`;
+}
+
 function markdownSections(source: string): { prefix: string; sections: string[] } {
   const frontMatter = initialFrontMatter(source);
   const prefix = frontMatter ? source.slice(0, frontMatter.bodyStart) : '';

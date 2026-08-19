@@ -6,6 +6,7 @@ import {
   presentationThemeFromSource,
   replaceSlideMarkdown,
   setPresentationTheme,
+  setSlideLayout,
   slideContentBudget,
   splitSlideAtSeparator,
   splitSlideMarkdown,
@@ -56,6 +57,13 @@ describe('parseMarkdown', () => {
   it('parses layouts after document front matter', () => {
     const result = parseMarkdown('---\ntitle: Demo\n---\n:::slide-layout{intro}\n# Welcome');
     expect(result.slides[0]).toMatchObject({ layout: 'intro', markdown: '# Welcome' });
+  });
+
+  it('sets a slide layout without changing other slide content', () => {
+    const source = '# One\n---\n# Two';
+    expect(setSlideLayout(source, 1, 'intro')).toBe('# One\n---\n:::slide-layout{intro}\n# Two');
+    expect(setSlideLayout(setSlideLayout(source, 1, 'intro'), 1, 'body'))
+      .toBe('# One\n---\n:::slide-layout{body}\n# Two');
   });
 
   it('does not treat directive-like text in fences as metadata', () => {
