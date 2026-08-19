@@ -8,7 +8,6 @@ import { TauriDocumentReader, TauriFileSelector, TauriWorldFileSystem } from './
 import { WorldWorkspace } from './application/world/workspace';
 import { confirmPresentationDeletion } from './application/world/delete-confirmation';
 import { PresentationPreview } from './components/PresentationPreview';
-import { SourceModeMockups } from './components/SourceModeMockups';
 import {
   normalizeEditorThemePreference,
   resolveEditorTheme,
@@ -118,7 +117,6 @@ function App() {
   ));
   const editorTheme: ThemeMode = resolveEditorTheme(editorPreference, systemPrefersDark);
   const tauri = isTauri();
-  if (!tauri && window.location.search === '?mockups=1') return <div className={`app theme-${editorTheme}`}><SourceModeMockups /></div>;
   const [world] = useState(() => new WorldWorkspace(new TauriWorldFileSystem()));
   const worldState = useSyncExternalStore(world.subscribe.bind(world), world.getState.bind(world), world.getState.bind(world));
   const setEditorPreference = (preference: EditorThemePreference) => {
