@@ -96,6 +96,8 @@ function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const [editorPreference, setEditorPreferenceState] = useState<EditorThemePreference>(() => {
     try {
       return normalizeEditorThemePreference(localStorage.getItem(editorThemeKey));
@@ -146,6 +148,24 @@ function App() {
     window.addEventListener('keydown', toggleSidebar);
     return () => window.removeEventListener('keydown', toggleSidebar);
   }, [tauri]);
+  useEffect(() => {
+    if (!openMenuId) return;
+    const dismissMenu = (event: PointerEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) setOpenMenuId(null);
+    };
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setOpenMenuId(null);
+      }
+    };
+    document.addEventListener('pointerdown', dismissMenu);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('pointerdown', dismissMenu);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [openMenuId]);
 
   const openFile = () => {
     const selector = tauri
@@ -169,13 +189,21 @@ function App() {
       if (renameValue.trim()) void world.renamePresentation(id, renameValue.trim());
       setRenamingId(null);
     };
+    const slideCount = (item: typeof presentations[number]) => {
+      try { return world.presentation(item.id)?.slides.length; } catch { return undefined; }
+    };
     const sidebar = sidebarOpen && <aside className="world-sidebar">
       <div className="sidebar-header"><strong>Elef World</strong><button className="icon-button" type="button" aria-label="Collapse sidebar" onClick={() => setSidebarOpen(false)}>‹</button></div>
+      <div className="sidebar-search" role="search"><span aria-hidden="true">⌕</span><span>Quick open</span><kbd>⌘K</kbd></div>
       <button className="new-presentation" type="button" onClick={() => void world.createDraft()}>＋ New presentation</button>
-      <nav aria-label="Presentations">{presentations.map((item) => <div className={`presentation-item${active?.id === item.id ? ' active' : ''}`} key={item.id}>
-        {renamingId === item.id ? <form className="rename-form" onSubmit={(event) => { event.preventDefault(); submitRename(item.id); }}><input aria-label={`New name for ${item.title}`} autoFocus value={renameValue} onChange={(event) => setRenameValue(event.target.value)} onKeyDown={(event) => { if (event.key === 'Escape') setRenamingId(null); }} /><button type="submit">Save</button></form> : <><button className="presentation-link" type="button" onClick={() => item.missing ? void world.locate(item.id) : world.open(item.id)}>{item.title}{item.missing && ' (missing)'}</button>
-        {!item.missing && <span className="item-actions"><button type="button" aria-label={`Rename ${item.title}`} onClick={() => { setRenamingId(item.id); setRenameValue(item.title); }}>Rename</button><button type="button" aria-label={`Delete ${item.title}`} onClick={() => remove(item.id, item.title)}>Delete</button></span>}</>}
+      <div className="sidebar-section-title"><span>Open editors</span><span className="sidebar-count">{active ? 1 : 0}</span></div>
+      <nav className="open-editors" aria-label="Open editors">{active && <button className="editor-tab" type="button" onClick={() => world.open(active.id)}><span aria-hidden="true">●</span>{active.title}<span aria-hidden="true">×</span></button>}</nav>
+      <div className="sidebar-section-title"><span>All files</span><span className="sidebar-count">{presentations.length}</span></div>
+      <nav aria-label="All presentations">{presentations.map((item) => <div className={`presentation-item${active?.id === item.id ? ' active' : ''}`} key={item.id}>
+        {renamingId === item.id ? <form className="rename-form" onSubmit={(event) => { event.preventDefault(); submitRename(item.id); }}><input aria-label={`New name for ${item.title}`} autoFocus value={renameValue} onChange={(event) => setRenameValue(event.target.value)} onKeyDown={(event) => { if (event.key === 'Escape') setRenamingId(null); }} /><button type="submit">Save</button></form> : <><button className="presentation-link" type="button" onClick={() => item.missing ? void world.locate(item.id) : world.open(item.id)}><span aria-hidden="true">▱</span><span className="presentation-title">{item.title}{item.missing && ' (missing)'}</span>{!item.missing && slideCount(item) !== undefined && <small>{slideCount(item)}</small>}</button>
+        {!item.missing && <div className="item-menu" ref={openMenuId === item.id ? menuRef : undefined}><button className="overflow-trigger" type="button" aria-label={`Actions for ${item.title}`} aria-expanded={openMenuId === item.id} aria-haspopup="menu" onClick={() => setOpenMenuId((id) => id === item.id ? null : item.id)}>⋯</button>{openMenuId === item.id && <div className="context-menu" role="menu"><button type="button" role="menuitem" onClick={() => { setOpenMenuId(null); setRenamingId(item.id); setRenameValue(item.title); }}>Rename</button><button className="destructive" type="button" role="menuitem" onClick={() => { setOpenMenuId(null); remove(item.id, item.title); }}>Delete</button></div>}</div>}</>}
       </div>)}</nav>
+      <footer className="sidebar-footer"><span>Elef World</span><span>⌘B Sidebar</span></footer>
     </aside>;
     if (import.meta.env.DEV && active) console.debug('[elef] workspace render', { action: 'presentation', phase: 'parse', presentationId: active.id });
     const presentation = active ? world.presentation(active.id) : null;
