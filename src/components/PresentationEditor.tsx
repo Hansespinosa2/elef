@@ -990,7 +990,8 @@ export function PresentationEditor({ presentation, theme, source, onSourceChange
       {mode === 'playback' && (
         <section className="presentation-playback" aria-label="Presentation playback">
           <article
-            className="slide presentation-playback-slide"
+            className={`slide presentation-playback-slide${presentation.slides[playbackIndex]?.layout === 'intro' ? ' slide-intro' : ''}`}
+            data-slide-layout={presentation.slides[playbackIndex]?.layout || 'body'}
             aria-label={`Slide ${playbackIndex + 1}`}
             dangerouslySetInnerHTML={{ __html: playbackSlide(presentation.slides[playbackIndex]?.markdown || '') }}
           />

@@ -1486,6 +1486,17 @@ describe('PRESENT: presentation-mode contract', () => {
     expect(liveCanvas.getAttribute('aria-hidden')).toBe('true');
   });
 
+  it('PRESENT-2a: Present mode applies the parsed intro layout to the playback slide', () => {
+    render(':::slide-layout{intro}\n# Intro title');
+    const enterButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Present')!;
+
+    act(() => enterButton.dispatchEvent(new MouseEvent('click', { bubbles: true })));
+
+    const playbackSlide = container.querySelector<HTMLElement>('.presentation-playback-slide');
+    expect(playbackSlide?.dataset.slideLayout).toBe('intro');
+    expect(playbackSlide?.classList.contains('slide-intro')).toBe(true);
+  });
+
   it('PRESENT-3: Present mode supports previous/next navigation across all slides', () => {
     render('# One\n---\n# Two\n---\n# Three');
     const enterButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Present')!;
