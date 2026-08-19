@@ -31,11 +31,19 @@ describe('presentation workspace', () => {
     workspace.updateSource(draft!.id, '# My Talk'); await new Promise((resolve) => setTimeout(resolve, 400));
     expect([...fs.files.keys()].some((path) => path.includes('/My Talk/presentation.md'))).toBe(true);
   });
+  it('starts new presentations in an intro slide with an editable H1', async () => {
+    const fs = new MemoryWorld(); const workspace = new WorldWorkspace(fs, storage());
+    await workspace.setup();
+    const draft = await workspace.createDraft();
+
+    expect(workspace.editorSource(draft!.id)).toBe(':::slide-layout{intro}\n# ');
+    expect(workspace.presentation(draft!.id)?.slides[0].layout).toBe('intro');
+  });
   it('keeps the Elef id out of the editor source and preview', async () => {
     const fs = new MemoryWorld(); const workspace = new WorldWorkspace(fs, storage());
     await workspace.setup(); const draft = await workspace.createDraft();
-    expect(workspace.editorSource(draft!.id)).toBe('');
-    expect(stripWorldMetadata(draft!.source)).toBe('');
+    expect(workspace.editorSource(draft!.id)).toBe(':::slide-layout{intro}\n# ');
+    expect(stripWorldMetadata(draft!.source)).toBe(':::slide-layout{intro}\n# ');
     expect(workspace.presentation(draft!.id)?.slides[0].markdown).toBe('');
     workspace.updateSource(draft!.id, '# Visible title');
     expect(workspace.editorSource(draft!.id)).toBe('# Visible title');

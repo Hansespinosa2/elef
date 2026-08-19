@@ -168,8 +168,9 @@ export class WorldWorkspace {
     const path = join(this.state.root, folder);
     try {
       await this.fs.ensureDir(path);
-      await this.fs.writeText(join(path, 'presentation.md'), `<!-- elef-id: ${presentationId} -->\n`);
-      const entry = { id: presentationId, path, title: 'Untitled presentation', source: addWorldMetadata('', presentationId), lastOpened: Date.now() };
+      const initialSource = ':::slide-layout{intro}\n# ';
+      await this.fs.writeText(join(path, 'presentation.md'), addWorldMetadata(initialSource, presentationId));
+      const entry = { id: presentationId, path, title: 'Untitled presentation', source: addWorldMetadata(initialSource, presentationId), lastOpened: Date.now() };
       this.setState({ ...this.state, presentations: [entry, ...this.state.presentations], activeId: presentationId, error: null });
       this.persist();
       return entry;

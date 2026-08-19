@@ -700,7 +700,11 @@ export function PresentationEditor({ presentation, theme, source, onSourceChange
     const editor = new EditorView({
       state: EditorState.create({
         doc: source,
-        selection: { anchor: slideSourceRanges(source)[0]?.start ?? 0 },
+        selection: {
+          anchor: source === ':::slide-layout{intro}\n# '
+            ? source.length
+            : slideSourceRanges(source)[0]?.start ?? 0,
+        },
         extensions: [
           history(),
           keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
@@ -834,6 +838,7 @@ export function PresentationEditor({ presentation, theme, source, onSourceChange
       parent: host,
     });
     viewRef.current = editor;
+    editor.focus();
     return () => {
       editor.destroy();
       viewRef.current = null;

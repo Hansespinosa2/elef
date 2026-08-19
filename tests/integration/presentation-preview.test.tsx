@@ -282,6 +282,15 @@ describe('Obsidian-style presentation editor', () => {
     expect(rendered.textContent).not.toContain('slide-layout');
   });
 
+  it('focuses a new intro presentation after its editable H1 prefix', () => {
+    const source = ':::slide-layout{intro}\n# ';
+    render(source);
+    const editor = EditorView.findFromDOM(container.querySelector<HTMLElement>('.cm-editor')!);
+
+    expect(editor.state.selection.main.head).toBe(source.length);
+    expect(document.activeElement).toBe(editor.contentDOM);
+  });
+
   it('preserves layout metadata when source content is edited', () => {
     const changes: string[] = [];
     const source = ':::slide-layout{intro}\n# Welcome';
