@@ -226,6 +226,50 @@ describe('Obsidian-style presentation editor', () => {
     expect(container.querySelector('.cm-slide-line')?.textContent).not.toContain(':::slide-layout{intro}');
   });
 
+  it('keeps the intro slide surface geometry unchanged while editing its H1', () => {
+    const markdown = ':::slide-layout{intro}\n# Hello';
+    render(markdown);
+    const editor = EditorView.findFromDOM(container.querySelector<HTMLElement>('.cm-editor')!);
+    const surface = container.querySelector<HTMLElement>('.cm-slide-first')!;
+    const before = {
+      className: surface.className,
+      layout: surface.dataset.slideLayout,
+      slideSurfaceCount: container.querySelectorAll('.cm-slide-first').length,
+    };
+
+    act(() => editor.dispatch({ selection: { anchor: markdown.indexOf('He') + 2 } }));
+
+    expect({
+      className: surface.className,
+      layout: surface.dataset.slideLayout,
+      slideSurfaceCount: container.querySelectorAll('.cm-slide-first').length,
+    }).toEqual(before);
+  });
+
+  it('keeps the active intro H1 aligned with the rendered heading instead of adding source indentation', () => {
+    const markdown = ':::slide-layout{intro}\n# Hello';
+    render(markdown);
+    const editor = EditorView.findFromDOM(container.querySelector<HTMLElement>('.cm-editor')!);
+
+    act(() => editor.dispatch({ selection: { anchor: markdown.indexOf('He') + 2 } }));
+
+    const activeHeading = container.querySelector<HTMLElement>('.cm-heading-source-active');
+    expect(activeHeading?.classList.contains('cm-heading-source-level-1')).toBe(true);
+    expect(activeHeading?.getAttribute('style')).toContain('padding-inline: 0');
+  });
+
+  it('keeps the caret at the clicked position inside the active intro H1', () => {
+    const markdown = ':::slide-layout{intro}\n# Hello';
+    render(markdown);
+    const editor = EditorView.findFromDOM(container.querySelector<HTMLElement>('.cm-editor')!);
+    const clickedPosition = markdown.indexOf('He') + 2;
+
+    act(() => editor.dispatch({ selection: { anchor: clickedPosition } }));
+
+    expect(editor.state.selection.main.head).toBe(clickedPosition);
+    expect(container.querySelector('.cm-heading-source-active')?.textContent).toBe('Hello');
+  });
+
   it('keeps active body-slide headings rendered in place at every heading level', () => {
     const markdown = '# First slide\n---\n## Body heading\n\nBody text';
     render(markdown);

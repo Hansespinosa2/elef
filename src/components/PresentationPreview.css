@@ -217,7 +217,7 @@
   display: inline-block; width: 0; overflow: hidden;
 }
 .presentation-codemirror .cm-heading-source-active {
-  display: block; box-sizing: border-box; width: 100%;
+  display: inline-block; box-sizing: border-box; width: auto; vertical-align: baseline;
   color: var(--slide-heading); font-family: 'Cormorant Garamond', Georgia, serif;
   font-weight: 700; line-height: 1.02;
 }

@@ -559,6 +559,7 @@ function livePreviewDecorations(state: EditorState): DecorationSet {
                 'data-slide-index': String(block.slideIndex),
                 'data-slide-surface': String(block.slideIndex),
                 'data-slide-layout': layout,
+                style: 'padding-inline: 0;',
               },
             }),
           });
