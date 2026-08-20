@@ -958,19 +958,19 @@ export function PresentationEditor({ presentation, theme, source, onSourceChange
   };
 
   return (
-    <main className={`slide-list presentation-theme-${theme} presentation-editor`} aria-label={`${presentation.sourceName} slides`}>
-      <section className="presentation-editor-toolbar" aria-label="Editor mode">
-        <div>
-          <strong>{mode === 'edit' ? 'Live preview' : 'Presentation'}</strong>
+    <main className={`slide-list presentation-theme-${theme} presentation-editor flex w-full flex-col gap-4`} aria-label={`${presentation.sourceName} slides`}>
+      <section className="presentation-editor-toolbar flex items-baseline justify-between gap-4 text-[.82rem] text-text-muted max-[700px]:items-start max-[700px]:flex-col max-[700px]:gap-1" aria-label="Editor mode">
+        <div className="flex items-baseline gap-2.5">
+          <strong className="text-[.95rem] text-text-strong">{mode === 'edit' ? 'Live preview' : 'Presentation'}</strong>
           <span>{presentation.slides.length} {presentation.slides.length === 1 ? 'slide' : 'slides'}</span>
         </div>
-        <div className="presentation-editor-actions">
-          <button type="button" onClick={() => setMode(mode === 'edit' ? 'playback' : 'edit')}>
+        <div className="presentation-editor-actions flex items-center justify-end gap-2 max-[700px]:w-full">
+          <button className="rounded-md border border-[var(--slide-border)] bg-[var(--slide-bg)] px-3 py-2 text-[var(--slide-text)]" type="button" onClick={() => setMode(mode === 'edit' ? 'playback' : 'edit')}>
             {mode === 'edit' ? 'Present' : 'Back to editor'}
           </button>
           {mode === 'edit' && (
             <button
-              className={`source-mode-toggle${sourceMode ? ' active' : ''}`}
+              className={`source-mode-toggle rounded-md border border-[var(--slide-border)] px-3 py-2${sourceMode ? ' active' : ''}`}
               type="button"
               role="switch"
               aria-checked={sourceMode}
@@ -983,34 +983,34 @@ export function PresentationEditor({ presentation, theme, source, onSourceChange
         </div>
       </section>
 
-      <div className={`${mode === 'edit' ? 'presentation-live-canvas' : 'presentation-live-canvas hidden'}${sourceMode ? ' source-mode' : ''}`} aria-hidden={mode !== 'edit'}>
+      <div className={`presentation-live-canvas${mode === 'edit' ? '' : ' hidden'}${sourceMode ? ' source-mode mx-auto w-full max-w-[900px] rounded-[10px] border border-[var(--slide-border)] bg-[var(--slide-source-bg)] px-8 py-6 shadow-[0_10px_28px_var(--slide-shadow)]' : ''}`} aria-hidden={mode !== 'edit'}>
         <div ref={hostRef} className="presentation-codemirror" aria-label="Live-preview Markdown editor" />
       </div>
 
       {mode === 'playback' && (
-        <section className="presentation-playback" aria-label="Presentation playback">
+        <section className="presentation-playback grid gap-4" aria-label="Presentation playback">
           <article
             className={`slide presentation-playback-slide${presentation.slides[playbackIndex]?.layout === 'intro' ? ' slide-intro' : ''}`}
             data-slide-layout={presentation.slides[playbackIndex]?.layout || 'body'}
             aria-label={`Slide ${playbackIndex + 1}`}
             dangerouslySetInnerHTML={{ __html: playbackSlide(presentation.slides[playbackIndex]?.markdown || '') }}
           />
-          <nav className="presentation-playback-controls" aria-label="Slide navigation">
-            <button type="button" disabled={playbackIndex === 0} onClick={() => setPlaybackIndex((index) => index - 1)}>Previous</button>
+          <nav className="presentation-playback-controls flex items-center justify-center gap-4" aria-label="Slide navigation">
+            <button className="rounded-md border border-[var(--slide-border)] bg-[var(--slide-bg)] px-3 py-2 text-[var(--slide-text)] disabled:cursor-not-allowed disabled:opacity-45" type="button" disabled={playbackIndex === 0} onClick={() => setPlaybackIndex((index) => index - 1)}>Previous</button>
             <span>{playbackIndex + 1} / {presentation.slides.length}</span>
-            <button type="button" disabled={playbackIndex >= presentation.slides.length - 1} onClick={() => setPlaybackIndex((index) => index + 1)}>Next</button>
+            <button className="rounded-md border border-[var(--slide-border)] bg-[var(--slide-bg)] px-3 py-2 text-[var(--slide-text)] disabled:cursor-not-allowed disabled:opacity-45" type="button" disabled={playbackIndex >= presentation.slides.length - 1} onClick={() => setPlaybackIndex((index) => index + 1)}>Next</button>
           </nav>
         </section>
       )}
 
       {splitPreview && (
-        <section className="slide-split-preview" role="dialog" aria-label={`Automatic split preview for slide ${splitPreview.slideIndex + 1}`}>
+        <section className="slide-split-preview sticky bottom-4 z-[8] grid max-h-[50vh] gap-2 overflow-auto rounded-lg border border-[var(--slide-accent)] bg-[var(--slide-bg)] p-4 text-[var(--slide-text)] shadow-[0_14px_36px_var(--slide-shadow)]" role="dialog" aria-label={`Automatic split preview for slide ${splitPreview.slideIndex + 1}`}>
           <strong>Preview only — your Markdown has not changed.</strong>
-          <p>This would create {slideSourceRanges(splitPreview.proposed).length - slideSourceRanges(splitPreview.original).length + 1} slides from slide {splitPreview.slideIndex + 1}.</p>
-          <pre>{splitPreview.proposed}</pre>
-          <div>
-            <button type="button" onClick={confirmSplit}>Confirm split</button>
-            <button type="button" onClick={() => setSplitPreview(null)}>Cancel</button>
+          <p className="m-0">This would create {slideSourceRanges(splitPreview.proposed).length - slideSourceRanges(splitPreview.original).length + 1} slides from slide {splitPreview.slideIndex + 1}.</p>
+          <pre className="m-0 max-h-56 overflow-auto bg-[var(--slide-code-bg)] p-3 whitespace-pre-wrap">{splitPreview.proposed}</pre>
+          <div className="flex gap-2">
+            <button className="rounded-md border border-[var(--slide-border)] bg-[var(--slide-bg)] px-3 py-2 text-[var(--slide-text)]" type="button" onClick={confirmSplit}>Confirm split</button>
+            <button className="rounded-md border border-[var(--slide-border)] bg-[var(--slide-bg)] px-3 py-2 text-[var(--slide-text)]" type="button" onClick={() => setSplitPreview(null)}>Cancel</button>
           </div>
         </section>
       )}
@@ -1018,7 +1018,7 @@ export function PresentationEditor({ presentation, theme, source, onSourceChange
       {splitUndo && !splitPreview && (
         <div className="slide-undo-notice" role="status">
           Automatic split applied.
-          <button type="button" onClick={() => { replaceDocument(splitUndo.source, splitUndo.slideIndex); setSplitUndo(null); }}>Undo</button>
+          <button className="rounded-md bg-accent px-3 py-2 text-accent-text" type="button" onClick={() => { replaceDocument(splitUndo.source, splitUndo.slideIndex); setSplitUndo(null); }}>Undo</button>
         </div>
       )}
     </main>
