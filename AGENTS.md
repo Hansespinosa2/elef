@@ -11,6 +11,8 @@
 - Keep presentation parsing and rendering behavior covered by unit tests.
 - Use request tests for Rails boundaries and Selenium-backed Rails system tests
   for complete browser workflows.
+- Run all repository browser automation headlessly; never launch a visible
+  Chrome, Firefox, or other browser during tests or development checks.
 - Run the smallest relevant test before broader validation.
 
 ## Commits
