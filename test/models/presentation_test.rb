@@ -86,26 +86,31 @@ class PresentationTest < ActiveSupport::TestCase
     assert_equal Presentations::SampleData::SAMPLES.map { |sample| sample[:id] },
       samples.map(&:sample_id)
     assert_equal %w[dark light match], samples.map(&:presentation_theme).uniq.sort
+    assert samples.all? { |presentation| presentation.slides.length.between?(10, 15) }
+    assert samples.all? { |presentation| presentation.source.lines.length > 50 }
+    assert samples.all? { |presentation| presentation.source.scan(/^# /).length >= 8 }
     assert samples.any? { |presentation| presentation.source.include?("```ruby") }
     assert samples.any? { |presentation| presentation.source.include?("$$") }
-    assert samples.any? { |presentation| presentation.source.include?("| Feature | Example |") }
+    assert samples.any? { |presentation| presentation.source.include?("| Workflow | Authoring speed |") }
     assert samples.any? { |presentation| presentation.slides.any? { |slide| slide.layout == "intro" } }
-    assert samples.any? { |presentation| presentation.slides.any? { |slide| slide.markdown.blank? } }
+    assert samples.any? { |presentation| presentation.source.include?("Fenced") }
   end
 
   test "renders every sample's representative content" do
     Presentations::SampleData.load!
 
-    assert_includes Presentations::MarkdownRenderer.render(
+    code_and_math = Presentations::MarkdownRenderer.render(
       Presentation.find_by!(sample_id: "code-and-math").source
-    ), "katex"
+    )
+    assert_includes code_and_math, "katex"
+    assert_includes code_and_math, "process_records"
     tables_and_media = Presentations::MarkdownRenderer.render(
       Presentation.find_by!(sample_id: "tables-and-media").source
     )
 
     assert_includes tables_and_media, "<table>"
-    assert_includes tables_and_media, 'src="https://example.com/elef.png"'
-    assert_includes tables_and_media, 'href="https://example.com"'
+    assert_includes tables_and_media, 'src="https://example.com/elef-workflow.png"'
+    assert_includes tables_and_media, 'href="https://example.com/elef"'
     assert_includes Presentations::MarkdownRenderer.render(
       Presentation.find_by!(sample_id: "code-and-math").source
     ), "$not_math$"

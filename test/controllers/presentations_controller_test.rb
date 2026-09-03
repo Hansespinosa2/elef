@@ -86,17 +86,17 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :success
     assert_select ".slides-theme-match"
-    assert_select ".katex", 2
-    assert_select ".katex-display", 1
+    assert_select ".katex", 4
+    assert_select ".katex-display", 3
     assert_select "pre code", text: /puts/
-    assert_select ".slide", 2
+    assert_select ".slide", 10
 
     tables_and_media = Presentation.find_by!(sample_id: "tables-and-media")
     get presentation_path(tables_and_media)
 
     assert_select "table"
-    assert_select 'img[alt="Elef"][src="https://example.com/elef.png"]'
-    assert_select 'a[href="https://example.com"]'
+    assert_select 'img[alt="Elef authoring workflow"][src="https://example.com/elef-workflow.png"]'
+    assert_select 'a[href="https://example.com/elef"]'
 
     layouts_and_themes = Presentation.find_by!(sample_id: "layouts-and-themes")
     get presentation_path(layouts_and_themes)
@@ -108,7 +108,6 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     edge_cases = Presentation.find_by!(sample_id: "slide-edge-cases")
     get presentation_path(edge_cases)
 
-    assert_select ".empty-slide"
-    assert_select ".slide", 3
+    assert_select ".slide", 10
   end
 end

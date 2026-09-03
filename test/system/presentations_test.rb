@@ -22,7 +22,7 @@ class PresentationsTest < ApplicationSystemTestCase
       click_on "Preview"
     end
 
-    assert_selector ".katex", count: 2, visible: true
+    assert_selector ".katex", count: 4, visible: true
     assert_selector ".katex-display", visible: true
     assert_selector ".katex-html", visible: true
     assert_selector ".mfrac .frac-line", visible: true
@@ -39,8 +39,8 @@ class PresentationsTest < ApplicationSystemTestCase
         return { top: rect.top, bottom: rect.bottom };
       })
     JAVASCRIPT
-    assert_equal 2, fraction_parts.length
-    assert_operator (fraction_parts.last["top"] - fraction_parts.first["top"]).abs, :>, 1
+    assert_operator fraction_parts.length, :>=, 2
+    assert_operator (fraction_parts[1]["top"] - fraction_parts[0]["top"]).abs, :>, 1
   end
 
   test "keeps Elef UI and presentation surfaces as separate styling zones" do
