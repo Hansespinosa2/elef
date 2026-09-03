@@ -54,6 +54,27 @@ P0/P1/P2 express importance, not delivery schedule.
 - **Rationale:** A simple slide should be easy to understand at presentation distance.
 - **Verification criteria:** Reviewers can identify the primary message and supporting content on representative slides without relying on source inspection.
 
+#### NFR-031 - Make shared presentation context visually consistent
+
+- **Priority:** P0
+- **Requirement:** Automatically generated section labels, slide counts, headers, footers, icons, and stage markers shall follow the presentation's visual system and shall not compete with the primary slide message.
+- **Rationale:** Recurring contextual chrome should orient the audience without becoming a second, inconsistent layout system.
+- **Verification criteria:** Shared elements remain aligned, legible, subordinate, and visually consistent across sections with different content.
+
+#### NFR-032 - Keep visual customization bounded
+
+- **Priority:** P1
+- **Requirement:** Local visual adjustments and effects shall use constrained semantic values or presets that preserve theme coherence, readability, and predictable layout behavior.
+- **Rationale:** The product should support the exceptional one percent of visual cases without returning to unrestricted slide formatting.
+- **Verification criteria:** A local adjustment can improve a specific slide without causing style drift, inaccessible contrast, unexpected overlap, or unrelated changes elsewhere.
+
+#### NFR-033 - Prefer component defaults over manual styling
+
+- **Priority:** P0
+- **Requirement:** Components shall define sensible defaults for shadows, transparency, borders, radii, emphasis, and related effects, and ordinary users shall not need to configure these properties.
+- **Rationale:** Most users should receive a polished result without repeatedly choosing visual details.
+- **Verification criteria:** New components look intentional and consistent before any local effect adjustment is made.
+
 ### 4.2 Determinism and repeatability
 
 #### NFR-005 - Render repeatably

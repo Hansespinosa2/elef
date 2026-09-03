@@ -58,7 +58,37 @@ Requirements use the following priority model:
 - **Rationale:** Losing fast, unrepeatable thinking destroys trust in the product.
 - **Success criteria:** An interruption does not silently discard the latest recoverable edits, and the user receives a clear path to continue or recover them.
 
-### 4.2 Source authoring
+### 4.2 Presentation structure and contextual chrome
+
+#### FR-039 - Define first-class presentation sections
+
+- **Priority:** P0
+- **Requirement:** Elef shall allow users to define named sections that contain one or more slides and shall treat those sections as part of the presentation's structure.
+- **Rationale:** Sections are central to how the primary user organizes a story and navigates a substantial presentation.
+- **Success criteria:** A user can create, rename, reorder, and navigate sections without manually encoding section membership on every slide.
+
+#### FR-040 - Use heading hierarchy as a strong structural convention
+
+- **Priority:** P0
+- **Requirement:** Elef shall provide a strong default convention in which H1 identifies the presentation or title level, H2 identifies major sections, and H3 identifies subsections or recurring stages, while allowing a presentation to opt out of or customize that mapping.
+- **Rationale:** A meaningful hierarchy helps authors structure a story and gives the system reliable context for navigation and recurring visual elements.
+- **Success criteria:** A presentation using the convention receives useful structural behavior automatically, while an atypical presentation can explicitly choose a different mapping.
+
+#### FR-041 - Provide automatic presentation context
+
+- **Priority:** P0
+- **Requirement:** Elef shall be able to display automatically updated contextual information such as the current section, subsection, slide number, and slide count in consistent presentation regions.
+- **Rationale:** Recurring context reduces audience disorientation and eliminates repetitive manual header and footer work.
+- **Success criteria:** As the user navigates slides, configured contextual information updates to represent the active section and presentation position.
+
+#### FR-042 - Support reusable contextual elements
+
+- **Priority:** P1
+- **Requirement:** Elef shall allow users to define reusable presentation-wide elements, including section labels, project or topic markers, icons, and recurring stage indicators, and associate them with sections or other presentation structure.
+- **Rationale:** Presentations often use a repeated visual grammar, such as a project icon and a CAR stage marker, that should be declared once and reused consistently.
+- **Success criteria:** A user can define a contextual element once, associate it with relevant sections or states, and have it appear consistently without duplicating it on each slide.
+
+### 4.3 Source authoring
 
 #### FR-005 - Author presentations with Markdown
 
@@ -95,7 +125,7 @@ Requirements use the following priority model:
 - **Rationale:** Errors must be recoverable and must never look like successful output.
 - **Success criteria:** An invalid edit produces an actionable explanation and does not silently replace the document with stale or empty content.
 
-### 4.3 Semantic components and layout
+### 4.4 Semantic components and layout
 
 #### FR-010 - Render semantic presentation components
 
@@ -132,7 +162,28 @@ Requirements use the following priority model:
 - **Rationale:** Users should be able to change ideas without repairing every dependent object by hand.
 - **Success criteria:** Common content changes reflow the relevant structure without overlapping, clipping, or requiring manual repositioning.
 
-### 4.4 Themes and visual design
+#### FR-043 - Provide constrained local visual adjustments
+
+- **Priority:** P1
+- **Requirement:** Elef shall allow users to make limited, semantic visual adjustments to an otherwise automatically rendered component or slide, including supported choices for emphasis, density, alignment, spacing, size tier, and component variant.
+- **Rationale:** Automatic rendering should handle nearly all cases, but legitimate exceptions and small corrections will occur.
+- **Success criteria:** A user can correct a small visual issue without abandoning semantic authoring or exposing arbitrary coordinate-level editing.
+
+#### FR-044 - Preserve automatic design as the default
+
+- **Priority:** P0
+- **Requirement:** Elef shall make automatic layout and theme behavior the default path and shall not require local visual adjustments for ordinary, well-formed content.
+- **Rationale:** The product's value depends on making the beautiful result automatic rather than recreating PowerPoint's formatting burden.
+- **Success criteria:** Representative presentations achieve a polished result without manual per-slide or per-object tuning.
+
+#### FR-045 - Support bounded visual effect presets
+
+- **Priority:** P1
+- **Requirement:** Elef shall provide bounded semantic presets for visual effects such as shadow, transparency, border, radius, and emphasis, with sensible component-specific defaults and limits.
+- **Rationale:** Effects such as shadows and transparency are sometimes useful, but unrestricted controls would undermine consistency and accessibility.
+- **Success criteria:** A user can apply or adjust a supported effect through a small set of understandable presets without entering arbitrary numeric styling values.
+
+### 4.5 Themes and visual design
 
 #### FR-015 - Apply Oradia as the default design system
 
@@ -162,7 +213,7 @@ Requirements use the following priority model:
 - **Rationale:** Consistency is a core quality of a polished presentation and a major weakness of ad hoc slide editing.
 - **Success criteria:** Adding or changing content does not unexpectedly revert to unrelated defaults or introduce inconsistent styling.
 
-### 4.5 Media, equations, and content types
+### 4.6 Media, equations, and content types
 
 #### FR-019 - Insert media by direct manipulation
 
@@ -185,7 +236,7 @@ Requirements use the following priority model:
 - **Rationale:** Users need to combine explanatory and technical material without switching authoring systems.
 - **Success criteria:** These content types can coexist on slides and inherit the presentation's theme and layout rules.
 
-### 4.6 Presenting and interaction
+### 4.7 Presenting and interaction
 
 #### FR-022 - Provide a dedicated Present mode
 
@@ -222,7 +273,7 @@ Requirements use the following priority model:
 - **Rationale:** Users need a simple safeguard against unexpected changes before an important presentation.
 - **Success criteria:** A user can pin a version with one clear action and later identify and present that canonical version.
 
-### 4.7 Validation and overflow
+### 4.8 Validation and overflow
 
 #### FR-027 - Detect content overflow
 
@@ -238,7 +289,7 @@ Requirements use the following priority model:
 - **Rationale:** Detection is useful only when it helps the user make a better presentation.
 - **Success criteria:** A user can understand why a slide is overloaded and choose a corrective action without manually inspecting hidden geometry.
 
-### 4.8 Executable and reproducible content
+### 4.9 Executable and reproducible content
 
 #### FR-029 - Associate derived content with its inputs
 
@@ -261,7 +312,7 @@ Requirements use the following priority model:
 - **Rationale:** Reproducibility requires dependency awareness, but unexpected changes must not undermine presentation stability.
 - **Success criteria:** A changed input can update dependent content in authoring mode, and the user can see what changed before relying on it.
 
-### 4.9 Export and sharing
+### 4.10 Export and sharing
 
 #### FR-032 - Export faithful presentation artifacts
 
@@ -291,7 +342,7 @@ Requirements use the following priority model:
 - **Rationale:** Collaboration is valuable but is not central to Elef's identity.
 - **Success criteria:** Multiple authorized users can work with a presentation without silently losing changes or obscuring what content is authoritative.
 
-### 4.10 AI assistance
+### 4.11 AI assistance
 
 #### FR-036 - Operate fully without AI
 
@@ -313,4 +364,3 @@ Requirements use the following priority model:
 - **Requirement:** Elef should use observable presentation information, such as structure, density, overflow, and consistency findings, to guide AI suggestions rather than delegating layout truth to AI.
 - **Rationale:** AI should recommend useful changes based on the actual rendered document.
 - **Success criteria:** Suggestions refer to identifiable presentation conditions and do not claim that content fits or renders correctly without product validation.
-
