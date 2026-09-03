@@ -3,7 +3,6 @@
 ## Project
 
 - Elef is a Rails monolith for creating and presenting Markdown slide decks.
-- Rails is the default and only product runtime on this branch.
 - Keep raw Markdown as the canonical presentation source.
 
 ## Development
@@ -13,8 +12,6 @@
 - Use request tests for Rails boundaries and Selenium-backed Rails system tests
   for complete browser workflows.
 - Run the smallest relevant test before broader validation.
-- Do not introduce React, Tauri, autosave, export/import, a semantic DSL, Python,
-  AI, or freeform canvas behavior without explicit scope approval.
 
 ## Commits
 
