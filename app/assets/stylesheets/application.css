@@ -63,14 +63,77 @@
 .slide blockquote,
 .slide td,
 .slide th { font-size: clamp(1rem, 2vw, 1.6rem); }
-.slide pre {
+.presentation-surface pre {
   background: #191714;
+  border: 1px solid rgba(255, 247, 232, 0.12);
   border-radius: 0.75rem;
+  box-shadow: 0 12px 24px rgba(35, 29, 20, 0.16);
   color: #fff7e8;
+  font-size: clamp(0.78rem, 1.25vw, 1.15rem);
+  line-height: 1.5;
+  margin: 0.75rem 0;
+  max-width: 100%;
   overflow: auto;
-  padding: 1rem;
+  padding: clamp(0.85rem, 2vw, 1.35rem);
+  text-align: left;
 }
-.slide code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; }
+.presentation-surface pre code {
+  display: block;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: inherit;
+  line-height: inherit;
+  min-width: max-content;
+}
+.presentation-surface code {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+
+/* Rouge token colors keep generated code readable without coupling it to a deck theme. */
+.presentation-surface .highlight .k,
+.presentation-surface .highlight .kd,
+.presentation-surface .highlight .kn,
+.presentation-surface .highlight .kp,
+.presentation-surface .highlight .kr,
+.presentation-surface .highlight .kt {
+  color: #ff9f9f;
+}
+.presentation-surface .highlight .nc,
+.presentation-surface .highlight .nn,
+.presentation-surface .highlight .nf,
+.presentation-surface .highlight .nt {
+  color: #8ed6ff;
+}
+.presentation-surface .highlight .nb,
+.presentation-surface .highlight .n,
+.presentation-surface .highlight .nv,
+.presentation-surface .highlight .vc,
+.presentation-surface .highlight .vg {
+  color: #f5d28c;
+}
+.presentation-surface .highlight .s,
+.presentation-surface .highlight .s1,
+.presentation-surface .highlight .s2,
+.presentation-surface .highlight .sb,
+.presentation-surface .highlight .sc,
+.presentation-surface .highlight .sh {
+  color: #b7e3a1;
+}
+.presentation-surface .highlight .c,
+.presentation-surface .highlight .c1,
+.presentation-surface .highlight .cm,
+.presentation-surface .highlight .cp {
+  color: #9ca39a;
+}
+.presentation-surface .highlight .mi,
+.presentation-surface .highlight .mf,
+.presentation-surface .highlight .mh,
+.presentation-surface .highlight .mo {
+  color: #d6b4ff;
+}
+.presentation-surface .highlight .o,
+.presentation-surface .highlight .p {
+  color: #f2eee6;
+}
 .slide img { max-height: 70%; max-width: 100%; object-fit: contain; }
 .slide table { border-collapse: collapse; width: 100%; }
 .slide th,
