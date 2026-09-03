@@ -1,0 +1,22 @@
+<% content_for :title, "Present #{@presentation.title}" %>
+<div class="presentation-mode" data-controller="presentation" data-presentation-index-value="0">
+  <div class="presentation-toolbar">
+    <%= link_to "Exit", presentation_path(@presentation), class: "button", data: { turbo: false } %>
+    <button type="button" class="button" data-action="presentation#previous" aria-label="Previous slide">Previous</button>
+    <span data-presentation-target="counter" aria-live="polite"></span>
+    <button type="button" class="button" data-action="presentation#next" aria-label="Next slide">Next</button>
+    <button type="button" class="button" data-action="presentation#fullscreen">Fullscreen</button>
+  </div>
+
+  <div class="presentation-stage" data-presentation-target="stage" tabindex="0">
+    <% @presentation.slides.each do |slide| %>
+      <section class="slide presentation-slide slide-<%= slide.layout %>" data-presentation-target="slide" aria-label="Slide <%= slide.index + 1 %>">
+        <% if slide.markdown.blank? %>
+          <p class="empty-slide">Empty slide</p>
+        <% else %>
+          <%= render_markdown(slide.markdown) %>
+        <% end %>
+      </section>
+    <% end %>
+  </div>
+</div>

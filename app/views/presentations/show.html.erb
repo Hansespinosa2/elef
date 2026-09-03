@@ -1,0 +1,13 @@
+<% content_for :title, @presentation.title %>
+<section class="show-header">
+  <div>
+    <p class="eyebrow">Saved preview</p>
+    <h1><%= @presentation.title %></h1>
+    <p><%= pluralize(@presentation.slides.length, "slide") %> rendered from saved Markdown.</p>
+  </div>
+  <div class="show-actions">
+    <%= link_to "Edit", edit_presentation_path(@presentation), class: "button" %>
+    <%= link_to "Present", present_presentation_path(@presentation), class: "button primary", data: { turbo: false } %>
+  </div>
+</section>
+<%= render "slides", presentation: @presentation %>

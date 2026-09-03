@@ -1,0 +1,41 @@
+<%= form_with model: presentation, class: "editor-layout", data: { controller: "dirty", action: "submit->dirty#allowSubmit", dirty_unsaved_message_value: "You have unsaved presentation changes. Leave without saving?" } do |form| %>
+  <% if presentation.errors.any? %>
+    <section class="error-panel" aria-label="Validation errors">
+      <h2><%= pluralize(presentation.errors.count, "error") %> prevented saving</h2>
+      <ul>
+        <% presentation.errors.full_messages.each do |message| %>
+          <li><%= message %></li>
+        <% end %>
+      </ul>
+    </section>
+  <% end %>
+
+  <section class="source-pane">
+    <div class="field">
+      <%= form.label :title %>
+      <%= form.text_field :title, data: { dirty_target: "field", action: "input->dirty#markDirty" }, autocomplete: "off" %>
+    </div>
+
+    <div class="field source-field">
+      <%= form.label :source, "Markdown source" %>
+      <%= form.text_area :source, rows: 24, spellcheck: "false", data: { dirty_target: "field", action: "input->dirty#markDirty" } %>
+    </div>
+
+    <div class="editor-actions">
+      <%= form.submit "Save presentation", class: "button primary", data: { dirty_target: "saveButton", action: "dirty#allowSubmit" } %>
+      <% if presentation.persisted? %>
+        <%= link_to "View saved preview", presentation_path(presentation), class: "button" %>
+        <%= link_to "Present", present_presentation_path(presentation), class: "button", data: { turbo: false } %>
+      <% end %>
+      <span class="dirty-state" data-dirty-target="status" aria-live="polite">Saved</span>
+    </div>
+  </section>
+
+  <aside class="preview-pane" aria-label="Rendered slide preview">
+    <div class="preview-heading">
+      <h2>Rendered preview</h2>
+      <p>Preview is derived from the current Markdown source when this page is rendered. Save to persist and refresh it.</p>
+    </div>
+    <%= render "slides", presentation: presentation %>
+  </aside>
+<% end %>

@@ -1,0 +1,33 @@
+<% content_for :title, "Elef presentation library" %>
+<section class="library-hero">
+  <div>
+    <p class="eyebrow">Markdown presentations</p>
+    <h1>Presentation library</h1>
+    <p>Create, save, reopen, and present source-first Markdown decks.</p>
+  </div>
+  <%= link_to "New presentation", new_presentation_path, class: "button primary" %>
+</section>
+
+<section class="library-list" aria-label="Saved presentations">
+  <% if @presentations.any? %>
+    <% @presentations.each do |presentation| %>
+      <article class="library-card">
+        <div>
+          <h2><%= link_to presentation.title, edit_presentation_path(presentation) %></h2>
+          <p><%= pluralize(presentation.slides.length, "slide") %> · Updated <%= time_ago_in_words(presentation.updated_at) %> ago</p>
+        </div>
+        <div class="card-actions">
+          <%= link_to "Edit", edit_presentation_path(presentation) %>
+          <%= link_to "Preview", presentation_path(presentation) %>
+          <%= link_to "Present", present_presentation_path(presentation), data: { turbo: false } %>
+        </div>
+      </article>
+    <% end %>
+  <% else %>
+    <div class="empty-state">
+      <h2>No presentations yet</h2>
+      <p>Start with Markdown. Elef stores the source and derives every slide from it.</p>
+      <%= link_to "Create your first presentation", new_presentation_path, class: "button primary" %>
+    </div>
+  <% end %>
+</section>
