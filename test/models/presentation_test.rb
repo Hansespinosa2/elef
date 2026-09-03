@@ -80,6 +80,9 @@ class PresentationTest < ActiveSupport::TestCase
     samples = Presentations::SampleData.load!
 
     assert_equal Presentations::SampleData::SAMPLES.length, samples.length
+    Presentations::SampleData::SAMPLES.zip(samples).each do |sample, presentation|
+      assert_equal sample[:source], presentation.reload.source
+    end
     assert_equal Presentations::SampleData::SAMPLES.map { |sample| sample[:id] },
       samples.map(&:sample_id)
     assert_equal %w[dark light match], samples.map(&:presentation_theme).uniq.sort
@@ -88,5 +91,23 @@ class PresentationTest < ActiveSupport::TestCase
     assert samples.any? { |presentation| presentation.source.include?("| Feature | Example |") }
     assert samples.any? { |presentation| presentation.slides.any? { |slide| slide.layout == "intro" } }
     assert samples.any? { |presentation| presentation.slides.any? { |slide| slide.markdown.blank? } }
+  end
+
+  test "renders every sample's representative content" do
+    Presentations::SampleData.load!
+
+    assert_includes Presentations::MarkdownRenderer.render(
+      Presentation.find_by!(sample_id: "code-and-math").source
+    ), "katex"
+    tables_and_media = Presentations::MarkdownRenderer.render(
+      Presentation.find_by!(sample_id: "tables-and-media").source
+    )
+
+    assert_includes tables_and_media, "<table>"
+    assert_includes tables_and_media, 'src="https://example.com/elef.png"'
+    assert_includes tables_and_media, 'href="https://example.com"'
+    assert_includes Presentations::MarkdownRenderer.render(
+      Presentation.find_by!(sample_id: "code-and-math").source
+    ), "$not_math$"
   end
 end

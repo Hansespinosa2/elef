@@ -224,6 +224,35 @@ textarea {
 .empty-slide { color: var(--muted); font-style: italic; }
 .math-error { color: var(--danger); font-family: "SFMono-Regular", Consolas, monospace; }
 
+.katex {
+  display: inline-block;
+  line-height: 1.2;
+  text-indent: 0;
+}
+.katex-mathml {
+  border: 0;
+  clip: rect(1px, 1px, 1px, 1px);
+  height: 1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  width: 1px;
+}
+.katex-html { display: inline-block; }
+.katex-display {
+  display: block;
+  margin: 1em 0;
+  text-align: center;
+}
+.katex-display > .katex > .katex-html { display: block; position: relative; }
+.katex-display > .katex { display: inline-block; text-align: initial; }
+.katex .base {
+  display: inline-block;
+  position: relative;
+  white-space: nowrap;
+  width: min-content;
+}
+
 .presentation-body {
   background: #0f0f12;
   color: #fff;

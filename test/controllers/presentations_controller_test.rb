@@ -15,6 +15,9 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     end
     assert_redirected_to presentations_path
     assert_equal "Sample presentations loaded.", flash[:notice]
+    Presentations::SampleData::SAMPLES.each do |sample|
+      assert_equal sample[:source], Presentation.find_by!(sample_id: sample[:id]).reload.source
+    end
 
     assert_no_difference("Presentation.count") do
       post load_samples_presentations_path
@@ -75,8 +78,30 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     get presentation_path(sample)
 
     assert_response :success
-    assert_select ".katex"
+    assert_select ".slides-theme-match"
+    assert_select ".katex", 2
+    assert_select ".katex-display", 1
     assert_select "pre code", text: /puts/
     assert_select ".slide", 2
+
+    tables_and_media = Presentation.find_by!(sample_id: "tables-and-media")
+    get presentation_path(tables_and_media)
+
+    assert_select "table"
+    assert_select 'img[alt="Elef"][src="https://example.com/elef.png"]'
+    assert_select 'a[href="https://example.com"]'
+
+    layouts_and_themes = Presentation.find_by!(sample_id: "layouts-and-themes")
+    get presentation_path(layouts_and_themes)
+
+    assert_select ".slides-theme-dark"
+    assert_select ".slide-intro"
+    assert_select ".slide-body"
+
+    edge_cases = Presentation.find_by!(sample_id: "slide-edge-cases")
+    get presentation_path(edge_cases)
+
+    assert_select ".empty-slide"
+    assert_select ".slide", 3
   end
 end

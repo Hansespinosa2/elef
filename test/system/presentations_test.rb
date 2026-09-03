@@ -2,12 +2,35 @@ require "application_system_test_case"
 
 class PresentationsTest < ApplicationSystemTestCase
   test "loads sample presentations from the library" do
+    Presentation.delete_all
+
     visit presentations_path
+    assert_text "No presentations yet"
     click_on "Load sample presentations"
 
     assert_text "Sample presentations loaded."
-    assert_text "Sample: Markdown basics"
-    assert_text "Sample: Code and LaTeX math"
+    Presentations::SampleData::SAMPLES.each do |sample|
+      assert_text sample[:title]
+    end
+  end
+
+  test "renders the code and math sample with block display math" do
+    Presentations::SampleData.load!
+
+    visit presentations_path
+    within("article", text: "Sample: Code and LaTeX math") do
+      click_on "Preview"
+    end
+
+    assert_selector ".katex", count: 2, visible: true
+    assert_selector ".katex-display", visible: true
+    assert_selector ".katex-html", visible: true
+    assert_text "$not_math$"
+    assert_no_selector ".math-error"
+    assert_equal "block",
+      page.evaluate_script("getComputedStyle(document.querySelector('.katex-display')).display")
+    assert_equal "absolute",
+      page.evaluate_script("getComputedStyle(document.querySelector('.katex-mathml')).position")
   end
 
   test "user creates saves and reopens a markdown presentation" do
