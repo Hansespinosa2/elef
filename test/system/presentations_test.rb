@@ -1,6 +1,15 @@
 require "application_system_test_case"
 
 class PresentationsTest < ApplicationSystemTestCase
+  test "loads sample presentations from the library" do
+    visit presentations_path
+    click_on "Load sample presentations"
+
+    assert_text "Sample presentations loaded."
+    assert_text "Sample: Markdown basics"
+    assert_text "Sample: Code and LaTeX math"
+  end
+
   test "user creates saves and reopens a markdown presentation" do
     visit presentations_path
     click_on "New presentation", match: :first

@@ -7,6 +7,23 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_select "h1", "Presentation library"
   end
 
+  test "loads sample presentations idempotently and preserves unrelated records" do
+    unrelated = Presentation.create!(title: "Personal deck", source: "# Keep me")
+
+    assert_difference("Presentation.count", Presentations::SampleData::SAMPLES.length) do
+      post load_samples_presentations_path
+    end
+    assert_redirected_to presentations_path
+    assert_equal "Sample presentations loaded.", flash[:notice]
+
+    assert_no_difference("Presentation.count") do
+      post load_samples_presentations_path
+    end
+    assert_equal "# Keep me", unrelated.reload.source
+    assert_equal Presentations::SampleData::SAMPLES.length,
+      Presentation.where("source LIKE ?", "%#{Presentations::SampleData::MARKER_KEY}%").count
+  end
+
   test "creates a presentation from markdown source" do
     assert_difference("Presentation.count", 1) do
       post presentations_path, params: { presentation: { title: "Request Deck", source: "# One\n---\n# Two" } }

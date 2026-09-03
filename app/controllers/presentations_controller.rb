@@ -5,6 +5,11 @@ class PresentationsController < ApplicationController
     @presentations = Presentation.recent_first
   end
 
+  def load_samples
+    Presentations::SampleData.load!
+    redirect_to presentations_path, notice: "Sample presentations loaded."
+  end
+
   def show
   end
 

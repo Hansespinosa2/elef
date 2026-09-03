@@ -75,4 +75,16 @@ class PresentationTest < ActiveSupport::TestCase
     assert_includes html, "$not_math$"
     assert_includes html, "katex"
   end
+
+  test "sample data covers supported presentation features" do
+    samples = Presentations::SampleData.load!
+
+    assert_equal Presentations::SampleData::SAMPLES.length, samples.length
+    assert_equal %w[dark light match], samples.map(&:presentation_theme).uniq.sort
+    assert samples.any? { |presentation| presentation.source.include?("```ruby") }
+    assert samples.any? { |presentation| presentation.source.include?("$$") }
+    assert samples.any? { |presentation| presentation.source.include?("| Feature | Example |") }
+    assert samples.any? { |presentation| presentation.slides.any? { |slide| slide.layout == "intro" } }
+    assert samples.any? { |presentation| presentation.slides.any? { |slide| slide.markdown.blank? } }
+  end
 end

@@ -5,7 +5,10 @@
     <h1>Presentation library</h1>
     <p>Create, save, reopen, and present source-first Markdown decks.</p>
   </div>
-  <%= link_to "New presentation", new_presentation_path, class: "button primary" %>
+  <div class="card-actions">
+    <%= button_to "Load sample presentations", load_samples_presentations_path, method: :post, class: "button" %>
+    <%= link_to "New presentation", new_presentation_path, class: "button primary" %>
+  </div>
 </section>
 
 <section class="library-list" aria-label="Saved presentations">

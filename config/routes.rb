@@ -2,6 +2,9 @@ Rails.application.routes.draw do
   root "presentations#index"
 
   resources :presentations do
+    collection do
+      post :load_samples
+    end
     member do
       get :present
     end
