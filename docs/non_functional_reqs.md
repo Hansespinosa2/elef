@@ -101,9 +101,9 @@ P0/P1/P2 express importance, not delivery schedule.
 #### NFR-008 - Make canonical versions dependable
 
 - **Priority:** P1
-- **Requirement:** A pinned canonical version shall remain identifiable and reproducible as the version the user selected, subject to clearly disclosed unavailable inputs.
-- **Rationale:** Pinning is a simple but important safeguard before presenting.
-- **Verification criteria:** A user can later distinguish the pinned version from the current editable work and present the intended version.
+- **Requirement:** A pinned runnable output shall remain identifiable and reproducible as the rendered result the user selected, shall not change through automatic recomputation or execution, and shall retain provenance for its source, data, and assets, subject to clearly disclosed unavailable inputs.
+- **Rationale:** Pinning protects the output shown to an audience and is separate from editing history or presentation lineage.
+- **Verification criteria:** A user can later distinguish the pinned output from current editable work, present the intended result without unexpected execution, and inspect its provenance.
 
 ### 4.3 Responsiveness and interaction quality
 
@@ -272,6 +272,34 @@ P0/P1/P2 express importance, not delivery schedule.
 - **Requirement:** Automated layout, validation, recomputation, AI assistance, and synchronization shall not make unexplained changes that appear to be ordinary user-authored content.
 - **Rationale:** Users must remain able to understand and control the presentation.
 - **Verification criteria:** Automated changes are visible, attributable, reversible where appropriate, and distinguishable from direct authoring.
+
+#### NFR-034 - Keep lineage relationships understandable
+
+- **Priority:** P1
+- **Requirement:** Presentation lineage shall clearly distinguish formal continuation, independent inspiration, detached presentations, and rebased relationships without implying that independent presentations share live content.
+- **Rationale:** A lineage graph is useful only if its visual relationships communicate trustworthy meaning.
+- **Verification criteria:** Users can explain what a solid or dotted edge means and can identify when a presentation no longer has an active parent.
+
+#### NFR-035 - Preserve fork and copy isolation
+
+- **Priority:** P0
+- **Requirement:** Forked and copied presentation content shall remain isolated from later edits to the source unless an explicitly defined future reference capability is used.
+- **Rationale:** Unexpected propagation would undermine trust in recurring presentations, reusable visuals, and canonical outputs.
+- **Verification criteria:** Editing a source presentation does not alter a fork or copied visual that was created as independent content.
+
+#### NFR-036 - Keep fast authoring interactions responsive
+
+- **Priority:** P0
+- **Requirement:** Common keyboard shortcuts, the `:` snippet palette, fuzzy search, snippet insertion, and Tab-stop navigation shall respond quickly enough to preserve continuous authoring flow.
+- **Rationale:** Snippets and keybinds exist to remove pauses and syntax-recall friction, not introduce a new interaction delay.
+- **Verification criteria:** A user can invoke, search, accept, and complete a typical snippet without losing their editing context or waiting through avoidable transitions.
+
+#### NFR-037 - Keep copied semantic content portable
+
+- **Priority:** P1
+- **Requirement:** Editable content copied between presentations shall retain its semantic meaning and required dependencies without creating unexplained broken references or accidental source ownership.
+- **Rationale:** Cross-presentation reuse must be dependable even when the original presentation is unavailable or later changes.
+- **Verification criteria:** A copied visual renders coherently in the destination, identifies any unsupported dependency clearly, and remains independent of the source.
 
 ### 4.10 Deferred quality decisions
 

@@ -269,9 +269,9 @@ Requirements use the following priority model:
 #### FR-026 - Pin a canonical presentation version
 
 - **Priority:** P1
-- **Requirement:** Elef shall let a user pin a presentation as a canonical version for presenting, sharing, or reference.
-- **Rationale:** Users need a simple safeguard against unexpected changes before an important presentation.
-- **Success criteria:** A user can pin a version with one clear action and later identify and present that canonical version.
+- **Requirement:** Elef shall let a user pin the rendered output of a runnable presentation as a canonical version that does not automatically recompute or execute when opened or presented, while preserving provenance for the exact source, data, and assets behind that output.
+- **Rationale:** Users need to preserve the exact result they intend to present without conflating runnable-output safety with editing history or fork relationships.
+- **Success criteria:** A user can pin one rendered result, later present that same result without unexpected execution, and inspect which source, data, and assets produced it.
 
 ### 4.8 Validation and overflow
 
@@ -364,3 +364,91 @@ Requirements use the following priority model:
 - **Requirement:** Elef should use observable presentation information, such as structure, density, overflow, and consistency findings, to guide AI suggestions rather than delegating layout truth to AI.
 - **Rationale:** AI should recommend useful changes based on the actual rendered document.
 - **Success criteria:** Suggestions refer to identifiable presentation conditions and do not claim that content fits or renders correctly without product validation.
+
+### 4.12 Forking and presentation lineage
+
+#### FR-046 - Create derived presentations with an explicit relationship
+
+- **Priority:** P1
+- **Requirement:** When a user creates a presentation from an existing presentation, Elef shall let the user choose whether it is a **Fork as continuation** or a **Fork as inspiration**, and shall record the resulting relationship in a presentation lineage graph.
+- **Rationale:** The user needs both formal continuation for recurring work and looser inspiration for substantial reinterpretation, without losing the history of where a presentation came from.
+- **Success criteria:** A derived presentation is visibly connected to its source with a solid or dotted relationship, while a presentation created from scratch is a new lineage root.
+
+#### FR-047 - Preserve independent fork content
+
+- **Priority:** P0
+- **Requirement:** Both fork modes shall create an independent presentation that can be edited without changing the source presentation, while retaining the exact source snapshot from which it began.
+- **Rationale:** Forking must support recurring presentations and experimentation without unsafe propagation or surprising edits to prior work.
+- **Success criteria:** Changes to either presentation remain isolated, and the fork can identify the source presentation and source state used at creation.
+
+#### FR-048 - Distinguish continuation and inspiration relationships
+
+- **Priority:** P1
+- **Requirement:** Elef shall represent **Fork as continuation** with a solid edge for formal continuation and **Fork as inspiration** with a dotted edge for independent derivation.
+- **Rationale:** The graph should communicate whether a presentation continues a line of work or merely began from another presentation.
+- **Success criteria:** Users can distinguish the two relationship meanings without opening either presentation's source.
+
+#### FR-049 - Edit presentation lineage safely
+
+- **Priority:** P1
+- **Requirement:** Elef shall let users downgrade a solid relationship to dotted, chop or detach a dotted relationship, and rebase a derived presentation onto another presentation as a dotted relationship; it shall not promote a relationship back to solid.
+- **Rationale:** A presentation's eventual purpose may diverge from its origin, but formal continuity should not be claimed retroactively.
+- **Success criteria:** Lineage edits preserve the presentation content, update the graph visibly, and prevent a previously downgraded or dotted relationship from being relabeled as formal continuation.
+
+#### FR-050 - Navigate presentation lineage
+
+- **Priority:** P1
+- **Requirement:** Elef shall provide a navigable directed lineage graph showing presentations derived from one another and the relationship type between them.
+- **Rationale:** The graph helps users manage recurring presentations, understand progression, and find related work.
+- **Success criteria:** A user can move from a presentation to its parents and descendants and understand whether each connection represents continuation or inspiration.
+
+### 4.13 Fast authoring and cross-presentation reuse
+
+#### FR-051 - Provide built-in and personal snippets
+
+- **Priority:** P0
+- **Requirement:** Elef shall provide useful built-in snippets and let users create, edit, organize, preview, and remove personal snippets for small source fragments such as LaTeX, presentation extension syntax, recurring text, and common authoring patterns.
+- **Rationale:** Small reusable fragments make Markdown-first authoring fast without reintroducing whole-presentation templates.
+- **Success criteria:** A user can manage a personal snippet library and use it across presentations without turning snippets into linked presentation content.
+
+#### FR-052 - Open a fuzzy snippet palette from a canonical trigger
+
+- **Priority:** P0
+- **Requirement:** Typing `:` in the authoring context shall open a searchable, fuzzy-matching palette containing available snippets and allow the user to insert a selected result without leaving the editor.
+- **Rationale:** A single memorable trigger reduces the friction of recalling DSL and LaTeX syntax.
+- **Success criteria:** A user can type a partial term such as `:process` or `:beq`, find the intended snippet quickly, and insert it through keyboard interaction.
+
+#### FR-053 - Complete snippets with Tab stops
+
+- **Priority:** P0
+- **Requirement:** Snippets shall support ordered editable placeholders, with the cursor entering the first placeholder after insertion and Tab moving through subsequent placeholders.
+- **Rationale:** Inline completion preserves typing flow and is faster than reconstructing a component block manually.
+- **Success criteria:** A user can accept a snippet, fill its fields in sequence, and finish without manually navigating between placeholder locations.
+
+#### FR-054 - Support familiar customizable shortcuts
+
+- **Priority:** P0
+- **Requirement:** Elef shall provide familiar shortcuts for common authoring actions, including Cmd/Ctrl+B for bold, with sensible defaults that users can remap.
+- **Rationale:** Keyboard-first editing is essential to the user's fast authoring workflow.
+- **Success criteria:** A user can apply common formatting and authoring actions from the keyboard and change the shortcut for a common action without losing the default action.
+
+#### FR-055 - Copy semantic visuals between presentations
+
+- **Priority:** P1
+- **Requirement:** Elef shall let users copy visual content from one presentation to another as independent editable semantic content, including the required referenced dependencies needed for the copied content to work in the destination.
+- **Rationale:** Reusing a strong visual from an earlier presentation should be faster than rebuilding it while preserving Elef's structured, editable source.
+- **Success criteria:** A copied visual remains editable in the destination, works without requiring the source presentation to remain available, and does not change when the source is later edited.
+
+#### FR-056 - Offer an image paste alternative
+
+- **Priority:** P1
+- **Requirement:** When copying visual content between presentations, Elef shall offer paste as an image as an explicit alternative to editable semantic paste.
+- **Rationale:** Users sometimes need exact appearance rather than editability, especially for complex or exceptional visuals.
+- **Success criteria:** A user can choose an image result when preserving appearance is more important than preserving semantic editability.
+
+#### FR-057 - Keep cross-presentation references deferred
+
+- **Priority:** Deferred
+- **Requirement:** Elef may later allow copied content to be intentionally converted into a reference to another presentation, but the initial product shall not create such references automatically.
+- **Rationale:** Live references would introduce propagation, ownership, detach, and missing-source behavior that is not yet defined.
+- **Success criteria:** Current copy and fork workflows remain independent and do not silently inherit later changes from another presentation.
