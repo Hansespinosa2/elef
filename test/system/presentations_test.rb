@@ -62,6 +62,27 @@ class PresentationsTest < ApplicationSystemTestCase
     refute_selector "body.elef-app"
   end
 
+  test "starts every regular slide header at the same inset" do
+    presentation = Presentation.create!(
+      title: "Header alignment",
+      source: "# Short slide\n\nA short body.\n---\n# Code-heavy slide\n\n```ruby\n#{'  ' * 2}records.each { |record| process(record) }\n#{'  ' * 2}records.each { |record| process(record) }\n```\n\nAdditional body content."
+    )
+
+    visit presentation_path(presentation)
+
+    header_offsets = page.evaluate_script(<<~JAVASCRIPT)
+      [...document.querySelectorAll(".slide")].map((slide) => {
+        const header = slide.querySelector("h1");
+        const slideRect = slide.getBoundingClientRect();
+        const headerRect = header.getBoundingClientRect();
+        return headerRect.top - slideRect.top;
+      })
+    JAVASCRIPT
+
+    assert_equal 2, header_offsets.length
+    assert_equal header_offsets.first, header_offsets.last
+  end
+
   test "user creates saves and reopens a markdown presentation" do
     visit presentations_path
     click_on "New presentation", match: :first
