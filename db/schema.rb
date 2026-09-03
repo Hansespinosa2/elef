@@ -13,8 +13,10 @@
 ActiveRecord::Schema[8.1].define(version: 2026_09_03_002001) do
   create_table "presentations", force: :cascade do |t|
     t.datetime "created_at", null: false
+    t.string "sample_id"
     t.text "source", null: false
     t.string "title", null: false
     t.datetime "updated_at", null: false
+    t.index ["sample_id"], name: "index_presentations_on_sample_id", unique: true
   end
 end

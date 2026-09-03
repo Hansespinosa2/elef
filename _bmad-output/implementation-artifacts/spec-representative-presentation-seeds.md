@@ -2,7 +2,7 @@
 title: 'Add representative presentation seeds'
 type: 'feature'
 created: '2026-09-02'
-status: 'in-review'
+status: 'done'
 review_loop_iteration: 0
 baseline_commit: '6692e6d'
 context: []
@@ -74,3 +74,32 @@ Use a stable sample identity separate from user-visible titles so titles can rem
 - `bin/rails test test/models/presentation_test.rb test/controllers/presentations_controller_test.rb test/system/presentations_test.rb` -- expected: all targeted tests pass.
 - `bin/rails db:seed` -- expected: completes successfully and is safe to run twice.
 - `bin/rails zeitwerk:check` -- expected: reports no autoloading errors.
+
+## Suggested Review Order
+
+**Shared sample ownership**
+
+- Stable identities make repeat loads safe and protect unrelated presentations.
+  [`sample_data.rb:102`](../../app/lib/presentations/sample_data.rb#L102)
+
+- A unique nullable identity column prevents duplicate sample records under concurrent loads.
+  [`20260902210000_add_sample_id_to_presentations.rb:1`](../../db/migrate/20260902210000_add_sample_id_to_presentations.rb#L1)
+
+**Entry points and user workflow**
+
+- Both database setup and the explicit library action call the same builder.
+  [`seeds.rb:11`](../../db/seeds.rb#L11)
+
+- The controller exposes a deliberate POST action with success feedback.
+  [`presentations_controller.rb:8`](../../app/controllers/presentations_controller.rb#L8)
+
+- The library button makes sample data discoverable without automatic insertion.
+  [`index.html.erb:8`](../../app/views/presentations/index.html.erb#L8)
+
+**Representative content and verification**
+
+- The dataset exercises supported Markdown, layouts, themes, code, math, media, and edge cases.
+  [`sample_data.rb:7`](../../app/lib/presentations/sample_data.rb#L7)
+
+- Request tests cover idempotency, seed wiring, preservation, and rendered sample output.
+  [`presentations_controller_test.rb:10`](../../test/controllers/presentations_controller_test.rb#L10)
