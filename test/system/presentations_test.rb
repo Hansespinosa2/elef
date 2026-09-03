@@ -25,12 +25,22 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_selector ".katex", count: 2, visible: true
     assert_selector ".katex-display", visible: true
     assert_selector ".katex-html", visible: true
+    assert_selector ".mfrac .frac-line", visible: true
+    assert_selector ".msupsub", visible: true
     assert_text "$not_math$"
     assert_no_selector ".math-error"
     assert_equal "block",
       page.evaluate_script("getComputedStyle(document.querySelector('.katex-display')).display")
     assert_equal "absolute",
       page.evaluate_script("getComputedStyle(document.querySelector('.katex-mathml')).position")
+    fraction_parts = page.evaluate_script(<<~JAVASCRIPT)
+      [...document.querySelectorAll(".mfrac > .vlist-t > .vlist-r:first-child > .vlist > span > .mord")].map((element) => {
+        const rect = element.getBoundingClientRect();
+        return { top: rect.top, bottom: rect.bottom };
+      })
+    JAVASCRIPT
+    assert_equal 2, fraction_parts.length
+    assert_operator (fraction_parts.last["top"] - fraction_parts.first["top"]).abs, :>, 1
   end
 
   test "user creates saves and reopens a markdown presentation" do

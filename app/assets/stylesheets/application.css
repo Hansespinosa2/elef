@@ -239,6 +239,54 @@ textarea {
   width: 1px;
 }
 .katex-html { display: inline-block; }
+.katex .base,
+.katex .mord,
+.katex .mop,
+.katex .mbin,
+.katex .mrel,
+.katex .mopen,
+.katex .mclose,
+.katex .mpunct,
+.katex .minner {
+  display: inline-block;
+}
+.katex .strut { display: inline-block; }
+.katex .vlist-t {
+  display: inline-table;
+  table-layout: fixed;
+}
+.katex .vlist-r { display: table-row; }
+.katex .vlist {
+  display: table-cell;
+  position: relative;
+  vertical-align: bottom;
+}
+.katex .vlist > span {
+  display: block;
+  height: 0;
+  position: relative;
+}
+.katex .vlist > span > span { display: inline-block; }
+.katex .vlist-s {
+  display: table-cell;
+  width: 0;
+}
+.katex .msupsub {
+  display: inline-block;
+  text-align: left;
+}
+.katex .mfrac {
+  display: inline-block;
+  text-align: center;
+  vertical-align: middle;
+}
+.katex .mfrac > span > span { display: block; }
+.katex .mfrac .frac-line {
+  border-bottom: 1px solid currentColor;
+  display: inline-block;
+  min-height: 1px;
+  width: 100%;
+}
 .katex-display {
   display: block;
   margin: 1em 0;
