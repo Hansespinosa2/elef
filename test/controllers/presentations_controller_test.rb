@@ -5,6 +5,9 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     get presentations_path
     assert_response :success
     assert_select "h1", "Presentation library"
+    assert_select 'body.elef-app'
+    assert_select 'link[href*="tailwind"]'
+    assert_select 'link[href*="katex/katex.min"]'
   end
 
   test "loads sample presentations idempotently and preserves unrelated records" do
@@ -63,11 +66,14 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
 
     get presentation_path(presentation)
     assert_response :success
+    assert_select ".presentation-surface"
     assert_select ".slide", 2
     assert_select "h1", text: "One"
 
     get present_presentation_path(presentation)
     assert_response :success
+    assert_select "body.presentation-body"
+    assert_select ".presentation-mode.presentation-surface"
     assert_select ".presentation-slide", 2
   end
 

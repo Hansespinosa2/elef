@@ -43,6 +43,23 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_operator (fraction_parts.last["top"] - fraction_parts.first["top"]).abs, :>, 1
   end
 
+  test "keeps Elef UI and presentation surfaces as separate styling zones" do
+    presentation = Presentation.create!(title: "Scoped Deck", source: "# Scoped")
+
+    visit presentations_path
+    assert_selector "body.elef-app"
+    refute_selector "body.presentation-body"
+
+    visit presentation_path(presentation)
+    assert_selector "body.elef-app"
+    assert_selector ".presentation-surface"
+
+    visit present_presentation_path(presentation)
+    assert_selector "body.presentation-body"
+    assert_selector ".presentation-mode.presentation-surface"
+    refute_selector "body.elef-app"
+  end
+
   test "user creates saves and reopens a markdown presentation" do
     visit presentations_path
     click_on "New presentation", match: :first

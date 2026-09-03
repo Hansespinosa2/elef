@@ -1,4 +1,4 @@
-<div class="slides slides-theme-<%= presentation.presentation_theme %>">
+<div class="presentation-surface slides slides-theme-<%= presentation.presentation_theme %>">
   <% presentation.slides.each do |slide| %>
     <section class="slide slide-<%= slide.layout %>" aria-label="Slide <%= slide.index + 1 %>">
       <% if slide.markdown.blank? %>
