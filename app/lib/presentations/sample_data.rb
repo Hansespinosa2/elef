@@ -102,20 +102,33 @@ module Presentations
     def load!
       Presentation.transaction do
         SAMPLES.map do |sample|
-          presentation = find_owned(sample[:id]) || Presentation.new
-          presentation.assign_attributes(title: sample[:title], source: sample[:source])
+          presentation = Presentation.find_by(sample_id: sample[:id]) || find_legacy_owned(sample[:id]) || Presentation.new
+          presentation.assign_attributes(
+            sample_id: sample[:id],
+            title: sample[:title],
+            source: sample[:source]
+          )
           presentation.save!
           presentation
         end
       end
     end
 
-    def find_owned(id)
+    def find_legacy_owned(id)
       marker = "#{MARKER_KEY}: #{id}"
       Presentation.where("source LIKE ?", "%#{Presentation.sanitize_sql_like(marker)}%").find do |presentation|
-        presentation.source.lines.any? { |line| line.strip == marker }
+        front_matter_lines(presentation.source).any? { |line| line.strip == marker }
       end
     end
-    private_class_method :find_owned
+    private_class_method :find_legacy_owned
+
+    def front_matter_lines(source)
+      lines = source.to_s.lines
+      return [] unless lines.first&.strip == "---"
+
+      closing_index = lines.drop(1).find_index { |line| line.strip == "---" }
+      closing_index ? lines[1..closing_index] : []
+    end
+    private_class_method :front_matter_lines
   end
 end

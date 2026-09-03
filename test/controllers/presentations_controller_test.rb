@@ -21,7 +21,19 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     end
     assert_equal "# Keep me", unrelated.reload.source
     assert_equal Presentations::SampleData::SAMPLES.length,
+      Presentation.where.not(sample_id: nil).count
+    assert_equal Presentations::SampleData::SAMPLES.length,
       Presentation.where("source LIKE ?", "%#{Presentations::SampleData::MARKER_KEY}%").count
+  end
+
+  test "loads samples through the Rails seed entry point" do
+    assert_difference("Presentation.count", Presentations::SampleData::SAMPLES.length) do
+      Rails.application.load_seed
+    end
+
+    assert_no_difference("Presentation.count") do
+      Rails.application.load_seed
+    end
   end
 
   test "creates a presentation from markdown source" do
@@ -54,5 +66,17 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     get present_presentation_path(presentation)
     assert_response :success
     assert_select ".presentation-slide", 2
+  end
+
+  test "renders representative sample content in the saved preview" do
+    Presentations::SampleData.load!
+    sample = Presentation.find_by!(sample_id: "code-and-math")
+
+    get presentation_path(sample)
+
+    assert_response :success
+    assert_select ".katex"
+    assert_select "pre code", text: /puts/
+    assert_select ".slide", 2
   end
 end

@@ -2,7 +2,7 @@
 title: 'Add representative presentation seeds'
 type: 'feature'
 created: '2026-09-02'
-status: 'in-progress'
+status: 'in-review'
 review_loop_iteration: 0
 baseline_commit: '6692e6d'
 context: []

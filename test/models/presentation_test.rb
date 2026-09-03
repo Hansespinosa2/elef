@@ -80,6 +80,8 @@ class PresentationTest < ActiveSupport::TestCase
     samples = Presentations::SampleData.load!
 
     assert_equal Presentations::SampleData::SAMPLES.length, samples.length
+    assert_equal Presentations::SampleData::SAMPLES.map { |sample| sample[:id] },
+      samples.map(&:sample_id)
     assert_equal %w[dark light match], samples.map(&:presentation_theme).uniq.sort
     assert samples.any? { |presentation| presentation.source.include?("```ruby") }
     assert samples.any? { |presentation| presentation.source.include?("$$") }
