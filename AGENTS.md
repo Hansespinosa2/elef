@@ -1,11 +1,25 @@
-# Agent execution guidance
+# Repository Instructions
 
-## Tauri E2E tests
+## Project
 
-- Start with `git status --short` and identify the smallest targeted test.
-- Use `npm run test:e2e -- --mochaOpts.grep='...'` for a focused run.
-- The E2E runner reuses the existing debug binary. Rebuild explicitly with `npm run test:e2e:build` or `WDIO_BUILD=1 npm run test:e2e`.
-- Do not run the full Tauri suite before a focused test passes.
-- Before any command expected to take more than two minutes, state the command and why it is necessary.
-- If a command produces no useful output for two minutes, stop it and report the blocker rather than recreating fixtures or restarting planning.
-- Treat an existing implementation spec as the source of truth; do not restart planning when it already identifies the next unchecked task.
+- Elef is a Rails monolith for creating and presenting Markdown slide decks.
+- Rails is the default and only product runtime on this branch.
+- Keep raw Markdown as the canonical presentation source.
+
+## Development
+
+- Use Rails views with Hotwire/Stimulus by default.
+- Keep presentation parsing and rendering behavior covered by unit tests.
+- Use request tests for Rails boundaries and Selenium-backed Rails system tests
+  for complete browser workflows.
+- Run the smallest relevant test before broader validation.
+- Do not introduce React, Tauri, autosave, export/import, a semantic DSL, Python,
+  AI, or freeform canvas behavior without explicit scope approval.
+
+## Commits
+
+- Commit frequently at coherent checkpoints while working on a task.
+- Use concise imperative commit subjects, preferably 50 characters or fewer.
+- Do not add co-author trailers.
+- Do not amend commits or rewrite history unless explicitly requested.
+- Keep unrelated user changes intact.
