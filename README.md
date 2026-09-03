@@ -22,8 +22,11 @@ Elef is now a conventional Rails monolith for creating and presenting single-use
 ```bash
 bundle install
 bin/rails db:prepare
-bin/rails server
+bin/dev
 ```
+
+For a server-only session, build Tailwind first with
+`bin/rails tailwindcss:build`, then run `bin/rails server`.
 
 ## Validation
 

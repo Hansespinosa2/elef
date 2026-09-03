@@ -74,6 +74,7 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_select "body.presentation-body"
     assert_select ".presentation-mode.presentation-surface"
+    assert_select 'link[href*="tailwind"]', count: 0
     assert_select ".presentation-slide", 2
   end
 

@@ -9,6 +9,30 @@
   color: #1e1c18;
 }
 
+.presentation-surface ul {
+  list-style: disc;
+  padding-left: 1.5em;
+}
+
+.presentation-surface ol {
+  list-style: decimal;
+  padding-left: 1.5em;
+}
+
+.presentation-surface h1,
+.presentation-surface h2,
+.presentation-surface h3,
+.presentation-surface h4,
+.presentation-surface h5,
+.presentation-surface h6,
+.presentation-surface p {
+  margin-top: 0;
+}
+
+.presentation-surface a {
+  color: inherit;
+}
+
 .slides {
   display: grid;
   gap: 1.25rem;
@@ -57,6 +81,13 @@
 .presentation-body {
   background: #0f0f12;
   color: #fff;
+  margin: 0;
+}
+
+.presentation-body *,
+.presentation-body *::before,
+.presentation-body *::after {
+  box-sizing: border-box;
 }
 
 .presentation-mode {
@@ -66,10 +97,30 @@
 
 .presentation-toolbar {
   align-items: center;
+  color: #fff;
   display: flex;
   gap: 0.75rem;
   justify-content: center;
   margin-bottom: 1rem;
+}
+
+.presentation-toolbar .button {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  color: #fff;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-weight: 700;
+  min-height: 2.5rem;
+  padding: 0.55rem 1rem;
+  text-decoration: none;
+}
+
+.presentation-toolbar .button:hover {
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .presentation-stage {

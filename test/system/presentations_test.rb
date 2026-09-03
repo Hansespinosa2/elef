@@ -44,7 +44,7 @@ class PresentationsTest < ApplicationSystemTestCase
   end
 
   test "keeps Elef UI and presentation surfaces as separate styling zones" do
-    presentation = Presentation.create!(title: "Scoped Deck", source: "# Scoped")
+    presentation = Presentation.create!(title: "Scoped Deck", source: "# Scoped\n\n- One\n- Two")
 
     visit presentations_path
     assert_selector "body.elef-app"
@@ -53,6 +53,8 @@ class PresentationsTest < ApplicationSystemTestCase
     visit presentation_path(presentation)
     assert_selector "body.elef-app"
     assert_selector ".presentation-surface"
+    assert_equal "disc",
+      page.evaluate_script("getComputedStyle(document.querySelector('.presentation-surface ul')).listStyleType")
 
     visit present_presentation_path(presentation)
     assert_selector "body.presentation-body"
