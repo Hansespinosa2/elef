@@ -27,7 +27,9 @@ bin/dev
 ```
 
 For a server-only session, build Tailwind first with
-`bin/rails tailwindcss:build`, then run `bin/rails server`.
+`bin/rails tailwindcss:build`, then run `bin/rails server`. Development uses
+Propshaft's dynamic asset resolver and ignores production-style manifests in
+`public/assets`, so stylesheet changes are picked up after refresh.
 
 ## Validation
 
