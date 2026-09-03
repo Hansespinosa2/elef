@@ -22,6 +22,8 @@ class PresentationsTest < ApplicationSystemTestCase
       click_on "Preview"
     end
 
+    assert_equal "center",
+      page.evaluate_script("getComputedStyle(document.querySelector('.slide-intro')).justifyContent")
     assert_selector ".katex", count: 4, visible: true
     assert_selector ".katex-display", visible: true
     assert_selector ".katex-html", visible: true

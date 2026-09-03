@@ -51,6 +51,10 @@
   padding: clamp(1rem, 4vw, 4rem);
 }
 
+.slide:not(.slide-intro) {
+  justify-content: flex-start;
+}
+
 .slide-intro {
   align-items: center;
   text-align: center;
