@@ -301,6 +301,27 @@ P0/P1/P2 express importance, not delivery schedule.
 - **Rationale:** Cross-presentation reuse must be dependable even when the original presentation is unavailable or later changes.
 - **Verification criteria:** A copied visual renders coherently in the destination, identifies any unsupported dependency clearly, and remains independent of the source.
 
+#### NFR-038 - Make export state trustworthy
+
+- **Priority:** P0
+- **Requirement:** Export workflows shall clearly identify whether they use the latest valid render or a pinned canonical result and shall not silently export a stale result without user awareness.
+- **Rationale:** Users need to trust that a delivered file represents the state they intentionally selected.
+- **Verification criteria:** A user can distinguish current, stale, and pinned export states before and after an export.
+
+#### NFR-039 - Preserve export intent across formats
+
+- **Priority:** P1
+- **Requirement:** Export behavior shall preserve the presentation's intended content and supported state transitions consistently, while clearly identifying behavior that was flattened, approximated, or made non-editable by the target format.
+- **Rationale:** Format differences should not become unexplained discrepancies between the authored presentation and delivered artifacts.
+- **Verification criteria:** Reviewers can determine what was preserved, transformed, or omitted in PDF, HTML, PPTX, and image outputs.
+
+#### NFR-040 - Keep preservation packages self-contained and understandable
+
+- **Priority:** P1
+- **Requirement:** A preservation-oriented presentation package shall retain the relationships among source, supporting inputs, derived results, pinned outputs, and provenance well enough for a user to understand and reopen the preserved work without relying on undocumented external context.
+- **Rationale:** Long-term preservation requires more than retaining one rendered file.
+- **Verification criteria:** A user can inspect a package, locate its meaningful source and supporting material, and identify unavailable or incomplete dependencies explicitly.
+
 ### 4.10 Deferred quality decisions
 
 The following quality targets require later product decisions and should not be invented in this document:

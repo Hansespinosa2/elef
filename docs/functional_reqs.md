@@ -452,3 +452,40 @@ Requirements use the following priority model:
 - **Requirement:** Elef may later allow copied content to be intentionally converted into a reference to another presentation, but the initial product shall not create such references automatically.
 - **Rationale:** Live references would introduce propagation, ownership, detach, and missing-source behavior that is not yet defined.
 - **Success criteria:** Current copy and fork workflows remain independent and do not silently inherit later changes from another presentation.
+
+### 4.14 Export state and preservation
+
+#### FR-058 - Choose the export state
+
+- **Priority:** P0
+- **Requirement:** Elef shall export the latest valid rendered presentation by default and shall let users explicitly choose a pinned canonical result when exporting.
+- **Rationale:** Ordinary exports should reflect current work while users retain control over stable delivery artifacts.
+- **Success criteria:** A user can identify whether an export represents the latest valid render or a selected pinned result before creating it.
+
+#### FR-059 - Handle stale exports explicitly
+
+- **Priority:** P0
+- **Requirement:** When the latest valid render is stale relative to editable source or runnable inputs, Elef shall warn the user and offer clear choices to export the prior valid result, render a new result, or pin and use the current result.
+- **Rationale:** Export must not silently deliver content that differs from what the user believes they are exporting.
+- **Success criteria:** A user cannot unknowingly export stale content and can intentionally choose the desired state.
+
+#### FR-060 - Define format-specific export behavior
+
+- **Priority:** P1
+- **Requirement:** Elef shall provide PDF as a static presentation export, standalone HTML as an interactive export where supported, and PPTX as an export that balances visual fidelity with practical editability.
+- **Rationale:** Each format supports a different subset of Elef's semantic, interactive, and animated behavior.
+- **Success criteria:** Users understand the intended behavior of each export format and receive an output recognizable as the same presentation.
+
+#### FR-061 - Materialize runnable content in delivery exports
+
+- **Priority:** P0
+- **Requirement:** PDF, HTML, PPTX, and image delivery exports shall use the selected valid rendered results of Python-backed, data-driven, and other runnable content rather than requiring execution in the exported artifact.
+- **Rationale:** Delivery files should remain usable without the authoring environment or its computational dependencies.
+- **Success criteria:** An exported presentation displays the selected computed results without unexpectedly executing or recomputing source content.
+
+#### FR-062 - Export a self-contained presentation package
+
+- **Priority:** P1
+- **Requirement:** Elef shall provide a preservation-oriented export containing the presentation source, required assets, data, scripts, references, provenance, and selected pinned outputs needed to retain and reopen the presentation as a meaningful work unit.
+- **Rationale:** A PDF, HTML, or PPTX delivery file is not a substitute for preserving the editable and reproducible presentation.
+- **Success criteria:** A user can create a self-contained package, move it outside the current environment, and identify the source and supporting material associated with its preserved outputs.
