@@ -6,6 +6,7 @@ CONTAINER_CLI="${CONTAINER_CLI:-container}"
 IMAGE_OVERRIDE="${ELEF_AGENT_IMAGE:-}"
 CODEX_VERSION="${ELEF_AGENT_CODEX_VERSION:-latest}"
 CHROME_DEVTOOLS_MCP_VERSION="${ELEF_AGENT_CHROME_DEVTOOLS_MCP_VERSION:-1.8.0}"
+CONTAINER_MEMORY="${ELEF_AGENT_MEMORY:-2G}"
 WORKTREE_ROOT="${ELEF_WORKTREE_ROOT:-$(dirname "$REPO")/elef-worktrees}"
 CODEX_HOME_HOST="${CODEX_HOME:-$HOME/.codex}"
 USER_SKILLS_HOST="${ELEF_USER_SKILLS_DIR:-$HOME/Documents/GitHub/andy-skills/skills}"
@@ -296,6 +297,7 @@ run_container() {
   [[ -f "$CODEX_HOME_HOST/auth.json" ]] && mounts+=(--volume "$CODEX_HOME_HOST/auth.json:/home/developer/.codex/auth.json:ro")
   [[ -f "$GH_CONFIG_HOST/hosts.yml" ]] && mounts+=(--volume "$GH_CONFIG_HOST/hosts.yml:/home/developer/.config/gh/hosts.yml:ro")
   "$CONTAINER_CLI" run --name "$name" --detach --init \
+    --memory "$CONTAINER_MEMORY" \
     --publish "127.0.0.1:${backend_port}:3000" \
     --env "GITHUB_TOKEN=$token" --env "GH_TOKEN=$token" \
     --env PORT=3000 --env BIND=0.0.0.0 \
