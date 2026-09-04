@@ -141,6 +141,6 @@ class PresentationsTest < ApplicationSystemTestCase
 
     source.send_keys(:enter)
     assert_equal "# Math\n\n$$\nequation\n$$", source.value
-    assert_equal "equation", page.evaluate_script("const e = document.querySelector('[data-snippet-palette-target=editor]'); return e.value.slice(e.selectionStart, e.selectionEnd)")
+    assert_equal "equation", page.evaluate_script("(() => { const e = document.querySelector('[data-snippet-palette-target=editor]'); return e.value.slice(e.selectionStart, e.selectionEnd) })()")
   end
 end

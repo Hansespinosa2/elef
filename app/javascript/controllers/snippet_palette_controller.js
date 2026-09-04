@@ -20,7 +20,7 @@ export default class extends Controller {
   }
 
   keydown(event) {
-    if (this.palette.hidden) {
+    if (this.paletteTarget.hidden) {
       if (event.key === "Tab" && this.stops.length > 0) {
         event.preventDefault()
         this.nextStop()

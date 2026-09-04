@@ -48,6 +48,14 @@ class PresentationsController < ApplicationController
   end
 
   def presentation_params
-    params.require(:presentation).permit(:title, :source, :presentation_typography)
+    permitted = params.require(:presentation).permit(:title, :source, :presentation_typography)
+    if permitted[:presentation_typography] == "book" && !source_declares_typography?(permitted[:source])
+      permitted.delete(:presentation_typography)
+    end
+    permitted
+  end
+
+  def source_declares_typography?(source)
+    source.to_s.match?(/^presentationTypography\s*:/)
   end
 end
