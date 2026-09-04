@@ -23,6 +23,25 @@ class PresentationTest < ActiveSupport::TestCase
     assert_equal ["", "presentationTheme: dark"], document.slides.map(&:markdown)
   end
 
+  test "defaults presentation typography to book" do
+    assert_equal "book", Presentations::Document.parse("# Title").presentation_typography
+    assert_equal "book", Presentations::Document.parse("---\npresentationTypography: unknown\n---\n# Title").presentation_typography
+  end
+
+  test "reads and updates presentation typography without losing front matter" do
+    source = "---\ntitle: Demo\npresentationTheme: dark\npresentationTypography: modern\n---\n# Title\n---\n# Second"
+    presentation = Presentation.create!(title: "Demo", source: source)
+
+    assert_equal "modern", presentation.presentation_typography
+    presentation.presentation_typography = "technical"
+
+    assert_equal "technical", presentation.presentation_typography
+    assert_includes presentation.source, "title: Demo\n"
+    assert_includes presentation.source, "presentationTheme: dark\n"
+    assert_includes presentation.source, "presentationTypography: technical\n"
+    assert_includes presentation.source, "# Title\n---\n# Second"
+  end
+
   test "layout directive is metadata instead of rendered Markdown" do
     slide = Presentations::Document.parse(":::slide-layout{intro}\n# Welcome").slides.first
 

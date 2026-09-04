@@ -61,12 +61,25 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "# Saved\n---\n# Again", presentation.reload.source
   end
 
+  test "saves presentation typography in front matter" do
+    presentation = presentations(:one)
+
+    patch presentation_path(presentation), params: {
+      presentation: { title: presentation.title, source: presentation.source, presentation_typography: "modern" }
+    }
+
+    assert_redirected_to edit_presentation_path(presentation)
+    assert_equal "modern", presentation.reload.presentation_typography
+    assert_includes presentation.source, "presentationTypography: modern"
+  end
+
   test "renders saved preview and presentation mode" do
     presentation = presentations(:one)
 
     get presentation_path(presentation)
     assert_response :success
     assert_select ".presentation-surface"
+    assert_select ".slides-typography-book"
     assert_select ".slide", 2
     assert_select "h1", text: "One"
 
@@ -74,6 +87,7 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_select "body.presentation-body"
     assert_select ".presentation-mode.presentation-surface"
+    assert_select ".slides-typography-book"
     assert_select 'link[href*="tailwind"]', count: 0
     assert_select ".presentation-slide", 2
   end
@@ -109,5 +123,16 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     get presentation_path(edge_cases)
 
     assert_select ".slide", 10
+  end
+
+  test "editor exposes the presentation typography selector" do
+    get edit_presentation_path(presentations(:one))
+
+    assert_response :success
+    assert_select "select[name='presentation[presentation_typography]']" do
+      assert_select "option[value='book']", text: "Book"
+      assert_select "option[value='modern']", text: "Modern"
+      assert_select "option[value='technical']", text: "Technical"
+    end
   end
 end

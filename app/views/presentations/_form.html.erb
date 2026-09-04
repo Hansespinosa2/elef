@@ -21,6 +21,16 @@
       <%= form.text_area :source, rows: 24, class: "min-h-[36rem] w-full resize-y rounded-xl border border-[#ddd5c8] bg-white p-3 font-mono text-[#1e1c18] outline-none focus:border-[#6d4aff] focus:ring-2 focus:ring-[#6d4aff]/20 max-[920px]:min-h-96", spellcheck: "false", data: { dirty_target: "field", action: "input->dirty#markDirty" } %>
     </div>
 
+    <div class="field typography-field mb-4">
+      <%= form.label :presentation_typography, "Presentation typography", class: "mb-1 block font-extrabold" %>
+      <%= form.select :presentation_typography,
+        [["Book", "book"], ["Modern", "modern"], ["Technical", "technical"]],
+        {},
+        class: "w-full rounded-xl border border-[#ddd5c8] bg-white p-3 text-[#1e1c18] outline-none focus:border-[#6d4aff] focus:ring-2 focus:ring-[#6d4aff]/20",
+        data: { dirty_target: "field", action: "change->dirty#markDirty" } %>
+      <p class="field-hint">Choose the type treatment for the rendered slides. It is saved in the presentation’s Markdown front matter.</p>
+    </div>
+
     <div class="editor-actions flex flex-wrap items-center gap-3">
       <%= form.submit "Save presentation", class: "button primary inline-flex min-h-10 cursor-pointer items-center gap-1 rounded-full border border-[#6d4aff] bg-[#6d4aff] px-4 py-2 font-bold text-white hover:brightness-95", data: { dirty_target: "saveButton", action: "dirty#allowSubmit" } %>
       <% if presentation.persisted? %>

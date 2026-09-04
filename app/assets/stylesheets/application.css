@@ -1,12 +1,104 @@
 :root {
+  --oradia-slate-950: #11161a;
+  --oradia-slate-900: #182126;
+  --oradia-slate-800: #202c32;
+  --oradia-slate-700: #304047;
+  --oradia-paper: #f5f0e7;
+  --oradia-paper-bright: #fcfaf5;
+  --oradia-ink: #e9eee9;
+  --oradia-paper-ink: #252a27;
+  --oradia-muted: #aab7b1;
+  --oradia-paper-muted: #68716b;
+  --oradia-green: #9fc5a9;
+  --oradia-green-deep: #4f8b68;
+  --oradia-line: rgba(206, 224, 213, 0.18);
+  --oradia-paper-line: #d8d0c2;
+  --oradia-serif: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+  --oradia-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --oradia-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   --presentation-line: #ddd5c8;
   --presentation-muted: #6f675c;
   --presentation-danger: #a63a2d;
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--oradia-sans);
 }
 
+body.elef-app {
+  background: var(--oradia-slate-950) !important;
+  color: var(--oradia-ink) !important;
+  font-family: var(--oradia-sans);
+  min-height: 100vh;
+}
+
+.elef-app .app-header {
+  background: rgba(17, 22, 26, 0.94) !important;
+  border-color: var(--oradia-line) !important;
+  color: var(--oradia-ink);
+}
+
+.elef-app .app-header a { color: inherit; }
+.elef-app .brand { font-family: var(--oradia-serif); font-size: 1.55rem; }
+.elef-app h1,
+.elef-app h2,
+.elef-app h3 { font-family: var(--oradia-serif); letter-spacing: -0.025em; }
+.elef-app .eyebrow { color: var(--oradia-green) !important; }
+.elef-app .app-shell { max-width: 1440px; }
+.elef-app .source-pane,
+.elef-app .preview-pane,
+.elef-app .library-card,
+.elef-app .empty-state {
+  background: var(--oradia-slate-900) !important;
+  border-color: var(--oradia-line) !important;
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.16);
+}
+.elef-app .source-pane label,
+.elef-app .preview-heading h2 { color: var(--oradia-ink); }
+.elef-app .source-pane input,
+.elef-app .source-pane textarea,
+.elef-app .source-pane select {
+  background: var(--oradia-slate-950) !important;
+  border-color: var(--oradia-slate-700) !important;
+  color: var(--oradia-ink) !important;
+}
+.elef-app .source-pane input:focus,
+.elef-app .source-pane textarea:focus,
+.elef-app .source-pane select:focus {
+  border-color: var(--oradia-green) !important;
+  box-shadow: 0 0 0 3px rgba(159, 197, 169, 0.18) !important;
+}
+.elef-app .field-hint,
+.elef-app .preview-heading p,
+.elef-app .dirty-state,
+.elef-app .text-\[\#6f675c\] { color: var(--oradia-muted) !important; }
+.elef-app .button:not(.primary) {
+  background: var(--oradia-slate-800) !important;
+  border-color: var(--oradia-slate-700) !important;
+  color: var(--oradia-ink) !important;
+}
+.elef-app .button:not(.primary):hover { background: var(--oradia-slate-700) !important; }
+.elef-app .button.primary {
+  background: var(--oradia-green-deep) !important;
+  border-color: var(--oradia-green-deep) !important;
+  color: #f5faf5 !important;
+}
+.elef-app .library-card a { color: var(--oradia-ink); }
+.elef-app .library-card p,
+.elef-app .empty-state p { color: var(--oradia-muted) !important; }
+.elef-app .error-panel { background: #3a2428 !important; border-color: #92565e !important; color: #f3c7c9 !important; }
+.elef-app .flash { background: #263c31 !important; border-color: #4f8b68 !important; color: #d7eddb; }
+.field-hint { color: var(--oradia-muted); font-size: 0.82rem; line-height: 1.45; margin: 0.5rem 0 0; }
+
+.presentation-surface { font-family: var(--oradia-sans); }
+.presentation-surface h1,
+.presentation-surface h2,
+.presentation-surface h3,
+.presentation-surface h4,
+.presentation-surface h5,
+.presentation-surface h6 { font-family: var(--oradia-serif); }
+.presentation-surface code,
+.presentation-surface pre { font-family: var(--oradia-mono); }
+
 .presentation-surface {
-  color: #1e1c18;
+  color: var(--oradia-paper-ink);
 }
 
 .presentation-surface ul {
@@ -40,9 +132,9 @@
 
 .slide {
   aspect-ratio: 16 / 9;
-  background: linear-gradient(135deg, #fffdf8, #f7efe2);
-  border: 1px solid var(--presentation-line);
-  border-radius: 1.1rem;
+  background: linear-gradient(135deg, var(--oradia-paper-bright), var(--oradia-paper));
+  border: 1px solid var(--oradia-paper-line);
+  border-radius: 0.65rem;
   box-shadow: 0 24px 60px rgba(35, 29, 20, 0.08);
   display: flex;
   flex-direction: column;
@@ -83,6 +175,27 @@
   padding: clamp(0.85rem, 2vw, 1.35rem);
   text-align: left;
 }
+
+.slides-typography-book h1,
+.slides-typography-book h2,
+.slides-typography-book h3,
+.slides-typography-book h4,
+.slides-typography-book h5,
+.slides-typography-book h6 { font-family: var(--oradia-serif); }
+.slides-typography-modern h1,
+.slides-typography-modern h2,
+.slides-typography-modern h3,
+.slides-typography-modern h4,
+.slides-typography-modern h5,
+.slides-typography-modern h6 { font-family: Baskerville, "Iowan Old Style", Georgia, serif; font-weight: 600; }
+.slides-typography-technical h1,
+.slides-typography-technical h2,
+.slides-typography-technical h3,
+.slides-typography-technical h4,
+.slides-typography-technical h5,
+.slides-typography-technical h6 { font-family: var(--oradia-sans); font-weight: 750; letter-spacing: -0.04em; }
+.slides-typography-technical .slide p,
+.slides-typography-technical .slide li { font-size: 0.96em; }
 .presentation-surface pre code {
   display: block;
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
@@ -148,7 +261,7 @@
 .math-error { color: var(--presentation-danger); font-family: "SFMono-Regular", Consolas, monospace; }
 
 .presentation-body {
-  background: #0f0f12;
+  background: var(--oradia-slate-950);
   color: #fff;
   margin: 0;
 }
@@ -191,6 +304,8 @@
 .presentation-toolbar .button:hover {
   background: rgba(255, 255, 255, 0.2);
 }
+
+.presentation-toolbar .button { border-radius: 0.5rem; }
 
 .presentation-stage {
   align-items: center;
