@@ -20,6 +20,7 @@ worktree_for() { printf '%s/%s' "$WORKTREE_ROOT" "$1"; }
 container_for() { printf 'elef-agent-%s' "$(host_for "$1")"; }
 branch_for() { printf 'codex/%s' "$1"; }
 route_for() { printf '%s/routes/%s' "$AGENT_STATE_ROOT" "$1"; }
+codex_state_for() { printf '%s/codex/%s' "$AGENT_STATE_ROOT" "$1"; }
 host_for() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
 
 image_for() {
@@ -216,8 +217,14 @@ report_readiness() {
 }
 
 run_container() {
-  local task="$1" wt="$2" name="$3" token="$4" backend_port="$5" image="$6"
-  local -a mounts=(--volume "$wt:$wt" --volume "$REPO/.git:$REPO/.git")
+  local task="$1" wt="$2" name="$3" token="$4" backend_port="$5" image="$6" codex_state
+  codex_state="$(codex_state_for "$task")"
+  mkdir -p "$codex_state"
+  local -a mounts=(
+    --volume "$wt:$wt"
+    --volume "$REPO/.git:$REPO/.git"
+    --volume "$codex_state:/home/developer/.codex"
+  )
   if [[ -d "$USER_SKILLS_HOST" ]]; then
     mounts+=(--volume "$USER_SKILLS_HOST:/home/developer/.codex/skills:ro")
   else
