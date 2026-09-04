@@ -10,6 +10,10 @@
   ports. Restart only for boot-time changes that cannot reload safely
   (environment/application config, initializers, dependencies, or asset
   configuration). Verify the endpoint before and after a required restart.
+- The primary checkout belongs to the user's main agent. Never create a
+  worktree, branch, or container implicitly. The user explicitly starts an
+  isolated task with `scripts/elef-agent start TASK`, then launches Codex with
+  `scripts/elef-agent codex TASK`.
 - For isolated agent browser checks, run `scripts/elef-agent setup` once and
   use the task URL printed by `scripts/elef-agent start TASK`,
   `https://TASK.localhost`. These URLs are routed to the matching container;

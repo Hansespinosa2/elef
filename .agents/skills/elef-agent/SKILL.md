@@ -5,21 +5,28 @@ description: Use Elef's disposable Apple Container workflow for repository imple
 
 # Elef disposable agent workflow
 
-Use this skill when implementing or reviewing Elef code in an isolated task.
-The workflow gives each task a real host Git worktree and a persistent Apple
-Container. The worktree is mounted into the container, so edits made by Codex
-are immediately present on the host worktree; it is not a second copy inside
-the container.
+Use this skill when the user explicitly chooses to run an Elef task in an
+isolated worktree and Apple Container. The primary checkout belongs to the
+user's main agent. Never create a worktree, branch, or container implicitly.
 
-Run commands from the Elef repository root. Do not make task changes directly
-in the main checkout.
+The user owns the split/merge boundary. A task worktree is a real host Git
+worktree mounted into its container; it is not a second copy inside the
+container. Edits made by Codex are immediately present in that task worktree.
 
-## Start a task
+Run commands from the Elef repository root.
+
+## User-controlled task lifecycle
+
+The user starts isolation explicitly:
 
 ```sh
 scripts/elef-agent start TASK
 scripts/elef-agent codex TASK
 ```
+
+The first command creates the branch, worktree, and persistent container. The
+second launches Codex in that already-created task. An agent may use `shell`,
+`resume`, or other task commands only after the user has created the task.
 
 Use `scripts/elef-agent start TASK BASE` when the task must branch from a
 specific commit or branch. The task branch is `codex/TASK` and the worktree is
@@ -39,6 +46,20 @@ scripts/elef-agent shell TASK bin/rails test
 
 Keep browser automation headless. Use the installed Chromium and Chrome
 DevTools MCP for browser checks. Run the smallest relevant tests first.
+
+## Merge and cleanup
+
+The primary agent reviews and merges task branches. Do not merge into the
+primary checkout automatically, and do not remove a task worktree before its
+changes have been reviewed and merged:
+
+```sh
+git merge --ff-only codex/TASK
+scripts/elef-agent cleanup TASK
+```
+
+If the task is abandoned, the user can explicitly discard it with
+`scripts/elef-agent remove TASK`.
 
 ## GitHub access
 
