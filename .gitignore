@@ -9,6 +9,7 @@
 
 # Ignore all environment files.
 /.env*
+!.env.example
 
 # Ignore old/local JavaScript dependency installs.
 /node_modules

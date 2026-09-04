@@ -1,0 +1,123 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO="$(git rev-parse --show-toplevel 2>/dev/null)" || { echo "Run from elef." >&2; exit 1; }
+CONTAINER_CLI="${CONTAINER_CLI:-container}"
+IMAGE="${ELEF_AGENT_IMAGE:-elef-codex:latest}"
+WORKTREE_ROOT="${ELEF_WORKTREE_ROOT:-$(dirname "$REPO")/elef-worktrees}"
+CODEX_HOME_HOST="${CODEX_HOME:-$HOME/.codex}"
+GH_CONFIG_HOST="${GH_CONFIG_DIR:-$HOME/.config/gh}"
+
+die() { echo "error: $*" >&2; exit 1; }
+need_container() { command -v "$CONTAINER_CLI" >/dev/null || die "Apple Container CLI not found"; }
+safe_name() { [[ "${1:-}" =~ ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ ]] || die "invalid task name: ${1:-}"; }
+worktree_for() { printf '%s/%s' "$WORKTREE_ROOT" "$1"; }
+container_for() { printf 'elef-agent-%s' "$1"; }
+branch_for() { printf 'codex/%s' "$1"; }
+
+build_image() {
+  need_container
+  "$CONTAINER_CLI" build --tag "$IMAGE" \
+    --build-arg "DEV_UID=$(id -u)" --build-arg "DEV_GID=$(id -g)" \
+    --file "$REPO/.devcontainer/Containerfile" "$REPO"
+}
+
+token_for_gh() {
+  if [[ -n "${GITHUB_TOKEN:-}" ]]; then printf '%s' "$GITHUB_TOKEN"
+  elif [[ -n "${GH_TOKEN:-}" ]]; then printf '%s' "$GH_TOKEN"
+  elif command -v gh >/dev/null 2>&1; then gh auth token 2>/dev/null || true
+  fi
+}
+
+load_dotenv() {
+  local env_file
+  for env_file in "$REPO/.env" "$REPO/.env.local"; do
+    if [[ -f "$env_file" ]]; then
+      set -a
+      # shellcheck disable=SC1090
+      source "$env_file"
+      set +a
+    fi
+  done
+}
+
+start() {
+  local task="${1:-}" base="${2:-HEAD}" wt name branch token
+  [[ -n "$task" ]] || die "usage: elef-agent start TASK [BASE]"
+  safe_name "$task"
+  load_dotenv
+  token="$(token_for_gh)"
+  [[ -n "$token" ]] || die "GitHub token unavailable; run 'gh auth login' or set GITHUB_TOKEN"
+  wt="$(worktree_for "$task")"; name="$(container_for "$task")"; branch="$(branch_for "$task")"
+  [[ ! -e "$wt" ]] || die "worktree already exists: $wt"
+  need_container
+  "$CONTAINER_CLI" system start >/dev/null
+  mkdir -p "$WORKTREE_ROOT"
+  git worktree add -b "$branch" "$wt" "$base"
+  build_image
+
+  local -a mounts=(--volume "$wt:$wt" --volume "$REPO/.git:$REPO/.git")
+  [[ -f "$CODEX_HOME_HOST/auth.json" ]] && mounts+=(--volume "$CODEX_HOME_HOST/auth.json:/home/developer/.codex/auth.json:ro")
+  [[ -f "$GH_CONFIG_HOST/hosts.yml" ]] && mounts+=(--volume "$GH_CONFIG_HOST/hosts.yml:/home/developer/.config/gh/hosts.yml:ro")
+  "$CONTAINER_CLI" run --name "$name" --detach --init \
+    --env "GITHUB_TOKEN=$token" --env "GH_TOKEN=$token" \
+    "${mounts[@]}" --workdir "$wt" "$IMAGE"
+  "$CONTAINER_CLI" exec --workdir "$wt" "$name" bundle install
+  "$CONTAINER_CLI" exec --workdir "$wt" "$name" bin/rails db:prepare
+  echo "Started $name"
+  echo "Worktree: $wt"
+  echo "Branch:   $branch"
+}
+
+exec_in() {
+  local task="$1"; shift
+  safe_name "$task"; need_container
+  "$CONTAINER_CLI" exec --interactive --tty --workdir "$(worktree_for "$task")" "$(container_for "$task")" "$@"
+}
+
+stop() {
+  local task="${1:-}"; [[ -n "$task" ]] || die "usage: elef-agent stop TASK"
+  safe_name "$task"; need_container; "$CONTAINER_CLI" stop "$(container_for "$task")"
+}
+
+remove() {
+  local task="${1:-}" wt name
+  [[ -n "$task" ]] || die "usage: elef-agent remove TASK"
+  safe_name "$task"; need_container; wt="$(worktree_for "$task")"; name="$(container_for "$task")"
+  "$CONTAINER_CLI" stop "$name" 2>/dev/null || true
+  "$CONTAINER_CLI" delete "$name" 2>/dev/null || true
+  [[ ! -e "$wt" ]] || git worktree remove --force "$wt"
+  git branch -D "$(branch_for "$task")" 2>/dev/null || true
+  echo "Removed container, worktree, and local branch for $task"
+}
+
+cleanup() {
+  local task="${1:-}" wt name branch repo pr_state
+  [[ -n "$task" ]] || die "usage: elef-agent cleanup TASK"
+  safe_name "$task"; wt="$(worktree_for "$task")"; name="$(container_for "$task")"; branch="$(branch_for "$task")"
+  [[ -e "$wt" ]] || die "worktree not found: $wt"
+  [[ -z "$(git -C "$wt" status --porcelain)" ]] || die "worktree has uncommitted changes: $wt"
+  command -v gh >/dev/null || die "GitHub CLI not found"
+  repo="$(gh repo view --json nameWithOwner --jq .nameWithOwner)" || die "unable to determine GitHub repository"
+  pr_state="$(gh pr list --repo "$repo" --head "$branch" --state all --json state --jq '.[0].state // ""')"
+  [[ "$pr_state" == "MERGED" ]] || die "refusing cleanup: PR for $branch is not merged"
+  need_container
+  "$CONTAINER_CLI" stop "$name" 2>/dev/null || true
+  "$CONTAINER_CLI" delete "$name" 2>/dev/null || true
+  git worktree remove "$wt"
+  git branch -D "$branch"
+  git push origin --delete "$branch"
+  echo "Cleaned up merged task $task"
+}
+
+case "${1:-}" in
+  start) shift; start "$@" ;;
+  shell) shift; [[ -n "${1:-}" ]] || die "usage: elef-agent shell TASK [COMMAND...]"; task="$1"; shift; exec_in "$task" bash "$@" ;;
+  codex) shift; [[ -n "${1:-}" ]] || die "usage: elef-agent codex TASK [PROMPT...]"; task="$1"; shift; exec_in "$task" codex --dangerously-bypass-approvals-and-sandbox -m gpt-5.6-luna "$@" ;;
+  resume) shift; [[ -n "${1:-}" ]] || die "usage: elef-agent resume TASK"; task="$1"; shift; exec_in "$task" codex --dangerously-bypass-approvals-and-sandbox -m gpt-5.6-luna resume --last "$@" ;;
+  stop) shift; stop "$@" ;;
+  cleanup) shift; cleanup "$@" ;;
+  remove) shift; remove "$@" ;;
+  build) build_image ;;
+  *) echo "usage: $0 {start|codex|resume|shell|stop|cleanup|remove|build} TASK [ARGS...]" >&2; exit 2 ;;
+esac
