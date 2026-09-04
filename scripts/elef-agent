@@ -307,6 +307,7 @@ start() {
   echo "Worktree: $wt"
   echo "Branch:   $branch"
   echo "Browser:  https://${host}.localhost"
+  exec_in "$task" codex --dangerously-bypass-approvals-and-sandbox -m gpt-5.6-luna
 }
 
 up() {
@@ -425,10 +426,9 @@ Recommended lifecycle:
 
   1.  $0 setup
   2.  $0 start TASK [BASE]
-  3.  $0 codex TASK [PROMPT...]
-  4.  $0 status
-  5.  Review and merge codex/TASK in the primary checkout
-  6.  $0 cleanup TASK
+  3.  $0 status
+  4.  Review and merge codex/TASK in the primary checkout
+  5.  $0 cleanup TASK
 
 Commands:
 
@@ -437,9 +437,10 @@ Commands:
                         tasks. Requires Caddy and sudo.
 
   start TASK [BASE]     Create a new task worktree and branch, build/reuse the
-                        agent image, start its container, and start Rails.
-                        Use for a brand-new isolated task. BASE defaults to
-                        HEAD; it may be a branch, tag, or commit.
+                        agent image, start its container and Rails, then launch
+                        Codex immediately. Use for a brand-new isolated task.
+                        BASE defaults to HEAD; it may be a branch, tag, or
+                        commit.
 
   codex TASK [PROMPT...] Launch Codex inside a running task container.
                         Use for the first implementation prompt or a follow-up

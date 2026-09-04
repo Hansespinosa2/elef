@@ -41,7 +41,8 @@ scripts/elef-agent setup
 ```
 
 After setup, `scripts/elef-agent start editor-fix` creates the isolated
-worktree and container, prepares the database, and starts Rails automatically.
+worktree and container, prepares the database, starts Rails, and launches Codex
+automatically.
 It exposes the app at `https://editor-fix.localhost`. The hostname identifies
 the worktree while the local Caddy router forwards it to that task's isolated
 container. Each agent gets a separate backend port internally; those ports are

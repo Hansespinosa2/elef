@@ -21,11 +21,10 @@ The user starts isolation explicitly:
 
 ```sh
 scripts/elef-agent start TASK
-scripts/elef-agent codex TASK
 ```
 
-The first command creates the branch, worktree, and persistent container. The
-second launches Codex in that already-created task. An agent may use `shell`,
+The command creates the branch, worktree, and persistent container, then
+launches Codex once Rails is ready. An agent may use `shell`,
 `resume`, or other task commands only after the user has created the task.
 
 Use `scripts/elef-agent start TASK BASE` when the task must branch from a
@@ -42,6 +41,7 @@ remember that the mounted task worktree and shared Git metadata are host files.
 scripts/elef-agent resume TASK
 scripts/elef-agent shell TASK
 scripts/elef-agent shell TASK bin/rails test
+scripts/elef-agent codex TASK
 ```
 
 Keep browser automation headless. Use the installed Chromium and Chrome
