@@ -89,6 +89,12 @@ EOF
   </array>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
+  <key>WorkingDirectory</key><string>$AGENT_STATE_ROOT</string>
+  <key>EnvironmentVariables</key><dict>
+    <key>HOME</key><string>$AGENT_STATE_ROOT</string>
+    <key>XDG_CONFIG_HOME</key><string>$AGENT_STATE_ROOT/caddy-config</string>
+    <key>XDG_DATA_HOME</key><string>$AGENT_STATE_ROOT/caddy-data</string>
+  </dict>
   <key>StandardOutPath</key><string>$AGENT_STATE_ROOT/caddy.log</string>
   <key>StandardErrorPath</key><string>$AGENT_STATE_ROOT/caddy-error.log</string>
 </dict></plist>
@@ -98,7 +104,8 @@ EOF
   sudo launchctl bootout system/com.elef.agent-router 2>/dev/null || true
   sudo launchctl bootstrap system /Library/LaunchDaemons/com.elef.agent-router.plist
   sudo launchctl kickstart -k system/com.elef.agent-router
-  sudo caddy trust
+  sudo install -d -m 755 "$AGENT_STATE_ROOT/caddy-config" "$AGENT_STATE_ROOT/caddy-data"
+  sudo caddy trust --address 127.0.0.1:2019
   echo "Caddy is running on local HTTPS port 443."
   echo "Run '$0 start TASK' to create https://TASK.localhost."
 }
