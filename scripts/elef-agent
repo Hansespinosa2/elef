@@ -8,6 +8,7 @@ CODEX_VERSION="${ELEF_AGENT_CODEX_VERSION:-0.153.1}"
 CHROME_DEVTOOLS_MCP_VERSION="${ELEF_AGENT_CHROME_DEVTOOLS_MCP_VERSION:-1.8.0}"
 WORKTREE_ROOT="${ELEF_WORKTREE_ROOT:-$(dirname "$REPO")/elef-worktrees}"
 CODEX_HOME_HOST="${CODEX_HOME:-$HOME/.codex}"
+USER_SKILLS_HOST="${ELEF_USER_SKILLS_DIR:-$HOME/Documents/GitHub/andy-skills/skills}"
 GH_CONFIG_HOST="${GH_CONFIG_DIR:-$HOME/.config/gh}"
 AGENT_STATE_ROOT="${ELEF_AGENT_STATE_ROOT:-$HOME/Library/Application Support/Elef/agent-router}"
 CADDYFILE="${ELEF_AGENT_CADDYFILE:-$AGENT_STATE_ROOT/Caddyfile}"
@@ -217,6 +218,11 @@ report_readiness() {
 run_container() {
   local task="$1" wt="$2" name="$3" token="$4" backend_port="$5" image="$6"
   local -a mounts=(--volume "$wt:$wt" --volume "$REPO/.git:$REPO/.git")
+  if [[ -d "$USER_SKILLS_HOST" ]]; then
+    mounts+=(--volume "$USER_SKILLS_HOST:/home/developer/.codex/skills:ro")
+  else
+    echo "warning: user skills directory not found: $USER_SKILLS_HOST" >&2
+  fi
   [[ -f "$CODEX_HOME_HOST/auth.json" ]] && mounts+=(--volume "$CODEX_HOME_HOST/auth.json:/home/developer/.codex/auth.json:ro")
   [[ -f "$GH_CONFIG_HOST/hosts.yml" ]] && mounts+=(--volume "$GH_CONFIG_HOST/hosts.yml:/home/developer/.config/gh/hosts.yml:ro")
   "$CONTAINER_CLI" run --name "$name" --detach --init \
