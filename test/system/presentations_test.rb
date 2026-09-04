@@ -29,6 +29,25 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: /Quarterly Review June/
   end
 
+  test "preserves a 16:9 slide surface across views" do
+    parent = Presentation.create!(title: "Ratio deck", source: "# First slide\n\nContent\n---\n# Second slide")
+    child = parent.fork_as("continuation")
+    child.save!
+
+    visit presentation_path(parent)
+    preview_ratio = page.evaluate_script("(function(){ const r = document.querySelector('.slides > .slide').getBoundingClientRect(); return r.width / r.height })()")
+
+    visit present_presentation_path(parent)
+    presentation_ratio = page.evaluate_script("(function(){ const r = document.querySelector('.presentation-slide .slide').getBoundingClientRect(); return r.width / r.height })()")
+
+    visit presentations_path
+    lineage_ratio = page.evaluate_script("(function(){ const r = document.querySelector('[data-lineage-graph-id=\\\"#{parent.id}\\\"] .slide').getBoundingClientRect(); return r.width / r.height })()")
+
+    assert_in_delta 16.0 / 9.0, preview_ratio, 0.02
+    assert_in_delta preview_ratio, presentation_ratio, 0.02
+    assert_in_delta preview_ratio, lineage_ratio, 0.02
+  end
+
   test "renders the code and math sample with block display math" do
     Presentations::SampleData.load!
 

@@ -322,9 +322,15 @@
 }
 
 .presentation-slide {
+  aspect-ratio: 16 / 9;
   height: min(80vh, 56.25vw);
   max-width: calc(100vw - 2rem);
   width: min(142.22vh, calc(100vw - 2rem));
+}
+
+.presentation-slide .slide {
+  height: 100%;
+  width: 100%;
 }
 
 .presentation-slide[hidden] { display: none; }

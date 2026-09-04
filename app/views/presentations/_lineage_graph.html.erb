@@ -33,13 +33,7 @@
                 aria: { label: "Open #{presentation.title}" } do %>
             <div class="lineage-slide-thumb" aria-hidden="true">
               <div class="lineage-slide-preview presentation-surface slides slides-theme-<%= presentation.presentation_theme %>">
-                <section class="slide slide-<%= first_slide&.layout || "body" %>">
-                  <% if first_slide&.markdown.present? %>
-                    <%= render_markdown(first_slide.markdown) %>
-                  <% else %>
-                    <span>Empty slide</span>
-                  <% end %>
-                </section>
+                <%= render "slide", slide: first_slide || Presentations::Document::Slide.new(id: "empty", index: 0, markdown: "", layout: "body") %>
               </div>
             </div>
             <span class="lineage-hover-card" role="tooltip">

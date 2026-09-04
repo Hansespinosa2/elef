@@ -153,6 +153,24 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_select ".presentation-slide", 2
   end
 
+  test "uses identical slide markup in preview, presentation, and lineage" do
+    parent = Presentation.create!(title: "Shared slide", source: "# First slide\n\nThe same content\n---\n# Second slide")
+    child = parent.fork_as("continuation")
+    child.save!
+
+    get presentation_path(parent)
+    preview_slide = Nokogiri::HTML(response.body).at_css(".slides > .slide").to_html
+
+    get present_presentation_path(parent)
+    presentation_slide = Nokogiri::HTML(response.body).at_css(".presentation-slide .slide").to_html
+
+    get presentations_path
+    lineage_slide = Nokogiri::HTML(response.body).at_css(%([data-lineage-graph-id="#{parent.id}"] .slide)).to_html
+
+    assert_equal preview_slide, presentation_slide
+    assert_equal preview_slide, lineage_slide
+  end
+
   test "renders representative sample content in the saved preview" do
     Presentations::SampleData.load!
     sample = Presentation.find_by!(sample_id: "code-and-math")
