@@ -5,6 +5,10 @@ class PresentationsController < ApplicationController
     @presentations = Presentation.includes(:parent).recent_first
   end
 
+  def mockups
+    render file: Rails.root.join("docs/lineage-mockups.html"), layout: false, content_type: "text/html"
+  end
+
   def load_samples
     Presentations::SampleData.load!
     Presentations::LineageSampleData.load!

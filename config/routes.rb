@@ -1,6 +1,8 @@
 Rails.application.routes.draw do
   root "presentations#index"
 
+  get "lineage-mockups", to: "presentations#mockups"
+
   resources :presentations do
     collection do
       post :load_samples
