@@ -399,10 +399,21 @@ up() {
   report_readiness "$task" "$code"
 }
 
+restore_terminal() {
+  [[ -t 1 ]] || return 0
+  printf '\033[<u\033[?2004l\033[?1l\033[?1004l' || true
+  stty sane 2>/dev/null || true
+}
+
 exec_in() {
-  local task="$1"; shift
+  local task="$1" status; shift
   safe_name "$task"; need_container
+  trap restore_terminal EXIT
   "$CONTAINER_CLI" exec --interactive --tty --workdir "$(worktree_for "$task")" "$(container_for "$task")" "$@"
+  status=$?
+  trap - EXIT
+  restore_terminal
+  return "$status"
 }
 
 status() {
