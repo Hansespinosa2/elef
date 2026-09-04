@@ -25,6 +25,7 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_selector ".lineage-graph .lineage-node", count: 15
     assert_selector ".lineage-continuation"
     assert_selector ".lineage-inspiration"
+    assert_equal 12, page.evaluate_script("document.querySelectorAll('.lineage-edge').length")
     click_on "Open Quarterly Review June"
     assert_field "Markdown source", with: /Quarterly Review June/
   end

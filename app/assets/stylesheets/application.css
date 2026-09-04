@@ -250,6 +250,8 @@
 }
 .lineage-node:hover,
 .lineage-node:focus-visible { border-color: #b9a7ff; box-shadow: 0 0 0 4px rgba(109, 74, 255, 0.3), 0 10px 28px rgba(0, 0, 0, 0.35); transform: translateY(-2px); }
+.lineage-node { cursor: grab; }
+.lineage-node.is-dragging { cursor: grabbing; }
 .lineage-slide-thumb { aspect-ratio: 16 / 9; border: 0; border-radius: 0.6rem; padding: 0; }
 .lineage-slide-thumb::after { display: none; }
 .lineage-slide-preview { height: 562.5px; transform: scale(0.176); width: 1000px; }
