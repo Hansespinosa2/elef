@@ -1,16 +1,17 @@
 <section class="lineage-panel mt-8 rounded-2xl border border-[#ddd5c8] bg-[#fffdf8] p-5" aria-labelledby="lineage-heading">
+  <% lineage_presentations = presentations.select { |presentation| presentation.parent_id.present? || presentations.any? { |candidate| candidate.parent_id == presentation.id } } %>
   <div class="mb-4 flex items-end justify-between gap-4 max-[920px]:flex-col max-[920px]:items-stretch">
     <div>
       <p class="eyebrow mb-1 text-xs font-extrabold uppercase tracking-[0.12em] text-[#6d4aff]">Presentation relationships</p>
       <h2 id="lineage-heading" class="mb-1 text-2xl font-bold">Lineage graph</h2>
       <p class="text-[#6f675c]">Solid lines continue a presentation. Dotted lines show independent inspiration.</p>
     </div>
-    <span class="text-sm font-bold text-[#6f675c]"><%= pluralize(presentations.length, "presentation") %></span>
+    <span class="text-sm font-bold text-[#6f675c]"><%= pluralize(lineage_presentations.length, "presentation") %></span>
   </div>
 
-  <% if presentations.any? %>
+  <% if lineage_presentations.any? %>
     <div class="lineage-graph overflow-x-auto" role="img" aria-label="Presentation lineage graph">
-      <% presentations.group_by { |presentation| lineage_root(presentation).id }.each_value do |tree| %>
+      <% lineage_presentations.group_by { |presentation| lineage_root(presentation).id }.each_value do |tree| %>
         <% root = tree.find { |presentation| presentation.parent.nil? } || tree.first %>
         <% layout = lineage_layout(tree, root) %>
         <section class="lineage-tree" aria-labelledby="lineage-tree-<%= root.id %>">

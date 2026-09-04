@@ -92,11 +92,11 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     get presentations_path
 
     assert_response :success
-    assert_select ".lineage-graph .lineage-node", count: 6
+    assert_select ".lineage-graph .lineage-node", count: 15
     assert_select ".lineage-continuation"
     assert_select ".lineage-inspiration"
-    assert_select ".lineage-slide-thumb", count: 6
-    assert_select ".lineage-hover-card", count: 6
+    assert_select ".lineage-slide-thumb", count: 15
+    assert_select ".lineage-hover-card", count: 15
     assert_select ".lineage-hover-card", text: /Created.*Last published/m
   end
 

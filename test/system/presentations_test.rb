@@ -22,7 +22,7 @@ class PresentationsTest < ApplicationSystemTestCase
 
     visit presentations_path
 
-    assert_selector ".lineage-graph .lineage-node", count: 5
+    assert_selector ".lineage-graph .lineage-node", count: 15
     assert_selector ".lineage-continuation"
     assert_selector ".lineage-inspiration"
     click_on "Open Quarterly Review June"

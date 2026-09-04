@@ -116,13 +116,14 @@ class PresentationTest < ActiveSupport::TestCase
     ), "$not_math$"
   end
 
-  test "lineage seed creates a five-presentation tree" do
+  test "lineage seed creates three five-presentation trees" do
     records = Presentations::LineageSampleData.load!
 
-    assert_equal 5, records.length
-    assert_equal 2, records.count(&:continuation?)
-    assert_equal 2, records.count(&:inspiration?)
-    assert_equal ["lineage-root"], records.select { |record| record.parent.nil? }.map(&:sample_id)
+    assert_equal 15, records.length
+    assert_equal 6, records.count(&:continuation?)
+    assert_equal 6, records.count(&:inspiration?)
+    assert_equal %w[lineage-product-root lineage-research-root lineage-root],
+      records.select { |record| record.parent.nil? }.map(&:sample_id).sort
     assert_equal records.find { |record| record.sample_id == "lineage-root" }.source,
       records.find { |record| record.sample_id == "lineage-continuation-june" }.fork_source
   end
