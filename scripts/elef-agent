@@ -23,6 +23,19 @@ route_for() { printf '%s/routes/%s' "$AGENT_STATE_ROOT" "$1"; }
 codex_state_for() { printf '%s/codex/%s' "$AGENT_STATE_ROOT" "$1"; }
 host_for() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
 
+delete_codex_state() {
+  local task="$1" state codex_root
+  state="$(codex_state_for "$task")"
+  codex_root="$AGENT_STATE_ROOT/codex"
+  [[ "$state" == "$codex_root/"* ]] || die "refusing to delete unexpected Codex state path: $state"
+  [[ "$state" != "$codex_root" && "$state" != "$codex_root/" ]] || die "refusing to delete Codex state root"
+  [[ ! -L "$state" ]] || die "refusing to delete symlinked Codex state: $state"
+  if [[ -d "$state" ]]; then
+    rm -rf -- "$state"
+    echo "Deleted Codex session state: $state"
+  fi
+}
+
 image_for() {
   if [[ -n "$IMAGE_OVERRIDE" ]]; then
     printf '%s' "$IMAGE_OVERRIDE"
@@ -394,6 +407,7 @@ cleanup() {
   git worktree remove "$wt"
   git branch -D "$branch"
   git push origin --delete "$branch"
+  delete_codex_state "$task"
   echo "Cleaned up merged task $task"
 }
 
