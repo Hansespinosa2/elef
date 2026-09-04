@@ -1,5 +1,5 @@
 <section class="lineage-panel mt-8 rounded-2xl border border-[#ddd5c8] bg-[#fffdf8] p-5" aria-labelledby="lineage-heading">
-  <% lineage_presentations = presentations.select { |presentation| presentation.parent_id.present? || presentations.any? { |candidate| candidate.parent_id == presentation.id } } %>
+  <% lineage_presentations = presentations %>
   <div class="mb-4 flex items-end justify-between gap-4 max-[920px]:flex-col max-[920px]:items-stretch">
     <div>
       <p class="eyebrow mb-1 text-xs font-extrabold uppercase tracking-[0.12em] text-[#6d4aff]">Presentation relationships</p>
