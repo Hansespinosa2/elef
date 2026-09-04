@@ -7,16 +7,17 @@ IMAGE="${ELEF_AGENT_IMAGE:-elef-codex:latest}"
 WORKTREE_ROOT="${ELEF_WORKTREE_ROOT:-$(dirname "$REPO")/elef-worktrees}"
 CODEX_HOME_HOST="${CODEX_HOME:-$HOME/.codex}"
 GH_CONFIG_HOST="${GH_CONFIG_DIR:-$HOME/.config/gh}"
-AGENT_STATE_ROOT="${ELEF_AGENT_STATE_ROOT:-${TMPDIR:-/tmp}/elef-agent}"
-PROXY_PORT="${ELEF_AGENT_PROXY_PORT:-3001}"
+AGENT_STATE_ROOT="${ELEF_AGENT_STATE_ROOT:-$HOME/Library/Application Support/Elef/agent-router}"
+CADDYFILE="${ELEF_AGENT_CADDYFILE:-$AGENT_STATE_ROOT/Caddyfile}"
 
 die() { echo "error: $*" >&2; exit 1; }
 need_container() { command -v "$CONTAINER_CLI" >/dev/null || die "Apple Container CLI not found"; }
-safe_name() { [[ "${1:-}" =~ ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ ]] || die "invalid task name: ${1:-}"; }
+safe_name() { [[ "${1:-}" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*[a-zA-Z0-9]$ ]] || die "invalid task name: ${1:-}"; }
 worktree_for() { printf '%s/%s' "$WORKTREE_ROOT" "$1"; }
 container_for() { printf 'elef-agent-%s' "$1"; }
 branch_for() { printf 'codex/%s' "$1"; }
 route_for() { printf '%s/routes/%s' "$AGENT_STATE_ROOT" "$1"; }
+host_for() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
 
 backend_port_for() {
   local task="$1" digest offset
@@ -25,17 +26,81 @@ backend_port_for() {
   printf '%s' "$((3100 + offset))"
 }
 
-ensure_proxy() {
-  local pid_file="${AGENT_STATE_ROOT}/proxy.pid" pid
+router_ready() { command -v caddy >/dev/null 2>&1; }
+
+render_routes() {
+  local route task port
   mkdir -p "$AGENT_STATE_ROOT/routes"
-  if [[ -f "$pid_file" ]]; then
-    pid="$(<"$pid_file")"
-    if kill -0 "$pid" 2>/dev/null; then return; fi
-    rm -f "$pid_file"
+  {
+    echo '{'
+    echo '  auto_https disable_redirects'
+    echo '}'
+    echo
+    for route in "$AGENT_STATE_ROOT"/routes/*; do
+      [[ -f "$route" ]] || continue
+      task="$(basename "$route")"; port="$(<"$route")"
+      cat <<EOF
+https://${task}.localhost {
+  bind 127.0.0.1
+  tls internal
+  reverse_proxy 127.0.0.1:${port}
+}
+
+EOF
+    done
+  } >"$CADDYFILE"
+}
+
+reload_router() {
+  router_ready || die "Caddy is not installed; run '$0 setup' first"
+  render_routes
+  caddy reload --config "$CADDYFILE" --adapter caddyfile >/dev/null 2>&1 || \
+    die "Caddy is not running; run '$0 setup' first"
+}
+
+setup() {
+  if ! router_ready; then
+    cat >&2 <<EOF
+Caddy is required for worktree browser URLs.
+Install it with:
+
+  brew install caddy
+
+Then run this command again. Caddy's local CA must also be trusted once:
+
+  sudo caddy trust
+EOF
+    return 1
   fi
-  python3 "$REPO/scripts/elef-agent-proxy" "$AGENT_STATE_ROOT/routes" "$PROXY_PORT" \
-    >"$AGENT_STATE_ROOT/proxy.log" 2>&1 &
-  printf '%s' "$!" >"$pid_file"
+  mkdir -p "$AGENT_STATE_ROOT/routes"
+  render_routes
+  caddy validate --config "$CADDYFILE" --adapter caddyfile >/dev/null || \
+    die "invalid Caddy configuration: $CADDYFILE"
+  local plist="$(mktemp -t elef-agent-router).plist"
+  cat >"$plist" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.elef.agent-router</string>
+  <key>ProgramArguments</key><array>
+    <string>$(command -v caddy)</string><string>run</string>
+    <string>--config</string><string>$CADDYFILE</string>
+    <string>--adapter</string><string>caddyfile</string>
+  </array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>$AGENT_STATE_ROOT/caddy.log</string>
+  <key>StandardErrorPath</key><string>$AGENT_STATE_ROOT/caddy-error.log</string>
+</dict></plist>
+EOF
+  sudo caddy trust
+  sudo install -m 644 "$plist" /Library/LaunchDaemons/com.elef.agent-router.plist
+  rm -f "$plist"
+  sudo launchctl bootout system/com.elef.agent-router 2>/dev/null || true
+  sudo launchctl bootstrap system /Library/LaunchDaemons/com.elef.agent-router.plist
+  sudo launchctl kickstart -k system/com.elef.agent-router
+  echo "Caddy is running on local HTTPS port 443."
+  echo "Run '$0 start TASK' to create https://TASK.localhost."
 }
 
 build_image() {
@@ -65,9 +130,12 @@ load_dotenv() {
 }
 
 start() {
-  local task="${1:-}" base="${2:-HEAD}" wt name branch token backend_port
+  local task="${1:-}" base="${2:-HEAD}" wt name branch token backend_port host
   [[ -n "$task" ]] || die "usage: elef-agent start TASK [BASE]"
   safe_name "$task"
+  host="$(host_for "$task")"
+  router_ready || die "Caddy is not installed; run '$0 setup' first"
+  [[ ! "$host" =~ (^|\.)([.-]|$) ]] || die "task name cannot contain empty or hyphen-starting hostname labels: $task"
   load_dotenv
   token="$(token_for_gh)"
   [[ -n "$token" ]] || die "GitHub token unavailable; run 'gh auth login' or set GITHUB_TOKEN"
@@ -78,6 +146,7 @@ start() {
   if lsof -nP -iTCP:"$backend_port" -sTCP:LISTEN >/dev/null 2>&1; then
     die "backend port is already in use: $backend_port"
   fi
+  [[ ! -e "$(route_for "$host")" ]] || die "browser route already exists: https://${host}.localhost"
   "$CONTAINER_CLI" system start >/dev/null
   mkdir -p "$WORKTREE_ROOT"
   git worktree add -b "$branch" "$wt" "$base"
@@ -92,12 +161,12 @@ start() {
     "${mounts[@]}" --workdir "$wt" "$IMAGE"
   "$CONTAINER_CLI" exec --workdir "$wt" "$name" bundle install
   "$CONTAINER_CLI" exec --workdir "$wt" "$name" bin/rails db:prepare
-  ensure_proxy
-  printf '%s' "$backend_port" >"$(route_for "$task")"
+  printf '%s' "$backend_port" >"$(route_for "$host")"
+  reload_router
   echo "Started $name"
   echo "Worktree: $wt"
   echo "Branch:   $branch"
-  echo "Browser:  http://${task}.localhost:${PROXY_PORT}"
+  echo "Browser:  https://${host}.localhost"
 }
 
 exec_in() {
@@ -106,27 +175,41 @@ exec_in() {
   "$CONTAINER_CLI" exec --interactive --tty --workdir "$(worktree_for "$task")" "$(container_for "$task")" "$@"
 }
 
+status() {
+  local route host port state
+  printf '%-32s %-8s %s\n' "TASK" "STATE" "URL"
+  for route in "$AGENT_STATE_ROOT"/routes/*; do
+    [[ -f "$route" ]] || continue
+    host="$(basename "$route")"; port="$(<"$route")"; state="stopped"
+    lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1 && state="running"
+    printf '%-32s %-8s https://%s.localhost\n' "$host" "$state" "$host"
+  done
+}
+
 stop() {
-  local task="${1:-}"; [[ -n "$task" ]] || die "usage: elef-agent stop TASK"
-  safe_name "$task"; need_container; "$CONTAINER_CLI" stop "$(container_for "$task")"
+  local task="${1:-}" host; [[ -n "$task" ]] || die "usage: elef-agent stop TASK"
+  safe_name "$task"; host="$(host_for "$task")"; need_container; "$CONTAINER_CLI" stop "$(container_for "$task")"
+  rm -f "$(route_for "$host")"
+  reload_router
 }
 
 remove() {
-  local task="${1:-}" wt name
+  local task="${1:-}" wt name host
   [[ -n "$task" ]] || die "usage: elef-agent remove TASK"
-  safe_name "$task"; need_container; wt="$(worktree_for "$task")"; name="$(container_for "$task")"
+  safe_name "$task"; host="$(host_for "$task")"; need_container; wt="$(worktree_for "$task")"; name="$(container_for "$task")"
   "$CONTAINER_CLI" stop "$name" 2>/dev/null || true
   "$CONTAINER_CLI" delete "$name" 2>/dev/null || true
-  rm -f "$(route_for "$task")"
+  rm -f "$(route_for "$host")"
+  router_ready && reload_router || true
   [[ ! -e "$wt" ]] || git worktree remove --force "$wt"
   git branch -D "$(branch_for "$task")" 2>/dev/null || true
   echo "Removed container, worktree, and local branch for $task"
 }
 
 cleanup() {
-  local task="${1:-}" wt name branch repo pr_state
+  local task="${1:-}" wt name branch repo pr_state host
   [[ -n "$task" ]] || die "usage: elef-agent cleanup TASK"
-  safe_name "$task"; wt="$(worktree_for "$task")"; name="$(container_for "$task")"; branch="$(branch_for "$task")"
+  safe_name "$task"; host="$(host_for "$task")"; wt="$(worktree_for "$task")"; name="$(container_for "$task")"; branch="$(branch_for "$task")"
   [[ -e "$wt" ]] || die "worktree not found: $wt"
   [[ -z "$(git -C "$wt" status --porcelain)" ]] || die "worktree has uncommitted changes: $wt"
   command -v gh >/dev/null || die "GitHub CLI not found"
@@ -136,7 +219,8 @@ cleanup() {
   need_container
   "$CONTAINER_CLI" stop "$name" 2>/dev/null || true
   "$CONTAINER_CLI" delete "$name" 2>/dev/null || true
-  rm -f "$(route_for "$task")"
+  rm -f "$(route_for "$host")"
+  router_ready && reload_router || true
   git worktree remove "$wt"
   git branch -D "$branch"
   git push origin --delete "$branch"
@@ -144,6 +228,8 @@ cleanup() {
 }
 
 case "${1:-}" in
+  setup) shift; setup "$@" ;;
+  status) shift; status "$@" ;;
   start) shift; start "$@" ;;
   shell) shift; [[ -n "${1:-}" ]] || die "usage: elef-agent shell TASK [COMMAND...]"; task="$1"; shift; exec_in "$task" bash "$@" ;;
   codex) shift; [[ -n "${1:-}" ]] || die "usage: elef-agent codex TASK [PROMPT...]"; task="$1"; shift; exec_in "$task" codex --dangerously-bypass-approvals-and-sandbox -m gpt-5.6-luna "$@" ;;
@@ -152,5 +238,5 @@ case "${1:-}" in
   cleanup) shift; cleanup "$@" ;;
   remove) shift; remove "$@" ;;
   build) build_image ;;
-  *) echo "usage: $0 {start|codex|resume|shell|stop|cleanup|remove|build} TASK [ARGS...]" >&2; exit 2 ;;
+  *) echo "usage: $0 {setup|status|start|codex|resume|shell|stop|cleanup|remove|build} TASK [ARGS...]" >&2; exit 2 ;;
 esac

@@ -31,6 +31,22 @@ For a server-only session, build Tailwind first with
 Propshaft's dynamic asset resolver and ignores production-style manifests in
 `public/assets`, so stylesheet changes are picked up after refresh.
 
+## Isolated agent browser URLs
+
+The disposable agent workflow gives each task a stable browser identity. On a
+Mac, run the one-time guided setup:
+
+```bash
+scripts/elef-agent setup
+```
+
+After setup, starting `editor-fix` exposes its app at
+`https://editor-fix.localhost`. The hostname identifies the worktree while
+the local Caddy router forwards it to that task's isolated container. Each
+agent gets a separate backend port internally; those ports are loopback-only
+and do not appear in the browser URL. Stop or remove the task to unregister
+its route.
+
 ## Validation
 
 ```bash
