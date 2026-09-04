@@ -13,7 +13,6 @@ module Presentations
           #{MARKER_KEY}: markdown-basics
           presentationTheme: light
           ---
-          :::slide-layout{intro}
           # Markdown in practice
 
           A complete tour of the writing patterns that make a presentation easy
@@ -105,13 +104,11 @@ module Presentations
           #{MARKER_KEY}: layouts-and-themes
           presentationTheme: dark
           ---
-          :::slide-layout{intro}
           # Designing a visual system
 
-          This deck exercises intro and body layouts while telling a complete
-          story about consistent presentation design.
+          This deck exercises automatic layouts while telling a complete story
+          about consistent presentation design.
           ---
-          :::slide-layout{body}
           # Why consistency matters
 
           Consistency reduces the interpretation an audience must do. Repeated
@@ -123,15 +120,18 @@ module Presentations
           ---
           # Establish a visual contract
 
-          A theme is a contract between the document and its audience. It sets
-          expectations for background, foreground, accents, and emphasis.
+          ## Source
 
-          The content should remain understandable if the theme changes.
+          A theme is a contract between the document and its audience.
+
+          ## Theme
+
+          The content should remain understandable if the visual system changes.
           ---
-          # Intro slides create orientation
+          # Opening slides create orientation
 
-          The `intro` layout gives a major section room to breathe. Use it for
-          a new chapter, a key question, or a transition in the narrative.
+          A short statement gives a major section room to breathe. Use it for a
+          new chapter, a key question, or a transition in the narrative.
 
           It should not be used merely because a slide has a large heading.
           ---
@@ -145,11 +145,17 @@ module Presentations
           ---
           # Contrast supports comprehension
 
-          Dark themes can create focus, but contrast still needs to be tested:
+          ## Readability
 
-          - primary text must remain comfortable to read;
-          - muted text must not disappear;
-          - links and code need visible boundaries.
+          Dark themes can create focus, but contrast still needs to be tested.
+
+          ## Meaning
+
+          Primary text, muted text, links, and code need distinct boundaries.
+
+          ## Consistency
+
+          Every choice should remain legible when the audience is far away.
           ---
           # Theme and content stay separate
 
@@ -173,6 +179,8 @@ module Presentations
           ---
           # Review the whole arc
 
+          :::position{center middle}
+
           Before presenting, check the sequence at thumbnail scale:
 
           1. Does the visual rhythm vary?
@@ -182,8 +190,105 @@ module Presentations
           # Design system takeaway
 
           Themes provide atmosphere, layouts provide intent, and Markdown
-          provides the content. Keeping those responsibilities separate makes
-          the deck easier to edit and easier for Elef to render.
+          provides the content. Keeping those responsibilities separate makes the deck easier to edit and easier for Elef to render.
+          ---
+          # Two columns with independent positions
+
+          ## Bullets
+
+          :::position{center middle}
+
+          - Center the important points.
+          - Keep the list easy to scan.
+
+          ## Code
+
+          :::position{right bottom}
+
+          ```ruby
+          layout = infer_layout(document)
+          render(layout)
+          ```
+          ---
+          # Three columns at a glance
+
+          ## First
+
+          :::position{left top}
+
+          Start with the question.
+
+          ## Second
+
+          :::position{center middle}
+
+          Compare the alternatives.
+
+          ## Third
+
+          :::position{right bottom}
+
+          Make the decision.
+          ---
+          # Horizontal positions
+
+          ## Left
+
+          :::position{left top}
+
+          Left aligned.
+
+          ## Center
+
+          :::position{center top}
+
+          Center aligned.
+
+          ## Right
+
+          :::position{right top}
+
+          Right aligned.
+          ---
+          # Vertical positions
+
+          ## Top
+
+          :::position{left top}
+
+          Top aligned.
+
+          ## Middle
+
+          :::position{left middle}
+
+          Middle aligned.
+
+          ## Bottom
+
+          :::position{center bottom}
+
+          Bottom aligned.
+          ---
+          # More position combinations
+
+          ## Lower left
+
+          :::position{left bottom}
+
+          Lower-left content.
+
+          ## Center right
+
+          :::position{right middle}
+
+          Middle-right content.
+
+          ## Lower center
+
+          :::position{center bottom}
+
+          Lower-center content.
         MARKDOWN
       },
       {
@@ -194,7 +299,6 @@ module Presentations
           #{MARKER_KEY}: code-and-math
           presentationTheme: match
           ---
-          :::slide-layout{intro}
           # Reasoning with code and math
 
           A technical presentation needs more than a code sample. It needs a
@@ -252,9 +356,6 @@ module Presentations
             .group_by(&:category)
             .transform_values(&:count)
           ```
-
-          Chaining makes the data flow readable, but it may also allocate
-          intermediate collections. The code should invite a useful question.
           ---
           # Put limits where they belong
 
@@ -288,7 +389,6 @@ module Presentations
           ---
           #{MARKER_KEY}: tables-and-media
           ---
-          :::slide-layout{intro}
           # Communicating a product decision
 
           A decision deck combines narrative, comparison, evidence, and a
@@ -333,9 +433,6 @@ module Presentations
           # Use images as evidence
 
           ![A representative slide canvas](https://example.com/slide-canvas.png)
-
-          An image can show a state that prose cannot: density, alignment,
-          contrast, or the relationship between editor and preview.
           ---
           # Explain the cost
 
@@ -377,7 +474,6 @@ module Presentations
           #{MARKER_KEY}: slide-edge-cases
           presentationTheme: light
           ---
-          :::slide-layout{intro}
           # Stress testing the document boundary
 
           Real documents contain punctuation, fences, long lines, metadata, and
@@ -469,7 +565,6 @@ module Presentations
           #{MARKER_KEY}: elef-workflow
           presentationTheme: dark
           ---
-          :::slide-layout{intro}
           # From source to stage
 
           A complete Elef workflow turns a Markdown document into a reviewable,
@@ -555,7 +650,6 @@ module Presentations
           #{MARKER_KEY}: renderer-stress-test
           presentationTheme: match
           ---
-          :::slide-layout{intro}
           # Renderer stress test
 
           This deliberate kitchen-sink deck combines the Markdown, layout, code,

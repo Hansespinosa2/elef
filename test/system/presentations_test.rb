@@ -43,6 +43,35 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_operator (fraction_parts[1]["top"] - fraction_parts[0]["top"]).abs, :>, 1
   end
 
+  test "renders automatic layouts and positioned blocks" do
+    presentation = Presentation.create!(
+      title: "Automatic layouts",
+      source: <<~MARKDOWN
+        # Compare
+
+        ## Left
+
+        One side.
+
+        ## Right
+
+        The other side.
+        ---
+        # Positioned
+
+        :::position{center middle}
+
+        Center this message.
+      MARKDOWN
+    )
+
+    visit presentation_path(presentation)
+
+    assert_selector ".slide-two-column .slide-regions"
+    assert_selector ".slide-statement .position-center.position-middle", text: /Center this message/
+    refute_text ":::position"
+  end
+
   test "keeps Elef UI and presentation surfaces as separate styling zones" do
     presentation = Presentation.create!(title: "Scoped Deck", source: "# Scoped\n\n- One\n- Two")
 
