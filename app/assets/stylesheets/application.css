@@ -147,6 +147,15 @@
 .empty-slide { color: var(--presentation-muted); font-style: italic; }
 .math-error { color: var(--presentation-danger); font-family: "SFMono-Regular", Consolas, monospace; }
 
+.lineage-graph { display: grid; gap: 0.75rem; padding: 0.5rem 0; }
+.lineage-row { min-width: 18rem; padding-left: calc(var(--lineage-depth) * 3rem); position: relative; }
+.lineage-child { border-left: 2px solid #6d4aff; margin-left: calc(var(--lineage-depth) * 1.5rem); padding-left: 1.5rem; }
+.lineage-child.lineage-inspiration { border-left-style: dotted; }
+.lineage-connector { display: block; height: 2px; left: 0; position: absolute; top: 50%; width: 1.5rem; }
+.lineage-continuation .lineage-connector { background: #6d4aff; }
+.lineage-inspiration .lineage-connector { border-top: 2px dotted #6d4aff; }
+.lineage-node { box-shadow: 0 8px 20px rgba(35, 29, 20, 0.05); }
+
 .presentation-body {
   background: #0f0f12;
   color: #fff;

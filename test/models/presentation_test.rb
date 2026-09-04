@@ -115,4 +115,27 @@ class PresentationTest < ActiveSupport::TestCase
       Presentation.find_by!(sample_id: "code-and-math").source
     ), "$not_math$"
   end
+
+  test "lineage seed creates a five-presentation tree" do
+    records = Presentations::LineageSampleData.load!
+
+    assert_equal 5, records.length
+    assert_equal 2, records.count(&:continuation?)
+    assert_equal 2, records.count(&:inspiration?)
+    assert_equal ["lineage-root"], records.select { |record| record.parent.nil? }.map(&:sample_id)
+    assert_equal records.find { |record| record.sample_id == "lineage-root" }.source,
+      records.find { |record| record.sample_id == "lineage-continuation-june" }.fork_source
+  end
+
+  test "deleting a parent leaves the fork detached and intact" do
+    parent = Presentation.create!(title: "Parent", source: "# Parent")
+    child = parent.fork_as("continuation")
+    child.save!
+
+    parent.destroy!
+
+    assert_nil child.reload.parent
+    assert_equal "# Parent", child.source
+    assert_equal "Parent", child.fork_parent_title
+  end
 end

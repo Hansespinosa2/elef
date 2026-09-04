@@ -33,13 +33,65 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "loads samples through the Rails seed entry point" do
-    assert_difference("Presentation.count", Presentations::SampleData::SAMPLES.length) do
+    expected_count = Presentations::SampleData::SAMPLES.length + Presentations::LineageSampleData::SAMPLES.length
+    assert_difference("Presentation.count", expected_count) do
       Rails.application.load_seed
     end
 
     assert_no_difference("Presentation.count") do
       Rails.application.load_seed
     end
+  end
+
+  test "starts a blank presentation immediately" do
+    assert_difference("Presentation.count", 1) do
+      post start_presentations_path
+    end
+
+    presentation = Presentation.order(:created_at).last
+    assert_redirected_to edit_presentation_path(presentation)
+    assert_equal Presentation::DEFAULT_SOURCE, presentation.source
+  end
+
+  test "renames and deletes a presentation" do
+    presentation = presentations(:one)
+
+    patch rename_presentation_path(presentation), params: { presentation: { title: "Renamed deck" } }
+    assert_redirected_to presentations_path
+    assert_equal "Renamed deck", presentation.reload.title
+
+    assert_difference("Presentation.count", -1) do
+      delete presentation_path(presentation)
+    end
+  end
+
+  test "forks an independent presentation with lineage metadata" do
+    parent = presentations(:one)
+
+    assert_difference("Presentation.count", 1) do
+      post fork_presentation_path(parent), params: { fork_type: "inspiration" }
+    end
+
+    forked = Presentation.order(:created_at).last
+    assert_redirected_to edit_presentation_path(forked)
+    assert_equal parent, forked.parent
+    assert_equal "inspiration", forked.fork_type
+    assert_equal parent.source, forked.fork_source
+    assert_equal "Demo Deck (Inspiration)", forked.title
+
+    parent.update!(source: "# Changed")
+    assert_equal "# One\n\nBody\n---\n# Two", forked.reload.source
+  end
+
+  test "renders the lineage graph with relationship styles" do
+    Presentations::LineageSampleData.load!
+
+    get presentations_path
+
+    assert_response :success
+    assert_select ".lineage-graph .lineage-node", count: 6
+    assert_select ".lineage-continuation"
+    assert_select ".lineage-inspiration"
   end
 
   test "creates a presentation from markdown source" do
@@ -59,6 +111,19 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
 
     assert_redirected_to edit_presentation_path(presentation)
     assert_equal "# Saved\n---\n# Again", presentation.reload.source
+  end
+
+  test "accepts an autosave update without redirecting" do
+    presentation = presentations(:one)
+
+    patch presentation_path(presentation),
+      params: { presentation: { title: "Autosaved", source: "# Autosaved" } },
+      as: :json
+
+    assert_response :success
+    assert_equal "Autosaved", presentation.reload.title
+    assert_equal "# Autosaved", presentation.source
+    assert_equal presentation.id, response.parsed_body["id"]
   end
 
   test "renders saved preview and presentation mode" do

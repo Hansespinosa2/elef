@@ -1,4 +1,4 @@
-<%= form_with model: presentation, class: "editor-layout grid gap-6 grid-cols-[minmax(320px,0.95fr)_minmax(360px,1.05fr)] max-[920px]:flex max-[920px]:flex-col", data: { controller: "dirty", action: "submit->dirty#allowSubmit", dirty_unsaved_message_value: "You have unsaved presentation changes. Leave without saving?" } do |form| %>
+<%= form_with model: presentation, class: "editor-layout grid gap-6 grid-cols-[minmax(320px,0.95fr)_minmax(360px,1.05fr)] max-[920px]:flex max-[920px]:flex-col", data: { controller: "dirty autosave", action: "submit->dirty#allowSubmit autosave:saved->dirty#markSaved", dirty_unsaved_message_value: "You have unsaved presentation changes. Leave without saving?" } do |form| %>
   <% if presentation.errors.any? %>
     <section class="error-panel col-span-full rounded-2xl border border-[#efb0a8] bg-[#fff1ee] p-4 text-[#a63a2d]" aria-label="Validation errors">
       <h2><%= pluralize(presentation.errors.count, "error") %> prevented saving</h2>
@@ -13,12 +13,12 @@
   <section class="source-pane rounded-2xl border border-[#ddd5c8] bg-[#fffdf8] p-4">
     <div class="field mb-4">
       <%= form.label :title, class: "mb-1 block font-extrabold" %>
-      <%= form.text_field :title, class: "w-full rounded-xl border border-[#ddd5c8] bg-white p-3 text-[#1e1c18] outline-none focus:border-[#6d4aff] focus:ring-2 focus:ring-[#6d4aff]/20", data: { dirty_target: "field", action: "input->dirty#markDirty" }, autocomplete: "off" %>
+      <%= form.text_field :title, class: "w-full rounded-xl border border-[#ddd5c8] bg-white p-3 text-[#1e1c18] outline-none focus:border-[#6d4aff] focus:ring-2 focus:ring-[#6d4aff]/20", data: { dirty_target: "field", autosave_target: "field", action: "input->dirty#markDirty input->autosave#schedule" }, autocomplete: "off" %>
     </div>
 
     <div class="field source-field mb-4">
       <%= form.label :source, "Markdown source", class: "mb-1 block font-extrabold" %>
-      <%= form.text_area :source, rows: 24, class: "min-h-[36rem] w-full resize-y rounded-xl border border-[#ddd5c8] bg-white p-3 font-mono text-[#1e1c18] outline-none focus:border-[#6d4aff] focus:ring-2 focus:ring-[#6d4aff]/20 max-[920px]:min-h-96", spellcheck: "false", data: { dirty_target: "field", action: "input->dirty#markDirty" } %>
+      <%= form.text_area :source, rows: 24, class: "min-h-[36rem] w-full resize-y rounded-xl border border-[#ddd5c8] bg-white p-3 font-mono text-[#1e1c18] outline-none focus:border-[#6d4aff] focus:ring-2 focus:ring-[#6d4aff]/20 max-[920px]:min-h-96", spellcheck: "false", data: { dirty_target: "field", autosave_target: "field", action: "input->dirty#markDirty input->autosave#schedule" } %>
     </div>
 
     <div class="editor-actions flex flex-wrap items-center gap-3">
@@ -28,6 +28,8 @@
         <%= link_to "Present", present_presentation_path(presentation), class: "button inline-flex min-h-10 items-center rounded-full border border-[#ddd5c8] bg-[#fffdf8] px-4 py-2 font-bold no-underline hover:bg-[#f7efe2]", data: { turbo: false } %>
       <% end %>
       <span class="dirty-state text-[#6f675c] font-bold" data-dirty-target="status" aria-live="polite">Saved</span>
+      <span class="autosave-state text-[#6f675c] font-bold" data-autosave-target="status" aria-live="polite">Saved</span>
+      <button type="button" class="button rounded-full border border-[#efb0a8] px-3 py-2 font-bold text-[#a63a2d]" data-autosave-target="retry" data-action="autosave#retry" hidden>Retry save</button>
     </div>
   </section>
 

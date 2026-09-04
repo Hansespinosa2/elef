@@ -14,6 +14,18 @@ class PresentationsTest < ApplicationSystemTestCase
     end
   end
 
+  test "shows the seeded lineage tree in the library" do
+    Presentations::LineageSampleData.load!
+
+    visit presentations_path
+
+    assert_selector ".lineage-graph .lineage-node", count: 5
+    assert_selector ".lineage-continuation"
+    assert_selector ".lineage-inspiration"
+    click_on "Open Quarterly Review June"
+    assert_field "Markdown source", with: /Quarterly Review June/
+  end
+
   test "renders the code and math sample with block display math" do
     Presentations::SampleData.load!
 

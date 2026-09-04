@@ -1,0 +1,30 @@
+<section class="lineage-panel mt-8 rounded-2xl border border-[#ddd5c8] bg-[#fffdf8] p-5" aria-labelledby="lineage-heading">
+  <div class="mb-4 flex items-end justify-between gap-4 max-[920px]:flex-col max-[920px]:items-stretch">
+    <div>
+      <p class="eyebrow mb-1 text-xs font-extrabold uppercase tracking-[0.12em] text-[#6d4aff]">Presentation relationships</p>
+      <h2 id="lineage-heading" class="mb-1 text-2xl font-bold">Lineage graph</h2>
+      <p class="text-[#6f675c]">Solid lines continue a presentation. Dotted lines show independent inspiration.</p>
+    </div>
+    <span class="text-sm font-bold text-[#6f675c]"><%= pluralize(presentations.length, "presentation") %></span>
+  </div>
+
+  <% if presentations.any? %>
+    <div class="lineage-graph overflow-x-auto" role="img" aria-label="Presentation lineage graph">
+      <% presentations.each do |presentation| %>
+        <% depth = lineage_depth(presentation) %>
+        <div class="lineage-row <%= presentation.parent ? "lineage-child lineage-#{presentation.fork_type}" : "lineage-root" %>" style="--lineage-depth: <%= depth %>">
+          <span class="lineage-connector" aria-hidden="true"></span>
+          <%= link_to edit_presentation_path(presentation), class: "lineage-node inline-flex min-w-64 items-center justify-between gap-4 rounded-xl border border-[#ddd5c8] bg-white px-4 py-3 no-underline hover:border-[#6d4aff]", aria: { label: "Open #{presentation.title}" } do %>
+            <span>
+              <strong class="block"><%= presentation.title %></strong>
+              <small class="text-[#6f675c]"><%= pluralize(presentation.slides.length, "slide") %></small>
+            </span>
+            <% if presentation.fork_type %><span class="rounded-full bg-[#f0ebff] px-2 py-1 text-xs font-bold text-[#6d4aff]"><%= presentation.fork_type %></span><% end %>
+          <% end %>
+        </div>
+      <% end %>
+    </div>
+  <% else %>
+    <p class="text-[#6f675c]">Create a presentation to start a lineage.</p>
+  <% end %>
+</section>

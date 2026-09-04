@@ -7,7 +7,7 @@
   </div>
   <div class="card-actions flex flex-wrap items-center gap-3">
     <%= button_to "Load sample presentations", load_samples_presentations_path, method: :post, class: "button inline-flex min-h-10 cursor-pointer items-center gap-1 rounded-full border border-[#ddd5c8] bg-[#fffdf8] px-4 py-2 font-bold text-[#1e1c18] no-underline hover:bg-[#f7efe2]" %>
-    <%= link_to "New presentation", new_presentation_path, class: "button primary inline-flex min-h-10 items-center gap-1 rounded-full border border-[#6d4aff] bg-[#6d4aff] px-4 py-2 font-bold text-white no-underline hover:brightness-95" %>
+    <%= button_to "New presentation", start_presentations_path, method: :post, class: "button primary inline-flex min-h-10 cursor-pointer items-center gap-1 rounded-full border border-[#6d4aff] bg-[#6d4aff] px-4 py-2 font-bold text-white no-underline hover:brightness-95" %>
   </div>
 </section>
 
@@ -18,11 +18,19 @@
         <div>
           <h2 class="mb-2 text-2xl font-bold"><%= link_to presentation.title, edit_presentation_path(presentation), class: "hover:underline" %></h2>
           <p class="text-[#6f675c]"><%= pluralize(presentation.slides.length, "slide") %> · Updated <%= time_ago_in_words(presentation.updated_at) %> ago</p>
+          <% if presentation.parent %><p class="mt-1 text-sm text-[#6f675c]">Forked from <%= presentation.parent.title %> · <%= presentation.fork_type %></p><% elsif presentation.fork_parent_title.present? %><p class="mt-1 text-sm text-[#a63a2d]">Parent no longer available · <%= presentation.fork_type %></p><% end %>
         </div>
         <div class="card-actions flex flex-wrap items-center gap-3">
           <%= link_to "Edit", edit_presentation_path(presentation), class: "hover:underline" %>
           <%= link_to "Preview", presentation_path(presentation), class: "hover:underline" %>
           <%= link_to "Present", present_presentation_path(presentation), class: "hover:underline", data: { turbo: false } %>
+          <%= form_with url: rename_presentation_path(presentation), method: :patch, class: "inline-flex items-center gap-2" do |form| %>
+            <%= form.text_field :title, value: presentation.title, aria: { label: "Rename #{presentation.title}" }, class: "w-40 rounded-lg border border-[#ddd5c8] bg-white px-2 py-1" %>
+            <%= form.submit "Rename", class: "cursor-pointer rounded-full border border-[#ddd5c8] bg-[#fffdf8] px-3 py-1 font-bold" %>
+          <% end %>
+          <%= button_to "Fork continuation", fork_presentation_path(presentation), method: :post, params: { fork_type: "continuation" }, class: "cursor-pointer rounded-full border border-[#ddd5c8] bg-[#fffdf8] px-3 py-1 font-bold" %>
+          <%= button_to "Fork inspiration", fork_presentation_path(presentation), method: :post, params: { fork_type: "inspiration" }, class: "cursor-pointer rounded-full border border-[#ddd5c8] bg-[#fffdf8] px-3 py-1 font-bold" %>
+          <%= button_to "Delete", presentation_path(presentation), method: :delete, form: { data: { turbo_confirm: "Delete #{presentation.title}?" } }, class: "cursor-pointer rounded-full border border-[#efb0a8] bg-[#fff1ee] px-3 py-1 font-bold text-[#a63a2d]" %>
         </div>
       </article>
     <% end %>
@@ -32,7 +40,9 @@
         <h2 class="mb-2 text-2xl font-bold">No presentations yet</h2>
         <p class="text-[#6f675c]">Start with Markdown. Elef stores the source and derives every slide from it.</p>
       </div>
-      <%= link_to "Create your first presentation", new_presentation_path, class: "button primary inline-flex min-h-10 items-center gap-1 rounded-full border border-[#6d4aff] bg-[#6d4aff] px-4 py-2 font-bold text-white no-underline hover:brightness-95" %>
+      <%= button_to "Create your first presentation", start_presentations_path, method: :post, class: "button primary inline-flex min-h-10 cursor-pointer items-center gap-1 rounded-full border border-[#6d4aff] bg-[#6d4aff] px-4 py-2 font-bold text-white no-underline hover:brightness-95" %>
     </div>
   <% end %>
 </section>
+
+<%= render "lineage_graph", presentations: @presentations %>

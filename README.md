@@ -14,8 +14,9 @@ Elef is now a conventional Rails monolith for creating and presenting single-use
 ## Features
 
 - Presentation library with create, list, edit, saved preview, and browser presentation mode.
-- Source-first Markdown editor with explicit **Save presentation**; no autosave.
+- Source-first Markdown editor with hybrid autosave, explicit **Save presentation**, and retryable save status.
 - Dirty-state warning before unsaved source is lost.
+- Presentation management with rename, delete, continuation/inspiration forks, and a library lineage graph.
 - Strict slide parsing around standalone `---`, initial front matter, fenced code blocks, layout metadata, theme metadata, and empty slides.
 
 ## Development

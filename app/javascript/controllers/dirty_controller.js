@@ -33,6 +33,13 @@ export default class extends Controller {
     this.submitting = true
   }
 
+  markSaved() {
+    this.baseline = this.snapshot()
+    this.dirty = false
+    this.submitting = false
+    this.updateState()
+  }
+
   guardNavigation(event) {
     if (!this.dirty || this.submitting) return
     const link = event.target.closest?.("a[href]")

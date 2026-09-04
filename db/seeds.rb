@@ -9,3 +9,4 @@
 #   end
 
 Presentations::SampleData.load!
+Presentations::LineageSampleData.load!
