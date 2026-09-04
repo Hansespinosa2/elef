@@ -384,7 +384,87 @@ cleanup() {
   echo "Cleaned up merged task $task"
 }
 
+help() {
+  cat <<EOF
+Elef disposable agent workflow
+
+Use this command to create and operate an isolated Elef development task. Each
+task gets a sibling Git worktree, an Apple Container, and a stable browser URL:
+
+  https://TASK.localhost
+
+Recommended lifecycle:
+
+  1.  $0 setup
+  2.  $0 start TASK [BASE]
+  3.  $0 codex TASK [PROMPT...]
+  4.  $0 status
+  5.  Review and merge codex/TASK in the primary checkout
+  6.  $0 cleanup TASK
+
+Commands:
+
+  setup                 Install/configure the local Caddy HTTPS router.
+                        Run once before starting isolated browser-accessible
+                        tasks. Requires Caddy and sudo.
+
+  start TASK [BASE]     Create a new task worktree and branch, build/reuse the
+                        agent image, start its container, and start Rails.
+                        Use for a brand-new isolated task. BASE defaults to
+                        HEAD; it may be a branch, tag, or commit.
+
+  codex TASK [PROMPT...] Launch Codex inside a running task container.
+                        Use for the first implementation prompt or a follow-up
+                        prompt. The task must already exist and be running.
+
+  resume TASK           Resume the last Codex session inside the task.
+                        Use when Codex exited and you want to continue its
+                        conversation rather than start a new prompt.
+
+  shell TASK [COMMAND...] Open a shell or run a command in the task container.
+                        Use for tests, Rails commands, logs, or diagnosis.
+                        Example: $0 shell TASK bin/rails test test/models
+
+  status                Show known tasks, container state, HTTP readiness, and
+                        browser URLs. Use to find a task's current state.
+
+  stop TASK             Stop the task container and unregister its browser
+                        route, while preserving its worktree and branch.
+                        Use when pausing work; resume later with 'up'.
+
+  up TASK               Recreate the task container from its existing worktree
+                        and restart Rails. Use after 'stop' or when a task's
+                        disposable container is gone but its worktree remains.
+
+  cleanup TASK          Remove a clean task after its PR has been merged.
+                        Also deletes the local and remote task branch. This is
+                        the normal end of a successfully merged task.
+
+  remove TASK           Force-remove the task container, worktree, route, and
+                        local branch without requiring a merged PR. Use only
+                        for an abandoned task. It does not delete a remote
+                        branch.
+
+  build                 Build the agent container image without starting a
+                        task. Use to prebuild or refresh the image.
+
+Environment overrides:
+
+  CONTAINER_CLI                 Container command (default: container)
+  ELEF_AGENT_IMAGE              Use a specific prebuilt image
+  ELEF_WORKTREE_ROOT            Worktree parent (default: ../elef-worktrees)
+  ELEF_AGENT_STATE_ROOT         Router state directory
+  ELEF_AGENT_CADDYFILE          Caddyfile path
+  ELEF_AGENT_CODEX_VERSION      Codex version used in the image
+  ELEF_AGENT_CHROME_DEVTOOLS_MCP_VERSION
+                                Chrome DevTools MCP version used in the image
+
+For command syntax, run '$0 --help'. Run commands from the Elef repository root.
+EOF
+}
+
 case "${1:-}" in
+  -h|--help|help) shift; help "$@" ;;
   setup) shift; setup "$@" ;;
   status) shift; status "$@" ;;
   start) shift; start "$@" ;;
