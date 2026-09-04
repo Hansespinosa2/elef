@@ -27,8 +27,10 @@ assert_contains "$launcher" 'exec_in "$task" codex --dangerously-bypass-approval
 assert_contains "$launcher" 'up) shift; up "$@" ;;'
 assert_contains "$launcher" 'image inspect "$1"'
 assert_contains "$launcher" 'delete_codex_state "$task"'
-assert_contains "$launcher" 'trap restore_terminal EXIT'
+assert_contains "$launcher" "trap 'restore_terminal;"
+assert_contains "$launcher" 'fork) shift;'
 assert_contains "$launcher" 'stty sane'
+assert_contains "$launcher" 'restore_task_terminal "$task"'
 assert_contains "$launcher" 'finish TASK [TITLE]'
 assert_contains "$launcher" 'gh pr checks "$pr_number"'
 assert_contains "$launcher" 'cleanup "$task"'

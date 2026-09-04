@@ -22,6 +22,7 @@ branch_for() { printf 'codex/%s' "$1"; }
 route_for() { printf '%s/routes/%s' "$AGENT_STATE_ROOT" "$1"; }
 codex_state_for() { printf '%s/codex/%s' "$AGENT_STATE_ROOT" "$1"; }
 image_state_for() { printf '%s/images/%s' "$AGENT_STATE_ROOT" "$1"; }
+terminal_state_for() { printf '%s/terminals/%s' "$AGENT_STATE_ROOT" "$1"; }
 host_for() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
 
 delete_codex_state() {
@@ -405,14 +406,38 @@ restore_terminal() {
   stty sane 2>/dev/null || true
 }
 
+clear_terminal_state() {
+  local task="$1" state
+  state="$(terminal_state_for "$task")"
+  rm -f -- "$state"
+}
+
+restore_task_terminal() {
+  local task="$1" state terminal
+  state="$(terminal_state_for "$task")"
+  [[ -f "$state" ]] || return 0
+  terminal="$(<"$state")"
+  [[ "$terminal" == /dev/tty* ]] || { clear_terminal_state "$task"; return 0; }
+  printf '\033[<u\033[?2004l\033[?1l\033[?1004l' >"$terminal" 2>/dev/null || true
+  stty sane <"$terminal" 2>/dev/null || true
+  clear_terminal_state "$task"
+}
+
 exec_in() {
-  local task="$1" status; shift
+  local task="$1" status terminal state; shift
   safe_name "$task"; need_container
-  trap restore_terminal EXIT
+  terminal="$(tty 2>/dev/null || true)"
+  if [[ "$terminal" == /dev/tty* ]]; then
+    state="$(terminal_state_for "$task")"
+    mkdir -p "$(dirname "$state")"
+    printf '%s\n' "$terminal" >"$state"
+  fi
+  trap 'restore_terminal; clear_terminal_state "$task"' EXIT
   "$CONTAINER_CLI" exec --interactive --tty --workdir "$(worktree_for "$task")" "$(container_for "$task")" "$@"
   status=$?
   trap - EXIT
   restore_terminal
+  clear_terminal_state "$task"
   return "$status"
 }
 
@@ -433,6 +458,7 @@ status() {
 stop() {
   local task="${1:-}" host; [[ -n "$task" ]] || die "usage: elef-agent stop TASK"
   safe_name "$task"; host="$(host_for "$task")"; need_container
+  restore_task_terminal "$task"
   "$CONTAINER_CLI" stop "$(container_for "$task")" || echo "warning: container may already be stopped" >&2
   rm -f "$(route_for "$host")"
   reload_router
@@ -462,6 +488,7 @@ cleanup() {
   pr_state="$(gh pr list --repo "$repo" --head "$branch" --state all --json state --jq '.[0].state // ""')"
   [[ "$pr_state" == "MERGED" ]] || die "refusing cleanup: PR for $branch is not merged"
   need_container
+  restore_task_terminal "$task"
   "$CONTAINER_CLI" stop "$name" 2>/dev/null || true
   "$CONTAINER_CLI" delete "$name" 2>/dev/null || true
   rm -f "$(route_for "$host")"
@@ -538,6 +565,9 @@ Commands:
                         Use for the first implementation prompt or a follow-up
                         prompt. The task must already exist and be running.
 
+  fork TASK [PROMPT...] Fork the most recent Codex session inside a running
+                        task container.
+
   resume TASK           Resume the last Codex session inside the task.
                         Use when Codex exited and you want to continue its
                         conversation rather than start a new prompt.
@@ -594,11 +624,12 @@ case "${1:-}" in
   up) shift; up "$@" ;;
   shell) shift; [[ -n "${1:-}" ]] || die "usage: elef-agent shell TASK [COMMAND...]"; task="$1"; shift; exec_in "$task" bash "$@" ;;
   codex) shift; [[ -n "${1:-}" ]] || die "usage: elef-agent codex TASK [PROMPT...]"; task="$1"; shift; exec_in "$task" codex --dangerously-bypass-approvals-and-sandbox -m gpt-5.6-luna "$@" ;;
+  fork) shift; [[ -n "${1:-}" ]] || die "usage: elef-agent fork TASK [PROMPT...]"; task="$1"; shift; exec_in "$task" codex --dangerously-bypass-approvals-and-sandbox -m gpt-5.6-luna fork --last "$@" ;;
   resume) shift; [[ -n "${1:-}" ]] || die "usage: elef-agent resume TASK"; task="$1"; shift; exec_in "$task" codex --dangerously-bypass-approvals-and-sandbox -m gpt-5.6-luna resume --last "$@" ;;
   stop) shift; stop "$@" ;;
   cleanup) shift; cleanup "$@" ;;
   finish) shift; finish "$@" ;;
   remove) shift; remove "$@" ;;
   build) ensure_image "$(new_image_for)" ;;
-  *) echo "usage: $0 {setup|status|start|up|codex|resume|shell|stop|cleanup|finish|remove|build} TASK [ARGS...]" >&2; exit 2 ;;
+  *) echo "usage: $0 {setup|status|start|up|codex|fork|resume|shell|stop|cleanup|finish|remove|build} TASK [ARGS...]" >&2; exit 2 ;;
 esac

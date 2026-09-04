@@ -46,6 +46,7 @@ scripts/elef-agent resume TASK
 scripts/elef-agent shell TASK
 scripts/elef-agent shell TASK bin/rails test
 scripts/elef-agent codex TASK
+scripts/elef-agent fork TASK
 ```
 
 Keep browser automation headless. Use the installed Chromium and Chrome
