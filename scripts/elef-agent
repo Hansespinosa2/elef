@@ -243,6 +243,7 @@ run_container() {
   else
     echo "warning: user skills directory not found: $USER_SKILLS_HOST" >&2
   fi
+  [[ -f "$HOME/.gitconfig" ]] && mounts+=(--volume "$HOME/.gitconfig:/home/developer/.gitconfig:ro")
   [[ -f "$CODEX_HOME_HOST/auth.json" ]] && mounts+=(--volume "$CODEX_HOME_HOST/auth.json:/home/developer/.codex/auth.json:ro")
   [[ -f "$GH_CONFIG_HOST/hosts.yml" ]] && mounts+=(--volume "$GH_CONFIG_HOST/hosts.yml:/home/developer/.config/gh/hosts.yml:ro")
   "$CONTAINER_CLI" run --name "$name" --detach --init \
