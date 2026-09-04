@@ -423,6 +423,12 @@ restore_task_terminal() {
   clear_terminal_state "$task"
 }
 
+assert_no_active_terminal() {
+  local task="$1" state
+  state="$(terminal_state_for "$task")"
+  [[ ! -s "$state" ]] || die "task has an active Codex terminal; exit Codex before cleanup"
+}
+
 exec_in() {
   local task="$1" status terminal state; shift
   safe_name "$task"; need_container
@@ -458,6 +464,7 @@ status() {
 stop() {
   local task="${1:-}" host; [[ -n "$task" ]] || die "usage: elef-agent stop TASK"
   safe_name "$task"; host="$(host_for "$task")"; need_container
+  assert_no_active_terminal "$task"
   restore_task_terminal "$task"
   "$CONTAINER_CLI" stop "$(container_for "$task")" || echo "warning: container may already be stopped" >&2
   rm -f "$(route_for "$host")"
@@ -488,6 +495,7 @@ cleanup() {
   pr_state="$(gh pr list --repo "$repo" --head "$branch" --state all --json state --jq '.[0].state // ""')"
   [[ "$pr_state" == "MERGED" ]] || die "refusing cleanup: PR for $branch is not merged"
   need_container
+  assert_no_active_terminal "$task"
   restore_task_terminal "$task"
   "$CONTAINER_CLI" stop "$name" 2>/dev/null || true
   "$CONTAINER_CLI" delete "$name" 2>/dev/null || true
