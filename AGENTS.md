@@ -15,6 +15,17 @@
   isolated task with `scripts/elef-agent start TASK`, then launches Codex with
   `scripts/elef-agent codex TASK`. `start` prepares and starts Rails in the
   task container; use `scripts/elef-agent up TASK` to restore a stopped task.
+- Treat `up`, `stop`, `remove`, and `cleanup` as state-changing operations.
+  Before using them on an existing task, determine whether the container is
+  active and tell the user if the operation will interrupt a Codex session;
+  do not interpret a failed container-CLI/status check as proof that a task is
+  stopped. Ask for confirmation before recreating an active container.
+- Each task's Codex home and session history must remain host-persistent under
+  the Elef agent state directory. Recreating a container is acceptable only
+  when that persistent state is mounted back into `/home/developer/.codex`;
+  preserve the task worktree and verify the task URL before and after the
+  recreation. Afterward, use `scripts/elef-agent resume TASK` when a prior
+  session exists.
 - For isolated agent browser checks, run `scripts/elef-agent setup` once and
   use the task URL printed by `scripts/elef-agent start TASK`,
   `https://TASK.localhost`. These URLs are routed to the matching container;
