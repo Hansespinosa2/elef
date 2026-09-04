@@ -155,7 +155,7 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_in_delta 16.0 / 9, geometry["frameRatio"], 0.01
     assert_equal 1280, geometry["slideWidth"]
     assert_equal 720, geometry["slideHeight"]
-    assert_equal "80px", geometry["headingFontSize"]
+    assert_equal "96px", geometry["headingFontSize"]
     assert_operator geometry["scale"], :>, 0
 
     page.driver.browser.manage.window.resize_to(800, 1000)
@@ -164,6 +164,6 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_operator resized_scale, :<, geometry["scale"]
     assert_equal 1280, page.evaluate_script("document.querySelector('.slide').offsetWidth")
     assert_equal 720, page.evaluate_script("document.querySelector('.slide').offsetHeight")
-    assert_equal "80px", page.evaluate_script("getComputedStyle(document.querySelector('.slide h1')).fontSize")
+    assert_equal "96px", page.evaluate_script("getComputedStyle(document.querySelector('.slide h1')).fontSize")
   end
 end

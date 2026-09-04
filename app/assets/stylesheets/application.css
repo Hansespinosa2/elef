@@ -139,7 +139,7 @@ body.elef-app {
   flex-direction: column;
   justify-content: flex-start;
   overflow: hidden;
-  padding: 4rem;
+  padding: 4.5rem;
   height: 720px;
   width: 1280px;
   max-width: none;
@@ -158,25 +158,25 @@ body.elef-app {
   text-align: center;
 }
 
-.slide h1 { font-size: 5rem; line-height: 0.95; }
-.slide h2 { font-size: 3.5rem; }
+.slide h1 { font-size: 6rem; line-height: 0.95; }
+.slide h2 { font-size: 4.25rem; }
 .slide p,
 .slide li,
 .slide blockquote,
 .slide td,
-.slide th { font-size: 1.6rem; }
+.slide th { font-size: 2rem; }
 .presentation-surface pre {
   background: #191714;
   border: 1px solid rgba(255, 247, 232, 0.12);
   border-radius: 0.75rem;
   box-shadow: 0 12px 24px rgba(35, 29, 20, 0.16);
   color: #fff7e8;
-  font-size: 1.15rem;
+  font-size: 1.4rem;
   line-height: 1.5;
   margin: 0.75rem 0;
   max-width: 100%;
   overflow: auto;
-  padding: 1.35rem;
+  padding: 1.5rem;
   text-align: left;
 }
 
