@@ -128,4 +128,19 @@ class PresentationsTest < ApplicationSystemTestCase
     send_keys :arrow_left
     assert_text "1 / 2"
   end
+
+  test "inserts a fuzzy snippet and moves through its placeholder" do
+    Snippet.create!(name: "Block equation", trigger: "beq", description: "A block LaTeX equation", category: "LaTeX", body: "$$\n${1:equation}\n$$")
+    presentation = Presentation.create!(title: "Snippet deck", source: "# Math\n\n:")
+
+    visit edit_presentation_path(presentation)
+    source = find_field("Markdown source")
+    source.send_keys("beq")
+    assert_selector ".snippet-palette", visible: true
+    assert_text ":beq"
+
+    source.send_keys(:enter)
+    assert_equal "# Math\n\n$$\nequation\n$$", source.value
+    assert_equal "equation", page.evaluate_script("const e = document.querySelector('[data-snippet-palette-target=editor]'); return e.value.slice(e.selectionStart, e.selectionEnd)")
+  end
 end

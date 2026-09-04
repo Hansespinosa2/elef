@@ -1,6 +1,8 @@
 Rails.application.routes.draw do
   root "presentations#index"
 
+  resources :snippets, except: :show
+
   resources :presentations do
     collection do
       post :load_samples
