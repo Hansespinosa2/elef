@@ -175,7 +175,7 @@ container_exists() {
 }
 
 container_running() {
-  "$CONTAINER_CLI" inspect "$1" 2>/dev/null | rg -q '"status"\s*:\s*"running"|"running"\s*:\s*true'
+  "$CONTAINER_CLI" inspect "$1" 2>/dev/null | grep -Eq '"state"[[:space:]]*:[[:space:]]*"running"|"status"[[:space:]]*:[[:space:]]*"running"|"running"[[:space:]]*:[[:space:]]*true'
 }
 
 route_up() {
@@ -190,12 +190,15 @@ route_up() {
 }
 
 wait_for_http() {
-  local task="$1" attempt code
-  for attempt in {1..30}; do
-    code="$(curl -k -sS -o /dev/null -w '%{http_code}' --max-time 2 "https://$(host_for "$task").localhost" 2>/dev/null || true)"
-    if [[ "$code" =~ ^[1-5][0-9][0-9]$ ]]; then
-      printf '%s' "$code"
-      return 0
+  local task="$1" port="$2" attempt backend_code route_code
+  for attempt in {1..120}; do
+    backend_code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 2 "http://127.0.0.1:${port}/" 2>/dev/null || true)"
+    if [[ "$backend_code" =~ ^[1-5][0-9][0-9]$ ]]; then
+      route_code="$(curl -k -sS -o /dev/null -w '%{http_code}' --max-time 2 "https://$(host_for "$task").localhost" 2>/dev/null || true)"
+      if [[ "$route_code" =~ ^[1-5][0-9][0-9]$ && "$route_code" != 502 && "$route_code" != 503 && "$route_code" != 504 ]]; then
+        printf '%s' "$route_code"
+        return 0
+      fi
     fi
     sleep 1
   done
@@ -232,7 +235,7 @@ start_task() {
     die "unable to register route for $task"
   fi
   local code
-  if ! code="$(wait_for_http "$task")"; then
+  if ! code="$(wait_for_http "$task" "$backend_port")"; then
     local logs
     logs="$($CONTAINER_CLI logs "$name" 2>/dev/null || true)"
     "$CONTAINER_CLI" stop "$name" >/dev/null 2>&1 || true
@@ -259,7 +262,7 @@ start() {
   backend_port="$(backend_port_for "$task")"
   [[ ! -e "$wt" ]] || die "worktree already exists: $wt"
   need_container
-  if ! container_running "$name" && lsof -nP -iTCP:"$backend_port" -sTCP:LISTEN >/dev/null 2>&1; then
+  if ! container_exists "$name" && lsof -nP -iTCP:"$backend_port" -sTCP:LISTEN >/dev/null 2>&1; then
     die "backend port is already in use: $backend_port"
   fi
   [[ ! -e "$(route_for "$host")" ]] || die "browser route already exists: https://${host}.localhost"
@@ -296,21 +299,19 @@ up() {
   image="$(image_for)"
   ensure_image "$image"
   if container_exists "$name"; then
-    if ! container_running "$name"; then
-      # Recreate the disposable container so tasks created by older launcher
-      # versions receive the managed web-process command as well.
-      "$CONTAINER_CLI" stop "$name" >/dev/null 2>&1 || true
-      "$CONTAINER_CLI" delete "$name" >/dev/null 2>&1 || true
-    fi
+    # Recreate the disposable container so tasks created by older launcher
+    # versions receive the managed web-process command as well.
+    "$CONTAINER_CLI" stop "$name" >/dev/null 2>&1 || true
+    "$CONTAINER_CLI" delete "$name" >/dev/null 2>&1 || true
   fi
-  container_running "$name" || run_container "$task" "$wt" "$name" "$token" "$backend_port" "$image"
+  run_container "$task" "$wt" "$name" "$token" "$backend_port" "$image"
   if ! route_up "$task" "$backend_port"; then
     "$CONTAINER_CLI" stop "$name" >/dev/null 2>&1 || true
     "$CONTAINER_CLI" delete "$name" >/dev/null 2>&1 || true
     die "unable to register route for $task"
   fi
   local code
-  if ! code="$(wait_for_http "$task")"; then
+  if ! code="$(wait_for_http "$task" "$backend_port")"; then
     "$CONTAINER_CLI" logs "$name" 2>/dev/null | tail -40 >&2 || true
     "$CONTAINER_CLI" stop "$name" >/dev/null 2>&1 || true
     "$CONTAINER_CLI" delete "$name" >/dev/null 2>&1 || true

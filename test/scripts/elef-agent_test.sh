@@ -8,7 +8,7 @@ containerfile="$ROOT/.devcontainer/Containerfile"
 
 assert_contains() {
   local file="$1" pattern="$2"
-  rg -F --quiet -- "$pattern" "$file" || {
+  grep -F --quiet -- "$pattern" "$file" || {
     echo "missing '$pattern' in $file" >&2
     exit 1
   }

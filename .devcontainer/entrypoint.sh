@@ -14,6 +14,7 @@ if [[ "${1:-}" == web ]]; then
   shift
   bundle install
   bin/rails db:prepare
+  bin/rails tailwindcss:build
   exec bin/rails server -b "${BIND:-0.0.0.0}" -p "${PORT:-3000}" "$@"
 fi
 
