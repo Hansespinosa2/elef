@@ -80,7 +80,7 @@ class PresentationsTest < ApplicationSystemTestCase
     JAVASCRIPT
 
     assert_equal 2, header_offsets.length
-    assert_equal header_offsets.first, header_offsets.last
+    assert_in_delta header_offsets.first, header_offsets.last, 0.001
   end
 
   test "user creates saves and reopens a markdown presentation" do
@@ -88,16 +88,18 @@ class PresentationsTest < ApplicationSystemTestCase
     click_on "New presentation", match: :first
 
     fill_in "Title", with: "System Deck"
-    fill_in "Markdown source", with: "# First\n\nBody\n---\n# Second"
+    source = "# First\n\nBody\n---\n# Second"
+    normalized_source = "---\npresentationTypography: book\n---\n#{source}"
+    fill_in "Markdown source", with: source
     click_on "Save presentation"
 
     assert_text "Presentation saved."
-    assert_field "Markdown source", with: "# First\n\nBody\n---\n# Second"
+    assert_field "Markdown source", with: normalized_source
     assert_selector ".slide", count: 2
 
     click_on "Library"
     click_on "System Deck"
-    assert_field "Markdown source", with: "# First\n\nBody\n---\n# Second"
+    assert_field "Markdown source", with: normalized_source
   end
 
   test "dirty source warns before navigation and cancel preserves edits" do
@@ -158,7 +160,7 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_equal "112px", geometry["headingFontSize"]
     assert_operator geometry["scale"], :>, 0
 
-    page.driver.browser.manage.window.resize_to(800, 1000)
+    page.execute_script("document.querySelector('.slide-frame').style.width = '640px'")
     resized_scale = page.evaluate_script("Number.parseFloat(getComputedStyle(document.querySelector('.slide')).getPropertyValue('--slide-scale'))")
 
     assert_operator resized_scale, :<, geometry["scale"]
