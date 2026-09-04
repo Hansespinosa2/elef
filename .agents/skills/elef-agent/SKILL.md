@@ -51,11 +51,6 @@ scripts/elef-agent codex TASK
 Keep browser automation headless. Use the installed Chromium and Chrome
 DevTools MCP for browser checks. Run the smallest relevant tests first.
 
-If Selenium cannot start because its driver manager fails, report the system
-test as blocked by the environment. A direct headless Chromium request or page
-check is supplemental evidence only; it does not replace or prove a passing
-Selenium system test.
-
 ## Merge and cleanup
 
 The primary agent reviews and merges task branches. Do not merge into the
