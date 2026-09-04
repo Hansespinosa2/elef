@@ -51,6 +51,11 @@ scripts/elef-agent codex TASK
 Keep browser automation headless. Use the installed Chromium and Chrome
 DevTools MCP for browser checks. Run the smallest relevant tests first.
 
+If Selenium cannot start because its driver manager fails, report the system
+test as blocked by the environment. A direct headless Chromium request or page
+check is supplemental evidence only; it does not replace or prove a passing
+Selenium system test.
+
 ## Merge and cleanup
 
 The primary agent reviews and merges task branches. Do not merge into the
@@ -61,6 +66,17 @@ changes have been reviewed and merged:
 git merge --ff-only codex/TASK
 scripts/elef-agent cleanup TASK
 ```
+
+For a small, already-reviewed task that should be handed off quickly, the
+primary checkout can run:
+
+```sh
+scripts/elef-agent finish TASK [TITLE]
+```
+
+This creates or reuses the task PR, waits for CI, merges it, confirms the merge,
+and then performs the guarded cleanup. It leaves the task intact if CI fails
+or the merge cannot be confirmed.
 
 If the task is abandoned, the user can explicitly discard it with
 `scripts/elef-agent remove TASK`.

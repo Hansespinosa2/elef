@@ -463,6 +463,37 @@ cleanup() {
   echo "Cleaned up merged task $task"
 }
 
+finish() {
+  local task="${1:-}" title base branch repo pr_number pr_state
+  [[ -n "$task" ]] || die "usage: elef-agent finish TASK [TITLE]"
+  safe_name "$task"
+  [[ -z "$(git -C "$(worktree_for "$task")" status --porcelain)" ]] || \
+    die "worktree has uncommitted changes: $(worktree_for "$task")"
+  command -v gh >/dev/null || die "GitHub CLI not found"
+  title="${2:-Ship $task}"
+  base="$(git branch --show-current)"
+  [[ -n "$base" ]] || die "current checkout is not on a branch"
+  branch="$(branch_for "$task")"
+  repo="$(gh repo view --json nameWithOwner --jq .nameWithOwner)" || \
+    die "unable to determine GitHub repository"
+  pr_number="$(gh pr list --repo "$repo" --head "$branch" --state all --json number --jq '.[0].number // empty')"
+  if [[ -z "$pr_number" ]]; then
+    gh pr create --repo "$repo" --base "$base" --head "$branch" \
+      --title "$title" --body "Automated task handoff for $task."
+    pr_number="$(gh pr list --repo "$repo" --head "$branch" --state all --json number --jq '.[0].number // empty')"
+  fi
+  [[ -n "$pr_number" ]] || die "unable to determine pull request for $branch"
+  gh pr checks "$pr_number" --repo "$repo" --watch --fail-fast
+  gh pr merge "$pr_number" --repo "$repo" --merge --subject "$title"
+  for _ in {1..30}; do
+    pr_state="$(gh pr view "$pr_number" --repo "$repo" --json state --jq .state)"
+    [[ "$pr_state" == "MERGED" ]] && break
+    sleep 1
+  done
+  [[ "$pr_state" == "MERGED" ]] || die "pull request $pr_number was not confirmed merged"
+  cleanup "$task"
+}
+
 help() {
   cat <<EOF
 Elef disposable agent workflow
@@ -518,6 +549,8 @@ Commands:
   cleanup TASK          Remove a clean task after its PR has been merged.
                         Also deletes the local and remote task branch. This is
                         the normal end of a successfully merged task.
+  finish TASK [TITLE]   Create or find the task PR, wait for CI, merge it, and
+                        clean up the task after the merge is confirmed.
 
   remove TASK           Force-remove the task container, worktree, route, and
                         local branch without requiring a merged PR. Use only
@@ -553,7 +586,8 @@ case "${1:-}" in
   resume) shift; [[ -n "${1:-}" ]] || die "usage: elef-agent resume TASK"; task="$1"; shift; exec_in "$task" codex --dangerously-bypass-approvals-and-sandbox -m gpt-5.6-luna resume --last "$@" ;;
   stop) shift; stop "$@" ;;
   cleanup) shift; cleanup "$@" ;;
+  finish) shift; finish "$@" ;;
   remove) shift; remove "$@" ;;
   build) ensure_image "$(new_image_for)" ;;
-  *) echo "usage: $0 {setup|status|start|up|codex|resume|shell|stop|cleanup|remove|build} TASK [ARGS...]" >&2; exit 2 ;;
+  *) echo "usage: $0 {setup|status|start|up|codex|resume|shell|stop|cleanup|finish|remove|build} TASK [ARGS...]" >&2; exit 2 ;;
 esac
