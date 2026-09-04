@@ -30,6 +30,10 @@
   use the task URL printed by `scripts/elef-agent start TASK`,
   `https://TASK.localhost`. These URLs are routed to the matching container;
   do not point browser checks at the main checkout's server.
+- Claims must match direct evidence. State exactly what was tested and
+  what it verifies; do not infer untested specifics from broader results.
+- Never claim a fix works unless the relevant behavior was personally re-
+  tested after the fix.
 - All browser automation must remain headless; never open a visible browser.
 - Commit coherent changes frequently with concise imperative subjects (ideally
   under 50 characters). Do not add co-author trailers, amend, rewrite history,
