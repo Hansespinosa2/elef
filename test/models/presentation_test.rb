@@ -28,6 +28,49 @@ class PresentationTest < ActiveSupport::TestCase
     assert_equal "book", Presentations::Document.parse("---\npresentationTypography: unknown\n---\n# Title").presentation_typography
   end
 
+  test "parses margin settings and slide context directives" do
+    source = <<~MARKDOWN
+      ---
+      show-in-margin:
+        section: true
+        subsection: false
+        footnote: true
+        slideCount: false
+      ---
+      # Intro
+      ---
+      :::section{Product strategy}
+      :::subsection{The opportunity}
+      :::footnote{Source: [research](https://example.com)}
+      # Opportunity
+      ---
+      :::subsection{The shift}
+      # Shift
+    MARKDOWN
+
+    document = Presentations::Document.parse(source)
+
+    assert_equal [true, false, true, false], [
+      document.margin_settings.section,
+      document.margin_settings.subsection,
+      document.margin_settings.footnote,
+      document.margin_settings.slide_count
+    ]
+    assert_nil document.slides[0].section
+    assert_equal "Product strategy", document.slides[1].section
+    assert_equal "The opportunity", document.slides[1].subsection
+    assert_equal "The shift", document.slides[2].subsection
+    assert_nil document.slides[2].footnote
+    refute_includes document.slides[1].markdown, ":::"
+    assert_empty document.warnings
+  end
+
+  test "enables all margin regions by default" do
+    settings = Presentations::Document.parse("# Slide").margin_settings
+
+    assert_equal [true, true, true, true], [settings.section, settings.subsection, settings.footnote, settings.slide_count]
+  end
+
   test "reads and updates presentation typography without losing front matter" do
     source = "---\ntitle: Demo\npresentationTheme: dark\npresentationTypography: modern\n---\n# Title\n---\n# Second"
     presentation = Presentation.create!(title: "Demo", source: source)

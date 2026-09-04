@@ -145,7 +145,49 @@ body.elef-app {
   max-width: none;
   transform: scale(var(--slide-scale, 1));
   transform-origin: top left;
+  position: relative;
+  padding: 5rem;
 }
+
+.slide-content {
+  display: contents;
+}
+
+.slide-margin {
+  color: var(--presentation-muted);
+  display: flex;
+  font-size: 1rem;
+  gap: 1rem;
+  left: 5rem;
+  line-height: 1.2;
+  max-width: calc(100% - 10rem);
+  overflow: hidden;
+  position: absolute;
+  right: 5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.slide-margin-top {
+  justify-content: space-between;
+  top: 2rem;
+}
+
+.slide-margin-bottom {
+  bottom: 2rem;
+  justify-content: space-between;
+}
+
+.slide-margin-footnote {
+  margin-left: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.slide-margin-footnote p { margin: 0; }
 
 .slide-block,
 .slide-title,

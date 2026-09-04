@@ -8,4 +8,8 @@ module PresentationsHelper
 
     "position-#{position.horizontal} position-#{position.vertical}"
   end
+
+  def total_slides
+    @presentation&.slides&.length || 0
+  end
 end

@@ -1,7 +1,7 @@
 <div class="presentation-surface slides slides-theme-<%= presentation.presentation_theme %> slides-typography-<%= presentation.presentation_typography %>">
   <% presentation.slides.each do |slide| %>
     <div class="slide-frame" data-controller="presentation-canvas">
-      <%= render "slide", slide: slide %>
+      <%= render "slide", slide: slide, margin_settings: presentation.document.margin_settings %>
     </div>
   <% end %>
 </div>

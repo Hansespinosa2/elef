@@ -92,6 +92,35 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_select ".presentation-slide", 2
   end
 
+  test "renders margin metadata and slide count in both views" do
+    presentation = Presentation.create!(title: "Margin deck", source: <<~MARKDOWN)
+      ---
+      show-in-margin:
+        section: true
+        subsection: true
+      footnote: true
+      slideCount: true
+      ---
+      :::section{Product strategy}
+      :::subsection{Opportunity}
+      :::footnote{Source: customer interviews}
+      # First
+      ---
+      # Second
+    MARKDOWN
+
+    get presentation_path(presentation)
+    assert_select ".slide-margin-section", text: "Product strategy", count: 2
+    assert_select ".slide-margin-subsection", text: "Opportunity", count: 2
+    assert_select ".slide-margin-footnote", text: /Source: customer interviews/, count: 1
+    assert_select ".slide-margin-count", text: "1 / 2", count: 1
+    assert_select ".slide-margin-count", text: "2 / 2", count: 1
+
+    get present_presentation_path(presentation)
+    assert_select ".presentation-toolbar [data-presentation-target='counter']", count: 0
+    assert_select ".presentation-slide .slide-margin-section", text: "Product strategy", count: 2
+  end
+
   test "renders representative sample content in the saved preview" do
     Presentations::SampleData.load!
     sample = Presentation.find_by!(sample_id: "code-and-math")
