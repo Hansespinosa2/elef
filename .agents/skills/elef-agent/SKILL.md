@@ -31,6 +31,10 @@ Use `scripts/elef-agent start TASK BASE` when the task must branch from a
 specific commit or branch. The task branch is `codex/TASK` and the worktree is
 the sibling directory `../elef-worktrees/TASK`.
 
+New tasks use the latest Codex CLI when their image is built. Existing tasks
+retain the image they were created with, including when they are resumed with
+`up`; use an intentional image refresh when upgrading an existing task.
+
 Codex is launched in the container with approvals and sandbox bypassed and
 model `gpt-5.6-luna`. Treat the container as the isolation boundary, but
 remember that the mounted task worktree and shared Git metadata are host files.

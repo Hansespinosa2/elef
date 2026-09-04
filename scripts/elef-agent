@@ -4,7 +4,7 @@ set -euo pipefail
 REPO="$(git rev-parse --show-toplevel 2>/dev/null)" || { echo "Run from elef." >&2; exit 1; }
 CONTAINER_CLI="${CONTAINER_CLI:-container}"
 IMAGE_OVERRIDE="${ELEF_AGENT_IMAGE:-}"
-CODEX_VERSION="${ELEF_AGENT_CODEX_VERSION:-0.153.1}"
+CODEX_VERSION="${ELEF_AGENT_CODEX_VERSION:-latest}"
 CHROME_DEVTOOLS_MCP_VERSION="${ELEF_AGENT_CHROME_DEVTOOLS_MCP_VERSION:-1.8.0}"
 WORKTREE_ROOT="${ELEF_WORKTREE_ROOT:-$(dirname "$REPO")/elef-worktrees}"
 CODEX_HOME_HOST="${CODEX_HOME:-$HOME/.codex}"
@@ -21,6 +21,7 @@ container_for() { printf 'elef-agent-%s' "$(host_for "$1")"; }
 branch_for() { printf 'codex/%s' "$1"; }
 route_for() { printf '%s/routes/%s' "$AGENT_STATE_ROOT" "$1"; }
 codex_state_for() { printf '%s/codex/%s' "$AGENT_STATE_ROOT" "$1"; }
+image_state_for() { printf '%s/images/%s' "$AGENT_STATE_ROOT" "$1"; }
 host_for() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
 
 delete_codex_state() {
@@ -49,6 +50,53 @@ image_for() {
     printf '%s:%s:%s:%s' "$(id -u)" "$(id -g)" "$CODEX_VERSION" "$CHROME_DEVTOOLS_MCP_VERSION"
   } | shasum | cut -c1-16)"
   printf 'elef-codex:%s' "$digest"
+}
+
+resolve_latest_codex() {
+  [[ "$CODEX_VERSION" != "latest" ]] && return
+  command -v npm >/dev/null || die "npm is required to resolve the latest Codex version"
+  CODEX_VERSION="$(npm view @openai/codex version --silent)"
+  [[ "$CODEX_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]] || \
+    die "unable to resolve a valid Codex version"
+}
+
+new_image_for() {
+  resolve_latest_codex
+  image_for
+}
+
+remember_image() {
+  local task="$1" image="$2" state
+  state="$(image_state_for "$task")"
+  mkdir -p "$(dirname "$state")"
+  printf '%s\n' "$image" >"$state"
+}
+
+existing_image_for() {
+  local task="$1" name image state
+  state="$(image_state_for "$task")"
+  if [[ -f "$state" ]]; then
+    image="$(<"$state")"
+    [[ -n "$image" ]] && { printf '%s' "$image"; return; }
+  fi
+  name="$(container_for "$task")"
+  if container_exists "$name"; then
+    command -v jq >/dev/null || die "jq is required to recover an existing task image"
+    image="$("$CONTAINER_CLI" inspect "$name" | jq -r '.[0].configuration.image.reference // empty')"
+    if [[ -n "$image" ]]; then
+      remember_image "$task" "$image"
+      printf '%s' "$image"
+      return
+    fi
+  fi
+  new_image_for
+}
+
+delete_image_state() {
+  local task="$1" state
+  state="$(image_state_for "$task")"
+  [[ ! -L "$state" ]] || die "refusing to delete symlinked image state: $state"
+  rm -f -- "$state"
 }
 
 backend_port_for() {
@@ -296,13 +344,14 @@ start() {
   "$CONTAINER_CLI" system start >/dev/null
   mkdir -p "$WORKTREE_ROOT"
   git worktree add -b "$branch" "$wt" "$base"
-  image="$(image_for)"
+  image="$(new_image_for)"
   if ! ensure_image "$image"; then
     git worktree remove --force "$wt"
     git branch -D "$branch" >/dev/null 2>&1 || true
     die "unable to build image $image"
   fi
   start_task "$task" "$wt" "$name" "$token" "$backend_port" "$image"
+  remember_image "$task" "$image"
   echo "Started $name"
   echo "Worktree: $wt"
   echo "Branch:   $branch"
@@ -324,7 +373,7 @@ up() {
     die "backend port is already in use: $backend_port"
   fi
   "$CONTAINER_CLI" system start >/dev/null
-  image="$(image_for)"
+  image="$(existing_image_for "$task")"
   ensure_image "$image"
   if container_exists "$name"; then
     # Recreate the disposable container so tasks created by older launcher
@@ -410,6 +459,7 @@ cleanup() {
   git branch -D "$branch"
   git push origin --delete "$branch"
   delete_codex_state "$task"
+  delete_image_state "$task"
   echo "Cleaned up merged task $task"
 }
 
@@ -504,6 +554,6 @@ case "${1:-}" in
   stop) shift; stop "$@" ;;
   cleanup) shift; cleanup "$@" ;;
   remove) shift; remove "$@" ;;
-  build) ensure_image ;;
+  build) ensure_image "$(new_image_for)" ;;
   *) echo "usage: $0 {setup|status|start|up|codex|resume|shell|stop|cleanup|remove|build} TASK [ARGS...]" >&2; exit 2 ;;
 esac
