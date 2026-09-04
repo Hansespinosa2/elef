@@ -13,7 +13,8 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
   test "loads sample presentations idempotently and preserves unrelated records" do
     unrelated = Presentation.create!(title: "Personal deck", source: "# Keep me")
 
-    assert_difference("Presentation.count", Presentations::SampleData::SAMPLES.length) do
+    expected_count = Presentations::SampleData::SAMPLES.length + Presentations::LineageSampleData::SAMPLES.length
+    assert_difference("Presentation.count", expected_count) do
       post load_samples_presentations_path
     end
     assert_redirected_to presentations_path
@@ -26,10 +27,12 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
       post load_samples_presentations_path
     end
     assert_equal "# Keep me", unrelated.reload.source
-    assert_equal Presentations::SampleData::SAMPLES.length,
+    assert_equal expected_count,
       Presentation.where.not(sample_id: nil).count
     assert_equal Presentations::SampleData::SAMPLES.length,
       Presentation.where("source LIKE ?", "%#{Presentations::SampleData::MARKER_KEY}%").count
+    assert_equal Presentations::LineageSampleData::SAMPLES.length,
+      Presentation.where(sample_id: Presentations::LineageSampleData::SAMPLES.map { |sample| sample[:id] }).count
   end
 
   test "loads samples through the Rails seed entry point" do

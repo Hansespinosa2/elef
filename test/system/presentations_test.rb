@@ -12,6 +12,9 @@ class PresentationsTest < ApplicationSystemTestCase
     Presentations::SampleData::SAMPLES.each do |sample|
       assert_text sample[:title]
     end
+    Presentations::LineageSampleData::SAMPLES.each do |sample|
+      assert_text sample[:title]
+    end
   end
 
   test "shows the seeded lineage tree in the library" do

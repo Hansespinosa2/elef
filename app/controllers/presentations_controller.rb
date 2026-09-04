@@ -7,6 +7,7 @@ class PresentationsController < ApplicationController
 
   def load_samples
     Presentations::SampleData.load!
+    Presentations::LineageSampleData.load!
     redirect_to presentations_path, notice: "Sample presentations loaded."
   end
 
