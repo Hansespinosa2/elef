@@ -93,12 +93,12 @@ EOF
   <key>StandardErrorPath</key><string>$AGENT_STATE_ROOT/caddy-error.log</string>
 </dict></plist>
 EOF
-  sudo caddy trust
   sudo install -m 644 "$plist" /Library/LaunchDaemons/com.elef.agent-router.plist
   rm -f "$plist"
   sudo launchctl bootout system/com.elef.agent-router 2>/dev/null || true
   sudo launchctl bootstrap system /Library/LaunchDaemons/com.elef.agent-router.plist
   sudo launchctl kickstart -k system/com.elef.agent-router
+  sudo caddy trust
   echo "Caddy is running on local HTTPS port 443."
   echo "Run '$0 start TASK' to create https://TASK.localhost."
 }
