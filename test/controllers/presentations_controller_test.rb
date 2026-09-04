@@ -98,6 +98,9 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_select ".lineage-slide-thumb", count: 15
     assert_select ".lineage-hover-card", count: 15
     assert_select ".lineage-hover-card", text: /Created.*Last published/m
+    assert_select ".lineage-graph-canvas[data-controller='lineage-graph']"
+    assert_select ".lineage-edges[data-lineage-graph-target='edges']"
+    assert_select ".lineage-node[data-lineage-graph-parent-id]", count: 12
   end
 
   test "creates a presentation from markdown source" do

@@ -28,8 +28,13 @@
             <%= form.text_field :title, value: presentation.title, aria: { label: "Rename #{presentation.title}" }, class: "w-40 rounded-lg border border-[#ddd5c8] bg-white px-2 py-1" %>
             <%= form.submit "Rename", class: "cursor-pointer rounded-full border border-[#ddd5c8] bg-[#fffdf8] px-3 py-1 font-bold" %>
           <% end %>
-          <%= button_to "Fork continuation", fork_presentation_path(presentation), method: :post, params: { fork_type: "continuation" }, class: "cursor-pointer rounded-full border border-[#ddd5c8] bg-[#fffdf8] px-3 py-1 font-bold" %>
-          <%= button_to "Fork inspiration", fork_presentation_path(presentation), method: :post, params: { fork_type: "inspiration" }, class: "cursor-pointer rounded-full border border-[#ddd5c8] bg-[#fffdf8] px-3 py-1 font-bold" %>
+          <details class="fork-menu relative">
+            <summary class="cursor-pointer list-none rounded-full border border-[#ddd5c8] bg-[#fffdf8] px-3 py-1 font-bold">Fork</summary>
+            <div class="fork-menu-options absolute right-0 z-10 mt-2 grid min-w-44 gap-1 rounded-xl border border-[#ddd5c8] bg-[#fffdf8] p-2 shadow-lg">
+              <%= button_to "As continuation", fork_presentation_path(presentation), method: :post, params: { fork_type: "continuation" }, class: "cursor-pointer rounded-lg px-3 py-2 text-left font-bold hover:bg-[#f7efe2]" %>
+              <%= button_to "As inspiration", fork_presentation_path(presentation), method: :post, params: { fork_type: "inspiration" }, class: "cursor-pointer rounded-lg px-3 py-2 text-left font-bold hover:bg-[#f7efe2]" %>
+            </div>
+          </details>
           <%= button_to "Delete", presentation_path(presentation), method: :delete, form: { data: { turbo_confirm: "Delete #{presentation.title}?" } }, class: "cursor-pointer rounded-full border border-[#efb0a8] bg-[#fff1ee] px-3 py-1 font-bold text-[#a63a2d]" %>
         </div>
       </article>
