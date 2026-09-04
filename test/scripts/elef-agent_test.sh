@@ -28,5 +28,6 @@ assert_contains "$entrypoint" 'bin/rails server -b "${BIND:-0.0.0.0}" -p "${PORT
 assert_contains "$containerfile" 'ARG CODEX_VERSION=0.153.1'
 assert_contains "$containerfile" 'ARG CHROME_DEVTOOLS_MCP_VERSION=1.8.0'
 assert_contains "$containerfile" 'chromium-driver'
+assert_contains "$containerfile" 'ripgrep'
 
 echo "elef-agent launcher checks passed"
