@@ -147,12 +147,105 @@ body.elef-app {
   transform-origin: top left;
 }
 
-.slide:not(.slide-intro) {
+.slide-block,
+.slide-title,
+.slide-region {
+  min-width: 0;
+  width: 100%;
+}
+
+.slide-title {
+  flex: 0 0 auto;
+}
+
+.slide-regions {
+  align-items: stretch;
+  display: flex;
+  flex: 1;
+  gap: clamp(1rem, 3vw, 3rem);
+  min-height: 0;
+  width: 100%;
+}
+
+.slide-region {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-height: 0;
+}
+
+.slide-region .slide-block {
+  width: auto;
+}
+
+.slide-block.position-left { align-self: flex-start; text-align: left; }
+.slide-block.position-center { align-self: center; text-align: center; }
+.slide-block.position-right { align-self: flex-end; text-align: right; }
+.slide-block.position-middle { margin-bottom: auto; margin-top: auto; }
+.slide-block.position-bottom { margin-top: auto; }
+
+.slide-statement {
+  justify-content: center;
+  text-align: center;
+}
+
+.slide-statement .slide-block {
+  align-self: center;
+  max-width: 80%;
+}
+
+.slide-two-column .slide-regions,
+.slide-three-column .slide-regions {
+  align-items: stretch;
+  display: grid;
+}
+
+.slide-two-column .slide-regions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.slide-three-column .slide-regions {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.slide-image .slide-block,
+.slide-table .slide-block,
+.slide-code .slide-block {
+  align-self: center;
+  width: 100%;
+}
+
+.slide-image .slide-block {
+  align-items: center;
+  display: flex;
+  flex: 1;
+  justify-content: center;
+}
+
+.slide-image .slide-block img {
+  height: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  width: 100%;
+}
+
+.slide-table table { font-size: clamp(0.85rem, 1.7vw, 1.4rem); }
+
+.slide-code .slide-block,
+.slide-code pre { max-height: 100%; }
+
+@media (max-width: 720px) {
+  .slide-region { min-height: 0; }
+  .slide-statement .slide-block { max-width: 100%; }
+}
+
+.slide {
   align-items: flex-start;
   text-align: left;
 }
 
-.slide-intro {
+.slide-statement {
   align-items: center;
   justify-content: center;
   text-align: center;

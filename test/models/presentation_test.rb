@@ -42,11 +42,82 @@ class PresentationTest < ActiveSupport::TestCase
     assert_includes presentation.source, "# Title\n---\n# Second"
   end
 
-  test "layout directive is metadata instead of rendered Markdown" do
-    slide = Presentations::Document.parse(":::slide-layout{intro}\n# Welcome").slides.first
+  test "automatic layouts do not require a layout directive" do
+    slide = Presentations::Document.parse("# Welcome\n\nA clear opening.").slides.first
 
-    assert_equal "intro", slide.layout
-    assert_equal "# Welcome", slide.markdown
+    assert_equal "statement", slide.layout
+    assert_equal "# Welcome\n\nA clear opening.", slide.markdown
+  end
+
+  test "infers column layouts from repeated sibling headings" do
+    two_column = Presentations::Document.parse(<<~MARKDOWN).slides.first
+      # Compare approaches
+
+      ## Fast
+
+      Write quickly.
+
+      ## Safe
+
+      Validate carefully.
+    MARKDOWN
+    three_column = Presentations::Document.parse(<<~MARKDOWN).slides.first
+      # Three priorities
+
+      ## Speed
+
+      Short feedback loops.
+
+      ## Quality
+
+      Reliable output.
+
+      ## Trust
+
+      Source remains canonical.
+    MARKDOWN
+
+    assert_equal "two-column", two_column.layout
+    assert_equal ["## Fast", "## Safe"], two_column.regions.map { |region| region.blocks.first.markdown }
+    assert_equal "three-column", three_column.layout
+    assert_equal 3, three_column.regions.length
+  end
+
+  test "infers focused content layouts and keeps mixed content as body" do
+    assert_equal "statement", Presentations::Document.parse("# Takeaway\n\nMake it clear.").slides.first.layout
+    assert_equal "image", Presentations::Document.parse("# Visual\n\n![Alt](image.png)").slides.first.layout
+    assert_equal "table", Presentations::Document.parse("# Data\n\n| A | B |\n| --- | --- |\n| 1 | 2 |").slides.first.layout
+    assert_equal "code", Presentations::Document.parse("# Example\n\n```ruby\nputs 1\n```").slides.first.layout
+    assert_equal "body", Presentations::Document.parse("# Mixed\n\nA paragraph.\n\n- One\n- Two").slides.first.layout
+  end
+
+  test "parses block positioning and removes extension directives" do
+    document = Presentations::Document.parse(<<~MARKDOWN)
+      # Positioned
+
+      :::position{center middle}
+
+      A centered message.
+
+      :::position{right bottom}
+      - One
+      - Two
+    MARKDOWN
+    slide = document.slides.first
+
+    assert_equal "body", slide.layout
+    assert_equal [nil, ["center", "middle"], ["right", "bottom"]],
+      slide.blocks.map { |block| block.position&.then { |position| [position.horizontal, position.vertical] } }
+    refute_includes slide.markdown, ":::"
+    assert_empty document.warnings
+  end
+
+  test "warns and removes unknown presentation directives" do
+    document = Presentations::Document.parse("# Slide\n\n:::unknown\n\nContent")
+
+    refute_includes document.slides.first.markdown, ":::unknown"
+    assert_equal 1, document.warnings.length
+    assert_match "directive", document.warnings.first
   end
 
   test "blank source is a valid one-slide presentation" do
@@ -105,13 +176,26 @@ class PresentationTest < ActiveSupport::TestCase
     assert_equal Presentations::SampleData::SAMPLES.map { |sample| sample[:id] },
       samples.map(&:sample_id)
     assert_equal %w[dark light match], samples.map(&:presentation_theme).uniq.sort
-    assert samples.all? { |presentation| presentation.slides.length.between?(10, 15) }
+    assert samples.all? { |presentation| presentation.slides.length.between?(10, 20) }
     assert samples.all? { |presentation| presentation.source.lines.length > 50 }
     assert samples.all? { |presentation| presentation.source.scan(/^# /).length >= 8 }
     assert samples.any? { |presentation| presentation.source.include?("```ruby") }
     assert samples.any? { |presentation| presentation.source.include?("$$") }
     assert samples.any? { |presentation| presentation.source.include?("| Workflow | Authoring speed |") }
-    assert samples.any? { |presentation| presentation.slides.any? { |slide| slide.layout == "intro" } }
+    refute samples.any? { |presentation| presentation.source.include?("slide-layout") }
+    layouts = Presentation.find_by!(sample_id: "layouts-and-themes")
+    assert_includes layouts.slides.map(&:layout), "two-column"
+    assert_includes layouts.slides.map(&:layout), "three-column"
+    assert_includes layouts.slides.map(&:layout), "statement"
+    assert_equal 5, layouts.slides.count { |slide| slide.layout == "three-column" }
+    %w[left center right].product(%w[top middle bottom]).each do |horizontal, vertical|
+      assert_includes layouts.source, ":::position{#{horizontal} #{vertical}}"
+    end
+    assert layouts.slides.any? { |slide| slide.blocks.any? { |block| block.position&.horizontal == "center" && block.position.vertical == "middle" } }
+    assert layouts.slides.any? { |slide| slide.blocks.any? { |block| block.position&.horizontal == "right" && block.position.vertical == "bottom" } }
+    assert_includes Presentation.find_by!(sample_id: "tables-and-media").slides.map(&:layout), "image"
+    assert_includes Presentation.find_by!(sample_id: "code-and-math").slides.map(&:layout), "code"
+    assert_includes Presentation.find_by!(sample_id: "tables-and-media").slides.map(&:layout), "table"
     assert samples.any? { |presentation| presentation.source.include?("Fenced") }
   end
 

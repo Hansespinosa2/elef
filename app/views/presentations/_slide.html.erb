@@ -1,0 +1,27 @@
+<% presentation_slide = local_assigns[:presentation_slide] %>
+<section class="slide <%= 'presentation-slide ' if presentation_slide %>slide-<%= slide.layout %>" <%= 'data-presentation-target="slide"' if presentation_slide %> data-presentation-canvas-target="canvas" aria-label="Slide <%= slide.index + 1 %>">
+  <% if slide.title.present? %>
+    <div class="slide-title">
+      <%= render_markdown(slide.title) %>
+    </div>
+    <div class="slide-regions">
+      <% slide.regions.each do |region| %>
+        <div class="slide-region">
+          <% region.blocks.each do |block| %>
+            <div class="slide-block <%= position_classes(block.position) %>">
+              <%= render_markdown(block.markdown) %>
+            </div>
+          <% end %>
+        </div>
+      <% end %>
+    </div>
+  <% elsif slide.blocks.empty? %>
+    <p class="empty-slide">Empty slide</p>
+  <% else %>
+    <% slide.blocks.each do |block| %>
+      <div class="slide-block <%= position_classes(block.position) %>">
+        <%= render_markdown(block.markdown) %>
+      </div>
+    <% end %>
+  <% end %>
+</section>
