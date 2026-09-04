@@ -1,7 +1,9 @@
-FROM ruby:3.4-bookworm
+FROM ruby:3.4-bookworm@sha256:719732d30910d44c7173cde5010bf33c8f279573bd8908e2ff2b49272b7d55ce
 
 ARG DEV_UID=1000
 ARG DEV_GID=1000
+ARG CODEX_VERSION=0.153.1
+ARG CHROME_DEVTOOLS_MCP_VERSION=1.8.0
 
 ENV BUNDLE_PATH=/usr/local/bundle \
     BUNDLE_JOBS=4 \
@@ -25,7 +27,7 @@ RUN apt-get update \
     && apt-get install --no-install-recommends -y gh \
     && rm -rf /var/lib/apt/lists/* \
     && gem install bundler -v 4.0.6 \
-    && npm install --global @openai/codex chrome-devtools-mcp \
+    && npm install --global "@openai/codex@${CODEX_VERSION}" "chrome-devtools-mcp@${CHROME_DEVTOOLS_MCP_VERSION}" \
     && if getent group "${DEV_GID}" >/dev/null; then DEV_GROUP="$(getent group "${DEV_GID}" | cut -d: -f1)"; else groupadd --gid "${DEV_GID}" developer; DEV_GROUP=developer; fi \
     && useradd --uid "${DEV_UID}" --gid "${DEV_GID}" --create-home --shell /bin/bash developer \
     && mkdir --parents /workspace /home/developer/.codex /home/developer/.config/gh \

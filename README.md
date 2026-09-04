@@ -40,12 +40,18 @@ Mac, run the one-time guided setup:
 scripts/elef-agent setup
 ```
 
-After setup, starting `editor-fix` exposes its app at
-`https://editor-fix.localhost`. The hostname identifies the worktree while
-the local Caddy router forwards it to that task's isolated container. Each
-agent gets a separate backend port internally; those ports are loopback-only
-and do not appear in the browser URL. Stop or remove the task to unregister
-its route.
+After setup, `scripts/elef-agent start editor-fix` creates the isolated
+worktree and container, prepares the database, and starts Rails automatically.
+It exposes the app at `https://editor-fix.localhost`. The hostname identifies
+the worktree while the local Caddy router forwards it to that task's isolated
+container. Each agent gets a separate backend port internally; those ports are
+loopback-only and do not appear in the browser URL.
+
+Use `scripts/elef-agent stop editor-fix` to stop the task while preserving its
+worktree, then `scripts/elef-agent up editor-fix` to recreate its disposable
+container and start Rails again. Use `scripts/elef-agent status` to see
+container and HTTP readiness states. Stop or remove the task to unregister its
+route.
 
 ## Validation
 

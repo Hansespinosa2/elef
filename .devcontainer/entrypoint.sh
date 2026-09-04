@@ -10,4 +10,11 @@ if command -v gh >/dev/null 2>&1; then
   git config --global credential.helper '!gh auth git-credential' || true
 fi
 
+if [[ "${1:-}" == web ]]; then
+  shift
+  bundle install
+  bin/rails db:prepare
+  exec bin/rails server -b "${BIND:-0.0.0.0}" -p "${PORT:-3000}" "$@"
+fi
+
 exec "$@"

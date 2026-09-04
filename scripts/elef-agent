@@ -3,7 +3,9 @@ set -euo pipefail
 
 REPO="$(git rev-parse --show-toplevel 2>/dev/null)" || { echo "Run from elef." >&2; exit 1; }
 CONTAINER_CLI="${CONTAINER_CLI:-container}"
-IMAGE="${ELEF_AGENT_IMAGE:-elef-codex:latest}"
+IMAGE_OVERRIDE="${ELEF_AGENT_IMAGE:-}"
+CODEX_VERSION="${ELEF_AGENT_CODEX_VERSION:-0.153.1}"
+CHROME_DEVTOOLS_MCP_VERSION="${ELEF_AGENT_CHROME_DEVTOOLS_MCP_VERSION:-1.8.0}"
 WORKTREE_ROOT="${ELEF_WORKTREE_ROOT:-$(dirname "$REPO")/elef-worktrees}"
 CODEX_HOME_HOST="${CODEX_HOME:-$HOME/.codex}"
 GH_CONFIG_HOST="${GH_CONFIG_DIR:-$HOME/.config/gh}"
@@ -14,10 +16,25 @@ die() { echo "error: $*" >&2; exit 1; }
 need_container() { command -v "$CONTAINER_CLI" >/dev/null || die "Apple Container CLI not found"; }
 safe_name() { [[ "${1:-}" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*[a-zA-Z0-9]$ ]] || die "invalid task name: ${1:-}"; }
 worktree_for() { printf '%s/%s' "$WORKTREE_ROOT" "$1"; }
-container_for() { printf 'elef-agent-%s' "$1"; }
+container_for() { printf 'elef-agent-%s' "$(host_for "$1")"; }
 branch_for() { printf 'codex/%s' "$1"; }
 route_for() { printf '%s/routes/%s' "$AGENT_STATE_ROOT" "$1"; }
 host_for() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
+
+image_for() {
+  if [[ -n "$IMAGE_OVERRIDE" ]]; then
+    printf '%s' "$IMAGE_OVERRIDE"
+    return
+  fi
+  local digest
+  digest="$({
+    cat "$REPO/.devcontainer/Containerfile"
+    cat "$REPO/.devcontainer/entrypoint.sh"
+    cat "$REPO/.devcontainer/codex-config.toml"
+    printf '%s:%s:%s:%s' "$(id -u)" "$(id -g)" "$CODEX_VERSION" "$CHROME_DEVTOOLS_MCP_VERSION"
+  } | shasum | cut -c1-16)"
+  printf 'elef-codex:%s' "$digest"
+}
 
 backend_port_for() {
   local task="$1" digest offset
@@ -112,9 +129,26 @@ EOF
 
 build_image() {
   need_container
-  "$CONTAINER_CLI" build --tag "$IMAGE" \
+  local image="${1:-$(image_for)}"
+  "$CONTAINER_CLI" build --tag "$image" \
     --build-arg "DEV_UID=$(id -u)" --build-arg "DEV_GID=$(id -g)" \
+    --build-arg "CODEX_VERSION=$CODEX_VERSION" \
+    --build-arg "CHROME_DEVTOOLS_MCP_VERSION=$CHROME_DEVTOOLS_MCP_VERSION" \
     --file "$REPO/.devcontainer/Containerfile" "$REPO"
+}
+
+image_exists() {
+  "$CONTAINER_CLI" image inspect "$1" >/dev/null 2>&1
+}
+
+ensure_image() {
+  local image="${1:-$(image_for)}"
+  if image_exists "$image"; then
+    echo "Reusing image $image"
+  else
+    echo "Building image $image"
+    build_image "$image"
+  fi
 }
 
 token_for_gh() {
@@ -136,8 +170,83 @@ load_dotenv() {
   done
 }
 
+container_exists() {
+  "$CONTAINER_CLI" inspect "$1" >/dev/null 2>&1
+}
+
+container_running() {
+  "$CONTAINER_CLI" inspect "$1" 2>/dev/null | rg -q '"status"\s*:\s*"running"|"running"\s*:\s*true'
+}
+
+route_up() {
+  local task="$1" port="$2" route
+  route="$(route_for "$(host_for "$task")")"
+  printf '%s' "$port" >"$route"
+  if ! reload_router; then
+    rm -f "$route"
+    reload_router || true
+    return 1
+  fi
+}
+
+wait_for_http() {
+  local task="$1" attempt code
+  for attempt in {1..30}; do
+    code="$(curl -k -sS -o /dev/null -w '%{http_code}' --max-time 2 "https://$(host_for "$task").localhost" 2>/dev/null || true)"
+    if [[ "$code" =~ ^[1-5][0-9][0-9]$ ]]; then
+      printf '%s' "$code"
+      return 0
+    fi
+    sleep 1
+  done
+  return 1
+}
+
+report_readiness() {
+  local task="$1" code="$2"
+  if [[ "$code" -ge 500 ]]; then
+    echo "Rails reachable at https://$(host_for "$task").localhost (HTTP $code); application is unhealthy" >&2
+  else
+    echo "Rails ready at https://$(host_for "$task").localhost (HTTP $code)"
+  fi
+}
+
+run_container() {
+  local task="$1" wt="$2" name="$3" token="$4" backend_port="$5" image="$6"
+  local -a mounts=(--volume "$wt:$wt" --volume "$REPO/.git:$REPO/.git")
+  [[ -f "$CODEX_HOME_HOST/auth.json" ]] && mounts+=(--volume "$CODEX_HOME_HOST/auth.json:/home/developer/.codex/auth.json:ro")
+  [[ -f "$GH_CONFIG_HOST/hosts.yml" ]] && mounts+=(--volume "$GH_CONFIG_HOST/hosts.yml:/home/developer/.config/gh/hosts.yml:ro")
+  "$CONTAINER_CLI" run --name "$name" --detach --init \
+    --publish "127.0.0.1:${backend_port}:3000" \
+    --env "GITHUB_TOKEN=$token" --env "GH_TOKEN=$token" \
+    --env PORT=3000 --env BIND=0.0.0.0 \
+    "${mounts[@]}" --workdir "$wt" "$image" web
+}
+
+start_task() {
+  local task="$1" wt="$2" name="$3" token="$4" backend_port="$5" image="$6"
+  run_container "$task" "$wt" "$name" "$token" "$backend_port" "$image"
+  if ! route_up "$task" "$backend_port"; then
+    "$CONTAINER_CLI" stop "$name" >/dev/null 2>&1 || true
+    "$CONTAINER_CLI" delete "$name" >/dev/null 2>&1 || true
+    die "unable to register route for $task"
+  fi
+  local code
+  if ! code="$(wait_for_http "$task")"; then
+    local logs
+    logs="$($CONTAINER_CLI logs "$name" 2>/dev/null || true)"
+    "$CONTAINER_CLI" stop "$name" >/dev/null 2>&1 || true
+    "$CONTAINER_CLI" delete "$name" >/dev/null 2>&1 || true
+    rm -f "$(route_for "$(host_for "$task")")"
+    reload_router || true
+    printf '%s\n' "$logs" | tail -40 >&2
+    die "Rails did not become reachable for $task"
+  fi
+  report_readiness "$task" "$code"
+}
+
 start() {
-  local task="${1:-}" base="${2:-HEAD}" wt name branch token backend_port host
+  local task="${1:-}" base="${2:-HEAD}" wt name branch token backend_port host image
   [[ -n "$task" ]] || die "usage: elef-agent start TASK [BASE]"
   safe_name "$task"
   host="$(host_for "$task")"
@@ -150,30 +259,66 @@ start() {
   backend_port="$(backend_port_for "$task")"
   [[ ! -e "$wt" ]] || die "worktree already exists: $wt"
   need_container
-  if lsof -nP -iTCP:"$backend_port" -sTCP:LISTEN >/dev/null 2>&1; then
+  if ! container_running "$name" && lsof -nP -iTCP:"$backend_port" -sTCP:LISTEN >/dev/null 2>&1; then
     die "backend port is already in use: $backend_port"
   fi
   [[ ! -e "$(route_for "$host")" ]] || die "browser route already exists: https://${host}.localhost"
   "$CONTAINER_CLI" system start >/dev/null
   mkdir -p "$WORKTREE_ROOT"
   git worktree add -b "$branch" "$wt" "$base"
-  build_image
-
-  local -a mounts=(--volume "$wt:$wt" --volume "$REPO/.git:$REPO/.git")
-  [[ -f "$CODEX_HOME_HOST/auth.json" ]] && mounts+=(--volume "$CODEX_HOME_HOST/auth.json:/home/developer/.codex/auth.json:ro")
-  [[ -f "$GH_CONFIG_HOST/hosts.yml" ]] && mounts+=(--volume "$GH_CONFIG_HOST/hosts.yml:/home/developer/.config/gh/hosts.yml:ro")
-  "$CONTAINER_CLI" run --name "$name" --detach --init \
-    --publish "127.0.0.1:${backend_port}:3000" \
-    --env "GITHUB_TOKEN=$token" --env "GH_TOKEN=$token" \
-    "${mounts[@]}" --workdir "$wt" "$IMAGE"
-  "$CONTAINER_CLI" exec --workdir "$wt" "$name" bundle install
-  "$CONTAINER_CLI" exec --workdir "$wt" "$name" bin/rails db:prepare
-  printf '%s' "$backend_port" >"$(route_for "$host")"
-  reload_router
+  image="$(image_for)"
+  if ! ensure_image "$image"; then
+    git worktree remove --force "$wt"
+    git branch -D "$branch" >/dev/null 2>&1 || true
+    die "unable to build image $image"
+  fi
+  start_task "$task" "$wt" "$name" "$token" "$backend_port" "$image"
   echo "Started $name"
   echo "Worktree: $wt"
   echo "Branch:   $branch"
   echo "Browser:  https://${host}.localhost"
+}
+
+up() {
+  local task="${1:-}" wt name token backend_port host image
+  [[ -n "$task" ]] || die "usage: elef-agent up TASK"
+  safe_name "$task"
+  wt="$(worktree_for "$task")"; name="$(container_for "$task")"; host="$(host_for "$task")"
+  [[ -d "$wt" ]] || die "task worktree not found: $wt"
+  router_ready || die "Caddy is not installed; run '$0 setup' first"
+  load_dotenv
+  token="$(token_for_gh)"; [[ -n "$token" ]] || die "GitHub token unavailable"
+  backend_port="$(backend_port_for "$task")"
+  if ! container_running "$name" && lsof -nP -iTCP:"$backend_port" -sTCP:LISTEN >/dev/null 2>&1; then
+    die "backend port is already in use: $backend_port"
+  fi
+  "$CONTAINER_CLI" system start >/dev/null
+  image="$(image_for)"
+  ensure_image "$image"
+  if container_exists "$name"; then
+    if ! container_running "$name"; then
+      # Recreate the disposable container so tasks created by older launcher
+      # versions receive the managed web-process command as well.
+      "$CONTAINER_CLI" stop "$name" >/dev/null 2>&1 || true
+      "$CONTAINER_CLI" delete "$name" >/dev/null 2>&1 || true
+    fi
+  fi
+  container_running "$name" || run_container "$task" "$wt" "$name" "$token" "$backend_port" "$image"
+  if ! route_up "$task" "$backend_port"; then
+    "$CONTAINER_CLI" stop "$name" >/dev/null 2>&1 || true
+    "$CONTAINER_CLI" delete "$name" >/dev/null 2>&1 || true
+    die "unable to register route for $task"
+  fi
+  local code
+  if ! code="$(wait_for_http "$task")"; then
+    "$CONTAINER_CLI" logs "$name" 2>/dev/null | tail -40 >&2 || true
+    "$CONTAINER_CLI" stop "$name" >/dev/null 2>&1 || true
+    "$CONTAINER_CLI" delete "$name" >/dev/null 2>&1 || true
+    rm -f "$(route_for "$host")"
+    reload_router || true
+    die "Rails did not become reachable for $task"
+  fi
+  report_readiness "$task" "$code"
 }
 
 exec_in() {
@@ -183,19 +328,23 @@ exec_in() {
 }
 
 status() {
-  local route host port state
-  printf '%-32s %-8s %s\n' "TASK" "STATE" "URL"
+  local route host port state code
+  printf '%-32s %-10s %-8s %s\n' "TASK" "CONTAINER" "HTTP" "URL"
   for route in "$AGENT_STATE_ROOT"/routes/*; do
     [[ -f "$route" ]] || continue
-    host="$(basename "$route")"; port="$(<"$route")"; state="stopped"
-    lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1 && state="running"
-    printf '%-32s %-8s https://%s.localhost\n' "$host" "$state" "$host"
+    host="$(basename "$route")"; port="$(<"$route")"; state="stopped"; code="down"
+    container_exists "$(container_for "$host")" && state="present"
+    container_running "$(container_for "$host")" && state="running"
+    code="$(curl -k -sS -o /dev/null -w '%{http_code}' --max-time 2 "https://${host}.localhost" 2>/dev/null || true)"
+    [[ "$code" =~ ^[1-5][0-9][0-9]$ ]] || code="down"
+    printf '%-32s %-10s %-8s https://%s.localhost\n' "$host" "$state" "$code" "$host"
   done
 }
 
 stop() {
   local task="${1:-}" host; [[ -n "$task" ]] || die "usage: elef-agent stop TASK"
-  safe_name "$task"; host="$(host_for "$task")"; need_container; "$CONTAINER_CLI" stop "$(container_for "$task")"
+  safe_name "$task"; host="$(host_for "$task")"; need_container
+  "$CONTAINER_CLI" stop "$(container_for "$task")" || echo "warning: container may already be stopped" >&2
   rm -f "$(route_for "$host")"
   reload_router
 }
@@ -238,12 +387,13 @@ case "${1:-}" in
   setup) shift; setup "$@" ;;
   status) shift; status "$@" ;;
   start) shift; start "$@" ;;
+  up) shift; up "$@" ;;
   shell) shift; [[ -n "${1:-}" ]] || die "usage: elef-agent shell TASK [COMMAND...]"; task="$1"; shift; exec_in "$task" bash "$@" ;;
   codex) shift; [[ -n "${1:-}" ]] || die "usage: elef-agent codex TASK [PROMPT...]"; task="$1"; shift; exec_in "$task" codex --dangerously-bypass-approvals-and-sandbox -m gpt-5.6-luna "$@" ;;
   resume) shift; [[ -n "${1:-}" ]] || die "usage: elef-agent resume TASK"; task="$1"; shift; exec_in "$task" codex --dangerously-bypass-approvals-and-sandbox -m gpt-5.6-luna resume --last "$@" ;;
   stop) shift; stop "$@" ;;
   cleanup) shift; cleanup "$@" ;;
   remove) shift; remove "$@" ;;
-  build) build_image ;;
-  *) echo "usage: $0 {setup|status|start|codex|resume|shell|stop|cleanup|remove|build} TASK [ARGS...]" >&2; exit 2 ;;
+  build) ensure_image ;;
+  *) echo "usage: $0 {setup|status|start|up|codex|resume|shell|stop|cleanup|remove|build} TASK [ARGS...]" >&2; exit 2 ;;
 esac

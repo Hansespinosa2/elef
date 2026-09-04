@@ -13,7 +13,8 @@
 - The primary checkout belongs to the user's main agent. Never create a
   worktree, branch, or container implicitly. The user explicitly starts an
   isolated task with `scripts/elef-agent start TASK`, then launches Codex with
-  `scripts/elef-agent codex TASK`.
+  `scripts/elef-agent codex TASK`. `start` prepares and starts Rails in the
+  task container; use `scripts/elef-agent up TASK` to restore a stopped task.
 - For isolated agent browser checks, run `scripts/elef-agent setup` once and
   use the task URL printed by `scripts/elef-agent start TASK`,
   `https://TASK.localhost`. These URLs are routed to the matching container;
