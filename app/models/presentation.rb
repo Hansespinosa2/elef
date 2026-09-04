@@ -20,6 +20,18 @@ class Presentation < ApplicationRecord
     document.presentation_theme
   end
 
+  def presentation_typography
+    document.presentation_typography
+  end
+
+  def presentation_typography=(value)
+    self.source = Presentations::Document.with_front_matter_value(
+      source.to_s,
+      "presentationTypography",
+      Presentations::Document.normalize_typography_value(value)
+    )
+  end
+
   def source=(value)
     @document = nil
     super

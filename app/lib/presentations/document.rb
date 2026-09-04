@@ -1,7 +1,7 @@
 module Presentations
   module Document
     Slide = Data.define(:id, :index, :markdown, :layout)
-    Parsed = Data.define(:source_name, :presentation_theme, :slides)
+    Parsed = Data.define(:source_name, :presentation_theme, :presentation_typography, :slides)
     SourceLine = Data.define(:start, :end_pos, :text, :ending)
     FrontMatter = Data.define(:lines, :closing_line, :body_start, :eol)
 
@@ -11,13 +11,14 @@ module Presentations
       raise ArgumentError, "The selected file did not contain readable text." unless source.is_a?(String)
 
       theme = presentation_theme_from_source(source)
+      typography = presentation_typography_from_source(source)
       content = content_without_front_matter(source)
       sections = split_sections(content)
       slides = sections.map.with_index do |section, index|
         metadata = slide_metadata(section)
         Slide.new(id: "#{source_name}-#{index + 1}", index: index, markdown: metadata[:content], layout: metadata[:layout])
       end
-      Parsed.new(source_name: source_name, presentation_theme: theme, slides: slides)
+      Parsed.new(source_name: source_name, presentation_theme: theme, presentation_typography: typography, slides: slides)
     end
 
     def split_sections(content)
@@ -51,6 +52,40 @@ module Presentations
         return normalize_theme_value(match[1]) if match
       end
       "match"
+    end
+
+    def presentation_typography_from_source(source)
+      front_matter_value(source, "presentationTypography", default: "book") do |value|
+        normalize_typography_value(value)
+      end
+    end
+
+    def with_front_matter_value(source, key, value)
+      normalized_source = source.to_s
+      front_matter = initial_front_matter(normalized_source)
+      eol = front_matter&.eol || (normalized_source.include?("\r\n") ? "\r\n" : "\n")
+      replacement = "#{key}: #{value}"
+
+      unless front_matter
+        prefix = "---#{eol}#{replacement}#{eol}---#{eol}"
+        return prefix + normalized_source
+      end
+
+      lines = source_lines(normalized_source)
+      metadata_range = 1...front_matter.closing_line
+      matching_line = metadata_range.find { |index| lines[index].text.match?(/\A\s*#{Regexp.escape(key)}\s*:/) }
+
+      if matching_line
+        line = lines[matching_line]
+        normalized_source.dup.tap do |updated|
+          updated[line.start...line.end_pos] = "#{replacement}#{line.ending}"
+        end
+      else
+        closing = lines[front_matter.closing_line]
+        normalized_source.dup.tap do |updated|
+          updated.insert(closing.start, "#{replacement}#{eol}")
+        end
+      end
     end
 
     def extract_first_h1(source)
@@ -140,6 +175,23 @@ module Presentations
       without_comment = value.strip.sub(/\s+#.*\z/, "").strip
       unquoted = without_comment.match(/\A(['"])(.*)\1\z/)&.[](2) || without_comment
       %w[light dark match].include?(unquoted) ? unquoted : "match"
+    end
+
+    def normalize_typography_value(value)
+      without_comment = value.to_s.strip.sub(/\s+#.*\z/, "").strip
+      unquoted = without_comment.match(/\A(['"])(.*)\1\z/)&.[](2) || without_comment
+      %w[book modern technical].include?(unquoted) ? unquoted : "book"
+    end
+
+    def front_matter_value(source, key, default:)
+      front_matter = initial_front_matter(source)
+      return default unless front_matter
+
+      front_matter.lines[1...front_matter.closing_line].each do |line|
+        match = line.text.match(/\A#{Regexp.escape(key)}\s*:\s*(.*)\z/)
+        return yield(match[1]) if match
+      end
+      default
     end
 
     def normalize_section(value)
