@@ -7,6 +7,8 @@ IMAGE="${ELEF_AGENT_IMAGE:-elef-codex:latest}"
 WORKTREE_ROOT="${ELEF_WORKTREE_ROOT:-$(dirname "$REPO")/elef-worktrees}"
 CODEX_HOME_HOST="${CODEX_HOME:-$HOME/.codex}"
 GH_CONFIG_HOST="${GH_CONFIG_DIR:-$HOME/.config/gh}"
+AGENT_STATE_ROOT="${ELEF_AGENT_STATE_ROOT:-${TMPDIR:-/tmp}/elef-agent}"
+PROXY_PORT="${ELEF_AGENT_PROXY_PORT:-3001}"
 
 die() { echo "error: $*" >&2; exit 1; }
 need_container() { command -v "$CONTAINER_CLI" >/dev/null || die "Apple Container CLI not found"; }
@@ -14,6 +16,27 @@ safe_name() { [[ "${1:-}" =~ ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ ]] || die "invalid tas
 worktree_for() { printf '%s/%s' "$WORKTREE_ROOT" "$1"; }
 container_for() { printf 'elef-agent-%s' "$1"; }
 branch_for() { printf 'codex/%s' "$1"; }
+route_for() { printf '%s/routes/%s' "$AGENT_STATE_ROOT" "$1"; }
+
+backend_port_for() {
+  local task="$1" digest offset
+  digest="$(printf '%s' "$task" | shasum | cut -c1-8)"
+  offset=$((16#$digest % 900))
+  printf '%s' "$((3100 + offset))"
+}
+
+ensure_proxy() {
+  local pid_file="${AGENT_STATE_ROOT}/proxy.pid" pid
+  mkdir -p "$AGENT_STATE_ROOT/routes"
+  if [[ -f "$pid_file" ]]; then
+    pid="$(<"$pid_file")"
+    if kill -0 "$pid" 2>/dev/null; then return; fi
+    rm -f "$pid_file"
+  fi
+  python3 "$REPO/scripts/elef-agent-proxy" "$AGENT_STATE_ROOT/routes" "$PROXY_PORT" \
+    >"$AGENT_STATE_ROOT/proxy.log" 2>&1 &
+  printf '%s' "$!" >"$pid_file"
+}
 
 build_image() {
   need_container
@@ -42,15 +65,19 @@ load_dotenv() {
 }
 
 start() {
-  local task="${1:-}" base="${2:-HEAD}" wt name branch token
+  local task="${1:-}" base="${2:-HEAD}" wt name branch token backend_port
   [[ -n "$task" ]] || die "usage: elef-agent start TASK [BASE]"
   safe_name "$task"
   load_dotenv
   token="$(token_for_gh)"
   [[ -n "$token" ]] || die "GitHub token unavailable; run 'gh auth login' or set GITHUB_TOKEN"
   wt="$(worktree_for "$task")"; name="$(container_for "$task")"; branch="$(branch_for "$task")"
+  backend_port="$(backend_port_for "$task")"
   [[ ! -e "$wt" ]] || die "worktree already exists: $wt"
   need_container
+  if lsof -nP -iTCP:"$backend_port" -sTCP:LISTEN >/dev/null 2>&1; then
+    die "backend port is already in use: $backend_port"
+  fi
   "$CONTAINER_CLI" system start >/dev/null
   mkdir -p "$WORKTREE_ROOT"
   git worktree add -b "$branch" "$wt" "$base"
@@ -60,13 +87,17 @@ start() {
   [[ -f "$CODEX_HOME_HOST/auth.json" ]] && mounts+=(--volume "$CODEX_HOME_HOST/auth.json:/home/developer/.codex/auth.json:ro")
   [[ -f "$GH_CONFIG_HOST/hosts.yml" ]] && mounts+=(--volume "$GH_CONFIG_HOST/hosts.yml:/home/developer/.config/gh/hosts.yml:ro")
   "$CONTAINER_CLI" run --name "$name" --detach --init \
+    --publish "127.0.0.1:${backend_port}:3000" \
     --env "GITHUB_TOKEN=$token" --env "GH_TOKEN=$token" \
     "${mounts[@]}" --workdir "$wt" "$IMAGE"
   "$CONTAINER_CLI" exec --workdir "$wt" "$name" bundle install
   "$CONTAINER_CLI" exec --workdir "$wt" "$name" bin/rails db:prepare
+  ensure_proxy
+  printf '%s' "$backend_port" >"$(route_for "$task")"
   echo "Started $name"
   echo "Worktree: $wt"
   echo "Branch:   $branch"
+  echo "Browser:  http://${task}.localhost:${PROXY_PORT}"
 }
 
 exec_in() {
@@ -86,6 +117,7 @@ remove() {
   safe_name "$task"; need_container; wt="$(worktree_for "$task")"; name="$(container_for "$task")"
   "$CONTAINER_CLI" stop "$name" 2>/dev/null || true
   "$CONTAINER_CLI" delete "$name" 2>/dev/null || true
+  rm -f "$(route_for "$task")"
   [[ ! -e "$wt" ]] || git worktree remove --force "$wt"
   git branch -D "$(branch_for "$task")" 2>/dev/null || true
   echo "Removed container, worktree, and local branch for $task"
@@ -104,6 +136,7 @@ cleanup() {
   need_container
   "$CONTAINER_CLI" stop "$name" 2>/dev/null || true
   "$CONTAINER_CLI" delete "$name" 2>/dev/null || true
+  rm -f "$(route_for "$task")"
   git worktree remove "$wt"
   git branch -D "$branch"
   git push origin --delete "$branch"
