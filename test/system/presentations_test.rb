@@ -161,6 +161,7 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_operator geometry["scale"], :>, 0
 
     page.execute_script("document.querySelector('.slide-frame').style.width = '640px'")
+    page.evaluate_async_script("window.requestAnimationFrame(() => arguments[0]())")
     resized_scale = page.evaluate_script("Number.parseFloat(getComputedStyle(document.querySelector('.slide')).getPropertyValue('--slide-scale'))")
 
     assert_operator resized_scale, :<, geometry["scale"]
