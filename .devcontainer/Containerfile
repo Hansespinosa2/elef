@@ -30,7 +30,7 @@ RUN apt-get update \
     && npm install --global "@openai/codex@${CODEX_VERSION}" "chrome-devtools-mcp@${CHROME_DEVTOOLS_MCP_VERSION}" \
     && if getent group "${DEV_GID}" >/dev/null; then DEV_GROUP="$(getent group "${DEV_GID}" | cut -d: -f1)"; else groupadd --gid "${DEV_GID}" developer; DEV_GROUP=developer; fi \
     && useradd --uid "${DEV_UID}" --gid "${DEV_GID}" --create-home --shell /bin/bash developer \
-    && mkdir --parents /workspace /home/developer/.codex /home/developer/.config/gh \
+    && mkdir --parents /workspace /home/developer/.codex/skills /home/developer/.config/gh \
     && chown --recursive "developer:${DEV_GROUP}" /workspace /home/developer
 
 COPY .devcontainer/codex-config.toml /etc/elef/codex-config.toml

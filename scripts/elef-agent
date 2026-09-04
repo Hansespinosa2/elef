@@ -8,6 +8,7 @@ CODEX_VERSION="${ELEF_AGENT_CODEX_VERSION:-0.153.1}"
 CHROME_DEVTOOLS_MCP_VERSION="${ELEF_AGENT_CHROME_DEVTOOLS_MCP_VERSION:-1.8.0}"
 WORKTREE_ROOT="${ELEF_WORKTREE_ROOT:-$(dirname "$REPO")/elef-worktrees}"
 CODEX_HOME_HOST="${CODEX_HOME:-$HOME/.codex}"
+USER_SKILLS_HOST="${ELEF_USER_SKILLS_DIR:-$HOME/Documents/GitHub/andy-skills/skills}"
 GH_CONFIG_HOST="${GH_CONFIG_DIR:-$HOME/.config/gh}"
 AGENT_STATE_ROOT="${ELEF_AGENT_STATE_ROOT:-$HOME/Library/Application Support/Elef/agent-router}"
 CADDYFILE="${ELEF_AGENT_CADDYFILE:-$AGENT_STATE_ROOT/Caddyfile}"
@@ -19,7 +20,21 @@ worktree_for() { printf '%s/%s' "$WORKTREE_ROOT" "$1"; }
 container_for() { printf 'elef-agent-%s' "$(host_for "$1")"; }
 branch_for() { printf 'codex/%s' "$1"; }
 route_for() { printf '%s/routes/%s' "$AGENT_STATE_ROOT" "$1"; }
+codex_state_for() { printf '%s/codex/%s' "$AGENT_STATE_ROOT" "$1"; }
 host_for() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
+
+delete_codex_state() {
+  local task="$1" state codex_root
+  state="$(codex_state_for "$task")"
+  codex_root="$AGENT_STATE_ROOT/codex"
+  [[ "$state" == "$codex_root/"* ]] || die "refusing to delete unexpected Codex state path: $state"
+  [[ "$state" != "$codex_root" && "$state" != "$codex_root/" ]] || die "refusing to delete Codex state root"
+  [[ ! -L "$state" ]] || die "refusing to delete symlinked Codex state: $state"
+  if [[ -d "$state" ]]; then
+    rm -rf -- "$state"
+    echo "Deleted Codex session state: $state"
+  fi
+}
 
 image_for() {
   if [[ -n "$IMAGE_OVERRIDE" ]]; then
@@ -215,8 +230,19 @@ report_readiness() {
 }
 
 run_container() {
-  local task="$1" wt="$2" name="$3" token="$4" backend_port="$5" image="$6"
-  local -a mounts=(--volume "$wt:$wt" --volume "$REPO/.git:$REPO/.git")
+  local task="$1" wt="$2" name="$3" token="$4" backend_port="$5" image="$6" codex_state
+  codex_state="$(codex_state_for "$task")"
+  mkdir -p "$codex_state"
+  local -a mounts=(
+    --volume "$wt:$wt"
+    --volume "$REPO/.git:$REPO/.git"
+    --volume "$codex_state:/home/developer/.codex"
+  )
+  if [[ -d "$USER_SKILLS_HOST" ]]; then
+    mounts+=(--volume "$USER_SKILLS_HOST:/home/developer/.codex/skills:ro")
+  else
+    echo "warning: user skills directory not found: $USER_SKILLS_HOST" >&2
+  fi
   [[ -f "$CODEX_HOME_HOST/auth.json" ]] && mounts+=(--volume "$CODEX_HOME_HOST/auth.json:/home/developer/.codex/auth.json:ro")
   [[ -f "$GH_CONFIG_HOST/hosts.yml" ]] && mounts+=(--volume "$GH_CONFIG_HOST/hosts.yml:/home/developer/.config/gh/hosts.yml:ro")
   "$CONTAINER_CLI" run --name "$name" --detach --init \
@@ -381,6 +407,7 @@ cleanup() {
   git worktree remove "$wt"
   git branch -D "$branch"
   git push origin --delete "$branch"
+  delete_codex_state "$task"
   echo "Cleaned up merged task $task"
 }
 
