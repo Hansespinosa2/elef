@@ -10,12 +10,13 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_04_221642) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_04_232001) do
   create_table "presentations", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.string "fork_parent_title"
     t.text "fork_source"
     t.string "fork_type"
+    t.datetime "last_published_at"
     t.integer "parent_id"
     t.string "sample_id"
     t.text "source", null: false

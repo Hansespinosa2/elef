@@ -12,14 +12,18 @@
     <div class="lineage-graph overflow-x-auto" role="img" aria-label="Presentation lineage graph">
       <% presentations.each do |presentation| %>
         <% depth = lineage_depth(presentation) %>
+        <% first_slide = presentation.slides.first %>
         <div class="lineage-row <%= presentation.parent ? "lineage-child lineage-#{presentation.fork_type}" : "lineage-root" %>" style="--lineage-depth: <%= depth %>">
           <span class="lineage-connector" aria-hidden="true"></span>
-          <%= link_to edit_presentation_path(presentation), class: "lineage-node inline-flex min-w-64 items-center justify-between gap-4 rounded-xl border border-[#ddd5c8] bg-white px-4 py-3 no-underline hover:border-[#6d4aff]", aria: { label: "Open #{presentation.title}" } do %>
-            <span>
-              <strong class="block"><%= presentation.title %></strong>
-              <small class="text-[#6f675c]"><%= pluralize(presentation.slides.length, "slide") %></small>
-            </span>
-            <% if presentation.fork_type %><span class="rounded-full bg-[#f0ebff] px-2 py-1 text-xs font-bold text-[#6d4aff]"><%= presentation.fork_type %></span><% end %>
+          <%= link_to edit_presentation_path(presentation), class: "lineage-node group relative block min-w-64 rounded-xl border border-[#ddd5c8] bg-white p-2 no-underline hover:border-[#6d4aff]", aria: { label: "Open #{presentation.title}" } do %>
+            <div class="lineage-slide-thumb slide slide-<%= first_slide&.layout || "body" %>" aria-hidden="true">
+              <% if first_slide&.markdown.present? %><%= render_markdown(first_slide.markdown) %><% else %><span>Empty slide</span><% end %>
+            </div>
+            <div class="flex items-center justify-between gap-3 px-2 pb-1 pt-2">
+              <span><strong class="block"><%= presentation.title %></strong><small class="text-[#6f675c]"><%= pluralize(presentation.slides.length, "slide") %></small></span>
+              <% if presentation.fork_type %><span class="rounded-full bg-[#f0ebff] px-2 py-1 text-xs font-bold text-[#6d4aff]"><%= presentation.fork_type %></span><% end %>
+            </div>
+            <span class="lineage-hover-card" role="tooltip"><strong><%= presentation.title %></strong><span>Created <%= presentation.created_at.strftime("%b %-d, %Y") %></span><span>Last published <%= presentation.last_published_at ? presentation.last_published_at.strftime("%b %-d, %Y") : "Never" %></span></span>
           <% end %>
         </div>
       <% end %>

@@ -155,6 +155,82 @@
 .lineage-continuation .lineage-connector { background: #6d4aff; }
 .lineage-inspiration .lineage-connector { border-top: 2px dotted #6d4aff; }
 .lineage-node { box-shadow: 0 8px 20px rgba(35, 29, 20, 0.05); }
+.lineage-row { z-index: 0; }
+.lineage-row:hover,
+.lineage-row:focus-within { z-index: 3; }
+.lineage-slide-thumb {
+  aspect-ratio: 16 / 9;
+  background: #fffdf8;
+  border: 1px solid #eee5d8;
+  border-radius: 0.55rem;
+  color: #24211d;
+  overflow: hidden;
+  padding: 0.8rem;
+  pointer-events: none;
+  position: relative;
+}
+.lineage-slide-thumb::after {
+  background: linear-gradient(135deg, transparent 48%, rgba(109, 74, 255, 0.16) 49%, rgba(109, 74, 255, 0.16) 53%, transparent 54%);
+  content: "";
+  inset: 0;
+  opacity: 0.55;
+  position: absolute;
+}
+.lineage-slide-thumb h1,
+.lineage-slide-thumb h2,
+.lineage-slide-thumb h3 {
+  font-size: clamp(0.8rem, 1.7vw, 1.25rem);
+  line-height: 1.05;
+  margin: 0 0 0.35rem;
+  max-width: 78%;
+  position: relative;
+  z-index: 1;
+}
+.lineage-slide-thumb p,
+.lineage-slide-thumb ul,
+.lineage-slide-thumb ol,
+.lineage-slide-thumb blockquote,
+.lineage-slide-thumb pre {
+  font-size: clamp(0.45rem, 0.9vw, 0.7rem);
+  line-height: 1.25;
+  margin: 0.25rem 0;
+  max-width: 78%;
+  position: relative;
+  z-index: 1;
+}
+.lineage-slide-thumb ul,
+.lineage-slide-thumb ol { padding-left: 1rem; }
+.lineage-slide-thumb .empty-slide { font-size: 0.65rem; }
+.lineage-hover-card {
+  background: #24211d;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 0.7rem;
+  box-shadow: 0 12px 28px rgba(35, 29, 20, 0.2);
+  color: #fffdf8;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  left: 0;
+  min-width: 13rem;
+  opacity: 0;
+  padding: 0.75rem 0.9rem;
+  pointer-events: none;
+  position: absolute;
+  top: calc(100% + 0.6rem);
+  transform: translateY(-0.35rem);
+  transition: opacity 120ms ease, transform 120ms ease;
+  visibility: hidden;
+  white-space: nowrap;
+  z-index: 10;
+}
+.lineage-hover-card strong { font-size: 0.85rem; }
+.lineage-hover-card span { color: #d9d0c4; font-size: 0.75rem; }
+.lineage-node:hover .lineage-hover-card,
+.lineage-node:focus-visible .lineage-hover-card {
+  opacity: 1;
+  transform: translateY(0);
+  visibility: visible;
+}
 
 .presentation-body {
   background: #0f0f12;
