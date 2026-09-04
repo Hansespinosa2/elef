@@ -131,7 +131,6 @@ body.elef-app {
 }
 
 .slide {
-  aspect-ratio: 16 / 9;
   background: linear-gradient(135deg, var(--oradia-paper-bright), var(--oradia-paper));
   border: 1px solid var(--oradia-paper-line);
   border-radius: 0.65rem;
@@ -140,7 +139,12 @@ body.elef-app {
   flex-direction: column;
   justify-content: flex-start;
   overflow: hidden;
-  padding: clamp(1rem, 4vw, 4rem);
+  padding: 4rem;
+  height: 720px;
+  width: 1280px;
+  max-width: none;
+  transform: scale(var(--slide-scale, 1));
+  transform-origin: top left;
 }
 
 .slide:not(.slide-intro) {
@@ -154,25 +158,25 @@ body.elef-app {
   text-align: center;
 }
 
-.slide h1 { font-size: clamp(2rem, 6vw, 5rem); line-height: 0.95; }
-.slide h2 { font-size: clamp(1.6rem, 4vw, 3.5rem); }
+.slide h1 { font-size: 5rem; line-height: 0.95; }
+.slide h2 { font-size: 3.5rem; }
 .slide p,
 .slide li,
 .slide blockquote,
 .slide td,
-.slide th { font-size: clamp(1rem, 2vw, 1.6rem); }
+.slide th { font-size: 1.6rem; }
 .presentation-surface pre {
   background: #191714;
   border: 1px solid rgba(255, 247, 232, 0.12);
   border-radius: 0.75rem;
   box-shadow: 0 12px 24px rgba(35, 29, 20, 0.16);
   color: #fff7e8;
-  font-size: clamp(0.78rem, 1.25vw, 1.15rem);
+  font-size: 1.15rem;
   line-height: 1.5;
   margin: 0.75rem 0;
   max-width: 100%;
   overflow: auto;
-  padding: clamp(0.85rem, 2vw, 1.35rem);
+  padding: 1.35rem;
   text-align: left;
 }
 
@@ -260,6 +264,19 @@ body.elef-app {
 .empty-slide { color: var(--presentation-muted); font-style: italic; }
 .math-error { color: var(--presentation-danger); font-family: "SFMono-Regular", Consolas, monospace; }
 
+.slide-frame {
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  position: relative;
+  width: 100%;
+}
+
+.slide-frame > .slide {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
 .presentation-body {
   background: var(--oradia-slate-950);
   color: #fff;
@@ -312,12 +329,11 @@ body.elef-app {
   display: flex;
   justify-content: center;
   outline: none;
+  width: min(calc(100vw - 2rem), calc((100vh - 7rem) * 16 / 9));
 }
 
-.presentation-slide {
-  height: min(80vh, 56.25vw);
-  max-width: calc(100vw - 2rem);
-  width: min(142.22vh, calc(100vw - 2rem));
+.presentation-slide-frame {
+  flex: 0 0 auto;
 }
 
-.presentation-slide[hidden] { display: none; }
+.presentation-slide-frame[hidden] { display: none; }
