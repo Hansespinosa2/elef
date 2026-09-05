@@ -138,8 +138,8 @@ class PresentationsTest < ApplicationSystemTestCase
     source.send_keys("beq")
     assert_selector ".snippet-palette", visible: true
     assert_text ":beq"
-    palette_position = page.evaluate_script("(() => { const e = document.querySelector('[data-snippet-palette-target=editor]').getBoundingClientRect(); const p = document.querySelector('[data-snippet-palette-target=palette]').getBoundingClientRect(); return { editorTop: e.top, editorBottom: e.bottom, paletteTop: p.top }; })()")
-    assert_operator palette_position["paletteTop"], :>, palette_position["editorTop"]
+    palette_position = page.evaluate_script("(() => { const editor = document.querySelector('[data-snippet-palette-target=editor]'); const e = editor.getBoundingClientRect(); const p = document.querySelector('[data-snippet-palette-target=palette]').getBoundingClientRect(); const styles = getComputedStyle(editor); const lineHeight = parseFloat(styles.lineHeight); const paddingTop = parseFloat(styles.paddingTop); const lineNumber = editor.value.slice(0, editor.selectionStart).split('\\n').length; const caretLineBottom = e.top + paddingTop + lineHeight * lineNumber - editor.scrollTop; return { editorBottom: e.bottom, paletteTop: p.top, caretLineBottom }; })()")
+    assert_operator palette_position["paletteTop"], :>, palette_position["caretLineBottom"]
     assert_operator palette_position["paletteTop"], :<, palette_position["editorBottom"]
 
     source.send_keys(:enter)
