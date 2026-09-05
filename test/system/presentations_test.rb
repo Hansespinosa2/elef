@@ -1,6 +1,49 @@
 require "application_system_test_case"
 
 class PresentationsTest < ApplicationSystemTestCase
+  def assert_timeline_geometry
+    geometry = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const nodes = [...document.querySelectorAll('.lineage-node')];
+        const boxes = nodes.map(n => n.getBoundingClientRect());
+        const overlaps = [];
+        boxes.forEach((a, i) => boxes.slice(i + 1).forEach((b, j) => {
+          if (a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top)
+            overlaps.push([nodes[i].dataset.lineageGraphId, nodes[i+j+1].dataset.lineageGraphId]);
+        }));
+        const edges = [...document.querySelectorAll('.lineage-edge')].map(edge => {
+          const parent = document.querySelector('[data-lineage-graph-id="' + edge.dataset.lineageEdgeFrom + '"]').getBoundingClientRect();
+          const child = document.querySelector('[data-lineage-graph-id="' + edge.dataset.lineageEdgeTo + '"]').getBoundingClientRect();
+          const point = distance => {
+            const p = edge.getPointAtLength(distance);
+            return new DOMPoint(p.x, p.y).matrixTransform(edge.getScreenCTM());
+          };
+          const start = point(0), end = point(edge.getTotalLength());
+          return { startError: Math.hypot(start.x-parent.right, start.y-(parent.top+parent.height/2)),
+            endError: Math.hypot(end.x-child.left, end.y-(child.top+child.height/2)),
+            forward: child.left > parent.right,
+            marker: !!document.querySelector(edge.getAttribute('marker-end').slice(4,-1)) };
+        });
+        return { overlaps, edges, slides: nodes.map((n,i) => {
+          const s = n.querySelector('.slide').getBoundingClientRect(), b = boxes[i];
+          return { ratio: b.width/b.height, left: s.left-b.left, top: s.top-b.top,
+            width: s.width-b.width, height: s.height-b.height };
+        }) };
+      })()
+    JAVASCRIPT
+    assert_empty geometry["overlaps"], "Slide cards overlap in the browser"
+    geometry["slides"].each do |slide|
+      assert_in_delta 16.0 / 9, slide["ratio"], 0.01
+      %w[left top width height].each { |dimension| assert_in_delta 0, slide[dimension], 1 }
+    end
+    geometry["edges"].each do |edge|
+      assert_operator edge["startError"], :<, 1, "Edge misses the visible parent boundary"
+      assert_operator edge["endError"], :<, 1, "Edge misses the visible child boundary"
+      assert edge["forward"], "Child must appear to the right of its parent"
+      assert edge["marker"]
+    end
+  end
+
   test "loads sample presentations from the library" do
     Presentation.delete_all
 
@@ -18,6 +61,7 @@ class PresentationsTest < ApplicationSystemTestCase
   end
 
   test "shows the seeded lineage tree in the library" do
+    Presentation.delete_all
     Presentations::LineageSampleData.load!
 
     visit presentations_path
@@ -29,32 +73,56 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_equal 15, page.evaluate_script("document.querySelectorAll('.lineage-node[data-lineage-graph-created-at]').length")
     assert_equal 3, page.evaluate_script("document.querySelectorAll('.lineage-date-tick').length")
     assert_equal 0, page.evaluate_script("document.querySelectorAll('.lineage-node[data-dragged]').length")
-    edge_endpoints = page.evaluate_script(<<~JAVASCRIPT)
-      [...document.querySelectorAll('.lineage-edge')].map((edge) => {
-        const values = edge.getAttribute('d').match(/-?[\\d.]+/g).map(Number);
-        const from = document.querySelector(`[data-lineage-graph-id="${edge.dataset.lineageEdgeFrom}"]`);
-        const to = document.querySelector(`[data-lineage-graph-id="${edge.dataset.lineageEdgeTo}"]`);
-        const center = (node) => ({
-          x: parseFloat(node.style.left) + 88,
-          y: parseFloat(node.style.top) + 50
-        });
-        return {
-          start: { x: values[0], y: values[1] },
-          end: { x: values[values.length - 2], y: values[values.length - 1] },
-          from: center(from),
-          to: center(to)
-        };
-      });
-    JAVASCRIPT
-    edge_endpoints.each do |edge|
-      assert_in_delta edge["from"]["y"], edge["start"]["y"], 0.1
-      assert_in_delta edge["to"]["y"], edge["end"]["y"], 0.1
-      assert_in_delta 88, edge["start"]["x"] - edge["from"]["x"], 0.1
-      assert_in_delta(-88, edge["end"]["x"] - edge["to"]["x"], 0.1)
-      assert_equal 'url("#lineage-arrow")', edge["marker"]
-    end
-    click_on "Open Quarterly Review June"
+    assert_timeline_geometry
+    find('button[aria-label="Zoom out"]').click
+    assert_timeline_geometry
+    click_on "Overview"
+    assert_timeline_geometry
+    find('button[aria-label="Reset graph view"]').click
+    page.driver.browser.manage.window.resize_to(780, 900)
+    find('select[aria-label="Jump to creation date"] option[value="2026-01-15"]').select_option
+    assert_operator page.evaluate_script("document.querySelector('.lineage-timeline-scroll').scrollLeft"), :>, 0
+    assert_timeline_geometry
+    page.driver.browser.manage.window.resize_to(1400, 1000)
+    find('input[aria-label="Find a presentation"]').set("Quarterly Review June")
+    within(".lineage-search-results") { find("button", text: "Quarterly Review June").click }
+    assert_selector ".lineage-node.is-located"
+    find('a[aria-label="Open Quarterly Review June"]').click
     assert_field "Markdown source", with: /Quarterly Review June/
+  end
+
+  test "navigates a large same-day timeline without overlapping slides" do
+    Presentation.delete_all
+    created = Time.utc(2026, 9, 1, 10)
+    12.times do |family|
+      parent = Presentation.create!(title: "Family #{family}", source: "# Family #{family}", created_at: created)
+      5.times do |generation|
+        child = parent.fork_as("continuation")
+        child.title = "Family #{family} revision #{generation}"
+        child.created_at = created
+        child.save!
+        if generation == 2
+          inspiration = parent.fork_as("inspiration")
+          inspiration.title = "Family #{family} workshop"
+          inspiration.created_at = created
+          inspiration.save!
+        end
+        parent = child
+      end
+    end
+    visit presentations_path
+    assert_selector ".lineage-node", count: 84
+    assert_selector ".lineage-date-tick", count: 1
+    assert_timeline_geometry
+    find('input[aria-label="Find a presentation"]').set("Family 11 revision 4")
+    find(".lineage-search-results button", text: "Family 11 revision 4").click
+    assert_selector ".lineage-node.is-located"
+    page.driver.browser.manage.window.resize_to(780, 900)
+    assert_timeline_geometry
+    find('a[aria-label="Open Family 11 revision 4"]').click
+    assert_field "Title", with: "Family 11 revision 4"
+  ensure
+    page.driver.browser.manage.window.resize_to(1400, 1000)
   end
 
   test "preserves a 16:9 slide surface across views" do
