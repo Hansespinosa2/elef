@@ -289,7 +289,7 @@ body.elef-app {
 
 .slide-statement {
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   text-align: center;
 }
 
