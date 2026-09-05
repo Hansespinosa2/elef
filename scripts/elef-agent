@@ -300,6 +300,7 @@ run_container() {
     --memory "$CONTAINER_MEMORY" \
     --publish "127.0.0.1:${backend_port}:3000" \
     --env "GITHUB_TOKEN=$token" --env "GH_TOKEN=$token" \
+    --env GIT_CONFIG_GLOBAL=/home/developer/.config/git/config \
     --env PORT=3000 --env BIND=0.0.0.0 \
     "${mounts[@]}" --workdir "$wt" "$image" web
 }

@@ -1,7 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-mkdir -p "$CODEX_HOME" "$HOME/.config/gh"
+GIT_CONFIG_GLOBAL="${GIT_CONFIG_GLOBAL:-$HOME/.config/git/config}"
+export GIT_CONFIG_GLOBAL
+
+mkdir -p "$CODEX_HOME" "$HOME/.config/gh" "$(dirname "$GIT_CONFIG_GLOBAL")"
+if [[ -f "$HOME/.gitconfig" && ! -e "$GIT_CONFIG_GLOBAL" ]]; then
+  cp "$HOME/.gitconfig" "$GIT_CONFIG_GLOBAL"
+fi
+
 if [[ ! -e "$CODEX_HOME/config.toml" ]]; then
   cp /etc/elef/codex-config.toml "$CODEX_HOME/config.toml"
 fi
