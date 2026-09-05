@@ -160,6 +160,57 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_text "1 / 2"
   end
 
+  test "inserts a fuzzy snippet and moves through its placeholder" do
+    Snippet.create!(name: "Block equation", trigger: "beq", description: "A block LaTeX equation", category: "LaTeX", body: "$$\n${1:equation}\n$$")
+    presentation = Presentation.create!(title: "Snippet deck", source: "# Math\n\n:")
+
+    visit edit_presentation_path(presentation)
+    source = find_field("Markdown source")
+    source.send_keys("beq")
+    assert_selector ".snippet-palette", visible: true
+    assert_text ":beq"
+    palette_position = page.evaluate_script("(() => { const editor = document.querySelector('[data-snippet-palette-target=editor]'); const e = editor.getBoundingClientRect(); const p = document.querySelector('[data-snippet-palette-target=palette]').getBoundingClientRect(); const styles = getComputedStyle(editor); const lineHeight = parseFloat(styles.lineHeight); const paddingTop = parseFloat(styles.paddingTop); const lineNumber = editor.value.slice(0, editor.selectionStart).split('\\n').length; const caretLineBottom = e.top + paddingTop + lineHeight * lineNumber - editor.scrollTop; return { editorBottom: e.bottom, paletteTop: p.top, caretLineBottom }; })()")
+    assert_operator palette_position["paletteTop"], :>, palette_position["caretLineBottom"]
+    assert_operator palette_position["paletteTop"], :<, palette_position["editorBottom"]
+
+    source.send_keys(:enter)
+    assert_equal "# Math\n\n$$\nequation\n$$", source.value
+    assert_equal "equation", page.evaluate_script("(() => { const e = document.querySelector('[data-snippet-palette-target=editor]'); return e.value.slice(e.selectionStart, e.selectionEnd) })()")
+  end
+
+  test "positions the palette when only the colon trigger is typed" do
+    Snippet.create!(name: "Equation", trigger: "beq", category: "LaTeX", body: "x")
+    visit new_presentation_path
+    source = find_field("Markdown source")
+    source.fill_in with: "# Math\n\n"
+    source.send_keys(":")
+    assert_selector ".snippet-option", text: ":beq"
+    bounds = page.evaluate_script(<<~JS)
+      (() => {
+        const editor = document.querySelector('[data-snippet-palette-target="editor"]');
+        const palette = document.querySelector('.snippet-palette');
+        const e = editor.getBoundingClientRect(), p = palette.getBoundingClientRect();
+        return { positioned: palette.style.top !== '', top: p.top, bottom: p.bottom, editorTop: e.top, editorBottom: e.bottom };
+      })()
+    JS
+    assert bounds["positioned"], "The colon popup must receive caret coordinates before a query is typed"
+    assert_operator bounds["top"], :>, bounds["editorTop"]
+    assert_operator bounds["bottom"], :<, bounds["editorBottom"]
+    save_screenshot("tmp/colon-palette.png")
+  end
+
+  test "renders untrusted snippet metadata as text" do
+    Snippet.create!(name: '<img src=x onerror="alert(1)">', trigger: "unsafe", description: "Untrusted", category: "Markdown", body: "text")
+    presentation = Presentation.create!(title: "Safe snippets", source: "# Safe\n\n:")
+
+    visit edit_presentation_path(presentation)
+    source = find_field("Markdown source")
+    source.send_keys("unsafe")
+
+    assert_selector ".snippet-option span", text: '<img src=x onerror="alert(1)"> · Markdown'
+    assert_no_selector ".snippet-option img"
+  end
+
   test "keeps slide geometry fixed while scaling the canvas" do
     presentation = Presentation.create!(
       title: "Static geometry",

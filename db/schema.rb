@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_03_002001) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_04_232433) do
   create_table "presentations", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.string "sample_id"
@@ -18,5 +18,18 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_03_002001) do
     t.string "title", null: false
     t.datetime "updated_at", null: false
     t.index ["sample_id"], name: "index_presentations_on_sample_id", unique: true
+  end
+
+  create_table "snippets", force: :cascade do |t|
+    t.text "body", null: false
+    t.boolean "built_in", default: false, null: false
+    t.string "category", default: "Markdown", null: false
+    t.datetime "created_at", null: false
+    t.string "description", default: "", null: false
+    t.string "name", null: false
+    t.string "trigger", null: false
+    t.datetime "updated_at", null: false
+    t.index ["category"], name: "index_snippets_on_category"
+    t.index ["trigger", "built_in"], name: "index_snippets_on_trigger_and_built_in"
   end
 end
