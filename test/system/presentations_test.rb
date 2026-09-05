@@ -26,6 +26,29 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_selector ".lineage-continuation"
     assert_selector ".lineage-inspiration"
     assert_equal 12, page.evaluate_script("document.querySelectorAll('.lineage-edge').length")
+    edge_endpoints = page.evaluate_script(<<~JAVASCRIPT)
+      [...document.querySelectorAll('.lineage-edge')].map((edge) => {
+        const values = edge.getAttribute('d').match(/-?[\\d.]+/g).map(Number);
+        const from = document.querySelector(`[data-lineage-graph-id="${edge.dataset.lineageEdgeFrom}"]`);
+        const to = document.querySelector(`[data-lineage-graph-id="${edge.dataset.lineageEdgeTo}"]`);
+        const center = (node) => ({
+          x: parseFloat(node.style.left) + 88,
+          y: parseFloat(node.style.top) + 50
+        });
+        return {
+          start: { x: values[0], y: values[1] },
+          end: { x: values[values.length - 2], y: values[values.length - 1] },
+          from: center(from),
+          to: center(to)
+        };
+      });
+    JAVASCRIPT
+    edge_endpoints.each do |edge|
+      assert_in_delta edge["from"]["y"], edge["start"]["y"], 0.1
+      assert_in_delta edge["to"]["y"], edge["end"]["y"], 0.1
+      assert_in_delta 88, (edge["start"]["x"] - edge["from"]["x"]).abs, 0.1
+      assert_in_delta 88, (edge["end"]["x"] - edge["to"]["x"]).abs, 0.1
+    end
     click_on "Open Quarterly Review June"
     assert_field "Markdown source", with: /Quarterly Review June/
   end

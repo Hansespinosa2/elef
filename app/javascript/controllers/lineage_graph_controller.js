@@ -120,17 +120,16 @@ export default class extends Controller {
       const start = this.edgePoint(parent, child)
       const end = this.edgePoint(child, parent)
       const bend = Math.max(25, Math.abs(end.x - start.x) * 0.3)
+      const direction = end.x >= start.x ? 1 : -1
       const type = child.element.dataset.lineageGraphType === "inspiration" ? "inspiration" : "continuation"
-      return '<path class="lineage-edge ' + type + '" d="M ' + start.x + " " + start.y + " C " + (start.x + bend) + " " + start.y + ", " + (end.x - bend) + " " + end.y + ", " + end.x + " " + end.y + '"/>'
+      return '<path class="lineage-edge ' + type + '" data-lineage-edge-from="' + parent.id + '" data-lineage-edge-to="' + child.id + '" d="M ' + start.x + " " + start.y + " C " + (start.x + bend * direction) + " " + start.y + ", " + (end.x - bend * direction) + " " + end.y + ", " + end.x + " " + end.y + '"/>'
     }).join("")
     this.applyTransform()
   }
 
   edgePoint(from, to) {
-    const dx = to.x - from.x
-    const dy = to.y - from.y
-    const scale = 1 / Math.max(Math.abs(dx) / 88, Math.abs(dy) / 50, 1)
-    return { x: from.x + dx * scale, y: from.y + dy * scale }
+    const direction = to.x >= from.x ? 1 : -1
+    return { x: from.x + direction * 88, y: from.y }
   }
 
   pointerdown(event) {
