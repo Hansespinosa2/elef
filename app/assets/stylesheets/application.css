@@ -180,7 +180,11 @@ body.elef-app {
 }
 
 .slide-margin-footnote {
+  align-items: flex-start;
+  display: flex;
   font-size: 0.85em;
+  font-style: italic;
+  gap: 0.35em;
   margin-left: auto;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -191,6 +195,11 @@ body.elef-app {
 .slide-margin .slide-margin-footnote p {
   font-size: inherit;
   margin: 0;
+}
+
+.slide-margin-footnote-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .slide-block,

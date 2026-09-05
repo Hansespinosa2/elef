@@ -113,6 +113,7 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_select ".slide-margin-section", text: "Product strategy", count: 2
     assert_select ".slide-margin-subsection", text: "Opportunity", count: 2
     assert_select ".slide-margin-footnote", text: /Source: customer interviews/, count: 1
+    assert_select ".slide-margin-footnote-marker", text: "*", count: 1
     assert_select ".slide-margin-count", text: "1 / 2", count: 1
     assert_select ".slide-margin-count", text: "2 / 2", count: 1
 

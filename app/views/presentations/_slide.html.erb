@@ -35,7 +35,12 @@
   <% if margin_settings.slide_count || margin_settings.footnote %>
     <div class="slide-margin slide-margin-bottom" aria-hidden="true">
       <% if margin_settings.slide_count %><span class="slide-margin-count"><%= slide.index + 1 %> / <%= total_slides %></span><% end %>
-      <% if margin_settings.footnote && slide.footnote.present? %><span class="slide-margin-footnote"><%= render_markdown(slide.footnote) %></span><% end %>
+      <% if margin_settings.footnote && slide.footnote.present? %>
+        <span class="slide-margin-footnote" aria-label="Footnote">
+          <span class="slide-margin-footnote-marker">*</span>
+          <span class="slide-margin-footnote-text"><%= render_markdown(slide.footnote) %></span>
+        </span>
+      <% end %>
     </div>
   <% end %>
 </section>
