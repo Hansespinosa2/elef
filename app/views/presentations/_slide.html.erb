@@ -1,27 +1,46 @@
 <% presentation_slide = local_assigns[:presentation_slide] %>
 <section class="slide <%= 'presentation-slide ' if presentation_slide %>slide-<%= slide.layout %>" <%= 'data-presentation-target="slide"' if presentation_slide %> data-presentation-canvas-target="canvas" aria-label="Slide <%= slide.index + 1 %>">
-  <% if slide.title.present? %>
-    <div class="slide-title">
-      <%= render_markdown(slide.title) %>
+  <% if margin_settings.subsection || margin_settings.section %>
+    <div class="slide-margin slide-margin-top" aria-hidden="true">
+      <% if margin_settings.subsection %><span class="slide-margin-subsection"><%= slide.subsection %></span><% end %>
+      <% if margin_settings.section %><span class="slide-margin-section"><%= slide.section %></span><% end %>
     </div>
-    <div class="slide-regions">
-      <% slide.regions.each do |region| %>
-        <div class="slide-region">
-          <% region.blocks.each do |block| %>
-            <div class="slide-block <%= position_classes(block.position) %>">
-              <%= render_markdown(block.markdown) %>
-            </div>
-          <% end %>
+  <% end %>
+  <div class="slide-content">
+    <% if slide.title.present? %>
+      <div class="slide-title">
+        <%= render_markdown(slide.title) %>
+      </div>
+      <div class="slide-regions">
+        <% slide.regions.each do |region| %>
+          <div class="slide-region">
+            <% region.blocks.each do |block| %>
+              <div class="slide-block <%= position_classes(block.position) %>">
+                <%= render_markdown(block.markdown) %>
+              </div>
+            <% end %>
+          </div>
+        <% end %>
+      </div>
+    <% elsif slide.blocks.empty? %>
+      <p class="empty-slide">Empty slide</p>
+    <% else %>
+      <% slide.blocks.each do |block| %>
+        <div class="slide-block <%= position_classes(block.position) %>">
+          <%= render_markdown(block.markdown) %>
         </div>
       <% end %>
-    </div>
-  <% elsif slide.blocks.empty? %>
-    <p class="empty-slide">Empty slide</p>
-  <% else %>
-    <% slide.blocks.each do |block| %>
-      <div class="slide-block <%= position_classes(block.position) %>">
-        <%= render_markdown(block.markdown) %>
-      </div>
     <% end %>
+  </div>
+  <% if margin_settings.slide_count || margin_settings.footnote %>
+    <div class="slide-margin slide-margin-bottom" aria-hidden="true">
+      <% if margin_settings.slide_count %><span class="slide-margin-count"><%= slide.index + 1 %> / <%= total_slides %></span><% end %>
+      <% if margin_settings.footnote && slide.footnote.present? %>
+        <span class="slide-margin-footnote" aria-label="Footnote">
+          <span class="slide-margin-footnote-marker">*</span>
+          <span class="slide-margin-footnote-text"><%= render_markdown(slide.footnote) %></span>
+        </span>
+      <% end %>
+    </div>
   <% end %>
 </section>

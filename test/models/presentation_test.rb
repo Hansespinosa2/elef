@@ -28,6 +28,90 @@ class PresentationTest < ActiveSupport::TestCase
     assert_equal "book", Presentations::Document.parse("---\npresentationTypography: unknown\n---\n# Title").presentation_typography
   end
 
+  test "parses margin settings and slide context directives" do
+    source = <<~MARKDOWN
+      ---
+      show-in-margin:
+        section: true
+        subsection: false
+        footnote: true
+        slideCount: false
+      ---
+      # Intro
+      ---
+      :::section{Product strategy}
+      :::subsection{The opportunity}
+      # Opportunity
+      :::footnote{Source: [research](https://example.com)}
+      ---
+      :::subsection{The shift}
+      # Shift
+    MARKDOWN
+
+    document = Presentations::Document.parse(source)
+
+    assert_equal [true, false, true, false], [
+      document.margin_settings.section,
+      document.margin_settings.subsection,
+      document.margin_settings.footnote,
+      document.margin_settings.slide_count
+    ]
+    assert_nil document.slides[0].section
+    assert_equal "Product strategy", document.slides[1].section
+    assert_equal "The opportunity", document.slides[1].subsection
+    assert_equal "The shift", document.slides[2].subsection
+    assert_nil document.slides[2].footnote
+    refute_includes document.slides[1].markdown, ":::"
+    assert_empty document.warnings
+  end
+
+  test "enables all margin regions by default" do
+    settings = Presentations::Document.parse("# Slide").margin_settings
+
+    assert_equal [true, true, true, true], [settings.section, settings.subsection, settings.footnote, settings.slide_count]
+  end
+
+  test "parses nested and escaped footnote braces at the end of a slide" do
+    document = Presentations::Document.parse(<<~MARKDOWN)
+      # Explain the configuration
+
+      The note belongs to this slide.
+
+      ```yaml
+      :::footnote{This remains code}
+      ```
+
+      :::footnote{Use {production: true} and \{literal braces\}.}
+    MARKDOWN
+
+    assert_equal "Use {production: true} and {literal braces}.", document.slides.first.footnote
+    assert_includes document.slides.first.markdown, ":::footnote{This remains code}"
+    assert_empty document.warnings
+  end
+
+  test "warns and removes section directives that are not at the beginning" do
+    document = Presentations::Document.parse(<<~MARKDOWN)
+      # Intro
+
+      :::footnote{Too early}
+
+      Content first.
+
+      :::section{Late context}
+      :::subsection{Also late}
+      ---
+      :::section{Valid context}
+      # Next
+    MARKDOWN
+
+    assert_nil document.slides.first.section
+    assert_equal "Valid context", document.slides.second.section
+    refute_includes document.slides.first.markdown, "Late context"
+    assert_equal 3, document.warnings.length
+    assert_equal 2, document.warnings.count { |warning| warning.include?("beginning of a slide") }
+    assert_includes document.warnings, "Footnote margin directive must appear at the end of a slide."
+  end
+
   test "reads and updates presentation typography without losing front matter" do
     source = "---\ntitle: Demo\npresentationTheme: dark\npresentationTypography: modern\n---\n# Title\n---\n# Second"
     presentation = Presentation.create!(title: "Demo", source: source)
