@@ -88,8 +88,9 @@ body.elef-app {
 .field-hint { color: var(--oradia-muted); font-size: 0.82rem; line-height: 1.45; margin: 0.5rem 0 0; }
 
 .snippet-palette {
-  position: relative;
-  margin-top: 0.5rem;
+  position: fixed;
+  z-index: 20;
+  margin: 0;
   width: min(22rem, calc(100% - 2rem));
   overflow: hidden;
   border: 1px solid var(--oradia-slate-700);

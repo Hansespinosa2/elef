@@ -8,6 +8,14 @@ export default class extends Controller {
     this.matches = []
     this.selectedIndex = 0
     this.stops = []
+    this.positionPalette = this.positionPalette.bind(this)
+    window.addEventListener("resize", this.positionPalette)
+    this.editorTarget.addEventListener("scroll", this.positionPalette)
+  }
+
+  disconnect() {
+    window.removeEventListener("resize", this.positionPalette)
+    this.editorTarget.removeEventListener("scroll", this.positionPalette)
   }
 
   input() {
@@ -94,6 +102,44 @@ export default class extends Controller {
       this.paletteTarget.append(option)
     })
     this.paletteTarget.hidden = this.matches.length === 0
+    if (!this.paletteTarget.hidden) this.positionPalette()
+  }
+
+  positionPalette() {
+    if (this.paletteTarget.hidden || !this.query) return
+
+    const editor = this.editorTarget
+    const editorRect = editor.getBoundingClientRect()
+    const styles = getComputedStyle(editor)
+    const mirror = document.createElement("div")
+    const marker = document.createElement("span")
+    mirror.setAttribute("aria-hidden", "true")
+    Object.assign(mirror.style, {
+      position: "fixed",
+      visibility: "hidden",
+      top: `${editorRect.top - editor.scrollTop}px`,
+      left: `${editorRect.left - editor.scrollLeft}px`,
+      width: `${editor.clientWidth}px`,
+      boxSizing: "border-box",
+      whiteSpace: "pre-wrap",
+      overflowWrap: "break-word",
+      wordBreak: "break-word",
+      font: styles.font,
+      lineHeight: styles.lineHeight,
+      letterSpacing: styles.letterSpacing,
+      padding: styles.padding,
+      border: styles.border
+    })
+    mirror.append(document.createTextNode(editor.value.slice(0, editor.selectionStart)), marker)
+    document.body.append(mirror)
+    const markerRect = marker.getBoundingClientRect()
+    mirror.remove()
+
+    const paletteRect = this.paletteTarget.getBoundingClientRect()
+    const left = Math.max(8, Math.min(markerRect.left, window.innerWidth - paletteRect.width - 8))
+    const top = Math.max(8, Math.min(markerRect.bottom + 4, window.innerHeight - paletteRect.height - 8))
+    this.paletteTarget.style.left = `${left}px`
+    this.paletteTarget.style.top = `${top}px`
   }
 
   insertSelected() {
