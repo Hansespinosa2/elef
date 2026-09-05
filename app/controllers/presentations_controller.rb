@@ -56,6 +56,6 @@ class PresentationsController < ApplicationController
   end
 
   def source_declares_typography?(source)
-    source.to_s.match?(/^presentationTypography\s*:/)
+    Presentations::Document.front_matter_has_key?(source.to_s, "presentationTypography")
   end
 end

@@ -73,6 +73,19 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_includes presentation.source, "presentationTypography: modern"
   end
 
+  test "updates typography inside valid front matter" do
+    presentation = Presentation.create!(title: "Front matter deck", source: "---\npresentationTheme: dark\npresentationTypography: modern\n---\n# Title")
+
+    patch presentation_path(presentation), params: {
+      presentation: { title: presentation.title, source: presentation.source, presentation_typography: "book" }
+    }
+
+    assert_redirected_to edit_presentation_path(presentation)
+    assert_equal "book", presentation.reload.presentation_typography
+    assert_includes presentation.source, "presentationTheme: dark"
+    assert_includes presentation.source, "presentationTypography: book"
+  end
+
   test "renders saved preview and presentation mode" do
     presentation = presentations(:one)
 

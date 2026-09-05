@@ -143,4 +143,16 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_equal "# Math\n\n$$\nequation\n$$", source.value
     assert_equal "equation", page.evaluate_script("(() => { const e = document.querySelector('[data-snippet-palette-target=editor]'); return e.value.slice(e.selectionStart, e.selectionEnd) })()")
   end
+
+  test "renders untrusted snippet metadata as text" do
+    Snippet.create!(name: '<img src=x onerror="alert(1)">', trigger: "unsafe", description: "Untrusted", category: "Markdown", body: "text")
+    presentation = Presentation.create!(title: "Safe snippets", source: "# Safe\n\n:")
+
+    visit edit_presentation_path(presentation)
+    source = find_field("Markdown source")
+    source.send_keys("unsafe")
+
+    assert_selector ".snippet-option span", text: '<img src=x onerror="alert(1)"> · Markdown'
+    assert_no_selector ".snippet-option img"
+  end
 end

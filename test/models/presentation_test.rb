@@ -49,6 +49,13 @@ class PresentationTest < ActiveSupport::TestCase
     assert_equal "# Welcome", slide.markdown
   end
 
+  test "detects keys inside front matter" do
+    source = "---\npresentationTheme: dark\npresentationTypography: modern\n---\n# Title"
+
+    assert Presentations::Document.front_matter_has_key?(source, "presentationTypography")
+    refute Presentations::Document.front_matter_has_key?(source, "missing")
+  end
+
   test "blank source is a valid one-slide presentation" do
     presentation = Presentation.create!(title: "Blank", source: "")
 

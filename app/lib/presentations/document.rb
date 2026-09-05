@@ -194,6 +194,13 @@ module Presentations
       default
     end
 
+    def front_matter_has_key?(source, key)
+      front_matter = initial_front_matter(source)
+      front_matter && front_matter.lines[1...front_matter.closing_line].any? do |line|
+        line.text.match?( /\A\s*#{Regexp.escape(key)}\s*:/ )
+      end
+    end
+
     def normalize_section(value)
       value.sub(/\A\n/, "").sub(/\n\z/, "")
     end

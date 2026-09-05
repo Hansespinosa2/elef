@@ -81,7 +81,11 @@ export default class extends Controller {
       option.type = "button"
       option.role = "option"
       option.className = `snippet-option${index === this.selectedIndex ? " is-selected" : ""}`
-      option.innerHTML = `<strong>:${snippet.trigger}</strong><span>${snippet.name} · ${snippet.category}</span>`
+      const trigger = document.createElement("strong")
+      trigger.textContent = `:${snippet.trigger}`
+      const details = document.createElement("span")
+      details.textContent = `${snippet.name} · ${snippet.category}`
+      option.append(trigger, details)
       option.addEventListener("mousedown", (event) => {
         event.preventDefault()
         this.selectedIndex = index
