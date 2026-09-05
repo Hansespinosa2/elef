@@ -86,10 +86,8 @@ body.elef-app {
 .elef-app .error-panel { background: #3a2428 !important; border-color: #92565e !important; color: #f3c7c9 !important; }
 .elef-app .flash { background: #263c31 !important; border-color: #4f8b68 !important; color: #d7eddb; }
 .field-hint { color: var(--oradia-muted); font-size: 0.82rem; line-height: 1.45; margin: 0.5rem 0 0; }
-.source-field { position: relative; }
-
 .snippet-palette {
-  position: absolute;
+  position: fixed;
   z-index: 20;
   margin: 0;
   width: min(22rem, calc(100% - 2rem));

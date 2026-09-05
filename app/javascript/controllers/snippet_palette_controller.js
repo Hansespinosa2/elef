@@ -136,9 +136,8 @@ export default class extends Controller {
     mirror.remove()
 
     const paletteRect = this.paletteTarget.getBoundingClientRect()
-    const containerRect = this.element.getBoundingClientRect()
-    const left = Math.max(8, Math.min(markerRect.left - containerRect.left, containerRect.width - paletteRect.width - 8))
-    const top = markerRect.bottom - containerRect.top + 4
+    const left = Math.max(8, Math.min(markerRect.left, window.innerWidth - paletteRect.width - 8))
+    const top = Math.max(8, Math.min(markerRect.bottom + 4, window.innerHeight - paletteRect.height - 8))
     this.paletteTarget.style.left = `${left}px`
     this.paletteTarget.style.top = `${top}px`
   }
