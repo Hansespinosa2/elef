@@ -250,4 +250,3 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_equal "112px", page.evaluate_script("getComputedStyle(document.querySelector('.slide h1')).fontSize")
   end
 end
-end
