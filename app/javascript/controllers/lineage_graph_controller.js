@@ -28,10 +28,9 @@ export default class extends Controller {
   layout() {
     const byDate = (a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id)
     const sorted = [...this.nodes].sort(byDate)
-    const firstDate = sorted[0]?.createdAt.getTime() || Date.now()
-    const day = 24 * 60 * 60 * 1000
     const leftPadding = 110
-    const columnWidth = 230
+    const nodeSpacing = 230
+    const groupGap = 90
     const children = new Map(this.nodes.map((node) => [node.id, []]))
     this.links.forEach((child) => children.get(child.parentId)?.push(child))
 
@@ -59,21 +58,35 @@ export default class extends Controller {
       nextLane += 1
     })
 
-    this.nodes.forEach((node) => {
-      const elapsedDays = Math.max(0, (node.createdAt.getTime() - firstDate) / day)
-      node.x = leftPadding + elapsedDays * columnWidth
-      node.y = 105 + (laneByNode.get(node.id) || 0) * 135
+    const dateGroups = []
+    sorted.forEach((node) => {
+      const dateKey = node.createdAt.toISOString().slice(0, 10)
+      const group = dateGroups.find((candidate) => candidate.key === dateKey)
+      if (group) {
+        group.nodes.push(node)
+      } else {
+        dateGroups.push({ key: dateKey, nodes: [node] })
+      }
     })
-    this.width = Math.max(this.viewportTarget.clientWidth, (Math.max(...this.nodes.map((node) => node.x), leftPadding) + 120))
+
+    let groupStart = leftPadding
+    dateGroups.forEach((group) => {
+      group.nodes.forEach((node, index) => {
+        node.x = groupStart + index * nodeSpacing
+        node.y = 105 + (laneByNode.get(node.id) || 0) * 135
+      })
+      group.tickX = groupStart + ((group.nodes.length - 1) * nodeSpacing) / 2
+      groupStart += Math.max(nodeSpacing, group.nodes.length * nodeSpacing) + groupGap
+    })
+    this.width = Math.max(this.viewportTarget.clientWidth, groupStart + leftPadding)
     this.height = Math.max(470, 105 + Math.max(...this.nodes.map((node) => node.y), 0) + 100)
     this.contentTarget.style.width = `${this.width}px`
     this.contentTarget.style.height = `${this.height}px`
     this.zoomTarget.style.width = `${this.width * this.scale}px`
     this.zoomTarget.style.height = `${this.height * this.scale}px`
-    this.axisTarget.innerHTML = sorted.map((node, index) => {
-      const isNewDate = index === 0 || node.createdAt.toDateString() !== sorted[index - 1].createdAt.toDateString()
-      if (!isNewDate) return ""
-      return `<span class="lineage-date-tick" style="left: ${node.x}px">${node.createdAt.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}</span>`
+    this.axisTarget.innerHTML = dateGroups.map((group) => {
+      const date = new Date(`${group.key}T00:00:00Z`)
+      return `<span class="lineage-date-tick" style="left: ${group.tickX}px">${date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })}</span>`
     }).join("")
   }
 

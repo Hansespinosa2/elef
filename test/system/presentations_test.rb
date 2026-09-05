@@ -27,7 +27,7 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_selector ".lineage-inspiration"
     assert_equal 12, page.evaluate_script("document.querySelectorAll('.lineage-edge').length")
     assert_equal 15, page.evaluate_script("document.querySelectorAll('.lineage-node[data-lineage-graph-created-at]').length")
-    assert_equal 15, page.evaluate_script("document.querySelectorAll('.lineage-date-tick').length")
+    assert_equal 3, page.evaluate_script("document.querySelectorAll('.lineage-date-tick').length")
     assert_equal 0, page.evaluate_script("document.querySelectorAll('.lineage-node[data-dragged]').length")
     edge_endpoints = page.evaluate_script(<<~JAVASCRIPT)
       [...document.querySelectorAll('.lineage-edge')].map((edge) => {
