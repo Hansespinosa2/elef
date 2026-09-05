@@ -4,6 +4,7 @@ class Presentation < ApplicationRecord
 
   before_validation :normalize_source
   before_validation :derive_title, if: -> { title.blank? }
+  before_validation :ensure_created_at
 
   validates :title, presence: true, length: { maximum: 120 }
   validates :fork_type, inclusion: { in: FORK_TYPES }, allow_nil: true
@@ -66,6 +67,10 @@ class Presentation < ApplicationRecord
 
   def normalize_source
     self.source = source.to_s
+  end
+
+  def ensure_created_at
+    self.created_at ||= Time.current
   end
 
   def derive_title

@@ -18,7 +18,7 @@ module Presentations
       { id: "lineage-research-inspiration", title: "Workshop Prompts", parent: "lineage-research-root", fork_type: "inspiration", source: "# Workshop Prompts\n\nPrompts inspired by the research." },
       { id: "lineage-research-next", title: "Decision Memo", parent: "lineage-research-continuation", fork_type: "continuation", source: "# Decision Memo\n\nA decision based on the findings." },
       { id: "lineage-research-remix", title: "Talk Outline", parent: "lineage-research-inspiration", fork_type: "inspiration", source: "# Talk Outline\n\nA presentation outline born from the prompts." }
-    ].freeze
+    ].each_with_index.map { |sample, index| sample.merge(created_at: Time.utc(2026, 1, 1) + (index * 7).days) }.freeze
 
     def load!
       records = {}
@@ -30,7 +30,8 @@ module Presentations
           source: attributes[:source],
           fork_type: attributes[:fork_type],
           fork_source: nil,
-          fork_parent_title: nil
+          fork_parent_title: nil,
+          created_at: attributes[:created_at]
         )
         records[attributes[:id]] = record
       end

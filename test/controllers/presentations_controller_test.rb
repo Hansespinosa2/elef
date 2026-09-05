@@ -99,8 +99,11 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_select ".lineage-hover-card", count: 16
     assert_select ".lineage-hover-card", text: /Created.*Last published/m
     assert_select ".lineage-graph-canvas[data-controller='lineage-graph']"
+    assert_select ".lineage-timeline-scroll"
+    assert_select ".lineage-date-axis"
     assert_select ".lineage-edges[data-lineage-graph-target='edges']"
     assert_select ".lineage-node[data-lineage-graph-parent-id]", count: 12
+    assert_select ".lineage-node[data-lineage-graph-created-at]", count: 16
   end
 
   test "creates a presentation from markdown source" do
@@ -111,6 +114,7 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     presentation = Presentation.order(:created_at).last
     assert_redirected_to edit_presentation_path(presentation)
     assert_equal "# One\n---\n# Two", presentation.source
+    assert_not_nil presentation.created_at
   end
 
   test "updates source only on explicit save request" do

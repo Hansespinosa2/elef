@@ -128,6 +128,14 @@ class PresentationTest < ActiveSupport::TestCase
       records.find { |record| record.sample_id == "lineage-continuation-june" }.fork_source
   end
 
+  test "presentation creation always has a timestamp" do
+    presentation = Presentation.new(title: "Timestamped", source: "# Timestamped", created_at: nil)
+
+    presentation.save!
+
+    assert_not_nil presentation.created_at
+  end
+
   test "deleting a parent leaves the fork detached and intact" do
     parent = Presentation.create!(title: "Parent", source: "# Parent")
     child = parent.fork_as("continuation")

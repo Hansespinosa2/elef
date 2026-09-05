@@ -14,35 +14,49 @@
   </div>
 
   <% if lineage_presentations.any? %>
-    <div class="lineage-graph lineage-graph-canvas" data-controller="lineage-graph" data-lineage-graph-target="canvas" data-action="pointerdown->lineage-graph#pointerdown" tabindex="0" aria-label="Interactive presentation lineage graph">
-      <svg class="lineage-edges" data-lineage-graph-target="edges" aria-hidden="true"></svg>
-      <div class="lineage-nodes" data-lineage-graph-target="nodes">
-        <% lineage_presentations.each do |presentation| %>
-          <% first_slide = presentation.slides.first %>
-          <%= link_to edit_presentation_path(presentation),
-                class: "lineage-node lineage-#{presentation.fork_type || "root"}",
-                data: {
-                  lineage_graph_target: "node",
-                  lineage_graph_id: presentation.id,
-                  lineage_graph_parent_id: presentation.parent_id,
-                  lineage_graph_type: presentation.fork_type,
-                  lineage_graph_title: presentation.title,
-                  lineage_graph_created_at: presentation.created_at.strftime("%b %-d, %Y"),
-                  lineage_graph_published_at: presentation.last_published_at ? presentation.last_published_at.strftime("%b %-d, %Y") : "Never"
-                },
-                aria: { label: "Open #{presentation.title}" } do %>
-            <div class="lineage-slide-thumb" aria-hidden="true">
-              <div class="lineage-slide-preview presentation-surface slides slides-theme-<%= presentation.presentation_theme %>">
-                <%= render "slide", slide: first_slide || Presentations::Document::Slide.new(id: "empty", index: 0, markdown: "", layout: "body") %>
-              </div>
+    <div class="lineage-graph lineage-graph-canvas" data-controller="lineage-graph" data-lineage-graph-target="canvas" tabindex="0" aria-label="Presentation timeline and lineage graph">
+      <div class="lineage-timeline-scroll" data-lineage-graph-target="viewport">
+        <div class="lineage-timeline-zoom" data-lineage-graph-target="zoom">
+          <div class="lineage-timeline-content" data-lineage-graph-target="content">
+            <div class="lineage-date-axis" data-lineage-graph-target="axis" aria-hidden="true"></div>
+            <svg class="lineage-edges" data-lineage-graph-target="edges" aria-hidden="true">
+              <defs>
+                <marker id="lineage-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth">
+                  <path d="M 0 0 L 8 4 L 0 8 z" fill="currentColor"></path>
+                </marker>
+              </defs>
+            </svg>
+            <div class="lineage-nodes" data-lineage-graph-target="nodes">
+              <% lineage_presentations.each do |presentation| %>
+                <% first_slide = presentation.slides.first %>
+                <%= link_to edit_presentation_path(presentation),
+                      class: "lineage-node lineage-#{presentation.fork_type || "root"}",
+                      data: {
+                        lineage_graph_target: "node",
+                        lineage_graph_id: presentation.id,
+                        lineage_graph_parent_id: presentation.parent_id,
+                        lineage_graph_type: presentation.fork_type,
+                        lineage_graph_title: presentation.title,
+                        lineage_graph_created_at: presentation.created_at.iso8601,
+                        lineage_graph_created_label: presentation.created_at.strftime("%b %-d, %Y"),
+                        lineage_graph_published_at: presentation.last_published_at ? presentation.last_published_at.strftime("%b %-d, %Y") : "Never"
+                      },
+                      aria: { label: "Open #{presentation.title}" } do %>
+                  <div class="lineage-slide-thumb" aria-hidden="true">
+                    <div class="lineage-slide-preview presentation-surface slides slides-theme-<%= presentation.presentation_theme %>">
+                      <%= render "slide", slide: first_slide || Presentations::Document::Slide.new(id: "empty", index: 0, markdown: "", layout: "body") %>
+                    </div>
+                  </div>
+                  <span class="lineage-hover-card" role="tooltip">
+                    <strong><%= presentation.title %></strong>
+                    <span>Created <%= presentation.created_at.strftime("%b %-d, %Y") %></span>
+                    <span>Last published <%= presentation.last_published_at ? presentation.last_published_at.strftime("%b %-d, %Y") : "Never" %></span>
+                  </span>
+                <% end %>
+              <% end %>
             </div>
-            <span class="lineage-hover-card" role="tooltip">
-              <strong><%= presentation.title %></strong>
-              <span>Created <%= presentation.created_at.strftime("%b %-d, %Y") %></span>
-              <span>Last published <%= presentation.last_published_at ? presentation.last_published_at.strftime("%b %-d, %Y") : "Never" %></span>
-            </span>
-          <% end %>
-        <% end %>
+          </div>
+        </div>
       </div>
       <div class="lineage-graph-controls" aria-label="Graph controls">
         <button type="button" data-action="lineage-graph#zoomOut" aria-label="Zoom out">−</button>
