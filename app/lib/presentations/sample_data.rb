@@ -20,11 +20,11 @@ module Presentations
           ---
           :::section{Markdown fundamentals}
           :::subsection{Build a clear story}
-          :::footnote{Elef treats raw Markdown as the source of truth.}
           # Markdown in practice
 
           A complete tour of the writing patterns that make a presentation easy
           to follow: structure, emphasis, pacing, and useful examples.
+          :::footnote{Elef treats raw Markdown as the source of truth.}
           ---
           # Start with a clear promise
 

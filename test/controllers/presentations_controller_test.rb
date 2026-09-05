@@ -98,13 +98,13 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
       show-in-margin:
         section: true
         subsection: true
-      footnote: true
-      slideCount: true
+        footnote: true
+        slideCount: true
       ---
       :::section{Product strategy}
       :::subsection{Opportunity}
-      :::footnote{Source: customer interviews}
       # First
+      :::footnote{Source: customer interviews}
       ---
       # Second
     MARKDOWN

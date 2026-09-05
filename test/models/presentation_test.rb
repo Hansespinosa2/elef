@@ -41,8 +41,8 @@ class PresentationTest < ActiveSupport::TestCase
       ---
       :::section{Product strategy}
       :::subsection{The opportunity}
-      :::footnote{Source: [research](https://example.com)}
       # Opportunity
+      :::footnote{Source: [research](https://example.com)}
       ---
       :::subsection{The shift}
       # Shift
@@ -71,17 +71,17 @@ class PresentationTest < ActiveSupport::TestCase
     assert_equal [true, true, true, true], [settings.section, settings.subsection, settings.footnote, settings.slide_count]
   end
 
-  test "parses nested and escaped footnote braces anywhere outside fenced code" do
+  test "parses nested and escaped footnote braces at the end of a slide" do
     document = Presentations::Document.parse(<<~MARKDOWN)
       # Explain the configuration
 
       The note belongs to this slide.
 
-      :::footnote{Use {production: true} and \{literal braces\}.}
-
       ```yaml
       :::footnote{This remains code}
       ```
+
+      :::footnote{Use {production: true} and \{literal braces\}.}
     MARKDOWN
 
     assert_equal "Use {production: true} and {literal braces}.", document.slides.first.footnote
@@ -92,6 +92,8 @@ class PresentationTest < ActiveSupport::TestCase
   test "warns and removes section directives that are not at the beginning" do
     document = Presentations::Document.parse(<<~MARKDOWN)
       # Intro
+
+      :::footnote{Too early}
 
       Content first.
 
@@ -105,8 +107,9 @@ class PresentationTest < ActiveSupport::TestCase
     assert_nil document.slides.first.section
     assert_equal "Valid context", document.slides.second.section
     refute_includes document.slides.first.markdown, "Late context"
-    assert_equal 2, document.warnings.length
-    assert document.warnings.all? { |warning| warning.include?("beginning of a slide") }
+    assert_equal 3, document.warnings.length
+    assert_equal 2, document.warnings.count { |warning| warning.include?("beginning of a slide") }
+    assert_includes document.warnings, "Footnote margin directive must appear at the end of a slide."
   end
 
   test "reads and updates presentation typography without losing front matter" do

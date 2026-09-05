@@ -286,7 +286,7 @@ module Presentations
       fence = nil
       footnote = nil
 
-      lines.each do |line|
+      lines.each_with_index do |line, index|
         incoming_fence = fence_marker(line)
         if fence
           content << line
@@ -304,7 +304,11 @@ module Presentations
           if directive[:malformed]
             warnings << "Malformed #{directive[:type]} margin directive was removed."
           elsif directive[:type] == "footnote"
-            footnote = directive[:value]
+            if lines[(index + 1)..].to_a.all?(&:blank?)
+              footnote = directive[:value]
+            else
+              warnings << "Footnote margin directive must appear at the end of a slide."
+            end
           elsif leading
             context[directive[:type].to_sym] = directive[:value]
           else
