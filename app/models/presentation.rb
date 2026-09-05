@@ -28,6 +28,18 @@ class Presentation < ApplicationRecord
     document.presentation_theme
   end
 
+  def presentation_typography
+    document.presentation_typography
+  end
+
+  def presentation_typography=(value)
+    self.source = Presentations::Document.with_front_matter_value(
+      source.to_s,
+      "presentationTypography",
+      Presentations::Document.normalize_typography_value(value)
+    )
+  end
+
   def forked?
     parent_id.present?
   end
@@ -43,14 +55,8 @@ class Presentation < ApplicationRecord
   def fork_as(type)
     raise ArgumentError, "Unsupported fork type" unless FORK_TYPES.include?(type.to_s)
 
-    self.class.new(
-      title: "#{title} (#{type.to_s.capitalize})",
-      source: source,
-      parent: self,
-      fork_type: type,
-      fork_source: source,
-      fork_parent_title: title
-    )
+    self.class.new(title: "#{title} (#{type.to_s.capitalize})", source: source,
+      parent: self, fork_type: type, fork_source: source, fork_parent_title: title)
   end
 
   def source=(value)

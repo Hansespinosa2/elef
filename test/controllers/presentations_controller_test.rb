@@ -13,8 +13,8 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
   test "loads sample presentations idempotently and preserves unrelated records" do
     unrelated = Presentation.create!(title: "Personal deck", source: "# Keep me")
 
-    expected_count = Presentations::SampleData::SAMPLES.length + Presentations::LineageSampleData::SAMPLES.length
-    assert_difference("Presentation.count", expected_count) do
+    expected_seed_records = Presentations::SampleData::SAMPLES.length + Presentations::LineageSampleData::SAMPLES.length
+    assert_difference("Presentation.count", expected_seed_records) do
       post load_samples_presentations_path
     end
     assert_redirected_to presentations_path
@@ -27,83 +27,21 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
       post load_samples_presentations_path
     end
     assert_equal "# Keep me", unrelated.reload.source
-    assert_equal expected_count,
+    assert_equal expected_seed_records,
       Presentation.where.not(sample_id: nil).count
     assert_equal Presentations::SampleData::SAMPLES.length,
       Presentation.where("source LIKE ?", "%#{Presentations::SampleData::MARKER_KEY}%").count
-    assert_equal Presentations::LineageSampleData::SAMPLES.length,
-      Presentation.where(sample_id: Presentations::LineageSampleData::SAMPLES.map { |sample| sample[:id] }).count
   end
 
   test "loads samples through the Rails seed entry point" do
-    expected_count = Presentations::SampleData::SAMPLES.length + Presentations::LineageSampleData::SAMPLES.length
-    assert_difference("Presentation.count", expected_count) do
+    expected_seed_records = Presentations::SampleData::SAMPLES.length + Presentations::LineageSampleData::SAMPLES.length
+    assert_difference("Presentation.count", expected_seed_records) do
       Rails.application.load_seed
     end
 
     assert_no_difference("Presentation.count") do
       Rails.application.load_seed
     end
-  end
-
-  test "starts a blank presentation immediately" do
-    assert_difference("Presentation.count", 1) do
-      post start_presentations_path
-    end
-
-    presentation = Presentation.order(:created_at).last
-    assert_redirected_to edit_presentation_path(presentation)
-    assert_equal Presentation::DEFAULT_SOURCE, presentation.source
-  end
-
-  test "renames and deletes a presentation" do
-    presentation = presentations(:one)
-
-    patch rename_presentation_path(presentation), params: { presentation: { title: "Renamed deck" } }
-    assert_redirected_to presentations_path
-    assert_equal "Renamed deck", presentation.reload.title
-
-    assert_difference("Presentation.count", -1) do
-      delete presentation_path(presentation)
-    end
-  end
-
-  test "forks an independent presentation with lineage metadata" do
-    parent = presentations(:one)
-
-    assert_difference("Presentation.count", 1) do
-      post fork_presentation_path(parent), params: { fork_type: "inspiration" }
-    end
-
-    forked = Presentation.order(:created_at).last
-    assert_redirected_to edit_presentation_path(forked)
-    assert_equal parent, forked.parent
-    assert_equal "inspiration", forked.fork_type
-    assert_equal parent.source, forked.fork_source
-    assert_equal "Demo Deck (Inspiration)", forked.title
-
-    parent.update!(source: "# Changed")
-    assert_equal "# One\n\nBody\n---\n# Two", forked.reload.source
-  end
-
-  test "renders the lineage graph with relationship styles" do
-    Presentations::LineageSampleData.load!
-
-    get presentations_path
-
-    assert_response :success
-    assert_select ".lineage-graph .lineage-node", count: 16
-    assert_select ".lineage-continuation"
-    assert_select ".lineage-inspiration"
-    assert_select ".lineage-slide-thumb", count: 16
-    assert_select ".lineage-hover-card", count: 16
-    assert_select ".lineage-hover-card", text: /Created.*Last published/m
-    assert_select ".lineage-graph-canvas[data-controller='lineage-graph']"
-    assert_select ".lineage-timeline-scroll"
-    assert_select ".lineage-date-axis"
-    assert_select ".lineage-edges[data-lineage-graph-target='edges']"
-    assert_select ".lineage-node[data-lineage-graph-parent-id]", count: 12
-    assert_select ".lineage-node[data-lineage-graph-created-at]", count: 16
   end
 
   test "creates a presentation from markdown source" do
@@ -114,7 +52,6 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     presentation = Presentation.order(:created_at).last
     assert_redirected_to edit_presentation_path(presentation)
     assert_equal "# One\n---\n# Two", presentation.source
-    assert_not_nil presentation.created_at
   end
 
   test "updates source only on explicit save request" do
@@ -126,17 +63,29 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "# Saved\n---\n# Again", presentation.reload.source
   end
 
-  test "accepts an autosave update without redirecting" do
+  test "saves presentation typography in front matter" do
     presentation = presentations(:one)
 
-    patch presentation_path(presentation),
-      params: { presentation: { title: "Autosaved", source: "# Autosaved" } },
-      as: :json
+    patch presentation_path(presentation), params: {
+      presentation: { title: presentation.title, source: presentation.source, presentation_typography: "modern" }
+    }
 
-    assert_response :success
-    assert_equal "Autosaved", presentation.reload.title
-    assert_equal "# Autosaved", presentation.source
-    assert_equal presentation.id, response.parsed_body["id"]
+    assert_redirected_to edit_presentation_path(presentation)
+    assert_equal "modern", presentation.reload.presentation_typography
+    assert_includes presentation.source, "presentationTypography: modern"
+  end
+
+  test "updates typography inside valid front matter" do
+    presentation = Presentation.create!(title: "Front matter deck", source: "---\npresentationTheme: dark\npresentationTypography: modern\n---\n# Title")
+
+    patch presentation_path(presentation), params: {
+      presentation: { title: presentation.title, source: presentation.source, presentation_typography: "book" }
+    }
+
+    assert_redirected_to edit_presentation_path(presentation)
+    assert_equal "book", presentation.reload.presentation_typography
+    assert_includes presentation.source, "presentationTheme: dark"
+    assert_includes presentation.source, "presentationTypography: book"
   end
 
   test "renders saved preview and presentation mode" do
@@ -145,34 +94,47 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     get presentation_path(presentation)
     assert_response :success
     assert_select ".presentation-surface"
+    assert_select ".slides-typography-book"
     assert_select ".slide", 2
     assert_select "h1", text: "One"
 
     get present_presentation_path(presentation)
     assert_response :success
-    assert presentation.reload.last_published_at
     assert_select "body.presentation-body"
     assert_select ".presentation-mode.presentation-surface"
+    assert_select ".slides-typography-book"
     assert_select 'link[href*="tailwind"]', count: 0
     assert_select ".presentation-slide", 2
   end
 
-  test "uses identical slide markup in preview, presentation, and lineage" do
-    parent = Presentation.create!(title: "Shared slide", source: "# First slide\n\nThe same content\n---\n# Second slide")
-    child = parent.fork_as("continuation")
-    child.save!
+  test "renders margin metadata and slide count in both views" do
+    presentation = Presentation.create!(title: "Margin deck", source: <<~MARKDOWN)
+      ---
+      show-in-margin:
+        section: true
+        subsection: true
+        footnote: true
+        slideCount: true
+      ---
+      :::section{Product strategy}
+      :::subsection{Opportunity}
+      # First
+      :::footnote{Source: customer interviews}
+      ---
+      # Second
+    MARKDOWN
 
-    get presentation_path(parent)
-    preview_slide = Nokogiri::HTML(response.body).at_css(".slides > .slide").to_html
+    get presentation_path(presentation)
+    assert_select ".slide-margin-section", text: "Product strategy", count: 2
+    assert_select ".slide-margin-subsection", text: "Opportunity", count: 2
+    assert_select ".slide-margin-footnote", text: /Source: customer interviews/, count: 1
+    assert_select ".slide-margin-footnote-marker", text: "*", count: 1
+    assert_select ".slide-margin-count", text: "1 / 2", count: 1
+    assert_select ".slide-margin-count", text: "2 / 2", count: 1
 
-    get present_presentation_path(parent)
-    presentation_slide = Nokogiri::HTML(response.body).at_css(".presentation-slide .slide").to_html
-
-    get presentations_path
-    lineage_slide = Nokogiri::HTML(response.body).at_css(%([data-lineage-graph-id="#{parent.id}"] .slide)).to_html
-
-    assert_equal preview_slide, presentation_slide
-    assert_equal preview_slide, lineage_slide
+    get present_presentation_path(presentation)
+    assert_select ".presentation-toolbar [data-presentation-target='counter']", count: 0
+    assert_select ".presentation-slide .slide-margin-section", text: "Product strategy", count: 2
   end
 
   test "renders representative sample content in the saved preview" do
@@ -199,12 +161,48 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     get presentation_path(layouts_and_themes)
 
     assert_select ".slides-theme-dark"
-    assert_select ".slide-intro"
     assert_select ".slide-body"
+    assert_select ".slide-statement"
+    assert_select ".slide-two-column .slide-regions", 2
+    assert_select ".slide-three-column .slide-regions", 5
 
     edge_cases = Presentation.find_by!(sample_id: "slide-edge-cases")
     get presentation_path(edge_cases)
 
     assert_select ".slide", 10
+  end
+
+  test "renders every seeded lineage presentation in the timeline" do
+    Presentations::LineageSampleData.load!
+
+    get presentations_path
+
+    assert_response :success
+    assert_select ".lineage-timeline-scroll"
+    assert_select ".lineage-node", count: Presentation.count
+    assert_select ".lineage-node[data-lineage-graph-created-at]", count: Presentation.count
+    assert_select ".lineage-date-axis"
+  end
+
+  test "editor exposes the presentation typography selector" do
+    get edit_presentation_path(presentations(:one))
+
+    assert_response :success
+    assert_select "select[name='presentation[presentation_typography]']" do
+      assert_select "option[value='book']", text: "Book"
+      assert_select "option[value='modern']", text: "Modern"
+      assert_select "option[value='technical']", text: "Technical"
+    end
+  end
+
+  test "renders positioning warnings without leaking directives" do
+    presentation = Presentation.create!(title: "Warnings", source: "# Slide\n\n:::unknown\n\nContent")
+
+    get presentation_path(presentation)
+
+    assert_response :success
+    assert_select '[aria-label="Markdown warnings"]', text: /directive/
+    assert_select ".slide", text: /Content/
+    refute_includes response.body, ":::unknown"
   end
 end

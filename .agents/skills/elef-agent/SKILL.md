@@ -21,16 +21,19 @@ The user starts isolation explicitly:
 
 ```sh
 scripts/elef-agent start TASK
-scripts/elef-agent codex TASK
 ```
 
-The first command creates the branch, worktree, and persistent container. The
-second launches Codex in that already-created task. An agent may use `shell`,
+The command creates the branch, worktree, and persistent container, then
+launches Codex once Rails is ready. An agent may use `shell`,
 `resume`, or other task commands only after the user has created the task.
 
 Use `scripts/elef-agent start TASK BASE` when the task must branch from a
 specific commit or branch. The task branch is `codex/TASK` and the worktree is
 the sibling directory `../elef-worktrees/TASK`.
+
+New tasks use the latest Codex CLI when their image is built. Existing tasks
+retain the image they were created with, including when they are resumed with
+`up`; use an intentional image refresh when upgrading an existing task.
 
 Codex is launched in the container with approvals and sandbox bypassed and
 model `gpt-5.6-luna`. Treat the container as the isolation boundary, but
@@ -42,6 +45,8 @@ remember that the mounted task worktree and shared Git metadata are host files.
 scripts/elef-agent resume TASK
 scripts/elef-agent shell TASK
 scripts/elef-agent shell TASK bin/rails test
+scripts/elef-agent codex TASK
+scripts/elef-agent fork TASK
 ```
 
 Keep browser automation headless. Use the installed Chromium and Chrome
@@ -57,6 +62,17 @@ changes have been reviewed and merged:
 git merge --ff-only codex/TASK
 scripts/elef-agent cleanup TASK
 ```
+
+For a small, already-reviewed task that should be handed off quickly, the
+primary checkout can run:
+
+```sh
+scripts/elef-agent finish TASK [TITLE]
+```
+
+This creates or reuses the task PR, waits for CI, merges it, confirms the merge,
+and then performs the guarded cleanup. It leaves the task intact if CI fails
+or the merge cannot be confirmed.
 
 If the task is abandoned, the user can explicitly discard it with
 `scripts/elef-agent remove TASK`.

@@ -87,6 +87,6 @@ class PresentationsController < ApplicationController
   end
 
   def presentation_params
-    params.require(:presentation).permit(:title, :source)
+    params.require(:presentation).permit(:title, :source, :presentation_typography)
   end
 end

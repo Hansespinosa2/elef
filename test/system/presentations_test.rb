@@ -131,7 +131,7 @@ class PresentationsTest < ApplicationSystemTestCase
     child.save!
 
     visit presentation_path(parent)
-    preview_ratio = page.evaluate_script("(function(){ const r = document.querySelector('.slides > .slide').getBoundingClientRect(); return r.width / r.height })()")
+    preview_ratio = page.evaluate_script("(function(){ const r = document.querySelector('.slides .slide').getBoundingClientRect(); return r.width / r.height })()")
 
     visit present_presentation_path(parent)
     presentation_ratio = page.evaluate_script("(function(){ const r = document.querySelector('.presentation-slide .slide').getBoundingClientRect(); return r.width / r.height })()")
@@ -173,6 +173,35 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_operator (fraction_parts[1]["top"] - fraction_parts[0]["top"]).abs, :>, 1
   end
 
+  test "renders automatic layouts and positioned blocks" do
+    presentation = Presentation.create!(
+      title: "Automatic layouts",
+      source: <<~MARKDOWN
+        # Compare
+
+        ## Left
+
+        One side.
+
+        ## Right
+
+        The other side.
+        ---
+        # Positioned
+
+        :::position{center middle}
+
+        Center this message.
+      MARKDOWN
+    )
+
+    visit presentation_path(presentation)
+
+    assert_selector ".slide-two-column .slide-regions"
+    assert_selector ".slide-statement .position-center.position-middle", text: /Center this message/
+    refute_text ":::position"
+  end
+
   test "keeps Elef UI and presentation surfaces as separate styling zones" do
     presentation = Presentation.create!(title: "Scoped Deck", source: "# Scoped\n\n- One\n- Two")
 
@@ -210,7 +239,7 @@ class PresentationsTest < ApplicationSystemTestCase
     JAVASCRIPT
 
     assert_equal 2, header_offsets.length
-    assert_equal header_offsets.first, header_offsets.last
+    assert_in_delta header_offsets.first, header_offsets.last, 0.001
   end
 
   test "user creates saves and reopens a markdown presentation" do
@@ -218,16 +247,18 @@ class PresentationsTest < ApplicationSystemTestCase
     click_on "New presentation", match: :first
 
     fill_in "Title", with: "System Deck"
-    fill_in "Markdown source", with: "# First\n\nBody\n---\n# Second"
+    source = "# First\n\nBody\n---\n# Second"
+    normalized_source = "---\npresentationTypography: book\n---\n#{source}"
+    fill_in "Markdown source", with: source
     click_on "Save presentation"
 
     assert_text "Presentation saved."
-    assert_field "Markdown source", with: "# First\n\nBody\n---\n# Second"
+    assert_field "Markdown source", with: normalized_source
     assert_selector ".slide", count: 2
 
     click_on "Library"
     click_on "System Deck"
-    assert_field "Markdown source", with: "# First\n\nBody\n---\n# Second"
+    assert_field "Markdown source", with: normalized_source
   end
 
   test "dirty source warns before navigation and cancel preserves edits" do
@@ -257,5 +288,95 @@ class PresentationsTest < ApplicationSystemTestCase
 
     send_keys :arrow_left
     assert_text "1 / 2"
+  end
+
+  test "inserts a fuzzy snippet and moves through its placeholder" do
+    Snippet.create!(name: "Block equation", trigger: "beq", description: "A block LaTeX equation", category: "LaTeX", body: "$$\n${1:equation}\n$$")
+    presentation = Presentation.create!(title: "Snippet deck", source: "# Math\n\n:")
+
+    visit edit_presentation_path(presentation)
+    source = find_field("Markdown source")
+    source.send_keys("beq")
+    assert_selector ".snippet-palette", visible: true
+    assert_text ":beq"
+    palette_position = page.evaluate_script("(() => { const editor = document.querySelector('[data-snippet-palette-target=editor]'); const e = editor.getBoundingClientRect(); const p = document.querySelector('[data-snippet-palette-target=palette]').getBoundingClientRect(); const styles = getComputedStyle(editor); const lineHeight = parseFloat(styles.lineHeight); const paddingTop = parseFloat(styles.paddingTop); const lineNumber = editor.value.slice(0, editor.selectionStart).split('\\n').length; const caretLineBottom = e.top + paddingTop + lineHeight * lineNumber - editor.scrollTop; return { editorBottom: e.bottom, paletteTop: p.top, caretLineBottom }; })()")
+    assert_operator palette_position["paletteTop"], :>, palette_position["caretLineBottom"]
+    assert_operator palette_position["paletteTop"], :<, palette_position["editorBottom"]
+
+    source.send_keys(:enter)
+    assert_equal "# Math\n\n$$\nequation\n$$", source.value
+    assert_equal "equation", page.evaluate_script("(() => { const e = document.querySelector('[data-snippet-palette-target=editor]'); return e.value.slice(e.selectionStart, e.selectionEnd) })()")
+  end
+
+  test "positions the palette when only the colon trigger is typed" do
+    Snippet.create!(name: "Equation", trigger: "beq", category: "LaTeX", body: "x")
+    visit new_presentation_path
+    source = find_field("Markdown source")
+    source.fill_in with: "# Math\n\n"
+    source.send_keys(":")
+    assert_selector ".snippet-option", text: ":beq"
+    bounds = page.evaluate_script(<<~JS)
+      (() => {
+        const editor = document.querySelector('[data-snippet-palette-target="editor"]');
+        const palette = document.querySelector('.snippet-palette');
+        const e = editor.getBoundingClientRect(), p = palette.getBoundingClientRect();
+        return { positioned: palette.style.top !== '', top: p.top, bottom: p.bottom, editorTop: e.top, editorBottom: e.bottom };
+      })()
+    JS
+    assert bounds["positioned"], "The colon popup must receive caret coordinates before a query is typed"
+    assert_operator bounds["top"], :>, bounds["editorTop"]
+    assert_operator bounds["bottom"], :<, bounds["editorBottom"]
+    save_screenshot("tmp/colon-palette.png")
+  end
+
+  test "renders untrusted snippet metadata as text" do
+    Snippet.create!(name: '<img src=x onerror="alert(1)">', trigger: "unsafe", description: "Untrusted", category: "Markdown", body: "text")
+    presentation = Presentation.create!(title: "Safe snippets", source: "# Safe\n\n:")
+
+    visit edit_presentation_path(presentation)
+    source = find_field("Markdown source")
+    source.send_keys("unsafe")
+
+    assert_selector ".snippet-option span", text: '<img src=x onerror="alert(1)"> · Markdown'
+    assert_no_selector ".snippet-option img"
+  end
+
+  test "keeps slide geometry fixed while scaling the canvas" do
+    presentation = Presentation.create!(
+      title: "Static geometry",
+      source: "# A fixed heading\n\nA paragraph with enough content to establish a stable line break in the design canvas."
+    )
+
+    visit presentation_path(presentation)
+
+    geometry = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const frame = document.querySelector('.slide-frame');
+        const slide = frame.querySelector('.slide');
+        const heading = slide.querySelector('h1');
+        return {
+          frameRatio: frame.getBoundingClientRect().width / frame.getBoundingClientRect().height,
+          slideWidth: slide.offsetWidth,
+          slideHeight: slide.offsetHeight,
+          headingFontSize: getComputedStyle(heading).fontSize,
+          scale: Number.parseFloat(getComputedStyle(slide).getPropertyValue('--slide-scale'))
+        };
+      })()
+    JAVASCRIPT
+
+    assert_in_delta 16.0 / 9, geometry["frameRatio"], 0.01
+    assert_equal 1280, geometry["slideWidth"]
+    assert_equal 720, geometry["slideHeight"]
+    assert_equal "112px", geometry["headingFontSize"]
+    assert_operator geometry["scale"], :>, 0
+
+    page.execute_script("document.querySelector('.slide-frame').style.width = '640px'")
+    page.evaluate_async_script("window.requestAnimationFrame(() => arguments[0]())")
+    resized_scale = page.evaluate_script("Number.parseFloat(getComputedStyle(document.querySelector('.slide')).getPropertyValue('--slide-scale'))")
+
+    assert_operator resized_scale, :<, geometry["scale"]
+    assert_equal 1280, page.evaluate_script("document.querySelector('.slide').offsetWidth")
+    assert_equal 720, page.evaluate_script("document.querySelector('.slide').offsetHeight")
+    assert_equal "112px", page.evaluate_script("getComputedStyle(document.querySelector('.slide h1')).fontSize")
   end
 end

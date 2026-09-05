@@ -10,4 +10,14 @@
     <%= link_to "Present", present_presentation_path(@presentation), class: "button primary inline-flex min-h-10 items-center rounded-full border border-[#6d4aff] bg-[#6d4aff] px-4 py-2 font-bold text-white no-underline hover:brightness-95", data: { turbo: false } %>
   </div>
 </section>
+<% if @presentation.document.warnings.any? %>
+  <section class="presentation-warnings mb-6 rounded-2xl border border-[#e7c56d] bg-[#fff8df] p-4 text-[#765700]" aria-label="Markdown warnings">
+    <h2 class="mb-2 text-lg font-bold">Markdown warnings</h2>
+    <ul class="list-disc pl-5">
+      <% @presentation.document.warnings.each do |warning| %>
+        <li><%= warning %></li>
+      <% end %>
+    </ul>
+  </section>
+<% end %>
 <%= render "slides", presentation: @presentation %>

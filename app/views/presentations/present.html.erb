@@ -1,17 +1,16 @@
 <% content_for :title, "Present #{@presentation.title}" %>
-<div class="presentation-mode presentation-surface" data-controller="presentation" data-presentation-index-value="0">
+<div class="presentation-mode presentation-surface slides-theme-<%= @presentation.presentation_theme %> slides-typography-<%= @presentation.presentation_typography %>" data-controller="presentation" data-presentation-index-value="0">
   <div class="presentation-toolbar">
     <%= link_to "Exit", presentation_path(@presentation), class: "button inline-flex min-h-10 items-center rounded-full border border-white/20 bg-white/10 px-4 py-2 font-bold text-white no-underline hover:bg-white/20", data: { turbo: false } %>
     <button type="button" class="button inline-flex min-h-10 cursor-pointer items-center rounded-full border border-white/20 bg-white/10 px-4 py-2 font-bold text-white hover:bg-white/20" data-action="presentation#previous" aria-label="Previous slide">Previous</button>
-    <span data-presentation-target="counter" aria-live="polite"></span>
     <button type="button" class="button inline-flex min-h-10 cursor-pointer items-center rounded-full border border-white/20 bg-white/10 px-4 py-2 font-bold text-white hover:bg-white/20" data-action="presentation#next" aria-label="Next slide">Next</button>
     <button type="button" class="button inline-flex min-h-10 cursor-pointer items-center rounded-full border border-white/20 bg-white/10 px-4 py-2 font-bold text-white hover:bg-white/20" data-action="presentation#fullscreen">Fullscreen</button>
   </div>
 
   <div class="presentation-stage" data-presentation-target="stage" tabindex="0">
     <% @presentation.slides.each do |slide| %>
-      <div data-presentation-target="slide" class="presentation-slide">
-        <%= render "slide", slide: slide %>
+      <div class="slide-frame presentation-slide-frame" data-controller="presentation-canvas" data-presentation-target="slide">
+        <%= render "slide", slide: slide, presentation_slide: true, margin_settings: @presentation.document.margin_settings %>
       </div>
     <% end %>
   </div>

@@ -125,6 +125,23 @@ Requirements use the following priority model:
 - **Rationale:** Errors must be recoverable and must never look like successful output.
 - **Success criteria:** An invalid edit produces an actionable explanation and does not silently replace the document with stale or empty content.
 
+#### Initial Markdown layout convention
+
+The first implementation of the presentation extension language keeps ordinary
+Markdown as the default authoring path and derives a bounded layout from clear
+content shapes. A slide remains delimited by a standalone `---`. A title followed
+by exactly two or three sibling heading sections becomes a two- or three-column
+slide; a single dominant image, table, or fenced code block receives a focused
+composition; and a single short prose block becomes a statement slide. Ambiguous
+content remains a body slide.
+
+Authors may add bounded block positioning with `:::position{...}` using the values
+`left`, `center`, `right`, `top`, `middle`, and `bottom`. A directive can apply to
+the next Markdown block or wrap multiple blocks until a closing `:::`. Extension
+directives are removed from rendered content and warned about when malformed;
+ordinary Markdown is never rejected merely because it does not match a layout
+shape.
+
 ### 4.4 Semantic components and layout
 
 #### FR-010 - Render semantic presentation components
