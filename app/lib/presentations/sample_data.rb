@@ -12,7 +12,15 @@ module Presentations
           ---
           #{MARKER_KEY}: markdown-basics
           presentationTheme: light
+          show-in-margin:
+            section: true
+            subsection: true
+            footnote: true
+            slideCount: true
           ---
+          :::section{Markdown fundamentals}
+          :::subsection{Build a clear story}
+          :::footnote{Elef treats raw Markdown as the source of truth.}
           # Markdown in practice
 
           A complete tour of the writing patterns that make a presentation easy
@@ -27,6 +35,7 @@ module Presentations
           - Explain why it matters now.
           - Show the path from question to decision.
           ---
+          :::subsection{Make hierarchy visible}
           # Make hierarchy visible
 
           Headings provide the outline, while paragraphs carry the argument.
