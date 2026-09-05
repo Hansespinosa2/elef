@@ -30,7 +30,7 @@ export default class extends Controller {
 
     if (event.key === "ArrowDown") {
       event.preventDefault()
-      this.selectedIndex = Math.min(this.selectedIndex + 1, this.matches.length - 1)
+      this.selectedIndex = Math.min(this.selectedIndex + 1, Math.min(this.matches.length, 5) - 1)
       this.renderPalette()
     } else if (event.key === "ArrowUp") {
       event.preventDefault()
@@ -76,7 +76,7 @@ export default class extends Controller {
 
   renderPalette() {
     this.paletteTarget.replaceChildren()
-    this.matches.slice(0, 8).forEach((snippet, index) => {
+    this.matches.slice(0, 5).forEach((snippet, index) => {
       const option = document.createElement("button")
       option.type = "button"
       option.role = "option"

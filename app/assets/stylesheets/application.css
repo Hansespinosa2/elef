@@ -92,7 +92,7 @@ body.elef-app {
   z-index: 20;
   top: 5.2rem;
   left: 1rem;
-  width: min(28rem, calc(100% - 2rem));
+  width: min(22rem, calc(100% - 2rem));
   overflow: hidden;
   border: 1px solid var(--oradia-slate-700);
   border-radius: 0.75rem;
@@ -110,12 +110,12 @@ body.elef-app {
   background: transparent;
   color: var(--oradia-ink);
   cursor: pointer;
-  padding: 0.75rem 1rem;
+  padding: 0.55rem 0.75rem;
   text-align: left;
 }
 
 .snippet-option:last-child { border-bottom: 0; }
-.snippet-option span { color: var(--oradia-muted); font-size: 0.8rem; }
+.snippet-option span { color: var(--oradia-muted); font-size: 0.72rem; }
 .snippet-option.is-selected { background: var(--oradia-slate-700); }
 
 .presentation-surface { font-family: var(--oradia-sans); }
