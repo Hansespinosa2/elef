@@ -86,6 +86,36 @@ body.elef-app {
 .elef-app .error-panel { background: #3a2428 !important; border-color: #92565e !important; color: #f3c7c9 !important; }
 .elef-app .flash { background: #263c31 !important; border-color: #4f8b68 !important; color: #d7eddb; }
 .field-hint { color: var(--oradia-muted); font-size: 0.82rem; line-height: 1.45; margin: 0.5rem 0 0; }
+.snippet-palette {
+  position: fixed;
+  z-index: 20;
+  margin: 0;
+  width: min(22rem, calc(100% - 2rem));
+  overflow: hidden;
+  border: 1px solid var(--oradia-slate-700);
+  border-radius: 0.75rem;
+  background: rgba(24, 33, 38, 0.86);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.35);
+}
+
+.snippet-option {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  gap: 1rem;
+  border: 0;
+  border-bottom: 1px solid var(--oradia-line);
+  background: transparent;
+  color: var(--oradia-ink);
+  cursor: pointer;
+  padding: 0.55rem 0.75rem;
+  text-align: left;
+}
+
+.snippet-option:last-child { border-bottom: 0; }
+.snippet-option span { color: var(--oradia-muted); font-size: 0.72rem; }
+.snippet-option.is-selected { background: var(--oradia-slate-700); }
 
 .presentation-surface { font-family: var(--oradia-sans); }
 .presentation-surface h1,

@@ -16,9 +16,10 @@
       <%= form.text_field :title, class: "w-full rounded-xl border border-[#ddd5c8] bg-white p-3 text-[#1e1c18] outline-none focus:border-[#6d4aff] focus:ring-2 focus:ring-[#6d4aff]/20", data: { dirty_target: "field", action: "input->dirty#markDirty" }, autocomplete: "off" %>
     </div>
 
-    <div class="field source-field mb-4">
+    <div class="field source-field relative mb-4" data-controller="snippet-palette" data-snippet-palette-snippets-value="<%= json_escape(Snippets::Catalog.for_editor.to_json) %>">
       <%= form.label :source, "Markdown source", class: "mb-1 block font-extrabold" %>
-      <%= form.text_area :source, rows: 24, class: "min-h-[36rem] w-full resize-y rounded-xl border border-[#ddd5c8] bg-white p-3 font-mono text-[#1e1c18] outline-none focus:border-[#6d4aff] focus:ring-2 focus:ring-[#6d4aff]/20 max-[920px]:min-h-96", spellcheck: "false", data: { dirty_target: "field", action: "input->dirty#markDirty" } %>
+      <%= form.text_area :source, rows: 24, class: "min-h-[36rem] w-full resize-y rounded-xl border border-[#ddd5c8] bg-white p-3 font-mono text-[#1e1c18] outline-none focus:border-[#6d4aff] focus:ring-2 focus:ring-[#6d4aff]/20 max-[920px]:min-h-96", spellcheck: "false", data: { dirty_target: "field", snippet_palette_target: "editor", action: "input->dirty#markDirty input->snippet-palette#input keydown->snippet-palette#keydown" } %>
+      <div class="snippet-palette" data-snippet-palette-target="palette" hidden role="listbox" aria-label="Snippet suggestions"></div>
     </div>
 
     <div class="field typography-field mb-4">
