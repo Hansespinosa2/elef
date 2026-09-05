@@ -71,6 +71,44 @@ class PresentationTest < ActiveSupport::TestCase
     assert_equal [true, true, true, true], [settings.section, settings.subsection, settings.footnote, settings.slide_count]
   end
 
+  test "parses nested and escaped footnote braces anywhere outside fenced code" do
+    document = Presentations::Document.parse(<<~MARKDOWN)
+      # Explain the configuration
+
+      The note belongs to this slide.
+
+      :::footnote{Use {production: true} and \{literal braces\}.}
+
+      ```yaml
+      :::footnote{This remains code}
+      ```
+    MARKDOWN
+
+    assert_equal "Use {production: true} and {literal braces}.", document.slides.first.footnote
+    assert_includes document.slides.first.markdown, ":::footnote{This remains code}"
+    assert_empty document.warnings
+  end
+
+  test "warns and removes section directives that are not at the beginning" do
+    document = Presentations::Document.parse(<<~MARKDOWN)
+      # Intro
+
+      Content first.
+
+      :::section{Late context}
+      :::subsection{Also late}
+      ---
+      :::section{Valid context}
+      # Next
+    MARKDOWN
+
+    assert_nil document.slides.first.section
+    assert_equal "Valid context", document.slides.second.section
+    refute_includes document.slides.first.markdown, "Late context"
+    assert_equal 2, document.warnings.length
+    assert document.warnings.all? { |warning| warning.include?("beginning of a slide") }
+  end
+
   test "reads and updates presentation typography without losing front matter" do
     source = "---\ntitle: Demo\npresentationTheme: dark\npresentationTypography: modern\n---\n# Title\n---\n# Second"
     presentation = Presentation.create!(title: "Demo", source: source)

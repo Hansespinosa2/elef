@@ -280,39 +280,85 @@ module Presentations
 
     def parse_margin_directives(markdown, context)
       lines = markdown.split("\n", -1)
-      metadata_lines = []
-      index = 0
+      content = []
+      warnings = []
+      leading = true
+      fence = nil
+      footnote = nil
 
-      while index < lines.length
-        line = lines[index]
-        if line.blank? && metadata_lines.any?
-          metadata_lines << line
-          index += 1
+      lines.each do |line|
+        incoming_fence = fence_marker(line)
+        if fence
+          content << line
+          fence = toggle_fence(fence, incoming_fence) if incoming_fence
+          next
+        elsif incoming_fence
+          content << line
+          fence = incoming_fence
+          leading = false
           next
         end
 
-        match = line.match(/\A\s*:::section\{([^}]*)\}\s*\z/)
-        if match
-          context[:section] = match[1].strip
-        elsif (match = line.match(/\A\s*:::subsection\{([^}]*)\}\s*\z/))
-          context[:subsection] = match[1].strip
-        elsif (match = line.match(/\A\s*:::footnote\{([^}]*)\}\s*\z/))
-          footnote = match[1].strip
-        else
-          break
+        directive = margin_directive_from_line(line)
+        if directive
+          if directive[:malformed]
+            warnings << "Malformed #{directive[:type]} margin directive was removed."
+          elsif directive[:type] == "footnote"
+            footnote = directive[:value]
+          elsif leading
+            context[directive[:type].to_sym] = directive[:value]
+          else
+            warnings << "#{directive[:type].capitalize} margin directive must appear at the beginning of a slide."
+          end
+          next
         end
 
-        metadata_lines << line
-        index += 1
+        leading = false unless line.blank?
+        content << line
       end
 
       {
-        content: lines[index..]&.join("\n").to_s.sub(/\A\n+/, ""),
+        content: content.join("\n"),
         section: context[:section],
         subsection: context[:subsection],
         footnote: footnote,
-        warnings: []
+        warnings: warnings
       }
+    end
+
+    def margin_directive_from_line(line)
+      match = line.match(/\A\s*:::(section|subsection|footnote)\{/)
+      return unless match
+
+      characters = line[match.end(0)..].to_s.chars
+      value = []
+      depth = 1
+      index = 0
+
+      while index < characters.length
+        character = characters[index]
+        if character == "\\" && characters[index + 1] && %w[{ } \\].include?(characters[index + 1])
+          value << characters[index + 1]
+          index += 2
+          next
+        elsif character == "{"
+          depth += 1
+          value << character
+        elsif character == "}"
+          depth -= 1
+          if depth.zero?
+            return { type: match[1], value: value.join.strip } if characters[(index + 1)..].join.strip.blank?
+
+            return { type: match[1], malformed: true }
+          end
+          value << character
+        else
+          value << character
+        end
+        index += 1
+      end
+
+      { type: match[1], malformed: true }
     end
 
     def slide_warnings(slide)
