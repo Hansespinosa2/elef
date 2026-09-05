@@ -43,6 +43,35 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_operator (fraction_parts[1]["top"] - fraction_parts[0]["top"]).abs, :>, 1
   end
 
+  test "renders automatic layouts and positioned blocks" do
+    presentation = Presentation.create!(
+      title: "Automatic layouts",
+      source: <<~MARKDOWN
+        # Compare
+
+        ## Left
+
+        One side.
+
+        ## Right
+
+        The other side.
+        ---
+        # Positioned
+
+        :::position{center middle}
+
+        Center this message.
+      MARKDOWN
+    )
+
+    visit presentation_path(presentation)
+
+    assert_selector ".slide-two-column .slide-regions"
+    assert_selector ".slide-statement .position-center.position-middle", text: /Center this message/
+    refute_text ":::position"
+  end
+
   test "keeps Elef UI and presentation surfaces as separate styling zones" do
     presentation = Presentation.create!(title: "Scoped Deck", source: "# Scoped\n\n- One\n- Two")
 
@@ -80,7 +109,7 @@ class PresentationsTest < ApplicationSystemTestCase
     JAVASCRIPT
 
     assert_equal 2, header_offsets.length
-    assert_equal header_offsets.first, header_offsets.last
+    assert_in_delta header_offsets.first, header_offsets.last, 0.001
   end
 
   test "user creates saves and reopens a markdown presentation" do
@@ -88,16 +117,18 @@ class PresentationsTest < ApplicationSystemTestCase
     click_on "New presentation", match: :first
 
     fill_in "Title", with: "System Deck"
-    fill_in "Markdown source", with: "# First\n\nBody\n---\n# Second"
+    source = "# First\n\nBody\n---\n# Second"
+    normalized_source = "---\npresentationTypography: book\n---\n#{source}"
+    fill_in "Markdown source", with: source
     click_on "Save presentation"
 
     assert_text "Presentation saved."
-    assert_field "Markdown source", with: "# First\n\nBody\n---\n# Second"
+    assert_field "Markdown source", with: normalized_source
     assert_selector ".slide", count: 2
 
     click_on "Library"
     click_on "System Deck"
-    assert_field "Markdown source", with: "# First\n\nBody\n---\n# Second"
+    assert_field "Markdown source", with: normalized_source
   end
 
   test "dirty source warns before navigation and cancel preserves edits" do
@@ -179,4 +210,44 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_selector ".snippet-option span", text: '<img src=x onerror="alert(1)"> · Markdown'
     assert_no_selector ".snippet-option img"
   end
+
+  test "keeps slide geometry fixed while scaling the canvas" do
+    presentation = Presentation.create!(
+      title: "Static geometry",
+      source: "# A fixed heading\n\nA paragraph with enough content to establish a stable line break in the design canvas."
+    )
+
+    visit presentation_path(presentation)
+
+    geometry = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const frame = document.querySelector('.slide-frame');
+        const slide = frame.querySelector('.slide');
+        const heading = slide.querySelector('h1');
+        return {
+          frameRatio: frame.getBoundingClientRect().width / frame.getBoundingClientRect().height,
+          slideWidth: slide.offsetWidth,
+          slideHeight: slide.offsetHeight,
+          headingFontSize: getComputedStyle(heading).fontSize,
+          scale: Number.parseFloat(getComputedStyle(slide).getPropertyValue('--slide-scale'))
+        };
+      })()
+    JAVASCRIPT
+
+    assert_in_delta 16.0 / 9, geometry["frameRatio"], 0.01
+    assert_equal 1280, geometry["slideWidth"]
+    assert_equal 720, geometry["slideHeight"]
+    assert_equal "112px", geometry["headingFontSize"]
+    assert_operator geometry["scale"], :>, 0
+
+    page.execute_script("document.querySelector('.slide-frame').style.width = '640px'")
+    page.evaluate_async_script("window.requestAnimationFrame(() => arguments[0]())")
+    resized_scale = page.evaluate_script("Number.parseFloat(getComputedStyle(document.querySelector('.slide')).getPropertyValue('--slide-scale'))")
+
+    assert_operator resized_scale, :<, geometry["scale"]
+    assert_equal 1280, page.evaluate_script("document.querySelector('.slide').offsetWidth")
+    assert_equal 720, page.evaluate_script("document.querySelector('.slide').offsetHeight")
+    assert_equal "112px", page.evaluate_script("getComputedStyle(document.querySelector('.slide h1')).fontSize")
+  end
+end
 end

@@ -1,6 +1,12 @@
 require "test_helper"
 require "selenium/webdriver"
 
+chromedriver = ENV["CHROMEDRIVER_PATH"]
+chromedriver ||= %w[/usr/bin/chromedriver /usr/local/bin/chromedriver].find do |path|
+  File.executable?(path)
+end
+Selenium::WebDriver::Chrome::Service.driver_path = chromedriver if chromedriver
+
 class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
   chrome_binary = ENV.fetch("CHROME_BINARY", "/usr/bin/chromium")
   chromedriver_path = ENV.fetch("CHROMEDRIVER_PATH", "/usr/bin/chromedriver")

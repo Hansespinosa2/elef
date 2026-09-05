@@ -6,6 +6,7 @@ CONTAINER_CLI="${CONTAINER_CLI:-container}"
 IMAGE_OVERRIDE="${ELEF_AGENT_IMAGE:-}"
 CODEX_VERSION="${ELEF_AGENT_CODEX_VERSION:-latest}"
 CHROME_DEVTOOLS_MCP_VERSION="${ELEF_AGENT_CHROME_DEVTOOLS_MCP_VERSION:-1.8.0}"
+CONTAINER_MEMORY="${ELEF_AGENT_MEMORY:-1536M}"
 WORKTREE_ROOT="${ELEF_WORKTREE_ROOT:-$(dirname "$REPO")/elef-worktrees}"
 CODEX_HOME_HOST="${CODEX_HOME:-$HOME/.codex}"
 USER_SKILLS_HOST="${ELEF_USER_SKILLS_DIR:-$HOME/Documents/GitHub/andy-skills/skills}"
@@ -22,6 +23,7 @@ branch_for() { printf 'codex/%s' "$1"; }
 route_for() { printf '%s/routes/%s' "$AGENT_STATE_ROOT" "$1"; }
 codex_state_for() { printf '%s/codex/%s' "$AGENT_STATE_ROOT" "$1"; }
 image_state_for() { printf '%s/images/%s' "$AGENT_STATE_ROOT" "$1"; }
+terminal_state_for() { printf '%s/terminals/%s' "$AGENT_STATE_ROOT" "$1"; }
 host_for() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
 
 delete_codex_state() {
@@ -295,6 +297,7 @@ run_container() {
   [[ -f "$CODEX_HOME_HOST/auth.json" ]] && mounts+=(--volume "$CODEX_HOME_HOST/auth.json:/home/developer/.codex/auth.json:ro")
   [[ -f "$GH_CONFIG_HOST/hosts.yml" ]] && mounts+=(--volume "$GH_CONFIG_HOST/hosts.yml:/home/developer/.config/gh/hosts.yml:ro")
   "$CONTAINER_CLI" run --name "$name" --detach --init \
+    --memory "$CONTAINER_MEMORY" \
     --publish "127.0.0.1:${backend_port}:3000" \
     --env "GITHUB_TOKEN=$token" --env "GH_TOKEN=$token" \
     --env PORT=3000 --env BIND=0.0.0.0 \
@@ -399,10 +402,51 @@ up() {
   report_readiness "$task" "$code"
 }
 
+restore_terminal() {
+  [[ -t 1 ]] || return 0
+  printf '\033[<u\033[?2004l\033[?1l\033[?1004l' || true
+  stty sane 2>/dev/null || true
+}
+
+clear_terminal_state() {
+  local task="$1" state
+  state="$(terminal_state_for "$task")"
+  rm -f -- "$state"
+}
+
+restore_task_terminal() {
+  local task="$1" state terminal
+  state="$(terminal_state_for "$task")"
+  [[ -f "$state" ]] || return 0
+  terminal="$(<"$state")"
+  [[ "$terminal" == /dev/tty* ]] || { clear_terminal_state "$task"; return 0; }
+  printf '\033[<u\033[?2004l\033[?1l\033[?1004l' >"$terminal" 2>/dev/null || true
+  stty sane <"$terminal" 2>/dev/null || true
+  clear_terminal_state "$task"
+}
+
+assert_no_active_terminal() {
+  local task="$1" state
+  state="$(terminal_state_for "$task")"
+  [[ ! -s "$state" ]] || die "task has an active Codex terminal; exit Codex before cleanup"
+}
+
 exec_in() {
-  local task="$1"; shift
+  local task="$1" status terminal state; shift
   safe_name "$task"; need_container
+  terminal="$(tty 2>/dev/null || true)"
+  if [[ "$terminal" == /dev/tty* ]]; then
+    state="$(terminal_state_for "$task")"
+    mkdir -p "$(dirname "$state")"
+    printf '%s\n' "$terminal" >"$state"
+  fi
+  trap 'restore_terminal; clear_terminal_state "$task"' EXIT
   "$CONTAINER_CLI" exec --interactive --tty --workdir "$(worktree_for "$task")" "$(container_for "$task")" "$@"
+  status=$?
+  trap - EXIT
+  restore_terminal
+  clear_terminal_state "$task"
+  return "$status"
 }
 
 status() {
@@ -422,6 +466,8 @@ status() {
 stop() {
   local task="${1:-}" host; [[ -n "$task" ]] || die "usage: elef-agent stop TASK"
   safe_name "$task"; host="$(host_for "$task")"; need_container
+  assert_no_active_terminal "$task"
+  restore_task_terminal "$task"
   "$CONTAINER_CLI" stop "$(container_for "$task")" || echo "warning: container may already be stopped" >&2
   rm -f "$(route_for "$host")"
   reload_router
@@ -451,6 +497,8 @@ cleanup() {
   pr_state="$(gh pr list --repo "$repo" --head "$branch" --state all --json state --jq '.[0].state // ""')"
   [[ "$pr_state" == "MERGED" ]] || die "refusing cleanup: PR for $branch is not merged"
   need_container
+  assert_no_active_terminal "$task"
+  restore_task_terminal "$task"
   "$CONTAINER_CLI" stop "$name" 2>/dev/null || true
   "$CONTAINER_CLI" delete "$name" 2>/dev/null || true
   rm -f "$(route_for "$host")"
@@ -461,6 +509,37 @@ cleanup() {
   delete_codex_state "$task"
   delete_image_state "$task"
   echo "Cleaned up merged task $task"
+}
+
+finish() {
+  local task="${1:-}" title base branch repo pr_number pr_state
+  [[ -n "$task" ]] || die "usage: elef-agent finish TASK [TITLE]"
+  safe_name "$task"
+  [[ -z "$(git -C "$(worktree_for "$task")" status --porcelain)" ]] || \
+    die "worktree has uncommitted changes: $(worktree_for "$task")"
+  command -v gh >/dev/null || die "GitHub CLI not found"
+  title="${2:-Ship $task}"
+  base="$(git branch --show-current)"
+  [[ -n "$base" ]] || die "current checkout is not on a branch"
+  branch="$(branch_for "$task")"
+  repo="$(gh repo view --json nameWithOwner --jq .nameWithOwner)" || \
+    die "unable to determine GitHub repository"
+  pr_number="$(gh pr list --repo "$repo" --head "$branch" --state all --json number --jq '.[0].number // empty')"
+  if [[ -z "$pr_number" ]]; then
+    gh pr create --repo "$repo" --base "$base" --head "$branch" \
+      --title "$title" --body "Automated task handoff for $task."
+    pr_number="$(gh pr list --repo "$repo" --head "$branch" --state all --json number --jq '.[0].number // empty')"
+  fi
+  [[ -n "$pr_number" ]] || die "unable to determine pull request for $branch"
+  gh pr checks "$pr_number" --repo "$repo" --watch --fail-fast
+  gh pr merge "$pr_number" --repo "$repo" --merge --subject "$title"
+  for _ in {1..30}; do
+    pr_state="$(gh pr view "$pr_number" --repo "$repo" --json state --jq .state)"
+    [[ "$pr_state" == "MERGED" ]] && break
+    sleep 1
+  done
+  [[ "$pr_state" == "MERGED" ]] || die "pull request $pr_number was not confirmed merged"
+  cleanup "$task"
 }
 
 help() {
@@ -496,6 +575,9 @@ Commands:
                         Use for the first implementation prompt or a follow-up
                         prompt. The task must already exist and be running.
 
+  fork TASK [PROMPT...] Fork the most recent Codex session inside a running
+                        task container.
+
   resume TASK           Resume the last Codex session inside the task.
                         Use when Codex exited and you want to continue its
                         conversation rather than start a new prompt.
@@ -518,6 +600,8 @@ Commands:
   cleanup TASK          Remove a clean task after its PR has been merged.
                         Also deletes the local and remote task branch. This is
                         the normal end of a successfully merged task.
+  finish TASK [TITLE]   Create or find the task PR, wait for CI, merge it, and
+                        clean up the task after the merge is confirmed.
 
   remove TASK           Force-remove the task container, worktree, route, and
                         local branch without requiring a merged PR. Use only
@@ -550,10 +634,12 @@ case "${1:-}" in
   up) shift; up "$@" ;;
   shell) shift; [[ -n "${1:-}" ]] || die "usage: elef-agent shell TASK [COMMAND...]"; task="$1"; shift; exec_in "$task" bash "$@" ;;
   codex) shift; [[ -n "${1:-}" ]] || die "usage: elef-agent codex TASK [PROMPT...]"; task="$1"; shift; exec_in "$task" codex --dangerously-bypass-approvals-and-sandbox -m gpt-5.6-luna "$@" ;;
+  fork) shift; [[ -n "${1:-}" ]] || die "usage: elef-agent fork TASK [PROMPT...]"; task="$1"; shift; exec_in "$task" codex --dangerously-bypass-approvals-and-sandbox -m gpt-5.6-luna fork --last "$@" ;;
   resume) shift; [[ -n "${1:-}" ]] || die "usage: elef-agent resume TASK"; task="$1"; shift; exec_in "$task" codex --dangerously-bypass-approvals-and-sandbox -m gpt-5.6-luna resume --last "$@" ;;
   stop) shift; stop "$@" ;;
   cleanup) shift; cleanup "$@" ;;
+  finish) shift; finish "$@" ;;
   remove) shift; remove "$@" ;;
   build) ensure_image "$(new_image_for)" ;;
-  *) echo "usage: $0 {setup|status|start|up|codex|resume|shell|stop|cleanup|remove|build} TASK [ARGS...]" >&2; exit 2 ;;
+  *) echo "usage: $0 {setup|status|start|up|codex|fork|resume|shell|stop|cleanup|finish|remove|build} TASK [ARGS...]" >&2; exit 2 ;;
 esac

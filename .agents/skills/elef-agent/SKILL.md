@@ -46,6 +46,7 @@ scripts/elef-agent resume TASK
 scripts/elef-agent shell TASK
 scripts/elef-agent shell TASK bin/rails test
 scripts/elef-agent codex TASK
+scripts/elef-agent fork TASK
 ```
 
 Keep browser automation headless. Use the installed Chromium and Chrome
@@ -61,6 +62,17 @@ changes have been reviewed and merged:
 git merge --ff-only codex/TASK
 scripts/elef-agent cleanup TASK
 ```
+
+For a small, already-reviewed task that should be handed off quickly, the
+primary checkout can run:
+
+```sh
+scripts/elef-agent finish TASK [TITLE]
+```
+
+This creates or reuses the task PR, waits for CI, merges it, confirms the merge,
+and then performs the guarded cleanup. It leaves the task intact if CI fails
+or the merge cannot be confirmed.
 
 If the task is abandoned, the user can explicitly discard it with
 `scripts/elef-agent remove TASK`.

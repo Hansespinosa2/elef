@@ -105,6 +105,36 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_select ".presentation-slide", 2
   end
 
+  test "renders margin metadata and slide count in both views" do
+    presentation = Presentation.create!(title: "Margin deck", source: <<~MARKDOWN)
+      ---
+      show-in-margin:
+        section: true
+        subsection: true
+        footnote: true
+        slideCount: true
+      ---
+      :::section{Product strategy}
+      :::subsection{Opportunity}
+      # First
+      :::footnote{Source: customer interviews}
+      ---
+      # Second
+    MARKDOWN
+
+    get presentation_path(presentation)
+    assert_select ".slide-margin-section", text: "Product strategy", count: 2
+    assert_select ".slide-margin-subsection", text: "Opportunity", count: 2
+    assert_select ".slide-margin-footnote", text: /Source: customer interviews/, count: 1
+    assert_select ".slide-margin-footnote-marker", text: "*", count: 1
+    assert_select ".slide-margin-count", text: "1 / 2", count: 1
+    assert_select ".slide-margin-count", text: "2 / 2", count: 1
+
+    get present_presentation_path(presentation)
+    assert_select ".presentation-toolbar [data-presentation-target='counter']", count: 0
+    assert_select ".presentation-slide .slide-margin-section", text: "Product strategy", count: 2
+  end
+
   test "renders representative sample content in the saved preview" do
     Presentations::SampleData.load!
     sample = Presentation.find_by!(sample_id: "code-and-math")
@@ -129,8 +159,10 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     get presentation_path(layouts_and_themes)
 
     assert_select ".slides-theme-dark"
-    assert_select ".slide-intro"
     assert_select ".slide-body"
+    assert_select ".slide-statement"
+    assert_select ".slide-two-column .slide-regions", 2
+    assert_select ".slide-three-column .slide-regions", 5
 
     edge_cases = Presentation.find_by!(sample_id: "slide-edge-cases")
     get presentation_path(edge_cases)
@@ -147,5 +179,16 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
       assert_select "option[value='modern']", text: "Modern"
       assert_select "option[value='technical']", text: "Technical"
     end
+  end
+
+  test "renders positioning warnings without leaking directives" do
+    presentation = Presentation.create!(title: "Warnings", source: "# Slide\n\n:::unknown\n\nContent")
+
+    get presentation_path(presentation)
+
+    assert_response :success
+    assert_select '[aria-label="Markdown warnings"]', text: /directive/
+    assert_select ".slide", text: /Content/
+    refute_includes response.body, ":::unknown"
   end
 end

@@ -1,7 +1,11 @@
 module Presentations
   module Document
-    Slide = Data.define(:id, :index, :markdown, :layout)
-    Parsed = Data.define(:source_name, :presentation_theme, :presentation_typography, :slides)
+    Position = Data.define(:horizontal, :vertical)
+    Block = Data.define(:markdown, :position)
+    Region = Data.define(:blocks)
+    MarginSettings = Data.define(:section, :subsection, :footnote, :slide_count)
+    Slide = Data.define(:id, :index, :markdown, :layout, :blocks, :title, :regions, :section, :subsection, :footnote, :warnings)
+    Parsed = Data.define(:source_name, :presentation_theme, :presentation_typography, :margin_settings, :slides, :warnings)
     SourceLine = Data.define(:start, :end_pos, :text, :ending)
     FrontMatter = Data.define(:lines, :closing_line, :body_start, :eol)
 
@@ -12,13 +16,34 @@ module Presentations
 
       theme = presentation_theme_from_source(source)
       typography = presentation_typography_from_source(source)
+      margin_settings = presentation_margin_settings_from_source(source)
       content = content_without_front_matter(source)
       sections = split_sections(content)
+      context = { section: nil, subsection: nil }
       slides = sections.map.with_index do |section, index|
-        metadata = slide_metadata(section)
-        Slide.new(id: "#{source_name}-#{index + 1}", index: index, markdown: metadata[:content], layout: metadata[:layout])
+        metadata = slide_metadata(section, context)
+        Slide.new(
+          id: "#{source_name}-#{index + 1}",
+          index: index,
+          markdown: metadata[:content],
+          layout: metadata[:layout],
+          blocks: metadata[:blocks],
+          title: metadata[:title],
+          regions: metadata[:regions],
+          section: metadata[:section],
+          subsection: metadata[:subsection],
+          footnote: metadata[:footnote],
+          warnings: metadata[:warnings]
+        )
       end
-      Parsed.new(source_name: source_name, presentation_theme: theme, presentation_typography: typography, slides: slides)
+      Parsed.new(
+        source_name: source_name,
+        presentation_theme: theme,
+        presentation_typography: typography,
+        margin_settings: margin_settings,
+        slides: slides,
+        warnings: slides.flat_map { |slide| slide_warnings(slide) }
+      )
     end
 
     def split_sections(content)
@@ -58,6 +83,26 @@ module Presentations
       front_matter_value(source, "presentationTypography", default: "book") do |value|
         normalize_typography_value(value)
       end
+    end
+
+    def presentation_margin_settings_from_source(source)
+      settings = { section: true, subsection: true, footnote: true, slide_count: true }
+      front_matter = initial_front_matter(source)
+      return MarginSettings.new(**settings) unless front_matter
+
+      in_margin_settings = false
+      front_matter.lines[1...front_matter.closing_line].each do |line|
+        if line.text.match?(/\Ashow-in-margin\s*:\s*\z/)
+          in_margin_settings = true
+        elsif in_margin_settings && (match = line.text.match(/\A\s+([A-Za-z][\w-]*)\s*:\s*(true|false)\s*\z/))
+          key = match[1].tr("-", "_").gsub(/([A-Z])/, '_\\1').downcase.sub(/\A_/, "")
+          settings[key.to_sym] = match[2] == "true" if settings.key?(key.to_sym)
+        elsif line.text.match?(/\A\S/)
+          in_margin_settings = false
+        end
+      end
+
+      MarginSettings.new(**settings)
     end
 
     def with_front_matter_value(source, key, value)
@@ -218,19 +263,255 @@ module Presentations
       end
     end
 
-    def slide_metadata(markdown)
+    def slide_metadata(markdown, context)
       normalized = markdown.gsub(/\r\n?/, "\n")
-      lines = normalized.split("\n", -1)
-      first_content_line = lines.find_index { |line| line.strip.present? }
-      return { layout: "body", directive: nil, content: normalized } unless first_content_line
+      margin = parse_margin_directives(normalized, context)
+      normalized = margin[:content]
+      parsed = parse_blocks(normalized)
+      content = parsed[:blocks].map(&:markdown).join("\n\n")
+      layout = infer_layout(parsed[:blocks])
+      title = column_title(parsed[:blocks], layout)
+      regions = column_regions(parsed[:blocks], layout)
+      {
+        layout: layout,
+        content: content,
+        blocks: parsed[:blocks],
+        title: title,
+        regions: regions,
+        section: margin[:section],
+        subsection: margin[:subsection],
+        footnote: margin[:footnote],
+        warnings: margin[:warnings] + parsed[:warnings]
+      }
+    end
 
-      match = lines[first_content_line].match(/\A\s{0,3}:::slide-layout\{([^}\s]+)\}[ \t]*\z/)
-      return { layout: "body", directive: nil, content: normalized } unless match
+    def parse_margin_directives(markdown, context)
+      lines = markdown.split("\n", -1)
+      content = []
+      warnings = []
+      leading = true
+      fence = nil
+      footnote = nil
 
-      layout = %w[intro body].include?(match[1]) ? match[1] : "body"
-      content_lines = lines[0...first_content_line] + lines[(first_content_line + 1)..]
-      content_lines.delete_at(first_content_line) if content_lines[first_content_line] == ""
-      { layout: layout, directive: lines[first_content_line], content: content_lines.join("\n") }
+      lines.each_with_index do |line, index|
+        incoming_fence = fence_marker(line)
+        if fence
+          content << line
+          fence = toggle_fence(fence, incoming_fence) if incoming_fence
+          next
+        elsif incoming_fence
+          content << line
+          fence = incoming_fence
+          leading = false
+          next
+        end
+
+        directive = margin_directive_from_line(line)
+        if directive
+          if directive[:malformed]
+            warnings << "Malformed #{directive[:type]} margin directive was removed."
+          elsif directive[:type] == "footnote"
+            if lines[(index + 1)..].to_a.all?(&:blank?)
+              footnote = directive[:value]
+            else
+              warnings << "Footnote margin directive must appear at the end of a slide."
+            end
+          elsif leading
+            context[directive[:type].to_sym] = directive[:value]
+          else
+            warnings << "#{directive[:type].capitalize} margin directive must appear at the beginning of a slide."
+          end
+          next
+        end
+
+        leading = false unless line.blank?
+        content << line
+      end
+
+      {
+        content: content.join("\n"),
+        section: context[:section],
+        subsection: context[:subsection],
+        footnote: footnote,
+        warnings: warnings
+      }
+    end
+
+    def margin_directive_from_line(line)
+      match = line.match(/\A\s*:::(section|subsection|footnote)\{/)
+      return unless match
+
+      characters = line[match.end(0)..].to_s.chars
+      value = []
+      depth = 1
+      index = 0
+
+      while index < characters.length
+        character = characters[index]
+        if character == "\\" && characters[index + 1] && %w[{ } \\].include?(characters[index + 1])
+          value << characters[index + 1]
+          index += 2
+          next
+        elsif character == "{"
+          depth += 1
+          value << character
+        elsif character == "}"
+          depth -= 1
+          if depth.zero?
+            return { type: match[1], value: value.join.strip } if characters[(index + 1)..].join.strip.blank?
+
+            return { type: match[1], malformed: true }
+          end
+          value << character
+        else
+          value << character
+        end
+        index += 1
+      end
+
+      { type: match[1], malformed: true }
+    end
+
+    def slide_warnings(slide)
+      slide.warnings
+    end
+
+    def parse_blocks(markdown)
+      raw_blocks = markdown_blocks(markdown)
+      blocks = []
+      warnings = []
+      index = 0
+
+      while index < raw_blocks.length
+        block = raw_blocks[index]
+        position = position_from_block(block)
+        if position
+          closing_index = raw_blocks[(index + 1)..]&.index(":::")
+          if closing_index
+            closing_index += index + 1
+            grouped = raw_blocks[(index + 1)...closing_index]
+            grouped.each { |group| blocks << Block.new(group, position) unless group == "" }
+            index = closing_index + 1
+          elsif raw_blocks[index + 1]
+            blocks << Block.new(raw_blocks[index + 1], position)
+            index += 2
+          else
+            warnings << "Position directive has no following Markdown block."
+            index += 1
+          end
+        elsif block == ":::" || block.start_with?(":::")
+          warnings << "Unknown or malformed presentation directive was removed."
+          index += 1
+        else
+          blocks << Block.new(block, nil)
+          index += 1
+        end
+      end
+
+      { blocks: blocks, warnings: warnings }
+    end
+
+    def markdown_blocks(markdown)
+      blocks = []
+      current = []
+      fence = nil
+
+      markdown.split("\n", -1).each do |line|
+        next_fence = fence_marker(line)
+        fence = toggle_fence(fence, next_fence) if next_fence
+
+        if fence.nil? && line.match?(/\A\s*:::/)
+          blocks << current.join("\n") if current.any?
+          blocks << line.strip
+          current = []
+        elsif line.blank? && fence.nil?
+          blocks << current.join("\n") if current.any?
+          current = []
+        else
+          current << line
+        end
+      end
+      blocks << current.join("\n") if current.any?
+      blocks
+    end
+
+    def position_from_block(block)
+      match = block.match(/\A\s*:::position\{([^}]*)\}\s*\z/)
+      return unless match
+
+      values = match[1].split.map(&:downcase)
+      horizontal = values.find { |value| %w[left center right].include?(value) }
+      vertical = values.find { |value| %w[top middle bottom].include?(value) }
+      return unless horizontal || vertical
+
+      Position.new(horizontal || "left", vertical || "top")
+    end
+
+    def infer_layout(blocks)
+      meaningful = blocks.reject { |block| block.markdown.blank? }
+      return "body" if meaningful.empty?
+
+      if heading_for(meaningful.first.markdown)&.fetch(:level, nil) == 1
+        section_blocks = meaningful.drop(1).select { |block| heading_for(block.markdown) }
+        section_levels = section_blocks.map { |block| heading_for(block.markdown)[:level] }
+        first_section_index = meaningful.drop(1).index { |block| heading_for(block.markdown) }
+        if section_blocks.length.between?(2, 3) && first_section_index == 0 && section_levels.uniq.one? && section_levels.first > 1
+          return section_blocks.length == 2 ? "two-column" : "three-column"
+        end
+      end
+
+      content_blocks = meaningful.drop(1) if heading_for(meaningful.first.markdown)&.fetch(:level, nil) == 1
+      if content_blocks&.length == 1
+        content = content_blocks.first.markdown
+        return "image" if image_block?(content)
+        return "table" if table_block?(content)
+        return "code" if code_block?(content)
+        return "statement" if prose_block?(content)
+      end
+      "body"
+    end
+
+    def column_title(blocks, layout)
+      return unless %w[two-column three-column].include?(layout)
+
+      blocks.first.markdown
+    end
+
+    def column_regions(blocks, layout)
+      return [Region.new(blocks)] unless %w[two-column three-column].include?(layout)
+
+      regions = []
+      blocks.drop(1).each do |block|
+        if heading_for(block.markdown)
+          regions << Region.new([])
+        end
+        next if regions.empty?
+
+        regions[-1].blocks << block
+      end
+      regions
+    end
+
+    def heading_for(markdown)
+      first_line = markdown.lines.first.to_s
+      match = first_line.match(/\A\s{0,3}(#+)\s+(.+?)\s*#*\s*\z/)
+      match && { level: match[1].length, text: match[2].strip }
+    end
+
+    def image_block?(markdown)
+      markdown.match?(/\A\s*!\[[^\]]*\]\([^\)]+\)\s*\z/m)
+    end
+
+    def table_block?(markdown)
+      markdown.lines.length >= 2 && markdown.lines[0].include?("|") && markdown.lines[1].match?(/\A\s*\|?\s*:?-{3,}/)
+    end
+
+    def code_block?(markdown)
+      markdown.match?(/\A\s*(`{3,}|~{3,})[^\n]*\n.*\n\s*\1\s*\z/m)
+    end
+
+    def prose_block?(markdown)
+      !markdown.match?(/\A\s*(?:[-*+] |\d+[.)] |> |!\[|\||`{3,}|~{3,})/)
     end
   end
 end
