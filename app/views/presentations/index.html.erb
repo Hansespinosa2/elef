@@ -11,7 +11,9 @@
   </div>
 </section>
 
-<section class="library-list grid gap-4" aria-label="Saved presentations">
+<%= render "lineage_graph", presentations: @presentations %>
+
+<section class="library-list mt-8 grid gap-4" aria-label="Saved presentations">
   <% if @presentations.any? %>
     <% @presentations.each do |presentation| %>
       <article class="library-card flex items-center justify-between rounded-2xl border border-[#ddd5c8] bg-[#fffdf8] p-5 max-[920px]:flex-col max-[920px]:items-stretch">
@@ -49,5 +51,3 @@
     </div>
   <% end %>
 </section>
-
-<%= render "lineage_graph", presentations: @presentations %>

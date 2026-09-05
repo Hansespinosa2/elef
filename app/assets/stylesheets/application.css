@@ -148,55 +148,85 @@
 .math-error { color: var(--presentation-danger); font-family: "SFMono-Regular", Consolas, monospace; }
 
 .lineage-graph-canvas {
-  background: #17171b;
-  border: 1px solid #39363e;
+  background: #f7f5f0;
+  border: 1px solid #e4ded3;
   border-radius: 1rem;
-  height: 42rem;
+  height: min(740px, 78vh);
+  min-height: 440px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   position: relative;
 }
-.lineage-timeline-scroll { height: 100%; overflow: auto; }
-.lineage-timeline-zoom { min-height: 100%; position: relative; }
+.lineage-timeline-scroll { flex: 1; min-height: 0; overflow: auto; }
+.lineage-timeline-zoom { position: relative; overflow: hidden; }
 .lineage-timeline-content { position: relative; transform-origin: 0 0; }
 .lineage-edges,
 .lineage-nodes,
 .lineage-date-axis { height: 100%; inset: 0; position: absolute; width: 100%; }
-.lineage-edges { color: #a995ff; overflow: visible; pointer-events: none; }
-.lineage-edge { fill: none; marker-end: url("#lineage-arrow"); stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2.5; }
-.lineage-edge.inspiration { stroke: #e39a51; stroke-dasharray: 5 6; }
-.lineage-date-axis { border-bottom: 1px solid #514c5b; height: 3rem; pointer-events: none; }
-.lineage-date-tick { color: #c9c1d7; font-size: 0.75rem; font-weight: 700; position: absolute; top: 0.8rem; transform: translateX(-50%); white-space: nowrap; }
-.lineage-date-tick::after { background: #514c5b; content: ""; height: 0.5rem; left: 50%; position: absolute; top: 1.45rem; width: 1px; }
+.lineage-edges { color: #7964bd; overflow: visible; pointer-events: none; }
+.lineage-edge { fill: none; stroke: currentColor; stroke-linecap: butt; stroke-linejoin: round; stroke-width: 2; }
+.lineage-edge.inspiration { stroke: #b78543; stroke-dasharray: 6 4; }
+.lineage-date-axis { pointer-events: none; }
+.lineage-date-tick { color: #746b60; font-size: 12px; font-weight: 700; position: absolute; top: 0; height: 100%; padding: 20px; border-left: 1px solid #e4ded3; white-space: nowrap; }
+.lineage-date-tick:nth-child(even) { background: #fff8; }
+.lineage-date-tick::after { display: none; }
 .lineage-nodes { pointer-events: none; }
 .lineage-node {
   aspect-ratio: 16 / 9;
   background: #fffdf8;
-  border: 2px solid #fffdf8;
-  border-radius: 0.75rem;
-  box-shadow: 0 7px 22px rgba(0, 0, 0, 0.28);
+  border: 0;
+  border-radius: 0.4rem;
+  box-shadow: 0 0 0 1px #d9d2c6, 0 4px 10px #362f2210;
   padding: 0;
   position: absolute;
   pointer-events: auto;
-  width: 11rem;
+  width: 208px;
+  height: 117px;
   z-index: 2;
 }
 .lineage-node:hover,
 .lineage-node:focus-visible { border-color: #b9a7ff; box-shadow: 0 0 0 4px rgba(109, 74, 255, 0.3), 0 10px 28px rgba(0, 0, 0, 0.35); }
 .lineage-node { cursor: pointer; }
-.lineage-slide-thumb { aspect-ratio: 16 / 9; border: 0; border-radius: 0.6rem; padding: 0; }
+.lineage-slide-thumb { position: absolute; inset: 0; overflow: hidden; aspect-ratio: 16 / 9; border: 0; border-radius: inherit; padding: 0; pointer-events: none; }
 .lineage-slide-thumb::after { display: none; }
-.lineage-slide-preview { height: 562.5px; transform: scale(0.176); width: 1000px; }
+.lineage-slide-preview { position: absolute; top: 0; left: 0; display: block; height: 562.5px; transform: scale(0.208); transform-origin: top left; width: 1000px; }
 .lineage-slide-preview .slide { height: 562.5px; width: 1000px; }
 .lineage-hover-card {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 16px;
+  background: #24211d;
+  color: #fffdf8;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px #0003;
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  font-size: 12px;
+  z-index: 10;
   left: 50%;
   min-width: 14rem;
   top: calc(100% + 0.75rem);
   transform: translate(-50%, -0.35rem);
 }
 .lineage-node:hover .lineage-hover-card,
-.lineage-node:focus-visible .lineage-hover-card { transform: translate(-50%, 0); }
-.lineage-graph-controls { bottom: 1rem; display: flex; gap: 0.35rem; position: absolute; right: 1rem; z-index: 4; }
-.lineage-graph-controls button { background: #29272f; border: 1px solid #4c4758; border-radius: 0.5rem; color: #fffdf8; cursor: pointer; font-weight: 700; min-width: 2.25rem; padding: 0.45rem 0.65rem; }
-.lineage-graph-controls button:hover { background: #6d4aff; border-color: #6d4aff; }
+.lineage-node:focus-visible .lineage-hover-card { transform: translate(-50%, 0); visibility: visible; opacity: 1; }
+.lineage-node:hover, .lineage-node:focus-visible { z-index: 10; }
+.lineage-navigation { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 12px; background: #fffdf8; border-bottom: 1px solid #e4ded3; z-index: 20; }
+.lineage-navigation [aria-live] { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.lineage-search { position: relative; flex: 1; min-width: 180px; }
+.lineage-navigation input, .lineage-navigation select { border: 1px solid #ddd5c8; background: white; border-radius: 8px; padding: 8px 12px; font-size: 13px; }
+.lineage-navigation input { width: 100%; }
+.lineage-search-results { position: absolute; top: calc(100% + 6px); left: 0; right: 0; max-height: 280px; overflow: auto; background: #fffdf8; border: 1px solid #ddd5c8; border-radius: 8px; box-shadow: 0 8px 24px #0002; }
+.lineage-search-results button { display: block; width: 100%; padding: 12px; text-align: left; cursor: pointer; font-size: 13px; }
+.lineage-search-results button:hover, .lineage-search-results button:focus-visible { background: #eee8fc; }
+.lineage-node.is-located { outline: 3px solid #6d4aff; outline-offset: 4px; }
+.lineage-graph-controls { display: flex; gap: 4px; }
+.lineage-graph-controls button { background: #fffdf8; border: 1px solid #ddd5c8; border-radius: 6px; color: #514939; cursor: pointer; font-weight: 600; min-width: 32px; padding: 7px 10px; font-size: 13px; }
+.lineage-graph-controls button:hover { background: #eee8fc; }
 .lineage-legend { align-items: center; display: flex; gap: 1rem; }
 .lineage-key-line { border-top: 2px solid #6d4aff; display: inline-block; margin-right: 0.35rem; vertical-align: middle; width: 1.4rem; }
 .lineage-key-dotted { border-top-style: dotted; border-top-color: #e39a51; }
