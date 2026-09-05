@@ -138,6 +138,9 @@ class PresentationsTest < ApplicationSystemTestCase
     source.send_keys("beq")
     assert_selector ".snippet-palette", visible: true
     assert_text ":beq"
+    palette_position = page.evaluate_script("(() => { const e = document.querySelector('[data-snippet-palette-target=editor]').getBoundingClientRect(); const p = document.querySelector('[data-snippet-palette-target=palette]').getBoundingClientRect(); return { editorTop: e.top, editorBottom: e.bottom, paletteTop: p.top }; })()")
+    assert_operator palette_position["paletteTop"], :>, palette_position["editorTop"]
+    assert_operator palette_position["paletteTop"], :<, palette_position["editorBottom"]
 
     source.send_keys(:enter)
     assert_equal "# Math\n\n$$\nequation\n$$", source.value
