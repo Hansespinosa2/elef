@@ -145,6 +145,61 @@ body.elef-app {
   max-width: none;
   transform: scale(var(--slide-scale, 1));
   transform-origin: top left;
+  position: relative;
+  padding: 5rem;
+}
+
+.slide-content {
+  display: contents;
+}
+
+.slide-margin {
+  color: var(--presentation-muted);
+  display: flex;
+  font-size: 1rem;
+  gap: 1rem;
+  left: 5rem;
+  line-height: 1.2;
+  max-width: calc(100% - 10rem);
+  overflow: hidden;
+  position: absolute;
+  right: 5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.slide-margin-top {
+  justify-content: space-between;
+  top: 2rem;
+}
+
+.slide-margin-bottom {
+  bottom: 2rem;
+  justify-content: space-between;
+}
+
+.slide-margin-footnote {
+  align-items: flex-start;
+  display: flex;
+  font-size: 0.85em;
+  font-style: italic;
+  gap: 0.35em;
+  margin-left: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.slide-margin .slide-margin-footnote p {
+  font-size: inherit;
+  margin: 0;
+}
+
+.slide-margin-footnote-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .slide-block,
@@ -247,7 +302,7 @@ body.elef-app {
 
 .slide-statement {
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   text-align: center;
 }
 

@@ -3,8 +3,9 @@ module Presentations
     Position = Data.define(:horizontal, :vertical)
     Block = Data.define(:markdown, :position)
     Region = Data.define(:blocks)
-    Slide = Data.define(:id, :index, :markdown, :layout, :blocks, :title, :regions, :warnings)
-    Parsed = Data.define(:source_name, :presentation_theme, :presentation_typography, :slides, :warnings)
+    MarginSettings = Data.define(:section, :subsection, :footnote, :slide_count)
+    Slide = Data.define(:id, :index, :markdown, :layout, :blocks, :title, :regions, :section, :subsection, :footnote, :warnings)
+    Parsed = Data.define(:source_name, :presentation_theme, :presentation_typography, :margin_settings, :slides, :warnings)
     SourceLine = Data.define(:start, :end_pos, :text, :ending)
     FrontMatter = Data.define(:lines, :closing_line, :body_start, :eol)
 
@@ -15,10 +16,12 @@ module Presentations
 
       theme = presentation_theme_from_source(source)
       typography = presentation_typography_from_source(source)
+      margin_settings = presentation_margin_settings_from_source(source)
       content = content_without_front_matter(source)
       sections = split_sections(content)
+      context = { section: nil, subsection: nil }
       slides = sections.map.with_index do |section, index|
-        metadata = slide_metadata(section)
+        metadata = slide_metadata(section, context)
         Slide.new(
           id: "#{source_name}-#{index + 1}",
           index: index,
@@ -27,6 +30,9 @@ module Presentations
           blocks: metadata[:blocks],
           title: metadata[:title],
           regions: metadata[:regions],
+          section: metadata[:section],
+          subsection: metadata[:subsection],
+          footnote: metadata[:footnote],
           warnings: metadata[:warnings]
         )
       end
@@ -34,6 +40,7 @@ module Presentations
         source_name: source_name,
         presentation_theme: theme,
         presentation_typography: typography,
+        margin_settings: margin_settings,
         slides: slides,
         warnings: slides.flat_map { |slide| slide_warnings(slide) }
       )
@@ -76,6 +83,26 @@ module Presentations
       front_matter_value(source, "presentationTypography", default: "book") do |value|
         normalize_typography_value(value)
       end
+    end
+
+    def presentation_margin_settings_from_source(source)
+      settings = { section: true, subsection: true, footnote: true, slide_count: true }
+      front_matter = initial_front_matter(source)
+      return MarginSettings.new(**settings) unless front_matter
+
+      in_margin_settings = false
+      front_matter.lines[1...front_matter.closing_line].each do |line|
+        if line.text.match?(/\Ashow-in-margin\s*:\s*\z/)
+          in_margin_settings = true
+        elsif in_margin_settings && (match = line.text.match(/\A\s+([A-Za-z][\w-]*)\s*:\s*(true|false)\s*\z/))
+          key = match[1].tr("-", "_").gsub(/([A-Z])/, '_\\1').downcase.sub(/\A_/, "")
+          settings[key.to_sym] = match[2] == "true" if settings.key?(key.to_sym)
+        elsif line.text.match?(/\A\S/)
+          in_margin_settings = false
+        end
+      end
+
+      MarginSettings.new(**settings)
     end
 
     def with_front_matter_value(source, key, value)
@@ -229,8 +256,10 @@ module Presentations
       end
     end
 
-    def slide_metadata(markdown)
+    def slide_metadata(markdown, context)
       normalized = markdown.gsub(/\r\n?/, "\n")
+      margin = parse_margin_directives(normalized, context)
+      normalized = margin[:content]
       parsed = parse_blocks(normalized)
       content = parsed[:blocks].map(&:markdown).join("\n\n")
       layout = infer_layout(parsed[:blocks])
@@ -242,8 +271,98 @@ module Presentations
         blocks: parsed[:blocks],
         title: title,
         regions: regions,
-        warnings: parsed[:warnings]
+        section: margin[:section],
+        subsection: margin[:subsection],
+        footnote: margin[:footnote],
+        warnings: margin[:warnings] + parsed[:warnings]
       }
+    end
+
+    def parse_margin_directives(markdown, context)
+      lines = markdown.split("\n", -1)
+      content = []
+      warnings = []
+      leading = true
+      fence = nil
+      footnote = nil
+
+      lines.each_with_index do |line, index|
+        incoming_fence = fence_marker(line)
+        if fence
+          content << line
+          fence = toggle_fence(fence, incoming_fence) if incoming_fence
+          next
+        elsif incoming_fence
+          content << line
+          fence = incoming_fence
+          leading = false
+          next
+        end
+
+        directive = margin_directive_from_line(line)
+        if directive
+          if directive[:malformed]
+            warnings << "Malformed #{directive[:type]} margin directive was removed."
+          elsif directive[:type] == "footnote"
+            if lines[(index + 1)..].to_a.all?(&:blank?)
+              footnote = directive[:value]
+            else
+              warnings << "Footnote margin directive must appear at the end of a slide."
+            end
+          elsif leading
+            context[directive[:type].to_sym] = directive[:value]
+          else
+            warnings << "#{directive[:type].capitalize} margin directive must appear at the beginning of a slide."
+          end
+          next
+        end
+
+        leading = false unless line.blank?
+        content << line
+      end
+
+      {
+        content: content.join("\n"),
+        section: context[:section],
+        subsection: context[:subsection],
+        footnote: footnote,
+        warnings: warnings
+      }
+    end
+
+    def margin_directive_from_line(line)
+      match = line.match(/\A\s*:::(section|subsection|footnote)\{/)
+      return unless match
+
+      characters = line[match.end(0)..].to_s.chars
+      value = []
+      depth = 1
+      index = 0
+
+      while index < characters.length
+        character = characters[index]
+        if character == "\\" && characters[index + 1] && %w[{ } \\].include?(characters[index + 1])
+          value << characters[index + 1]
+          index += 2
+          next
+        elsif character == "{"
+          depth += 1
+          value << character
+        elsif character == "}"
+          depth -= 1
+          if depth.zero?
+            return { type: match[1], value: value.join.strip } if characters[(index + 1)..].join.strip.blank?
+
+            return { type: match[1], malformed: true }
+          end
+          value << character
+        else
+          value << character
+        end
+        index += 1
+      end
+
+      { type: match[1], malformed: true }
     end
 
     def slide_warnings(slide)
