@@ -106,7 +106,7 @@ export default class extends Controller {
   }
 
   positionPalette() {
-    if (this.paletteTarget.hidden || !this.query) return
+    if (this.paletteTarget.hidden) return
 
     const editor = this.editorTarget
     const editorRect = editor.getBoundingClientRect()

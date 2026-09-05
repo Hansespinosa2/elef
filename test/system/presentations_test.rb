@@ -147,6 +147,27 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_equal "equation", page.evaluate_script("(() => { const e = document.querySelector('[data-snippet-palette-target=editor]'); return e.value.slice(e.selectionStart, e.selectionEnd) })()")
   end
 
+  test "positions the palette when only the colon trigger is typed" do
+    Snippet.create!(name: "Equation", trigger: "beq", category: "LaTeX", body: "x")
+    visit new_presentation_path
+    source = find_field("Markdown source")
+    source.fill_in with: "# Math\n\n"
+    source.send_keys(":")
+    assert_selector ".snippet-option", text: ":beq"
+    bounds = page.evaluate_script(<<~JS)
+      (() => {
+        const editor = document.querySelector('[data-snippet-palette-target="editor"]');
+        const palette = document.querySelector('.snippet-palette');
+        const e = editor.getBoundingClientRect(), p = palette.getBoundingClientRect();
+        return { positioned: palette.style.top !== '', top: p.top, bottom: p.bottom, editorTop: e.top, editorBottom: e.bottom };
+      })()
+    JS
+    assert bounds["positioned"], "The colon popup must receive caret coordinates before a query is typed"
+    assert_operator bounds["top"], :>, bounds["editorTop"]
+    assert_operator bounds["bottom"], :<, bounds["editorBottom"]
+    save_screenshot("tmp/colon-palette.png")
+  end
+
   test "renders untrusted snippet metadata as text" do
     Snippet.create!(name: '<img src=x onerror="alert(1)">', trigger: "unsafe", description: "Untrusted", category: "Markdown", body: "text")
     presentation = Presentation.create!(title: "Safe snippets", source: "# Safe\n\n:")
