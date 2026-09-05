@@ -1,0 +1,7 @@
+<section class="slide slide-<%= slide.layout %>" aria-label="Slide <%= slide.index + 1 %>">
+  <% if slide.markdown.blank? %>
+    <p class="empty-slide">Empty slide</p>
+  <% else %>
+    <%= render_markdown(slide.markdown) %>
+  <% end %>
+</section>

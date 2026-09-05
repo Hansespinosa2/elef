@@ -1,0 +1,5 @@
+<div class="presentation-surface slides slides-theme-<%= presentation.presentation_theme %>">
+  <% presentation.slides.each do |slide| %>
+    <%= render "slide", slide: slide %>
+  <% end %>
+</div>
