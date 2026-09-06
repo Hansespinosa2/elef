@@ -8,6 +8,7 @@ export default class extends Controller {
     this.baseline = this.snapshot()
     this.dirty = false
     this.submitting = false
+    this.unconfirmedSave = false
     this.beforeUnload = (event) => {
       if (!this.dirty || this.submitting) return
       event.preventDefault()
@@ -25,8 +26,15 @@ export default class extends Controller {
   }
 
   markDirty() {
-    this.dirty = this.snapshot() !== this.baseline
+    this.dirty = this.unconfirmedSave || this.snapshot() !== this.baseline
     this.updateState()
+  }
+
+  markSaving() {
+    // Even reverting to the baseline needs another save if an older request
+    // can still overwrite it. A failed response also leaves that write unsure.
+    this.unconfirmedSave = true
+    this.markDirty()
   }
 
   allowSubmit() {
@@ -34,6 +42,7 @@ export default class extends Controller {
   }
 
   markSaved(event) {
+    this.unconfirmedSave = false
     this.baseline = event.detail.snapshot
     this.dirty = this.snapshot() !== this.baseline
     this.submitting = false

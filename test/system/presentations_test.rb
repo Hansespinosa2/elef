@@ -45,6 +45,9 @@ class PresentationsTest < ApplicationSystemTestCase
     hold_autosaves
     fill_in "Markdown source", with: "# First edit"
     assert_selector '[data-autosave-target="status"]', text: "Saving…"
+    fill_in "Markdown source", with: "# Original"
+    dismiss_confirm { click_on "Library" }
+    assert_field "Markdown source", with: "# Original"
     fill_in "Markdown source", with: "# Latest edit"
     page.execute_script("window.autosaveRequests[0].release()")
     assert_selector '[data-autosave-target="status"]', text: "Saving…"
@@ -157,14 +160,14 @@ class PresentationsTest < ApplicationSystemTestCase
       assert_selector '[data-lineage-graph-target="scaleLabel"]', text: "85%"
       find('button[aria-label="Reset graph view"]').click
       assert_timeline_geometry
-      save_screenshot("tmp/library-#{width}.png")
+      save_screenshot("tmp/screenshots/library/viewport-#{width}.png")
     end
 
     search = find('input[aria-label="Find a presentation"]')
     search.set("Quarterly Review June")
     search.send_keys(:arrow_down)
     assert_equal "Quarterly Review June · 2026-01-08", page.evaluate_script("document.activeElement.textContent")
-    save_screenshot("tmp/library-search-mobile.png")
+    save_screenshot("tmp/screenshots/library/search-mobile.png")
     send_keys :escape
     assert_selector '.lineage-search-results', visible: :hidden
     assert_equal "Find a presentation", page.evaluate_script("document.activeElement.getAttribute('aria-label')")
@@ -173,16 +176,19 @@ class PresentationsTest < ApplicationSystemTestCase
     search.set("Quarterly Review June")
     search.send_keys(:arrow_down, :enter)
     assert_selector ".lineage-node.is-located"
-    save_screenshot("tmp/library-focus-mobile.png")
+    page.execute_script("document.querySelector('.lineage-node.is-located').scrollIntoView({block: 'center'})")
+    save_screenshot("tmp/screenshots/library/focus-mobile.png")
 
     within("article", match: :first) do
       find('summary', text: "Rename").click
       assert_selector '.library-rename input[type="text"]', visible: true
-      save_screenshot("tmp/library-rename-mobile.png")
+      page.execute_script("document.querySelector('.rename-menu[open]').scrollIntoView({block: 'center'})")
+      save_screenshot("tmp/screenshots/library/rename-mobile.png")
       find('summary', text: "Rename").click
       find('summary', text: "Fork").click
       assert_selector 'button', text: "As inspiration", visible: true
-      save_screenshot("tmp/library-fork-mobile.png")
+      page.execute_script("document.querySelector('.fork-menu[open]').scrollIntoView({block: 'center'})")
+      save_screenshot("tmp/screenshots/library/fork-mobile.png")
     end
     assert_operator page.evaluate_script("document.documentElement.scrollWidth"), :<=,
       page.evaluate_script("window.innerWidth")
@@ -195,7 +201,7 @@ class PresentationsTest < ApplicationSystemTestCase
 
     visit presentations_path
     assert_text "No presentations yet"
-    save_screenshot("tmp/library-empty.png")
+    save_screenshot("tmp/screenshots/library/empty.png")
     click_on "Load sample presentations"
 
     assert_text "Sample presentations loaded."
@@ -278,13 +284,16 @@ class PresentationsTest < ApplicationSystemTestCase
     child.save!
 
     visit presentation_path(parent)
+    assert_selector '.slides .slide', count: 2
     preview_ratio = page.evaluate_script("(function(){ const r = document.querySelector('.slides .slide').getBoundingClientRect(); return r.width / r.height })()")
 
     visit present_presentation_path(parent)
-    presentation_ratio = page.evaluate_script("(function(){ const r = document.querySelector('.presentation-slide .slide').getBoundingClientRect(); return r.width / r.height })()")
+    assert_selector '.presentation-slide.slide', visible: true
+    presentation_ratio = page.evaluate_script("(function(){ const r = document.querySelector('.presentation-slide.slide').getBoundingClientRect(); return r.width / r.height })()")
 
     visit presentations_path
-    lineage_ratio = page.evaluate_script("(function(){ const r = document.querySelector('[data-lineage-graph-id=\\\"#{parent.id}\\\"] .slide').getBoundingClientRect(); return r.width / r.height })()")
+    assert_selector ".lineage-node[data-lineage-graph-id='#{parent.id}'] .slide"
+    lineage_ratio = page.evaluate_script("(function(){ const r = document.querySelector(\"[data-lineage-graph-id='#{parent.id}'] .slide\").getBoundingClientRect(); return r.width / r.height })()")
 
     assert_in_delta 16.0 / 9.0, preview_ratio, 0.02
     assert_in_delta preview_ratio, presentation_ratio, 0.02

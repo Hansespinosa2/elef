@@ -41,6 +41,7 @@ export default class extends Controller {
     if (this.saving || !this.active) return
     const snapshot = this.snapshot()
     this.saving = true
+    this.element.dispatchEvent(new CustomEvent("autosave:saving"))
     this.setStatus("Saving…")
 
     try {

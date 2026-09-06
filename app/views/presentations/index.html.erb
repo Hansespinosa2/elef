@@ -32,7 +32,7 @@
             <details class="rename-menu relative">
               <summary>Rename</summary>
               <%= form_with scope: :presentation, url: rename_presentation_path(presentation), method: :patch, class: "library-rename inline-flex items-center gap-2" do |form| %>
-                <%= form.text_field :title, value: presentation.title, aria: { label: "Rename #{presentation.title}" }, class: "w-40 rounded-lg border border-[#ddd5c8] bg-white px-2 py-1" %>
+                <%= form.text_field :title, id: dom_id(presentation, :rename_title), value: presentation.title, aria: { label: "Rename #{presentation.title}" }, class: "w-40 rounded-lg border border-[#ddd5c8] bg-white px-2 py-1" %>
                 <%= form.submit "Save title", class: "cursor-pointer rounded-full border border-[#ddd5c8] bg-[#fffdf8] px-3 py-1 font-bold" %>
               <% end %>
             </details>

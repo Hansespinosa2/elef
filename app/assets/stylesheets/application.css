@@ -613,7 +613,6 @@ body.elef-app {
   .lineage-panel { padding: 1rem; }
   .lineage-search { flex-basis: 100%; min-width: 0; }
   .lineage-navigation select { width: 100%; }
-  .lineage-graph-controls { justify-content: space-between; width: 100%; }
-  .lineage-graph-controls button { flex: 1; }
+  .lineage-graph-controls { display: grid; grid-template-columns: 40px minmax(3.5rem, 1fr) 40px auto; width: 100%; }
   .lineage-graph-canvas { min-height: 460px; }
 }
