@@ -6,9 +6,12 @@ Rails.application.routes.draw do
   resources :presentations do
     collection do
       post :load_samples
+      post :start
     end
     member do
       get :present
+      patch :rename
+      post :fork
     end
   end
 

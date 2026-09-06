@@ -309,4 +309,48 @@ class PresentationTest < ActiveSupport::TestCase
       Presentation.find_by!(sample_id: "code-and-math").source
     ), "$not_math$"
   end
+
+  test "lineage seed creates three five-presentation trees" do
+    records = Presentations::LineageSampleData.load!
+
+    assert_equal 15, records.length
+    assert_equal 6, records.count(&:continuation?)
+    assert_equal 6, records.count(&:inspiration?)
+    assert_equal %w[lineage-product-root lineage-research-root lineage-root],
+      records.select { |record| record.parent.nil? }.map(&:sample_id).sort
+    assert_equal records.find { |record| record.sample_id == "lineage-root" }.source,
+      records.find { |record| record.sample_id == "lineage-continuation-june" }.fork_source
+  end
+
+  test "presentation creation always has a timestamp" do
+    presentation = Presentation.new(title: "Timestamped", source: "# Timestamped", created_at: nil)
+
+    presentation.save!
+
+    assert_not_nil presentation.created_at
+  end
+
+  test "deleting a parent leaves the fork detached and intact" do
+    parent = Presentation.create!(title: "Parent", source: "# Parent")
+    child = parent.fork_as("continuation")
+    child.save!
+
+    parent.destroy!
+
+    assert_nil child.reload.parent
+    assert_equal "# Parent", child.source
+    assert_equal "Parent", child.fork_parent_title
+  end
+
+  test "forks a maximum length title while preserving the original snapshot" do
+    parent = Presentation.create!(title: "x" * 120, source: "# Original")
+    Presentation::FORK_TYPES.each do |type|
+      child = parent.fork_as(type)
+      assert child.save, child.errors.full_messages.to_sentence
+      assert_operator child.title.length, :<=, 120
+      assert child.title.end_with?(" (#{type.capitalize})")
+      assert_equal parent.title, child.fork_parent_title
+      assert_equal parent.source, child.fork_source
+    end
+  end
 end
