@@ -1,6 +1,103 @@
 require "application_system_test_case"
 
 class PresentationsTest < ApplicationSystemTestCase
+  def hold_autosaves
+    page.execute_script(<<~JAVASCRIPT)
+      window.autosaveRequests = [];
+      const originalFetch = window.fetch.bind(window);
+      window.fetch = (url, options) => {
+        if (options?.method !== 'PATCH') return originalFetch(url, options);
+        return new Promise((resolve, reject) => {
+          window.autosaveRequests.push({
+            release: () => originalFetch(url, options).then(resolve, reject)
+          });
+        });
+      };
+    JAVASCRIPT
+  end
+
+  test "library renames forks and deletes a presentation through its controls" do
+    parent = Presentation.create!(title: "Workflow parent", source: "# Keep this source")
+    visit presentations_path
+    within("#presentation_#{parent.id}") do
+      find("summary", text: "Rename").click
+      find('input[aria-label="Rename Workflow parent"]').set("Renamed parent")
+      click_on "Save title"
+    end
+    assert_text "Presentation renamed."
+    within("article", text: "Renamed parent") do
+      find("summary", text: "Fork").click
+      click_on "As inspiration"
+    end
+    assert_field "Title", with: "Renamed parent (Inspiration)"
+    click_on "Library"
+    within("#presentation_#{parent.id}") do
+      accept_confirm { click_on "Delete" }
+    end
+    assert_text "Presentation deleted."
+    assert_text "Parent no longer available"
+    assert_equal "# Keep this source", Presentation.find_by!(parent_id: nil, fork_type: "inspiration").source
+  end
+
+  test "autosave persists newer edits after an outstanding request and keeps them dirty until saved" do
+    presentation = Presentation.create!(title: "Autosave order", source: "# Original")
+    visit edit_presentation_path(presentation)
+    hold_autosaves
+    fill_in "Markdown source", with: "# First edit"
+    assert_selector '[data-autosave-target="status"]', text: "Saving…"
+    fill_in "Markdown source", with: "# Latest edit"
+    page.execute_script("window.autosaveRequests[0].release()")
+    assert_selector '[data-autosave-target="status"]', text: "Saving…"
+    dismiss_confirm { click_on "Library" }
+    assert_field "Markdown source", with: "# Latest edit"
+    assert_includes presentation.reload.source, "# First edit"
+    page.execute_script("window.autosaveRequests[1].release()")
+    assert_selector '[data-autosave-target="status"]', exact_text: "Saved"
+    assert_includes presentation.reload.source, "# Latest edit"
+    click_on "Library"
+    assert_current_path presentations_path
+  end
+
+  test "explicit save waits for autosave and refreshes the latest preview" do
+    presentation = Presentation.create!(title: "Manual save order", source: "# Original")
+    visit edit_presentation_path(presentation)
+    hold_autosaves
+    fill_in "Markdown source", with: "# Earlier edit"
+    assert_selector '[data-autosave-target="status"]', text: "Saving…"
+    fill_in "Markdown source", with: "# Manual latest"
+    click_on "Save presentation"
+    page.execute_script("window.autosaveRequests[0].release()")
+    assert_text "Presentation saved."
+    assert_selector '.preview-pane .slide', text: "Manual latest"
+    assert_includes presentation.reload.source, "# Manual latest"
+  end
+
+  test "failed autosave can be retried and validation errors preserve saved source" do
+    presentation = Presentation.create!(title: "Retry deck", source: "# Original")
+    visit edit_presentation_path(presentation)
+    page.execute_script(<<~JAVASCRIPT)
+      const originalFetch = window.fetch.bind(window);
+      window.fetch = (url, options) => {
+        if (options?.method !== 'PATCH') return originalFetch(url, options);
+        window.fetch = originalFetch;
+        return Promise.reject(new Error('Simulated connection failure'));
+      };
+    JAVASCRIPT
+    fill_in "Markdown source", with: "# Recovered"
+    assert_selector '[data-autosave-target="status"]', text: "Save failed"
+    assert_equal "# Original", presentation.reload.source
+    click_on "Retry save"
+    assert_selector '[data-autosave-target="status"]', exact_text: "Saved"
+    assert_includes presentation.reload.source, "# Recovered"
+
+    fill_in "Title", with: "x" * 121
+    assert_selector '[data-autosave-target="status"]', text: "Save failed"
+    assert_equal "Retry deck", presentation.reload.title
+    fill_in "Title", with: "Valid title"
+    assert_selector '[data-autosave-target="status"]', exact_text: "Saved"
+    assert_equal "Valid title", presentation.reload.title
+  end
+
   def assert_timeline_geometry
     geometry = page.evaluate_script(<<~JAVASCRIPT)
       (() => {
@@ -44,11 +141,61 @@ class PresentationsTest < ApplicationSystemTestCase
     end
   end
 
+  test "library controls stay usable on narrow screens and search supports keyboard navigation" do
+    Presentation.delete_all
+    Presentations::LineageSampleData.load!
+    visit presentations_path
+    assert_selector ".lineage-node", count: 15
+
+    [1400, 780, 390].each do |width|
+      page.driver.browser.manage.window.resize_to(width, 1000)
+      assert_operator page.evaluate_script("document.documentElement.scrollWidth"), :<=,
+        page.evaluate_script("window.innerWidth")
+      find('.lineage-navigation').scroll_to(:center)
+      assert_selector 'button[aria-label="Zoom out"]', visible: true
+      find('button[aria-label="Zoom out"]').click
+      assert_selector '[data-lineage-graph-target="scaleLabel"]', text: "85%"
+      find('button[aria-label="Reset graph view"]').click
+      assert_timeline_geometry
+      save_screenshot("tmp/library-#{width}.png")
+    end
+
+    search = find('input[aria-label="Find a presentation"]')
+    search.set("Quarterly Review June")
+    search.send_keys(:arrow_down)
+    assert_equal "Quarterly Review June · 2026-01-08", page.evaluate_script("document.activeElement.textContent")
+    save_screenshot("tmp/library-search-mobile.png")
+    send_keys :escape
+    assert_selector '.lineage-search-results', visible: :hidden
+    assert_equal "Find a presentation", page.evaluate_script("document.activeElement.getAttribute('aria-label')")
+    search.set("No such presentation")
+    assert_text "No matching presentations."
+    search.set("Quarterly Review June")
+    search.send_keys(:arrow_down, :enter)
+    assert_selector ".lineage-node.is-located"
+    save_screenshot("tmp/library-focus-mobile.png")
+
+    within("article", match: :first) do
+      find('summary', text: "Rename").click
+      assert_selector '.library-rename input[type="text"]', visible: true
+      save_screenshot("tmp/library-rename-mobile.png")
+      find('summary', text: "Rename").click
+      find('summary', text: "Fork").click
+      assert_selector 'button', text: "As inspiration", visible: true
+      save_screenshot("tmp/library-fork-mobile.png")
+    end
+    assert_operator page.evaluate_script("document.documentElement.scrollWidth"), :<=,
+      page.evaluate_script("window.innerWidth")
+  ensure
+    page.driver.browser.manage.window.resize_to(1400, 1000)
+  end
+
   test "loads sample presentations from the library" do
     Presentation.delete_all
 
     visit presentations_path
     assert_text "No presentations yet"
+    save_screenshot("tmp/library-empty.png")
     click_on "Load sample presentations"
 
     assert_text "Sample presentations loaded."
@@ -265,6 +412,7 @@ class PresentationsTest < ApplicationSystemTestCase
     presentation = Presentation.create!(title: "Dirty Deck", source: "# Saved")
 
     visit edit_presentation_path(presentation)
+    hold_autosaves
     fill_in "Markdown source", with: "# Unsaved"
 
     dismiss_confirm do

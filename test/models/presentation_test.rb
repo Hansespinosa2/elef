@@ -341,4 +341,16 @@ class PresentationTest < ActiveSupport::TestCase
     assert_equal "# Parent", child.source
     assert_equal "Parent", child.fork_parent_title
   end
+
+  test "forks a maximum length title while preserving the original snapshot" do
+    parent = Presentation.create!(title: "x" * 120, source: "# Original")
+    Presentation::FORK_TYPES.each do |type|
+      child = parent.fork_as(type)
+      assert child.save, child.errors.full_messages.to_sentence
+      assert_operator child.title.length, :<=, 120
+      assert child.title.end_with?(" (#{type.capitalize})")
+      assert_equal parent.title, child.fork_parent_title
+      assert_equal parent.source, child.fork_source
+    end
+  end
 end

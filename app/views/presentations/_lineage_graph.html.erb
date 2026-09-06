@@ -17,13 +17,13 @@
     <div class="lineage-graph lineage-graph-canvas" data-controller="lineage-graph" data-lineage-graph-target="canvas" tabindex="0" aria-label="Presentation timeline and lineage graph">
       <div class="lineage-navigation">
         <div class="lineage-search">
-          <input type="search" aria-label="Find a presentation" placeholder="Find a presentation…" data-lineage-graph-target="search" data-action="input->lineage-graph#search">
-          <div class="lineage-search-results" data-lineage-graph-target="results" hidden></div>
+          <input type="search" aria-label="Find a presentation" placeholder="Find a presentation…" data-lineage-graph-target="search" data-action="input->lineage-graph#search keydown.down->lineage-graph#focusResult">
+          <div class="lineage-search-results" data-lineage-graph-target="results" data-action="keydown.esc->lineage-graph#closeSearch" hidden></div>
         </div>
         <select aria-label="Jump to creation date" data-lineage-graph-target="date" data-action="change->lineage-graph#jumpToDate"></select>
         <div class="lineage-graph-controls" aria-label="Graph controls">
           <button type="button" data-action="lineage-graph#zoomOut" aria-label="Zoom out">−</button>
-          <button type="button" data-action="lineage-graph#reset" aria-label="Reset graph view">100%</button>
+          <button type="button" data-lineage-graph-target="scaleLabel" data-action="lineage-graph#reset" aria-label="Reset graph view" title="Reset to 100%">100%</button>
           <button type="button" data-action="lineage-graph#zoomIn" aria-label="Zoom in">+</button>
           <button type="button" data-action="lineage-graph#fit">Overview</button>
         </div>

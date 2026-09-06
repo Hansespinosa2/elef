@@ -1,7 +1,7 @@
 import { Controller } from "@hotwired/stimulus"
 
 export default class extends Controller {
-  static targets = ["axis", "content", "edges", "node", "viewport", "zoom", "search", "results", "date", "status"]
+  static targets = ["axis", "content", "edges", "node", "viewport", "zoom", "search", "results", "date", "status", "scaleLabel"]
 
   connect() {
     this.scale = 1
@@ -108,7 +108,7 @@ export default class extends Controller {
       const type = child.type === "inspiration" ? "inspiration" : "continuation"
       return `<path class="lineage-edge ${type}" data-lineage-edge-from="${parent.id}" data-lineage-edge-to="${child.id}" marker-end="url(#lineage-arrow-${type})" d="M ${start.x} ${start.y} H ${turn} V ${end.y} H ${end.x}"/>`
     }).join("")
-    const markers = [["continuation", "#7964bd"], ["inspiration", "#b78543"]].map(([type, color]) =>
+    const markers = [["continuation", "var(--oradia-green-deep)"], ["inspiration", "#b78543"]].map(([type, color]) =>
       `<marker id="lineage-arrow-${type}" markerWidth="7" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 7 4 L 0 8 z" fill="${color}"/></marker>`).join("")
     this.edgesTarget.innerHTML = `<defs>${markers}</defs>${paths}`
     this.applyScale()
@@ -148,13 +148,25 @@ export default class extends Controller {
     this.statusTarget.textContent = node.title
   }
 
+  focusResult(event) {
+    const result = this.resultsTarget.querySelector("button")
+    if (!result || this.resultsTarget.hidden) return
+    event.preventDefault()
+    result.focus()
+  }
+
+  closeSearch() {
+    this.resultsTarget.hidden = true
+    this.searchTarget.focus()
+  }
+
   jumpToDate() {
     const group = this.groups.find(group => group.date === this.dateTarget.value)
     if (group) this.viewportTarget.scrollTo({ left: group.left * this.scale, top: 0 })
   }
 
   zoomIn() { this.scale = Math.min(1.5, this.scale + 0.15); this.applyScale() }
-  zoomOut() { this.scale = Math.max(0.4, this.scale - 0.15); this.applyScale() }
+  zoomOut() { this.scale = Math.min(this.scale, Math.max(0.05, this.scale - 0.15)); this.applyScale() }
   fit() {
     this.scale = Math.min(1, (this.viewportTarget.clientWidth - 24) / this.width, (this.viewportTarget.clientHeight - 24) / this.height)
     this.applyScale()
@@ -162,6 +174,7 @@ export default class extends Controller {
   }
   reset() { this.scale = 1; this.applyScale(); this.viewportTarget.scrollTo({ left: 0, top: 0 }) }
   applyScale() {
+    this.scaleLabelTarget.textContent = `${Math.round(this.scale * 100)}%`
     this.zoomTarget.style.width = `${this.width * this.scale}px`
     this.zoomTarget.style.height = `${this.height * this.scale}px`
     this.contentTarget.style.transform = `scale(${this.scale})`

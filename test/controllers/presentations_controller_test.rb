@@ -1,6 +1,84 @@
 require "test_helper"
 
 class PresentationsControllerTest < ActionDispatch::IntegrationTest
+  test "library rename form submits scoped parameters" do
+    get presentations_path
+    assert_select "form[action='#{rename_presentation_path(presentations(:one))}']" do
+      assert_select "input[name='presentation[title]']"
+    end
+  end
+
+  test "renames without changing source and rejects an oversized title" do
+    presentation = presentations(:one)
+    source = presentation.source
+    patch rename_presentation_path(presentation), params: { presentation: { title: "Renamed", source: "overwrite" } }
+    assert_redirected_to presentations_path
+    assert_equal "Renamed", presentation.reload.title
+    assert_equal source, presentation.source
+
+    patch rename_presentation_path(presentation), params: { presentation: { title: "x" * 121 } }
+    assert_redirected_to presentations_path
+    assert_match /too long/, flash[:alert]
+    assert_equal "Renamed", presentation.reload.title
+  end
+
+  test "autosaves JSON and returns validation errors without overwriting saved data" do
+    presentation = presentations(:one)
+    patch presentation_path(presentation), params: { presentation: { source: "# Autosaved" } }, as: :json
+    assert_response :ok
+    assert_equal presentation.id, response.parsed_body["id"]
+    assert_equal "# Autosaved", presentation.reload.source
+
+    patch presentation_path(presentation), params: { presentation: { title: "x" * 121, source: "# Invalid" } }, as: :json
+    assert_response :unprocessable_content
+    assert_match /too long/, response.parsed_body["errors"].join
+    assert_equal "# Autosaved", presentation.reload.source
+  end
+
+  test "forks both relationship types and rejects unsupported types" do
+    parent = presentations(:one)
+    Presentation::FORK_TYPES.each do |type|
+      assert_difference("Presentation.count") { post fork_presentation_path(parent), params: { fork_type: type } }
+      child = parent.children.order(:id).last
+      assert_redirected_to edit_presentation_path(child)
+      assert_equal type, child.fork_type
+      assert_equal parent.source, child.fork_source
+    end
+    assert_no_difference("Presentation.count") { post fork_presentation_path(parent), params: { fork_type: "invalid" } }
+    assert_redirected_to presentations_path
+    assert_equal "Choose a valid fork type.", flash[:alert]
+  end
+
+  test "deleting a parent retains its fork and provenance" do
+    parent = presentations(:one)
+    child = parent.fork_as("inspiration")
+    child.save!
+    assert_difference("Presentation.count", -1) { delete presentation_path(parent) }
+    assert_redirected_to presentations_path
+    assert_nil child.reload.parent_id
+    assert_equal parent.source, child.fork_source
+    assert_equal parent.title, child.fork_parent_title
+  end
+
+  test "only presentation mode records the last published time" do
+    presentation = presentations(:one)
+    get presentation_path(presentation)
+    assert_nil presentation.reload.last_published_at
+    freeze_time do
+      get present_presentation_path(presentation)
+      assert_response :success
+      assert_equal Time.current, presentation.reload.last_published_at
+    end
+  end
+
+  test "persisted editor wires autosave but new presentation waits for creation" do
+    get edit_presentation_path(presentations(:one))
+    assert_select 'form[data-controller~="autosave"]'
+    assert_select '[data-autosave-target="retry"]'
+    get new_presentation_path
+    assert_select 'form[data-controller~="autosave"]', count: 0
+  end
+
   test "library loads" do
     get presentations_path
     assert_response :success

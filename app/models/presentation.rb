@@ -55,7 +55,8 @@ class Presentation < ApplicationRecord
   def fork_as(type)
     raise ArgumentError, "Unsupported fork type" unless FORK_TYPES.include?(type.to_s)
 
-    self.class.new(title: "#{title} (#{type.to_s.capitalize})", source: source,
+    suffix = " (#{type.to_s.capitalize})"
+    self.class.new(title: "#{title.truncate(120 - suffix.length)}#{suffix}", source: source,
       parent: self, fork_type: type, fork_source: source, fork_parent_title: title)
   end
 

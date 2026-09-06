@@ -33,9 +33,9 @@ export default class extends Controller {
     this.submitting = true
   }
 
-  markSaved() {
-    this.baseline = this.snapshot()
-    this.dirty = false
+  markSaved(event) {
+    this.baseline = event.detail.snapshot
+    this.dirty = this.snapshot() !== this.baseline
     this.submitting = false
     this.updateState()
   }
