@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Elef sidebar directions</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --page: #101513;
+      --ink: #e7eee9;
+      --muted: #8e9b93;
+      --line: #2a3630;
+      --green: #79c896;
+      --green-soft: #1c3b2a;
+      --surface: #18201c;
+      --surface-2: #202a25;
+      --paper: #f5f1e8;
+      --paper-ink: #273129;
+      --paper-muted: #7d887e;
+      font: 14px/1.4 Inter, ui-sans-serif, system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 32px; color: var(--ink); background: var(--page); }
+    h1, h2, p { margin: 0; }
+    header { max-width: 1200px; margin: 0 auto 28px; }
+    h1 { font-size: 28px; letter-spacing: -.03em; }
+    header p { margin-top: 6px; color: var(--muted); }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; max-width: 1200px; margin: auto; }
+    .mockup { overflow: hidden; border: 1px solid var(--line); border-radius: 14px; background: #151c18; box-shadow: 0 18px 50px #0005; }
+    .mockup.wide { grid-column: span 2; }
+    .label { display: flex; align-items: baseline; gap: 10px; padding: 18px 20px 14px; }
+    .label h2 { font-size: 16px; }
+    .label span { color: var(--muted); font-size: 12px; }
+    .window { display: flex; min-height: 292px; margin: 0 10px 10px; border: 1px solid #303b35; border-radius: 8px; overflow: hidden; background: var(--surface); }
+    .rail { display: flex; width: 42px; flex: 0 0 42px; flex-direction: column; align-items: center; gap: 18px; padding: 16px 0; border-right: 1px solid var(--line); color: var(--muted); }
+    .rail .active { color: var(--green); }
+    .side { width: 210px; flex: 0 0 210px; padding: 16px 12px; border-right: 1px solid var(--line); background: #1b241f; }
+    .side.wide { width: 250px; flex-basis: 250px; }
+    .side.light { color: var(--paper-ink); background: var(--paper); border-color: #d7d2c7; }
+    .main { flex: 1; padding: 24px; color: var(--paper-ink); background: var(--paper); }
+    .main.dark { color: var(--ink); background: #202a25; }
+    .main h3 { margin: 18px 0 8px; font: 28px Georgia, serif; }
+    .main p { max-width: 360px; color: var(--paper-muted); }
+    .main.dark p { color: var(--muted); }
+    .topline, .section-title, .row { display: flex; align-items: center; }
+    .topline { justify-content: space-between; margin-bottom: 18px; }
+    .brand { color: var(--green); font-weight: 800; letter-spacing: -.02em; }
+    .dots { color: var(--muted); letter-spacing: 3px; }
+    .section-title { justify-content: space-between; margin: 16px 4px 7px; color: var(--muted); font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+    .section-title b { color: var(--green); font-size: 15px; letter-spacing: 0; }
+    .row { gap: 8px; min-height: 32px; padding: 6px 8px; border-radius: 5px; white-space: nowrap; }
+    .row small { margin-left: auto; color: var(--muted); font-size: 10px; }
+    .row.active { color: var(--ink); background: var(--green-soft); }
+    .row.light-active { color: #17462d; background: #d8ebd8; }
+    .row.indent { padding-left: 26px; }
+    .row.subindent { padding-left: 44px; }
+    .muted { color: var(--muted); }
+    .new { display: flex; align-items: center; justify-content: center; gap: 7px; width: 100%; padding: 9px; border: 1px solid #3c7652; border-radius: 6px; color: #b9e6c5; background: #214732; font-weight: 700; }
+    .search { margin: 13px 0 12px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 5px; color: var(--muted); background: #141b17; font-size: 12px; }
+    .search.light { border-color: #d7d2c7; background: #fffdf7; }
+    .profile { display: flex; align-items: center; gap: 8px; margin-top: auto; padding-top: 22px; color: var(--muted); font-size: 11px; }
+    .avatar { display: grid; width: 24px; height: 24px; place-items: center; border-radius: 50%; color: #102219; background: var(--green); font-size: 11px; font-weight: 800; }
+    .cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 24px; }
+    .card { padding: 13px; border: 1px solid #d8d2c6; border-radius: 8px; background: #fffdf8; }
+    .card strong { display: block; margin-bottom: 3px; }
+    .card small { color: var(--paper-muted); }
+    .status { display: flex; justify-content: space-between; margin-top: 20px; padding-top: 10px; border-top: 1px solid var(--line); color: var(--muted); font-size: 11px; }
+    .tabs { display: flex; gap: 5px; margin-bottom: 18px; }
+    .tab { padding: 7px 10px; border-radius: 5px; color: var(--muted); background: #17201b; font-size: 12px; }
+    .tab.active { color: var(--ink); background: var(--surface-2); }
+    @media (max-width: 780px) {
+      body { padding: 18px; }
+      .grid { grid-template-columns: 1fr; }
+      .mockup.wide { grid-column: auto; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Elef sidebar directions</h1>
+    <p>Five navigation concepts inspired by the clarity of VS Code and the calm of Obsidian.</p>
+  </header>
+  <main class="grid">
+    <article class="mockup">
+      <div class="label"><h2>01. Explorer</h2><span>VS Code-like tree</span></div>
+      <div class="window">
+        <div class="rail"><span class="active">▤</span><span>⌕</span><span>♧</span><span>⚙</span></div>
+        <aside class="side">
+          <div class="topline"><span class="brand">EXPLORER</span><span class="dots">•••</span></div>
+          <div class="section-title"><span>Elef World</span><b>＋</b></div>
+          <div class="row"><span>⌄</span><strong>Presentations</strong></div>
+          <div class="row indent active"><span>▱</span><span>Quarterly review</span></div>
+          <div class="row indent"><span>▱</span><span>Launch story</span></div>
+          <div class="row indent"><span>▱</span><span>Team offsite</span></div>
+          <div class="row"><span>⌄</span><strong>Assets</strong></div>
+          <div class="row indent muted"><span>▧</span><span>Images</span></div>
+        </aside>
+        <section class="main"><div class="topline"><span class="muted">Quarterly review.md</span><span class="dots">•••</span></div><h3>Quarterly review</h3><p>A familiar file explorer with clear hierarchy, inline actions, and a compact activity rail.</p></section>
+      </div>
+    </article>
+
+    <article class="mockup">
+      <div class="label"><h2>02. Vault</h2><span>Obsidian-like calm</span></div>
+      <div class="window">
+        <aside class="side light">
+          <div class="topline"><span class="brand">ELEF WORLD</span><span class="dots">•••</span></div>
+          <div class="search light">⌕ &nbsp; Filter files...</div>
+          <div class="section-title"><span>Files</span><b>＋</b></div>
+          <div class="row light-active"><span>▱</span><strong>Quarterly review</strong></div>
+          <div class="row"><span>▱</span><span>Launch story</span><small>2m</small></div>
+          <div class="row"><span>▱</span><span>Team offsite</span><small>1d</small></div>
+          <div class="profile"><span class="avatar">A</span><span>Andres</span><span style="margin-left:auto">⚙</span></div>
+        </aside>
+        <section class="main"><div class="tabs"><span class="tab active">Quarterly review</span><span class="tab">＋</span></div><h3>Quarterly review</h3><p>A quiet, content-first vault. Search and recency stay close while the canvas gets most of the attention.</p><div class="status"><span>Markdown</span><span>Saved just now</span></div></section>
+      </div>
+    </article>
+
+    <article class="mockup">
+      <div class="label"><h2>03. Recent work</h2><span>Fast start dashboard</span></div>
+      <div class="window">
+        <div class="rail"><span class="active">⌂</span><span>▤</span><span>⌕</span><span style="margin-top:auto">⚙</span></div>
+        <aside class="side wide">
+          <div class="topline"><span class="brand">ELEF</span><span class="dots">•••</span></div>
+          <button class="new">＋ New presentation</button>
+          <div class="section-title"><span>Recent</span><b>⌄</b></div>
+          <div class="row active"><span>▱</span><span>Quarterly review</span></div>
+          <div class="row"><span>▱</span><span>Launch story</span></div>
+          <div class="row"><span>▱</span><span>Team offsite</span></div>
+          <div class="section-title"><span>Workspace</span><b>⌄</b></div>
+          <div class="row muted"><span>▦</span><span>All presentations</span></div>
+          <div class="row muted"><span>⚙</span><span>Settings</span></div>
+        </aside>
+        <section class="main"><div class="topline"><span class="muted">Workspace</span><span class="dots">•••</span></div><h3>Good evening, Andres</h3><p>Pick up where you left off or start something new.</p><div class="cards"><div class="card"><strong>Quarterly review</strong><small>Edited just now</small></div><div class="card"><strong>Launch story</strong><small>Edited yesterday</small></div></div></section>
+      </div>
+    </article>
+
+    <article class="mockup">
+      <div class="label"><h2>04. Focus rail</h2><span>Minimal chrome</span></div>
+      <div class="window">
+        <div class="rail"><span class="active">▱</span><span>＋</span><span>⌕</span><span>☷</span><span style="margin-top:auto">⚙</span></div>
+        <aside class="side">
+          <div class="topline"><span class="brand">PRESENTATIONS</span><span class="dots">•••</span></div>
+          <div class="search">⌕ &nbsp; Search presentations</div>
+          <div class="row active"><span>▱</span><span>Quarterly review</span><small>1</small></div>
+          <div class="row"><span>▱</span><span>Launch story</span><small>8</small></div>
+          <div class="row"><span>▱</span><span>Team offsite</span><small>6</small></div>
+          <div class="status"><span>3 presentations</span><span>⌘B</span></div>
+        </aside>
+        <section class="main dark"><div class="topline"><span class="muted">Editing</span><span class="dots">•••</span></div><h3>Quarterly review</h3><p>The navigation disappears into an icon rail, leaving a compact list only when you need it.</p></section>
+      </div>
+    </article>
+
+    <article class="mockup wide">
+      <div class="label"><h2>05. Command center</h2><span>Dense, keyboard-friendly workspace</span></div>
+      <div class="window">
+        <aside class="side wide">
+          <div class="topline"><span class="brand">ELEF WORLD</span><span class="dots">•••</span></div>
+          <div class="search">⌘K &nbsp; Go to file</div>
+          <div class="section-title"><span>Open editors</span><b>＋</b></div>
+          <div class="row active"><span>●</span><span>Quarterly review</span><small>×</small></div>
+          <div class="row"><span>○</span><span>Launch story</span><small>×</small></div>
+          <div class="section-title"><span>All files</span><b>⌄</b></div>
+          <div class="row"><span>▱</span><span>Team offsite</span></div>
+          <div class="row"><span>▱</span><span>Product narrative</span></div>
+          <div class="profile"><span class="avatar">A</span><span>main workspace</span></div>
+        </aside>
+        <section class="main"><div class="topline"><span class="muted">Quarterly review.md</span><span class="muted">Saved</span></div><h3>Quarterly review</h3><p>Open editors, quick search, and a visible workspace status make this the most power-user-oriented option.</p><div class="status"><span>Markdown</span><span>⌘B Sidebar &nbsp; ⌘K Quick open</span></div></section>
+      </div>
+    </article>
+  </main>
+</body>
+</html>
