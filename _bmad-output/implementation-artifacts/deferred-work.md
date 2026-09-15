@@ -25,12 +25,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-domain-inspired-editor-architecture.md`
   summary: Add UI-level coverage for replacement cancellation and the hidden browser input wiring.
   evidence: Application session tests cover core synchronization, but no rendered App test verifies that user cancellation preserves the editor or that browser file selection reaches the session.
-- source_spec: `_bmad-output/implementation-artifacts/spec-gh-4-migrate-tailwind.md`
-  summary: Add browser-level visual regression coverage for Tailwind themes, responsive breakpoints, and computed control geometry.
-  evidence: Existing integration tests verify behavior and semantic state classes but do not load stylesheets or assert computed visual layout in a real WebView.
-- source_spec: `_bmad-output/implementation-artifacts/spec-gh-4-migrate-tailwind.md`
-  summary: Repair the pre-existing editor integration failures exposed by the full test suite.
-  evidence: The migration leaves the same 12 failures in heading reveal, navigation, Markdown widgets, split focus, geometry, and fullscreen behavior; the failures are outside the styling changes.
 - source_spec: none
   summary: Add an in-app flow for creating a new Elef World folder from the setup screen.
   evidence: The user chose to handle the Rust future-incompatibility warning before returning to folder creation.

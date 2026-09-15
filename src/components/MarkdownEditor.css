@@ -1,0 +1,23 @@
+.markdown-editor {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: .65rem;
+  padding: 0 0 1.5rem;
+  border-bottom: 1px solid var(--border);
+}
+.markdown-editor label { color: var(--text-strong); font-weight: 700; }
+.markdown-editor textarea {
+  width: 100%;
+  min-height: 12rem;
+  resize: none;
+  overflow: hidden;
+  padding: .25rem 0;
+  border: 0;
+  border-radius: 0;
+  color: var(--text);
+  background: transparent;
+  font: .95rem/1.65 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.markdown-editor textarea:focus { outline: 0; }
+.markdown-editor p { margin: 0; color: var(--text-muted); font-size: .85rem; }

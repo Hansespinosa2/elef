@@ -34,11 +34,11 @@ export class RecoverableErrorBoundary extends Component<Props, State> {
 export function RecoveryScreen({ error }: { error: Error }) {
   const detail = import.meta.env.DEV && error.stack ? error.stack : 'Unexpected application error.';
   return (
-    <main className="recovery-screen grid min-h-screen place-content-center gap-4 bg-app-bg p-8 text-text" role="alert">
-      <h1 className="font-display text-text-strong">Elef needs to recover</h1>
+    <main className="recovery-screen" role="alert">
+      <h1>Elef needs to recover</h1>
       <p>The application stopped rendering safely. Reload Elef to continue.</p>
-      <pre className="max-w-[70rem] overflow-auto whitespace-pre-wrap bg-danger-bg p-4 text-danger-text">{detail}</pre>
-      <button className="rounded-md bg-accent px-4 py-2.5 font-bold text-accent-text hover:bg-accent-hover focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2" type="button" onClick={() => window.location.reload()}>Reload Elef</button>
+      <pre>{detail}</pre>
+      <button type="button" onClick={() => window.location.reload()}>Reload Elef</button>
     </main>
   );
 }
