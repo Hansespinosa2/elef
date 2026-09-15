@@ -1,11 +1,38 @@
-# Agent execution guidance
+# Repository Instructions
 
-## Tauri E2E tests
+## Architecture
+- Elef is a Rails monolith for authoring and presenting Markdown slide decks.
+- Raw Markdown is canonical.
+- Prefer Rails views with Hotwire/Stimulus.
 
-- Start with `git status --short` and identify the smallest targeted test.
-- Use `npm run test:e2e -- --mochaOpts.grep='...'` for a focused run.
-- The E2E runner reuses the existing debug binary. Rebuild explicitly with `npm run test:e2e:build` or `WDIO_BUILD=1 npm run test:e2e`.
-- Do not run the full Tauri suite before a focused test passes.
-- Before any command expected to take more than two minutes, state the command and why it is necessary.
-- If a command produces no useful output for two minutes, stop it and report the blocker rather than recreating fixtures or restarting planning.
-- Treat an existing implementation spec as the source of truth; do not restart planning when it already identifies the next unchecked task.
+## Development Environment
+- Reuse `https://127.0.0.1:3000/`; never start another server or change ports.
+- Restart only for boot-time changes.
+- The primary checkout belongs to the user's main agent. Never implicitly
+  create branches, worktrees, or containers.
+
+## Isolated Agents
+- The user creates tasks with `scripts/elef-agent start TASK` and enters them
+  with `scripts/elef-agent codex TASK`.
+- Use the task URL `https://TASK.localhost` for browser checks.
+- Never interrupt/recreate an active task without confirmation.
+- Preserve the worktree and `/home/developer/.codex` state across recreation.
+
+## Testing
+- Unit-test parsing/rendering, request-test Rails boundaries, and use headless
+  Selenium for complete workflows.
+- Run the smallest relevant test first.
+- Re-test relevant behavior after the final change.
+- Report only what the performed tests directly establish.
+
+## UI Verification
+- Browser automation must be headless.
+- Distinguish:
+  1. DOM assertions
+  2. exact reproduction of user state
+  3. inspected screenshot
+- Never claim a higher verification level than was performed.
+
+## Git
+- Commit coherent changes frequently with concise imperative subjects.
+- Never add co-author trailers, rewrite history, or revert unrelated changes.

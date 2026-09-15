@@ -1,0 +1,6 @@
+<% content_for :title, "Edit #{@presentation.title}" %>
+<div class="page-title mb-8 flex items-end justify-between gap-4 max-[920px]:flex-col max-[920px]:items-stretch">
+  <p class="eyebrow mb-1 text-xs font-extrabold uppercase tracking-[0.12em] text-[#6d4aff]">Source-first editor</p>
+  <h1 class="mb-0 text-4xl font-bold">Edit <%= @presentation.title %></h1>
+</div>
+<%= render "form", presentation: @presentation %>
