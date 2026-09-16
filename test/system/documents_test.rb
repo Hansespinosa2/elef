@@ -55,4 +55,31 @@ class DocumentsTest < ApplicationSystemTestCase
     editor.send_keys(:enter)
     assert_includes editor.value, "$x.unknown\n"
   end
+
+  test "keeps the last good preview when a live preview fails" do
+    document = Document.create!(title: "Stable notes", source: "# Stable notes\n\nLast good content")
+    visit edit_document_path(document)
+    assert_selector ".document-surface", text: "Last good content"
+
+    page.execute_script(<<~JAVASCRIPT)
+      const originalFetch = window.fetch.bind(window);
+      window.fetch = (url, options = {}) => {
+        if (options.method === "POST" && String(url).includes("/preview")) {
+          window.fetch = originalFetch;
+          return Promise.resolve(new Response(JSON.stringify({
+            html: null,
+            warnings: ["The preview service rejected this edit."],
+            revision: "failed-preview"
+          }), { status: 422, headers: { "Content-Type": "application/json" } }));
+        }
+        return originalFetch(url, options);
+      };
+    JAVASCRIPT
+
+    fill_in "Markdown source", with: "# Broken edit"
+    assert_selector '[data-preview-target="status"]', text: "Preview unavailable", wait: 5
+    assert_selector '[data-preview-target="warnings"]', text: "The preview service rejected this edit."
+    assert_selector ".document-surface", text: "Last good content"
+    assert_no_selector ".document-surface", text: "Broken edit"
+  end
 end
