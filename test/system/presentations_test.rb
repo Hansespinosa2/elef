@@ -58,7 +58,7 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_selector '[data-autosave-target="status"]', exact_text: "Saved"
     assert_includes presentation.reload.source, "# Latest edit"
     click_on "Library"
-    assert_current_path presentations_path
+    assert_current_path presentations_path(type: "all")
   end
 
   test "explicit save waits for autosave and refreshes the latest preview" do
