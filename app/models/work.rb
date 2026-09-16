@@ -67,12 +67,6 @@ class Work < ApplicationRecord
     parsed_document.warnings
   end
 
-  def preview_html
-    return Presentations::DocumentRenderer.render(source, source_name: title, parsed: parsed_document) if document?
-
-    Presentations::MarkdownRenderer.render(source)
-  end
-
   def source=(value)
     @parsed_document = nil
     super
