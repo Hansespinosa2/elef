@@ -22,42 +22,53 @@ export function expandMathShorthand(token) {
 
 export function insideMath(text, caret) {
   const before = text.slice(0, caret)
-  if (insideFencedCode(before) || insideInlineCode(before)) return false
-
   let delimiter = null
-  for (let index = 0; index < before.length; index += 1) {
-    if (before[index] === "\\") {
-      index += 1
+  let fence = null
+  let inlineCodeLength = null
+
+  for (const line of before.split("\n")) {
+    const fenceMatch = line.match(/^\s{0,3}([`~]{3,})/)
+    if (fence) {
+      if (fenceMatch && fenceMatch[1][0] === fence.character && fenceMatch[1].length >= fence.length) fence = null
       continue
     }
-    if (before.startsWith("$$", index)) {
-      delimiter = delimiter === "$$" ? null : delimiter || "$$"
-      index += 1
-    } else if (before[index] === "$") {
-      delimiter = delimiter === "$" ? null : delimiter || "$"
+    if (fenceMatch) {
+      fence = { character: fenceMatch[1][0], length: fenceMatch[1].length }
+      continue
+    }
+
+    for (let index = 0; index < line.length;) {
+      if (line[index] === "\\") {
+        index += 2
+        continue
+      }
+
+      if (line[index] === "`") {
+        let length = 1
+        while (line[index + length] === "`") length += 1
+        if (inlineCodeLength === null) inlineCodeLength = length
+        else if (inlineCodeLength === length) inlineCodeLength = null
+        index += length
+        continue
+      }
+
+      if (inlineCodeLength !== null) {
+        index += 1
+        continue
+      }
+
+      if (line.startsWith("$$", index)) {
+        delimiter = delimiter === "$$" ? null : delimiter || "$$"
+        index += 2
+      } else if (line[index] === "$") {
+        delimiter = delimiter === "$" ? null : delimiter || "$"
+        index += 1
+      } else {
+        index += 1
+      }
     }
   }
   return delimiter !== null
-}
-
-function insideFencedCode(text) {
-  let marker = null
-  text.replace(/^\s{0,3}(`{3,}|~{3,}).*$/gm, (_line, fence) => {
-    const current = { character: fence[0], length: fence.length }
-    if (marker && marker.character === current.character && current.length >= marker.length) marker = null
-    else if (!marker) marker = current
-    return _line
-  })
-  return marker !== null
-}
-
-function insideInlineCode(text) {
-  let ticks = 0
-  for (let index = 0; index < text.length; index += 1) {
-    if (text[index] !== "`" || text[index - 1] === "\\") continue
-    ticks += 1
-  }
-  return ticks % 2 === 1
 }
 
 export default class extends Controller {

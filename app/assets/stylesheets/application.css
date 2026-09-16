@@ -617,9 +617,10 @@ body.elef-app {
 .document-block.position-left { text-align: left; }
 .document-block.position-center { align-self: center; text-align: center; }
 .document-block.position-right { align-self: flex-end; text-align: right; }
+.document-block:is(.position-top, .position-middle, .position-bottom) { display: flex; flex-direction: column; min-height: clamp(12rem, 35vh, 28rem); }
 .document-block.position-top { justify-content: flex-start; }
-.document-block.position-middle { display: flex; flex-direction: column; justify-content: center; min-height: 8rem; }
-.document-block.position-bottom { display: flex; flex-direction: column; justify-content: flex-end; min-height: 8rem; }
+.document-block.position-middle { justify-content: center; }
+.document-block.position-bottom { justify-content: flex-end; }
 .document-surface pre { background: #191714; border-radius: 0.75rem; color: #fff7e8; overflow: auto; padding: 1rem; }
 .document-surface table { border-collapse: collapse; width: 100%; }
 .document-surface th, .document-surface td { border: 1px solid var(--presentation-line); padding: 0.35rem 0.5rem; }

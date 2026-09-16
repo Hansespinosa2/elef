@@ -54,11 +54,11 @@
           <%= link_to "Present", present_presentation_path(work), class: "button inline-flex min-h-10 items-center rounded-full border border-[#ddd5c8] bg-[#fffdf8] px-4 py-2 font-bold no-underline hover:bg-[#f7efe2]", data: { turbo: false } %>
         <% end %>
         <span class="dirty-state text-[#6f675c] font-bold" data-autosave-target="status" aria-live="polite">Saved</span>
-        <span class="dirty-state text-[#6f675c] font-bold" data-preview-target="status" aria-live="polite"></span>
         <button type="button" class="autosave-retry" data-autosave-target="retry" data-action="autosave#retry" hidden>Retry save</button>
       <% else %>
         <span class="dirty-state text-[#6f675c] font-bold" data-dirty-target="status" aria-live="polite">Saved</span>
       <% end %>
+      <span class="dirty-state text-[#6f675c] font-bold" data-preview-target="status" aria-live="polite"></span>
     </div>
   </section>
 

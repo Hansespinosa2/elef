@@ -2,8 +2,8 @@ module Presentations
   module DocumentRenderer
     module_function
 
-    def render(source, source_name: "Untitled document")
-      parsed = Presentations::Document.parse(source.to_s, source_name: source_name, mode: :document)
+    def render(source, source_name: "Untitled document", parsed: nil)
+      parsed ||= Presentations::Document.parse(source.to_s, source_name: source_name, mode: :document)
       slide = parsed.slides.first
       return "".html_safe unless slide
 

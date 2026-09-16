@@ -68,7 +68,7 @@ class Work < ApplicationRecord
   end
 
   def preview_html
-    return Presentations::DocumentRenderer.render(source, source_name: title) if document?
+    return Presentations::DocumentRenderer.render(source, source_name: title, parsed: parsed_document) if document?
 
     Presentations::MarkdownRenderer.render(source)
   end
