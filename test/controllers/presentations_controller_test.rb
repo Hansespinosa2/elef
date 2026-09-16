@@ -77,6 +77,33 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_select '[data-autosave-target="retry"]'
     get new_presentation_path
     assert_select 'form[data-controller~="autosave"]', count: 0
+    assert_select 'form[data-controller~="preview"]'
+    assert_select 'form[data-preview-url-value="/presentations/preview"]'
+  end
+
+  test "previews an unsaved presentation without creating a record" do
+    assert_no_difference("Presentation.count") do
+      post preview_presentations_path, params: {
+        presentation: { title: "Draft deck", source: "# Draft deck\n---\n# Next" }, revision: "new-2"
+      }, as: :json
+    end
+
+    assert_response :success
+    assert_equal "new-2", response.parsed_body["revision"]
+    assert_equal 2, response.parsed_body["html"].scan('class="slide ').length
+  end
+
+  test "the root library shows all work while the presentations URL stays presentation-focused" do
+    Document.create!(title: "Root notes", source: "# Root notes")
+
+    get root_path
+    assert_response :success
+    assert_select "h1", "Work library"
+    assert_select "#document_#{Document.order(:id).last.id}"
+
+    get presentations_path
+    assert_select "h1", "Presentation library"
+    assert_select "#document_#{Document.order(:id).last.id}", count: 0
   end
 
   test "library loads" do

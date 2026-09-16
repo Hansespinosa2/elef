@@ -15,6 +15,10 @@ module ApplicationHelper
     work.document? ? preview_document_path(work) : preview_presentation_path(work)
   end
 
+  def work_preview_collection_path(work)
+    work.document? ? preview_documents_path : preview_presentations_path
+  end
+
   def work_rename_path(work)
     work.document? ? rename_document_path(work) : rename_presentation_path(work)
   end

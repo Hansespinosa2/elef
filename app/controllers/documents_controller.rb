@@ -1,5 +1,8 @@
 class DocumentsController < ApplicationController
-  before_action :set_document, only: %i[show edit update preview destroy rename]
+  include WorkPreview
+
+  before_action :set_document, only: %i[show edit update destroy rename]
+  before_action :set_preview_document, only: :preview
 
   def index
     @filter = "documents"
@@ -48,13 +51,7 @@ class DocumentsController < ApplicationController
   end
 
   def preview
-    render json: preview_payload(@document)
-  rescue StandardError => error
-    render json: {
-      html: nil,
-      warnings: ["Preview could not be rendered: #{error.message}. Check the latest Markdown edit."],
-      revision: preview_revision
-    }, status: :unprocessable_content
+    render_work_preview(@document || Document.new)
   end
 
   def rename
@@ -76,31 +73,12 @@ class DocumentsController < ApplicationController
     @document = Document.find(params[:id])
   end
 
+  def set_preview_document
+    @document = Document.find(params[:id]) if params[:id].present?
+  end
+
   def document_params
     params.require(:document).permit(:title, :source)
   end
 
-  def preview_payload(work)
-    attributes = params[:document].respond_to?(:permit) ? params[:document].permit(:title, :source) : {}
-    source = if attributes.key?(:source)
-      attributes[:source]
-    elsif params.key?(:source)
-      params[:source]
-    else
-      work.source.to_s
-    end
-    title = attributes[:title].presence || params[:title].presence || work.title
-    raise ArgumentError, "Markdown source must be plain text" unless source.is_a?(String)
-    preview_work = work.class.new(title: title, source: source, work_type: work.work_type)
-
-    {
-      html: render_to_string(partial: "works/preview", formats: [:html], locals: { work: preview_work }),
-      warnings: preview_work.preview_warnings,
-      revision: preview_revision
-    }
-  end
-
-  def preview_revision
-    params[:revision].presence || @document.updated_at.to_i
-  end
 end

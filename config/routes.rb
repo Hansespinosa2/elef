@@ -1,5 +1,5 @@
 Rails.application.routes.draw do
-  root "presentations#index"
+  root "presentations#index", type: "all"
 
   resources :snippets, except: :show
 
@@ -7,6 +7,7 @@ Rails.application.routes.draw do
     collection do
       post :load_samples
       post :start
+      post :preview
     end
     member do
       get :present
@@ -17,7 +18,10 @@ Rails.application.routes.draw do
   end
 
   resources :documents do
-    collection { post :start }
+    collection do
+      post :start
+      post :preview
+    end
     member do
       match :preview, via: %i[get post]
       patch :rename

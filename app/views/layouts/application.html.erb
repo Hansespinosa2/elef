@@ -19,7 +19,7 @@
     <header class="app-header sticky top-0 z-10 flex items-center justify-between border-b border-[#ddd5c8] bg-[rgba(255,253,248,0.94)] px-[clamp(1rem,4vw,3rem)] py-4">
       <%= link_to "Elef", root_path, class: "brand font-extrabold tracking-[-0.04em] no-underline", data: { turbo: false } %>
       <nav class="flex gap-4">
-        <%= link_to "Library", presentations_path, class: "hover:underline" %>
+        <%= link_to "Library", presentations_path(type: "all"), class: "hover:underline" %>
         <%= link_to "Documents", documents_path, class: "hover:underline" %>
         <%= link_to "Snippets", snippets_path, class: "hover:underline" %>
         <%= link_to "New presentation", new_presentation_path, class: "hover:underline" %>

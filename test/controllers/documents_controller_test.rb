@@ -48,6 +48,19 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
     assert_select "#presentation_#{presentations(:one).id}"
   end
 
+  test "previews an unsaved document without creating a record" do
+    assert_no_difference("Document.count") do
+      post preview_documents_path, params: {
+        document: { title: "Draft notes", source: "# Draft notes\n\n---\n\nMore" }, revision: "new-1"
+      }, as: :json
+    end
+
+    assert_response :success
+    assert_equal "new-1", response.parsed_body["revision"]
+    assert_includes response.parsed_body["html"], "<hr"
+    assert_includes response.parsed_body["html"], "Draft notes"
+  end
+
   test "presentation preview keeps the saved record untouched" do
     presentation = presentations(:one)
 
