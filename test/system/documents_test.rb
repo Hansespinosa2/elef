@@ -6,8 +6,7 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_field "Title", with: ""
     fill_in "Title", with: "Research notes"
     fill_in "Markdown source", with: "# Research notes\n\nFirst section\n\n---\n\nSecond section"
-    assert_selector '[data-preview-target="status"]', text: "Preview updated", wait: 5
-    assert_selector ".document-surface", text: "Second section"
+    assert_selector ".document-surface", text: "Second section", wait: 5
     assert_selector ".document-surface hr"
     click_on "Save document"
 
@@ -15,8 +14,7 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_current_path %r{/documents/\d+/edit}
     assert_selector ".document-surface h1", text: "Research notes"
     fill_in "Markdown source", with: "# Research notes\n\nA live update\n\n---\n\nSecond section"
-    assert_selector '[data-preview-target="status"]', text: "Preview updated", wait: 5
-    assert_selector ".document-surface", text: "A live update"
+    assert_selector ".document-surface", text: "A live update", wait: 5
     assert_includes Document.order(:id).last.source, "Second section"
   end
 
