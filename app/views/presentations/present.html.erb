@@ -10,7 +10,7 @@
   <div class="presentation-stage" data-presentation-target="stage" tabindex="0">
     <% @presentation.slides.each do |slide| %>
       <div class="slide-frame presentation-slide-frame" data-controller="presentation-canvas" data-presentation-target="slide">
-        <%= render "slide", slide: slide, presentation_slide: true, margin_settings: @presentation.document.margin_settings %>
+        <%= render "slide", slide: slide, presentation: @presentation, presentation_slide: true, margin_settings: @presentation.document.margin_settings %>
       </div>
     <% end %>
   </div>

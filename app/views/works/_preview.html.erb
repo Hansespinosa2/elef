@@ -1,0 +1,5 @@
+<% if work.presentation? %>
+  <%= render "presentations/slides", presentation: work %>
+<% else %>
+  <%= render "documents/content", document: work %>
+<% end %>

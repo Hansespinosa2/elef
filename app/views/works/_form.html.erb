@@ -1,0 +1,74 @@
+<% persisted = work.persisted? %>
+<% type_label = work_type_label(work) %>
+<% controllers = ["dirty"] %>
+<% controllers += %w[autosave preview] if persisted %>
+<% actions = ["submit->dirty#allowSubmit", "input->dirty#markDirty"] %>
+<% if persisted %>
+  <% actions += ["submit->autosave#submit", "input->autosave#schedule", "change->autosave#schedule", "autosave:saving->dirty#markSaving", "autosave:saved->dirty#markSaved", "input->preview#schedule", "change->preview#schedule"] %>
+<% end %>
+<% form_data = { controller: controllers.join(" "), action: actions.join(" "), dirty_unsaved_message_value: "You have unsaved #{type_label.downcase} changes. Leave without saving?" } %>
+<% form_data[:preview_url_value] = work_preview_path(work) if persisted %>
+<%= form_with model: work, class: "editor-layout grid gap-6 grid-cols-[minmax(320px,0.95fr)_minmax(360px,1.05fr)] max-[920px]:flex max-[920px]:flex-col", data: form_data do |form| %>
+  <% if work.errors.any? %>
+    <section class="error-panel col-span-full rounded-2xl border border-[#efb0a8] bg-[#fff1ee] p-4 text-[#a63a2d]" aria-label="Validation errors">
+      <h2><%= pluralize(work.errors.count, "error") %> prevented saving</h2>
+      <ul>
+        <% work.errors.full_messages.each do |message| %>
+          <li><%= message %></li>
+        <% end %>
+      </ul>
+    </section>
+  <% end %>
+
+  <section class="source-pane rounded-2xl border border-[#ddd5c8] bg-[#fffdf8] p-4">
+    <div class="field mb-4">
+      <%= form.label :title, class: "mb-1 block font-extrabold" %>
+      <%= form.text_field :title, class: "w-full rounded-xl border border-[#ddd5c8] bg-white p-3 text-[#1e1c18] outline-none focus:border-[#6d4aff] focus:ring-2 focus:ring-[#6d4aff]/20", data: { dirty_target: "field", autosave_target: "field", action: "input->dirty#markDirty" }, autocomplete: "off" %>
+    </div>
+
+    <div class="field source-field relative mb-4" data-controller="snippet-palette math-shorthand" data-snippet-palette-snippets-value="<%= json_escape(Snippets::Catalog.for_editor.to_json) %>">
+      <%= form.label :source, "Markdown source", class: "mb-1 block font-extrabold" %>
+      <%= form.text_area :source, rows: 24, class: "min-h-[36rem] w-full resize-y rounded-xl border border-[#ddd5c8] bg-white p-3 font-mono text-[#1e1c18] outline-none focus:border-[#6d4aff] focus:ring-2 focus:ring-[#6d4aff]/20 max-[920px]:min-h-96", spellcheck: "false", data: { dirty_target: "field", autosave_target: "field", snippet_palette_target: "editor", math_shorthand_target: "editor", action: "input->dirty#markDirty input->snippet-palette#input keydown->snippet-palette#keydown keydown->math-shorthand#keydown" } %>
+      <div class="snippet-palette" data-snippet-palette-target="palette" hidden role="listbox" aria-label="Snippet suggestions"></div>
+      <p class="field-hint">Use <code>:trigger</code> for snippets. In math, commit exact shorthand such as <code>$x.hat.b.T$</code> with Enter or Tab.</p>
+    </div>
+
+    <% if work.presentation? %>
+      <div class="field typography-field mb-4">
+        <%= form.label :presentation_typography, "Presentation typography", class: "mb-1 block font-extrabold" %>
+        <%= form.select :presentation_typography,
+          [["Book", "book"], ["Modern", "modern"], ["Technical", "technical"]],
+          {},
+          class: "w-full rounded-xl border border-[#ddd5c8] bg-white p-3 text-[#1e1c18] outline-none focus:border-[#6d4aff] focus:ring-2 focus:ring-[#6d4aff]/20",
+          data: { dirty_target: "field", autosave_target: "field", action: "change->dirty#markDirty" } %>
+        <p class="field-hint">Saved in the presentation’s Markdown front matter.</p>
+      </div>
+    <% end %>
+
+    <div class="editor-actions flex flex-wrap items-center gap-3">
+      <%= form.submit "Save #{type_label.downcase}", class: "button primary inline-flex min-h-10 cursor-pointer items-center gap-1 rounded-full border border-[#6d4aff] bg-[#6d4aff] px-4 py-2 font-bold text-white hover:brightness-95", data: { dirty_target: "saveButton" } %>
+      <% if persisted %>
+        <%= link_to "View saved preview", work_show_path(work), class: "button inline-flex min-h-10 items-center rounded-full border border-[#ddd5c8] bg-[#fffdf8] px-4 py-2 font-bold no-underline hover:bg-[#f7efe2]" %>
+        <% if work.presentation? %>
+          <%= link_to "Present", present_presentation_path(work), class: "button inline-flex min-h-10 items-center rounded-full border border-[#ddd5c8] bg-[#fffdf8] px-4 py-2 font-bold no-underline hover:bg-[#f7efe2]", data: { turbo: false } %>
+        <% end %>
+        <span class="dirty-state text-[#6f675c] font-bold" data-autosave-target="status" aria-live="polite">Saved</span>
+        <span class="dirty-state text-[#6f675c] font-bold" data-preview-target="status" aria-live="polite"></span>
+        <button type="button" class="autosave-retry" data-autosave-target="retry" data-action="autosave#retry" hidden>Retry save</button>
+      <% else %>
+        <span class="dirty-state text-[#6f675c] font-bold" data-dirty-target="status" aria-live="polite">Saved</span>
+      <% end %>
+    </div>
+  </section>
+
+  <aside class="preview-pane rounded-2xl border border-[#ddd5c8] bg-[#fffdf8] p-4" aria-label="<%= work.document? ? "Rendered document preview" : "Rendered slide preview" %>">
+    <div class="preview-heading">
+      <h2>Live preview</h2>
+      <p><%= work.document? ? "Continuous Markdown preview updates as you write." : "Markdown is split into slides for this presentation." %></p>
+    </div>
+    <%= render "works/warnings", warnings: work.preview_warnings %>
+    <div data-preview-target="container">
+      <%= render "works/preview", work: work %>
+    </div>
+  </aside>
+<% end %>

@@ -5,23 +5,26 @@ module Presentations
     Region = Data.define(:blocks)
     MarginSettings = Data.define(:section, :subsection, :footnote, :slide_count)
     Slide = Data.define(:id, :index, :markdown, :layout, :blocks, :title, :regions, :section, :subsection, :footnote, :warnings)
-    Parsed = Data.define(:source_name, :presentation_theme, :presentation_typography, :margin_settings, :slides, :warnings)
+    Parsed = Data.define(:source_name, :mode, :presentation_theme, :presentation_typography, :margin_settings, :slides, :warnings)
     SourceLine = Data.define(:start, :end_pos, :text, :ending)
     FrontMatter = Data.define(:lines, :closing_line, :body_start, :eol)
 
     module_function
 
-    def parse(source, source_name: "Untitled presentation")
+    def parse(source, source_name: "Untitled presentation", mode: :presentation)
       raise ArgumentError, "The selected file did not contain readable text." unless source.is_a?(String)
+
+      mode = mode.to_sym
+      raise ArgumentError, "Unsupported document mode" unless %i[presentation document].include?(mode)
 
       theme = presentation_theme_from_source(source)
       typography = presentation_typography_from_source(source)
       margin_settings = presentation_margin_settings_from_source(source)
       content = content_without_front_matter(source)
-      sections = split_sections(content)
+      sections = mode == :document ? [content] : split_sections(content)
       context = { section: nil, subsection: nil }
       slides = sections.map.with_index do |section, index|
-        metadata = slide_metadata(section, context)
+        metadata = slide_metadata(section, context, mode: mode)
         Slide.new(
           id: "#{source_name}-#{index + 1}",
           index: index,
@@ -38,6 +41,7 @@ module Presentations
       end
       Parsed.new(
         source_name: source_name,
+        mode: mode,
         presentation_theme: theme,
         presentation_typography: typography,
         margin_settings: margin_settings,
@@ -263,9 +267,13 @@ module Presentations
       end
     end
 
-    def slide_metadata(markdown, context)
+    def slide_metadata(markdown, context, mode: :presentation)
       normalized = markdown.gsub(/\r\n?/, "\n")
-      margin = parse_margin_directives(normalized, context)
+      margin = if mode == :presentation
+        parse_margin_directives(normalized, context)
+      else
+        { content: normalized, section: nil, subsection: nil, footnote: nil, warnings: [] }
+      end
       normalized = margin[:content]
       parsed = parse_blocks(normalized)
       content = parsed[:blocks].map(&:markdown).join("\n\n")

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_04_232433) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_16_120000) do
   create_table "presentations", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.string "fork_parent_title"
@@ -22,8 +22,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_04_232433) do
     t.text "source", null: false
     t.string "title", null: false
     t.datetime "updated_at", null: false
-    t.index ["sample_id"], name: "index_presentations_on_sample_id", unique: true
+    t.string "work_type", default: "presentation", null: false
     t.index ["parent_id"], name: "index_presentations_on_parent_id"
+    t.index ["sample_id"], name: "index_presentations_on_sample_id", unique: true
+    t.index ["work_type"], name: "index_presentations_on_work_type"
   end
 
   create_table "snippets", force: :cascade do |t|

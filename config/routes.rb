@@ -10,8 +10,17 @@ Rails.application.routes.draw do
     end
     member do
       get :present
+      match :preview, via: %i[get post]
       patch :rename
       post :fork
+    end
+  end
+
+  resources :documents do
+    collection { post :start }
+    member do
+      match :preview, via: %i[get post]
+      patch :rename
     end
   end
 

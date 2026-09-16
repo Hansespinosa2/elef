@@ -20,8 +20,10 @@
       <%= link_to "Elef", root_path, class: "brand font-extrabold tracking-[-0.04em] no-underline", data: { turbo: false } %>
       <nav class="flex gap-4">
         <%= link_to "Library", presentations_path, class: "hover:underline" %>
+        <%= link_to "Documents", documents_path, class: "hover:underline" %>
         <%= link_to "Snippets", snippets_path, class: "hover:underline" %>
         <%= link_to "New presentation", new_presentation_path, class: "hover:underline" %>
+        <%= link_to "New document", new_document_path, class: "hover:underline" %>
       </nav>
     </header>
 

@@ -1,0 +1,16 @@
+<% content_for :title, @document.title %>
+<section class="show-header mb-8 flex items-end justify-between gap-4 max-[920px]:flex-col max-[920px]:items-stretch">
+  <div>
+    <p class="eyebrow mb-1 text-xs font-extrabold uppercase tracking-[0.12em] text-[#6d4aff]">Saved document</p>
+    <h1 class="mb-0 text-4xl font-bold"><%= @document.title %></h1>
+    <p class="mt-2 text-[#6f675c]">Continuous Markdown rendered from the saved source.</p>
+  </div>
+  <div class="show-actions flex flex-wrap items-center gap-3">
+    <%= link_to "Library", documents_path, class: "button inline-flex min-h-10 items-center rounded-full border border-[#ddd5c8] bg-[#fffdf8] px-4 py-2 font-bold no-underline hover:bg-[#f7efe2]" %>
+    <%= link_to "Edit", edit_document_path(@document), class: "button primary inline-flex min-h-10 items-center rounded-full border border-[#6d4aff] bg-[#6d4aff] px-4 py-2 font-bold text-white no-underline hover:brightness-95" %>
+  </div>
+</section>
+<%= render "works/warnings", warnings: @document.preview_warnings %>
+<div class="saved-document-preview mt-6">
+  <%= render "documents/content", document: @document %>
+</div>

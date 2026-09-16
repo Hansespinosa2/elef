@@ -602,6 +602,29 @@ body.elef-app {
 .autosave-retry:focus-visible { outline: 2px solid var(--oradia-green); outline-offset: 3px; }
 .autosave-retry { border: 1px solid var(--oradia-green); border-radius: 999px; color: var(--oradia-ink); cursor: pointer; padding: 0.5rem 1rem; }
 .elef-app .dirty-state[data-autosave-state="error"] { color: #f3c7c9 !important; }
+.library-tabs { border-bottom: 1px solid var(--oradia-line); padding-bottom: 0.75rem; }
+.library-tab { border: 1px solid var(--oradia-slate-700); border-radius: 999px; color: var(--oradia-muted); font-weight: 700; padding: 0.5rem 1rem; text-decoration: none; }
+.library-tab:hover, .library-tab.is-active { background: var(--oradia-slate-800); color: var(--oradia-ink); }
+.preview-warnings { margin-bottom: 1rem; }
+.preview-warnings[hidden] { display: none; }
+.document-surface { background: linear-gradient(135deg, var(--oradia-paper-bright), var(--oradia-paper)); border: 1px solid var(--oradia-paper-line); border-radius: 0.75rem; box-shadow: 0 24px 60px rgba(35, 29, 20, 0.08); color: var(--oradia-paper-ink); padding: clamp(1.5rem, 5vw, 5rem); }
+.document-surface h1, .document-surface h2, .document-surface h3, .document-surface h4, .document-surface h5, .document-surface h6 { margin-bottom: 0.75rem; }
+.document-surface p, .document-surface li, .document-surface blockquote, .document-surface td, .document-surface th { font-size: clamp(1rem, 1.5vw, 1.2rem); line-height: 1.6; }
+.document-surface ul { list-style: disc; padding-left: 1.5em; }
+.document-surface ol { list-style: decimal; padding-left: 1.5em; }
+.document-surface hr { border: 0; border-top: 1px solid var(--presentation-line); margin: 2rem 0; }
+.document-block { width: 100%; }
+.document-block.position-left { text-align: left; }
+.document-block.position-center { align-self: center; text-align: center; }
+.document-block.position-right { align-self: flex-end; text-align: right; }
+.document-block.position-top { justify-content: flex-start; }
+.document-block.position-middle { display: flex; flex-direction: column; justify-content: center; min-height: 8rem; }
+.document-block.position-bottom { display: flex; flex-direction: column; justify-content: flex-end; min-height: 8rem; }
+.document-surface pre { background: #191714; border-radius: 0.75rem; color: #fff7e8; overflow: auto; padding: 1rem; }
+.document-surface table { border-collapse: collapse; width: 100%; }
+.document-surface th, .document-surface td { border: 1px solid var(--presentation-line); padding: 0.35rem 0.5rem; }
+.document-surface img { max-width: 100%; }
+.document-surface a { color: inherit; }
 
 @media (max-width: 920px) {
   .library-actions { width: 100%; }

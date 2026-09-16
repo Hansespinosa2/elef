@@ -1,49 +1,64 @@
-<% content_for :title, "Elef presentation library" %>
+<% current_filter = @filter || "all" %>
+<% title = current_filter == "documents" ? "Document library" : current_filter == "presentations" ? "Presentation library" : "Work library" %>
+<% content_for :title, "Elef #{title.downcase}" %>
 <section class="library-hero mb-8 flex items-end justify-between gap-4 max-[920px]:flex-col max-[920px]:items-stretch">
   <div>
-    <p class="eyebrow mb-1 text-xs font-extrabold uppercase tracking-[0.12em] text-[#6d4aff]">Markdown presentations</p>
-    <h1 class="mb-0 text-4xl font-bold">Presentation library</h1>
-    <p class="mt-2 text-[#6f675c]">Create, save, reopen, and present source-first Markdown decks.</p>
+    <p class="eyebrow mb-1 text-xs font-extrabold uppercase tracking-[0.12em] text-[#6d4aff]">Markdown workspace</p>
+    <h1 class="mb-0 text-4xl font-bold"><%= title %></h1>
+    <p class="mt-2 text-[#6f675c]">Author source-first Markdown documents and presentations in one library.</p>
   </div>
   <div class="card-actions flex flex-wrap items-center gap-3">
-    <%= button_to "Load sample presentations", load_samples_presentations_path, method: :post, class: "button inline-flex min-h-10 cursor-pointer items-center gap-1 rounded-full border border-[#ddd5c8] bg-[#fffdf8] px-4 py-2 font-bold text-[#1e1c18] no-underline hover:bg-[#f7efe2]" %>
+    <%= button_to "Load sample presentations", load_samples_presentations_path, method: :post, class: "button inline-flex min-h-10 cursor-pointer items-center gap-1 rounded-full border border-[#ddd5c8] bg-[#fffdf8] px-4 py-2 font-bold text-[#1e1c18] no-underline hover:bg-[#f7efe2]" if current_filter != "documents" %>
+    <%= link_to "New document", new_document_path, class: "button inline-flex min-h-10 items-center rounded-full border border-[#ddd5c8] bg-[#fffdf8] px-4 py-2 font-bold no-underline hover:bg-[#f7efe2]" %>
     <%= button_to "New presentation", start_presentations_path, method: :post, class: "button primary inline-flex min-h-10 cursor-pointer items-center gap-1 rounded-full border border-[#6d4aff] bg-[#6d4aff] px-4 py-2 font-bold text-white no-underline hover:brightness-95" %>
   </div>
 </section>
 
-<%= render "lineage_graph", presentations: @presentations %>
+<nav class="library-tabs mb-6 flex flex-wrap gap-2" aria-label="Library views">
+  <%= link_to "All", presentations_path(type: "all"), class: "library-tab #{current_filter == 'all' ? 'is-active' : ''}", aria: { current: current_filter == "all" ? "page" : nil } %>
+  <%= link_to "Documents", documents_path, class: "library-tab #{current_filter == 'documents' ? 'is-active' : ''}", aria: { current: current_filter == "documents" ? "page" : nil } %>
+  <%= link_to "Presentations", presentations_path(type: "presentations"), class: "library-tab #{current_filter == 'presentations' ? 'is-active' : ''}", aria: { current: current_filter == "presentations" ? "page" : nil } %>
+</nav>
 
-<section class="library-list mt-8 grid gap-4" aria-label="Saved presentations">
-  <% if @presentations.any? %>
-    <% @presentations.each do |presentation| %>
-      <article id="<%= dom_id(presentation) %>" class="library-card flex items-center justify-between rounded-2xl border border-[#ddd5c8] bg-[#fffdf8] p-5 max-[920px]:flex-col max-[920px]:items-stretch">
+<%= render "lineage_graph", presentations: @lineage_presentations if @lineage_presentations.any? %>
+
+<section class="library-list mt-8 grid gap-4" aria-label="Saved <%= current_filter %>">
+  <% if @works.any? %>
+    <% @works.each do |work| %>
+      <article id="<%= work_dom_id(work) %>" class="library-card flex items-center justify-between rounded-2xl border border-[#ddd5c8] bg-[#fffdf8] p-5 max-[920px]:flex-col max-[920px]:items-stretch">
         <div>
-          <h2 class="mb-2 text-2xl font-bold"><%= link_to presentation.title, edit_presentation_path(presentation), class: "hover:underline" %></h2>
-          <p class="text-[#6f675c]"><%= pluralize(presentation.slides.length, "slide") %> · Updated <%= time_ago_in_words(presentation.updated_at) %> ago</p>
-          <% if presentation.parent %><p class="mt-1 text-sm text-[#6f675c]">Forked from <%= presentation.parent.title %> · <%= presentation.fork_type %></p><% elsif presentation.fork_parent_title.present? %><p class="mt-1 text-sm text-[#a63a2d]">Parent no longer available · <%= presentation.fork_type %></p><% end %>
+          <p class="eyebrow mb-1 text-xs font-extrabold uppercase tracking-[0.12em] text-[#6d4aff]"><%= work_type_label(work) %></p>
+          <h2 class="mb-2 text-2xl font-bold"><%= link_to work.title, work_edit_path(work), class: "hover:underline" %></h2>
+          <p class="text-[#6f675c]">
+            <% if work.presentation? %><%= pluralize(work.slides.length, "slide") %> · <% else %>Continuous Markdown · <% end %>
+            Updated <%= time_ago_in_words(work.updated_at) %> ago
+          </p>
+          <% if work.presentation? && work.parent %><p class="mt-1 text-sm text-[#6f675c]">Forked from <%= work.parent.title %> · <%= work.fork_type %></p><% elsif work.presentation? && work.fork_parent_title.present? %><p class="mt-1 text-sm text-[#a63a2d]">Parent no longer available · <%= work.fork_type %></p><% end %>
         </div>
         <div class="library-actions">
           <div class="library-open-actions">
-            <%= link_to "Edit", edit_presentation_path(presentation), class: "button primary" %>
-            <%= link_to "Preview", presentation_path(presentation), class: "hover:underline" %>
-            <%= link_to "Present", present_presentation_path(presentation), class: "hover:underline", data: { turbo: false } %>
+            <%= link_to "Edit", work_edit_path(work), class: "button primary" %>
+            <%= link_to "Preview", work_show_path(work), class: "hover:underline" %>
+            <%= link_to "Present", present_presentation_path(work), class: "hover:underline", data: { turbo: false } if work.presentation? %>
           </div>
           <div class="library-manage-actions">
             <details class="rename-menu relative">
               <summary>Rename</summary>
-              <%= form_with scope: :presentation, url: rename_presentation_path(presentation), method: :patch, class: "library-rename inline-flex items-center gap-2" do |form| %>
-                <%= form.text_field :title, id: dom_id(presentation, :rename_title), value: presentation.title, aria: { label: "Rename #{presentation.title}" }, class: "w-40 rounded-lg border border-[#ddd5c8] bg-white px-2 py-1" %>
+              <%= form_with scope: work_param_key(work), url: work_rename_path(work), method: :patch, class: "library-rename inline-flex items-center gap-2" do |form| %>
+                <%= form.text_field :title, id: "#{work_dom_id(work)}_rename_title", value: work.title, aria: { label: "Rename #{work.title}" }, class: "w-40 rounded-lg border border-[#ddd5c8] bg-white px-2 py-1" %>
                 <%= form.submit "Save title", class: "cursor-pointer rounded-full border border-[#ddd5c8] bg-[#fffdf8] px-3 py-1 font-bold" %>
               <% end %>
             </details>
-            <details class="fork-menu relative">
-              <summary class="cursor-pointer list-none rounded-full border border-[#ddd5c8] bg-[#fffdf8] px-3 py-1 font-bold">Fork</summary>
-              <div class="fork-menu-options absolute right-0 z-10 mt-2 grid min-w-44 gap-1 rounded-xl border border-[#ddd5c8] bg-[#fffdf8] p-2 shadow-lg">
-                <%= button_to "As continuation", fork_presentation_path(presentation), method: :post, params: { fork_type: "continuation" }, class: "cursor-pointer rounded-lg px-3 py-2 text-left font-bold hover:bg-[#f7efe2]" %>
-                <%= button_to "As inspiration", fork_presentation_path(presentation), method: :post, params: { fork_type: "inspiration" }, class: "cursor-pointer rounded-lg px-3 py-2 text-left font-bold hover:bg-[#f7efe2]" %>
-              </div>
-            </details>
-            <%= button_to "Delete", presentation_path(presentation), method: :delete, form: { data: { turbo_confirm: "Delete #{presentation.title}?" } }, class: "cursor-pointer rounded-full border border-[#efb0a8] bg-[#fff1ee] px-3 py-1 font-bold text-[#a63a2d]" %>
+            <% if work.presentation? %>
+              <details class="fork-menu relative">
+                <summary class="cursor-pointer list-none rounded-full border border-[#ddd5c8] bg-[#fffdf8] px-3 py-1 font-bold">Fork</summary>
+                <div class="fork-menu-options absolute right-0 z-10 mt-2 grid min-w-44 gap-1 rounded-xl border border-[#ddd5c8] bg-[#fffdf8] p-2 shadow-lg">
+                  <%= button_to "As continuation", fork_presentation_path(work), method: :post, params: { fork_type: "continuation" }, class: "cursor-pointer rounded-lg px-3 py-2 text-left font-bold hover:bg-[#f7efe2]" %>
+                  <%= button_to "As inspiration", fork_presentation_path(work), method: :post, params: { fork_type: "inspiration" }, class: "cursor-pointer rounded-lg px-3 py-2 text-left font-bold hover:bg-[#f7efe2]" %>
+                </div>
+              </details>
+            <% end %>
+            <%= button_to "Delete", work_delete_path(work), method: :delete, form: { data: { turbo_confirm: "Delete #{work.title}?" } }, class: "cursor-pointer rounded-full border border-[#efb0a8] bg-[#fff1ee] px-3 py-1 font-bold text-[#a63a2d]" %>
           </div>
         </div>
       </article>
@@ -51,10 +66,10 @@
   <% else %>
     <div class="empty-state flex items-center justify-between rounded-2xl border border-[#ddd5c8] bg-[#fffdf8] p-5 max-[920px]:flex-col max-[920px]:items-stretch">
       <div>
-        <h2 class="mb-2 text-2xl font-bold">No presentations yet</h2>
-        <p class="text-[#6f675c]">Start with Markdown. Elef stores the source and derives every slide from it.</p>
+        <h2 class="mb-2 text-2xl font-bold">No <%= current_filter == "all" ? "work" : current_filter %> yet</h2>
+        <p class="text-[#6f675c]">Start with Markdown. Elef stores the source and derives the rendered result.</p>
       </div>
-      <%= button_to "Create your first presentation", start_presentations_path, method: :post, class: "button primary inline-flex min-h-10 cursor-pointer items-center gap-1 rounded-full border border-[#6d4aff] bg-[#6d4aff] px-4 py-2 font-bold text-white no-underline hover:brightness-95" %>
+      <%= button_to "Create your first #{current_filter == "documents" ? "document" : "presentation"}", work_start_path(current_filter == "documents" ? "document" : "presentation"), method: :post, class: "button primary inline-flex min-h-10 cursor-pointer items-center gap-1 rounded-full border border-[#6d4aff] bg-[#6d4aff] px-4 py-2 font-bold text-white no-underline hover:brightness-95" %>
     </div>
   <% end %>
 </section>
