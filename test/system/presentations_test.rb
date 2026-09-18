@@ -403,6 +403,7 @@ class PresentationsTest < ApplicationSystemTestCase
     find("summary", text: "New").click
     assert_equal "pointer", page.evaluate_script("getComputedStyle(document.querySelector('.new-work-trigger')).cursor")
     assert_equal "pointer", page.evaluate_script("getComputedStyle(document.querySelector('.new-work-option')).cursor")
+    assert_equal "pointer", page.evaluate_script("getComputedStyle(document.querySelector('.library-tools > summary')).cursor")
     within ".new-work-panel" do
       click_on "Presentation"
     end
