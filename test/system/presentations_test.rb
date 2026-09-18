@@ -400,8 +400,12 @@ class PresentationsTest < ApplicationSystemTestCase
 
   test "user creates saves and reopens a markdown presentation" do
     visit presentations_path
-    find("summary", text: "New work").click
-    click_on "New presentation"
+    find("summary", text: "New").click
+    assert_equal "pointer", page.evaluate_script("getComputedStyle(document.querySelector('.new-work-trigger')).cursor")
+    assert_equal "pointer", page.evaluate_script("getComputedStyle(document.querySelector('.new-work-option')).cursor")
+    within ".new-work-panel" do
+      click_on "Presentation"
+    end
 
     fill_in "Title", with: "System Deck"
     source = "# First\n\nBody\n---\n# Second"
