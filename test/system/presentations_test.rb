@@ -400,7 +400,8 @@ class PresentationsTest < ApplicationSystemTestCase
 
   test "user creates saves and reopens a markdown presentation" do
     visit presentations_path
-    click_on "New presentation", match: :first
+    find("summary", text: "New work").click
+    click_on "New presentation"
 
     fill_in "Title", with: "System Deck"
     source = "# First\n\nBody\n---\n# Second"

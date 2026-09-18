@@ -37,13 +37,13 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
 
     get documents_path
     assert_response :success
-    assert_select "h1", "Document library"
+    assert_select "h1", "Library"
     assert_select "##{ActionView::RecordIdentifier.dom_id(document)}"
     assert_select "#presentation_#{presentations(:one).id}", count: 0
 
     get presentations_path, params: { type: "all" }
     assert_response :success
-    assert_select "h1", "Work library"
+    assert_select "h1", "Library"
     assert_select "#document_#{document.id}"
     assert_select "#presentation_#{presentations(:one).id}"
   end

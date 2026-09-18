@@ -98,18 +98,18 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
 
     get root_path
     assert_response :success
-    assert_select "h1", "Work library"
+    assert_select "h1", "Library"
     assert_select "#document_#{Document.order(:id).last.id}"
 
     get presentations_path
-    assert_select "h1", "Presentation library"
+    assert_select "h1", "Library"
     assert_select "#document_#{Document.order(:id).last.id}", count: 0
   end
 
   test "library loads" do
     get presentations_path
     assert_response :success
-    assert_select "h1", "Presentation library"
+    assert_select "h1", "Library"
     assert_select 'body.elef-app'
     assert_select 'link[href*="tailwind"]'
     assert_select 'link[href*="katex/katex.min"]'

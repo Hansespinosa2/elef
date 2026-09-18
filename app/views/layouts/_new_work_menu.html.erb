@@ -1,0 +1,27 @@
+<details class="new-work-menu relative">
+  <summary class="new-work-trigger">
+    <span class="new-work-plus" aria-hidden="true">+</span>
+    <span>New work</span>
+    <span class="new-work-chevron" aria-hidden="true"></span>
+  </summary>
+  <div class="new-work-panel">
+    <div class="new-work-intro">
+      <p class="new-work-label">Start writing</p>
+      <p class="new-work-description">Choose a format for your next idea.</p>
+    </div>
+    <%= link_to new_document_path, class: "new-work-option" do %>
+      <span class="new-work-icon new-work-icon-document" aria-hidden="true">▤</span>
+      <span>
+        <strong>New document</strong>
+        <small>Continuous Markdown for notes and writing</small>
+      </span>
+    <% end %>
+    <%= link_to new_presentation_path, class: "new-work-option" do %>
+      <span class="new-work-icon new-work-icon-presentation" aria-hidden="true">▥</span>
+      <span>
+        <strong>New presentation</strong>
+        <small>Slide-based Markdown for talks and decks</small>
+      </span>
+    <% end %>
+  </div>
+</details>

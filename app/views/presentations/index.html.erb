@@ -1,17 +1,24 @@
 <% current_filter = @filter || "all" %>
-<% title = current_filter == "documents" ? "Document library" : current_filter == "presentations" ? "Presentation library" : "Work library" %>
-<% content_for :title, "Elef #{title.downcase}" %>
+<% title = "Library" %>
+<% description = current_filter == "documents" ? "Long-form Markdown, gathered in one calm place." : current_filter == "presentations" ? "Slide-based Markdown, ready to shape into a story." : "One home for your documents, presentations, and source." %>
+<% content_for :title, "Elef library" %>
 <section class="library-hero mb-8 flex items-end justify-between gap-4 max-[920px]:flex-col max-[920px]:items-stretch">
   <div>
-    <p class="eyebrow mb-1 text-xs font-extrabold uppercase tracking-[0.12em] text-[#6d4aff]">Markdown workspace</p>
+    <div class="library-kicker">
+      <p class="eyebrow mb-1 text-xs font-extrabold uppercase tracking-[0.12em] text-[#6d4aff]">Your workspace</p>
+      <span class="library-count"><%= pluralize(@works.size, "work") %></span>
+    </div>
     <h1 class="mb-0 text-4xl font-bold"><%= title %></h1>
-    <p class="mt-2 text-[#6f675c]">Author source-first Markdown documents and presentations in one library.</p>
+    <p class="mt-2 text-[#6f675c]"><%= description %></p>
   </div>
-  <div class="card-actions flex flex-wrap items-center gap-3">
-    <%= button_to "Load sample presentations", load_samples_presentations_path, method: :post, class: "button inline-flex min-h-10 cursor-pointer items-center gap-1 rounded-full border border-[#ddd5c8] bg-[#fffdf8] px-4 py-2 font-bold text-[#1e1c18] no-underline hover:bg-[#f7efe2]" if current_filter != "documents" %>
-    <%= link_to "New document", new_document_path, class: "button inline-flex min-h-10 items-center rounded-full border border-[#ddd5c8] bg-[#fffdf8] px-4 py-2 font-bold no-underline hover:bg-[#f7efe2]" %>
-    <%= button_to "New presentation", start_presentations_path, method: :post, class: "button primary inline-flex min-h-10 cursor-pointer items-center gap-1 rounded-full border border-[#6d4aff] bg-[#6d4aff] px-4 py-2 font-bold text-white no-underline hover:brightness-95" %>
-  </div>
+  <% if current_filter != "documents" %>
+    <details class="library-tools">
+      <summary>More</summary>
+      <div class="library-tools-panel">
+        <%= button_to "Load sample presentations", load_samples_presentations_path, method: :post, class: "library-tool-action" %>
+      </div>
+    </details>
+  <% end %>
 </section>
 
 <nav class="library-tabs mb-6 flex flex-wrap gap-2" aria-label="Library views">

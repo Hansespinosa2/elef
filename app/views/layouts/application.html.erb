@@ -16,15 +16,17 @@
     <%= javascript_importmap_tags %>
   </head>
   <body class="elef-app m-0 bg-[#f6f4ef] text-[#1e1c18] font-sans">
-    <header class="app-header sticky top-0 z-10 flex items-center justify-between border-b border-[#ddd5c8] bg-[rgba(255,253,248,0.94)] px-[clamp(1rem,4vw,3rem)] py-4">
-      <%= link_to "Elef", root_path, class: "brand font-extrabold tracking-[-0.04em] no-underline", data: { turbo: false } %>
-      <nav class="flex gap-4">
-        <%= link_to "Library", presentations_path(type: "all"), class: "hover:underline" %>
-        <%= link_to "Documents", documents_path, class: "hover:underline" %>
-        <%= link_to "Snippets", snippets_path, class: "hover:underline" %>
-        <%= link_to "New presentation", new_presentation_path, class: "hover:underline" %>
-        <%= link_to "New document", new_document_path, class: "hover:underline" %>
-      </nav>
+    <header class="app-header sticky top-0 z-10 border-b border-[#ddd5c8] bg-[rgba(255,253,248,0.94)] px-[clamp(1rem,4vw,3rem)] py-4">
+      <div class="app-header-inner mx-auto flex max-w-[1440px] flex-wrap items-center gap-8">
+        <div class="app-header-identity flex shrink-0 items-center">
+          <%= link_to "Elef", root_path, class: "brand font-extrabold tracking-[-0.04em] no-underline", data: { turbo: false } %>
+        </div>
+        <nav class="app-nav mr-auto flex items-center gap-1" aria-label="Primary">
+          <%= link_to "Library", presentations_path(type: "all"), class: "app-nav-link #{'is-active' if %w[presentations documents].include?(controller_name)}" %>
+          <%= link_to "Snippets", snippets_path, class: "app-nav-link #{'is-active' if controller_name == 'snippets'}" %>
+        </nav>
+        <%= render "layouts/new_work_menu" %>
+      </div>
     </header>
 
     <main class="app-shell mx-auto max-w-[1440px] p-[clamp(1rem,4vw,3rem)]">
