@@ -4,20 +4,20 @@
     <span>New work</span>
     <span class="new-work-chevron" aria-hidden="true"></span>
   </summary>
-  <div class="new-work-panel">
-    <div class="new-work-intro">
-      <p class="new-work-label">Start writing</p>
-      <p class="new-work-description">Choose a format for your next idea.</p>
+  <div class="new-work-panel absolute right-0 top-full z-20 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-xl border border-[#304047] bg-[#182126] p-2 shadow-2xl">
+    <div class="new-work-intro border-b border-[#304047] px-3 py-3">
+      <p class="new-work-label mb-0 text-xs font-extrabold uppercase tracking-wider text-[#9fc5a9]">Start writing</p>
+      <p class="new-work-description mt-1 mb-0 text-xs text-[#aab7b1]">Choose a format for your next idea.</p>
     </div>
-    <%= link_to new_document_path, class: "new-work-option" do %>
-      <span class="new-work-icon new-work-icon-document" aria-hidden="true">▤</span>
+    <%= link_to new_document_path, class: "new-work-option flex items-start gap-3 rounded-lg p-3 no-underline" do %>
+      <span class="new-work-icon new-work-icon-document inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[#304047] bg-[#202c32] text-[#9fc5a9]" aria-hidden="true">▤</span>
       <span>
         <strong>New document</strong>
         <small>Continuous Markdown for notes and writing</small>
       </span>
     <% end %>
-    <%= link_to new_presentation_path, class: "new-work-option" do %>
-      <span class="new-work-icon new-work-icon-presentation" aria-hidden="true">▥</span>
+    <%= link_to new_presentation_path, class: "new-work-option flex items-start gap-3 rounded-lg p-3 no-underline" do %>
+      <span class="new-work-icon new-work-icon-presentation inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[#304047] bg-[#202c32] text-[#9fc5a9]" aria-hidden="true">▥</span>
       <span>
         <strong>New presentation</strong>
         <small>Slide-based Markdown for talks and decks</small>
