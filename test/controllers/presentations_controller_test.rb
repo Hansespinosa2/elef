@@ -81,6 +81,11 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_select "form[action='#{publish_presentation_path(presentations(:one))}'] button.button", text: "Present"
     assert_select 'form[data-controller~="autosave"] form', count: 0
     assert_select '[data-autosave-target="retry"]'
+    assert_select '[data-controller~="editor"]'
+    assert_select '[data-editor-target="surface"][role="textbox"]'
+    assert_select 'textarea[name="presentation[source]"][data-editor-target="input"]'
+    assert_select '[data-editor-target="mode"]', text: "Standard"
+    assert_select '[data-editor-target="vimToggle"]'
     get new_presentation_path
     assert_select 'form[data-controller~="autosave"]', count: 0
     assert_select 'form[data-controller~="preview"]'
