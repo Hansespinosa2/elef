@@ -1,4 +1,5 @@
 import { Controller } from "@hotwired/stimulus"
+import { editorFor } from "controllers/editor_controller"
 
 const MODIFIER_ORDER = ["hat", "tilde", "b", "T"]
 const MODIFIERS = {
@@ -74,10 +75,31 @@ export function insideMath(text, caret) {
 export default class extends Controller {
   static targets = ["editor"]
 
+  connect() {
+    this.editorController = editorFor(this.element)
+    this.editorReady = () => { this.editorController ||= editorFor(this.element); this.setupEditor() }
+    this.element.addEventListener("elef:editor-ready", this.editorReady)
+    this.setupEditor()
+  }
+
+  disconnect() {
+    if (this.editorController && this.keydownBound) this.editorController.dom.removeEventListener("keydown", this.handleEditorKeydown, true)
+    this.element.removeEventListener("elef:editor-ready", this.editorReady)
+  }
+
+  setupEditor() {
+    if (this.editorController && !this.keydownBound) {
+      this.handleEditorKeydown = (event) => this.keydown(event)
+      this.editorController.dom.addEventListener("keydown", this.handleEditorKeydown, true)
+      this.keydownBound = true
+    }
+  }
+
   keydown(event) {
     if (!["Enter", "Tab"].includes(event.key)) return
 
-    const editor = this.editorTarget
+    const editor = this.editorController
+    if (!editor || !editor.insertMode) return
     if (editor.selectionStart !== editor.selectionEnd) return
     const caret = editor.selectionStart
     if (!insideMath(editor.value, caret)) return
@@ -90,7 +112,6 @@ export default class extends Controller {
     if (!expansion) return
 
     event.preventDefault()
-    editor.setRangeText(expansion, caret - match[1].length, caret, "end")
-    editor.dispatchEvent(new Event("input", { bubbles: true }))
+    editor.replaceRange(expansion, caret - match[1].length, caret)
   }
 }
