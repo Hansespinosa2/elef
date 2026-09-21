@@ -112,6 +112,23 @@ body.elef-app {
 .elef-app .error-panel { background: #3a2428 !important; border-color: #92565e !important; color: #f3c7c9 !important; }
 .elef-app .flash { background: #263c31 !important; border-color: #4f8b68 !important; color: #d7eddb; }
 .field-hint { color: var(--oradia-muted); font-size: 0.82rem; line-height: 1.45; margin: 0.5rem 0 0; }
+.editor-toolbar { color: var(--oradia-muted); font-size: 0.78rem; min-height: 1.8rem; }
+.editor-mode { border: 1px solid var(--oradia-slate-700); border-radius: 999px; color: var(--oradia-green); font-weight: 800; padding: 0.28rem 0.65rem; }
+.editor-mode[data-mode="insert"] { color: #f0d56b; }
+.editor-mode[data-mode="visual"] { color: #d5b4ff; }
+.editor-command { color: var(--oradia-ink); font-family: var(--oradia-mono); min-width: 1rem; }
+.editor-settings { position: relative; }
+.editor-settings summary { border: 1px solid var(--oradia-slate-700); border-radius: 999px; color: var(--oradia-muted); cursor: pointer; padding: 0.28rem 0.7rem; }
+.editor-settings summary:hover, .editor-settings[open] summary { background: var(--oradia-slate-800); color: var(--oradia-ink); }
+.editor-settings-panel { background: var(--oradia-slate-900); border: 1px solid var(--oradia-slate-700); border-radius: 0.75rem; box-shadow: 0 18px 45px #0006; display: grid; gap: 0.7rem; left: 0; padding: 0.8rem; position: absolute; right: auto; top: calc(100% + 0.5rem); width: min(24rem, calc(100vw - 2rem)); z-index: 30; }
+.editor-setting-row { align-items: center; color: var(--oradia-muted); display: flex; gap: 0.55rem; justify-content: space-between; }
+.editor-setting-row select { background: var(--oradia-slate-950); border: 1px solid var(--oradia-slate-700); border-radius: 0.45rem; color: var(--oradia-ink); max-width: 14rem; padding: 0.3rem; }
+.editor-surface { font-family: var(--oradia-mono); line-height: 1.55; min-height: 36rem; position: relative; resize: vertical; }
+.editor-surface .cm-editor { border: 1px solid var(--oradia-slate-700); border-radius: 0.75rem; min-height: 36rem; overflow: hidden; }
+.editor-surface .cm-editor.cm-focused { border-color: var(--oradia-green); box-shadow: 0 0 0 3px rgba(159, 197, 169, 0.18); }
+.editor-surface .cm-vim-panel { background: var(--oradia-slate-950); border-top: 1px solid var(--oradia-slate-700); color: var(--oradia-ink); min-height: 1.7rem; padding: 0.25rem 0.65rem; }
+.editor-surface .cm-vim-panel input { color: var(--oradia-ink); }
+.editor-input-proxy { background: transparent !important; border: 0 !important; color: transparent !important; font-size: 1px !important; height: 1px !important; left: 0; line-height: 1px !important; padding: 0 !important; pointer-events: auto; position: absolute; top: 2.4rem; width: 1px !important; z-index: 1; }
 .snippet-palette {
   position: fixed;
   z-index: 20;
