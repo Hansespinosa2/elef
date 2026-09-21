@@ -232,6 +232,7 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_select ".presentation-mode.presentation-surface"
     assert_select ".slides-typography-book"
     assert_select 'link[href*="tailwind"]', count: 0
+    assert_select 'link[rel="icon"][href="/icon.svg"]'
     assert_select ".presentation-slide", 2
   end
 
