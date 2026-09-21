@@ -18,6 +18,12 @@ class DocumentLinksTest < ActiveSupport::TestCase
       DocumentLinks::Parser.rewrite(source, "Old title", "New title")
   end
 
+  test "identifies titles that can round-trip through the bare link syntax" do
+    assert DocumentLinks::Parser.linkable_title?("Readable title")
+    refute DocumentLinks::Parser.linkable_title?("Title with ]")
+    refute DocumentLinks::Parser.linkable_title?("Title with `code`")
+  end
+
   test "renders resolved links and keeps missing links visibly unresolved" do
     target = Document.create!(title: "Target", source: "# Target")
 

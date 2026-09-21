@@ -7,7 +7,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
     visit edit_document_path(document)
     editor = find_field("Markdown source")
-    fill_in "Markdown source", with: "# Source\n\n[[Research ta"
+    fill_in "Markdown source", with: "# Source\n\n    [[Not a link]]\n\n[[Research ta"
 
     assert_selector ".document-link-option", text: "Research target", wait: 5
     editor.send_keys(:enter)
@@ -41,12 +41,29 @@ class DocumentsTest < ApplicationSystemTestCase
     end
     assert_selector ".document-graph-node.is-highlighted", count: 1
 
+    fill_in "Find a document", with: "Graph source"
+    assert_selector ".document-graph-node.is-search-match", count: 1
+    fill_in "Find a document", with: ""
+    assert_no_selector ".document-graph-node.is-search-match"
+
+    edge_geometry = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const edge = document.querySelector('.document-graph-edge');
+        const source = document.querySelector(".document-graph-node[data-node-id='#{source.id}']").getAttribute('transform').match(/translate\\(([^ ]+) ([^)]+)\\)/);
+        const target = document.querySelector(".document-graph-node[data-node-id='#{target.id}']").getAttribute('transform').match(/translate\\(([^ ]+) ([^)]+)\\)/);
+        return { targetGap: Math.hypot(Number(target[1]) - Number(edge.getAttribute('x2')), Number(target[2]) - Number(edge.getAttribute('y2'))), sourceGap: Math.hypot(Number(source[1]) - Number(edge.getAttribute('x1')), Number(source[2]) - Number(edge.getAttribute('y1'))) };
+      })()
+    JAVASCRIPT
+    assert_operator edge_geometry["targetGap"], :>=, 12
+    assert_operator edge_geometry["sourceGap"], :>=, 12
+
     find("[aria-label='Zoom in']").click
     assert_selector "[data-document-graph-target='scaleLabel']", text: "120%"
     assert_operator page.evaluate_script("document.documentElement.scrollWidth"), :<=, page.evaluate_script("window.innerWidth")
 
     page.driver.browser.manage.window.resize_to(600, 900)
     assert_operator page.evaluate_script("document.documentElement.scrollWidth"), :<=, page.evaluate_script("window.innerWidth")
+    assert_operator page.evaluate_script("document.querySelector('.document-graph-node text').getBoundingClientRect().height"), :>=, 10
     find(".document-graph-node[data-node-id='#{orphan.id}']").click
     assert_current_path document_path(orphan)
   ensure

@@ -44,6 +44,6 @@ module ApplicationHelper
   end
 
   def document_link_titles
-    Document.order(:title).pluck(:title)
+    Document.order(:title).pluck(:title).select { |title| DocumentLinks::Parser.linkable_title?(title) }
   end
 end

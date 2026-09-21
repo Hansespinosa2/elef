@@ -27,6 +27,11 @@ module DocumentLinks
         tokens
       end
 
+      def linkable_title?(title)
+        title = title.to_s
+        !title.empty? && !title.match?(/[\]\r\n`]/)
+      end
+
       def replace(source)
         source = source.to_s
         tokens = parse(source)
@@ -68,6 +73,7 @@ module DocumentLinks
             start = offset + match.begin(0)
             next if escaped?(line, match.begin(0))
             next if code_ranges.any? { |range| range.cover?(match.begin(0)) }
+            next unless linkable_title?(match[1])
 
             tokens << Token.new(title: match[1], start: start, end: offset + match.end(0))
           end

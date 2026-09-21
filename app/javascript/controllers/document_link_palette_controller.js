@@ -146,21 +146,45 @@ export default class extends Controller {
     let fenceCharacter = null
     let fenceLength = 0
 
-    for (const line of lines) {
-      if (/^( {4}|\t)/.test(line)) return true
+    for (let index = 0; index < lines.length; index += 1) {
+      const line = lines[index]
       const fence = line.match(/^ {0,3}(`{3,}|~{3,})/)
       if (fenced) {
-        if (fence && fence[1][0] === fenceCharacter && fence[1].length >= fenceLength) fenced = false
+        if (fence && fence[1][0] === fenceCharacter && fence[1].length >= fenceLength) {
+          fenced = false
+        } else if (index === lines.length - 1) {
+          // Only the line containing the caret determines whether an
+          // indented/code-fenced context is active for autocomplete.
+          return true
+        }
       } else if (fence) {
         fenced = true
         fenceCharacter = fence[1][0]
         fenceLength = fence[1].length
+        if (index === lines.length - 1) return true
+      } else if (index === lines.length - 1 && /^( {4}|\t)/.test(line)) {
+        return true
       }
     }
 
     if (fenced) return true
-    const backticks = [...source.matchAll(/`+/g)]
-    return backticks.length % 2 === 1
+    return this.insideInlineCode(lines.at(-1))
+  }
+
+  insideInlineCode(line) {
+    let markerLength = 0
+
+    for (let index = 0; index < line.length; index += 1) {
+      if (line[index] !== "`") continue
+
+      let length = 1
+      while (line[index + length] === "`") length += 1
+      if (markerLength === 0) markerLength = length
+      else if (length === markerLength) markerLength = 0
+      index += length - 1
+    }
+
+    return markerLength > 0
   }
 
   close() {

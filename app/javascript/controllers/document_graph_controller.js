@@ -9,25 +9,47 @@ export default class extends Controller {
     this.pan = { x: 0, y: 0 }
     this.drag = null
     this.alpha = 0.9
+    this.boundHandlers = {
+      resize: () => this.render(),
+      pointerdown: (event) => this.startPan(event),
+      pointermove: (event) => this.movePan(event),
+      pointerup: () => this.stopPan(),
+      pointercancel: () => this.stopPan(),
+      wheel: (event) => this.wheel(event)
+    }
+    this.nodeHandlers = new Map()
     this.simulationFrame = requestAnimationFrame(() => this.simulate())
     this.render()
 
     this.nodeTargets.forEach((node) => {
-      node.addEventListener("mouseenter", () => this.highlight(node.dataset.nodeId))
-      node.addEventListener("focus", () => this.highlight(node.dataset.nodeId))
-      node.addEventListener("mouseleave", () => this.highlight())
-      node.addEventListener("blur", () => this.highlight())
+      const handlers = {
+        mouseenter: () => this.highlight(node.dataset.nodeId),
+        focus: () => this.highlight(node.dataset.nodeId),
+        mouseleave: () => this.highlight(),
+        blur: () => this.highlight()
+      }
+      this.nodeHandlers.set(node, handlers)
+      Object.entries(handlers).forEach(([event, handler]) => node.addEventListener(event, handler))
     })
-    this.canvasTarget.addEventListener("pointerdown", (event) => this.startPan(event))
-    this.canvasTarget.addEventListener("pointermove", (event) => this.movePan(event))
-    this.canvasTarget.addEventListener("pointerup", () => this.stopPan())
-    this.canvasTarget.addEventListener("pointercancel", () => this.stopPan())
-    this.canvasTarget.addEventListener("wheel", (event) => this.wheel(event), { passive: false })
+    window.addEventListener("resize", this.boundHandlers.resize)
+    this.canvasTarget.addEventListener("pointerdown", this.boundHandlers.pointerdown)
+    this.canvasTarget.addEventListener("pointermove", this.boundHandlers.pointermove)
+    this.canvasTarget.addEventListener("pointerup", this.boundHandlers.pointerup)
+    this.canvasTarget.addEventListener("pointercancel", this.boundHandlers.pointercancel)
+    this.canvasTarget.addEventListener("wheel", this.boundHandlers.wheel, { passive: false })
   }
 
   disconnect() {
     cancelAnimationFrame(this.simulationFrame)
-    this.canvasTarget?.removeEventListener("pointerup", () => this.stopPan())
+    window.removeEventListener("resize", this.boundHandlers.resize)
+    this.canvasTarget?.removeEventListener("pointerdown", this.boundHandlers.pointerdown)
+    this.canvasTarget?.removeEventListener("pointermove", this.boundHandlers.pointermove)
+    this.canvasTarget?.removeEventListener("pointerup", this.boundHandlers.pointerup)
+    this.canvasTarget?.removeEventListener("pointercancel", this.boundHandlers.pointercancel)
+    this.canvasTarget?.removeEventListener("wheel", this.boundHandlers.wheel)
+    this.nodeHandlers?.forEach((handlers, node) => {
+      Object.entries(handlers).forEach(([event, handler]) => node.removeEventListener(event, handler))
+    })
   }
 
   simulate() {
@@ -93,19 +115,30 @@ export default class extends Controller {
   }
 
   render() {
-    const states = this.nodeStates()
+    this.nodeStates()
+    const canvasScale = Math.max(this.canvasTarget.clientWidth / 1000, 0.01)
+    const labelSize = Math.max(15, 12 / canvasScale)
     this.nodeTargets.forEach((node) => {
       const state = this.nodeStateById.get(String(node.dataset.nodeId))
-      if (state) node.setAttribute("transform", `translate(${state.x} ${state.y})`)
+      if (state) {
+        node.setAttribute("transform", `translate(${state.x} ${state.y})`)
+        node.querySelector("text")?.style.setProperty("font-size", `${labelSize}px`)
+      }
     })
     this.edgeTargets.forEach((edge) => {
       const source = this.nodeStateById.get(String(edge.dataset.sourceId))
       const target = this.nodeStateById.get(String(edge.dataset.targetId))
       if (!source || !target) return
-      edge.setAttribute("x1", source.x)
-      edge.setAttribute("y1", source.y)
-      edge.setAttribute("x2", target.x)
-      edge.setAttribute("y2", target.y)
+      const dx = target.x - source.x
+      const dy = target.y - source.y
+      const distance = Math.max(Math.hypot(dx, dy), 1)
+      const unitX = dx / distance
+      const unitY = dy / distance
+      const nodeRadius = 18
+      edge.setAttribute("x1", source.x + unitX * nodeRadius)
+      edge.setAttribute("y1", source.y + unitY * nodeRadius)
+      edge.setAttribute("x2", target.x - unitX * nodeRadius)
+      edge.setAttribute("y2", target.y - unitY * nodeRadius)
     })
     this.viewportTarget.setAttribute("transform", `translate(${this.pan.x} ${this.pan.y}) scale(${this.zoom})`)
     if (this.hasScaleLabelTarget) this.scaleLabelTarget.textContent = `${Math.round(this.zoom * 100)}%`
@@ -141,6 +174,7 @@ export default class extends Controller {
   closeSearch() {
     this.resultsTarget.hidden = true
     this.statusTarget.textContent = ""
+    this.nodeTargets.forEach((node) => node.classList.remove("is-search-match"))
   }
 
   centerNode(id) {
