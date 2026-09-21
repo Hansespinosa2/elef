@@ -9,6 +9,7 @@ class DocumentsController < ApplicationController
     @works = Document.recent_first
     @presentations = @works
     @lineage_presentations = []
+    @document_graph = DocumentLinks::Graph.new(@works).as_json
     render "presentations/index"
   end
 

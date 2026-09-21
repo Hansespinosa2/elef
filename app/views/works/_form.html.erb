@@ -9,6 +9,12 @@
 <% end %>
 <% form_data = { controller: controllers.join(" "), action: actions.join(" "), dirty_unsaved_message_value: "You have unsaved #{type_label.downcase} changes. Leave without saving?" } %>
 <% form_data[:preview_url_value] = persisted ? work_preview_path(work) : work_preview_collection_path(work) %>
+<% editor_data = { dirty_target: "field", autosave_target: "field", snippet_palette_target: "editor", math_shorthand_target: "editor", action: "input->dirty#markDirty input->snippet-palette#input keydown->snippet-palette#keydown keydown->math-shorthand#keydown" } %>
+<% if work.document? %>
+  <% editor_data[:document_link_palette_target] = "editor" %>
+  <% editor_data[:action] += " input->document-link-palette#input keydown->document-link-palette#keydown" %>
+<% end %>
+<% editor_data[:editor_target] = "input" %>
 <%= form_with model: work, class: "editor-layout grid gap-6 grid-cols-[minmax(320px,0.95fr)_minmax(360px,1.05fr)] max-[920px]:flex max-[920px]:flex-col", data: form_data do |form| %>
   <% if work.errors.any? %>
     <section class="error-panel col-span-full rounded-2xl border border-[#efb0a8] bg-[#fff1ee] p-4 text-[#a63a2d]" aria-label="Validation errors">
@@ -27,7 +33,7 @@
       <%= form.text_field :title, class: "w-full rounded-xl border border-[#ddd5c8] bg-white p-3 text-[#1e1c18] outline-none focus:border-[#6d4aff] focus:ring-2 focus:ring-[#6d4aff]/20", data: { dirty_target: "field", autosave_target: "field", action: "input->dirty#markDirty" }, autocomplete: "off" %>
     </div>
 
-    <div class="field source-field relative mb-4" data-controller="editor snippet-palette math-shorthand" data-snippet-palette-snippets-value="<%= json_escape(Snippets::Catalog.for_editor.to_json) %>">
+    <div class="field source-field relative mb-4" data-controller="editor snippet-palette math-shorthand<%= " document-link-palette" if work.document? %>" data-snippet-palette-snippets-value="<%= json_escape(Snippets::Catalog.for_editor.to_json) %>"<% if work.document? %> data-document-link-palette-titles-value="<%= ERB::Util.html_escape(document_link_titles.to_json) %>"<% end %>>
       <% source_id = form.field_id(:source) %>
       <% editor_id = "#{source_id}_editor" %>
       <%= form.label :source, "Markdown source", for: source_id, id: "#{editor_id}_label", class: "mb-1 block font-extrabold" %>
@@ -53,9 +59,10 @@
         </details>
       </div>
       <div id="<%= editor_id %>" class="editor-surface" role="textbox" aria-multiline="true" aria-labelledby="<%= editor_id %>_label" data-editor-target="surface" data-snippet-palette-target="editor" data-math-shorthand-target="editor"></div>
-      <%= form.text_area :source, rows: 24, id: source_id, class: "editor-input-proxy", spellcheck: "false", tabindex: "-1", aria: { label: "Markdown source" }, data: { editor_target: "input", dirty_target: "field", autosave_target: "field", action: "input->snippet-palette#input" } %>
+      <%= form.text_area :source, rows: 24, id: source_id, class: "editor-input-proxy", spellcheck: "false", tabindex: "-1", aria: { label: "Markdown source" }, data: editor_data %>
       <div class="snippet-palette" data-snippet-palette-target="palette" hidden role="listbox" aria-label="Snippet suggestions"></div>
-      <p class="field-hint">Use <code>:trigger</code> for snippets. In math, commit exact shorthand such as <code>$x.hat.b.T$</code> with Enter or Tab.</p>
+      <% if work.document? %><div class="snippet-palette" data-document-link-palette-target="palette" hidden role="listbox" aria-label="Document link suggestions"></div><% end %>
+      <p class="field-hint">Use <code>:trigger</code> for snippets<%= ". Type <code>[[</code> to link another document." if work.document? %>. In math, commit exact shorthand such as <code>$x.hat.b.T$</code> with Enter or Tab.</p>
     </div>
 
     <% if work.presentation? %>
