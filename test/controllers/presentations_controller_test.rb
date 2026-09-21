@@ -60,13 +60,17 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_equal parent.title, child.fork_parent_title
   end
 
-  test "only presentation mode records the last published time" do
+  test "publishing records the last published time while presentation mode stays read-only" do
     presentation = presentations(:one)
     get presentation_path(presentation)
     assert_nil presentation.reload.last_published_at
     freeze_time do
       get present_presentation_path(presentation)
       assert_response :success
+      assert_nil presentation.reload.last_published_at
+
+      post publish_presentation_path(presentation)
+      assert_redirected_to present_presentation_path(presentation)
       assert_equal Time.current, presentation.reload.last_published_at
     end
   end
@@ -74,6 +78,8 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
   test "persisted editor wires autosave but new presentation waits for creation" do
     get edit_presentation_path(presentations(:one))
     assert_select 'form[data-controller~="autosave"]'
+    assert_select "form[action='#{publish_presentation_path(presentations(:one))}'] button.button", text: "Present"
+    assert_select 'form[data-controller~="autosave"] form', count: 0
     assert_select '[data-autosave-target="retry"]'
     get new_presentation_path
     assert_select 'form[data-controller~="autosave"]', count: 0
