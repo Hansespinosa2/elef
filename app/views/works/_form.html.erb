@@ -58,10 +58,10 @@
           </div>
         </details>
       </div>
-      <div id="<%= editor_id %>" class="editor-surface" role="textbox" aria-multiline="true" aria-labelledby="<%= editor_id %>_label" data-editor-target="surface" data-snippet-palette-target="editor" data-math-shorthand-target="editor"></div>
+      <div id="<%= editor_id %>" class="editor-surface" aria-labelledby="<%= editor_id %>_label" data-editor-target="surface" data-snippet-palette-target="editor" data-math-shorthand-target="editor"></div>
       <%= form.text_area :source, rows: 24, id: source_id, class: "editor-input-proxy", spellcheck: "false", tabindex: "-1", aria: { label: "Markdown source" }, data: editor_data %>
-      <div class="snippet-palette" data-snippet-palette-target="palette" hidden role="listbox" aria-label="Snippet suggestions"></div>
-      <% if work.document? %><div class="snippet-palette" data-document-link-palette-target="palette" hidden role="listbox" aria-label="Document link suggestions"></div><% end %>
+      <div id="<%= editor_id %>_snippet_palette" class="snippet-palette" data-snippet-palette-target="palette" hidden role="listbox" aria-label="Snippet suggestions"></div>
+      <% if work.document? %><div id="<%= editor_id %>_document_link_palette" class="snippet-palette" data-document-link-palette-target="palette" hidden role="listbox" aria-label="Document link suggestions"></div><% end %>
       <p class="field-hint">Use <code>:trigger</code> for snippets<%= ". Type <code>[[</code> to link another document." if work.document? %>. In math, commit exact shorthand such as <code>$x.hat.b.T$</code> with Enter or Tab.</p>
     </div>
 

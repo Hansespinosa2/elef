@@ -427,6 +427,7 @@ class PresentationsTest < ApplicationSystemTestCase
     fill_in "Markdown source", with: source
     click_on "Save presentation"
 
+    assert_current_path %r{/presentations/\d+/edit}
     assert_text "Presentation saved."
     assert_field "Markdown source", with: normalized_source
     assert_selector ".slide", count: 2
@@ -434,6 +435,23 @@ class PresentationsTest < ApplicationSystemTestCase
     click_on "Library"
     click_on "System Deck"
     assert_field "Markdown source", with: normalized_source
+  end
+
+  test "presenting warns before leaving unsaved edits" do
+    presentation = Presentation.create!(title: "Guarded presentation", source: "# Saved source")
+
+    visit edit_presentation_path(presentation)
+    hold_autosaves
+    fill_in "Markdown source", with: "# Unsaved source"
+    dismiss_confirm { click_on "Present" }
+
+    assert_current_path edit_presentation_path(presentation)
+    assert_field "Markdown source", with: "# Unsaved source"
+
+    accept_confirm { click_on "Present" }
+    assert_current_path present_presentation_path(presentation)
+    assert_selector ".presentation-slide", text: "Saved source"
+    assert_no_selector ".presentation-slide", text: "Unsaved source"
   end
 
   test "dirty source warns before navigation and cancel preserves edits" do
@@ -475,6 +493,8 @@ class PresentationsTest < ApplicationSystemTestCase
     source.send_keys("beq")
     assert_selector ".snippet-palette", visible: true
     assert_text ":beq"
+    assert_selector ".snippet-option[aria-selected='true']"
+    assert_equal "true", page.evaluate_script("document.querySelector('.cm-editor').getAttribute('aria-expanded')")
     palette_position = page.evaluate_script("(() => { const editor = document.querySelector('[data-snippet-palette-target=editor]'); const e = editor.getBoundingClientRect(); const p = document.querySelector('[data-snippet-palette-target=palette]').getBoundingClientRect(); const styles = getComputedStyle(editor); const lineHeight = parseFloat(styles.lineHeight); const paddingTop = parseFloat(styles.paddingTop); const lineNumber = editor.value.slice(0, editor.selectionStart).split('\\n').length; const caretLineBottom = e.top + paddingTop + lineHeight * lineNumber - editor.scrollTop; return { editorBottom: e.bottom, paletteTop: p.top, caretLineBottom }; })()")
     assert_operator palette_position["paletteTop"], :>, palette_position["caretLineBottom"]
     assert_operator palette_position["paletteTop"], :<, palette_position["editorBottom"]

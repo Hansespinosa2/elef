@@ -13,6 +13,7 @@ export default class extends Controller {
     this.editorReady = () => this.setupEditor()
     this.element.addEventListener("elef:editor-ready", this.editorReady)
     this.positionPalette = this.positionPalette.bind(this)
+    this.paletteTarget.setAttribute("aria-live", "polite")
     this.setupEditor()
     window.addEventListener("resize", this.positionPalette)
   }
@@ -26,6 +27,7 @@ export default class extends Controller {
 
   setupEditor() {
     this.editorController ||= editorFor(this.element)
+    if (this.editorController) this.setupAccessibility()
     if (this.editorController && !this.scrollBound) {
       this.editorController.scrollElement.addEventListener("scroll", this.positionPalette)
       this.scrollBound = true
@@ -35,6 +37,28 @@ export default class extends Controller {
       this.editorController.dom.addEventListener("keydown", this.handleEditorKeydown, true)
       this.keydownBound = true
     }
+  }
+
+  setupAccessibility() {
+    const editor = this.editorController?.dom
+    if (!editor) return
+
+    const controls = new Set((editor.getAttribute("aria-controls") || "").split(/\s+/).filter(Boolean))
+    controls.add(this.paletteTarget.id)
+    editor.setAttribute("aria-controls", [...controls].join(" "))
+    editor.setAttribute("aria-autocomplete", "list")
+    this.updateAccessibility()
+  }
+
+  updateAccessibility() {
+    const editor = this.editorController?.dom
+    if (!editor) return
+
+    const openPalette = [...this.element.querySelectorAll('[role="listbox"]')].find((palette) => !palette.hidden)
+    editor.setAttribute("aria-expanded", String(Boolean(openPalette)))
+    const selected = openPalette?.querySelector('[aria-selected="true"]')
+    if (selected) editor.setAttribute("aria-activedescendant", selected.id)
+    else editor.removeAttribute("aria-activedescendant")
   }
 
   input() {
@@ -111,6 +135,8 @@ export default class extends Controller {
       const option = document.createElement("button")
       option.type = "button"
       option.role = "option"
+      option.id = `${this.paletteTarget.id}-option-${index}`
+      option.setAttribute("aria-selected", String(index === this.selectedIndex))
       option.className = `snippet-option${index === this.selectedIndex ? " is-selected" : ""}`
       const trigger = document.createElement("strong")
       trigger.textContent = `:${snippet.trigger}`
@@ -125,6 +151,7 @@ export default class extends Controller {
       this.paletteTarget.append(option)
     })
     this.paletteTarget.hidden = this.matches.length === 0
+    this.updateAccessibility()
     if (!this.paletteTarget.hidden) this.positionPalette()
   }
 
@@ -219,6 +246,7 @@ export default class extends Controller {
   close() {
     this.paletteTarget.hidden = true
     this.matches = []
+    this.updateAccessibility()
   }
 }
 

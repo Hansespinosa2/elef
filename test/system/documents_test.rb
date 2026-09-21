@@ -14,6 +14,26 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_includes editor.value, "[[Research target]]"
   end
 
+  test "suggests document links from the visible CodeMirror editor" do
+    Document.create!(title: "Research target", source: "# Target")
+    document = Document.create!(title: "Research source", source: "# Source")
+
+    visit edit_document_path(document)
+    find("summary", text: "Vim settings").click
+    find("[data-editor-target='vimToggle']").check
+    find("summary", text: "Vim settings").click
+
+    editor = find(".cm-content")
+    editor.click
+    editor.send_keys("i", "[[Research ta")
+
+    assert_selector ".document-link-option", text: "Research target", wait: 5
+    assert_selector ".document-link-option[aria-selected='true']", text: "Research target"
+    assert_equal "true", page.evaluate_script("document.querySelector('.cm-editor').getAttribute('aria-expanded')")
+    editor.send_keys(:enter)
+    assert_includes find_field("Markdown source").value, "[[Research target]]"
+  end
+
   test "navigates resolved document links to previews" do
     target = Document.create!(title: "Linked target", source: "# Linked target")
     source = Document.create!(title: "Linked source", source: "See [[Linked target]]")

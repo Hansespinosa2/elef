@@ -34,6 +34,16 @@ class DocumentLinksTest < ActiveSupport::TestCase
     assert_includes html, "<code>[[Target]]</code>"
   end
 
+  test "preserves backslashes in rendered document titles" do
+    title = 'A\\1'
+    target = Document.create!(title: title, source: "# Target")
+
+    html = DocumentLinks::Renderer.render("[[#{title}]]", documents: [target])
+
+    assert_includes html, %(data-document-link-title="#{title}")
+    assert_includes html, %(>#{title}</a>)
+  end
+
   test "builds directed edges while retaining isolated documents" do
     source = Document.create!(title: "Source", source: "# Source\n\n[[Target]] [[Missing]]")
     target = Document.create!(title: "Target", source: "# Target")

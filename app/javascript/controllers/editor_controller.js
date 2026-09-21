@@ -66,6 +66,8 @@ export default class extends Controller {
     this.view.dom.setAttribute("aria-label", "Markdown source")
     this.view.dom.setAttribute("role", "textbox")
     this.view.dom.setAttribute("aria-multiline", "true")
+    const labelledBy = this.surfaceTarget.getAttribute("aria-labelledby")
+    if (labelledBy) this.view.dom.setAttribute("aria-labelledby", labelledBy)
     Object.defineProperties(this.surfaceTarget, {
       value: { configurable: true, get: () => this.value, set: (value) => this.setExternalValue(value) },
       selectionStart: { configurable: true, get: () => this.selectionStart },

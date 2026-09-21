@@ -13,7 +13,7 @@ module DocumentLinks
       end
 
       html = Presentations::MarkdownRenderer.render(annotated)
-      replacements.each { |placeholder, replacement| html = html.gsub(placeholder, replacement) }
+      replacements.each { |placeholder, replacement| html = html.gsub(placeholder) { replacement } }
       html.html_safe
     end
 

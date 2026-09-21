@@ -6,6 +6,7 @@
   </div>
   <%= button_to "Present", publish_presentation_path(@presentation), method: :post,
         class: "button primary inline-flex min-h-10 items-center rounded-full border border-[#6d4aff] bg-[#6d4aff] px-4 py-2 font-bold text-white no-underline hover:brightness-95",
+        data: { dirty_navigation: true },
         form: { data: { turbo: false } } %>
 </div>
 <%= render "form", presentation: @presentation %>
