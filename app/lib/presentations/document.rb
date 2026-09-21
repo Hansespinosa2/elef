@@ -515,7 +515,9 @@ module Presentations
     end
 
     def code_block?(markdown)
-      markdown.match?(/\A\s*(`{3,}|~{3,})[^\n]*\n.*\n\s*\1\s*\z/m)
+      opening = markdown.lines.first.to_s.match(/\A\s*([`~]{3,})/)
+      closing = markdown.lines.last.to_s.match(/\A\s*([`~]{3,})\s*\z/)
+      opening && closing && opening[1][0] == closing[1][0] && closing[1].length >= opening[1].length
     end
 
     def prose_block?(markdown)

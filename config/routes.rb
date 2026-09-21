@@ -11,6 +11,7 @@ Rails.application.routes.draw do
     end
     member do
       get :present
+      post :publish
       match :preview, via: %i[get post]
       patch :rename
       post :fork

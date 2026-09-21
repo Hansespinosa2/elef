@@ -175,6 +175,12 @@ class PresentationTest < ActiveSupport::TestCase
     assert_equal "body", Presentations::Document.parse("# Mixed\n\nA paragraph.\n\n- One\n- Two").slides.first.layout
   end
 
+  test "recognizes fenced code with a longer closing fence" do
+    slide = Presentations::Document.parse("# Example\n\n```ruby\nputs 1\n````").slides.first
+
+    assert_equal "code", slide.layout
+  end
+
   test "parses block positioning and removes extension directives" do
     document = Presentations::Document.parse(<<~MARKDOWN)
       # Positioned
@@ -255,6 +261,22 @@ class PresentationTest < ActiveSupport::TestCase
     assert_includes html, "puts"
     assert_includes html, "$not_math$"
     assert_includes html, "katex"
+  end
+
+  test "does not render math inside inline code or escaped delimiters" do
+    html = Presentations::MarkdownRenderer.render("`$x^2$` and $x^2$ and \\$x$")
+
+    assert_equal 1, html.scan('class="katex"').length
+    assert_includes html, "<code>$x^2$</code>"
+    assert_includes html, "\\$x$"
+  end
+
+  test "rejects dangerous link and image protocols" do
+    html = Presentations::MarkdownRenderer.render("[unsafe](javascript:alert(1)) ![image](javascript:alert(1))")
+
+    refute_includes html, "javascript:"
+    refute_includes html, "<a"
+    refute_includes html, "<img"
   end
 
   test "sample data covers supported presentation features" do

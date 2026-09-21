@@ -46,7 +46,7 @@
           <div class="library-open-actions">
             <%= link_to "Edit", work_edit_path(work), class: "button primary" %>
             <%= link_to "Preview", work_show_path(work), class: "hover:underline" %>
-            <%= link_to "Present", present_presentation_path(work), class: "hover:underline", data: { turbo: false } if work.presentation? %>
+            <%= button_to "Present", publish_presentation_path(work), method: :post, class: "hover:underline", form: { data: { turbo: false } } if work.presentation? %>
           </div>
           <div class="library-manage-actions">
             <details class="rename-menu relative">

@@ -51,7 +51,7 @@
       <% if persisted %>
         <%= link_to "View saved preview", work_show_path(work), class: "button inline-flex min-h-10 items-center rounded-full border border-[#ddd5c8] bg-[#fffdf8] px-4 py-2 font-bold no-underline hover:bg-[#f7efe2]" %>
         <% if work.presentation? %>
-          <%= link_to "Present", present_presentation_path(work), class: "button inline-flex min-h-10 items-center rounded-full border border-[#ddd5c8] bg-[#fffdf8] px-4 py-2 font-bold no-underline hover:bg-[#f7efe2]", data: { turbo: false } %>
+          <%= button_to "Present", publish_presentation_path(work), method: :post, class: "button inline-flex min-h-10 items-center rounded-full border border-[#ddd5c8] bg-[#fffdf8] px-4 py-2 font-bold no-underline hover:bg-[#f7efe2]", form: { data: { turbo: false } } %>
         <% end %>
         <span class="dirty-state text-[#6f675c] font-bold" data-autosave-target="status" aria-live="polite">Saved</span>
         <button type="button" class="autosave-retry" data-autosave-target="retry" data-action="autosave#retry" hidden>Retry save</button>

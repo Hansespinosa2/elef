@@ -1,7 +1,7 @@
 class PresentationsController < ApplicationController
   include WorkPreview
 
-  before_action :set_presentation, only: %i[show edit update present destroy rename fork]
+  before_action :set_presentation, only: %i[show edit update present publish destroy rename fork]
   before_action :set_preview_presentation, only: :preview
 
   def index
@@ -86,8 +86,12 @@ class PresentationsController < ApplicationController
   end
 
   def present
-    @presentation.touch(:last_published_at)
     render layout: "presentation"
+  end
+
+  def publish
+    @presentation.touch(:last_published_at)
+    redirect_to present_presentation_path(@presentation)
   end
 
   def preview

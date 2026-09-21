@@ -60,13 +60,17 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_equal parent.title, child.fork_parent_title
   end
 
-  test "only presentation mode records the last published time" do
+  test "publishing records the last published time while presentation mode stays read-only" do
     presentation = presentations(:one)
     get presentation_path(presentation)
     assert_nil presentation.reload.last_published_at
     freeze_time do
       get present_presentation_path(presentation)
       assert_response :success
+      assert_nil presentation.reload.last_published_at
+
+      post publish_presentation_path(presentation)
+      assert_redirected_to present_presentation_path(presentation)
       assert_equal Time.current, presentation.reload.last_published_at
     end
   end

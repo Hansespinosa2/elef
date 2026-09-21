@@ -202,6 +202,7 @@ class PresentationsTest < ApplicationSystemTestCase
     visit presentations_path
     assert_text "No presentations yet"
     save_screenshot("tmp/screenshots/library/empty.png")
+    find("summary", text: "More").click
     click_on "Load sample presentations"
 
     assert_text "Sample presentations loaded."
