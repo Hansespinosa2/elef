@@ -120,11 +120,14 @@ body.elef-app {
 .editor-settings { position: relative; }
 .editor-settings summary { border: 1px solid var(--oradia-slate-700); border-radius: 999px; color: var(--oradia-muted); cursor: pointer; padding: 0.28rem 0.7rem; }
 .editor-settings summary:hover, .editor-settings[open] summary { background: var(--oradia-slate-800); color: var(--oradia-ink); }
-.editor-settings-panel { background: var(--oradia-slate-900); border: 1px solid var(--oradia-slate-700); border-radius: 0.75rem; box-shadow: 0 18px 45px #0006; display: grid; gap: 0.7rem; left: 0; padding: 0.8rem; position: absolute; right: auto; top: calc(100% + 0.5rem); width: min(24rem, calc(100vw - 2rem)); z-index: 30; }
+.editor-settings-panel { background: var(--oradia-slate-900); border: 1px solid var(--oradia-slate-700); border-radius: 0.75rem; box-sizing: border-box; box-shadow: 0 18px 45px #0006; display: grid; gap: 0.7rem; left: auto; max-width: calc(100vw - 2rem); padding: 0.8rem; position: absolute; right: 0; top: calc(100% + 0.5rem); width: 24rem; z-index: 30; }
 .editor-setting-row { align-items: center; color: var(--oradia-muted); display: flex; gap: 0.55rem; justify-content: space-between; }
+.editor-setting-toggle { justify-content: flex-start; }
 .editor-setting-row select { background: var(--oradia-slate-950); border: 1px solid var(--oradia-slate-700); border-radius: 0.45rem; color: var(--oradia-ink); max-width: 14rem; padding: 0.3rem; }
-.editor-surface { font-family: var(--oradia-mono); line-height: 1.55; min-height: 36rem; position: relative; resize: vertical; }
-.editor-surface .cm-editor { border: 1px solid var(--oradia-slate-700); border-radius: 0.75rem; min-height: 36rem; overflow: hidden; }
+.editor-surface { box-sizing: border-box; font-family: var(--oradia-mono); height: min(36rem, 60vh); line-height: 1.55; max-height: 70vh; min-height: 24rem; overflow: hidden; position: relative; resize: vertical; width: 100%; }
+.editor-surface .cm-editor { border: 1px solid var(--oradia-slate-700); border-radius: 0.75rem; height: 100%; min-height: 100%; overflow: hidden; }
+.editor-surface .cm-scroller { min-height: 0; }
+.editor-surface .cm-content { min-height: 0; }
 .editor-surface .cm-editor.cm-focused { border-color: var(--oradia-green); box-shadow: 0 0 0 3px rgba(159, 197, 169, 0.18); }
 .editor-surface .cm-vim-panel { background: var(--oradia-slate-950); border-top: 1px solid var(--oradia-slate-700); color: var(--oradia-ink); min-height: 1.7rem; padding: 0.25rem 0.65rem; }
 .editor-surface .cm-vim-panel input { color: var(--oradia-ink); }

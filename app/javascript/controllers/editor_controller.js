@@ -14,17 +14,17 @@ const theme = EditorView.theme({
     backgroundColor: "#11161a",
     color: "#e9eee9",
     fontSize: "0.9rem",
-    minHeight: "36rem"
+    minHeight: "24rem"
   },
   ".cm-scroller": {
     fontFamily: "SFMono-Regular, Consolas, Liberation Mono, monospace",
     lineHeight: "1.55",
-    minHeight: "36rem",
+    minHeight: "24rem",
     overflow: "auto"
   },
   ".cm-content": {
     caretColor: "#9fc5a9",
-    minHeight: "36rem",
+    minHeight: "24rem",
     padding: "0.75rem"
   },
   ".cm-cursor, .cm-dropCursor": { borderLeftColor: "#9fc5a9" },
