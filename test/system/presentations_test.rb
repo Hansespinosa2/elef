@@ -75,6 +75,18 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_includes presentation.reload.source, "# Manual latest"
   end
 
+  test "presents from the edit screen without submitting the editor form" do
+    presentation = Presentation.create!(title: "Edit presentation", source: "# Original")
+
+    visit edit_presentation_path(presentation)
+    click_on "Present"
+
+    assert_current_path present_presentation_path(presentation)
+    assert_selector "body.presentation-body"
+    assert_equal "# Original", presentation.reload.source
+    assert_not_nil presentation.last_published_at
+  end
+
   test "failed autosave can be retried and validation errors preserve saved source" do
     presentation = Presentation.create!(title: "Retry deck", source: "# Original")
     visit edit_presentation_path(presentation)

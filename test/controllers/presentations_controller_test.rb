@@ -78,6 +78,8 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
   test "persisted editor wires autosave but new presentation waits for creation" do
     get edit_presentation_path(presentations(:one))
     assert_select 'form[data-controller~="autosave"]'
+    assert_select "form[action='#{publish_presentation_path(presentations(:one))}'] button.button", text: "Present"
+    assert_select 'form[data-controller~="autosave"] form', count: 0
     assert_select '[data-autosave-target="retry"]'
     get new_presentation_path
     assert_select 'form[data-controller~="autosave"]', count: 0
