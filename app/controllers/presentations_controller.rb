@@ -12,7 +12,8 @@ class PresentationsController < ApplicationController
     else Work.includes(:parent).recent_first
     end
     @presentations = @works
-    @lineage_presentations = @works.select(&:presentation?)
+    @lineage_presentations = @filter == "presentations" ? @works.select(&:presentation?) : []
+    @document_graph = DocumentLinks::Graph.new(@works.select(&:document?)).as_json if @filter == "documents"
   end
 
   def load_samples

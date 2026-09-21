@@ -48,6 +48,57 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
     assert_select "#presentation_#{presentations(:one).id}"
   end
 
+  test "documents expose their directed network while all and presentations keep theirs separate" do
+    target = Document.create!(title: "Target", source: "# Target")
+    source = Document.create!(title: "Source", source: "# Source\n\n[[Target]]")
+    Document.create!(title: "Orphan", source: "# Orphan")
+
+    get documents_path
+    assert_select ".document-graph"
+    assert_select ".document-graph-node", count: 3
+    assert_select ".document-graph-edge[data-source-id='#{source.id}'][data-target-id='#{target.id}']"
+    assert_select ".lineage-panel", count: 0
+
+    get presentations_path, params: { type: "all" }
+    assert_select ".document-graph", count: 0
+    assert_select ".lineage-panel", count: 0
+    assert_select "#document_#{source.id}"
+    assert_select "#presentation_#{presentations(:one).id}"
+
+    get presentations_path, params: { type: "presentations" }
+    assert_select ".document-graph", count: 0
+    assert_select ".lineage-panel"
+  end
+
+  test "duplicate document titles are rejected" do
+    Document.create!(title: "Existing notes", source: "# Existing")
+    duplicate = Document.new(title: "Existing notes", source: "# Duplicate")
+
+    assert_not duplicate.save
+    assert_includes duplicate.errors.full_messages, "Title has already been taken"
+  end
+
+  test "renaming a document rewrites incoming links atomically" do
+    target = Document.create!(title: "Old title", source: "# Old title")
+    incoming = Document.create!(title: "Incoming", source: "[[Old title]]\n\n`[[Old title]]`\n\n```\n[[Old title]]\n```")
+
+    patch rename_document_path(target), params: { document: { title: "New title" } }
+
+    assert_redirected_to documents_path
+    assert_equal "New title", target.reload.title
+    assert_equal "[[New title]]\n\n`[[Old title]]`\n\n```\n[[Old title]]\n```", incoming.reload.source
+  end
+
+  test "document previews link to resolved documents and mark missing links" do
+    target = Document.create!(title: "Preview target", source: "# Target")
+    document = Document.create!(title: "Preview source", source: "See [[Preview target]] and [[Missing target]]")
+
+    get document_path(document)
+
+    assert_select "a.document-link[href='#{document_path(target)}']", text: "Preview target"
+    assert_select "span.document-link.unresolved", text: "[[Missing target]]"
+  end
+
   test "previews an unsaved document without creating a record" do
     assert_no_difference("Document.count") do
       post preview_documents_path, params: {
