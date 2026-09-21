@@ -42,4 +42,8 @@ module ApplicationHelper
   def work_dom_id(work)
     "#{work.document? ? "document" : "presentation"}_#{work.id}"
   end
+
+  def document_link_titles
+    Document.order(:title).pluck(:title)
+  end
 end

@@ -106,6 +106,17 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_select "#document_#{Document.order(:id).last.id}", count: 0
   end
 
+  test "the all library is a combined list without relationship graphs" do
+    Document.create!(title: "All notes", source: "# Notes")
+
+    get root_path
+
+    assert_select ".document-graph", count: 0
+    assert_select ".lineage-panel", count: 0
+    assert_select "#document_#{Document.order(:id).last.id}"
+    assert_select "#presentation_#{presentations(:one).id}"
+  end
+
   test "library loads" do
     get presentations_path
     assert_response :success

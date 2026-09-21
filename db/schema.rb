@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_16_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_21_124719) do
   create_table "presentations", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.string "fork_parent_title"
@@ -25,6 +25,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_16_120000) do
     t.string "work_type", default: "presentation", null: false
     t.index ["parent_id"], name: "index_presentations_on_parent_id"
     t.index ["sample_id"], name: "index_presentations_on_sample_id", unique: true
+    t.index ["work_type", "title"], name: "index_documents_on_work_type_and_title", unique: true, where: "work_type = 'document'"
     t.index ["work_type"], name: "index_presentations_on_work_type"
   end
 

@@ -662,6 +662,49 @@ body.elef-app {
 .document-surface th, .document-surface td { border: 1px solid var(--presentation-line); padding: 0.35rem 0.5rem; }
 .document-surface img { max-width: 100%; }
 .document-surface a { color: inherit; }
+.document-surface .document-link { color: var(--oradia-green-deep); font-weight: 700; text-decoration: underline; text-decoration-color: #9fc5a988; text-underline-offset: 0.16em; }
+.document-surface .document-link.unresolved { color: var(--presentation-danger); font-weight: 700; text-decoration: underline wavy; text-underline-offset: 0.16em; }
+.document-link-option { background: transparent; border: 0; border-bottom: 1px solid var(--oradia-line); color: var(--oradia-ink); display: block; padding: 0.55rem 0.75rem; text-align: left; width: 100%; }
+.document-link-option:last-child { border-bottom: 0; }
+.document-link-option:hover, .document-link-option:focus-visible, .document-link-option.is-selected { background: var(--oradia-slate-700); }
+
+.document-graph-panel { overflow: hidden; }
+.document-graph-panel { color: var(--oradia-paper-ink); }
+.document-graph-panel h2 { color: var(--oradia-paper-ink); }
+.document-graph-panel > .mb-4 > div > p:not(.eyebrow), .document-graph-panel .document-graph-legend { color: var(--oradia-paper-muted) !important; }
+.document-graph-panel .document-graph-legend { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; }
+.document-graph-key-arrow { border-top: 2px solid var(--oradia-green-deep); display: inline-block; margin-right: 0.35rem; position: relative; vertical-align: middle; width: 1.4rem; }
+.document-graph-key-arrow::after { border-bottom: 4px solid transparent; border-left: 6px solid var(--oradia-green-deep); border-top: 4px solid transparent; content: ""; position: absolute; right: -1px; top: -5px; }
+.document-graph { background: var(--oradia-paper-bright); border: 1px solid var(--oradia-paper-line); border-radius: 1rem; overflow: hidden; }
+.document-graph-navigation { align-items: center; background: var(--oradia-paper-bright); border-bottom: 1px solid var(--oradia-paper-line); display: flex; flex-wrap: wrap; gap: 10px; padding: 12px; }
+.document-graph-search { flex: 1; min-width: 180px; position: relative; }
+.document-graph-navigation input { background: white; border: 1px solid var(--oradia-paper-line); border-radius: 8px; color: var(--oradia-paper-ink); font-size: 13px; min-height: 40px; padding: 8px 12px; width: 100%; }
+.document-graph-results { background: var(--oradia-paper-bright); border: 1px solid var(--oradia-paper-line); border-radius: 8px; box-shadow: 0 8px 24px #0002; left: 0; max-height: 280px; overflow: auto; position: absolute; right: 0; top: calc(100% + 6px); z-index: 5; }
+.document-graph-results button { background: transparent; border: 0; color: var(--oradia-paper-ink); display: block; padding: 12px; text-align: left; width: 100%; }
+.document-graph-results button:hover, .document-graph-results button:focus-visible { background: #eee8fc; }
+.document-graph-controls { display: flex; gap: 4px; }
+.document-graph-controls button { background: var(--oradia-paper-bright); border: 1px solid var(--oradia-paper-line); border-radius: 6px; color: var(--oradia-paper-ink); cursor: pointer; font-size: 13px; font-weight: 600; min-height: 40px; min-width: 40px; padding: 7px 10px; }
+.document-graph-controls button:hover { background: #eee8fc; }
+.document-graph-canvas { background: linear-gradient(145deg, #fcfaf5, #f5f0e7); min-height: 440px; overflow: hidden; position: relative; touch-action: none; }
+.document-graph-canvas svg { display: block; height: min(620px, 68vh); min-height: 440px; width: 100%; }
+.document-graph-edges, .document-graph-nodes { overflow: visible; }
+.document-graph-edge { color: var(--oradia-green-deep); fill: none; marker-end: url(#document-graph-arrow); stroke: currentColor; stroke-width: 2; transition: opacity 120ms ease, stroke-width 120ms ease; }
+.document-graph-edge.is-highlighted { stroke-width: 4; }
+.document-graph-edge.is-dimmed, .document-graph-node.is-dimmed { opacity: 0.18; }
+.document-graph-node { color: var(--oradia-paper-ink); cursor: pointer; outline: none; text-decoration: none; }
+.document-graph-node circle { fill: var(--oradia-green-deep); stroke: var(--oradia-paper-bright); stroke-width: 4; transition: r 120ms ease, fill 120ms ease; }
+.document-graph-node text { fill: currentColor; font-size: 15px; font-weight: 700; paint-order: stroke; stroke: var(--oradia-paper-bright); stroke-width: 5px; stroke-linejoin: round; }
+.document-graph-node:hover circle, .document-graph-node:focus-visible circle, .document-graph-node.is-highlighted circle, .document-graph-node.is-search-match circle { fill: #6d4aff; r: 18; }
+.document-graph-node:focus-visible { outline: none; }
+.document-graph-node:focus-visible text { fill: #6d4aff; }
+.document-graph-help, .document-graph-empty { color: var(--oradia-paper-muted); font-size: 0.82rem; margin: 0; padding: 0.65rem 0.9rem; }
+.document-graph-empty { left: 50%; position: absolute; top: 50%; transform: translate(-50%, -50%); }
+
+@media (max-width: 540px) {
+  .document-graph-search { flex-basis: 100%; min-width: 0; }
+  .document-graph-controls { display: grid; grid-template-columns: 40px minmax(3.5rem, 1fr) 40px; width: 100%; }
+  .document-graph-canvas, .document-graph-canvas svg { min-height: 400px; }
+}
 
 @media (max-width: 920px) {
   .library-actions { width: 100%; }
