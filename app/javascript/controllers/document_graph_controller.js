@@ -122,7 +122,7 @@ export default class extends Controller {
       const state = this.nodeStateById.get(String(node.dataset.nodeId))
       if (state) {
         node.setAttribute("transform", `translate(${state.x} ${state.y})`)
-        node.querySelector("text")?.style.setProperty("font-size", `${labelSize}px`)
+        this.renderLabel(node, state, labelSize)
       }
     })
     this.edgeTargets.forEach((edge) => {
@@ -142,6 +142,55 @@ export default class extends Controller {
     })
     this.viewportTarget.setAttribute("transform", `translate(${this.pan.x} ${this.pan.y}) scale(${this.zoom})`)
     if (this.hasScaleLabelTarget) this.scaleLabelTarget.textContent = `${Math.round(this.zoom * 100)}%`
+  }
+
+  renderLabel(node, state, labelSize) {
+    const label = node.querySelector("text")
+    if (!label) return
+
+    const title = node.dataset.title || label.textContent
+    const maxWidth = 250
+    const maxCharacters = Math.max(10, Math.floor(maxWidth / (labelSize * 0.65)))
+    const lines = this.wrapLabel(title, maxCharacters)
+    const lineHeight = labelSize * 1.15
+    const placeRight = state.x + 22 + maxWidth <= 980
+    const x = placeRight ? 22 : -22
+    const startY = state.y + lineHeight * lines.length > 600 ? -lineHeight * (lines.length - 1) + 5 : 5
+
+    label.replaceChildren()
+    label.setAttribute("x", x)
+    label.setAttribute("y", startY)
+    label.setAttribute("text-anchor", placeRight ? "start" : "end")
+    label.style.setProperty("font-size", `${labelSize}px`)
+    lines.forEach((line, index) => {
+      const tspan = document.createElementNS("http://www.w3.org/2000/svg", "tspan")
+      tspan.textContent = line
+      tspan.setAttribute("x", x)
+      if (index > 0) tspan.setAttribute("dy", lineHeight)
+      label.append(tspan)
+    })
+  }
+
+  wrapLabel(title, maxCharacters) {
+    const words = title.split(/\s+/).filter(Boolean)
+    const chunks = words.flatMap((word) => {
+      const pieces = []
+      for (let index = 0; index < word.length; index += maxCharacters) pieces.push(word.slice(index, index + maxCharacters))
+      return pieces
+    })
+    const lines = []
+    let line = ""
+    chunks.forEach((chunk) => {
+      const candidate = line ? `${line} ${chunk}` : chunk
+      if (line && candidate.length > maxCharacters) {
+        lines.push(line)
+        line = chunk
+      } else {
+        line = candidate
+      }
+    })
+    if (line) lines.push(line)
+    return lines.length ? lines : [""]
   }
 
   search() {

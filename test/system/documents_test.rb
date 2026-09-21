@@ -28,16 +28,24 @@ class DocumentsTest < ApplicationSystemTestCase
   test "shows orphan nodes and supports graph search, zoom, and responsive layout" do
     target = Document.create!(title: "Graph target", source: "# Target")
     source = Document.create!(title: "Graph source", source: "See [[Graph target]]")
-    orphan = Document.create!(title: "Graph orphan", source: "# Orphan")
+    orphan = Document.create!(title: "Graph orphan with a long mobile document label", source: "# Orphan")
 
     visit documents_path
     assert_selector ".document-graph-node", count: 3
     assert_selector ".document-graph-edge[data-source-id='#{source.id}'][data-target-id='#{target.id}']", visible: :all
+    edge_colors = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const edge = document.querySelector('.document-graph-edge');
+        const arrow = document.querySelector('#document-graph-arrow path');
+        return { edge: getComputedStyle(edge).stroke, arrow: getComputedStyle(arrow).fill };
+      })()
+    JAVASCRIPT
+    assert_equal edge_colors["edge"], edge_colors["arrow"]
 
     fill_in "Find a document", with: "Graph orphan"
-    assert_selector ".document-graph-results button", text: "Graph orphan"
+    assert_selector ".document-graph-results button", text: orphan.title
     within ".document-graph-results" do
-      click_on "Graph orphan"
+      click_on orphan.title
     end
     assert_selector ".document-graph-node.is-highlighted", count: 1
 
@@ -61,9 +69,25 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_selector "[data-document-graph-target='scaleLabel']", text: "120%"
     assert_operator page.evaluate_script("document.documentElement.scrollWidth"), :<=, page.evaluate_script("window.innerWidth")
 
+    find("[aria-label='Reset graph view']").click
     page.driver.browser.manage.window.resize_to(600, 900)
     assert_operator page.evaluate_script("document.documentElement.scrollWidth"), :<=, page.evaluate_script("window.innerWidth")
     assert_operator page.evaluate_script("document.querySelector('.document-graph-node text').getBoundingClientRect().height"), :>=, 10
+    label_overflow = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const canvas = document.querySelector('.document-graph-canvas').getBoundingClientRect();
+        const labels = [...document.querySelectorAll('.document-graph-node text')];
+        return labels.reduce((overflow, label) => {
+          const bounds = label.getBoundingClientRect();
+          return {
+            left: Math.max(overflow.left, canvas.left - bounds.left),
+            right: Math.max(overflow.right, bounds.right - canvas.right)
+          };
+        }, { left: 0, right: 0 });
+      })()
+    JAVASCRIPT
+    assert_operator label_overflow["left"], :<=, 2
+    assert_operator label_overflow["right"], :<=, 2
     find(".document-graph-node[data-node-id='#{orphan.id}']").click
     assert_current_path document_path(orphan)
   ensure
