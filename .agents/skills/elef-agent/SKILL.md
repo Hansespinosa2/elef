@@ -36,7 +36,8 @@ retain the image they were created with, including when they are resumed with
 `up`; use an intentional image refresh when upgrading an existing task.
 
 Codex is launched in the container with approvals and sandbox bypassed and
-model `gpt-5.6-luna-max`. Treat the container as the isolation boundary, but
+model `gpt-5.6-luna`, with maximum reasoning for implementation and plan mode.
+Treat the container as the isolation boundary, but
 remember that the mounted task worktree and shared Git metadata are host files.
 
 ## Continue and inspect

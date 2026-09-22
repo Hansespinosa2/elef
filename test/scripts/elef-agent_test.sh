@@ -26,8 +26,12 @@ assert_contains "$launcher" '--env GIT_CONFIG_GLOBAL=/home/developer/.config/git
 assert_contains "$launcher" '--memory "$CONTAINER_MEMORY"'
 assert_contains "$launcher" '"$image" web'
 assert_contains "$launcher" 'https://$(host_for "$task").localhost'
-assert_contains "$launcher" 'exec_in "$task" codex --dangerously-bypass-approvals-and-sandbox -m gpt-5.6-luna-max'
-assert_contains "$codex_config" 'model = "gpt-5.6-luna-max"'
+assert_contains "$launcher" 'exec_in "$task" codex --dangerously-bypass-approvals-and-sandbox -m gpt-5.6-luna'
+assert_contains "$launcher" "-c 'model_reasoning_effort=\"max\"'"
+assert_contains "$launcher" "-c 'plan_mode_reasoning_effort=\"max\"'"
+assert_contains "$codex_config" 'model = "gpt-5.6-luna"'
+assert_contains "$codex_config" 'model_reasoning_effort = "max"'
+assert_contains "$codex_config" 'plan_mode_reasoning_effort = "max"'
 assert_contains "$launcher" 'up) shift; up "$@" ;;'
 assert_contains "$launcher" 'image inspect "$1"'
 assert_contains "$launcher" 'delete_codex_state "$task"'
