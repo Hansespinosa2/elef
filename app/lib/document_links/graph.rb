@@ -22,7 +22,7 @@ module DocumentLinks
         title: document.title,
         url: Rails.application.routes.url_helpers.document_path(document),
         x: 120 + (index % 4) * 220,
-        y: 100 + ((index / 4) % 3) * 150
+        y: 100 + (index / 4) * 150
       }
     end
 

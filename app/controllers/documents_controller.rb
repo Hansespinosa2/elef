@@ -8,10 +8,18 @@ class DocumentsController < ApplicationController
   def index
     @filter = "documents"
     @works = Document.recent_first
-    @presentations = @works
     @lineage_presentations = []
     @document_graph = DocumentLinks::Graph.new(@works).as_json
-    render "presentations/index"
+    render "library/index"
+  end
+
+  def load_samples
+    result = Documents::SampleData.load!
+    flash_options = {}
+    flash_options[:notice] = "Sample documents loaded." if result.records.any?
+    flash_options[:alert] = sample_conflict_alert(result.conflicts) if result.conflicts.any?
+
+    redirect_to documents_path, **flash_options
   end
 
   def new
@@ -100,5 +108,12 @@ class DocumentsController < ApplicationController
       :title, :source, :lock_version, :base_revision, :base_revision_id,
       :revision_token, :edit_session_id, :checkpoint, :reason
     )
+  end
+
+  def sample_conflict_alert(conflicts)
+    noun = conflicts.one? ? "document" : "documents"
+    title_noun = conflicts.one? ? "title" : "titles"
+    titles = conflicts.map { |conflict| %("#{conflict.title}") }.to_sentence
+    "Skipped sample #{noun} with conflicting #{title_noun}: #{titles}."
   end
 end

@@ -22,7 +22,9 @@ module Presentations
     def position_classes(position)
       return "" unless position
 
-      "position-#{position.horizontal} position-#{position.vertical}"
+      classes = ["position-#{position.horizontal}", "position-#{position.vertical}"]
+      classes << "position-vertical" if position.vertical_explicit
+      classes.join(" ")
     end
   end
 end

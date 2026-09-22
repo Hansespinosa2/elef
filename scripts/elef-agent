@@ -557,8 +557,9 @@ Recommended lifecycle:
   1.  $0 setup
   2.  $0 start TASK [BASE]
   3.  $0 status
-  4.  Review and merge codex/TASK in the primary checkout
-  5.  $0 cleanup TASK
+  4.  Review and merge the task PR into the target branch on GitHub
+  5.  Confirm the PR is merged
+  6.  $0 cleanup TASK
 
 Commands:
 

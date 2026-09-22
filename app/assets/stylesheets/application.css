@@ -663,27 +663,51 @@ body.elef-app {
 .library-tab:hover, .library-tab.is-active { background: var(--oradia-slate-800); color: var(--oradia-ink); }
 .preview-warnings { margin-bottom: 1rem; }
 .preview-warnings[hidden] { display: none; }
-.document-surface { background: linear-gradient(135deg, var(--oradia-paper-bright), var(--oradia-paper)); border: 1px solid var(--oradia-paper-line); border-radius: 0.75rem; box-shadow: 0 24px 60px rgba(35, 29, 20, 0.08); color: var(--oradia-paper-ink); padding: clamp(1.5rem, 5vw, 5rem); }
-.document-surface h1, .document-surface h2, .document-surface h3, .document-surface h4, .document-surface h5, .document-surface h6 { margin-bottom: 0.75rem; }
-.document-surface p, .document-surface li, .document-surface blockquote, .document-surface td, .document-surface th { font-size: clamp(1rem, 1.5vw, 1.2rem); line-height: 1.6; }
+.document-reader { container-type: inline-size; width: 100%; }
+.document-surface { background: linear-gradient(135deg, var(--oradia-paper-bright), var(--oradia-paper)); border: 1px solid var(--oradia-paper-line); border-radius: 0.75rem; box-shadow: 0 24px 60px rgba(35, 29, 20, 0.08); color: var(--oradia-paper-ink); font-family: var(--oradia-sans); padding: clamp(1.5rem, 5vw, 5rem); }
+.document-surface.is-paginated { background: transparent; border: 0; box-shadow: none; display: grid; gap: clamp(1rem, 2vw, 1.5rem); padding: 0; }
+.document-surface h1, .document-surface h2, .document-surface h3, .document-surface h4, .document-surface h5, .document-surface h6 { color: var(--oradia-paper-ink); font-family: var(--oradia-serif); letter-spacing: -0.025em; margin-top: 0; }
+.document-surface h1 { font-size: clamp(2.5rem, 4.5vw, 4rem); line-height: 1.05; margin-bottom: 1.5rem; }
+.document-surface h2 { font-size: clamp(1.85rem, 3vw, 2.5rem); line-height: 1.15; margin-bottom: 1rem; margin-top: 2.75rem; }
+.document-surface h3 { font-size: clamp(1.4rem, 2.25vw, 1.85rem); line-height: 1.2; margin-bottom: 0.75rem; margin-top: 2rem; }
+.document-surface h4, .document-surface h5, .document-surface h6 { font-size: clamp(1.15rem, 1.8vw, 1.45rem); line-height: 1.25; margin-bottom: 0.6rem; margin-top: 1.5rem; }
+.document-surface p, .document-surface li, .document-surface blockquote, .document-surface td, .document-surface th { font-size: clamp(1rem, 1.15vw, 1.18rem); line-height: 1.65; }
+.document-surface p { margin-bottom: 1.1rem; }
+.document-surface > :first-child, .document-page-content > :first-child { margin-top: 0; }
+.document-surface > :last-child, .document-page-content > :last-child { margin-bottom: 0; }
 .document-surface ul { list-style: disc; padding-left: 1.5em; }
 .document-surface ol { list-style: decimal; padding-left: 1.5em; }
+.document-surface blockquote { border-left: 0.25rem solid var(--oradia-green-deep); color: var(--oradia-paper-muted); margin: 1.75rem 0; padding: 0.25rem 0 0.25rem 1.25rem; }
 .document-surface hr { border: 0; border-top: 1px solid var(--presentation-line); margin: 2rem 0; }
 .document-block { width: 100%; }
 .document-block.position-left { text-align: left; }
 .document-block.position-center { align-self: center; text-align: center; }
 .document-block.position-right { align-self: flex-end; text-align: right; }
-.document-block:is(.position-top, .position-middle, .position-bottom) { display: flex; flex-direction: column; min-height: clamp(12rem, 35vh, 28rem); }
+.document-block.position-vertical { display: flex; flex-direction: column; min-height: clamp(12rem, 35vh, 28rem); }
 .document-block.position-top { justify-content: flex-start; }
 .document-block.position-middle { justify-content: center; }
 .document-block.position-bottom { justify-content: flex-end; }
-.document-surface pre { background: #191714; border-radius: 0.75rem; color: #fff7e8; overflow: auto; padding: 1rem; }
-.document-surface table { border-collapse: collapse; width: 100%; }
+.document-surface pre { background: #191714; border: 1px solid rgba(255, 247, 232, 0.12); border-radius: 0.75rem; color: #fff7e8; font-size: 0.92em; line-height: 1.5; margin: 1.25rem 0; max-width: 100%; overflow: auto; padding: 1rem; }
+.document-surface pre code { display: block; font-family: var(--oradia-mono); min-width: max-content; }
+.document-surface code { font-family: var(--oradia-mono); }
+.document-surface table { border-collapse: collapse; max-width: 100%; width: 100%; }
 .document-surface th, .document-surface td { border: 1px solid var(--presentation-line); padding: 0.35rem 0.5rem; }
 .document-surface img { max-width: 100%; }
 .document-surface a { color: inherit; }
 .document-surface .document-link { color: var(--oradia-green-deep); font-weight: 700; text-decoration: underline; text-decoration-color: #9fc5a988; text-underline-offset: 0.16em; }
 .document-surface .document-link.unresolved { color: var(--presentation-danger); font-weight: 700; text-decoration: underline wavy; text-underline-offset: 0.16em; }
+.document-page { background: linear-gradient(135deg, var(--oradia-paper-bright), var(--oradia-paper)); border: 1px solid var(--oradia-paper-line); border-radius: 0.75rem; box-shadow: 0 24px 60px rgba(35, 29, 20, 0.08); box-sizing: border-box; display: flex; flex-direction: column; height: clamp(34rem, 141.4cqw, 72rem); margin: 0 auto; overflow: hidden; padding: clamp(1.75rem, 6cqw, 4.5rem); width: min(100%, 52rem); }
+.document-page-content { box-sizing: border-box; flex: 1 1 auto; min-height: 0; overflow: hidden; width: 100%; }
+.document-page-footer { border-top: 1px solid var(--presentation-line); color: var(--oradia-paper-muted); flex: 0 0 auto; font-size: 0.72rem; letter-spacing: 0.08em; margin-top: 1rem; padding-top: 0.75rem; text-align: right; text-transform: uppercase; }
+.document-page.is-overflowing { height: auto; min-height: 34rem; overflow: visible; }
+.document-page.is-overflowing .document-page-content { overflow: visible; }
+@media print {
+  .document-reader { container-type: normal; }
+  .document-surface.is-paginated { display: block; }
+  .document-page { border: 0; border-radius: 0; box-shadow: none; break-after: page; height: auto; min-height: 0; overflow: visible; width: 100%; }
+  .document-page:last-child { break-after: auto; }
+  .document-page-content { overflow: visible; }
+}
 .document-link-option { background: transparent; border: 0; border-bottom: 1px solid var(--oradia-line); color: var(--oradia-ink); display: block; padding: 0.55rem 0.75rem; text-align: left; width: 100%; }
 .document-link-option:last-child { border-bottom: 0; }
 .document-link-option:hover, .document-link-option:focus-visible, .document-link-option.is-selected { background: var(--oradia-slate-700); }

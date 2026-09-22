@@ -211,4 +211,87 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_selector ".document-surface", text: "Last good content"
     assert_no_selector ".document-surface", text: "Broken edit"
   end
+
+  test "renders the seeded document fixture library and its stress cases" do
+    Document.delete_all
+
+    visit documents_path
+
+    assert_text "No documents yet"
+    find("summary", text: "More").click
+    click_on "Load sample documents"
+
+    assert_selector ".document-graph-node", count: Documents::SampleData::SAMPLES.length
+    assert_selector ".document-graph-edge", minimum: 1
+    coordinates = page.evaluate_script(<<~JAVASCRIPT)
+      JSON.parse(document.querySelector(".document-graph").dataset.documentGraphDataValue)
+        .nodes.map(({ x, y }) => [x, y])
+    JAVASCRIPT
+    assert_equal coordinates.length, coordinates.uniq.length
+    assert_text "Stress: Renderer kitchen sink"
+    assert_text "Fixture: Graph orphan"
+    assert_operator page.evaluate_script("document.documentElement.scrollWidth"), :<=, page.evaluate_script("window.innerWidth")
+
+    warning_document = Document.find_by!(sample_id: "document-stress-warnings")
+    visit document_path(warning_document)
+
+    assert_selector '[aria-label="Markdown warnings"]', text: /directive/
+    assert_selector ".document-link.unresolved", text: "[[Fixture: Missing document]]"
+    assert_no_text "javascript:"
+
+    page.driver.browser.manage.window.resize_to(600, 900)
+    assert_operator page.evaluate_script("document.documentElement.scrollWidth"), :<=, page.evaluate_script("window.innerWidth")
+  ensure
+    page.driver.browser.manage.window.resize_to(1400, 1000)
+  end
+
+  test "paginates long documents and gives headings a clear hierarchy" do
+    report = Documents::SampleData.load!.records.find { |record| record.sample_id == "document-full-report" }
+
+    visit document_path(report)
+
+    assert_selector ".document-surface.is-paginated"
+    assert_selector ".document-page", minimum: 2, wait: 5
+    assert_text "Appendix C: Glossary"
+
+    page_count = page.evaluate_script("document.querySelectorAll('.document-page').length")
+    assert_operator page_count, :>=, 2
+    assert_selector ".document-page-number", text: /Page 1 of #{page_count}/i
+
+    font_sizes = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.document-surface');
+        const size = (selector) => Number.parseFloat(getComputedStyle(surface.querySelector(selector)).fontSize);
+        return { body: size('p'), h1: size('h1'), h2: size('h2') };
+      })()
+    JAVASCRIPT
+    assert_operator font_sizes["h1"], :>, font_sizes["body"]
+    assert_operator font_sizes["h2"], :>, font_sizes["body"]
+    assert_operator page.evaluate_script("document.documentElement.scrollWidth"), :<=, page.evaluate_script("window.innerWidth")
+  end
+
+  test "horizontal-only document positions stay content-sized" do
+    document = Document.create!(
+      title: "Inline positions",
+      source: <<~MARKDOWN
+        :::position{left}
+
+        Left stays ordinary.
+
+        :::position{center}
+
+        Center stays ordinary.
+
+        :::position{right}
+
+        Right stays ordinary.
+      MARKDOWN
+    )
+
+    visit document_path(document)
+
+    heights = page.evaluate_script("[...document.querySelectorAll('.document-block')].map((block) => block.getBoundingClientRect().height)")
+    assert_equal 3, heights.length
+    assert heights.all? { |height| height < 120 }, "horizontal-only blocks should not become vertical stages: #{heights.inspect}"
+  end
 end

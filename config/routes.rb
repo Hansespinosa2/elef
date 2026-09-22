@@ -1,5 +1,5 @@
 Rails.application.routes.draw do
-  root "presentations#index", type: "all"
+  root "library#index"
 
   resources :snippets, except: :show
 
@@ -24,6 +24,7 @@ Rails.application.routes.draw do
 
   resources :documents do
     collection do
+      post :load_samples
       post :start
       post :preview
       post :import

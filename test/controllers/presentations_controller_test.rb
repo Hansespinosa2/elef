@@ -152,6 +152,16 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_select "#document_#{Document.order(:id).last.id}", count: 0
   end
 
+  test "presentation collection no longer interprets type query filters" do
+    document = Document.create!(title: "Query notes", source: "# Query notes")
+
+    get presentations_path, params: { type: "all" }
+
+    assert_response :success
+    assert_select "#document_#{document.id}", count: 0
+    assert_select "#presentation_#{presentations(:one).id}"
+  end
+
   test "the all library is a combined list without relationship graphs" do
     Document.create!(title: "All notes", source: "# Notes")
 

@@ -36,7 +36,8 @@ retain the image they were created with, including when they are resumed with
 `up`; use an intentional image refresh when upgrading an existing task.
 
 Codex is launched in the container with approvals and sandbox bypassed and
-model `gpt-5.6-luna`, with maximum reasoning for implementation and plan mode. Treat the container as the isolation boundary, but
+model `gpt-5.6-luna`, with maximum reasoning for implementation and plan mode.
+Treat the container as the isolation boundary, but
 remember that the mounted task worktree and shared Git metadata are host files.
 
 ## Continue and inspect
@@ -54,14 +55,23 @@ DevTools MCP for browser checks. Run the smallest relevant tests first.
 
 ## Merge and cleanup
 
-The primary agent reviews and merges task branches. Do not merge into the
-primary checkout automatically, and do not remove a task worktree before its
-changes have been reviewed and merged:
+The primary agent reviews task PRs. Do not merge or tear down a task without
+an explicit user request. When a task branch has an open PR, that PR is the
+merge boundary: if the user asks to merge the task branch into a target
+branch, inspect and merge the PR through GitHub, then confirm its state is
+`MERGED`:
 
 ```sh
-git merge --ff-only codex/TASK
+gh pr view PR_NUMBER --json state,mergeable,mergeStateStatus,statusCheckRollup
+gh pr checks PR_NUMBER --watch --fail-fast
+gh pr merge PR_NUMBER --merge
 scripts/elef-agent cleanup TASK
 ```
+
+Do not create a local merge commit as a substitute for merging the PR. Only
+use `git merge` when the user explicitly requests local branch integration and
+the PR is not the intended merge boundary. Do not remove a task worktree until
+its PR has been confirmed merged.
 
 For a small, already-reviewed task that should be handed off quickly, the
 primary checkout can run:
@@ -86,8 +96,10 @@ Codex auth file and GitHub CLI hosts file are mounted read-only when present.
 
 Commit coherent changes on `codex/TASK`, push the branch, and create a draft PR
 from inside the container when the implementation is ready. Do not merge the
-PR automatically; the user reviews and merges it manually. Use the persistent
-session to apply review feedback.
+PR without an explicit user request. When the user requests the merge, use the
+GitHub PR as the merge boundary, confirm the merged state, and then clean up;
+do not substitute a local merge commit. Use the persistent session to apply
+review feedback.
 
 ## End a task
 
