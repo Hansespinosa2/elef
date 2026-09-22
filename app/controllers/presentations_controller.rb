@@ -7,8 +7,9 @@ class PresentationsController < ApplicationController
 
   def index
     @filter = "presentations"
-    @works = Presentation.includes(:parent, :presentation_detail).recent_first
+    @works = Presentation.includes(:presentation_detail).recent_first
     @presentations = @works
+    @lineage_presentations = @works.select(&:presentation?)
     render "library/index"
   end
 
