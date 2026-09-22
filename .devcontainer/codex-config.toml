@@ -1,4 +1,6 @@
-model = "gpt-5.6-luna-max"
+model = "gpt-5.6-luna"
+model_reasoning_effort = "max"
+plan_mode_reasoning_effort = "max"
 
 [mcp_servers.github]
 url = "https://api.githubcopilot.com/mcp/"
