@@ -8,6 +8,7 @@ module Presentations
       {
         id: "markdown-basics",
         title: "Sample: Markdown basics",
+        purpose: "Prove Markdown hierarchy, sections, subsections, footnotes, slide counts, and readable narrative flow.",
         source: <<~MARKDOWN
           ---
           #{MARKER_KEY}: markdown-basics
@@ -108,6 +109,7 @@ module Presentations
       {
         id: "layouts-and-themes",
         title: "Sample: Layouts and themes",
+        purpose: "Prove themes, automatic layouts, columns, centered content, and every supported position.",
         source: <<~MARKDOWN
           ---
           #{MARKER_KEY}: layouts-and-themes
@@ -303,6 +305,7 @@ module Presentations
       {
         id: "code-and-math",
         title: "Sample: Code and LaTeX math",
+        purpose: "Prove syntax-highlighted code stays distinct from inline and display LaTeX math.",
         source: <<~MARKDOWN
           ---
           #{MARKER_KEY}: code-and-math
@@ -394,6 +397,7 @@ module Presentations
       {
         id: "tables-and-media",
         title: "Sample: Tables and media",
+        purpose: "Prove table layout, image rendering, safe links, and evidence-oriented content.",
         source: <<~MARKDOWN
           ---
           #{MARKER_KEY}: tables-and-media
@@ -478,6 +482,7 @@ module Presentations
       {
         id: "slide-edge-cases",
         title: "Sample: Slide edge cases",
+        purpose: "Prove slide boundaries, front matter, fenced delimiters, tilde fences, and unusual text.",
         source: <<~MARKDOWN
           ---
           #{MARKER_KEY}: slide-edge-cases
@@ -569,6 +574,7 @@ module Presentations
       {
         id: "elef-workflow",
         title: "Sample: The Elef workflow",
+        purpose: "Prove a realistic end-to-end story can combine authoring, preview, presentation, and review.",
         source: <<~MARKDOWN
           ---
           #{MARKER_KEY}: elef-workflow
@@ -654,6 +660,7 @@ module Presentations
       {
         id: "renderer-stress-test",
         title: "Sample: Renderer stress test",
+        purpose: "Prove dense combinations of text, code, math, tables, media, links, and boundaries.",
         source: <<~MARKDOWN
           ---
           #{MARKER_KEY}: renderer-stress-test

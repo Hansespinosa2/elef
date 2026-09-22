@@ -48,6 +48,36 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
     assert_select "#presentation_#{presentations(:one).id}"
   end
 
+  test "loads sample documents idempotently from the document library" do
+    unrelated = Document.create!(title: "Personal notes", source: "# Keep me")
+    expected_seed_records = Documents::SampleData::SAMPLES.length
+
+    assert_difference("Document.count", expected_seed_records) do
+      post load_samples_documents_path
+    end
+
+    assert_redirected_to documents_path
+    assert_equal "Sample documents loaded.", flash[:notice]
+    Documents::SampleData::SAMPLES.each do |sample|
+      assert_equal sample[:source], Document.find_by!(sample_id: sample[:id]).reload.source
+    end
+
+    assert_no_difference("Document.count") do
+      post load_samples_documents_path
+    end
+
+    assert_equal ["Personal notes", "# Keep me"], [unrelated.reload.title, unrelated.source]
+    assert_equal expected_seed_records, Document.where.not(sample_id: nil).count
+  end
+
+  test "document library exposes its sample loader" do
+    get documents_path
+
+    assert_select "form[action='#{load_samples_documents_path}']" do
+      assert_select "button", text: "Load sample documents"
+    end
+  end
+
   test "documents expose their directed network while all and presentations keep theirs separate" do
     target = Document.create!(title: "Target", source: "# Target")
     source = Document.create!(title: "Source", source: "# Source\n\n[[Target]]")

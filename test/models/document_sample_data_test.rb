@@ -12,6 +12,7 @@ class DocumentSampleDataTest < ActiveSupport::TestCase
     assert_equal Documents::SampleData::SAMPLES.map { |sample| sample[:id] }, records.map(&:sample_id)
     assert_equal Documents::SampleData::SAMPLES.map { |sample| sample[:title] }, records.map(&:title)
     assert_equal Documents::SampleData::SAMPLES.map { |sample| sample[:source] }, records.map { |record| record.reload.source }
+    assert Documents::SampleData::SAMPLES.all? { |sample| sample[:purpose].present? }
     assert records.all?(&:document?)
     assert_equal records.length, records.map(&:title).uniq.length
   end

@@ -211,9 +211,13 @@ class DocumentsTest < ApplicationSystemTestCase
   end
 
   test "renders the seeded document fixture library and its stress cases" do
-    Documents::SampleData.load!
+    Document.delete_all
 
     visit documents_path
+
+    assert_text "No documents yet"
+    find("summary", text: "More").click
+    click_on "Load sample documents"
 
     assert_selector ".document-graph-node", count: Documents::SampleData::SAMPLES.length
     assert_selector ".document-graph-edge", minimum: 1

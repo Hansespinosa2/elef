@@ -13,6 +13,11 @@ class DocumentsController < ApplicationController
     render "presentations/index"
   end
 
+  def load_samples
+    Documents::SampleData.load!
+    redirect_to documents_path, notice: "Sample documents loaded."
+  end
+
   def new
     @document = Document.new(source: Document::DEFAULT_SOURCE)
   end

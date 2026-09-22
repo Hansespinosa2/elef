@@ -6,6 +6,7 @@ module Documents
       {
         id: "document-markdown-tour",
         title: "Fixture: Markdown tour",
+        purpose: "Prove continuous Markdown semantics, hierarchy, emphasis, lists, links, and thematic breaks.",
         source: <<~MARKDOWN
           ---
           presentationTheme: light
@@ -44,6 +45,7 @@ module Documents
       {
         id: "document-components",
         title: "Fixture: Rich components",
+        purpose: "Prove tables, fenced code, inline and display math, and safe media in a document.",
         source: <<~MARKDOWN
           ---
           presentationTheme: match
@@ -83,6 +85,7 @@ module Documents
       {
         id: "document-positioned-content",
         title: "Fixture: Positioned content",
+        purpose: "Prove document block positioning without exposing the positioning directive.",
         source: <<~MARKDOWN
           ---
           presentationTheme: dark
@@ -117,6 +120,7 @@ module Documents
       {
         id: "document-boundaries",
         title: "Fixture: Markdown boundaries",
+        purpose: "Prove front matter, thematic breaks, fenced delimiters, Unicode, and wrapping.",
         source: <<~MARKDOWN
           ---
           presentationTheme: match
@@ -155,6 +159,7 @@ module Documents
       {
         id: "document-links-hub",
         title: "Fixture: Link hub",
+        purpose: "Prove a high-degree graph node and duplicate-edge deduplication.",
         source: <<~MARKDOWN
           # Fixture: Link hub
 
@@ -169,6 +174,7 @@ module Documents
       {
         id: "document-links-branch-a",
         title: "Fixture: Link branch A",
+        purpose: "Prove a linked branch can return to the hub and continue to another branch.",
         source: <<~MARKDOWN
           # Fixture: Link branch A
 
@@ -180,6 +186,7 @@ module Documents
       {
         id: "document-links-branch-b",
         title: "Fixture: Link branch B",
+        purpose: "Prove a second branch remains legible and independently navigable.",
         source: <<~MARKDOWN
           # Fixture: Link branch B
 
@@ -190,6 +197,7 @@ module Documents
       {
         id: "document-links-cycle-a",
         title: "Fixture: Link cycle A",
+        purpose: "Prove one half of a reciprocal document cycle remains renderable.",
         source: <<~MARKDOWN
           # Fixture: Link cycle A
 
@@ -199,6 +207,7 @@ module Documents
       {
         id: "document-links-cycle-b",
         title: "Fixture: Link cycle B",
+        purpose: "Prove reciprocal cycles do not recurse or duplicate graph nodes.",
         source: <<~MARKDOWN
           # Fixture: Link cycle B
 
@@ -209,6 +218,7 @@ module Documents
       {
         id: "document-links-unresolved",
         title: "Fixture: Unresolved links",
+        purpose: "Prove resolved, unresolved, inline-code, and fenced-code link distinctions.",
         source: <<~MARKDOWN
           # Fixture: Unresolved links
 
@@ -226,6 +236,7 @@ module Documents
       {
         id: "document-links-orphan",
         title: "Fixture: Graph orphan",
+        purpose: "Prove a standalone document remains visible in the graph without edges.",
         source: <<~MARKDOWN
           # Fixture: Graph orphan
 
@@ -236,6 +247,7 @@ module Documents
       {
         id: "document-stress-renderer",
         title: "Stress: Renderer kitchen sink",
+        purpose: "Prove combined content types, wrapping, and generated HTML under density.",
         source: <<~MARKDOWN
           ---
           presentationTheme: match
@@ -273,6 +285,7 @@ module Documents
       {
         id: "document-stress-warnings",
         title: "Stress: Warnings and unsafe input",
+        purpose: "Prove malformed directives warn locally and unsafe protocols are removed.",
         source: <<~MARKDOWN
           # Stress: Warnings and unsafe input
 
