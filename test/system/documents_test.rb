@@ -242,4 +242,29 @@ class DocumentsTest < ApplicationSystemTestCase
   ensure
     page.driver.browser.manage.window.resize_to(1400, 1000)
   end
+
+  test "paginates long documents and gives headings a clear hierarchy" do
+    report = Documents::SampleData.load!.records.find { |record| record.sample_id == "document-full-report" }
+
+    visit document_path(report)
+
+    assert_selector ".document-surface.is-paginated"
+    assert_selector ".document-page", minimum: 2, wait: 5
+    assert_text "Appendix C: Glossary"
+
+    page_count = page.evaluate_script("document.querySelectorAll('.document-page').length")
+    assert_operator page_count, :>=, 2
+    assert_selector ".document-page-number", text: /Page 1 of #{page_count}/i
+
+    font_sizes = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.document-surface');
+        const size = (selector) => Number.parseFloat(getComputedStyle(surface.querySelector(selector)).fontSize);
+        return { body: size('p'), h1: size('h1'), h2: size('h2') };
+      })()
+    JAVASCRIPT
+    assert_operator font_sizes["h1"], :>, font_sizes["body"]
+    assert_operator font_sizes["h2"], :>, font_sizes["body"]
+    assert_operator page.evaluate_script("document.documentElement.scrollWidth"), :<=, page.evaluate_script("window.innerWidth")
+  end
 end

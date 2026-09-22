@@ -327,9 +327,9 @@ module Documents
 
           ## A field report on making ideas easier to shape, review, and revisit
 
-          **Prepared for:** teams who think in Markdown, diagrams, and unfinished drafts
-          **Status:** illustrative research report
-          **Reading time:** approximately twenty minutes
+          - **Prepared for:** teams who think in Markdown, diagrams, and unfinished drafts
+          - **Status:** illustrative research report
+          - **Reading time:** approximately twenty minutes
 
           > The quality of an authoring tool is measured less by how much it can
           > display than by how much thinking it leaves available to the author.
