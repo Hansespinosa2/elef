@@ -683,7 +683,7 @@ body.elef-app {
 .document-block.position-left { text-align: left; }
 .document-block.position-center { align-self: center; text-align: center; }
 .document-block.position-right { align-self: flex-end; text-align: right; }
-.document-block:is(.position-top, .position-middle, .position-bottom) { display: flex; flex-direction: column; min-height: clamp(12rem, 35vh, 28rem); }
+.document-block.position-vertical { display: flex; flex-direction: column; min-height: clamp(12rem, 35vh, 28rem); }
 .document-block.position-top { justify-content: flex-start; }
 .document-block.position-middle { justify-content: center; }
 .document-block.position-bottom { justify-content: flex-end; }

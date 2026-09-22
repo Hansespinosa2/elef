@@ -33,4 +33,12 @@ class WorkTest < ActiveSupport::TestCase
     refute_includes document.preview_html, ":::position"
     assert_empty document.preview_warnings
   end
+
+  test "document horizontal positioning does not create a vertical stage" do
+    inline = Document.new(title: "Inline position", source: ":::position{left}\n\nA short note.")
+    staged = Document.new(title: "Staged position", source: ":::position{center middle}\n\nA staged note.")
+
+    refute_includes inline.preview_html, "position-vertical"
+    assert_includes staged.preview_html, "position-vertical"
+  end
 end

@@ -267,4 +267,29 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_operator font_sizes["h2"], :>, font_sizes["body"]
     assert_operator page.evaluate_script("document.documentElement.scrollWidth"), :<=, page.evaluate_script("window.innerWidth")
   end
+
+  test "horizontal-only document positions stay content-sized" do
+    document = Document.create!(
+      title: "Inline positions",
+      source: <<~MARKDOWN
+        :::position{left}
+
+        Left stays ordinary.
+
+        :::position{center}
+
+        Center stays ordinary.
+
+        :::position{right}
+
+        Right stays ordinary.
+      MARKDOWN
+    )
+
+    visit document_path(document)
+
+    heights = page.evaluate_script("[...document.querySelectorAll('.document-block')].map((block) => block.getBoundingClientRect().height)")
+    assert_equal 3, heights.length
+    assert heights.all? { |height| height < 120 }, "horizontal-only blocks should not become vertical stages: #{heights.inspect}"
+  end
 end

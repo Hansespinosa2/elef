@@ -202,6 +202,20 @@ class PresentationTest < ActiveSupport::TestCase
     assert_empty document.warnings
   end
 
+  test "records whether a vertical position was explicitly requested" do
+    document = Presentations::Document.parse(<<~MARKDOWN)
+      :::position{center}
+
+      Horizontal only.
+
+      :::position{center middle}
+
+      Horizontal and vertical.
+    MARKDOWN
+
+    assert_equal [false, true], document.slides.first.blocks.map { |block| block.position&.vertical_explicit }
+  end
+
   test "warns and removes unknown presentation directives" do
     document = Presentations::Document.parse("# Slide\n\n:::unknown\n\nContent")
 

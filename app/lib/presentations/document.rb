@@ -1,6 +1,6 @@
 module Presentations
   module Document
-    Position = Data.define(:horizontal, :vertical)
+    Position = Data.define(:horizontal, :vertical, :vertical_explicit)
     Block = Data.define(:markdown, :position)
     Region = Data.define(:blocks)
     MarginSettings = Data.define(:section, :subsection, :footnote, :slide_count)
@@ -452,7 +452,7 @@ module Presentations
       vertical = values.find { |value| %w[top middle bottom].include?(value) }
       return unless horizontal || vertical
 
-      Position.new(horizontal || "left", vertical || "top")
+      Position.new(horizontal || "left", vertical || "top", vertical.present?)
     end
 
     def infer_layout(blocks)
