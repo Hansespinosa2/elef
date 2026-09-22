@@ -41,6 +41,57 @@ For a server-only session, build Tailwind first with
 Propshaft's dynamic asset resolver and ignores production-style manifests in
 `public/assets`, so stylesheet changes are picked up after refresh.
 
+## Personal PostgreSQL instance
+
+The repository includes a production-like, single-user Docker Compose stack.
+It uses the same `RAILS_ENV=production` configuration intended for a small
+personal server, PostgreSQL 17 for relational data, and durable volumes for
+PostgreSQL plus local Active Storage files.
+
+```bash
+cp .env.personal.example .env.personal
+bin/rails secret                         # put this in SECRET_KEY_BASE
+# replace the PostgreSQL password in .env.personal with a long random value
+scripts/personal-instance config
+scripts/personal-instance up
+```
+
+The app is private on `127.0.0.1:3000` by default, so a reverse proxy can be
+placed in front of it without exposing PostgreSQL. Set `APP_BIND_ADDRESS` and
+`APP_PORT` in `.env.personal` only when the host topology requires it. The
+first boot runs migrations only; sample data is optional:
+
+Elef does not currently provide built-in user authentication. Keep this
+single-user instance on a private network or put it behind a reverse proxy,
+VPN, or other access-control layer before exposing it beyond the host.
+
+```bash
+scripts/personal-instance seed
+```
+
+Use the built-in deployment smoke check after starting or restoring the stack:
+
+```bash
+scripts/personal-instance check
+```
+
+Back up both sides of the data model with one command. The bundle contains a
+compressed PostgreSQL custom-format dump and the Active Storage directory:
+
+```bash
+scripts/personal-instance backup
+```
+
+Copy the resulting timestamped directory to storage separate from the server.
+Restoring is deliberately destructive and requires an explicit confirmation:
+
+```bash
+scripts/personal-instance restore backups/20260922T120000Z --confirm
+```
+
+`down` preserves both named volumes; it does not delete personal data. Keep
+`.env.personal`, `backups/`, and the Docker volumes out of source control.
+
 ## Isolated agent browser URLs
 
 The disposable agent workflow gives each task a stable browser identity. On a

@@ -69,6 +69,11 @@ jobs:
           # REDIS_URL: redis://localhost:6379/0
         run: bin/rails db:test:prepare test
 
+      - name: Check repository launchers and personal deployment files
+        run: |
+          bash test/scripts/elef-agent_test.sh
+          bash test/scripts/personal_instance_test.sh
+
   system-test:
     runs-on: ubuntu-latest
 

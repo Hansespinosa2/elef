@@ -1,0 +1,14 @@
+.git
+.github
+.agents
+.codex
+.devcontainer
+backups
+log
+tmp
+storage
+vendor/bundle
+.env
+.env.*
+!.env.personal.example
+node_modules
