@@ -2,20 +2,40 @@ class Document < Work
   WORK_TYPE = "document".freeze
   DEFAULT_SOURCE = "# Untitled document\n\nStart writing Markdown here.".freeze
 
-  default_scope { where(work_type: WORK_TYPE) }
+  default_scope { where(kind: WORK_TYPE) }
 
-  validates :title, uniqueness: { scope: :work_type }
-
-  after_update :rewrite_incoming_document_links, if: :saved_change_to_title?
+  validates :title, uniqueness: { scope: [:workspace_id, :kind] }
 
   def preview_html
-    Presentations::DocumentRenderer.render(source, source_name: title, parsed: parsed_document)
+    preview_workspace = workspace || Workspace.default
+    Presentations::DocumentRenderer.render(
+      source,
+      source_name: title,
+      parsed: parsed_document,
+      documents: Document.where(workspace: preview_workspace),
+      workspace: preview_workspace
+    )
   end
 
-  private
+  def document_key
+    document_detail&.document_key
+  end
 
-  def rewrite_incoming_document_links
-    old_title, new_title = saved_change_to_title
-    DocumentLinks::Rewriter.rewrite!(old_title, new_title)
+  def canonical_link
+    document_detail&.canonical_link || "[[#{title}]]"
+  end
+
+  def aliases
+    document_aliases.order(:created_at, :id)
+  end
+
+  def self.resolve_link(token, workspace: Workspace.default)
+    token = token.to_s
+    if (key = token[/\A(?:document|id):(.+)\z/, 1])
+      joins(:document_detail).find_by(document_details: { document_key: key })
+    else
+      alias_record = DocumentAlias.find_by(workspace: workspace, alias_name: token)
+      alias_record && find_by(id: alias_record.work_id)
+    end
   end
 end

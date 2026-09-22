@@ -35,6 +35,27 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "# Autosaved", presentation.reload.source
   end
 
+  test "stale JSON saves return recovery metadata without overwriting the server draft" do
+    presentation = Presentation.create!(title: "Concurrent", source: "# Initial")
+    lock_version = presentation.lock_version
+    base_revision = presentation.revision_token
+
+    patch presentation_path(presentation), params: {
+      presentation: { source: "# Server", lock_version: lock_version, base_revision: base_revision }
+    }, as: :json
+    assert_response :ok
+
+    patch presentation_path(presentation), params: {
+      presentation: { source: "# Local", lock_version: lock_version, base_revision: base_revision }
+    }, as: :json
+
+    assert_response :conflict
+    assert_equal "conflict", response.parsed_body["status"]
+    assert_predicate response.parsed_body["recovery_revision_id"], :present?
+    assert_equal "# Local", response.parsed_body.dig("recovery_revision", "source")
+    assert_equal "# Server", presentation.reload.source
+  end
+
   test "forks both relationship types and rejects unsupported types" do
     parent = presentations(:one)
     Presentation::FORK_TYPES.each do |type|
@@ -75,7 +96,20 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
-  test "persisted editor wires autosave but new presentation waits for creation" do
+  test "present mode remains pinned when the draft changes after publishing" do
+    presentation = Presentation.create!(title: "Pinned", source: "# Published")
+    post publish_presentation_path(presentation)
+    patch presentation_path(presentation), params: { presentation: { source: "# Draft" } }
+
+    get present_presentation_path(presentation)
+
+    assert_response :success
+    assert_select ".presentation-slide h1", text: "Published"
+    assert_select ".presentation-slide h1", text: "Draft", count: 0
+    assert_select ".presentation-release-warning", text: /newer changes/
+  end
+
+  test "editor wires autosave and keeps new presentations client-only until creation" do
     get edit_presentation_path(presentations(:one))
     assert_select 'form[data-controller~="autosave"]'
     assert_select "form[action='#{publish_presentation_path(presentations(:one))}'] button.button", text: "Present"
@@ -88,7 +122,7 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_select '[data-editor-target="vimToggle"]'
     assert_select 'button[data-dirty-navigation]', text: "Present"
     get new_presentation_path
-    assert_select 'form[data-controller~="autosave"]', count: 0
+    assert_select 'form[data-controller~="autosave"][data-autosave-save-enabled-value="false"]'
     assert_select 'form[data-controller~="preview"]'
     assert_select 'form[data-preview-url-value="/presentations/preview"]'
   end

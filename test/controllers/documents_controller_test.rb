@@ -125,7 +125,7 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
     assert_includes duplicate.errors.full_messages, "Title has already been taken"
   end
 
-  test "renaming a document rewrites incoming links atomically" do
+  test "renaming a document preserves incoming links through aliases" do
     target = Document.create!(title: "Old title", source: "# Old title")
     incoming = Document.create!(title: "Incoming", source: "[[Old title]]\n\n`[[Old title]]`\n\n```\n[[Old title]]\n```")
 
@@ -133,7 +133,9 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
 
     assert_redirected_to documents_path
     assert_equal "New title", target.reload.title
-    assert_equal "[[New title]]\n\n`[[Old title]]`\n\n```\n[[Old title]]\n```", incoming.reload.source
+    assert_equal "[[Old title]]\n\n`[[Old title]]`\n\n```\n[[Old title]]\n```", incoming.reload.source
+    get document_path(incoming)
+    assert_select "a.document-link[href='#{document_path(target)}']", text: "New title"
   end
 
   test "document previews link to resolved documents and mark missing links" do
@@ -157,6 +159,18 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "new-1", response.parsed_body["revision"]
     assert_includes response.parsed_body["html"], "<hr"
     assert_includes response.parsed_body["html"], "Draft notes"
+  end
+
+  test "previews an unsaved document when no revision token is supplied" do
+    assert_no_difference("Document.count") do
+      post preview_documents_path, params: {
+        document: { title: "Revisionless draft", source: "# Revisionless draft" }
+      }, as: :json
+    end
+
+    assert_response :success
+    assert_equal 0, response.parsed_body["revision"]
+    assert_includes response.parsed_body["html"], "Revisionless draft"
   end
 
   test "presentation preview keeps the saved record untouched" do

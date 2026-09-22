@@ -8,10 +8,14 @@ Rails.application.routes.draw do
       post :load_samples
       post :start
       post :preview
+      post :import
     end
     member do
       get :present
       post :publish
+      post :restore
+      get :history
+      get :export
       match :preview, via: %i[get post]
       patch :rename
       post :fork
@@ -23,8 +27,12 @@ Rails.application.routes.draw do
       post :load_samples
       post :start
       post :preview
+      post :import
     end
     member do
+      post :restore
+      get :history
+      get :export
       match :preview, via: %i[get post]
       patch :rename
     end

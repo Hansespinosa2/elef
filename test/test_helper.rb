@@ -4,6 +4,8 @@ require "rails/test_help"
 
 module ActiveSupport
   class TestCase
+    set_fixture_class presentations: Presentation
+
     # Run tests in parallel with specified workers
     parallelize(workers: :number_of_processors)
 

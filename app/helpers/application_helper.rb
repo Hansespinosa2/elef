@@ -43,7 +43,9 @@ module ApplicationHelper
     "#{work.document? ? "document" : "presentation"}_#{work.id}"
   end
 
-  def document_link_titles
-    Document.order(:title).pluck(:title).select { |title| DocumentLinks::Parser.linkable_title?(title) }
+  def document_link_titles(workspace: Workspace.default)
+    Document.where(workspace: workspace || Workspace.default).order(:title).pluck(:title).select do |title|
+      DocumentLinks::Parser.linkable_title?(title)
+    end
   end
 end

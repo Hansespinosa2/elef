@@ -34,6 +34,16 @@ class DocumentLinksTest < ActiveSupport::TestCase
     assert_includes html, "<code>[[Target]]</code>"
   end
 
+  test "renders links within the source work's workspace" do
+    default_target = Document.create!(title: "Shared target", source: "# Default")
+    other_workspace = Workspace.create!(name: "Other workspace", slug: "other-links-#{SecureRandom.hex(6)}")
+    other_target = Document.create!(workspace: other_workspace, title: "Shared target", source: "# Other")
+    source = Document.create!(title: "Source", source: "[[Shared target]]")
+
+    assert_includes source.preview_html, %(href="/documents/#{default_target.id}")
+    refute_includes source.preview_html, %(href="/documents/#{other_target.id}")
+  end
+
   test "preserves backslashes in rendered document titles" do
     title = 'A\\1'
     target = Document.create!(title: title, source: "# Target")

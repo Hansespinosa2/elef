@@ -4,8 +4,8 @@ Elef is now a conventional Rails monolith for creating and presenting single-use
 
 ## Runtime choices
 
-- **Rails/Ruby:** Rails 8.1.3 on Ruby 3.4.3, selected because both are installed in this environment and Rails 8 keeps Hotwire, importmap, SQLite, and system tests conventional without adding a Node/React runtime.
-- **Database:** SQLite via Active Record. The first product is single-user and database-backed, so SQLite keeps the app portable and simple.
+- **Rails/Ruby:** Rails 8.1.3 on Ruby 3.4, using Hotwire, importmap, and system tests without adding a Node/React runtime.
+- **Database:** PostgreSQL via Active Record. SQLite remains available only when `ELEF_USE_SQLITE=1` is explicitly set for local migration checks.
 - **Views/interactions:** Rails ERB views with Turbo and Stimulus through importmap. Stimulus handles dirty-state navigation protection and browser presentation keyboard controls.
 - **Browser automation:** Rails system tests use Selenium with Chrome in explicit headless mode; repository checks must not open a visible browser.
 - **Styling:** Tailwind CSS through `tailwindcss-rails` styles Elef-owned application UI. Presentation output remains isolated under `.presentation-surface` with dedicated Markdown, Rouge, KaTeX, slide geometry, presentation-mode, and deck-theme CSS.
@@ -17,6 +17,7 @@ Elef is now a conventional Rails monolith for creating and presenting single-use
 - Source-first Markdown editor with hybrid autosave, explicit **Save presentation**, and retryable save status.
 - Dirty-state warning before unsaved source is lost.
 - Presentation management with rename, delete, continuation/inspiration forks, and a library lineage graph.
+- Relational workspaces, immutable Markdown revisions, recovery drafts, pinned presentation releases, Active Storage assets, and self-contained work packages.
 - Strict slide parsing around standalone `---`, initial front matter, fenced code blocks, layout metadata, theme metadata, and empty slides.
 
 ## Development
@@ -26,6 +27,14 @@ bundle install
 bin/rails db:prepare
 bin/dev
 ```
+
+Development and test expect PostgreSQL at `127.0.0.1` with the `postgres` user.
+Set `PGDATABASE`, `PGTESTDATABASE`, `PGUSER`, `PGPASSWORD`, `PGHOST`, and
+`PGPORT` when your local setup differs. For an isolated SQLite migration check,
+use `ELEF_USE_SQLITE=1 bin/rails db:prepare`.
+
+The disposable development container starts a private PostgreSQL cluster under
+`storage/postgres` automatically; set `PGHOST` to use an external server.
 
 For a server-only session, build Tailwind first with
 `bin/rails tailwindcss:build`, then run `bin/rails server`. Development uses
