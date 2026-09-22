@@ -86,6 +86,7 @@ class VimEditorTest < ApplicationSystemTestCase
     assert_selector ".cm-elef-metadata", text: ":::position{center}"
     assert_no_selector ".cm-elef-metadata", text: ":::not-metadata"
     assert_equal "0.68", page.evaluate_script("getComputedStyle(document.querySelector('.cm-elef-metadata')).opacity")
+    assert_equal "normal", page.evaluate_script("getComputedStyle(document.querySelector('.cm-elef-metadata')).fontStyle")
   end
 
   test "configured Shift+Space enters Insert mode" do

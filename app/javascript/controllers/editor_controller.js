@@ -72,8 +72,7 @@ const theme = EditorView.theme({
   ".cm-activeLineGutter": { backgroundColor: "#182126" },
   ".cm-elef-metadata": {
     color: "#9eada3",
-    opacity: "0.68",
-    fontStyle: "italic"
+    opacity: "0.68"
   }
 }, { dark: true })
 
