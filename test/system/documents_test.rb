@@ -209,4 +209,28 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_selector ".document-surface", text: "Last good content"
     assert_no_selector ".document-surface", text: "Broken edit"
   end
+
+  test "renders the seeded document fixture library and its stress cases" do
+    Documents::SampleData.load!
+
+    visit documents_path
+
+    assert_selector ".document-graph-node", count: Documents::SampleData::SAMPLES.length
+    assert_selector ".document-graph-edge", minimum: 1
+    assert_text "Stress: Renderer kitchen sink"
+    assert_text "Fixture: Graph orphan"
+    assert_operator page.evaluate_script("document.documentElement.scrollWidth"), :<=, page.evaluate_script("window.innerWidth")
+
+    warning_document = Document.find_by!(sample_id: "document-stress-warnings")
+    visit document_path(warning_document)
+
+    assert_selector '[aria-label="Markdown warnings"]', text: /directive/
+    assert_selector ".document-link.unresolved", text: "[[Fixture: Missing document]]"
+    assert_no_text "javascript:"
+
+    page.driver.browser.manage.window.resize_to(600, 900)
+    assert_operator page.evaluate_script("document.documentElement.scrollWidth"), :<=, page.evaluate_script("window.innerWidth")
+  ensure
+    page.driver.browser.manage.window.resize_to(1400, 1000)
+  end
 end

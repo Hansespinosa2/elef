@@ -10,6 +10,7 @@
 
 Presentations::SampleData.load!
 Presentations::LineageSampleData.load!
+Documents::SampleData.load!
 
 [
   { name: "Bold text", trigger: "bold", description: "Emphasized Markdown text", category: "Markdown", body: "**${1:text}**" },
