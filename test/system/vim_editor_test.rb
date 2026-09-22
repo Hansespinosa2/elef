@@ -69,6 +69,25 @@ class VimEditorTest < ApplicationSystemTestCase
     assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal"
   end
 
+  test "metadata directives are visually subdued without dimming fenced code" do
+    document = Document.create!(title: "Metadata styling", source: <<~MARKDOWN)
+      # Notes
+
+      :::position{center}
+
+      Visible text.
+
+      ```
+      :::not-metadata
+      ```
+    MARKDOWN
+    visit edit_document_path(document)
+
+    assert_selector ".cm-elef-metadata", text: ":::position{center}"
+    assert_no_selector ".cm-elef-metadata", text: ":::not-metadata"
+    assert_equal "0.68", page.evaluate_script("getComputedStyle(document.querySelector('.cm-elef-metadata')).opacity")
+  end
+
   test "configured Shift+Space enters Insert mode" do
     document = Document.create!(title: "Vim mapping", source: "# Mapping")
     visit edit_document_path(document)

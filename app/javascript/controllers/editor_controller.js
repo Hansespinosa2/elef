@@ -1,6 +1,6 @@
 import { Controller } from "@hotwired/stimulus"
-import { Compartment, EditorState } from "@codemirror/state"
-import { EditorView } from "@codemirror/view"
+import { Compartment, EditorState, RangeSetBuilder } from "@codemirror/state"
+import { Decoration, EditorView, ViewPlugin } from "@codemirror/view"
 import { basicSetup } from "codemirror"
 import { markdown } from "@codemirror/lang-markdown"
 import { Vim, getCM, vim } from "@replit/codemirror-vim"
@@ -8,6 +8,43 @@ import { Vim, getCM, vim } from "@replit/codemirror-vim"
 const ENABLED_STORAGE_KEY = "elef.editor.vim.enabled"
 const MAPPING_STORAGE_KEY = "elef.editor.vim.normalMapping"
 const SHIFT_SPACE = "<S-Space>"
+const METADATA_LINE = /^\s*:::/
+const FENCE_LINE = /^\s*(`{3,}|~{3,})/
+
+const metadataDecoration = Decoration.mark({ class: "cm-elef-metadata" })
+const metadataDecorations = ViewPlugin.fromClass(class {
+  constructor(view) {
+    this.decorations = this.build(view)
+  }
+
+  update(update) {
+    if (update.docChanged || update.viewportChanged) this.decorations = this.build(update.view)
+  }
+
+  build(view) {
+    const decorations = new RangeSetBuilder()
+    let fence = null
+
+    for (let lineNumber = 1; lineNumber <= view.state.doc.lines; lineNumber += 1) {
+      const line = view.state.doc.line(lineNumber)
+      const fenceMatch = line.text.match(FENCE_LINE)
+
+      if (fence) {
+        if (fenceMatch && fenceMatch[1][0] === fence.character && fenceMatch[1].length >= fence.length) fence = null
+        continue
+      }
+
+      if (fenceMatch) {
+        fence = { character: fenceMatch[1][0], length: fenceMatch[1].length }
+        continue
+      }
+
+      if (METADATA_LINE.test(line.text)) decorations.add(line.from, line.to, metadataDecoration)
+    }
+
+    return decorations.finish()
+  }
+}, { decorations: (value) => value.decorations })
 
 const theme = EditorView.theme({
   "&": {
@@ -32,7 +69,12 @@ const theme = EditorView.theme({
   ".cm-focused": { outline: "none" },
   ".cm-gutters": { backgroundColor: "#11161a", borderRight: "1px solid #304047" },
   ".cm-activeLine": { backgroundColor: "#182126" },
-  ".cm-activeLineGutter": { backgroundColor: "#182126" }
+  ".cm-activeLineGutter": { backgroundColor: "#182126" },
+  ".cm-elef-metadata": {
+    color: "#9eada3",
+    opacity: "0.68",
+    fontStyle: "italic"
+  }
 }, { dark: true })
 
 export default class extends Controller {
@@ -57,6 +99,7 @@ export default class extends Controller {
           this.vimCompartment.of(this.vimEnabled ? vim() : []),
           basicSetup,
           markdown(),
+          metadataDecorations,
           theme,
           EditorView.updateListener.of((update) => this.handleUpdate(update))
         ]
