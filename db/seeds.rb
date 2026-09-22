@@ -8,6 +8,8 @@
 #     MovieGenre.find_or_create_by!(name: genre_name)
 #   end
 
+Workspace.default
+
 Presentations::SampleData.load!
 Presentations::LineageSampleData.load!
 document_sample_result = Documents::SampleData.load!

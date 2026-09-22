@@ -27,6 +27,7 @@ class AddUniqueDocumentTitleIndex < ActiveRecord::Migration[8.1]
 
       duplicate_ids.each_with_index do |id, index|
         number = index + 2
+        candidate = nil
         loop do
           suffix = " (#{number})"
           candidate = "#{title.to_s.truncate(120 - suffix.length)}#{suffix}"

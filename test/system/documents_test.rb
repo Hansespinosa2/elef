@@ -114,7 +114,7 @@ class DocumentsTest < ApplicationSystemTestCase
     page.driver.browser.manage.window.resize_to(1400, 1000)
   end
 
-  test "renaming a document updates linked previews" do
+  test "renaming a document preserves linked previews" do
     target = Document.create!(title: "Rename target", source: "# Target")
     incoming = Document.create!(title: "Rename source", source: "See [[Rename target]]")
 
@@ -127,7 +127,9 @@ class DocumentsTest < ApplicationSystemTestCase
     end
 
     assert_text "Document renamed."
-    assert_equal "See [[Renamed target]]", incoming.reload.source
+    assert_equal "See [[Rename target]]", incoming.reload.source
+    visit document_path(incoming)
+    assert_selector "a.document-link[href='#{document_path(target)}']", text: "Renamed target"
   end
 
   test "creates a document and updates its continuous live preview" do

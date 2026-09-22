@@ -1,5 +1,10 @@
 <% content_for :title, "Present #{@presentation.title}" %>
 <div class="presentation-mode presentation-surface slides-theme-<%= @presentation.presentation_theme %> slides-typography-<%= @presentation.presentation_typography %>" data-controller="presentation" data-presentation-index-value="0">
+  <% if @release_stale %>
+    <p class="presentation-release-warning" role="status">This presentation is a published release. The editable draft has newer changes; republish to update what you present.</p>
+  <% elsif @release.nil? %>
+    <p class="presentation-release-warning" role="status">This presentation has not been published yet. Publish it from the editor to pin a release.</p>
+  <% end %>
   <div class="presentation-toolbar">
     <%= link_to "Exit", presentation_path(@presentation), class: "button inline-flex min-h-10 items-center rounded-full border border-white/20 bg-white/10 px-4 py-2 font-bold text-white no-underline hover:bg-white/20", data: { turbo: false } %>
     <button type="button" class="button inline-flex min-h-10 cursor-pointer items-center rounded-full border border-white/20 bg-white/10 px-4 py-2 font-bold text-white hover:bg-white/20" data-action="presentation#previous" aria-label="Previous slide">Previous</button>
