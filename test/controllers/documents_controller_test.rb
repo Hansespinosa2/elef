@@ -32,7 +32,7 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to documents_path
   end
 
-  test "document library is separate from presentation library while all includes both" do
+  test "document library is separate from the combined library" do
     document = Document.create!(title: "Notes", source: "# Notes")
 
     get documents_path
@@ -41,7 +41,7 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
     assert_select "##{ActionView::RecordIdentifier.dom_id(document)}"
     assert_select "#presentation_#{presentations(:one).id}", count: 0
 
-    get presentations_path, params: { type: "all" }
+    get root_path
     assert_response :success
     assert_select "h1", "Library"
     assert_select "#document_#{document.id}"
@@ -59,13 +59,13 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
     assert_select ".document-graph-edge[data-source-id='#{source.id}'][data-target-id='#{target.id}']"
     assert_select ".lineage-panel", count: 0
 
-    get presentations_path, params: { type: "all" }
+    get root_path
     assert_select ".document-graph", count: 0
     assert_select ".lineage-panel", count: 0
     assert_select "#document_#{source.id}"
     assert_select "#presentation_#{presentations(:one).id}"
 
-    get presentations_path, params: { type: "presentations" }
+    get presentations_path
     assert_select ".document-graph", count: 0
     assert_select ".lineage-panel"
   end

@@ -58,7 +58,27 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_selector '[data-autosave-target="status"]', exact_text: "Saved"
     assert_includes presentation.reload.source, "# Latest edit"
     click_on "Library"
-    assert_current_path presentations_path(type: "all")
+    assert_current_path root_path
+  end
+
+  test "library tabs use canonical collection paths" do
+    visit root_path
+
+    assert_current_path root_path
+    assert_link "Library", href: root_path
+    within "nav.library-tabs" do
+      assert_link "All", href: root_path
+      assert_link "Documents", href: documents_path
+      assert_link "Presentations", href: presentations_path
+      click_on "Documents"
+    end
+
+    assert_current_path documents_path
+    within "nav.library-tabs" do
+      click_on "Presentations"
+    end
+
+    assert_current_path presentations_path
   end
 
   test "explicit save waits for autosave and refreshes the latest preview" do
