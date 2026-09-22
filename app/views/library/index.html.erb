@@ -11,7 +11,14 @@
     <h1 class="mb-0 text-4xl font-bold"><%= title %></h1>
     <p class="mt-2 text-[#6f675c]"><%= description %></p>
   </div>
-  <% if current_filter != "documents" %>
+  <% if current_filter == "documents" %>
+    <details class="library-tools">
+      <summary class="inline-flex cursor-pointer items-center rounded-lg border border-[#304047] px-3 py-2 text-sm font-bold text-[#aab7b1]">More</summary>
+      <div class="library-tools-panel absolute right-0 top-full z-10 mt-2 w-56 rounded-lg border border-[#304047] bg-[#182126] p-1 shadow-xl">
+        <%= button_to "Load sample documents", load_samples_documents_path, method: :post, class: "library-tool-action block w-full rounded-lg px-3 py-2 text-left text-sm font-bold text-[#e9eee9]" %>
+      </div>
+    </details>
+  <% else %>
     <details class="library-tools">
       <summary class="inline-flex cursor-pointer items-center rounded-lg border border-[#304047] px-3 py-2 text-sm font-bold text-[#aab7b1]">More</summary>
       <div class="library-tools-panel absolute right-0 top-full z-10 mt-2 w-56 rounded-lg border border-[#304047] bg-[#182126] p-1 shadow-xl">

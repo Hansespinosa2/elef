@@ -10,6 +10,11 @@
 
 Presentations::SampleData.load!
 Presentations::LineageSampleData.load!
+document_sample_result = Documents::SampleData.load!
+if document_sample_result.conflicts.any?
+  titles = document_sample_result.conflicts.map { |conflict| %("#{conflict.title}") }.to_sentence
+  warn "Skipped sample documents with conflicting titles: #{titles}."
+end
 
 [
   { name: "Bold text", trigger: "bold", description: "Emphasized Markdown text", category: "Markdown", body: "**${1:text}**" },

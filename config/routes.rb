@@ -20,6 +20,7 @@ Rails.application.routes.draw do
 
   resources :documents do
     collection do
+      post :load_samples
       post :start
       post :preview
     end

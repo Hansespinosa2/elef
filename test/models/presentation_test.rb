@@ -283,6 +283,7 @@ class PresentationTest < ActiveSupport::TestCase
     samples = Presentations::SampleData.load!
 
     assert_equal Presentations::SampleData::SAMPLES.length, samples.length
+    assert Presentations::SampleData::SAMPLES.all? { |sample| sample[:purpose].present? }
     Presentations::SampleData::SAMPLES.zip(samples).each do |sample, presentation|
       assert_equal sample[:source], presentation.reload.source
     end
@@ -336,12 +337,31 @@ class PresentationTest < ActiveSupport::TestCase
     records = Presentations::LineageSampleData.load!
 
     assert_equal 15, records.length
+    assert Presentations::LineageSampleData::SAMPLES.all? { |sample| sample[:purpose].present? }
+    assert records.all? { |record| record.slides.length >= 4 }
     assert_equal 6, records.count(&:continuation?)
     assert_equal 6, records.count(&:inspiration?)
     assert_equal %w[lineage-product-root lineage-research-root lineage-root],
       records.select { |record| record.parent.nil? }.map(&:sample_id).sort
     assert_equal records.find { |record| record.sample_id == "lineage-root" }.source,
       records.find { |record| record.sample_id == "lineage-continuation-june" }.fork_source
+
+    root = records.find { |record| record.sample_id == "lineage-root" }
+    assert_equal 4, root.slides.length
+    assert_equal "Quarterly review", root.slides.first.section
+    assert_equal "Baseline", root.slides.first.subsection
+    assert_equal "Source: May operating review", root.slides.first.footnote
+    assert root.document.margin_settings.section
+    assert root.document.margin_settings.footnote
+
+    workshop = records.find { |record| record.sample_id == "lineage-inspiration-workshop" }
+    assert_includes workshop.slides.map(&:layout), "three-column"
+    assert workshop.slides.any? do |slide|
+      slide.blocks.any? { |block| block.position&.horizontal == "center" && block.position.vertical == "middle" }
+    end
+
+    findings = records.find { |record| record.sample_id == "lineage-research-continuation" }
+    assert_includes findings.source, "~~~ruby"
   end
 
   test "presentation creation always has a timestamp" do
