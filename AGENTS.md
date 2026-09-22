@@ -41,3 +41,9 @@
   through GitHub, not create a substitute local merge commit.
 - Only perform a local branch merge when it is explicitly requested and no PR
   merge is intended; confirm the PR is merged before tearing down its task.
+- PR descriptions must use the repository template, explain validation and
+  database/migration impact, and must not record current merge status. GitHub's
+  PR state is authoritative.
+- After a PR is merged, fetch its target branch and verify the merge commit is
+  reachable from that target before deleting the task branch or worktree. Do
+  not trust stale `origin/*` refs.

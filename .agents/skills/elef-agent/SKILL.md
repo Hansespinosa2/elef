@@ -73,6 +73,10 @@ use `git merge` when the user explicitly requests local branch integration and
 the PR is not the intended merge boundary. Do not remove a task worktree until
 its PR has been confirmed merged.
 
+After confirming a merge, refresh the target branch locally and verify the
+GitHub merge commit is reachable from that target before deleting the task
+branch or worktree. Treat local `origin/*` refs as stale until fetched.
+
 For a small, already-reviewed task that should be handed off quickly, the
 primary checkout can run:
 
