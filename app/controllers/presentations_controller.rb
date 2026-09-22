@@ -5,15 +5,10 @@ class PresentationsController < ApplicationController
   before_action :set_preview_presentation, only: :preview
 
   def index
-    @filter = library_filter
-    @works = case @filter
-    when "documents" then Document.recent_first
-    when "presentations" then Presentation.includes(:parent).recent_first
-    else Work.includes(:parent).recent_first
-    end
-    @presentations = @works
-    @lineage_presentations = @filter == "presentations" ? @works.select(&:presentation?) : []
-    @document_graph = DocumentLinks::Graph.new(@works.select(&:document?)).as_json if @filter == "documents"
+    @filter = "presentations"
+    @works = Presentation.includes(:parent).recent_first
+    @lineage_presentations = @works.select(&:presentation?)
+    render "library/index"
   end
 
   def load_samples
@@ -107,11 +102,6 @@ class PresentationsController < ApplicationController
 
   def set_preview_presentation
     @presentation = Presentation.find(params[:id]) if params[:id].present?
-  end
-
-  def library_filter
-    value = params[:type].to_s
-    %w[all documents presentations].include?(value) ? value : "presentations"
   end
 
   def presentation_params
