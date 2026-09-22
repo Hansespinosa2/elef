@@ -255,16 +255,18 @@ module Presentations
     end
 
     def fence_marker(line)
-      match = line.match(/\A\s{0,3}(`{3,}|~{3,})/)
-      match && { marker: match[1][0], length: match[1].length }
+      match = line.match(/\A\s{0,3}(`{3,}|~{3,})(.*)\z/)
+      return unless match
+
+      { marker: match[1][0], length: match[1].length, closing: match[2].match?(/\A[ \t]*\z/) }
     end
 
     def toggle_fence(current, incoming)
-      if current && current[:marker] == incoming[:marker] && incoming[:length] >= current[:length]
-        nil
-      else
-        incoming
-      end
+      return incoming unless current
+      return nil if current[:marker] == incoming[:marker] &&
+        incoming[:length] >= current[:length] && incoming[:closing]
+
+      current
     end
 
     def slide_metadata(markdown, context, mode: :presentation)

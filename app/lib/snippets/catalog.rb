@@ -1,6 +1,6 @@
 module Snippets
   class Catalog
-    PLACEHOLDER = /\$\{(\d+)(?::([^}]*))?\}/
+    PLACEHOLDER = /\$\{(\d+)(?::([^}]*))?\}/.freeze
 
     def self.all
       Snippet.ordered
@@ -22,10 +22,13 @@ module Snippets
     def self.expand(body)
       text = body.to_s
       stops = []
+      offset = 0
       expanded = text.gsub(PLACEHOLDER) do
-        number = Regexp.last_match(1).to_i
-        value = Regexp.last_match(2).to_s
-        start = Regexp.last_match.begin(0)
+        match = Regexp.last_match
+        number = match[1].to_i
+        value = match[2].to_s
+        start = match.begin(0) + offset
+        offset += value.length - match[0].length
         stops << { number: number, start: start, length: value.length }
         value
       end

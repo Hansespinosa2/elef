@@ -16,6 +16,14 @@ class PresentationTest < ActiveSupport::TestCase
     assert_equal ["```yaml\n---\n```", "", ""], document.slides.map(&:markdown)
   end
 
+  test "keeps language-like and mixed fences inside a slide" do
+    source = "# Code\n\n```\n```ruby\n---\n~~~\n---\n```\n\n---\n# Next"
+    document = Presentations::Document.parse(source)
+
+    assert_equal ["# Code\n\n```\n```ruby\n---\n~~~\n---\n```", "# Next"],
+      document.slides.map(&:markdown)
+  end
+
   test "malformed front matter remains ordinary Markdown" do
     document = Presentations::Document.parse("---\npresentationTheme: dark")
 

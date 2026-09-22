@@ -6,9 +6,10 @@ module WorkPreview
   def render_work_preview(work)
     render json: work_preview_payload(work)
   rescue StandardError => error
+    Rails.logger.warn("Work preview failed (#{error.class}): #{error.message}")
     render json: {
       html: nil,
-      warnings: ["Preview could not be rendered: #{error.message}. Check the latest Markdown edit."],
+      warnings: ["Preview could not be rendered. Check the latest Markdown edit."],
       revision: work_preview_revision(work)
     }, status: :unprocessable_content
   end

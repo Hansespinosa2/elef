@@ -28,9 +28,9 @@ export function insideMath(text, caret) {
   let inlineCodeLength = null
 
   for (const line of before.split("\n")) {
-    const fenceMatch = line.match(/^\s{0,3}([`~]{3,})/)
+    const fenceMatch = line.match(/^ {0,3}([`~]{3,})(.*)$/)
     if (fence) {
-      if (fenceMatch && fenceMatch[1][0] === fence.character && fenceMatch[1].length >= fence.length) fence = null
+      if (fenceMatch && fenceMatch[1][0] === fence.character && fenceMatch[1].length >= fence.length && /^[ \t]*$/.test(fenceMatch[2])) fence = null
       continue
     }
     if (fenceMatch) {

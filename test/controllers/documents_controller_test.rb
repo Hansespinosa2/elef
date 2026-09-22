@@ -180,7 +180,8 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :unprocessable_content
     assert_nil response.parsed_body["html"]
-    assert_match /Preview could not be rendered/, response.parsed_body["warnings"].join
+    assert_equal ["Preview could not be rendered. Check the latest Markdown edit."], response.parsed_body["warnings"]
+    refute_includes response.parsed_body["warnings"].join, "Markdown source must be plain text"
     assert_equal "bad-1", response.parsed_body["revision"]
     assert_equal "# Saved", document.reload.source
   end

@@ -226,9 +226,9 @@ export default class extends Controller {
 
     for (let index = 0; index < lines.length; index += 1) {
       const line = lines[index]
-      const fence = line.match(/^ {0,3}(`{3,}|~{3,})/)
+      const fence = line.match(/^ {0,3}(`{3,}|~{3,})(.*)$/)
       if (fenced) {
-        if (fence && fence[1][0] === fenceCharacter && fence[1].length >= fenceLength) {
+        if (fence && fence[1][0] === fenceCharacter && fence[1].length >= fenceLength && /^[ \t]*$/.test(fence[2])) {
           fenced = false
         } else if (index === lines.length - 1) {
           // Only the line containing the caret determines whether an

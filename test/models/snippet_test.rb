@@ -20,5 +20,6 @@ class SnippetTest < ActiveSupport::TestCase
 
     assert_equal "A second B first C ", result[:text]
     assert_equal [1, 2, 0], result[:stops].map { |stop| stop[:number] }
+    assert_equal [[11, 5], [2, 6], [19, 0]], result[:stops].map { |stop| [stop[:start], stop[:length]] }
   end
 end

@@ -251,9 +251,10 @@ export default class extends Controller {
 }
 
 function textLengthBefore(body, stops) {
-  let position = body.length
   const markers = [...body.matchAll(/\$\{\d+(?::[^}]*)?\}/g)]
   const marker = markers[stops.length]
-  if (marker) position = marker.index - markers.slice(0, stops.length).reduce((total, item) => total + item[0].length, 0)
-  return position
+  if (!marker) return body.length
+
+  return marker.index - stops.reduce((position, stop, index) =>
+    position + markers[index][0].length - stop.length, 0)
 }

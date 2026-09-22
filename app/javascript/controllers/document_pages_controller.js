@@ -4,6 +4,7 @@ export default class extends Controller {
   static targets = ["surface"]
 
   connect() {
+    this.active = true
     this.blocks = [...this.surfaceTarget.children]
     this.frame = null
     this.boundResize = () => this.schedule()
@@ -12,16 +13,20 @@ export default class extends Controller {
     this.paginate()
 
     if (document.fonts?.ready) {
-      document.fonts.ready.then(() => this.schedule())
+      document.fonts.ready.then(() => {
+        if (this.active) this.schedule()
+      })
     }
   }
 
   disconnect() {
+    this.active = false
     window.removeEventListener("resize", this.boundResize)
     cancelAnimationFrame(this.frame)
   }
 
   schedule() {
+    if (!this.active) return
     cancelAnimationFrame(this.frame)
     this.frame = requestAnimationFrame(() => this.paginate())
   }

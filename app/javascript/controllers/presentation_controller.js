@@ -26,10 +26,13 @@ export default class extends Controller {
   }
 
   fullscreen() {
-    if (this.stageTarget?.requestFullscreen) this.stageTarget.requestFullscreen()
+    const request = this.stageTarget?.requestFullscreen?.()
+    request?.catch(() => {})
   }
 
   handleKey(event) {
+    if (event.target.closest?.("a, button, input, select, textarea, summary, [contenteditable='true']")) return
+
     if (["ArrowRight", " ", "PageDown", "Enter"].includes(event.key)) {
       event.preventDefault()
       this.next()

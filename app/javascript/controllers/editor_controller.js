@@ -182,6 +182,7 @@ export default class extends Controller {
     const safeAnchor = Math.max(0, Math.min(anchor, length))
     const safeHead = Math.max(0, Math.min(head, length))
     this.view.dispatch({ selection: { anchor: safeAnchor, head: safeHead } })
+    this.syncInput()
   }
 
   replaceRange(insert, from, to = from) {

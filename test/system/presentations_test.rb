@@ -504,6 +504,15 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_text "1 / 2"
   end
 
+  test "presentation keyboard shortcuts do not hijack toolbar activation" do
+    presentation = Presentation.create!(title: "Keyboard exit", source: "# One")
+
+    visit present_presentation_path(presentation)
+    find("a", text: "Exit").send_keys(:enter)
+
+    assert_current_path presentation_path(presentation)
+  end
+
   test "inserts a fuzzy snippet and moves through its placeholder" do
     Snippet.create!(name: "Block equation", trigger: "beq", description: "A block LaTeX equation", category: "LaTeX", body: "$$\n${1:equation}\n$$")
     presentation = Presentation.create!(title: "Snippet deck", source: "# Math\n\n:")
@@ -522,6 +531,21 @@ class PresentationsTest < ApplicationSystemTestCase
     source.send_keys(:enter)
     assert_equal "# Math\n\n$$\nequation\n$$", source.value
     assert_equal "equation", page.evaluate_script("(() => { const e = document.querySelector('[data-snippet-palette-target=editor]'); return e.value.slice(e.selectionStart, e.selectionEnd) })()")
+  end
+
+  test "keeps multiple snippet placeholders aligned while tabbing" do
+    Snippet.create!(name: "Two fields", trigger: "twice", description: "Two tab stops", category: "Markdown", body: "A ${1:first} B ${2:second}")
+    presentation = Presentation.create!(title: "Multiple stops", source: "# Snippets\n\n:")
+
+    visit edit_presentation_path(presentation)
+    source = find_field("Markdown source")
+    source.send_keys("twice")
+    source.send_keys(:enter)
+
+    selected_text = "(() => { const e = document.querySelector('[data-snippet-palette-target=editor]'); return e.value.slice(e.selectionStart, e.selectionEnd) })()"
+    assert_equal "first", page.evaluate_script(selected_text)
+    find(".cm-content").send_keys(:tab)
+    assert_equal "second", page.evaluate_script(selected_text)
   end
 
   test "positions the palette when only the colon trigger is typed" do
