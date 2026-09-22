@@ -85,6 +85,8 @@ module WorkPackage
         "reason" => revision.reason,
         "status" => revision.status,
         "edit_session_id" => revision.edit_session_id,
+        "parent_source_digest" => revision.parent_revision&.source_digest,
+        "base_source_digest" => revision.base_revision&.source_digest,
         "created_at" => revision.created_at&.iso8601
       }
     end
@@ -125,6 +127,7 @@ module WorkPackage
       {
         "parent_work_id" => edge.parent_work_id,
         "parent_title" => edge.parent_title_snapshot,
+        "parent_current_title" => edge.parent_work&.title,
         "fork_type" => edge.fork_type,
         "origin_revision_id" => edge.origin_revision_id,
         "origin_source_digest" => edge.origin_revision&.source_digest,

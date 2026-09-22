@@ -97,6 +97,25 @@ class PersistenceServicesTest < ActiveSupport::TestCase
     assert_equal republished.release.id, PresentationReleasePublisher.call(presentation.reload).release.id
   end
 
+  test "published releases pin presentation metadata and detect asset changes" do
+    presentation = Presentation.create!(title: "Pinned title", source: "# Published")
+    release = PresentationReleasePublisher.call(presentation).release
+
+    presentation.update!(title: "Renamed after publish")
+
+    assert_equal "Pinned title", release.presentation.title
+    assert_predicate release.reload, :stale?
+
+    presentation.assets.attach(io: StringIO.new("asset bytes"), filename: "diagram.txt", content_type: "text/plain")
+
+    assert_predicate release.reload, :stale?
+
+    republished = PresentationReleasePublisher.call(presentation.reload).release
+    assert_equal "Renamed after publish", republished.presentation.title
+    assert_equal PresentationRelease.asset_manifest_for(presentation), republished.asset_manifest
+    assert_not_predicate republished.reload, :stale?
+  end
+
   test "destroying a published work removes its pinned release safely" do
     presentation = Presentation.create!(title: "Disposable release", source: "# Published")
     release = PresentationReleasePublisher.call(presentation).release
@@ -130,6 +149,7 @@ class PersistenceServicesTest < ActiveSupport::TestCase
   test "work packages round-trip stable identity, release provenance, and assets" do
     source = "# Published\n\nOriginal content"
     presentation = Presentation.create!(title: "Package", source: source)
+    presentation.assets.attach(io: StringIO.new("asset bytes"), filename: "diagram.txt", content_type: "text/plain")
     PresentationReleasePublisher.call(presentation)
     Drafts::Save.call(
       presentation.reload,
@@ -138,7 +158,6 @@ class PersistenceServicesTest < ActiveSupport::TestCase
       base_revision: presentation.revision_token,
       checkpoint: true
     )
-    presentation.assets.attach(io: StringIO.new("asset bytes"), filename: "diagram.txt", content_type: "text/plain")
     target_workspace = Workspace.create!(name: "Package import", slug: "package-import-#{SecureRandom.hex(6)}")
 
     package = WorkPackage::Exporter.call(presentation.reload, include_revisions: true)
@@ -150,6 +169,21 @@ class PersistenceServicesTest < ActiveSupport::TestCase
     assert_equal ["diagram.txt"], imported.assets.map { |asset| asset.filename.to_s }
     assert_equal "text/plain", imported.assets.first.content_type
     assert_equal presentation.presentation_detail.settings, imported.presentation_detail.settings
+    assert_equal PresentationRelease.asset_manifest_for(imported), imported.published_release.asset_manifest
+  end
+
+  test "imported forks do not attach to a parent in another workspace by numeric id" do
+    parent = Presentation.create!(title: "Package parent", source: "# Origin")
+    child = parent.fork_as("inspiration")
+    child.save!
+    target_workspace = Workspace.create!(name: "Fork import", slug: "fork-import-#{SecureRandom.hex(6)}")
+
+    package = WorkPackage::Exporter.call(child)
+    imported = WorkPackage::Importer.call(StringIO.new(package), workspace: target_workspace)
+
+    assert_nil imported.reload.parent
+    assert_equal parent.title, imported.fork_parent_title
+    assert_equal parent.source, imported.fork_source
   end
 
   test "document packages preserve stable identity and aliases" do

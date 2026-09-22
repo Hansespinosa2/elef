@@ -114,6 +114,18 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
     assert_includes response.parsed_body["html"], "Draft notes"
   end
 
+  test "previews an unsaved document when no revision token is supplied" do
+    assert_no_difference("Document.count") do
+      post preview_documents_path, params: {
+        document: { title: "Revisionless draft", source: "# Revisionless draft" }
+      }, as: :json
+    end
+
+    assert_response :success
+    assert_equal 0, response.parsed_body["revision"]
+    assert_includes response.parsed_body["html"], "Revisionless draft"
+  end
+
   test "presentation preview keeps the saved record untouched" do
     presentation = presentations(:one)
 

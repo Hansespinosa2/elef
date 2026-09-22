@@ -7,11 +7,13 @@ class Document < Work
   validates :title, uniqueness: { scope: [:workspace_id, :kind] }
 
   def preview_html
+    preview_workspace = workspace || Workspace.default
     Presentations::DocumentRenderer.render(
       source,
       source_name: title,
       parsed: parsed_document,
-      documents: Document.all
+      documents: Document.where(workspace: preview_workspace),
+      workspace: preview_workspace
     )
   end
 

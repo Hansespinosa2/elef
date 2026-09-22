@@ -75,16 +75,29 @@ module WorkPackage
     end
 
     def import_revisions(work, manifest, entries)
-      @revisions_by_digest = { work.draft_digest => work.latest_checkpoint }
+      @revisions_by_digest = { work.latest_checkpoint.source_digest => work.latest_checkpoint }
       revisions = manifest.fetch("revisions", [])
       revisions.reverse_each do |data|
         source = entries["revisions/#{data["id"]}.md"]
         next unless source
-        next if work.work_revisions.exists?(source_digest: data["source_digest"])
+
+        existing = work.work_revisions.find_by(source_digest: WorkRevision.digest(source))
+        if existing
+          @revisions_by_digest[existing.source_digest] = existing
+          next
+        end
+
+        parent_revision = if data.key?("parent_source_digest")
+          @revisions_by_digest[data["parent_source_digest"]]
+        else
+          work.latest_checkpoint
+        end
+        base_revision = @revisions_by_digest[data["base_source_digest"]]
 
         revision = work.work_revisions.create!(
           workspace: @workspace,
-          parent_revision: work.latest_checkpoint,
+          parent_revision: parent_revision,
+          base_revision: base_revision,
           source: source,
           source_digest: WorkRevision.digest(source),
           reason: WorkRevision::REASONS.include?(data["reason"]) ? data["reason"] : "import",
@@ -126,6 +139,7 @@ module WorkPackage
     end
 
     def import_assets(work, manifest, entries)
+      @asset_blobs_by_key = {}
       manifest.fetch("assets", []).each do |asset|
         path = asset.fetch("path")
         content = entries[path]
@@ -136,6 +150,9 @@ module WorkPackage
           filename: asset.fetch("filename"),
           content_type: asset["content_type"]
         )
+        blob = work.assets.attachments.last&.blob
+        @asset_blobs_by_key[asset["key"].to_s] = blob if blob
+        @asset_blobs_by_key[asset["id"].to_s] = blob if blob
       end
     end
 
@@ -152,14 +169,21 @@ module WorkPackage
       end
       return unless revision
 
+      settings = release_data["settings"] || {}
+      asset_manifest = remap_asset_manifest(release_data["asset_manifest"] || [])
+      render_digest = Digest::SHA256.hexdigest(
+        [revision.source_digest, release_data["renderer_version"].presence || PresentationRelease::RENDERER_VERSION,
+         JSON.generate(settings), JSON.generate(asset_manifest)].join("\0")
+      )
+
       release = PresentationRelease.create!(
         work: work,
         source_revision: revision,
         source_digest: revision.source_digest,
         renderer_version: release_data["renderer_version"].presence || PresentationRelease::RENDERER_VERSION,
-        settings: release_data["settings"] || {},
-        asset_manifest: release_data["asset_manifest"] || [],
-        render_digest: release_data["render_digest"].presence || Digest::SHA256.hexdigest(revision.source_digest),
+        settings: settings,
+        asset_manifest: asset_manifest,
+        render_digest: render_digest,
         rendered_artifact: entries["release/artifact.html"],
         published_at: release_data["published_at"].presence || Time.current
       )
@@ -171,18 +195,59 @@ module WorkPackage
       lineage = metadata.dig("presentation", "lineage")
       return unless lineage
 
-      parent = Work.find_by(id: lineage["parent_work_id"], kind: "presentation")
+      parent = find_lineage_parent(lineage)
       origin = if parent && lineage["origin_source_digest"].present?
         parent.work_revisions.find_by(source_digest: lineage["origin_source_digest"])
+      elsif parent && lineage["origin_source"].present?
+        parent.work_revisions.find_by(source_digest: WorkRevision.digest(lineage["origin_source"]))
       end
       PresentationLineageEdge.create!(
         parent_work: parent,
         child_work: work,
         origin_revision: origin,
         fork_type: PresentationLineageEdge::FORK_TYPES.include?(lineage["fork_type"]) ? lineage["fork_type"] : "inspiration",
-        parent_title_snapshot: lineage["parent_title"],
+        parent_title_snapshot: lineage["parent_title"].presence || lineage["parent_current_title"],
         origin_source_snapshot: lineage["origin_source"]
       )
+    end
+
+    def find_lineage_parent(lineage)
+      candidates = @workspace.works.where(kind: "presentation")
+      origin_digest = lineage["origin_source_digest"].presence
+      origin_source = lineage["origin_source"].presence
+
+      candidate = candidates.find_by(id: lineage["parent_work_id"]) if lineage["parent_work_id"].present?
+      return candidate if candidate && lineage_matches_parent?(candidate, origin_digest, origin_source)
+
+      titles = [lineage["parent_title"], lineage["parent_current_title"]].compact_blank.uniq
+      matching = candidates.where(title: titles).select do |work|
+        lineage_matches_parent?(work, origin_digest, origin_source)
+      end
+      matching.one? ? matching.first : nil
+    end
+
+    def lineage_matches_parent?(work, origin_digest, origin_source)
+      return work.source == origin_source if origin_digest.blank? && origin_source.present?
+      return false if origin_digest.blank?
+
+      work.work_revisions.exists?(source_digest: origin_digest)
+    end
+
+    def remap_asset_manifest(asset_manifest)
+      Array(asset_manifest).map do |entry|
+        asset = entry.to_h.stringify_keys
+        blob = @asset_blobs_by_key[asset["key"].to_s] || @asset_blobs_by_key[asset["id"].to_s]
+        next asset unless blob
+
+        asset.merge(
+          "id" => blob.id,
+          "key" => blob.key,
+          "filename" => blob.filename.to_s,
+          "content_type" => blob.content_type,
+          "byte_size" => blob.byte_size,
+          "checksum" => blob.checksum
+        )
+      end
     end
 
     def ensure_revision(work, source, reason: "import")

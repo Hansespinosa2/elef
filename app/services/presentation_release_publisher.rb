@@ -13,6 +13,7 @@ class PresentationReleasePublisher
     @presentation.with_lock do
       revision = source_revision
       settings = {
+        "title" => @presentation.title,
         "theme" => @presentation.presentation_theme,
         "typography" => @presentation.presentation_typography,
         "margin" => margin_settings
@@ -70,17 +71,7 @@ class PresentationReleasePublisher
   end
 
   def assets_manifest
-    @presentation.assets.attachments.includes(:blob).map do |attachment|
-      blob = attachment.blob
-      {
-        "id" => blob.id,
-        "key" => blob.key,
-        "filename" => blob.filename.to_s,
-        "content_type" => blob.content_type,
-        "byte_size" => blob.byte_size,
-        "checksum" => blob.checksum
-      }
-    end
+    PresentationRelease.asset_manifest_for(@presentation)
   end
 end
 

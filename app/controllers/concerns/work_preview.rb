@@ -65,6 +65,6 @@ module WorkPreview
   end
 
   def work_preview_revision(work)
-    params[:revision].presence || work.updated_at.to_i
+    params[:revision].presence || work.updated_at&.to_i || work.lock_version.to_i
   end
 end

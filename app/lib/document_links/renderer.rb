@@ -3,8 +3,8 @@ module DocumentLinks
     module_function
 
     def render(markdown, documents: nil, workspace: nil)
-      documents = (documents || Document.all).to_a
-      workspace ||= documents.first&.workspace || Workspace.default
+      workspace ||= documents&.first&.workspace || Workspace.default
+      documents = (documents || Document.where(workspace: workspace)).to_a
       documents_by_title = documents.index_by(&:title)
       documents_by_key = documents.index_by(&:document_key)
       documents_by_alias = documents.flat_map { |document| document.aliases.map { |alias_record| [alias_record.alias_name, document] } }.to_h
