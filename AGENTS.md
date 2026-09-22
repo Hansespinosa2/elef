@@ -36,3 +36,8 @@
 ## Git
 - Commit coherent changes frequently with concise imperative subjects.
 - Never add co-author trailers, rewrite history, or revert unrelated changes.
+- When an open PR exists for a task branch, the PR is the merge boundary: an
+  instruction to merge that branch into a target branch means merge the PR
+  through GitHub, not create a substitute local merge commit.
+- Only perform a local branch merge when it is explicitly requested and no PR
+  merge is intended; confirm the PR is merged before tearing down its task.
