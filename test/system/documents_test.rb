@@ -221,6 +221,11 @@ class DocumentsTest < ApplicationSystemTestCase
 
     assert_selector ".document-graph-node", count: Documents::SampleData::SAMPLES.length
     assert_selector ".document-graph-edge", minimum: 1
+    coordinates = page.evaluate_script(<<~JAVASCRIPT)
+      JSON.parse(document.querySelector(".document-graph").dataset.documentGraphDataValue)
+        .nodes.map(({ x, y }) => [x, y])
+    JAVASCRIPT
+    assert_equal coordinates.length, coordinates.uniq.length
     assert_text "Stress: Renderer kitchen sink"
     assert_text "Fixture: Graph orphan"
     assert_operator page.evaluate_script("document.documentElement.scrollWidth"), :<=, page.evaluate_script("window.innerWidth")

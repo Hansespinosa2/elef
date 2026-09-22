@@ -6,9 +6,11 @@ class DocumentSampleDataTest < ActiveSupport::TestCase
   end
 
   test "loads the complete document sample catalog" do
-    records = Documents::SampleData.load!
+    result = Documents::SampleData.load!
+    records = result.records
 
     assert_equal Documents::SampleData::SAMPLES.length, records.length
+    assert_empty result.conflicts
     assert_equal Documents::SampleData::SAMPLES.map { |sample| sample[:id] }, records.map(&:sample_id)
     assert_equal Documents::SampleData::SAMPLES.map { |sample| sample[:title] }, records.map(&:title)
     assert_equal Documents::SampleData::SAMPLES.map { |sample| sample[:source] }, records.map { |record| record.reload.source }
@@ -49,7 +51,7 @@ class DocumentSampleDataTest < ActiveSupport::TestCase
   end
 
   test "sample documents cover rendering and document graph behavior" do
-    records = Documents::SampleData.load!
+    records = Documents::SampleData.load!.records
     documents = records.index_by(&:sample_id)
 
     components_html = documents.fetch("document-components").preview_html
@@ -78,6 +80,8 @@ class DocumentSampleDataTest < ActiveSupport::TestCase
 
     graph = DocumentLinks::Graph.new(records).as_json
     assert_equal records.length, graph[:nodes].length
+    coordinates = graph[:nodes].map { |node| [node[:x], node[:y]] }
+    assert_equal coordinates.length, coordinates.uniq.length
     assert_includes graph[:edges], { source: documents.fetch("document-links-hub").id, target: documents.fetch("document-links-branch-a").id }
     assert_equal 1, graph[:edges].count { |edge| edge[:source] == documents.fetch("document-links-hub").id && edge[:target] == documents.fetch("document-links-branch-a").id }
     assert_includes graph[:edges], { source: documents.fetch("document-links-cycle-a").id, target: documents.fetch("document-links-cycle-b").id }

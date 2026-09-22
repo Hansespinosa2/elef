@@ -70,6 +70,23 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
     assert_equal expected_seed_records, Document.where.not(sample_id: nil).count
   end
 
+  test "reports a sample title collision without overwriting the existing document" do
+    sample = Documents::SampleData::SAMPLES.first
+    existing = Document.create!(title: sample[:title], source: "# Personal document")
+
+    assert_difference("Document.count", Documents::SampleData::SAMPLES.length - 1) do
+      post load_samples_documents_path
+    end
+
+    assert_redirected_to documents_path
+    assert_equal "# Personal document", existing.reload.source
+    assert_nil Document.find_by(sample_id: sample[:id])
+    assert_equal Documents::SampleData::SAMPLES.length - 1, Document.where.not(sample_id: nil).count
+    assert_match(/Skipped sample document with conflicting title/, flash[:alert])
+    assert_includes flash[:alert], sample[:title]
+    assert_equal "Sample documents loaded.", flash[:notice]
+  end
+
   test "document library exposes its sample loader" do
     get documents_path
 

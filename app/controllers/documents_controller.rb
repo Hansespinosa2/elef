@@ -13,8 +13,12 @@ class DocumentsController < ApplicationController
   end
 
   def load_samples
-    Documents::SampleData.load!
-    redirect_to documents_path, notice: "Sample documents loaded."
+    result = Documents::SampleData.load!
+    flash_options = {}
+    flash_options[:notice] = "Sample documents loaded." if result.records.any?
+    flash_options[:alert] = sample_conflict_alert(result.conflicts) if result.conflicts.any?
+
+    redirect_to documents_path, **flash_options
   end
 
   def new
@@ -84,6 +88,13 @@ class DocumentsController < ApplicationController
 
   def document_params
     params.require(:document).permit(:title, :source)
+  end
+
+  def sample_conflict_alert(conflicts)
+    noun = conflicts.one? ? "document" : "documents"
+    title_noun = conflicts.one? ? "title" : "titles"
+    titles = conflicts.map { |conflict| %("#{conflict.title}") }.to_sentence
+    "Skipped sample #{noun} with conflicting #{title_noun}: #{titles}."
   end
 
 end

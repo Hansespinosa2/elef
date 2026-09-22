@@ -2,6 +2,9 @@ module Documents
   module SampleData
     module_function
 
+    Conflict = Data.define(:sample_id, :title, :existing_document)
+    LoadResult = Data.define(:records, :conflicts)
+
     SAMPLES = [
       {
         id: "document-markdown-tour",
@@ -314,14 +317,28 @@ module Documents
     ].freeze
 
     def load!
-      Document.transaction do
+      conflicts = SAMPLES.filter_map do |sample|
+        existing_document = Document.find_by(sample_id: nil, title: sample[:title])
+        next unless existing_document
+
+        Conflict.new(sample[:id], sample[:title], existing_document)
+      end
+      conflicted_sample_ids = conflicts.each_with_object({}) do |conflict, sample_ids|
+        sample_ids[conflict.sample_id] = true
+      end
+
+      records = Document.transaction do
         SAMPLES.map do |sample|
+          next if conflicted_sample_ids[sample[:id]]
+
           document = Document.find_or_initialize_by(sample_id: sample[:id])
           document.assign_attributes(title: sample[:title], source: sample[:source])
           document.save!
           document
-        end
+        end.compact
       end
+
+      LoadResult.new(records, conflicts)
     end
   end
 end
