@@ -1,5 +1,5 @@
 Rails.application.routes.draw do
-  root "presentations#index", type: "all"
+  root "library#index"
 
   resources :snippets, except: :show
 
