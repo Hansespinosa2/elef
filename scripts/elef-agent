@@ -360,7 +360,7 @@ start() {
   echo "Worktree: $wt"
   echo "Branch:   $branch"
   echo "Browser:  https://${host}.localhost"
-  exec_in "$task" codex --dangerously-bypass-approvals-and-sandbox -m gpt-5.6-luna
+  exec_in "$task" codex --dangerously-bypass-approvals-and-sandbox -m gpt-5.6-luna -c 'model_reasoning_effort="max"' -c 'plan_mode_reasoning_effort="max"'
 }
 
 up() {
@@ -557,8 +557,9 @@ Recommended lifecycle:
   1.  $0 setup
   2.  $0 start TASK [BASE]
   3.  $0 status
-  4.  Review and merge codex/TASK in the primary checkout
-  5.  $0 cleanup TASK
+  4.  Review and merge the task PR into the target branch on GitHub
+  5.  Confirm the PR is merged
+  6.  $0 cleanup TASK
 
 Commands:
 
@@ -634,9 +635,9 @@ case "${1:-}" in
   start) shift; start "$@" ;;
   up) shift; up "$@" ;;
   shell) shift; [[ -n "${1:-}" ]] || die "usage: elef-agent shell TASK [COMMAND...]"; task="$1"; shift; exec_in "$task" bash "$@" ;;
-  codex) shift; [[ -n "${1:-}" ]] || die "usage: elef-agent codex TASK [PROMPT...]"; task="$1"; shift; exec_in "$task" codex --dangerously-bypass-approvals-and-sandbox -m gpt-5.6-luna "$@" ;;
-  fork) shift; [[ -n "${1:-}" ]] || die "usage: elef-agent fork TASK [PROMPT...]"; task="$1"; shift; exec_in "$task" codex --dangerously-bypass-approvals-and-sandbox -m gpt-5.6-luna fork --last "$@" ;;
-  resume) shift; [[ -n "${1:-}" ]] || die "usage: elef-agent resume TASK"; task="$1"; shift; exec_in "$task" codex --dangerously-bypass-approvals-and-sandbox -m gpt-5.6-luna resume --last "$@" ;;
+  codex) shift; [[ -n "${1:-}" ]] || die "usage: elef-agent codex TASK [PROMPT...]"; task="$1"; shift; exec_in "$task" codex --dangerously-bypass-approvals-and-sandbox -m gpt-5.6-luna -c 'model_reasoning_effort="max"' -c 'plan_mode_reasoning_effort="max"' "$@" ;;
+  fork) shift; [[ -n "${1:-}" ]] || die "usage: elef-agent fork TASK [PROMPT...]"; task="$1"; shift; exec_in "$task" codex --dangerously-bypass-approvals-and-sandbox -m gpt-5.6-luna -c 'model_reasoning_effort="max"' -c 'plan_mode_reasoning_effort="max"' fork --last "$@" ;;
+  resume) shift; [[ -n "${1:-}" ]] || die "usage: elef-agent resume TASK"; task="$1"; shift; exec_in "$task" codex --dangerously-bypass-approvals-and-sandbox -m gpt-5.6-luna -c 'model_reasoning_effort="max"' -c 'plan_mode_reasoning_effort="max"' resume --last "$@" ;;
   stop) shift; stop "$@" ;;
   cleanup) shift; cleanup "$@" ;;
   finish) shift; finish "$@" ;;

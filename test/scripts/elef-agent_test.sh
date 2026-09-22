@@ -5,6 +5,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 launcher="$ROOT/scripts/elef-agent"
 entrypoint="$ROOT/.devcontainer/entrypoint.sh"
 containerfile="$ROOT/.devcontainer/Containerfile"
+codex_config="$ROOT/.devcontainer/codex-config.toml"
 
 assert_contains() {
   local file="$1" pattern="$2"
@@ -26,6 +27,11 @@ assert_contains "$launcher" '--memory "$CONTAINER_MEMORY"'
 assert_contains "$launcher" '"$image" web'
 assert_contains "$launcher" 'https://$(host_for "$task").localhost'
 assert_contains "$launcher" 'exec_in "$task" codex --dangerously-bypass-approvals-and-sandbox -m gpt-5.6-luna'
+assert_contains "$launcher" "-c 'model_reasoning_effort=\"max\"'"
+assert_contains "$launcher" "-c 'plan_mode_reasoning_effort=\"max\"'"
+assert_contains "$codex_config" 'model = "gpt-5.6-luna"'
+assert_contains "$codex_config" 'model_reasoning_effort = "max"'
+assert_contains "$codex_config" 'plan_mode_reasoning_effort = "max"'
 assert_contains "$launcher" 'up) shift; up "$@" ;;'
 assert_contains "$launcher" 'image inspect "$1"'
 assert_contains "$launcher" 'delete_codex_state "$task"'
@@ -35,6 +41,8 @@ assert_contains "$launcher" 'stty sane'
 assert_contains "$launcher" 'restore_task_terminal "$task"'
 assert_contains "$launcher" 'assert_no_active_terminal "$task"'
 assert_contains "$launcher" 'finish TASK [TITLE]'
+assert_contains "$launcher" 'Review and merge the task PR into the target branch on GitHub'
+assert_contains "$launcher" 'Confirm the PR is merged'
 assert_contains "$launcher" 'gh pr checks "$pr_number"'
 assert_contains "$launcher" 'cleanup "$task"'
 assert_contains "$launcher" 'rm -rf -- "$state"'
