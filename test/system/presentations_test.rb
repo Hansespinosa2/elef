@@ -61,6 +61,37 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_current_path presentations_path(type: "all")
   end
 
+  test "two editor tabs preserve a stale local draft as a recovery revision" do
+    presentation = Presentation.create!(title: "Two tabs", source: "# Initial")
+    visit edit_presentation_path(presentation)
+
+    using_session(:server_tab) do
+      visit edit_presentation_path(presentation)
+      fill_in "Markdown source", with: "# Server tab"
+      assert_selector '[data-autosave-target="status"]', text: "Saved", wait: 5
+    end
+
+    fill_in "Markdown source", with: "# Local tab"
+    assert_selector '[data-autosave-target="status"]', text: "A newer version is active; your draft was preserved.", wait: 5
+    assert_selector "[data-autosave-target='conflict']", visible: true
+    assert_includes presentation.reload.source, "# Server tab"
+    assert_includes presentation.revisions.recoveries.order(:id).last.source, "# Local tab"
+  end
+
+  test "refresh recovers an unsent draft from browser persistence" do
+    presentation = Presentation.create!(title: "Refresh recovery", source: "# Initial")
+    visit edit_presentation_path(presentation)
+    hold_autosaves
+    fill_in "Markdown source", with: "# Unsent after refresh"
+    assert_selector '[data-autosave-target="status"]', text: "Saving…", wait: 5
+
+    page.refresh
+
+    assert_field "Markdown source", with: "# Unsent after refresh", wait: 5
+    assert_selector '[data-autosave-target="status"]', exact_text: "Saved", wait: 5
+    assert_includes presentation.reload.source, "# Unsent after refresh"
+  end
+
   test "explicit save waits for autosave and refreshes the latest preview" do
     presentation = Presentation.create!(title: "Manual save order", source: "# Original")
     visit edit_presentation_path(presentation)

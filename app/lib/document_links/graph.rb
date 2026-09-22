@@ -3,6 +3,8 @@ module DocumentLinks
     def initialize(documents)
       @documents = documents.to_a
       @documents_by_title = @documents.index_by(&:title)
+      @documents_by_alias = @documents.flat_map { |document| document.aliases.map { |alias_record| [alias_record.alias_name, document] } }.to_h
+      @documents_by_key = @documents.index_by(&:document_key)
     end
 
     def as_json(*)
@@ -28,7 +30,12 @@ module DocumentLinks
       seen = {}
       @documents.flat_map do |document|
         DocumentLinks::Parser.parse(document.source).filter_map do |token|
-          target = @documents_by_title[token.title]
+          token_key, = token.title.split("|", 2)
+          target = if token_key.match?(/\A(?:document|id):/)
+            @documents_by_key[token_key.sub(/\A(?:document|id):/, "")]
+          end
+          target ||= @documents_by_alias[token_key]
+          target ||= @documents_by_title[token_key]
           next unless target
 
           key = [document.id, target.id]

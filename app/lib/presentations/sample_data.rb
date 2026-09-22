@@ -756,7 +756,8 @@ module Presentations
     def load!
       Presentation.transaction do
         SAMPLES.map do |sample|
-          presentation = Presentation.find_by(sample_id: sample[:id]) || find_legacy_owned(sample[:id]) || Presentation.new
+          presentation = Presentation.joins(:presentation_detail).find_by(presentation_details: { sample_id: sample[:id] }) ||
+            find_legacy_owned(sample[:id]) || Presentation.new
           presentation.assign_attributes(
             sample_id: sample[:id],
             title: sample[:title],

@@ -1,7 +1,8 @@
 class DocumentsController < ApplicationController
   include WorkPreview
+  include WorkPersistence
 
-  before_action :set_document, only: %i[show edit update destroy rename]
+  before_action :set_document, only: %i[show edit update destroy rename restore history export]
   before_action :set_preview_document, only: :preview
 
   def index
@@ -38,17 +39,7 @@ class DocumentsController < ApplicationController
   end
 
   def update
-    if @document.update(document_params)
-      respond_to do |format|
-        format.html { redirect_to edit_document_path(@document), notice: "Document saved." }
-        format.json { render json: { id: @document.id, updated_at: @document.updated_at }, status: :ok }
-      end
-    else
-      respond_to do |format|
-        format.html { render :edit, status: :unprocessable_content }
-        format.json { render json: { errors: @document.errors.full_messages }, status: :unprocessable_content }
-      end
-    end
+    save_draft(@document, merge_draft_tokens(document_update_params))
   end
 
   def preview
@@ -68,6 +59,28 @@ class DocumentsController < ApplicationController
     redirect_to documents_path, notice: "Document deleted."
   end
 
+  def history
+    render json: @document.work_revisions.history.map { |revision| revision_payload(revision) }
+  end
+
+  def restore
+    revision = @document.work_revisions.find(params.require(:revision_id))
+    result = DraftRestorer.call(@document, revision)
+    payload = draft_payload(Drafts::Save::Result.new(:saved, result.work, result.revision, nil, [], nil))
+    respond_to do |format|
+      format.html { redirect_to edit_document_path(@document), notice: "Revision restored." }
+      format.json { render json: payload, status: :ok }
+    end
+  end
+
+  def export
+    export_work(@document)
+  end
+
+  def import
+    import_work(params[:package] || params[:file])
+  end
+
   private
 
   def set_document
@@ -82,4 +95,10 @@ class DocumentsController < ApplicationController
     params.require(:document).permit(:title, :source)
   end
 
+  def document_update_params
+    params.require(:document).permit(
+      :title, :source, :lock_version, :base_revision, :base_revision_id,
+      :revision_token, :edit_session_id, :checkpoint, :reason
+    )
+  end
 end

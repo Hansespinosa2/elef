@@ -12,7 +12,7 @@ ENV BUNDLE_PATH=/usr/local/bundle \
 
 RUN apt-get update \
     && apt-get install --no-install-recommends -y \
-       build-essential ca-certificates chromium chromium-driver curl git libsqlite3-dev npm ripgrep sqlite3 \
+       build-essential ca-certificates chromium chromium-driver curl git libpq-dev libsqlite3-dev npm postgresql postgresql-client ripgrep sqlite3 \
     && rm -rf /var/lib/apt/lists/* \
     && curl --fail --silent --show-error https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get update \

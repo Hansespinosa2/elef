@@ -31,8 +31,27 @@ module WorkPreview
       preview_work.presentation_typography = typography if typography.present?
     end
 
+    html = if preview_work.presentation?
+      margin = preview_work.document.margin_settings
+      settings = {
+        "theme" => preview_work.presentation_theme,
+        "typography" => preview_work.presentation_typography,
+        "margin" => {
+          "section" => margin.section,
+          "subsection" => margin.subsection,
+          "footnote" => margin.footnote,
+          "slide_count" => margin.slide_count
+        }
+      }
+      Presentations::RenderCache.fetch(source: source, settings: settings, asset_manifest: []) do
+        render_to_string(partial: "works/preview", formats: [:html], locals: { work: preview_work })
+      end
+    else
+      render_to_string(partial: "works/preview", formats: [:html], locals: { work: preview_work })
+    end
+
     {
-      html: render_to_string(partial: "works/preview", formats: [:html], locals: { work: preview_work }),
+      html: html,
       warnings: preview_work.preview_warnings,
       revision: work_preview_revision(work)
     }

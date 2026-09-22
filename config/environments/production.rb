@@ -45,6 +45,7 @@ Rails.application.configure do
 
   # Keep the first single-user deployment simple; durable cache/job adapters are not in scope.
   config.cache_store = :memory_store
+  config.active_storage.service = ENV.fetch("ACTIVE_STORAGE_SERVICE", "local").to_sym
 
   # Enable locale fallbacks for I18n (makes lookups for any locale fall back to
   # the I18n.default_locale when a translation cannot be found).
