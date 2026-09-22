@@ -69,9 +69,13 @@ class VimEditorTest < ApplicationSystemTestCase
     assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal"
   end
 
-  test "metadata directives are visually subdued without dimming fenced code" do
+  test "metadata directives use the same styling as Markdown markers" do
     document = Document.create!(title: "Metadata styling", source: <<~MARKDOWN)
       # Notes
+
+      > A quote
+
+      **Bold**
 
       :::position{center}
 
@@ -83,10 +87,41 @@ class VimEditorTest < ApplicationSystemTestCase
     MARKDOWN
     visit edit_document_path(document)
 
-    assert_selector ".cm-elef-metadata", text: ":::position{center}"
-    assert_no_selector ".cm-elef-metadata", text: ":::not-metadata"
-    assert_equal "0.68", page.evaluate_script("getComputedStyle(document.querySelector('.cm-elef-metadata')).opacity")
-    assert_equal "normal", page.evaluate_script("getComputedStyle(document.querySelector('.cm-elef-metadata')).fontStyle")
+    styles = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const find = (text) => [...document.querySelectorAll(".cm-line span")].find((node) => node.textContent === text)
+        const describe = (node) => node && ({
+          className: node.className,
+          color: getComputedStyle(node).color,
+          opacity: getComputedStyle(node).opacity,
+          fontStyle: getComputedStyle(node).fontStyle
+        })
+
+        const metadata = find(":::position{center}")
+        const heading = find("#")
+        const quote = find(">")
+        const strong = find("**")
+        const metadataClasses = metadata ? [...metadata.classList] : []
+        const sharedClass = metadataClasses.find((className) => [heading, quote, strong].every((node) => node?.classList.contains(className)))
+
+        return {
+          metadata: describe(metadata),
+          heading: describe(heading),
+          quote: describe(quote),
+          strong: describe(strong),
+          sharedClass,
+          fenced: describe(find(":::not-metadata"))
+        }
+      })()
+    JAVASCRIPT
+
+    refute_nil styles["sharedClass"]
+    %w[color opacity fontStyle].each do |property|
+      assert_equal styles["metadata"][property], styles["heading"][property]
+      assert_equal styles["metadata"][property], styles["quote"][property]
+      assert_equal styles["metadata"][property], styles["strong"][property]
+    end
+    assert_nil styles["fenced"]
   end
 
   test "configured Shift+Space enters Insert mode" do
