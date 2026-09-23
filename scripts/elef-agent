@@ -61,7 +61,7 @@ worktree_for() {
 container_for() { printf 'elef-agent-%s' "$(host_for "$1")"; }
 branch_for() { printf 'codex/%s' "$1"; }
 worktree_is_valid() {
-  local task="$1" path canonical root branch repo_common task_common
+  local task="$1" path="$2" canonical root branch repo_common task_common
   [[ -d "$path" ]] || return 1
   canonical="$(cd -- "$path" 2>/dev/null && pwd -P)" || return 1
   root="$(git -C "$canonical" rev-parse --show-toplevel 2>/dev/null)" || return 1
