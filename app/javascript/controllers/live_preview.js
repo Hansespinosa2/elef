@@ -68,10 +68,14 @@ function safeUrl(url) {
   return /^(?:https?:|mailto:|tel:|#|\/|\.\.?\/|[^:]*$)/i.test(url)
 }
 
-function addHidden(decorations, state, from, to, widget = null) {
+function addHidden(decorations, state, from, to, widget = null, context = null) {
   if (from >= to) return
+  const [activeFrom, activeTo] = context || [from, to]
+  if (activeRange(state, activeFrom, activeTo)) {
+    decorations.push(markDecoration("cm-live-active-syntax").range(from, to))
+    return
+  }
   decorations.push(markDecoration("cm-live-syntax-marker").range(from, to))
-  if (activeRange(state, from, to)) return
   decorations.push(replaceDecoration(widget || new PreviewWidget("syntax", state.sliceDoc(from, to))).range(from, to))
 }
 
@@ -87,7 +91,7 @@ function addInlineMarkup(decorations, state, source) {
   for (const match of source.matchAll(imagePattern)) {
     const from = match.index
     const to = from + match[0].length
-    if (safeUrl(match[2])) addHidden(decorations, state, from, to, new PreviewWidget("image", "", { alt: match[1], src: match[2] }))
+    if (safeUrl(match[2])) addHidden(decorations, state, from, to, new PreviewWidget("image", "", { alt: match[1], src: match[2] }), [from, to])
   }
 
   const linkPattern = /\[([^\]]+)\]\(([^\s)]+)(?:\s+["']([^"']*)["'])?\)/g
@@ -98,8 +102,8 @@ function addInlineMarkup(decorations, state, source) {
     const destinationStart = labelEnd + 2
     const destinationEnd = from + match[0].length
     if (!safeUrl(match[2])) continue
-    addHidden(decorations, state, from, labelStart)
-    addHidden(decorations, state, labelEnd, destinationEnd)
+    addHidden(decorations, state, from, labelStart, null, [from, destinationEnd])
+    addHidden(decorations, state, labelEnd, destinationEnd, null, [from, destinationEnd])
     addMark(decorations, state, labelStart, labelEnd, "cm-live-link")
   }
 
@@ -108,8 +112,8 @@ function addInlineMarkup(decorations, state, source) {
     const from = match.index
     const labelStart = from + 2
     const labelEnd = labelStart + match[1].length
-    addHidden(decorations, state, from, labelStart)
-    addHidden(decorations, state, labelEnd, from + match[0].length)
+    addHidden(decorations, state, from, labelStart, null, [from, from + match[0].length])
+    addHidden(decorations, state, labelEnd, from + match[0].length, null, [from, from + match[0].length])
     addMark(decorations, state, labelStart, labelEnd, "cm-live-document-link")
   }
 
@@ -119,7 +123,7 @@ function addInlineMarkup(decorations, state, source) {
     const from = match.index
     const to = from + match[0].length
     const widget = new PreviewWidget(match[1] ? "math-display" : "math", expression.trim())
-    addHidden(decorations, state, from, to, widget)
+    addHidden(decorations, state, from, to, widget, [from, to])
   }
 
   const codePattern = /(`+)([^`\r\n]+?)\1/g
@@ -127,8 +131,8 @@ function addInlineMarkup(decorations, state, source) {
     const from = match.index
     const contentStart = from + match[1].length
     const contentEnd = contentStart + match[2].length
-    addHidden(decorations, state, from, contentStart)
-    addHidden(decorations, state, contentEnd, from + match[0].length)
+    addHidden(decorations, state, from, contentStart, null, [from, from + match[0].length])
+    addHidden(decorations, state, contentEnd, from + match[0].length, null, [from, from + match[0].length])
     addMark(decorations, state, contentStart, contentEnd, "cm-live-inline-code")
   }
 
@@ -137,8 +141,8 @@ function addInlineMarkup(decorations, state, source) {
     const from = match.index
     const contentStart = from + match[1].length
     const contentEnd = contentStart + match[2].length
-    addHidden(decorations, state, from, contentStart)
-    addHidden(decorations, state, contentEnd, from + match[0].length)
+    addHidden(decorations, state, from, contentStart, null, [from, from + match[0].length])
+    addHidden(decorations, state, contentEnd, from + match[0].length, null, [from, from + match[0].length])
     addMark(decorations, state, contentStart, contentEnd, "cm-live-strong")
   }
 
@@ -149,8 +153,8 @@ function addInlineMarkup(decorations, state, source) {
     const from = match.index
     const contentStart = from + 1
     const contentEnd = contentStart + text.length
-    addHidden(decorations, state, from, contentStart)
-    addHidden(decorations, state, contentEnd, from + match[0].length)
+    addHidden(decorations, state, from, contentStart, null, [from, from + match[0].length])
+    addHidden(decorations, state, contentEnd, from + match[0].length, null, [from, from + match[0].length])
     addMark(decorations, state, contentStart, contentEnd, "cm-live-emphasis")
     void marker
   }
@@ -168,11 +172,18 @@ function addBlockMarkup(decorations, state, source) {
     if (fenceMatch) {
       if (!fence) {
         fence = { marker: fenceMatch[2][0], length: fenceMatch[2].length }
-        addHidden(decorations, state, lineStart + fenceMatch[1].length, lineStart + fenceMatch[1].length + fenceMatch[2].length)
-        if (fenceMatch[3].trim()) addHidden(decorations, state, lineStart + line.length - fenceMatch[3].length, lineEnd)
+        addHidden(
+          decorations,
+          state,
+          lineStart + fenceMatch[1].length,
+          lineStart + fenceMatch[1].length + fenceMatch[2].length,
+          null,
+          [lineStart, lineEnd]
+        )
+        if (fenceMatch[3].trim()) addHidden(decorations, state, lineStart + line.length - fenceMatch[3].length, lineEnd, null, [lineStart, lineEnd])
         decorations.push(lineDecoration("cm-live-code-fence").range(lineStart))
       } else if (fence.marker === fenceMatch[2][0] && fenceMatch[2].length >= fence.length && fenceMatch[3].trim() === "") {
-        addHidden(decorations, state, lineStart + fenceMatch[1].length, lineStart + line.length)
+        addHidden(decorations, state, lineStart + fenceMatch[1].length, lineStart + line.length, null, [lineStart, lineEnd])
         decorations.push(lineDecoration("cm-live-code-fence").range(lineStart))
         fence = null
       }
@@ -189,8 +200,14 @@ function addBlockMarkup(decorations, state, source) {
     const heading = line.match(/^(\s{0,3})(#{1,6})(\s+)(.*)$/)
     if (heading) {
       const markerStart = lineStart + heading[1].length
-      addMark(decorations, state, markerStart, markerStart + heading[2].length, "cm-live-syntax-marker")
-      addHidden(decorations, state, markerStart, markerStart + heading[2].length + heading[3].length)
+      addMark(
+        decorations,
+        state,
+        markerStart,
+        markerStart + heading[2].length,
+        activeRange(state, lineStart, lineEnd) ? "cm-live-active-syntax" : "cm-live-syntax-marker"
+      )
+      addHidden(decorations, state, markerStart, markerStart + heading[2].length + heading[3].length, null, [lineStart, lineEnd])
       const headingTextStart = markerStart + heading[2].length + heading[3].length
       decorations.push(lineDecoration(`cm-live-heading cm-live-heading-${heading[2].length}`).range(lineStart))
       addMark(decorations, state, headingTextStart, lineEnd, `cm-live-heading-text cm-live-heading-text-${heading[2].length}`)
@@ -201,20 +218,33 @@ function addBlockMarkup(decorations, state, source) {
     const list = line.match(/^(\s*)([-+*]|\d+[.)])(\s+)/)
     if (list) {
       const markerStart = lineStart + list[1].length
-      addHidden(decorations, state, markerStart, markerStart + list[2].length + list[3].length, new PreviewWidget("list-marker", list[2].match(/\d/) ? "1." : "•"))
+      addHidden(
+        decorations,
+        state,
+        markerStart,
+        markerStart + list[2].length + list[3].length,
+        new PreviewWidget("list-marker", list[2].match(/\d/) ? "1." : "•"),
+        [lineStart, lineEnd]
+      )
       decorations.push(lineDecoration("cm-live-list-item").range(lineStart))
     }
 
     const quote = line.match(/^(\s*>\s?)/)
     if (quote) {
       const markerStart = lineStart + quote[1].indexOf(">")
-      addMark(decorations, state, markerStart, markerStart + 1, "cm-live-syntax-marker")
-      addHidden(decorations, state, markerStart, markerStart + 1, new PreviewWidget("quote-marker", ">"))
+      addMark(
+        decorations,
+        state,
+        markerStart,
+        markerStart + 1,
+        activeRange(state, lineStart, lineEnd) ? "cm-live-active-syntax" : "cm-live-syntax-marker"
+      )
+      addHidden(decorations, state, markerStart, markerStart + 1, new PreviewWidget("quote-marker", ">"), [lineStart, lineEnd])
       decorations.push(lineDecoration("cm-live-quote").range(lineStart))
     }
 
     if (line.match(/^\s{0,3}([-*_])(?:\s*\1){2,}\s*$/)) {
-      addHidden(decorations, state, lineStart, lineEnd, new PreviewWidget("rule", ""))
+      addHidden(decorations, state, lineStart, lineEnd, new PreviewWidget("rule", ""), [lineStart, lineEnd])
     }
 
     if (index < lines.length - 1) offset = lineEnd + 1
@@ -232,7 +262,13 @@ function addSyntaxTreeHints(decorations, state) {
       if (node.name === "Blockquote") {
         decorations.push(lineDecoration("cm-live-quote").range(node.from))
       } else if (node.name === "ElefMetadata") {
-        addMark(decorations, state, node.from, node.to, "cm-live-syntax-marker")
+        addMark(
+          decorations,
+          state,
+          node.from,
+          node.to,
+          activeRange(state, node.from, node.to) ? "cm-live-active-syntax" : "cm-live-syntax-marker"
+        )
       }
     }
   })

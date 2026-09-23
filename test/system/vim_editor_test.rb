@@ -94,10 +94,11 @@ class VimEditorTest < ApplicationSystemTestCase
       ```
     MARKDOWN
     visit edit_document_path(document)
+    page.execute_script("document.querySelector('.source-field').editorController.setSelectionRange(document.querySelector('.source-field').editorController.value.length)")
 
     styles = page.evaluate_script(<<~JAVASCRIPT)
       (() => {
-        const find = (text) => [...document.querySelectorAll(".cm-line span")].find((node) => node.textContent === text)
+        const find = (text) => [...document.querySelectorAll(".cm-line span")].find((node) => node.textContent.trim() === text)
         const describe = (node) => node && ({
           className: node.className,
           color: getComputedStyle(node).color,
@@ -130,6 +131,26 @@ class VimEditorTest < ApplicationSystemTestCase
       assert_equal styles["metadata"][property], styles["strong"][property]
     end
     assert_nil styles["fenced"]
+  end
+
+  test "live preview reveals syntax around the active source range" do
+    document = Document.create!(title: "Active syntax", source: "# Heading\n\n**Bold**")
+    visit edit_document_path(document)
+
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      editor.setSelectionRange(editor.value.indexOf('Bold') + 1);
+    JAVASCRIPT
+
+    active_syntax = page.evaluate_script(<<~JAVASCRIPT)
+      [...document.querySelectorAll('.cm-live-active-syntax')].map((element) => ({
+        text: element.textContent,
+        fontSize: getComputedStyle(element).fontSize,
+        color: getComputedStyle(element).color
+      }))
+    JAVASCRIPT
+    assert active_syntax.any? { |entry| entry["text"].include?("*") }
+    refute active_syntax.any? { |entry| entry["fontSize"] == "0px" }
   end
 
   test "configured Shift+Space enters Insert mode" do

@@ -132,6 +132,7 @@ body.elef-app {
 .visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-editor { border-color: transparent; box-shadow: none; }
 .visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-content { color: transparent; caret-color: transparent; }
 .visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-line span { color: transparent !important; }
+.visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-line .cm-live-active-syntax { color: var(--oradia-ink) !important; font-size: inherit !important; }
 .visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-gutters { color: transparent; opacity: 0; }
 .visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-scroller { scrollbar-width: none; }
 .visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-scroller::-webkit-scrollbar { display: none; }
