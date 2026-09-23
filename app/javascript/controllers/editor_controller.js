@@ -62,6 +62,12 @@ export default class extends Controller {
     this.vimEnabled = this.readBoolean(ENABLED_STORAGE_KEY)
     this.mapping = this.readMapping()
     this.vimCompartment = new Compartment()
+    this.updateVisualSurfaceGeometry = () => this.syncVisualSurfaceGeometry()
+    this.resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(this.updateVisualSurfaceGeometry)
+    this.toolbar = this.element.querySelector(".editor-toolbar")
+    this.resizeObserver?.observe(this.element)
+    if (this.toolbar) this.resizeObserver?.observe(this.toolbar)
+    this.syncVisualSurfaceGeometry()
     this.inputTarget.addEventListener("input", this.handleExternalInput = () => this.handleExternalInputEvent())
     this.inputTarget.addEventListener("change", this.handleExternalChange = () => this.handleExternalInputEvent())
     this.inputTarget.addEventListener("click", this.handleProxyClick = () => this.focus())
@@ -110,6 +116,7 @@ export default class extends Controller {
   disconnect() {
     this.destroyed = true
     this.form?.removeEventListener("submit", this.handleSubmit)
+    this.resizeObserver?.disconnect()
     this.inputTarget.removeEventListener("input", this.handleExternalInput)
     this.inputTarget.removeEventListener("change", this.handleExternalChange)
     this.inputTarget.removeEventListener("click", this.handleProxyClick)
@@ -172,6 +179,15 @@ export default class extends Controller {
         detail: { mode: this.editingMode, editor: this }
       }))
     }
+  }
+
+  syncVisualSurfaceGeometry() {
+    if (!this.toolbar) return
+
+    const toolbarHeight = this.toolbar.getBoundingClientRect().height
+    const surfaceHeight = Math.max(0, this.element.getBoundingClientRect().height - toolbarHeight)
+    this.element.style.setProperty("--editor-toolbar-height", `${toolbarHeight}px`)
+    this.element.style.setProperty("--editor-surface-height", `${surfaceHeight}px`)
   }
 
   get value() {

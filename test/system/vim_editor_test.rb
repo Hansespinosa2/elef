@@ -13,6 +13,14 @@ class VimEditorTest < ApplicationSystemTestCase
     page.driver.browser.manage.window.resize_to(500, 800)
     assert_equal "vertical", page.evaluate_script("getComputedStyle(document.querySelector('.editor-surface')).resize")
     assert_equal "hidden", page.evaluate_script("getComputedStyle(document.querySelector('.editor-surface')).overflow")
+    geometry = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.source-field .editor-surface').getBoundingClientRect();
+        const projection = document.querySelector('.editor-projection').getBoundingClientRect();
+        return { surfaceBottom: surface.bottom, projectionTop: projection.top };
+      })()
+    JAVASCRIPT
+    assert_operator geometry["surfaceBottom"], :<=, geometry["projectionTop"]
 
     find("summary", text: "Vim settings").click
     panel = page.evaluate_script(<<~JAVASCRIPT)
