@@ -54,6 +54,19 @@ class DocumentLinksTest < ActiveSupport::TestCase
     assert_includes html, %(>#{title}</a>)
   end
 
+  test "calculates resolved and unresolved context through aliases and document keys" do
+    target = Document.create!(title: "Target", source: "# Target")
+    target.document_aliases.create!(workspace: target.workspace, alias_name: "theorem")
+    source = Document.create!(
+      title: "Source",
+      source: "[[theorem]] [[document:#{target.document_key}]] [[Missing|read this]]"
+    )
+
+    assert_equal [target], source.outgoing_documents
+    assert_equal ["Missing|read this"], source.unresolved_link_tokens.map(&:title)
+    assert_includes target.incoming_backlinks, source
+  end
+
   test "builds directed edges while retaining isolated documents" do
     source = Document.create!(title: "Source", source: "# Source\n\n[[Target]] [[Missing]]")
     target = Document.create!(title: "Target", source: "# Target")

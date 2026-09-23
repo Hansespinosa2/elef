@@ -100,19 +100,35 @@ class Work < ApplicationRecord
     slides.flat_map(&:blocks)
   end
 
-  def presentation_theme
-    parsed_document.presentation_theme
+  def theme
+    Presentations::Document.style_overrides(source)[:theme] || workspace_style_defaults[:theme]
   end
 
-  def presentation_typography
-    parsed_document.presentation_typography
+  def typography
+    Presentations::Document.style_overrides(source)[:typography] || workspace_style_defaults[:typography]
   end
 
-  def presentation_typography=(value)
+  def theme_override
+    Presentations::Document.style_overrides(source)[:theme]
+  end
+
+  def typography_override
+    Presentations::Document.style_overrides(source)[:typography]
+  end
+
+  def theme=(value)
     self.source = Presentations::Document.with_front_matter_value(
       source.to_s,
-      "presentationTypography",
-      Presentations::Document.normalize_typography_value(value)
+      "theme",
+      value.blank? ? nil : Presentations::Document.normalize_theme_value(value)
+    )
+  end
+
+  def typography=(value)
+    self.source = Presentations::Document.with_front_matter_value(
+      source.to_s,
+      "typography",
+      value.blank? ? nil : Presentations::Document.normalize_typography_value(value)
     )
   end
 
@@ -174,6 +190,11 @@ class Work < ApplicationRecord
   end
 
   private
+
+  def workspace_style_defaults
+    current_workspace = workspace || Workspace.default
+    { theme: current_workspace.default_theme, typography: current_workspace.default_typography }
+  end
 
   def normalize_source
     self.source = source.to_s

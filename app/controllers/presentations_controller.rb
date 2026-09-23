@@ -134,12 +134,12 @@ class PresentationsController < ApplicationController
   end
 
   def presentation_params
-    params.require(:presentation).permit(:title, :source, :presentation_typography)
+    params.require(:presentation).permit(:title, :source, :theme, :typography)
   end
 
   def presentation_update_params
     params.require(:presentation).permit(
-      :title, :source, :presentation_typography, :lock_version, :base_revision,
+      :title, :source, :theme, :typography, :lock_version, :base_revision,
       :base_revision_id, :revision_token, :edit_session_id, :checkpoint, :reason
     )
   end

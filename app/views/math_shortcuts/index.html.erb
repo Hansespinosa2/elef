@@ -1,0 +1,28 @@
+<% content_for :title, "Math shortcuts" %>
+<section class="page-title mb-8 flex items-end justify-between gap-4 max-[720px]:flex-col max-[720px]:items-stretch">
+  <div>
+    <p class="eyebrow mb-1 text-xs font-extrabold uppercase tracking-[0.12em] text-[#6d4aff]">Authoring tools</p>
+    <h1 class="mb-2 text-4xl font-bold">Math shortcuts</h1>
+    <p class="text-[#6f675c]">Use <code>.</code> transformations and <code>@</code> Greek aliases inside math.</p>
+  </div>
+  <%= link_to "New shortcut", new_math_shortcut_path, class: "button primary inline-flex min-h-10 items-center rounded-full border border-[#6d4aff] bg-[#6d4aff] px-4 py-2 font-bold text-white no-underline" %>
+</section>
+
+<section class="math-shortcut-list grid gap-3" aria-label="Math shortcuts">
+  <% @math_shortcuts.each do |shortcut| %>
+    <article class="math-shortcut-card flex items-center justify-between gap-4 rounded-2xl border border-[#ddd5c8] bg-[#fffdf8] p-4 max-[720px]:items-start max-[720px]:flex-col">
+      <div>
+        <p class="text-sm font-bold text-[#6f675c]"><%= shortcut.prefix %><%= shortcut.aliases.join(", ") %><% if shortcut.built_in? %> · Built in<% end %></p>
+        <h2 class="text-xl font-bold"><%= shortcut.name %></h2>
+        <p class="text-sm text-[#6f675c]"><%= shortcut.description %></p>
+        <code class="math-shortcut-expansion"><%= shortcut.expansion %></code>
+      </div>
+      <% unless shortcut.built_in? %>
+        <div class="flex gap-2">
+          <%= link_to "Edit", edit_math_shortcut_path(shortcut), class: "button rounded-full border border-[#ddd5c8] px-3 py-1 font-bold no-underline" %>
+          <%= button_to "Delete", math_shortcut_path(shortcut), method: :delete, class: "rounded-full border border-[#efb0a8] bg-[#fff1ee] px-3 py-1 font-bold text-[#a63a2d]" %>
+        </div>
+      <% end %>
+    </article>
+  <% end %>
+</section>

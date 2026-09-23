@@ -9,7 +9,7 @@ module Presentations
         purpose: "Root deck: establish a baseline with margins, evidence, a footer, and a centered decision.",
         source: <<~MARKDOWN
           ---
-          presentationTheme: light
+          theme: light
           show-in-margin:
             section: true
             subsection: true
@@ -57,7 +57,7 @@ module Presentations
         purpose: "Continuation deck: preserve the review arc while updating evidence and the next decision.",
         source: <<~MARKDOWN
           ---
-          presentationTheme: light
+          theme: light
           show-in-margin:
             section: true
             subsection: true
@@ -103,7 +103,7 @@ module Presentations
         purpose: "Inspiration deck: deliberately reframe the review as a workshop rather than a continuation.",
         source: <<~MARKDOWN
           ---
-          presentationTheme: dark
+          theme: dark
           show-in-margin:
             section: true
             subsection: true
@@ -152,7 +152,7 @@ module Presentations
         purpose: "Second continuation: show a deeper branch with a durable metric and an explicit handoff.",
         source: <<~MARKDOWN
           ---
-          presentationTheme: match
+          theme: match
           show-in-margin:
             section: true
             subsection: true
@@ -193,7 +193,7 @@ module Presentations
         purpose: "Second inspiration branch: preserve workshop learning while changing the output into practice notes.",
         source: <<~MARKDOWN
           ---
-          presentationTheme: dark
+          theme: dark
           show-in-margin:
             section: true
             subsection: true
@@ -230,7 +230,7 @@ module Presentations
         purpose: "Root deck: establish a launch narrative with a table, evidence, and a clear audience promise.",
         source: <<~MARKDOWN
           ---
-          presentationTheme: light
+          theme: light
           show-in-margin:
             section: true
             subsection: true
@@ -271,7 +271,7 @@ module Presentations
         purpose: "Continuation deck: turn the launch plan into a sequence that can be presented to the next audience.",
         source: <<~MARKDOWN
           ---
-          presentationTheme: match
+          theme: match
           show-in-margin:
             section: true
             subsection: true
@@ -310,7 +310,7 @@ module Presentations
         purpose: "Inspiration deck: reinterpret the launch plan through one customer story and a centered outcome.",
         source: <<~MARKDOWN
           ---
-          presentationTheme: dark
+          theme: dark
           show-in-margin:
             section: true
             subsection: true
@@ -351,7 +351,7 @@ module Presentations
         purpose: "Second continuation: inspect launch outcomes and preserve a measurable feedback loop.",
         source: <<~MARKDOWN
           ---
-          presentationTheme: light
+          theme: light
           show-in-margin:
             section: true
             subsection: true
@@ -390,7 +390,7 @@ module Presentations
         purpose: "Second inspiration branch: compress the customer story into a briefing with a different audience and goal.",
         source: <<~MARKDOWN
           ---
-          presentationTheme: match
+          theme: match
           show-in-margin:
             section: true
             subsection: true
@@ -428,7 +428,7 @@ module Presentations
         purpose: "Root deck: frame a research program with questions, hypotheses, and a bounded next step.",
         source: <<~MARKDOWN
           ---
-          presentationTheme: light
+          theme: light
           show-in-margin:
             section: true
             subsection: true
@@ -468,7 +468,7 @@ module Presentations
         purpose: "Continuation deck: turn research questions into evidence, a small model, and a decision.",
         source: <<~MARKDOWN
           ---
-          presentationTheme: match
+          theme: match
           show-in-margin:
             section: true
             subsection: true
@@ -511,7 +511,7 @@ module Presentations
         purpose: "Inspiration deck: turn research questions into prompts for a workshop rather than findings.",
         source: <<~MARKDOWN
           ---
-          presentationTheme: dark
+          theme: dark
           show-in-margin:
             section: true
             subsection: true
@@ -560,7 +560,7 @@ module Presentations
         purpose: "Second continuation: convert findings into a decision memo with an explicit recommendation and footnote.",
         source: <<~MARKDOWN
           ---
-          presentationTheme: light
+          theme: light
           show-in-margin:
             section: true
             subsection: true
@@ -599,7 +599,7 @@ module Presentations
         purpose: "Second inspiration branch: remix workshop prompts into a talk outline with a different narrative arc.",
         source: <<~MARKDOWN
           ---
-          presentationTheme: match
+          theme: match
           show-in-margin:
             section: true
             subsection: true

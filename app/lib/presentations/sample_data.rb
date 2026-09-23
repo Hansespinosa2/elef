@@ -12,7 +12,7 @@ module Presentations
         source: <<~MARKDOWN
           ---
           #{MARKER_KEY}: markdown-basics
-          presentationTheme: light
+          theme: light
           show-in-margin:
             section: true
             subsection: true
@@ -113,7 +113,7 @@ module Presentations
         source: <<~MARKDOWN
           ---
           #{MARKER_KEY}: layouts-and-themes
-          presentationTheme: dark
+          theme: dark
           ---
           # Designing a visual system
 
@@ -309,7 +309,7 @@ module Presentations
         source: <<~MARKDOWN
           ---
           #{MARKER_KEY}: code-and-math
-          presentationTheme: match
+          theme: match
           ---
           # Reasoning with code and math
 
@@ -486,7 +486,7 @@ module Presentations
         source: <<~MARKDOWN
           ---
           #{MARKER_KEY}: slide-edge-cases
-          presentationTheme: light
+          theme: light
           ---
           # Stress testing the document boundary
 
@@ -529,7 +529,7 @@ module Presentations
 
           Front matter configures the deck:
 
-          - `presentationTheme: light`
+          - `theme: light`
           - `elefSampleId: slide-edge-cases`
 
           The metadata is removed from rendered slide content.
@@ -578,7 +578,7 @@ module Presentations
         source: <<~MARKDOWN
           ---
           #{MARKER_KEY}: elef-workflow
-          presentationTheme: dark
+          theme: dark
           ---
           # From source to stage
 
@@ -664,7 +664,7 @@ module Presentations
         source: <<~MARKDOWN
           ---
           #{MARKER_KEY}: renderer-stress-test
-          presentationTheme: match
+          theme: match
           ---
           # Renderer stress test
 

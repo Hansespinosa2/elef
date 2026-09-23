@@ -86,9 +86,8 @@ module Drafts
     def assign_attributes(source)
       @work.title = @attributes[:title] if @attributes.key?(:title)
       @work.source = source
-      if @work.presentation? && @attributes[:presentation_typography].present?
-        @work.presentation_typography = @attributes[:presentation_typography]
-      end
+      @work.theme = @attributes[:theme] if @attributes.key?(:theme)
+      @work.typography = @attributes[:typography] if @attributes.key?(:typography)
     end
 
     def explicit_checkpoint?

@@ -24,7 +24,30 @@
         <nav class="app-nav mr-auto flex items-center gap-1" aria-label="Primary">
           <%= link_to "Library", root_path, class: "app-nav-link rounded-lg px-3 py-2 text-sm font-bold no-underline text-[#aab7b1] #{'is-active' if %w[library presentations documents].include?(controller_name)}" %>
           <%= link_to "Snippets", snippets_path, class: "app-nav-link rounded-lg px-3 py-2 text-sm font-bold no-underline text-[#aab7b1] #{'is-active' if controller_name == 'snippets'}" %>
+          <%= link_to "Math", math_shortcuts_path, class: "app-nav-link rounded-lg px-3 py-2 text-sm font-bold no-underline text-[#aab7b1] #{'is-active' if controller_name == 'math_shortcuts'}" %>
+          <%= link_to "Settings", settings_path, class: "app-nav-link rounded-lg px-3 py-2 text-sm font-bold no-underline text-[#aab7b1] #{'is-active' if controller_name == 'workspace_settings'}" %>
         </nav>
+        <div class="command-palette-root" data-controller="command-palette" data-command-palette-search-url-value="<%= search_path %>" data-command-palette-commands-value="<%= json_escape([
+          { id: "quick-open", label: "Quick-open works", description: "Search titles, aliases, headings, and source" },
+          { id: "new-document", label: "New document", description: "Start a continuous Markdown document", url: new_document_path },
+          { id: "save", label: "Save current work", description: "Submit the active editor" },
+          { id: "toggle-vim", label: "Toggle Vim mode", description: "Change the active editor mode" },
+          { id: "vim-settings", label: "Open Vim settings", description: "Configure the browser-local editor preferences" },
+          { id: "reveal-metadata", label: "Reveal source metadata", description: "Unfold and focus Markdown front matter" },
+          { id: "library-all", label: "Go to All", description: "Open the combined library", url: root_path },
+          { id: "library-documents", label: "Go to Documents", description: "Open the document library", url: documents_path },
+          { id: "library-presentations", label: "Go to Presentations", description: "Open the presentation library", url: presentations_path }
+        ].to_json) %>">
+          <button type="button" class="command-palette-trigger" data-action="command-palette#open" aria-label="Open command palette">Search <kbd>⌘K</kbd></button>
+          <dialog class="command-palette" data-command-palette-target="dialog" aria-labelledby="command-palette-heading">
+            <div class="command-palette-panel">
+              <div class="command-palette-heading"><h2 id="command-palette-heading">Command palette</h2><button type="button" data-action="command-palette#close" aria-label="Close command palette">Esc</button></div>
+              <input type="search" autocomplete="off" placeholder="Search works or run a command…" data-command-palette-target="input" data-action="input->command-palette#inputChanged keydown->command-palette#keydown" aria-controls="command-palette-results">
+              <div id="command-palette-results" class="command-palette-results" data-command-palette-target="results" role="listbox" aria-label="Commands and search results"></div>
+              <p class="command-palette-status" data-command-palette-target="status" aria-live="polite"></p>
+            </div>
+          </dialog>
+        </div>
         <%= render "layouts/new_work_menu" %>
       </div>
     </header>

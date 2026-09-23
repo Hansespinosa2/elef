@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_22_171355) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_23_091000) do
   create_table "active_storage_attachments", force: :cascade do |t|
     t.bigint "blob_id", null: false
     t.datetime "created_at", null: false
@@ -55,6 +55,20 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_22_171355) do
     t.bigint "work_id", null: false
     t.index ["document_key"], name: "index_document_details_on_document_key", unique: true
     t.index ["work_id"], name: "index_document_details_on_work_id", unique: true
+  end
+
+  create_table "math_shortcuts", force: :cascade do |t|
+    t.text "aliases", default: "[]", null: false
+    t.boolean "built_in", default: false, null: false
+    t.datetime "created_at", null: false
+    t.string "description", default: "", null: false
+    t.text "expansion", null: false
+    t.string "name", null: false
+    t.string "prefix", null: false
+    t.datetime "updated_at", null: false
+    t.integer "workspace_id", null: false
+    t.index ["workspace_id", "prefix", "name"], name: "index_math_shortcuts_on_workspace_id_and_prefix_and_name", unique: true
+    t.index ["workspace_id"], name: "index_math_shortcuts_on_workspace_id"
   end
 
   create_table "presentation_details", force: :cascade do |t|
@@ -154,6 +168,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_22_171355) do
   create_table "workspaces", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.string "name", null: false
+    t.text "settings", default: "{}", null: false
     t.string "slug", null: false
     t.boolean "system", default: false, null: false
     t.datetime "updated_at", null: false
@@ -164,6 +179,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_22_171355) do
   add_foreign_key "document_aliases", "works"
   add_foreign_key "document_aliases", "workspaces"
   add_foreign_key "document_details", "works"
+  add_foreign_key "math_shortcuts", "workspaces"
   add_foreign_key "presentation_details", "works"
   add_foreign_key "presentation_lineage_edges", "work_revisions", column: "origin_revision_id", on_delete: :nullify
   add_foreign_key "presentation_lineage_edges", "works", column: "child_work_id", on_delete: :cascade

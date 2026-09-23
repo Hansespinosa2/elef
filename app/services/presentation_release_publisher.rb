@@ -14,8 +14,8 @@ class PresentationReleasePublisher
       revision = source_revision
       settings = {
         "title" => @presentation.title,
-        "theme" => @presentation.presentation_theme,
-        "typography" => @presentation.presentation_typography,
+        "theme" => @presentation.theme,
+        "typography" => @presentation.typography,
         "margin" => margin_settings
       }
       asset_manifest = assets_manifest

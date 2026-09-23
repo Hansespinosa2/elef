@@ -8,12 +8,13 @@ const MODIFIERS = {
   b: (value) => `\\mathbf{${value}}`,
   T: (value) => `${value}^{\\mathsf{T}}`
 }
+const MODIFIER_ALIASES = { bold: "b", transpose: "T", tr: "T", h: "hat", t: "tilde" }
 
 export function expandMathShorthand(token) {
   const match = token.match(/^([A-Za-z][A-Za-z0-9]*)(?:\.([A-Za-z][A-Za-z0-9]*))*$/)
   if (!match) return null
 
-  const modifiers = token.split(".").slice(1)
+  const modifiers = token.split(".").slice(1).map((modifier) => MODIFIER_ALIASES[modifier] || modifier)
   if (modifiers.length === 0 || modifiers.some((modifier) => !MODIFIERS[modifier])) return null
   if (new Set(modifiers).size !== modifiers.length) return null
 
