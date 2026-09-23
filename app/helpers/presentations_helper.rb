@@ -11,7 +11,7 @@ module PresentationsHelper
     content_tag(:figure, class: "editor-media") do
       safe_join([
         rendered,
-        content_tag(:figcaption, alt, class: "editor-media-caption")
+        content_tag(:figcaption, alt, class: "editor-media-caption", aria: { label: "Editable image alt text" }, title: "Edit image alt text")
       ])
     end
   end

@@ -48,7 +48,7 @@ module Presentations
 
     def editable_media(rendered, markdown)
       alt = markdown.to_s.match(/\A\s*!\[([^\]]*)\]/)&.[](1).to_s
-      %(<figure class="editor-media">#{rendered}<figcaption class="editor-media-caption">#{ERB::Util.html_escape(alt)}</figcaption></figure>)
+      %(<figure class="editor-media">#{rendered}<figcaption class="editor-media-caption" aria-label="Editable image alt text" title="Edit image alt text">#{ERB::Util.html_escape(alt)}</figcaption></figure>)
     end
   end
 end

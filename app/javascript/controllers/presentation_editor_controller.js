@@ -112,6 +112,9 @@ export default class extends Controller {
     const slideIndex = Number(control.dataset.slideIndex)
     const blockIndex = Number(control.dataset.blockIndex)
 
+    if (action === "delete-slide" && !window.confirm("Delete this slide?")) return
+    if (action === "delete-block" && !window.confirm("Delete this block?")) return
+
     switch (action) {
       case "add-slide-after":
         this.addSlide(slideIndex + 1)

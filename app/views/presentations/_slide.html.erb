@@ -42,8 +42,8 @@
                 <div class="presentation-editor-block-controls" aria-label="Block controls">
                   <button type="button" data-presentation-editor-action="add-block-after" data-slide-index="<%= slide.index %>" data-block-index="<%= block_index %>">Add block</button>
                   <button type="button" data-presentation-editor-action="delete-block" data-slide-index="<%= slide.index %>" data-block-index="<%= block_index %>"<%= " disabled" if slide.blocks.length == 1 %>>Delete</button>
-                  <button type="button" data-presentation-editor-action="move-block-up" data-slide-index="<%= slide.index %>" data-block-index="<%= block_index %>"<%= " disabled" if block_index.zero? %>>↑</button>
-                  <button type="button" data-presentation-editor-action="move-block-down" data-slide-index="<%= slide.index %>" data-block-index="<%= block_index %>"<%= " disabled" if block_index == slide.blocks.length - 1 %>>↓</button>
+                  <button type="button" aria-label="Move block up" data-presentation-editor-action="move-block-up" data-slide-index="<%= slide.index %>" data-block-index="<%= block_index %>"<%= " disabled" if block_index.zero? %>>↑</button>
+                  <button type="button" aria-label="Move block down" data-presentation-editor-action="move-block-down" data-slide-index="<%= slide.index %>" data-block-index="<%= block_index %>"<%= " disabled" if block_index == slide.blocks.length - 1 %>>↓</button>
                   <select aria-label="Block position" data-presentation-editor-position data-slide-index="<%= slide.index %>" data-block-index="<%= block_index %>" data-action="change->presentation-editor#positionChanged">
                     <option value="">Automatic position</option>
                     <% %w[left center right].each do |horizontal| %>
@@ -72,8 +72,8 @@
           <div class="presentation-editor-block-controls" aria-label="Block controls">
             <button type="button" data-presentation-editor-action="add-block-after" data-slide-index="<%= slide.index %>" data-block-index="<%= block_index %>">Add block</button>
             <button type="button" data-presentation-editor-action="delete-block" data-slide-index="<%= slide.index %>" data-block-index="<%= block_index %>"<%= " disabled" if slide.blocks.length == 1 %>>Delete</button>
-            <button type="button" data-presentation-editor-action="move-block-up" data-slide-index="<%= slide.index %>" data-block-index="<%= block_index %>"<%= " disabled" if block_index.zero? %>>↑</button>
-            <button type="button" data-presentation-editor-action="move-block-down" data-slide-index="<%= slide.index %>" data-block-index="<%= block_index %>"<%= " disabled" if block_index == slide.blocks.length - 1 %>>↓</button>
+            <button type="button" aria-label="Move block up" data-presentation-editor-action="move-block-up" data-slide-index="<%= slide.index %>" data-block-index="<%= block_index %>"<%= " disabled" if block_index.zero? %>>↑</button>
+            <button type="button" aria-label="Move block down" data-presentation-editor-action="move-block-down" data-slide-index="<%= slide.index %>" data-block-index="<%= block_index %>"<%= " disabled" if block_index == slide.blocks.length - 1 %>>↓</button>
             <select aria-label="Block position" data-presentation-editor-position data-slide-index="<%= slide.index %>" data-block-index="<%= block_index %>" data-action="change->presentation-editor#positionChanged">
               <option value="">Automatic position</option>
               <% %w[left center right].each do |horizontal| %>

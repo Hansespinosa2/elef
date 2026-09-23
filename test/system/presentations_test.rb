@@ -148,7 +148,7 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: /# First\n\nChanged/, wait: 5
     find("[data-presentation-editor-action='add-slide-after']", match: :first).click
     assert_selector ".presentation-editor-projection .slide", count: 3, wait: 5
-    all("[data-presentation-editor-action='delete-slide']").last.click
+    accept_confirm { all("[data-presentation-editor-action='delete-slide']").last.click }
     assert_selector ".presentation-editor-projection .slide", count: 2, wait: 5
 
     find("select[data-presentation-editor-position][data-slide-index='0'][data-block-index='1']").select("Center Middle")
@@ -210,6 +210,10 @@ class PresentationsTest < ApplicationSystemTestCase
     )
 
     visit edit_presentation_path(presentation)
+    dismiss_confirm do
+      find("[data-presentation-editor-action='delete-block'][data-slide-index='0'][data-block-index='1']").click
+    end
+    assert_field "Markdown source", with: "# First\n\nFirst block\n\nSecond block\n---\n# Second\n\nOther block"
 
     find("[data-presentation-editor-action='move-block-down'][data-slide-index='0'][data-block-index='1']").click
     assert_field "Markdown source", with: /# First\n\nSecond block\n\nFirst block/, wait: 5
@@ -219,7 +223,7 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: /Second block\n\nNew block\n\nFirst block/, wait: 5
     assert_no_selector "[data-presentation-editor-action='delete-block'][data-slide-index='0'][data-block-index='2'][disabled]", wait: 5
 
-    find("[data-presentation-editor-action='delete-block'][data-slide-index='0'][data-block-index='2']").click
+    accept_confirm { find("[data-presentation-editor-action='delete-block'][data-slide-index='0'][data-block-index='2']").click }
     assert_field "Markdown source", with: /Second block\n\nFirst block/, wait: 5
     assert_no_selector "[data-presentation-editor-action='move-slide-down'][data-slide-index='0'][disabled]", wait: 5
 
