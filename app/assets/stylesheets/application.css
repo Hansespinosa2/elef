@@ -125,8 +125,13 @@ body.elef-app {
 .visual-editor-form[data-editor-mode="visual"] .source-field.is-source-hidden .editor-surface { display: block; }
 .visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface { clip-path: inset(0); height: var(--editor-surface-height, 3.4rem); left: 0; min-height: 0; pointer-events: auto; position: absolute; right: 0; top: var(--editor-toolbar-height, 2.4rem); z-index: 6; }
 .visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-editor { min-height: 0; }
-.visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-editor { background: transparent; border-color: transparent; box-shadow: none; }
+.visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-editor,
+.visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-scroller,
+.visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-content,
+.visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-line { background: transparent !important; }
+.visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-editor { border-color: transparent; box-shadow: none; }
 .visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-content { color: transparent; caret-color: transparent; }
+.visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-line span { color: transparent !important; }
 .visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-gutters { color: transparent; opacity: 0; }
 .visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-scroller { scrollbar-width: none; }
 .visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-scroller::-webkit-scrollbar { display: none; }
