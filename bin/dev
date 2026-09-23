@@ -3,9 +3,8 @@
 # Default to port 3000 if not specified
 export PORT="${PORT:-3000}"
 
-# Let the debug gem allow remote connections,
-# but avoid loading until `debugger` is called
-export RUBY_DEBUG_OPEN="true"
+# Keep the debugger lazy; remote connections are opt-in for a tailnet service.
+export RUBY_DEBUG_OPEN="${RUBY_DEBUG_OPEN:-false}"
 export RUBY_DEBUG_LAZY="true"
 
 exec bundle exec foreman start -f Procfile.dev "$@"

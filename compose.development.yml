@@ -34,6 +34,8 @@ services:
       PGUSER: ${POSTGRES_USER:-elef}
       PGPASSWORD: ${POSTGRES_PASSWORD:-elef-development}
       RAILS_MAX_THREADS: ${RAILS_MAX_THREADS:-3}
+      RUBY_DEBUG_OPEN: ${RUBY_DEBUG_OPEN:-false}
+      RUBY_DEBUG_LAZY: ${RUBY_DEBUG_LAZY:-true}
       PORT: 3000
     ports:
       - "${APP_BIND_ADDRESS:-127.0.0.1}:${APP_PORT:-3001}:3000"
