@@ -49,10 +49,7 @@ export default class extends Controller {
     const requestController = new AbortController()
     this.requestController = requestController
     let timedOut = false
-    const timeout = setTimeout(() => {
-      timedOut = true
-      requestController.abort()
-    }, this.timeoutValue)
+    let timeout
     const body = new FormData(this.element)
     // Persisted Rails forms include _method=patch. Preview is deliberately a
     // POST to a non-mutating endpoint, so do not let Rack method override it.
@@ -62,7 +59,7 @@ export default class extends Controller {
     body.set("projection", "editor")
 
     try {
-      const response = await fetch(this.urlValue, {
+      const request = fetch(this.urlValue, {
         method: "POST",
         headers: {
           Accept: "application/json",
@@ -71,6 +68,16 @@ export default class extends Controller {
         signal: requestController.signal,
         body
       })
+      const timeoutFailure = new Promise((_, reject) => {
+        timeout = setTimeout(() => {
+          timedOut = true
+          requestController.abort()
+          const error = new Error("Preview timed out")
+          error.name = "PreviewTimeout"
+          reject(error)
+        }, this.timeoutValue)
+      })
+      const response = await Promise.race([request, timeoutFailure])
       const payload = await response.json()
       if (!this.active || requestId !== this.requestId) return
 
