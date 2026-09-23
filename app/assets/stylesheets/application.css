@@ -209,7 +209,7 @@ body.elef-app {
 .cm-live-syntax-marker { color: #404740 !important; font-style: normal !important; opacity: 1 !important; }
 .visual-editor-form[data-editor-mode="visual"] .cm-live-syntax-marker { font-size: 0; }
 .visual-editor-form[data-editor-mode="visual"] .cm-live-widget-quote-marker::after { content: "❯"; font-size: 0.9rem; }
-.editor-input-proxy { background: transparent !important; border: 0 !important; color: transparent !important; font-size: 1px !important; height: 1px !important; left: 0; line-height: 1px !important; padding: 0 !important; pointer-events: auto; position: absolute; top: 2.4rem; width: 1px !important; z-index: 7; }
+.editor-input-proxy { background: transparent !important; border: 0 !important; color: transparent !important; font-size: 1px !important; height: 1px !important; left: 0; line-height: 1px !important; overflow: hidden; padding: 0 !important; pointer-events: auto; position: absolute; resize: none; top: 2.4rem; width: 1px !important; z-index: 7; }
 .snippet-palette {
   position: fixed;
   z-index: 20;

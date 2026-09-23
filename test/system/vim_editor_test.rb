@@ -13,6 +13,7 @@ class VimEditorTest < ApplicationSystemTestCase
     page.driver.browser.manage.window.resize_to(500, 800)
     assert_equal "vertical", page.evaluate_script("getComputedStyle(document.querySelector('.editor-surface')).resize")
     assert_equal "hidden", page.evaluate_script("getComputedStyle(document.querySelector('.editor-surface')).overflow")
+    assert_equal "none", page.evaluate_script("getComputedStyle(document.querySelector('.editor-input-proxy')).resize")
     geometry = page.evaluate_script(<<~JAVASCRIPT)
       (() => {
         const surface = document.querySelector('.source-field .editor-surface').getBoundingClientRect();
