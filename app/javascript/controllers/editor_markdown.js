@@ -52,6 +52,9 @@ export function markdownForVisibleText(markdown, text, kind, element = null) {
   const math = source.match(/^(\s*)(\${1,2})[\s\S]*?\2(\s*)$/)
   if (math) return `${math[1]}${math[2]}${value}${math[2]}${math[3]}`
 
+  const preserved = preserveInlineMarkdown(source, value)
+  if (preserved !== null) return preserved
+
   return value
 }
 
@@ -101,4 +104,106 @@ function markdownForImage(source, element, fallback) {
   const alt = visibleText(caption?.innerText || caption?.textContent || fallback)
   const title = image[4] ? ` ${image[4]}` : ""
   return `${image[1]}![${alt}](${image[3]}${title})${image[5]}`
+}
+
+function preserveInlineMarkdown(source, value) {
+  const projection = inlineProjection(source)
+  if (!projection.hasSyntax) return null
+
+  const leading = projection.text.match(/^\s*/)?.[0].length || 0
+  const trailing = projection.text.match(/\s*$/)?.[0].length || 0
+  const end = projection.text.length - trailing
+  const previous = projection.text.slice(leading, end)
+  const boundaries = projection.boundaries.slice(leading, end + 1)
+  const next = value
+  if (previous === next) return source
+
+  let prefix = 0
+  while (prefix < previous.length && prefix < next.length && previous[prefix] === next[prefix]) prefix += 1
+
+  let suffix = 0
+  while (suffix < previous.length - prefix && suffix < next.length - prefix &&
+    previous[previous.length - suffix - 1] === next[next.length - suffix - 1]) suffix += 1
+
+  const from = boundaries[prefix]
+  const to = boundaries[previous.length - suffix]
+  if (from === undefined || to === undefined || from > to) return null
+
+  return `${source.slice(0, from)}${next.slice(prefix, next.length - suffix)}${source.slice(to)}`
+}
+
+function inlineProjection(source, sourceOffset = 0) {
+  let text = ""
+  let boundaries = []
+  let hasSyntax = false
+
+  const appendPlain = (value, sourceStart) => {
+    if (!value) return
+    if (boundaries.length === 0) boundaries[0] = sourceStart
+    for (let offset = 0; offset < value.length;) {
+      const codePoint = value.codePointAt(offset)
+      const width = codePoint > 0xffff ? 2 : 1
+      text += value.slice(offset, offset + width)
+      boundaries[text.length] = sourceStart + offset + width
+      offset += width
+    }
+  }
+
+  const appendProjection = (projection) => {
+    if (!projection.text) return
+    boundaries[text.length] = projection.boundaries[0]
+    for (let offset = 0; offset < projection.text.length;) {
+      const codePoint = projection.text.codePointAt(offset)
+      const width = codePoint > 0xffff ? 2 : 1
+      text += projection.text.slice(offset, offset + width)
+      boundaries[text.length] = projection.boundaries[offset + width]
+      offset += width
+    }
+  }
+
+  for (let index = 0; index < source.length;) {
+    const token = inlineTokenAt(source.slice(index))
+    if (!token) {
+      const codePoint = source.codePointAt(index)
+      const width = codePoint > 0xffff ? 2 : 1
+      appendPlain(source.slice(index, index + width), sourceOffset + index)
+      index += width
+      continue
+    }
+
+    hasSyntax = true
+    appendProjection(inlineProjection(token.content, sourceOffset + index + token.contentOffset))
+    index += token.length
+  }
+
+  return { text, boundaries, hasSyntax }
+}
+
+function inlineTokenAt(source) {
+  let match = source.match(/^(\[([^\]]+)\]\(([^\s)]+)(?:\s+["'][^"']*["'])?\))/)
+  if (match) return { length: match[0].length, content: match[2], contentOffset: 1 }
+
+  match = source.match(/^(\[\[([^\]|]+)(?:\|([^\]]*))?\]\])/)
+  if (match) {
+    const content = match[3] === undefined ? match[2] : match[3]
+    const contentOffset = match[3] === undefined ? 2 : 2 + match[2].length + 1
+    return { length: match[0].length, content, contentOffset }
+  }
+
+  match = source.match(/^(`+)([^`\r\n]+?)\1/)
+  if (match) return { length: match[0].length, content: match[2], contentOffset: match[1].length }
+
+  match = source.match(/^(\*\*|__)(?=\S)(.+?)(?<=\S)\1/)
+  if (match) return { length: match[0].length, content: match[2], contentOffset: match[1].length }
+
+  match = source.match(/^(~~)(?=\S)(.+?)(?<=\S)\1/)
+  if (match) return { length: match[0].length, content: match[2], contentOffset: match[1].length }
+
+  match = source.match(/^(?<!\*)(\*)(?!\s)(.+?)(?<!\s)\1(?!\*)/)
+  if (match) return { length: match[0].length, content: match[2], contentOffset: 1 }
+
+  match = source.match(/^(?<!_)(_)(?!\s)(.+?)(?<!\s)\1(?!_)/)
+  if (match) return { length: match[0].length, content: match[2], contentOffset: 1 }
+
+  return null
 }

@@ -217,6 +217,24 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_includes find_field("Markdown source").value, "| Updated | Two |"
   end
 
+  test "visual inline edits preserve surrounding Markdown syntax" do
+    document = Document.create!(
+      title: "Inline notes",
+      source: "# Inline notes\n\nA **bold** and *italic* link [target](/path)."
+    )
+
+    visit edit_document_path(document)
+
+    page.execute_script(<<~JAVASCRIPT)
+      const block = [...document.querySelectorAll('.document-editor-block')]
+        .find((candidate) => candidate.querySelector('strong'));
+      block.querySelector('strong').innerText = 'updated';
+      block.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'updated' }));
+    JAVASCRIPT
+
+    assert_field "Markdown source", with: "# Inline notes\n\nA **updated** and *italic* link [target](/path).", wait: 5
+  end
+
   test "visual code editing preserves fenced language and indentation" do
     document = Document.create!(
       title: "Code notes",

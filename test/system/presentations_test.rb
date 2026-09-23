@@ -164,10 +164,18 @@ class PresentationsTest < ApplicationSystemTestCase
   test "visual presentation editing keeps tables and media as Markdown structures" do
     presentation = Presentation.create!(
       title: "Rich deck",
-      source: "# Rich\n\n| Name | Value |\n| --- | --- |\n| One | Two |\n\n![Old alt](/icon.svg)"
+      source: "# Rich\n\nA **message**.\n\n| Name | Value |\n| --- | --- |\n| One | Two |\n\n![Old alt](/icon.svg)"
     )
 
     visit edit_presentation_path(presentation)
+
+    page.execute_script(<<~JAVASCRIPT)
+      const block = [...document.querySelectorAll('.slide-block')]
+        .find((candidate) => candidate.querySelector('strong'));
+      block.querySelector('strong').innerText = 'updated';
+      block.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'updated' }));
+    JAVASCRIPT
+    assert_field "Markdown source", with: /A \*\*updated\*\*\./, wait: 5
 
     page.execute_script(<<~JAVASCRIPT)
       const tableBlock = [...document.querySelectorAll('.slide-block')]
