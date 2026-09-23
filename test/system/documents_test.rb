@@ -186,6 +186,17 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_selector ".document-editor-block strong", text: "Keep formatting"
   end
 
+  test "visual document blocks accept direct keyboard edits" do
+    document = Document.create!(title: "Typing notes", source: "# Typing notes\n\nBody")
+
+    visit edit_document_path(document)
+    block = find(".document-editor-block", text: "Body")
+    block.click
+    block.send_keys(:end, " changed")
+
+    assert_field "Markdown source", with: "# Typing notes\n\nBody changed", wait: 5
+  end
+
   test "visual rich blocks preserve table and image Markdown while editing" do
     document = Document.create!(
       title: "Rich notes",
