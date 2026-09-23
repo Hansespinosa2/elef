@@ -217,6 +217,24 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_includes find_field("Markdown source").value, "| Updated | Two |"
   end
 
+  test "visual code editing preserves fenced language and indentation" do
+    document = Document.create!(
+      title: "Code notes",
+      source: "# Code\n\n```ruby\n  records.each do |record|\n    process(record)\n  end\n```"
+    )
+
+    visit edit_document_path(document)
+
+    page.execute_script(<<~JAVASCRIPT)
+      const codeBlock = [...document.querySelectorAll('.document-editor-block')]
+        .find((block) => block.querySelector('pre'));
+      codeBlock.querySelector('code').innerText = '  updated\\n    indented';
+      codeBlock.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'updated' }));
+    JAVASCRIPT
+
+    assert_field "Markdown source", with: "# Code\n\n```ruby\n  updated\n    indented\n```", wait: 5
+  end
+
   test "expands math shorthand only when committed inside math" do
     document = Document.create!(title: "Math notes", source: "# Math")
     visit edit_document_path(document)

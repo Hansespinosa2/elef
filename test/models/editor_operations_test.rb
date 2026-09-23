@@ -40,4 +40,22 @@ class EditorOperationsTest < ActiveSupport::TestCase
 
     assert_equal "# 🚀 Slide\n\nNext\n\nBody", updated
   end
+
+  test "moves slides without rewriting front matter or section spacing" do
+    source = "---\npresentationTheme: dark\npresentationTypography: modern\n---\n# One\n\nFirst\n---\n# Two\n\nSecond"
+
+    moved = Presentations::EditorOperations.move_slide(source, index: 0, to: 1)
+
+    assert_equal "---\npresentationTheme: dark\npresentationTypography: modern\n---\n# Two\n\nSecond\n---\n# One\n\nFirst", moved
+    assert_equal "dark", Presentations::Document.parse(moved).presentation_theme
+    assert_equal "modern", Presentations::Document.parse(moved).presentation_typography
+  end
+
+  test "moves blocks without stripping code indentation" do
+    source = "# Slide\n\n```ruby\n  first\n    nested\n```\n\nAfter"
+
+    moved = Presentations::EditorOperations.move_block(source, slide_index: 0, block_index: 1, to: 2)
+
+    assert_equal "# Slide\n\nAfter\n\n```ruby\n  first\n    nested\n```", moved
+  end
 end

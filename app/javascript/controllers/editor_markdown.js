@@ -1,12 +1,15 @@
 export function markdownForVisibleText(markdown, text, kind, element = null) {
   const source = markdown || ""
   const value = visibleText(text)
+  const rawValue = rawVisibleText(text)
 
   if (kind === "heading") return value
 
   if (kind === "table") return markdownForTable(source, element, value)
 
   if (kind === "image") return markdownForImage(source, element, value)
+
+  if (kind === "code") return markdownForCode(source, rawValue)
 
   if (kind === "list") {
     const marker = source.match(/^(\s*(?:[-*+] |\d+[.)] ))/)?.[1] || "- "
@@ -54,6 +57,17 @@ export function markdownForVisibleText(markdown, text, kind, element = null) {
 
 function visibleText(text) {
   return (text || "").replace(/\u00a0/g, " ").replace(/\n+$/, "").trim()
+}
+
+function rawVisibleText(text) {
+  return (text || "").replace(/\u00a0/g, " ").replace(/\n+$/, "")
+}
+
+function markdownForCode(source, value) {
+  const fencedCode = source.match(/^(\s*)(`{3,}|~{3,})([^\r\n]*?)\r?\n([\s\S]*?)\r?\n\2(\s*)$/)
+  if (!fencedCode) return value
+
+  return `${fencedCode[1]}${fencedCode[2]}${fencedCode[3]}\n${value}\n${fencedCode[2]}${fencedCode[5]}`
 }
 
 function markdownForTable(source, element, fallback) {

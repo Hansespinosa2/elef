@@ -188,6 +188,21 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_includes find_field("Markdown source").value, "| Updated | Two |"
   end
 
+  test "source mode keeps unsupported presentation directives available" do
+    presentation = Presentation.create!(title: "Source fallback", source: "# Visible\n\n:::custom-directive{value}\n\nContent")
+
+    visit edit_presentation_path(presentation)
+
+    assert_equal "visual", page.evaluate_script("document.querySelector('form.visual-editor-form').dataset.editorMode")
+    assert_text "Unknown or malformed presentation directive was removed."
+    click_on "Source"
+    assert_selector ".cm-content", visible: true
+    assert_includes find_field("Markdown source").value, ":::custom-directive{value}"
+    click_on "Visual"
+    assert_selector ".presentation-editor-projection", visible: true
+    assert_includes find_field("Markdown source").value, ":::custom-directive{value}"
+  end
+
   test "visual presentation controls reorder blocks and slides without losing source text" do
     presentation = Presentation.create!(
       title: "Structural deck",
