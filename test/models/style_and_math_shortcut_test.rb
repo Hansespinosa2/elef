@@ -37,4 +37,22 @@ class StyleAndMathShortcutTest < ActiveSupport::TestCase
     assert MathShortcuts::Catalog.for_editor.any? { |item| item[:aliases].include?("alpha") }
     assert_equal "\\mathbf{${1}}", MathShortcuts::Catalog::DEFAULTS.find { |item| item[:name] == "Bold" }[:expansion]
   end
+
+  test "includes common TeX operators and expands multiple math slots in order" do
+    catalog = MathShortcuts::Catalog.for_editor
+
+    assert_equal "\\nabla", catalog.find { |item| item[:aliases].include?("nabla") }[:expansion]
+    assert_equal "\\to", catalog.find { |item| item[:aliases].include?("to") }[:expansion]
+    assert_equal "\\inf", catalog.find { |item| item[:aliases].include?("inf") }[:expansion]
+    assert_equal "\\sum", catalog.find { |item| item[:aliases].include?("sum") }[:expansion]
+
+    assert_equal(
+      { text: "\\frac{}{}", stops: [{ number: 1, start: 6, length: 0 }, { number: 2, start: 8, length: 0 }] },
+      MathShortcuts::Catalog.expand("\\frac{${1}}{${2}}")
+    )
+    assert_equal(
+      { text: "\\mathbf{q}", stops: [{ number: 1, start: 8, length: 1 }] },
+      MathShortcuts::Catalog.expand("\\mathbf{${1}}", value: "q")
+    )
+  end
 end
