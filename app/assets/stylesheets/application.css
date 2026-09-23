@@ -734,6 +734,7 @@ body.elef-app {
 .document-reader.document-typography-technical .document-surface { font-family: var(--oradia-sans); }
 .document-reader.document-typography-technical .document-surface :is(h1, h2, h3, h4, h5, h6) { font-family: var(--oradia-sans); font-weight: 750; letter-spacing: -0.04em; }
 .document-source-anchor { display: block; height: 0; margin: 0; overflow: visible; }
+.document-surface > .document-source-anchor:first-child + :is(h1, h2, h3, h4, h5, h6, p, ul, ol, pre, blockquote, table, hr) { margin-top: 0; }
 .document-surface .document-source-anchor.is-source-active + :is(h1, h2, h3, h4, h5, h6, p, ul, ol, pre, blockquote, table, hr) { outline: 2px solid var(--oradia-green-deep); outline-offset: 0.25rem; border-radius: 0.2rem; }
 .preview-pane { max-height: calc(100vh - 7rem); overflow: auto; }
 .preview-pane .document-surface { min-height: 100%; }
