@@ -8,6 +8,7 @@ export default class extends Controller {
   static targets = ["field", "status", "retry", "conflict", "conflictMessage", "serverSource"]
   static values = {
     delay: { type: Number, default: 900 },
+    timeout: { type: Number, default: 15000 },
     workId: String,
     workKind: String,
     workIdentity: String,
@@ -32,6 +33,8 @@ export default class extends Controller {
   disconnect() {
     this.active = false
     clearTimeout(this.timer)
+    clearTimeout(this.requestTimeout)
+    this.requestController?.abort()
   }
 
   // Let an outstanding PATCH finish before the explicit form submission so
@@ -111,17 +114,34 @@ export default class extends Controller {
     this.saving = true
     this.element.dispatchEvent(new CustomEvent("autosave:saving"))
     this.setStatus("Saving…")
+    const requestController = new AbortController()
+    this.requestController = requestController
+    let timedOut = false
+    let timeoutReject
+    const timeoutFailure = new Promise((_, reject) => { timeoutReject = reject })
+    this.requestTimeout = setTimeout(() => {
+      timedOut = true
+      requestController.abort()
+      const error = new Error("Save timed out")
+      error.name = "AutosaveTimeout"
+      timeoutReject(error)
+    }, this.timeoutValue)
 
     try {
-      const response = await fetch(this.element.action, {
-        method: "PATCH",
-        headers: {
-          Accept: "application/json",
-          "X-CSRF-Token": document.querySelector('meta[name="csrf-token"]')?.content || ""
-        },
-        body: new FormData(this.element)
-      })
-      const payload = await response.json().catch(() => ({}))
+      const request = (async () => {
+        const response = await fetch(this.element.action, {
+          method: "PATCH",
+          headers: {
+            Accept: "application/json",
+            "X-CSRF-Token": document.querySelector('meta[name="csrf-token"]')?.content || ""
+          },
+          signal: requestController.signal,
+          body: new FormData(this.element)
+        })
+        const payload = await response.json().catch(() => ({}))
+        return { response, payload }
+      })()
+      const { response, payload } = await Promise.race([request, timeoutFailure])
 
       if (response.status === 409) {
         if (!this.active) return
@@ -145,8 +165,13 @@ export default class extends Controller {
         this.timer = setTimeout(() => this.save(), 0)
       }
     } catch (_error) {
-      if (this.active) this.setStatus("Save failed", "error")
+      if (this.active) {
+        this.setStatus(timedOut ? "Save timed out; your changes remain in the editor." : "Save failed", "error")
+      }
     } finally {
+      clearTimeout(this.requestTimeout)
+      this.requestTimeout = null
+      if (this.requestController === requestController) this.requestController = null
       this.saving = false
       if (this.active && this.pendingSubmit) {
         const submitter = this.pendingSubmit
@@ -166,7 +191,9 @@ export default class extends Controller {
       this.statusTarget.textContent = text
       this.statusTarget.setAttribute("data-autosave-state", state || (text.startsWith("Save failed") ? "error" : ""))
     }
-    if (this.hasRetryTarget) this.retryTarget.hidden = !(text.startsWith("Save failed") || state === "conflict")
+    if (this.hasRetryTarget) {
+      this.retryTarget.hidden = !(text.startsWith("Save failed") || text.startsWith("Save timed out") || state === "conflict")
+    }
   }
 
   updateRevisionTokens(payload) {

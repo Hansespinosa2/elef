@@ -339,6 +339,49 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_includes presentation.reload.source, "# Offline edit"
   end
 
+  test "times out a stalled autosave and lets the user retry the latest edit" do
+    presentation = Presentation.create!(title: "Stalled save", source: "# Original")
+    visit edit_presentation_path(presentation)
+    page.execute_script(<<~JAVASCRIPT)
+      const form = document.querySelector('form[data-controller~="autosave"]');
+      form.setAttribute("data-autosave-timeout-value", "1200");
+      window.saveStarted = false;
+      window.fetchForSaveRetry = window.fetch.bind(window);
+      window.fetch = (url, options = {}) => {
+        if (options.method === "PATCH") {
+          window.saveStarted = true;
+          return new Promise(() => {});
+        }
+        return window.fetchForSaveRetry(url, options);
+      };
+    JAVASCRIPT
+
+    fill_in "Markdown source", with: "# First edit"
+    save_started = page.evaluate_async_script(<<~JAVASCRIPT)
+      const done = arguments[arguments.length - 1];
+      const deadline = Date.now() + 5000;
+      const waitForSave = () => {
+        if (window.saveStarted) return done(true);
+        if (Date.now() >= deadline) return done(false);
+        window.setTimeout(waitForSave, 10);
+      };
+      waitForSave();
+    JAVASCRIPT
+    assert save_started, "autosave request did not start"
+
+    fill_in "Markdown source", with: "# Latest edit"
+    assert_field "Markdown source", with: "# Latest edit"
+    assert_selector '[data-autosave-target="status"]', text: "Save timed out", wait: 5
+    assert_selector '[data-autosave-target="retry"]', visible: true
+    assert_equal "# Original", presentation.reload.source
+
+    page.execute_script("window.fetch = window.fetchForSaveRetry")
+    click_on "Retry save"
+
+    assert_selector '[data-autosave-target="status"]', exact_text: "Saved", wait: 5
+    assert_includes presentation.reload.source, "# Latest edit"
+  end
+
   def assert_timeline_geometry
     geometry = page.evaluate_script(<<~JAVASCRIPT)
       (() => {
