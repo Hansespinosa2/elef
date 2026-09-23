@@ -26,11 +26,16 @@ class VimEditorTest < ApplicationSystemTestCase
     panel = page.evaluate_script(<<~JAVASCRIPT)
       (() => {
         const rect = document.querySelector('.editor-settings-panel').getBoundingClientRect()
-        return { left: rect.left, right: rect.right, width: rect.width }
+        const source = document.querySelector('.source-field').getBoundingClientRect()
+        return { left: rect.left, right: rect.right, width: rect.width, sourceLeft: source.left, sourceRight: source.right }
       })()
     JAVASCRIPT
     assert_operator panel["left"], :>=, 0
     assert_operator panel["right"], :<=, page.evaluate_script("window.innerWidth")
+    assert_operator panel["left"], :>=, panel["sourceLeft"]
+    assert_operator panel["right"], :<=, panel["sourceRight"]
+    assert_in_delta panel["sourceLeft"], panel["left"], 1
+    assert_in_delta panel["sourceRight"], panel["right"], 1
     save_screenshot("tmp/screenshots/editor/mobile-vim-settings.png")
   ensure
     page.driver.browser.manage.window.resize_to(1400, 1000)
