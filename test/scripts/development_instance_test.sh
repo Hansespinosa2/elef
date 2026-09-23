@@ -8,7 +8,7 @@ DOCKERFILE="$ROOT/Dockerfile.development"
 
 assert_contains() {
   local file="$1" needle="$2"
-  rg -F -- "$needle" "$file" >/dev/null || {
+  grep -F -e "$needle" "$file" >/dev/null || {
     echo "expected $file to contain: $needle" >&2
     exit 1
   }
