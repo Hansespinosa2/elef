@@ -680,9 +680,9 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_text ":beq"
     assert_selector ".snippet-option[aria-selected='true']"
     assert_equal "true", page.evaluate_script("document.querySelector('.cm-editor').getAttribute('aria-expanded')")
-    palette_position = page.evaluate_script("(() => { const editor = document.querySelector('[data-snippet-palette-target=editor]'); const e = editor.getBoundingClientRect(); const p = document.querySelector('[data-snippet-palette-target=palette]').getBoundingClientRect(); const styles = getComputedStyle(editor); const lineHeight = parseFloat(styles.lineHeight); const paddingTop = parseFloat(styles.paddingTop); const lineNumber = editor.value.slice(0, editor.selectionStart).split('\\n').length; const caretLineBottom = e.top + paddingTop + lineHeight * lineNumber - editor.scrollTop; return { editorBottom: e.bottom, paletteTop: p.top, caretLineBottom }; })()")
+    palette_position = page.evaluate_script("(() => { const editor = document.querySelector('[data-snippet-palette-target=editor]'); const e = editor.getBoundingClientRect(); const p = document.querySelector('[data-snippet-palette-target=palette]').getBoundingClientRect(); const styles = getComputedStyle(editor); const lineHeight = parseFloat(styles.lineHeight); const paddingTop = parseFloat(styles.paddingTop); const lineNumber = editor.value.slice(0, editor.selectionStart).split('\\n').length; const caretLineBottom = e.top + paddingTop + lineHeight * lineNumber - editor.scrollTop; return { paletteTop: p.top, paletteBottom: p.bottom, caretLineBottom, viewportBottom: window.innerHeight }; })()")
     assert_operator palette_position["paletteTop"], :>, palette_position["caretLineBottom"]
-    assert_operator palette_position["paletteTop"], :<, palette_position["editorBottom"]
+    assert_operator palette_position["paletteBottom"], :<, palette_position["viewportBottom"]
 
     source.send_keys(:enter)
     assert_equal "# Math\n\n$$\nequation\n$$", source.value
@@ -716,12 +716,12 @@ class PresentationsTest < ApplicationSystemTestCase
         const editor = document.querySelector('[data-snippet-palette-target="editor"]');
         const palette = document.querySelector('.snippet-palette');
         const e = editor.getBoundingClientRect(), p = palette.getBoundingClientRect();
-        return { positioned: palette.style.top !== '', top: p.top, bottom: p.bottom, editorTop: e.top, editorBottom: e.bottom };
+        return { positioned: palette.style.top !== '', top: p.top, bottom: p.bottom, editorTop: e.top, viewportBottom: window.innerHeight };
       })()
     JS
     assert bounds["positioned"], "The colon popup must receive caret coordinates before a query is typed"
     assert_operator bounds["top"], :>, bounds["editorTop"]
-    assert_operator bounds["bottom"], :<, bounds["editorBottom"]
+    assert_operator bounds["bottom"], :<, bounds["viewportBottom"]
     save_screenshot("tmp/colon-palette.png")
   end
 
