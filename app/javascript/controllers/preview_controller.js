@@ -8,12 +8,20 @@ export default class extends Controller {
     this.timer = null
     this.requestId = 0
     this.active = true
+    this.serverWarnings = [...this.warningsTarget.querySelectorAll("li")].map((item) => item.textContent)
+    this.localWarnings = []
+    this.localPreviewError = (event) => this.handleLocalPreviewError(event)
+    this.localPreviewRecovered = () => this.handleLocalPreviewRecovered()
+    this.element.addEventListener("elef:live-preview-error", this.localPreviewError)
+    this.element.addEventListener("elef:live-preview-recovered", this.localPreviewRecovered)
   }
 
   disconnect() {
     this.active = false
     clearTimeout(this.timer)
     this.abortActiveRequest()
+    this.element.removeEventListener("elef:live-preview-error", this.localPreviewError)
+    this.element.removeEventListener("elef:live-preview-recovered", this.localPreviewRecovered)
   }
 
   schedule() {
@@ -97,14 +105,27 @@ export default class extends Controller {
   }
 
   renderWarnings(warnings) {
+    this.serverWarnings = Array.isArray(warnings) ? warnings : []
+    const visibleWarnings = [...this.localWarnings, ...this.serverWarnings]
     const list = this.warningsTarget.querySelector("ul")
     list.replaceChildren()
-    warnings.forEach((warning) => {
+    visibleWarnings.forEach((warning) => {
       const item = document.createElement("li")
       item.textContent = warning
       list.append(item)
     })
-    this.warningsTarget.hidden = warnings.length === 0
+    this.warningsTarget.hidden = visibleWarnings.length === 0
+  }
+
+  handleLocalPreviewError(event) {
+    this.localWarnings = [event.detail?.message || "Live Markdown projection is unavailable. Your source remains editable."]
+    this.renderWarnings(this.serverWarnings)
+    this.setStatus("Visual preview degraded")
+  }
+
+  handleLocalPreviewRecovered() {
+    this.localWarnings = []
+    this.renderWarnings(this.serverWarnings)
   }
 
   setStatus(text) {

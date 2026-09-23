@@ -333,6 +333,22 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_selector '[data-preview-target="retry"]', visible: false
   end
 
+  test "keeps typing enabled when the local projection reports a failure" do
+    document = Document.create!(title: "Projection notes", source: "# Stable")
+    visit edit_document_path(document)
+
+    page.execute_script(<<~JAVASCRIPT)
+      document.querySelector('.source-field').dispatchEvent(new CustomEvent('elef:live-preview-error', {
+        bubbles: true,
+        detail: { message: 'Live projection unavailable for this edit.' }
+      }));
+    JAVASCRIPT
+
+    assert_selector '[data-preview-target="warnings"]', text: "Live projection unavailable for this edit."
+    fill_in "Markdown source", with: "# Still editable"
+    assert_field "Markdown source", with: "# Still editable"
+  end
+
   test "debounces rapid preview requests and renders the latest source" do
     document = Document.create!(title: "Latency notes", source: "# Initial")
     visit edit_document_path(document)

@@ -103,6 +103,7 @@ export default class extends Controller {
     this.inputTarget.addEventListener("keydown", this.handleProxyKeydown = (event) => this.forwardProxyKeydown(event))
     this.form = this.element.closest("form")
     this.form?.addEventListener("submit", this.handleSubmit = () => this.syncInput())
+    this.reportLivePreviewState(this.view.state)
 
     this.vimToggleTarget.checked = this.vimEnabled
     this.mappingTarget.value = this.mapping
@@ -240,11 +241,30 @@ export default class extends Controller {
   }
 
   handleUpdate(update) {
+    this.reportLivePreviewState(update.state)
     if (update.docChanged) {
       this.syncInput()
       this.dispatchFieldEvent("input")
     }
     if (update.selectionSet || update.docChanged) this.updateMode()
+  }
+
+  reportLivePreviewState(state) {
+    const projection = state.field(livePreviewField, false)
+    if (!projection) return
+
+    if (projection.error && projection.error !== this.livePreviewError) {
+      this.livePreviewError = projection.error
+      this.element.dispatchEvent(new CustomEvent("elef:live-preview-error", {
+        bubbles: true,
+        detail: {
+          message: "Live Markdown projection is unavailable. Your source remains editable; switch to Source mode or reload to restore it."
+        }
+      }))
+    } else if (!projection.error && this.livePreviewError) {
+      this.livePreviewError = null
+      this.element.dispatchEvent(new CustomEvent("elef:live-preview-recovered", { bubbles: true }))
+    }
   }
 
   handleExternalInputEvent() {

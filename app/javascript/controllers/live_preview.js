@@ -275,16 +275,24 @@ function addSyntaxTreeHints(decorations, state) {
 }
 
 function buildDecorations(state, enabled) {
-  if (!enabled) return { decorations: Decoration.none, atomic: Decoration.none }
+  if (!enabled) return { decorations: Decoration.none, atomic: Decoration.none, error: null }
 
-  const source = state.doc.toString()
-  const decorations = []
-  addBlockMarkup(decorations, state, source)
-  addInlineMarkup(decorations, state, source)
-  addSyntaxTreeHints(decorations, state)
-  const set = Decoration.set(decorations, true)
-  const atomic = Decoration.set(decorations.filter((range) => range.value.spec.widget), true)
-  return { decorations: set, atomic }
+  try {
+    const source = state.doc.toString()
+    const decorations = []
+    addBlockMarkup(decorations, state, source)
+    addInlineMarkup(decorations, state, source)
+    addSyntaxTreeHints(decorations, state)
+    const set = Decoration.set(decorations, true)
+    const atomic = Decoration.set(decorations.filter((range) => range.value.spec.widget), true)
+    return { decorations: set, atomic, error: null }
+  } catch (error) {
+    return {
+      decorations: Decoration.none,
+      atomic: Decoration.none,
+      error: error instanceof Error ? error.message : String(error)
+    }
+  }
 }
 
 export const livePreviewField = StateField.define({
