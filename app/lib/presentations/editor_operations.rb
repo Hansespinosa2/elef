@@ -67,9 +67,22 @@ module Presentations
       raise IndexError, "Slide destination is out of bounds" unless target.between?(0, ranges.length - 1)
       return source if index == target
 
-      slide = source[ranges[index][:start]...ranges[index][:end]].to_s.strip
-      remaining = delete_slide(source, index: index)
-      add_slide(remaining, index: target, markdown: slide)
+      body_start = ranges.first[:start]
+      sections = ranges.map do |range|
+        body = source[range[:start]...range[:end]].to_s
+        trailing = body[/\s*\z/] || ""
+        { body: body[0, body.length - trailing.length], trailing: trailing }
+      end
+      separators = ranges[0...-1].each_with_index.map do |range, range_index|
+        delimiter = source[range[:delimiter_start]...range[:delimiter_end]].to_s
+        "#{sections[range_index][:trailing]}#{delimiter}"
+      end
+      final_trailing = sections.last[:trailing]
+      moved = sections.delete_at(index)
+      sections.insert(target, moved)
+      body = sections.each_with_index.map { |section, section_index| "#{section[:body]}#{separators[section_index]}" }.join
+      source[body_start..] = "#{body}#{final_trailing}"
+      source
     end
 
     def add_block(source, slide_index:, markdown:, index: nil, position: nil)
@@ -135,9 +148,24 @@ module Presentations
       raise IndexError, "Block destination is out of bounds" unless target.between?(0, blocks.length - 1)
       return source if index == target
 
-      block = source[character_index(source, blocks[index][:range][:start])...character_index(source, blocks[index][:range][:end])].to_s.strip
-      remaining = delete_block(source, slide_index: slide_index, block_index: index)
-      add_block(remaining, slide_index: slide_index, index: target, markdown: block)
+      starts = blocks.map { |block| character_index(source, block[:range][:start]) }
+      ends = blocks.map { |block| character_index(source, block[:range][:end]) }
+      content_ends = blocks.each_with_index.map do |block, block_index|
+        raw = source[starts[block_index]...ends[block_index]].to_s
+        ending_length = raw.end_with?("\r\n") ? 2 : raw.end_with?("\n", "\r") ? 1 : 0
+        ends[block_index] - ending_length
+      end
+      block_sources = blocks.each_with_index.map { |_, block_index| source[starts[block_index]...content_ends[block_index]].to_s }
+      separators = blocks.each_cons(2).with_index.map do |(_, _), block_index|
+        source[content_ends[block_index]...starts[block_index + 1]].to_s
+      end
+      trailing = source[content_ends.last...character_index(source, slide[:range][:end])].to_s
+
+      moved = block_sources.delete_at(index)
+      block_sources.insert(target, moved)
+      body = block_sources.each_with_index.map { |block, block_index| "#{block}#{separators[block_index]}" }.join
+      source[character_index(source, slide[:range][:start])...character_index(source, slide[:range][:end])] = "#{body}#{trailing}"
+      source
     end
 
     def set_position(source, slide_index:, block_index:, position:)

@@ -17,11 +17,13 @@ module Presentations
           classes = position_classes(block.position)
           class_names = ["document-editor-block", classes].reject(&:blank?).join(" ")
           attributes = if mapped
-            %( class="#{ERB::Util.html_escape(class_names)}" data-editor-region-id="#{ERB::Util.html_escape(mapped[:editable_region_id].to_s)}" data-editor-block-id="#{ERB::Util.html_escape(mapped[:id].to_s)}" contenteditable="true" spellcheck="true" data-action="input->visual-editor#projectionInput focus->visual-editor#blockFocus blur->visual-editor#blockBlur")
+            %( class="#{ERB::Util.html_escape(class_names)}" data-editor-region-id="#{ERB::Util.html_escape(mapped[:editable_region_id].to_s)}" data-editor-block-id="#{ERB::Util.html_escape(mapped[:id].to_s)}" contenteditable="true" role="textbox" aria-label="Editable Markdown block" aria-multiline="true" spellcheck="true" data-action="input->visual-editor#projectionInput focus->visual-editor#blockFocus blur->visual-editor#blockBlur")
           else
-            %( class="#{ERB::Util.html_escape(class_names)}" contenteditable="true" spellcheck="true" data-action="input->visual-editor#projectionInput focus->visual-editor#blockFocus blur->visual-editor#blockBlur")
+            %( class="#{ERB::Util.html_escape(class_names)}" contenteditable="true" role="textbox" aria-label="Editable Markdown block" aria-multiline="true" spellcheck="true" data-action="input->visual-editor#projectionInput focus->visual-editor#blockFocus blur->visual-editor#blockBlur")
           end
-          %(<div#{attributes}>#{DocumentLinks::Renderer.render(block.markdown, documents: documents, workspace: workspace)}</div>)
+          rendered = DocumentLinks::Renderer.render(block.markdown, documents: documents, workspace: workspace)
+          rendered = editable_media(rendered, block.markdown) if mapped&.dig(:kind) == "image"
+          %(<div#{attributes}>#{rendered}</div>)
         end.join
         return html.html_safe
       end
@@ -42,6 +44,11 @@ module Presentations
       classes = ["position-#{position.horizontal}", "position-#{position.vertical}"]
       classes << "position-vertical" if position.vertical_explicit
       classes.join(" ")
+    end
+
+    def editable_media(rendered, markdown)
+      alt = markdown.to_s.match(/\A\s*!\[([^\]]*)\]/)&.[](1).to_s
+      %(<figure class="editor-media">#{rendered}<figcaption class="editor-media-caption">#{ERB::Util.html_escape(alt)}</figcaption></figure>)
     end
   end
 end

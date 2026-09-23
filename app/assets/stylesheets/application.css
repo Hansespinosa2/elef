@@ -149,12 +149,16 @@ body.elef-app {
 .document-editor-block { border-radius: 0.45rem; outline: 1px solid transparent; outline-offset: 0.35rem; transition: background 120ms ease, outline-color 120ms ease; }
 .document-editor-block:hover, .document-editor-block:focus { background: rgba(159, 197, 169, 0.08); outline-color: rgba(79, 139, 104, 0.42); }
 .document-editor-block:focus { outline-width: 2px; }
+.editor-media { margin: 0; }
+.editor-media-caption { border-top: 1px dashed var(--oradia-paper-line); color: var(--oradia-paper-muted); font-size: 0.78rem; margin-top: 0.4rem; padding-top: 0.25rem; }
 .presentation-editor-tools { align-items: center; display: flex; flex-wrap: wrap; gap: 0.75rem; justify-content: space-between; margin: 0.9rem 0; }
 .presentation-editor-help { color: var(--oradia-muted); font-size: 0.82rem; line-height: 1.4; }
 .presentation-typography-select { background: var(--oradia-slate-950); border: 1px solid var(--oradia-slate-700); border-radius: 999px; color: var(--oradia-ink); font-weight: 700; padding: 0.45rem 0.75rem; }
 .editor-footer { align-items: center; display: flex; flex-wrap: wrap; gap: 0.75rem; justify-content: space-between; margin-top: 1rem; }
 .editor-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 0.7rem; }
 .editor-actions .button { align-items: center; border-radius: 999px; display: inline-flex; font-weight: 800; min-height: 2.5rem; padding: 0.55rem 1rem; text-decoration: none; }
+.editor-actions .preview-retry { background: transparent; border: 1px solid var(--oradia-slate-700); border-radius: 999px; color: var(--oradia-green); cursor: pointer; font: inherit; font-size: 0.82rem; font-weight: 800; min-height: 2.5rem; padding: 0.45rem 0.8rem; }
+.editor-actions .preview-retry:hover { background: var(--oradia-slate-800); }
 .editor-actions .button:not(.primary) { background: var(--oradia-slate-800); border: 1px solid var(--oradia-slate-700); color: var(--oradia-ink); }
 .presentation-editor-status { color: var(--oradia-muted); font-size: 0.8rem; }
 .presentation-editor-projection { padding: clamp(0.35rem, 1vw, 0.75rem); }

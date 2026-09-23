@@ -1,8 +1,12 @@
-export function markdownForVisibleText(markdown, text, kind) {
+export function markdownForVisibleText(markdown, text, kind, element = null) {
   const source = markdown || ""
   const value = visibleText(text)
 
   if (kind === "heading") return value
+
+  if (kind === "table") return markdownForTable(source, element, value)
+
+  if (kind === "image") return markdownForImage(source, element, value)
 
   if (kind === "list") {
     const marker = source.match(/^(\s*(?:[-*+] |\d+[.)] ))/)?.[1] || "- "
@@ -50,4 +54,37 @@ export function markdownForVisibleText(markdown, text, kind) {
 
 function visibleText(text) {
   return (text || "").replace(/\u00a0/g, " ").replace(/\n+$/, "").trim()
+}
+
+function markdownForTable(source, element, fallback) {
+  const rows = [...(element?.querySelectorAll?.("tr") || [])].map((row) =>
+    [...row.querySelectorAll("th, td")].map((cell) => visibleText(cell.innerText || cell.textContent))
+  )
+  if (rows.length < 2) return fallback
+
+  const sourceRows = source.split(/\r?\n/)
+  const renderRow = (cells, sourceRow) => {
+    const original = sourceRow || ""
+    const leading = original.match(/^\s*/)?.[0] || ""
+    const hasLeadingPipe = /^\s*\|/.test(original)
+    const hasTrailingPipe = /\|\s*$/.test(original)
+    const values = cells.map((cell) => cell.replace(/\|/g, "\\|"))
+    const prefix = `${leading}${hasLeadingPipe ? "| " : ""}`
+    const suffix = hasTrailingPipe ? " |" : ""
+    return `${prefix}${values.join(" | ")}${suffix}`
+  }
+  const renderedRows = [renderRow(rows[0], sourceRows[0])]
+  if (sourceRows[1]) renderedRows.push(sourceRows[1])
+  rows.slice(1).forEach((cells, rowIndex) => renderedRows.push(renderRow(cells, sourceRows[rowIndex + 2])))
+  return renderedRows.join("\n")
+}
+
+function markdownForImage(source, element, fallback) {
+  const image = source.match(/^(\s*)!\[([^\]]*)\]\(([^)\s]+)(?:\s+([^)]*?))?\)(\s*)$/)
+  if (!image) return fallback
+
+  const caption = element?.querySelector?.(".editor-media-caption")
+  const alt = visibleText(caption?.innerText || caption?.textContent || fallback)
+  const title = image[4] ? ` ${image[4]}` : ""
+  return `${image[1]}![${alt}](${image[3]}${title})${image[5]}`
 }

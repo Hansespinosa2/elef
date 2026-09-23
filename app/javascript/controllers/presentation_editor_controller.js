@@ -22,6 +22,8 @@ export default class extends Controller {
     this.element.addEventListener("elef:preview-updated", this.previewHandler)
     this.clickHandler = (event) => this.handleAction(event)
     this.element.addEventListener("click", this.clickHandler)
+    this.projectionLinkHandler = (event) => this.projectionLinkClicked(event)
+    this.element.addEventListener("click", this.projectionLinkHandler)
     this.applyMode("visual")
   }
 
@@ -31,6 +33,7 @@ export default class extends Controller {
     this.element.removeEventListener("elef:editor-mode-change", this.modeChangedHandler)
     this.element.removeEventListener("elef:preview-updated", this.previewHandler)
     this.element.removeEventListener("click", this.clickHandler)
+    this.element.removeEventListener("click", this.projectionLinkHandler)
     if (this.element.presentationEditorController === this) delete this.element.presentationEditorController
   }
 
@@ -49,6 +52,14 @@ export default class extends Controller {
     delete this.element.dataset.editorProjectionActive
   }
 
+  projectionLinkClicked(event) {
+    const link = event.target.closest?.(".editor-projection [contenteditable='true'] a")
+    if (!link) return
+
+    event.preventDefault()
+    link.closest("[contenteditable='true']")?.focus()
+  }
+
   blockInput(event) {
     if (!this.editorController || this.updatingSource) return
     const blockElement = event.target.closest?.("[data-editor-block-id]")
@@ -57,7 +68,7 @@ export default class extends Controller {
     const region = this.map?.editable_regions?.find((candidate) => candidate.block_id === block?.id)
     if (!block || !region) return
 
-    const replacement = markdownForVisibleText(block.markdown, this.editableText(blockElement), region.kind)
+    const replacement = markdownForVisibleText(block.markdown, this.editableText(blockElement), region.kind, blockElement)
     const from = region.content_range.start
     const to = region.content_range.end
     this.shiftMapAfterEdit(from, to, replacement.length)
@@ -172,14 +183,19 @@ export default class extends Controller {
     if (!slides[index] || target < 0 || target >= slides.length) return
     const source = this.sourceValue()
     const bodyStart = this.map.front_matter?.range.end || 0
-    const separators = slides.slice(0, -1).map((slide) => source.slice(slide.delimiter_range.start, slide.delimiter_range.end))
-    const sections = slides.map((slide) => ({
-      body: source.slice(slide.range.start, slide.range.end)
-    }))
+    const sections = slides.map((slide) => {
+      const body = source.slice(slide.range.start, slide.range.end)
+      const trailing = body.match(/\s*$/)?.[0] || ""
+      return { body: body.slice(0, body.length - trailing.length), trailing }
+    })
+    const separators = slides.slice(0, -1).map((slide, slideIndex) =>
+      `${sections[slideIndex].trailing}${source.slice(slide.delimiter_range.start, slide.delimiter_range.end)}`
+    )
+    const finalTrailing = sections.at(-1).trailing
     const moved = sections.splice(index, 1)[0]
     sections.splice(target, 0, moved)
     const body = sections.map((section, sectionIndex) => `${section.body}${separators[sectionIndex] || ""}`).join("")
-    this.replaceSource(`${source.slice(0, bodyStart)}${body}`)
+    this.replaceSource(`${source.slice(0, bodyStart)}${body}${finalTrailing}`)
   }
 
   addBlock(slideIndex, index) {
@@ -213,12 +229,22 @@ export default class extends Controller {
     const slide = this.map?.slides?.[slideIndex]
     if (!slide || target < 0 || target >= slide.blocks.length) return
     const source = this.sourceValue()
-    const blocks = slide.blocks.map((block) => source.slice(block.range.start, block.range.end).replace(/\s+$/, "").trim())
+    const contentEnd = (block) => {
+      const raw = source.slice(block.range.start, block.range.end)
+      const ending = raw.match(/\r\n|\n|\r$/)?.[0] || ""
+      return block.range.end - ending.length
+    }
+    const blocks = slide.blocks.map((block) => source.slice(block.range.start, contentEnd(block)))
+    const separators = slide.blocks.slice(0, -1).map((block, blockIndex) =>
+      source.slice(contentEnd(block), slide.blocks[blockIndex + 1].range.start)
+    )
+    const trailing = source.slice(contentEnd(slide.blocks.at(-1)), slide.range.end)
     const moved = blocks.splice(index, 1)[0]
     blocks.splice(target, 0, moved)
     const from = slide.range.start
     const to = slide.range.end
-    this.replaceSource(`${source.slice(0, from)}${blocks.join("\n\n")}${source.slice(to)}`)
+    const body = blocks.map((block, blockIndex) => `${block}${separators[blockIndex] || ""}`).join("")
+    this.replaceSource(`${source.slice(0, from)}${body}${trailing}${source.slice(to)}`)
   }
 
   previewUpdated(payload) {

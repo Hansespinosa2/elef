@@ -45,6 +45,19 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_selector ".document-surface h1", text: "Linked target"
   end
 
+  test "keeps links editable in the visual surface instead of navigating" do
+    Document.create!(title: "Editable target", source: "# Target")
+    source = Document.create!(title: "Editable source", source: "See [[Editable target]]")
+
+    visit edit_document_path(source)
+    within ".editor-projection" do
+      click_on "Editable target"
+    end
+
+    assert_current_path edit_document_path(source)
+    assert page.evaluate_script("Boolean(document.activeElement.closest('[contenteditable=\\\"true\\\"]'))")
+  end
+
   test "shows orphan nodes and supports graph search, zoom, and responsive layout" do
     target = Document.create!(title: "Graph target", source: "# Target")
     source = Document.create!(title: "Graph source", source: "See [[Graph target]]")
@@ -173,6 +186,37 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_selector ".document-editor-block strong", text: "Keep formatting"
   end
 
+  test "visual rich blocks preserve table and image Markdown while editing" do
+    document = Document.create!(
+      title: "Rich notes",
+      source: "# Rich notes\n\n| Name | Value |\n| --- | --- |\n| One | Two |\n\n![Old alt](/icon.svg)"
+    )
+
+    visit edit_document_path(document)
+
+    assert_selector ".document-editor-block table"
+    assert_selector ".document-editor-block .editor-media-caption", text: "Old alt"
+
+    page.execute_script(<<~JAVASCRIPT)
+      const tableBlock = [...document.querySelectorAll('.document-editor-block')]
+        .find((block) => block.querySelector('table'));
+      tableBlock.querySelector('tbody td').innerText = 'Updated';
+      tableBlock.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'Updated' }));
+    JAVASCRIPT
+    assert_field "Markdown source", with: /\| Updated \| Two \|/, wait: 5
+    assert_includes find_field("Markdown source").value, "![Old alt](/icon.svg)"
+
+    page.execute_script(<<~JAVASCRIPT)
+      const imageBlock = [...document.querySelectorAll('.document-editor-block')]
+        .find((block) => block.querySelector('.editor-media-caption'));
+      const caption = imageBlock.querySelector('.editor-media-caption');
+      caption.innerText = 'New alt';
+      caption.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'New alt' }));
+    JAVASCRIPT
+    assert_field "Markdown source", with: /!\[New alt\]\(\/icon\.svg\)/, wait: 5
+    assert_includes find_field("Markdown source").value, "| Updated | Two |"
+  end
+
   test "expands math shorthand only when committed inside math" do
     document = Document.create!(title: "Math notes", source: "# Math")
     visit edit_document_path(document)
@@ -234,6 +278,80 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_selector '[data-preview-target="warnings"]', text: "The preview service rejected this edit."
     assert_selector ".document-surface", text: "Last good content"
     assert_no_selector ".document-surface", text: "Broken edit"
+    assert_selector '[data-preview-target="retry"]', visible: true
+
+    click_on "Retry preview"
+    assert_selector ".document-surface", text: "Broken edit", wait: 5
+    assert_selector '[data-preview-target="warnings"]', visible: false
+    assert_selector '[data-preview-target="retry"]', visible: false
+  end
+
+  test "debounces rapid preview requests and renders the latest source" do
+    document = Document.create!(title: "Latency notes", source: "# Initial")
+    visit edit_document_path(document)
+
+    page.execute_script(<<~JAVASCRIPT)
+      window.previewRequests = 0;
+      const originalFetch = window.fetch.bind(window);
+      window.fetch = (url, options = {}) => {
+        if (options.method === "POST" && String(url).includes("/preview")) window.previewRequests += 1;
+        return originalFetch(url, options);
+      };
+    JAVASCRIPT
+
+    fill_in "Markdown source", with: "# First draft"
+    fill_in "Markdown source", with: "# Latest draft"
+
+    assert_selector ".document-surface h1", text: "Latest draft", wait: 5
+    assert_equal 1, page.evaluate_script("window.previewRequests")
+  end
+
+  test "ignores a slow preview response after a newer edit" do
+    document = Document.create!(title: "Race notes", source: "# Initial")
+    visit edit_document_path(document)
+
+    page.execute_script(<<~JAVASCRIPT)
+      window.previewResponses = [];
+      const originalFetch = window.fetch.bind(window);
+      window.fetch = (url, options = {}) => {
+        if (options.method === "POST" && String(url).includes("/preview")) {
+          const source = options.body.get("document[source]");
+          return new Promise((resolve) => window.previewResponses.push({ source, resolve }));
+        }
+        return originalFetch(url, options);
+      };
+    JAVASCRIPT
+
+    fill_in "Markdown source", with: "# First response"
+    sleep 0.5
+    assert_equal 1, page.evaluate_script("window.previewResponses.length")
+
+    fill_in "Markdown source", with: "# Latest response"
+    sleep 0.5
+    assert_equal 2, page.evaluate_script("window.previewResponses.length")
+
+    page.execute_script(<<~JAVASCRIPT)
+      const response = window.previewResponses[0];
+      const title = response.source.match(/^# (.*)$/m)[1];
+      response.resolve(new Response(JSON.stringify({
+        html: `<div class="document-reader"><div class="document-surface"><h1>${title}</h1></div></div>`,
+        warnings: [],
+        editor_map: null
+      }), { headers: { "Content-Type": "application/json" } }));
+    JAVASCRIPT
+    sleep 0.1
+    assert_no_selector ".document-surface h1", text: "First response"
+
+    page.execute_script(<<~JAVASCRIPT)
+      const response = window.previewResponses[1];
+      const title = response.source.match(/^# (.*)$/m)[1];
+      response.resolve(new Response(JSON.stringify({
+        html: `<div class="document-reader"><div class="document-surface"><h1>${title}</h1></div></div>`,
+        warnings: [],
+        editor_map: null
+      }), { headers: { "Content-Type": "application/json" } }));
+    JAVASCRIPT
+    assert_selector ".document-surface h1", text: "Latest response", wait: 5
   end
 
   test "renders the seeded document fixture library and its stress cases" do

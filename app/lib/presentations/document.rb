@@ -295,9 +295,10 @@ module Presentations
         regions << region
         block[:editable_region_id] = region[:id]
         current = []
+        pending_position = nil if pending_position && !pending_position[:scoped]
       end
 
-      lines.each do |line|
+      lines.each_with_index do |line, line_index|
         incoming_fence = fence_marker(line.text)
         if fence
           current << line
@@ -327,11 +328,13 @@ module Presentations
           )
           directives << directive
           if (position = position_from_block(directive_text))
-            pending_position = { value: position_payload(position), directive_id: directive[:id] }
+            pending_position = {
+              value: position_payload(position),
+              directive_id: directive[:id],
+              scoped: position_scope_closes?(lines, line_index)
+            }
           elsif directive_text == ":::" && pending_position
             pending_position = nil
-          elsif directive[:type] == "position" && pending_position.nil?
-            pending_position = { value: directive[:value], directive_id: directive[:id] }
           end
           next
         end
@@ -348,6 +351,24 @@ module Presentations
       end
 
       [blocks, directives, regions]
+    end
+
+    def position_scope_closes?(lines, start_index)
+      fence = nil
+      lines[(start_index + 1)..].to_a.each do |line|
+        incoming_fence = fence_marker(line.text)
+        if fence
+          fence = toggle_fence(fence, incoming_fence) if incoming_fence
+          next
+        elsif incoming_fence
+          fence = incoming_fence
+          next
+        end
+
+        return true if line.text.strip == ":::"
+        return false if line.text.match?(/\A\s*:::position\{/)
+      end
+      false
     end
 
     def editor_directive(source, start_pos, end_pos, text, slide_index, directive_index)

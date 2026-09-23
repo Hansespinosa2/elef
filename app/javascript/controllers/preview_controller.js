@@ -1,7 +1,7 @@
 import { Controller } from "@hotwired/stimulus"
 
 export default class extends Controller {
-  static targets = ["container", "warnings", "status"]
+  static targets = ["container", "warnings", "status", "retry"]
   static values = { url: String, delay: { type: Number, default: 300 } }
 
   connect() {
@@ -20,8 +20,18 @@ export default class extends Controller {
     clearTimeout(this.timer)
     this.abortActiveRequest()
     const revision = ++this.requestId
+    this.hideRetry()
     this.setStatus("Updating preview…")
     this.timer = setTimeout(() => this.refresh(revision), this.delayValue)
+  }
+
+  retry(event) {
+    event?.preventDefault()
+    clearTimeout(this.timer)
+    const revision = ++this.requestId
+    this.hideRetry()
+    this.setStatus("Updating preview…")
+    this.refresh(revision)
   }
 
   async refresh(requestId = this.requestId) {
@@ -52,6 +62,7 @@ export default class extends Controller {
       this.renderWarnings(payload.warnings || [])
       if (!response.ok || payload.html === null || payload.html === undefined) {
         this.element.dispatchEvent(new CustomEvent("elef:preview-updated", { bubbles: true, detail: { payload, response } }))
+        this.showRetry()
         this.setStatus("Preview unavailable")
         return
       }
@@ -66,12 +77,14 @@ export default class extends Controller {
         this.containerTarget.scrollTop = scrollTop
       }
       this.element.dispatchEvent(new CustomEvent("elef:preview-updated", { bubbles: true, detail: { payload, response } }))
+      this.hideRetry()
       this.setStatus("")
     } catch (error) {
       if (error.name === "AbortError") return
       if (!this.active || requestId !== this.requestId) return
       this.renderWarnings(["Preview could not be reached. Your source is still safe; try again shortly."])
       this.element.dispatchEvent(new CustomEvent("elef:preview-updated", { bubbles: true, detail: { payload: null, response: null, error } }))
+      this.showRetry()
       this.setStatus("Preview unavailable")
     } finally {
       if (this.requestController === requestController) this.requestController = null
@@ -96,5 +109,13 @@ export default class extends Controller {
 
   setStatus(text) {
     if (this.hasStatusTarget) this.statusTarget.textContent = text
+  }
+
+  showRetry() {
+    if (this.hasRetryTarget) this.retryTarget.hidden = false
+  }
+
+  hideRetry() {
+    if (this.hasRetryTarget) this.retryTarget.hidden = true
   }
 }

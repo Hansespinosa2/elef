@@ -243,6 +243,14 @@ class PresentationTest < ActiveSupport::TestCase
     assert_equal 34, map[:slides].first[:editable_regions].first[:content_range][:start]
   end
 
+  test "maps a single-block position directive without leaking it to the next block" do
+    source = "# Slide\n\n:::position{center}\n\nFirst\n\nSecond"
+
+    blocks = Presentations::Document.editor_map(source, mode: :presentation)[:slides].first[:blocks]
+
+    assert_equal [nil, "center", nil], blocks.map { |block| block[:position]&.fetch(:horizontal) }
+  end
+
   test "keeps a document editor map as one source surface across horizontal rules" do
     source = "# First\n\n---\n\nSecond"
 

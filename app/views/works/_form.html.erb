@@ -152,6 +152,7 @@
           <span class="dirty-state" data-dirty-target="status" data-autosave-target="status" aria-live="polite">Saved</span>
         <% end %>
         <span class="dirty-state" data-preview-target="status" aria-live="polite"></span>
+        <button type="button" class="preview-retry" data-preview-target="retry" data-action="preview#retry" hidden>Retry preview</button>
       </div>
       <% if work.presentation? %><span class="presentation-editor-status" data-presentation-editor-target="status" aria-live="polite"></span><% end %>
     </div>

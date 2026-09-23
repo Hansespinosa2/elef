@@ -161,6 +161,89 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_selector ".presentation-editor-projection .slide", count: 2
   end
 
+  test "visual presentation editing keeps tables and media as Markdown structures" do
+    presentation = Presentation.create!(
+      title: "Rich deck",
+      source: "# Rich\n\n| Name | Value |\n| --- | --- |\n| One | Two |\n\n![Old alt](/icon.svg)"
+    )
+
+    visit edit_presentation_path(presentation)
+
+    page.execute_script(<<~JAVASCRIPT)
+      const tableBlock = [...document.querySelectorAll('.slide-block')]
+        .find((block) => block.querySelector('table'));
+      tableBlock.querySelector('tbody td').innerText = 'Updated';
+      tableBlock.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'Updated' }));
+    JAVASCRIPT
+    assert_field "Markdown source", with: /\| Updated \| Two \|/, wait: 5
+
+    page.execute_script(<<~JAVASCRIPT)
+      const imageBlock = [...document.querySelectorAll('.slide-block')]
+        .find((block) => block.querySelector('.editor-media-caption'));
+      const caption = imageBlock.querySelector('.editor-media-caption');
+      caption.innerText = 'New alt';
+      caption.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'New alt' }));
+    JAVASCRIPT
+    assert_field "Markdown source", with: /!\[New alt\]\(\/icon\.svg\)/, wait: 5
+    assert_includes find_field("Markdown source").value, "| Updated | Two |"
+  end
+
+  test "visual presentation controls reorder blocks and slides without losing source text" do
+    presentation = Presentation.create!(
+      title: "Structural deck",
+      source: "# First\n\nFirst block\n\nSecond block\n---\n# Second\n\nOther block"
+    )
+
+    visit edit_presentation_path(presentation)
+
+    find("[data-presentation-editor-action='move-block-down'][data-slide-index='0'][data-block-index='1']").click
+    assert_field "Markdown source", with: /# First\n\nSecond block\n\nFirst block/, wait: 5
+    assert_no_selector "[data-presentation-editor-action='add-block-after'][data-slide-index='0'][data-block-index='1'][disabled]", wait: 5
+
+    find("[data-presentation-editor-action='add-block-after'][data-slide-index='0'][data-block-index='1']").click
+    assert_field "Markdown source", with: /Second block\n\nNew block\n\nFirst block/, wait: 5
+    assert_no_selector "[data-presentation-editor-action='delete-block'][data-slide-index='0'][data-block-index='2'][disabled]", wait: 5
+
+    find("[data-presentation-editor-action='delete-block'][data-slide-index='0'][data-block-index='2']").click
+    assert_field "Markdown source", with: /Second block\n\nFirst block/, wait: 5
+    assert_no_selector "[data-presentation-editor-action='move-slide-down'][data-slide-index='0'][disabled]", wait: 5
+
+    find("[data-presentation-editor-action='move-slide-down'][data-slide-index='0']").click
+    assert_field "Markdown source", with: /# Second\n\nOther block\n---\n# First\n\nSecond block\n\nFirst block/, wait: 5
+  end
+
+  test "keeps the last good presentation projection when preview is unavailable and offers retry" do
+    presentation = Presentation.create!(title: "Stable deck", source: "# Stable\n\nLast good slide")
+    visit edit_presentation_path(presentation)
+    assert_selector ".presentation-editor-projection .slide", text: "Last good slide"
+
+    page.execute_script(<<~JAVASCRIPT)
+      const originalFetch = window.fetch.bind(window);
+      window.fetch = (url, options = {}) => {
+        if (options.method === "POST" && String(url).includes("/preview")) {
+          window.fetch = originalFetch;
+          return Promise.reject(new Error("Simulated preview outage"));
+        }
+        return originalFetch(url, options);
+      };
+    JAVASCRIPT
+
+    fill_in "Markdown source", with: "# Broken\n\nNew slide text"
+    assert_selector '[data-preview-target="status"]', text: "Preview unavailable", wait: 5
+    assert_selector '[data-preview-target="warnings"]', text: "Preview could not be reached. Your source is still safe; try again shortly."
+    assert_selector ".presentation-editor-projection .slide", text: "Last good slide"
+    assert_no_selector ".presentation-editor-projection .slide", text: "New slide text"
+    assert_field "Markdown source", with: "# Broken\n\nNew slide text"
+    assert_selector "[data-presentation-editor-action='add-slide-after'][disabled]"
+    assert_selector '[data-preview-target="retry"]', visible: true
+
+    click_on "Retry preview"
+    assert_selector ".presentation-editor-projection .slide", text: "New slide text", wait: 5
+    assert_selector '[data-preview-target="warnings"]', visible: false
+    assert_selector '[data-preview-target="retry"]', visible: false
+    assert_no_selector "[data-presentation-editor-action='add-slide-after'][disabled]"
+  end
+
   test "failed autosave can be retried and validation errors preserve saved source" do
     presentation = Presentation.create!(title: "Retry deck", source: "# Original")
     visit edit_presentation_path(presentation)

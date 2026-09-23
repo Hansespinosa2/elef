@@ -18,6 +18,8 @@ export default class extends Controller {
     this.element.addEventListener("elef:editor-mode-change", this.modeChangedHandler)
     this.previewHandler = (event) => this.previewUpdated(event.detail.payload)
     this.element.addEventListener("elef:preview-updated", this.previewHandler)
+    this.projectionLinkHandler = (event) => this.projectionLinkClicked(event)
+    this.element.addEventListener("click", this.projectionLinkHandler)
     this.applyMode("visual")
   }
 
@@ -25,6 +27,7 @@ export default class extends Controller {
     this.element.removeEventListener("elef:editor-ready", this.editorReady)
     this.element.removeEventListener("elef:editor-mode-change", this.modeChangedHandler)
     this.element.removeEventListener("elef:preview-updated", this.previewHandler)
+    this.element.removeEventListener("click", this.projectionLinkHandler)
   }
 
   modeChanged(event) {
@@ -43,6 +46,14 @@ export default class extends Controller {
 
   blockBlur() {
     delete this.element.dataset.editorProjectionActive
+  }
+
+  projectionLinkClicked(event) {
+    const link = event.target.closest?.(".editor-projection [contenteditable='true'] a")
+    if (!link) return
+
+    event.preventDefault()
+    link.closest("[contenteditable='true']")?.focus()
   }
 
   projectionInput(event) {
@@ -110,7 +121,7 @@ export default class extends Controller {
   }
 
   markdownForRegion(block, region, element) {
-    return markdownForVisibleText(block.markdown, this.editableText(element), region.kind)
+    return markdownForVisibleText(block.markdown, this.editableText(element), region.kind, element)
   }
 
   editableText(element) {
