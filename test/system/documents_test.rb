@@ -349,6 +349,28 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: "# Still editable"
   end
 
+  test "times out a stalled preview without replacing the last good result" do
+    document = Document.create!(title: "Slow notes", source: "# Stable content")
+    visit edit_document_path(document)
+
+    page.execute_script(<<~JAVASCRIPT)
+      const form = document.querySelector('form.visual-editor-form');
+      form.previewController.timeoutValue = 50;
+      const originalFetch = window.fetch.bind(window);
+      window.fetch = (url, options = {}) => {
+        if (options.method === 'POST' && String(url).includes('/preview')) return new Promise(() => {});
+        return originalFetch(url, options);
+      };
+    JAVASCRIPT
+
+    fill_in "Markdown source", with: "# Slow edit"
+    assert_selector '[data-preview-target="status"]', text: "Preview unavailable", wait: 5
+    assert_selector '[data-preview-target="warnings"]', text: "Preview timed out."
+    assert_selector ".document-surface", text: "Stable content"
+    assert_no_selector ".document-surface", text: "Slow edit"
+    assert_selector '[data-preview-target="retry"]', visible: true
+  end
+
   test "debounces rapid preview requests and renders the latest source" do
     document = Document.create!(title: "Latency notes", source: "# Initial")
     visit edit_document_path(document)

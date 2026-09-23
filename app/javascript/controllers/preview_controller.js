@@ -2,9 +2,10 @@ import { Controller } from "@hotwired/stimulus"
 
 export default class extends Controller {
   static targets = ["container", "warnings", "status", "retry"]
-  static values = { url: String, delay: { type: Number, default: 300 } }
+  static values = { url: String, delay: { type: Number, default: 300 }, timeout: { type: Number, default: 8000 } }
 
   connect() {
+    this.element.previewController = this
     this.timer = null
     this.requestId = 0
     this.active = true
@@ -22,6 +23,7 @@ export default class extends Controller {
     this.abortActiveRequest()
     this.element.removeEventListener("elef:live-preview-error", this.localPreviewError)
     this.element.removeEventListener("elef:live-preview-recovered", this.localPreviewRecovered)
+    if (this.element.previewController === this) delete this.element.previewController
   }
 
   schedule() {
@@ -46,6 +48,11 @@ export default class extends Controller {
     this.abortActiveRequest()
     const requestController = new AbortController()
     this.requestController = requestController
+    let timedOut = false
+    const timeout = setTimeout(() => {
+      timedOut = true
+      requestController.abort()
+    }, this.timeoutValue)
     const body = new FormData(this.element)
     // Persisted Rails forms include _method=patch. Preview is deliberately a
     // POST to a non-mutating endpoint, so do not let Rack method override it.
@@ -88,13 +95,17 @@ export default class extends Controller {
       this.hideRetry()
       this.setStatus("")
     } catch (error) {
-      if (error.name === "AbortError") return
+      if (error.name === "AbortError" && !timedOut) return
       if (!this.active || requestId !== this.requestId) return
-      this.renderWarnings(["Preview could not be reached. Your source is still safe; try again shortly."])
+      const warning = timedOut
+        ? "Preview timed out. Your source is still safe; try again when the server responds."
+        : "Preview could not be reached. Your source is still safe; try again shortly."
+      this.renderWarnings([warning])
       this.element.dispatchEvent(new CustomEvent("elef:preview-updated", { bubbles: true, detail: { payload: null, response: null, error } }))
       this.showRetry()
       this.setStatus("Preview unavailable")
     } finally {
+      clearTimeout(timeout)
       if (this.requestController === requestController) this.requestController = null
     }
   }
