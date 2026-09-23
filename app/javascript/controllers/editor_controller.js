@@ -379,7 +379,7 @@ export default class extends Controller {
   }
 
   collapseFrontmatter() {
-    const match = this.value.match(/\A---\r?\n[\s\S]*?\r?\n---(?=\r?\n|$)/)
+    const match = this.value.match(/^---\r?\n[\s\S]*?\r?\n---(?=\r?\n|$)/)
     if (!match || match[0].length <= 4) return
 
     setTimeout(() => {
