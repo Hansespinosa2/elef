@@ -5,7 +5,7 @@ Elef is now a conventional Rails monolith for creating and presenting single-use
 ## Runtime choices
 
 - **Rails/Ruby:** Rails 8.1.3 on Ruby 3.4, using Hotwire, importmap, and system tests without adding a Node/React runtime.
-- **Database:** PostgreSQL via Active Record. SQLite remains available only when `ELEF_USE_SQLITE=1` is explicitly set for local migration checks.
+- **Database:** PostgreSQL is canonical for hosted development, production, and CI. Disposable Apple agent containers default to SQLite; set `ELEF_AGENT_DATABASE=postgres` when a task needs a private PostgreSQL cluster.
 - **Views/interactions:** Rails ERB views with Turbo and Stimulus through importmap. Stimulus handles dirty-state navigation protection and browser presentation keyboard controls.
 - **Browser automation:** Rails system tests use Selenium with Chrome in explicit headless mode; repository checks must not open a visible browser.
 - **Styling:** Tailwind CSS through `tailwindcss-rails` styles Elef-owned application UI. Presentation output remains isolated under `.presentation-surface` with dedicated Markdown, Rouge, KaTeX, slide geometry, presentation-mode, and deck-theme CSS.
@@ -28,13 +28,16 @@ bin/rails db:prepare
 bin/dev
 ```
 
-Development and test expect PostgreSQL at `127.0.0.1` with the `postgres` user.
+Host-local development and test expect PostgreSQL at `127.0.0.1` with the `postgres` user.
 Set `PGDATABASE`, `PGTESTDATABASE`, `PGUSER`, `PGPASSWORD`, `PGHOST`, and
-`PGPORT` when your local setup differs. For an isolated SQLite migration check,
+`PGPORT` when your local setup differs. For a host-local SQLite migration check,
 use `ELEF_USE_SQLITE=1 bin/rails db:prepare`.
 
-The disposable development container starts a private PostgreSQL cluster under
-`storage/postgres` automatically; set `PGHOST` to use an external server.
+The disposable Apple agent container defaults to SQLite under
+`storage/development.sqlite3` and `storage/test.sqlite3`. Set
+`ELEF_AGENT_DATABASE=postgres` before `scripts/elef-agent start` or `up` to use a
+private PostgreSQL cluster under `storage/postgres`. The selected mode is
+remembered for the task when it is resumed with `up`.
 
 For a server-only session, build Tailwind first with
 `bin/rails tailwindcss:build`, then run `bin/rails server`. Development uses
@@ -94,16 +97,19 @@ scripts/personal-instance restore backups/20260922T120000Z --confirm
 
 ## Isolated agent browser URLs
 
-The disposable agent workflow gives each task a stable browser identity. On a
-Mac, run the one-time guided setup:
+The disposable agent workflow gives each task a stable browser identity and
+defaults to an isolated SQLite database. On a Mac, run the one-time guided
+setup:
 
 ```bash
 scripts/elef-agent setup
 ```
 
 After setup, `scripts/elef-agent start editor-fix` creates the isolated
-worktree and container, prepares the database, starts Rails, and launches Codex
-automatically.
+worktree and container, prepares SQLite, starts Rails, and launches Codex
+automatically. For a persistence-focused task, use
+`ELEF_AGENT_DATABASE=postgres scripts/elef-agent start persistence-fix` to
+exercise PostgreSQL inside the container.
 It exposes the app at `https://editor-fix.localhost`. The hostname identifies
 the worktree while the local Caddy router forwards it to that task's isolated
 container. Each agent gets a separate backend port internally; those ports are

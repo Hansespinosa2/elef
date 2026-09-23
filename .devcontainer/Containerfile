@@ -10,6 +10,7 @@ ENV BUNDLE_PATH=/usr/local/bundle \
     BUNDLE_RETRY=3 \
     CODEX_HOME=/home/developer/.codex
 
+# PostgreSQL remains available for ELEF_AGENT_DATABASE=postgres; SQLite is the default.
 RUN apt-get update \
     && apt-get install --no-install-recommends -y \
        build-essential ca-certificates chromium chromium-driver curl git libpq-dev libsqlite3-dev npm postgresql postgresql-client ripgrep sqlite3 \

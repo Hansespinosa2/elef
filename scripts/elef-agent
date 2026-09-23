@@ -7,6 +7,7 @@ IMAGE_OVERRIDE="${ELEF_AGENT_IMAGE:-}"
 CODEX_VERSION="${ELEF_AGENT_CODEX_VERSION:-latest}"
 CHROME_DEVTOOLS_MCP_VERSION="${ELEF_AGENT_CHROME_DEVTOOLS_MCP_VERSION:-1.8.0}"
 CONTAINER_MEMORY="${ELEF_AGENT_MEMORY:-1536M}"
+AGENT_DATABASE="${ELEF_AGENT_DATABASE:-sqlite}"
 WORKTREE_ROOT="${ELEF_WORKTREE_ROOT:-$(dirname "$REPO")/elef-worktrees}"
 CODEX_HOME_HOST="${CODEX_HOME:-$HOME/.codex}"
 USER_SKILLS_HOST="${ELEF_USER_SKILLS_DIR:-$HOME/Documents/GitHub/andy-skills/skills}"
@@ -17,12 +18,19 @@ CADDYFILE="${ELEF_AGENT_CADDYFILE:-$AGENT_STATE_ROOT/Caddyfile}"
 die() { echo "error: $*" >&2; exit 1; }
 need_container() { command -v "$CONTAINER_CLI" >/dev/null || die "Apple Container CLI not found"; }
 safe_name() { [[ "${1:-}" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*[a-zA-Z0-9]$ ]] || die "invalid task name: ${1:-}"; }
+validate_agent_database() {
+  case "$AGENT_DATABASE" in
+    sqlite|postgres) ;;
+    *) die "ELEF_AGENT_DATABASE must be sqlite or postgres (got: $AGENT_DATABASE)" ;;
+  esac
+}
 worktree_for() { printf '%s/%s' "$WORKTREE_ROOT" "$1"; }
 container_for() { printf 'elef-agent-%s' "$(host_for "$1")"; }
 branch_for() { printf 'codex/%s' "$1"; }
 route_for() { printf '%s/routes/%s' "$AGENT_STATE_ROOT" "$1"; }
 codex_state_for() { printf '%s/codex/%s' "$AGENT_STATE_ROOT" "$1"; }
 image_state_for() { printf '%s/images/%s' "$AGENT_STATE_ROOT" "$1"; }
+database_state_for() { printf '%s/databases/%s' "$AGENT_STATE_ROOT" "$1"; }
 terminal_state_for() { printf '%s/terminals/%s' "$AGENT_STATE_ROOT" "$1"; }
 host_for() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
 
@@ -74,6 +82,14 @@ remember_image() {
   printf '%s\n' "$image" >"$state"
 }
 
+remember_database() {
+  local task="$1" state
+  validate_agent_database
+  state="$(database_state_for "$task")"
+  mkdir -p "$(dirname "$state")"
+  printf '%s\n' "$AGENT_DATABASE" >"$state"
+}
+
 existing_image_for() {
   local task="$1" name image state
   state="$(image_state_for "$task")"
@@ -98,6 +114,26 @@ delete_image_state() {
   local task="$1" state
   state="$(image_state_for "$task")"
   [[ ! -L "$state" ]] || die "refusing to delete symlinked image state: $state"
+  rm -f -- "$state"
+}
+
+existing_database_for() {
+  local task="$1" state database
+  state="$(database_state_for "$task")"
+  if [[ -f "$state" ]]; then
+    database="$(<"$state")"
+    case "$database" in
+      sqlite|postgres) printf '%s' "$database"; return ;;
+      *) die "invalid stored agent database mode: $database" ;;
+    esac
+  fi
+  printf '%s' "$AGENT_DATABASE"
+}
+
+delete_database_state() {
+  local task="$1" state
+  state="$(database_state_for "$task")"
+  [[ ! -L "$state" ]] || die "refusing to delete symlinked database state: $state"
   rm -f -- "$state"
 }
 
@@ -291,7 +327,10 @@ ensure_base_current() {
 }
 
 run_container() {
-  local task="$1" wt="$2" name="$3" token="$4" backend_port="$5" image="$6" codex_state
+  local task="$1" wt="$2" name="$3" token="$4" backend_port="$5" image="$6" codex_state sqlite_env
+  validate_agent_database
+  sqlite_env=
+  [[ "$AGENT_DATABASE" == sqlite ]] && sqlite_env=1
   codex_state="$(codex_state_for "$task")"
   mkdir -p "$codex_state"
   local -a mounts=(
@@ -312,6 +351,7 @@ run_container() {
     --publish "127.0.0.1:${backend_port}:3000" \
     --env "GITHUB_TOKEN=$token" --env "GH_TOKEN=$token" \
     --env GIT_CONFIG_GLOBAL=/home/developer/.config/git/config \
+    --env "ELEF_USE_SQLITE=$sqlite_env" \
     --env PORT=3000 --env BIND=0.0.0.0 \
     "${mounts[@]}" --workdir "$wt" "$image" web
 }
@@ -341,6 +381,7 @@ start_task() {
 start() {
   local task="${1:-}" base="${2:-HEAD}" current_base wt name branch token backend_port host image
   [[ -n "$task" ]] || die "usage: elef-agent start TASK [BASE]"
+  validate_agent_database
   safe_name "$task"
   if [[ "$base" == "HEAD" ]]; then
     current_base="$(git branch --show-current)"
@@ -373,9 +414,11 @@ start() {
   fi
   start_task "$task" "$wt" "$name" "$token" "$backend_port" "$image"
   remember_image "$task" "$image"
+  remember_database "$task"
   echo "Started $name"
   echo "Worktree: $wt"
   echo "Branch:   $branch"
+  echo "Database: $AGENT_DATABASE"
   echo "Browser:  https://${host}.localhost"
   exec_in "$task" codex --dangerously-bypass-approvals-and-sandbox -m gpt-5.6-luna -c 'model_reasoning_effort="max"' -c 'plan_mode_reasoning_effort="max"'
 }
@@ -384,6 +427,8 @@ up() {
   local task="${1:-}" wt name token backend_port host image
   [[ -n "$task" ]] || die "usage: elef-agent up TASK"
   safe_name "$task"
+  [[ -n "${ELEF_AGENT_DATABASE:-}" ]] || AGENT_DATABASE="$(existing_database_for "$task")"
+  validate_agent_database
   wt="$(worktree_for "$task")"; name="$(container_for "$task")"; host="$(host_for "$task")"
   [[ -d "$wt" ]] || die "task worktree not found: $wt"
   router_ready || die "Caddy is not installed; run '$0 setup' first"
@@ -418,6 +463,7 @@ up() {
     die "Rails did not become reachable for $task"
   fi
   report_readiness "$task" "$code"
+  remember_database "$task"
 }
 
 restore_terminal() {
@@ -501,6 +547,7 @@ remove() {
   router_ready && reload_router || true
   [[ ! -e "$wt" ]] || git worktree remove --force "$wt"
   git branch -D "$(branch_for "$task")" 2>/dev/null || true
+  delete_database_state "$task"
   echo "Removed container, worktree, and local branch for $task"
 }
 
@@ -589,6 +636,7 @@ cleanup() {
   git push origin --delete "$branch"
   delete_codex_state "$task"
   delete_image_state "$task"
+  delete_database_state "$task"
   echo "Cleaned up merged task $task"
 }
 
@@ -706,6 +754,7 @@ Environment overrides:
   ELEF_AGENT_CODEX_VERSION      Codex version used in the image
   ELEF_AGENT_CHROME_DEVTOOLS_MCP_VERSION
                                 Chrome DevTools MCP version used in the image
+  ELEF_AGENT_DATABASE            Agent database: sqlite (default) or postgres
 
 For command syntax, run '$0 --help'. Run commands from the Elef repository root.
 EOF
@@ -725,6 +774,6 @@ case "${1:-}" in
   cleanup) shift; cleanup "$@" ;;
   finish) shift; finish "$@" ;;
   remove) shift; remove "$@" ;;
-  build) ensure_image "$(new_image_for)" ;;
+  build) validate_agent_database; ensure_image "$(new_image_for)" ;;
   *) echo "usage: $0 {setup|status|start|up|codex|fork|resume|shell|stop|cleanup|finish|remove|build} TASK [ARGS...]" >&2; exit 2 ;;
 esac

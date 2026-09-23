@@ -6,6 +6,7 @@ launcher="$ROOT/scripts/elef-agent"
 entrypoint="$ROOT/.devcontainer/entrypoint.sh"
 containerfile="$ROOT/.devcontainer/Containerfile"
 codex_config="$ROOT/.devcontainer/codex-config.toml"
+readme="$ROOT/README.md"
 
 assert_contains() {
   local file="$1" pattern="$2"
@@ -33,6 +34,13 @@ assert_contains "$launcher" '--env BIND=0.0.0.0'
 assert_contains "$launcher" '--env GIT_CONFIG_GLOBAL=/home/developer/.config/git/config'
 assert_contains "$launcher" '--memory "$CONTAINER_MEMORY"'
 assert_contains "$launcher" '"$image" web'
+assert_contains "$launcher" 'AGENT_DATABASE="${ELEF_AGENT_DATABASE:-sqlite}"'
+assert_contains "$launcher" 'ELEF_AGENT_DATABASE must be sqlite or postgres'
+assert_contains "$launcher" '--env "ELEF_USE_SQLITE=$sqlite_env"'
+assert_contains "$launcher" 'validate_agent_database'
+assert_contains "$launcher" 'database_state_for'
+assert_contains "$launcher" 'remember_database "$task"'
+assert_contains "$launcher" 'existing_database_for "$task"'
 assert_contains "$launcher" 'https://$(host_for "$task").localhost'
 assert_contains "$launcher" 'exec_in "$task" codex --dangerously-bypass-approvals-and-sandbox -m gpt-5.6-luna'
 assert_contains "$launcher" "-c 'model_reasoning_effort=\"max\"'"
@@ -61,6 +69,7 @@ assert_contains "$launcher" 'check_pr_description.rb'
 assert_contains "$launcher" 'git fetch origin "refs/heads/$base:$target_ref"'
 assert_contains "$launcher" 'git merge-base --is-ancestor'
 assert_contains "$launcher" 'ensure_base_current "$base"'
+assert_contains "$launcher" 'ELEF_AGENT_DATABASE            Agent database: sqlite (default) or postgres'
 assert_contains "$launcher" 'rm -rf -- "$state"'
 assert_contains "$entrypoint" 'bin/rails server -b "${BIND:-0.0.0.0}" -p "${PORT:-3000}"'
 assert_contains "$entrypoint" 'GIT_CONFIG_GLOBAL="${GIT_CONFIG_GLOBAL:-$HOME/.config/git/config}"'
@@ -69,5 +78,7 @@ assert_contains "$containerfile" 'ARG CODEX_VERSION=latest'
 assert_contains "$containerfile" 'ARG CHROME_DEVTOOLS_MCP_VERSION=1.8.0'
 assert_contains "$containerfile" 'chromium-driver'
 assert_contains "$containerfile" 'ripgrep'
+assert_contains "$readme" 'ELEF_AGENT_DATABASE=postgres'
+assert_contains "$readme" 'defaults to an isolated SQLite database'
 
 echo "elef-agent launcher checks passed"
