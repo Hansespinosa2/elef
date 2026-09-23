@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+COMPOSE_FILE="${ELEF_DEVELOPMENT_COMPOSE_FILE:-$ROOT/compose.development.yml}"
+ENV_FILE="${ELEF_DEVELOPMENT_ENV_FILE:-$ROOT/.env.development}"
+PROJECT_NAME="${COMPOSE_PROJECT_NAME:-elef-development}"
+
+usage() {
+  cat <<'USAGE'
+Usage: scripts/development-instance COMMAND
+
+Commands:
+  config                 Validate the development Compose configuration.
+  build                  Build the source-mounted development image.
+  up                     Build if needed, prepare the database, and start Elef.
+  down                   Stop the development instance without deleting data.
+  restart                Restart the development containers.
+  logs [SERVICE]         Follow logs for the whole stack or one service.
+  status                 Show container and health status.
+  migrate                Run pending development migrations.
+  seed                   Load the optional idempotent sample/snippet data.
+  check                  Verify Rails, PostgreSQL, and Active Storage.
+  shell                  Open a shell in the development application container.
+USAGE
+}
+
+die() {
+  echo "error: $*" >&2
+  exit 1
+}
+
+command -v docker >/dev/null 2>&1 || die "Docker is required"
+[[ -f "$COMPOSE_FILE" ]] || die "Compose file not found: $COMPOSE_FILE"
+
+if [[ ! -f "$ENV_FILE" ]]; then
+  if [[ "${1:-}" == "config" || "${1:-}" == "help" || "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+    die "copy .env.development.example to .env.development"
+  fi
+  die "missing $ENV_FILE; copy .env.development.example to .env.development"
+fi
+
+compose() {
+  docker compose --project-name "$PROJECT_NAME" --env-file "$ENV_FILE" --file "$COMPOSE_FILE" "$@"
+}
+
+case "${1:-}" in
+  config)
+    compose config --quiet
+    echo "Development instance configuration is valid"
+    ;;
+  build)
+    compose build web
+    ;;
+  up)
+    compose up -d --build
+    compose ps
+    ;;
+  down)
+    compose down
+    ;;
+  restart)
+    compose restart
+    ;;
+  logs)
+    shift
+    compose logs --follow "${1:-}"
+    ;;
+  status)
+    compose ps
+    ;;
+  migrate)
+    compose run --rm --no-deps web bin/rails db:migrate
+    ;;
+  seed)
+    compose run --rm --no-deps web bin/rails db:seed
+    ;;
+  check)
+    compose exec -T web bin/rails runner 'abort "wrong Rails environment" unless Rails.env.development?; abort "wrong database adapter" unless ActiveRecord::Base.connection.adapter_name == "PostgreSQL"; storage = Rails.root.join("storage"); probe = storage.join(".write-check"); File.write(probe, "ok"); File.delete(probe); puts "Rails=#{Rails.env} PostgreSQL=#{ActiveRecord::Base.connection.adapter_name} ActiveStorage=#{Rails.application.config.active_storage.service}"'
+    ;;
+  shell)
+    compose exec web bash
+    ;;
+  help|--help|-h)
+    usage
+    ;;
+  *)
+    usage >&2
+    exit 1
+    ;;
+esac

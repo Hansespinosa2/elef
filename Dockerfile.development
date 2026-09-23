@@ -1,0 +1,21 @@
+FROM ruby:3.4-bookworm
+
+ENV APP_HOME=/rails \
+    BUNDLE_PATH=/usr/local/bundle \
+    RAILS_ENV=development
+
+RUN apt-get update \
+  && apt-get install --no-install-recommends -y build-essential ca-certificates curl libpq-dev \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR ${APP_HOME}
+
+COPY Gemfile Gemfile.lock ./
+RUN bundle install \
+  && rm -rf /root/.bundle/cache /usr/local/bundle/cache
+
+COPY . .
+
+EXPOSE 3000
+
+CMD ["bin/dev"]
