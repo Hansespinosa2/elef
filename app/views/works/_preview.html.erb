@@ -1,0 +1,9 @@
+<% if work.presentation? %>
+  <%= render "presentations/slides", presentation: work %>
+<% else %>
+  <div class="document-reader document-theme-<%= work.theme %> document-typography-<%= work.typography %> work-theme-<%= work.theme %> work-typography-<%= work.typography %>">
+    <div class="document-surface document-continuous-preview">
+      <%= work.preview_html %>
+    </div>
+  </div>
+<% end %>

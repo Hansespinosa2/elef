@@ -58,7 +58,58 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_selector '[data-autosave-target="status"]', exact_text: "Saved"
     assert_includes presentation.reload.source, "# Latest edit"
     click_on "Library"
+    assert_current_path root_path
+  end
+
+  test "library tabs use canonical collection paths" do
+    visit root_path
+
+    assert_current_path root_path
+    assert_link "Library", href: root_path
+    within "nav.library-tabs" do
+      assert_link "All", href: root_path
+      assert_link "Documents", href: documents_path
+      assert_link "Presentations", href: presentations_path
+      click_on "Documents"
+    end
+
+    assert_current_path documents_path
+    within "nav.library-tabs" do
+      click_on "Presentations"
+    end
+
     assert_current_path presentations_path
+  end
+
+  test "two editor tabs preserve a stale local draft as a recovery revision" do
+    presentation = Presentation.create!(title: "Two tabs", source: "# Initial")
+    visit edit_presentation_path(presentation)
+
+    using_session(:server_tab) do
+      visit edit_presentation_path(presentation)
+      fill_in "Markdown source", with: "# Server tab"
+      assert_selector '[data-autosave-target="status"]', text: "Saved", wait: 5
+    end
+
+    fill_in "Markdown source", with: "# Local tab"
+    assert_selector '[data-autosave-target="status"]', text: "A newer version is active; your draft was preserved.", wait: 5
+    assert_selector "[data-autosave-target='conflict']", visible: true
+    assert_includes presentation.reload.source, "# Server tab"
+    assert_includes presentation.revisions.recoveries.order(:id).last.source, "# Local tab"
+  end
+
+  test "refresh recovers an unsent draft from browser persistence" do
+    presentation = Presentation.create!(title: "Refresh recovery", source: "# Initial")
+    visit edit_presentation_path(presentation)
+    hold_autosaves
+    fill_in "Markdown source", with: "# Unsent after refresh"
+    assert_selector '[data-autosave-target="status"]', text: "Saving…", wait: 5
+
+    page.refresh
+
+    assert_field "Markdown source", with: "# Unsent after refresh", wait: 5
+    assert_selector '[data-autosave-target="status"]', exact_text: "Saved", wait: 5
+    assert_includes presentation.reload.source, "# Unsent after refresh"
   end
 
   test "explicit save waits for autosave and refreshes the latest preview" do
@@ -73,6 +124,18 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_text "Presentation saved."
     assert_selector '.preview-pane .slide', text: "Manual latest"
     assert_includes presentation.reload.source, "# Manual latest"
+  end
+
+  test "presents from the edit screen without submitting the editor form" do
+    presentation = Presentation.create!(title: "Edit presentation", source: "# Original")
+
+    visit edit_presentation_path(presentation)
+    click_on "Present"
+
+    assert_current_path present_presentation_path(presentation)
+    assert_selector "body.presentation-body"
+    assert_equal "# Original", presentation.reload.source
+    assert_not_nil presentation.last_published_at
   end
 
   test "failed autosave can be retried and validation errors preserve saved source" do
@@ -202,6 +265,7 @@ class PresentationsTest < ApplicationSystemTestCase
     visit presentations_path
     assert_text "No presentations yet"
     save_screenshot("tmp/screenshots/library/empty.png")
+    find("summary", text: "More").click
     click_on "Load sample presentations"
 
     assert_text "Sample presentations loaded."
@@ -400,14 +464,22 @@ class PresentationsTest < ApplicationSystemTestCase
 
   test "user creates saves and reopens a markdown presentation" do
     visit presentations_path
-    click_on "New presentation", match: :first
+    find("summary", text: "New").click
+    assert_equal "pointer", page.evaluate_script("getComputedStyle(document.querySelector('.new-work-trigger')).cursor")
+    assert_equal "pointer", page.evaluate_script("getComputedStyle(document.querySelector('.new-work-option')).cursor")
+    assert_equal "pointer", page.evaluate_script("getComputedStyle(document.querySelector('.library-tools > summary')).cursor")
+    within ".new-work-panel" do
+      click_on "Presentation"
+    end
 
     fill_in "Title", with: "System Deck"
     source = "# First\n\nBody\n---\n# Second"
-    normalized_source = "---\npresentationTypography: book\n---\n#{source}"
+    select "Book", from: "Typography"
+    normalized_source = "---\ntypography: book\n---\n#{source}"
     fill_in "Markdown source", with: source
     click_on "Save presentation"
 
+    assert_current_path %r{/presentations/\d+/edit}
     assert_text "Presentation saved."
     assert_field "Markdown source", with: normalized_source
     assert_selector ".slide", count: 2
@@ -415,6 +487,23 @@ class PresentationsTest < ApplicationSystemTestCase
     click_on "Library"
     click_on "System Deck"
     assert_field "Markdown source", with: normalized_source
+  end
+
+  test "presenting warns before leaving unsaved edits" do
+    presentation = Presentation.create!(title: "Guarded presentation", source: "# Saved source")
+
+    visit edit_presentation_path(presentation)
+    hold_autosaves
+    fill_in "Markdown source", with: "# Unsaved source"
+    dismiss_confirm { click_on "Present" }
+
+    assert_current_path edit_presentation_path(presentation)
+    assert_field "Markdown source", with: "# Unsaved source"
+
+    accept_confirm { click_on "Present" }
+    assert_current_path present_presentation_path(presentation)
+    assert_selector ".presentation-slide", text: "Saved source"
+    assert_no_selector ".presentation-slide", text: "Unsaved source"
   end
 
   test "dirty source warns before navigation and cancel preserves edits" do
@@ -447,6 +536,15 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_text "1 / 2"
   end
 
+  test "presentation keyboard shortcuts do not hijack toolbar activation" do
+    presentation = Presentation.create!(title: "Keyboard exit", source: "# One")
+
+    visit present_presentation_path(presentation)
+    find("a", text: "Exit").send_keys(:enter)
+
+    assert_current_path presentation_path(presentation)
+  end
+
   test "inserts a fuzzy snippet and moves through its placeholder" do
     Snippet.create!(name: "Block equation", trigger: "beq", description: "A block LaTeX equation", category: "LaTeX", body: "$$\n${1:equation}\n$$")
     presentation = Presentation.create!(title: "Snippet deck", source: "# Math\n\n:")
@@ -456,6 +554,8 @@ class PresentationsTest < ApplicationSystemTestCase
     source.send_keys("beq")
     assert_selector ".snippet-palette", visible: true
     assert_text ":beq"
+    assert_selector ".snippet-option[aria-selected='true']"
+    assert_equal "true", page.evaluate_script("document.querySelector('.cm-editor').getAttribute('aria-expanded')")
     palette_position = page.evaluate_script("(() => { const editor = document.querySelector('[data-snippet-palette-target=editor]'); const e = editor.getBoundingClientRect(); const p = document.querySelector('[data-snippet-palette-target=palette]').getBoundingClientRect(); const styles = getComputedStyle(editor); const lineHeight = parseFloat(styles.lineHeight); const paddingTop = parseFloat(styles.paddingTop); const lineNumber = editor.value.slice(0, editor.selectionStart).split('\\n').length; const caretLineBottom = e.top + paddingTop + lineHeight * lineNumber - editor.scrollTop; return { editorBottom: e.bottom, paletteTop: p.top, caretLineBottom }; })()")
     assert_operator palette_position["paletteTop"], :>, palette_position["caretLineBottom"]
     assert_operator palette_position["paletteTop"], :<, palette_position["editorBottom"]
@@ -463,6 +563,21 @@ class PresentationsTest < ApplicationSystemTestCase
     source.send_keys(:enter)
     assert_equal "# Math\n\n$$\nequation\n$$", source.value
     assert_equal "equation", page.evaluate_script("(() => { const e = document.querySelector('[data-snippet-palette-target=editor]'); return e.value.slice(e.selectionStart, e.selectionEnd) })()")
+  end
+
+  test "keeps multiple snippet placeholders aligned while tabbing" do
+    Snippet.create!(name: "Two fields", trigger: "twice", description: "Two tab stops", category: "Markdown", body: "A ${1:first} B ${2:second}")
+    presentation = Presentation.create!(title: "Multiple stops", source: "# Snippets\n\n:")
+
+    visit edit_presentation_path(presentation)
+    source = find_field("Markdown source")
+    source.send_keys("twice")
+    source.send_keys(:enter)
+
+    selected_text = "(() => { const e = document.querySelector('[data-snippet-palette-target=editor]'); return e.value.slice(e.selectionStart, e.selectionEnd) })()"
+    assert_equal "first", page.evaluate_script(selected_text)
+    find(".cm-content").send_keys(:tab)
+    assert_equal "second", page.evaluate_script(selected_text)
   end
 
   test "positions the palette when only the colon trigger is typed" do

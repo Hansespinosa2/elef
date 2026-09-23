@@ -20,5 +20,18 @@ class SnippetTest < ActiveSupport::TestCase
 
     assert_equal "A second B first C ", result[:text]
     assert_equal [1, 2, 0], result[:stops].map { |stop| stop[:number] }
+    assert_equal [[11, 5], [2, 6], [19, 0]], result[:stops].map { |stop| [stop[:start], stop[:length]] }
+  end
+
+  test "ships the common Markdown and LaTeX authoring triggers" do
+    defaults = Snippets::Catalog::DEFAULTS.index_by { |snippet| snippet[:trigger] }
+
+    assert_equal %w[bga beq bit ben], %w[bga beq bit ben].select { |trigger| defaults.key?(trigger) }
+    assert_includes defaults.fetch("bga")[:body], "\\begin{gathered}"
+    assert_equal "$$\n${1:equation}\n$$", defaults.fetch("beq")[:body]
+    assert_equal "- ${1:first item}\n- ${2:second item}", defaults.fetch("bit")[:body]
+    assert_equal "1. ${1:first item}\n2. ${2:second item}", defaults.fetch("ben")[:body]
+    assert_equal "\\frac{${1:numerator}}{${2:denominator}}", defaults.fetch("frac")[:body]
+    assert_includes Snippets::Catalog.for_editor.map { |snippet| snippet[:trigger] }, "bga"
   end
 end

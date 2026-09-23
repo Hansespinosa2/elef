@@ -4,7 +4,7 @@
     <div>
       <p class="eyebrow mb-1 text-xs font-extrabold uppercase tracking-[0.12em] text-[#6d4aff]">Presentation relationships</p>
       <h2 id="lineage-heading" class="mb-1 text-2xl font-bold">Presentation timeline</h2>
-      <p class="text-[#6f675c]">Follow a branch, browse by date, or find a presentation. Click a slide to open it.</p>
+      <p class="text-[#6f675c]">Follow a branch, browse by date, or find a presentation. Click a slide to edit it.</p>
     </div>
     <div class="lineage-legend text-sm text-[#6f675c]">
       <span><i class="lineage-key-line"></i>Continuation</span>
@@ -51,8 +51,8 @@
                       },
                       draggable: false, aria: { label: "Open #{presentation.title}" } do %>
                   <div class="lineage-slide-thumb" aria-hidden="true">
-                    <div class="lineage-slide-preview presentation-surface slides slides-theme-<%= presentation.presentation_theme %> slides-typography-<%= presentation.presentation_typography %>">
-                      <%= render "slide", slide: first_slide || Presentations::Document::Slide.new(id: "empty", index: 0, markdown: "", layout: "body"), margin_settings: presentation.document.margin_settings %>
+                    <div class="lineage-slide-preview presentation-surface slides slides-theme-<%= presentation.theme %> slides-typography-<%= presentation.typography %> work-theme-<%= presentation.theme %> work-typography-<%= presentation.typography %>">
+                      <%= render "slide", slide: first_slide || Presentations::Document::Slide.new(id: "empty", index: 0, markdown: "", layout: "body"), presentation: presentation, margin_settings: presentation.document.margin_settings %>
                     </div>
                   </div>
                   <span class="lineage-hover-card" role="tooltip">

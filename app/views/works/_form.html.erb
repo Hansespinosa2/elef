@@ -1,0 +1,148 @@
+<% persisted = work.persisted? %>
+<% type_label = work_type_label(work) %>
+<% controllers = %w[dirty preview autosave] %>
+<% controllers << "document-scroll-sync" if work.document? %>
+<% actions = ["submit->dirty#allowSubmit", "input->dirty#markDirty"] %>
+<% actions += ["input->preview#schedule", "change->preview#schedule"] %>
+<% actions += ["submit->autosave#submit", "input->autosave#schedule", "change->autosave#schedule", "autosave:saving->dirty#markSaving", "autosave:saved->dirty#markSaved"] %>
+<% form_data = { controller: controllers.join(" "), action: actions.join(" "), dirty_unsaved_message_value: "You have unsaved #{type_label.downcase} changes. Leave without saving?" } %>
+<% form_data[:preview_url_value] = persisted ? work_preview_path(work) : work_preview_collection_path(work) %>
+<% if persisted %>
+  <% form_data[:autosave_work_id_value] = work.id %>
+  <% form_data[:autosave_work_kind_value] = work.kind %>
+  <% form_data[:autosave_work_identity_value] = work.created_at.to_f %>
+<% else %>
+  <% form_data[:autosave_work_kind_value] = work.kind %>
+  <% form_data[:autosave_save_enabled_value] = false %>
+<% end %>
+<% editor_data = { dirty_target: "field", autosave_target: "field", snippet_palette_target: "editor", math_shorthand_target: "editor", math_shortcut_palette_target: "editor", action: "input->dirty#markDirty input->snippet-palette#input keydown->snippet-palette#keydown keydown->math-shorthand#keydown input->math-shortcut-palette#input keydown->math-shortcut-palette#keydown" } %>
+<% if work.document? %>
+  <% editor_data[:document_link_palette_target] = "editor" %>
+  <% editor_data[:action] += " input->document-link-palette#input keydown->document-link-palette#keydown" %>
+<% end %>
+<% editor_data[:editor_target] = "input" %>
+<%= form_with model: work, class: "editor-layout grid gap-6 max-[920px]:flex max-[920px]:flex-col", data: form_data do |form| %>
+  <% if work.errors.any? %>
+    <section class="error-panel col-span-full rounded-2xl border border-[#efb0a8] bg-[#fff1ee] p-4 text-[#a63a2d]" aria-label="Validation errors">
+      <h2><%= pluralize(work.errors.count, "error") %> prevented saving</h2>
+      <ul>
+        <% work.errors.full_messages.each do |message| %>
+          <li><%= message %></li>
+        <% end %>
+      </ul>
+    </section>
+  <% end %>
+
+  <section class="source-pane rounded-2xl border border-[#ddd5c8] bg-[#fffdf8] p-4">
+    <% if persisted %>
+      <%= form.hidden_field :lock_version, value: work.lock_version %>
+      <%= form.hidden_field :base_revision, value: work.revision_token %>
+      <%= form.hidden_field :edit_session_id, value: SecureRandom.uuid %>
+    <% end %>
+    <div class="field mb-4">
+      <%= form.label :title, class: "mb-1 block font-extrabold" %>
+      <%= form.text_field :title, class: "w-full rounded-xl border border-[#ddd5c8] bg-white p-3 text-[#1e1c18] outline-none focus:border-[#6d4aff] focus:ring-2 focus:ring-[#6d4aff]/20", data: { dirty_target: "field", autosave_target: "field", action: "input->dirty#markDirty" }, autocomplete: "off" %>
+    </div>
+
+    <div class="field source-field relative mb-4" data-controller="editor snippet-palette math-shorthand math-shortcut-palette<%= " document-link-palette" if work.document? %>" data-snippet-palette-snippets-value="<%= json_escape(Snippets::Catalog.for_editor.to_json) %>" data-math-shortcut-palette-shortcuts-value="<%= json_escape(MathShortcuts::Catalog.for_editor(workspace: work.workspace || Workspace.default).to_json) %>"<% if work.document? %> data-document-link-palette-titles-value="<%= ERB::Util.html_escape(document_link_titles(workspace: work.workspace).to_json) %>"<% end %>>
+      <% source_id = form.field_id(:source) %>
+      <% editor_id = "#{source_id}_editor" %>
+      <%= form.label :source, "Markdown source", for: source_id, id: "#{editor_id}_label", class: "mb-1 block font-extrabold" %>
+      <div class="editor-toolbar mb-2 flex flex-wrap items-center gap-2" aria-label="Editor controls">
+        <span class="editor-mode" data-editor-target="mode" data-mode="standard" aria-live="polite">Standard</span>
+        <span class="editor-command" data-editor-target="command" aria-live="polite"></span>
+        <button type="button" class="editor-reveal-metadata" data-action="editor#revealMetadata">Reveal source metadata</button>
+        <details class="editor-settings ml-auto">
+          <summary>Vim settings</summary>
+          <div class="editor-settings-panel">
+            <label class="editor-setting-row editor-setting-toggle">
+              <input type="checkbox" data-editor-target="vimToggle" data-action="change->editor#toggleVim">
+              <span>Enable Vim mode in this browser</span>
+            </label>
+            <label class="editor-setting-row">
+              <span>Shift+Space in Normal mode</span>
+              <select data-editor-target="mapping" data-action="change->editor#mappingChanged">
+                <option value="standard">Move forward a word (standard)</option>
+                <option value="insert">Enter Insert mode</option>
+                <option value="disabled">Unmapped</option>
+              </select>
+            </label>
+            <label class="editor-setting-row">
+              <span>Escape aliases in Insert mode</span>
+              <select data-editor-target="escapeAlias" data-action="change->editor#escapeAliasChanged">
+                <option value="none">Escape only</option>
+                <option value="shift-space">Escape or Shift+Space</option>
+              </select>
+            </label>
+            <label class="editor-setting-row">
+              <span>Line numbers</span>
+              <select data-editor-target="lineNumbers" data-action="change->editor#lineNumbersChanged">
+                <option value="absolute">Absolute</option>
+                <option value="relative">Relative</option>
+                <option value="off">Hidden</option>
+              </select>
+            </label>
+            <label class="editor-setting-row editor-setting-toggle">
+              <input type="checkbox" data-editor-target="modeAwareCursor" data-action="change->editor#modeAwareCursorChanged">
+              <span>Mode-aware cursor styling</span>
+            </label>
+          </div>
+        </details>
+      </div>
+      <div id="<%= editor_id %>" class="editor-surface" aria-labelledby="<%= editor_id %>_label" data-editor-target="surface" data-snippet-palette-target="editor" data-math-shorthand-target="editor" data-math-shortcut-palette-target="editor"></div>
+      <%= form.text_area :source, rows: 24, id: source_id, class: "editor-input-proxy", spellcheck: "false", tabindex: "-1", aria: { label: "Markdown source" }, data: editor_data %>
+      <div id="<%= editor_id %>_snippet_palette" class="snippet-palette" data-snippet-palette-target="palette" hidden role="listbox" aria-label="Snippet suggestions"></div>
+      <div id="<%= editor_id %>_math_shortcut_palette" class="snippet-palette math-shortcut-palette" data-math-shortcut-palette-target="palette" hidden role="listbox" aria-label="Math shortcut suggestions"></div>
+      <% if work.document? %><div id="<%= editor_id %>_document_link_palette" class="snippet-palette" data-document-link-palette-target="palette" hidden role="listbox" aria-label="Document link suggestions"></div><% end %>
+      <p class="field-hint">Use <code>:trigger</code> for Markdown, LaTeX, and Elef snippets<%= ". Type <code>[[</code> to link another document." if work.document? %>. In math, type <code>@nabla</code>, <code>@frac</code>, or <code>@sum</code>; Tab walks multi-slot expressions. Exact transforms such as <code>$x.hat.b.T$</code> still commit with Enter or Tab.</p>
+    </div>
+
+    <div class="field appearance-fields mb-4 grid gap-3 sm:grid-cols-2">
+      <div>
+        <%= form.label :theme, "Theme", class: "mb-1 block font-extrabold" %>
+        <%= form.select :theme, [["Workspace default", ""], ["Light", "light"], ["Dark", "dark"], ["Match", "match"]], { selected: work.theme_override }, class: "w-full rounded-xl border border-[#ddd5c8] bg-white p-3 text-[#1e1c18]", data: { dirty_target: "field", autosave_target: "field", action: "change->dirty#markDirty" } %>
+      </div>
+      <div>
+        <%= form.label :typography, "Typography", class: "mb-1 block font-extrabold" %>
+        <%= form.select :typography, [["Workspace default", ""], ["Book", "book"], ["Modern", "modern"], ["Technical", "technical"]], { selected: work.typography_override }, class: "w-full rounded-xl border border-[#ddd5c8] bg-white p-3 text-[#1e1c18]", data: { dirty_target: "field", autosave_target: "field", action: "change->dirty#markDirty" } %>
+      </div>
+      <p class="field-hint sm:col-span-2">These values stay in the Markdown front matter when overridden.</p>
+    </div>
+    <div class="editor-actions flex flex-wrap items-center gap-3">
+      <%= form.submit "Save #{type_label.downcase}", class: "button primary inline-flex min-h-10 cursor-pointer items-center gap-1 rounded-full border border-[#6d4aff] bg-[#6d4aff] px-4 py-2 font-bold text-white hover:brightness-95", data: { dirty_target: "saveButton" } %>
+      <% if persisted %>
+        <%= link_to "View saved preview", work_show_path(work), class: "button inline-flex min-h-10 items-center rounded-full border border-[#ddd5c8] bg-[#fffdf8] px-4 py-2 font-bold no-underline hover:bg-[#f7efe2]" %>
+        <span class="dirty-state text-[#6f675c] font-bold" data-autosave-target="status" aria-live="polite">Saved</span>
+        <button type="button" class="autosave-retry" data-autosave-target="retry" data-action="autosave#retry" hidden>Retry save</button>
+        <div class="autosave-conflict" data-autosave-target="conflict" hidden role="status">
+          <p data-autosave-target="conflictMessage">A newer version is active; your draft was preserved.</p>
+          <details>
+            <summary>Compare with the active version</summary>
+            <pre data-autosave-target="serverSource"></pre>
+          </details>
+          <button type="button" data-action="autosave#keepLocal">Keep local draft</button>
+          <button type="button" data-action="autosave#discardLocal">Discard local draft</button>
+        </div>
+        <% if work.presentation? %>
+          <span class="release-state text-[#6f675c]" data-release-status="<%= work.published_release_status %>">
+            <% if work.published_release_status == "stale" %>Published release is stale — republish to present the latest draft.<% elsif work.published_release_status == "current" %>Published release is current.<% end %>
+          </span>
+        <% end %>
+      <% else %>
+        <span class="dirty-state text-[#6f675c] font-bold" data-dirty-target="status" data-autosave-target="status" aria-live="polite">Saved</span>
+      <% end %>
+      <span class="dirty-state text-[#6f675c] font-bold" data-preview-target="status" aria-live="polite"></span>
+    </div>
+  </section>
+
+  <aside class="preview-pane rounded-2xl border border-[#ddd5c8] bg-[#fffdf8] p-4" aria-label="<%= work.document? ? "Rendered document preview" : "Rendered slide preview" %>"<%= ' data-document-scroll-sync-target="preview"' if work.document? %>>
+    <div class="preview-heading">
+      <h2>Live preview</h2>
+      <p><%= work.document? ? "Continuous Markdown preview updates as you write." : "Markdown is split into slides for this presentation." %></p>
+    </div>
+    <%= render "works/warnings", warnings: work.preview_warnings %>
+    <div data-preview-target="container">
+      <%= render "works/preview", work: work %>
+    </div>
+  </aside>
+<% end %>

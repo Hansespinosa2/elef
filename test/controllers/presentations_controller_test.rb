@@ -35,6 +35,27 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "# Autosaved", presentation.reload.source
   end
 
+  test "stale JSON saves return recovery metadata without overwriting the server draft" do
+    presentation = Presentation.create!(title: "Concurrent", source: "# Initial")
+    lock_version = presentation.lock_version
+    base_revision = presentation.revision_token
+
+    patch presentation_path(presentation), params: {
+      presentation: { source: "# Server", lock_version: lock_version, base_revision: base_revision }
+    }, as: :json
+    assert_response :ok
+
+    patch presentation_path(presentation), params: {
+      presentation: { source: "# Local", lock_version: lock_version, base_revision: base_revision }
+    }, as: :json
+
+    assert_response :conflict
+    assert_equal "conflict", response.parsed_body["status"]
+    assert_predicate response.parsed_body["recovery_revision_id"], :present?
+    assert_equal "# Local", response.parsed_body.dig("recovery_revision", "source")
+    assert_equal "# Server", presentation.reload.source
+  end
+
   test "forks both relationship types and rejects unsupported types" do
     parent = presentations(:one)
     Presentation::FORK_TYPES.each do |type|
@@ -60,29 +81,102 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_equal parent.title, child.fork_parent_title
   end
 
-  test "only presentation mode records the last published time" do
+  test "publishing records the last published time while presentation mode stays read-only" do
     presentation = presentations(:one)
     get presentation_path(presentation)
     assert_nil presentation.reload.last_published_at
     freeze_time do
       get present_presentation_path(presentation)
       assert_response :success
+      assert_nil presentation.reload.last_published_at
+
+      post publish_presentation_path(presentation)
+      assert_redirected_to present_presentation_path(presentation)
       assert_equal Time.current, presentation.reload.last_published_at
     end
   end
 
-  test "persisted editor wires autosave but new presentation waits for creation" do
+  test "present mode remains pinned when the draft changes after publishing" do
+    presentation = Presentation.create!(title: "Pinned", source: "# Published")
+    post publish_presentation_path(presentation)
+    patch presentation_path(presentation), params: { presentation: { source: "# Draft" } }
+
+    get present_presentation_path(presentation)
+
+    assert_response :success
+    assert_select ".presentation-slide h1", text: "Published"
+    assert_select ".presentation-slide h1", text: "Draft", count: 0
+    assert_select ".presentation-release-warning", text: /newer changes/
+  end
+
+  test "editor wires autosave and keeps new presentations client-only until creation" do
     get edit_presentation_path(presentations(:one))
     assert_select 'form[data-controller~="autosave"]'
+    assert_select "form[action='#{publish_presentation_path(presentations(:one))}'] button.button", text: "Present"
+    assert_select 'form[data-controller~="autosave"] form', count: 0
     assert_select '[data-autosave-target="retry"]'
+    assert_select '[data-controller~="editor"]'
+    assert_select '[data-editor-target="surface"][aria-labelledby]'
+    assert_select 'textarea[name="presentation[source]"][data-editor-target="input"]'
+    assert_select '[data-editor-target="mode"]', text: "Standard"
+    assert_select '[data-editor-target="vimToggle"]'
+    assert_select 'button[data-dirty-navigation]', text: "Present"
     get new_presentation_path
-    assert_select 'form[data-controller~="autosave"]', count: 0
+    assert_select 'form[data-controller~="autosave"][data-autosave-save-enabled-value="false"]'
+    assert_select 'form[data-controller~="preview"]'
+    assert_select 'form[data-preview-url-value="/presentations/preview"]'
+  end
+
+  test "previews an unsaved presentation without creating a record" do
+    assert_no_difference("Presentation.count") do
+      post preview_presentations_path, params: {
+        presentation: { title: "Draft deck", source: "# Draft deck\n---\n# Next" }, revision: "new-2"
+      }, as: :json
+    end
+
+    assert_response :success
+    assert_equal "new-2", response.parsed_body["revision"]
+    assert_equal 2, response.parsed_body["html"].scan('class="slide ').length
+  end
+
+  test "the root library shows all work while the presentations URL stays presentation-focused" do
+    Document.create!(title: "Root notes", source: "# Root notes")
+
+    get root_path
+    assert_response :success
+    assert_select "h1", "Library"
+    assert_select "#document_#{Document.order(:id).last.id}"
+
+    get presentations_path
+    assert_select "h1", "Library"
+    assert_select "#document_#{Document.order(:id).last.id}", count: 0
+  end
+
+  test "presentation collection no longer interprets type query filters" do
+    document = Document.create!(title: "Query notes", source: "# Query notes")
+
+    get presentations_path, params: { type: "all" }
+
+    assert_response :success
+    assert_select "#document_#{document.id}", count: 0
+    assert_select "#presentation_#{presentations(:one).id}"
+  end
+
+  test "the all library is a combined list without relationship graphs" do
+    Document.create!(title: "All notes", source: "# Notes")
+
+    get root_path
+
+    assert_select ".document-graph", count: 0
+    assert_select ".lineage-panel", count: 0
+    assert_select "#document_#{Document.order(:id).last.id}"
+    assert_select "#presentation_#{presentations(:one).id}"
   end
 
   test "library loads" do
     get presentations_path
     assert_response :success
-    assert_select "h1", "Presentation library"
+    assert_select "h1", "Library"
     assert_select 'body.elef-app'
     assert_select 'link[href*="tailwind"]'
     assert_select 'link[href*="katex/katex.min"]'
@@ -141,29 +235,29 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "# Saved\n---\n# Again", presentation.reload.source
   end
 
-  test "saves presentation typography in front matter" do
+  test "saves generic typography in front matter" do
     presentation = presentations(:one)
 
     patch presentation_path(presentation), params: {
-      presentation: { title: presentation.title, source: presentation.source, presentation_typography: "modern" }
+      presentation: { title: presentation.title, source: presentation.source, typography: "modern" }
     }
 
     assert_redirected_to edit_presentation_path(presentation)
-    assert_equal "modern", presentation.reload.presentation_typography
-    assert_includes presentation.source, "presentationTypography: modern"
+    assert_equal "modern", presentation.reload.typography
+    assert_includes presentation.source, "typography: modern"
   end
 
   test "updates typography inside valid front matter" do
-    presentation = Presentation.create!(title: "Front matter deck", source: "---\npresentationTheme: dark\npresentationTypography: modern\n---\n# Title")
+    presentation = Presentation.create!(title: "Front matter deck", source: "---\ntheme: dark\ntypography: modern\n---\n# Title")
 
     patch presentation_path(presentation), params: {
-      presentation: { title: presentation.title, source: presentation.source, presentation_typography: "book" }
+      presentation: { title: presentation.title, source: presentation.source, typography: "book" }
     }
 
     assert_redirected_to edit_presentation_path(presentation)
-    assert_equal "book", presentation.reload.presentation_typography
-    assert_includes presentation.source, "presentationTheme: dark"
-    assert_includes presentation.source, "presentationTypography: book"
+    assert_equal "book", presentation.reload.typography
+    assert_includes presentation.source, "theme: dark"
+    assert_includes presentation.source, "typography: book"
   end
 
   test "renders saved preview and presentation mode" do
@@ -182,6 +276,7 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_select ".presentation-mode.presentation-surface"
     assert_select ".slides-typography-book"
     assert_select 'link[href*="tailwind"]', count: 0
+    assert_select 'link[rel="icon"][href="/icon.svg"]'
     assert_select ".presentation-slide", 2
   end
 
@@ -262,11 +357,11 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_select ".lineage-date-axis"
   end
 
-  test "editor exposes the presentation typography selector" do
+  test "editor exposes the generic typography selector" do
     get edit_presentation_path(presentations(:one))
 
     assert_response :success
-    assert_select "select[name='presentation[presentation_typography]']" do
+    assert_select "select[name='presentation[typography]']" do
       assert_select "option[value='book']", text: "Book"
       assert_select "option[value='modern']", text: "Modern"
       assert_select "option[value='technical']", text: "Technical"

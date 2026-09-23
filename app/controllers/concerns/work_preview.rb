@@ -1,0 +1,69 @@
+module WorkPreview
+  extend ActiveSupport::Concern
+
+  private
+
+  def render_work_preview(work)
+    render json: work_preview_payload(work)
+  rescue StandardError => error
+    Rails.logger.warn("Work preview failed (#{error.class}): #{error.message}")
+    render json: {
+      html: nil,
+      warnings: ["Preview could not be rendered. Check the latest Markdown edit."],
+      revision: work_preview_revision(work)
+    }, status: :unprocessable_content
+  end
+
+  def work_preview_payload(work)
+    attributes = work_preview_attributes(work)
+    source = if attributes.key?(:source)
+      attributes[:source]
+    elsif params.key?(:source)
+      params[:source]
+    else
+      work.source.to_s
+    end
+    title = attributes[:title].presence || params[:title].presence || work.title
+    raise ArgumentError, "Markdown source must be plain text" unless source.is_a?(String)
+
+    preview_work = work.class.new(title: title, source: source, work_type: work.work_type, workspace: work.workspace || Workspace.default)
+    preview_work.theme = attributes[:theme] if attributes.key?(:theme)
+    preview_work.typography = attributes[:typography] if attributes.key?(:typography)
+
+    html = if preview_work.presentation?
+      margin = preview_work.document.margin_settings
+      settings = {
+        "theme" => preview_work.theme,
+        "typography" => preview_work.typography,
+        "margin" => {
+          "section" => margin.section,
+          "subsection" => margin.subsection,
+          "footnote" => margin.footnote,
+          "slide_count" => margin.slide_count
+        }
+      }
+      Presentations::RenderCache.fetch(source: source, settings: settings, asset_manifest: []) do
+        render_to_string(partial: "works/preview", formats: [:html], locals: { work: preview_work })
+      end
+    else
+      render_to_string(partial: "works/preview", formats: [:html], locals: { work: preview_work })
+    end
+
+    {
+      html: html,
+      warnings: preview_work.preview_warnings,
+      revision: work_preview_revision(work)
+    }
+  end
+
+  def work_preview_attributes(work)
+    key = work.document? ? :document : :presentation
+    fields = %i[title source theme typography]
+    attributes = params[key]
+    attributes.respond_to?(:permit) ? attributes.permit(*fields) : {}
+  end
+
+  def work_preview_revision(work)
+    params[:revision].presence || work.updated_at&.to_i || work.lock_version.to_i
+  end
+end

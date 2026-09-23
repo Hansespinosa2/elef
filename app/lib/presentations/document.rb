@@ -1,27 +1,30 @@
 module Presentations
   module Document
-    Position = Data.define(:horizontal, :vertical)
+    Position = Data.define(:horizontal, :vertical, :vertical_explicit)
     Block = Data.define(:markdown, :position)
     Region = Data.define(:blocks)
     MarginSettings = Data.define(:section, :subsection, :footnote, :slide_count)
     Slide = Data.define(:id, :index, :markdown, :layout, :blocks, :title, :regions, :section, :subsection, :footnote, :warnings)
-    Parsed = Data.define(:source_name, :presentation_theme, :presentation_typography, :margin_settings, :slides, :warnings)
+    Parsed = Data.define(:source_name, :mode, :theme, :typography, :margin_settings, :slides, :warnings)
     SourceLine = Data.define(:start, :end_pos, :text, :ending)
     FrontMatter = Data.define(:lines, :closing_line, :body_start, :eol)
 
     module_function
 
-    def parse(source, source_name: "Untitled presentation")
+    def parse(source, source_name: "Untitled presentation", mode: :presentation)
       raise ArgumentError, "The selected file did not contain readable text." unless source.is_a?(String)
 
-      theme = presentation_theme_from_source(source)
-      typography = presentation_typography_from_source(source)
+      mode = mode.to_sym
+      raise ArgumentError, "Unsupported document mode" unless %i[presentation document].include?(mode)
+
+      theme = theme_from_source(source)
+      typography = typography_from_source(source)
       margin_settings = presentation_margin_settings_from_source(source)
       content = content_without_front_matter(source)
-      sections = split_sections(content)
+      sections = mode == :document ? [content] : split_sections(content)
       context = { section: nil, subsection: nil }
       slides = sections.map.with_index do |section, index|
-        metadata = slide_metadata(section, context)
+        metadata = slide_metadata(section, context, mode: mode)
         Slide.new(
           id: "#{source_name}-#{index + 1}",
           index: index,
@@ -38,8 +41,9 @@ module Presentations
       end
       Parsed.new(
         source_name: source_name,
-        presentation_theme: theme,
-        presentation_typography: typography,
+        mode: mode,
+        theme: theme,
+        typography: typography,
         margin_settings: margin_settings,
         slides: slides,
         warnings: slides.flat_map { |slide| slide_warnings(slide) }
@@ -68,21 +72,29 @@ module Presentations
       sections
     end
 
-    def presentation_theme_from_source(source)
+    def theme_from_source(source)
       front_matter = initial_front_matter(source)
       return "match" unless front_matter
 
       front_matter.lines[1...front_matter.closing_line].each do |line|
-        match = line.text.match(/\ApresentationTheme\s*:\s*(.*)\z/)
+        match = line.text.match(/\Atheme\s*:\s*(.*)\z/)
         return normalize_theme_value(match[1]) if match
       end
       "match"
     end
 
-    def presentation_typography_from_source(source)
-      front_matter_value(source, "presentationTypography", default: "book") do |value|
-        normalize_typography_value(value)
-      end
+    def typography_from_source(source)
+      value = front_matter_value(source, "typography", default: nil) { |raw| raw }
+      return "book" unless value
+
+      normalize_typography_value(value)
+    end
+
+    def style_overrides(source)
+      {
+        theme: normalized_override(source, "theme", method(:normalize_theme_value)),
+        typography: normalized_override(source, "typography", method(:normalize_typography_value))
+      }
     end
 
     def presentation_margin_settings_from_source(source)
@@ -106,6 +118,8 @@ module Presentations
     end
 
     def with_front_matter_value(source, key, value)
+      return remove_front_matter_value(source, key) if value.nil?
+
       normalized_source = source.to_s
       front_matter = initial_front_matter(normalized_source)
       eol = front_matter&.eol || (normalized_source.include?("\r\n") ? "\r\n" : "\n")
@@ -131,6 +145,28 @@ module Presentations
           updated.insert(closing.start, "#{replacement}#{eol}")
         end
       end
+    end
+
+    def remove_front_matter_value(source, key)
+      normalized_source = source.to_s
+      front_matter = initial_front_matter(normalized_source)
+      return normalized_source unless front_matter
+
+      lines = source_lines(normalized_source)
+      matching_line = (1...front_matter.closing_line).find do |index|
+        lines[index].text.match?(/\A\s*#{Regexp.escape(key)}\s*:/)
+      end
+      return normalized_source unless matching_line
+
+      line = lines[matching_line]
+      updated = normalized_source.dup
+      updated[line.start...line.end_pos] = ""
+      remaining = updated.lines
+      if remaining.length >= 2 && remaining.first.to_s.strip == "---" && remaining[1].to_s.strip == "---"
+        closing = remaining[1]
+        return updated[(remaining.first.length + closing.length)..].to_s.sub(/\A\r?\n/, "")
+      end
+      updated
     end
 
     def extract_first_h1(source)
@@ -228,6 +264,16 @@ module Presentations
       %w[book modern technical].include?(unquoted) ? unquoted : "book"
     end
 
+    def normalized_override(source, key, normalizer)
+      value = front_matter_value(source, key, default: nil) { |raw| raw }
+      return unless value
+
+      normalized = normalizer.call(value)
+      return normalized if normalized == value.to_s.strip.sub(/\s+#.*\z/, "").strip.sub(/\A(['"])(.*)\1\z/, '\2')
+
+      nil
+    end
+
     def front_matter_value(source, key, default:)
       front_matter = initial_front_matter(source)
       return default unless front_matter
@@ -251,21 +297,27 @@ module Presentations
     end
 
     def fence_marker(line)
-      match = line.match(/\A\s{0,3}(`{3,}|~{3,})/)
-      match && { marker: match[1][0], length: match[1].length }
+      match = line.match(/\A\s{0,3}(`{3,}|~{3,})(.*)\z/)
+      return unless match
+
+      { marker: match[1][0], length: match[1].length, closing: match[2].match?(/\A[ \t]*\z/) }
     end
 
     def toggle_fence(current, incoming)
-      if current && current[:marker] == incoming[:marker] && incoming[:length] >= current[:length]
-        nil
-      else
-        incoming
-      end
+      return incoming unless current
+      return nil if current[:marker] == incoming[:marker] &&
+        incoming[:length] >= current[:length] && incoming[:closing]
+
+      current
     end
 
-    def slide_metadata(markdown, context)
+    def slide_metadata(markdown, context, mode: :presentation)
       normalized = markdown.gsub(/\r\n?/, "\n")
-      margin = parse_margin_directives(normalized, context)
+      margin = if mode == :presentation
+        parse_margin_directives(normalized, context)
+      else
+        { content: normalized, section: nil, subsection: nil, footnote: nil, warnings: [] }
+      end
       normalized = margin[:content]
       parsed = parse_blocks(normalized)
       content = parsed[:blocks].map(&:markdown).join("\n\n")
@@ -444,7 +496,7 @@ module Presentations
       vertical = values.find { |value| %w[top middle bottom].include?(value) }
       return unless horizontal || vertical
 
-      Position.new(horizontal || "left", vertical || "top")
+      Position.new(horizontal || "left", vertical || "top", vertical.present?)
     end
 
     def infer_layout(blocks)
@@ -507,7 +559,9 @@ module Presentations
     end
 
     def code_block?(markdown)
-      markdown.match?(/\A\s*(`{3,}|~{3,})[^\n]*\n.*\n\s*\1\s*\z/m)
+      opening = markdown.lines.first.to_s.match(/\A\s*([`~]{3,})/)
+      closing = markdown.lines.last.to_s.match(/\A\s*([`~]{3,})\s*\z/)
+      opening && closing && opening[1][0] == closing[1][0] && closing[1].length >= opening[1].length
     end
 
     def prose_block?(markdown)

@@ -1,0 +1,165 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+COMPOSE_FILE="${ELEF_PERSONAL_COMPOSE_FILE:-$ROOT/compose.personal.yml}"
+ENV_FILE="${ELEF_PERSONAL_ENV_FILE:-$ROOT/.env.personal}"
+PROJECT_NAME="${COMPOSE_PROJECT_NAME:-elef-personal}"
+BACKUP_ROOT="${ELEF_BACKUP_DIR:-$ROOT/backups}"
+
+usage() {
+  cat <<'USAGE'
+Usage: scripts/personal-instance COMMAND [ARGUMENTS]
+
+Commands:
+  config                 Validate the Compose configuration without printing secrets.
+  build                  Build the production-like application image.
+  up                     Build if needed, migrate the database, and start Elef.
+  down                   Stop the personal instance without deleting volumes.
+  restart                Restart the application containers.
+  logs [SERVICE]         Follow logs for the whole stack or one service.
+  status                 Show container and health status.
+  migrate                Run pending production migrations.
+  seed                   Load the optional idempotent sample/snippet data.
+  check                  Verify Rails, PostgreSQL, and Active Storage from inside the app.
+  shell                  Open a shell in the application container.
+  backup                 Write a PostgreSQL and Active Storage backup bundle.
+  restore DIR --confirm  Replace database/files from a backup bundle.
+USAGE
+}
+
+die() {
+  echo "error: $*" >&2
+  exit 1
+}
+
+command -v docker >/dev/null 2>&1 || die "Docker is required"
+[[ -f "$COMPOSE_FILE" ]] || die "Compose file not found: $COMPOSE_FILE"
+
+if [[ ! -f "$ENV_FILE" ]]; then
+  if [[ "${1:-}" == "config" || "${1:-}" == "help" || "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+    die "copy .env.personal.example to .env.personal and fill in the secrets"
+  fi
+  die "missing $ENV_FILE; copy .env.personal.example and fill in the secrets"
+fi
+
+compose() {
+  docker compose --project-name "$PROJECT_NAME" --env-file "$ENV_FILE" --file "$COMPOSE_FILE" "$@"
+}
+
+checksum() {
+  if command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$@"
+  else
+    sha256sum "$@"
+  fi
+}
+
+backup() {
+  local stamp target final
+  stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+  final="$BACKUP_ROOT/$stamp"
+  target="$BACKUP_ROOT/.incomplete-$stamp-$$"
+  [[ ! -e "$final" ]] || die "backup already exists: $final"
+  mkdir -p "$BACKUP_ROOT"
+  mkdir -p "$target"
+
+  if ! compose up -d db web >/dev/null; then
+    rm -rf -- "$target"
+    die "could not start the personal instance for backup"
+  fi
+  if ! compose exec -T db sh -c 'pg_dump --format=custom --no-owner --username="$POSTGRES_USER" --dbname="$POSTGRES_DB"' > "$target/database.dump"; then
+    rm -rf -- "$target"
+    die "database backup failed"
+  fi
+  if ! compose exec -T web sh -c 'tar --create --gzip --file=- --directory=/rails/storage .' > "$target/storage.tar.gz"; then
+    rm -rf -- "$target"
+    die "Active Storage backup failed"
+  fi
+  {
+    echo "created_at=$stamp"
+    echo "project=$PROJECT_NAME"
+    echo "git_revision=$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo unknown)"
+    echo "database_format=pg_dump-custom"
+    echo "storage_archive=storage.tar.gz"
+  } > "$target/manifest"
+  (cd "$target" && checksum database.dump storage.tar.gz > SHA256SUMS)
+  mv "$target" "$final"
+  echo "Backup written to $final"
+}
+
+restore() {
+  local source="${1:-}" confirmed="${2:-}"
+  [[ -n "$source" ]] || die "restore requires a backup directory"
+  [[ "$confirmed" == "--confirm" ]] || die "restore replaces live data; pass --confirm explicitly"
+  [[ -d "$source" ]] || die "backup directory not found: $source"
+  [[ -f "$source/database.dump" ]] || die "missing $source/database.dump"
+  [[ -f "$source/storage.tar.gz" ]] || die "missing $source/storage.tar.gz"
+  [[ -f "$source/SHA256SUMS" ]] || die "missing $source/SHA256SUMS"
+  source="$(cd "$source" && pwd)"
+  if command -v shasum >/dev/null 2>&1; then
+    (cd "$source" && shasum -a 256 --check SHA256SUMS >/dev/null) || die "backup checksum verification failed"
+  else
+    (cd "$source" && sha256sum --check SHA256SUMS >/dev/null) || die "backup checksum verification failed"
+  fi
+
+  echo "Restoring database and Active Storage from $source"
+  compose up -d db >/dev/null
+  compose stop web >/dev/null 2>&1 || true
+  cat "$source/database.dump" | compose exec -T db sh -c 'pg_restore --clean --if-exists --no-owner --exit-on-error --username="$POSTGRES_USER" --dbname="$POSTGRES_DB"'
+  cat "$source/storage.tar.gz" | compose run --rm --no-deps -T web sh -c 'find /rails/storage -mindepth 1 -maxdepth 1 -exec rm -rf -- {} + && tar --extract --gzip --file=- --directory=/rails/storage'
+  compose up -d web >/dev/null
+  echo "Restore complete"
+}
+
+case "${1:-}" in
+  config)
+    compose config --quiet
+    echo "Personal instance configuration is valid"
+    ;;
+  build)
+    compose build web
+    ;;
+  up)
+    compose up -d --build
+    compose ps
+    ;;
+  down)
+    compose down
+    ;;
+  restart)
+    compose restart
+    ;;
+  logs)
+    shift
+    compose logs --follow "${1:-}"
+    ;;
+  status)
+    compose ps
+    ;;
+  migrate)
+    compose run --rm --no-deps web bin/rails db:migrate
+    ;;
+  seed)
+    compose run --rm --no-deps web bin/rails db:seed
+    ;;
+  check)
+    compose exec -T web bin/rails runner 'abort "wrong Rails environment" unless Rails.env.production?; abort "wrong database adapter" unless ActiveRecord::Base.connection.adapter_name == "PostgreSQL"; storage = Rails.root.join("storage"); probe = storage.join(".write-check"); File.write(probe, "ok"); File.delete(probe); puts "Rails=#{Rails.env} PostgreSQL=#{ActiveRecord::Base.connection.adapter_name} ActiveStorage=#{Rails.application.config.active_storage.service}"'
+    ;;
+  shell)
+    compose exec web bash
+    ;;
+  backup)
+    backup
+    ;;
+  restore)
+    restore "${2:-}" "${3:-}"
+    ;;
+  help|--help|-h)
+    usage
+    ;;
+  *)
+    usage >&2
+    exit 1
+    ;;
+esac

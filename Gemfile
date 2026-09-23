@@ -2,10 +2,13 @@ source "https://rubygems.org"
 
 # Bundle edge Rails instead: gem "rails", github: "rails/rails", branch: "main"
 gem "rails", "~> 8.1.3"
+gem "rubyzip", "~> 3.0"
 # The modern asset pipeline for Rails [https://github.com/rails/propshaft]
 gem "propshaft"
 gem "tailwindcss-rails"
-# Use sqlite3 as the database for Active Record
+# PostgreSQL is the canonical hosted and CI database. SQLite is the default for
+# disposable agent containers and remains available for explicit local checks.
+gem "pg", ">= 1.5"
 gem "sqlite3", ">= 2.1"
 # Use the Puma web server [https://github.com/puma/puma]
 gem "puma", ">= 5.0"
@@ -34,6 +37,8 @@ group :development, :test do
 end
 
 group :development do
+  gem "foreman"
+
   # Use console on exceptions pages [https://github.com/rails/web-console]
   gem "web-console"
 end
