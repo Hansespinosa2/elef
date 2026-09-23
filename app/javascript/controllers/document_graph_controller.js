@@ -156,6 +156,8 @@ export default class extends Controller {
     const placeRight = state.x + 22 + maxWidth <= 980
     const x = placeRight ? 22 : -22
     const startY = state.y + lineHeight * lines.length > 600 ? -lineHeight * (lines.length - 1) + 5 : 5
+    const layout = JSON.stringify({ title, labelSize, x, startY })
+    if (node.dataset.labelLayout === layout) return
 
     label.replaceChildren()
     label.setAttribute("x", x)
@@ -169,6 +171,23 @@ export default class extends Controller {
       if (index > 0) tspan.setAttribute("dy", lineHeight)
       label.append(tspan)
     })
+
+    const hitArea = node.querySelector(".document-graph-node-hit-area")
+    const circle = node.querySelector("circle")
+    if (hitArea && circle) {
+      const labelBounds = label.getBBox()
+      const circleBounds = circle.getBBox()
+      const padding = 4
+      const left = Math.min(labelBounds.x, circleBounds.x) - padding
+      const top = Math.min(labelBounds.y, circleBounds.y) - padding
+      const right = Math.max(labelBounds.x + labelBounds.width, circleBounds.x + circleBounds.width) + padding
+      const bottom = Math.max(labelBounds.y + labelBounds.height, circleBounds.y + circleBounds.height) + padding
+      hitArea.setAttribute("x", left)
+      hitArea.setAttribute("y", top)
+      hitArea.setAttribute("width", right - left)
+      hitArea.setAttribute("height", bottom - top)
+    }
+    node.dataset.labelLayout = layout
   }
 
   wrapLabel(title, maxCharacters) {
