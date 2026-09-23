@@ -5,12 +5,12 @@ class VimEditorTest < ApplicationSystemTestCase
     document = Document.create!(title: "Mobile editor", source: "# Mobile")
     visit edit_document_path(document)
     [500, 390, 320].each do |width|
-      page.driver.browser.manage.window.resize_to(width, 800)
+      page.driver.browser.execute_cdp("Emulation.setDeviceMetricsOverride", width: width, height: 800, deviceScaleFactor: 1, mobile: false)
       assert_operator page.evaluate_script("document.documentElement.scrollWidth"), :<=,
         page.evaluate_script("window.innerWidth")
     end
 
-    page.driver.browser.manage.window.resize_to(500, 800)
+    page.driver.browser.execute_cdp("Emulation.setDeviceMetricsOverride", width: 500, height: 800, deviceScaleFactor: 1, mobile: false)
     assert_equal "vertical", page.evaluate_script("getComputedStyle(document.querySelector('.editor-surface')).resize")
     assert_equal "hidden", page.evaluate_script("getComputedStyle(document.querySelector('.editor-surface')).overflow")
 
@@ -25,6 +25,7 @@ class VimEditorTest < ApplicationSystemTestCase
     assert_operator panel["right"], :<=, page.evaluate_script("window.innerWidth")
     save_screenshot("tmp/screenshots/editor/mobile-vim-settings.png")
   ensure
+    page.driver.browser.execute_cdp("Emulation.clearDeviceMetricsOverride")
     page.driver.browser.manage.window.resize_to(1400, 1000)
   end
 
