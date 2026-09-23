@@ -224,6 +224,35 @@ class PresentationTest < ActiveSupport::TestCase
     assert_equal [false, true], document.slides.first.blocks.map { |block| block.position&.vertical_explicit }
   end
 
+  test "builds an ephemeral editor map with UTF-16 ranges and known directives" do
+    source = "---\npresentationTheme: dark\n---\n# 🚀 Intro\n\n:::position{center middle}\n\nA **message**.\n\n:::\n---\n:::unknown\n\n# Next"
+
+    map = Presentations::Document.editor_map(source, source_name: "Deck", mode: :presentation)
+
+    assert_equal 1, map[:version]
+    assert_equal "presentation", map[:mode]
+    assert_equal source.encode("UTF-16LE").bytesize / 2, map[:source_length]
+    assert_equal 2, map[:slides].length
+    assert_equal "# 🚀 Intro", map[:slides].first[:blocks].first[:markdown]
+    assert_equal "heading", map[:slides].first[:blocks].first[:kind]
+    assert_equal "center middle", map[:slides].first[:blocks].second[:position].values_at(:horizontal, :vertical).join(" ")
+    assert_equal "position", map[:slides].first[:directives].first[:type]
+    assert_equal "unknown", map[:slides].second[:directives].first[:type]
+    assert_operator map[:slides].first[:editable_regions].first[:content_range][:start], :>,
+      map[:slides].first[:editable_regions].first[:range][:start]
+    assert_equal 34, map[:slides].first[:editable_regions].first[:content_range][:start]
+  end
+
+  test "keeps a document editor map as one source surface across horizontal rules" do
+    source = "# First\n\n---\n\nSecond"
+
+    map = Presentations::Document.editor_map(source, mode: :document)
+
+    assert_equal 1, map[:slides].length
+    assert_equal source.length, map[:slides].first[:range][:end]
+    assert_equal ["# First", "---", "Second"], map[:slides].first[:blocks].map { |block| block[:markdown] }
+  end
+
   test "warns and removes unknown presentation directives" do
     document = Presentations::Document.parse("# Slide\n\n:::unknown\n\nContent")
 

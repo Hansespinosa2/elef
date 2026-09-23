@@ -5,6 +5,7 @@ import { basicSetup } from "codemirror"
 import { markdown } from "@codemirror/lang-markdown"
 import { tags } from "@lezer/highlight"
 import { Vim, getCM, vim } from "@replit/codemirror-vim"
+import { livePreviewField, livePreviewMode } from "controllers/live_preview"
 
 const ENABLED_STORAGE_KEY = "elef.editor.vim.enabled"
 const MAPPING_STORAGE_KEY = "elef.editor.vim.normalMapping"
@@ -52,7 +53,7 @@ const theme = EditorView.theme({
 }, { dark: true })
 
 export default class extends Controller {
-  static targets = ["surface", "input", "mode", "command", "vimToggle", "mapping"]
+  static targets = ["surface", "input", "mode", "command", "vimToggle", "mapping", "editingMode", "visualButton", "sourceButton"]
 
   connect() {
     this.editorController = this
@@ -73,6 +74,7 @@ export default class extends Controller {
           this.vimCompartment.of(this.vimEnabled ? vim() : []),
           basicSetup,
           markdown({ extensions: elefMetadata }),
+          livePreviewField,
           theme,
           EditorView.updateListener.of((update) => this.handleUpdate(update))
         ]
@@ -100,8 +102,9 @@ export default class extends Controller {
     this.mappingTarget.value = this.mapping
     this.applyMapping()
     this.bindVimEvents()
+    this.setEditingMode("visual", { silent: true })
     this.updateMode()
-    this.element.dispatchEvent(new CustomEvent("elef:editor-ready", { detail: { editor: this }, bubbles: false }))
+    this.element.dispatchEvent(new CustomEvent("elef:editor-ready", { detail: { editor: this }, bubbles: true }))
   }
 
   disconnect() {
@@ -143,6 +146,32 @@ export default class extends Controller {
 
   sync() {
     this.syncInput()
+  }
+
+  showVisual(event) {
+    event?.preventDefault()
+    this.setEditingMode("visual")
+  }
+
+  showSource(event) {
+    event?.preventDefault()
+    this.setEditingMode("source")
+  }
+
+  setEditingMode(mode, { silent = false } = {}) {
+    this.editingMode = mode === "source" ? "source" : "visual"
+    this.view?.dispatch({ effects: livePreviewMode.of(this.editingMode === "visual") })
+    this.element.dataset.editorEditingMode = this.editingMode
+    this.form?.setAttribute("data-editor-mode", this.editingMode)
+    if (this.hasEditingModeTarget) this.editingModeTarget.textContent = this.editingMode === "visual" ? "Visual" : "Source"
+    if (this.hasVisualButtonTarget) this.visualButtonTarget.setAttribute("aria-pressed", String(this.editingMode === "visual"))
+    if (this.hasSourceButtonTarget) this.sourceButtonTarget.setAttribute("aria-pressed", String(this.editingMode === "source"))
+    if (!silent) {
+      this.form?.dispatchEvent(new CustomEvent("elef:editor-mode-change", {
+        bubbles: true,
+        detail: { mode: this.editingMode, editor: this }
+      }))
+    }
   }
 
   get value() {
@@ -289,6 +318,7 @@ export default class extends Controller {
       this.modeTarget.dataset.mode = "standard"
       if (this.hasCommandTarget) this.commandTarget.textContent = ""
       this.element.dataset.editorVimEnabled = "false"
+      if (this.form) this.form.dataset.editorVimEnabled = "false"
       return
     }
 
@@ -297,6 +327,7 @@ export default class extends Controller {
     this.modeTarget.textContent = label
     this.modeTarget.dataset.mode = label.toLowerCase()
     this.element.dataset.editorVimEnabled = "true"
+    if (this.form) this.form.dataset.editorVimEnabled = "true"
     if (this.hasCommandTarget) this.commandTarget.textContent = this.vim?.state?.vim?.status || ""
   }
 

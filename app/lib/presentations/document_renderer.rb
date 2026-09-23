@@ -2,12 +2,29 @@ module Presentations
   module DocumentRenderer
     module_function
 
-    def render(source, source_name: "Untitled document", parsed: nil, documents: nil, workspace: nil)
+    def render(source, source_name: "Untitled document", parsed: nil, documents: nil, workspace: nil, editable: false, editor_map: nil)
       parsed ||= Presentations::Document.parse(source.to_s, source_name: source_name, mode: :document)
       workspace ||= documents&.first&.workspace || Workspace.default
       documents ||= ::Document.where(workspace: workspace).to_a
       slide = parsed.slides.first
       return "".html_safe unless slide
+
+      if editable
+        editor_map ||= Presentations::Document.editor_map(source.to_s.gsub(/\r\n?/, "\n"), source_name: source_name, mode: :document)
+        mapped_blocks = editor_map.dig(:slides, 0, :blocks) || []
+        html = slide.blocks.map.with_index do |block, index|
+          mapped = mapped_blocks[index]
+          classes = position_classes(block.position)
+          class_names = ["document-editor-block", classes].reject(&:blank?).join(" ")
+          attributes = if mapped
+            %( class="#{ERB::Util.html_escape(class_names)}" data-editor-region-id="#{ERB::Util.html_escape(mapped[:editable_region_id].to_s)}" data-editor-block-id="#{ERB::Util.html_escape(mapped[:id].to_s)}" contenteditable="true" spellcheck="true" data-action="input->visual-editor#projectionInput focus->visual-editor#blockFocus blur->visual-editor#blockBlur")
+          else
+            %( class="#{ERB::Util.html_escape(class_names)}" contenteditable="true" spellcheck="true" data-action="input->visual-editor#projectionInput focus->visual-editor#blockFocus blur->visual-editor#blockBlur")
+          end
+          %(<div#{attributes}>#{DocumentLinks::Renderer.render(block.markdown, documents: documents, workspace: workspace)}</div>)
+        end.join
+        return html.html_safe
+      end
 
       if slide.blocks.any? { |block| block.position }
         slide.blocks.map do |block|

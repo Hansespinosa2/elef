@@ -138,6 +138,29 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_not_nil presentation.last_published_at
   end
 
+  test "visual presentation editing updates source and known slide operations" do
+    presentation = Presentation.create!(title: "Visual deck", source: "# First\n\nBody\n---\n# Second\n\nOther")
+
+    visit edit_presentation_path(presentation)
+
+    find(".slide-block", text: "Body").click
+    page.execute_script("const block = [...document.querySelectorAll('.slide-block')].find((candidate) => candidate.innerText === 'Body'); block.innerText = 'Changed'; block.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'Changed' }));")
+    assert_field "Markdown source", with: /# First\n\nChanged/, wait: 5
+    find("[data-presentation-editor-action='add-slide-after']", match: :first).click
+    assert_selector ".presentation-editor-projection .slide", count: 3, wait: 5
+    all("[data-presentation-editor-action='delete-slide']").last.click
+    assert_selector ".presentation-editor-projection .slide", count: 2, wait: 5
+
+    find("select[data-presentation-editor-position][data-slide-index='0'][data-block-index='1']").select("Center Middle")
+    assert_field "Markdown source", with: /:::position\{center middle\}/, wait: 5
+
+    click_on "Save presentation"
+    assert_text "Presentation saved."
+    visit edit_presentation_path(presentation)
+    assert_field "Markdown source", with: /Changed/
+    assert_selector ".presentation-editor-projection .slide", count: 2
+  end
+
   test "failed autosave can be retried and validation errors preserve saved source" do
     presentation = Presentation.create!(title: "Retry deck", source: "# Original")
     visit edit_presentation_path(presentation)

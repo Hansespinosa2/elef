@@ -149,6 +149,30 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_includes Document.order(:id).last.source, "Second section"
   end
 
+  test "visual document editing preserves untouched Markdown and survives reopening" do
+    document = Document.create!(title: "Visual notes", source: "# Original\n\n**Keep formatting**\n\nUnchanged")
+
+    visit edit_document_path(document)
+
+    assert_equal "visual", page.evaluate_script("document.querySelector('form.visual-editor-form').dataset.editorMode")
+    find(".document-editor-block", text: "Original").click
+    page.execute_script("const block = document.querySelector('.document-editor-block'); block.innerText = 'Renamed'; block.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'Renamed' }));")
+    assert_field "Markdown source", with: "# Renamed\n\n**Keep formatting**\n\nUnchanged", wait: 5
+    assert_selector ".document-editor-block strong", text: "Keep formatting"
+
+    click_on "Source"
+    assert_selector ".editor-projection", visible: :hidden
+    assert_selector ".cm-content", visible: true
+    click_on "Visual"
+    click_on "Save document"
+
+    assert_text "Document saved."
+    visit edit_document_path(document)
+    assert_field "Markdown source", with: "# Renamed\n\n**Keep formatting**\n\nUnchanged"
+    assert_selector ".document-editor-block", text: "Renamed"
+    assert_selector ".document-editor-block strong", text: "Keep formatting"
+  end
+
   test "expands math shorthand only when committed inside math" do
     document = Document.create!(title: "Math notes", source: "# Math")
     visit edit_document_path(document)

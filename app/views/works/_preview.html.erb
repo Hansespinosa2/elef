@@ -1,5 +1,5 @@
 <% if work.presentation? %>
-  <%= render "presentations/slides", presentation: work %>
+  <%= render "presentations/slides", presentation: work, editable: local_assigns[:editable], editor_map: local_assigns[:editor_map] %>
 <% else %>
-  <%= render "documents/content", document: work %>
+  <%= render "documents/content", document: work, editable: local_assigns[:editable], editor_map: local_assigns[:editor_map] %>
 <% end %>

@@ -34,6 +34,7 @@ export default class extends Controller {
     body.delete("_method")
     body.delete("commit")
     body.set("revision", requestId)
+    body.set("projection", "editor")
 
     try {
       const response = await fetch(this.urlValue, {
@@ -50,20 +51,27 @@ export default class extends Controller {
 
       this.renderWarnings(payload.warnings || [])
       if (!response.ok || payload.html === null || payload.html === undefined) {
+        this.element.dispatchEvent(new CustomEvent("elef:preview-updated", { bubbles: true, detail: { payload, response } }))
         this.setStatus("Preview unavailable")
         return
       }
 
-      const scrollLeft = this.containerTarget.scrollLeft
-      const scrollTop = this.containerTarget.scrollTop
-      this.containerTarget.innerHTML = payload.html
-      this.containerTarget.scrollLeft = scrollLeft
-      this.containerTarget.scrollTop = scrollTop
+      const activeEditable = document.activeElement?.closest?.("[contenteditable='true']")
+      const editingProjection = activeEditable && this.containerTarget.contains(activeEditable)
+      if (!editingProjection) {
+        const scrollLeft = this.containerTarget.scrollLeft
+        const scrollTop = this.containerTarget.scrollTop
+        this.containerTarget.innerHTML = payload.html
+        this.containerTarget.scrollLeft = scrollLeft
+        this.containerTarget.scrollTop = scrollTop
+      }
+      this.element.dispatchEvent(new CustomEvent("elef:preview-updated", { bubbles: true, detail: { payload, response } }))
       this.setStatus("")
     } catch (error) {
       if (error.name === "AbortError") return
       if (!this.active || requestId !== this.requestId) return
       this.renderWarnings(["Preview could not be reached. Your source is still safe; try again shortly."])
+      this.element.dispatchEvent(new CustomEvent("elef:preview-updated", { bubbles: true, detail: { payload: null, response: null, error } }))
       this.setStatus("Preview unavailable")
     } finally {
       if (this.requestController === requestController) this.requestController = null

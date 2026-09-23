@@ -159,6 +159,9 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "new-1", response.parsed_body["revision"]
     assert_includes response.parsed_body["html"], "<hr"
     assert_includes response.parsed_body["html"], "Draft notes"
+    assert_equal "document", response.parsed_body.dig("editor_map", "mode")
+    assert_equal 1, response.parsed_body.dig("editor_map", "slides").length
+    assert response.parsed_body.dig("editor_map", "editable_regions").any?
   end
 
   test "previews an unsaved document when no revision token is supplied" do
@@ -194,6 +197,7 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :unprocessable_content
     assert_nil response.parsed_body["html"]
+    assert_nil response.parsed_body["editor_map"]
     assert_equal ["Preview could not be rendered. Check the latest Markdown edit."], response.parsed_body["warnings"]
     refute_includes response.parsed_body["warnings"].join, "Markdown source must be plain text"
     assert_equal "bad-1", response.parsed_body["revision"]
