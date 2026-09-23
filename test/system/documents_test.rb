@@ -349,25 +349,43 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: "# Still editable"
   end
 
-  test "times out a stalled preview without replacing the last good result" do
+  test "keeps typing responsive while preview is stalled and preserves the last good result" do
     document = Document.create!(title: "Slow notes", source: "# Stable content")
     visit edit_document_path(document)
 
     page.execute_script(<<~JAVASCRIPT)
       const form = document.querySelector('form.visual-editor-form');
-      form.previewController.timeoutValue = 50;
+      form.previewController.timeoutValue = 1200;
+      window.previewStarted = false;
       const originalFetch = window.fetch.bind(window);
       window.fetch = (url, options = {}) => {
-        if (options.method === 'POST' && String(url).includes('/preview')) return new Promise(() => {});
+        if (options.method === 'POST' && String(url).includes('/preview')) {
+          window.previewStarted = true;
+          return new Promise(() => {});
+        }
         return originalFetch(url, options);
       };
     JAVASCRIPT
 
-    fill_in "Markdown source", with: "# Slow edit"
+    fill_in "Markdown source", with: "# First slow edit"
+    preview_started = page.evaluate_async_script(<<~JAVASCRIPT)
+      const done = arguments[arguments.length - 1];
+      const deadline = Date.now() + 5000;
+      const waitForPreview = () => {
+        if (window.previewStarted) return done(true);
+        if (Date.now() >= deadline) return done(false);
+        window.setTimeout(waitForPreview, 10);
+      };
+      waitForPreview();
+    JAVASCRIPT
+    assert preview_started, "preview request did not start"
+
+    fill_in "Markdown source", with: "# Latest slow edit"
+    assert_field "Markdown source", with: "# Latest slow edit"
     assert_selector '[data-preview-target="status"]', text: "Preview unavailable", wait: 5
     assert_selector '[data-preview-target="warnings"]', text: "Preview timed out."
     assert_selector ".document-surface", text: "Stable content"
-    assert_no_selector ".document-surface", text: "Slow edit"
+    assert_no_selector ".document-surface", text: "Latest slow edit"
     assert_selector '[data-preview-target="retry"]', visible: true
   end
 

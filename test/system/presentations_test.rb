@@ -314,6 +314,31 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_equal "Valid title", presentation.reload.title
   end
 
+  test "recovers the browser draft after an autosave outage and reload" do
+    presentation = Presentation.create!(title: "Offline recovery", source: "# Original")
+    visit edit_presentation_path(presentation)
+    page.execute_script(<<~JAVASCRIPT)
+      const originalFetch = window.fetch.bind(window);
+      window.fetch = (url, options = {}) => {
+        if (options.method === "PATCH") {
+          window.fetch = originalFetch;
+          return Promise.reject(new TypeError("Failed to fetch"));
+        }
+        return originalFetch(url, options);
+      };
+    JAVASCRIPT
+
+    fill_in "Markdown source", with: "# Offline edit"
+    assert_selector '[data-autosave-target="status"]', text: "Save failed", wait: 5
+    assert_equal "# Original", presentation.reload.source
+
+    page.refresh
+
+    assert_field "Markdown source", with: "# Offline edit", wait: 5
+    assert_selector '[data-autosave-target="status"]', exact_text: "Saved", wait: 5
+    assert_includes presentation.reload.source, "# Offline edit"
+  end
+
   def assert_timeline_geometry
     geometry = page.evaluate_script(<<~JAVASCRIPT)
       (() => {
