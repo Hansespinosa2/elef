@@ -2,7 +2,6 @@
 .github
 .agents
 .codex
-.devcontainer
 backups
 log
 tmp
