@@ -21,7 +21,7 @@
   <% editor_data[:action] += " input->document-link-palette#input keydown->document-link-palette#keydown" %>
 <% end %>
 <% editor_data[:editor_target] = "input" %>
-<%= form_with model: work, class: "editor-layout grid gap-6 grid-cols-[minmax(0,1.2fr)_minmax(22rem,0.8fr)] max-[920px]:flex max-[920px]:flex-col", data: form_data do |form| %>
+<%= form_with model: work, class: "editor-layout grid gap-6 max-[920px]:flex max-[920px]:flex-col", data: form_data do |form| %>
   <% if work.errors.any? %>
     <section class="error-panel col-span-full rounded-2xl border border-[#efb0a8] bg-[#fff1ee] p-4 text-[#a63a2d]" aria-label="Validation errors">
       <h2><%= pluralize(work.errors.count, "error") %> prevented saving</h2>
