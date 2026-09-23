@@ -522,6 +522,8 @@ class PresentationsTest < ApplicationSystemTestCase
       click_on "Preview"
     end
 
+    assert_current_path %r{/presentations/\d+}, wait: 5
+    assert_selector ".presentation-surface .slide", visible: true, wait: 5
     assert_selector ".katex", count: 4, visible: true
     assert_selector ".katex-display", visible: true
     assert_selector ".katex-html", visible: true
