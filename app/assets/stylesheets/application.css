@@ -169,6 +169,7 @@ body.elef-app {
 .editor-surface[data-mode-aware-cursor="true"][data-editor-mode="insert"] .cm-cursor { border-left-color: #f0d56b; }
 .editor-surface[data-mode-aware-cursor="true"][data-editor-mode="visual"] .cm-cursor { border-left-color: #d5b4ff; }
 .editor-surface[data-mode-aware-cursor="true"][data-editor-mode="normal"] .cm-cursor { border-left-color: var(--oradia-green); }
+.editor-layout { grid-template-columns: minmax(0, 1.2fr) minmax(22rem, 0.8fr); }
 
 .command-palette-root { position: relative; }
 .command-palette-trigger { background: var(--oradia-slate-800); border: 1px solid var(--oradia-slate-700); border-radius: 999px; color: var(--oradia-muted); cursor: pointer; font: inherit; font-size: 0.8rem; font-weight: 700; padding: 0.48rem 0.75rem; }
@@ -796,6 +797,7 @@ body.elef-app {
 }
 
 @media (max-width: 920px) {
+  .editor-layout { display: flex; flex-direction: column; }
   .library-actions { width: 100%; }
   .library-open-actions { border-top: 1px solid var(--oradia-line); padding-top: 1rem; }
 }

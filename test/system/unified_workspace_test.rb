@@ -47,4 +47,25 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     assert_no_selector ".cm-foldPlaceholder"
     assert_selector ".cm-content", text: "theme: dark"
   end
+
+  test "keeps the source pane wider on desktop and stacks on narrow screens" do
+    document = Document.create!(title: "Responsive editor", source: "# Responsive editor\n\nBody")
+
+    visit edit_document_path(document)
+    desktop = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const layout = document.querySelector(".editor-layout");
+        const source = layout.querySelector(".source-pane").getBoundingClientRect();
+        const preview = layout.querySelector(".preview-pane").getBoundingClientRect();
+        return { source: source.width, preview: preview.width };
+      })()
+    JAVASCRIPT
+    assert_operator desktop["source"], :>, desktop["preview"]
+
+    page.driver.browser.manage.window.resize_to(700, 900)
+    assert_equal "flex", page.evaluate_script("getComputedStyle(document.querySelector('.editor-layout')).display")
+    assert_equal "column", page.evaluate_script("getComputedStyle(document.querySelector('.editor-layout')).flexDirection")
+  ensure
+    page.driver.browser.manage.window.resize_to(1400, 1000)
+  end
 end
