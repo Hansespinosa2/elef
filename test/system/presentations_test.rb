@@ -16,6 +16,21 @@ class PresentationsTest < ApplicationSystemTestCase
     JAVASCRIPT
   end
 
+  def wait_for_autosave_request(index)
+    ready = page.evaluate_async_script(<<~JAVASCRIPT, index)
+      const target = arguments[0];
+      const done = arguments[arguments.length - 1];
+      const deadline = Date.now() + 5000;
+      const wait = () => {
+        if ((window.autosaveRequests || []).length > target) return done(true);
+        if (Date.now() >= deadline) return done(false);
+        window.setTimeout(wait, 10);
+      };
+      wait();
+    JAVASCRIPT
+    assert ready, "autosave request #{index} was not registered"
+  end
+
   test "library renames forks and deletes a presentation through its controls" do
     parent = Presentation.create!(title: "Workflow parent", source: "# Keep this source")
     visit presentations_path
@@ -49,11 +64,13 @@ class PresentationsTest < ApplicationSystemTestCase
     dismiss_confirm { click_on "Library" }
     assert_field "Markdown source", with: "# Original"
     fill_in "Markdown source", with: "# Latest edit"
+    wait_for_autosave_request(0)
     page.execute_script("window.autosaveRequests[0].release()")
     assert_selector '[data-autosave-target="status"]', text: "Saving…"
     dismiss_confirm { click_on "Library" }
     assert_field "Markdown source", with: "# Latest edit"
     assert_includes presentation.reload.source, "# First edit"
+    wait_for_autosave_request(1)
     page.execute_script("window.autosaveRequests[1].release()")
     assert_selector '[data-autosave-target="status"]', exact_text: "Saved"
     assert_includes presentation.reload.source, "# Latest edit"
