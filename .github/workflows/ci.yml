@@ -170,3 +170,30 @@ jobs:
           done
 
           "${compose[@]}" exec -T web bin/rails runner 'abort "wrong Rails environment" unless Rails.env.production?; abort "wrong database adapter" unless ActiveRecord::Base.connection.adapter_name == "PostgreSQL"; storage = Rails.root.join("storage"); probe = storage.join(".write-check"); File.write(probe, "ok"); File.delete(probe); puts "production smoke ok"'
+
+  development-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Validate development Compose configuration
+        run: docker compose --project-name elef-development-ci --env-file .env.development.example --file compose.development.yml config --quiet
+
+      - name: Build development image
+        run: docker compose --project-name elef-development-ci --env-file .env.development.example --file compose.development.yml build web
+
+      - name: Prepare and smoke-test development stack
+        run: |
+          set -euo pipefail
+          compose=(docker compose --project-name elef-development-ci --env-file .env.development.example --file compose.development.yml)
+          cleanup() {
+            "${compose[@]}" down -v --remove-orphans
+          }
+          trap cleanup EXIT
+
+          "${compose[@]}" up -d db
+          "${compose[@]}" run --rm --no-deps web bin/rails db:prepare
+          "${compose[@]}" run --rm --no-deps web bin/rails runner 'abort "wrong Rails environment" unless Rails.env.development?; abort "wrong database adapter" unless ActiveRecord::Base.connection.adapter_name == "PostgreSQL"; storage = Rails.root.join("storage"); probe = storage.join(".write-check"); File.write(probe, "ok"); File.delete(probe); puts "development smoke ok"'
