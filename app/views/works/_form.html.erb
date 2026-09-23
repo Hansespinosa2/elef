@@ -94,7 +94,7 @@
       <div id="<%= editor_id %>_snippet_palette" class="snippet-palette" data-snippet-palette-target="palette" hidden role="listbox" aria-label="Snippet suggestions"></div>
       <div id="<%= editor_id %>_math_shortcut_palette" class="snippet-palette math-shortcut-palette" data-math-shortcut-palette-target="palette" hidden role="listbox" aria-label="Math shortcut suggestions"></div>
       <% if work.document? %><div id="<%= editor_id %>_document_link_palette" class="snippet-palette" data-document-link-palette-target="palette" hidden role="listbox" aria-label="Document link suggestions"></div><% end %>
-      <p class="field-hint">Use <code>:trigger</code> for snippets<%= ". Type <code>[[</code> to link another document." if work.document? %>. In math, commit exact shorthand such as <code>$x.hat.b.T$</code> with Enter or Tab.</p>
+      <p class="field-hint">Use <code>:trigger</code> for Markdown, LaTeX, and Elef snippets<%= ". Type <code>[[</code> to link another document." if work.document? %>. In math, type <code>@nabla</code>, <code>@frac</code>, or <code>@sum</code>; Tab walks multi-slot expressions. Exact transforms such as <code>$x.hat.b.T$</code> still commit with Enter or Tab.</p>
     </div>
 
     <div class="field appearance-fields mb-4 grid gap-3 sm:grid-cols-2">

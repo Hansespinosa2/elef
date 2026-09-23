@@ -35,6 +35,67 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     assert_includes source, "\\alpha"
   end
 
+  test "expands common TeX operators and walks fraction tab stops" do
+    document = Document.create!(title: "TeX operators", source: "# TeX operators")
+
+    visit edit_document_path(document)
+    editor = find(".cm-content")
+    editor.click
+    editor.send_keys("\n$@nabla")
+    assert_selector ".math-shortcut-palette .snippet-option", text: /Nabla/, wait: 5
+    editor.send_keys(:enter)
+
+    editor.send_keys(" @to")
+    assert_selector ".math-shortcut-palette .snippet-option", text: /Right arrow/, wait: 5
+    editor.send_keys(:enter)
+    editor.send_keys(" @inf")
+    assert_selector ".math-shortcut-palette .snippet-option", text: /Infimum/, wait: 5
+    editor.send_keys(:enter)
+    editor.send_keys(" @sum")
+    assert_selector ".math-shortcut-palette .snippet-option", text: /Summation/, wait: 5
+    editor.send_keys(:enter)
+
+    editor.send_keys(" @frac")
+    assert_selector ".math-shortcut-palette .snippet-option", text: /Fraction/, wait: 5
+    editor.send_keys(:enter)
+    editor.send_keys("u", :tab, "v", :tab)
+    editor.send_keys("$")
+
+    source = find_field("Markdown source").value
+    assert_includes source, "$\\nabla \\to \\inf \\sum \\frac{u}{v}"
+    assert_selector ".document-surface .katex", minimum: 1, wait: 5
+    assert_no_selector ".math-error"
+  end
+
+  test "uses the selected math transform without duplicating its base" do
+    document = Document.create!(title: "Selected math transform", source: "# Math")
+
+    visit edit_document_path(document)
+    editor = find(".cm-content")
+    editor.click
+    editor.send_keys("\n$x.bo")
+    find(".math-shortcut-palette .snippet-option", text: /Bold/).click
+
+    source = find_field("Markdown source").value
+    assert_includes source, "$\\mathbf{x}"
+    refute_includes source, "$x\\mathbf{x}"
+  end
+
+  test "ships the common block and list colon snippets" do
+    document = Document.create!(title: "Authoring snippets", source: "# Authoring snippets")
+
+    visit edit_document_path(document)
+    editor = find(".cm-content")
+    editor.click
+    editor.send_keys("\n:bga")
+    assert_selector ".snippet-palette .snippet-option", text: /Gathered equations/, wait: 5
+    editor.send_keys(:enter)
+
+    source = find_field("Markdown source").value
+    assert_includes source, "\\begin{gathered}"
+    assert_includes source, "\\end{gathered}"
+  end
+
   test "collapses front matter and reveals it on demand" do
     document = Document.create!(
       title: "Metadata notes",

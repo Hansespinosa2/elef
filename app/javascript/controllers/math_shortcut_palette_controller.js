@@ -7,6 +7,10 @@ export default class extends Controller {
   static values = { shortcuts: Array }
 
   connect() {
+    this.matches = []
+    this.selectedIndex = 0
+    this.stops = []
+    this.activeStop = null
     this.editorController = editorFor(this.element)
     this.editorReady = () => {
       this.editorController ||= editorFor(this.element)
@@ -24,6 +28,7 @@ export default class extends Controller {
   }
 
   setupEditor() {
+    if (this.editorController) this.setupAccessibility()
     if (this.editorController && !this.keydownBound) {
       this.handleEditorKeydown = (event) => this.keydown(event)
       this.editorController.dom.addEventListener("keydown", this.handleEditorKeydown, true)
@@ -32,7 +37,30 @@ export default class extends Controller {
     }
   }
 
+  setupAccessibility() {
+    const editor = this.editorController?.dom
+    if (!editor) return
+
+    const controls = new Set((editor.getAttribute("aria-controls") || "").split(/\s+/).filter(Boolean))
+    controls.add(this.paletteTarget.id)
+    editor.setAttribute("aria-controls", [...controls].join(" "))
+    editor.setAttribute("aria-autocomplete", "list")
+    this.updateAccessibility()
+  }
+
+  updateAccessibility() {
+    const editor = this.editorController?.dom
+    if (!editor) return
+
+    const openPalette = [...this.element.querySelectorAll('[role="listbox"]')].find((palette) => !palette.hidden)
+    editor.setAttribute("aria-expanded", String(Boolean(openPalette)))
+    const selected = openPalette?.querySelector('[aria-selected="true"]')
+    if (selected) editor.setAttribute("aria-activedescendant", selected.id)
+    else editor.removeAttribute("aria-activedescendant")
+  }
+
   input() {
+    this.adjustStops()
     this.schedule()
   }
 
@@ -43,6 +71,12 @@ export default class extends Controller {
       return
     }
     if (!this.editorController?.insertMode) return
+
+    if (event.key === "Tab" && this.paletteTarget.hidden && this.stops.length > 0) {
+      event.preventDefault()
+      this.nextStop()
+      return
+    }
 
     if (["ArrowDown", "ArrowUp"].includes(event.key) && !this.paletteTarget.hidden) {
       event.preventDefault()
@@ -94,7 +128,7 @@ export default class extends Controller {
     return {
       prefix: match[2],
       text: match[3],
-      start: match.index + (match[1]?.length || 0),
+      start: match[2] === "." && match[1] ? match.index : match.index + (match[1]?.length || 0),
       base: match[1] || "",
       baseStart: match.index
     }
@@ -137,12 +171,14 @@ export default class extends Controller {
       const option = document.createElement("button")
       option.type = "button"
       option.role = "option"
-      option.className = "snippet-option"
+      option.className = `snippet-option${index === this.selectedIndex ? " is-selected" : ""}`
+      option.id = `${this.paletteTarget.id}-option-${index}`
       option.setAttribute("aria-selected", String(index === this.selectedIndex))
       const title = document.createElement("strong")
       title.textContent = `${shortcut.prefix}${shortcut.aliases[0]}`
       const details = document.createElement("span")
-      details.textContent = `${shortcut.name} · ${shortcut.description || "Math shortcut"}`
+      const preview = (shortcut.expansion || "").replace(/\$\{\d+(?::[^}]*)?\}/g, "□")
+      details.textContent = `${shortcut.name} · ${shortcut.description || "Math shortcut"} · ${preview}`
       option.append(title, details)
       option.addEventListener("mousedown", (event) => {
         event.preventDefault()
@@ -152,6 +188,7 @@ export default class extends Controller {
       this.paletteTarget.append(option)
     })
     this.paletteTarget.hidden = false
+    this.updateAccessibility()
     this.positionPalette()
   }
 
@@ -170,7 +207,9 @@ export default class extends Controller {
     this.selectedIndex = (this.selectedIndex + amount + this.matches.length) % this.matches.length
     this.paletteTarget.querySelectorAll("[role='option']").forEach((option, index) => {
       option.setAttribute("aria-selected", String(index === this.selectedIndex))
+      option.classList.toggle("is-selected", index === this.selectedIndex)
     })
+    this.updateAccessibility()
   }
 
   insertSelected() {
@@ -178,18 +217,84 @@ export default class extends Controller {
     const query = this.query
     if (!shortcut || !query || !this.editorController) return this.close()
 
-    let expansion = shortcut.expansion
-    if (shortcut.prefix === ".") {
-      expansion = expansion.replace(/\$\{1(?::[^}]*)?\}/g, query.base || "x")
-    }
-    this.editorController.replaceRange(expansion, query.start, this.editorController.selectionStart)
+    const expansion = this.expandShortcut(shortcut, query)
+    const base = query.start
+    this.stops = expansion.stops.map((stop) => ({
+      ...stop,
+      start: base + stop.start,
+      end: base + stop.start + stop.length
+    }))
+    this.activeStop = null
     this.close()
+    this.editorController.replaceRange(expansion.text, query.start, this.editorController.selectionStart)
     this.editorController.focus()
+    this.selectStop(this.stops[0])
+  }
+
+  expandShortcut(shortcut, query) {
+    const stops = []
+    const source = shortcut.expansion || ""
+    const base = query.base || "x"
+    let text = ""
+    let cursor = 0
+    const placeholder = /\$\{(\d+)(?::([^}]*))?\}/g
+    let match
+
+    while ((match = placeholder.exec(source))) {
+      text += source.slice(cursor, match.index)
+      const number = Number(match[1])
+      const replacement = shortcut.prefix === "." && number === 1 ? base : (match[2] || "")
+      if (!(shortcut.prefix === "." && number === 1)) {
+        stops.push({ number, start: text.length, length: replacement.length })
+      }
+      text += replacement
+      cursor = match.index + match[0].length
+    }
+
+    text += source.slice(cursor)
+    return { text, stops: stops.sort((left, right) => left.number === 0 ? 1 : right.number === 0 ? -1 : left.number - right.number) }
+  }
+
+  nextStop() {
+    const current = this.stops.shift()
+    if (!current) return
+    this.activeStop = null
+    const next = this.stops[0]
+    if (next) return this.selectStop(next)
+
+    const editor = this.editorController
+    if (!editor) return
+    const exit = editor.value[current.end] === "}" ? current.end + 1 : current.end
+    editor.setSelectionRange(exit, exit)
+  }
+
+  selectStop(stop) {
+    const editor = this.editorController
+    if (!editor || !stop) return
+    this.activeStop = stop
+    editor.setSelectionRange(stop.start, stop.end)
+  }
+
+  adjustStops() {
+    const active = this.activeStop
+    if (!active) return
+
+    const editor = this.editorController
+    if (!editor) return
+    const delta = editor.selectionStart - active.end
+    if (delta === 0) return
+    active.end = editor.selectionStart
+    const activeIndex = this.stops.indexOf(active)
+    this.stops.slice(activeIndex + 1).forEach((stop) => {
+      stop.start += delta
+      stop.end += delta
+    })
   }
 
   close() {
     this.paletteTarget.hidden = true
     this.matches = []
     this.query = null
+    this.updateAccessibility()
   }
 }
