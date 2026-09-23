@@ -25,6 +25,21 @@ assert_not_contains() {
 }
 
 bash -n "$launcher" "$entrypoint"
+(cd /tmp && "$launcher" --help >/dev/null)
+assert_contains "$launcher" 'SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"'
+assert_contains "$launcher" 'cd "$REPO"'
+assert_contains "$launcher" 'CODEX_MODEL="gpt-6-luna"'
+assert_contains "$launcher" 'USER_SKILLS_HOST="$HOME/.agents/skills"'
+assert_not_contains "$launcher" 'Documents/GitHub/andy-skills/skills'
+assert_contains "$launcher" 'registered_worktree_for'
+assert_contains "$launcher" 'worktree_is_valid "$1" "$preferred"'
+assert_contains "$launcher" 'worktree_is_valid "$1" "$registered"'
+assert_contains "$launcher" '--git-common-dir'
+assert_contains "$launcher" 'task directory is not a valid checkout'
+assert_contains "$launcher" 'git worktree repair'
+assert_contains "$launcher" 'wt="$(require_worktree "$task")"'
+assert_contains "$launcher" 'assert_no_active_terminal "$task"'
+assert_contains "$launcher" 'prune the stale Git worktree record'
 assert_contains "$launcher" 'ensure_image "$image"'
 assert_contains "$launcher" 'npm view @openai/codex version --silent'
 assert_contains "$launcher" 'existing_image_for "$task"'
@@ -42,13 +57,17 @@ assert_contains "$launcher" 'database_state_for'
 assert_contains "$launcher" 'remember_database "$task"'
 assert_contains "$launcher" 'existing_database_for "$task"'
 assert_contains "$launcher" 'https://$(host_for "$task").localhost'
-assert_contains "$launcher" 'exec_in "$task" codex --dangerously-bypass-approvals-and-sandbox -m gpt-5.6-luna'
+assert_contains "$launcher" 'exec_in "$task" codex --dangerously-bypass-approvals-and-sandbox -m "$CODEX_MODEL"'
+assert_contains "$launcher" '-m "$CODEX_MODEL"'
 assert_contains "$launcher" "-c 'model_reasoning_effort=\"max\"'"
 assert_contains "$launcher" "-c 'plan_mode_reasoning_effort=\"max\"'"
-assert_contains "$codex_config" 'model = "gpt-5.6-luna"'
+assert_contains "$codex_config" 'model = "gpt-6-luna"'
 assert_contains "$codex_config" 'model_reasoning_effort = "max"'
 assert_contains "$codex_config" 'plan_mode_reasoning_effort = "max"'
-invalid_model="gpt-5.6-luna""-max"
+assert_not_contains "$launcher" 'gpt-5.6-luna'
+assert_not_contains "$codex_config" 'gpt-5.6-luna'
+assert_not_contains "$ROOT/.agents/skills/elef-agent/SKILL.md" 'gpt-5.6-luna'
+invalid_model="gpt-6-luna""-max"
 assert_not_contains "$launcher" "$invalid_model"
 assert_not_contains "$codex_config" "$invalid_model"
 assert_contains "$launcher" 'up) shift; up "$@" ;;'

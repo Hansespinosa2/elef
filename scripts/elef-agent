@@ -1,16 +1,28 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="$(git rev-parse --show-toplevel 2>/dev/null)" || { echo "Run from elef." >&2; exit 1; }
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)" || {
+  echo "Unable to locate the Elef repository from this script." >&2
+  exit 1
+}
+REPO="$(cd -- "$SCRIPT_DIR/.." && pwd -P)" || { echo "Unable to locate the Elef repository." >&2; exit 1; }
+cd "$REPO"
 CONTAINER_CLI="${CONTAINER_CLI:-container}"
 IMAGE_OVERRIDE="${ELEF_AGENT_IMAGE:-}"
 CODEX_VERSION="${ELEF_AGENT_CODEX_VERSION:-latest}"
+CODEX_MODEL="gpt-6-luna"
 CHROME_DEVTOOLS_MCP_VERSION="${ELEF_AGENT_CHROME_DEVTOOLS_MCP_VERSION:-1.8.0}"
 CONTAINER_MEMORY="${ELEF_AGENT_MEMORY:-1536M}"
 AGENT_DATABASE="${ELEF_AGENT_DATABASE:-sqlite}"
 WORKTREE_ROOT="${ELEF_WORKTREE_ROOT:-$(dirname "$REPO")/elef-worktrees}"
 CODEX_HOME_HOST="${CODEX_HOME:-$HOME/.codex}"
-USER_SKILLS_HOST="${ELEF_USER_SKILLS_DIR:-$HOME/Documents/GitHub/andy-skills/skills}"
+if [[ -n "${ELEF_USER_SKILLS_DIR:-}" ]]; then
+  USER_SKILLS_HOST="$ELEF_USER_SKILLS_DIR"
+elif [[ -d "$HOME/.agents/skills" ]]; then
+  USER_SKILLS_HOST="$HOME/.agents/skills"
+else
+  USER_SKILLS_HOST="$CODEX_HOME_HOST/skills"
+fi
 GH_CONFIG_HOST="${GH_CONFIG_DIR:-$HOME/.config/gh}"
 AGENT_STATE_ROOT="${ELEF_AGENT_STATE_ROOT:-$HOME/Library/Application Support/Elef/agent-router}"
 CADDYFILE="${ELEF_AGENT_CADDYFILE:-$AGENT_STATE_ROOT/Caddyfile}"
@@ -24,9 +36,69 @@ validate_agent_database() {
     *) die "ELEF_AGENT_DATABASE must be sqlite or postgres (got: $AGENT_DATABASE)" ;;
   esac
 }
-worktree_for() { printf '%s/%s' "$WORKTREE_ROOT" "$1"; }
+registered_worktree_for() {
+  local branch
+  branch="refs/heads/$(branch_for "$1")"
+  git worktree list --porcelain 2>/dev/null | awk -v branch="$branch" '
+    /^worktree / { path = substr($0, 9) }
+    $1 == "branch" && $2 == branch { print path; exit }
+  '
+}
+worktree_for() {
+  local preferred registered
+  preferred="$WORKTREE_ROOT/$1"
+  if worktree_is_valid "$1" "$preferred"; then
+    (cd -- "$preferred" && pwd -P)
+    return
+  fi
+  registered="$(registered_worktree_for "$1")"
+  if [[ -n "$registered" ]] && worktree_is_valid "$1" "$registered"; then
+    (cd -- "$registered" && pwd -P)
+    return
+  fi
+  printf '%s' "$preferred"
+}
 container_for() { printf 'elef-agent-%s' "$(host_for "$1")"; }
 branch_for() { printf 'codex/%s' "$1"; }
+worktree_is_valid() {
+  local task="$1" path canonical root branch repo_common task_common
+  [[ -d "$path" ]] || return 1
+  canonical="$(cd -- "$path" 2>/dev/null && pwd -P)" || return 1
+  root="$(git -C "$canonical" rev-parse --show-toplevel 2>/dev/null)" || return 1
+  [[ "$root" == "$canonical" ]] || return 1
+  branch="$(git -C "$canonical" symbolic-ref --quiet --short HEAD 2>/dev/null)" || return 1
+  [[ "$branch" == "$(branch_for "$task")" ]] || return 1
+  repo_common="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || return 1
+  task_common="$(git -C "$canonical" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || return 1
+  [[ "$task_common" == "$repo_common" ]]
+}
+require_worktree() {
+  local task="$1" path registered
+  path="$(worktree_for "$task")"
+  worktree_is_valid "$task" "$path" && { printf '%s' "$path"; return; }
+  registered="$(registered_worktree_for "$task")"
+  if [[ -d "$path" ]]; then
+    if [[ -n "$registered" ]]; then
+      die "task directory is not a valid checkout for $(branch_for "$task"): $path. Git records the worktree at $registered; if it was moved, run: git worktree repair '$path'"
+    fi
+    die "task directory is not a valid checkout for $(branch_for "$task"): $path"
+  fi
+  if [[ -n "$registered" ]]; then
+    die "task worktree is unavailable at $registered. Restore it or repair its Git worktree registration before resuming."
+  fi
+  die "task worktree not found: $path"
+}
+assert_task_branch_available() {
+  local task="$1" branch registered
+  branch="$(branch_for "$task")"
+  if git show-ref --verify --quiet "refs/heads/$branch"; then
+    registered="$(registered_worktree_for "$task")"
+    if [[ -n "$registered" && ! -e "$registered" ]]; then
+      die "branch $branch is registered to a missing worktree at $registered; inspect that path and prune the stale Git worktree record before reusing this task name"
+    fi
+    die "branch already exists: $branch"
+  fi
+}
 route_for() { printf '%s/routes/%s' "$AGENT_STATE_ROOT" "$1"; }
 codex_state_for() { printf '%s/codex/%s' "$AGENT_STATE_ROOT" "$1"; }
 image_state_for() { printf '%s/images/%s' "$AGENT_STATE_ROOT" "$1"; }
@@ -383,6 +455,7 @@ start() {
   [[ -n "$task" ]] || die "usage: elef-agent start TASK [BASE]"
   validate_agent_database
   safe_name "$task"
+  assert_task_branch_available "$task"
   if [[ "$base" == "HEAD" ]]; then
     current_base="$(git branch --show-current)"
     [[ -z "$current_base" ]] || ensure_base_current "$current_base"
@@ -420,7 +493,7 @@ start() {
   echo "Branch:   $branch"
   echo "Database: $AGENT_DATABASE"
   echo "Browser:  https://${host}.localhost"
-  exec_in "$task" codex --dangerously-bypass-approvals-and-sandbox -m gpt-5.6-luna -c 'model_reasoning_effort="max"' -c 'plan_mode_reasoning_effort="max"'
+  exec_in "$task" codex --dangerously-bypass-approvals-and-sandbox -m "$CODEX_MODEL" -c 'model_reasoning_effort="max"' -c 'plan_mode_reasoning_effort="max"'
 }
 
 up() {
@@ -429,8 +502,8 @@ up() {
   safe_name "$task"
   [[ -n "${ELEF_AGENT_DATABASE:-}" ]] || AGENT_DATABASE="$(existing_database_for "$task")"
   validate_agent_database
-  wt="$(worktree_for "$task")"; name="$(container_for "$task")"; host="$(host_for "$task")"
-  [[ -d "$wt" ]] || die "task worktree not found: $wt"
+  wt="$(require_worktree "$task")"; name="$(container_for "$task")"; host="$(host_for "$task")"
+  assert_no_active_terminal "$task"
   router_ready || die "Caddy is not installed; run '$0 setup' first"
   load_dotenv
   token="$(token_for_gh)"; [[ -n "$token" ]] || die "GitHub token unavailable"
@@ -496,8 +569,8 @@ assert_no_active_terminal() {
 }
 
 exec_in() {
-  local task="$1" status terminal state; shift
-  safe_name "$task"; need_container
+  local task="$1" status terminal state wt; shift
+  safe_name "$task"; wt="$(require_worktree "$task")"; need_container
   terminal="$(tty 2>/dev/null || true)"
   if [[ "$terminal" == /dev/tty* ]]; then
     state="$(terminal_state_for "$task")"
@@ -505,7 +578,7 @@ exec_in() {
     printf '%s\n' "$terminal" >"$state"
   fi
   trap 'restore_terminal; clear_terminal_state "$task"' EXIT
-  "$CONTAINER_CLI" exec --interactive --tty --workdir "$(worktree_for "$task")" "$(container_for "$task")" "$@"
+  "$CONTAINER_CLI" exec --interactive --tty --workdir "$wt" "$(container_for "$task")" "$@"
   status=$?
   trap - EXIT
   restore_terminal
@@ -540,7 +613,9 @@ stop() {
 remove() {
   local task="${1:-}" wt name host
   [[ -n "$task" ]] || die "usage: elef-agent remove TASK"
-  safe_name "$task"; host="$(host_for "$task")"; need_container; wt="$(worktree_for "$task")"; name="$(container_for "$task")"
+  safe_name "$task"; host="$(host_for "$task")"; wt="$(worktree_for "$task")"
+  if [[ -e "$wt" ]]; then wt="$(require_worktree "$task")"; fi
+  name="$(container_for "$task")"; need_container
   "$CONTAINER_CLI" stop "$name" 2>/dev/null || true
   "$CONTAINER_CLI" delete "$name" 2>/dev/null || true
   rm -f "$(route_for "$host")"
@@ -616,7 +691,7 @@ validate_pr_description() {
 cleanup() {
   local task="${1:-}" wt name branch repo pr_number host
   [[ -n "$task" ]] || die "usage: elef-agent cleanup TASK"
-  safe_name "$task"; host="$(host_for "$task")"; wt="$(worktree_for "$task")"; name="$(container_for "$task")"; branch="$(branch_for "$task")"
+  safe_name "$task"; host="$(host_for "$task")"; wt="$(require_worktree "$task")"; name="$(container_for "$task")"; branch="$(branch_for "$task")"
   [[ -e "$wt" ]] || die "worktree not found: $wt"
   [[ -z "$(git -C "$wt" status --porcelain)" ]] || die "worktree has uncommitted changes: $wt"
   command -v gh >/dev/null || die "GitHub CLI not found"
@@ -644,8 +719,10 @@ finish() {
   local task="${1:-}" title base branch repo pr_number pr_state body
   [[ -n "$task" ]] || die "usage: elef-agent finish TASK [TITLE]"
   safe_name "$task"
-  [[ -z "$(git -C "$(worktree_for "$task")" status --porcelain)" ]] || \
-    die "worktree has uncommitted changes: $(worktree_for "$task")"
+  local wt
+  wt="$(require_worktree "$task")"
+  [[ -z "$(git -C "$wt" status --porcelain)" ]] || \
+    die "worktree has uncommitted changes: $wt"
   command -v gh >/dev/null || die "GitHub CLI not found"
   title="${2:-Ship $task}"
   base="$(git branch --show-current)"
@@ -751,6 +828,8 @@ Environment overrides:
   ELEF_WORKTREE_ROOT            Worktree parent (default: ../elef-worktrees)
   ELEF_AGENT_STATE_ROOT         Router state directory
   ELEF_AGENT_CADDYFILE          Caddyfile path
+  ELEF_USER_SKILLS_DIR          Host skills directory (default: ~/.agents/skills,
+                                or $CODEX_HOME_HOST/skills)
   ELEF_AGENT_CODEX_VERSION      Codex version used in the image
   ELEF_AGENT_CHROME_DEVTOOLS_MCP_VERSION
                                 Chrome DevTools MCP version used in the image
@@ -767,9 +846,9 @@ case "${1:-}" in
   start) shift; start "$@" ;;
   up) shift; up "$@" ;;
   shell) shift; [[ -n "${1:-}" ]] || die "usage: elef-agent shell TASK [COMMAND...]"; task="$1"; shift; exec_in "$task" bash "$@" ;;
-  codex) shift; [[ -n "${1:-}" ]] || die "usage: elef-agent codex TASK [PROMPT...]"; task="$1"; shift; exec_in "$task" codex --dangerously-bypass-approvals-and-sandbox -m gpt-5.6-luna -c 'model_reasoning_effort="max"' -c 'plan_mode_reasoning_effort="max"' "$@" ;;
-  fork) shift; [[ -n "${1:-}" ]] || die "usage: elef-agent fork TASK [PROMPT...]"; task="$1"; shift; exec_in "$task" codex --dangerously-bypass-approvals-and-sandbox -m gpt-5.6-luna -c 'model_reasoning_effort="max"' -c 'plan_mode_reasoning_effort="max"' fork --last "$@" ;;
-  resume) shift; [[ -n "${1:-}" ]] || die "usage: elef-agent resume TASK"; task="$1"; shift; exec_in "$task" codex --dangerously-bypass-approvals-and-sandbox -m gpt-5.6-luna -c 'model_reasoning_effort="max"' -c 'plan_mode_reasoning_effort="max"' resume --last "$@" ;;
+  codex) shift; [[ -n "${1:-}" ]] || die "usage: elef-agent codex TASK [PROMPT...]"; task="$1"; shift; exec_in "$task" codex --dangerously-bypass-approvals-and-sandbox -m "$CODEX_MODEL" -c 'model_reasoning_effort="max"' -c 'plan_mode_reasoning_effort="max"' "$@" ;;
+  fork) shift; [[ -n "${1:-}" ]] || die "usage: elef-agent fork TASK [PROMPT...]"; task="$1"; shift; exec_in "$task" codex --dangerously-bypass-approvals-and-sandbox -m "$CODEX_MODEL" -c 'model_reasoning_effort="max"' -c 'plan_mode_reasoning_effort="max"' fork --last "$@" ;;
+  resume) shift; [[ -n "${1:-}" ]] || die "usage: elef-agent resume TASK"; task="$1"; shift; exec_in "$task" codex --dangerously-bypass-approvals-and-sandbox -m "$CODEX_MODEL" -c 'model_reasoning_effort="max"' -c 'plan_mode_reasoning_effort="max"' resume --last "$@" ;;
   stop) shift; stop "$@" ;;
   cleanup) shift; cleanup "$@" ;;
   finish) shift; finish "$@" ;;
