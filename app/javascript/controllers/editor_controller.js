@@ -13,6 +13,7 @@ const LEGACY_ESCAPE_ALIAS_STORAGE_KEY = "elef.editor.vim.escapeAlias"
 const LINE_NUMBERS_STORAGE_KEY = "elef.editor.lineNumbers"
 const MODE_AWARE_CURSOR_STORAGE_KEY = "elef.editor.vim.modeAwareCursor"
 const SHIFT_SPACE = "<S-Space>"
+const VIM_ESCAPE_MODES = ["normal", "insert", "visual"]
 let activeEscapeKey = ""
 
 const VIM_KEY_NAMES = {
@@ -369,9 +370,14 @@ export default class extends Controller {
 
   applyMapping() {
     try {
-      if (activeEscapeKey) Vim.unmap(activeEscapeKey)
+      if (activeEscapeKey) {
+        Vim.unmap(activeEscapeKey)
+        VIM_ESCAPE_MODES.forEach((mode) => Vim.unmap(activeEscapeKey, mode))
+      }
       activeEscapeKey = this.escapeKey
-      if (activeEscapeKey) Vim.map(activeEscapeKey, "<Esc>")
+      if (activeEscapeKey && activeEscapeKey !== "<Esc>") {
+        VIM_ESCAPE_MODES.forEach((mode) => Vim.map(activeEscapeKey, "<Esc>", mode))
+      }
     } catch (_error) {
       // A browser without the optional Vim engine should still have a usable editor.
     }
