@@ -96,7 +96,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     assert_includes source, "\\end{gathered}"
   end
 
-  test "collapses front matter and reveals it on demand" do
+  test "front matter can be revealed and hidden again on demand" do
     document = Document.create!(
       title: "Metadata notes",
       source: "---\ntheme: dark\ntypography: modern\n---\n# Metadata notes\n\nBody"
@@ -107,6 +107,12 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     click_on "Reveal source metadata"
     assert_no_selector ".cm-foldPlaceholder"
     assert_selector ".cm-content", text: "theme: dark"
+
+    click_on "Hide source metadata"
+    assert_selector ".cm-foldPlaceholder"
+
+    click_on "Reveal source metadata"
+    assert_no_selector ".cm-foldPlaceholder"
   end
 
   test "keeps the source pane wider on desktop and stacks on narrow screens" do

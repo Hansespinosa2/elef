@@ -1,7 +1,7 @@
 import { Controller } from "@hotwired/stimulus"
 import { Compartment, EditorState } from "@codemirror/state"
 import { EditorView } from "@codemirror/view"
-import { foldEffect, unfoldAll } from "@codemirror/language"
+import { foldEffect, foldedRanges, unfoldEffect } from "@codemirror/language"
 import { basicSetup } from "codemirror"
 import { markdown } from "@codemirror/lang-markdown"
 import { tags } from "@lezer/highlight"
@@ -75,7 +75,7 @@ const theme = EditorView.theme({
 }, { dark: true })
 
 export default class extends Controller {
-  static targets = ["surface", "input", "mode", "command", "vimToggle", "escapeKey", "lineNumbers", "modeAwareCursor"]
+  static targets = ["surface", "input", "mode", "command", "vimToggle", "escapeKey", "lineNumbers", "modeAwareCursor", "metadataToggle"]
 
   connect() {
     this.editorController = this
@@ -196,11 +196,20 @@ export default class extends Controller {
     this.applyCursorStyle()
   }
 
-  revealMetadata() {
-    if (!this.view) return
-    unfoldAll(this.view)
-    const metadataLine = this.view.state.doc.line(1)
-    this.view.dispatch({ selection: { anchor: metadataLine.from }, scrollIntoView: true })
+  toggleMetadataVisibility() {
+    if (!this.view || !this.frontmatterRange) return
+
+    if (this.frontmatterIsFolded()) {
+      this.view.dispatch({
+        effects: unfoldEffect.of(this.frontmatterRange),
+        selection: { anchor: this.frontmatterRange.from },
+        scrollIntoView: true
+      })
+    } else {
+      this.view.dispatch({ effects: foldEffect.of(this.frontmatterRange) })
+    }
+
+    this.syncMetadataToggle()
     this.focus()
   }
 
@@ -260,10 +269,12 @@ export default class extends Controller {
   handleUpdate(update) {
     if (update.docChanged) {
       this.syncInput()
+      this.refreshFrontmatterRange()
       this.dispatchFieldEvent("input")
     }
     if (update.selectionSet || update.docChanged) this.updateMode()
     if (update.selectionSet || update.docChanged || update.viewportChanged) this.scheduleLineNumberUpdate()
+    this.syncMetadataToggle()
   }
 
   handleExternalInputEvent() {
@@ -428,13 +439,38 @@ export default class extends Controller {
   }
 
   collapseFrontmatter() {
-    const match = this.value.match(/^---\r?\n[\s\S]*?\r?\n---(?=\r?\n|$)/)
-    if (!match || match[0].length <= 4) return
+    this.refreshFrontmatterRange()
+    if (!this.frontmatterRange) return
 
     setTimeout(() => {
-      if (this.destroyed) return
-      this.view.dispatch({ effects: foldEffect.of({ from: 0, to: match[0].length }) })
+      if (this.destroyed || !this.frontmatterRange || this.frontmatterIsFolded()) return
+      this.view.dispatch({ effects: foldEffect.of(this.frontmatterRange) })
+      this.syncMetadataToggle()
     }, 0)
+  }
+
+  refreshFrontmatterRange() {
+    const match = this.value.match(/^---\r?\n[\s\S]*?\r?\n---(?=\r?\n|$)/)
+    this.frontmatterRange = match && match[0].length > 4 ? { from: 0, to: match[0].length } : null
+    this.syncMetadataToggle()
+  }
+
+  frontmatterIsFolded() {
+    if (!this.frontmatterRange) return false
+
+    let folded = false
+    foldedRanges(this.view.state).between(this.frontmatterRange.from, this.frontmatterRange.to, (from, to) => {
+      if (from === this.frontmatterRange.from && to === this.frontmatterRange.to) folded = true
+    })
+    return folded
+  }
+
+  syncMetadataToggle() {
+    if (!this.hasMetadataToggleTarget) return
+
+    const hasMetadata = Boolean(this.frontmatterRange)
+    this.metadataToggleTarget.disabled = !hasMetadata
+    this.metadataToggleTarget.textContent = hasMetadata && !this.frontmatterIsFolded() ? "Hide source metadata" : "Reveal source metadata"
   }
 
   applyLineNumbers() {
