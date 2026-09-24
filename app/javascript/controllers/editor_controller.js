@@ -67,6 +67,8 @@ export default class extends Controller {
     this.escapeAlias = this.readEscapeAlias()
     this.lineNumberMode = this.readLineNumberMode()
     this.modeAwareCursor = this.readBoolean(MODE_AWARE_CURSOR_STORAGE_KEY)
+    this.initialSource = this.readInitialSource()
+    this.lineSeparator = this.initialSource.match(/\r\n|\r|\n/)?.[0] || "\n"
     this.vimCompartment = new Compartment()
     this.inputTarget.addEventListener("input", this.handleExternalInput = () => this.handleExternalInputEvent())
     this.inputTarget.addEventListener("change", this.handleExternalChange = () => this.handleExternalInputEvent())
@@ -75,8 +77,9 @@ export default class extends Controller {
 
     this.view = new EditorView({
       state: EditorState.create({
-        doc: this.inputTarget.value,
+        doc: this.initialSource,
         extensions: [
+          EditorState.lineSeparator.of(this.lineSeparator),
           this.vimCompartment.of(this.vimEnabled ? vim() : []),
           basicSetup,
           markdown({ extensions: elefMetadata }),
@@ -102,6 +105,9 @@ export default class extends Controller {
     this.inputTarget.addEventListener("keydown", this.handleProxyKeydown = (event) => this.forwardProxyKeydown(event))
     this.form = this.element.closest("form")
     this.form?.addEventListener("submit", this.handleSubmit = () => this.syncInput())
+    this.form?.addEventListener("formdata", this.handleFormData = (event) => {
+      if (this.inputTarget.name) event.formData.set(this.inputTarget.name, this.sourceValue)
+    })
 
     this.vimToggleTarget.checked = this.vimEnabled
     this.mappingTarget.value = this.mapping
@@ -118,8 +124,9 @@ export default class extends Controller {
   }
 
   disconnect() {
-    this.destroyed = true
     this.form?.removeEventListener("submit", this.handleSubmit)
+    this.form?.removeEventListener("formdata", this.handleFormData)
+    this.destroyed = true
     this.inputTarget.removeEventListener("input", this.handleExternalInput)
     this.inputTarget.removeEventListener("change", this.handleExternalChange)
     this.inputTarget.removeEventListener("click", this.handleProxyClick)
@@ -185,7 +192,11 @@ export default class extends Controller {
   }
 
   get value() {
-    return this.view.state.doc.toString()
+    return this.view.state.doc.sliceString(0, this.view.state.doc.length, "\n")
+  }
+
+  get sourceValue() {
+    return this.view.state.sliceDoc()
   }
 
   get selectionStart() {
@@ -242,7 +253,7 @@ export default class extends Controller {
   }
 
   handleExternalInputEvent() {
-    if (this.syncingInput || this.inputTarget.value === this.value) return
+    if (this.syncingInput || this.normalizeLineEndings(this.inputTarget.value) === this.normalizeLineEndings(this.value)) return
 
     const selection = {
       anchor: this.inputTarget.selectionStart ?? this.inputTarget.value.length,
@@ -262,9 +273,22 @@ export default class extends Controller {
   syncInput() {
     const value = this.value
     this.syncingInput = true
-    if (this.inputTarget.value !== value) this.inputTarget.value = value
+    if (this.normalizeLineEndings(this.inputTarget.value) !== this.normalizeLineEndings(value)) this.inputTarget.value = value
     this.inputTarget.setSelectionRange(this.selectionStart, this.selectionEnd)
     this.syncingInput = false
+  }
+
+  readInitialSource() {
+    try {
+      const source = this.element.dataset.editorInitialSourceValue
+      return source ? JSON.parse(source) : this.inputTarget.value
+    } catch (_error) {
+      return this.inputTarget.value
+    }
+  }
+
+  normalizeLineEndings(value) {
+    return value.replace(/\r\n|\r/g, "\n")
   }
 
   dispatchFieldEvent(type) {
@@ -284,7 +308,7 @@ export default class extends Controller {
     if (["Shift", "Control", "Alt", "Meta", "CapsLock"].includes(event.key)) return
     if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) return
 
-    if (this.inputTarget.value !== this.value) this.handleExternalInputEvent()
+    if (this.normalizeLineEndings(this.inputTarget.value) !== this.normalizeLineEndings(this.value)) this.handleExternalInputEvent()
     this.setSelectionRange(this.inputTarget.selectionStart ?? this.selectionStart, this.inputTarget.selectionEnd ?? this.selectionEnd)
     this.focus()
 

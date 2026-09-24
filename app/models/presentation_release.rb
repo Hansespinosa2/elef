@@ -55,13 +55,15 @@ class PresentationRelease < ApplicationRecord
     release_title = if settings.is_a?(Hash)
       settings["title"].presence || settings[:title].presence
     end
-    Presentation.new(
+    released_presentation = Presentation.new(
       id: work.id,
       title: release_title.presence || work.title,
       source: source_revision.source,
       work_type: "presentation",
       workspace: work.workspace
     )
+    released_presentation.assets = work.assets.blobs if work.assets.attached?
+    released_presentation
   end
 
   private

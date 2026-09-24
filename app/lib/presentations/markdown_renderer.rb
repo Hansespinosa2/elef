@@ -9,7 +9,8 @@ module Presentations
 
     SAFE_URL = /\A(?:https?:|mailto:|tel:|#|\/|\.\.?\/|[^:]*\z)/i
 
-    def initialize
+    def initialize(media_resolver: nil)
+      @media_resolver = media_resolver
       super(filter_html: true, hard_wrap: false, safe_links_only: false)
     end
 
@@ -21,6 +22,22 @@ module Presentations
     end
 
     def image(link, title, alt_text)
+      if (match = link.to_s.match(/\Aelef-asset:([0-9a-f]{64})\z/))
+        media = @media_resolver&.call(match[1])
+        return "" unless media
+
+        path, content_type = media
+        fit = title.to_s.match(/\Afit:(contain|cover)\z/)&.[](1) || "contain"
+        class_name = "presentation-media presentation-media-#{fit}"
+        escaped_path = ERB::Util.html_escape(path)
+        if content_type == "video/mp4"
+          return %(<video class="#{class_name}" src="#{escaped_path}" controls playsinline preload="metadata" aria-label="#{ERB::Util.html_escape(alt_text)}"></video>)
+        end
+
+        title_attribute = alt_text.present? ? %( title="#{ERB::Util.html_escape(alt_text)}") : ""
+        return %(<img class="#{class_name}" src="#{escaped_path}" alt="#{ERB::Util.html_escape(alt_text)}"#{title_attribute}>)
+      end
+
       return "" unless safe_url?(link)
 
       title_attribute = title.present? ? %( title="#{ERB::Util.html_escape(title)}") : ""
@@ -43,14 +60,30 @@ module Presentations
   module MarkdownRenderer
     module_function
 
-    def render(markdown)
-      html = markdown_renderer.render(markdown.to_s)
+    def render(markdown, media_resolver: nil)
+      renderer = media_resolver ? renderer_with_media(media_resolver) : markdown_renderer
+      html = renderer.render(markdown.to_s)
       render_math_outside_code(html).html_safe
     end
 
     def markdown_renderer
       @markdown_renderer ||= Redcarpet::Markdown.new(
         HtmlRenderer.new,
+        autolink: true,
+        fenced_code_blocks: true,
+        footnotes: false,
+        lax_spacing: true,
+        no_intra_emphasis: true,
+        space_after_headers: true,
+        strikethrough: true,
+        superscript: false,
+        tables: true
+      )
+    end
+
+    def renderer_with_media(media_resolver)
+      Redcarpet::Markdown.new(
+        HtmlRenderer.new(media_resolver: media_resolver),
         autolink: true,
         fenced_code_blocks: true,
         footnotes: false,

@@ -15,10 +15,13 @@ Elef is now a conventional Rails monolith for creating and presenting single-use
 
 - Presentation library with create, list, edit, saved preview, and browser presentation mode.
 - Source-first Markdown editor with hybrid autosave, explicit **Save presentation**, and retryable save status.
+- Slide overview with source-backed add, duplicate, delete, and reorder controls; image/MP4 insertion; overflow warnings; and browser print-to-PDF.
 - Dirty-state warning before unsaved source is lost.
 - Presentation management with rename, delete, continuation/inspiration forks, and a library lineage graph.
 - Relational workspaces, immutable Markdown revisions, recovery drafts, pinned presentation releases, Active Storage assets, and self-contained work packages.
 - Strict slide parsing around standalone `---`, initial front matter, fenced code blocks, layout metadata, theme metadata, and empty slides.
+
+Presentation media syntax and print instructions are in [the authoring guide](docs/presentation-media-and-printing.md). The selected Hype features and upstream research are recorded in [the Hype review](docs/hype-research.md).
 
 ## Development
 

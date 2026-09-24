@@ -2,7 +2,7 @@ class PresentationsController < ApplicationController
   include WorkPreview
   include WorkPersistence
 
-  before_action :set_presentation, only: %i[show edit update present publish destroy rename fork restore history export]
+  before_action :set_presentation, only: %i[show edit update present print publish destroy rename fork restore history export upload_asset media_asset]
   before_action :set_preview_presentation, only: :preview
 
   def index
@@ -79,6 +79,48 @@ class PresentationsController < ApplicationController
     @presentation = @release&.presentation || @presentation
     @release_stale = @release&.stale?
     render layout: "presentation"
+  end
+
+  def print
+    @release = @presentation.published_release if params[:version] == "published"
+    @presentation = @release&.presentation || @presentation
+    render layout: "presentation"
+  end
+
+  def upload_asset
+    upload = params.require(:file)
+    content_type = upload.content_type.to_s
+    unless content_type.start_with?("image/") || content_type == "video/mp4"
+      return render json: { error: "Choose an image or MP4 video." }, status: :unprocessable_content
+    end
+    if upload.size.to_i > 50.megabytes
+      return render json: { error: "Media files must be 50 MB or smaller." }, status: :unprocessable_content
+    end
+
+    @presentation.assets.attach(io: upload, filename: upload.original_filename, content_type: content_type)
+    blob = @presentation.assets.blobs.last
+    digest = Digest::SHA256.hexdigest(blob.download)
+    blob.update!(metadata: blob.metadata.merge("elef_sha256" => digest))
+    @presentation.reload
+    render json: {
+      digest: digest,
+      lock_version: @presentation.lock_version,
+      revision_token: @presentation.revision_token,
+      source: Presentations::MediaAssets.markdown_source(
+        digest,
+        alt: params[:alt].presence || File.basename(upload.original_filename, ".*"),
+        fit: %w[contain cover].include?(params[:fit]) ? params[:fit] : "contain"
+      )
+    }, status: :created
+  end
+
+  def media_asset
+    return head :not_found unless params[:digest].to_s.match?(/\A[0-9a-f]{64}\z/)
+
+    blob = @presentation.assets.blobs.find { |asset| Presentations::MediaAssets.digest(asset) == params[:digest] }
+    return head :not_found unless blob
+
+    redirect_to rails_blob_path(blob, disposition: "inline"), allow_other_host: false
   end
 
   def publish
