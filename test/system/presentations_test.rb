@@ -66,8 +66,8 @@ class PresentationsTest < ApplicationSystemTestCase
     page.execute_script("window.autosaveRequests[1].release()")
     assert_selector '[data-autosave-target="status"]', exact_text: "Saved"
     assert_includes presentation.reload.source, "# Latest edit"
-    page.execute_script(<<~JAVASCRIPT)
-      document.querySelector(".source-field").editorController.dom.dispatchEvent(new FocusEvent("focusout"));
+    page.evaluate_async_script(<<~JAVASCRIPT)
+      window.setTimeout(() => arguments[0](), 1200);
     JAVASCRIPT
     assert_nil page.evaluate_script(<<~JAVASCRIPT)
       (() => {
