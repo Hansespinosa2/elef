@@ -70,6 +70,7 @@ body.elef-app {
 .elef-app .source-pane,
 .elef-app .preview-pane,
 .elef-app .library-card,
+.elef-app .document-graph-panel,
 .elef-app .lineage-panel,
 .elef-app .empty-state {
   background: var(--oradia-slate-900) !important;
@@ -761,9 +762,9 @@ body.elef-app {
 .document-link-option:hover, .document-link-option:focus-visible, .document-link-option.is-selected { background: var(--oradia-slate-700); }
 
 .document-graph-panel { overflow: hidden; }
-.document-graph-panel { color: var(--oradia-paper-ink); }
-.document-graph-panel h2 { color: var(--oradia-paper-ink); }
-.document-graph-panel > .mb-4 > div > p:not(.eyebrow), .document-graph-panel .document-graph-legend { color: var(--oradia-paper-muted) !important; }
+.document-graph-panel { color: var(--oradia-ink); }
+.document-graph-panel h2 { color: var(--oradia-ink); }
+.document-graph-panel > .mb-4 > div > p:not(.eyebrow), .document-graph-panel .document-graph-legend { color: var(--oradia-muted) !important; }
 .document-graph-panel .document-graph-legend { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; }
 .document-graph-key-arrow { border-top: 2px solid var(--oradia-green-deep); display: inline-block; margin-right: 0.35rem; position: relative; vertical-align: middle; width: 1.4rem; }
 .document-graph-key-arrow::after { border-bottom: 4px solid transparent; border-left: 6px solid var(--oradia-green-deep); border-top: 4px solid transparent; content: ""; position: absolute; right: -1px; top: -5px; }
