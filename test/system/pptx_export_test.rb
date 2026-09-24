@@ -11,19 +11,22 @@ class PptxExportTest < ApplicationSystemTestCase
   }.freeze
 
   test "exports every presentation fixture as a styled 16:9 PPTX" do
-    fixtures = [{ id: "presentations.yml:one", presentation: presentations(:one) }]
+    presentation = presentations(:one)
+    fixtures = [{ id: "presentations.yml:one", source: presentation.source }]
     fixtures += (Presentations::SampleData::SAMPLES + Presentations::LineageSampleData::SAMPLES).map do |sample|
-      { id: sample.fetch(:id), presentation: Presentation.create!(title: sample.fetch(:title), source: sample.fetch(:source)) }
+      { id: sample.fetch(:id), source: sample.fetch(:source) }
     end
     fake_image = Presentations::PptxExport::RemoteImageFetcher::Image.new(PIXEL_PNG, "image/png")
     generated_packages = 0
 
+    visit presentation_path(presentation)
+    capture_pptx_blob
+    download_button = find(".show-actions button", text: "Download PPTX")
+
     with_remote_image_fetcher(->(_url) { fake_image }) do
       fixtures.each do |fixture|
-        presentation = fixture.fetch(:presentation)
-        visit presentation_path(presentation)
-        capture_pptx_blob
-        find(".show-actions button", text: "Download PPTX").click
+        presentation.update!(source: fixture.fetch(:source))
+        download_button.click
         assert_selector '[role="status"]', text: "PowerPoint downloaded.", wait: 30
 
         pptx_bytes = captured_pptx_bytes
