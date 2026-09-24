@@ -25,6 +25,7 @@ export default class extends Controller {
     this.projectionLinkHandler = (event) => this.projectionLinkClicked(event)
     this.element.addEventListener("click", this.projectionLinkHandler)
     this.applyMode("visual")
+    this.updateBlockBoundaries()
   }
 
   disconnect() {
@@ -212,7 +213,9 @@ export default class extends Controller {
     const slide = this.map?.slides?.[slideIndex]
     if (!slide) return
     const source = this.sourceValue()
-    const insertion = index < slide.blocks.length ? slide.blocks[index].range.start : slide.range.end
+    const insertion = index < slide.blocks.length
+      ? this.blockOperationStart(slide, slide.blocks[index])
+      : slide.range.end
     if (index < slide.blocks.length) {
       this.replaceSource(`${source.slice(0, insertion)}New block\n\n${source.slice(insertion)}`)
       return
@@ -225,11 +228,27 @@ export default class extends Controller {
   }
 
   deleteBlock(slideIndex, blockIndex) {
-    const block = this.map?.slides?.[slideIndex]?.blocks?.[blockIndex]
-    if (!block) return
+    const slide = this.map?.slides?.[slideIndex]
+    const block = slide?.blocks?.[blockIndex]
+    if (!slide || !block) return
     const source = this.sourceValue()
-    const before = source.slice(0, block.range.start)
-    let after = source.slice(block.range.end)
+    let from = this.blockOperationStart(slide, block)
+    let to = block.range.end
+
+    if (block.position_scope === "group") {
+      const groupMembers = slide.blocks.filter((candidate) => candidate.position_directive_id === block.position_directive_id)
+      if (groupMembers.length === 1) {
+        const directiveIndex = slide.directives.findIndex((candidate) => candidate.id === block.position_directive_id)
+        const closing = slide.directives.slice(directiveIndex + 1).find((candidate) => candidate.type === "position_close")
+        if (closing) {
+          from = slide.directives[directiveIndex].range.start
+          to = closing.range.end
+        }
+      }
+    }
+
+    const before = source.slice(0, from)
+    let after = source.slice(to)
     if (before.trim() === "" && after.startsWith("\n")) after = after.slice(1)
     else if (after.startsWith("\n") && before.endsWith("\n\n")) after = after.slice(1)
     this.replaceSource(`${before}${after}`)
@@ -238,23 +257,35 @@ export default class extends Controller {
   moveBlock(slideIndex, index, target) {
     const slide = this.map?.slides?.[slideIndex]
     if (!slide || target < 0 || target >= slide.blocks.length) return
+    const movingGroupId = slide.blocks[index]?.position_scope === "group"
+      ? slide.blocks[index].position_directive_id
+      : null
+    const low = Math.min(index, target)
+    const high = Math.max(index, target)
+    if (slide.blocks.slice(low, high + 1).some((block) =>
+      block.position_scope === "group" && block.position_directive_id !== movingGroupId
+    )) return
+    if (movingGroupId && slide.blocks.slice(low, high + 1).some((block) =>
+      block.position_scope !== "group" || block.position_directive_id !== movingGroupId
+    )) return
+
     const source = this.sourceValue()
     const contentEnd = (block) => {
       const raw = source.slice(block.range.start, block.range.end)
       const ending = raw.match(/\r\n|\n|\r$/)?.[0] || ""
       return block.range.end - ending.length
     }
-    const blocks = slide.blocks.map((block) => source.slice(block.range.start, contentEnd(block)))
+    const starts = slide.blocks.map((block) => this.blockOperationStart(slide, block))
+    const blocks = slide.blocks.map((block, blockIndex) => source.slice(starts[blockIndex], contentEnd(block)))
     const separators = slide.blocks.slice(0, -1).map((block, blockIndex) =>
-      source.slice(contentEnd(block), slide.blocks[blockIndex + 1].range.start)
+      source.slice(contentEnd(block), starts[blockIndex + 1])
     )
     const trailing = source.slice(contentEnd(slide.blocks.at(-1)), slide.range.end)
+    const leading = source.slice(slide.range.start, starts[0])
     const moved = blocks.splice(index, 1)[0]
     blocks.splice(target, 0, moved)
-    const from = slide.range.start
-    const to = slide.range.end
-    const body = blocks.map((block, blockIndex) => `${block}${separators[blockIndex] || ""}`).join("")
-    this.replaceSource(`${source.slice(0, from)}${body}${trailing}${source.slice(to)}`)
+    const body = `${leading}${blocks.map((block, blockIndex) => `${block}${separators[blockIndex] || ""}`).join("")}${trailing}`
+    this.replaceSource(`${source.slice(0, slide.range.start)}${body}${source.slice(slide.range.end)}`)
   }
 
   previewUpdated(payload) {
@@ -266,6 +297,7 @@ export default class extends Controller {
     this.map = payload.editor_map
     this.operationPending = false
     if (wasPending) this.setControlsDisabled(false)
+    this.updateBlockBoundaries()
     this.setStatus("")
   }
 
@@ -330,6 +362,36 @@ export default class extends Controller {
     return this.map?.slides?.flatMap((slide) => slide.blocks || []).find((block) => block.id === id)
   }
 
+  blockOperationStart(slide, block) {
+    if (block.position_scope !== "block" || !block.position_directive_id) return block.range.start
+    const directive = slide.directives.find((candidate) => candidate.id === block.position_directive_id)
+    return directive?.range.start ?? block.range.start
+  }
+
+  updateBlockBoundaries() {
+    this.element.querySelectorAll('[data-presentation-editor-action="move-block-up"], [data-presentation-editor-action="move-block-down"]').forEach((control) => {
+      const slide = this.map?.slides?.[Number(control.dataset.slideIndex)]
+      const index = Number(control.dataset.blockIndex)
+      const delta = control.dataset.presentationEditorAction === "move-block-up" ? -1 : 1
+      const neighbor = slide?.blocks?.[index + delta]
+      const block = slide?.blocks?.[index]
+      let disabled = !neighbor || !block
+
+      if (neighbor && block && (neighbor.position_scope === "group" || block.position_scope === "group")) {
+        disabled = neighbor.position_scope !== "group" || block.position_scope !== "group" ||
+          neighbor.position_directive_id !== block.position_directive_id
+      }
+
+      if (disabled) {
+        control.dataset.editorBoundaryDisabled = "true"
+        control.disabled = true
+      } else {
+        delete control.dataset.editorBoundaryDisabled
+        control.disabled = false
+      }
+    })
+  }
+
   removePositionDirectives(source, slide, directive) {
     const directiveIndex = slide.directives.findIndex((candidate) => candidate.id === directive.id)
     const closing = slide.directives[directiveIndex + 1]
@@ -365,13 +427,14 @@ export default class extends Controller {
 
   setControlsDisabled(disabled) {
     this.element.querySelectorAll("[data-presentation-editor-action], [data-presentation-editor-position]").forEach((control) => {
-      if (!disabled && control.dataset.editorBoundaryDisabled === "true") return
       if (disabled) {
-        control.dataset.editorOriginalDisabled = String(control.disabled)
+        if (control.dataset.editorOperationPending !== "true") {
+          control.dataset.editorOriginalDisabled = String(control.disabled)
+        }
         control.dataset.editorOperationPending = "true"
         control.disabled = true
       } else if (control.dataset.editorOperationPending === "true") {
-        control.disabled = control.dataset.editorOriginalDisabled === "true"
+        control.disabled = control.dataset.editorOriginalDisabled === "true" || control.dataset.editorBoundaryDisabled === "true"
         delete control.dataset.editorOperationPending
         delete control.dataset.editorOriginalDisabled
       }

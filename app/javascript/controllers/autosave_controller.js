@@ -115,13 +115,15 @@ export default class extends Controller {
     const requestController = new AbortController()
     this.requestController = requestController
     let timedOut = false
+    let recoveryCopySaved = false
 
     try {
-      // Do not report an in-flight save until its recovery copy has committed.
-      // A reload during a slow or failed PATCH must still be able to restore it.
-      await this.persistLocalDraft(snapshot)
+      // Attempt a recovery copy before PATCH so reloads can recover work if
+      // the request stalls. Continue saving if browser storage is unavailable,
+      // but make that loss-of-recovery risk visible to the author.
+      recoveryCopySaved = await this.persistLocalDraft(snapshot)
       if (!this.active) return
-      this.setStatus("Saving…")
+      this.setStatus(recoveryCopySaved ? "Saving…" : "Saving… Browser recovery is unavailable.")
 
       let timeoutReject
       const timeoutFailure = new Promise((_, reject) => { timeoutReject = reject })
@@ -171,7 +173,11 @@ export default class extends Controller {
       }
     } catch (_error) {
       if (this.active) {
-        this.setStatus(timedOut ? "Save timed out; your changes remain in the editor." : "Save failed", "error")
+        const failure = timedOut ? "Save timed out; your changes remain in the editor." : "Save failed"
+        const recoveryWarning = recoveryCopySaved
+          ? ""
+          : " Browser recovery is unavailable; keep this page open and copy your changes before leaving."
+        this.setStatus(`${failure}${recoveryWarning}`, "error")
       }
     } finally {
       clearTimeout(this.requestTimeout)
@@ -223,7 +229,7 @@ export default class extends Controller {
   }
 
   persistLocalDraft(snapshot = this.snapshot()) {
-    if (!this.localDraftKey) return
+    if (!this.localDraftKey) return false
     const record = {
       key: this.localDraftKey,
       snapshot,
@@ -261,77 +267,126 @@ export default class extends Controller {
   }
 
   openDatabase() {
-    if (!window.indexedDB) return null
+    try {
+      if (!window.indexedDB) return null
 
-    return new Promise((resolve) => {
-      let settled = false
-      const resolveOnce = (database) => {
-        if (settled) {
-          database?.close()
-          return
+      return new Promise((resolve) => {
+        let settled = false
+        const resolveOnce = (database) => {
+          if (settled) {
+            database?.close()
+            return
+          }
+          settled = true
+          resolve(database)
         }
-        settled = true
-        resolve(database)
-      }
-      const request = window.indexedDB.open(DATABASE_NAME, DATABASE_VERSION)
-      request.onupgradeneeded = () => {
-        if (!request.result.objectStoreNames.contains(STORE_NAME)) {
-          request.result.createObjectStore(STORE_NAME, { keyPath: "key" })
+        const request = window.indexedDB.open(DATABASE_NAME, DATABASE_VERSION)
+        request.onupgradeneeded = () => {
+          if (!request.result.objectStoreNames.contains(STORE_NAME)) {
+            request.result.createObjectStore(STORE_NAME, { keyPath: "key" })
+          }
         }
-      }
-      request.onsuccess = () => resolveOnce(request.result)
-      request.onerror = () => resolveOnce(null)
-      request.onblocked = () => resolveOnce(null)
-    })
+        request.onsuccess = () => resolveOnce(request.result)
+        request.onerror = () => resolveOnce(null)
+        request.onblocked = () => resolveOnce(null)
+      })
+    } catch (_error) {
+      return null
+    }
   }
 
   async readDraft(key) {
+    let databaseRecord = null
     try {
       const database = await this.database
       if (database) {
-        return await new Promise((resolve) => {
+        databaseRecord = await new Promise((resolve) => {
           const transaction = database.transaction(STORE_NAME, "readonly")
           const request = transaction.objectStore(STORE_NAME).get(key)
           request.onsuccess = () => resolve(request.result || null)
           request.onerror = () => resolve(null)
         })
       }
-      return JSON.parse(window.localStorage.getItem(this.storageKey(key)) || "null")
     } catch (_error) {
-      return null
+      databaseRecord = null
     }
+
+    let localRecord = null
+    try {
+      localRecord = JSON.parse(window.localStorage.getItem(this.storageKey(key)) || "null")
+    } catch (_error) {
+      localRecord = null
+    }
+
+    if (!databaseRecord) return localRecord
+    if (!localRecord) return databaseRecord
+    return Number(localRecord.updatedAt || 0) > Number(databaseRecord.updatedAt || 0)
+      ? localRecord
+      : databaseRecord
   }
 
   async writeDraft(record) {
+    let database
     try {
-      const database = await this.database
-      if (database) {
+      database = await this.database
+    } catch (_error) {
+      database = null
+    }
+
+    if (database) {
+      try {
         const committed = await new Promise((resolve) => {
           const transaction = database.transaction(STORE_NAME, "readwrite")
           transaction.oncomplete = () => resolve(true)
           transaction.onabort = transaction.onerror = () => resolve(false)
           transaction.objectStore(STORE_NAME).put(record)
         })
-        if (committed) return
+        if (committed) {
+          try {
+            window.localStorage.removeItem(this.storageKey(record.key))
+          } catch (_error) {
+            // A newer IndexedDB record wins if an old fallback cannot be removed.
+          }
+          return true
+        }
+      } catch (_error) {
+        // Fall back to local storage if IndexedDB is blocked or full.
       }
+    }
+
+    try {
       window.localStorage.setItem(this.storageKey(record.key), JSON.stringify(record))
+      return true
     } catch (_error) {
       // Private browsing, blocked storage, or a full quota should not disable editing.
+      return false
     }
   }
 
   async deleteDraft(key) {
+    let deleted = true
     try {
       const database = await this.database
       if (database) {
         const transaction = database.transaction(STORE_NAME, "readwrite")
+        const completed = new Promise((resolve) => {
+          transaction.oncomplete = () => resolve(true)
+          transaction.onabort = transaction.onerror = () => resolve(false)
+        })
         transaction.objectStore(STORE_NAME).delete(key)
-        return
+        deleted = await completed
       }
+    } catch (_error) {
+      deleted = false
+    }
+
+    try {
       window.localStorage.removeItem(this.storageKey(key))
     } catch (_error) {
-      // The server copy remains authoritative if browser cleanup is unavailable.
+      deleted = false
     }
+
+    return deleted
   }
 
   storageKey(key) {

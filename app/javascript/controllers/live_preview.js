@@ -84,79 +84,123 @@ function addMark(decorations, state, from, to, className) {
   decorations.push(markDecoration(className).range(from, to))
 }
 
-function addInlineMarkup(decorations, state, source) {
-  // Images are widgets only when their destination is safe. Unknown or
-  // malformed media stays as editable Markdown instead of disappearing.
-  const imagePattern = /!\[([^\]]*)\]\(([^\s)]+)(?:\s+["']([^"']*)["'])?\)/g
-  for (const match of source.matchAll(imagePattern)) {
-    const from = match.index
-    const to = from + match[0].length
-    if (safeUrl(match[2])) addHidden(decorations, state, from, to, new PreviewWidget("image", "", { alt: match[1], src: match[2] }), [from, to])
-  }
+function inlineRangesOutsideFences(source) {
+  const ranges = []
+  let offset = 0
+  let rangeStart = 0
+  let fence = null
 
-  const linkPattern = /\[([^\]]+)\]\(([^\s)]+)(?:\s+["']([^"']*)["'])?\)/g
-  for (const match of source.matchAll(linkPattern)) {
-    const from = match.index
-    const labelStart = from + 1
-    const labelEnd = labelStart + match[1].length
-    const destinationStart = labelEnd + 2
-    const destinationEnd = from + match[0].length
-    if (!safeUrl(match[2])) continue
-    addHidden(decorations, state, from, labelStart, null, [from, destinationEnd])
-    addHidden(decorations, state, labelEnd, destinationEnd, null, [from, destinationEnd])
-    addMark(decorations, state, labelStart, labelEnd, "cm-live-link")
-  }
+  source.split("\n").forEach((line) => {
+    const lineStart = offset
+    const lineEnd = lineStart + line.length
+    const match = line.match(/^(\s{0,3})(`{3,}|~{3,})(.*)$/)
 
-  const documentLinkPattern = /\[\[([^\]\r\n]+)\]\]/g
-  for (const match of source.matchAll(documentLinkPattern)) {
-    const from = match.index
-    const labelStart = from + 2
-    const labelEnd = labelStart + match[1].length
-    addHidden(decorations, state, from, labelStart, null, [from, from + match[0].length])
-    addHidden(decorations, state, labelEnd, from + match[0].length, null, [from, from + match[0].length])
-    addMark(decorations, state, labelStart, labelEnd, "cm-live-document-link")
-  }
+    if (fence) {
+      if (match && fence.marker === match[2][0] && match[2].length >= fence.length && match[3].trim() === "") {
+        fence = null
+        rangeStart = lineEnd + (lineEnd < source.length ? 1 : 0)
+      }
+    } else if (match) {
+      if (rangeStart < lineStart) ranges.push({ from: rangeStart, to: lineStart })
+      fence = { marker: match[2][0], length: match[2].length }
+    }
 
-  const mathPattern = /\$\$(.+?)\$\$|(?<!\$)\$(?!\s)(.+?)(?<!\s)\$(?!\$)/gs
-  for (const match of source.matchAll(mathPattern)) {
-    const expression = match[1] || match[2]
-    const from = match.index
-    const to = from + match[0].length
-    const widget = new PreviewWidget(match[1] ? "math-display" : "math", expression.trim())
-    addHidden(decorations, state, from, to, widget, [from, to])
-  }
+    offset = lineEnd + 1
+  })
 
-  const codePattern = /(`+)([^`\r\n]+?)\1/g
-  for (const match of source.matchAll(codePattern)) {
-    const from = match.index
-    const contentStart = from + match[1].length
-    const contentEnd = contentStart + match[2].length
-    addHidden(decorations, state, from, contentStart, null, [from, from + match[0].length])
-    addHidden(decorations, state, contentEnd, from + match[0].length, null, [from, from + match[0].length])
-    addMark(decorations, state, contentStart, contentEnd, "cm-live-inline-code")
-  }
+  if (rangeStart < source.length) ranges.push({ from: rangeStart, to: source.length })
+  return ranges
+}
 
-  const strongPattern = /(\*\*|__)(?=\S)(.+?)(?<=\S)\1/g
-  for (const match of source.matchAll(strongPattern)) {
-    const from = match.index
-    const contentStart = from + match[1].length
-    const contentEnd = contentStart + match[2].length
-    addHidden(decorations, state, from, contentStart, null, [from, from + match[0].length])
-    addHidden(decorations, state, contentEnd, from + match[0].length, null, [from, from + match[0].length])
-    addMark(decorations, state, contentStart, contentEnd, "cm-live-strong")
-  }
+function addInlineMarkup(decorations, state, source, ranges) {
+  for (const range of ranges) {
+    const segment = source.slice(range.from, range.to)
+    const absolute = (offset) => range.from + offset
+    const codeRanges = []
+    const codePattern = /(`+)([^`\r\n]+?)\1/g
 
-  const emphasisPattern = /(?<!\*)\*(?!\s)(.+?)(?<!\s)\*(?!\*)|(?<!_)_(?!\s)(.+?)(?<!\s)_(?!_)/g
-  for (const match of source.matchAll(emphasisPattern)) {
-    const marker = match[0][0]
-    const text = match[1] || match[2]
-    const from = match.index
-    const contentStart = from + 1
-    const contentEnd = contentStart + text.length
-    addHidden(decorations, state, from, contentStart, null, [from, from + match[0].length])
-    addHidden(decorations, state, contentEnd, from + match[0].length, null, [from, from + match[0].length])
-    addMark(decorations, state, contentStart, contentEnd, "cm-live-emphasis")
-    void marker
+    for (const match of segment.matchAll(codePattern)) {
+      const from = absolute(match.index)
+      const to = from + match[0].length
+      const contentStart = from + match[1].length
+      const contentEnd = contentStart + match[2].length
+      codeRanges.push([from, to])
+      addHidden(decorations, state, from, contentStart, null, [from, to])
+      addHidden(decorations, state, contentEnd, to, null, [from, to])
+      addMark(decorations, state, contentStart, contentEnd, "cm-live-inline-code")
+    }
+
+    const overlapsCode = (from, to) => codeRanges.some(([codeFrom, codeTo]) => from < codeTo && to > codeFrom)
+
+    // Images are widgets only when their destination is safe. Unknown or
+    // malformed media stays as editable Markdown instead of disappearing.
+    const imagePattern = /!\[([^\]]*)\]\(([^\s)]+)(?:\s+["']([^"']*)["'])?\)/g
+    for (const match of segment.matchAll(imagePattern)) {
+      const from = absolute(match.index)
+      const to = from + match[0].length
+      if (!overlapsCode(from, to) && safeUrl(match[2])) {
+        addHidden(decorations, state, from, to, new PreviewWidget("image", "", { alt: match[1], src: match[2] }), [from, to])
+      }
+    }
+
+    const linkPattern = /\[([^\]]+)\]\(([^\s)]+)(?:\s+["']([^"']*)["'])?\)/g
+    for (const match of segment.matchAll(linkPattern)) {
+      const from = absolute(match.index)
+      const labelStart = from + 1
+      const labelEnd = labelStart + match[1].length
+      const destinationEnd = from + match[0].length
+      if (overlapsCode(from, destinationEnd) || !safeUrl(match[2]) || segment[match.index - 1] === "!") continue
+      addHidden(decorations, state, from, labelStart, null, [from, destinationEnd])
+      addHidden(decorations, state, labelEnd, destinationEnd, null, [from, destinationEnd])
+      addMark(decorations, state, labelStart, labelEnd, "cm-live-link")
+    }
+
+    const documentLinkPattern = /\[\[([^\]\r\n]+)\]\]/g
+    for (const match of segment.matchAll(documentLinkPattern)) {
+      const from = absolute(match.index)
+      const labelStart = from + 2
+      const labelEnd = labelStart + match[1].length
+      const to = from + match[0].length
+      if (overlapsCode(from, to)) continue
+      addHidden(decorations, state, from, labelStart, null, [from, to])
+      addHidden(decorations, state, labelEnd, to, null, [from, to])
+      addMark(decorations, state, labelStart, labelEnd, "cm-live-document-link")
+    }
+
+    const mathPattern = /\$\$(.+?)\$\$|(?<!\$)\$(?!\s)(.+?)(?<!\s)\$(?!\$)/gs
+    for (const match of segment.matchAll(mathPattern)) {
+      const from = absolute(match.index)
+      const to = from + match[0].length
+      if (overlapsCode(from, to)) continue
+      const expression = match[1] || match[2]
+      const widget = new PreviewWidget(match[1] ? "math-display" : "math", expression.trim())
+      addHidden(decorations, state, from, to, widget, [from, to])
+    }
+
+    const strongPattern = /(\*\*|__)(?=\S)(.+?)(?<=\S)\1/g
+    for (const match of segment.matchAll(strongPattern)) {
+      const from = absolute(match.index)
+      const to = from + match[0].length
+      if (overlapsCode(from, to)) continue
+      const contentStart = from + match[1].length
+      const contentEnd = contentStart + match[2].length
+      addHidden(decorations, state, from, contentStart, null, [from, to])
+      addHidden(decorations, state, contentEnd, to, null, [from, to])
+      addMark(decorations, state, contentStart, contentEnd, "cm-live-strong")
+    }
+
+    const emphasisPattern = /(?<!\*)\*(?!\s)(.+?)(?<!\s)\*(?!\*)|(?<!_)_(?!\s)(.+?)(?<!\s)_(?!_)/g
+    for (const match of segment.matchAll(emphasisPattern)) {
+      const from = absolute(match.index)
+      const to = from + match[0].length
+      if (overlapsCode(from, to)) continue
+      const text = match[1] || match[2]
+      const contentStart = from + 1
+      const contentEnd = contentStart + text.length
+      addHidden(decorations, state, from, contentStart, null, [from, to])
+      addHidden(decorations, state, contentEnd, to, null, [from, to])
+      addMark(decorations, state, contentStart, contentEnd, "cm-live-emphasis")
+    }
   }
 }
 
@@ -281,7 +325,7 @@ function buildDecorations(state, enabled) {
     const source = state.doc.toString()
     const decorations = []
     addBlockMarkup(decorations, state, source)
-    addInlineMarkup(decorations, state, source)
+    addInlineMarkup(decorations, state, source, inlineRangesOutsideFences(source))
     addSyntaxTreeHints(decorations, state)
     const set = Decoration.set(decorations, true)
     const atomic = Decoration.set(decorations.filter((range) => range.value.spec.widget), true)

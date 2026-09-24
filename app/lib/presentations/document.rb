@@ -308,6 +308,7 @@ module Presentations
           markdown: markdown,
           position: pending_position && pending_position[:value],
           position_directive_id: pending_position && pending_position[:directive_id],
+          position_scope: pending_position && (pending_position[:scoped] ? "group" : "block"),
           range: utf16_range(source, block_start, block_end),
           source_range: utf16_range(source, block_start, block_end),
           content_range: utf16_range(source, block_start, block_start + markdown.length)

@@ -271,6 +271,102 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_selector ".presentation-editor-projection .slide", count: 2
   end
 
+  test "presentation controls re-enable after repeated visual typing" do
+    presentation = Presentation.create!(title: "Typing controls", source: "# Slide\n\nAlpha")
+
+    visit edit_presentation_path(presentation)
+    block = find(".editor-projection .slide-block", text: "Alpha")
+    block.click
+    block.send_keys(:end, " with several characters")
+
+    assert_field "Markdown source", with: "# Slide\n\nAlpha with several characters", wait: 5
+    page.execute_script("document.activeElement.blur()")
+
+    controls_reenabled = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const form = document.querySelector('.visual-editor-form');
+        const controller = form.presentationEditorController;
+        const control = form.querySelector('[data-presentation-editor-action="add-block-after"][data-block-index="1"]');
+        controller.setControlsDisabled(true);
+        controller.setControlsDisabled(true);
+        controller.setControlsDisabled(false);
+        return !control.disabled;
+      })()
+    JAVASCRIPT
+    assert controls_reenabled, "repeated pending updates must restore the original control state"
+
+    assert_selector "[data-presentation-editor-action='add-block-after'][data-block-index='1']:not([disabled])", wait: 5
+    find("[data-presentation-editor-action='add-block-after'][data-block-index='1']").click
+    assert_field "Markdown source", with: "# Slide\n\nAlpha with several characters\n\nNew block", wait: 5
+    assert_selector ".presentation-editor-projection .slide-block", text: "New block", wait: 5
+  end
+
+  test "single-block position directives move with their content and are deleted with it" do
+    presentation = Presentation.create!(
+      title: "Positioned structure",
+      source: "# Slide\n\n:::position{center middle}\n\nPositioned\n\nPlain"
+    )
+
+    visit edit_presentation_path(presentation)
+    assert_selector ".slide-block.position-center.position-middle", text: "Positioned"
+    refute_selector ".slide-block.position-center", text: "Plain"
+
+    find("[data-presentation-editor-action='move-block-down'][data-block-index='1']").click
+    assert_field "Markdown source", with: "# Slide\n\nPlain\n\n:::position{center middle}\n\nPositioned", wait: 5
+    assert_selector ".slide-block.position-center.position-middle", text: "Positioned", wait: 5
+    refute_selector ".slide-block.position-center", text: "Plain"
+
+    assert_selector "[data-presentation-editor-action='add-block-after'][data-block-index='1']:not([disabled])", wait: 5
+    find("[data-presentation-editor-action='add-block-after'][data-block-index='1']").click
+    assert_field "Markdown source", with: "# Slide\n\nPlain\n\nNew block\n\n:::position{center middle}\n\nPositioned", wait: 5
+    assert_selector ".slide-block", text: "New block", wait: 5
+    refute_selector ".slide-block.position-center", text: "New block"
+
+    accept_confirm do
+      find("[data-presentation-editor-action='delete-block'][data-block-index='3']").click
+    end
+    refute_includes find_field("Markdown source").value, ":::position{center middle}"
+    assert_no_selector ".slide-block.position-center", wait: 5
+
+    click_on "Save presentation"
+    assert_selector ".flash.notice", text: "Presentation saved.", wait: 10
+    visit edit_presentation_path(presentation)
+    assert_field "Markdown source", with: /# Slide\n\nPlain\n\nNew block/
+    refute_includes find_field("Markdown source").value, ":::position{center middle}"
+  end
+
+  test "shared position groups stay intact and cannot be split by block reordering" do
+    presentation = Presentation.create!(
+      title: "Position group",
+      source: "# Slide\n\n:::position{center}\n\nFirst\n\nSecond\n\n:::\n\nOutside"
+    )
+
+    visit edit_presentation_path(presentation)
+    assert_selector "[data-presentation-editor-action='move-block-down'][data-block-index='1']:not([disabled])"
+    assert_selector "[data-presentation-editor-action='move-block-down'][data-block-index='2'][disabled]"
+    assert_selector "[data-presentation-editor-action='move-block-up'][data-block-index='3'][disabled]"
+
+    find("[data-presentation-editor-action='move-block-down'][data-block-index='1']").click
+    assert_field "Markdown source", with: "# Slide\n\n:::position{center}\n\nSecond\n\nFirst\n\n:::\n\nOutside", wait: 5
+    assert_selector ".slide-block.position-center", text: "First", wait: 5
+    assert_selector ".slide-block.position-center", text: "Second"
+
+    assert_selector "[data-presentation-editor-action='delete-block'][data-block-index='2']:not([disabled])", wait: 5
+    accept_confirm do
+      find("[data-presentation-editor-action='delete-block'][data-block-index='2']").click
+    end
+    assert_includes find_field("Markdown source").value, ":::position{center}"
+
+    assert_selector "[data-presentation-editor-action='delete-block'][data-block-index='1']:not([disabled])", wait: 5
+    accept_confirm do
+      find("[data-presentation-editor-action='delete-block'][data-block-index='1']").click
+    end
+    final_source = find_field("Markdown source").value
+    refute_includes final_source, ":::position{center}"
+    refute_includes final_source, ":::"
+    assert_includes final_source, "Outside"
+  end
+
   test "keeps rendered presentation blocks and source mappings atomic while editing structure" do
     presentation = Presentation.create!(title: "Live block structure", source: "# Live structure\n\nAlpha")
 
@@ -352,6 +448,57 @@ class PresentationsTest < ApplicationSystemTestCase
     visit edit_presentation_path(presentation)
     assert_field "Markdown source", with: "# Live structure\n\nBeta"
     assert_selector ".presentation-editor-projection [data-editor-block-id]", count: 2
+  end
+
+  test "keeps the last-good presentation map paired with its projection after render failure" do
+    presentation = Presentation.create!(title: "Failed map", source: "# Original\n\nOne")
+    visit edit_presentation_path(presentation)
+    original_state = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const form = document.querySelector('.visual-editor-form');
+        return {
+          sourceLength: form.presentationEditorController.map.source_length,
+          renderedIds: [...document.querySelectorAll('.presentation-editor-projection [data-editor-block-id]')]
+            .map((block) => block.dataset.editorBlockId)
+        };
+      })()
+    JAVASCRIPT
+
+    page.execute_script(<<~JAVASCRIPT)
+      const originalFetch = window.fetch.bind(window);
+      window.fetch = (url, options = {}) => {
+        if (options.method === 'POST' && String(url).includes('/preview')) {
+          return Promise.resolve(new Response(JSON.stringify({
+            html: null,
+            warnings: ['Simulated invalid projection'],
+            editor_map: { source_length: 0, slides: [] }
+          }), { status: 422, headers: { 'Content-Type': 'application/json' } }));
+        }
+        return originalFetch(url, options);
+      };
+    JAVASCRIPT
+
+    fill_in "Markdown source", with: "# Changed\n\nOne\n\nTwo"
+    assert_selector '[data-preview-target="status"]', text: "Preview unavailable", wait: 5
+    failed_state = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const form = document.querySelector('.visual-editor-form');
+        return {
+          sourceLength: form.presentationEditorController.map.source_length,
+          mappedIds: form.presentationEditorController.map.slides.flatMap((slide) => slide.blocks.map((block) => block.id)),
+          renderedIds: [...document.querySelectorAll('.presentation-editor-projection [data-editor-block-id]')]
+            .map((block) => block.dataset.editorBlockId),
+          controlsPaused: [...form.querySelectorAll('[data-presentation-editor-action="add-block-after"]')]
+            .some((control) => control.disabled)
+        };
+      })()
+    JAVASCRIPT
+
+    assert_equal original_state["sourceLength"], failed_state["sourceLength"]
+    assert_equal original_state["renderedIds"], failed_state["mappedIds"]
+    assert_equal original_state["renderedIds"], failed_state["renderedIds"]
+    assert failed_state["controlsPaused"]
+    assert_field "Markdown source", with: "# Changed\n\nOne\n\nTwo"
   end
 
   test "visual presentation edits preserve formatted headings and LaTeX" do
@@ -850,6 +997,68 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: "# Offline edit", wait: 5
     assert_selector '[data-autosave-target="status"]', exact_text: "Saved", wait: 5
     assert_includes presentation.reload.source, "# Offline edit"
+  end
+
+  test "falls back to local storage when indexeddb cannot read a draft" do
+    presentation = Presentation.create!(title: "Storage fallback", source: "# Initial")
+    visit edit_presentation_path(presentation)
+
+    page.execute_script(<<~JAVASCRIPT)
+      const controller = window.Stimulus.getControllerForElementAndIdentifier(
+        document.querySelector('form[data-controller~="autosave"]'), 'autosave'
+      );
+      const record = {
+        key: controller.localDraftKey,
+        snapshot: "# Browser copy",
+        values: ["Storage fallback", "# Browser copy"],
+        updatedAt: Date.now()
+      };
+      localStorage.setItem(controller.storageKey(record.key), JSON.stringify(record));
+      controller.database = Promise.resolve({ transaction() { throw new Error("IndexedDB unavailable"); } });
+      window.draftFallbackController = controller;
+    JAVASCRIPT
+
+    record = page.evaluate_async_script(<<~JAVASCRIPT)
+      const done = arguments[arguments.length - 1];
+      window.draftFallbackController.readDraft(window.draftFallbackController.localDraftKey).then(done);
+    JAVASCRIPT
+    assert_equal "# Browser copy", record["values"][1]
+
+    page.execute_script("localStorage.removeItem(window.draftFallbackController.storageKey(window.draftFallbackController.localDraftKey))")
+  end
+
+  test "warns when autosave and both browser draft stores are unavailable" do
+    presentation = Presentation.create!(title: "No browser storage", source: "# Original")
+    visit edit_presentation_path(presentation)
+
+    page.execute_script(<<~JAVASCRIPT)
+      const controller = window.Stimulus.getControllerForElementAndIdentifier(
+        document.querySelector('form[data-controller~="autosave"]'), 'autosave'
+      );
+      controller.database = Promise.resolve(null);
+      const originalSetItem = Storage.prototype.setItem;
+      Storage.prototype.setItem = function(key, value) {
+        if (key.startsWith('elef.draft.')) throw new DOMException('Storage is full', 'QuotaExceededError');
+        return originalSetItem.call(this, key, value);
+      };
+      window.restoreDraftStorage = () => { Storage.prototype.setItem = originalSetItem; };
+      const originalFetch = window.fetch.bind(window);
+      window.fetch = (url, options = {}) => {
+        if (options.method === 'PATCH') {
+          window.fetch = originalFetch;
+          return Promise.reject(new TypeError('Failed to fetch'));
+        }
+        return originalFetch(url, options);
+      };
+    JAVASCRIPT
+
+    fill_in "Markdown source", with: "# Keep this open"
+    assert_selector '[data-autosave-target="status"]', text: "Browser recovery is unavailable", wait: 5
+    assert_selector '[data-autosave-target="status"]', text: "copy your changes before leaving", wait: 5
+    assert_field "Markdown source", with: "# Keep this open"
+    assert_equal "# Original", presentation.reload.source
+  ensure
+    page.execute_script("window.restoreDraftStorage?.()") if page
   end
 
   test "times out a stalled autosave and lets the user retry the latest edit" do

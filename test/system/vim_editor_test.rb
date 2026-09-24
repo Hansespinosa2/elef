@@ -194,6 +194,43 @@ class VimEditorTest < ApplicationSystemTestCase
     assert_nil styles["fenced"]
   end
 
+  test "live preview leaves Markdown-looking code literal in fenced and inline code" do
+    source = <<~MARKDOWN
+      # Literal code
+
+      ```markdown
+      **bold** *italic* $x$ $$y$$ [link](/path) ![image](/image.svg) [[document]]
+      ```
+
+      Inline code: `$z$ **not bold**`
+    MARKDOWN
+    document = Document.create!(title: "Literal code", source: source)
+
+    visit edit_document_path(document)
+
+    assert_field "Markdown source", with: source
+    code_state = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const fencedLine = [...document.querySelectorAll('.cm-line.cm-live-code-line')]
+          .find((line) => line.textContent.includes('**bold**'));
+        const inlineCode = [...document.querySelectorAll('.cm-live-inline-code')]
+          .find((node) => node.textContent.includes('$z$'));
+        const previewSyntax = '.cm-live-strong, .cm-live-emphasis, .cm-live-link, .cm-live-document-link, .cm-live-widget-math, .cm-live-image';
+        return {
+          fencedText: fencedLine?.textContent,
+          fencedDecorations: fencedLine?.querySelector(previewSyntax) !== null,
+          inlineText: inlineCode?.textContent,
+          inlineDecorations: inlineCode?.querySelector(previewSyntax) !== null
+        };
+      })()
+    JAVASCRIPT
+
+    assert_equal "**bold** *italic* $x$ $$y$$ [link](/path) ![image](/image.svg) [[document]]", code_state["fencedText"]
+    refute code_state["fencedDecorations"]
+    assert_equal "$z$ **not bold**", code_state["inlineText"]
+    refute code_state["inlineDecorations"]
+  end
+
   test "live preview reveals syntax around the active source range" do
     document = Document.create!(title: "Active syntax", source: "# Heading\n\n**Bold**")
     visit edit_document_path(document)

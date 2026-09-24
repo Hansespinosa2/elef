@@ -95,7 +95,10 @@ export default class extends Controller {
 
       this.renderWarnings(payload.warnings || [])
       if (!response.ok || payload.html === null || payload.html === undefined) {
-        this.element.dispatchEvent(new CustomEvent("elef:preview-updated", { bubbles: true, detail: { payload, response } }))
+        // A source map only describes a projection when that projection was
+        // installed. Keep the previous map paired with the last-good HTML.
+        const unavailablePayload = { ...payload, editor_map: null }
+        this.element.dispatchEvent(new CustomEvent("elef:preview-updated", { bubbles: true, detail: { payload: unavailablePayload, response } }))
         this.showRetry()
         this.setStatus("Preview unavailable")
         return
