@@ -20,7 +20,7 @@ services:
 
   web:
     build:
-      context: .
+      context: ${ELEF_DEVELOPMENT_SOURCE:-.}
       dockerfile: Dockerfile.development
     restart: unless-stopped
     depends_on:
@@ -40,7 +40,7 @@ services:
     ports:
       - "${APP_BIND_ADDRESS:-127.0.0.1}:${APP_PORT:-3001}:3000"
     volumes:
-      - .:/rails
+      - ${ELEF_DEVELOPMENT_SOURCE:-.}:/rails
       - elef_development_storage:/rails/storage
       - elef_development_tmp:/rails/tmp
     command: ["sh", "-c", "bin/rails db:prepare && exec bin/dev"]
