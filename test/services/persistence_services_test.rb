@@ -150,6 +150,12 @@ class PersistenceServicesTest < ActiveSupport::TestCase
     source = "# Published\n\nOriginal content"
     presentation = Presentation.create!(title: "Package", source: source)
     presentation.assets.attach(io: StringIO.new("asset bytes"), filename: "diagram.txt", content_type: "text/plain")
+    media_bytes = "round-trip image bytes"
+    presentation.reload.assets.attach(io: StringIO.new(media_bytes), filename: "visual.png", content_type: "image/png")
+    media_digest = Digest::SHA256.hexdigest(media_bytes)
+    presentation.assets.blobs.last.update!(metadata: presentation.assets.blobs.last.metadata.merge("elef_sha256" => media_digest))
+    source_with_media = "#{source}\n\n![Visual](elef-asset:#{media_digest} \"fit:cover\")"
+    presentation.reload.update!(source: source_with_media)
     PresentationReleasePublisher.call(presentation)
     Drafts::Save.call(
       presentation.reload,
@@ -164,10 +170,12 @@ class PersistenceServicesTest < ActiveSupport::TestCase
     imported = WorkPackage::Importer.call(StringIO.new(package), workspace: target_workspace)
 
     assert_equal "# Current draft", imported.source
-    assert_equal "# Published\n\nOriginal content", imported.published_release.presentation.source
+    assert_equal source_with_media, imported.published_release.presentation.source
     assert_equal presentation.published_release.source_digest, imported.published_release.source_digest
-    assert_equal ["diagram.txt"], imported.assets.map { |asset| asset.filename.to_s }
+    assert_equal %w[diagram.txt visual.png], imported.assets.map { |asset| asset.filename.to_s }
     assert_equal "text/plain", imported.assets.first.content_type
+    assert_includes imported.assets.blobs.map { |blob| Presentations::MediaAssets.digest(blob) }, media_digest
+    assert_includes imported.published_release.presentation.assets.blobs.map { |blob| Presentations::MediaAssets.digest(blob) }, media_digest
     assert_equal presentation.presentation_detail.settings, imported.presentation_detail.settings
     assert_equal PresentationRelease.asset_manifest_for(imported), imported.published_release.asset_manifest
   end

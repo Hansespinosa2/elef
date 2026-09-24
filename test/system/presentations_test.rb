@@ -1,4 +1,7 @@
 require "application_system_test_case"
+require "base64"
+require "stringio"
+require "tempfile"
 
 class PresentationsTest < ApplicationSystemTestCase
   def hold_autosaves
@@ -136,6 +139,146 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_selector "body.presentation-body"
     assert_equal "# Original", presentation.reload.source
     assert_not_nil presentation.last_published_at
+  end
+
+  test "overview edits source ranges safely and slide operations undo as one edit" do
+    original = "---\r\ntitle: Deck\r\n---\r\n# Café 😀\r\n\r\n```md\r\n---\r\n```\r\n---\r\n# Second\r\n---\r\n# Third"
+    presentation = Presentation.create!(title: "Overview operations", source: original)
+
+    visit edit_presentation_path(presentation)
+    assert_selector ".slide-overview-card", count: 3
+    find('.slide-overview-card[data-slide-index="1"]').click
+    find('button[aria-label="Duplicate selected slide"]').click
+    assert_selector ".slide-overview-card", count: 4
+    find('button[aria-label="Move selected slide later"]').click
+
+    source = page.evaluate_script("document.querySelector('.source-field').editorController.value")
+    assert source.start_with?("---\ntitle: Deck\n---\n")
+    assert_includes source, "```md\n---\n```"
+    assert_operator source.index("# Third"), :<, source.rindex("# Second")
+
+    find('button[aria-label="Delete selected slide"]').click
+    assert_selector ".slide-overview-card", count: 3
+    before_add = page.evaluate_script("document.querySelector('.source-field').editorController.value")
+    find('button[aria-label="Add slide after selected"]').click
+    assert_selector ".slide-overview-card", count: 4
+    page.driver.browser.action.key_down(:control).send_keys("z").key_up(:control).perform
+    assert_selector ".slide-overview-card", count: 3
+    assert_equal before_add, page.evaluate_script("document.querySelector('.source-field').editorController.value")
+    assert_selector '[data-autosave-target="status"]', exact_text: "Saved", wait: 8
+    assert_equal before_add, presentation.reload.source.gsub(/\r\n|\r/, "\n")
+    assert presentation.source.start_with?("---\r\ntitle: Deck\r\n---\r\n")
+  end
+
+  test "overflow warnings update after editing and media picker insertion uses canonical asset references" do
+    dense = "# Dense slide\n\n" + ("A sentence with enough detail to occupy space. " * 280)
+    presentation = Presentation.create!(title: "Overflow and media", source: dense)
+    visit edit_presentation_path(presentation)
+    assert_selector ".slide-overflow-warnings", visible: true, wait: 8
+    assert_text "Slide 1 extends beyond its 16:9 frame."
+    assert_selector ".slide-overview-card .is-overflowing"
+
+    fill_in "Markdown source", with: "# Clear slide"
+    assert_selector ".slide-overflow-warnings", visible: false, wait: 8
+
+    media_file = Tempfile.new(["pixel", ".png"])
+    media_file.binmode
+    media_file.write(Base64.decode64("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+i9MwAAAAASUVORK5CYII="))
+    media_file.flush
+    page.execute_script("document.querySelector('.source-field').editorController.setSelectionRange(document.querySelector('.source-field').editorController.value.length)")
+    page.execute_script("document.querySelector('[data-media-target=input]').hidden = false")
+    find('[data-media-target="input"]').set(media_file.path)
+
+    assert_selector ".media-upload-status", text: /pixel.*added to the Markdown source/i, wait: 8
+    assert_includes page.evaluate_script("document.querySelector('.source-field').editorController.value"), "elef-asset:"
+    assert_selector ".preview-pane .presentation-media-contain", wait: 8
+    assert_equal "image/png", presentation.reload.assets.blobs.last.content_type
+    assert_selector '[data-autosave-target="status"]', exact_text: "Saved", wait: 8
+  ensure
+    media_file&.close!
+  end
+
+  test "print view selects draft content and sizes slides for one landscape page each" do
+    media_bytes = Base64.decode64("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+i9MwAAAAASUVORK5CYII=")
+    media_digest = Digest::SHA256.hexdigest(media_bytes)
+    published_source = "---\ntheme: dark\ntypography: technical\n---\n# Published one\n\n![Diagram](elef-asset:#{media_digest} \"fit:contain\")\n---\n# Published two"
+    presentation = Presentation.create!(title: "Print workflow", source: published_source)
+    presentation.assets.attach(io: StringIO.new(media_bytes), filename: "diagram.png", content_type: "image/png")
+    blob = presentation.assets.blobs.last
+    blob.update!(metadata: blob.metadata.merge("elef_sha256" => media_digest))
+    PresentationReleasePublisher.call(presentation)
+    presentation.update!(source: "---\ntheme: light\n---\n# Latest draft\n---\n# Draft two")
+
+    visit print_presentation_path(presentation)
+    assert_text "Latest draft · Print workflow"
+    assert_selector ".presentation-print-slides > .slide-frame", count: 2
+    assert_selector ".presentation-print.work-theme-light.work-typography-book"
+    assert_selector ".presentation-print .slide h1", text: "Latest draft"
+    page.execute_script("window.print = () => { window.printWasRequested = true }")
+    click_on "Print / Save PDF"
+    assert_equal true, page.evaluate_script("window.printWasRequested")
+
+    visit print_presentation_path(presentation, version: "published")
+    assert_text "Published release · Print workflow"
+    assert_selector ".presentation-print.work-theme-dark.work-typography-technical"
+    assert_selector ".presentation-print .slide h1", text: "Published one"
+    assert_selector ".presentation-print img.presentation-media-contain[src='/presentations/#{presentation.id}/assets/#{media_digest}']"
+    assert_selector ".presentation-print-slides > .slide-frame", count: 2
+
+    page.driver.browser.execute_cdp("Emulation.setEmulatedMedia", media: "print")
+    dimensions = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const frame = document.querySelector('.presentation-print-slides > .slide-frame');
+        const slide = frame.querySelector('.slide');
+        return { frameWidth: frame.getBoundingClientRect().width, frameHeight: frame.getBoundingClientRect().height,
+          slideWidth: slide.getBoundingClientRect().width, slideHeight: slide.getBoundingClientRect().height,
+          pageBreak: getComputedStyle(frame).breakAfter };
+      })()
+    JAVASCRIPT
+    assert_in_delta 1280, dimensions["frameWidth"], 2
+    assert_in_delta 720, dimensions["frameHeight"], 2
+    assert_in_delta 1280, dimensions["slideWidth"], 2
+    assert_in_delta 720, dimensions["slideHeight"], 2
+    assert_equal "page", dimensions["pageBreak"]
+  end
+
+  test "media can be pasted or dropped onto the preview" do
+    presentation = Presentation.create!(title: "Media gestures", source: "# Media gestures")
+    visit edit_presentation_path(presentation)
+    png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+i9MwAAAAASUVORK5CYII="
+    page.execute_script(<<~JAVASCRIPT)
+      const transfer = new DataTransfer();
+      const bytes = Uint8Array.from(atob("#{png}"), character => character.charCodeAt(0));
+      transfer.items.add(new File([bytes], "pasted.png", { type: "image/png" }));
+      document.querySelector("form.editor-layout").dispatchEvent(new ClipboardEvent("paste", {
+        bubbles: true, cancelable: true, clipboardData: transfer
+      }));
+    JAVASCRIPT
+    assert_selector ".media-upload-status", text: /pasted.*added to the Markdown source/i, wait: 8
+
+    drag_result = page.execute_script(<<~JAVASCRIPT)
+      const transfer = new DataTransfer();
+      const bytes = Uint8Array.from(atob("#{png}"), character => character.charCodeAt(0));
+      transfer.items.add(new File([bytes], "dropped.png", { type: "image/png" }));
+      const preview = document.querySelector(".preview-pane");
+      const dragover = new DragEvent("dragover", { bubbles: true, cancelable: true, dataTransfer: transfer });
+      const drop = new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer: transfer });
+      preview.dispatchEvent(dragover);
+      preview.dispatchEvent(drop);
+      return { files: drop.dataTransfer.files.length, types: [...drop.dataTransfer.types], status: document.querySelector(".media-upload-status").textContent,
+        dragoverTypes: [...dragover.dataTransfer.types], dragoverPrevented: dragover.defaultPrevented, dropPrevented: drop.defaultPrevented,
+        action: preview.getAttribute("data-action"),
+        hasController: Boolean(window.Stimulus.getControllerForElementAndIdentifier(document.querySelector("form.editor-layout"), "media")) };
+    JAVASCRIPT
+    assert_equal 1, drag_result["files"]
+    assert_includes drag_result["types"], "Files"
+    assert drag_result["hasController"], drag_result.inspect
+    assert drag_result["dragoverPrevented"], drag_result.inspect
+    assert drag_result["dropPrevented"]
+    assert_equal "Uploading dropped.png…", drag_result["status"]
+    assert_selector ".media-upload-status", text: /dropped.*added to the Markdown source/i, wait: 8
+    assert_selector '.preview-pane [data-preview-target="container"] .presentation-media-contain', count: 2, wait: 8
+    assert_equal 2, presentation.reload.assets.count
   end
 
   test "failed autosave can be retried and validation errors preserve saved source" do
@@ -482,7 +625,7 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_current_path %r{/presentations/\d+/edit}
     assert_text "Presentation saved."
     assert_field "Markdown source", with: normalized_source
-    assert_selector ".slide", count: 2
+    assert_selector '.preview-pane [data-preview-target="container"] .slide', count: 2
 
     click_on "Library"
     click_on "System Deck"

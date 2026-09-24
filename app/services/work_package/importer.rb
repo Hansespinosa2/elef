@@ -28,12 +28,18 @@ module WorkPackage
         work.save!
         import_details(work, metadata)
         import_revisions(work, manifest, entries)
-        import_assets(work, manifest, entries)
+      end
+      import_assets(work, manifest, entries)
+      work.reload
+      Work.transaction do
         import_release(work, manifest, entries)
         import_aliases(work, metadata)
         import_lineage(work, metadata)
       end
-      work
+      work.reload
+    rescue StandardError
+      work&.reload&.destroy! if work&.persisted?
+      raise
     end
 
     private
@@ -145,12 +151,20 @@ module WorkPackage
         content = entries[path]
         next unless content
 
-        work.assets.attach(
+        work.reload.assets.attach(
           io: StringIO.new(content),
           filename: asset.fetch("filename"),
           content_type: asset["content_type"]
         )
         blob = work.assets.attachments.last&.blob
+        if blob
+          digest = Presentations::MediaAssets.digest(blob)
+          expected_digest = asset["sha256"].presence
+          if expected_digest.present? && expected_digest != digest
+            raise ArgumentError, "Work package asset digest does not match its contents"
+          end
+          blob.update!(metadata: blob.metadata.merge("elef_sha256" => digest))
+        end
         @asset_blobs_by_key[asset["key"].to_s] = blob if blob
         @asset_blobs_by_key[asset["id"].to_s] = blob if blob
       end
@@ -247,7 +261,7 @@ module WorkPackage
           "byte_size" => blob.byte_size,
           "checksum" => blob.checksum
         )
-      end
+      end.sort_by { |asset| [asset["key"].to_s, asset["filename"].to_s] }
     end
 
     def ensure_revision(work, source, reason: "import")

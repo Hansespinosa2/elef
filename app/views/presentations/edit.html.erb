@@ -4,9 +4,15 @@
     <p class="eyebrow mb-1 text-xs font-extrabold uppercase tracking-[0.12em] text-[#6d4aff]">Source-first editor</p>
     <h1 class="mb-0 text-4xl font-bold">Edit <%= @presentation.title %></h1>
   </div>
-  <%= button_to "Present", publish_presentation_path(@presentation), method: :post,
-        class: "button primary inline-flex min-h-10 items-center rounded-full border border-[#6d4aff] bg-[#6d4aff] px-4 py-2 font-bold text-white no-underline hover:brightness-95",
-        data: { dirty_navigation: true },
-        form: { data: { turbo: false } } %>
+  <div class="flex flex-wrap items-center gap-3">
+    <%= link_to "Print draft / save PDF", print_presentation_path(@presentation), class: "button inline-flex min-h-10 items-center rounded-full border border-[#ddd5c8] bg-[#fffdf8] px-4 py-2 font-bold no-underline hover:bg-[#f7efe2]" %>
+    <% if @presentation.published_release %>
+      <%= link_to "Print published release", print_presentation_path(@presentation, version: "published"), class: "button inline-flex min-h-10 items-center rounded-full border border-[#ddd5c8] bg-[#fffdf8] px-4 py-2 font-bold no-underline hover:bg-[#f7efe2]" %>
+    <% end %>
+    <%= button_to "Present", publish_presentation_path(@presentation), method: :post,
+          class: "button primary inline-flex min-h-10 items-center rounded-full border border-[#6d4aff] bg-[#6d4aff] px-4 py-2 font-bold text-white no-underline hover:brightness-95",
+          data: { dirty_navigation: true },
+          form: { data: { turbo: false } } %>
+  </div>
 </div>
 <%= render "form", presentation: @presentation %>
