@@ -55,6 +55,54 @@ class VimEditorTest < ApplicationSystemTestCase
     assert_selector "[data-autosave-target='status']", text: "Saved", wait: 5
   end
 
+  test "Vim visual mode highlights horizontal selections with the Aradia palette" do
+    document = Document.create!(title: "Visual selection", source: "abcdef\nsecond line")
+    visit edit_document_path(document)
+
+    find("summary", text: "Vim settings").click
+    find("[data-editor-target='vimToggle']").check
+    find("summary", text: "Vim settings").click
+
+    editor = find(".cm-content")
+    editor.click
+    page.execute_script("document.querySelector('.source-field').editorController.setSelectionRange(3, 3)")
+    editor.send_keys("v", "h")
+    assert_selector "[data-editor-target='mode'][data-mode='visual']", text: "Visual"
+
+    selection = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const editor = document.querySelector('.source-field').editorController
+        const selected = document.querySelector('.cm-selectionBackground')
+        const bounds = selected?.getBoundingClientRect()
+        return {
+          from: editor.view.state.selection.main.from,
+          to: editor.view.state.selection.main.to,
+          background: selected && getComputedStyle(selected).backgroundColor,
+          width: bounds?.width || 0
+        }
+      })()
+    JAVASCRIPT
+
+    assert_operator selection["to"], :>, selection["from"]
+    assert_operator selection["width"], :>, 0
+    editor.send_keys("h")
+    extended_selection = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const editor = document.querySelector('.source-field').editorController
+        const selected = document.querySelector('.cm-selectionBackground')
+        return {
+          from: editor.view.state.selection.main.from,
+          to: editor.view.state.selection.main.to,
+          background: selected && getComputedStyle(selected).backgroundColor,
+          width: selected?.getBoundingClientRect().width || 0
+        }
+      })()
+    JAVASCRIPT
+    assert_operator extended_selection["to"] - extended_selection["from"], :>, selection["to"] - selection["from"]
+    assert_operator extended_selection["width"], :>, selection["width"]
+    assert_equal "rgba(159, 197, 169, 0.42)", extended_selection["background"]
+  end
+
   test "Vim settings persist per browser" do
     document = Document.create!(title: "Vim settings", source: "# Settings")
     visit edit_document_path(document)
@@ -109,13 +157,13 @@ class VimEditorTest < ApplicationSystemTestCase
     editor.click
     page.execute_script("document.querySelector('.source-field').editorController.setSelectionRange(0, 0)")
     editor.send_keys("i")
-    assert_equal "rgb(240, 213, 107)", page.evaluate_script("getComputedStyle(document.querySelector('.cm-cursor')).borderLeftColor")
+    assert_equal "rgb(215, 194, 142)", page.evaluate_script("getComputedStyle(document.querySelector('.cm-cursor')).borderLeftColor")
     editor.send_keys("Alias", [:shift, :space])
     assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal"
     assert_equal "rgb(159, 197, 169)", page.evaluate_script("getComputedStyle(document.querySelector('.cm-cursor')).borderLeftColor")
     editor.send_keys("v", "l")
     assert_selector "[data-editor-target='mode'][data-mode='visual']", text: "Visual"
-    assert_equal "rgb(213, 180, 255)", page.evaluate_script("getComputedStyle(document.querySelector('.cm-cursor')).borderLeftColor")
+    assert_equal "rgb(196, 214, 202)", page.evaluate_script("getComputedStyle(document.querySelector('.cm-cursor')).borderLeftColor")
     editor.send_keys([:shift, :space])
     assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal"
 
