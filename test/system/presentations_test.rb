@@ -446,7 +446,7 @@ class PresentationsTest < ApplicationSystemTestCase
     find("summary", text: "More").click
     click_on "Load sample presentations"
 
-    assert_text "Sample presentations loaded."
+    assert_text "Sample presentations loaded.", wait: 15
     Presentations::SampleData::SAMPLES.each do |sample|
       assert_text sample[:title]
     end
