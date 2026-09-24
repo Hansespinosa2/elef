@@ -98,6 +98,7 @@ class VimEditorTest < ApplicationSystemTestCase
     select "Absolute", from: "Line numbers"
     page.evaluate_async_script("window.requestAnimationFrame(() => arguments[0]())")
     assert_equal %w[1 2 3 4], page.evaluate_script(line_numbers)
+    select "Relative", from: "Line numbers"
     check "Mode-aware cursor styling"
     check "Enable Vim mode in this browser"
     assert_equal "relative", page.evaluate_script("document.querySelector('.editor-surface').dataset.lineNumbers")
