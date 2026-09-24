@@ -89,6 +89,8 @@
       <p class="field-hint sm:col-span-2">Appearance overrides stay in the Markdown front matter.</p>
     </div>
 
+    <div class="editor-layout">
+      <div class="source-pane">
     <div class="field source-field relative mb-4" data-controller="editor snippet-palette math-shorthand math-shortcut-palette<%= " document-link-palette" if work.document? %>" data-editor-initial-source-value="<%= ERB::Util.html_escape(work.source.to_s.to_json) %>" data-snippet-palette-snippets-value="<%= json_escape(Snippets::Catalog.for_editor.to_json) %>" data-math-shortcut-palette-shortcuts-value="<%= json_escape(MathShortcuts::Catalog.for_editor(workspace: work.workspace || Workspace.default).to_json) %>"<% if work.document? %> data-document-link-palette-titles-value="<%= ERB::Util.html_escape(document_link_titles(workspace: work.workspace).to_json) %>"<% end %><% if work.presentation? %> data-presentation-editor-target="source"<% end %>>
       <% source_id = form.field_id(:source) %>
       <% editor_id = "#{source_id}_editor" %>
@@ -190,9 +192,11 @@
       </section>
     <% end %>
 
+      </div>
     <script type="application/json" data-editor-map-json><%= raw json_escape(editor_map.to_json) %></script>
     <div class="editor-projection preview-pane" data-visual-editor-target="projection" data-preview-target="container" aria-label="Visual editing surface"<% if work.presentation? %> data-action="dragover->media#dragOver dragleave->media#dragLeave drop->media#drop"<% end %>>
       <%= render "works/preview", work: work, editable: true, editor_map: editor_map %>
+    </div>
     </div>
 
     <%= render "works/warnings", warnings: work.preview_warnings %>

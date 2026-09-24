@@ -1,7 +1,12 @@
 require "application_system_test_case"
 
 class DocumentsTest < ApplicationSystemTestCase
+  def wait_for_fresh_projection
+    assert_selector "form.visual-editor-form:not([data-preview-projection-stale='true'])", wait: 5
+  end
+
   def type_visual_text(selector, source_text, replacement)
+    wait_for_fresh_projection
     attempts = 0
     loop do
       source_before = find_field("Markdown source").value
@@ -241,7 +246,7 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_selector ".document-editor-block strong", text: "Keep formatting"
 
     click_on "Source"
-    assert_selector ".editor-projection", visible: :hidden
+    assert_selector ".editor-projection[aria-label='Rendered preview']", visible: true
     assert_selector ".cm-content", visible: true
     click_on "Visual"
     click_on "Save document"
@@ -308,6 +313,7 @@ class DocumentsTest < ApplicationSystemTestCase
         expected.sub!(source_text, replacement)
         assert_field "Markdown source", with: expected, wait: 5
         page.execute_script("document.activeElement.blur()")
+        wait_for_fresh_projection
         assert_selector selector, text: /#{Regexp.escape(replacement)}/, wait: 5
       end
 
@@ -348,15 +354,20 @@ class DocumentsTest < ApplicationSystemTestCase
     page.execute_script(<<~JAVASCRIPT)
       const tableBlock = [...document.querySelectorAll('.document-editor-block')]
         .find((block) => block.querySelector('table'));
+      tableBlock.focus();
       tableBlock.querySelector('tbody td:last-child').innerText = 'Updated';
       tableBlock.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'Updated' }));
     JAVASCRIPT
     assert_field "Markdown source", with: /\| \*\*One\*\* \| Updated \|/, wait: 5
     assert_includes find_field("Markdown source").value, "![Old alt](/icon.svg)"
+    page.execute_script("document.activeElement.blur()")
+    assert_selector ".document-editor-block table", text: "Updated", wait: 5
+    assert_no_selector 'form[data-preview-projection-stale="true"]', wait: 5
 
     page.execute_script(<<~JAVASCRIPT)
       const imageBlock = [...document.querySelectorAll('.document-editor-block')]
         .find((block) => block.querySelector('.editor-media-caption'));
+      imageBlock.focus();
       const caption = imageBlock.querySelector('.editor-media-caption');
       caption.innerText = 'New alt';
       caption.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'New alt' }));
@@ -405,6 +416,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
     page.execute_script(<<~JAVASCRIPT)
       const block = document.querySelector('.document-editor-block');
+      block.focus();
       const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
       let node;
       while ((node = walker.nextNode()) && !node.textContent.includes('Before ')) {}
@@ -412,9 +424,12 @@ class DocumentsTest < ApplicationSystemTestCase
       block.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'Earlier' }));
     JAVASCRIPT
     assert_field "Markdown source", with: 'Earlier $\\frac{a}{b}$ between $$\\sum_{i=1}^{n} i$$ after.', wait: 5
+    page.execute_script("document.activeElement.blur()")
+    wait_for_fresh_projection
 
     page.execute_script(<<~JAVASCRIPT)
       const block = document.querySelector('.document-editor-block');
+      block.focus();
       const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
       let node;
       while ((node = walker.nextNode()) && !node.textContent.includes(' after.')) {}
@@ -502,6 +517,54 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: "# Code\n\n```ruby\n  updated\n    indented\n````", wait: 5
   end
 
+  test "keeps an unterminated fenced block read-only and preserves it across save and reopen" do
+    source = "# Code notes\n\n```ruby\nputs 1"
+    document = Document.create!(title: "Unterminated code", source: source)
+
+    visit edit_document_path(document)
+
+    assert_selector '.document-editor-block[aria-readonly="true"] pre code', text: "puts 1"
+    assert_no_selector '.document-editor-block[contenteditable="true"] pre'
+    page.execute_script(<<~JAVASCRIPT)
+      const block = document.querySelector('.document-editor-block[aria-readonly="true"]');
+      block.textContent = 'flattened code';
+      block.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'flattened code' }));
+    JAVASCRIPT
+
+    assert_field "Markdown source", with: source
+    click_on "Save document"
+    assert_text "Document saved."
+    visit edit_document_path(document)
+
+    assert_field "Markdown source", with: source
+    assert_selector '.document-editor-block[aria-readonly="true"] pre code', text: "puts 1"
+  end
+
+  test "keeps reference links, autolinks, HTML, and rules read-only through save and reopen" do
+    source = "[Guide][guide]\n\n[guide]: /guide\n\n<https://example.test>\n\n<kbd>Shift</kbd>\n\nfoo*bar*baz and value_name_value\n\n> outer\n> > nested quote\n\n| A |\n| --- |\n\n---"
+    document = Document.create!(title: "Unsupported Markdown", source: source)
+
+    visit edit_document_path(document)
+
+    assert_selector '.document-editor-block[aria-readonly="true"]', minimum: 8, visible: false
+    assert_selector '.document-editor-block[aria-readonly="true"] blockquote', text: "nested quote"
+    assert_no_selector '.document-editor-block[contenteditable="true"]'
+    page.execute_script(<<~JAVASCRIPT)
+      document.querySelectorAll('.document-editor-block[aria-readonly="true"]').forEach((block) => {
+        block.textContent = 'flattened output';
+        block.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'flattened output' }));
+      });
+    JAVASCRIPT
+
+    assert_field "Markdown source", with: source
+    click_on "Save document"
+    assert_text "Document saved."
+    visit edit_document_path(document)
+
+    assert_field "Markdown source", with: source
+    assert_selector '.document-editor-block[aria-readonly="true"]', minimum: 8, visible: false
+  end
+
   test "expands math shorthand only when committed inside math" do
     document = Document.create!(title: "Math notes", source: "# Math")
     visit edit_document_path(document)
@@ -569,6 +632,57 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_selector ".document-surface", text: "Broken edit", wait: 5
     assert_selector '[data-preview-target="warnings"]', visible: false
     assert_selector '[data-preview-target="retry"]', visible: false
+  end
+
+  test "disables a stale document projection when returning from source mode before preview recovery" do
+    original = "# Original\n\nOld first block\n\nOld second block"
+    updated = "# Rebuilt\n\nNew first block\n\nNew second block"
+    document = Document.create!(title: "Stale projection", source: original)
+
+    visit edit_document_path(document)
+    click_on "Source"
+    page.execute_script(<<~JAVASCRIPT, updated)
+      const form = document.querySelector('form.visual-editor-form');
+      form.previewController.delayValue = 5000;
+      const originalFetch = window.fetch.bind(window);
+      window.fetch = (url, options = {}) => {
+        if (options.method === 'POST' && String(url).includes('/preview')) {
+          return Promise.reject(new TypeError('preview offline'));
+        }
+        return originalFetch(url, options);
+      };
+      document.querySelector('.source-field').editorController.setExternalValue(arguments[0]);
+    JAVASCRIPT
+    click_on "Visual"
+
+    assert_selector ".editor-projection", visible: true
+    assert_selector ".editor-projection", text: "Old first block"
+    assert_selector '.editor-projection[aria-busy="true"]'
+    assert_no_selector '.editor-projection .document-editor-block[contenteditable="true"]'
+    assert_field "Markdown source", with: updated
+
+    page.execute_script(<<~JAVASCRIPT)
+      const form = document.querySelector('form.visual-editor-form');
+      form.previewController.delayValue = 0;
+      form.previewController.retry();
+    JAVASCRIPT
+    assert_selector '[data-preview-target="status"]', text: "Preview unavailable", wait: 5
+    assert_selector ".editor-projection", text: "Old first block"
+    assert_selector '.editor-projection[aria-busy="false"]'
+    assert_no_selector '.editor-projection .document-editor-block[contenteditable="true"]'
+
+    page.execute_script(<<~JAVASCRIPT)
+      const staleBlock = document.querySelector('.editor-projection .document-editor-block');
+      staleBlock.textContent = 'Stale-map injection';
+      staleBlock.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'Stale-map injection' }));
+    JAVASCRIPT
+    assert_field "Markdown source", with: updated
+
+    click_on "Save document"
+    assert_text "Document saved."
+    visit edit_document_path(document)
+    assert_field "Markdown source", with: updated
+    assert_selector ".document-editor-block", text: "New first block"
   end
 
   test "keeps typing enabled when the local projection reports a failure" do

@@ -18,6 +18,8 @@ export default class extends Controller {
     this.element.addEventListener("elef:editor-mode-change", this.modeChangedHandler)
     this.previewHandler = (event) => this.previewUpdated(event.detail.payload)
     this.element.addEventListener("elef:preview-updated", this.previewHandler)
+    this.previewStaleHandler = (event) => this.previewStale(event.detail)
+    this.element.addEventListener("elef:preview-stale", this.previewStaleHandler)
     this.projectionLinkHandler = (event) => this.projectionLinkClicked(event)
     this.element.addEventListener("click", this.projectionLinkHandler)
     this.applyMode("visual")
@@ -27,6 +29,7 @@ export default class extends Controller {
     this.element.removeEventListener("elef:editor-ready", this.editorReady)
     this.element.removeEventListener("elef:editor-mode-change", this.modeChangedHandler)
     this.element.removeEventListener("elef:preview-updated", this.previewHandler)
+    this.element.removeEventListener("elef:preview-stale", this.previewStaleHandler)
     this.element.removeEventListener("click", this.projectionLinkHandler)
   }
 
@@ -37,15 +40,19 @@ export default class extends Controller {
   applyMode(mode) {
     const visual = mode !== "source"
     this.element.dataset.editorMode = visual ? "visual" : "source"
-    if (this.hasProjectionTarget) this.projectionTarget.hidden = !visual
+    if (this.hasProjectionTarget) this.projectionTarget.setAttribute("aria-label", visual ? "Visual editing surface" : "Rendered preview")
+    this.syncProjectionEditability()
   }
 
-  blockFocus() {
+  blockFocus(event) {
+    this.activeProjectionBlock = event.currentTarget
     this.element.dataset.editorProjectionActive = "true"
   }
 
   blockBlur() {
+    this.activeProjectionBlock = null
     delete this.element.dataset.editorProjectionActive
+    this.syncProjectionEditability()
   }
 
   projectionLinkClicked(event) {
@@ -60,7 +67,7 @@ export default class extends Controller {
     if (!this.editorController || this.updatingProjection) return
 
     const blockElement = event.target.closest?.("[data-editor-block-id]")
-    if (!blockElement) return
+    if (!blockElement || !this.canEditBlock(blockElement)) return
     const block = this.map?.slides?.flatMap((slide) => slide.blocks || []).find((candidate) => candidate.id === blockElement.dataset.editorBlockId)
     const region = this.map?.editable_regions?.find((candidate) => candidate.block_id === block?.id)
     if (!block || !region) return
@@ -77,8 +84,45 @@ export default class extends Controller {
   }
 
   previewUpdated(payload) {
-    if (!payload?.editor_map) return
-    this.map = payload.editor_map
+    if (payload?.editor_map) this.map = payload.editor_map
+    this.syncProjectionEditability({ preserveActive: Boolean(this.activeProjectionBlock && this.element.dataset.editorProjectionActive === "true") })
+  }
+
+  previewStale(detail = {}) {
+    this.syncProjectionEditability({ preserveActive: detail.preserveActive })
+  }
+
+  canEditBlock(blockElement) {
+    if (this.element.dataset.editorMode !== "visual") return false
+    if (this.element.previewController?.projectionFresh !== false) return true
+
+    return this.activeProjectionBlock === blockElement &&
+      document.activeElement?.closest?.("[contenteditable='true']") === blockElement
+  }
+
+  syncProjectionEditability({ preserveActive = false } = {}) {
+    if (!this.hasProjectionTarget) return
+
+    const visual = this.element.dataset.editorMode !== "source"
+    const fresh = this.element.previewController?.projectionFresh !== false
+    const active = preserveActive ? document.activeElement?.closest?.("[data-editor-block-id]") : null
+    this.projectionTarget.querySelectorAll(".document-editor-block[data-editor-block-id]").forEach((block) => {
+      const editable = visual && (fresh || (preserveActive && block === active))
+      block.contentEditable = String(editable)
+      if (editable) {
+        block.setAttribute("role", "textbox")
+        block.setAttribute("aria-label", "Editable Markdown block")
+        block.setAttribute("aria-multiline", "true")
+        block.setAttribute("spellcheck", "true")
+        block.removeAttribute("aria-readonly")
+      } else {
+        block.removeAttribute("role")
+        block.removeAttribute("aria-label")
+        block.removeAttribute("aria-multiline")
+        block.removeAttribute("spellcheck")
+        block.setAttribute("aria-readonly", "true")
+      }
+    })
   }
 
   shiftMapAfterEdit(from, to, replacementLength) {

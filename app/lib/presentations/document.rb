@@ -429,6 +429,7 @@ module Presentations
     end
 
     def editable_region_for_block(source, block_start, markdown, block_id, slide_index, block_index, kind, slide)
+      editable = client_can_round_trip?(markdown, kind)
       heading = markdown.match(/\A(\s{0,3})(#+)(\s+)(.+?)(\s*#*\s*)\z/m)
       if heading
         text_start = block_start + heading.begin(4)
@@ -442,7 +443,7 @@ module Presentations
           range: utf16_range(source, block_start, block_start + markdown.length),
           source_range: utf16_range(source, block_start, block_start + markdown.length),
           content_range: utf16_range(source, text_start, text_end),
-          editable: true
+          editable: editable
         }
       end
 
@@ -455,19 +456,104 @@ module Presentations
         range: utf16_range(source, block_start, block_start + markdown.length),
         source_range: utf16_range(source, block_start, block_start + markdown.length),
         content_range: utf16_range(source, block_start, block_start + markdown.length),
-        editable: true
+        editable: editable
       }
     end
 
     def editable_block_kind(markdown)
       return "heading" if heading_for(markdown)
-      return "code" if code_block?(markdown)
+      return "code" if fenced_code_source?(markdown) || indented_code_source?(markdown)
       return "image" if image_block?(markdown)
       return "table" if table_block?(markdown)
       return "list" if markdown.match?(/\A\s*(?:[-*+] |\d+[.)] )/)
       return "quote" if markdown.match?(/\A\s*>/)
+      return "rule" if markdown.match?(/\A\s*(?:-{3,}|\*{3,}|_{3,})\s*\z/)
 
       "paragraph"
+    end
+
+    def client_can_round_trip?(markdown, kind)
+      return supported_fenced_code_block?(markdown) if kind == "code" && fenced_code_source?(markdown)
+      return false if kind == "code" || kind == "rule"
+      return false if kind == "heading" && markdown.lines.length != 1
+      return false if kind == "table" && !supported_table_block?(markdown)
+      return false if kind == "quote" && markdown.lines.any? { |line| line.match?(/\A[ \t]*>[ \t]*>/) }
+      return false if kind != "image" && markdown.match?(/!\[[^\]]*\]\(elef-asset:[0-9a-f]{64}(?:\s+[^)]*)?\)/)
+      return false if markdown.match?(/\A[^\r\n]+\r?\n[=-]{3,}[ \t]*\z/)
+      return false if unsupported_block_syntax?(markdown)
+
+      true
+    end
+
+    def supported_fenced_code_block?(markdown)
+      match = markdown.match(/\A([ \t]*)(`{3,}|~{3,})([^\r\n]*?)(\r\n|\n|\r)([\s\S]*?)(\r\n|\n|\r)([`~]{3,})([ \t]*)\z/)
+      return false unless match
+
+      opening = match[2]
+      closing = match[7]
+      closing[0] == opening[0] && closing.each_char.all? { |character| character == opening[0] } && closing.length >= opening.length
+    end
+
+    def supported_table_block?(markdown)
+      lines = markdown.split(/\r?\n/)
+      return false if lines.length < 3
+      return false unless lines[1].match?(/\A\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)*\|?\s*\z/)
+
+      columns = table_cell_count(lines.first)
+      columns.positive? && table_cell_count(lines[1]) == columns && lines.drop(2).all? do |line|
+        !line.blank? && table_cell_count(line) == columns
+      end
+    end
+
+    def table_cell_count(line)
+      value = line.to_s.strip
+      pipe_positions = []
+      escaped = false
+      value.each_char.with_index do |character, index|
+        if character == "\\" && !escaped
+          escaped = true
+          next
+        end
+        pipe_positions << index if character == "|" && !escaped
+        escaped = false
+      end
+
+      leading_pipe = pipe_positions.first == 0 ? 1 : 0
+      trailing_pipe = pipe_positions.last == value.length - 1 ? 1 : 0
+      [pipe_positions.length - leading_pipe - trailing_pipe + 1, 0].max
+    end
+
+    def unsupported_block_syntax?(markdown)
+      return true if markdown.match?(/<\s*!--|--\s*>|<\/?[A-Za-z][^>]*>/)
+      return true if markdown.match?(/<\s*(?:https?:\/\/|mailto:)[^>]+>|<\s*[^<>\s@]+@[^<>\s@]+\s*>/i)
+      return true if markdown.match?(/\[[^\]]+\]\s*\[[^\]]*\]|^\s*\[[^\]]+\]:|\[\^[^\]]+\]/)
+      return true if markdown.match?(/&(?:[A-Za-z][A-Za-z0-9]+|#\d+|#x[0-9A-Fa-f]+);/)
+      return true if markdown.match?(/\]\([^)]*\(/)
+      return true if markdown.match?(/[[:alnum:]][_*]{1,2}[^\s*_]+?[*_]{1,2}[[:alnum:]]/)
+      return true if markdown.lines.any? { |line| line.match?(/(?: {2,}|\\)\r?\n?\z/) }
+      return true if unsupported_escaped_punctuation?(markdown)
+
+      false
+    end
+
+    def unsupported_escaped_punctuation?(markdown)
+      without_math = markdown.gsub(/(?<!\\)\$\$[\s\S]+?\$\$(?!\$)|(?<![\\$])\$(?!\$|\s)[^$\r\n]+?(?<!\s)\$(?!\$)/, "")
+      without_math.each_char.with_index.any? do |character, index|
+        next false unless character == "\\"
+
+        next_character = without_math[index + 1]
+        next false if next_character.nil? || next_character == "$" || next_character.match?(/[[:alnum:]_[:space:]]/)
+
+        true
+      end
+    end
+
+    def fenced_code_source?(markdown)
+      fence_marker(markdown.lines.first.to_s.chomp).present?
+    end
+
+    def indented_code_source?(markdown)
+      markdown.match?(/\A(?: {4}|\t)/)
     end
 
     def position_payload(position)

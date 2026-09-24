@@ -20,6 +20,8 @@ export default class extends Controller {
     this.element.addEventListener("elef:editor-mode-change", this.modeChangedHandler)
     this.previewHandler = (event) => this.previewUpdated(event.detail.payload)
     this.element.addEventListener("elef:preview-updated", this.previewHandler)
+    this.previewStaleHandler = (event) => this.previewStale(event.detail)
+    this.element.addEventListener("elef:preview-stale", this.previewStaleHandler)
     this.clickHandler = (event) => this.handleAction(event)
     this.element.addEventListener("click", this.clickHandler)
     this.projectionLinkHandler = (event) => this.projectionLinkClicked(event)
@@ -33,6 +35,7 @@ export default class extends Controller {
     this.element.removeEventListener("input", this.sourceInputHandler)
     this.element.removeEventListener("elef:editor-mode-change", this.modeChangedHandler)
     this.element.removeEventListener("elef:preview-updated", this.previewHandler)
+    this.element.removeEventListener("elef:preview-stale", this.previewStaleHandler)
     this.element.removeEventListener("click", this.clickHandler)
     this.element.removeEventListener("click", this.projectionLinkHandler)
     if (this.element.presentationEditorController === this) delete this.element.presentationEditorController
@@ -41,16 +44,19 @@ export default class extends Controller {
   applyMode(mode) {
     const visual = mode !== "source"
     this.element.dataset.editorMode = visual ? "visual" : "source"
-    if (this.hasCanvasTarget) this.canvasTarget.hidden = !visual
     if (this.hasSourceTarget) this.sourceTarget.classList.toggle("is-source-hidden", visual)
+    this.syncProjectionEditability()
   }
 
-  blockFocus() {
+  blockFocus(event) {
+    this.activeProjectionBlock = event.currentTarget
     this.element.dataset.editorProjectionActive = "true"
   }
 
   blockBlur() {
+    this.activeProjectionBlock = null
     delete this.element.dataset.editorProjectionActive
+    this.syncProjectionEditability()
   }
 
   projectionLinkClicked(event) {
@@ -64,7 +70,7 @@ export default class extends Controller {
   blockInput(event) {
     if (!this.editorController || this.updatingSource) return
     const blockElement = event.target.closest?.("[data-editor-block-id]")
-    if (!blockElement) return
+    if (!blockElement || !this.canEditBlock(blockElement)) return
     const block = this.findBlock(blockElement.dataset.editorBlockId)
     const region = this.map?.editable_regions?.find((candidate) => candidate.block_id === block?.id)
     if (!block || !region) return
@@ -84,6 +90,7 @@ export default class extends Controller {
   }
 
   positionChanged(event) {
+    if (!this.canOperateOnProjection()) return
     const select = event.target
     const source = this.sourceValue()
     const slideIndex = Number(select.dataset.slideIndex)
@@ -113,6 +120,7 @@ export default class extends Controller {
   }
 
   handleAction(event) {
+    if (!this.canOperateOnProjection()) return
     const control = event.target.closest?.("[data-presentation-editor-action]")
     if (!control || control.disabled) return
     event.preventDefault()
@@ -291,6 +299,7 @@ export default class extends Controller {
   previewUpdated(payload) {
     if (!payload?.editor_map) {
       if (this.operationPending) this.setStatus("Visual controls are paused until the preview recovers.")
+      this.syncProjectionEditability({ preserveActive: Boolean(this.activeProjectionBlock && this.element.dataset.editorProjectionActive === "true") })
       return
     }
     const wasPending = this.operationPending
@@ -298,7 +307,50 @@ export default class extends Controller {
     this.operationPending = false
     if (wasPending) this.setControlsDisabled(false)
     this.updateBlockBoundaries()
+    this.syncProjectionEditability()
     this.setStatus("")
+  }
+
+  previewStale(detail = {}) {
+    this.operationPending = true
+    this.setControlsDisabled(true)
+    this.syncProjectionEditability({ preserveActive: detail.preserveActive })
+  }
+
+  canOperateOnProjection() {
+    return this.element.dataset.editorMode !== "source" && this.element.previewController?.projectionFresh !== false
+  }
+
+  canEditBlock(blockElement) {
+    if (this.element.dataset.editorMode === "source" || blockElement.dataset.editorSourceEditable === "false") return false
+    if (this.element.previewController?.projectionFresh !== false) return true
+
+    return this.activeProjectionBlock === blockElement &&
+      document.activeElement?.closest?.("[contenteditable='true']") === blockElement
+  }
+
+  syncProjectionEditability({ preserveActive = false } = {}) {
+    const visual = this.element.dataset.editorMode !== "source"
+    const fresh = this.element.previewController?.projectionFresh !== false
+    const active = preserveActive ? document.activeElement?.closest?.("[data-editor-block-id]") : null
+    this.element.querySelectorAll("[data-editor-block-id][data-editor-source-editable]").forEach((block) => {
+      const sourceEditable = block.dataset.editorSourceEditable !== "false"
+      const editable = sourceEditable && visual && (fresh || (preserveActive && block === active))
+      block.contentEditable = String(editable)
+      if (editable) {
+        block.setAttribute("role", "textbox")
+        block.setAttribute("aria-label", block.classList.contains("slide-title") ? "Editable slide title" : "Editable slide block")
+        block.setAttribute("aria-multiline", "true")
+        block.setAttribute("spellcheck", "true")
+        block.removeAttribute("aria-readonly")
+      } else {
+        block.removeAttribute("role")
+        block.removeAttribute("aria-label")
+        block.removeAttribute("aria-multiline")
+        block.removeAttribute("spellcheck")
+        block.setAttribute("aria-readonly", "true")
+      }
+    })
   }
 
   sourceInput(event) {
@@ -351,7 +403,6 @@ export default class extends Controller {
     this.editorController.replaceRange(source, 0, this.editorController.value.length)
     this.updatingSource = false
     this.setStatus("Updating visual preview…")
-    this.editorController.focus()
   }
 
   sourceValue() {

@@ -284,6 +284,27 @@ class PresentationTest < ActiveSupport::TestCase
     assert_equal ["# First", "---", "Second"], map[:slides].first[:blocks].map { |block| block[:markdown] }
   end
 
+  test "marks Markdown that the visual serializer cannot round-trip as read-only" do
+    sources = [
+      "```ruby\nputs 1",
+      "[Guide][guide]",
+      "[guide]: /guide",
+      "<https://example.test>",
+      "---",
+      "Title\n===",
+      "    indented code",
+      "foo*bar*baz and value_name_value",
+      "> outer\n> > nested quote",
+      "Inline ![video](elef-asset:#{'a' * 64})",
+      "| A |\n| --- |",
+      "| A | B |\n| --- |\n| 1 | 2 | 3 |"
+    ]
+    maps = sources.map { |source| Presentations::Document.editor_map(source, mode: :document) }
+
+    assert_equal "code", maps.first[:slides].first[:blocks].first[:kind]
+    assert_equal [false] * sources.length, maps.map { |map| map[:slides].first[:editable_regions].first[:editable] }
+  end
+
   test "warns and removes unknown presentation directives" do
     document = Presentations::Document.parse("# Slide\n\n:::unknown\n\nContent")
 

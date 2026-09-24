@@ -4,8 +4,13 @@ require "stringio"
 require "tempfile"
 
 class PresentationsTest < ApplicationSystemTestCase
+  def wait_for_fresh_projection
+    assert_selector "form.visual-editor-form:not([data-preview-projection-stale='true'])", wait: 5
+  end
+
   def type_visual_text(selector, visible_text, replacement)
     selector = ".editor-projection #{selector}"
+    wait_for_fresh_projection
     attempts = 0
     loop do
       source_before = find_field("Markdown source").value
@@ -238,10 +243,38 @@ class PresentationsTest < ApplicationSystemTestCase
     end
 
     click_on "Source"
-    assert_selector ".editor-projection", visible: :hidden
+    assert_selector ".editor-projection[aria-label='Rendered preview']", visible: true
     assert_selector ".cm-content", visible: true
+    [1400, 700, 390].each do |width|
+      page.driver.browser.manage.window.resize_to(width, 900)
+      geometry = page.evaluate_script(<<~JAVASCRIPT)
+        (() => {
+          const source = document.querySelector('.source-pane').getBoundingClientRect();
+          const preview = document.querySelector('.editor-projection').getBoundingClientRect();
+          return {
+            sourceRight: source.right,
+            sourceBottom: source.bottom,
+            sourceWidth: source.width,
+            previewLeft: preview.left,
+            previewTop: preview.top,
+            previewWidth: preview.width,
+            viewport: window.innerWidth,
+            document: document.documentElement.scrollWidth
+          };
+        })()
+      JAVASCRIPT
+      assert_operator geometry["sourceWidth"], :>, 0
+      assert_operator geometry["previewWidth"], :>, 0
+      if width > 900
+        assert_operator geometry["sourceRight"], :<=, geometry["previewLeft"]
+      else
+        assert_operator geometry["sourceBottom"], :<=, geometry["previewTop"] + 1
+      end
+      assert_operator geometry["document"], :<=, geometry["viewport"] + 1
+    end
+
     click_on "Visual"
-    assert_selector ".editor-projection", visible: true
+    assert_selector ".editor-projection[aria-label='Visual editing surface']", visible: true
   ensure
     page.driver.browser.manage.window.resize_to(1400, 1000)
   end
@@ -255,11 +288,30 @@ class PresentationsTest < ApplicationSystemTestCase
     page.execute_script("const block = [...document.querySelectorAll('.editor-projection .slide-block')].find((candidate) => candidate.innerText === 'Body'); block.innerText = 'Changed'; block.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'Changed' }));")
     assert_field "Markdown source", with: /# First\n\nChanged/, wait: 5
     page.execute_script("document.activeElement.blur()")
+    wait_for_fresh_projection
     assert_no_selector "[data-presentation-editor-action='add-slide-after'][disabled]", wait: 5
     find("[data-presentation-editor-action='add-slide-after']", match: :first).click
     assert_selector ".presentation-editor-projection .slide", count: 3, wait: 5
-    accept_confirm { all("[data-presentation-editor-action='delete-slide']").last.click }
+    wait_for_fresh_projection
+    state = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const form = document.querySelector('form.visual-editor-form');
+        const controls = [...form.querySelectorAll('[data-presentation-editor-action="delete-slide"]')];
+        return {
+          fresh: form.previewController.projectionFresh,
+          slides: form.presentationEditorController.map.slides.length,
+          controlCount: controls.length,
+          lastDisabled: controls.at(-1)?.disabled
+        };
+      })()
+    JAVASCRIPT
+    assert_equal({ "fresh" => true, "slides" => 3, "controlCount" => 3, "lastDisabled" => false }, state)
+    refute page.evaluate_script("Boolean(document.activeElement.closest('.cm-content'))"), "visual operations must not move focus into the hidden source editor"
+    accept_confirm("Delete this slide?") do
+      find("[data-presentation-editor-action='delete-slide'][data-slide-index='2']").click
+    end
     assert_selector ".presentation-editor-projection .slide", count: 2, wait: 5
+    wait_for_fresh_projection
 
     find("select[data-presentation-editor-position][data-slide-index='0'][data-block-index='1']").select("Center Middle")
     assert_field "Markdown source", with: /:::position\{center middle\}/, wait: 5
@@ -269,6 +321,120 @@ class PresentationsTest < ApplicationSystemTestCase
     visit edit_presentation_path(presentation)
     assert_field "Markdown source", with: /Changed/
     assert_selector ".presentation-editor-projection .slide", count: 2
+  end
+
+  test "disables stale presentation blocks and controls until matching HTML and map install" do
+    original = "# Old A\n\nOld first block\n---\n# Old B\n\nOld second block"
+    updated = "# New A\n\nFresh first block\n\nFresh second block\n---\n# New B\n\nFresh third block\n---\n# New C"
+    presentation = Presentation.create!(title: "Stale map recovery", source: original)
+
+    visit edit_presentation_path(presentation)
+    click_on "Source"
+    page.execute_script(<<~JAVASCRIPT, updated)
+      const form = document.querySelector('form.visual-editor-form');
+      form.previewController.delayValue = 5000;
+      const originalFetch = window.fetch.bind(window);
+      let failNextPreview = true;
+      window.fetch = (url, options = {}) => {
+        if (options.method === 'POST' && String(url).includes('/preview') && failNextPreview) {
+          failNextPreview = false;
+          return Promise.reject(new TypeError('preview offline'));
+        }
+        return originalFetch(url, options);
+      };
+      document.querySelector('.source-field').editorController.setExternalValue(arguments[0]);
+    JAVASCRIPT
+    click_on "Visual"
+
+    assert_selector ".editor-projection", text: "Old first block"
+    assert_selector '.editor-projection[aria-busy="true"]'
+    assert_no_selector '.editor-projection [contenteditable="true"]'
+    assert_selector '[data-presentation-editor-action="add-slide-after"]:disabled'
+    assert_field "Markdown source", with: updated
+
+    page.execute_script(<<~JAVASCRIPT)
+      const staleBlock = document.querySelector('.editor-projection [data-editor-block-id]');
+      staleBlock.textContent = 'Stale-map injection';
+      staleBlock.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'Stale-map injection' }));
+      const form = document.querySelector('form.visual-editor-form');
+      form.previewController.delayValue = 0;
+      form.previewController.retry();
+    JAVASCRIPT
+    assert_selector '[data-preview-target="status"]', text: "Preview unavailable", wait: 5
+    assert_selector ".editor-projection", text: "Old first block"
+    assert_selector '.editor-projection[aria-busy="false"]'
+    assert_no_selector '.editor-projection [contenteditable="true"]'
+    assert_selector '[data-presentation-editor-action="add-slide-after"]:disabled'
+    assert_field "Markdown source", with: updated
+
+    click_on "Retry preview"
+    assert_selector ".presentation-editor-projection .slide", count: 3, wait: 5
+    title_state = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const form = document.querySelector('form.visual-editor-form');
+        const title = [...document.querySelectorAll('.editor-projection .slide-block')].find((block) => block.textContent.includes('New A'));
+        return {
+          mode: form.dataset.editorMode,
+          fresh: form.previewController.projectionFresh,
+          sourceEditable: title?.dataset.editorSourceEditable,
+          contentEditable: title?.getAttribute('contenteditable'),
+          slideCount: form.presentationEditorController.map.slides.length,
+          mapTitleEditable: form.presentationEditorController.map.slides[0].editable_regions[0].editable
+        };
+      })()
+    JAVASCRIPT
+    assert_equal "visual", title_state["mode"], title_state.inspect
+    assert_equal true, title_state["fresh"], title_state.inspect
+    assert_equal "true", title_state["sourceEditable"], title_state.inspect
+    assert_equal "true", title_state["contentEditable"], title_state.inspect
+    assert_selector ".editor-projection .slide-block[contenteditable='true']", text: "New A"
+    assert_selector '[data-presentation-editor-action="add-slide-after"]:not(:disabled)'
+    range_mismatches = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const form = document.querySelector('form.visual-editor-form');
+        const source = document.querySelector('.source-field').editorController.value;
+        const map = form.presentationEditorController.map;
+        return map.slides.flatMap((slide) => slide.blocks.filter((block) => {
+          const raw = source.slice(block.source_range.start, block.source_range.end);
+          return raw !== block.markdown && raw.replace(/\\r?\\n$/, '') !== block.markdown;
+        }).map((block) => ({
+          id: block.id,
+          markdown: block.markdown,
+          raw: source.slice(block.source_range.start, block.source_range.end),
+          range: block.source_range
+        })));
+      })()
+    JAVASCRIPT
+    assert_empty range_mismatches, "installed editor map must describe the current source: #{range_mismatches.inspect}"
+
+    click_on "Save presentation"
+    assert_text "Presentation saved."
+    visit edit_presentation_path(presentation)
+    assert_field "Markdown source", with: updated
+    refute_includes presentation.reload.source, "Stale-map injection"
+  end
+
+  test "keeps an unterminated presentation code fence read-only across save and reopen" do
+    source = "# Code example\n\n```ruby\nputs 1"
+    presentation = Presentation.create!(title: "Unterminated slide code", source: source)
+
+    visit edit_presentation_path(presentation)
+
+    assert_selector '.slide-block[data-editor-source-editable="false"][aria-readonly="true"] pre code', text: "puts 1"
+    assert_no_selector '.slide-block[contenteditable="true"] pre'
+    page.execute_script(<<~JAVASCRIPT)
+      const block = document.querySelector('.slide-block[data-editor-source-editable="false"]');
+      block.textContent = 'flattened code';
+      block.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'flattened code' }));
+    JAVASCRIPT
+
+    assert_field "Markdown source", with: source
+    click_on "Save presentation"
+    assert_text "Presentation saved."
+    visit edit_presentation_path(presentation)
+
+    assert_field "Markdown source", with: source
+    assert_selector '.slide-block[data-editor-source-editable="false"][aria-readonly="true"] pre code', text: "puts 1"
   end
 
   test "presentation controls re-enable after repeated visual typing" do
@@ -281,6 +447,7 @@ class PresentationsTest < ApplicationSystemTestCase
 
     assert_field "Markdown source", with: "# Slide\n\nAlpha with several characters", wait: 5
     page.execute_script("document.activeElement.blur()")
+    wait_for_fresh_projection
 
     controls_reenabled = page.evaluate_script(<<~JAVASCRIPT)
       (() => {
@@ -313,18 +480,21 @@ class PresentationsTest < ApplicationSystemTestCase
 
     find("[data-presentation-editor-action='move-block-down'][data-block-index='1']").click
     assert_field "Markdown source", with: "# Slide\n\nPlain\n\n:::position{center middle}\n\nPositioned", wait: 5
+    wait_for_fresh_projection
     assert_selector ".slide-block.position-center.position-middle", text: "Positioned", wait: 5
     refute_selector ".slide-block.position-center", text: "Plain"
 
     assert_selector "[data-presentation-editor-action='add-block-after'][data-block-index='1']:not([disabled])", wait: 5
     find("[data-presentation-editor-action='add-block-after'][data-block-index='1']").click
     assert_field "Markdown source", with: "# Slide\n\nPlain\n\nNew block\n\n:::position{center middle}\n\nPositioned", wait: 5
+    wait_for_fresh_projection
     assert_selector ".slide-block", text: "New block", wait: 5
     refute_selector ".slide-block.position-center", text: "New block"
 
     accept_confirm do
       find("[data-presentation-editor-action='delete-block'][data-block-index='3']").click
     end
+    wait_for_fresh_projection
     refute_includes find_field("Markdown source").value, ":::position{center middle}"
     assert_no_selector ".slide-block.position-center", wait: 5
 
@@ -348,6 +518,7 @@ class PresentationsTest < ApplicationSystemTestCase
 
     find("[data-presentation-editor-action='move-block-down'][data-block-index='1']").click
     assert_field "Markdown source", with: "# Slide\n\n:::position{center}\n\nSecond\n\nFirst\n\n:::\n\nOutside", wait: 5
+    wait_for_fresh_projection
     assert_selector ".slide-block.position-center", text: "First", wait: 5
     assert_selector ".slide-block.position-center", text: "Second"
 
@@ -355,12 +526,14 @@ class PresentationsTest < ApplicationSystemTestCase
     accept_confirm do
       find("[data-presentation-editor-action='delete-block'][data-block-index='2']").click
     end
+    wait_for_fresh_projection
     assert_includes find_field("Markdown source").value, ":::position{center}"
 
     assert_selector "[data-presentation-editor-action='delete-block'][data-block-index='1']:not([disabled])", wait: 5
     accept_confirm do
       find("[data-presentation-editor-action='delete-block'][data-block-index='1']").click
     end
+    wait_for_fresh_projection
     final_source = find_field("Markdown source").value
     refute_includes final_source, ":::position{center}"
     refute_includes final_source, ":::"
@@ -510,15 +683,19 @@ class PresentationsTest < ApplicationSystemTestCase
     visit edit_presentation_path(presentation)
     page.execute_script(<<~JAVASCRIPT)
       const heading = [...document.querySelectorAll('.editor-projection .slide-block')].find((block) => block.innerText.includes('Styled'));
+      heading.focus();
       const strong = heading.querySelector('strong');
       if (strong) strong.textContent = 'Visual';
       else heading.textContent = heading.textContent.replace('Styled', 'Visual');
       heading.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'Visual' }));
     JAVASCRIPT
     assert_field "Markdown source", with: "# **Visual** deck\n\nBefore $\\frac{x}{y}$ and $$\\sum_{i=1}^{n} i$$ after.", wait: 5
+    page.execute_script("document.activeElement.blur()")
+    wait_for_fresh_projection
 
     page.execute_script(<<~JAVASCRIPT)
       const block = [...document.querySelectorAll('.editor-projection .slide-block')].find((candidate) => candidate.querySelector('[data-editor-math-source]'));
+      block.focus();
       const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
       let node;
       while ((node = walker.nextNode()) && !node.textContent.includes('Before ')) {}
@@ -620,6 +797,7 @@ class PresentationsTest < ApplicationSystemTestCase
       visual_expected.sub!(source_text, replacement)
       assert_field "Markdown source", with: visual_expected, wait: 5
       page.execute_script("document.activeElement.blur()")
+      wait_for_fresh_projection
       assert_selector selector, text: /#{Regexp.escape(replacement)}/, wait: 5
     end
 
@@ -690,22 +868,31 @@ class PresentationsTest < ApplicationSystemTestCase
     page.execute_script(<<~JAVASCRIPT)
       const block = [...document.querySelectorAll('.editor-projection .slide-block')]
         .find((candidate) => candidate.querySelector('strong'));
+      block.focus();
       block.querySelector('strong').innerText = 'updated';
       block.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'updated' }));
     JAVASCRIPT
     assert_field "Markdown source", with: /A \*\*updated\*\*\./, wait: 5
+    page.execute_script("document.activeElement.blur()")
+    assert_selector ".editor-projection .slide-block strong", text: "updated", wait: 5
+    assert_no_selector 'form[data-preview-projection-stale="true"]', wait: 5
 
     page.execute_script(<<~JAVASCRIPT)
       const tableBlock = [...document.querySelectorAll('.editor-projection .slide-block')]
         .find((block) => block.querySelector('table'));
+      tableBlock.focus();
       tableBlock.querySelector('tbody td').innerText = 'Updated';
       tableBlock.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'Updated' }));
     JAVASCRIPT
     assert_field "Markdown source", with: /\| Updated \| Two \|/, wait: 5
+    page.execute_script("document.activeElement.blur()")
+    assert_selector ".editor-projection table", text: "Updated", wait: 5
+    assert_no_selector 'form[data-preview-projection-stale="true"]', wait: 5
 
     page.execute_script(<<~JAVASCRIPT)
       const imageBlock = [...document.querySelectorAll('.editor-projection .slide-block')]
         .find((block) => block.querySelector('.editor-media-caption'));
+      imageBlock.focus();
       const caption = imageBlock.querySelector('.editor-media-caption');
       caption.innerText = 'New alt';
       caption.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'New alt' }));
@@ -743,18 +930,22 @@ class PresentationsTest < ApplicationSystemTestCase
 
     find("[data-presentation-editor-action='move-block-down'][data-slide-index='0'][data-block-index='1']").click
     assert_field "Markdown source", with: /# First\n\nSecond block\n\nFirst block/, wait: 5
+    wait_for_fresh_projection
     assert_no_selector "[data-presentation-editor-action='add-block-after'][data-slide-index='0'][data-block-index='1'][disabled]", wait: 5
 
     find("[data-presentation-editor-action='add-block-after'][data-slide-index='0'][data-block-index='1']").click
     assert_field "Markdown source", with: /Second block\n\nNew block\n\nFirst block/, wait: 5
+    wait_for_fresh_projection
     assert_no_selector "[data-presentation-editor-action='delete-block'][data-slide-index='0'][data-block-index='2'][disabled]", wait: 5
 
     accept_confirm { find("[data-presentation-editor-action='delete-block'][data-slide-index='0'][data-block-index='2']").click }
     assert_field "Markdown source", with: /Second block\n\nFirst block/, wait: 5
+    wait_for_fresh_projection
     assert_no_selector "[data-presentation-editor-action='move-slide-down'][data-slide-index='0'][disabled]", wait: 5
 
     find("[data-presentation-editor-action='move-slide-down'][data-slide-index='0']").click
     assert_field "Markdown source", with: /# Second\n\nOther block\n---\n# First\n\nSecond block\n\nFirst block/, wait: 5
+    wait_for_fresh_projection
   end
 
   test "keeps the last good presentation projection when preview is unavailable and offers retry" do

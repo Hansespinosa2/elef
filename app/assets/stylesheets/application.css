@@ -138,9 +138,19 @@ body.elef-app {
 .visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-scroller { scrollbar-width: none; }
 .visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-scroller::-webkit-scrollbar { display: none; }
 .visual-editor-form[data-editor-mode="visual"][data-editor-vim-enabled="true"] .source-field .editor-surface { display: block; margin-top: 0.75rem; }
-.visual-editor-form[data-editor-mode="source"] .editor-projection { display: none; }
 .visual-editor-form[data-editor-mode="source"] .source-field .editor-surface { display: block; }
 .visual-editor-form[data-editor-mode="source"] .source-field.is-source-hidden { display: block; }
+.editor-layout, .source-pane { min-width: 0; }
+.visual-editor-form[data-editor-mode="source"] .editor-layout { align-items: start; display: grid; gap: clamp(0.75rem, 1.5vw, 1.25rem); grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr); }
+.visual-editor-form[data-editor-mode="source"] .editor-projection { max-height: min(74vh, 58rem); min-height: 24rem; overflow: auto; }
+.visual-editor-form[data-editor-mode="source"] .presentation-editor-slide-toolbar,
+.visual-editor-form[data-editor-mode="source"] .presentation-editor-block-controls { display: none; }
+.visual-editor-form[data-editor-mode="source"] .document-editor-block:hover,
+.visual-editor-form[data-editor-mode="source"] .document-editor-block:focus { background: transparent; outline-color: transparent; }
+@media (max-width: 900px) {
+  .visual-editor-form[data-editor-mode="source"] .editor-layout { grid-template-columns: minmax(0, 1fr); }
+  .visual-editor-form[data-editor-mode="source"] .editor-projection { max-height: 60vh; }
+}
 .editor-toolbar { align-items: center; color: var(--oradia-muted); display: flex; flex-wrap: wrap; gap: 0.55rem; min-height: 2rem; position: relative; }
 .editor-mode-switch { align-items: center; display: inline-flex; gap: 0.15rem; }
 .editor-mode-button { background: transparent; border: 1px solid var(--oradia-slate-700); border-radius: 999px; color: var(--oradia-muted); cursor: pointer; font: inherit; font-size: 0.78rem; font-weight: 800; padding: 0.3rem 0.7rem; }

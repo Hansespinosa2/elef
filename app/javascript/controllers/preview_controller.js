@@ -10,13 +10,20 @@ export default class extends Controller {
     this.requestId = 0
     this.active = true
     this.pendingProjection = null
+    this.projectionFresh = true
     this.serverWarnings = [...this.warningsTarget.querySelectorAll("li")].map((item) => item.textContent)
     this.localWarnings = []
     this.focusoutHandler = (event) => {
-      if (!event.target.closest?.("[contenteditable='true']") || !this.containerTarget.contains(event.target)) return
+      // A block's blur handler may mark it read-only before this bubbling
+      // listener runs, so identify the editor block independently of its
+      // current contenteditable value.
+      if (!event.target.closest?.("[data-editor-block-id]") || !this.containerTarget.contains(event.target)) return
 
       queueMicrotask(() => {
-        if (!this.isEditingProjection()) this.applyPendingProjection()
+        if (this.isEditingProjection()) return
+
+        if (this.pendingProjection) this.applyPendingProjection()
+        else if (!this.projectionFresh) this.markProjectionStale(false)
       })
     }
     this.localPreviewError = (event) => this.handleLocalPreviewError(event)
@@ -41,6 +48,7 @@ export default class extends Controller {
     this.abortActiveRequest()
     this.pendingProjection = null
     const revision = ++this.requestId
+    this.markProjectionStale(this.isEditingProjection())
     this.hideRetry()
     this.setStatus("Updating preview…")
     this.timer = setTimeout(() => this.refresh(revision), this.delayValue)
@@ -51,6 +59,7 @@ export default class extends Controller {
     clearTimeout(this.timer)
     this.pendingProjection = null
     const revision = ++this.requestId
+    this.markProjectionStale(this.isEditingProjection())
     this.hideRetry()
     this.setStatus("Updating preview…")
     this.refresh(revision)
@@ -69,6 +78,8 @@ export default class extends Controller {
     body.delete("commit")
     body.set("revision", requestId)
     body.set("projection", "editor")
+    const sourceFieldName = [...body.keys()].find((name) => name.endsWith("[source]"))
+    const requestedSource = sourceFieldName ? body.get(sourceFieldName).toString() : ""
 
     try {
       const request = fetch(this.urlValue, {
@@ -98,20 +109,26 @@ export default class extends Controller {
         // A source map only describes a projection when that projection was
         // installed. Keep the previous map paired with the last-good HTML.
         const unavailablePayload = { ...payload, editor_map: null }
+        this.containerTarget.setAttribute("aria-busy", "false")
         this.element.dispatchEvent(new CustomEvent("elef:preview-updated", { bubbles: true, detail: { payload: unavailablePayload, response } }))
         this.showRetry()
         this.setStatus("Preview unavailable")
         return
       }
 
+      if (!this.sameSource(this.currentSource(), requestedSource)) {
+        this.schedule()
+        return
+      }
+
       if (this.isEditingProjection()) {
-        this.pendingProjection = { payload, response }
+        this.pendingProjection = { payload, response, source: requestedSource }
         this.hideRetry()
         this.setStatus("Preview ready — finish editing to update the visual structure.")
         return
       }
 
-      this.installProjection(payload, response)
+      this.installProjection(payload, response, requestedSource)
     } catch (error) {
       if (error.name === "AbortError" && !timedOut) return
       if (!this.active || requestId !== this.requestId) return
@@ -119,6 +136,7 @@ export default class extends Controller {
         ? "Preview timed out. Your source is still safe; try again when the server responds."
         : "Preview could not be reached. Your source is still safe; try again shortly."
       this.renderWarnings([warning])
+      this.containerTarget.setAttribute("aria-busy", "false")
       this.element.dispatchEvent(new CustomEvent("elef:preview-updated", { bubbles: true, detail: { payload: null, response: null, error } }))
       this.showRetry()
       this.setStatus("Preview unavailable")
@@ -143,19 +161,47 @@ export default class extends Controller {
 
     const projection = this.pendingProjection
     this.pendingProjection = null
-    this.installProjection(projection.payload, projection.response)
+    this.installProjection(projection.payload, projection.response, projection.source)
   }
 
-  installProjection(payload, response) {
+  installProjection(payload, response, source) {
+    if (!this.sameSource(this.currentSource(), source)) {
+      this.schedule()
+      return
+    }
+
     const scrollLeft = this.containerTarget.scrollLeft
     const scrollTop = this.containerTarget.scrollTop
     this.containerTarget.innerHTML = payload.html
     this.containerTarget.scrollLeft = scrollLeft
     this.containerTarget.scrollTop = scrollTop
-    this.element.dispatchEvent(new CustomEvent("elef:preview-updated", { bubbles: true, detail: { payload, response } }))
+    this.projectionFresh = true
+    delete this.element.dataset.previewProjectionStale
+    this.containerTarget.removeAttribute("aria-busy")
+    this.element.dispatchEvent(new CustomEvent("elef:preview-updated", { bubbles: true, detail: { payload, response, source } }))
     this.containerTarget.dispatchEvent(new CustomEvent("preview:updated", { bubbles: true }))
     this.hideRetry()
     this.setStatus("")
+  }
+
+  markProjectionStale(preserveActive) {
+    this.projectionFresh = false
+    this.element.dataset.previewProjectionStale = "true"
+    this.containerTarget.setAttribute("aria-busy", "true")
+    this.element.dispatchEvent(new CustomEvent("elef:preview-stale", {
+      bubbles: true,
+      detail: { preserveActive: Boolean(preserveActive) }
+    }))
+  }
+
+  currentSource() {
+    const field = this.element.querySelector(".source-field")
+    return field?.editorController?.sourceValue ?? field?.querySelector("textarea")?.value ?? ""
+  }
+
+  sameSource(left, right) {
+    const normalize = (source) => String(source ?? "").replace(/\r\n?/g, "\n")
+    return normalize(left) === normalize(right)
   }
 
   renderWarnings(warnings) {
