@@ -201,7 +201,7 @@ class DocumentsTest < ApplicationSystemTestCase
   test "visual rich blocks preserve table and image Markdown while editing" do
     document = Document.create!(
       title: "Rich notes",
-      source: "# Rich notes\n\n| Name | Value |\n| --- | --- |\n| One | Two |\n\n![Old alt](/icon.svg)"
+      source: "# Rich notes\n\n| Name | Value |\n| --- | --- |\n| **One** | Two |\n\n![Old alt](/icon.svg)"
     )
 
     visit edit_document_path(document)
@@ -212,10 +212,10 @@ class DocumentsTest < ApplicationSystemTestCase
     page.execute_script(<<~JAVASCRIPT)
       const tableBlock = [...document.querySelectorAll('.document-editor-block')]
         .find((block) => block.querySelector('table'));
-      tableBlock.querySelector('tbody td').innerText = 'Updated';
+      tableBlock.querySelector('tbody td:last-child').innerText = 'Updated';
       tableBlock.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'Updated' }));
     JAVASCRIPT
-    assert_field "Markdown source", with: /\| Updated \| Two \|/, wait: 5
+    assert_field "Markdown source", with: /\| \*\*One\*\* \| Updated \|/, wait: 5
     assert_includes find_field("Markdown source").value, "![Old alt](/icon.svg)"
 
     page.execute_script(<<~JAVASCRIPT)
@@ -226,7 +226,7 @@ class DocumentsTest < ApplicationSystemTestCase
       caption.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'New alt' }));
     JAVASCRIPT
     assert_field "Markdown source", with: /!\[New alt\]\(\/icon\.svg\)/, wait: 5
-    assert_includes find_field("Markdown source").value, "| Updated | Two |"
+    assert_includes find_field("Markdown source").value, "| **One** | Updated |"
   end
 
   test "visual inline edits preserve surrounding Markdown syntax" do
@@ -247,10 +247,82 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: "# Inline notes\n\nA **updated** and *italic* link [target](/path).", wait: 5
   end
 
+  test "visual heading edits preserve inline formatting" do
+    document = Document.create!(title: "Styled heading", source: "# **Styled** and *clear*")
+
+    visit edit_document_path(document)
+    page.execute_script(<<~JAVASCRIPT)
+      const heading = document.querySelector('.document-editor-block strong');
+      heading.textContent = 'Updated';
+      heading.closest('.document-editor-block').dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'Updated' }));
+    JAVASCRIPT
+
+    assert_field "Markdown source", with: "# **Updated** and *clear*", wait: 5
+  end
+
+  test "visual paragraph edits preserve inline and display LaTeX source" do
+    source = 'Before $\\frac{a}{b}$ between $$\\sum_{i=1}^{n} i$$ after.'
+    document = Document.create!(title: "Math preservation", source: source)
+
+    visit edit_document_path(document)
+    assert_selector '.document-editor-block [data-editor-math-source][contenteditable="false"]', count: 2
+
+    page.execute_script(<<~JAVASCRIPT)
+      const block = document.querySelector('.document-editor-block');
+      const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+      let node;
+      while ((node = walker.nextNode()) && !node.textContent.includes('Before ')) {}
+      node.textContent = node.textContent.replace('Before ', 'Earlier ');
+      block.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'Earlier' }));
+    JAVASCRIPT
+    assert_field "Markdown source", with: 'Earlier $\\frac{a}{b}$ between $$\\sum_{i=1}^{n} i$$ after.', wait: 5
+
+    page.execute_script(<<~JAVASCRIPT)
+      const block = document.querySelector('.document-editor-block');
+      const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+      let node;
+      while ((node = walker.nextNode()) && !node.textContent.includes(' after.')) {}
+      node.textContent = node.textContent.replace(' after.', ' still here.');
+      block.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'still here' }));
+    JAVASCRIPT
+    assert_field "Markdown source", with: 'Earlier $\\frac{a}{b}$ between $$\\sum_{i=1}^{n} i$$ still here.', wait: 5
+  end
+
+  test "visual paragraph edits preserve inline media source" do
+    document = Document.create!(title: "Inline image", source: "Before ![diagram](/diagram.svg) after.")
+
+    visit edit_document_path(document)
+    assert_selector '.document-editor-block [data-editor-image-source][contenteditable="false"]'
+    page.execute_script(<<~JAVASCRIPT)
+      const block = document.querySelector('.document-editor-block');
+      const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+      let node;
+      while ((node = walker.nextNode()) && !node.textContent.includes('Before ')) {}
+      node.textContent = node.textContent.replace('Before ', 'Earlier ');
+      block.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'Earlier' }));
+    JAVASCRIPT
+
+    assert_field "Markdown source", with: "Earlier ![diagram](/diagram.svg) after.", wait: 5
+  end
+
+  test "visual edits preserve nested task lists and untouched item formatting" do
+    source = "- [ ] Keep **this**\n  - Nested [link](/path)\n- [x] Already done"
+    document = Document.create!(title: "List preservation", source: source)
+
+    visit edit_document_path(document)
+    page.execute_script(<<~JAVASCRIPT)
+      const strong = document.querySelector('.document-editor-block strong');
+      strong.textContent = 'that';
+      strong.closest('.document-editor-block').dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'that' }));
+    JAVASCRIPT
+
+    assert_field "Markdown source", with: "- [ ] Keep **that**\n  - Nested [link](/path)\n- [x] Already done", wait: 5
+  end
+
   test "visual code editing preserves fenced language and indentation" do
     document = Document.create!(
       title: "Code notes",
-      source: "# Code\n\n```ruby\n  records.each do |record|\n    process(record)\n  end\n```"
+      source: "# Code\n\n```ruby\n  records.each do |record|\n    process(record)\n  end\n````"
     )
 
     visit edit_document_path(document)
@@ -262,7 +334,7 @@ class DocumentsTest < ApplicationSystemTestCase
       codeBlock.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'updated' }));
     JAVASCRIPT
 
-    assert_field "Markdown source", with: "# Code\n\n```ruby\n  updated\n    indented\n```", wait: 5
+    assert_field "Markdown source", with: "# Code\n\n```ruby\n  updated\n    indented\n````", wait: 5
   end
 
   test "expands math shorthand only when committed inside math" do

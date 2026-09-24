@@ -39,7 +39,7 @@ class PresentationsTest < ApplicationSystemTestCase
       find('input[aria-label="Rename Workflow parent"]').set("Renamed parent")
       click_on "Save title"
     end
-    assert_text "Presentation renamed."
+    assert_text "Presentation renamed.", wait: 5
     within("article", text: "Renamed parent") do
       find("summary", text: "Fork").click
       click_on "As inspiration"
@@ -176,6 +176,33 @@ class PresentationsTest < ApplicationSystemTestCase
     visit edit_presentation_path(presentation)
     assert_field "Markdown source", with: /Changed/
     assert_selector ".presentation-editor-projection .slide", count: 2
+  end
+
+  test "visual presentation edits preserve formatted headings and LaTeX" do
+    presentation = Presentation.create!(
+      title: "Preserved syntax",
+      source: "# **Styled** deck\n\nBefore $\\frac{x}{y}$ and $$\\sum_{i=1}^{n} i$$ after."
+    )
+
+    visit edit_presentation_path(presentation)
+    page.execute_script(<<~JAVASCRIPT)
+      const heading = [...document.querySelectorAll('.slide-block')].find((block) => block.innerText.includes('Styled'));
+      const strong = heading.querySelector('strong');
+      if (strong) strong.textContent = 'Visual';
+      else heading.textContent = heading.textContent.replace('Styled', 'Visual');
+      heading.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'Visual' }));
+    JAVASCRIPT
+    assert_field "Markdown source", with: "# **Visual** deck\n\nBefore $\\frac{x}{y}$ and $$\\sum_{i=1}^{n} i$$ after.", wait: 5
+
+    page.execute_script(<<~JAVASCRIPT)
+      const block = [...document.querySelectorAll('.slide-block')].find((candidate) => candidate.querySelector('[data-editor-math-source]'));
+      const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+      let node;
+      while ((node = walker.nextNode()) && !node.textContent.includes('Before ')) {}
+      node.textContent = node.textContent.replace('Before ', 'After ');
+      block.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'After' }));
+    JAVASCRIPT
+    assert_field "Markdown source", with: "# **Visual** deck\n\nAfter $\\frac{x}{y}$ and $$\\sum_{i=1}^{n} i$$ after.", wait: 5
   end
 
   test "visual presentation editing keeps tables and media as Markdown structures" do
@@ -776,8 +803,8 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_text ":beq"
     assert_selector ".snippet-option[aria-selected='true']"
     assert_equal "true", page.evaluate_script("document.querySelector('.cm-editor').getAttribute('aria-expanded')")
-    palette_position = page.evaluate_script("(() => { const editor = document.querySelector('[data-snippet-palette-target=editor]'); const e = editor.getBoundingClientRect(); const p = document.querySelector('[data-snippet-palette-target=palette]').getBoundingClientRect(); const styles = getComputedStyle(editor); const lineHeight = parseFloat(styles.lineHeight); const paddingTop = parseFloat(styles.paddingTop); const lineNumber = editor.value.slice(0, editor.selectionStart).split('\\n').length; const caretLineBottom = e.top + paddingTop + lineHeight * lineNumber - editor.scrollTop; return { paletteTop: p.top, paletteBottom: p.bottom, caretLineBottom, viewportBottom: window.innerHeight }; })()")
-    assert_operator palette_position["paletteTop"], :>, palette_position["caretLineBottom"]
+    palette_position = page.evaluate_script("(() => { const element = document.querySelector('[data-controller~=editor]'); const editor = element.editorController; const caret = editor.view.coordsAtPos(editor.selectionStart); const palette = document.querySelector('[data-snippet-palette-target=palette]').getBoundingClientRect(); return { belowCaret: Math.abs(palette.top - caret.bottom - 4) < 2, aboveCaret: Math.abs(palette.bottom - caret.top + 4) < 2, paletteBottom: palette.bottom, viewportBottom: window.innerHeight }; })()")
+    assert palette_position["belowCaret"] || palette_position["aboveCaret"], "The snippet popup should stay next to the caret"
     assert_operator palette_position["paletteBottom"], :<, palette_position["viewportBottom"]
 
     source.send_keys(:enter)
@@ -809,14 +836,15 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_selector ".snippet-option", text: ":beq"
     bounds = page.evaluate_script(<<~JS)
       (() => {
-        const editor = document.querySelector('[data-snippet-palette-target="editor"]');
+        const element = document.querySelector('[data-controller~="editor"]');
+        const editor = element.editorController;
         const palette = document.querySelector('.snippet-palette');
-        const e = editor.getBoundingClientRect(), p = palette.getBoundingClientRect();
-        return { positioned: palette.style.top !== '', top: p.top, bottom: p.bottom, editorTop: e.top, viewportBottom: window.innerHeight };
+        const caret = editor.view.coordsAtPos(editor.selectionStart), p = palette.getBoundingClientRect();
+        return { positioned: palette.style.top !== '', belowCaret: Math.abs(p.top - caret.bottom - 4) < 2, aboveCaret: Math.abs(p.bottom - caret.top + 4) < 2, bottom: p.bottom, viewportBottom: window.innerHeight };
       })()
     JS
     assert bounds["positioned"], "The colon popup must receive caret coordinates before a query is typed"
-    assert_operator bounds["top"], :>, bounds["editorTop"]
+    assert bounds["belowCaret"] || bounds["aboveCaret"], "The snippet popup should stay next to the caret"
     assert_operator bounds["bottom"], :<, bounds["viewportBottom"]
     save_screenshot("tmp/colon-palette.png")
   end

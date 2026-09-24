@@ -65,9 +65,12 @@ export default class extends Controller {
     const region = this.map?.editable_regions?.find((candidate) => candidate.block_id === block?.id)
     if (!block || !region) return
 
-    const replacement = this.markdownForRegion(block, region, blockElement)
     const from = region.content_range.start
     const to = region.content_range.end
+    const currentSource = this.editorController.value.slice(from, to)
+    const replacement = markdownForVisibleText(currentSource, this.editableText(blockElement), region.kind, blockElement)
+    if (replacement === currentSource) return
+
     this.shiftMapAfterEdit(from, to, replacement.length)
     this.editorController.replaceRange(replacement, from, to)
   }
@@ -118,10 +121,6 @@ export default class extends Controller {
     } catch (_error) {
       return null
     }
-  }
-
-  markdownForRegion(block, region, element) {
-    return markdownForVisibleText(block.markdown, this.editableText(element), region.kind, element)
   }
 
   editableText(element) {
