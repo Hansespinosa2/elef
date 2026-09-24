@@ -95,6 +95,11 @@ scripts/personal-instance restore backups/20260922T120000Z --confirm
 `down` preserves both named volumes; it does not delete personal data. Keep
 `.env.personal`, `backups/`, and the Docker volumes out of source control.
 
+For the recommended long-running Mac mini setup, keep a `main` checkout in a
+`prod` directory and a `dev` checkout in a separate `dev` directory. The
+development checkout has its own PostgreSQL, storage, and port through
+`compose.development.yml`; see [the Mac mini deployment runbook](docs/mac-mini-deployment.md).
+
 ## Isolated agent browser URLs
 
 The disposable agent workflow gives each task a stable browser identity and

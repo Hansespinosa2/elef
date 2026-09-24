@@ -1,7 +1,11 @@
 Rails.application.routes.draw do
   root "library#index"
 
+  resource :settings, only: %i[show update], controller: "workspace_settings"
+  get "search", to: "library#search", as: :search
+
   resources :snippets, except: :show
+  resources :math_shortcuts, except: :show
 
   resources :presentations do
     collection do

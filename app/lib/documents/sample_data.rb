@@ -12,8 +12,8 @@ module Documents
         purpose: "Prove continuous Markdown semantics, hierarchy, emphasis, lists, links, and thematic breaks.",
         source: <<~MARKDOWN
           ---
-          presentationTheme: light
-          presentationTypography: modern
+          theme: light
+          typography: modern
           ---
           # Fixture: Markdown tour
 
@@ -51,7 +51,7 @@ module Documents
         purpose: "Prove tables, fenced code, inline and display math, and safe media in a document.",
         source: <<~MARKDOWN
           ---
-          presentationTheme: match
+          theme: match
           ---
           # Fixture: Rich components
 
@@ -91,7 +91,7 @@ module Documents
         purpose: "Prove document block positioning without exposing the positioning directive.",
         source: <<~MARKDOWN
           ---
-          presentationTheme: dark
+          theme: dark
           ---
           # Fixture: Positioned content
 
@@ -126,7 +126,7 @@ module Documents
         purpose: "Prove front matter, thematic breaks, fenced delimiters, Unicode, and wrapping.",
         source: <<~MARKDOWN
           ---
-          presentationTheme: match
+          theme: match
           show-in-margin:
             section: true
             subsection: true
@@ -253,7 +253,7 @@ module Documents
         purpose: "Prove combined content types, wrapping, and generated HTML under density.",
         source: <<~MARKDOWN
           ---
-          presentationTheme: match
+          theme: match
           ---
           # Stress: Renderer kitchen sink
 
@@ -320,8 +320,8 @@ module Documents
         purpose: "Prove a long-form report remains readable across ten or more pages of structured Markdown.",
         source: <<~MARKDOWN
           ---
-          presentationTheme: light
-          presentationTypography: modern
+          theme: light
+          typography: modern
           ---
           # The State of Calm Authoring
 

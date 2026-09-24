@@ -5,12 +5,12 @@ class VimEditorTest < ApplicationSystemTestCase
     document = Document.create!(title: "Mobile editor", source: "# Mobile")
     visit edit_document_path(document)
     [500, 390, 320].each do |width|
-      page.driver.browser.manage.window.resize_to(width, 800)
+      page.driver.browser.execute_cdp("Emulation.setDeviceMetricsOverride", width: width, height: 800, deviceScaleFactor: 1, mobile: false)
       assert_operator page.evaluate_script("document.documentElement.scrollWidth"), :<=,
         page.evaluate_script("window.innerWidth")
     end
 
-    page.driver.browser.manage.window.resize_to(500, 800)
+    page.driver.browser.execute_cdp("Emulation.setDeviceMetricsOverride", width: 500, height: 800, deviceScaleFactor: 1, mobile: false)
     assert_equal "vertical", page.evaluate_script("getComputedStyle(document.querySelector('.editor-surface')).resize")
     assert_equal "hidden", page.evaluate_script("getComputedStyle(document.querySelector('.editor-surface')).overflow")
     assert_equal "none", page.evaluate_script("getComputedStyle(document.querySelector('.editor-input-proxy')).resize")
@@ -39,6 +39,7 @@ class VimEditorTest < ApplicationSystemTestCase
     assert_in_delta panel["sourceRight"], panel["right"], 1
     save_screenshot("tmp/screenshots/editor/mobile-vim-settings.png")
   ensure
+    page.driver.browser.execute_cdp("Emulation.clearDeviceMetricsOverride")
     page.driver.browser.manage.window.resize_to(1400, 1000)
   end
 
@@ -81,6 +82,34 @@ class VimEditorTest < ApplicationSystemTestCase
     assert_selector "[data-editor-target='vimToggle']:checked"
     assert_equal "insert", find("[data-editor-target='mapping']").value
     assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal"
+  end
+
+  test "customizes Insert Escape, line numbers, cursor styling, and persists" do
+    document = Document.create!(title: "Expanded Vim settings", source: "# Settings")
+    visit edit_document_path(document)
+    page.execute_script("localStorage.clear()")
+    page.refresh
+
+    find("summary", text: "Vim settings").click
+    select "Escape or Shift+Space", from: "Escape aliases in Insert mode"
+    select "Relative", from: "Line numbers"
+    check "Mode-aware cursor styling"
+    check "Enable Vim mode in this browser"
+    assert_equal "relative", page.evaluate_script("document.querySelector('.editor-surface').dataset.lineNumbers")
+    assert_equal "true", page.evaluate_script("document.querySelector('.editor-surface').dataset.modeAwareCursor")
+    find("summary", text: "Vim settings").click
+
+    editor = find(".cm-content")
+    editor.click
+    page.execute_script("document.querySelector('.source-field').editorController.setSelectionRange(0, 0)")
+    editor.send_keys("i", "Alias", [:shift, :space])
+    assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal"
+
+    visit edit_document_path(document)
+    find("summary", text: "Vim settings").click
+    assert_equal "relative", find("[data-editor-target='lineNumbers']").value
+    assert_selector "[data-editor-target='modeAwareCursor']:checked"
+    assert_equal "shift-space", find("[data-editor-target='escapeAlias']").value
   end
 
   test "metadata directives use the same styling as Markdown markers" do

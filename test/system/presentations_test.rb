@@ -694,7 +694,8 @@ class PresentationsTest < ApplicationSystemTestCase
 
     fill_in "Title", with: "System Deck"
     source = "# First\n\nBody\n---\n# Second"
-    normalized_source = "---\npresentationTypography: book\n---\n#{source}"
+    select "Book", from: "Typography"
+    normalized_source = "---\ntypography: book\n---\n#{source}"
     fill_in "Markdown source", with: source
     click_on "Save presentation"
 

@@ -2,12 +2,14 @@
 .github
 .agents
 .codex
+.gitignore
+.env*
 backups
 log
 tmp
 storage
 vendor/bundle
-.env
-.env.*
-!.env.personal.example
 node_modules
+public/assets
+app/assets/builds
+config/*.key

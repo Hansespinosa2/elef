@@ -1,5 +1,5 @@
 <% content_for :title, "Present #{@presentation.title}" %>
-<div class="presentation-mode presentation-surface slides-theme-<%= @presentation.presentation_theme %> slides-typography-<%= @presentation.presentation_typography %>" data-controller="presentation" data-presentation-index-value="0">
+<div class="presentation-mode presentation-surface work-theme-<%= @presentation.theme %> work-typography-<%= @presentation.typography %> slides-theme-<%= @presentation.theme %> slides-typography-<%= @presentation.typography %>" data-controller="presentation" data-presentation-index-value="0">
   <% if @release_stale %>
     <p class="presentation-release-warning" role="status">This presentation is a published release. The editable draft has newer changes; republish to update what you present.</p>
   <% elsif @release.nil? %>

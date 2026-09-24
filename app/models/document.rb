@@ -38,4 +38,29 @@ class Document < Work
       alias_record && find_by(id: alias_record.work_id)
     end
   end
+
+  def outgoing_link_tokens
+    DocumentLinks::Parser.parse(source)
+  end
+
+  def outgoing_documents
+    outgoing_link_tokens.filter_map { |token| resolve_link_token(token) }.uniq
+  end
+
+  def unresolved_link_tokens
+    outgoing_link_tokens.reject { |token| resolve_link_token(token) }
+  end
+
+  def incoming_backlinks
+    candidates = self.class.where(workspace: workspace || Workspace.default).where.not(id: id).to_a
+    candidates.select { |document| document.outgoing_documents.any? { |target| target.id == id } }
+  end
+
+  alias backlinks incoming_backlinks
+
+  private
+
+  def resolve_link_token(token)
+    self.class.resolve_link(token.title.split("|", 2).first, workspace: workspace || Workspace.default)
+  end
 end

@@ -51,7 +51,7 @@
                       },
                       draggable: false, aria: { label: "Open #{presentation.title}" } do %>
                   <div class="lineage-slide-thumb" aria-hidden="true">
-                    <div class="lineage-slide-preview presentation-surface slides slides-theme-<%= presentation.presentation_theme %> slides-typography-<%= presentation.presentation_typography %>">
+                    <div class="lineage-slide-preview presentation-surface slides slides-theme-<%= presentation.theme %> slides-typography-<%= presentation.typography %> work-theme-<%= presentation.theme %> work-typography-<%= presentation.typography %>">
                       <%= render "slide", slide: first_slide || Presentations::Document::Slide.new(id: "empty", index: 0, markdown: "", layout: "body"), presentation: presentation, margin_settings: presentation.document.margin_settings %>
                     </div>
                   </div>

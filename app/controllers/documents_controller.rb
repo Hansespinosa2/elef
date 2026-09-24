@@ -100,13 +100,13 @@ class DocumentsController < ApplicationController
   end
 
   def document_params
-    params.require(:document).permit(:title, :source)
+    params.require(:document).permit(:title, :source, :theme, :typography)
   end
 
   def document_update_params
     params.require(:document).permit(
       :title, :source, :lock_version, :base_revision, :base_revision_id,
-      :revision_token, :edit_session_id, :checkpoint, :reason
+      :revision_token, :edit_session_id, :checkpoint, :reason, :theme, :typography
     )
   end
 

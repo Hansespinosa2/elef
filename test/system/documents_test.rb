@@ -65,6 +65,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
     visit documents_path
     assert_selector ".document-graph-node", count: 3
+    assert_selector ".document-graph-node-hit-area", count: 3, visible: :all
     assert_selector ".document-graph-edge[data-source-id='#{source.id}'][data-target-id='#{target.id}']", visible: :all
     edge_colors = page.evaluate_script(<<~JAVASCRIPT)
       (() => {

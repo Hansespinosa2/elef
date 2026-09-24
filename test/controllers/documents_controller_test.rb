@@ -148,6 +148,20 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
     assert_select "span.document-link.unresolved", text: "[[Missing target]]"
   end
 
+  test "document views expose collapsed outgoing and incoming context" do
+    target = Document.create!(title: "Context target", source: "# Target")
+    target.document_aliases.create!(workspace: target.workspace, alias_name: "context-alias")
+    source = Document.create!(title: "Context source", source: "[[context-alias]] [[Missing target]]")
+
+    get document_path(target)
+
+    assert_select "details.linked-context"
+    assert_select "a[href='#{document_path(source)}']", text: "Context source"
+    get document_path(source)
+    assert_select "a[href='#{document_path(target)}']", text: "Context target"
+    assert_select ".linked-context", text: /Unresolved: Missing target/
+  end
+
   test "previews an unsaved document without creating a record" do
     assert_no_difference("Document.count") do
       post preview_documents_path, params: {

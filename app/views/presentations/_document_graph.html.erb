@@ -44,6 +44,7 @@
           <g class="document-graph-nodes" data-document-graph-target="nodes">
             <% nodes.each do |node| %>
               <%= link_to node[:url], class: "document-graph-node", data: { document_graph_target: "node", node_id: node[:id], title: node[:title] }, aria: { label: "Open #{node[:title]} preview" } do %>
+                <rect class="document-graph-node-hit-area" fill="transparent" pointer-events="all" aria-hidden="true"></rect>
                 <circle r="14"></circle>
                 <text x="22" y="5"><%= node[:title] %></text>
                 <title><%= node[:title] %></title>

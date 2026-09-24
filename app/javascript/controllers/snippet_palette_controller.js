@@ -111,7 +111,7 @@ export default class extends Controller {
     this.matches = this.snippetsValue
       .map((snippet) => ({ snippet, score: this.score(snippet) }))
       .filter((result) => result.score !== null)
-      .sort((a, b) => a.score - b.score || a.snippet.name.localeCompare(b.snippet.name))
+      .sort((a, b) => a.score - b.score || a.snippet.trigger.localeCompare(b.snippet.trigger) || a.snippet.name.localeCompare(b.snippet.name))
       .map((result) => result.snippet)
     this.selectedIndex = 0
     this.renderPalette()

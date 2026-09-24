@@ -1,6 +1,7 @@
 import { Controller } from "@hotwired/stimulus"
 import { Compartment, EditorState } from "@codemirror/state"
 import { EditorView } from "@codemirror/view"
+import { foldEffect, unfoldAll } from "@codemirror/language"
 import { basicSetup } from "codemirror"
 import { markdown } from "@codemirror/lang-markdown"
 import { tags } from "@lezer/highlight"
@@ -9,6 +10,9 @@ import { livePreviewField, livePreviewMode } from "controllers/live_preview"
 
 const ENABLED_STORAGE_KEY = "elef.editor.vim.enabled"
 const MAPPING_STORAGE_KEY = "elef.editor.vim.normalMapping"
+const ESCAPE_ALIAS_STORAGE_KEY = "elef.editor.vim.escapeAlias"
+const LINE_NUMBERS_STORAGE_KEY = "elef.editor.lineNumbers"
+const MODE_AWARE_CURSOR_STORAGE_KEY = "elef.editor.vim.modeAwareCursor"
 const SHIFT_SPACE = "<S-Space>"
 
 const elefMetadata = {
@@ -53,7 +57,7 @@ const theme = EditorView.theme({
 }, { dark: true })
 
 export default class extends Controller {
-  static targets = ["surface", "input", "mode", "command", "vimToggle", "mapping", "editingMode", "visualButton", "sourceButton"]
+  static targets = ["surface", "input", "mode", "command", "vimToggle", "mapping", "editingMode", "visualButton", "sourceButton", "escapeAlias", "lineNumbers", "modeAwareCursor"]
 
   connect() {
     this.editorController = this
@@ -61,6 +65,9 @@ export default class extends Controller {
     this.destroyed = false
     this.vimEnabled = this.readBoolean(ENABLED_STORAGE_KEY)
     this.mapping = this.readMapping()
+    this.escapeAlias = this.readEscapeAlias()
+    this.lineNumberMode = this.readLineNumberMode()
+    this.modeAwareCursor = this.readBoolean(MODE_AWARE_CURSOR_STORAGE_KEY)
     this.vimCompartment = new Compartment()
     this.updateVisualSurfaceGeometry = () => this.syncVisualSurfaceGeometry()
     this.resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(this.updateVisualSurfaceGeometry)
@@ -107,10 +114,16 @@ export default class extends Controller {
 
     this.vimToggleTarget.checked = this.vimEnabled
     this.mappingTarget.value = this.mapping
+    this.escapeAliasTarget.value = this.escapeAlias
+    this.lineNumbersTarget.value = this.lineNumberMode
+    this.modeAwareCursorTarget.checked = this.modeAwareCursor
     this.applyMapping()
+    this.applyLineNumbers()
+    this.applyCursorStyle()
     this.bindVimEvents()
     this.setEditingMode("visual", { silent: true })
     this.updateMode()
+    this.collapseFrontmatter()
     this.element.dispatchEvent(new CustomEvent("elef:editor-ready", { detail: { editor: this }, bubbles: true }))
   }
 
@@ -150,6 +163,32 @@ export default class extends Controller {
     this.writeValue(MAPPING_STORAGE_KEY, this.mapping)
     this.applyMapping()
     this.updateMode()
+  }
+
+  escapeAliasChanged(event) {
+    this.escapeAlias = this.normalizeEscapeAlias(event.target.value)
+    this.writeValue(ESCAPE_ALIAS_STORAGE_KEY, this.escapeAlias)
+    this.applyMapping()
+  }
+
+  lineNumbersChanged(event) {
+    this.lineNumberMode = this.normalizeLineNumberMode(event.target.value)
+    this.writeValue(LINE_NUMBERS_STORAGE_KEY, this.lineNumberMode)
+    this.applyLineNumbers()
+  }
+
+  modeAwareCursorChanged(event) {
+    this.modeAwareCursor = event.target.checked
+    this.writeBoolean(MODE_AWARE_CURSOR_STORAGE_KEY, this.modeAwareCursor)
+    this.applyCursorStyle()
+  }
+
+  revealMetadata() {
+    if (!this.view) return
+    unfoldAll(this.view)
+    const metadataLine = this.view.state.doc.line(1)
+    this.view.dispatch({ selection: { anchor: metadataLine.from }, scrollIntoView: true })
+    this.focus()
   }
 
   sync() {
@@ -355,6 +394,8 @@ export default class extends Controller {
       if (this.hasCommandTarget) this.commandTarget.textContent = ""
       this.element.dataset.editorVimEnabled = "false"
       if (this.form) this.form.dataset.editorVimEnabled = "false"
+      this.element.dataset.editorMode = "standard"
+      this.applyCursorStyle()
       return
     }
 
@@ -364,13 +405,17 @@ export default class extends Controller {
     this.modeTarget.dataset.mode = label.toLowerCase()
     this.element.dataset.editorVimEnabled = "true"
     if (this.form) this.form.dataset.editorVimEnabled = "true"
+    this.element.dataset.editorMode = label.toLowerCase()
+    this.applyCursorStyle()
     if (this.hasCommandTarget) this.commandTarget.textContent = this.vim?.state?.vim?.status || ""
   }
 
   applyMapping() {
     try {
       Vim.unmap(SHIFT_SPACE, "normal")
+      Vim.unmap(SHIFT_SPACE, "insert")
       if (this.mapping === "insert") Vim.map(SHIFT_SPACE, "i", "normal")
+      if (this.escapeAlias === "shift-space") Vim.map(SHIFT_SPACE, "<Esc>", "insert")
     } catch (_error) {
       // A browser without the optional Vim engine should still have a usable editor.
     }
@@ -380,8 +425,52 @@ export default class extends Controller {
     return this.normalizeMapping(this.readValue(MAPPING_STORAGE_KEY) || "standard")
   }
 
+  readEscapeAlias() {
+    return this.normalizeEscapeAlias(this.readValue(ESCAPE_ALIAS_STORAGE_KEY) || "none")
+  }
+
+  readLineNumberMode() {
+    return this.normalizeLineNumberMode(this.readValue(LINE_NUMBERS_STORAGE_KEY) || "absolute")
+  }
+
   normalizeMapping(value) {
     return ["standard", "insert", "disabled"].includes(value) ? value : "standard"
+  }
+
+  normalizeEscapeAlias(value) {
+    return ["none", "shift-space"].includes(value) ? value : "none"
+  }
+
+  normalizeLineNumberMode(value) {
+    return ["absolute", "relative", "off"].includes(value) ? value : "absolute"
+  }
+
+  collapseFrontmatter() {
+    const match = this.value.match(/^---\r?\n[\s\S]*?\r?\n---(?=\r?\n|$)/)
+    if (!match || match[0].length <= 4) return
+
+    setTimeout(() => {
+      if (this.destroyed) return
+      this.view.dispatch({ effects: foldEffect.of({ from: 0, to: match[0].length }) })
+    }, 0)
+  }
+
+  applyLineNumbers() {
+    this.surfaceTarget.dataset.lineNumbers = this.lineNumberMode
+    requestAnimationFrame(() => {
+      if (this.destroyed || this.lineNumberMode !== "relative") return
+      const gutter = this.surfaceTarget.querySelector(".cm-lineNumbers")
+      if (!gutter) return
+      const activeLine = this.view.state.doc.lineAt(this.selectionStart).number
+      gutter.querySelectorAll(".cm-gutterElement").forEach((element) => {
+        const absolute = Number(element.textContent)
+        if (Number.isFinite(absolute)) element.textContent = String(Math.abs(activeLine - absolute) || 0)
+      })
+    })
+  }
+
+  applyCursorStyle() {
+    this.surfaceTarget.dataset.modeAwareCursor = String(this.modeAwareCursor)
   }
 
   readBoolean(key) {

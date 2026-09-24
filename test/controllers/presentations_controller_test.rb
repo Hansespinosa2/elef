@@ -256,29 +256,29 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "# Saved\n---\n# Again", presentation.reload.source
   end
 
-  test "saves presentation typography in front matter" do
+  test "saves generic typography in front matter" do
     presentation = presentations(:one)
 
     patch presentation_path(presentation), params: {
-      presentation: { title: presentation.title, source: presentation.source, presentation_typography: "modern" }
+      presentation: { title: presentation.title, source: presentation.source, typography: "modern" }
     }
 
     assert_redirected_to edit_presentation_path(presentation)
-    assert_equal "modern", presentation.reload.presentation_typography
-    assert_includes presentation.source, "presentationTypography: modern"
+    assert_equal "modern", presentation.reload.typography
+    assert_includes presentation.source, "typography: modern"
   end
 
   test "updates typography inside valid front matter" do
-    presentation = Presentation.create!(title: "Front matter deck", source: "---\npresentationTheme: dark\npresentationTypography: modern\n---\n# Title")
+    presentation = Presentation.create!(title: "Front matter deck", source: "---\ntheme: dark\ntypography: modern\n---\n# Title")
 
     patch presentation_path(presentation), params: {
-      presentation: { title: presentation.title, source: presentation.source, presentation_typography: "book" }
+      presentation: { title: presentation.title, source: presentation.source, typography: "book" }
     }
 
     assert_redirected_to edit_presentation_path(presentation)
-    assert_equal "book", presentation.reload.presentation_typography
-    assert_includes presentation.source, "presentationTheme: dark"
-    assert_includes presentation.source, "presentationTypography: book"
+    assert_equal "book", presentation.reload.typography
+    assert_includes presentation.source, "theme: dark"
+    assert_includes presentation.source, "typography: book"
   end
 
   test "renders saved preview and presentation mode" do
@@ -378,11 +378,11 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_select ".lineage-date-axis"
   end
 
-  test "editor exposes the presentation typography selector" do
+  test "editor exposes the generic typography selector" do
     get edit_presentation_path(presentations(:one))
 
     assert_response :success
-    assert_select "select[name='presentation[presentation_typography]']" do
+    assert_select "select[name='presentation[typography]']" do
       assert_select "option[value='book']", text: "Book"
       assert_select "option[value='modern']", text: "Modern"
       assert_select "option[value='technical']", text: "Technical"

@@ -27,11 +27,9 @@ module WorkPreview
     title = attributes[:title].presence || params[:title].presence || work.title
     raise ArgumentError, "Markdown source must be plain text" unless source.is_a?(String)
 
-    preview_work = work.class.new(title: title, source: source, work_type: work.work_type)
-    if work.presentation?
-      typography = attributes[:presentation_typography].presence || params[:presentation_typography].presence
-      preview_work.presentation_typography = typography if typography.present?
-    end
+    preview_work = work.class.new(title: title, source: source, work_type: work.work_type, workspace: work.workspace || Workspace.default)
+    preview_work.theme = attributes[:theme] if attributes.key?(:theme)
+    preview_work.typography = attributes[:typography] if attributes.key?(:typography)
 
     editor_map = Presentations::Document.editor_map(
       source.gsub(/\r\n?/, "\n"),
@@ -42,8 +40,8 @@ module WorkPreview
     html = if preview_work.presentation?
       margin = preview_work.document.margin_settings
       settings = {
-        "theme" => preview_work.presentation_theme,
-        "typography" => preview_work.presentation_typography,
+        "theme" => preview_work.theme,
+        "typography" => preview_work.typography,
         "margin" => {
           "section" => margin.section,
           "subsection" => margin.subsection,
@@ -84,7 +82,7 @@ module WorkPreview
 
   def work_preview_attributes(work)
     key = work.document? ? :document : :presentation
-    fields = work.document? ? %i[title source] : %i[title source presentation_typography]
+    fields = %i[title source theme typography]
     attributes = params[key]
     attributes.respond_to?(:permit) ? attributes.permit(*fields) : {}
   end

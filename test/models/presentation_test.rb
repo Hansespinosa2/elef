@@ -9,10 +9,10 @@ class PresentationTest < ActiveSupport::TestCase
   end
 
   test "preserves empty slides and ignores front matter and fenced separators" do
-    source = "---\ntitle: Demo\npresentationTheme: dark\n---\n```yaml\n---\n```\n---\n---"
+    source = "---\ntitle: Demo\ntheme: dark\n---\n```yaml\n---\n```\n---\n---"
     document = Presentations::Document.parse(source, source_name: "Demo")
 
-    assert_equal "dark", document.presentation_theme
+    assert_equal "dark", document.theme
     assert_equal ["```yaml\n---\n```", "", ""], document.slides.map(&:markdown)
   end
 
@@ -25,15 +25,15 @@ class PresentationTest < ActiveSupport::TestCase
   end
 
   test "malformed front matter remains ordinary Markdown" do
-    document = Presentations::Document.parse("---\npresentationTheme: dark")
+    document = Presentations::Document.parse("---\ntheme: dark")
 
-    assert_equal "match", document.presentation_theme
-    assert_equal ["", "presentationTheme: dark"], document.slides.map(&:markdown)
+    assert_equal "match", document.theme
+    assert_equal ["", "theme: dark"], document.slides.map(&:markdown)
   end
 
-  test "defaults presentation typography to book" do
-    assert_equal "book", Presentations::Document.parse("# Title").presentation_typography
-    assert_equal "book", Presentations::Document.parse("---\npresentationTypography: unknown\n---\n# Title").presentation_typography
+  test "defaults typography to book" do
+    assert_equal "book", Presentations::Document.parse("# Title").typography
+    assert_equal "book", Presentations::Document.parse("---\ntypography: unknown\n---\n# Title").typography
   end
 
   test "parses margin settings and slide context directives" do
@@ -120,17 +120,17 @@ class PresentationTest < ActiveSupport::TestCase
     assert_includes document.warnings, "Footnote margin directive must appear at the end of a slide."
   end
 
-  test "reads and updates presentation typography without losing front matter" do
-    source = "---\ntitle: Demo\npresentationTheme: dark\npresentationTypography: modern\n---\n# Title\n---\n# Second"
+  test "reads and updates generic typography without losing front matter" do
+    source = "---\ntitle: Demo\ntheme: dark\ntypography: modern\n---\n# Title\n---\n# Second"
     presentation = Presentation.create!(title: "Demo", source: source)
 
-    assert_equal "modern", presentation.presentation_typography
-    presentation.presentation_typography = "technical"
+    assert_equal "modern", presentation.typography
+    presentation.typography = "technical"
 
-    assert_equal "technical", presentation.presentation_typography
+    assert_equal "technical", presentation.typography
     assert_includes presentation.source, "title: Demo\n"
-    assert_includes presentation.source, "presentationTheme: dark\n"
-    assert_includes presentation.source, "presentationTypography: technical\n"
+    assert_includes presentation.source, "theme: dark\n"
+    assert_includes presentation.source, "typography: technical\n"
     assert_includes presentation.source, "# Title\n---\n# Second"
   end
 
@@ -270,9 +270,9 @@ class PresentationTest < ActiveSupport::TestCase
   end
 
   test "detects keys inside front matter" do
-    source = "---\npresentationTheme: dark\npresentationTypography: modern\n---\n# Title"
+    source = "---\ntheme: dark\ntypography: modern\n---\n# Title"
 
-    assert Presentations::Document.front_matter_has_key?(source, "presentationTypography")
+    assert Presentations::Document.front_matter_has_key?(source, "typography")
     refute Presentations::Document.front_matter_has_key?(source, "missing")
   end
 
@@ -348,7 +348,7 @@ class PresentationTest < ActiveSupport::TestCase
     end
     assert_equal Presentations::SampleData::SAMPLES.map { |sample| sample[:id] },
       samples.map(&:sample_id)
-    assert_equal %w[dark light match], samples.map(&:presentation_theme).uniq.sort
+    assert_equal %w[dark light match], samples.map(&:theme).uniq.sort
     assert samples.all? { |presentation| presentation.slides.length.between?(10, 20) }
     assert samples.all? { |presentation| presentation.source.lines.length > 50 }
     assert samples.all? { |presentation| presentation.source.scan(/^# /).length >= 8 }
