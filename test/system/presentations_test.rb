@@ -430,7 +430,7 @@ class PresentationsTest < ApplicationSystemTestCase
     page.execute_script("document.activeElement.blur()")
     assert_selector ".presentation-editor-projection h2", text: "Test", wait: 5
     click_on "Save presentation"
-    assert_text "Presentation saved."
+    assert_selector ".flash.notice", text: "Presentation saved.", wait: 10
     visit edit_presentation_path(presentation)
     assert_field "Markdown source", with: "# Existing slide\n\n## Test"
 
@@ -444,7 +444,7 @@ class PresentationsTest < ApplicationSystemTestCase
     find(".cm-content").send_keys("\n\n## Test")
     assert_field "Markdown source", with: "# Existing slide\n\n## Test", wait: 5
     click_on "Save presentation"
-    assert_text "Presentation saved."
+    assert_selector ".flash.notice", text: "Presentation saved.", wait: 10
     visit edit_presentation_path(source_presentation)
     assert_field "Markdown source", with: "# Existing slide\n\n## Test"
     assert_equal presentation.reload.source, source_presentation.reload.source

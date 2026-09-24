@@ -312,7 +312,7 @@ class DocumentsTest < ApplicationSystemTestCase
       end
 
       click_on "Save document"
-      assert_text "Document saved."
+      assert_selector ".flash.notice", text: "Document saved.", wait: 10
       visit edit_document_path(visual)
       assert_field "Markdown source", with: expected
       visual.reload
@@ -326,7 +326,7 @@ class DocumentsTest < ApplicationSystemTestCase
       end
 
       click_on "Save document"
-      assert_text "Document saved."
+      assert_selector ".flash.notice", text: "Document saved.", wait: 10
       visit edit_document_path(source)
       assert_field "Markdown source", with: source_expected
       assert_equal expected, source_expected
