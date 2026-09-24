@@ -226,6 +226,28 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_includes payload.dig("slides", 1, "blocks", 0, "html"), "Two"
   end
 
+  test "PPTX POST exports unsaved form values without persisting them" do
+    presentation = Presentation.create!(title: "Saved presentation", source: "# Saved source")
+
+    post pptx_presentation_path(presentation, version: "draft"), params: {
+      presentation: {
+        title: "Unsaved title",
+        source: "# Unsaved source",
+        theme: "dark",
+        typography: "technical"
+      }
+    }
+
+    assert_response :success
+    payload = response.parsed_body
+    assert_equal "Unsaved title.pptx", payload["filename"]
+    assert_equal "dark", payload.dig("presentation", "theme")
+    assert_equal "technical", payload.dig("presentation", "typography")
+    assert_includes payload.dig("slides", 0, "blocks", 0, "html"), "Unsaved source"
+    assert_equal "# Saved source", presentation.reload.source
+    assert_equal "Saved presentation", presentation.title
+  end
+
   test "PPTX export selects a pinned release and requires one for published exports" do
     presentation = Presentation.create!(title: "PPTX versions", source: "# Published copy")
     get pptx_presentation_path(presentation, version: "published")

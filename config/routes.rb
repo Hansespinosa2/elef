@@ -17,7 +17,7 @@ Rails.application.routes.draw do
     member do
       get :present
       get :print
-      get :pptx, defaults: { format: :json }
+      match :pptx, via: %i[get post], defaults: { format: :json }
       post :upload_asset, path: "assets"
       get "assets/:digest", action: :media_asset, as: :media_asset
       get "pptx_assets/:digest", action: :pptx_asset, as: :pptx_asset

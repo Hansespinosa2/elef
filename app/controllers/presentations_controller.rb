@@ -109,6 +109,8 @@ class PresentationsController < ApplicationController
         blob = ActiveStorage::Blob.find_by(id: asset["id"] || asset[:id])
         blob if blob && blob.key == (asset["key"] || asset[:key])
       end
+    elsif request.post?
+      presentation.assign_attributes(pptx_params)
     end
 
     response.headers["Cache-Control"] = "private, no-store"
@@ -247,5 +249,9 @@ class PresentationsController < ApplicationController
       :title, :source, :theme, :typography, :lock_version, :base_revision,
       :base_revision_id, :revision_token, :edit_session_id, :checkpoint, :reason
     )
+  end
+
+  def pptx_params
+    params.require(:presentation).permit(:title, :source, :theme, :typography)
   end
 end

@@ -6,7 +6,7 @@ let pptxLibraryPromise
 
 export default class extends Controller {
   static targets = ["status"]
-  static values = { url: String }
+  static values = { url: String, currentDraft: Boolean }
 
   async download(event) {
     event.preventDefault()
@@ -15,7 +15,17 @@ export default class extends Controller {
 
     try {
       this.setStatus("Preparing PowerPoint…")
-      const response = await fetch(this.urlValue, { headers: { Accept: "application/json" }, credentials: "same-origin" })
+      const request = { headers: { Accept: "application/json" }, credentials: "same-origin" }
+      if (this.currentDraftValue) {
+        const form = document.querySelector('form[data-controller~="autosave"]')
+        if (!form) throw new Error("The current draft form is unavailable for export.")
+
+        request.method = "POST"
+        request.headers["X-CSRF-Token"] = document.querySelector('meta[name="csrf-token"]')?.content || ""
+        request.body = new FormData(form)
+        request.body.delete("_method")
+      }
+      const response = await fetch(this.urlValue, request)
       const model = await response.json()
       if (!response.ok) throw new Error(model.error || "The PowerPoint export could not be prepared.")
 

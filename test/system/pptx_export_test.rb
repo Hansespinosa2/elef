@@ -36,6 +36,24 @@ class PptxExportTest < ApplicationSystemTestCase
     assert_equal fixtures.length, generated_packages
   end
 
+  test "draft export includes editor changes made immediately before download" do
+    presentation = Presentation.create!(title: "Unsaved export", source: "# Saved source")
+
+    visit edit_presentation_path(presentation)
+    capture_pptx_blob
+    fill_in "Markdown source", with: "# Unsaved source\n\nThis edit has not autosaved yet."
+    find("button", text: "Download PPTX draft").click
+    assert_selector '[role="status"]', text: "PowerPoint downloaded.", wait: 15
+
+    Zip::File.open_buffer(StringIO.new(captured_pptx_bytes)) do |archive|
+      slide_text = Nokogiri::XML(archive.read("ppt/slides/slide1.xml"))
+        .xpath("//a:t", "a" => "http://schemas.openxmlformats.org/drawingml/2006/main")
+        .map(&:text).join(" ")
+      assert_includes slide_text, "Unsaved source"
+      assert_not_includes slide_text, "Saved source"
+    end
+  end
+
   test "embeds Elef image and MP4 attachments in the generated presentation" do
     png = PIXEL_PNG
     mp4 = "fixture mp4 payload".b
