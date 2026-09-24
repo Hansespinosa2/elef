@@ -155,6 +155,40 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_not_nil presentation.last_published_at
   end
 
+  test "keeps the presentation editor usable at desktop and narrow widths" do
+    presentation = Presentation.create!(title: "Responsive deck", source: "# Responsive deck\n\nBody")
+
+    visit edit_presentation_path(presentation)
+
+    [1400, 700, 390].each do |width|
+      page.driver.browser.manage.window.resize_to(width, 900)
+      assert_selector ".editor-projection", visible: true
+      assert_equal "visual", page.evaluate_script("document.querySelector('form.visual-editor-form').dataset.editorMode")
+      geometry = page.evaluate_script(<<~JAVASCRIPT)
+        (() => {
+          const projection = document.querySelector('.editor-projection').getBoundingClientRect();
+          return {
+            width: projection.width,
+            right: projection.right,
+            viewport: window.innerWidth,
+            document: document.documentElement.scrollWidth
+          };
+        })()
+      JAVASCRIPT
+      assert_operator geometry["width"], :>, 0
+      assert_operator geometry["right"], :<=, geometry["viewport"] + 1
+      assert_operator geometry["document"], :<=, geometry["viewport"] + 1
+    end
+
+    click_on "Source"
+    assert_selector ".editor-projection", visible: :hidden
+    assert_selector ".cm-content", visible: true
+    click_on "Visual"
+    assert_selector ".editor-projection", visible: true
+  ensure
+    page.driver.browser.manage.window.resize_to(1400, 1000)
+  end
+
   test "visual presentation editing updates source and known slide operations" do
     presentation = Presentation.create!(title: "Visual deck", source: "# First\n\nBody\n---\n# Second\n\nOther")
 
@@ -163,6 +197,8 @@ class PresentationsTest < ApplicationSystemTestCase
     find(".slide-block", text: "Body").click
     page.execute_script("const block = [...document.querySelectorAll('.slide-block')].find((candidate) => candidate.innerText === 'Body'); block.innerText = 'Changed'; block.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'Changed' }));")
     assert_field "Markdown source", with: /# First\n\nChanged/, wait: 5
+    page.execute_script("document.activeElement.blur()")
+    assert_no_selector "[data-presentation-editor-action='add-slide-after'][disabled]", wait: 5
     find("[data-presentation-editor-action='add-slide-after']", match: :first).click
     assert_selector ".presentation-editor-projection .slide", count: 3, wait: 5
     accept_confirm { all("[data-presentation-editor-action='delete-slide']").last.click }
@@ -176,6 +212,83 @@ class PresentationsTest < ApplicationSystemTestCase
     visit edit_presentation_path(presentation)
     assert_field "Markdown source", with: /Changed/
     assert_selector ".presentation-editor-projection .slide", count: 2
+  end
+
+  test "keeps rendered presentation blocks and source mappings atomic while editing structure" do
+    presentation = Presentation.create!(title: "Live block structure", source: "# Live structure\n\nAlpha")
+
+    visit edit_presentation_path(presentation)
+
+    page.execute_script(<<~JAVASCRIPT)
+      const block = [...document.querySelectorAll('.slide-block[contenteditable="true"]')]
+        .find((candidate) => candidate.innerText === 'Alpha');
+      block.focus();
+      block.innerText = 'Alpha\\n\\nBeta';
+      block.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'Beta' }));
+    JAVASCRIPT
+
+    assert_field "Markdown source", with: "# Live structure\n\nAlpha\n\nBeta", wait: 5
+    assert_selector "[data-presentation-editor-action='delete-block']:disabled", count: 2
+    pending = page.evaluate_async_script(<<~JAVASCRIPT)
+      const done = arguments[arguments.length - 1];
+      const deadline = Date.now() + 5000;
+      const check = () => {
+        const preview = document.querySelector('.visual-editor-form')?.previewController;
+        if (preview?.pendingProjection) return done(true);
+        if (Date.now() >= deadline) return done(false);
+        window.setTimeout(check, 10);
+      };
+      check();
+    JAVASCRIPT
+    assert pending, "server projection was not held while its editable block had focus"
+
+    waiting_state = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const form = document.querySelector('.visual-editor-form');
+        const controller = form.presentationEditorController;
+        const preview = form.previewController;
+        return {
+          renderedBlocks: document.querySelectorAll('.presentation-editor-projection [data-editor-block-id]').length,
+          installedBlocks: controller.map.slides[0].blocks.length,
+          pendingBlocks: preview.pendingProjection.payload.editor_map.slides[0].blocks.length
+        };
+      })()
+    JAVASCRIPT
+    assert_equal 2, waiting_state["renderedBlocks"]
+    assert_equal 2, waiting_state["installedBlocks"]
+    assert_equal 3, waiting_state["pendingBlocks"]
+    page.execute_script("document.querySelector('[data-presentation-editor-action=\"delete-block\"][data-block-index=\"1\"]').click()")
+    assert_field "Markdown source", with: "# Live structure\n\nAlpha\n\nBeta"
+
+    page.execute_script("document.activeElement.blur()")
+
+    assert_selector ".presentation-editor-projection [data-editor-block-id]", count: 3, wait: 5
+    aligned_state = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const form = document.querySelector('.visual-editor-form');
+        const controller = form.presentationEditorController;
+        return {
+          renderedIds: [...document.querySelectorAll('.presentation-editor-projection [data-editor-block-id]')]
+            .map((block) => block.dataset.editorBlockId),
+          mappedIds: controller.map.slides[0].blocks.map((block) => block.id),
+          sourceLength: controller.map.source_length
+        };
+      })()
+    JAVASCRIPT
+    assert_equal aligned_state["mappedIds"], aligned_state["renderedIds"]
+    assert_equal find_field("Markdown source").value.length, aligned_state["sourceLength"]
+    assert_selector "[data-presentation-editor-action='delete-block']:disabled", count: 0
+
+    accept_confirm do
+      find("[data-presentation-editor-action='delete-block'][data-slide-index='0'][data-block-index='1']").click
+    end
+    assert_field "Markdown source", with: "# Live structure\n\nBeta", wait: 5
+
+    click_on "Save presentation"
+    assert_text "Presentation saved."
+    visit edit_presentation_path(presentation)
+    assert_field "Markdown source", with: "# Live structure\n\nBeta"
+    assert_selector ".presentation-editor-projection [data-editor-block-id]", count: 2
   end
 
   test "visual presentation edits preserve formatted headings and LaTeX" do

@@ -9,10 +9,19 @@ export default class extends Controller {
     this.timer = null
     this.requestId = 0
     this.active = true
+    this.pendingProjection = null
     this.serverWarnings = [...this.warningsTarget.querySelectorAll("li")].map((item) => item.textContent)
     this.localWarnings = []
+    this.focusoutHandler = (event) => {
+      if (!event.target.closest?.("[contenteditable='true']") || !this.containerTarget.contains(event.target)) return
+
+      queueMicrotask(() => {
+        if (!this.isEditingProjection()) this.applyPendingProjection()
+      })
+    }
     this.localPreviewError = (event) => this.handleLocalPreviewError(event)
     this.localPreviewRecovered = () => this.handleLocalPreviewRecovered()
+    this.element.addEventListener("focusout", this.focusoutHandler)
     this.element.addEventListener("elef:live-preview-error", this.localPreviewError)
     this.element.addEventListener("elef:live-preview-recovered", this.localPreviewRecovered)
   }
@@ -21,6 +30,7 @@ export default class extends Controller {
     this.active = false
     clearTimeout(this.timer)
     this.abortActiveRequest()
+    this.element.removeEventListener("focusout", this.focusoutHandler)
     this.element.removeEventListener("elef:live-preview-error", this.localPreviewError)
     this.element.removeEventListener("elef:live-preview-recovered", this.localPreviewRecovered)
     if (this.element.previewController === this) delete this.element.previewController
@@ -29,6 +39,7 @@ export default class extends Controller {
   schedule() {
     clearTimeout(this.timer)
     this.abortActiveRequest()
+    this.pendingProjection = null
     const revision = ++this.requestId
     this.hideRetry()
     this.setStatus("Updating preview…")
@@ -38,6 +49,7 @@ export default class extends Controller {
   retry(event) {
     event?.preventDefault()
     clearTimeout(this.timer)
+    this.pendingProjection = null
     const revision = ++this.requestId
     this.hideRetry()
     this.setStatus("Updating preview…")
@@ -89,18 +101,14 @@ export default class extends Controller {
         return
       }
 
-      const activeEditable = document.activeElement?.closest?.("[contenteditable='true']")
-      const editingProjection = activeEditable && this.containerTarget.contains(activeEditable)
-      if (!editingProjection) {
-        const scrollLeft = this.containerTarget.scrollLeft
-        const scrollTop = this.containerTarget.scrollTop
-        this.containerTarget.innerHTML = payload.html
-        this.containerTarget.scrollLeft = scrollLeft
-        this.containerTarget.scrollTop = scrollTop
+      if (this.isEditingProjection()) {
+        this.pendingProjection = { payload, response }
+        this.hideRetry()
+        this.setStatus("Preview ready — finish editing to update the visual structure.")
+        return
       }
-      this.element.dispatchEvent(new CustomEvent("elef:preview-updated", { bubbles: true, detail: { payload, response } }))
-      this.hideRetry()
-      this.setStatus("")
+
+      this.installProjection(payload, response)
     } catch (error) {
       if (error.name === "AbortError" && !timedOut) return
       if (!this.active || requestId !== this.requestId) return
@@ -120,6 +128,30 @@ export default class extends Controller {
   abortActiveRequest() {
     this.requestController?.abort()
     this.requestController = null
+  }
+
+  isEditingProjection() {
+    const activeEditable = document.activeElement?.closest?.("[contenteditable='true']")
+    return Boolean(activeEditable && this.containerTarget.contains(activeEditable))
+  }
+
+  applyPendingProjection() {
+    if (!this.pendingProjection || this.isEditingProjection()) return
+
+    const projection = this.pendingProjection
+    this.pendingProjection = null
+    this.installProjection(projection.payload, projection.response)
+  }
+
+  installProjection(payload, response) {
+    const scrollLeft = this.containerTarget.scrollLeft
+    const scrollTop = this.containerTarget.scrollTop
+    this.containerTarget.innerHTML = payload.html
+    this.containerTarget.scrollLeft = scrollLeft
+    this.containerTarget.scrollTop = scrollTop
+    this.element.dispatchEvent(new CustomEvent("elef:preview-updated", { bubbles: true, detail: { payload, response } }))
+    this.hideRetry()
+    this.setStatus("")
   }
 
   renderWarnings(warnings) {

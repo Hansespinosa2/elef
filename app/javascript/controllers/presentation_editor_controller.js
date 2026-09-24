@@ -74,6 +74,9 @@ export default class extends Controller {
     const replacement = markdownForVisibleText(currentSource, this.editableText(blockElement), region.kind, blockElement)
     if (replacement === currentSource) return
 
+    this.operationPending = true
+    this.setControlsDisabled(true)
+    this.setStatus("Updating visual structure… finish editing to refresh the controls.")
     this.shiftMapAfterEdit(from, to, replacement.length)
     this.editorController.replaceRange(replacement, from, to)
   }
