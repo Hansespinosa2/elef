@@ -10,7 +10,6 @@ import { Vim, getCM, vim } from "@replit/codemirror-vim"
 const ENABLED_STORAGE_KEY = "elef.editor.vim.enabled"
 const ESCAPE_KEY_STORAGE_KEY = "elef.editor.vim.escapeKey"
 const LEGACY_ESCAPE_ALIAS_STORAGE_KEY = "elef.editor.vim.escapeAlias"
-const LEGACY_NORMAL_MAPPING_STORAGE_KEY = "elef.editor.vim.normalMapping"
 const LINE_NUMBERS_STORAGE_KEY = "elef.editor.lineNumbers"
 const MODE_AWARE_CURSOR_STORAGE_KEY = "elef.editor.vim.modeAwareCursor"
 const SHIFT_SPACE = "<S-Space>"
@@ -84,7 +83,6 @@ export default class extends Controller {
     this.destroyed = false
     this.vimEnabled = this.readBoolean(ENABLED_STORAGE_KEY)
     this.escapeKey = this.readEscapeKey()
-    this.legacyNormalMapping = this.readLegacyNormalMapping()
     this.lineNumberMode = this.readLineNumberMode()
     this.modeAwareCursor = this.readBoolean(MODE_AWARE_CURSOR_STORAGE_KEY)
     this.initialSource = this.readInitialSource()
@@ -434,9 +432,6 @@ export default class extends Controller {
         Vim.unmap(activeEscapeKey)
         VIM_ESCAPE_MODES.forEach((mode) => Vim.unmap(activeEscapeKey, mode))
       }
-      Vim.unmap(SHIFT_SPACE, "normal")
-      Vim.unmap(SHIFT_SPACE, "insert")
-      if (this.legacyNormalMapping === "insert") Vim.map(SHIFT_SPACE, "i", "normal")
       activeEscapeKey = this.escapeKey === "<Esc>" ? "" : this.escapeKey
       if (activeEscapeKey && activeEscapeKey !== "<Esc>") {
         VIM_ESCAPE_MODES.forEach((mode) => Vim.map(activeEscapeKey, "<Esc>", mode))
@@ -451,11 +446,6 @@ export default class extends Controller {
     if (saved !== null) return this.normalizeEscapeKey(saved)
 
     return this.readValue(LEGACY_ESCAPE_ALIAS_STORAGE_KEY) === "shift-space" ? SHIFT_SPACE : ""
-  }
-
-  readLegacyNormalMapping() {
-    const saved = this.readValue(LEGACY_NORMAL_MAPPING_STORAGE_KEY)
-    return ["standard", "insert", "disabled"].includes(saved) ? saved : "standard"
   }
 
   readLineNumberMode() {

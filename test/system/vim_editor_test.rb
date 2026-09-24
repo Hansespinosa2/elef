@@ -118,32 +118,31 @@ class VimEditorTest < ApplicationSystemTestCase
     assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal"
   end
 
-  test "loads saved Normal-mode mappings after the setting is removed" do
-    document = Document.create!(title: "Legacy Vim mapping", source: "# One two")
+  test "uses one configured Vim Escape remap and ignores legacy Normal mappings" do
+    document = Document.create!(title: "Unified Vim Escape", source: "# One two")
     visit edit_document_path(document)
     page.execute_script(<<~JAVASCRIPT)
       localStorage.clear();
       localStorage.setItem("elef.editor.vim.enabled", "true");
       localStorage.setItem("elef.editor.vim.normalMapping", "insert");
+      localStorage.setItem("elef.editor.vim.escapeKey", "<C-CR>");
     JAVASCRIPT
     page.refresh
 
-    find("summary", text: "Vim settings").click
-    assert_no_selector "[data-editor-target='mapping']"
-    find("summary", text: "Vim settings").click
     editor = find(".cm-content")
     editor.click
     editor.send_keys([:shift, :space])
-    assert_selector "[data-editor-target='mode'][data-mode='insert']", text: "Insert"
-    editor.send_keys(:escape)
     assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal"
 
-    %w[disabled standard].each do |mapping|
-      page.execute_script("localStorage.setItem('elef.editor.vim.normalMapping', '#{mapping}')")
-      page.refresh
-      find(".cm-content").click.send_keys([:shift, :space])
-      assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal"
-    end
+    editor.send_keys("i", "Alias", [:control, :enter])
+    assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal"
+    editor.send_keys("v", "l", [:control, :enter])
+    assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal"
+
+    source_before_escape = find_field("Markdown source").value
+    editor.send_keys("d", [:control, :enter], "w")
+    assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal"
+    assert_equal source_before_escape, find_field("Markdown source").value
   ensure
     page.execute_script("localStorage.clear()")
   end
