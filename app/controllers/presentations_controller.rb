@@ -2,7 +2,7 @@ class PresentationsController < ApplicationController
   include WorkPreview
   include WorkPersistence
 
-  before_action :set_presentation, only: %i[show edit update present print publish destroy rename fork restore history export upload_asset media_asset]
+  before_action :set_presentation, only: %i[show edit update present print pptx pptx_asset publish destroy rename fork restore history export upload_asset media_asset]
   before_action :set_preview_presentation, only: :preview
 
   def index
@@ -85,6 +85,69 @@ class PresentationsController < ApplicationController
     @release = @presentation.published_release if params[:version] == "published"
     @presentation = @release&.presentation || @presentation
     render layout: "presentation"
+  end
+
+  def pptx
+    version = params[:version].presence || "draft"
+    return render json: { error: "Choose draft or published for the PPTX export." }, status: :bad_request unless %w[draft published].include?(version)
+
+    presentation = @presentation
+    release_id = nil
+    if version == "published"
+      release = @presentation.published_release
+      return head :not_found unless release
+      release_id = release.id
+
+      presentation = release.presentation
+      release_settings = release.settings || {}
+      pinned_theme = release_settings["theme"] || release_settings[:theme]
+      pinned_typography = release_settings["typography"] || release_settings[:typography]
+      presentation.theme = pinned_theme if pinned_theme.present?
+      presentation.typography = pinned_typography if pinned_typography.present?
+      manifest = Array(release.asset_manifest)
+      presentation.assets = manifest.filter_map do |asset|
+        blob = ActiveStorage::Blob.find_by(id: asset["id"] || asset[:id])
+        blob if blob && blob.key == (asset["key"] || asset[:key])
+      end
+    end
+
+    response.headers["Cache-Control"] = "private, no-store"
+    render json: Presentations::PptxExport.new(presentation, version:, release_id:).as_json
+  rescue Presentations::PptxExport::Error => error
+    render json: { error: error.message }, status: :unprocessable_content
+  end
+
+  def pptx_asset
+    return head :not_found unless params[:digest].to_s.match?(/\A[0-9a-f]{64}\z/)
+
+    version = params[:version].presence || "draft"
+    return head :not_found unless %w[draft published].include?(version)
+
+    blob = if version == "published"
+      release = if params[:release_id].present?
+        PresentationRelease.find_by(id: params[:release_id], work: @presentation)
+      else
+        @presentation.published_release
+      end
+      return head :not_found unless release
+
+      manifest_asset = Array(release.asset_manifest).find do |asset|
+        blob_id = asset["id"] || asset[:id]
+        candidate = ActiveStorage::Blob.find_by(id: blob_id) if blob_id
+        candidate && candidate.key == (asset["key"] || asset[:key]) &&
+          Presentations::MediaAssets.digest(candidate) == params[:digest]
+      end
+      asset_id = manifest_asset && (manifest_asset["id"] || manifest_asset[:id])
+      ActiveStorage::Blob.find_by(id: asset_id) if asset_id
+    else
+      @presentation.assets.blobs.find do |asset|
+        Presentations::MediaAssets.digest(asset) == params[:digest]
+      end
+    end
+    return head :not_found unless blob
+
+    response.headers["Cache-Control"] = "private, no-store"
+    send_data blob.download, type: blob.content_type, disposition: :inline, filename: blob.filename.to_s
   end
 
   def upload_asset
