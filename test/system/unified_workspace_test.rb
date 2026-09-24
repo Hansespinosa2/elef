@@ -115,6 +115,27 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     assert_no_selector ".cm-foldPlaceholder"
   end
 
+  test "appearance changes update visible source metadata" do
+    document = Document.create!(
+      title: "Appearance metadata",
+      source: "---\ntheme: light\ntypography: book\n---\n# Appearance metadata\n\nBody"
+    )
+
+    visit edit_document_path(document)
+    click_on "Reveal source metadata"
+    select "Dark", from: "Theme"
+    select "Modern", from: "Typography"
+
+    assert_selector ".document-reader.document-theme-dark.document-typography-modern", wait: 5
+    assert_selector '[data-autosave-target="status"]', exact_text: "Saved", wait: 5
+    assert_match /^theme: dark\r?$/m, find_field("Markdown source").value
+    assert_match /^typography: modern\r?$/m, find_field("Markdown source").value
+    assert_match /^theme: dark\r?$/m, document.reload.source
+    assert_match /^typography: modern\r?$/m, document.reload.source
+    refute_match /^theme: light\r?$/m, find_field("Markdown source").value
+    refute_match /^typography: book\r?$/m, find_field("Markdown source").value
+  end
+
   test "keeps the source pane wider on desktop and stacks on narrow screens" do
     document = Document.create!(title: "Responsive editor", source: "# Responsive editor\n\nBody")
 

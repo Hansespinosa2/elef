@@ -257,6 +257,29 @@ export default class extends Controller {
     this.syncInput()
   }
 
+  replaceServerSource(source) {
+    const current = this.value
+    if (typeof source !== "string" || source === current) return
+
+    let from = 0
+    const sharedLength = Math.min(current.length, source.length)
+    while (from < sharedLength && current.charCodeAt(from) === source.charCodeAt(from)) from += 1
+
+    let currentEnd = current.length
+    let sourceEnd = source.length
+    while (currentEnd > from && sourceEnd > from && current.charCodeAt(currentEnd - 1) === source.charCodeAt(sourceEnd - 1)) {
+      currentEnd -= 1
+      sourceEnd -= 1
+    }
+
+    const frontmatterWasFolded = this.frontmatterIsFolded()
+    this.view.dispatch({ changes: { from, to: currentEnd, insert: source.slice(from, sourceEnd) } })
+
+    if (frontmatterWasFolded && this.frontmatterRange && !this.frontmatterIsFolded()) {
+      this.view.dispatch({ effects: foldEffect.of(this.frontmatterRange) })
+    }
+  }
+
   replaceRange(insert, from, to = from) {
     const end = from + insert.length
     this.view.dispatch({

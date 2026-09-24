@@ -49,6 +49,8 @@ export default class extends Controller {
   }
 
   schedule() {
+    if (this.synchronizingCanonicalSource) return
+
     clearTimeout(this.timer)
     this.setStatus("Unsaved changes")
     this.persistLocalDraft()
@@ -135,12 +137,18 @@ export default class extends Controller {
 
       if (!this.active) return
       this.updateRevisionTokens(payload)
-      this.element.dispatchEvent(new CustomEvent("autosave:saved", { detail: { snapshot, payload } }))
-      this.setStatus(this.snapshot() === snapshot ? "Saved" : "Unsaved changes")
-      if (this.snapshot() === snapshot) this.clearLocalDraft()
+      let savedSnapshot = snapshot
+      if (this.snapshot() === snapshot && typeof payload.source === "string") {
+        this.synchronizeCanonicalSource(payload.source)
+        savedSnapshot = this.snapshot()
+      }
+      this.element.dispatchEvent(new CustomEvent("autosave:saved", { detail: { snapshot: savedSnapshot, payload } }))
+      const currentSnapshot = this.snapshot()
+      this.setStatus(currentSnapshot === savedSnapshot ? "Saved" : "Unsaved changes")
+      if (currentSnapshot === savedSnapshot) this.clearLocalDraft()
       // schedule() may have fired while this request was in flight.
       // Persist the newer fields even if that debounce timer already elapsed.
-      if (this.snapshot() !== snapshot) {
+      if (currentSnapshot !== savedSnapshot) {
         this.persistLocalDraft()
         this.timer = setTimeout(() => this.save(), 0)
       }
@@ -175,6 +183,24 @@ export default class extends Controller {
     if (tokenField && payload.revision_token) tokenField.value = payload.revision_token
     if (lockField && payload.lock_version !== undefined) lockField.value = payload.lock_version
     this.updateReleaseStatus(payload)
+  }
+
+  synchronizeCanonicalSource(source) {
+    const sourceField = this.element.querySelector('[name$="[source]"]')
+    if (!sourceField || sourceField.value === source) return
+
+    this.synchronizingCanonicalSource = true
+    try {
+      const editor = this.element.querySelector(".source-field")?.editorController
+      if (editor?.replaceServerSource) {
+        editor.replaceServerSource(source)
+      } else {
+        sourceField.value = source
+        sourceField.dispatchEvent(new Event("input", { bubbles: true }))
+      }
+    } finally {
+      this.synchronizingCanonicalSource = false
+    }
   }
 
   updateReleaseStatus(payload) {
