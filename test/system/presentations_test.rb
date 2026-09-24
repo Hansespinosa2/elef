@@ -225,26 +225,34 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_selector ".presentation-print img.presentation-media-contain[src='/presentations/#{presentation.id}/assets/#{media_digest}']"
     assert_selector ".presentation-print-slides > .slide-frame", count: 2
 
-    page.driver.browser.execute_cdp("Emulation.setEmulatedMedia", media: "print")
-    dimensions = page.evaluate_script(<<~JAVASCRIPT)
-      (() => {
-        const frame = document.querySelector('.presentation-print-slides > .slide-frame');
-        const slide = frame.querySelector('.slide');
-        return { frameWidth: frame.getBoundingClientRect().width, frameHeight: frame.getBoundingClientRect().height,
-          slideWidth: slide.getBoundingClientRect().width, slideHeight: slide.getBoundingClientRect().height,
-          pageBreak: getComputedStyle(frame).breakAfter };
-      })()
-    JAVASCRIPT
-    assert_in_delta 1280, dimensions["frameWidth"], 2
-    assert_in_delta 720, dimensions["frameHeight"], 2
-    assert_in_delta 1280, dimensions["slideWidth"], 2
-    assert_in_delta 720, dimensions["slideHeight"], 2
-    assert_equal "page", dimensions["pageBreak"]
+    browser = page.driver.browser
+    begin
+      browser.execute_cdp("Emulation.setEmulatedMedia", media: "print")
+      dimensions = page.evaluate_script(<<~JAVASCRIPT)
+        (() => {
+          const frame = document.querySelector('.presentation-print-slides > .slide-frame');
+          const slide = frame.querySelector('.slide');
+          return { frameWidth: frame.getBoundingClientRect().width, frameHeight: frame.getBoundingClientRect().height,
+            slideWidth: slide.getBoundingClientRect().width, slideHeight: slide.getBoundingClientRect().height,
+            pageBreak: getComputedStyle(frame).breakAfter };
+        })()
+      JAVASCRIPT
+      assert_in_delta 1280, dimensions["frameWidth"], 2
+      assert_in_delta 720, dimensions["frameHeight"], 2
+      assert_in_delta 1280, dimensions["slideWidth"], 2
+      assert_in_delta 720, dimensions["slideHeight"], 2
+      assert_equal "page", dimensions["pageBreak"]
 
-    printed_pdf = page.driver.browser.execute_cdp("Page.printToPDF", printBackground: true, preferCSSPageSize: true)
-    pdf_bytes = Base64.decode64(printed_pdf.fetch("data"))
-    assert pdf_bytes.start_with?("%PDF-")
-    assert_operator pdf_bytes.bytesize, :>, 1_000
+      printed_pdf = browser.execute_cdp("Page.printToPDF", printBackground: true, preferCSSPageSize: true)
+      pdf_bytes = Base64.decode64(printed_pdf.fetch("data"))
+      assert pdf_bytes.start_with?("%PDF-")
+      assert_operator pdf_bytes.bytesize, :>, 1_000
+      assert_equal 2, pdf_bytes.scan(%r{/Type\s*/Page\b}).length, "PDF should contain one page for each published slide"
+      assert_match %r{/Subtype\s*/Image\b}, pdf_bytes, "PDF should contain the slide image media"
+    ensure
+      browser.execute_cdp("Emulation.setEmulatedMedia", media: "screen")
+    end
+    assert page.evaluate_script("window.matchMedia('screen').matches"), "print emulation should not leak into later system tests"
   end
 
   test "media can be pasted or dropped onto the preview" do

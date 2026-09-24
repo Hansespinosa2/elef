@@ -18,4 +18,4 @@ Elef keeps the image or MP4 in the presentation's attachments. Work-package expo
 
 ## Save as PDF
 
-Choose **Print draft / save PDF** in the editor for the latest saved draft. When a published release exists, **Print published release** opens that pinned version. In the print view, choose **Print / Save PDF** and select the browser's PDF destination. The print layout uses one 16:9 landscape page per slide and carries the presentation theme and media into the print output.
+Choose **Print draft / save PDF** in the editor for the latest saved draft. When a published release exists, **Print published release** opens that pinned version. In the print view, choose **Print / Save PDF** and select the browser's PDF destination. The print layout uses one 16:9 landscape page per slide and carries the presentation theme and images into the print output. MP4 playback is available in preview and Present; the PDF does not contain video playback.
