@@ -69,8 +69,8 @@ class VimEditorTest < ApplicationSystemTestCase
     assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal"
   end
 
-  test "customizes Insert Escape, line numbers, cursor styling, and persists" do
-    document = Document.create!(title: "Expanded Vim settings", source: "# Settings")
+  test "customizes Vim Escape, line numbers, cursor styling, and persists" do
+    document = Document.create!(title: "Expanded Vim settings", source: "# Settings\nSecond\nThird\nFourth")
     visit edit_document_path(document)
     page.execute_script("localStorage.clear()")
     page.refresh
@@ -80,7 +80,24 @@ class VimEditorTest < ApplicationSystemTestCase
     escape_key.click
     escape_key.send_keys([:shift, :space])
     assert_equal "Shift+Space", escape_key.value
+
+    select "Hidden", from: "Line numbers"
+    assert_equal "none", page.evaluate_script("getComputedStyle(document.querySelector('.cm-lineNumbers')).display")
     select "Relative", from: "Line numbers"
+    page.execute_script("document.querySelector('.source-field').editorController.setSelectionRange(0, 0)")
+    line_numbers = <<~JAVASCRIPT
+      [...document.querySelectorAll('.cm-lineNumbers .cm-gutterElement')]
+        .filter((element) => element.style.visibility !== 'hidden')
+        .map((element) => element.textContent)
+    JAVASCRIPT
+    page.evaluate_async_script("window.requestAnimationFrame(() => arguments[0]())")
+    assert_equal %w[0 1 2 3], page.evaluate_script(line_numbers)
+    page.execute_script("const editor = document.querySelector('.source-field').editorController; editor.setSelectionRange(editor.value.indexOf('Third'))")
+    page.evaluate_async_script("window.requestAnimationFrame(() => arguments[0]())")
+    assert_equal %w[2 1 0 1], page.evaluate_script(line_numbers)
+    select "Absolute", from: "Line numbers"
+    page.evaluate_async_script("window.requestAnimationFrame(() => arguments[0]())")
+    assert_equal %w[1 2 3 4], page.evaluate_script(line_numbers)
     check "Mode-aware cursor styling"
     check "Enable Vim mode in this browser"
     assert_equal "relative", page.evaluate_script("document.querySelector('.editor-surface').dataset.lineNumbers")

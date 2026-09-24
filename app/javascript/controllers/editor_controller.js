@@ -135,6 +135,7 @@ export default class extends Controller {
 
   disconnect() {
     this.destroyed = true
+    if (this.lineNumberFrame) cancelAnimationFrame(this.lineNumberFrame)
     this.form?.removeEventListener("submit", this.handleSubmit)
     this.inputTarget.removeEventListener("input", this.handleExternalInput)
     this.inputTarget.removeEventListener("change", this.handleExternalChange)
@@ -261,6 +262,7 @@ export default class extends Controller {
       this.dispatchFieldEvent("input")
     }
     if (update.selectionSet || update.docChanged) this.updateMode()
+    if (update.selectionSet || update.docChanged || update.viewportChanged) this.scheduleLineNumberUpdate()
   }
 
   handleExternalInputEvent() {
@@ -431,14 +433,33 @@ export default class extends Controller {
 
   applyLineNumbers() {
     this.surfaceTarget.dataset.lineNumbers = this.lineNumberMode
-    requestAnimationFrame(() => {
-      if (this.destroyed || this.lineNumberMode !== "relative") return
-      const gutter = this.surfaceTarget.querySelector(".cm-lineNumbers")
+    const gutter = this.view.dom.querySelector(".cm-lineNumbers")
+    if (gutter) gutter.style.display = this.lineNumberMode === "off" ? "none" : ""
+    this.scheduleLineNumberUpdate()
+  }
+
+  scheduleLineNumberUpdate() {
+    if (this.destroyed || this.lineNumberMode === "off" || this.lineNumberFrame) return
+
+    this.lineNumberFrame = requestAnimationFrame(() => {
+      this.lineNumberFrame = null
+      if (this.destroyed || this.lineNumberMode === "off") return
+
+      const gutter = this.view.dom.querySelector(".cm-lineNumbers")
       if (!gutter) return
-      const activeLine = this.view.state.doc.lineAt(this.selectionStart).number
+
+      const contentLeft = this.view.contentDOM.getBoundingClientRect().left + 1
+      const activeLine = this.view.state.doc.lineAt(this.view.state.selection.main.head).number
       gutter.querySelectorAll(".cm-gutterElement").forEach((element) => {
-        const absolute = Number(element.textContent)
-        if (Number.isFinite(absolute)) element.textContent = String(Math.abs(activeLine - absolute) || 0)
+        if (element.style.visibility === "hidden") return
+
+        const rect = element.getBoundingClientRect()
+        const position = this.view.posAtCoords({ x: contentLeft, y: rect.top + rect.height / 2 })
+        if (position === null) return
+
+        const line = this.view.state.doc.lineAt(position).number
+        const number = this.lineNumberMode === "relative" ? Math.abs(activeLine - line) : line
+        element.textContent = String(number)
       })
     })
   }

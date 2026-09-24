@@ -168,7 +168,7 @@ body.elef-app {
 .snippet-option span { color: var(--oradia-muted); font-size: 0.72rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .snippet-option.is-selected { background: var(--oradia-slate-700); }
 
-.editor-surface[data-line-numbers="off"] .cm-lineNumbers { display: none; }
+.editor-surface[data-line-numbers="off"] .cm-lineNumbers { display: none !important; }
 .editor-surface[data-mode-aware-cursor="true"][data-editor-mode="insert"] .cm-cursor { border-left-color: #f0d56b; }
 .editor-surface[data-mode-aware-cursor="true"][data-editor-mode="visual"] .cm-cursor { border-left-color: #d5b4ff; }
 .editor-surface[data-mode-aware-cursor="true"][data-editor-mode="normal"] .cm-cursor { border-left-color: var(--oradia-green); }
