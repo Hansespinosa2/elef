@@ -124,6 +124,9 @@ body.elef-app {
 .editor-setting-row { align-items: center; color: var(--oradia-muted); display: flex; gap: 0.55rem; justify-content: space-between; }
 .editor-setting-toggle { justify-content: flex-start; }
 .editor-setting-row select { background: var(--oradia-slate-950); border: 1px solid var(--oradia-slate-700); border-radius: 0.45rem; color: var(--oradia-ink); max-width: 14rem; padding: 0.3rem; }
+.editor-setting-key { flex-wrap: wrap; }
+.editor-setting-key input { background: var(--oradia-slate-950); border: 1px solid var(--oradia-slate-700); border-radius: 0.45rem; color: var(--oradia-ink); min-width: 0; padding: 0.3rem; width: 8rem; }
+.editor-setting-key button { background: var(--oradia-slate-800); border: 1px solid var(--oradia-slate-700); border-radius: 0.45rem; color: var(--oradia-ink); cursor: pointer; padding: 0.3rem 0.5rem; }
 .editor-reveal-metadata { background: transparent; border: 1px solid var(--oradia-slate-700); border-radius: 999px; color: var(--oradia-muted); cursor: pointer; padding: 0.28rem 0.7rem; }
 .editor-reveal-metadata:hover, .editor-reveal-metadata:focus-visible { background: var(--oradia-slate-800); color: var(--oradia-ink); }
 .editor-surface { box-sizing: border-box; font-family: var(--oradia-mono); height: min(36rem, 60vh); line-height: 1.55; max-height: 70vh; min-height: 24rem; overflow: hidden; position: relative; resize: vertical; width: 100%; }

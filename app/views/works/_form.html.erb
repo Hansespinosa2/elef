@@ -59,13 +59,12 @@
               <input type="checkbox" data-editor-target="vimToggle" data-action="change->editor#toggleVim">
               <span>Enable Vim mode in this browser</span>
             </label>
-            <label class="editor-setting-row">
-              <span>Escape aliases in Insert mode</span>
-              <select data-editor-target="escapeAlias" data-action="change->editor#escapeAliasChanged">
-                <option value="none">Escape only</option>
-                <option value="shift-space">Escape or Shift+Space</option>
-              </select>
-            </label>
+            <div class="editor-setting-row editor-setting-key">
+              <label for="<%= editor_id %>_escape_key">Remap Vim Escape</label>
+              <input id="<%= editor_id %>_escape_key" type="text" readonly placeholder="Escape (default)" data-editor-target="escapeKey" data-action="keydown->editor#captureEscapeKey" aria-label="Choose a key to remap Vim Escape">
+              <button type="button" data-action="editor#clearEscapeKey">Clear</button>
+            </div>
+            <p class="field-hint">Focus the field and press a key or key combination to set it as Escape in every Vim mode.</p>
             <label class="editor-setting-row">
               <span>Line numbers</span>
               <select data-editor-target="lineNumbers" data-action="change->editor#lineNumbersChanged">

@@ -76,7 +76,10 @@ class VimEditorTest < ApplicationSystemTestCase
     page.refresh
 
     find("summary", text: "Vim settings").click
-    select "Escape or Shift+Space", from: "Escape aliases in Insert mode"
+    escape_key = find("[data-editor-target='escapeKey']")
+    escape_key.click
+    escape_key.send_keys([:shift, :space])
+    assert_equal "Shift+Space", escape_key.value
     select "Relative", from: "Line numbers"
     check "Mode-aware cursor styling"
     check "Enable Vim mode in this browser"
@@ -89,12 +92,16 @@ class VimEditorTest < ApplicationSystemTestCase
     page.execute_script("document.querySelector('.source-field').editorController.setSelectionRange(0, 0)")
     editor.send_keys("i", "Alias", [:shift, :space])
     assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal"
+    editor.send_keys("v", "l")
+    assert_selector "[data-editor-target='mode'][data-mode='visual']", text: "Visual"
+    editor.send_keys([:shift, :space])
+    assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal"
 
     visit edit_document_path(document)
     find("summary", text: "Vim settings").click
     assert_equal "relative", find("[data-editor-target='lineNumbers']").value
     assert_selector "[data-editor-target='modeAwareCursor']:checked"
-    assert_equal "shift-space", find("[data-editor-target='escapeAlias']").value
+    assert_equal "Shift+Space", find("[data-editor-target='escapeKey']").value
   end
 
   test "metadata directives use the same styling as Markdown markers" do

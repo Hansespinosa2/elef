@@ -8,10 +8,29 @@ import { tags } from "@lezer/highlight"
 import { Vim, getCM, vim } from "@replit/codemirror-vim"
 
 const ENABLED_STORAGE_KEY = "elef.editor.vim.enabled"
-const ESCAPE_ALIAS_STORAGE_KEY = "elef.editor.vim.escapeAlias"
+const ESCAPE_KEY_STORAGE_KEY = "elef.editor.vim.escapeKey"
+const LEGACY_ESCAPE_ALIAS_STORAGE_KEY = "elef.editor.vim.escapeAlias"
 const LINE_NUMBERS_STORAGE_KEY = "elef.editor.lineNumbers"
 const MODE_AWARE_CURSOR_STORAGE_KEY = "elef.editor.vim.modeAwareCursor"
 const SHIFT_SPACE = "<S-Space>"
+let activeEscapeKey = ""
+
+const VIM_KEY_NAMES = {
+  " ": "Space",
+  ArrowDown: "Down",
+  ArrowLeft: "Left",
+  ArrowRight: "Right",
+  ArrowUp: "Up",
+  Backspace: "BS",
+  Enter: "CR",
+  Delete: "Del",
+  Escape: "Esc",
+  Insert: "Ins",
+  PageDown: "PageDown",
+  PageUp: "PageUp"
+}
+
+const VIM_MODIFIER_NAMES = { A: "Alt", C: "Ctrl", M: "Meta", S: "Shift" }
 
 const elefMetadata = {
   defineNodes: [{ name: "ElefMetadata", block: true, style: tags.processingInstruction }],
@@ -55,14 +74,14 @@ const theme = EditorView.theme({
 }, { dark: true })
 
 export default class extends Controller {
-  static targets = ["surface", "input", "mode", "command", "vimToggle", "escapeAlias", "lineNumbers", "modeAwareCursor"]
+  static targets = ["surface", "input", "mode", "command", "vimToggle", "escapeKey", "lineNumbers", "modeAwareCursor"]
 
   connect() {
     this.editorController = this
     this.element.editorController = this
     this.destroyed = false
     this.vimEnabled = this.readBoolean(ENABLED_STORAGE_KEY)
-    this.escapeAlias = this.readEscapeAlias()
+    this.escapeKey = this.readEscapeKey()
     this.lineNumberMode = this.readLineNumberMode()
     this.modeAwareCursor = this.readBoolean(MODE_AWARE_CURSOR_STORAGE_KEY)
     this.vimCompartment = new Compartment()
@@ -102,7 +121,7 @@ export default class extends Controller {
     this.form?.addEventListener("submit", this.handleSubmit = () => this.syncInput())
 
     this.vimToggleTarget.checked = this.vimEnabled
-    this.escapeAliasTarget.value = this.escapeAlias
+    this.escapeKeyTarget.value = this.escapeKeyDisplay(this.escapeKey)
     this.lineNumbersTarget.value = this.lineNumberMode
     this.modeAwareCursorTarget.checked = this.modeAwareCursor
     this.applyMapping()
@@ -144,9 +163,22 @@ export default class extends Controller {
     }, 0)
   }
 
-  escapeAliasChanged(event) {
-    this.escapeAlias = this.normalizeEscapeAlias(event.target.value)
-    this.writeValue(ESCAPE_ALIAS_STORAGE_KEY, this.escapeAlias)
+  captureEscapeKey(event) {
+    const key = this.vimKeyFromEvent(event)
+    if (!key) return
+
+    event.preventDefault()
+    event.stopPropagation()
+    this.escapeKey = key
+    this.escapeKeyTarget.value = this.escapeKeyDisplay(key)
+    this.writeValue(ESCAPE_KEY_STORAGE_KEY, key)
+    this.applyMapping()
+  }
+
+  clearEscapeKey() {
+    this.escapeKey = ""
+    this.escapeKeyTarget.value = ""
+    this.writeValue(ESCAPE_KEY_STORAGE_KEY, "")
     this.applyMapping()
   }
 
@@ -335,24 +367,52 @@ export default class extends Controller {
 
   applyMapping() {
     try {
-      Vim.unmap(SHIFT_SPACE, "normal")
-      Vim.unmap(SHIFT_SPACE, "insert")
-      if (this.escapeAlias === "shift-space") Vim.map(SHIFT_SPACE, "<Esc>", "insert")
+      if (activeEscapeKey) Vim.unmap(activeEscapeKey)
+      activeEscapeKey = this.escapeKey
+      if (activeEscapeKey) Vim.map(activeEscapeKey, "<Esc>")
     } catch (_error) {
       // A browser without the optional Vim engine should still have a usable editor.
     }
   }
 
-  readEscapeAlias() {
-    return this.normalizeEscapeAlias(this.readValue(ESCAPE_ALIAS_STORAGE_KEY) || "none")
+  readEscapeKey() {
+    const saved = this.readValue(ESCAPE_KEY_STORAGE_KEY)
+    if (saved !== null) return this.normalizeEscapeKey(saved)
+
+    return this.readValue(LEGACY_ESCAPE_ALIAS_STORAGE_KEY) === "shift-space" ? SHIFT_SPACE : ""
   }
 
   readLineNumberMode() {
     return this.normalizeLineNumberMode(this.readValue(LINE_NUMBERS_STORAGE_KEY) || "absolute")
   }
 
-  normalizeEscapeAlias(value) {
-    return ["none", "shift-space"].includes(value) ? value : "none"
+  normalizeEscapeKey(value) {
+    if (typeof value !== "string" || value.length === 0) return ""
+    if (value.startsWith("<")) return /^(?:<(?:[CSMA]-)*[A-Za-z0-9]+>)+$/.test(value) ? value : ""
+    return Array.from(value).length === 1 ? value : ""
+  }
+
+  vimKeyFromEvent(event) {
+    if (["Shift", "Control", "Alt", "Meta", "Unidentified"].includes(event.key)) return ""
+
+    const isLetter = /^[A-Za-z]$/.test(event.key)
+    let key = VIM_KEY_NAMES[event.key] || event.key
+    const modifiers = []
+    if (event.ctrlKey) modifiers.push("C")
+    if (event.shiftKey && (!Array.from(event.key).length || key.length > 1 || isLetter)) modifiers.push("S")
+    if (event.altKey) modifiers.push("A")
+    if (event.metaKey) modifiers.push("M")
+    if (event.shiftKey && isLetter) key = key.toLowerCase()
+
+    if (Array.from(key).length !== 1 || modifiers.length > 0) return `<${modifiers.join("-")}${modifiers.length ? "-" : ""}${key}>`
+    return key
+  }
+
+  escapeKeyDisplay(key) {
+    if (!key) return ""
+    if (!key.startsWith("<")) return key
+
+    return key.slice(1, -1).split("-").map((part) => VIM_MODIFIER_NAMES[part] || part).join("+")
   }
 
   normalizeLineNumberMode(value) {
