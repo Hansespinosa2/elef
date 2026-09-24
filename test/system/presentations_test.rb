@@ -6,31 +6,45 @@ require "tempfile"
 class PresentationsTest < ApplicationSystemTestCase
   def type_visual_text(selector, visible_text, replacement)
     selector = ".editor-projection #{selector}"
-    target = all(selector).find { |candidate| candidate.text.include?(visible_text) }
-    assert target, "could not find visual text #{visible_text.inspect} in #{selector}"
-    target.click
-    selected = page.execute_script(<<~JAVASCRIPT, target, visible_text)
-      const root = arguments[0];
-      const needle = arguments[1];
-      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-      let node;
-      while (walker.nextNode()) {
-        node = walker.currentNode;
-        if (node.textContent.includes(needle)) break;
-        node = null;
-      }
-      if (!node) return false;
-      const start = node.textContent.indexOf(needle);
-      const range = document.createRange();
-      range.setStart(node, start);
-      range.setEnd(node, start + needle.length);
-      const selection = window.getSelection();
-      selection.removeAllRanges();
-      selection.addRange(range);
-      return true;
-    JAVASCRIPT
-    assert selected, "could not select visual text #{visible_text.inspect}"
-    target.send_keys(replacement)
+    attempts = 0
+    loop do
+      source_before = find_field("Markdown source").value
+      expected_source = source_before.sub(visible_text, replacement)
+      assert_not_equal source_before, expected_source, "could not find source text #{visible_text.inspect}"
+      target = all(selector, wait: 5).find { |candidate| candidate.text.include?(visible_text) }
+      assert target, "could not find visual text #{visible_text.inspect} in #{selector}"
+
+      begin
+        target.click
+        selected = page.execute_script(<<~JAVASCRIPT, target, visible_text)
+          const root = arguments[0];
+          const needle = arguments[1];
+          const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+          let node;
+          while (walker.nextNode()) {
+            node = walker.currentNode;
+            if (node.textContent.includes(needle)) break;
+            node = null;
+          }
+          if (!node) return false;
+          const start = node.textContent.indexOf(needle);
+          const range = document.createRange();
+          range.setStart(node, start);
+          range.setEnd(node, start + needle.length);
+          const selection = window.getSelection();
+          selection.removeAllRanges();
+          selection.addRange(range);
+          return true;
+        JAVASCRIPT
+        assert selected, "could not select visual text #{visible_text.inspect}"
+        target.send_keys(replacement)
+        return
+      rescue Selenium::WebDriver::Error::StaleElementReferenceError
+        attempts += 1
+        return if find_field("Markdown source").value == expected_source
+        raise if attempts >= 3
+      end
+    end
   end
 
   def type_source_text(source, source_text, replacement)
@@ -985,7 +999,7 @@ class PresentationsTest < ApplicationSystemTestCase
     find("summary", text: "More").click
     click_on "Load sample presentations"
 
-    assert_text "Sample presentations loaded."
+    assert_selector ".flash.notice", text: "Sample presentations loaded.", wait: 10
     Presentations::SampleData::SAMPLES.each do |sample|
       assert_text sample[:title]
     end

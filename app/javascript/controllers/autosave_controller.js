@@ -110,24 +110,29 @@ export default class extends Controller {
     clearTimeout(this.timer)
     if (this.saving || !this.active || !this.saveEnabledValue) return
     const snapshot = this.snapshot()
-    this.persistLocalDraft(snapshot)
     this.saving = true
     this.element.dispatchEvent(new CustomEvent("autosave:saving"))
-    this.setStatus("Saving…")
     const requestController = new AbortController()
     this.requestController = requestController
     let timedOut = false
-    let timeoutReject
-    const timeoutFailure = new Promise((_, reject) => { timeoutReject = reject })
-    this.requestTimeout = setTimeout(() => {
-      timedOut = true
-      requestController.abort()
-      const error = new Error("Save timed out")
-      error.name = "AutosaveTimeout"
-      timeoutReject(error)
-    }, this.timeoutValue)
 
     try {
+      // Do not report an in-flight save until its recovery copy has committed.
+      // A reload during a slow or failed PATCH must still be able to restore it.
+      await this.persistLocalDraft(snapshot)
+      if (!this.active) return
+      this.setStatus("Saving…")
+
+      let timeoutReject
+      const timeoutFailure = new Promise((_, reject) => { timeoutReject = reject })
+      this.requestTimeout = setTimeout(() => {
+        timedOut = true
+        requestController.abort()
+        const error = new Error("Save timed out")
+        error.name = "AutosaveTimeout"
+        timeoutReject(error)
+      }, this.timeoutValue)
+
       const request = (async () => {
         const response = await fetch(this.element.action, {
           method: "PATCH",
@@ -225,7 +230,7 @@ export default class extends Controller {
       values: this.fieldTargets.map(field => field.value),
       updatedAt: Date.now()
     }
-    this.writeDraft(record)
+    return this.writeDraft(record)
   }
 
   clearLocalDraft() {
@@ -259,14 +264,24 @@ export default class extends Controller {
     if (!window.indexedDB) return null
 
     return new Promise((resolve) => {
+      let settled = false
+      const resolveOnce = (database) => {
+        if (settled) {
+          database?.close()
+          return
+        }
+        settled = true
+        resolve(database)
+      }
       const request = window.indexedDB.open(DATABASE_NAME, DATABASE_VERSION)
       request.onupgradeneeded = () => {
         if (!request.result.objectStoreNames.contains(STORE_NAME)) {
           request.result.createObjectStore(STORE_NAME, { keyPath: "key" })
         }
       }
-      request.onsuccess = () => resolve(request.result)
-      request.onerror = () => resolve(null)
+      request.onsuccess = () => resolveOnce(request.result)
+      request.onerror = () => resolveOnce(null)
+      request.onblocked = () => resolveOnce(null)
     })
   }
 
@@ -291,9 +306,13 @@ export default class extends Controller {
     try {
       const database = await this.database
       if (database) {
-        const transaction = database.transaction(STORE_NAME, "readwrite")
-        transaction.objectStore(STORE_NAME).put(record)
-        return
+        const committed = await new Promise((resolve) => {
+          const transaction = database.transaction(STORE_NAME, "readwrite")
+          transaction.oncomplete = () => resolve(true)
+          transaction.onabort = transaction.onerror = () => resolve(false)
+          transaction.objectStore(STORE_NAME).put(record)
+        })
+        if (committed) return
       }
       window.localStorage.setItem(this.storageKey(record.key), JSON.stringify(record))
     } catch (_error) {

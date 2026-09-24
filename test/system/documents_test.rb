@@ -2,45 +2,58 @@ require "application_system_test_case"
 
 class DocumentsTest < ApplicationSystemTestCase
   def type_visual_text(selector, source_text, replacement)
-    candidates = all(selector)
-    target = candidates.find { |candidate| candidate.text.include?(source_text) }
-    assert target, "could not find visual text #{source_text.inspect} in #{selector}"
-    target.click
-    selected = page.execute_script(<<~JAVASCRIPT, target, source_text)
-      const root = arguments[0];
-      const needle = arguments[1];
-      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-      const nodes = [];
-      while (walker.nextNode()) {
-        const node = walker.currentNode;
-        if (!node.parentElement?.closest('[data-editor-math-source]')) nodes.push(node);
-      }
-      const combined = nodes.map((node) => node.textContent).join('');
-      const start = combined.indexOf(needle);
-      if (start < 0) return false;
-      const point = (offset) => {
-        let consumed = 0;
-        for (const node of nodes) {
-          const end = consumed + node.textContent.length;
-          if (offset <= end) return [node, offset - consumed];
-          consumed = end;
-        }
-        const last = nodes[nodes.length - 1];
-        return last ? [last, last.textContent.length] : null;
-      };
-      const from = point(start);
-      const to = point(start + needle.length);
-      if (!from || !to) return false;
-      const range = document.createRange();
-      range.setStart(from[0], from[1]);
-      range.setEnd(to[0], to[1]);
-      const selection = window.getSelection();
-      selection.removeAllRanges();
-      selection.addRange(range);
-      return true;
-    JAVASCRIPT
-    assert selected, "could not select visual text #{source_text.inspect}"
-    target.send_keys(replacement)
+    attempts = 0
+    loop do
+      source_before = find_field("Markdown source").value
+      expected_source = source_before.sub(source_text, replacement)
+      assert_not_equal source_before, expected_source, "could not find source text #{source_text.inspect}"
+      target = all(selector, wait: 5).find { |candidate| candidate.text.include?(source_text) }
+      assert target, "could not find visual text #{source_text.inspect} in #{selector}"
+
+      begin
+        target.click
+        selected = page.execute_script(<<~JAVASCRIPT, target, source_text)
+          const root = arguments[0];
+          const needle = arguments[1];
+          const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+          const nodes = [];
+          while (walker.nextNode()) {
+            const node = walker.currentNode;
+            if (!node.parentElement?.closest('[data-editor-math-source]')) nodes.push(node);
+          }
+          const combined = nodes.map((node) => node.textContent).join('');
+          const start = combined.indexOf(needle);
+          if (start < 0) return false;
+          const point = (offset) => {
+            let consumed = 0;
+            for (const node of nodes) {
+              const end = consumed + node.textContent.length;
+              if (offset <= end) return [node, offset - consumed];
+              consumed = end;
+            }
+            const last = nodes[nodes.length - 1];
+            return last ? [last, last.textContent.length] : null;
+          };
+          const from = point(start);
+          const to = point(start + needle.length);
+          if (!from || !to) return false;
+          const range = document.createRange();
+          range.setStart(from[0], from[1]);
+          range.setEnd(to[0], to[1]);
+          const selection = window.getSelection();
+          selection.removeAllRanges();
+          selection.addRange(range);
+          return true;
+        JAVASCRIPT
+        assert selected, "could not select visual text #{source_text.inspect}"
+        target.send_keys(replacement)
+        return
+      rescue Selenium::WebDriver::Error::StaleElementReferenceError
+        attempts += 1
+        return if find_field("Markdown source").value == expected_source
+        raise if attempts >= 3
+      end
+    end
   end
 
   def type_source_text(source, source_text, replacement)
