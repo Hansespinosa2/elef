@@ -55,6 +55,10 @@ export default class extends Controller {
       const active = index === this.indexValue
       slide.hidden = !active
       slide.setAttribute("aria-hidden", active ? "false" : "true")
+      slide.querySelectorAll("video").forEach((video) => {
+        if (active) video.play().catch(() => {})
+        else video.pause()
+      })
     })
     if (this.hasCounterTarget) {
       this.counterTarget.textContent = `${this.indexValue + 1} / ${this.slideTargets.length}`

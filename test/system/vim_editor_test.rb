@@ -3,25 +3,51 @@ require "application_system_test_case"
 class VimEditorTest < ApplicationSystemTestCase
   test "editor controls fit a narrow viewport and retain resizing" do
     document = Document.create!(title: "Mobile editor", source: "# Mobile")
+    page.driver.browser.execute_cdp("Emulation.clearDeviceMetricsOverride")
+    page.driver.browser.manage.window.resize_to(1400, 1000)
     visit edit_document_path(document)
     [500, 390, 320].each do |width|
       page.driver.browser.execute_cdp("Emulation.setDeviceMetricsOverride", width: width, height: 800, deviceScaleFactor: 1, mobile: false)
-      assert_operator page.evaluate_script("document.documentElement.scrollWidth"), :<=,
-        page.evaluate_script("window.innerWidth")
+      metrics = page.evaluate_script(<<~JAVASCRIPT)
+        (() => {
+          const viewport = window.innerWidth;
+          const overflow = [...document.querySelectorAll("body *")].map((element) => {
+            const rect = element.getBoundingClientRect();
+            return { tag: element.tagName, className: String(element.className).slice(0, 80), left: rect.left, right: rect.right,
+              width: rect.width, scrollWidth: element.scrollWidth, clientWidth: element.clientWidth };
+          }).filter((element) => element.width > 0 && (element.left < -1 || element.right > viewport + 1))
+            .sort((left, right) => right.right - left.right).slice(0, 8);
+          return { viewport, scrollWidth: document.documentElement.scrollWidth, overflow };
+        })()
+      JAVASCRIPT
+      assert_operator metrics["scrollWidth"], :<=, metrics["viewport"], "emulated width #{width}: #{metrics.inspect}"
     end
 
     page.driver.browser.execute_cdp("Emulation.setDeviceMetricsOverride", width: 500, height: 800, deviceScaleFactor: 1, mobile: false)
+    page.evaluate_script("new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))")
     assert_equal "vertical", page.evaluate_script("getComputedStyle(document.querySelector('.editor-surface')).resize")
     assert_equal "hidden", page.evaluate_script("getComputedStyle(document.querySelector('.editor-surface')).overflow")
     assert_equal "none", page.evaluate_script("getComputedStyle(document.querySelector('.editor-input-proxy')).resize")
     geometry = page.evaluate_script(<<~JAVASCRIPT)
       (() => {
         const surface = document.querySelector('.source-field .editor-surface').getBoundingClientRect();
+        const source = document.querySelector('.source-field').getBoundingClientRect();
+        const toolbar = document.querySelector('.editor-toolbar').getBoundingClientRect();
         const projection = document.querySelector('.editor-projection').getBoundingClientRect();
-        return { surfaceBottom: surface.bottom, projectionTop: projection.top };
+        const editor = document.querySelector('.source-field .cm-editor').getBoundingClientRect();
+        const fieldStyle = getComputedStyle(document.querySelector('.source-field'));
+        return {
+          surface: { top: surface.top, bottom: surface.bottom, height: surface.height, position: getComputedStyle(document.querySelector('.editor-surface')).position },
+          source: { top: source.top, bottom: source.bottom, height: source.height, position: fieldStyle.position },
+          toolbar: { top: toolbar.top, bottom: toolbar.bottom, height: toolbar.height },
+          editor: { top: editor.top, bottom: editor.bottom, height: editor.height },
+          projectionTop: projection.top,
+          configuredToolbarHeight: document.querySelector('.source-field').style.getPropertyValue('--editor-toolbar-height'),
+          configuredSurfaceHeight: document.querySelector('.source-field').style.getPropertyValue('--editor-surface-height')
+        };
       })()
     JAVASCRIPT
-    assert_operator geometry["surfaceBottom"], :<=, geometry["projectionTop"]
+    assert_operator geometry.dig("surface", "bottom"), :<=, geometry["projectionTop"], geometry.inspect
 
     find("summary", text: "Vim settings").click
     panel = page.evaluate_script(<<~JAVASCRIPT)

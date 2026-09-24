@@ -1,7 +1,11 @@
 require "application_system_test_case"
+require "base64"
+require "stringio"
+require "tempfile"
 
 class PresentationsTest < ApplicationSystemTestCase
   def type_visual_text(selector, visible_text, replacement)
+    selector = ".editor-projection #{selector}"
     target = all(selector).find { |candidate| candidate.text.include?(visible_text) }
     assert target, "could not find visual text #{visible_text.inspect} in #{selector}"
     target.click
@@ -233,8 +237,8 @@ class PresentationsTest < ApplicationSystemTestCase
 
     visit edit_presentation_path(presentation)
 
-    find(".slide-block", text: "Body").click
-    page.execute_script("const block = [...document.querySelectorAll('.slide-block')].find((candidate) => candidate.innerText === 'Body'); block.innerText = 'Changed'; block.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'Changed' }));")
+    find(".editor-projection .slide-block", text: "Body").click
+    page.execute_script("const block = [...document.querySelectorAll('.editor-projection .slide-block')].find((candidate) => candidate.innerText === 'Body'); block.innerText = 'Changed'; block.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'Changed' }));")
     assert_field "Markdown source", with: /# First\n\nChanged/, wait: 5
     page.execute_script("document.activeElement.blur()")
     assert_no_selector "[data-presentation-editor-action='add-slide-after'][disabled]", wait: 5
@@ -259,7 +263,7 @@ class PresentationsTest < ApplicationSystemTestCase
     visit edit_presentation_path(presentation)
 
     page.execute_script(<<~JAVASCRIPT)
-      const block = [...document.querySelectorAll('.slide-block[contenteditable="true"]')]
+      const block = [...document.querySelectorAll('.editor-projection .slide-block[contenteditable="true"]')]
         .find((candidate) => candidate.innerText === 'Alpha');
       block.focus();
       block.innerText = 'Alpha\\n\\nBeta';
@@ -280,6 +284,8 @@ class PresentationsTest < ApplicationSystemTestCase
       check();
     JAVASCRIPT
     assert pending, "server projection was not held while its editable block had focus"
+    assert_selector ".slide-overview-actions button[disabled]"
+    assert_selector ".slide-overview-card[disabled]"
 
     waiting_state = page.evaluate_script(<<~JAVASCRIPT)
       (() => {
@@ -302,6 +308,10 @@ class PresentationsTest < ApplicationSystemTestCase
     page.execute_script("document.activeElement.blur()")
 
     assert_selector ".presentation-editor-projection [data-editor-block-id]", count: 3, wait: 5
+    assert_no_selector ".slide-overview-actions button[aria-label='Add slide after selected'][disabled]"
+    assert_no_selector ".slide-overview-actions button[aria-label='Duplicate selected slide'][disabled]"
+    assert_no_selector ".slide-overview-actions button[aria-label='Delete selected slide'][disabled]"
+    assert_no_selector ".slide-overview-card[disabled]"
     aligned_state = page.evaluate_script(<<~JAVASCRIPT)
       (() => {
         const form = document.querySelector('.visual-editor-form');
@@ -338,7 +348,7 @@ class PresentationsTest < ApplicationSystemTestCase
 
     visit edit_presentation_path(presentation)
     page.execute_script(<<~JAVASCRIPT)
-      const heading = [...document.querySelectorAll('.slide-block')].find((block) => block.innerText.includes('Styled'));
+      const heading = [...document.querySelectorAll('.editor-projection .slide-block')].find((block) => block.innerText.includes('Styled'));
       const strong = heading.querySelector('strong');
       if (strong) strong.textContent = 'Visual';
       else heading.textContent = heading.textContent.replace('Styled', 'Visual');
@@ -347,7 +357,7 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: "# **Visual** deck\n\nBefore $\\frac{x}{y}$ and $$\\sum_{i=1}^{n} i$$ after.", wait: 5
 
     page.execute_script(<<~JAVASCRIPT)
-      const block = [...document.querySelectorAll('.slide-block')].find((candidate) => candidate.querySelector('[data-editor-math-source]'));
+      const block = [...document.querySelectorAll('.editor-projection .slide-block')].find((candidate) => candidate.querySelector('[data-editor-math-source]'));
       const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
       let node;
       while ((node = walker.nextNode()) && !node.textContent.includes('Before ')) {}
@@ -372,9 +382,9 @@ class PresentationsTest < ApplicationSystemTestCase
     presentation = Presentation.create!(title: "Keystroke parity", source: source)
 
     visit edit_presentation_path(presentation)
-    title = find(".slide-block", match: :first)
+    title = find(".editor-projection .slide-block", match: :first)
     page.execute_script(<<~JAVASCRIPT)
-      const title = document.querySelector('.slide-block');
+      const title = document.querySelector('.editor-projection .slide-block');
       title.focus();
       const range = document.createRange();
       range.selectNodeContents(title);
@@ -395,7 +405,7 @@ class PresentationsTest < ApplicationSystemTestCase
 
     visit edit_presentation_path(presentation)
     find("[data-presentation-editor-action='add-block-after']").click
-    block = find(".slide-block", text: "New block", wait: 5)
+    block = find(".editor-projection .slide-block", text: "New block", wait: 5)
     block.click
     block.send_keys(:control, "a")
     block.send_keys("## Test")
@@ -477,7 +487,7 @@ class PresentationsTest < ApplicationSystemTestCase
     presentation = Presentation.create!(title: "Inline math typing", source: "# Math\n\nAn equation")
 
     visit edit_presentation_path(presentation)
-    block = find(".slide-block", text: "An equation")
+    block = find(".editor-projection .slide-block", text: "An equation")
     block.click
     page.execute_script(<<~JAVASCRIPT, block)
       const block = arguments[0];
@@ -517,7 +527,7 @@ class PresentationsTest < ApplicationSystemTestCase
     visit edit_presentation_path(presentation)
 
     page.execute_script(<<~JAVASCRIPT)
-      const block = [...document.querySelectorAll('.slide-block')]
+      const block = [...document.querySelectorAll('.editor-projection .slide-block')]
         .find((candidate) => candidate.querySelector('strong'));
       block.querySelector('strong').innerText = 'updated';
       block.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'updated' }));
@@ -525,7 +535,7 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: /A \*\*updated\*\*\./, wait: 5
 
     page.execute_script(<<~JAVASCRIPT)
-      const tableBlock = [...document.querySelectorAll('.slide-block')]
+      const tableBlock = [...document.querySelectorAll('.editor-projection .slide-block')]
         .find((block) => block.querySelector('table'));
       tableBlock.querySelector('tbody td').innerText = 'Updated';
       tableBlock.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'Updated' }));
@@ -533,7 +543,7 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: /\| Updated \| Two \|/, wait: 5
 
     page.execute_script(<<~JAVASCRIPT)
-      const imageBlock = [...document.querySelectorAll('.slide-block')]
+      const imageBlock = [...document.querySelectorAll('.editor-projection .slide-block')]
         .find((block) => block.querySelector('.editor-media-caption'));
       const caption = imageBlock.querySelector('.editor-media-caption');
       caption.innerText = 'New alt';
@@ -616,6 +626,165 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_selector '[data-preview-target="warnings"]', visible: false
     assert_selector '[data-preview-target="retry"]', visible: false
     assert_no_selector "[data-presentation-editor-action='add-slide-after'][disabled]"
+  end
+
+  test "overview edits source ranges safely and slide operations undo as one edit" do
+    original = "---\r\ntitle: Deck\r\n---\r\n# Café 😀\r\n\r\n```md\r\n---\r\n```\r\n---\r\n# Second\r\n---\r\n# Third"
+    presentation = Presentation.create!(title: "Overview operations", source: original)
+
+    visit edit_presentation_path(presentation)
+    assert_selector ".slide-overview-card", count: 3
+    assert_no_selector ".slide-overview-card [contenteditable='true']"
+    assert_no_selector ".slide-overview-card .presentation-editor-block-controls"
+    find('.slide-overview-card[data-slide-index="1"]').click
+    find('button[aria-label="Duplicate selected slide"]').click
+    assert_selector ".slide-overview-card", count: 4
+    assert_no_selector ".slide-overview-actions button[disabled]", wait: 8
+    find('button[aria-label="Move selected slide later"]').click
+    assert_selector ".slide-overview-actions button:not([disabled])", minimum: 1, wait: 8
+
+    source = page.evaluate_script("document.querySelector('.source-field').editorController.value")
+    assert source.start_with?("---\ntitle: Deck\n---\n")
+    assert_includes source, "```md\n---\n```"
+    assert_operator source.index("# Third"), :<, source.rindex("# Second"), source
+
+    find('button[aria-label="Delete selected slide"]').click
+    assert_selector ".slide-overview-card", count: 3
+    assert_selector ".slide-overview-actions button:not([disabled])", minimum: 1, wait: 8
+    before_add = page.evaluate_script("document.querySelector('.source-field').editorController.value")
+    find('button[aria-label="Add slide after selected"]').click
+    assert_selector ".slide-overview-card", count: 4
+    page.driver.browser.action.key_down(:control).send_keys("z").key_up(:control).perform
+    assert_selector ".slide-overview-card", count: 3
+    assert_selector ".slide-overview-actions button:not([disabled])", minimum: 1, wait: 8
+    assert_equal before_add, page.evaluate_script("document.querySelector('.source-field').editorController.value")
+    assert_selector '[data-autosave-target="status"]', exact_text: "Saved", wait: 8
+    assert_equal before_add, presentation.reload.source.gsub(/\r\n|\r/, "\n")
+    assert presentation.source.start_with?("---\r\ntitle: Deck\r\n---\r\n")
+  end
+
+  test "overflow warnings update after editing and media picker insertion uses canonical asset references" do
+    dense = "# Dense slide\n\n" + ("A sentence with enough detail to occupy space. " * 280)
+    presentation = Presentation.create!(title: "Overflow and media", source: dense)
+    visit edit_presentation_path(presentation)
+    assert_selector ".slide-overflow-warnings", visible: true, wait: 8
+    assert_text "Slide 1 extends beyond its 16:9 frame."
+    assert_selector ".slide-overview-card .is-overflowing"
+
+    fill_in "Markdown source", with: "# Clear slide"
+    assert_selector ".slide-overflow-warnings", visible: false, wait: 8
+
+    media_file = Tempfile.new(["pixel", ".png"])
+    media_file.binmode
+    media_file.write(Base64.decode64("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+i9MwAAAAASUVORK5CYII="))
+    media_file.flush
+    page.execute_script("document.querySelector('.source-field').editorController.setSelectionRange(document.querySelector('.source-field').editorController.value.length)")
+    page.execute_script("document.querySelector('[data-media-target=input]').hidden = false")
+    find('[data-media-target="input"]').set(media_file.path)
+
+    assert_selector ".media-upload-status", text: /pixel.*added to the Markdown source/i, wait: 8
+    assert_includes page.evaluate_script("document.querySelector('.source-field').editorController.value"), "elef-asset:"
+    assert_selector ".preview-pane .presentation-media-contain", wait: 8
+    assert_equal "image/png", presentation.reload.assets.blobs.last.content_type
+    assert_selector '[data-autosave-target="status"]', exact_text: "Saved", wait: 8
+  ensure
+    media_file&.close!
+  end
+
+  test "print view selects draft content and sizes slides for one landscape page each" do
+    media_bytes = Base64.decode64("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+i9MwAAAAASUVORK5CYII=")
+    media_digest = Digest::SHA256.hexdigest(media_bytes)
+    published_source = "---\ntheme: dark\ntypography: technical\n---\n# Published one\n\n![Diagram](elef-asset:#{media_digest} \"fit:contain\")\n---\n# Published two"
+    presentation = Presentation.create!(title: "Print workflow", source: published_source)
+    presentation.assets.attach(io: StringIO.new(media_bytes), filename: "diagram.png", content_type: "image/png")
+    blob = presentation.assets.blobs.last
+    blob.update!(metadata: blob.metadata.merge("elef_sha256" => media_digest))
+    PresentationReleasePublisher.call(presentation)
+    presentation.update!(source: "---\ntheme: light\n---\n# Latest draft\n---\n# Draft two")
+
+    visit print_presentation_path(presentation)
+    assert_text "Latest draft · Print workflow"
+    assert_selector ".presentation-print-slides > .slide-frame", count: 2
+    assert_selector ".presentation-print.work-theme-light.work-typography-book"
+    assert_selector ".presentation-print .slide h1", text: "Latest draft"
+    page.execute_script("window.print = () => { window.printWasRequested = true }")
+    click_on "Print / Save PDF"
+    assert_equal true, page.evaluate_script("window.printWasRequested")
+
+    visit print_presentation_path(presentation, version: "published")
+    assert_text "Published release · Print workflow"
+    assert_selector ".presentation-print.work-theme-dark.work-typography-technical"
+    assert_selector ".presentation-print .slide h1", text: "Published one"
+    assert_selector ".presentation-print img.presentation-media-contain[src='/presentations/#{presentation.id}/assets/#{media_digest}']"
+    assert_selector ".presentation-print-slides > .slide-frame", count: 2
+
+    browser = page.driver.browser
+    begin
+      browser.execute_cdp("Emulation.setEmulatedMedia", media: "print")
+      dimensions = page.evaluate_script(<<~JAVASCRIPT)
+        (() => {
+          const frame = document.querySelector('.presentation-print-slides > .slide-frame');
+          const slide = frame.querySelector('.slide');
+          return { frameWidth: frame.getBoundingClientRect().width, frameHeight: frame.getBoundingClientRect().height,
+            slideWidth: slide.getBoundingClientRect().width, slideHeight: slide.getBoundingClientRect().height,
+            pageBreak: getComputedStyle(frame).breakAfter };
+        })()
+      JAVASCRIPT
+      assert_in_delta 1280, dimensions["frameWidth"], 2
+      assert_in_delta 720, dimensions["frameHeight"], 2
+      assert_in_delta 1280, dimensions["slideWidth"], 2
+      assert_in_delta 720, dimensions["slideHeight"], 2
+      assert_equal "page", dimensions["pageBreak"]
+
+      printed_pdf = browser.execute_cdp("Page.printToPDF", printBackground: true, preferCSSPageSize: true)
+      pdf_bytes = Base64.decode64(printed_pdf.fetch("data"))
+      assert pdf_bytes.start_with?("%PDF-")
+      assert_operator pdf_bytes.bytesize, :>, 1_000
+      assert_equal 2, pdf_bytes.scan(%r{/Type\s*/Page\b}).length, "PDF should contain one page for each published slide"
+      assert_match %r{/Subtype\s*/Image\b}, pdf_bytes, "PDF should contain the slide image media"
+    ensure
+      browser.execute_cdp("Emulation.setEmulatedMedia", media: "screen")
+    end
+    assert page.evaluate_script("window.matchMedia('screen').matches"), "print emulation should not leak into later system tests"
+  end
+
+  test "media can be pasted or dropped onto the preview" do
+    presentation = Presentation.create!(title: "Media gestures", source: "# Media gestures")
+    visit edit_presentation_path(presentation)
+    png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+i9MwAAAAASUVORK5CYII="
+    page.execute_script(<<~JAVASCRIPT)
+      const transfer = new DataTransfer();
+      const bytes = Uint8Array.from(atob("#{png}"), character => character.charCodeAt(0));
+      transfer.items.add(new File([bytes], "pasted.png", { type: "image/png" }));
+      document.querySelector("form.visual-editor-form").dispatchEvent(new ClipboardEvent("paste", {
+        bubbles: true, cancelable: true, clipboardData: transfer
+      }));
+    JAVASCRIPT
+    assert_selector ".media-upload-status", text: /pasted.*added to the Markdown source/i, wait: 8
+
+    drag_result = page.execute_script(<<~JAVASCRIPT)
+      const transfer = new DataTransfer();
+      const bytes = Uint8Array.from(atob("#{png}"), character => character.charCodeAt(0));
+      transfer.items.add(new File([bytes], "dropped.png", { type: "image/png" }));
+      const preview = document.querySelector(".preview-pane");
+      const dragover = new DragEvent("dragover", { bubbles: true, cancelable: true, dataTransfer: transfer });
+      const drop = new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer: transfer });
+      preview.dispatchEvent(dragover);
+      preview.dispatchEvent(drop);
+      return { files: drop.dataTransfer.files.length, types: [...drop.dataTransfer.types], status: document.querySelector(".media-upload-status").textContent,
+        dragoverTypes: [...dragover.dataTransfer.types], dragoverPrevented: dragover.defaultPrevented, dropPrevented: drop.defaultPrevented,
+        action: preview.getAttribute("data-action"),
+        hasController: Boolean(window.Stimulus.getControllerForElementAndIdentifier(document.querySelector("form.visual-editor-form"), "media")) };
+    JAVASCRIPT
+    assert_equal 1, drag_result["files"]
+    assert_includes drag_result["types"], "Files"
+    assert drag_result["hasController"], drag_result.inspect
+    assert drag_result["dragoverPrevented"], drag_result.inspect
+    assert drag_result["dropPrevented"]
+    assert_equal "Uploading dropped.png…", drag_result["status"]
+    assert_selector ".media-upload-status", text: /dropped.*added to the Markdown source/i, wait: 8
+    assert_selector ".editor-projection .presentation-media-contain", count: 2, wait: 8
+    assert_equal 2, presentation.reload.assets.count
   end
 
   test "failed autosave can be retried and validation errors preserve saved source" do
@@ -1032,7 +1201,7 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_current_path %r{/presentations/\d+/edit}
     assert_text "Presentation saved."
     assert_field "Markdown source", with: normalized_source
-    assert_selector ".slide", count: 2
+    assert_selector ".editor-projection .slide", count: 2
 
     click_on "Library"
     click_on "System Deck"

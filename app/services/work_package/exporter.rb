@@ -116,6 +116,7 @@ module WorkPackage
         "content_type" => blob.content_type,
         "byte_size" => blob.byte_size,
         "checksum" => blob.checksum,
+        "sha256" => Presentations::MediaAssets.digest(blob),
         "path" => "assets/#{blob.key}-#{sanitize_filename(blob.filename.to_s)}"
       }
     end

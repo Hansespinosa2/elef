@@ -28,6 +28,10 @@ module WorkPreview
     raise ArgumentError, "Markdown source must be plain text" unless source.is_a?(String)
 
     preview_work = work.class.new(title: title, source: source, work_type: work.work_type, workspace: work.workspace || Workspace.default)
+    if work.persisted?
+      preview_work.id = work.id
+      preview_work.assets = work.assets.blobs if work.assets.attached?
+    end
     preview_work.theme = attributes[:theme] if attributes.key?(:theme)
     preview_work.typography = attributes[:typography] if attributes.key?(:typography)
 
@@ -56,7 +60,9 @@ module WorkPreview
           locals: { work: preview_work, editable: true, editor_map: editor_map }
         )
       else
-        Presentations::RenderCache.fetch(source: source, settings: settings, asset_manifest: []) do
+        settings["asset_owner_id"] = work.id if work.persisted?
+        asset_manifest = work.persisted? ? PresentationRelease.asset_manifest_for(work) : []
+        Presentations::RenderCache.fetch(source: source, settings: settings, asset_manifest: asset_manifest) do
           render_to_string(
             partial: "works/preview",
             formats: [:html],

@@ -615,6 +615,47 @@ body.elef-app {
   margin: 0;
 }
 
+.slide-overview { border-top: 1px solid var(--oradia-line); margin: 1rem 0; padding-top: 1rem; }
+.slide-overview-heading-row { align-items: flex-start; display: flex; flex-wrap: wrap; gap: 0.75rem; justify-content: space-between; }
+.slide-overview-heading-row h3 { font-size: 1.2rem; margin: 0; }
+.slide-overview-heading-row p { color: var(--oradia-muted); font-size: 0.78rem; margin: 0.15rem 0 0; }
+.slide-overview-actions { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.slide-overview-actions button,
+.media-editor-controls button { background: var(--oradia-slate-800); border: 1px solid var(--oradia-slate-700); border-radius: 0.5rem; color: var(--oradia-ink); cursor: pointer; font: inherit; font-size: 0.78rem; font-weight: 700; min-height: 2.3rem; padding: 0.4rem 0.65rem; }
+.slide-overview-actions button:hover,
+.media-editor-controls button:hover { border-color: var(--oradia-green); }
+.slide-overview-actions button:disabled,
+.media-editor-controls button:disabled { cursor: not-allowed; opacity: 0.45; }
+.slide-overview-grid { display: grid; gap: 0.65rem; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); margin-top: 0.75rem; max-height: min(34vh, 22rem); overflow: auto; padding: 0.25rem; }
+.slide-overview-card { background: var(--oradia-slate-950); border: 1px solid var(--oradia-slate-700); border-radius: 0.65rem; color: var(--oradia-ink); cursor: pointer; min-width: 0; padding: 0.35rem; text-align: left; }
+.slide-overview-card:hover,
+.slide-overview-card:focus-visible { border-color: var(--oradia-green); outline: 2px solid var(--oradia-green); outline-offset: 1px; }
+.slide-overview-card[aria-current="true"] { border-color: var(--oradia-green); box-shadow: 0 0 0 2px var(--oradia-green); }
+.slide-overview-thumbnail { aspect-ratio: 16 / 9; background: var(--oradia-slate-900); border-radius: 0.35rem; display: block; overflow: hidden; position: relative; }
+.slide-overview-thumbnail > .slide-frame { width: 100%; }
+.slide-overview-thumbnail .slide { border-radius: 0; box-shadow: none; }
+.slide-overview-thumbnail .slide :is(h1, h2, h3, h4, h5, h6) { font-size: 7rem; }
+.slide-overview-thumbnail video { pointer-events: none; }
+.slide-overview-label { display: block; font-size: 0.72rem; margin-top: 0.3rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.slide-overview-card .is-overflowing::after { background: #8c352b; border-radius: 0 0 0 0.35rem; color: white; content: "Overflow"; font: 700 10px/1.2 var(--oradia-sans); padding: 0.2rem 0.35rem; position: absolute; right: 0; top: 0; z-index: 2; }
+.slide-overflow-warnings { background: #493a18; border: 1px solid #94752d; border-radius: 0.65rem; color: #f5d982; margin-top: 0.75rem; padding: 0.65rem 0.8rem; }
+.slide-overflow-warnings h4 { font-size: 0.85rem; margin: 0 0 0.25rem; }
+.slide-overflow-warnings ul { font-size: 0.78rem; margin: 0; padding-left: 1.2rem; }
+.slide-frame.is-overflowing > .slide { outline: 5px solid #c24738; outline-offset: -5px; }
+.slide.is-overflowing::after { background: #8c352b; color: white; content: "Overflow"; font: 700 1rem/1 var(--oradia-sans); padding: 0.5rem 0.75rem; position: absolute; right: 1rem; top: 1rem; z-index: 5; }
+.presentation-media { display: block; max-height: 70%; max-width: 100%; }
+.presentation-media-contain { object-fit: contain; }
+.presentation-media-cover { height: 100%; object-fit: cover; width: 100%; }
+.media-editor-controls { align-items: center; display: flex; }
+.media-fit-control { align-items: center; color: var(--oradia-muted); display: inline-flex; font-size: 0.78rem; gap: 0.35rem; }
+.media-fit-control select { background: var(--oradia-slate-800); border: 1px solid var(--oradia-slate-700); border-radius: 0.45rem; color: var(--oradia-ink); padding: 0.45rem; }
+.media-upload-status { color: var(--oradia-muted); font-size: 0.78rem; }
+.preview-pane.is-media-drop-target { outline: 3px dashed var(--oradia-green); outline-offset: -0.5rem; }
+.presentation-print { background: #11161a; color: white; min-height: 100vh; }
+.presentation-print-toolbar { align-items: center; display: flex; gap: 0.75rem; justify-content: center; padding: 1rem; }
+.presentation-print-toolbar .button { background: var(--oradia-slate-800); border: 1px solid var(--oradia-slate-700); border-radius: 0.55rem; color: var(--oradia-ink); cursor: pointer; font: inherit; font-weight: 700; min-height: 2.5rem; padding: 0.5rem 0.8rem; text-decoration: none; }
+.presentation-print-toolbar .button.primary { background: #6d4aff; border-color: #6d4aff; color: white; }
+
 .presentation-body *,
 .presentation-body *::before,
 .presentation-body *::after {
@@ -831,6 +872,21 @@ body.elef-app {
   .document-page { border: 0; border-radius: 0; box-shadow: none; break-after: page; height: auto; min-height: 0; overflow: visible; width: 100%; }
   .document-page:last-child { break-after: auto; }
   .document-page-content { overflow: visible; }
+}
+
+.presentation-print { page: presentation; }
+@page presentation { size: 13.333in 7.5in; margin: 0; }
+@media print {
+  html:has(.presentation-print), body.presentation-body:has(.presentation-print) { background: white !important; margin: 0 !important; padding: 0 !important; }
+  .presentation-print { background: white !important; color-adjust: exact; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .presentation-print-toolbar { display: none !important; }
+  .presentation-print-slides { display: block; gap: 0; }
+  .presentation-print-slides > .slide-frame { aspect-ratio: auto; break-after: page; height: 7.5in; overflow: hidden; page-break-after: always; width: 13.333in; }
+  .presentation-print-slides > .slide-frame:last-child { break-after: auto; page-break-after: auto; }
+  .presentation-print .slide { border: 0; border-radius: 0; box-shadow: none; height: 7.5in; padding: 5rem; transform: none; width: 13.333in; }
+  .presentation-print .slide-frame.is-overflowing > .slide { outline: none; }
+  .presentation-print .slide.is-overflowing::after { display: none; }
+  .presentation-print video::-webkit-media-controls { display: none !important; }
 }
 .document-link-option { background: transparent; border: 0; border-bottom: 1px solid var(--oradia-line); color: var(--oradia-ink); display: block; padding: 0.55rem 0.75rem; text-align: left; width: 100%; }
 .document-link-option:last-child { border-bottom: 0; }

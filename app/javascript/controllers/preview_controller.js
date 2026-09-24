@@ -150,6 +150,7 @@ export default class extends Controller {
     this.containerTarget.scrollLeft = scrollLeft
     this.containerTarget.scrollTop = scrollTop
     this.element.dispatchEvent(new CustomEvent("elef:preview-updated", { bubbles: true, detail: { payload, response } }))
+    this.containerTarget.dispatchEvent(new CustomEvent("preview:updated", { bubbles: true }))
     this.hideRetry()
     this.setStatus("")
   }

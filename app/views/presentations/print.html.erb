@@ -1,0 +1,15 @@
+<% content_for :title, "Print #{@presentation.title}" %>
+<main class="presentation-print presentation-surface work-theme-<%= @presentation.theme %> work-typography-<%= @presentation.typography %> slides-theme-<%= @presentation.theme %> slides-typography-<%= @presentation.typography %>" data-controller="print-view">
+  <div class="presentation-print-toolbar" aria-label="Print controls">
+    <%= link_to "Back to editor", edit_presentation_path(@presentation), class: "button" %>
+    <button type="button" class="button primary" data-action="print-view#print">Print / Save PDF</button>
+    <span><%= @release ? "Published release" : "Latest draft" %> · <%= @presentation.title %></span>
+  </div>
+  <div class="slides presentation-print-slides">
+    <% @presentation.slides.each do |slide| %>
+      <div class="slide-frame" data-controller="presentation-canvas">
+        <%= render "slide", slide: slide, presentation: @presentation, margin_settings: @presentation.document.margin_settings %>
+      </div>
+    <% end %>
+  </div>
+</main>

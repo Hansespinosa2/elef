@@ -1,4 +1,5 @@
 require "test_helper"
+require "tempfile"
 
 class PresentationsControllerTest < ActionDispatch::IntegrationTest
   test "library rename form submits scoped parameters" do
@@ -122,10 +123,90 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_select '[data-editor-target="mode"]', text: "Standard"
     assert_select '[data-editor-target="vimToggle"]'
     assert_select 'button[data-dirty-navigation]', text: "Present"
+    assert_select "a[href='#{print_presentation_path(presentations(:one))}']", text: "Print draft / save PDF"
     get new_presentation_path
     assert_select 'form[data-controller~="autosave"][data-autosave-save-enabled-value="false"]'
     assert_select 'form[data-controller~="preview"]'
     assert_select 'form[data-preview-url-value="/presentations/preview"]'
+    assert_select 'form[data-controller~="slide-overview"][data-controller~="media"]'
+    assert_select '[data-slide-overview-target="grid"][role="group"]'
+    assert_select '.preview-pane[data-action="dragover->media#dragOver dragleave->media#dragLeave drop->media#drop"]'
+    assert_select 'button[data-action="media#choose"]', text: "Add image or MP4"
+  end
+
+  test "uploads image assets with content digest references and rejects other files" do
+    presentation = Presentation.create!(title: "Media upload", source: "# Media")
+    bytes = Base64.decode64("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+i9MwAAAAASUVORK5CYII=")
+    Tempfile.create(["pixel", ".png"]) do |file|
+      file.binmode
+      file.write(bytes)
+      file.rewind
+      upload = Rack::Test::UploadedFile.new(file.path, "image/png")
+      post upload_asset_presentation_path(presentation), params: { file: upload, fit: "cover", alt: "Pixel" }, headers: { "Accept" => "application/json" }
+    end
+
+    assert_response :created
+    digest = Digest::SHA256.hexdigest(bytes)
+    assert_equal digest, response.parsed_body["digest"]
+    assert_equal "![Pixel](elef-asset:#{digest} \"fit:cover\")", response.parsed_body["source"]
+    blob = presentation.assets.blobs.last
+    assert_equal digest, blob.metadata["elef_sha256"]
+
+    presentation.reload.update!(source: "# Pixel\n\n#{response.parsed_body["source"]}")
+    get presentation_path(presentation)
+    assert_response :success
+    assert_select ".presentation-media-cover[src='/presentations/#{presentation.id}/assets/#{digest}'][alt='Pixel']"
+
+    get media_asset_presentation_path(presentation, digest)
+    assert_response :redirect
+    assert_includes response.location, "/rails/active_storage/blobs/redirect/"
+
+    video_bytes = "mp4 test bytes".b
+    Tempfile.create(["clip", ".mp4"]) do |file|
+      file.binmode
+      file.write(video_bytes)
+      file.rewind
+      video = Rack::Test::UploadedFile.new(file.path, "video/mp4")
+      post upload_asset_presentation_path(presentation), params: { file: video, fit: "contain", alt: "Clip" }, headers: { "Accept" => "application/json" }
+    end
+    assert_response :created
+    video_digest = response.parsed_body["digest"]
+    video_source = response.parsed_body["source"]
+    assert_equal Digest::SHA256.hexdigest(video_bytes), video_digest
+    assert_equal "![Clip](elef-asset:#{video_digest} \"fit:contain\")", video_source
+
+    presentation.reload.update!(source: "# Media\n\n#{response.parsed_body["source"]}")
+    get presentation_path(presentation)
+    assert_select "video.presentation-media-contain[src='/presentations/#{presentation.id}/assets/#{video_digest}'][controls][playsinline]"
+    post publish_presentation_path(presentation)
+    get present_presentation_path(presentation)
+    assert_select ".presentation-slide video[src='/presentations/#{presentation.id}/assets/#{video_digest}'][controls]"
+
+    Tempfile.create(["notes", ".txt"]) do |file|
+      file.write("not media")
+      file.rewind
+      invalid = Rack::Test::UploadedFile.new(file.path, "text/plain")
+      post upload_asset_presentation_path(presentation), params: { file: invalid }, headers: { "Accept" => "application/json" }
+    end
+    assert_response :unprocessable_content
+    assert_equal "Choose an image or MP4 video.", response.parsed_body["error"]
+  end
+
+  test "print view selects the latest draft or published release" do
+    presentation = Presentation.create!(title: "Print selection", source: "# Published version")
+    post publish_presentation_path(presentation)
+    patch presentation_path(presentation), params: { presentation: { source: "# Latest draft" } }
+
+    get print_presentation_path(presentation)
+    assert_response :success
+    assert_select ".presentation-print-toolbar", text: /Latest draft/
+    assert_select ".presentation-print .slide h1", text: "Latest draft"
+
+    get print_presentation_path(presentation, version: "published")
+    assert_response :success
+    assert_select ".presentation-print-toolbar", text: /Published release/
+    assert_select ".presentation-print .slide h1", text: "Published version"
+    assert_select ".presentation-print .slide h1", text: "Latest draft", count: 0
   end
 
   test "previews an unsaved presentation without creating a record" do

@@ -1,10 +1,17 @@
 module PresentationsHelper
-  def render_markdown(markdown)
-    Presentations::MarkdownRenderer.render(markdown)
+  def render_markdown(markdown, work: @presentation)
+    return Presentations::MarkdownRenderer.render(markdown) unless work&.id && markdown.to_s.match?(/elef-asset:[0-9a-f]{64}/)
+
+    assets = (@presentation_media_assets ||= {})[work.id] ||= Presentations::MediaAssets.index(work)
+    resolver = lambda do |digest|
+      blob = assets[digest]
+      blob && ["/presentations/#{work.id}/assets/#{digest}", blob.content_type]
+    end
+    Presentations::MarkdownRenderer.render(markdown, media_resolver: resolver)
   end
 
-  def render_editor_block(markdown, editor_block)
-    rendered = render_markdown(markdown)
+  def render_editor_block(markdown, editor_block, work: @presentation)
+    rendered = render_markdown(markdown, work: work)
     return rendered unless editor_block&.dig(:kind) == "image"
 
     alt = markdown.to_s.match(/\A\s*!\[([^\]]*)\]/)&.[](1).to_s

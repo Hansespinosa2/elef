@@ -16,6 +16,18 @@ class PresentationTest < ActiveSupport::TestCase
     assert_equal ["```yaml\n---\n```", "", ""], document.slides.map(&:markdown)
   end
 
+  test "maps source ranges around front matter, fenced separators, CRLF, and unicode" do
+    source = "---\r\ntitle: Café 😀\r\n---\r\n# One 😀\r\n```md\r\n---\r\n```\r\n---\r\n---"
+    ranges = Presentations::Document.slide_source_ranges(source)
+
+    assert_equal 3, ranges.length
+    assert_equal source.index("# One"), ranges.first[:start]
+    assert_equal source.index("---\r\n", source.index("```\r\n") + 4), ranges.first[:end]
+    assert_equal "# One 😀\r\n```md\r\n---\r\n```\r\n", source[ranges.first[:start]...ranges.first[:end]]
+    assert_equal "", source[ranges.second[:start]...ranges.second[:end]]
+    assert_equal "", source[ranges.last[:start]...ranges.last[:end]]
+  end
+
   test "keeps language-like and mixed fences inside a slide" do
     source = "# Code\n\n```\n```ruby\n---\n~~~\n---\n```\n\n---\n# Next"
     document = Presentations::Document.parse(source)
