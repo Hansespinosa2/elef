@@ -120,11 +120,19 @@ the worktree while the local Caddy router forwards it to that task's isolated
 container. Each agent gets a separate backend port internally; those ports are
 loopback-only and do not appear in the browser URL.
 
-Use `scripts/elef-agent stop editor-fix` to stop the task while preserving its
-worktree, then `scripts/elef-agent up editor-fix` to recreate its disposable
-container and start Rails again. Use `scripts/elef-agent status` to see
-container and HTTP readiness states. Stop or remove the task to unregister its
-route.
+Startup output is streamed as each container boots and saved with private
+permissions under `~/Library/Application Support/Elef/agent-router/logs/`.
+The default readiness timeout is five minutes; set
+`ELEF_AGENT_STARTUP_TIMEOUT=600` to allow up to ten minutes.
+On failure, the launcher prints backend and HTTPS status codes, the final
+container output and boot log, and keeps the stopped container for inspection.
+
+`start` creates a new task name. If a task already has a branch/worktree (for
+example, after its first startup failed), use `scripts/elef-agent up TASK` to
+restart Rails and `scripts/elef-agent resume TASK` to continue its Codex
+session. Use `scripts/elef-agent stop editor-fix` to stop a task while
+preserving its worktree. Use `scripts/elef-agent status` to see container and
+HTTP readiness states.
 
 ## Validation
 
