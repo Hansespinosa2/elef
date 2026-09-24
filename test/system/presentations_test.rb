@@ -55,11 +55,33 @@ class PresentationsTest < ApplicationSystemTestCase
     page.execute_script("window.autosaveRequests[0].release()")
     assert_selector '[data-autosave-target="status"]', text: "Saving…"
     dismiss_confirm { click_on "Library" }
+    assert_equal true, page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const form = document.querySelector('form[data-controller~="autosave"]');
+        return window.Stimulus.getControllerForElementAndIdentifier(form, "autosave").timer !== null;
+      })()
+    JAVASCRIPT
     assert_field "Markdown source", with: "# Latest edit"
     assert_includes presentation.reload.source, "# First edit"
     page.execute_script("window.autosaveRequests[1].release()")
     assert_selector '[data-autosave-target="status"]', exact_text: "Saved"
     assert_includes presentation.reload.source, "# Latest edit"
+    page.execute_script(<<~JAVASCRIPT)
+      document.querySelector(".source-field").editorController.dom.dispatchEvent(new FocusEvent("focusout"));
+    JAVASCRIPT
+    assert_nil page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const form = document.querySelector('form[data-controller~="autosave"]');
+        return window.Stimulus.getControllerForElementAndIdentifier(form, "autosave").timer;
+      })()
+    JAVASCRIPT
+    assert_equal 2, page.evaluate_script("window.autosaveRequests.length")
+    assert_equal false, page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const form = document.querySelector('form[data-controller~="dirty"]');
+        return window.Stimulus.getControllerForElementAndIdentifier(form, "dirty").dirty;
+      })()
+    JAVASCRIPT
     click_on "Library"
     assert_current_path root_path
   end
