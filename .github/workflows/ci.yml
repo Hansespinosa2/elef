@@ -5,6 +5,9 @@ on:
   push:
     branches: [ main ]
 
+permissions:
+  contents: read
+
 jobs:
   scan_ruby:
     runs-on: ubuntu-latest
@@ -93,3 +96,36 @@ jobs:
           name: screenshots
           path: ${{ github.workspace }}/tmp/screenshots
           if-no-files-found: ignore
+
+  publish-deployment-ref:
+    name: Authorize deployment after CI
+    if: github.event_name == 'push' && github.ref_name == 'main'
+    needs: [ scan_ruby, scan_js, test, system-test ]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout the tested commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: true
+
+      - name: Publish the CI-approved deployment ref
+        env:
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          case "$GITHUB_REF_NAME" in
+            dev|main) deployment_ref="refs/heads/elef-deploy-$GITHUB_REF_NAME" ;;
+            *) exit 0 ;;
+          esac
+
+          current_sha="$(git ls-remote --heads origin "refs/heads/$GITHUB_REF_NAME" | awk 'NR == 1 { print $1 }')"
+          if [[ "$current_sha" != "$GITHUB_SHA" ]]; then
+            echo "Skipping stale run for $GITHUB_SHA; $GITHUB_REF_NAME is now $current_sha"
+            exit 0
+          fi
+
+          git push --force origin "$GITHUB_SHA:$deployment_ref"
