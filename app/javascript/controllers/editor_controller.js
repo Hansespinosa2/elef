@@ -508,6 +508,7 @@ export default class extends Controller {
 
   applyCursorStyle() {
     this.surfaceTarget.dataset.modeAwareCursor = String(this.modeAwareCursor)
+    this.surfaceTarget.dataset.editorMode = this.element.dataset.editorMode || "standard"
   }
 
   readBoolean(key) {

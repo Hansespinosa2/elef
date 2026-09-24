@@ -108,10 +108,14 @@ class VimEditorTest < ApplicationSystemTestCase
     editor = find(".cm-content")
     editor.click
     page.execute_script("document.querySelector('.source-field').editorController.setSelectionRange(0, 0)")
-    editor.send_keys("i", "Alias", [:shift, :space])
+    editor.send_keys("i")
+    assert_equal "rgb(240, 213, 107)", page.evaluate_script("getComputedStyle(document.querySelector('.cm-cursor')).borderLeftColor")
+    editor.send_keys("Alias", [:shift, :space])
     assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal"
+    assert_equal "rgb(159, 197, 169)", page.evaluate_script("getComputedStyle(document.querySelector('.cm-cursor')).borderLeftColor")
     editor.send_keys("v", "l")
     assert_selector "[data-editor-target='mode'][data-mode='visual']", text: "Visual"
+    assert_equal "rgb(213, 180, 255)", page.evaluate_script("getComputedStyle(document.querySelector('.cm-cursor')).borderLeftColor")
     editor.send_keys([:shift, :space])
     assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal"
 
