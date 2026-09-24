@@ -61,12 +61,11 @@ class VimEditorTest < ApplicationSystemTestCase
 
     find("summary", text: "Vim settings").click
     find("[data-editor-target='vimToggle']").check
-    select "Enter Insert mode", from: "Shift+Space in Normal mode"
     visit edit_document_path(document)
 
     find("summary", text: "Vim settings").click
     assert_selector "[data-editor-target='vimToggle']:checked"
-    assert_equal "insert", find("[data-editor-target='mapping']").value
+    assert_no_selector "[data-editor-target='mapping']"
     assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal"
   end
 
@@ -151,21 +150,6 @@ class VimEditorTest < ApplicationSystemTestCase
       assert_equal styles["metadata"][property], styles["strong"][property]
     end
     assert_nil styles["fenced"]
-  end
-
-  test "configured Shift+Space enters Insert mode" do
-    document = Document.create!(title: "Vim mapping", source: "# Mapping")
-    visit edit_document_path(document)
-
-    find("summary", text: "Vim settings").click
-    find("[data-editor-target='vimToggle']").check
-    select "Enter Insert mode", from: "Shift+Space in Normal mode"
-    find("summary", text: "Vim settings").click
-
-    editor = find(".cm-content")
-    editor.click
-    editor.send_keys([:shift, :space])
-    assert_selector "[data-editor-target='mode'][data-mode='insert']", text: "Insert"
   end
 
   test "Vim edits update a presentation preview and autosave" do

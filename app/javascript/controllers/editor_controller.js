@@ -8,7 +8,6 @@ import { tags } from "@lezer/highlight"
 import { Vim, getCM, vim } from "@replit/codemirror-vim"
 
 const ENABLED_STORAGE_KEY = "elef.editor.vim.enabled"
-const MAPPING_STORAGE_KEY = "elef.editor.vim.normalMapping"
 const ESCAPE_ALIAS_STORAGE_KEY = "elef.editor.vim.escapeAlias"
 const LINE_NUMBERS_STORAGE_KEY = "elef.editor.lineNumbers"
 const MODE_AWARE_CURSOR_STORAGE_KEY = "elef.editor.vim.modeAwareCursor"
@@ -56,14 +55,13 @@ const theme = EditorView.theme({
 }, { dark: true })
 
 export default class extends Controller {
-  static targets = ["surface", "input", "mode", "command", "vimToggle", "mapping", "escapeAlias", "lineNumbers", "modeAwareCursor"]
+  static targets = ["surface", "input", "mode", "command", "vimToggle", "escapeAlias", "lineNumbers", "modeAwareCursor"]
 
   connect() {
     this.editorController = this
     this.element.editorController = this
     this.destroyed = false
     this.vimEnabled = this.readBoolean(ENABLED_STORAGE_KEY)
-    this.mapping = this.readMapping()
     this.escapeAlias = this.readEscapeAlias()
     this.lineNumberMode = this.readLineNumberMode()
     this.modeAwareCursor = this.readBoolean(MODE_AWARE_CURSOR_STORAGE_KEY)
@@ -104,7 +102,6 @@ export default class extends Controller {
     this.form?.addEventListener("submit", this.handleSubmit = () => this.syncInput())
 
     this.vimToggleTarget.checked = this.vimEnabled
-    this.mappingTarget.value = this.mapping
     this.escapeAliasTarget.value = this.escapeAlias
     this.lineNumbersTarget.value = this.lineNumberMode
     this.modeAwareCursorTarget.checked = this.modeAwareCursor
@@ -145,13 +142,6 @@ export default class extends Controller {
       this.updateMode()
       this.view.focus()
     }, 0)
-  }
-
-  mappingChanged(event) {
-    this.mapping = this.normalizeMapping(event.target.value)
-    this.writeValue(MAPPING_STORAGE_KEY, this.mapping)
-    this.applyMapping()
-    this.updateMode()
   }
 
   escapeAliasChanged(event) {
@@ -347,15 +337,10 @@ export default class extends Controller {
     try {
       Vim.unmap(SHIFT_SPACE, "normal")
       Vim.unmap(SHIFT_SPACE, "insert")
-      if (this.mapping === "insert") Vim.map(SHIFT_SPACE, "i", "normal")
       if (this.escapeAlias === "shift-space") Vim.map(SHIFT_SPACE, "<Esc>", "insert")
     } catch (_error) {
       // A browser without the optional Vim engine should still have a usable editor.
     }
-  }
-
-  readMapping() {
-    return this.normalizeMapping(this.readValue(MAPPING_STORAGE_KEY) || "standard")
   }
 
   readEscapeAlias() {
@@ -364,10 +349,6 @@ export default class extends Controller {
 
   readLineNumberMode() {
     return this.normalizeLineNumberMode(this.readValue(LINE_NUMBERS_STORAGE_KEY) || "absolute")
-  }
-
-  normalizeMapping(value) {
-    return ["standard", "insert", "disabled"].includes(value) ? value : "standard"
   }
 
   normalizeEscapeAlias(value) {
