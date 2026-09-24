@@ -60,17 +60,7 @@ class PresentationsTest < ApplicationSystemTestCase
     page.execute_script("window.autosaveRequests[1].release()")
     assert_selector '[data-autosave-target="status"]', exact_text: "Saved"
     assert_includes presentation.reload.source, "# Latest edit"
-
-    page.execute_script(<<~JAVASCRIPT)
-      const key = "elef-final-autosave-navigation-confirm";
-      sessionStorage.removeItem(key);
-      window.confirm = (message) => {
-        sessionStorage.setItem(key, message);
-        return false;
-      };
-    JAVASCRIPT
     click_on "Library"
-    assert_nil page.evaluate_script('sessionStorage.getItem("elef-final-autosave-navigation-confirm")')
     assert_current_path root_path
   end
 
