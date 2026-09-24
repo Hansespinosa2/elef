@@ -118,6 +118,36 @@ class VimEditorTest < ApplicationSystemTestCase
     assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal"
   end
 
+  test "loads saved Normal-mode mappings after the setting is removed" do
+    document = Document.create!(title: "Legacy Vim mapping", source: "# One two")
+    visit edit_document_path(document)
+    page.execute_script(<<~JAVASCRIPT)
+      localStorage.clear();
+      localStorage.setItem("elef.editor.vim.enabled", "true");
+      localStorage.setItem("elef.editor.vim.normalMapping", "insert");
+    JAVASCRIPT
+    page.refresh
+
+    find("summary", text: "Vim settings").click
+    assert_no_selector "[data-editor-target='mapping']"
+    find("summary", text: "Vim settings").click
+    editor = find(".cm-content")
+    editor.click
+    editor.send_keys([:shift, :space])
+    assert_selector "[data-editor-target='mode'][data-mode='insert']", text: "Insert"
+    editor.send_keys(:escape)
+    assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal"
+
+    %w[disabled standard].each do |mapping|
+      page.execute_script("localStorage.setItem('elef.editor.vim.normalMapping', '#{mapping}')")
+      page.refresh
+      find(".cm-content").click.send_keys([:shift, :space])
+      assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal"
+    end
+  ensure
+    page.execute_script("localStorage.clear()")
+  end
+
   test "customizes Vim Escape, line numbers, cursor styling, and persists" do
     document = Document.create!(title: "Expanded Vim settings", source: "# Settings\nSecond\nThird\nFourth")
     visit edit_document_path(document)
@@ -167,6 +197,10 @@ class VimEditorTest < ApplicationSystemTestCase
     assert_equal "rgb(196, 214, 202)", page.evaluate_script("getComputedStyle(document.querySelector('.cm-cursor')).borderLeftColor")
     editor.send_keys([:shift, :space])
     assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal"
+    source_before_normal_escape = find_field("Markdown source").value
+    editor.send_keys("d", [:shift, :space], "w")
+    assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal"
+    assert_equal source_before_normal_escape, find_field("Markdown source").value
 
     visit edit_document_path(document)
     find("summary", text: "Vim settings").click
