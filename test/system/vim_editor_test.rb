@@ -86,6 +86,7 @@ class VimEditorTest < ApplicationSystemTestCase
     assert_operator selection["to"], :>, selection["from"]
     assert_operator selection["width"], :>, 0
     editor.send_keys("h")
+    page.evaluate_async_script("window.requestAnimationFrame(() => arguments[0]())")
     extended_selection = page.evaluate_script(<<~JAVASCRIPT)
       (() => {
         const editor = document.querySelector('.source-field').editorController

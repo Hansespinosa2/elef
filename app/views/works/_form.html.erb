@@ -2,11 +2,15 @@
 <% type_label = work_type_label(work) %>
 <% controllers = %w[dirty preview autosave] %>
 <% controllers << "document-scroll-sync" if work.document? %>
+<% controllers.concat(%w[slide-overview media]) if work.presentation? %>
 <% actions = ["submit->dirty#allowSubmit", "input->dirty#markDirty"] %>
 <% actions += ["input->preview#schedule", "change->preview#schedule"] %>
 <% actions += ["submit->autosave#submit", "input->autosave#schedule", "change->autosave#schedule", "autosave:saving->dirty#markSaving", "autosave:saved->dirty#markSaved"] %>
+<% actions += ["input->slide-overview#sourceChanged", "change->slide-overview#sourceChanged", "preview:updated->slide-overview#previewUpdated", "paste->media#paste"] if work.presentation? %>
 <% form_data = { controller: controllers.join(" "), action: actions.join(" "), dirty_unsaved_message_value: "You have unsaved #{type_label.downcase} changes. Leave without saving?" } %>
 <% form_data[:preview_url_value] = persisted ? work_preview_path(work) : work_preview_collection_path(work) %>
+<% form_data[:media_upload_url_value] = persisted && work.presentation? ? upload_asset_presentation_path(work) : "" if work.presentation? %>
+<% form_data[:media_enabled_value] = persisted if work.presentation? %>
 <% if persisted %>
   <% form_data[:autosave_work_id_value] = work.id %>
   <% form_data[:autosave_work_kind_value] = work.kind %>
@@ -44,7 +48,7 @@
       <%= form.text_field :title, class: "w-full rounded-xl border border-[#ddd5c8] bg-white p-3 text-[#1e1c18] outline-none focus:border-[#6d4aff] focus:ring-2 focus:ring-[#6d4aff]/20", data: { dirty_target: "field", autosave_target: "field", action: "input->dirty#markDirty" }, autocomplete: "off" %>
     </div>
 
-    <div class="field source-field relative mb-4" data-controller="editor snippet-palette math-shorthand math-shortcut-palette<%= " document-link-palette" if work.document? %>" data-snippet-palette-snippets-value="<%= json_escape(Snippets::Catalog.for_editor.to_json) %>" data-math-shortcut-palette-shortcuts-value="<%= json_escape(MathShortcuts::Catalog.for_editor(workspace: work.workspace || Workspace.default).to_json) %>" data-math-shortcut-palette-katex-url-value="<%= asset_path("katex.js") %>"<% if work.document? %> data-document-link-palette-titles-value="<%= ERB::Util.html_escape(document_link_titles(workspace: work.workspace).to_json) %>"<% end %>>
+    <div class="field source-field relative mb-4" data-controller="editor snippet-palette math-shorthand math-shortcut-palette<%= " document-link-palette" if work.document? %>" data-editor-initial-source-value="<%= ERB::Util.html_escape(work.source.to_s.to_json) %>" data-snippet-palette-snippets-value="<%= json_escape(Snippets::Catalog.for_editor.to_json) %>" data-math-shortcut-palette-shortcuts-value="<%= json_escape(MathShortcuts::Catalog.for_editor(workspace: work.workspace || Workspace.default).to_json) %>" data-math-shortcut-palette-katex-url-value="<%= asset_path("katex.js") %>"<% if work.document? %> data-document-link-palette-titles-value="<%= ERB::Util.html_escape(document_link_titles(workspace: work.workspace).to_json) %>"<% end %>>
       <% source_id = form.field_id(:source) %>
       <% editor_id = "#{source_id}_editor" %>
       <%= form.label :source, "Markdown source", for: source_id, id: "#{editor_id}_label", class: "mb-1 block font-extrabold" %>
@@ -80,6 +84,20 @@
           </div>
         </details>
       </div>
+      <% if work.presentation? %>
+        <div class="media-editor-controls mb-3 flex flex-wrap items-center gap-2" aria-label="Media controls">
+          <button type="button" class="button secondary" data-action="media#choose" <%= "disabled" unless persisted %>>Add image or MP4</button>
+          <label class="media-fit-control">Fit
+            <select data-media-target="fit">
+              <option value="contain">Contain</option>
+              <option value="cover">Cover</option>
+            </select>
+          </label>
+          <input type="file" accept="image/*,video/mp4" hidden data-media-target="input" data-action="change->media#selected">
+          <span class="media-upload-status" data-media-target="status" role="status" aria-live="polite"></span>
+          <% unless persisted %><span class="field-hint">Save the presentation once to attach media.</span><% end %>
+        </div>
+      <% end %>
       <div id="<%= editor_id %>" class="editor-surface" aria-labelledby="<%= editor_id %>_label" data-editor-target="surface" data-snippet-palette-target="editor" data-math-shorthand-target="editor" data-math-shortcut-palette-target="editor"></div>
       <%= form.text_area :source, rows: 24, id: source_id, class: "editor-input-proxy", spellcheck: "false", tabindex: "-1", aria: { label: "Markdown source" }, data: editor_data %>
       <div id="<%= editor_id %>_snippet_palette" class="snippet-palette" data-snippet-palette-target="palette" hidden role="listbox" aria-label="Snippet suggestions"></div>
@@ -126,11 +144,33 @@
     </div>
   </section>
 
-  <aside class="preview-pane rounded-2xl border border-[#ddd5c8] bg-[#fffdf8] p-4" aria-label="<%= work.document? ? "Rendered document preview" : "Rendered slide preview" %>"<%= ' data-document-scroll-sync-target="preview"' if work.document? %>>
+  <aside class="preview-pane rounded-2xl border border-[#ddd5c8] bg-[#fffdf8] p-4" aria-label="<%= work.document? ? "Rendered document preview" : "Rendered slide preview" %>" <%= tag.attributes(data: { document_scroll_sync_target: ("preview" if work.document?), action: ("dragover->media#dragOver dragleave->media#dragLeave drop->media#drop" if work.presentation?) }) %>>
     <div class="preview-heading">
       <h2>Live preview</h2>
       <p><%= work.document? ? "Continuous Markdown preview updates as you write." : "Markdown is split into slides for this presentation." %></p>
     </div>
+    <% if work.presentation? %>
+      <section class="slide-overview" aria-labelledby="slide-overview-heading">
+        <div class="slide-overview-heading-row">
+          <div>
+            <h3 id="slide-overview-heading">Slide overview</h3>
+            <p data-slide-overview-target="count" aria-live="polite"><%= pluralize(work.slides.length, "slide") %></p>
+          </div>
+          <div class="slide-overview-actions" aria-label="Slide actions">
+            <button type="button" data-action="slide-overview#add" aria-label="Add slide after selected">Add</button>
+            <button type="button" data-action="slide-overview#duplicate" aria-label="Duplicate selected slide">Duplicate</button>
+            <button type="button" data-action="slide-overview#delete" aria-label="Delete selected slide">Delete</button>
+            <button type="button" data-action="slide-overview#moveUp" aria-label="Move selected slide earlier">↑</button>
+            <button type="button" data-action="slide-overview#moveDown" aria-label="Move selected slide later">↓</button>
+          </div>
+        </div>
+        <div class="slide-overview-grid" data-slide-overview-target="grid" role="group" aria-label="Slides"></div>
+        <section class="slide-overflow-warnings" data-slide-overview-target="warnings" aria-label="Slide overflow warnings" role="status" hidden>
+          <h4>Overflow warnings</h4>
+          <ul></ul>
+        </section>
+      </section>
+    <% end %>
     <%= render "works/warnings", warnings: work.preview_warnings %>
     <div data-preview-target="container">
       <%= render "works/preview", work: work %>

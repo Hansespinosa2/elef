@@ -59,6 +59,7 @@ export default class extends Controller {
       this.containerTarget.innerHTML = payload.html
       this.containerTarget.scrollLeft = scrollLeft
       this.containerTarget.scrollTop = scrollTop
+      this.containerTarget.dispatchEvent(new CustomEvent("preview:updated", { bubbles: true }))
       this.setStatus("")
     } catch (error) {
       if (error.name === "AbortError") return

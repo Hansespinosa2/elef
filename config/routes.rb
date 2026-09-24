@@ -16,6 +16,9 @@ Rails.application.routes.draw do
     end
     member do
       get :present
+      get :print
+      post :upload_asset, path: "assets"
+      get "assets/:digest", action: :media_asset, as: :media_asset
       post :publish
       post :restore
       get :history

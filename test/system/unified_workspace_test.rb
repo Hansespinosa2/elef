@@ -50,6 +50,14 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
       assert_selector ".math-shortcut-example-arrow", count: 2
       assert_selector ".math-shortcut-preview-render .katex-html", text: "γ", wait: 5
     end
+    asset_response = page.evaluate_async_script(<<~JAVASCRIPT)
+      const done = arguments[arguments.length - 1]
+      const assetUrl = document.querySelector('.source-field').getAttribute('data-math-shortcut-palette-katex-url-value')
+      fetch(assetUrl).then((response) => done({ status: response.status, contentType: response.headers.get('content-type') }))
+        .catch(() => done({ status: 0, contentType: '' }))
+    JAVASCRIPT
+    assert_equal 200, asset_response["status"]
+    assert_match(/javascript/, asset_response["contentType"])
     assert_equal "rgb(17, 22, 26)", page.evaluate_script("getComputedStyle(document.querySelector('.math-shortcut-palette')).backgroundColor")
     assert_equal "rgb(32, 44, 50)", page.evaluate_script("getComputedStyle(document.querySelector('.math-shortcut-option.is-selected')).backgroundColor")
 

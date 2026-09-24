@@ -45,6 +45,7 @@ curl() {
   esac
 }
 STARTUP_TIMEOUT=1
+container_running() { return 0; }
 if wait_for_http readiness 3123 fake-container "$log_file" >"$wait_output"; then
   echo "expected the HTTPS 502 response to fail readiness" >&2
   exit 1
