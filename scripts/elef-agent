@@ -16,10 +16,11 @@ CONTAINER_MEMORY="${ELEF_AGENT_MEMORY:-1536M}"
 AGENT_DATABASE="${ELEF_AGENT_DATABASE:-sqlite}"
 WORKTREE_ROOT="${ELEF_WORKTREE_ROOT:-$(dirname "$REPO")/elef-worktrees}"
 CODEX_HOME_HOST="${CODEX_HOME:-$HOME/.codex}"
+DEVELOPMENT_SKILLS_HOST="$HOME/Development/GitHub/andy-skills/skills"
 if [[ -n "${ELEF_USER_SKILLS_DIR:-}" ]]; then
   USER_SKILLS_HOST="$ELEF_USER_SKILLS_DIR"
-elif [[ -d "$HOME/.agents/skills" ]]; then
-  USER_SKILLS_HOST="$HOME/.agents/skills"
+elif [[ -d "$DEVELOPMENT_SKILLS_HOST" ]]; then
+  USER_SKILLS_HOST="$DEVELOPMENT_SKILLS_HOST"
 else
   USER_SKILLS_HOST="$CODEX_HOME_HOST/skills"
 fi
@@ -550,6 +551,7 @@ run_container() {
     --volume "$codex_state:/home/developer/.codex"
   )
   if [[ -d "$USER_SKILLS_HOST" ]]; then
+    echo "Mounting Codex skills from $USER_SKILLS_HOST"
     mounts+=(--volume "$USER_SKILLS_HOST:/home/developer/.codex/skills:ro")
   else
     echo "warning: user skills directory not found: $USER_SKILLS_HOST" >&2
@@ -940,8 +942,9 @@ Environment overrides:
   ELEF_WORKTREE_ROOT            Worktree parent (default: ../elef-worktrees)
   ELEF_AGENT_STATE_ROOT         Router state directory
   ELEF_AGENT_CADDYFILE          Caddyfile path
-  ELEF_USER_SKILLS_DIR          Host skills directory (default: ~/.agents/skills,
-                                or $CODEX_HOME_HOST/skills)
+  ELEF_USER_SKILLS_DIR          Host skills directory (default: ~/Development/GitHub/
+                                andy-skills/skills when present, else
+                                CODEX_HOME/skills when set, else ~/.codex/skills)
   ELEF_AGENT_CODEX_VERSION      Codex version used in the image
   ELEF_AGENT_CHROME_DEVTOOLS_MCP_VERSION
                                 Chrome DevTools MCP version used in the image

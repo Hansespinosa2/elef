@@ -29,8 +29,41 @@ bash -n "$launcher" "$entrypoint"
 assert_contains "$launcher" 'SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"'
 assert_contains "$launcher" 'cd "$REPO"'
 assert_contains "$launcher" 'CODEX_MODEL="gpt-6-luna"'
-assert_contains "$launcher" 'USER_SKILLS_HOST="$HOME/.agents/skills"'
+assert_contains "$launcher" 'DEVELOPMENT_SKILLS_HOST="$HOME/Development/GitHub/andy-skills/skills"'
+assert_contains "$launcher" 'USER_SKILLS_HOST="$DEVELOPMENT_SKILLS_HOST"'
+assert_contains "$launcher" 'USER_SKILLS_HOST="$CODEX_HOME_HOST/skills"'
+assert_contains "$launcher" 'Mounting Codex skills from $USER_SKILLS_HOST'
+assert_not_contains "$launcher" 'USER_SKILLS_HOST="$HOME/.agents/skills"'
 assert_not_contains "$launcher" 'Documents/GitHub/andy-skills/skills'
+skills_test_root="$(mktemp -d)"
+trap 'rm -rf -- "$skills_test_root"' EXIT
+development_home="$skills_test_root/development-home"
+mkdir -p "$development_home/Development/GitHub/andy-skills/skills" \
+  "$development_home/.agents/skills" "$development_home/.codex/skills"
+selected_skills="$(HOME="$development_home" CODEX_HOME="$development_home/.codex" \
+  bash -c 'source "$1"; printf "%s" "$USER_SKILLS_HOST"' _ "$launcher")"
+[[ "$selected_skills" == "$development_home/Development/GitHub/andy-skills/skills" ]] || {
+  echo "expected the Development skills checkout, got '$selected_skills'" >&2
+  exit 1
+}
+
+fallback_home="$skills_test_root/fallback-home"
+mkdir -p "$fallback_home/.agents/skills" "$fallback_home/.codex/skills"
+selected_skills="$(HOME="$fallback_home" CODEX_HOME="$fallback_home/.codex" \
+  bash -c 'source "$1"; printf "%s" "$USER_SKILLS_HOST"' _ "$launcher")"
+[[ "$selected_skills" == "$fallback_home/.codex/skills" ]] || {
+  echo "expected CODEX_HOME skills fallback, got '$selected_skills'" >&2
+  exit 1
+}
+
+override_skills="$skills_test_root/custom-skills"
+selected_skills="$(HOME="$fallback_home" CODEX_HOME="$fallback_home/.codex" \
+  ELEF_USER_SKILLS_DIR="$override_skills" \
+  bash -c 'source "$1"; printf "%s" "$USER_SKILLS_HOST"' _ "$launcher")"
+[[ "$selected_skills" == "$override_skills" ]] || {
+  echo "expected ELEF_USER_SKILLS_DIR override, got '$selected_skills'" >&2
+  exit 1
+}
 assert_contains "$launcher" 'registered_worktree_for'
 assert_contains "$launcher" 'path = substr($0, 10)'
 assert_contains "$launcher" 'worktree_is_valid "$1" "$preferred"'

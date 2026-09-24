@@ -126,6 +126,11 @@ The default readiness timeout is five minutes; set
 `ELEF_AGENT_STARTUP_TIMEOUT=600` to allow up to ten minutes.
 On failure, the launcher prints backend and HTTPS status codes, the final
 container output and boot log, and keeps the stopped container for inspection.
+New containers mount personal skills from
+`~/Development/GitHub/andy-skills/skills` when present, falling back to
+`$CODEX_HOME/skills` (or `~/.codex/skills`). The launcher reports the selected
+source. Set `ELEF_USER_SKILLS_DIR` to choose another source; already-running
+containers retain their existing skill mount.
 
 `start` creates a new task name. If a task already has a branch/worktree (for
 example, after its first startup failed), use `scripts/elef-agent up TASK` to
