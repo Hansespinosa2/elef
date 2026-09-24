@@ -30,3 +30,4 @@ pin "@replit/codemirror-vim-core", to: "@replit--codemirror-vim-core.js" # @0.1.
 pin "crelt" # @1.0.7
 pin "style-mod" # @4.1.4
 pin "w3c-keyname" # @2.2.8
+pin "katex", to: "katex.js" # Provided by the katex gem for consistent client-side live math

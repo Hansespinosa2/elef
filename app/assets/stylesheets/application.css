@@ -112,6 +112,7 @@ body.elef-app {
 .elef-app .error-panel { background: #3a2428 !important; border-color: #92565e !important; color: #f3c7c9 !important; }
 .elef-app .flash { background: #263c31 !important; border-color: #4f8b68 !important; color: #d7eddb; }
 .visual-editor-form { display: grid; gap: 1rem; min-width: 0; max-width: 100%; overflow-x: clip; }
+.editor-live-math-display { display: inline-block; margin: 0; text-align: left; vertical-align: baseline; }
 .editor-shell { background: var(--oradia-slate-900); border: 1px solid var(--oradia-line); border-radius: 1rem; box-shadow: 0 18px 45px rgba(0, 0, 0, 0.16); min-width: 0; max-width: 100%; overflow-x: clip; padding: clamp(1rem, 2.5vw, 1.5rem); }
 .editor-shell-header { align-items: flex-start; display: flex; gap: 1rem; justify-content: space-between; margin-bottom: 1rem; }
 .editor-title-field { flex: 1 1 auto; min-width: 0; }

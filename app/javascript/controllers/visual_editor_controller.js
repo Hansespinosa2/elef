@@ -1,6 +1,6 @@
 import { Controller } from "@hotwired/stimulus"
 import { editorFor } from "controllers/editor_controller"
-import { markdownForVisibleText } from "controllers/editor_markdown"
+import { markdownForVisibleText, renderInlineMath } from "controllers/editor_markdown"
 
 export default class extends Controller {
   static targets = ["projection"]
@@ -73,6 +73,7 @@ export default class extends Controller {
 
     this.shiftMapAfterEdit(from, to, replacement.length)
     this.editorController.replaceRange(replacement, from, to)
+    if (region.kind !== "code") renderInlineMath(blockElement)
   }
 
   previewUpdated(payload) {

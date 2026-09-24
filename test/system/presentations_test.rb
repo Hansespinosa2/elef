@@ -1,6 +1,45 @@
 require "application_system_test_case"
 
 class PresentationsTest < ApplicationSystemTestCase
+  def type_visual_text(selector, visible_text, replacement)
+    target = all(selector).find { |candidate| candidate.text.include?(visible_text) }
+    assert target, "could not find visual text #{visible_text.inspect} in #{selector}"
+    target.click
+    selected = page.execute_script(<<~JAVASCRIPT, target, visible_text)
+      const root = arguments[0];
+      const needle = arguments[1];
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      let node;
+      while (walker.nextNode()) {
+        node = walker.currentNode;
+        if (node.textContent.includes(needle)) break;
+        node = null;
+      }
+      if (!node) return false;
+      const start = node.textContent.indexOf(needle);
+      const range = document.createRange();
+      range.setStart(node, start);
+      range.setEnd(node, start + needle.length);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+      return true;
+    JAVASCRIPT
+    assert selected, "could not select visual text #{visible_text.inspect}"
+    target.send_keys(replacement)
+  end
+
+  def type_source_text(source, source_text, replacement)
+    start = source.index(source_text)
+    assert start, "could not find source text #{source_text.inspect}"
+    page.execute_script(<<~JAVASCRIPT, start, start + source_text.length)
+      const editor = document.querySelector('.source-field').editorController;
+      editor.setSelectionRange(arguments[0], arguments[1]);
+      editor.focus();
+    JAVASCRIPT
+    find(".cm-content").send_keys(replacement)
+  end
+
   def hold_autosaves
     page.execute_script(<<~JAVASCRIPT)
       window.autosaveRequests = [];
@@ -316,6 +355,157 @@ class PresentationsTest < ApplicationSystemTestCase
       block.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'After' }));
     JAVASCRIPT
     assert_field "Markdown source", with: "# **Visual** deck\n\nAfter $\\frac{x}{y}$ and $$\\sum_{i=1}^{n} i$$ after.", wait: 5
+  end
+
+  test "real visual keystrokes preserve the exact title source" do
+    source = <<~MARKDOWN.chomp
+      ---
+      presentationTheme: light
+      presentationTypography: modern
+      ---
+      # The State of Testing
+
+      ## A field report on making ideas easier to shape, review, and revisit
+
+      - **Prepared for:**
+    MARKDOWN
+    presentation = Presentation.create!(title: "Keystroke parity", source: source)
+
+    visit edit_presentation_path(presentation)
+    title = find(".slide-block", match: :first)
+    page.execute_script(<<~JAVASCRIPT)
+      const title = document.querySelector('.slide-block');
+      title.focus();
+      const range = document.createRange();
+      range.selectNodeContents(title);
+      range.collapse(false);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+    JAVASCRIPT
+    title.send_keys(:control, "a")
+    title.send_keys("The State of Testing — Updated")
+
+    assert_field "Markdown source", with: "---\npresentationTheme: light\npresentationTypography: modern\n---\n# The State of Testing — Updated\n\n## A field report on making ideas easier to shape, review, and revisit\n\n- **Prepared for:**", wait: 5
+  end
+
+  test "typing a Markdown heading into a new visual block preserves its line and source syntax" do
+    presentation = Presentation.create!(title: "Heading keystrokes", source: "# Existing slide")
+    source_presentation = Presentation.create!(title: "Source heading keystrokes", source: "# Existing slide")
+
+    visit edit_presentation_path(presentation)
+    find("[data-presentation-editor-action='add-block-after']").click
+    block = find(".slide-block", text: "New block", wait: 5)
+    block.click
+    block.send_keys(:control, "a")
+    block.send_keys("## Test")
+
+    assert_field "Markdown source", with: "# Existing slide\n\n## Test", wait: 5
+    assert_equal "true", page.evaluate_script("document.activeElement.closest('[contenteditable=true]') !== null").to_s
+
+    page.execute_script("document.activeElement.blur()")
+    assert_selector ".presentation-editor-projection h2", text: "Test", wait: 5
+    click_on "Save presentation"
+    assert_text "Presentation saved."
+    visit edit_presentation_path(presentation)
+    assert_field "Markdown source", with: "# Existing slide\n\n## Test"
+
+    visit edit_presentation_path(source_presentation)
+    click_on "Source"
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      editor.setSelectionRange(editor.value.length);
+      editor.focus();
+    JAVASCRIPT
+    find(".cm-content").send_keys("\n\n## Test")
+    assert_field "Markdown source", with: "# Existing slide\n\n## Test", wait: 5
+    click_on "Save presentation"
+    assert_text "Presentation saved."
+    visit edit_presentation_path(source_presentation)
+    assert_field "Markdown source", with: "# Existing slide\n\n## Test"
+    assert_equal presentation.reload.source, source_presentation.reload.source
+  end
+
+  test "typing in visual and source modes produces identical presentation fixture Markdown" do
+    fixture = Presentations::SampleData::SAMPLES.find { |sample| sample[:id] == "renderer-stress-test" }
+    baseline = fixture.fetch(:source)
+    operations = [
+      [".slide-block", "Renderer stress test", "Renderer stress test", "Markdown renderer stress test"],
+      [".slide-block", "deliberate kitchen-sink", "deliberate kitchen-sink", "focused kitchen-sink"],
+      [".slide-block", "Text", "Text", "Words"],
+      [".slide-block", "source remains editable;", "source remains editable;", "source stays editable;"],
+      [".slide-block", "formula", "formula", "equation"],
+      [".slide-block", "Model", "Model", "Domain"],
+      [".editor-media-caption", "Stress-test diagram", "Stress-test diagram", "Regression diagram"]
+    ]
+    visual = Presentation.create!(title: "Visual fixture parity", source: baseline)
+    source = Presentation.create!(title: "Source fixture parity", source: baseline)
+    visual_expected = baseline.dup
+    source_expected = baseline.dup
+
+    visit edit_presentation_path(visual)
+    operations.each do |selector, visible_text, source_text, replacement|
+      type_visual_text(selector, visible_text, replacement)
+      visual_expected.sub!(source_text, replacement)
+      assert_field "Markdown source", with: visual_expected, wait: 5
+      page.execute_script("document.activeElement.blur()")
+      assert_selector selector, text: /#{Regexp.escape(replacement)}/, wait: 5
+    end
+
+    click_on "Save presentation"
+    assert_text "Presentation saved."
+    visit edit_presentation_path(visual)
+    assert_field "Markdown source", with: visual_expected
+
+    visit edit_presentation_path(source)
+    click_on "Source"
+    operations.each do |_selector, _visible_text, source_text, replacement|
+      type_source_text(source_expected, source_text, replacement)
+      source_expected.sub!(source_text, replacement)
+      assert_field "Markdown source", with: source_expected, wait: 5
+    end
+
+    click_on "Save presentation"
+    assert_text "Presentation saved."
+    visit edit_presentation_path(source)
+    assert_field "Markdown source", with: source_expected
+    assert_equal visual_expected, source_expected
+    assert_equal visual.reload.source, source.reload.source
+  end
+
+  test "new inline math renders before a visual block loses focus" do
+    presentation = Presentation.create!(title: "Inline math typing", source: "# Math\n\nAn equation")
+
+    visit edit_presentation_path(presentation)
+    block = find(".slide-block", text: "An equation")
+    block.click
+    page.execute_script(<<~JAVASCRIPT, block)
+      const block = arguments[0];
+      const range = document.createRange();
+      range.selectNodeContents(block);
+      range.collapse(false);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+    JAVASCRIPT
+    block.send_keys(" $test$")
+
+    assert_field "Markdown source", with: "# Math\n\nAn equation $test$", wait: 5
+    assert_selector ".presentation-editor-projection .katex", text: "test", wait: 5
+    assert_equal "true", page.evaluate_script("document.activeElement.closest('[contenteditable=true]') !== null").to_s
+    block.send_keys(" and $$x^2$")
+    assert_field "Markdown source", with: "# Math\n\nAn equation $test$ and $$x^2$", wait: 5
+    block.send_keys("$")
+    assert_field "Markdown source", with: "# Math\n\nAn equation $test$ and $$x^2$$", wait: 5
+    assert_selector ".presentation-editor-projection .katex-display", wait: 5
+    block.send_keys(" after")
+    assert_field "Markdown source", with: "# Math\n\nAn equation $test$ and $$x^2$$ after", wait: 5
+
+    click_on "Save presentation"
+    assert_text "Presentation saved."
+    visit edit_presentation_path(presentation)
+    assert_field "Markdown source", with: "# Math\n\nAn equation $test$ and $$x^2$$ after"
+    assert_selector ".presentation-editor-projection .katex", text: "test"
   end
 
   test "visual presentation editing keeps tables and media as Markdown structures" do

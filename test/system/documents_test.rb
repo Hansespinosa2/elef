@@ -1,6 +1,59 @@
 require "application_system_test_case"
 
 class DocumentsTest < ApplicationSystemTestCase
+  def type_visual_text(selector, source_text, replacement)
+    candidates = all(selector)
+    target = candidates.find { |candidate| candidate.text.include?(source_text) }
+    assert target, "could not find visual text #{source_text.inspect} in #{selector}"
+    target.click
+    selected = page.execute_script(<<~JAVASCRIPT, target, source_text)
+      const root = arguments[0];
+      const needle = arguments[1];
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      const nodes = [];
+      while (walker.nextNode()) {
+        const node = walker.currentNode;
+        if (!node.parentElement?.closest('[data-editor-math-source]')) nodes.push(node);
+      }
+      const combined = nodes.map((node) => node.textContent).join('');
+      const start = combined.indexOf(needle);
+      if (start < 0) return false;
+      const point = (offset) => {
+        let consumed = 0;
+        for (const node of nodes) {
+          const end = consumed + node.textContent.length;
+          if (offset <= end) return [node, offset - consumed];
+          consumed = end;
+        }
+        const last = nodes[nodes.length - 1];
+        return last ? [last, last.textContent.length] : null;
+      };
+      const from = point(start);
+      const to = point(start + needle.length);
+      if (!from || !to) return false;
+      const range = document.createRange();
+      range.setStart(from[0], from[1]);
+      range.setEnd(to[0], to[1]);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+      return true;
+    JAVASCRIPT
+    assert selected, "could not select visual text #{source_text.inspect}"
+    target.send_keys(replacement)
+  end
+
+  def type_source_text(source, source_text, replacement)
+    start = source.index(source_text)
+    assert start, "could not find source text #{source_text.inspect}"
+    page.execute_script(<<~JAVASCRIPT, start, start + source_text.length)
+      const editor = document.querySelector('.source-field').editorController;
+      editor.setSelectionRange(arguments[0], arguments[1]);
+      editor.focus();
+    JAVASCRIPT
+    find(".cm-content").send_keys(replacement)
+  end
+
   test "suggests document links in the Markdown editor" do
     Document.create!(title: "Research target", source: "# Target")
     document = Document.create!(title: "Research source", source: "# Source")
@@ -198,6 +251,76 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: "# Typing notes\n\nBody changed", wait: 5
   end
 
+  test "typing in visual and source modes has identical fixture Markdown" do
+    fixtures = [
+      {
+        id: "document-markdown-tour",
+        operations: [
+          [".document-editor-block", "Fixture: Markdown tour", "Fixture: Markdown tour", "Markdown parity tour"],
+          [".document-editor-block", "qualification", "qualification", "qualified note"],
+          [".document-editor-block", "Start with the question.", "Start with the question.", "Start with the right question."],
+          [".document-editor-block", "Gather context.", "Gather context.", "Gather useful context."],
+          [".document-editor-block", "The best source is readable before it is rendered.", "The best source is readable before it is rendered.", "The best source stays readable before it is rendered."],
+          [".document-editor-block", "visit the Elef project", "visit the Elef project", "visit the Elef authoring project"]
+        ]
+      },
+      {
+        id: "document-components",
+        operations: [
+          [".document-editor-block", "Fixture: Rich components", "Fixture: Rich components", "Rich component parity"],
+          [".document-editor-block", "Markdown first", "Markdown first", "Markdown-first"],
+          [".document-editor-block", "render(document.source)", "render(document.source)", "render(source)"],
+          [".document-editor-block", "The relationship", "The relationship", "The equation relationship"],
+          [".editor-media-caption", "representative workflow diagram", "representative workflow diagram", "sample workflow diagram"]
+        ]
+      },
+      {
+        id: "document-full-report",
+        operations: [
+          [".document-editor-block", "The State of Calm Authoring", "The State of Calm Authoring", "The State of Testing"]
+        ]
+      }
+    ]
+
+    fixtures.each do |fixture|
+      baseline = Documents::SampleData::SAMPLES.find { |sample| sample[:id] == fixture[:id] }.fetch(:source)
+      visual = Document.create!(title: "Visual #{fixture[:id]}", source: baseline)
+      source = Document.create!(title: "Source #{fixture[:id]}", source: baseline)
+      expected = baseline.dup
+      source_expected = baseline.dup
+
+      visit edit_document_path(visual)
+      fixture[:operations].each do |selector, visible_text, source_text, replacement|
+        type_visual_text(selector, visible_text, replacement)
+        expected.sub!(source_text, replacement)
+        assert_field "Markdown source", with: expected, wait: 5
+        page.execute_script("document.activeElement.blur()")
+        assert_selector selector, text: /#{Regexp.escape(replacement)}/, wait: 5
+      end
+
+      click_on "Save document"
+      assert_text "Document saved."
+      visit edit_document_path(visual)
+      assert_field "Markdown source", with: expected
+      visual.reload
+
+      visit edit_document_path(source)
+      click_on "Source"
+      fixture[:operations].each do |_selector, _visible_text, source_text, replacement|
+        type_source_text(source_expected, source_text, replacement)
+        source_expected.sub!(source_text, replacement)
+        assert_field "Markdown source", with: source_expected, wait: 5
+      end
+
+      click_on "Save document"
+      assert_text "Document saved."
+      visit edit_document_path(source)
+      assert_field "Markdown source", with: source_expected
+      assert_equal expected, source_expected
+      assert_equal visual.reload.source, source.reload.source, "visual/source mismatch for #{fixture[:id]}"
+    end
+  end
+
   test "visual rich blocks preserve table and image Markdown while editing" do
     document = Document.create!(
       title: "Rich notes",
@@ -286,6 +409,35 @@ class DocumentsTest < ApplicationSystemTestCase
       block.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'still here' }));
     JAVASCRIPT
     assert_field "Markdown source", with: 'Earlier $\\frac{a}{b}$ between $$\\sum_{i=1}^{n} i$$ still here.', wait: 5
+  end
+
+  test "new inline math renders while the visual document block stays focused" do
+    document = Document.create!(title: "Inline math typing", source: "# Math\n\nAn equation")
+
+    visit edit_document_path(document)
+    block = find(".document-editor-block", text: "An equation")
+    block.click
+    page.execute_script(<<~JAVASCRIPT, block)
+      const block = arguments[0];
+      const range = document.createRange();
+      range.selectNodeContents(block);
+      range.collapse(false);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+    JAVASCRIPT
+    block.send_keys(" $test$")
+
+    assert_field "Markdown source", with: "# Math\n\nAn equation $test$", wait: 5
+    assert_selector ".document-editor-block .katex", text: "test", wait: 5
+    block.send_keys(" after")
+    assert_field "Markdown source", with: "# Math\n\nAn equation $test$ after", wait: 5
+
+    click_on "Save document"
+    assert_text "Document saved."
+    visit edit_document_path(document)
+    assert_field "Markdown source", with: "# Math\n\nAn equation $test$ after"
+    assert_selector ".document-editor-block .katex", text: "test"
   end
 
   test "visual paragraph edits preserve inline media source" do
