@@ -1,4 +1,4 @@
-<%= form_with model: math_shortcut, class: "settings-card max-w-2xl rounded-2xl border border-[#ddd5c8] bg-[#fffdf8] p-6" do |form| %>
+<%= form_with model: math_shortcut, class: "settings-card math-shortcut-form max-w-2xl rounded-2xl border border-[#ddd5c8] bg-[#fffdf8] p-6" do |form| %>
   <% if math_shortcut.errors.any? %>
     <div class="error-panel mb-5 rounded-xl border border-[#efb0a8] bg-[#fff1ee] p-3 text-[#a63a2d]"><%= math_shortcut.errors.full_messages.to_sentence %></div>
   <% end %>

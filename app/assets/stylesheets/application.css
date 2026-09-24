@@ -74,6 +74,8 @@ body.elef-app {
 .elef-app .source-pane,
 .elef-app .preview-pane,
 .elef-app .library-card,
+.elef-app .math-shortcut-card,
+.elef-app .math-shortcut-form,
 .elef-app .document-graph-panel,
 .elef-app .lineage-panel,
 .elef-app .empty-state {
@@ -114,6 +116,17 @@ body.elef-app {
 .elef-app .library-card a { color: var(--oradia-ink); }
 .elef-app .library-card p,
 .elef-app .empty-state p { color: var(--oradia-muted) !important; }
+.elef-app .math-shortcut-card h2 { color: var(--oradia-ink); }
+.elef-app .math-shortcut-card p,
+.elef-app .math-shortcut-intro { color: var(--oradia-muted) !important; }
+.elef-app .math-shortcut-card .math-shortcut-expansion { background: var(--oradia-slate-950); border: 1px solid var(--oradia-slate-700); border-radius: 0.5rem; color: var(--oradia-green); display: inline-block; margin-top: 0.55rem; overflow-wrap: anywhere; padding: 0.3rem 0.5rem; }
+.elef-app .math-shortcut-delete { background: #3a2428 !important; border-color: #92565e !important; color: #f3c7c9 !important; }
+.elef-app .math-shortcut-delete:hover { background: #4a2a2e !important; }
+.elef-app .math-shortcut-form label { color: var(--oradia-ink); }
+.elef-app .math-shortcut-form input,
+.elef-app .math-shortcut-form select { background: var(--oradia-slate-950) !important; border-color: var(--oradia-slate-700) !important; color: var(--oradia-ink) !important; }
+.elef-app .math-shortcut-form input:focus,
+.elef-app .math-shortcut-form select:focus { border-color: var(--oradia-green) !important; box-shadow: 0 0 0 3px rgba(159, 197, 169, 0.18) !important; }
 .elef-app .error-panel { background: #3a2428 !important; border-color: #92565e !important; color: #f3c7c9 !important; }
 .elef-app .flash { background: #263c31 !important; border-color: #4f8b68 !important; color: #d7eddb; }
 .field-hint { color: var(--oradia-muted); font-size: 0.82rem; line-height: 1.45; margin: 0.5rem 0 0; }
@@ -172,6 +185,53 @@ body.elef-app {
 .snippet-option:last-child { border-bottom: 0; }
 .snippet-option span { color: var(--oradia-muted); font-size: 0.72rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .snippet-option.is-selected { background: var(--oradia-slate-700); }
+
+.math-shortcut-palette {
+  box-sizing: border-box;
+  width: min(34rem, calc(100vw - 1rem));
+  max-height: min(70vh, 36rem);
+  overflow: auto;
+  padding: 0.35rem;
+  background: var(--oradia-slate-950);
+  backdrop-filter: blur(12px);
+  scrollbar-color: var(--oradia-slate-700) var(--oradia-slate-950);
+  scrollbar-width: thin;
+}
+.math-shortcut-palette::-webkit-scrollbar { width: 0.55rem; }
+.math-shortcut-palette::-webkit-scrollbar-track { background: var(--oradia-slate-950); }
+.math-shortcut-palette::-webkit-scrollbar-thumb { background: var(--oradia-slate-700); border: 2px solid var(--oradia-slate-950); border-radius: 999px; }
+.math-shortcut-palette .snippet-option {
+  display: grid;
+  justify-content: stretch;
+  gap: 0.6rem;
+  border: 1px solid transparent;
+  border-bottom-color: var(--oradia-line);
+  border-radius: 0.65rem;
+  padding: 0.65rem;
+}
+.math-shortcut-palette .snippet-option:last-child { border-bottom-color: transparent; }
+.math-shortcut-palette .snippet-option.is-selected { background: var(--oradia-slate-800); border-color: var(--oradia-green-deep); }
+.math-shortcut-option-header { align-items: flex-start; display: flex; gap: 0.65rem; white-space: normal !important; }
+.math-shortcut-trigger { background: var(--oradia-slate-800); border: 1px solid var(--oradia-slate-700); border-radius: 0.45rem; color: var(--oradia-green); flex: 0 0 auto; font-family: var(--oradia-mono); font-size: 0.76rem; padding: 0.25rem 0.4rem; }
+.math-shortcut-title { display: grid; gap: 0.15rem; white-space: normal !important; }
+.math-shortcut-title strong { color: var(--oradia-ink); font-size: 0.84rem; line-height: 1.25; }
+.math-shortcut-palette .math-shortcut-description { color: var(--oradia-muted); font-size: 0.7rem; line-height: 1.35; white-space: normal; }
+.math-shortcut-example { align-items: center; display: grid; gap: 0.35rem; grid-template-columns: max-content auto minmax(0, 1fr) auto minmax(7rem, 0.8fr); white-space: normal !important; }
+.math-shortcut-trigger-block { display: grid; gap: 0.25rem; white-space: normal !important; }
+.math-shortcut-latex,
+.math-shortcut-preview { background: var(--oradia-slate-900); border: 1px solid var(--oradia-slate-700); border-radius: 0.5rem; box-sizing: border-box; min-width: 0; padding: 0.35rem 0.5rem; }
+.math-shortcut-latex { display: grid; gap: 0.25rem; white-space: normal !important; }
+.math-shortcut-example-arrow { color: var(--oradia-green); font-size: 0.85rem; font-weight: 800; text-align: center; }
+.math-shortcut-example-label { color: var(--oradia-muted) !important; font-size: 0.6rem !important; font-weight: 800; letter-spacing: 0.08em; line-height: 1; text-transform: uppercase; white-space: normal !important; }
+.math-shortcut-latex code { color: var(--oradia-green); font-family: var(--oradia-mono); font-size: 0.7rem; overflow-wrap: anywhere; white-space: normal; }
+.math-shortcut-preview { align-items: center; display: grid; justify-items: center; }
+.math-shortcut-preview-render { align-items: center; color: var(--oradia-ink); display: flex; font-size: 0.88rem; justify-content: center; max-width: 100%; min-height: 1.6rem; overflow: auto; white-space: normal !important; }
+.math-shortcut-preview-render .katex { color: inherit; font-size: 1em; }
+@media (max-width: 420px) {
+  .math-shortcut-example { grid-template-columns: max-content auto minmax(0, 1fr); }
+  .math-shortcut-example-arrow:nth-of-type(4) { display: none; }
+  .math-shortcut-preview { align-items: center; display: flex; flex-direction: row; grid-column: 1 / -1; justify-content: space-between; }
+}
 
 .editor-surface[data-line-numbers="off"] .cm-lineNumbers { display: none !important; }
 .editor-surface[data-mode-aware-cursor="true"][data-editor-mode="insert"] .cm-cursor { border-left-color: var(--oradia-vim-insert); }

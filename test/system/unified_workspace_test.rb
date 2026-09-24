@@ -35,6 +35,55 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     assert_includes source, "\\alpha"
   end
 
+  test "shows dark math shortcut cards with rendered LaTeX examples" do
+    document = Document.create!(title: "Math shortcut previews", source: "# Math shortcut previews")
+
+    visit edit_document_path(document)
+    editor = find(".cm-content")
+    editor.click
+    editor.send_keys("\n$@g")
+
+    gamma = find(".math-shortcut-option", text: /Gamma/, wait: 5)
+    within(gamma) do
+      assert_selector ".math-shortcut-trigger", text: "@g"
+      assert_selector ".math-shortcut-latex code", text: "\\gamma"
+      assert_selector ".math-shortcut-example-arrow", count: 2
+      assert_selector ".math-shortcut-preview-render .katex-html", text: "γ", wait: 5
+    end
+    assert_equal "rgb(17, 22, 26)", page.evaluate_script("getComputedStyle(document.querySelector('.math-shortcut-palette')).backgroundColor")
+    assert_equal "rgb(32, 44, 50)", page.evaluate_script("getComputedStyle(document.querySelector('.math-shortcut-option.is-selected')).backgroundColor")
+
+    editor.send_keys(:enter)
+    editor.send_keys(" x.bar")
+    bar = find(".math-shortcut-option", text: /Bar/, wait: 5)
+    within(bar) do
+      assert_selector ".math-shortcut-trigger", text: "x.bar"
+      assert_selector ".math-shortcut-latex code", text: "\\bar{x}"
+      assert_selector ".math-shortcut-preview-render .katex-html", wait: 5
+    end
+
+    editor.send_keys(:enter)
+    editor.send_keys(" @longright")
+    arrow = find(".math-shortcut-option", text: /Long right arrow/, wait: 5)
+    within(arrow) do
+      assert_selector ".math-shortcut-trigger", text: "@longright"
+      assert_selector ".math-shortcut-latex code", text: "\\longrightarrow"
+      assert_selector ".math-shortcut-preview-render .katex-html", wait: 5
+    end
+  end
+
+  test "uses dark Aradia surfaces for math shortcut settings" do
+    visit math_shortcuts_path
+
+    assert_selector ".math-shortcut-card"
+    assert_equal "rgb(24, 33, 38)", page.evaluate_script("getComputedStyle(document.querySelector('.math-shortcut-card')).backgroundColor")
+
+    click_on "New shortcut"
+    assert_selector ".math-shortcut-form"
+    assert_equal "rgb(24, 33, 38)", page.evaluate_script("getComputedStyle(document.querySelector('.math-shortcut-form')).backgroundColor")
+    assert_equal "rgb(17, 22, 26)", page.evaluate_script("getComputedStyle(document.querySelector('.math-shortcut-form input')).backgroundColor")
+  end
+
   test "expands common TeX operators and walks fraction tab stops" do
     document = Document.create!(title: "TeX operators", source: "# TeX operators")
 
