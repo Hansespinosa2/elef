@@ -102,8 +102,10 @@ export default class extends Controller {
 
     const source = this.editorController.value
     const { start, end } = region.content_range
-    const markdown = source.slice(start, end)
-    const kind = this.currentBlockKind(markdown, region.kind)
+    const sourceMarkdown = source.slice(start, end)
+    const visibleMarkdown = block.empty_placeholder ? this.editableText(blockElement, region.kind, sourceMarkdown) : ""
+    const markdown = block.empty_placeholder && sourceMarkdown === "" ? visibleMarkdown : sourceMarkdown
+    const kind = this.currentBlockKind(markdown, this.currentBlockKind(visibleMarkdown, region.kind))
     const emptyListItem = kind === "list" && this.hasEmptyTrailingMarker(markdown, "list")
     const emptyQuoteLine = kind === "quote" && this.hasEmptyTrailingMarker(markdown, "quote")
 
@@ -119,9 +121,12 @@ export default class extends Controller {
     if (event.key !== "Enter" || event.shiftKey || kind === "code") return
 
     const atEnd = this.selectionIsAtEnd(blockElement)
+    const rawStructuredBlock = (kind === "list" && !blockElement.querySelector("ul, ol")) ||
+      (kind === "quote" && !blockElement.querySelector("blockquote"))
+    const rawStructuredCaret = rawStructuredBlock && this.selectionIsInsideBlock(blockElement)
     if (emptyListItem || emptyQuoteLine) {
-      if (!this.selectionIsInEmptyStructuredLine(blockElement, kind)) return
-    } else if (!atEnd && region.role !== "title") {
+      if (!this.selectionIsInEmptyStructuredLine(blockElement, kind) && !atEnd && !rawStructuredCaret) return
+    } else if (!atEnd && region.role !== "title" && !rawStructuredCaret) {
       return
     }
 
@@ -312,6 +317,11 @@ export default class extends Controller {
 
     const text = line.innerText || line.textContent || ""
     return text.trim() === "" && (line === selection.anchorNode || line.contains(selection.anchorNode))
+  }
+
+  selectionIsInsideBlock(element) {
+    const selection = window.getSelection()
+    return Boolean(selection?.isCollapsed && selection.anchorNode && element.contains(selection.anchorNode))
   }
 
   replaceAndFocus(blockElement, from, to, replacement, caret) {
