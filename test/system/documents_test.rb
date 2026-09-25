@@ -344,7 +344,7 @@ class DocumentsTest < ApplicationSystemTestCase
     active_document_block.send_keys(:enter)
     active_document_block.send_keys("- THis is the first item of a list")
     assert_field "Markdown source", with: /\n\n- THis is the first item of a list\z/, wait: 5
-    list_keydown_state = page.evaluate_script(<<~JAVASCRIPT)
+    list_keydown_state = page.execute_script(<<~JAVASCRIPT)
       const form = document.querySelector('form.visual-editor-form');
       const controller = window.Stimulus.getControllerForElementAndIdentifier(form, 'visual-editor');
       const block = document.activeElement.closest('.document-editor-block[data-editor-block-id]');
