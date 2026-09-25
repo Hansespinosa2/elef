@@ -23,26 +23,30 @@ module Presentations
     end
 
     def image(link, title, alt_text)
+      fit = title.to_s.match(/\Afit:(contain|cover)\z/)&.[](1) || "contain"
+      class_name = "presentation-media presentation-media-#{fit}"
+      title_attribute = alt_text.present? ? %( title="#{ERB::Util.html_escape(alt_text)}") : ""
+
+      media = nil
       if (match = link.to_s.match(/\Aelef-asset:([0-9a-f]{64})\z/))
         media = @media_resolver&.call(match[1])
         return "" unless media
-
-        path, content_type = media
-        fit = title.to_s.match(/\Afit:(contain|cover)\z/)&.[](1) || "contain"
-        class_name = "presentation-media presentation-media-#{fit}"
-        escaped_path = ERB::Util.html_escape(path)
-        if content_type == "video/mp4"
-          return %(<video class="#{class_name}" src="#{escaped_path}" controls playsinline preload="metadata" aria-label="#{ERB::Util.html_escape(alt_text)}"></video>)
-        end
-
-        title_attribute = alt_text.present? ? %( title="#{ERB::Util.html_escape(alt_text)}") : ""
-        return %(<img class="#{class_name}" src="#{escaped_path}" alt="#{ERB::Util.html_escape(alt_text)}"#{title_attribute}>)
+      elsif @media_resolver && !link.to_s.match?(/\A(?:https?:|\/\/|data:)/i) && (media = safe_media_resolve(link.to_s))
+        # Resolved via media resolver
+      elsif safe_url?(link)
+        ext_title_attr = title.present? ? %( title="#{ERB::Util.html_escape(title)}") : ""
+        return %(<img class="#{class_name}" src="#{ERB::Util.html_escape(link)}" alt="#{ERB::Util.html_escape(alt_text)}"#{ext_title_attr} data-editor-image-source="true" contenteditable="false">)
+      else
+        return ""
       end
 
-      return "" unless safe_url?(link)
+      path, content_type = media
+      escaped_path = ERB::Util.html_escape(path)
+      if content_type == "video/mp4"
+        return %(<video class="#{class_name}" src="#{escaped_path}" controls playsinline preload="metadata" aria-label="#{ERB::Util.html_escape(alt_text)}"></video>)
+      end
 
-      title_attribute = title.present? ? %( title="#{ERB::Util.html_escape(title)}") : ""
-      %(<img src="#{ERB::Util.html_escape(link)}" alt="#{ERB::Util.html_escape(alt_text)}"#{title_attribute} data-editor-image-source="true" contenteditable="false">)
+      %(<img class="#{class_name}" src="#{escaped_path}" alt="#{ERB::Util.html_escape(alt_text)}"#{title_attribute} data-editor-image-source="true" contenteditable="false">)
     end
 
     def block_code(code, language)
@@ -52,6 +56,12 @@ module Presentations
     end
 
     private
+
+    def safe_media_resolve(identifier)
+      @media_resolver&.call(identifier)
+    rescue StandardError
+      nil
+    end
 
     def safe_url?(url)
       url.to_s.match?(SAFE_URL)

@@ -33,10 +33,22 @@ class PresentationsController < ApplicationController
 
   def create
     @presentation = Presentation.new(presentation_params)
-    if @presentation.save
-      redirect_to edit_presentation_path(@presentation), notice: "Presentation saved."
-    else
-      render :new, status: :unprocessable_content
+    respond_to do |format|
+      if @presentation.save
+        format.html { redirect_to edit_presentation_path(@presentation), notice: "Presentation saved." }
+        format.json do
+          render json: {
+            id: @presentation.id,
+            edit_url: edit_presentation_path(@presentation),
+            upload_url: upload_asset_presentation_path(@presentation),
+            lock_version: @presentation.lock_version,
+            revision_token: @presentation.revision_token
+          }, status: :created
+        end
+      else
+        format.html { render :new, status: :unprocessable_content }
+        format.json { render json: { errors: @presentation.errors.full_messages }, status: :unprocessable_content }
+      end
     end
   end
 
@@ -167,6 +179,7 @@ class PresentationsController < ApplicationController
     digest = Digest::SHA256.hexdigest(blob.download)
     blob.update!(metadata: blob.metadata.merge("elef_sha256" => digest))
     @presentation.reload
+    Presentations::FolderSync.sync!(@presentation)
     render json: {
       digest: digest,
       lock_version: @presentation.lock_version,
@@ -180,9 +193,7 @@ class PresentationsController < ApplicationController
   end
 
   def media_asset
-    return head :not_found unless params[:digest].to_s.match?(/\A[0-9a-f]{64}\z/)
-
-    blob = @presentation.assets.blobs.find { |asset| Presentations::MediaAssets.digest(asset) == params[:digest] }
+    blob = Presentations::MediaAssets.resolve_blob(@presentation, params[:digest])
     return head :not_found unless blob
 
     redirect_to rails_blob_path(blob, disposition: "inline"), allow_other_host: false

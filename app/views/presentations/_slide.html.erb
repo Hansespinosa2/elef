@@ -5,11 +5,12 @@
 <% editor_slide_map = editor_map&.dig(:slides, slide.index) %>
 <% editor_blocks = editor_slide_map&.fetch(:blocks, []) || [] %>
 <% editor_regions = editor_slide_map&.fetch(:editable_regions, []) || [] %>
-<section class="slide <%= 'presentation-slide ' if presentation_slide %>slide-<%= slide.layout %>" <%= 'data-presentation-target="slide"' if presentation_slide %> data-presentation-canvas-target="canvas" aria-label="Slide <%= slide.index + 1 %>"<% if editable %> data-editor-slide-id="slide-<%= slide.index + 1 %>"<% end %>>
+<section class="slide <%= 'presentation-slide ' if presentation_slide %>slide-<%= slide.layout %>" <%= 'data-presentation-target="slide"' if presentation_slide %> data-presentation-canvas-target="canvas" aria-label="Slide <%= slide.index + 1 %>"<% if editable %> data-editor-slide-id="slide-<%= slide.index + 1 %>" data-slide-index="<%= slide.index %>"<% end %>>
   <% if editable %>
     <div class="presentation-editor-slide-toolbar" aria-label="Slide <%= slide.index + 1 %> controls">
       <span class="presentation-editor-slide-label">Slide <%= slide.index + 1 %></span>
       <button type="button" data-presentation-editor-action="add-slide-after" data-slide-index="<%= slide.index %>">Add slide</button>
+      <button type="button" class="presentation-editor-add-image" data-action="click->media#chooseForSlide" data-slide-index="<%= slide.index %>">Add image</button>
       <button type="button" data-presentation-editor-action="delete-slide" data-slide-index="<%= slide.index %>"<%= " disabled" if presentation.slides.length == 1 %>>Delete</button>
       <button type="button" data-presentation-editor-action="move-slide-up" data-slide-index="<%= slide.index %>"<%= " disabled" if slide.index.zero? %>>Move up</button>
       <button type="button" data-presentation-editor-action="move-slide-down" data-slide-index="<%= slide.index %>"<%= " disabled" if slide.index == presentation.slides.length - 1 %>>Move down</button>
@@ -60,7 +61,12 @@
         <% end %>
       </div>
     <% elsif slide.blocks.empty? %>
-      <p class="empty-slide">Empty slide</p>
+      <div class="empty-slide">
+        <p>Empty slide</p>
+        <% if editable %>
+          <button type="button" class="button secondary empty-slide-add-image" data-action="click->media#chooseForSlide" data-slide-index="<%= slide.index %>">Add image</button>
+        <% end %>
+      </div>
     <% else %>
       <% slide.blocks.each_with_index do |block, block_index| %>
         <% editor_block = editor_blocks[block_index] %>
