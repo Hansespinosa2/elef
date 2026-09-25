@@ -1,3 +1,4 @@
+<% workspace_for_command_palette = Workspace.find_by(slug: "default") %>
 <!DOCTYPE html>
 <html>
   <head>
@@ -25,10 +26,12 @@
           <%= link_to "Library", root_path, class: "app-nav-link rounded-lg px-3 py-2 text-sm font-bold no-underline text-[#aab7b1] #{'is-active' if %w[library presentations documents].include?(controller_name)}" %>
           <%= link_to "Settings", settings_path, class: "app-nav-link rounded-lg px-3 py-2 text-sm font-bold no-underline text-[#aab7b1] #{'is-active' if %w[workspace_settings snippets math_shortcuts].include?(controller_name)}" %>
         </nav>
-        <div class="command-palette-root" data-controller="command-palette" data-command-palette-search-url-value="<%= search_path %>" data-command-palette-commands-value="<%= json_escape([
+        <div class="command-palette-root" data-controller="command-palette" data-command-palette-search-url-value="<%= search_path %>" data-command-palette-settings-url-value="<%= settings_path %>" data-command-palette-theme-value="<%= workspace_for_command_palette&.default_theme || Workspace::DEFAULT_THEME %>" data-command-palette-typography-value="<%= workspace_for_command_palette&.default_typography || Workspace::DEFAULT_TYPOGRAPHY %>" data-command-palette-commands-value="<%= json_escape([
           { id: "quick-open", label: "Search presentations and documents", description: "Find by title, alias, heading, or content", shortcutKey: "p" },
           { id: "new-presentation", label: "New presentation", description: "Create slide-based Markdown", url: new_presentation_path },
           { id: "new-document", label: "New document", description: "Create a continuous Markdown document", url: new_document_path },
+          { id: "new-snippet", label: "New snippet", description: "Create a reusable Markdown snippet", url: new_snippet_path },
+          { id: "change-appearance", label: "Change workspace appearance", description: "Choose a Theme or Typography default" },
           { id: "open-settings", label: "Open settings", description: "Change workspace appearance", url: settings_path },
           { id: "open-snippets", label: "Manage snippets", description: "Edit reusable Markdown snippets", url: snippets_path },
           { id: "open-math-shortcuts", label: "Manage math shortcuts", description: "Edit editor math expansions", url: math_shortcuts_path },
@@ -46,8 +49,9 @@
           </div>
           <dialog class="command-palette" data-command-palette-target="dialog" data-action="click->command-palette#dialogClick close->command-palette#dialogClosed" aria-labelledby="command-palette-heading">
             <div class="command-palette-panel">
-              <div class="command-palette-heading"><h2 id="command-palette-heading" data-command-palette-target="heading">Command palette</h2><button type="button" data-action="command-palette#close" aria-label="Close command palette">Esc</button></div>
-              <input type="search" autocomplete="off" placeholder="Filter commands…" data-command-palette-target="input" data-action="input->command-palette#inputChanged keydown->command-palette#keydown" aria-controls="command-palette-results" aria-autocomplete="list" role="combobox" aria-expanded="true">
+              <div class="command-palette-heading"><h2 id="command-palette-heading" data-command-palette-target="heading">Command palette</h2><button type="button" data-command-palette-target="closeButton" data-action="command-palette#closeButtonClick" aria-label="Close command palette">Esc</button></div>
+              <input type="search" autocomplete="off" placeholder="Filter commands…" data-command-palette-target="input" data-action="input->command-palette#inputChanged keydown->command-palette#keydown" aria-controls="command-palette-results" aria-describedby="command-palette-hint" aria-autocomplete="list" role="combobox" aria-expanded="true">
+              <p id="command-palette-hint" class="command-palette-hint" data-command-palette-target="hint">↑/↓ move · Enter choose · Esc close</p>
               <div class="command-palette-filters" data-command-palette-target="filters" role="group" aria-label="Filter search by work type" hidden>
                 <button type="button" data-type="all" data-action="command-palette#setSearchType" aria-pressed="true">All work</button>
                 <button type="button" data-type="presentations" data-action="command-palette#setSearchType" aria-pressed="false">Presentations</button>

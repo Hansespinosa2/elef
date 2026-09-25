@@ -271,9 +271,9 @@ class DocumentsTest < ApplicationSystemTestCase
     incoming = Document.create!(title: "Rename source", source: "See [[Rename target]]")
 
     visit documents_path
-    target_card = find("##{ActionView::RecordIdentifier.dom_id(target)}")
-    page.execute_script("arguments[0].querySelector('details').open = true", target_card)
     within("##{ActionView::RecordIdentifier.dom_id(target)}") do
+      find(".library-card-menu-trigger").click
+      find("summary", text: "Rename").click
       find("input[type='text']").set("Renamed target")
       click_on "Save title"
     end
@@ -465,6 +465,117 @@ class DocumentsTest < ApplicationSystemTestCase
     block.send_keys(:end, " changed")
 
     assert_field "Markdown source", with: "# Typing notes\n\nBody changed", wait: 5
+  end
+
+  test "visual text edits coalesce source updates within a frame" do
+    document = Document.create!(title: "Batched visual edits", source: "# Batch\n\nOriginal")
+    visit edit_document_path(document)
+    block = find(".document-editor-block", text: "Original")
+
+    result = page.evaluate_async_script(<<~JAVASCRIPT, block)
+      const block = arguments[0];
+      const done = arguments[arguments.length - 1];
+      const editor = document.querySelector(".source-field").editorController;
+      const replaceRanges = editor.replaceRanges.bind(editor);
+      let updates = 0;
+      editor.replaceRanges = (changes) => { updates += 1; replaceRanges(changes); };
+      block.focus({ preventScroll: true });
+      ["One", "Two", "Final text"].forEach((value) => {
+        block.textContent = value;
+        block.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: value }));
+      });
+      requestAnimationFrame(() => requestAnimationFrame(() => done({ updates, source: editor.value })));
+    JAVASCRIPT
+
+    assert_equal 1, result["updates"]
+    assert_equal "# Batch\n\nFinal text", result["source"]
+  end
+
+  test "visual and source modes carry the caret position in both directions" do
+    source = "# Notes\n\nFirst paragraph\n\nSecond paragraph"
+    document = Document.create!(title: "Caret handoff", source: source)
+    visit edit_document_path(document)
+
+    first = find(".document-editor-block", text: "First paragraph")
+    page.execute_script(<<~JAVASCRIPT, first)
+      const block = arguments[0];
+      const text = block.querySelector("p").firstChild;
+      block.focus({ preventScroll: true });
+      window.getSelection().setPosition(text, 5);
+    JAVASCRIPT
+    click_on "Source"
+    page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(() => arguments[0]()))")
+    expected = source.index("First paragraph") + 5
+    assert_equal expected, page.evaluate_script("document.querySelector('.source-field').editorController.view.state.selection.main.head")
+
+    click_on "Visual"
+    page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(() => arguments[0]()))")
+    restored = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const selection = window.getSelection();
+        const element = selection.focusNode?.nodeType === Node.ELEMENT_NODE ? selection.focusNode : selection.focusNode?.parentElement;
+        const block = element?.closest(".document-editor-block");
+        return { text: block?.innerText, offset: selection.focusOffset, active: document.activeElement === block };
+      })()
+    JAVASCRIPT
+    assert_equal "First paragraph", restored["text"].strip
+    assert_equal 5, restored["offset"]
+    assert_equal true, restored["active"]
+
+    click_on "Source"
+    page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(() => arguments[0]()))")
+    second_position = source.index("Second paragraph") + 7
+    page.execute_script("document.querySelector('.source-field').editorController.setSelectionRange(arguments[0])", second_position)
+    click_on "Visual"
+    page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(() => arguments[0]()))")
+    restored = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const selection = window.getSelection();
+        const element = selection.focusNode?.nodeType === Node.ELEMENT_NODE ? selection.focusNode : selection.focusNode?.parentElement;
+        const block = element?.closest(".document-editor-block");
+        return { text: block?.innerText, offset: selection.focusOffset, active: document.activeElement === block };
+      })()
+    JAVASCRIPT
+    assert_equal "Second paragraph", restored["text"].strip
+    assert_equal 7, restored["offset"]
+    assert_equal true, restored["active"]
+  end
+
+  test "up and down move the caret between visual blocks and backspace removes an empty block" do
+    document = Document.create!(
+      title: "Block navigation",
+      source: "# Navigation\n\nFirst block\n\nSecond block\n\nThird block"
+    )
+    visit edit_document_path(document)
+
+    first = find(".document-editor-block", text: "First block")
+    navigation = page.execute_script(<<~JAVASCRIPT, first)
+      const block = arguments[0];
+      const text = block.querySelector("p").firstChild;
+      block.focus({ preventScroll: true });
+      window.getSelection().setPosition(text, text.textContent.length);
+      const down = new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true });
+      block.dispatchEvent(down);
+      const next = document.activeElement;
+      const held = new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true, repeat: true });
+      next.dispatchEvent(held);
+      return [down.defaultPrevented, held.defaultPrevented];
+    JAVASCRIPT
+    assert_equal [true, true], navigation
+    assert_equal "Third block", page.evaluate_script("document.activeElement.innerText.trim()")
+
+    empty = find(".document-editor-block", text: "Second block")
+    removed = page.execute_script(<<~JAVASCRIPT, empty)
+      const block = arguments[0];
+      block.innerHTML = "<br>";
+      block.focus({ preventScroll: true });
+      window.getSelection().setPosition(block, 0);
+      const event = new KeyboardEvent("keydown", { key: "Backspace", bubbles: true, cancelable: true });
+      block.dispatchEvent(event);
+      return event.defaultPrevented;
+    JAVASCRIPT
+    assert_equal true, removed
+    assert_field "Markdown source", with: "# Navigation\n\nFirst block\n\nThird block", wait: 5
   end
 
   test "visual edits preserve soft line breaks around inline math" do
@@ -683,6 +794,50 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_selector ".document-editor-block .katex", text: "test"
   end
 
+  test "new document renders inline and display math before its first save" do
+    visit new_document_path
+
+    find(".document-editor-block h1", text: "Untitled document").send_keys(:enter)
+    block = find(".document-editor-block[data-editor-empty-block='true']")
+    block.click
+    page.execute_script(<<~JAVASCRIPT, block)
+      const block = arguments[0];
+      const range = document.createRange();
+      range.selectNodeContents(block);
+      range.collapse(false);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+    JAVASCRIPT
+    block.send_keys(" $\\bar{x}$ and $$x^2$$ and \\(\\bar{y}\\) and \\[y^2\\]")
+
+    assert_includes find_field("Markdown source").value, "$\\bar{x}$ and $$x^2$$ and \\(\\bar{y}\\) and \\[y^2\\]"
+    assert_selector ".document-editor-block .katex", minimum: 4, wait: 5
+    assert_selector ".document-editor-block .katex-display", minimum: 2
+    assert_no_selector ".document-editor-block .math-error"
+
+    page.execute_script("document.activeElement.blur()")
+    assert_selector ".document-editor-block .katex-display", minimum: 1, wait: 5
+    assert_no_selector ".preview-warnings li", text: /preview could not be rendered/i
+  end
+
+  test "new document source mode renders inline and display math before its first save" do
+    visit new_document_path
+    click_on "Source"
+
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      editor.setSelectionRange(editor.value.length);
+      editor.focus();
+    JAVASCRIPT
+    find(".cm-content").send_keys("\n\n$\\bar{x}$ and \\(\\bar{y}\\)\n\n$$x^2$$\n\n\\[y^2\\]")
+
+    assert_includes find_field("Markdown source").value, "$\\bar{x}$ and \\(\\bar{y}\\)\n\n$$x^2$$\n\n\\[y^2\\]"
+    assert_selector ".preview-pane .katex", minimum: 4, wait: 5
+    assert_selector ".preview-pane .katex-display", minimum: 2
+    assert_no_selector ".preview-pane .math-error"
+  end
+
   test "document preview renders inline accents and multiline display equations" do
     document = Document.create!(title: "Document math rendering", source: <<~MARKDOWN)
       # Math
@@ -719,6 +874,30 @@ class DocumentsTest < ApplicationSystemTestCase
     JAVASCRIPT
 
     assert_field "Markdown source", with: "Earlier ![diagram](/diagram.svg) after.", wait: 5
+  end
+
+  test "a new document uploads and displays an attached image before its first manual save" do
+    visit new_document_path
+    media_file = Tempfile.new(["document-pixel", ".png"])
+    media_file.binmode
+    media_file.write(Base64.decode64("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+i9MwAAAAASUVORK5CYII="))
+    media_file.flush
+
+    page.execute_script("const editor = document.querySelector('.source-field').editorController; editor.setSelectionRange(editor.value.length);")
+    page.execute_script("document.querySelector('[data-media-target=input]').hidden = false")
+    find('[data-media-target="input"]').set(media_file.path)
+
+    assert_selector ".media-upload-status", text: /document-pixel.*added to the Markdown source/i, wait: 8
+    assert_includes find_field("Markdown source").value, "elef-asset:"
+    assert_selector ".preview-pane img.presentation-media", wait: 8
+    natural_width = page.evaluate_script("document.querySelector('.preview-pane img.presentation-media').naturalWidth")
+    assert_operator natural_width, :>, 0
+
+    document = Document.order(:id).last
+    assert document.assets.attached?
+    assert_selector '[data-autosave-target="status"]', exact_text: "Saved", wait: 8
+  ensure
+    media_file&.close!
   end
 
   test "visual edits preserve nested task lists and untouched item formatting" do
@@ -1105,7 +1284,7 @@ class DocumentsTest < ApplicationSystemTestCase
     find("summary", text: "More").click
     click_on "Load sample documents"
 
-    assert_selector ".document-graph-node", count: Documents::SampleData::SAMPLES.length
+    assert_selector ".document-graph-node", count: Documents::SampleData::SAMPLES.length, wait: 10
     assert_selector ".document-graph-edge", minimum: 1
     coordinates = page.evaluate_script(<<~JAVASCRIPT)
       JSON.parse(document.querySelector(".document-graph").dataset.documentGraphDataValue)
@@ -1177,5 +1356,85 @@ class DocumentsTest < ApplicationSystemTestCase
     heights = page.evaluate_script("[...document.querySelectorAll('.document-block')].map((block) => block.getBoundingClientRect().height)")
     assert_equal 3, heights.length
     assert heights.all? { |height| height < 120 }, "horizontal-only blocks should not become vertical stages: #{heights.inspect}"
+  end
+
+  test "maintains standard aspect ratio and fixed text wrapping across viewports" do
+    document = Document.create!(
+      title: "Aspect ratio document",
+      source: <<~MARKDOWN
+        # Standard Aspect Ratio Title
+
+        This is a paragraph with several words designed to check that resizing the window or browser does not re-wrap any words.
+      MARKDOWN
+    )
+
+    visit document_path(document)
+
+    assert_selector ".document-page", count: 1
+    page.driver.browser.manage.window.resize_to(1400, 1000)
+
+    desktop_measurements = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const frame = document.querySelector('.document-page-frame');
+        const page = document.querySelector('.document-page');
+        const paragraph = page.querySelector('p');
+        const frameRect = frame.getBoundingClientRect();
+        return {
+          frameAspect: frameRect.width / frameRect.height,
+          pageWidth: page.offsetWidth,
+          pageHeight: page.offsetHeight,
+          paragraphLines: paragraph.getClientRects().length,
+          paragraphText: paragraph.innerText
+        };
+      })()
+    JAVASCRIPT
+
+    assert_in_delta 816.0 / 1154.0, desktop_measurements["frameAspect"], 0.05
+    assert_equal 816, desktop_measurements["pageWidth"]
+    assert_equal 1154, desktop_measurements["pageHeight"]
+
+    # Resize to mobile / tablet width (600px)
+    page.driver.browser.manage.window.resize_to(600, 900)
+
+    mobile_measurements = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const frame = document.querySelector('.document-page-frame');
+        const page = document.querySelector('.document-page');
+        const paragraph = page.querySelector('p');
+        const frameRect = frame.getBoundingClientRect();
+        return {
+          frameAspect: frameRect.width / frameRect.height,
+          pageWidth: page.offsetWidth,
+          pageHeight: page.offsetHeight,
+          paragraphLines: paragraph.getClientRects().length,
+          paragraphText: paragraph.innerText
+        };
+      })()
+    JAVASCRIPT
+
+    assert_in_delta 816.0 / 1154.0, mobile_measurements["frameAspect"], 0.05
+    assert_equal 816, mobile_measurements["pageWidth"]
+    assert_equal 1154, mobile_measurements["pageHeight"]
+    assert_equal desktop_measurements["paragraphLines"], mobile_measurements["paragraphLines"], "Text line count should not re-wrap when scaling"
+    assert_equal desktop_measurements["paragraphText"], mobile_measurements["paragraphText"]
+  ensure
+    page.driver.browser.manage.window.resize_to(1400, 1000)
+  end
+
+  test "print view renders paginated document and triggers window.print" do
+    document = Document.create!(
+      title: "Printable Document",
+      source: "# Page 1\n\nFirst page body\n\n---\n\n# Page 2\n\nSecond page body"
+    )
+
+    visit print_document_path(document)
+
+    assert_text "Printable Document"
+    assert_selector ".document-print-toolbar", text: /Printable Document/
+    assert_selector ".document-page", minimum: 1
+
+    page.execute_script("window.print = () => { window.printWasRequested = true }")
+    click_on "Print / Save PDF"
+    assert_equal true, page.evaluate_script("window.printWasRequested")
   end
 end

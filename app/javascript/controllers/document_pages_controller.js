@@ -1,5 +1,8 @@
 import { Controller } from "@hotwired/stimulus"
 
+const DESIGN_WIDTH = 816
+const DESIGN_HEIGHT = 1154
+
 export default class extends Controller {
   static targets = ["surface"]
 
@@ -7,14 +10,15 @@ export default class extends Controller {
     this.active = true
     this.blocks = [...this.surfaceTarget.children]
     this.frame = null
-    this.boundResize = () => this.schedule()
+    this.boundResize = () => this.resizeFrames()
+    this.resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(this.boundResize)
 
     window.addEventListener("resize", this.boundResize)
     this.paginate()
 
     if (document.fonts?.ready) {
       document.fonts.ready.then(() => {
-        if (this.active) this.schedule()
+        if (this.active) this.paginate()
       })
     }
   }
@@ -22,18 +26,23 @@ export default class extends Controller {
   disconnect() {
     this.active = false
     window.removeEventListener("resize", this.boundResize)
+    this.resizeObserver?.disconnect()
     cancelAnimationFrame(this.frame)
   }
 
-  schedule() {
-    if (!this.active) return
-    cancelAnimationFrame(this.frame)
-    this.frame = requestAnimationFrame(() => this.paginate())
+  resizeFrames() {
+    if (!this.surfaceTarget) return
+    const frames = this.surfaceTarget.querySelectorAll(".document-page-frame")
+    frames.forEach((frame) => {
+      const scale = frame.clientWidth / DESIGN_WIDTH
+      frame.style.setProperty("--document-page-scale", scale)
+    })
   }
 
   paginate() {
     if (!this.blocks) return
 
+    this.resizeObserver?.disconnect()
     this.surfaceTarget.replaceChildren()
     this.surfaceTarget.classList.add("is-paginated")
 
@@ -55,10 +64,13 @@ export default class extends Controller {
       if (this.overflows(currentPage)) currentPage.page.classList.add("is-overflowing")
     })
 
-    pages.forEach(({ page, number }) => {
+    pages.forEach(({ page, number, frame }) => {
       page.setAttribute("aria-label", `Document page ${number} of ${pages.length}`)
       page.querySelector(".document-page-number").textContent = `Page ${number} of ${pages.length}`
+      if (this.resizeObserver) this.resizeObserver.observe(frame)
     })
+
+    this.resizeFrames()
   }
 
   pageUnits() {
@@ -84,6 +96,9 @@ export default class extends Controller {
   }
 
   createPage(number) {
+    const frame = document.createElement("div")
+    frame.className = "document-page-frame"
+
     const page = document.createElement("article")
     page.className = "document-page"
 
@@ -100,11 +115,13 @@ export default class extends Controller {
     footer.append(pageNumber)
 
     page.append(content, footer)
-    this.surfaceTarget.append(page)
-    return { content, number, page }
+    frame.append(page)
+    this.surfaceTarget.append(frame)
+    return { content, number, page, frame }
   }
 
   overflows({ content }) {
     return content.scrollHeight > content.clientHeight + 1
   }
 }
+

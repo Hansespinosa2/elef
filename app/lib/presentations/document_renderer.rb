@@ -2,7 +2,7 @@ module Presentations
   module DocumentRenderer
     module_function
 
-    def render(source, source_name: "Untitled document", parsed: nil, documents: nil, workspace: nil, editable: false, editor_map: nil)
+    def render(source, source_name: "Untitled document", parsed: nil, documents: nil, workspace: nil, media_resolver: nil, editable: false, editor_map: nil)
       parsed ||= Presentations::Document.parse(source.to_s, source_name: source_name, mode: :document)
       workspace ||= documents&.first&.workspace || Workspace.default
       documents ||= ::Document.where(workspace: workspace).to_a
@@ -46,7 +46,7 @@ module Presentations
           rendered = if region&.dig(:empty_heading)
             "<h1><br></h1>"
           else
-            DocumentLinks::Renderer.render(render_source, documents: documents, workspace: workspace)
+            DocumentLinks::Renderer.render(render_source, documents: documents, workspace: workspace, media_resolver: media_resolver)
           end
           rendered = editable_media(rendered, block.markdown) if valid_mapping && mapped[:kind] == "image"
           if valid_mapping && %w[list quote].include?(mapped[:kind])
@@ -65,11 +65,11 @@ module Presentations
         rendered = slide.blocks.map.with_index do |block, index|
           classes = position_classes(block.position)
           line = source_line_for(source, block.markdown, index)
-          %(<div class="document-block #{classes}" data-source-anchor="line-#{line}" data-source-line="#{line}">#{DocumentLinks::Renderer.render(block.markdown, documents: documents, workspace: workspace)}</div>)
+          %(<div class="document-block #{classes}" data-source-anchor="line-#{line}" data-source-line="#{line}">#{DocumentLinks::Renderer.render(block.markdown, documents: documents, workspace: workspace, media_resolver: media_resolver)}</div>)
         end.join.html_safe
       else
         annotate_source_anchors(
-          DocumentLinks::Renderer.render(slide.markdown, documents: documents, workspace: workspace),
+          DocumentLinks::Renderer.render(slide.markdown, documents: documents, workspace: workspace, media_resolver: media_resolver),
           source
         )
       end

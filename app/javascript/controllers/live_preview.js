@@ -1,6 +1,7 @@
 import { StateEffect, StateField } from "@codemirror/state"
 import { syntaxTree } from "@codemirror/language"
 import { Decoration, EditorView, WidgetType } from "@codemirror/view"
+import "katex"
 
 export const livePreviewMode = StateEffect.define()
 
@@ -42,6 +43,19 @@ class PreviewWidget extends WidgetType {
 
     const element = document.createElement("span")
     element.className = `cm-live-widget cm-live-widget-${this.kind}${this.kind === "quote-marker" ? " cm-live-syntax-marker" : ""}`
+    if (this.kind === "math" || this.kind === "math-display") {
+      try {
+        element.innerHTML = globalThis.katex.renderToString(this.value, {
+          displayMode: this.kind === "math-display",
+          throwOnError: true
+        })
+        element.setAttribute("aria-label", this.value)
+      } catch (_error) {
+        element.classList.add("math-error")
+        element.textContent = this.value
+      }
+      return element
+    }
     element.textContent = this.value
     return element
   }
@@ -167,13 +181,14 @@ function addInlineMarkup(decorations, state, source, ranges) {
       addMark(decorations, state, labelStart, labelEnd, "cm-live-document-link")
     }
 
-    const mathPattern = /\$\$(.+?)\$\$|(?<!\$)\$(?!\s)(.+?)(?<!\s)\$(?!\$)/gs
+    const mathPattern = /(?<!\\)\\\[([\s\S]+?)\\\]|(?<!\\)\$\$([\s\S]+?)\$\$|(?<!\\)\\\(([^\r\n]+?)\\\)|(?<!\$)\$(?!\s)(.+?)(?<!\s)\$(?!\$)/gs
     for (const match of segment.matchAll(mathPattern)) {
       const from = absolute(match.index)
       const to = from + match[0].length
       if (overlapsCode(from, to)) continue
-      const expression = match[1] || match[2]
-      const widget = new PreviewWidget(match[1] ? "math-display" : "math", expression.trim())
+      const expression = match[1] ?? match[2] ?? match[3] ?? match[4]
+      const isDisplay = match[1] !== undefined || match[2] !== undefined
+      const widget = new PreviewWidget(isDisplay ? "math-display" : "math", expression.trim())
       addHidden(decorations, state, from, to, widget, [from, to])
     }
 

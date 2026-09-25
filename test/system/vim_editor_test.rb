@@ -93,6 +93,51 @@ class VimEditorTest < ApplicationSystemTestCase
     assert_selector "[data-autosave-target='status']", text: "Saved", wait: 5
   end
 
+  test "Vim caret position survives visual source switches and its cursor stays out of the visual surface" do
+    document = Document.create!(title: "Vim caret handoff", source: "# Vim handoff\n\nBody")
+    visit edit_document_path(document)
+    page.execute_script("localStorage.setItem('elef.editor.vim.enabled', 'true')")
+    page.refresh
+
+    find("summary", text: "Vim settings").click
+    assert_selector "[data-editor-target='vimToggle']:checked"
+    find("summary", text: "Vim settings").click
+    block = find(".document-editor-block", text: "Body")
+    page.execute_script(<<~JAVASCRIPT, block)
+      const block = arguments[0];
+      const text = block.querySelector("p").firstChild;
+      block.focus({ preventScroll: true });
+      window.getSelection().setPosition(text, 2);
+    JAVASCRIPT
+
+    click_on "Source"
+    page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(() => arguments[0]()))")
+    expected = document.source.index("Body") + 2
+    assert_equal expected, page.evaluate_script("document.querySelector('.source-field').editorController.view.state.selection.main.head")
+    assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal"
+
+    click_on "Visual"
+    page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(() => arguments[0]()))")
+    assert_equal "none", page.evaluate_script("getComputedStyle(document.querySelector('.cm-vimCursorLayer')).display")
+    assert_equal 2, page.evaluate_script("window.getSelection().focusOffset")
+
+    click_on "Source"
+    page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(() => arguments[0]()))")
+    find(".cm-content").send_keys("i")
+    assert_selector "[data-editor-target='mode'][data-mode='insert']", text: "Insert"
+
+    click_on "Visual"
+    page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(() => arguments[0]()))")
+    assert_equal 2, page.evaluate_script("window.getSelection().focusOffset")
+    click_on "Source"
+    page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(() => arguments[0]()))")
+    assert_selector "[data-editor-target='mode'][data-mode='insert']", text: "Insert"
+    find(".cm-content").send_keys("!")
+    assert_field "Markdown source", with: "# Vim handoff\n\nBo!dy", wait: 5
+  ensure
+    page.execute_script("localStorage.removeItem('elef.editor.vim.enabled')")
+  end
+
   test "Vim visual mode highlights horizontal selections with the Aradia palette" do
     document = Document.create!(title: "Visual selection", source: "abcdef\nsecond line")
     visit edit_document_path(document)

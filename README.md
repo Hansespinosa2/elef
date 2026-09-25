@@ -5,7 +5,7 @@ Elef is now a conventional Rails monolith for creating and presenting single-use
 ## Runtime choices
 
 - **Rails/Ruby:** Rails 8.1.3 on Ruby 3.4, using Hotwire, importmap, and system tests without adding a Node/React runtime.
-- **Database:** PostgreSQL is canonical for hosted development, production, and CI. Disposable Apple agent containers default to SQLite; set `ELEF_AGENT_DATABASE=postgres` when a task needs a private PostgreSQL cluster.
+- **Database:** PostgreSQL is canonical for hosted development, production, and CI. SQLite remains available for explicit local checks.
 - **Views/interactions:** Rails ERB views with Turbo and Stimulus through importmap. Stimulus handles dirty-state navigation protection and browser presentation keyboard controls.
 - **Browser automation:** Rails system tests use Selenium with Chrome in explicit headless mode; repository checks must not open a visible browser.
 - **Styling:** Tailwind CSS through `tailwindcss-rails` styles Elef-owned application UI. Presentation output remains isolated under `.presentation-surface` with dedicated Markdown, Rouge, KaTeX, slide geometry, presentation-mode, and deck-theme CSS.
@@ -35,12 +35,6 @@ Host-local development and test expect PostgreSQL at `127.0.0.1` with the `postg
 Set `PGDATABASE`, `PGTESTDATABASE`, `PGUSER`, `PGPASSWORD`, `PGHOST`, and
 `PGPORT` when your local setup differs. For a host-local SQLite migration check,
 use `ELEF_USE_SQLITE=1 bin/rails db:prepare`.
-
-The disposable Apple agent container defaults to SQLite under
-`storage/development.sqlite3` and `storage/test.sqlite3`. Set
-`ELEF_AGENT_DATABASE=postgres` before `scripts/elef-agent start` or `up` to use a
-private PostgreSQL cluster under `storage/postgres`. The selected mode is
-remembered for the task when it is resumed with `up`.
 
 For a server-only session, build Tailwind first with
 `bin/rails tailwindcss:build`, then run `bin/rails server`. Development uses
@@ -103,44 +97,22 @@ For the recommended long-running Mac mini setup, keep a `main` checkout in a
 development checkout has its own PostgreSQL, storage, and port through
 `compose.development.yml`; see [the Mac mini deployment runbook](docs/mac-mini-deployment.md).
 
-## Isolated agent browser URLs
+## Native agent GitHub access
 
-The disposable agent workflow gives each task a stable browser identity and
-defaults to an isolated SQLite database. On a Mac, run the one-time guided
-setup:
+Agents run natively on Omarchy. Authenticate the host GitHub CLI with
+`gh auth login --hostname github.com` and check it with `gh auth status`.
+Install the shell wrappers once:
 
 ```bash
-scripts/elef-agent setup
+scripts/install-agent-gh-auth
 ```
 
-After setup, `scripts/elef-agent start editor-fix` creates the isolated
-worktree and container, prepares SQLite, starts Rails, and launches Codex
-automatically. For a persistence-focused task, use
-`ELEF_AGENT_DATABASE=postgres scripts/elef-agent start persistence-fix` to
-exercise PostgreSQL inside the container.
-It exposes the app at `https://editor-fix.localhost`. The hostname identifies
-the worktree while the local Caddy router forwards it to that task's isolated
-container. Each agent gets a separate backend port internally; those ports are
-loopback-only and do not appear in the browser URL.
-
-Startup output is streamed as each container boots and saved with private
-permissions under `~/Library/Application Support/Elef/agent-router/logs/`.
-The default readiness timeout is five minutes; set
-`ELEF_AGENT_STARTUP_TIMEOUT=600` to allow up to ten minutes.
-On failure, the launcher prints backend and HTTPS status codes, the final
-container output and boot log, and keeps the stopped container for inspection.
-New containers mount personal skills from
-`~/Development/GitHub/andy-skills/skills` when present, falling back to
-`$CODEX_HOME/skills` (or `~/.codex/skills`). The launcher reports the selected
-source. Set `ELEF_USER_SKILLS_DIR` to choose another source; already-running
-containers retain their existing skill mount.
-
-`start` creates a new task name. If a task already has a branch/worktree (for
-example, after its first startup failed), use `scripts/elef-agent up TASK` to
-restart Rails and `scripts/elef-agent resume TASK` to continue its Codex
-session. Use `scripts/elef-agent stop editor-fix` to stop a task while
-preserving its worktree. Use `scripts/elef-agent status` to see container and
-HTTP readiness states.
+The wrappers cover `agy`, `codex`, `opencode`, and `hermes`. They retrieve the
+current token with `gh auth token` when launching an agent and pass it as
+`GH_TOKEN` and `GITHUB_TOKEN` to that agent and its child processes. The token
+is not written to disk. To launch one agent without installing shell
+wrappers, use `scripts/with-gh-auth codex [args...]` (or replace `codex` with
+one of the other supported agent commands).
 
 ## Validation
 

@@ -1,12 +1,14 @@
 import { Controller } from "@hotwired/stimulus"
 
 export default class extends Controller {
-  static targets = ["dialog", "heading", "input", "filters", "results", "status"]
-  static values = { searchUrl: String, commands: Array }
+  static targets = ["dialog", "heading", "input", "filters", "results", "status", "hint", "closeButton"]
+  static values = { searchUrl: String, settingsUrl: String, commands: Array, theme: String, typography: String }
 
   connect() {
     this.mode = "commands"
     this.searchType = "all"
+    this.appearanceCategory = null
+    this.savingAppearance = false
     this.selectedIndex = 0
     this.resultsData = []
     this.visibleCommands = []
@@ -37,7 +39,8 @@ export default class extends Controller {
       this.openSearch()
     } else if (event.key === "Escape" && this.isOpen()) {
       event.preventDefault()
-      this.close()
+      if (this.mode === "appearance-values" || this.mode === "appearance-categories") this.goBackAppearance()
+      else this.close()
     }
   }
 
@@ -55,17 +58,11 @@ export default class extends Controller {
 
   openMode(mode) {
     this.cancelSearch()
-    this.mode = mode
     this.searchType = "all"
+    this.appearanceCategory = null
     this.selectedIndex = 0
     this.resultsData = []
-    this.dialogTarget.dataset.mode = mode
-    this.headingTarget.textContent = mode === "commands" ? "Command palette" : "Search presentations and documents"
-    this.inputTarget.placeholder = mode === "commands" ? "Filter commands…" : "Search by title, alias, heading, or content…"
-    this.inputTarget.setAttribute("aria-label", mode === "commands" ? "Filter commands" : "Search presentations and documents")
-    this.inputTarget.setAttribute("aria-expanded", "true")
-    this.resultsTarget.setAttribute("aria-label", mode === "commands" ? "Elef commands" : "Search results")
-    this.filtersTarget.hidden = mode !== "search"
+    this.setModeChrome(mode)
     this.updateFilterSelection()
 
     if (!this.isOpen()) {
@@ -97,6 +94,11 @@ export default class extends Controller {
     this.inputTarget.setAttribute("aria-expanded", "false")
   }
 
+  closeButtonClick() {
+    if (this.mode === "appearance-values" || this.mode === "appearance-categories") this.goBackAppearance()
+    else this.close()
+  }
+
   setSearchType(event) {
     this.searchType = event.currentTarget.dataset.type || "all"
     this.updateFilterSelection()
@@ -111,6 +113,14 @@ export default class extends Controller {
       this.renderCommands(query)
       const count = this.visibleCommands.length
       this.setStatus(`${count} command${count === 1 ? "" : "s"}`)
+      return
+    }
+
+    if (this.mode === "appearance-categories" || this.mode === "appearance-values") {
+      this.selectedIndex = 0
+      this.renderAppearanceOptions(query)
+      const count = this.visibleCommands.length
+      this.setStatus(`${count} choice${count === 1 ? "" : "s"}`)
       return
     }
 
@@ -163,6 +173,11 @@ export default class extends Controller {
 
   keydown(event) {
     const count = this.mode === "search" ? this.resultsData.length : this.visibleCommands.length
+    if (event.key === "Backspace" && this.mode === "appearance-values" && !this.inputTarget.value) {
+      event.preventDefault()
+      this.goBackAppearance()
+      return
+    }
     if (event.key === "ArrowDown" && count > 0) {
       event.preventDefault()
       this.selectedIndex = (this.selectedIndex + 1) % count
@@ -194,6 +209,14 @@ export default class extends Controller {
 
     const command = this.visibleCommands[this.selectedIndex]
     if (!command) return
+    if (this.mode === "appearance-categories") {
+      this.openAppearanceValues(command.id)
+      return
+    }
+    if (this.mode === "appearance-values") {
+      this.saveAppearance(command.id)
+      return
+    }
     if (command.url) {
       window.location.assign(command.url)
       return
@@ -204,6 +227,8 @@ export default class extends Controller {
   runCommand(id) {
     if (id === "quick-open") {
       this.openSearch()
+    } else if (id === "change-appearance") {
+      this.openAppearanceCategories()
     } else if (id === "save") {
       const form = document.querySelector("form[data-controller~='autosave']")
       form?.requestSubmit()
@@ -227,14 +252,39 @@ export default class extends Controller {
 
   renderCurrentMode() {
     if (this.mode === "search") this.renderResults()
+    else if (this.mode === "appearance-categories" || this.mode === "appearance-values") this.renderAppearanceOptions()
     else this.renderCommands()
   }
 
   renderCommands(query = "") {
-    const terms = this.normalize(query).split(/\s+/).filter(Boolean)
-    this.visibleCommands = this.commandsValue.filter((command) => {
+    const commands = this.commandsValue.filter((command) => {
       if (command.requiresEditor && !document.querySelector("form[data-controller~='autosave']")) return false
-      const searchable = this.normalize(`${command.label} ${command.description || ""}`)
+      return true
+    })
+
+    this.renderOptions(commands, query, "No matching commands.")
+  }
+
+  renderAppearanceOptions(query = this.inputTarget.value) {
+    const themeLabels = { match: "Match workspace", light: "Light", dark: "Dark" }
+    const typographyLabels = { book: "Book", modern: "Modern", technical: "Technical" }
+    const options = this.mode === "appearance-categories"
+      ? [
+          { id: "theme", label: "Theme", description: `Current: ${themeLabels[this.themeValue] || "Match workspace"}` },
+          { id: "typography", label: "Typography", description: `Current: ${typographyLabels[this.typographyValue] || "Book"}` }
+        ]
+      : (this.appearanceCategory === "theme"
+          ? Object.entries(themeLabels).map(([id, label]) => ({ id, label, description: id === this.themeValue ? "Current workspace default" : "Set this workspace default" }))
+          : Object.entries(typographyLabels).map(([id, label]) => ({ id, label, description: id === this.typographyValue ? "Current workspace default" : "Set this workspace default" })))
+
+    if (this.mode === "appearance-values") this.headingTarget.textContent = `Change default ${this.appearanceCategory}`
+    this.renderOptions(options, query, "No matching choices.")
+  }
+
+  renderOptions(options, query, emptyMessage) {
+    const terms = this.normalize(query).split(/\s+/).filter(Boolean)
+    this.visibleCommands = options.filter((option) => {
+      const searchable = this.normalize(`${option.label} ${option.description || ""}`)
       return terms.every((term) => searchable.includes(term))
     })
 
@@ -250,7 +300,7 @@ export default class extends Controller {
       this.resultsTarget.append(button)
     })
 
-    if (!this.visibleCommands.length) this.renderEmptyState("No matching commands.")
+    if (!this.visibleCommands.length) this.renderEmptyState(emptyMessage)
     this.updateSelection()
   }
 
@@ -277,6 +327,128 @@ export default class extends Controller {
     empty.className = "command-palette-empty"
     empty.textContent = message
     this.resultsTarget.append(empty)
+  }
+
+  openAppearanceCategories() {
+    this.appearanceCategory = null
+    this.inputTarget.value = ""
+    this.selectedIndex = 0
+    this.setModeChrome("appearance-categories")
+    this.renderAppearanceOptions("")
+    this.setStatus("Choose Theme or Typography. Enter opens its choices; Esc goes back.")
+  }
+
+  openAppearanceValues(category) {
+    this.appearanceCategory = category
+    this.inputTarget.value = ""
+    this.selectedIndex = 0
+    this.setModeChrome("appearance-values")
+    this.renderAppearanceOptions("")
+    this.setStatus(`Choose a ${category} default. Enter applies it immediately; Esc goes back.`)
+  }
+
+  goBackAppearance() {
+    if (this.mode === "appearance-values") {
+      this.openAppearanceCategories()
+    } else if (this.mode === "appearance-categories") {
+      this.openMode("commands")
+    }
+  }
+
+  setModeChrome(mode) {
+    this.mode = mode
+    this.dialogTarget.dataset.mode = mode
+    const modeCopy = {
+      commands: {
+        heading: "Command palette",
+        placeholder: "Filter commands…",
+        label: "Filter commands",
+        listLabel: "Elef commands",
+        button: "Esc",
+        buttonLabel: "Close command palette",
+        hint: "↑/↓ move · Enter choose · Esc close"
+      },
+      search: {
+        heading: "Search presentations and documents",
+        placeholder: "Search by title, alias, heading, or content…",
+        label: "Search presentations and documents",
+        listLabel: "Search results",
+        button: "Esc",
+        buttonLabel: "Close command palette",
+        hint: "↑/↓ move · Enter open · Esc close"
+      },
+      "appearance-categories": {
+        heading: "Change workspace appearance",
+        placeholder: "Choose Theme or Typography…",
+        label: "Choose Theme or Typography",
+        listLabel: "Appearance settings",
+        button: "Back",
+        buttonLabel: "Back to commands",
+        hint: "↑/↓ move · Enter choose · Esc back"
+      },
+      "appearance-values": {
+        heading: "Change appearance default",
+        placeholder: "Choose a value…",
+        label: "Choose an appearance value",
+        listLabel: "Appearance values",
+        button: "Back",
+        buttonLabel: "Back to appearance settings",
+        hint: "↑/↓ move · Enter apply · Esc back"
+      }
+    }[mode]
+
+    this.headingTarget.textContent = modeCopy.heading
+    this.inputTarget.placeholder = modeCopy.placeholder
+    this.inputTarget.setAttribute("aria-label", modeCopy.label)
+    this.inputTarget.setAttribute("aria-expanded", "true")
+    this.resultsTarget.setAttribute("aria-label", modeCopy.listLabel)
+    this.filtersTarget.hidden = mode !== "search"
+    this.closeButtonTarget.textContent = modeCopy.button
+    this.closeButtonTarget.setAttribute("aria-label", modeCopy.buttonLabel)
+    this.hintTarget.textContent = modeCopy.hint
+  }
+
+  async saveAppearance(value) {
+    if (this.savingAppearance) return
+
+    const category = this.appearanceCategory
+    const labels = category === "theme"
+      ? { match: "Match workspace", light: "Light", dark: "Dark" }
+      : { book: "Book", modern: "Modern", technical: "Technical" }
+    this.savingAppearance = true
+    this.setStatus(`Updating workspace ${category}…`)
+
+    try {
+      const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || ""
+      const response = await fetch(this.settingsUrlValue, {
+        method: "PATCH",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+          "X-CSRF-Token": csrfToken
+        },
+        body: JSON.stringify({ workspace: { [category]: value } })
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(payload.error || "The workspace appearance could not be updated.")
+
+      if (category === "theme") this.themeValue = value
+      else this.typographyValue = value
+
+      const categoryLabel = category === "theme" ? "theme" : "typography"
+      const successMessage = `Workspace default ${categoryLabel} set to ${labels[value]}. Applies to new and unstyled work; work-specific settings take precedence.`
+      this.appearanceCategory = null
+      this.inputTarget.value = ""
+      this.selectedIndex = 0
+      this.setModeChrome("commands")
+      this.renderCommands("")
+      this.setStatus(successMessage)
+    } catch (error) {
+      this.setStatus(`${error.message} Try again or press Esc to go back.`)
+    } finally {
+      this.savingAppearance = false
+    }
   }
 
   commandButton(label, description, index) {

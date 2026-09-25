@@ -39,6 +39,9 @@ Rails.application.routes.draw do
       post :import
     end
     member do
+      post :upload_asset, path: "assets"
+      get "assets/*digest", action: :media_asset, as: :media_asset, format: false
+      get :print
       post :restore
       get :history
       get :export

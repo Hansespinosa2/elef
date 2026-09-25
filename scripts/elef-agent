@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  echo "scripts/elef-agent is retired; run agents natively on Omarchy." >&2
+  echo "Install host-keyring token forwarding with scripts/install-agent-gh-auth." >&2
+  exit 64
+fi
+
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)" || {
   echo "Unable to locate the Elef repository from this script." >&2
   exit 1
