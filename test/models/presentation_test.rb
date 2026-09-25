@@ -408,7 +408,7 @@ class PresentationTest < ActiveSupport::TestCase
     assert_equal 3, fragment.css(".katex-display").length
     assert_empty fragment.css(".math-error")
     assert_equal 3, fragment.css("code").length
-    assert_equal ["$x^2$", "$x^2$", "$x^2$"], fragment.css("code").map(&:text)
+    assert_equal ["$x^2$", "$x^2$", "$x^2$"], fragment.css("code").map { |code| code.text.strip }
   end
 
   test "does not render math-looking link destinations or leak math placeholders" do
