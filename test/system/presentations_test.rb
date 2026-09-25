@@ -824,8 +824,31 @@ class PresentationsTest < ApplicationSystemTestCase
     source_expected = baseline.dup
 
     visit edit_presentation_path(visual)
-    operations.each do |selector, visible_text, source_text, replacement|
+    operations.each_with_index do |(selector, visible_text, source_text, replacement), operation_index|
       type_visual_text(selector, visible_text, replacement)
+      if operation_index == 1
+        trace = page.execute_script(<<~JAVASCRIPT)
+          const form = document.querySelector('.visual-editor-form');
+          const controller = form.presentationEditorController;
+          const active = document.activeElement.closest('[data-editor-block-id]');
+          const source = controller.editorController.value;
+          const region = controller.map.editable_regions.find((item) => item.block_id === active.dataset.editorBlockId);
+          const block = controller.findBlock(active.dataset.editorBlockId);
+          const from = region.content_range.start;
+          const to = region.content_range.end;
+          return {
+            activeId: active.dataset.editorBlockId,
+            innerText: active.innerText,
+            textContent: active.textContent,
+            innerHTML: active.innerHTML,
+            region,
+            block,
+            mappedSource: source.slice(from, to),
+            sourceAround: source.slice(Math.max(0, from - 40), Math.min(source.length, to + 40))
+          };
+        JAVASCRIPT
+        puts "PRESENTATION_PARITY_TRACE #{trace.to_json}"
+      end
       visual_expected.sub!(source_text, replacement)
       assert_field "Markdown source", with: visual_expected, wait: 5
       page.execute_script("document.activeElement.blur()")
