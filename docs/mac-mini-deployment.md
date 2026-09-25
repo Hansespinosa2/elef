@@ -72,9 +72,9 @@ repository; it does not need a new deploy key, inbound network access, a GitHub
 secret, or a self-hosted GitHub Actions runner.
 
 The final GitHub Actions job uses scoped `contents: write`, `actions: read`,
-and `pull-requests: read` permissions to verify the successful PR run and
-advance the deploy refs. This changes only GitHub Actions; no Mac mini-side
-configuration change is needed while the watcher continues to follow
+`checks: read`, and `pull-requests: read` permissions to verify the successful
+PR run and advance the deploy refs. This changes only GitHub Actions; no Mac
+mini-side configuration change is needed while the watcher continues to follow
 `elef-deploy-dev` and `elef-deploy-main`. If an approved deploy ref does not
 exist yet, the watcher waits until a successful CI run creates it.
 

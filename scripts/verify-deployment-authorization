@@ -37,47 +37,51 @@ fi
 
 pull_request="$(gh api "repos/$repository/pulls/$pull_number")"
 pull_head_sha="$(jq -r '.head.sha // empty' <<<"$pull_request")"
+pull_head_ref="$(jq -r '.head.ref // empty' <<<"$pull_request")"
 if [[ "$(jq -r '.merged_at != null' <<<"$pull_request")" != true || \
       "$(jq -r '.merge_commit_sha // empty' <<<"$pull_request")" != "$sha" || \
       "$(jq -r '.base.ref // empty' <<<"$pull_request")" != "$branch" || \
-      -z "$pull_head_sha" ]]; then
+      -z "$pull_head_sha" || -z "$pull_head_ref" ]]; then
   echo "Cannot authorize deployment of $sha: PR #$pull_number metadata does not match the merged ref" >&2
   exit 1
 fi
 
-find_latest_pr_run() {
-  local page=1
-  local runs match
+required_checks=(scan_ruby scan_js test sqlite-test system-test production-smoke development-smoke)
+required_jobs=("${required_checks[@]}" record-ci-attestation)
 
-  while (( page <= 10 )); do
-    runs="$(gh api "repos/$repository/actions/workflows/ci.yml/runs?event=pull_request&per_page=100&page=$page")"
-    match="$(jq -c --argjson pr "$pull_number" --arg branch "$branch" --arg head "$pull_head_sha" '
-      [.workflow_runs[]?
-       | select(.event == "pull_request")
-       | select(any(.pull_requests[]?; .number == $pr and .base.ref == $branch and .head.sha == $head))]
-      | sort_by(.run_number, .run_attempt)
-      | last // empty
-    ' <<<"$runs")"
+find_pr_run() {
+  local pull_view candidate_run_ids candidate_id candidate_run
 
-    if [[ -n "$match" ]]; then
-      printf '%s\n' "$match"
+  pull_view="$(gh pr view "$pull_number" --repo "$repository" --json statusCheckRollup)"
+  candidate_run_ids="$(jq -r --argjson required_checks "$(printf '%s\n' "${required_checks[@]}" | jq -R . | jq -s .)" '
+    [.statusCheckRollup[]?
+     | select(.workflowName == "CI")
+     | select(.name as $name | $required_checks | index($name) != null)
+     | select((.detailsUrl // "") | test("/actions/runs/[0-9]+/job/"))
+     | {run_id: (.detailsUrl | capture("/actions/runs/(?<id>[0-9]+)/job/").id), started_at: (.startedAt // "")}]
+    | group_by(.run_id)
+    | map({run_id: .[0].run_id, started_at: (map(.started_at) | max)})
+    | sort_by(.started_at)
+    | reverse
+    | .[].run_id
+  ' <<<"$pull_view")"
+
+  while IFS= read -r candidate_id; do
+    [[ -n "$candidate_id" ]] || continue
+    if candidate_run="$(gh api "repos/$repository/actions/runs/$candidate_id")" && \
+       jq -e --arg head "$pull_head_sha" --arg ref "$pull_head_ref" '
+         .event == "pull_request"
+         and .head_sha == $head
+         and .head_branch == $ref
+         and .path == ".github/workflows/ci.yml"
+       ' <<<"$candidate_run" >/dev/null; then
+      printf '%s\n' "$candidate_run"
       return 0
     fi
-
-    page=$((page + 1))
-  done
+  done <<<"$candidate_run_ids"
 
   return 1
 }
-
-run="$(find_latest_pr_run)" || {
-  echo "Cannot authorize deployment of $sha: no CI workflow run was found for PR #$pull_number at head $pull_head_sha" >&2
-  exit 1
-}
-
-run_id="$(jq -r '.id' <<<"$run")"
-run_attempt="$(jq -r '.run_attempt // 1' <<<"$run")"
-run_url="$(jq -r '.html_url // empty' <<<"$run")"
 
 wait_attempts="${DEPLOYMENT_AUTH_WAIT_ATTEMPTS:-240}"
 wait_interval="${DEPLOYMENT_AUTH_WAIT_INTERVAL:-15}"
@@ -85,6 +89,25 @@ if [[ ! "$wait_attempts" =~ ^[1-9][0-9]*$ || ! "$wait_interval" =~ ^[0-9]+$ ]]; 
   echo "Deployment authorization wait settings must be non-negative integers" >&2
   exit 1
 fi
+
+run=""
+for ((attempt = 1; attempt <= wait_attempts; attempt++)); do
+  if run="$(find_pr_run)"; then
+    break
+  fi
+
+  if (( attempt == wait_attempts )); then
+    echo "Timed out waiting for PR #$pull_number to expose its CI run in the check rollup" >&2
+    exit 1
+  fi
+
+  echo "Waiting for PR #$pull_number CI check runs to appear"
+  sleep "$wait_interval"
+done
+
+run_id="$(jq -r '.id' <<<"$run")"
+run_attempt="$(jq -r '.run_attempt // 1' <<<"$run")"
+run_url="$(jq -r '.html_url // empty' <<<"$run")"
 
 for ((attempt = 1; attempt <= wait_attempts; attempt++)); do
   run_status="$(gh api "repos/$repository/actions/runs/$run_id")"
@@ -122,7 +145,6 @@ if [[ "$run_conclusion" != success ]]; then
 fi
 
 jobs="$(gh api "repos/$repository/actions/runs/$run_id/jobs?filter=latest&per_page=100")"
-required_jobs=(scan_ruby scan_js test sqlite-test system-test production-smoke development-smoke record-ci-attestation)
 for job_name in "${required_jobs[@]}"; do
   matching_jobs="$(jq -c --arg name "$job_name" '[.jobs[]? | select(.name == $name)]' <<<"$jobs")"
   job_count="$(jq 'length' <<<"$matching_jobs")"
@@ -172,7 +194,7 @@ if [[ "$tested_tree" != "$merged_tree" ]]; then
   exit 1
 fi
 
-latest_run="$(find_latest_pr_run)" || {
+latest_run="$(find_pr_run)" || {
   echo "Cannot revalidate PR #$pull_number CI run after waiting" >&2
   exit 1
 }

@@ -47,9 +47,6 @@ if [[ "$command_name" == api ]]; then
     "repos/$GITHUB_REPOSITORY/pulls/52")
       printf '%s\n' "${GH_PULL_REQUEST_JSON:?}"
       ;;
-    "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?event=pull_request&per_page=100&page=1")
-      printf '%s\n' "${GH_WORKFLOW_RUNS_JSON:?}"
-      ;;
     "repos/$GITHUB_REPOSITORY/actions/runs/900")
       printf '%s\n' "${GH_RUN_STATUS_JSON:?}"
       ;;
@@ -64,6 +61,8 @@ if [[ "$command_name" == api ]]; then
       exit 1
       ;;
   esac
+elif [[ "$command_name" == pr && "${1:-}" == view ]]; then
+  printf '%s\n' "${GH_PR_CHECKS_JSON:?}"
 elif [[ "$command_name" == run && "${1:-}" == download ]]; then
   shift
   output_directory=""
@@ -101,9 +100,22 @@ build_fixtures() {
   local include_artifact="${4:-true}"
 
   GH_COMMIT_PRS_JSON="$(jq -n --arg sha "$commit_sha" '[{number: 52, merged_at: "2026-09-25T12:00:00Z", merge_commit_sha: $sha, base: {ref: "dev"}}]')"
-  GH_PULL_REQUEST_JSON="$(jq -n --arg sha "$commit_sha" '{number: 52, merged_at: "2026-09-25T12:00:00Z", merge_commit_sha: $sha, base: {ref: "dev"}, head: {sha: $sha}}')"
-  GH_WORKFLOW_RUNS_JSON="$(jq -n --arg sha "$commit_sha" '{workflow_runs: [{id: 900, run_number: 7, run_attempt: 1, event: "pull_request", status: "completed", conclusion: "success", pull_requests: [{number: 52, head: {sha: $sha}, base: {ref: "dev"}}]}]}')"
-  GH_RUN_STATUS_JSON="$(jq -n --arg conclusion "$run_conclusion" '{id: 900, run_attempt: 1, event: "pull_request", status: "completed", conclusion: $conclusion}')"
+  GH_PULL_REQUEST_JSON="$(jq -n --arg sha "$commit_sha" '{number: 52, merged_at: "2026-09-25T12:00:00Z", merge_commit_sha: $sha, base: {ref: "dev"}, head: {sha: $sha, ref: "feature/ci"}}')"
+  GH_PR_CHECKS_JSON="$(jq -n '
+    {statusCheckRollup: (
+      ["scan_ruby", "scan_js", "test", "sqlite-test", "system-test", "production-smoke", "development-smoke"]
+      | to_entries
+      | map({
+          name: .value,
+          workflowName: "CI",
+          conclusion: "SUCCESS",
+          status: "COMPLETED",
+          startedAt: "2026-09-25T12:00:00Z",
+          detailsUrl: ("https://github.com/example/elef/actions/runs/900/job/" + ((.key + 1) | tostring))
+        })
+    )}
+  ')"
+  GH_RUN_STATUS_JSON="$(jq -n --arg sha "$commit_sha" --arg conclusion "$run_conclusion" '{id: 900, run_attempt: 1, event: "pull_request", status: "completed", conclusion: $conclusion, head_sha: $sha, head_branch: "feature/ci", path: ".github/workflows/ci.yml", pull_requests: []}')"
   GH_JOBS_JSON="$(jq -n --arg failed "$failed_job" '{jobs: (["scan_ruby", "scan_js", "test", "sqlite-test", "system-test", "production-smoke", "development-smoke", "record-ci-attestation"] | map({name: ., conclusion: (if . == $failed then "failure" else "success" end)}))}')"
 
   if [[ "$include_artifact" == true ]]; then
@@ -121,8 +133,8 @@ build_fixtures() {
     '{pr_number: $pr_number, workflow_run_id: $workflow_run_id, run_attempt: $run_attempt, tested_sha: $tested_sha, tested_tree: $tested_tree}' \
     > "$GH_ATTESTATION_FIXTURE"
 
-  export GH_COMMIT_PRS_JSON GH_PULL_REQUEST_JSON GH_WORKFLOW_RUNS_JSON
-  export GH_RUN_STATUS_JSON GH_JOBS_JSON GH_ARTIFACTS_JSON
+  export GH_COMMIT_PRS_JSON GH_PULL_REQUEST_JSON GH_PR_CHECKS_JSON GH_RUN_STATUS_JSON
+  export GH_JOBS_JSON GH_ARTIFACTS_JSON
 }
 
 assert_rejected() {

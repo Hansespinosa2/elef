@@ -36,5 +36,12 @@ publisher = jobs.fetch("publish-deployment-ref")
 abort "deployment publishing must be a lightweight post-merge push job" unless
   publisher["if"] == "github.event_name == 'push' && (github.ref_name == 'dev' || github.ref_name == 'main')" &&
     !publisher.key?("needs")
+abort "deployment authorization requires only scoped read access plus ref-write access" unless
+  publisher.fetch("permissions") == {
+    "contents" => "write",
+    "actions" => "read",
+    "checks" => "read",
+    "pull-requests" => "read"
+  }
 
 puts "CI runs the seven required checks once per PR and verifies them before publishing"
