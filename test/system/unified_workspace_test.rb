@@ -28,7 +28,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     input.send_keys("new snippet", :enter)
 
     assert_current_path new_snippet_path
-    assert_equal "snippet_name", page.evaluate_script("document.activeElement.id")
+    assert_selector "#snippet_name:focus"
     assert_selector "label[for='snippet_name']", text: "Name"
     assert_selector "label[for='snippet_trigger']", text: "Trigger"
     assert_selector "label[for='snippet_body']", text: "Body"
