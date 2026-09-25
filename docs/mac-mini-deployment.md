@@ -1,139 +1,162 @@
 # Mac mini single-user deployment
 
-This is the intended operating model for a permanent personal Elef instance.
-It keeps production and development independent while using Tailscale as the
-only network boundary. It is not a public or multi-user deployment model.
+Elef runs as two independent Compose instances on the Mac mini. Tailscale is
+the only network boundary. This is a private, single-user deployment.
 
 ## Directory and branch layout
 
-Use two checkouts with two databases and two storage volumes:
-
 ```text
-~/development/elef/
-├── prod/    # tracks main; production Compose stack; port 3000
-└── dev/     # tracks dev; development Compose stack; port 3001
+~/Development/apps/elef/
+├── dev/    # Git checkout of dev; development app and PostgreSQL
+├── prod/   # Git checkout of main; production app source
+└── ops/    # Mac mini production Compose config, secrets, backups, and releases
 ```
 
-The branch contract is deliberately small:
+The `ops/` directory belongs to this Mac mini workspace; it is not part of the
+`dev` or `main` checkout. Production uses PostgreSQL and uploaded files in
+separate persistent volumes. Development has its own PostgreSQL database and
+storage volumes, isolated from production.
 
-- `main` is the deployable production line.
-- `dev` is the integration line and the source of the development instance.
-- `feat/<short-name>` branches start from `dev`, stay short-lived, and merge
-  back into `dev` through review and CI.
-- Promote `dev` to `main` only when the development instance is stable and a
-  production backup has been completed.
+Keep the branch contract simple:
 
-Do not run production from the `dev` checkout or development from the `prod`
-checkout. The separate directories make that mistake visible.
+- `dev` is the integration line and serves the development instance.
+- `main` is the production line.
+- Feature branches start from `dev`, pass review and CI, and merge into `dev`.
+- Promote tested code to `main` when it is ready for production.
+
+## Automatic deployment
+
+Pull requests run the seven required CI checks. After merge, a lightweight
+workflow verifies that those checks succeeded in the PR's test run and that
+the merged source tree is exactly the tree tested by CI. It then advances one
+of these refs to the approved commit without rerunning the suite:
+
+- `elef-deploy-dev` for `dev`
+- `elef-deploy-main` for `main`
+
+GitHub Actions only publishes these refs after CI succeeds; it does not deploy
+the app or select a machine. Deployment happens on a computer only while its
+machine-local watcher is installed and running. This runbook installs that
+watcher on the Mac mini. The setup does not enforce a hardware identity, so a
+watcher installed and running on another computer would deploy there too.
+
+The Mac mini's per-user launchd job checks those refs once a minute. It fetches
+the approved commit, builds from an immutable source snapshot under
+`ops/releases/`, starts the matching Compose instance, and checks the health
+endpoint. It does not change the `dev/` or `prod/` working trees, so local edits
+there are preserved. Production saves a timestamped copy of its full storage
+volume under `ops/backups/production/` before each deployment.
+
+Enable the watcher after the CI workflow changes are present on both origin
+branches:
+
+```sh
+ops/install-deployment-watcher install
+ops/install-deployment-watcher status
+```
+
+The watcher runs as the logged-in Mac user and fetches through the checkout's
+existing Git authentication. For a GitHub CLI login, configure Git and verify
+read access before installing:
+
+```sh
+gh auth status --hostname github.com
+gh auth setup-git
+git -C dev ls-remote --heads origin refs/heads/dev
+```
+
+If the saved GitHub login is invalid, reauthenticate with
+`gh auth login -h github.com` and repeat those commands. An existing SSH-based
+origin and SSH identity also work. The watcher needs read access to the private
+repository; it does not need a new deploy key, inbound network access, a GitHub
+secret, or a self-hosted GitHub Actions runner.
+
+The final GitHub Actions job uses scoped `contents: write`, `actions: read`,
+`checks: read`, and `pull-requests: read` permissions to verify the successful
+PR run and advance the deploy refs. This changes only GitHub Actions; no Mac
+mini-side configuration change is needed while the watcher continues to follow
+`elef-deploy-dev` and `elef-deploy-main`. If an approved deploy ref does not
+exist yet, the watcher waits until a successful CI run creates it.
+
+Check deploy state and logs with:
+
+```sh
+ops/deploy-origin-branches status
+tail -f ops/logs/deploy-origin-branches.log
+tail -f ops/logs/deploy-origin-branches-error.log
+```
+
+Retry a failed deployment after fixing its cause with:
+
+```sh
+ops/deploy-origin-branches retry dev
+ops/deploy-origin-branches retry main
+```
+
+Deployments replace one web container, so a brief interruption is expected.
+Rails runs `db:prepare` when the new container starts; that task applies
+pending migrations. Keep schema changes compatible with the previous app
+version when possible. The production backup is on the Mac mini, so copy
+timestamped backups to another device regularly.
 
 ## One-time setup
 
-On the Mac mini, install Git, Docker with Compose, and Tailscale. Then create
-the two checkouts and put each on its intended branch:
+Create the production secret and development environment file:
 
-```bash
-mkdir -p ~/development/elef
-cd ~/development/elef
-git clone <repository-url> prod
-git clone <repository-url> dev
-cd prod && git switch main
-cd ../dev && git switch dev
+```sh
+ops/setup-production-env
+cp dev/.env.development.example dev/.env.development
 ```
 
-Configure production:
-
-```bash
-cd ~/development/elef/prod
-cp .env.personal.example .env.personal
-# Put a long random value in POSTGRES_PASSWORD.
-# Put `bin/rails secret` output in SECRET_KEY_BASE.
-scripts/personal-instance config
-```
-
-Configure development:
-
-```bash
-cd ~/development/elef/dev
-cp .env.development.example .env.development
-scripts/development-instance config
-```
-
-The development stack is source-mounted, so edits in the `dev` checkout are
-picked up by Rails and Tailwind. Its PostgreSQL database and storage are not
-shared with production.
-
-## Start and verify
-
-```bash
-cd ~/development/elef/prod
-scripts/personal-instance up
-scripts/personal-instance check
-
-cd ~/development/elef/dev
-scripts/development-instance up
-scripts/development-instance check
-```
-
-Production listens on `127.0.0.1:3000`; development listens on
-`127.0.0.1:3001`. Both containers restart unless stopped, and `down` preserves
-their data volumes.
-
-## Tailscale boundary
-
-Use Tailscale Serve, or an equivalent tailnet-only proxy, to publish the two
-loopback ports to your own tailnet devices. Keep the application ports bound
-to `127.0.0.1`; do not bind them to `0.0.0.0`, and do not use Tailscale Funnel.
-Configure separate tailnet endpoints for production (`127.0.0.1:3000`) and
-development (`127.0.0.1:3001`) using the syntax supported by the installed
-Tailscale version.
-
-For production, set these values in `.env.personal` before exposing it through
-the tailnet proxy:
+Add the Mac mini's Tailscale MagicDNS hostname to `dev/.env.development` so
+Rails accepts requests forwarded by Tailscale Serve:
 
 ```dotenv
-ELEF_ASSUME_SSL=true
-ELEF_FORCE_SSL=true
 ELEF_ALLOWED_HOSTS=mac-mini.<your-tailnet>.ts.net
 ```
 
-Use the exact hostname that the proxy sends in the `Host` header. If more than
-one private hostname is needed, separate them with commas. The `/up` health
-endpoint remains reachable by the local container health check.
+Production secrets live in the private `ops/production.env` file. Do not put
+that file in either Git checkout.
 
-## Normal operating procedures
+## Start and verify
 
-Update development first:
+```sh
+ops/elef-production up
+ops/elef-production check
 
-```bash
-cd ~/development/elef/dev
-git fetch origin
-git switch dev
-git pull --ff-only
-scripts/development-instance up
-scripts/development-instance check
+dev/scripts/development-instance up
+dev/scripts/development-instance check
+ops/check-all
 ```
 
-Promote a tested development line to production only after taking a backup:
+Production listens on `127.0.0.1:3000`; development listens on
+`127.0.0.1:3001`. Both Compose services restart when Colima's Docker VM starts.
+Use `ops/elef-production down` or `dev/scripts/development-instance down` to
+stop a service without deleting its data volumes.
 
-```bash
-cd ~/development/elef/prod
-scripts/personal-instance backup
-git fetch origin
-git switch main
-git pull --ff-only
-scripts/personal-instance up
-scripts/personal-instance check
+## Tailscale boundary
+
+Publish the loopback ports through Tailscale Serve or the shared tailnet route
+setup. Keep both app ports bound to `127.0.0.1`; do not bind them to
+`0.0.0.0` or use Tailscale Funnel. The preferred paths are:
+
+- `https://mac-mini.tail889398.ts.net/apps/elef/prod`
+- `https://mac-mini.tail889398.ts.net/apps/elef/dev`
+
+Use the current MagicDNS hostname if the tailnet name changes. The `/up`
+health endpoints are checked locally by Compose and by the deployment watcher.
+
+## Backups and recovery
+
+Each automatic production deployment stores a checksummed archive of the
+production database and storage in `ops/backups/production/<timestamp>/`. The
+archive contains a PostgreSQL dump and Active Storage files. Create a manual
+snapshot at any time with:
+
+```sh
+ops/elef-production backup
 ```
 
-Keep timestamped backup directories off the Mac mini as well as on it. Test a
-restore into a disposable instance before relying on a backup as a recovery
-plan. Never use `docker compose down -v` for routine shutdown; it deletes the
-database and storage volumes.
-
-## Future multi-user work
-
-This layout is intentionally compatible with a later hosted architecture, but
-it does not provide authentication or authorization today. Before sharing the
-instance, add user/workspace identity, authorization, request limits, and a
-proper public edge. The single-user Tailscale boundary is the current security
-boundary.
+Keep copies off the Mac mini and periodically verify that a backup can be
+restored. Never use `docker compose down -v` for routine shutdown; it deletes
+the database and storage volumes.

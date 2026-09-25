@@ -20,7 +20,7 @@ services:
 
   web:
     build:
-      context: .
+      context: ${ELEF_DEVELOPMENT_SOURCE:-.}
       dockerfile: Dockerfile.development
     restart: unless-stopped
     depends_on:
@@ -28,11 +28,13 @@ services:
         condition: service_healthy
     environment:
       RAILS_ENV: development
+      RAILS_RELATIVE_URL_ROOT: /apps/elef/dev
       PGHOST: db
       PGPORT: 5432
       PGDATABASE: ${POSTGRES_DB:-elef_development}
       PGUSER: ${POSTGRES_USER:-elef}
       PGPASSWORD: ${POSTGRES_PASSWORD:-elef-development}
+      ELEF_ALLOWED_HOSTS: ${ELEF_ALLOWED_HOSTS:-}
       RAILS_MAX_THREADS: ${RAILS_MAX_THREADS:-3}
       RUBY_DEBUG_OPEN: ${RUBY_DEBUG_OPEN:-false}
       RUBY_DEBUG_LAZY: ${RUBY_DEBUG_LAZY:-true}
@@ -40,7 +42,7 @@ services:
     ports:
       - "${APP_BIND_ADDRESS:-127.0.0.1}:${APP_PORT:-3001}:3000"
     volumes:
-      - .:/rails
+      - ${ELEF_DEVELOPMENT_SOURCE:-.}:/rails
       - elef_development_storage:/rails/storage
       - elef_development_tmp:/rails/tmp
     command: ["sh", "-c", "bin/rails db:prepare && exec bin/dev"]

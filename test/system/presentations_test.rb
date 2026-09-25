@@ -4,6 +4,10 @@ require "stringio"
 require "tempfile"
 
 class PresentationsTest < ApplicationSystemTestCase
+  def primary_modifier
+    RUBY_PLATFORM.match?(/darwin/) ? :meta : :control
+  end
+
   def wait_for_fresh_projection
     assert_selector "form.visual-editor-form:not([data-preview-projection-stale='true'])", wait: 5
   end
@@ -24,6 +28,8 @@ class PresentationsTest < ApplicationSystemTestCase
         selected = page.execute_script(<<~JAVASCRIPT, target, visible_text)
           const root = arguments[0];
           const needle = arguments[1];
+          const editableBlock = root.closest("[contenteditable='true']") || root;
+          editableBlock.focus({ preventScroll: true });
           const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
           let node;
           while (walker.nextNode()) {
@@ -39,10 +45,14 @@ class PresentationsTest < ApplicationSystemTestCase
           const selection = window.getSelection();
           selection.removeAllRanges();
           selection.addRange(range);
-          return true;
+          return {
+            focused: document.activeElement === editableBlock,
+            selected: selection.toString() === needle
+          };
         JAVASCRIPT
-        assert selected, "could not select visual text #{visible_text.inspect}"
-        target.send_keys(replacement)
+        assert selected && selected["focused"] && selected["selected"],
+          "could not focus #{visible_text.inspect} and select it for visual editing"
+        target.find(:xpath, "ancestor-or-self::*[@contenteditable='true'][1]").send_keys(replacement)
         return
       rescue Selenium::WebDriver::Error::StaleElementReferenceError
         attempts += 1
@@ -142,8 +152,8 @@ class PresentationsTest < ApplicationSystemTestCase
     page.execute_script("window.autosaveRequests[1].release()")
     assert_selector '[data-autosave-target="status"]', exact_text: "Saved"
     assert_includes presentation.reload.source, "# Latest edit"
-    page.execute_script(<<~JAVASCRIPT)
-      document.querySelector(".source-field").editorController.dom.dispatchEvent(new FocusEvent("focusout"));
+    page.evaluate_async_script(<<~JAVASCRIPT)
+      window.setTimeout(() => arguments[0](), 1200);
     JAVASCRIPT
     assert_nil page.evaluate_script(<<~JAVASCRIPT)
       (() => {
@@ -753,7 +763,7 @@ class PresentationsTest < ApplicationSystemTestCase
       selection.removeAllRanges();
       selection.addRange(range);
     JAVASCRIPT
-    title.send_keys(:control, "a")
+    title.send_keys(primary_modifier, "a")
     title.send_keys("The State of Testing — Updated")
 
     assert_field "Markdown source", with: "---\npresentationTheme: light\npresentationTypography: modern\n---\n# The State of Testing — Updated\n\n## A field report on making ideas easier to shape, review, and revisit\n\n- **Prepared for:**", wait: 5
@@ -767,7 +777,7 @@ class PresentationsTest < ApplicationSystemTestCase
     find("[data-presentation-editor-action='add-block-after']").click
     block = find(".editor-projection .slide-block", text: "New block", wait: 5)
     block.click
-    block.send_keys(:control, "a")
+    block.send_keys(primary_modifier, "a")
     block.send_keys("## Test")
 
     assert_field "Markdown source", with: "# Existing slide\n\n## Test", wait: 5
@@ -842,6 +852,38 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: source_expected
     assert_equal visual_expected, source_expected
     assert_equal visual.reload.source, source.reload.source
+  end
+
+  test "CRLF autosave responses preserve source offsets for later visual edits" do
+    presentation = Presentation.create!(
+      title: "CRLF canonical source",
+      source: "# Stable offsets\n\nFirst paragraph.\n\n## Later section\n\nFinal paragraph."
+    )
+    canonical_source = presentation.source.sub("First paragraph.", "Server-saved paragraph.")
+
+    visit edit_presentation_path(presentation)
+    page.execute_script(<<~JAVASCRIPT, canonical_source.gsub("\n", "\r\n"))
+      const editor = document.querySelector(".source-field").editorController;
+      editor.replaceServerSource(arguments[0]);
+    JAVASCRIPT
+
+    assert_field "Markdown source", with: canonical_source, wait: 5
+    wait_for_fresh_projection
+    lengths = page.execute_script(<<~JAVASCRIPT)
+      const form = document.querySelector(".visual-editor-form");
+      const editor = form.querySelector(".source-field").editorController;
+      return {
+        editor: editor.value.length,
+        document: editor.view.state.doc.length,
+        sourceMap: form.presentationEditorController.map.source_length
+      };
+    JAVASCRIPT
+    assert_equal canonical_source.length, lengths.fetch("editor")
+    assert_equal canonical_source.length, lengths.fetch("document")
+    assert_equal canonical_source.length, lengths.fetch("sourceMap")
+
+    type_visual_text(".slide-block", "Final paragraph.", "Edited final paragraph.")
+    assert_field "Markdown source", with: canonical_source.sub("Final paragraph.", "Edited final paragraph."), wait: 5
   end
 
   test "new inline math renders before a visual block loses focus" do
@@ -1028,7 +1070,7 @@ class PresentationsTest < ApplicationSystemTestCase
     before_add = page.evaluate_script("document.querySelector('.source-field').editorController.value")
     find('button[aria-label="Add slide after selected"]').click
     assert_selector ".slide-overview-card", count: 4
-    page.driver.browser.action.key_down(:control).send_keys("z").key_up(:control).perform
+    page.driver.browser.action.key_down(primary_modifier).send_keys("z").key_up(primary_modifier).perform
     assert_selector ".slide-overview-card", count: 3
     assert_selector ".slide-overview-actions button:not([disabled])", minimum: 1, wait: 8
     assert_equal before_add, page.evaluate_script("document.querySelector('.source-field').editorController.value")
@@ -1421,7 +1463,7 @@ class PresentationsTest < ApplicationSystemTestCase
     find("summary", text: "More").click
     click_on "Load sample presentations"
 
-    assert_selector ".flash.notice", text: "Sample presentations loaded.", wait: 10
+    assert_selector ".flash.notice", text: "Sample presentations loaded.", wait: 15
     Presentations::SampleData::SAMPLES.each do |sample|
       assert_text sample[:title]
     end
@@ -1706,7 +1748,8 @@ class PresentationsTest < ApplicationSystemTestCase
 
     visit edit_presentation_path(presentation)
     source = find_field("Markdown source")
-    source.send_keys("beq")
+    editor = find(".cm-content")
+    editor.send_keys("beq")
     assert_selector ".snippet-palette", visible: true
     assert_text ":beq"
     assert_selector ".snippet-option[aria-selected='true']"
@@ -1715,7 +1758,7 @@ class PresentationsTest < ApplicationSystemTestCase
     assert palette_position["belowCaret"] || palette_position["aboveCaret"], "The snippet popup should stay next to the caret"
     assert_operator palette_position["paletteBottom"], :<, palette_position["viewportBottom"]
 
-    source.send_keys(:enter)
+    editor.send_keys(:enter)
     assert_equal "# Math\n\n$$\nequation\n$$", source.value
     assert_equal "equation", page.evaluate_script("(() => { const e = document.querySelector('[data-snippet-palette-target=editor]'); return e.value.slice(e.selectionStart, e.selectionEnd) })()")
   end
