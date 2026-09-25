@@ -107,23 +107,83 @@ class PresentationsTest < ApplicationSystemTestCase
     parent = Presentation.create!(title: "Workflow parent", source: "# Keep this source")
     visit presentations_path
     within("#presentation_#{parent.id}") do
+      find(".library-card-menu-trigger").click
       find("summary", text: "Rename").click
       find('input[aria-label="Rename Workflow parent"]').set("Renamed parent")
       click_on "Save title"
     end
     assert_text "Presentation renamed.", wait: 5
     within("article", text: "Renamed parent") do
+      find(".library-card-menu-trigger").click
       find("summary", text: "Fork").click
       click_on "As inspiration"
     end
     assert_field "Title", with: "Renamed parent (Inspiration)"
     click_on "Library"
     within("#presentation_#{parent.id}") do
+      find(".library-card-menu-trigger").click
       accept_confirm { click_on "Delete" }
     end
     assert_text "Presentation deleted."
     assert_text "Parent no longer available"
     assert_equal "# Keep this source", Presentation.find_by!(parent_id: nil, fork_type: "inspiration").source
+  end
+
+  test "library cards keep previews undistorted and controls isolated from the edit link" do
+    document = Document.create!(title: "Card document", source: "# Card document\n\nFirst page body.\n\n## Later heading")
+    presentation = Presentation.create!(title: "Card deck", source: "# Card deck\n\n---\n\n## Later slide")
+
+    visit root_path
+
+    geometry = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const box = selector => document.querySelector(selector).getBoundingClientRect();
+        const frame = box('.library-card .library-preview');
+        const slide = box('.library-card .slide');
+        const page1 = box('.library-card .library-preview-page .document-page');
+        return {
+          frameRatio: frame.width / frame.height,
+          slideRatio: slide.width / slide.height,
+          pageRatio: page1.width / page1.height,
+          slideFits: slide.width <= frame.width + 1 && slide.height <= frame.height + 1,
+          pageFits: page1.width <= frame.width + 1 && page1.height <= frame.height + 1,
+          slideScale: getComputedStyle(document.querySelector('.library-card .slide')).getPropertyValue('--slide-scale').trim(),
+          pageScale: getComputedStyle(document.querySelector('.library-card .library-preview-page')).getPropertyValue('--slide-scale').trim()
+        };
+      })()
+    JAVASCRIPT
+
+    assert_in_delta 16.0 / 9.0, geometry["frameRatio"], 0.02
+    assert_in_delta 16.0 / 9.0, geometry["slideRatio"], 0.02
+    assert_in_delta 52.0 / 72.0, geometry["pageRatio"], 0.02
+    assert geometry["slideFits"], "slide preview overflows its card frame"
+    assert geometry["pageFits"], "document preview overflows its card frame"
+    assert_operator geometry["slideScale"].to_f, :<, 1.0
+    assert_operator geometry["pageScale"].to_f, :<, 1.0
+
+    within("#presentation_#{presentation.id}") do
+      find(".library-card-preview-button").click
+    end
+    assert_current_path presentation_path(presentation)
+    assert_selector ".presentation-surface .slide", text: "Card deck"
+
+    visit root_path
+    within("#presentation_#{presentation.id}") do
+      find(".library-card-menu-trigger").click
+      assert_selector "details.library-card-menu[open]"
+    end
+    assert_current_path root_path
+
+    visit root_path
+    find("#presentation_#{presentation.id} a.library-card-open").click
+    assert_current_path edit_presentation_path(presentation)
+
+    visit root_path
+    assert_no_link "Edit Card document"
+    within("#document_#{document.id}") do
+      find(".library-card-title a").click
+    end
+    assert_current_path edit_document_path(document)
   end
 
   test "autosave persists newer edits after an outstanding request and keeps them dirty until saved" do
@@ -1415,6 +1475,7 @@ class PresentationsTest < ApplicationSystemTestCase
     page.execute_script("document.querySelector('.lineage-node.is-located').scrollIntoView({block: 'center'})")
 
     within("article", match: :first) do
+      find(".library-card-menu-trigger").click
       find('summary', text: "Rename").click
       assert_selector '.library-rename input[type="text"]', visible: true
       page.execute_script("document.querySelector('.rename-menu[open]').scrollIntoView({block: 'center'})")
