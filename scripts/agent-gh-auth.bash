@@ -1,5 +1,5 @@
 _ELEF_AGENT_AUTH_SCRIPT="${BASH_SOURCE[0]}"
-_ELEF_AGENT_AUTH_ROOT="$(cd -- "$(dirname -- "$_ELEF_AGENT_AUTH_SCRIPT")/.." && pwd)"
+_ELEF_AGENT_AUTH_ROOT="$(builtin cd -- "$(dirname -- "$_ELEF_AGENT_AUTH_SCRIPT")/.." && builtin pwd -P)"
 
 __elef_agent_with_gh_auth() {
   local agent="$1"
