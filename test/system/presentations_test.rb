@@ -336,6 +336,47 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_selector ".presentation-editor-projection .slide", count: 2
   end
 
+  test "presentation caret follows source switches and arrow keys move between blocks" do
+    source = "# First slide\n\nA paragraph\n\nNext paragraph"
+    presentation = Presentation.create!(title: "Presentation caret", source: source)
+    visit edit_presentation_path(presentation)
+
+    block = find(".editor-projection .slide-block", text: "A paragraph")
+    page.execute_script(<<~JAVASCRIPT, block)
+      const block = arguments[0];
+      const text = block.querySelector("p").firstChild;
+      block.focus({ preventScroll: true });
+      window.getSelection().setPosition(text, 3);
+    JAVASCRIPT
+    captured = page.evaluate_script("document.querySelector('form.visual-editor-form').presentationEditorController.captureCaret()")
+    assert_equal source.index("A paragraph") + 3, captured["sourceOffset"]
+    click_on "Source"
+    page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(() => arguments[0]()))")
+    assert_equal source.index("A paragraph") + 3,
+      page.evaluate_script("document.querySelector('.source-field').editorController.view.state.selection.main.head")
+
+    click_on "Visual"
+    page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(() => arguments[0]()))")
+    restored = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const selection = window.getSelection();
+        const block = selection.focusNode?.parentElement?.closest(".slide-block");
+        return { text: block?.innerText, offset: selection.focusOffset };
+      })()
+    JAVASCRIPT
+    assert_equal "A paragraph", restored["text"].strip
+    assert_equal 3, restored["offset"]
+
+    moved = page.execute_script(<<~JAVASCRIPT)
+      const block = document.activeElement;
+      const event = new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true });
+      block.dispatchEvent(event);
+      return { handled: event.defaultPrevented, text: document.activeElement.innerText.trim() };
+    JAVASCRIPT
+    assert_equal true, moved["handled"]
+    assert_equal "Next paragraph", moved["text"]
+  end
+
   test "disables stale presentation blocks and controls until matching HTML and map install" do
     original = "# Old A\n\nOld first block\n---\n# Old B\n\nOld second block"
     updated = "# New A\n\nFresh first block\n\nFresh second block\n---\n# New B\n\nFresh third block\n---\n# New C"
