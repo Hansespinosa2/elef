@@ -128,4 +128,4 @@ jobs:
             exit 0
           fi
 
-          git push --force origin "$GITHUB_SHA:$deployment_ref"
+          git push origin "$GITHUB_SHA:$deployment_ref"
