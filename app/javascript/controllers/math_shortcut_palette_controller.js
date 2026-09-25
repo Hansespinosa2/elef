@@ -86,6 +86,7 @@ export default class extends Controller {
   }
 
   keydown(event) {
+    if (event.defaultPrevented || event.elefMathShorthandHandled) return
     if (event.key === "Escape" && !this.paletteTarget.hidden) {
       event.preventDefault()
       this.close()

@@ -3,6 +3,7 @@ require "rouge"
 require "rouge/plugins/redcarpet"
 require "katex"
 require "cgi"
+require "securerandom"
 
 module Presentations
   class HtmlRenderer < Redcarpet::Render::HTML
@@ -63,8 +64,9 @@ module Presentations
 
     def render(markdown, media_resolver: nil)
       renderer = media_resolver ? renderer_with_media(media_resolver) : markdown_renderer
-      html = renderer.render(markdown.to_s)
-      render_math_outside_code(html).html_safe
+      source, expressions = protect_math(markdown.to_s)
+      html = renderer.render(source)
+      render_protected_math(html, expressions).html_safe
     end
 
     def markdown_renderer
@@ -97,25 +99,137 @@ module Presentations
       )
     end
 
-    def render_math_outside_code(html)
-      html.split(/(<(?:pre|code)\b.*?<\/(?:pre|code)>)/m).map do |segment|
-        segment.match?(/\A<(?:pre|code)\b/m) ? segment : render_math(segment)
+    def protect_math(markdown)
+      placeholders = {}
+      nonce = "ELEFMATH#{SecureRandom.hex(8).upcase}X"
+      protected_source = +""
+      cursor = 0
+      inline_code_length = nil
+      fence = nil
+
+      while cursor < markdown.length
+        if inline_code_length.nil? && (cursor.zero? || markdown[cursor - 1] == "\n")
+          line_end = markdown.index("\n", cursor) || markdown.length
+          line = markdown[cursor...line_end]
+          fence_marker = line.match(/\A {0,3}(`{3,}|~{3,})/)
+          if fence || fence_marker || line.match?(/\A(?: {4}|\t)/)
+            if fence_marker
+              marker = fence_marker[1]
+              if fence.nil?
+                fence = { character: marker[0], length: marker.length }
+              elsif marker[0] == fence[:character] && marker.length >= fence[:length] && line[fence_marker.end(0)..].to_s.strip.empty?
+                fence = nil
+              end
+            end
+
+            line_end += 1 if line_end < markdown.length
+            protected_source << markdown[cursor...line_end]
+            cursor = line_end
+            next
+          end
+        end
+
+        character = markdown[cursor]
+        if character == "\\" && cursor + 1 < markdown.length
+          protected_source << markdown[cursor, 2]
+          cursor += 2
+        elsif character == "`"
+          run_length = markdown[cursor..].match(/\A`+/)[0].length
+          if inline_code_length.nil?
+            inline_code_length = run_length
+          elsif inline_code_length == run_length
+            inline_code_length = nil
+          end
+          protected_source << markdown[cursor, run_length]
+          cursor += run_length
+        elsif inline_code_length
+          protected_source << character
+          cursor += 1
+        elsif character == "$"
+          dollar_run = markdown[cursor..].match(/\A\$+/)[0].length
+          delimiter_length = dollar_run == 1 || dollar_run == 2 ? dollar_run : 0
+          closing = delimiter_length.positive? ? math_closing_index(markdown, cursor + delimiter_length, delimiter_length) : nil
+
+          if closing
+            expression = markdown[(cursor + delimiter_length)...closing]
+            placeholder = "#{nonce}#{placeholders.length}Z"
+            placeholders[placeholder] = { expression: expression, display_mode: delimiter_length == 2 }
+            protected_source << placeholder
+            cursor = closing + delimiter_length
+          else
+            protected_source << markdown[cursor, [dollar_run, 2].min]
+            cursor += [dollar_run, 2].min
+          end
+        else
+          protected_source << character
+          cursor += 1
+        end
+      end
+
+      [protected_source, placeholders]
+    end
+
+    def render_protected_math(html, expressions)
+      code_depth = 0
+      html.split(/(<[^>]*>)/m).map do |segment|
+        if segment.start_with?("<")
+          code_depth += 1 if segment.match?(/\A<(?:pre|code)\b/i)
+          code_depth = [code_depth - 1, 0].max if segment.match?(/\A<\/(?:pre|code)\b/i)
+          expressions.each do |placeholder, math|
+            source = ERB::Util.html_escape(math_source(math))
+            segment = segment.gsub(placeholder) { source }
+          end
+          next segment
+        end
+
+        expressions.each do |placeholder, math|
+          replacement = if code_depth.positive?
+            ERB::Util.html_escape(math_source(math))
+          else
+            katex(math[:expression], display_mode: math[:display_mode])
+          end
+          segment = segment.gsub(placeholder) { replacement }
+        end
+        segment
       end.join
     end
 
-    def render_math(html)
-      html.split(/(<[^>]*>)/m).map do |segment|
-        next segment if segment.start_with?("<")
+    def math_source(math)
+      delimiter = math[:display_mode] ? "$$" : "$"
+      "#{delimiter}#{math[:expression]}#{delimiter}"
+    end
 
-        escaped_dollars = []
-        text = segment.gsub(/\\\$/) do
-          escaped_dollars << Regexp.last_match(0)
-          "\u0000MATH_ESCAPED_DOLLAR_#{escaped_dollars.length - 1}\u0000"
+    def math_closing_index(markdown, cursor, delimiter_length)
+      delimiter = "$" * delimiter_length
+      search_from = cursor
+
+      while (closing = markdown.index(delimiter, search_from))
+        if !escaped_math_delimiter?(markdown, closing) &&
+            (delimiter_length == 2 || !markdown[closing + 1..].to_s.start_with?("$")) &&
+            (delimiter_length == 2 || markdown[closing - 1] != "$")
+          expression = markdown[cursor...closing]
+          valid_expression = if delimiter_length == 2
+            expression.strip.present?
+          else
+            expression.present? && !expression.include?("\n") && !expression.match?(/\A\s|\s\z/)
+          end
+          return closing if valid_expression
         end
-        text = text.gsub(/\$\$(.+?)\$\$/m) { katex($1, display_mode: true) }
-        text = text.gsub(/(?<!\$)\$(?!\s)(.+?)(?<!\s)\$(?!\$)/m) { katex($1, display_mode: false) }
-        text.gsub(/\u0000MATH_ESCAPED_DOLLAR_(\d+)\u0000/) { escaped_dollars[Regexp.last_match(1).to_i] }
-      end.join
+
+        search_from = closing + delimiter_length
+      end
+
+      nil
+    end
+
+    def escaped_math_delimiter?(markdown, index)
+      slash_count = 0
+      cursor = index - 1
+      while cursor >= 0 && markdown[cursor] == "\\"
+        slash_count += 1
+        cursor -= 1
+      end
+      slash_count.odd?
     end
 
     def katex(expression, display_mode:)

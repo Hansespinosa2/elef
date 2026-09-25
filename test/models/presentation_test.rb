@@ -382,6 +382,44 @@ class PresentationTest < ActiveSupport::TestCase
     assert_empty fragment.css(".math-error")
   end
 
+  test "renders inline accents and multiline display math before Markdown transforms TeX" do
+    html = Presentations::MarkdownRenderer.render(<<~MARKDOWN)
+      Inline accent: $\\bar{x}$.
+
+      $$
+      \\begin{aligned}
+      x &= y \\\\
+      y &= z
+      \\end{aligned}
+      $$
+    MARKDOWN
+    fragment = Nokogiri::HTML.fragment(html)
+
+    assert_equal 2, fragment.css(".katex").length
+    assert_equal 1, fragment.css(".katex-display").length
+    assert_empty fragment.css(".math-error")
+  end
+
+  test "renders a stress fixture with inline, display, matrix, and aligned math" do
+    source = Rails.root.join("test/fixtures/files/latex_stress.md").read
+    fragment = Nokogiri::HTML.fragment(Presentations::MarkdownRenderer.render(source))
+
+    assert_equal 11, fragment.css(".katex").length
+    assert_equal 3, fragment.css(".katex-display").length
+    assert_empty fragment.css(".math-error")
+    assert_equal 3, fragment.css("code").length
+    assert_equal ["$x^2$", "$x^2$", "$x^2$"], fragment.css("code").map(&:text)
+  end
+
+  test "does not render math-looking link destinations or leak math placeholders" do
+    html = Presentations::MarkdownRenderer.render("[Formula link](/docs/$formula$)")
+    fragment = Nokogiri::HTML.fragment(html)
+
+    assert_equal "/docs/$formula$", fragment.at_css("a")["href"]
+    assert_empty fragment.css(".katex")
+    refute_includes html, "ELEFMATH"
+  end
+
   test "rejects dangerous link and image protocols" do
     html = Presentations::MarkdownRenderer.render("[unsafe](javascript:alert(1)) ![image](javascript:alert(1))")
 

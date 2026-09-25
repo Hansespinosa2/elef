@@ -539,6 +539,27 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_selector ".document-editor-block .katex", text: "test"
   end
 
+  test "document preview renders inline accents and multiline display equations" do
+    document = Document.create!(title: "Document math rendering", source: <<~MARKDOWN)
+      # Math
+
+      Inline $\\bar{x}$.
+
+      $$
+      \\begin{aligned}
+      x &= y \\\\
+      y &= z
+      \\end{aligned}
+      $$
+    MARKDOWN
+
+    visit edit_document_path(document)
+
+    assert_selector ".document-editor-block .katex", count: 2
+    assert_selector ".document-editor-block .katex-display", count: 1
+    assert_no_selector ".document-editor-block .math-error"
+  end
+
   test "visual paragraph edits preserve inline media source" do
     document = Document.create!(title: "Inline image", source: "Before ![diagram](/diagram.svg) after.")
 
@@ -648,6 +669,43 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_includes editor.value, "$\\mathbf{\\hat{x}}^{\\mathsf{T}}"
     assert_includes editor.value, "\n"
     assert_selector '[data-autosave-target="status"]', text: "Saved", wait: 5
+  end
+
+  test "chains supported math modifiers and leaves conflicting chains intact" do
+    document = Document.create!(title: "Math modifier chains", source: "# Math")
+    visit edit_document_path(document)
+    editor = find_field("Markdown source")
+    editor.click
+    editor.send_keys(:end)
+
+    editor.send_keys("\n$x.bar")
+    editor.send_keys(:enter)
+    editor.send_keys(".bb")
+    editor.send_keys(:enter)
+    editor.send_keys("$")
+
+    editor.send_keys("\n$x.bar.bb")
+    editor.send_keys(:enter)
+    editor.send_keys("$")
+
+    editor.send_keys("\n$x.bb.bar")
+    editor.send_keys(:enter)
+    editor.send_keys("$")
+
+    editor.send_keys("\n$x.bb")
+    editor.send_keys(:enter)
+    editor.send_keys(".bar")
+    editor.send_keys(:enter)
+    editor.send_keys("$")
+
+    assert_equal 4, editor.value.scan("$\\mathbf{\\bar{x}}$").length
+
+    ["x.bb.bb", "x.bar.bar", "x.bar.hat"].each do |token|
+      editor.send_keys("\n$#{token}")
+      editor.send_keys(:enter)
+      assert_includes editor.value, "$#{token}\n"
+      editor.send_keys("$")
+    end
   end
 
   test "canonicalizes modifier order and ignores code and unknown contexts" do
