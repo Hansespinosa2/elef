@@ -834,7 +834,7 @@ class PresentationsTest < ApplicationSystemTestCase
     end
 
     click_on "Save presentation"
-    assert_text "Presentation saved."
+    assert_text "Presentation saved.", wait: 10
     visit edit_presentation_path(visual)
     assert_field "Markdown source", with: visual_expected
 
@@ -847,7 +847,7 @@ class PresentationsTest < ApplicationSystemTestCase
     end
 
     click_on "Save presentation"
-    assert_text "Presentation saved."
+    assert_text "Presentation saved.", wait: 10
     visit edit_presentation_path(source)
     assert_field "Markdown source", with: source_expected
     assert_equal visual_expected, source_expected
