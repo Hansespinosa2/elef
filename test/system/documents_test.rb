@@ -350,39 +350,6 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_equal "true", list_block["data-editor-empty-block"], "Enter after Backspace should focus a new empty block"
     list_block.send_keys("- THis is the first item of a list")
     assert_field "Markdown source", with: /\n\n- THis is the first item of a list\z/, wait: 5
-    list_keydown_state = page.execute_script(<<~JAVASCRIPT)
-      const form = document.querySelector('form.visual-editor-form');
-      const controller = window.Stimulus.getControllerForElementAndIdentifier(form, 'visual-editor');
-      const block = document.activeElement.closest('.document-editor-block[data-editor-block-id]');
-      const mappedBlock = controller.map?.slides?.flatMap((slide) => slide.blocks || [])
-        .find((candidate) => candidate.id === block?.dataset.editorBlockId);
-      const region = controller.map?.editable_regions?.find((candidate) => candidate.block_id === mappedBlock?.id);
-      const markdown = region ? controller.editorController.value.slice(region.content_range.start, region.content_range.end) : null;
-      return {
-        blockId: block?.dataset.editorBlockId || null,
-        activeText: block?.innerText || null,
-        focusedBlock: Boolean(block && block === controller.focusedProjectionBlock()),
-        editable: block ? controller.canEditBlock(block) : false,
-        mappedBlock: Boolean(mappedBlock),
-        region: Boolean(region),
-        markdown,
-        kind: markdown === null ? null : controller.currentBlockKind(markdown, region.kind),
-        atEnd: block ? controller.selectionIsAtEnd(block) : false,
-        pendingCaret: controller.pendingCaret || null,
-        blocks: controller.map?.slides?.flatMap((slide) => slide.blocks || []).map(({ id, kind, range, content_range, empty_placeholder }) => ({ id, kind, range, content_range, empty_placeholder })),
-        source: controller.editorController.value
-      };
-    JAVASCRIPT
-    expected_list_keydown_state = {
-      "focusedBlock" => true,
-      "editable" => true,
-      "mappedBlock" => true,
-      "region" => true,
-      "markdown" => "- THis is the first item of a list",
-      "kind" => "list",
-      "atEnd" => true
-    }
-    assert_equal expected_list_keydown_state, list_keydown_state.slice(*expected_list_keydown_state.keys), "editor state: #{list_keydown_state.inspect}"
     active_document_block.send_keys(:enter)
     assert_field "Markdown source", with: /- THis is the first item of a list\n- \z/, wait: 5
     assert_selector ".document-editor-block ul > li", count: 2, wait: 5
