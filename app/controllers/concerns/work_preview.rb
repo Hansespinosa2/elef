@@ -24,8 +24,13 @@ module WorkPreview
     else
       work.source.to_s
     end
-    title = attributes[:title].presence || params[:title].presence || work.title
     raise ArgumentError, "Markdown source must be plain text" unless source.is_a?(String)
+
+    title = if work.document?
+      Presentations::Document.extract_first_h1(source).presence || work.title.presence || work.default_title
+    else
+      attributes[:title].presence || params[:title].presence || work.title
+    end
 
     preview_work = work.class.new(title: title, source: source, work_type: work.work_type, workspace: work.workspace || Workspace.default)
     if work.persisted?
@@ -89,6 +94,7 @@ module WorkPreview
   def work_preview_attributes(work)
     key = work.document? ? :document : :presentation
     fields = %i[title source theme typography]
+    fields.delete(:title) if work.document?
     attributes = params[key]
     attributes.respond_to?(:permit) ? attributes.permit(*fields) : {}
   end
