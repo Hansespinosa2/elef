@@ -23,9 +23,7 @@
         </div>
         <nav class="app-nav mr-auto flex items-center gap-1" aria-label="Primary">
           <%= link_to "Library", root_path, class: "app-nav-link rounded-lg px-3 py-2 text-sm font-bold no-underline text-[#aab7b1] #{'is-active' if %w[library presentations documents].include?(controller_name)}" %>
-          <%= link_to "Snippets", snippets_path, class: "app-nav-link rounded-lg px-3 py-2 text-sm font-bold no-underline text-[#aab7b1] #{'is-active' if controller_name == 'snippets'}" %>
-          <%= link_to "Math", math_shortcuts_path, class: "app-nav-link rounded-lg px-3 py-2 text-sm font-bold no-underline text-[#aab7b1] #{'is-active' if controller_name == 'math_shortcuts'}" %>
-          <%= link_to "Settings", settings_path, class: "app-nav-link rounded-lg px-3 py-2 text-sm font-bold no-underline text-[#aab7b1] #{'is-active' if controller_name == 'workspace_settings'}" %>
+          <%= link_to "Settings", settings_path, class: "app-nav-link rounded-lg px-3 py-2 text-sm font-bold no-underline text-[#aab7b1] #{'is-active' if %w[workspace_settings snippets math_shortcuts].include?(controller_name)}" %>
         </nav>
         <div class="command-palette-root" data-controller="command-palette" data-command-palette-search-url-value="<%= search_path %>" data-command-palette-commands-value="<%= json_escape([
           { id: "quick-open", label: "Quick-open works", description: "Search titles, aliases, headings, and source" },

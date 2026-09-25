@@ -374,6 +374,14 @@ class PresentationTest < ActiveSupport::TestCase
     assert_includes html, "\\$x$"
   end
 
+  test "renders ampersands in matrix math after markdown escaping" do
+    html = Presentations::MarkdownRenderer.render("$$\\begin{bmatrix} a & b \\\\ c & d \\end{bmatrix}$$")
+    fragment = Nokogiri::HTML.fragment(html)
+
+    assert_equal 1, fragment.css(".katex-display .katex").length
+    assert_empty fragment.css(".math-error")
+  end
+
   test "rejects dangerous link and image protocols" do
     html = Presentations::MarkdownRenderer.render("[unsafe](javascript:alert(1)) ![image](javascript:alert(1))")
 

@@ -1,18 +1,19 @@
-<% content_for :title, "Workspace settings" %>
+<% content_for :title, "Settings" %>
+<%= render "layouts/settings_navigation" %>
 <section class="page-title mb-8">
-  <p class="eyebrow mb-1 text-xs font-extrabold uppercase tracking-[0.12em] text-[#6d4aff]">Workspace defaults</p>
-  <h1 class="mb-2 text-4xl font-bold">Appearance</h1>
+  <p class="eyebrow mb-1 text-xs font-extrabold uppercase tracking-[0.12em]">Workspace defaults</p>
+  <h1 class="mb-2 text-4xl font-bold">Settings</h1>
   <p class="text-[#6f675c]">New and unstyled works use these values. Each work can override them in its editor.</p>
 </section>
 
-<%= form_with model: @workspace, url: settings_path, method: :patch, class: "settings-card max-w-2xl rounded-2xl border border-[#ddd5c8] bg-[#fffdf8] p-6" do |form| %>
+<%= form_with model: @workspace, url: settings_path, method: :patch, class: "settings-card max-w-2xl rounded-2xl border p-6" do |form| %>
   <div class="field mb-5">
     <%= form.label :theme, "Default theme", class: "mb-1 block font-extrabold" %>
-    <%= form.select :theme, [["Match workspace", "match"], ["Light", "light"], ["Dark", "dark"]], { selected: @workspace.default_theme }, class: "w-full rounded-xl border border-[#ddd5c8] bg-white p-3" %>
+    <%= form.select :theme, [["Match workspace", "match"], ["Light", "light"], ["Dark", "dark"]], { selected: @workspace.default_theme }, class: "settings-control w-full rounded-xl border p-3" %>
   </div>
   <div class="field mb-5">
     <%= form.label :typography, "Default typography", class: "mb-1 block font-extrabold" %>
-    <%= form.select :typography, [["Book", "book"], ["Modern", "modern"], ["Technical", "technical"]], { selected: @workspace.default_typography }, class: "w-full rounded-xl border border-[#ddd5c8] bg-white p-3" %>
+    <%= form.select :typography, [["Book", "book"], ["Modern", "modern"], ["Technical", "technical"]], { selected: @workspace.default_typography }, class: "settings-control w-full rounded-xl border p-3" %>
   </div>
   <%= form.submit "Save workspace defaults", class: "button primary inline-flex min-h-10 cursor-pointer items-center rounded-full border border-[#6d4aff] bg-[#6d4aff] px-4 py-2 font-bold text-white" %>
 <% end %>

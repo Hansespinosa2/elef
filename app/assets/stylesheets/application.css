@@ -935,10 +935,132 @@ body.elef-app {
 .document-graph-help, .document-graph-empty { color: var(--oradia-paper-muted); font-size: 0.82rem; margin: 0; padding: 0.65rem 0.9rem; }
 .document-graph-empty { left: 50%; position: absolute; top: 50%; transform: translate(-50%, -50%); }
 
+.elef-app .settings-card {
+  background: var(--oradia-slate-900) !important;
+  border-color: var(--oradia-line) !important;
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.16);
+  color: var(--oradia-ink);
+}
+.elef-app .settings-control {
+  background: var(--oradia-slate-950) !important;
+  border-color: var(--oradia-slate-700) !important;
+  color: var(--oradia-ink) !important;
+  color-scheme: dark;
+  width: 100%;
+}
+.elef-app .settings-control:focus {
+  border-color: var(--oradia-green) !important;
+  box-shadow: 0 0 0 3px rgba(159, 197, 169, 0.18) !important;
+  outline: none;
+}
+.settings-navigation { border-bottom: 1px solid var(--oradia-line); padding-bottom: 0.8rem; }
+.settings-navigation-link,
+.snippet-category-link {
+  align-items: center;
+  border: 1px solid var(--oradia-slate-700);
+  border-radius: 999px;
+  color: var(--oradia-muted);
+  display: inline-flex;
+  font-size: 0.85rem;
+  font-weight: 700;
+  gap: 0.5rem;
+  padding: 0.45rem 0.8rem;
+  text-decoration: none;
+}
+.settings-navigation-link:hover,
+.settings-navigation-link.is-active,
+.snippet-category-link:hover,
+.snippet-category-link.is-active { background: var(--oradia-slate-800); border-color: var(--oradia-green); color: var(--oradia-ink); }
+.snippet-category-link span,
+.snippet-group-heading span {
+  align-items: center;
+  background: var(--oradia-slate-950);
+  border: 1px solid var(--oradia-slate-700);
+  border-radius: 999px;
+  color: var(--oradia-muted);
+  display: inline-flex;
+  font-size: 0.7rem;
+  height: 1.3rem;
+  justify-content: center;
+  min-width: 1.3rem;
+  padding: 0 0.3rem;
+}
+.snippet-group-heading { color: var(--oradia-ink); }
+.snippet-category-badge,
+.snippet-example-label {
+  color: var(--oradia-green);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  margin: 0;
+  text-transform: uppercase;
+}
+.snippet-origin-badge {
+  border: 1px solid var(--oradia-slate-700);
+  border-radius: 999px;
+  color: var(--oradia-muted);
+  flex: 0 0 auto;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.25rem 0.55rem;
+}
+.snippet-template,
+.snippet-example-preview,
+.snippet-search input[type="search"] {
+  background: var(--oradia-slate-950) !important;
+  border: 1px solid var(--oradia-slate-700);
+  color: var(--oradia-ink) !important;
+}
+.snippet-template { line-height: 1.45; margin: 0.45rem 0 0; }
+.snippet-example-preview { margin-top: 0.45rem; min-height: 3.5rem; overflow-x: auto; }
+.snippet-example-preview > :first-child { margin-top: 0; }
+.snippet-example-preview > :last-child { margin-bottom: 0; }
+.snippet-example-preview .katex-display { margin: 0.5rem 0; overflow-x: auto; overflow-y: hidden; }
+.snippet-search input[type="search"]::placeholder { color: var(--oradia-muted); }
+.snippet-search input[type="search"]:focus { border-color: var(--oradia-green); outline: 2px solid rgba(159, 197, 169, 0.18); }
+.math-shortcut-list { display: grid; gap: 0.8rem; grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr)); }
+.math-shortcut-card { min-width: 0; }
+.math-shortcut-alias { color: var(--oradia-green); font-size: 0.75rem; font-weight: 700; margin: 0; }
+.math-shortcut-alias code { overflow-wrap: anywhere; }
+.math-shortcut-flow {
+  align-items: start;
+  display: grid;
+  gap: 0.35rem;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.2fr) auto minmax(0, 0.8fr);
+}
+.math-shortcut-step { display: flex; flex-direction: column; gap: 0.35rem; min-width: 0; }
+.math-shortcut-step > span { color: var(--oradia-muted); font-size: 0.65rem; font-weight: 700; text-transform: uppercase; }
+.math-shortcut-step > code,
+.math-shortcut-result > div {
+  align-items: center;
+  background: var(--oradia-slate-950);
+  border: 1px solid var(--oradia-slate-700);
+  border-radius: 0.5rem;
+  color: var(--oradia-ink);
+  display: flex;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  min-height: 2.25rem;
+  overflow-wrap: anywhere;
+  padding: 0.4rem 0.5rem;
+}
+.math-shortcut-step > code { display: block; }
+.math-shortcut-arrow { color: var(--oradia-muted); font-size: 0.9rem; margin-top: 1.2rem; }
+.math-shortcut-result > div { overflow-x: auto; }
+.math-shortcut-result p { margin: 0; }
+.math-shortcut-result .katex { font-size: 0.9em; }
+.settings-navigation :is(a, button):focus-visible,
+.snippet-category-navigation :is(a, button):focus-visible,
+.math-shortcut-card :is(a, button):focus-visible,
+.snippet-card :is(a, button):focus-visible { outline: 2px solid var(--oradia-green); outline-offset: 3px; }
+
 @media (max-width: 540px) {
   .document-graph-search { flex-basis: 100%; min-width: 0; }
   .document-graph-controls { display: grid; grid-template-columns: 40px minmax(3.5rem, 1fr) 40px; width: 100%; }
   .document-graph-canvas, .document-graph-canvas svg { min-height: 400px; }
+  .math-shortcut-flow { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.1fr); }
+  .math-shortcut-flow > :nth-child(4) { display: none; }
+  .math-shortcut-result { grid-column: 1 / -1; }
 }
 
 @media (max-width: 920px) {
