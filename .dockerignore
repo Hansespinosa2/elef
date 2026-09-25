@@ -1,0 +1,15 @@
+.git
+.github
+.agents
+.codex
+.gitignore
+.env*
+backups
+log
+tmp
+storage
+vendor/bundle
+node_modules
+public/assets
+app/assets/builds
+config/*.key

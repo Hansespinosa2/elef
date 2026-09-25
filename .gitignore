@@ -10,6 +10,11 @@
 # Ignore all environment files.
 /.env*
 !.env.example
+!.env.personal.example
+!.env.development.example
+
+# Personal instance backup bundles can contain the complete database and files.
+/backups/
 
 # Ignore old/local JavaScript dependency installs.
 /node_modules

@@ -5,6 +5,7 @@ CI.run do
 
   step "Security: Gem audit", "bin/bundler-audit"
   step "Security: Importmap vulnerability audit", "bin/importmap audit"
+  step "Checks: Zeitwerk", "bin/rails zeitwerk:check"
   step "Tests: Rails", "bin/rails test"
   step "Tests: Seeds", "env RAILS_ENV=test bin/rails db:seed:replant"
 

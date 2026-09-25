@@ -52,7 +52,9 @@ export default class extends Controller {
   guardNavigation(event) {
     if (!this.dirty || this.submitting) return
     const link = event.target.closest?.("a[href]")
-    if (!link || link.target === "_blank" || link.hasAttribute("download")) return
+    const guardedAction = event.target.closest?.("[data-dirty-navigation]")
+    if (!link && !guardedAction) return
+    if (link && (link.target === "_blank" || link.hasAttribute("download"))) return
     if (window.confirm(this.unsavedMessageValue)) return
 
     event.preventDefault()

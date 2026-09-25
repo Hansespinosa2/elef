@@ -1,6 +1,10 @@
 class Snippet < ApplicationRecord
   CATEGORIES = ["Markdown", "LaTeX", "Elef DSL"].freeze
 
+  belongs_to :workspace
+
+  before_validation :assign_workspace
+
   validates :name, :trigger, :body, presence: true
   validates :name, length: { maximum: 120 }
   validates :trigger, format: { with: /\A[a-z0-9][a-z0-9-]*\z/ }
@@ -23,6 +27,12 @@ class Snippet < ApplicationRecord
 
   def display_body
     body.gsub(/\$\{\d+(?::([^}]*))?\}/) { Regexp.last_match(1).presence || "example" }
+  end
+
+  private
+
+  def assign_workspace
+    self.workspace ||= Workspace.default
   end
 
 end

@@ -1,27 +1,30 @@
 module Presentations
   module Document
-    Position = Data.define(:horizontal, :vertical)
+    Position = Data.define(:horizontal, :vertical, :vertical_explicit)
     Block = Data.define(:markdown, :position)
     Region = Data.define(:blocks)
     MarginSettings = Data.define(:section, :subsection, :footnote, :slide_count)
     Slide = Data.define(:id, :index, :markdown, :layout, :blocks, :title, :regions, :section, :subsection, :footnote, :warnings)
-    Parsed = Data.define(:source_name, :presentation_theme, :presentation_typography, :margin_settings, :slides, :warnings)
+    Parsed = Data.define(:source_name, :mode, :theme, :typography, :margin_settings, :slides, :warnings)
     SourceLine = Data.define(:start, :end_pos, :text, :ending)
     FrontMatter = Data.define(:lines, :closing_line, :body_start, :eol)
 
     module_function
 
-    def parse(source, source_name: "Untitled presentation")
+    def parse(source, source_name: "Untitled presentation", mode: :presentation)
       raise ArgumentError, "The selected file did not contain readable text." unless source.is_a?(String)
 
-      theme = presentation_theme_from_source(source)
-      typography = presentation_typography_from_source(source)
+      mode = mode.to_sym
+      raise ArgumentError, "Unsupported document mode" unless %i[presentation document].include?(mode)
+
+      theme = theme_from_source(source)
+      typography = typography_from_source(source)
       margin_settings = presentation_margin_settings_from_source(source)
       content = content_without_front_matter(source)
-      sections = split_sections(content)
+      sections = mode == :document ? [content] : split_sections(content)
       context = { section: nil, subsection: nil }
       slides = sections.map.with_index do |section, index|
-        metadata = slide_metadata(section, context)
+        metadata = slide_metadata(section, context, mode: mode)
         Slide.new(
           id: "#{source_name}-#{index + 1}",
           index: index,
@@ -38,8 +41,9 @@ module Presentations
       end
       Parsed.new(
         source_name: source_name,
-        presentation_theme: theme,
-        presentation_typography: typography,
+        mode: mode,
+        theme: theme,
+        typography: typography,
         margin_settings: margin_settings,
         slides: slides,
         warnings: slides.flat_map { |slide| slide_warnings(slide) }
@@ -68,21 +72,29 @@ module Presentations
       sections
     end
 
-    def presentation_theme_from_source(source)
+    def theme_from_source(source)
       front_matter = initial_front_matter(source)
       return "match" unless front_matter
 
       front_matter.lines[1...front_matter.closing_line].each do |line|
-        match = line.text.match(/\ApresentationTheme\s*:\s*(.*)\z/)
+        match = line.text.match(/\Atheme\s*:\s*(.*)\z/)
         return normalize_theme_value(match[1]) if match
       end
       "match"
     end
 
-    def presentation_typography_from_source(source)
-      front_matter_value(source, "presentationTypography", default: "book") do |value|
-        normalize_typography_value(value)
-      end
+    def typography_from_source(source)
+      value = front_matter_value(source, "typography", default: nil) { |raw| raw }
+      return "book" unless value
+
+      normalize_typography_value(value)
+    end
+
+    def style_overrides(source)
+      {
+        theme: normalized_override(source, "theme", method(:normalize_theme_value)),
+        typography: normalized_override(source, "typography", method(:normalize_typography_value))
+      }
     end
 
     def presentation_margin_settings_from_source(source)
@@ -106,6 +118,8 @@ module Presentations
     end
 
     def with_front_matter_value(source, key, value)
+      return remove_front_matter_value(source, key) if value.nil?
+
       normalized_source = source.to_s
       front_matter = initial_front_matter(normalized_source)
       eol = front_matter&.eol || (normalized_source.include?("\r\n") ? "\r\n" : "\n")
@@ -131,6 +145,28 @@ module Presentations
           updated.insert(closing.start, "#{replacement}#{eol}")
         end
       end
+    end
+
+    def remove_front_matter_value(source, key)
+      normalized_source = source.to_s
+      front_matter = initial_front_matter(normalized_source)
+      return normalized_source unless front_matter
+
+      lines = source_lines(normalized_source)
+      matching_line = (1...front_matter.closing_line).find do |index|
+        lines[index].text.match?(/\A\s*#{Regexp.escape(key)}\s*:/)
+      end
+      return normalized_source unless matching_line
+
+      line = lines[matching_line]
+      updated = normalized_source.dup
+      updated[line.start...line.end_pos] = ""
+      remaining = updated.lines
+      if remaining.length >= 2 && remaining.first.to_s.strip == "---" && remaining[1].to_s.strip == "---"
+        closing = remaining[1]
+        return updated[(remaining.first.length + closing.length)..].to_s.sub(/\A\r?\n/, "")
+      end
+      updated
     end
 
     def extract_first_h1(source)
@@ -181,6 +217,368 @@ module Presentations
       ranges
     end
 
+    # Build the short-lived source projection used by the visual editor. The
+    # renderer deliberately works with the parsed document above, while this
+    # map points back into the original source so visual edits can replace the
+    # smallest possible range. JavaScript uses UTF-16 offsets, which is also
+    # the coordinate system used by CodeMirror and browser strings.
+    def editor_map(source, source_name: "Untitled presentation", mode: :presentation)
+      raise ArgumentError, "The selected file did not contain readable text." unless source.is_a?(String)
+
+      mode = mode.to_sym
+      raise ArgumentError, "Unsupported document mode" unless %i[presentation document].include?(mode)
+
+      parsed = parse(source, source_name: source_name, mode: mode)
+      front_matter = initial_front_matter(source)
+      slide_ranges = if mode == :document
+        [{ index: 0, start: front_matter&.body_start || 0, end: source.length, delimiter_start: nil, delimiter_end: nil }]
+      else
+        slide_source_ranges(source)
+      end
+      map = {
+        version: 1,
+        source_name: source_name.to_s,
+        mode: mode.to_s,
+        source_length: utf16_length(source),
+        front_matter: front_matter && {
+          range: utf16_range(source, 0, front_matter.body_start),
+          body_start: utf16_index(source, front_matter.body_start)
+        },
+        slides: [],
+        directives: [],
+        editable_regions: []
+      }
+
+      slide_ranges.each_with_index do |slide_range, index|
+        slide = parsed.slides[index]
+        blocks, directives, regions = editor_blocks(
+          source,
+          slide_range[:start],
+          slide_range[:end],
+          slide,
+          index,
+          mode: mode
+        )
+        slide_map = {
+          id: "slide-#{index + 1}",
+          index: index,
+          layout: slide&.layout || "body",
+          range: utf16_range(source, slide_range[:start], slide_range[:end]),
+          source_range: utf16_range(source, slide_range[:start], slide_range[:end]),
+          delimiter_range: if slide_range[:delimiter_start]
+            utf16_range(source, slide_range[:delimiter_start], slide_range[:delimiter_end])
+          end,
+          blocks: blocks,
+          directives: directives,
+          editable_regions: regions
+        }
+        map[:slides] << slide_map
+        map[:directives].concat(directives)
+        map[:editable_regions].concat(regions)
+      end
+
+      map
+    end
+
+    def editor_blocks(source, start_pos, end_pos, slide, slide_index, mode: :presentation)
+      section = source[start_pos...end_pos].to_s
+      lines = source_lines(section)
+      blocks = []
+      directives = []
+      regions = []
+      current = []
+      pending_position = nil
+      fence = nil
+
+      flush = lambda do
+        next if current.empty?
+
+        first = current.first
+        last = current.last
+        block_start = start_pos + first.start
+        block_end = start_pos + last.end_pos
+        markdown = source[block_start...block_end].to_s.sub(/\r\n?\z|\n\z/, "")
+        block_index = blocks.length
+        block_id = "slide-#{slide_index + 1}-block-#{block_index + 1}"
+        kind = editable_block_kind(markdown)
+        block = {
+          id: block_id,
+          index: block_index,
+          kind: kind,
+          markdown: markdown,
+          position: pending_position && pending_position[:value],
+          position_directive_id: pending_position && pending_position[:directive_id],
+          position_scope: pending_position && (pending_position[:scoped] ? "group" : "block"),
+          range: utf16_range(source, block_start, block_end),
+          source_range: utf16_range(source, block_start, block_end),
+          content_range: utf16_range(source, block_start, block_start + markdown.length)
+        }
+        blocks << block
+
+        region = editable_region_for_block(
+          source,
+          block_start,
+          markdown,
+          block_id,
+          slide_index,
+          block_index,
+          kind,
+          slide
+        )
+        regions << region
+        block[:editable_region_id] = region[:id]
+        current = []
+        pending_position = nil if pending_position && !pending_position[:scoped]
+      end
+
+      lines.each_with_index do |line, line_index|
+        incoming_fence = fence_marker(line.text)
+        if fence
+          current << line
+          fence = toggle_fence(fence, incoming_fence) if incoming_fence
+          next
+        elsif incoming_fence
+          current << line
+          fence = incoming_fence
+          next
+        end
+
+        if line.text.blank?
+          flush.call
+          next
+        end
+
+        if line.text.match?(/\A\s*:::/)
+          flush.call
+          directive_text = line.text.strip
+          directive = editor_directive(
+            source,
+            start_pos + line.start,
+            start_pos + line.end_pos,
+            directive_text,
+            slide_index,
+            directives.length
+          )
+          directives << directive
+          if (position = position_from_block(directive_text))
+            pending_position = {
+              value: position_payload(position),
+              directive_id: directive[:id],
+              scoped: position_scope_closes?(lines, line_index)
+            }
+          elsif directive_text == ":::" && pending_position
+            pending_position = nil
+          end
+          next
+        end
+
+        current << line
+      end
+      flush.call
+
+      # `parse_blocks` removes margin directives before building its blocks.
+      # Keep the map honest when a source line was a directive but the parser
+      # did not expose a corresponding editable block.
+      if mode == :document
+        directives.each { |directive| directive[:scope] = "document" }
+      end
+
+      [blocks, directives, regions]
+    end
+
+    def position_scope_closes?(lines, start_index)
+      fence = nil
+      lines[(start_index + 1)..].to_a.each do |line|
+        incoming_fence = fence_marker(line.text)
+        if fence
+          fence = toggle_fence(fence, incoming_fence) if incoming_fence
+          next
+        elsif incoming_fence
+          fence = incoming_fence
+          next
+        end
+
+        return true if line.text.strip == ":::"
+        return false if line.text.match?(/\A\s*:::position\{/)
+      end
+      false
+    end
+
+    def editor_directive(source, start_pos, end_pos, text, slide_index, directive_index)
+      position_match = text.match(/\A:::position\{([^}]*)\}/)
+      margin_match = text.match(/\A:::(section|subsection|footnote)\{/)
+      type = if text == ":::"
+        "position_close"
+      elsif position_match
+        "position"
+      elsif margin_match
+        margin_match[1]
+      else
+        "unknown"
+      end
+      value = position_match && position_match[1]
+      {
+        id: "slide-#{slide_index + 1}-directive-#{directive_index + 1}",
+        type: type,
+        value: value&.strip,
+        text: text,
+        range: utf16_range(source, start_pos, end_pos),
+        source_range: utf16_range(source, start_pos, end_pos),
+        editable: type == "position"
+      }
+    end
+
+    def editable_region_for_block(source, block_start, markdown, block_id, slide_index, block_index, kind, slide)
+      editable = client_can_round_trip?(markdown, kind)
+      heading = markdown.match(/\A(\s{0,3})(#+)(\s+)(.+?)(\s*#*\s*)\z/m)
+      if heading
+        text_start = block_start + heading.begin(4)
+        text_end = block_start + heading.end(4)
+        return {
+          id: "slide-#{slide_index + 1}-region-#{block_index + 1}",
+          block_id: block_id,
+          role: slide&.title == markdown ? "title" : "heading",
+          kind: "heading",
+          text: heading[4].strip,
+          range: utf16_range(source, block_start, block_start + markdown.length),
+          source_range: utf16_range(source, block_start, block_start + markdown.length),
+          content_range: utf16_range(source, text_start, text_end),
+          editable: editable
+        }
+      end
+
+      {
+        id: "slide-#{slide_index + 1}-region-#{block_index + 1}",
+        block_id: block_id,
+        role: "block",
+        kind: kind,
+        text: markdown,
+        range: utf16_range(source, block_start, block_start + markdown.length),
+        source_range: utf16_range(source, block_start, block_start + markdown.length),
+        content_range: utf16_range(source, block_start, block_start + markdown.length),
+        editable: editable
+      }
+    end
+
+    def editable_block_kind(markdown)
+      return "heading" if heading_for(markdown)
+      return "code" if fenced_code_source?(markdown) || indented_code_source?(markdown)
+      return "image" if image_block?(markdown)
+      return "table" if table_block?(markdown)
+      return "list" if markdown.match?(/\A\s*(?:[-*+] |\d+[.)] )/)
+      return "quote" if markdown.match?(/\A\s*>/)
+      return "rule" if markdown.match?(/\A\s*(?:-{3,}|\*{3,}|_{3,})\s*\z/)
+
+      "paragraph"
+    end
+
+    def client_can_round_trip?(markdown, kind)
+      return supported_fenced_code_block?(markdown) if kind == "code" && fenced_code_source?(markdown)
+      return false if kind == "code" || kind == "rule"
+      return false if kind == "heading" && markdown.lines.length != 1
+      return false if kind == "table" && !supported_table_block?(markdown)
+      return false if kind == "quote" && markdown.lines.any? { |line| line.match?(/\A[ \t]*>[ \t]*>/) }
+      return false if kind != "image" && markdown.match?(/!\[[^\]]*\]\(elef-asset:[0-9a-f]{64}(?:\s+[^)]*)?\)/)
+      return false if markdown.match?(/\A[^\r\n]+\r?\n[=-]{3,}[ \t]*\z/)
+      return false if unsupported_block_syntax?(markdown)
+
+      true
+    end
+
+    def supported_fenced_code_block?(markdown)
+      match = markdown.match(/\A([ \t]*)(`{3,}|~{3,})([^\r\n]*?)(\r\n|\n|\r)([\s\S]*?)(\r\n|\n|\r)([`~]{3,})([ \t]*)\z/)
+      return false unless match
+
+      opening = match[2]
+      closing = match[7]
+      closing[0] == opening[0] && closing.each_char.all? { |character| character == opening[0] } && closing.length >= opening.length
+    end
+
+    def supported_table_block?(markdown)
+      lines = markdown.split(/\r?\n/)
+      return false if lines.length < 3
+      return false unless lines[1].match?(/\A\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)*\|?\s*\z/)
+
+      columns = table_cell_count(lines.first)
+      columns.positive? && table_cell_count(lines[1]) == columns && lines.drop(2).all? do |line|
+        !line.blank? && table_cell_count(line) == columns
+      end
+    end
+
+    def table_cell_count(line)
+      value = line.to_s.strip
+      pipe_positions = []
+      escaped = false
+      value.each_char.with_index do |character, index|
+        if character == "\\" && !escaped
+          escaped = true
+          next
+        end
+        pipe_positions << index if character == "|" && !escaped
+        escaped = false
+      end
+
+      leading_pipe = pipe_positions.first == 0 ? 1 : 0
+      trailing_pipe = pipe_positions.last == value.length - 1 ? 1 : 0
+      [pipe_positions.length - leading_pipe - trailing_pipe + 1, 0].max
+    end
+
+    def unsupported_block_syntax?(markdown)
+      return true if markdown.match?(/<\s*!--|--\s*>|<\/?[A-Za-z][^>]*>/)
+      return true if markdown.match?(/<\s*(?:https?:\/\/|mailto:)[^>]+>|<\s*[^<>\s@]+@[^<>\s@]+\s*>/i)
+      return true if markdown.match?(/\[[^\]]+\]\s*\[[^\]]*\]|^\s*\[[^\]]+\]:|\[\^[^\]]+\]/)
+      return true if markdown.match?(/&(?:[A-Za-z][A-Za-z0-9]+|#\d+|#x[0-9A-Fa-f]+);/)
+      return true if markdown.match?(/\]\([^)]*\(/)
+      return true if markdown.match?(/[[:alnum:]][_*]{1,2}[^\s*_]+?[*_]{1,2}[[:alnum:]]/)
+      return true if markdown.lines.any? { |line| line.match?(/(?: {2,}|\\)\r?\n?\z/) }
+      return true if unsupported_escaped_punctuation?(markdown)
+
+      false
+    end
+
+    def unsupported_escaped_punctuation?(markdown)
+      without_math = markdown.gsub(/(?<!\\)\$\$[\s\S]+?\$\$(?!\$)|(?<![\\$])\$(?!\$|\s)[^$\r\n]+?(?<!\s)\$(?!\$)/, "")
+      without_math.each_char.with_index.any? do |character, index|
+        next false unless character == "\\"
+
+        next_character = without_math[index + 1]
+        next false if next_character.nil? || next_character == "$" || next_character.match?(/[[:alnum:]_[:space:]]/)
+
+        true
+      end
+    end
+
+    def fenced_code_source?(markdown)
+      fence_marker(markdown.lines.first.to_s.chomp).present?
+    end
+
+    def indented_code_source?(markdown)
+      markdown.match?(/\A(?: {4}|\t)/)
+    end
+
+    def position_payload(position)
+      {
+        horizontal: position.horizontal,
+        vertical: position.vertical,
+        vertical_explicit: position.vertical_explicit
+      }
+    end
+
+    def utf16_length(value)
+      value.to_s.encode("UTF-16LE").bytesize / 2
+    end
+
+    def utf16_index(source, character_index)
+      utf16_length(source.to_s[0...character_index].to_s)
+    end
+
+    def utf16_range(source, start_pos, end_pos)
+      {
+        start: utf16_index(source, start_pos),
+        end: utf16_index(source, end_pos)
+      }
+    end
+
     def content_without_front_matter(source)
       front_matter = initial_front_matter(source)
       front_matter ? source[front_matter.body_start..] || "" : source
@@ -228,6 +626,16 @@ module Presentations
       %w[book modern technical].include?(unquoted) ? unquoted : "book"
     end
 
+    def normalized_override(source, key, normalizer)
+      value = front_matter_value(source, key, default: nil) { |raw| raw }
+      return unless value
+
+      normalized = normalizer.call(value)
+      return normalized if normalized == value.to_s.strip.sub(/\s+#.*\z/, "").strip.sub(/\A(['"])(.*)\1\z/, '\2')
+
+      nil
+    end
+
     def front_matter_value(source, key, default:)
       front_matter = initial_front_matter(source)
       return default unless front_matter
@@ -251,21 +659,27 @@ module Presentations
     end
 
     def fence_marker(line)
-      match = line.match(/\A\s{0,3}(`{3,}|~{3,})/)
-      match && { marker: match[1][0], length: match[1].length }
+      match = line.match(/\A\s{0,3}(`{3,}|~{3,})(.*)\z/)
+      return unless match
+
+      { marker: match[1][0], length: match[1].length, closing: match[2].match?(/\A[ \t]*\z/) }
     end
 
     def toggle_fence(current, incoming)
-      if current && current[:marker] == incoming[:marker] && incoming[:length] >= current[:length]
-        nil
-      else
-        incoming
-      end
+      return incoming unless current
+      return nil if current[:marker] == incoming[:marker] &&
+        incoming[:length] >= current[:length] && incoming[:closing]
+
+      current
     end
 
-    def slide_metadata(markdown, context)
+    def slide_metadata(markdown, context, mode: :presentation)
       normalized = markdown.gsub(/\r\n?/, "\n")
-      margin = parse_margin_directives(normalized, context)
+      margin = if mode == :presentation
+        parse_margin_directives(normalized, context)
+      else
+        { content: normalized, section: nil, subsection: nil, footnote: nil, warnings: [] }
+      end
       normalized = margin[:content]
       parsed = parse_blocks(normalized)
       content = parsed[:blocks].map(&:markdown).join("\n\n")
@@ -444,7 +858,7 @@ module Presentations
       vertical = values.find { |value| %w[top middle bottom].include?(value) }
       return unless horizontal || vertical
 
-      Position.new(horizontal || "left", vertical || "top")
+      Position.new(horizontal || "left", vertical || "top", vertical.present?)
     end
 
     def infer_layout(blocks)
@@ -507,7 +921,9 @@ module Presentations
     end
 
     def code_block?(markdown)
-      markdown.match?(/\A\s*(`{3,}|~{3,})[^\n]*\n.*\n\s*\1\s*\z/m)
+      opening = markdown.lines.first.to_s.match(/\A\s*([`~]{3,})/)
+      closing = markdown.lines.last.to_s.match(/\A\s*([`~]{3,})\s*\z/)
+      opening && closing && opening[1][0] == closing[1][0] && closing[1].length >= opening[1].length
     end
 
     def prose_block?(markdown)

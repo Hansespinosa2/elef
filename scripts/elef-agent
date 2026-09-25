@@ -1,15 +1,28 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="$(git rev-parse --show-toplevel 2>/dev/null)" || { echo "Run from elef." >&2; exit 1; }
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)" || {
+  echo "Unable to locate the Elef repository from this script." >&2
+  exit 1
+}
+REPO="$(cd -- "$SCRIPT_DIR/.." && pwd -P)" || { echo "Unable to locate the Elef repository." >&2; exit 1; }
+cd "$REPO"
 CONTAINER_CLI="${CONTAINER_CLI:-container}"
 IMAGE_OVERRIDE="${ELEF_AGENT_IMAGE:-}"
 CODEX_VERSION="${ELEF_AGENT_CODEX_VERSION:-latest}"
+CODEX_MODEL="gpt-6-luna"
 CHROME_DEVTOOLS_MCP_VERSION="${ELEF_AGENT_CHROME_DEVTOOLS_MCP_VERSION:-1.8.0}"
 CONTAINER_MEMORY="${ELEF_AGENT_MEMORY:-1536M}"
+AGENT_DATABASE="${ELEF_AGENT_DATABASE:-sqlite}"
 WORKTREE_ROOT="${ELEF_WORKTREE_ROOT:-$(dirname "$REPO")/elef-worktrees}"
 CODEX_HOME_HOST="${CODEX_HOME:-$HOME/.codex}"
-USER_SKILLS_HOST="${ELEF_USER_SKILLS_DIR:-$HOME/Documents/GitHub/andy-skills/skills}"
+if [[ -n "${ELEF_USER_SKILLS_DIR:-}" ]]; then
+  USER_SKILLS_HOST="$ELEF_USER_SKILLS_DIR"
+elif [[ -d "$HOME/.agents/skills" ]]; then
+  USER_SKILLS_HOST="$HOME/.agents/skills"
+else
+  USER_SKILLS_HOST="$CODEX_HOME_HOST/skills"
+fi
 GH_CONFIG_HOST="${GH_CONFIG_DIR:-$HOME/.config/gh}"
 AGENT_STATE_ROOT="${ELEF_AGENT_STATE_ROOT:-$HOME/Library/Application Support/Elef/agent-router}"
 CADDYFILE="${ELEF_AGENT_CADDYFILE:-$AGENT_STATE_ROOT/Caddyfile}"
@@ -17,12 +30,79 @@ CADDYFILE="${ELEF_AGENT_CADDYFILE:-$AGENT_STATE_ROOT/Caddyfile}"
 die() { echo "error: $*" >&2; exit 1; }
 need_container() { command -v "$CONTAINER_CLI" >/dev/null || die "Apple Container CLI not found"; }
 safe_name() { [[ "${1:-}" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*[a-zA-Z0-9]$ ]] || die "invalid task name: ${1:-}"; }
-worktree_for() { printf '%s/%s' "$WORKTREE_ROOT" "$1"; }
+validate_agent_database() {
+  case "$AGENT_DATABASE" in
+    sqlite|postgres) ;;
+    *) die "ELEF_AGENT_DATABASE must be sqlite or postgres (got: $AGENT_DATABASE)" ;;
+  esac
+}
+registered_worktree_for() {
+  local branch
+  branch="refs/heads/$(branch_for "$1")"
+  git worktree list --porcelain 2>/dev/null | awk -v branch="$branch" '
+    /^worktree / { path = substr($0, 9) }
+    $1 == "branch" && $2 == branch { print path; exit }
+  '
+}
+worktree_for() {
+  local preferred registered
+  preferred="$WORKTREE_ROOT/$1"
+  if worktree_is_valid "$1" "$preferred"; then
+    (cd -- "$preferred" && pwd -P)
+    return
+  fi
+  registered="$(registered_worktree_for "$1")"
+  if [[ -n "$registered" ]] && worktree_is_valid "$1" "$registered"; then
+    (cd -- "$registered" && pwd -P)
+    return
+  fi
+  printf '%s' "$preferred"
+}
 container_for() { printf 'elef-agent-%s' "$(host_for "$1")"; }
 branch_for() { printf 'codex/%s' "$1"; }
+worktree_is_valid() {
+  local task="$1" path="$2" canonical root branch repo_common task_common
+  [[ -d "$path" ]] || return 1
+  canonical="$(cd -- "$path" 2>/dev/null && pwd -P)" || return 1
+  root="$(git -C "$canonical" rev-parse --show-toplevel 2>/dev/null)" || return 1
+  [[ "$root" == "$canonical" ]] || return 1
+  branch="$(git -C "$canonical" symbolic-ref --quiet --short HEAD 2>/dev/null)" || return 1
+  [[ "$branch" == "$(branch_for "$task")" ]] || return 1
+  repo_common="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || return 1
+  task_common="$(git -C "$canonical" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || return 1
+  [[ "$task_common" == "$repo_common" ]]
+}
+require_worktree() {
+  local task="$1" path registered
+  path="$(worktree_for "$task")"
+  worktree_is_valid "$task" "$path" && { printf '%s' "$path"; return; }
+  registered="$(registered_worktree_for "$task")"
+  if [[ -d "$path" ]]; then
+    if [[ -n "$registered" ]]; then
+      die "task directory is not a valid checkout for $(branch_for "$task"): $path. Git records the worktree at $registered; if it was moved, run: git worktree repair '$path'"
+    fi
+    die "task directory is not a valid checkout for $(branch_for "$task"): $path"
+  fi
+  if [[ -n "$registered" ]]; then
+    die "task worktree is unavailable at $registered. Restore it or repair its Git worktree registration before resuming."
+  fi
+  die "task worktree not found: $path"
+}
+assert_task_branch_available() {
+  local task="$1" branch registered
+  branch="$(branch_for "$task")"
+  if git show-ref --verify --quiet "refs/heads/$branch"; then
+    registered="$(registered_worktree_for "$task")"
+    if [[ -n "$registered" && ! -e "$registered" ]]; then
+      die "branch $branch is registered to a missing worktree at $registered; inspect that path and prune the stale Git worktree record before reusing this task name"
+    fi
+    die "branch already exists: $branch"
+  fi
+}
 route_for() { printf '%s/routes/%s' "$AGENT_STATE_ROOT" "$1"; }
 codex_state_for() { printf '%s/codex/%s' "$AGENT_STATE_ROOT" "$1"; }
 image_state_for() { printf '%s/images/%s' "$AGENT_STATE_ROOT" "$1"; }
+database_state_for() { printf '%s/databases/%s' "$AGENT_STATE_ROOT" "$1"; }
 terminal_state_for() { printf '%s/terminals/%s' "$AGENT_STATE_ROOT" "$1"; }
 host_for() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
 
@@ -74,6 +154,14 @@ remember_image() {
   printf '%s\n' "$image" >"$state"
 }
 
+remember_database() {
+  local task="$1" state
+  validate_agent_database
+  state="$(database_state_for "$task")"
+  mkdir -p "$(dirname "$state")"
+  printf '%s\n' "$AGENT_DATABASE" >"$state"
+}
+
 existing_image_for() {
   local task="$1" name image state
   state="$(image_state_for "$task")"
@@ -98,6 +186,26 @@ delete_image_state() {
   local task="$1" state
   state="$(image_state_for "$task")"
   [[ ! -L "$state" ]] || die "refusing to delete symlinked image state: $state"
+  rm -f -- "$state"
+}
+
+existing_database_for() {
+  local task="$1" state database
+  state="$(database_state_for "$task")"
+  if [[ -f "$state" ]]; then
+    database="$(<"$state")"
+    case "$database" in
+      sqlite|postgres) printf '%s' "$database"; return ;;
+      *) die "invalid stored agent database mode: $database" ;;
+    esac
+  fi
+  printf '%s' "$AGENT_DATABASE"
+}
+
+delete_database_state() {
+  local task="$1" state
+  state="$(database_state_for "$task")"
+  [[ ! -L "$state" ]] || die "refusing to delete symlinked database state: $state"
   rm -f -- "$state"
 }
 
@@ -279,8 +387,22 @@ report_readiness() {
   fi
 }
 
+ensure_base_current() {
+  local base="$1" remote_ref
+  [[ "$base" =~ ^[A-Za-z0-9._/-]+$ ]] || return 0
+  git show-ref --verify --quiet "refs/heads/$base" || return 0
+  remote_ref="refs/remotes/origin/$base"
+  git fetch origin "refs/heads/$base:$remote_ref" || \
+    die "unable to refresh origin/$base before continuing"
+  git merge-base --is-ancestor "$remote_ref" "refs/heads/$base" || \
+    die "local $base is behind or diverged from origin/$base; sync it before continuing"
+}
+
 run_container() {
-  local task="$1" wt="$2" name="$3" token="$4" backend_port="$5" image="$6" codex_state
+  local task="$1" wt="$2" name="$3" token="$4" backend_port="$5" image="$6" codex_state sqlite_env
+  validate_agent_database
+  sqlite_env=
+  [[ "$AGENT_DATABASE" == sqlite ]] && sqlite_env=1
   codex_state="$(codex_state_for "$task")"
   mkdir -p "$codex_state"
   local -a mounts=(
@@ -301,6 +423,7 @@ run_container() {
     --publish "127.0.0.1:${backend_port}:3000" \
     --env "GITHUB_TOKEN=$token" --env "GH_TOKEN=$token" \
     --env GIT_CONFIG_GLOBAL=/home/developer/.config/git/config \
+    --env "ELEF_USE_SQLITE=$sqlite_env" \
     --env PORT=3000 --env BIND=0.0.0.0 \
     "${mounts[@]}" --workdir "$wt" "$image" web
 }
@@ -328,9 +451,17 @@ start_task() {
 }
 
 start() {
-  local task="${1:-}" base="${2:-HEAD}" wt name branch token backend_port host image
+  local task="${1:-}" base="${2:-HEAD}" current_base wt name branch token backend_port host image
   [[ -n "$task" ]] || die "usage: elef-agent start TASK [BASE]"
+  validate_agent_database
   safe_name "$task"
+  assert_task_branch_available "$task"
+  if [[ "$base" == "HEAD" ]]; then
+    current_base="$(git branch --show-current)"
+    [[ -z "$current_base" ]] || ensure_base_current "$current_base"
+  else
+    ensure_base_current "$base"
+  fi
   host="$(host_for "$task")"
   router_ready || die "Caddy is not installed; run '$0 setup' first"
   [[ ! "$host" =~ (^|\.)([.-]|$) ]] || die "task name cannot contain empty or hyphen-starting hostname labels: $task"
@@ -356,19 +487,23 @@ start() {
   fi
   start_task "$task" "$wt" "$name" "$token" "$backend_port" "$image"
   remember_image "$task" "$image"
+  remember_database "$task"
   echo "Started $name"
   echo "Worktree: $wt"
   echo "Branch:   $branch"
+  echo "Database: $AGENT_DATABASE"
   echo "Browser:  https://${host}.localhost"
-  exec_in "$task" codex --dangerously-bypass-approvals-and-sandbox -m gpt-5.6-luna
+  exec_in "$task" codex --dangerously-bypass-approvals-and-sandbox -m "$CODEX_MODEL" -c 'model_reasoning_effort="max"' -c 'plan_mode_reasoning_effort="max"'
 }
 
 up() {
   local task="${1:-}" wt name token backend_port host image
   [[ -n "$task" ]] || die "usage: elef-agent up TASK"
   safe_name "$task"
-  wt="$(worktree_for "$task")"; name="$(container_for "$task")"; host="$(host_for "$task")"
-  [[ -d "$wt" ]] || die "task worktree not found: $wt"
+  [[ -n "${ELEF_AGENT_DATABASE:-}" ]] || AGENT_DATABASE="$(existing_database_for "$task")"
+  validate_agent_database
+  wt="$(require_worktree "$task")"; name="$(container_for "$task")"; host="$(host_for "$task")"
+  assert_no_active_terminal "$task"
   router_ready || die "Caddy is not installed; run '$0 setup' first"
   load_dotenv
   token="$(token_for_gh)"; [[ -n "$token" ]] || die "GitHub token unavailable"
@@ -401,6 +536,7 @@ up() {
     die "Rails did not become reachable for $task"
   fi
   report_readiness "$task" "$code"
+  remember_database "$task"
 }
 
 restore_terminal() {
@@ -433,8 +569,8 @@ assert_no_active_terminal() {
 }
 
 exec_in() {
-  local task="$1" status terminal state; shift
-  safe_name "$task"; need_container
+  local task="$1" status terminal state wt; shift
+  safe_name "$task"; wt="$(require_worktree "$task")"; need_container
   terminal="$(tty 2>/dev/null || true)"
   if [[ "$terminal" == /dev/tty* ]]; then
     state="$(terminal_state_for "$task")"
@@ -442,7 +578,7 @@ exec_in() {
     printf '%s\n' "$terminal" >"$state"
   fi
   trap 'restore_terminal; clear_terminal_state "$task"' EXIT
-  "$CONTAINER_CLI" exec --interactive --tty --workdir "$(worktree_for "$task")" "$(container_for "$task")" "$@"
+  "$CONTAINER_CLI" exec --interactive --tty --workdir "$wt" "$(container_for "$task")" "$@"
   status=$?
   trap - EXIT
   restore_terminal
@@ -477,26 +613,92 @@ stop() {
 remove() {
   local task="${1:-}" wt name host
   [[ -n "$task" ]] || die "usage: elef-agent remove TASK"
-  safe_name "$task"; host="$(host_for "$task")"; need_container; wt="$(worktree_for "$task")"; name="$(container_for "$task")"
+  safe_name "$task"; host="$(host_for "$task")"; wt="$(worktree_for "$task")"
+  if [[ -e "$wt" ]]; then wt="$(require_worktree "$task")"; fi
+  name="$(container_for "$task")"; need_container
   "$CONTAINER_CLI" stop "$name" 2>/dev/null || true
   "$CONTAINER_CLI" delete "$name" 2>/dev/null || true
   rm -f "$(route_for "$host")"
   router_ready && reload_router || true
   [[ ! -e "$wt" ]] || git worktree remove --force "$wt"
   git branch -D "$(branch_for "$task")" 2>/dev/null || true
+  delete_database_state "$task"
   echo "Removed container, worktree, and local branch for $task"
 }
 
+pr_number_for_branch() {
+  local repo="$1" branch="$2"
+  gh pr list --repo "$repo" --head "$branch" --state all --json number,state \
+    --jq 'map(select(.state == "MERGED")) | .[0].number // empty'
+}
+
+verify_merged_pr() {
+  local repo="$1" pr_number="$2" pr_state base merge_commit target_ref
+  pr_state="$(gh pr view "$pr_number" --repo "$repo" --json state --jq .state)"
+  [[ "$pr_state" == "MERGED" ]] || die "refusing cleanup: PR #$pr_number is not merged"
+
+  base="$(gh pr view "$pr_number" --repo "$repo" --json baseRefName --jq .baseRefName)"
+  [[ "$base" =~ ^[A-Za-z0-9._/-]+$ ]] || die "refusing cleanup: invalid PR target branch: $base"
+  merge_commit="$(gh pr view "$pr_number" --repo "$repo" --json mergeCommit --jq '.mergeCommit.oid // empty')"
+  [[ -n "$merge_commit" ]] || die "refusing cleanup: PR #$pr_number has no merge commit"
+
+  target_ref="refs/remotes/origin/$base"
+  git fetch origin "refs/heads/$base:$target_ref" || \
+    die "refusing cleanup: unable to refresh origin/$base"
+  git merge-base --is-ancestor "$merge_commit" "$target_ref" || \
+    die "refusing cleanup: merge commit $merge_commit is not reachable from origin/$base"
+  echo "Verified PR #$pr_number merge $merge_commit on origin/$base"
+}
+
+pr_body_for() {
+  local task="$1" base="$2" branch="$3" commits changed_files database_paths database_note
+  commits="$(git log --no-merges --format='- %s' "$base..$branch" 2>/dev/null || true)"
+  [[ -n "$commits" ]] || commits="- Complete isolated task: $task"
+  changed_files="$(git diff --name-only "$base...$branch" 2>/dev/null || true)"
+  database_paths="$(printf '%s\n' "$changed_files" | grep -E '^(db/|config/database\.yml$|Gemfile$|Gemfile\.lock$|app/models/|app/services/)' || true)"
+  if [[ -n "$database_paths" ]]; then
+    database_note="- Database-related paths changed: $(printf '%s' "$database_paths" | tr '\n' ' ')"
+  else
+    database_note="- No database, migration, model, or persistence-service paths changed."
+  fi
+
+  cat <<EOF
+## Summary
+$commits
+
+## Why
+- This PR completes the isolated Elef task \`$task\`; the commit summary above records its scope.
+
+## Database / migration impact
+$database_note
+- Add deployment or data-migration notes here when they apply.
+
+## Validation
+- GitHub Actions will run the repository checks before merge.
+- Record focused local tests and browser checks here before requesting review.
+
+## Follow-up
+- None recorded by the task launcher.
+EOF
+}
+
+validate_pr_description() {
+  local repo="$1" pr_number="$2" body
+  body="$(gh pr view "$pr_number" --repo "$repo" --json body --jq '.body // ""')"
+  PR_BODY="$body" ruby "$REPO/scripts/check_pr_description.rb"
+}
+
 cleanup() {
-  local task="${1:-}" wt name branch repo pr_state host
+  local task="${1:-}" wt name branch repo pr_number host
   [[ -n "$task" ]] || die "usage: elef-agent cleanup TASK"
-  safe_name "$task"; host="$(host_for "$task")"; wt="$(worktree_for "$task")"; name="$(container_for "$task")"; branch="$(branch_for "$task")"
+  safe_name "$task"; host="$(host_for "$task")"; wt="$(require_worktree "$task")"; name="$(container_for "$task")"; branch="$(branch_for "$task")"
   [[ -e "$wt" ]] || die "worktree not found: $wt"
   [[ -z "$(git -C "$wt" status --porcelain)" ]] || die "worktree has uncommitted changes: $wt"
   command -v gh >/dev/null || die "GitHub CLI not found"
   repo="$(gh repo view --json nameWithOwner --jq .nameWithOwner)" || die "unable to determine GitHub repository"
-  pr_state="$(gh pr list --repo "$repo" --head "$branch" --state all --json state --jq '.[0].state // ""')"
-  [[ "$pr_state" == "MERGED" ]] || die "refusing cleanup: PR for $branch is not merged"
+  pr_number="$(pr_number_for_branch "$repo" "$branch")"
+  [[ -n "$pr_number" ]] || die "refusing cleanup: no merged PR found for $branch"
+  verify_merged_pr "$repo" "$pr_number"
   need_container
   assert_no_active_terminal "$task"
   restore_task_terminal "$task"
@@ -509,29 +711,35 @@ cleanup() {
   git push origin --delete "$branch"
   delete_codex_state "$task"
   delete_image_state "$task"
+  delete_database_state "$task"
   echo "Cleaned up merged task $task"
 }
 
 finish() {
-  local task="${1:-}" title base branch repo pr_number pr_state
+  local task="${1:-}" title base branch repo pr_number pr_state body
   [[ -n "$task" ]] || die "usage: elef-agent finish TASK [TITLE]"
   safe_name "$task"
-  [[ -z "$(git -C "$(worktree_for "$task")" status --porcelain)" ]] || \
-    die "worktree has uncommitted changes: $(worktree_for "$task")"
+  local wt
+  wt="$(require_worktree "$task")"
+  [[ -z "$(git -C "$wt" status --porcelain)" ]] || \
+    die "worktree has uncommitted changes: $wt"
   command -v gh >/dev/null || die "GitHub CLI not found"
   title="${2:-Ship $task}"
   base="$(git branch --show-current)"
   [[ -n "$base" ]] || die "current checkout is not on a branch"
+  ensure_base_current "$base"
   branch="$(branch_for "$task")"
   repo="$(gh repo view --json nameWithOwner --jq .nameWithOwner)" || \
     die "unable to determine GitHub repository"
   pr_number="$(gh pr list --repo "$repo" --head "$branch" --state all --json number --jq '.[0].number // empty')"
   if [[ -z "$pr_number" ]]; then
+    body="$(pr_body_for "$task" "$base" "$branch")"
     gh pr create --repo "$repo" --base "$base" --head "$branch" \
-      --title "$title" --body "Automated task handoff for $task."
+      --title "$title" --body "$body"
     pr_number="$(gh pr list --repo "$repo" --head "$branch" --state all --json number --jq '.[0].number // empty')"
   fi
   [[ -n "$pr_number" ]] || die "unable to determine pull request for $branch"
+  validate_pr_description "$repo" "$pr_number"
   gh pr checks "$pr_number" --repo "$repo" --watch --fail-fast
   gh pr merge "$pr_number" --repo "$repo" --merge --subject "$title"
   for _ in {1..30}; do
@@ -557,8 +765,9 @@ Recommended lifecycle:
   1.  $0 setup
   2.  $0 start TASK [BASE]
   3.  $0 status
-  4.  Review and merge codex/TASK in the primary checkout
-  5.  $0 cleanup TASK
+  4.  Review and merge the task PR into the target branch on GitHub
+  5.  Confirm the PR is merged
+  6.  $0 cleanup TASK
 
 Commands:
 
@@ -619,9 +828,12 @@ Environment overrides:
   ELEF_WORKTREE_ROOT            Worktree parent (default: ../elef-worktrees)
   ELEF_AGENT_STATE_ROOT         Router state directory
   ELEF_AGENT_CADDYFILE          Caddyfile path
+  ELEF_USER_SKILLS_DIR          Host skills directory (default: ~/.agents/skills,
+                                or $CODEX_HOME_HOST/skills)
   ELEF_AGENT_CODEX_VERSION      Codex version used in the image
   ELEF_AGENT_CHROME_DEVTOOLS_MCP_VERSION
                                 Chrome DevTools MCP version used in the image
+  ELEF_AGENT_DATABASE            Agent database: sqlite (default) or postgres
 
 For command syntax, run '$0 --help'. Run commands from the Elef repository root.
 EOF
@@ -634,13 +846,13 @@ case "${1:-}" in
   start) shift; start "$@" ;;
   up) shift; up "$@" ;;
   shell) shift; [[ -n "${1:-}" ]] || die "usage: elef-agent shell TASK [COMMAND...]"; task="$1"; shift; exec_in "$task" bash "$@" ;;
-  codex) shift; [[ -n "${1:-}" ]] || die "usage: elef-agent codex TASK [PROMPT...]"; task="$1"; shift; exec_in "$task" codex --dangerously-bypass-approvals-and-sandbox -m gpt-5.6-luna "$@" ;;
-  fork) shift; [[ -n "${1:-}" ]] || die "usage: elef-agent fork TASK [PROMPT...]"; task="$1"; shift; exec_in "$task" codex --dangerously-bypass-approvals-and-sandbox -m gpt-5.6-luna fork --last "$@" ;;
-  resume) shift; [[ -n "${1:-}" ]] || die "usage: elef-agent resume TASK"; task="$1"; shift; exec_in "$task" codex --dangerously-bypass-approvals-and-sandbox -m gpt-5.6-luna resume --last "$@" ;;
+  codex) shift; [[ -n "${1:-}" ]] || die "usage: elef-agent codex TASK [PROMPT...]"; task="$1"; shift; exec_in "$task" codex --dangerously-bypass-approvals-and-sandbox -m "$CODEX_MODEL" -c 'model_reasoning_effort="max"' -c 'plan_mode_reasoning_effort="max"' "$@" ;;
+  fork) shift; [[ -n "${1:-}" ]] || die "usage: elef-agent fork TASK [PROMPT...]"; task="$1"; shift; exec_in "$task" codex --dangerously-bypass-approvals-and-sandbox -m "$CODEX_MODEL" -c 'model_reasoning_effort="max"' -c 'plan_mode_reasoning_effort="max"' fork --last "$@" ;;
+  resume) shift; [[ -n "${1:-}" ]] || die "usage: elef-agent resume TASK"; task="$1"; shift; exec_in "$task" codex --dangerously-bypass-approvals-and-sandbox -m "$CODEX_MODEL" -c 'model_reasoning_effort="max"' -c 'plan_mode_reasoning_effort="max"' resume --last "$@" ;;
   stop) shift; stop "$@" ;;
   cleanup) shift; cleanup "$@" ;;
   finish) shift; finish "$@" ;;
   remove) shift; remove "$@" ;;
-  build) ensure_image "$(new_image_for)" ;;
+  build) validate_agent_database; ensure_image "$(new_image_for)" ;;
   *) echo "usage: $0 {setup|status|start|up|codex|fork|resume|shell|stop|cleanup|finish|remove|build} TASK [ARGS...]" >&2; exit 2 ;;
 esac

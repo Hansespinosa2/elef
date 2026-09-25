@@ -8,10 +8,11 @@ module Presentations
       {
         id: "markdown-basics",
         title: "Sample: Markdown basics",
+        purpose: "Prove Markdown hierarchy, sections, subsections, footnotes, slide counts, and readable narrative flow.",
         source: <<~MARKDOWN
           ---
           #{MARKER_KEY}: markdown-basics
-          presentationTheme: light
+          theme: light
           show-in-margin:
             section: true
             subsection: true
@@ -108,10 +109,11 @@ module Presentations
       {
         id: "layouts-and-themes",
         title: "Sample: Layouts and themes",
+        purpose: "Prove themes, automatic layouts, columns, centered content, and every supported position.",
         source: <<~MARKDOWN
           ---
           #{MARKER_KEY}: layouts-and-themes
-          presentationTheme: dark
+          theme: dark
           ---
           # Designing a visual system
 
@@ -303,10 +305,11 @@ module Presentations
       {
         id: "code-and-math",
         title: "Sample: Code and LaTeX math",
+        purpose: "Prove syntax-highlighted code stays distinct from inline and display LaTeX math.",
         source: <<~MARKDOWN
           ---
           #{MARKER_KEY}: code-and-math
-          presentationTheme: match
+          theme: match
           ---
           # Reasoning with code and math
 
@@ -394,6 +397,7 @@ module Presentations
       {
         id: "tables-and-media",
         title: "Sample: Tables and media",
+        purpose: "Prove table layout, image rendering, safe links, and evidence-oriented content.",
         source: <<~MARKDOWN
           ---
           #{MARKER_KEY}: tables-and-media
@@ -478,10 +482,11 @@ module Presentations
       {
         id: "slide-edge-cases",
         title: "Sample: Slide edge cases",
+        purpose: "Prove slide boundaries, front matter, fenced delimiters, tilde fences, and unusual text.",
         source: <<~MARKDOWN
           ---
           #{MARKER_KEY}: slide-edge-cases
-          presentationTheme: light
+          theme: light
           ---
           # Stress testing the document boundary
 
@@ -524,7 +529,7 @@ module Presentations
 
           Front matter configures the deck:
 
-          - `presentationTheme: light`
+          - `theme: light`
           - `elefSampleId: slide-edge-cases`
 
           The metadata is removed from rendered slide content.
@@ -569,10 +574,11 @@ module Presentations
       {
         id: "elef-workflow",
         title: "Sample: The Elef workflow",
+        purpose: "Prove a realistic end-to-end story can combine authoring, preview, presentation, and review.",
         source: <<~MARKDOWN
           ---
           #{MARKER_KEY}: elef-workflow
-          presentationTheme: dark
+          theme: dark
           ---
           # From source to stage
 
@@ -654,10 +660,11 @@ module Presentations
       {
         id: "renderer-stress-test",
         title: "Sample: Renderer stress test",
+        purpose: "Prove dense combinations of text, code, math, tables, media, links, and boundaries.",
         source: <<~MARKDOWN
           ---
           #{MARKER_KEY}: renderer-stress-test
-          presentationTheme: match
+          theme: match
           ---
           # Renderer stress test
 
@@ -756,7 +763,8 @@ module Presentations
     def load!
       Presentation.transaction do
         SAMPLES.map do |sample|
-          presentation = Presentation.find_by(sample_id: sample[:id]) || find_legacy_owned(sample[:id]) || Presentation.new
+          presentation = Presentation.joins(:presentation_detail).find_by(presentation_details: { sample_id: sample[:id] }) ||
+            find_legacy_owned(sample[:id]) || Presentation.new
           presentation.assign_attributes(
             sample_id: sample[:id],
             title: sample[:title],

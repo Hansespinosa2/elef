@@ -26,10 +26,13 @@ export default class extends Controller {
   }
 
   fullscreen() {
-    if (this.stageTarget?.requestFullscreen) this.stageTarget.requestFullscreen()
+    const request = this.stageTarget?.requestFullscreen?.()
+    request?.catch(() => {})
   }
 
   handleKey(event) {
+    if (event.target.closest?.("a, button, input, select, textarea, summary, [contenteditable='true']")) return
+
     if (["ArrowRight", " ", "PageDown", "Enter"].includes(event.key)) {
       event.preventDefault()
       this.next()
@@ -52,6 +55,10 @@ export default class extends Controller {
       const active = index === this.indexValue
       slide.hidden = !active
       slide.setAttribute("aria-hidden", active ? "false" : "true")
+      slide.querySelectorAll("video").forEach((video) => {
+        if (active) video.play().catch(() => {})
+        else video.pause()
+      })
     })
     if (this.hasCounterTarget) {
       this.counterTarget.textContent = `${this.indexValue + 1} / ${this.slideTargets.length}`

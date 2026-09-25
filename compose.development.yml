@@ -1,0 +1,57 @@
+name: elef-development
+
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-elef_development}
+      POSTGRES_USER: ${POSTGRES_USER:-elef}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-elef-development}
+    ports:
+      - "${DEV_DB_BIND_ADDRESS:-127.0.0.1}:${DEV_DB_PORT:-5433}:5432"
+    volumes:
+      - elef_development_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  web:
+    build:
+      context: ${ELEF_DEVELOPMENT_SOURCE:-.}
+      dockerfile: Dockerfile.development
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      RAILS_ENV: development
+      PGHOST: db
+      PGPORT: 5432
+      PGDATABASE: ${POSTGRES_DB:-elef_development}
+      PGUSER: ${POSTGRES_USER:-elef}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-elef-development}
+      RAILS_MAX_THREADS: ${RAILS_MAX_THREADS:-3}
+      RUBY_DEBUG_OPEN: ${RUBY_DEBUG_OPEN:-false}
+      RUBY_DEBUG_LAZY: ${RUBY_DEBUG_LAZY:-true}
+      PORT: 3000
+    ports:
+      - "${APP_BIND_ADDRESS:-127.0.0.1}:${APP_PORT:-3001}:3000"
+    volumes:
+      - ${ELEF_DEVELOPMENT_SOURCE:-.}:/rails
+      - elef_development_storage:/rails/storage
+      - elef_development_tmp:/rails/tmp
+    command: ["sh", "-c", "bin/rails db:prepare && exec bin/dev"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent http://127.0.0.1:3000/up >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+
+volumes:
+  elef_development_postgres:
+  elef_development_storage:
+  elef_development_tmp:

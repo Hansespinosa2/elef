@@ -1,0 +1,43 @@
+<% content_for :title, @document.title %>
+<section class="show-header mb-8 flex items-end justify-between gap-4 max-[920px]:flex-col max-[920px]:items-stretch">
+  <div>
+    <p class="eyebrow mb-1 text-xs font-extrabold uppercase tracking-[0.12em] text-[#6d4aff]">Saved document</p>
+    <h1 class="mb-0 text-4xl font-bold"><%= @document.title %></h1>
+    <p class="mt-2 text-[#6f675c]">Continuous Markdown rendered from the saved source.</p>
+  </div>
+  <div class="show-actions flex flex-wrap items-center gap-3">
+    <%= link_to "Library", documents_path, class: "button inline-flex min-h-10 items-center rounded-full border border-[#ddd5c8] bg-[#fffdf8] px-4 py-2 font-bold no-underline hover:bg-[#f7efe2]" %>
+    <%= link_to "Edit", edit_document_path(@document), class: "button primary inline-flex min-h-10 items-center rounded-full border border-[#6d4aff] bg-[#6d4aff] px-4 py-2 font-bold text-white no-underline hover:brightness-95" %>
+  </div>
+</section>
+<%= render "works/warnings", warnings: @document.preview_warnings %>
+<div class="saved-document-preview mt-6">
+  <%= render "documents/content", document: @document %>
+</div>
+<details class="linked-context mt-6 rounded-2xl border border-[#ddd5c8] bg-[#fffdf8] p-4">
+  <summary class="cursor-pointer font-bold">Linked context</summary>
+  <div class="linked-context-grid mt-4 grid gap-5 md:grid-cols-2">
+    <section aria-labelledby="outgoing-links-heading">
+      <h2 id="outgoing-links-heading" class="mb-2 text-lg font-bold">Outgoing links</h2>
+      <% outgoing = @document.outgoing_documents %>
+      <% unresolved = @document.unresolved_link_tokens %>
+      <% if outgoing.any? || unresolved.any? %>
+        <ul class="list-disc pl-5">
+          <% outgoing.each do |document| %><li><%= link_to document.title, document_path(document), class: "document-link" %></li><% end %>
+          <% unresolved.each do |token| %><li class="text-[#a63a2d]">Unresolved: <%= token.title %></li><% end %>
+        </ul>
+      <% else %>
+        <p class="text-[#6f675c]">No outgoing links.</p>
+      <% end %>
+    </section>
+    <section aria-labelledby="backlinks-heading">
+      <h2 id="backlinks-heading" class="mb-2 text-lg font-bold">Backlinks</h2>
+      <% backlinks = @document.incoming_backlinks %>
+      <% if backlinks.any? %>
+        <ul class="list-disc pl-5"><% backlinks.each do |document| %><li><%= link_to document.title, document_path(document), class: "document-link" %></li><% end %></ul>
+      <% else %>
+        <p class="text-[#6f675c]">No documents link here yet.</p>
+      <% end %>
+    </section>
+  </div>
+</details>

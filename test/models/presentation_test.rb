@@ -9,23 +9,43 @@ class PresentationTest < ActiveSupport::TestCase
   end
 
   test "preserves empty slides and ignores front matter and fenced separators" do
-    source = "---\ntitle: Demo\npresentationTheme: dark\n---\n```yaml\n---\n```\n---\n---"
+    source = "---\ntitle: Demo\ntheme: dark\n---\n```yaml\n---\n```\n---\n---"
     document = Presentations::Document.parse(source, source_name: "Demo")
 
-    assert_equal "dark", document.presentation_theme
+    assert_equal "dark", document.theme
     assert_equal ["```yaml\n---\n```", "", ""], document.slides.map(&:markdown)
   end
 
-  test "malformed front matter remains ordinary Markdown" do
-    document = Presentations::Document.parse("---\npresentationTheme: dark")
+  test "maps source ranges around front matter, fenced separators, CRLF, and unicode" do
+    source = "---\r\ntitle: Café 😀\r\n---\r\n# One 😀\r\n```md\r\n---\r\n```\r\n---\r\n---"
+    ranges = Presentations::Document.slide_source_ranges(source)
 
-    assert_equal "match", document.presentation_theme
-    assert_equal ["", "presentationTheme: dark"], document.slides.map(&:markdown)
+    assert_equal 3, ranges.length
+    assert_equal source.index("# One"), ranges.first[:start]
+    assert_equal source.index("---\r\n", source.index("```\r\n") + 4), ranges.first[:end]
+    assert_equal "# One 😀\r\n```md\r\n---\r\n```\r\n", source[ranges.first[:start]...ranges.first[:end]]
+    assert_equal "", source[ranges.second[:start]...ranges.second[:end]]
+    assert_equal "", source[ranges.last[:start]...ranges.last[:end]]
   end
 
-  test "defaults presentation typography to book" do
-    assert_equal "book", Presentations::Document.parse("# Title").presentation_typography
-    assert_equal "book", Presentations::Document.parse("---\npresentationTypography: unknown\n---\n# Title").presentation_typography
+  test "keeps language-like and mixed fences inside a slide" do
+    source = "# Code\n\n```\n```ruby\n---\n~~~\n---\n```\n\n---\n# Next"
+    document = Presentations::Document.parse(source)
+
+    assert_equal ["# Code\n\n```\n```ruby\n---\n~~~\n---\n```", "# Next"],
+      document.slides.map(&:markdown)
+  end
+
+  test "malformed front matter remains ordinary Markdown" do
+    document = Presentations::Document.parse("---\ntheme: dark")
+
+    assert_equal "match", document.theme
+    assert_equal ["", "theme: dark"], document.slides.map(&:markdown)
+  end
+
+  test "defaults typography to book" do
+    assert_equal "book", Presentations::Document.parse("# Title").typography
+    assert_equal "book", Presentations::Document.parse("---\ntypography: unknown\n---\n# Title").typography
   end
 
   test "parses margin settings and slide context directives" do
@@ -112,17 +132,17 @@ class PresentationTest < ActiveSupport::TestCase
     assert_includes document.warnings, "Footnote margin directive must appear at the end of a slide."
   end
 
-  test "reads and updates presentation typography without losing front matter" do
-    source = "---\ntitle: Demo\npresentationTheme: dark\npresentationTypography: modern\n---\n# Title\n---\n# Second"
+  test "reads and updates generic typography without losing front matter" do
+    source = "---\ntitle: Demo\ntheme: dark\ntypography: modern\n---\n# Title\n---\n# Second"
     presentation = Presentation.create!(title: "Demo", source: source)
 
-    assert_equal "modern", presentation.presentation_typography
-    presentation.presentation_typography = "technical"
+    assert_equal "modern", presentation.typography
+    presentation.typography = "technical"
 
-    assert_equal "technical", presentation.presentation_typography
+    assert_equal "technical", presentation.typography
     assert_includes presentation.source, "title: Demo\n"
-    assert_includes presentation.source, "presentationTheme: dark\n"
-    assert_includes presentation.source, "presentationTypography: technical\n"
+    assert_includes presentation.source, "theme: dark\n"
+    assert_includes presentation.source, "typography: technical\n"
     assert_includes presentation.source, "# Title\n---\n# Second"
   end
 
@@ -175,6 +195,12 @@ class PresentationTest < ActiveSupport::TestCase
     assert_equal "body", Presentations::Document.parse("# Mixed\n\nA paragraph.\n\n- One\n- Two").slides.first.layout
   end
 
+  test "recognizes fenced code with a longer closing fence" do
+    slide = Presentations::Document.parse("# Example\n\n```ruby\nputs 1\n````").slides.first
+
+    assert_equal "code", slide.layout
+  end
+
   test "parses block positioning and removes extension directives" do
     document = Presentations::Document.parse(<<~MARKDOWN)
       # Positioned
@@ -196,6 +222,89 @@ class PresentationTest < ActiveSupport::TestCase
     assert_empty document.warnings
   end
 
+  test "records whether a vertical position was explicitly requested" do
+    document = Presentations::Document.parse(<<~MARKDOWN)
+      :::position{center}
+
+      Horizontal only.
+
+      :::position{center middle}
+
+      Horizontal and vertical.
+    MARKDOWN
+
+    assert_equal [false, true], document.slides.first.blocks.map { |block| block.position&.vertical_explicit }
+  end
+
+  test "builds an ephemeral editor map with UTF-16 ranges and known directives" do
+    source = "---\npresentationTheme: dark\n---\n# 🚀 Intro\n\n:::position{center middle}\n\nA **message**.\n\n:::\n---\n:::unknown\n\n# Next"
+
+    map = Presentations::Document.editor_map(source, source_name: "Deck", mode: :presentation)
+
+    assert_equal 1, map[:version]
+    assert_equal "presentation", map[:mode]
+    assert_equal source.encode("UTF-16LE").bytesize / 2, map[:source_length]
+    assert_equal 2, map[:slides].length
+    assert_equal "# 🚀 Intro", map[:slides].first[:blocks].first[:markdown]
+    assert_equal "heading", map[:slides].first[:blocks].first[:kind]
+    assert_equal "center middle", map[:slides].first[:blocks].second[:position].values_at(:horizontal, :vertical).join(" ")
+    assert_equal "position", map[:slides].first[:directives].first[:type]
+    assert_equal "unknown", map[:slides].second[:directives].first[:type]
+    assert_operator map[:slides].first[:editable_regions].first[:content_range][:start], :>,
+      map[:slides].first[:editable_regions].first[:range][:start]
+    assert_equal 34, map[:slides].first[:editable_regions].first[:content_range][:start]
+  end
+
+  test "maps a single-block position directive without leaking it to the next block" do
+    source = "# Slide\n\n:::position{center}\n\nFirst\n\nSecond"
+
+    blocks = Presentations::Document.editor_map(source, mode: :presentation)[:slides].first[:blocks]
+
+    assert_equal [nil, "center", nil], blocks.map { |block| block[:position]&.fetch(:horizontal) }
+    assert_equal [nil, "block", nil], blocks.map { |block| block[:position_scope] }
+  end
+
+  test "maps shared position scopes to every block inside the group" do
+    source = "# Slide\n\n:::position{center}\n\nFirst\n\nSecond\n\n:::\n\nOutside"
+
+    blocks = Presentations::Document.editor_map(source, mode: :presentation)[:slides].first[:blocks]
+
+    assert_equal [nil, "group", "group", nil], blocks.map { |block| block[:position_scope] }
+    assert_equal blocks[1][:position_directive_id], blocks[2][:position_directive_id]
+    refute_equal blocks[1][:position_directive_id], blocks[3][:position_directive_id]
+  end
+
+  test "keeps a document editor map as one source surface across horizontal rules" do
+    source = "# First\n\n---\n\nSecond"
+
+    map = Presentations::Document.editor_map(source, mode: :document)
+
+    assert_equal 1, map[:slides].length
+    assert_equal source.length, map[:slides].first[:range][:end]
+    assert_equal ["# First", "---", "Second"], map[:slides].first[:blocks].map { |block| block[:markdown] }
+  end
+
+  test "marks Markdown that the visual serializer cannot round-trip as read-only" do
+    sources = [
+      "```ruby\nputs 1",
+      "[Guide][guide]",
+      "[guide]: /guide",
+      "<https://example.test>",
+      "---",
+      "Title\n===",
+      "    indented code",
+      "foo*bar*baz and value_name_value",
+      "> outer\n> > nested quote",
+      "Inline ![video](elef-asset:#{'a' * 64})",
+      "| A |\n| --- |",
+      "| A | B |\n| --- |\n| 1 | 2 | 3 |"
+    ]
+    maps = sources.map { |source| Presentations::Document.editor_map(source, mode: :document) }
+
+    assert_equal "code", maps.first[:slides].first[:blocks].first[:kind]
+    assert_equal [false] * sources.length, maps.map { |map| map[:slides].first[:editable_regions].first[:editable] }
+  end
+
   test "warns and removes unknown presentation directives" do
     document = Presentations::Document.parse("# Slide\n\n:::unknown\n\nContent")
 
@@ -205,9 +314,9 @@ class PresentationTest < ActiveSupport::TestCase
   end
 
   test "detects keys inside front matter" do
-    source = "---\npresentationTheme: dark\npresentationTypography: modern\n---\n# Title"
+    source = "---\ntheme: dark\ntypography: modern\n---\n# Title"
 
-    assert Presentations::Document.front_matter_has_key?(source, "presentationTypography")
+    assert Presentations::Document.front_matter_has_key?(source, "typography")
     refute Presentations::Document.front_matter_has_key?(source, "missing")
   end
 
@@ -257,16 +366,33 @@ class PresentationTest < ActiveSupport::TestCase
     assert_includes html, "katex"
   end
 
+  test "does not render math inside inline code or escaped delimiters" do
+    html = Presentations::MarkdownRenderer.render("`$x^2$` and $x^2$ and \\$x$")
+
+    assert_equal 1, html.scan('class="katex"').length
+    assert_includes html, "<code>$x^2$</code>"
+    assert_includes html, "\\$x$"
+  end
+
+  test "rejects dangerous link and image protocols" do
+    html = Presentations::MarkdownRenderer.render("[unsafe](javascript:alert(1)) ![image](javascript:alert(1))")
+
+    refute_includes html, "javascript:"
+    refute_includes html, "<a"
+    refute_includes html, "<img"
+  end
+
   test "sample data covers supported presentation features" do
     samples = Presentations::SampleData.load!
 
     assert_equal Presentations::SampleData::SAMPLES.length, samples.length
+    assert Presentations::SampleData::SAMPLES.all? { |sample| sample[:purpose].present? }
     Presentations::SampleData::SAMPLES.zip(samples).each do |sample, presentation|
       assert_equal sample[:source], presentation.reload.source
     end
     assert_equal Presentations::SampleData::SAMPLES.map { |sample| sample[:id] },
       samples.map(&:sample_id)
-    assert_equal %w[dark light match], samples.map(&:presentation_theme).uniq.sort
+    assert_equal %w[dark light match], samples.map(&:theme).uniq.sort
     assert samples.all? { |presentation| presentation.slides.length.between?(10, 20) }
     assert samples.all? { |presentation| presentation.source.lines.length > 50 }
     assert samples.all? { |presentation| presentation.source.scan(/^# /).length >= 8 }
@@ -314,12 +440,31 @@ class PresentationTest < ActiveSupport::TestCase
     records = Presentations::LineageSampleData.load!
 
     assert_equal 15, records.length
+    assert Presentations::LineageSampleData::SAMPLES.all? { |sample| sample[:purpose].present? }
+    assert records.all? { |record| record.slides.length >= 4 }
     assert_equal 6, records.count(&:continuation?)
     assert_equal 6, records.count(&:inspiration?)
     assert_equal %w[lineage-product-root lineage-research-root lineage-root],
       records.select { |record| record.parent.nil? }.map(&:sample_id).sort
     assert_equal records.find { |record| record.sample_id == "lineage-root" }.source,
       records.find { |record| record.sample_id == "lineage-continuation-june" }.fork_source
+
+    root = records.find { |record| record.sample_id == "lineage-root" }
+    assert_equal 4, root.slides.length
+    assert_equal "Quarterly review", root.slides.first.section
+    assert_equal "Baseline", root.slides.first.subsection
+    assert_equal "Source: May operating review", root.slides.first.footnote
+    assert root.document.margin_settings.section
+    assert root.document.margin_settings.footnote
+
+    workshop = records.find { |record| record.sample_id == "lineage-inspiration-workshop" }
+    assert_includes workshop.slides.map(&:layout), "three-column"
+    assert workshop.slides.any? do |slide|
+      slide.blocks.any? { |block| block.position&.horizontal == "center" && block.position.vertical == "middle" }
+    end
+
+    findings = records.find { |record| record.sample_id == "lineage-research-continuation" }
+    assert_includes findings.source, "~~~ruby"
   end
 
   test "presentation creation always has a timestamp" do

@@ -1,4 +1,5 @@
 import { Controller } from "@hotwired/stimulus"
+import { editorFor } from "controllers/editor_controller"
 
 export default class extends Controller {
   static targets = ["editor", "palette"]
@@ -8,14 +9,56 @@ export default class extends Controller {
     this.matches = []
     this.selectedIndex = 0
     this.stops = []
+    this.editorController = editorFor(this.element)
+    this.editorReady = () => this.setupEditor()
+    this.element.addEventListener("elef:editor-ready", this.editorReady)
     this.positionPalette = this.positionPalette.bind(this)
+    this.paletteTarget.setAttribute("aria-live", "polite")
+    this.setupEditor()
     window.addEventListener("resize", this.positionPalette)
-    this.editorTarget.addEventListener("scroll", this.positionPalette)
   }
 
   disconnect() {
     window.removeEventListener("resize", this.positionPalette)
-    this.editorTarget.removeEventListener("scroll", this.positionPalette)
+    if (this.scrollBound) this.editorController?.scrollElement.removeEventListener("scroll", this.positionPalette)
+    if (this.keydownBound) this.editorController?.dom.removeEventListener("keydown", this.handleEditorKeydown, true)
+    this.element.removeEventListener("elef:editor-ready", this.editorReady)
+  }
+
+  setupEditor() {
+    this.editorController ||= editorFor(this.element)
+    if (this.editorController) this.setupAccessibility()
+    if (this.editorController && !this.scrollBound) {
+      this.editorController.scrollElement.addEventListener("scroll", this.positionPalette)
+      this.scrollBound = true
+    }
+    if (this.editorController && !this.keydownBound) {
+      this.handleEditorKeydown = (event) => this.keydown(event)
+      this.editorController.dom.addEventListener("keydown", this.handleEditorKeydown, true)
+      this.keydownBound = true
+    }
+  }
+
+  setupAccessibility() {
+    const editor = this.editorController?.dom
+    if (!editor) return
+
+    const controls = new Set((editor.getAttribute("aria-controls") || "").split(/\s+/).filter(Boolean))
+    controls.add(this.paletteTarget.id)
+    editor.setAttribute("aria-controls", [...controls].join(" "))
+    editor.setAttribute("aria-autocomplete", "list")
+    this.updateAccessibility()
+  }
+
+  updateAccessibility() {
+    const editor = this.editorController?.dom
+    if (!editor) return
+
+    const openPalette = [...this.element.querySelectorAll('[role="listbox"]')].find((palette) => !palette.hidden)
+    editor.setAttribute("aria-expanded", String(Boolean(openPalette)))
+    const selected = openPalette?.querySelector('[aria-selected="true"]')
+    if (selected) editor.setAttribute("aria-activedescendant", selected.id)
+    else editor.removeAttribute("aria-activedescendant")
   }
 
   input() {
@@ -28,6 +71,9 @@ export default class extends Controller {
   }
 
   keydown(event) {
+    const editor = this.editorController
+    if (!editor) return
+
     if (this.paletteTarget.hidden) {
       if (event.key === "Tab" && this.stops.length > 0) {
         event.preventDefault()
@@ -54,7 +100,8 @@ export default class extends Controller {
   }
 
   refresh() {
-    const editor = this.editorTarget
+    const editor = this.editorController
+    if (!editor) return this.close()
     const beforeCaret = editor.value.slice(0, editor.selectionStart)
     const match = beforeCaret.match(/:([a-z0-9-]*)$/i)
     if (!match) return this.close()
@@ -64,7 +111,7 @@ export default class extends Controller {
     this.matches = this.snippetsValue
       .map((snippet) => ({ snippet, score: this.score(snippet) }))
       .filter((result) => result.score !== null)
-      .sort((a, b) => a.score - b.score || a.snippet.name.localeCompare(b.snippet.name))
+      .sort((a, b) => a.score - b.score || a.snippet.trigger.localeCompare(b.snippet.trigger) || a.snippet.name.localeCompare(b.snippet.name))
       .map((result) => result.snippet)
     this.selectedIndex = 0
     this.renderPalette()
@@ -88,6 +135,8 @@ export default class extends Controller {
       const option = document.createElement("button")
       option.type = "button"
       option.role = "option"
+      option.id = `${this.paletteTarget.id}-option-${index}`
+      option.setAttribute("aria-selected", String(index === this.selectedIndex))
       option.className = `snippet-option${index === this.selectedIndex ? " is-selected" : ""}`
       const trigger = document.createElement("strong")
       trigger.textContent = `:${snippet.trigger}`
@@ -102,42 +151,24 @@ export default class extends Controller {
       this.paletteTarget.append(option)
     })
     this.paletteTarget.hidden = this.matches.length === 0
+    this.updateAccessibility()
     if (!this.paletteTarget.hidden) this.positionPalette()
   }
 
   positionPalette() {
     if (this.paletteTarget.hidden) return
 
-    const editor = this.editorTarget
-    const editorRect = editor.getBoundingClientRect()
-    const styles = getComputedStyle(editor)
-    const mirror = document.createElement("div")
-    const marker = document.createElement("span")
-    mirror.setAttribute("aria-hidden", "true")
-    Object.assign(mirror.style, {
-      position: "fixed",
-      visibility: "hidden",
-      top: `${editorRect.top - editor.scrollTop}px`,
-      left: `${editorRect.left - editor.scrollLeft}px`,
-      width: `${editor.clientWidth}px`,
-      boxSizing: "border-box",
-      whiteSpace: "pre-wrap",
-      overflowWrap: "break-word",
-      wordBreak: "break-word",
-      font: styles.font,
-      lineHeight: styles.lineHeight,
-      letterSpacing: styles.letterSpacing,
-      padding: styles.padding,
-      border: styles.border
-    })
-    mirror.append(document.createTextNode(editor.value.slice(0, editor.selectionStart)), marker)
-    document.body.append(mirror)
-    const markerRect = marker.getBoundingClientRect()
-    mirror.remove()
+    const editor = this.editorController
+    if (!editor) return
+    const editorRect = editor.dom.getBoundingClientRect()
+    const markerRect = editor.view.coordsAtPos(editor.selectionStart) || editorRect
 
     const paletteRect = this.paletteTarget.getBoundingClientRect()
     const left = Math.max(8, Math.min(markerRect.left, window.innerWidth - paletteRect.width - 8))
-    const top = Math.max(8, Math.min(markerRect.bottom + 4, window.innerHeight - paletteRect.height - 8))
+    const maxTop = window.innerHeight - paletteRect.height - 8
+    const belowTop = markerRect.bottom + 4
+    const aboveTop = markerRect.top - paletteRect.height - 4
+    const top = belowTop <= maxTop ? belowTop : Math.max(8, Math.min(aboveTop, maxTop))
     this.paletteTarget.style.left = `${left}px`
     this.paletteTarget.style.top = `${top}px`
   }
@@ -146,11 +177,11 @@ export default class extends Controller {
     const snippet = this.matches[this.selectedIndex]
     if (!snippet) return this.close()
 
-    const editor = this.editorTarget
+    const editor = this.editorController
+    if (!editor) return this.close()
     const before = editor.value.slice(0, this.queryStart)
     const after = editor.value.slice(editor.selectionStart)
     const expansion = this.expand(snippet.body)
-    editor.value = before + expansion.text + after
     const base = before.length
     this.stops = expansion.stops.map((stop) => ({
       ...stop,
@@ -158,10 +189,10 @@ export default class extends Controller {
       end: base + stop.start + stop.length
     }))
     this.close()
+    this.ignoreNextInput = true
+    editor.replaceRange(expansion.text, this.queryStart, editor.selectionStart)
     editor.focus()
     this.selectStop(this.stops[0])
-    this.ignoreNextInput = true
-    editor.dispatchEvent(new Event("input", { bubbles: true }))
   }
 
   expand(body) {
@@ -181,13 +212,15 @@ export default class extends Controller {
     const next = this.stops[0]
     if (next) return this.selectStop(next)
 
-    const editor = this.editorTarget
+    const editor = this.editorController
+    if (!editor) return
     const exit = editor.value[current.end] === "}" ? current.end + 1 : current.end
     editor.setSelectionRange(exit, exit)
   }
 
   selectStop(stop) {
-    const editor = this.editorTarget
+    const editor = this.editorController
+    if (!editor) return
     if (!stop) {
       this.activeStop = null
       editor.setSelectionRange(editor.selectionStart, editor.selectionStart)
@@ -201,7 +234,8 @@ export default class extends Controller {
     const active = this.activeStop
     if (!active) return
 
-    const editor = this.editorTarget
+    const editor = this.editorController
+    if (!editor) return
     const delta = editor.selectionStart - active.end
     if (delta === 0) return
     active.end = editor.selectionStart
@@ -215,13 +249,15 @@ export default class extends Controller {
   close() {
     this.paletteTarget.hidden = true
     this.matches = []
+    this.updateAccessibility()
   }
 }
 
 function textLengthBefore(body, stops) {
-  let position = body.length
   const markers = [...body.matchAll(/\$\{\d+(?::[^}]*)?\}/g)]
   const marker = markers[stops.length]
-  if (marker) position = marker.index - markers.slice(0, stops.length).reduce((total, item) => total + item[0].length, 0)
-  return position
+  if (!marker) return body.length
+
+  return marker.index - stops.reduce((position, stop, index) =>
+    position + markers[index][0].length - stop.length, 0)
 }

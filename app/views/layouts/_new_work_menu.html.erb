@@ -1,0 +1,29 @@
+<details class="new-work-menu relative">
+  <summary class="new-work-trigger inline-flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm font-bold text-[#aab7b1] list-none">
+    <span class="new-work-plus" aria-hidden="true">+</span>
+    <span>New</span>
+    <span class="new-work-chevron" aria-hidden="true"></span>
+  </summary>
+  <div class="new-work-panel absolute right-0 top-full z-20 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-xl border border-[#304047] bg-[#182126] p-2 shadow-2xl" role="menu" aria-label="Create new">
+    <%= link_to new_document_path, class: "new-work-option flex items-center gap-3 rounded-lg p-3 no-underline", role: "menuitem" do %>
+      <span class="new-work-icon new-work-icon-document inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#304047] bg-[#202c32] text-[#9fc5a9]" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M6.5 3.75h7.25L18.5 8.5v11.75a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1v-15.5a1 1 0 0 1 1-1Z"/><path d="M13.5 3.75V9h5M8.5 13h7M8.5 16.5h5"/></svg>
+      </span>
+      <span class="new-work-copy">
+        <strong>Document</strong>
+        <small>Continuous Markdown for writing</small>
+      </span>
+      <span class="new-work-arrow" aria-hidden="true">→</span>
+    <% end %>
+    <%= link_to new_presentation_path, class: "new-work-option flex items-center gap-3 rounded-lg p-3 no-underline", role: "menuitem" do %>
+      <span class="new-work-icon new-work-icon-presentation inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#304047] bg-[#202c32] text-[#9fc5a9]" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="1.5"/><path d="M7.5 9h9M7.5 12.5h6M7.5 16h3"/></svg>
+      </span>
+      <span class="new-work-copy">
+        <strong>Presentation</strong>
+        <small>Slide-based Markdown for talks</small>
+      </span>
+      <span class="new-work-arrow" aria-hidden="true">→</span>
+    <% end %>
+  </div>
+</details>
