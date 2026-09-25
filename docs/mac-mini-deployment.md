@@ -26,8 +26,10 @@ Keep the branch contract simple:
 
 ## Automatic deployment
 
-GitHub Actions runs the existing checks on pushes. After every check succeeds,
-the workflow advances one of these refs to the tested commit:
+Pull requests run the seven required CI checks. After merge, a lightweight
+workflow verifies that those checks succeeded in the PR's test run and that
+the merged source tree is exactly the tree tested by CI. It then advances one
+of these refs to the approved commit without rerunning the suite:
 
 - `elef-deploy-dev` for `dev`
 - `elef-deploy-main` for `main`
@@ -69,10 +71,12 @@ origin and SSH identity also work. The watcher needs read access to the private
 repository; it does not need a new deploy key, inbound network access, a GitHub
 secret, or a self-hosted GitHub Actions runner.
 
-The final GitHub Actions job needs `contents: write` so it can advance the
-deploy refs after CI succeeds. That permission is scoped to that job. If an
-approved deploy ref does not exist yet, the watcher waits until a successful
-CI run creates it.
+The final GitHub Actions job uses scoped `contents: write`, `actions: read`,
+`checks: read`, and `pull-requests: read` permissions to verify the successful
+PR run and advance the deploy refs. This changes only GitHub Actions; no Mac
+mini-side configuration change is needed while the watcher continues to follow
+`elef-deploy-dev` and `elef-deploy-main`. If an approved deploy ref does not
+exist yet, the watcher waits until a successful CI run creates it.
 
 Check deploy state and logs with:
 
