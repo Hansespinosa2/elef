@@ -1,19 +1,46 @@
 require "application_system_test_case"
 
 class UnifiedWorkspaceTest < ApplicationSystemTestCase
-  test "opens the command palette with Mod+K and searches works" do
-    target = Document.create!(title: "Palette target", source: "# Palette target")
+  test "Mod+K opens Elef actions without listing work" do
+    document = Document.create!(title: "Palette target", source: "# Palette target")
+
+    visit edit_document_path(document)
+    page.driver.browser.action.key_down(:control).send_keys("k").key_up(:control).perform
+    assert_selector "dialog.command-palette[open]"
+    assert_selector "#command-palette-heading", text: "Command palette"
+    assert_selector ".command-palette-option", text: "New presentation"
+    assert_selector ".command-palette-option", text: "Open settings"
+    assert_no_selector ".command-palette-option", text: document.title
+
+    fill_in "Filter commands…", with: "new presentation"
+    assert_selector ".command-palette-option", text: "New presentation"
+    assert_no_selector ".command-palette-option", text: document.title
+    find(".command-palette-option", text: "New presentation").click
+
+    assert_current_path new_presentation_path
+  end
+
+  test "Mod+P searches document and presentation content with work type filters" do
+    document = Document.create!(title: "Field archive", source: "# Field archive\n\nA memorable\nphrase from an old survey")
+    presentation = Presentation.create!(title: "Survey talk", source: "# Survey talk\n\nA memorable\nphrase from an old survey")
     source = Document.create!(title: "Palette source", source: "# Palette source")
 
     visit edit_document_path(source)
-    page.driver.browser.action.key_down(:control).send_keys("k").key_up(:control).perform
+    page.driver.browser.action.key_down(:control).send_keys("p").key_up(:control).perform
     assert_selector "dialog.command-palette[open]"
+    assert_selector "#command-palette-heading", text: "Search presentations and documents"
+    assert_selector ".command-palette-filters button[aria-pressed='true']", text: "All work"
 
-    fill_in "Search works or run a command…", with: "Palette target"
-    assert_selector ".command-palette-option", text: target.title, wait: 5
-    find(".command-palette-option", text: target.title).click
+    fill_in "Search by title, alias, heading, or content…", with: '"memorable phrase"'
+    assert_selector ".command-palette-option", text: document.title, wait: 5
+    assert_selector ".command-palette-option", text: presentation.title, wait: 5
 
-    assert_current_path document_path(target)
+    click_on "Documents"
+    assert_selector ".command-palette-option", text: document.title, wait: 5
+    assert_no_selector ".command-palette-option", text: presentation.title
+    find(".command-palette-option", text: document.title).click
+
+    assert_current_path document_path(document)
   end
 
   test "uses the math shortcut palette for aliases inside math" do

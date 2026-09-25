@@ -26,22 +26,34 @@
           <%= link_to "Settings", settings_path, class: "app-nav-link rounded-lg px-3 py-2 text-sm font-bold no-underline text-[#aab7b1] #{'is-active' if %w[workspace_settings snippets math_shortcuts].include?(controller_name)}" %>
         </nav>
         <div class="command-palette-root" data-controller="command-palette" data-command-palette-search-url-value="<%= search_path %>" data-command-palette-commands-value="<%= json_escape([
-          { id: "quick-open", label: "Quick-open works", description: "Search titles, aliases, headings, and source" },
-          { id: "new-document", label: "New document", description: "Start a continuous Markdown document", url: new_document_path },
-          { id: "save", label: "Save current work", description: "Submit the active editor" },
-          { id: "toggle-vim", label: "Toggle Vim mode", description: "Change the active editor mode" },
-          { id: "vim-settings", label: "Open Vim settings", description: "Configure the browser-local editor preferences" },
-          { id: "toggle-metadata", label: "Toggle source metadata", description: "Show or hide Markdown front matter" },
-          { id: "library-all", label: "Go to All", description: "Open the combined library", url: root_path },
-          { id: "library-documents", label: "Go to Documents", description: "Open the document library", url: documents_path },
-          { id: "library-presentations", label: "Go to Presentations", description: "Open the presentation library", url: presentations_path }
+          { id: "quick-open", label: "Search presentations and documents", description: "Find by title, alias, heading, or content", shortcutKey: "p" },
+          { id: "new-presentation", label: "New presentation", description: "Create slide-based Markdown", url: new_presentation_path },
+          { id: "new-document", label: "New document", description: "Create a continuous Markdown document", url: new_document_path },
+          { id: "open-settings", label: "Open settings", description: "Change workspace appearance", url: settings_path },
+          { id: "open-snippets", label: "Manage snippets", description: "Edit reusable Markdown snippets", url: snippets_path },
+          { id: "open-math-shortcuts", label: "Manage math shortcuts", description: "Edit editor math expansions", url: math_shortcuts_path },
+          { id: "library-all", label: "Open all work", description: "Browse documents and presentations", url: root_path },
+          { id: "library-documents", label: "Browse documents", description: "Open the document library", url: documents_path },
+          { id: "library-presentations", label: "Browse presentations", description: "Open the presentation library", url: presentations_path },
+          { id: "save", label: "Save current work", description: "Submit the active editor", requiresEditor: true },
+          { id: "toggle-vim", label: "Toggle Vim mode", description: "Change the active editor mode", requiresEditor: true },
+          { id: "vim-settings", label: "Open Vim settings", description: "Configure the browser-local editor preferences", requiresEditor: true },
+          { id: "toggle-metadata", label: "Toggle source metadata", description: "Show or hide Markdown front matter", requiresEditor: true }
         ].to_json) %>">
-          <button type="button" class="command-palette-trigger" data-action="command-palette#open" aria-label="Open command palette">Search <kbd>⌘K</kbd></button>
-          <dialog class="command-palette" data-command-palette-target="dialog" aria-labelledby="command-palette-heading">
+          <div class="command-palette-triggers" aria-label="Open Elef tools">
+            <button type="button" class="command-palette-trigger" data-action="command-palette#openCommands" aria-label="Open command palette">Commands <kbd data-command-palette-shortcut="k">⌘K</kbd></button>
+            <button type="button" class="command-palette-trigger" data-action="command-palette#openSearch" aria-label="Search presentations and documents">Search <kbd data-command-palette-shortcut="p">⌘P</kbd></button>
+          </div>
+          <dialog class="command-palette" data-command-palette-target="dialog" data-action="click->command-palette#dialogClick close->command-palette#dialogClosed" aria-labelledby="command-palette-heading">
             <div class="command-palette-panel">
-              <div class="command-palette-heading"><h2 id="command-palette-heading">Command palette</h2><button type="button" data-action="command-palette#close" aria-label="Close command palette">Esc</button></div>
-              <input type="search" autocomplete="off" placeholder="Search works or run a command…" data-command-palette-target="input" data-action="input->command-palette#inputChanged keydown->command-palette#keydown" aria-controls="command-palette-results">
-              <div id="command-palette-results" class="command-palette-results" data-command-palette-target="results" role="listbox" aria-label="Commands and search results"></div>
+              <div class="command-palette-heading"><h2 id="command-palette-heading" data-command-palette-target="heading">Command palette</h2><button type="button" data-action="command-palette#close" aria-label="Close command palette">Esc</button></div>
+              <input type="search" autocomplete="off" placeholder="Filter commands…" data-command-palette-target="input" data-action="input->command-palette#inputChanged keydown->command-palette#keydown" aria-controls="command-palette-results" aria-autocomplete="list" role="combobox" aria-expanded="true">
+              <div class="command-palette-filters" data-command-palette-target="filters" role="group" aria-label="Filter search by work type" hidden>
+                <button type="button" data-type="all" data-action="command-palette#setSearchType" aria-pressed="true">All work</button>
+                <button type="button" data-type="presentations" data-action="command-palette#setSearchType" aria-pressed="false">Presentations</button>
+                <button type="button" data-type="documents" data-action="command-palette#setSearchType" aria-pressed="false">Documents</button>
+              </div>
+              <div id="command-palette-results" class="command-palette-results" data-command-palette-target="results" role="listbox" aria-label="Elef commands"></div>
               <p class="command-palette-status" data-command-palette-target="status" aria-live="polite"></p>
             </div>
           </dialog>
