@@ -21,6 +21,8 @@ export default class extends Controller {
     this.active = true
     this.pendingSubmit = null
     this.recoveryNotice = false
+    this.savedSnapshot = this.snapshot()
+    this.saveFailed = false
     const workKind = this.hasWorkKindValue ? this.workKindValue : "work"
     this.freshNewWorkNavigation = !this.hasWorkIdValue && window.performance?.getEntriesByType?.("navigation")?.[0]?.type === "navigate"
     this.localDraftKey = this.hasWorkIdValue
@@ -33,6 +35,7 @@ export default class extends Controller {
   disconnect() {
     this.active = false
     clearTimeout(this.timer)
+    this.timer = null
     clearTimeout(this.requestTimeout)
     this.requestController?.abort()
   }
@@ -41,6 +44,7 @@ export default class extends Controller {
   // an older autosave cannot overwrite the manually saved version.
   submit(event) {
     clearTimeout(this.timer)
+    this.timer = null
     if (!this.saveEnabledValue) {
       this.clearLocalDraft()
       return
@@ -53,8 +57,16 @@ export default class extends Controller {
 
   schedule() {
     clearTimeout(this.timer)
+    this.timer = null
+    const snapshot = this.snapshot()
+    if (!this.saving && !this.saveFailed && this.savedSnapshot === snapshot) {
+      this.setStatus("Saved")
+      this.clearLocalDraft()
+      return
+    }
+
     this.setStatus("Unsaved changes")
-    this.persistLocalDraft()
+    this.persistLocalDraft(snapshot)
     this.timer = setTimeout(() => this.save(), this.delayValue)
   }
 
@@ -81,6 +93,7 @@ export default class extends Controller {
 
     this.updateRevisionTokens(current)
     this.conflictPayload = null
+    this.savedSnapshot = null
     if (this.hasConflictTarget) this.conflictTarget.hidden = true
     this.setStatus("Unsaved changes")
     this.schedule()
@@ -99,8 +112,11 @@ export default class extends Controller {
     }
     this.updateRevisionTokens(current)
     clearTimeout(this.timer)
+    this.timer = null
     this.clearLocalDraft()
     this.conflictPayload = null
+    this.savedSnapshot = null
+    this.saveFailed = false
     if (this.hasConflictTarget) this.conflictTarget.hidden = true
     this.element.dispatchEvent(new CustomEvent("autosave:saved", { detail: { snapshot: this.snapshot(), payload: current } }))
     this.setStatus("Saved")
@@ -108,6 +124,7 @@ export default class extends Controller {
 
   async save() {
     clearTimeout(this.timer)
+    this.timer = null
     if (this.saving || !this.active || !this.saveEnabledValue) return
     const snapshot = this.snapshot()
     this.saving = true
@@ -152,6 +169,10 @@ export default class extends Controller {
 
       if (response.status === 409) {
         if (!this.active) return
+        clearTimeout(this.timer)
+        this.timer = null
+        this.savedSnapshot = null
+        this.saveFailed = false
         this.conflictPayload = payload
         this.element.dispatchEvent(new CustomEvent("autosave:conflict", { detail: payload }))
         this.showConflict(payload)
@@ -162,17 +183,23 @@ export default class extends Controller {
 
       if (!this.active) return
       this.updateRevisionTokens(payload)
+      this.savedSnapshot = snapshot
+      this.saveFailed = false
       this.element.dispatchEvent(new CustomEvent("autosave:saved", { detail: { snapshot, payload } }))
-      this.setStatus(this.snapshot() === snapshot ? "Saved" : "Unsaved changes")
-      if (this.snapshot() === snapshot) this.clearLocalDraft()
+      const currentSnapshot = this.snapshot()
+      clearTimeout(this.timer)
+      this.timer = null
+      this.setStatus(currentSnapshot === snapshot ? "Saved" : "Unsaved changes")
+      if (currentSnapshot === snapshot) this.clearLocalDraft()
       // schedule() may have fired while this request was in flight.
       // Persist the newer fields even if that debounce timer already elapsed.
-      if (this.snapshot() !== snapshot) {
-        this.persistLocalDraft()
+      if (currentSnapshot !== snapshot) {
+        this.persistLocalDraft(currentSnapshot)
         this.timer = setTimeout(() => this.save(), 0)
       }
     } catch (_error) {
       if (this.active) {
+        this.saveFailed = true
         const failure = timedOut ? "Save timed out; your changes remain in the editor." : "Save failed"
         const recoveryWarning = recoveryCopySaved
           ? ""

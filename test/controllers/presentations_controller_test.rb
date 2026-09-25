@@ -209,6 +209,133 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_select ".presentation-print .slide h1", text: "Latest draft", count: 0
   end
 
+  test "PPTX JSON describes the latest draft with slide geometry inputs and typography" do
+    presentation = presentations(:one)
+
+    get pptx_presentation_path(presentation, version: "draft")
+
+    assert_response :success
+    assert_equal "private, no-store", response.headers["Cache-Control"]
+    payload = response.parsed_body
+    assert_equal "draft", payload["version"]
+    assert_equal "Demo Deck.pptx", payload["filename"]
+    assert_equal 1280, payload.dig("presentation", "width")
+    assert_equal 720, payload.dig("presentation", "height")
+    assert_equal "book", payload.dig("presentation", "typography")
+    assert_equal 2, payload["slides"].length
+    assert_includes payload.dig("slides", 0, "blocks", 0, "html"), "One"
+    assert_includes payload.dig("slides", 1, "blocks", 0, "html"), "Two"
+  end
+
+  test "PPTX POST exports unsaved form values without persisting them" do
+    presentation = Presentation.create!(title: "Saved presentation", source: "# Saved source")
+
+    post pptx_presentation_path(presentation, version: "draft"), params: {
+      presentation: {
+        title: "Unsaved title",
+        source: "# Unsaved source",
+        theme: "dark",
+        typography: "technical"
+      }
+    }
+
+    assert_response :success
+    payload = response.parsed_body
+    assert_equal "Unsaved title.pptx", payload["filename"]
+    assert_equal "dark", payload.dig("presentation", "theme")
+    assert_equal "technical", payload.dig("presentation", "typography")
+    assert_includes payload.dig("slides", 0, "blocks", 0, "html"), "Unsaved source"
+    assert_equal "# Saved source", presentation.reload.source
+    assert_equal "Saved presentation", presentation.title
+  end
+
+  test "PPTX export selects a pinned release and requires one for published exports" do
+    presentation = Presentation.create!(title: "PPTX versions", source: "# Published copy")
+    get pptx_presentation_path(presentation, version: "published")
+    assert_response :not_found
+
+    post publish_presentation_path(presentation)
+    patch presentation_path(presentation), params: { presentation: { source: "# Current draft" } }
+
+    get pptx_presentation_path(presentation, version: "draft")
+    assert_response :success
+    assert_includes response.parsed_body.dig("slides", 0, "blocks", 0, "html"), "Current draft"
+
+    get pptx_presentation_path(presentation, version: "published")
+    assert_response :success
+    assert_equal "published", response.parsed_body["version"]
+    assert_includes response.parsed_body.dig("slides", 0, "blocks", 0, "html"), "Published copy"
+  end
+
+  test "published PPTX keeps the release theme and typography after workspace defaults change" do
+    workspace = presentations(:one).workspace
+    workspace.update_style_defaults(theme: "dark", typography: "technical")
+    presentation = Presentation.create!(workspace:, title: "Pinned style", source: "# Original style")
+    post publish_presentation_path(presentation)
+    workspace.update_style_defaults(theme: "light", typography: "modern")
+
+    get pptx_presentation_path(presentation, version: "published")
+
+    assert_response :success
+    assert_equal "dark", response.parsed_body.dig("presentation", "theme")
+    assert_equal "technical", response.parsed_body.dig("presentation", "typography")
+
+    get pptx_presentation_path(presentation, version: "draft")
+    assert_equal "light", response.parsed_body.dig("presentation", "theme")
+    assert_equal "modern", response.parsed_body.dig("presentation", "typography")
+  end
+
+  test "published PPTX asset requests can read the release asset after draft detaches it" do
+    bytes = Base64.decode64("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+i9MwAAAAASUVORK5CYII=")
+    digest = Digest::SHA256.hexdigest(bytes)
+    presentation = Presentation.create!(title: "Pinned asset", source: "# Asset\n\n![Pixel](elef-asset:#{digest})")
+    presentation.assets.attach(io: StringIO.new(bytes), filename: "pixel.png", content_type: "image/png")
+    blob = presentation.assets.blobs.last
+    blob.update!(metadata: blob.metadata.merge("elef_sha256" => digest))
+    post publish_presentation_path(presentation)
+    release_id = presentation.reload.published_release.id
+    presentation.assets.detach
+
+    get pptx_presentation_path(presentation, version: "published")
+    assert_response :success
+    html = response.parsed_body.dig("slides", 0, "blocks", 1, "html")
+    assert_includes html, "/presentations/#{presentation.id}/pptx_assets/#{digest}?version=published&amp;release_id=#{release_id}"
+
+    presentation.update!(source: "# New release")
+    post publish_presentation_path(presentation)
+
+    get pptx_asset_presentation_path(id: presentation, digest:, version: "published", release_id:)
+    assert_response :success
+    assert_equal "image/png", response.media_type
+    assert_equal bytes, response.body
+
+    get pptx_asset_presentation_path(id: presentation, digest:, version: "draft")
+    assert_response :not_found
+  end
+
+  test "PPTX export reports linked HTTP images that cannot be embedded safely" do
+    presentation = Presentation.create!(title: "Unsafe remote image", source: "# Image\n\n![Remote](http://example.org/image.png)")
+
+    get pptx_presentation_path(presentation, version: "draft")
+
+    assert_response :unprocessable_content
+    assert_match /public HTTPS/, response.parsed_body["error"]
+  end
+
+  test "PPTX editor actions expose draft and published exports" do
+    presentation = presentations(:one)
+    get edit_presentation_path(presentation)
+    assert_select '[data-controller="pptx-export"][data-pptx-export-url-value=?]', pptx_presentation_path(presentation, version: "draft") do
+      assert_select "button", text: "Download PPTX draft"
+    end
+
+    post publish_presentation_path(presentation)
+    get edit_presentation_path(presentation)
+    assert_select '[data-controller="pptx-export"][data-pptx-export-url-value=?]', pptx_presentation_path(presentation, version: "published") do
+      assert_select "button", text: "Download published PPTX"
+    end
+  end
+
   test "previews an unsaved presentation without creating a record" do
     assert_no_difference("Presentation.count") do
       post preview_presentations_path, params: {
