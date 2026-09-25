@@ -1,0 +1,5 @@
+default:
+  id: 1
+  name: Default workspace
+  slug: default
+  system: true
