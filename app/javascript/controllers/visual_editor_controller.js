@@ -126,8 +126,6 @@ export default class extends Controller {
     const rawStructuredCaret = rawStructuredBlock && this.selectionIsInsideBlock(blockElement)
     if (emptyListItem || emptyQuoteLine) {
       if (!this.selectionIsInEmptyStructuredLine(blockElement, kind) && !atEnd && !rawStructuredCaret) return
-    } else if (!atEnd && region.role !== "title" && !rawStructuredCaret) {
-      return
     }
 
     event.preventDefault()

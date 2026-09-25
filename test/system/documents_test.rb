@@ -335,14 +335,21 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: "# This is my First Document\n\n", wait: 5
 
     first_paragraph = active_document_block
+    first_paragraph_id = first_paragraph["data-editor-block-id"]
     first_paragraph.send_keys("This is my first line in this document and it is a normal paragraph that may even wrap around. It creates one coherent block of text that can span one line or multiple depending on font or any other specific formatting, but it is one block.")
     assert_equal "true", first_paragraph["contenteditable"], "typing should keep the focused block editable while preview refreshes"
     first_paragraph.send_keys(:enter)
     assert_field "Markdown source", with: /one block\.\n\n\z/, wait: 5
-    active_document_block.send_keys(:backspace)
+    empty_paragraph = active_document_block
+    assert_not_equal first_paragraph_id, empty_paragraph["data-editor-block-id"], "Enter should focus a new document block"
+    empty_paragraph.send_keys(:backspace)
     assert_field "Markdown source", with: /one block\.\z/, wait: 5
-    active_document_block.send_keys(:enter)
-    active_document_block.send_keys("- THis is the first item of a list")
+    paragraph_after_backspace = active_document_block
+    assert_equal first_paragraph_id, paragraph_after_backspace["data-editor-block-id"], "Backspace on an empty block should return to the previous block"
+    paragraph_after_backspace.send_keys(:enter)
+    list_block = active_document_block
+    assert_not_equal first_paragraph_id, list_block["data-editor-block-id"], "Enter should focus a new block after Backspace restores the paragraph"
+    list_block.send_keys("- THis is the first item of a list")
     assert_field "Markdown source", with: /\n\n- THis is the first item of a list\z/, wait: 5
     list_keydown_state = page.execute_script(<<~JAVASCRIPT)
       const form = document.querySelector('form.visual-editor-form');
