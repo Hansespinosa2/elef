@@ -135,19 +135,16 @@ export default class extends Controller {
     this.editorController = editorFor(this.element)
     this.editorReady = () => { this.editorController ||= editorFor(this.element); this.setupEditor() }
     this.element.addEventListener("elef:editor-ready", this.editorReady)
-    this.editorInput = () => this.retainLastExpansion()
     this.setupEditor()
   }
 
   disconnect() {
     if (this.editorController && this.keydownBound) this.editorController.dom.removeEventListener("keydown", this.handleEditorKeydown, true)
-    this.editorController?.inputTarget.removeEventListener("input", this.editorInput)
     this.element.removeEventListener("elef:editor-ready", this.editorReady)
   }
 
   setupEditor() {
     this.editorController ||= editorFor(this.element)
-    this.editorController?.inputTarget.addEventListener("input", this.editorInput)
     if (this.editorController && !this.keydownBound) {
       this.handleEditorKeydown = (event) => this.keydown(event)
       this.editorController.dom.addEventListener("keydown", this.handleEditorKeydown, true)
@@ -174,7 +171,8 @@ export default class extends Controller {
           start: appended.start,
           end: appended.start + appended.expansion.length,
           base: appended.base,
-          modifiers: appended.modifiers
+          modifiers: appended.modifiers,
+          expansion: appended.expansion
         }
       } else if (appended.status === "unsupported") {
         event.elefMathShorthandHandled = true
@@ -202,13 +200,18 @@ export default class extends Controller {
       start,
       end: start + parsed.expansion.length,
       base: parsed.base,
-      modifiers: parsed.modifiers
+      modifiers: parsed.modifiers,
+      expansion: parsed.expansion
     }
   }
 
   expandAppendedModifiers(editor, caret) {
     const previous = this.lastExpansion
     if (!previous || caret < previous.end) return null
+    if (editor.value.slice(previous.start, previous.end) !== previous.expansion) {
+      this.lastExpansion = null
+      return null
+    }
 
     const suffix = editor.value.slice(previous.end, caret)
     if (!/^(?:\.[A-Za-z][A-Za-z0-9]*)+$/.test(suffix)) return null
@@ -219,19 +222,5 @@ export default class extends Controller {
     if (parsed.status === "unsupported") return { ...parsed, start: previous.start }
 
     return { ...parsed, start: previous.start }
-  }
-
-  retainLastExpansion() {
-    const previous = this.lastExpansion
-    if (!previous) return
-
-    const editor = this.editorController
-    if (!editor || editor.selectionStart !== editor.selectionEnd || editor.selectionStart < previous.end) {
-      this.lastExpansion = null
-      return
-    }
-
-    const suffix = editor.value.slice(previous.end, editor.selectionStart)
-    if (!/^(?:\.[A-Za-z0-9_-]*)*$/.test(suffix)) this.lastExpansion = null
   }
 }

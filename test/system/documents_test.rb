@@ -677,28 +677,34 @@ class DocumentsTest < ApplicationSystemTestCase
     editor = find_field("Markdown source")
     editor.click
     editor.send_keys(:end)
+    expanded = ->(symbol) { "$\\mathbf{\\bar{#{symbol}}}$" }
 
     editor.send_keys("\n$x.bar")
     editor.send_keys(:enter)
     editor.send_keys(".bb")
     editor.send_keys(:enter)
     editor.send_keys("$")
+    assert_includes editor.value, expanded.call("x"), "bar then bold should compose across commits: #{editor.value.inspect}"
 
-    editor.send_keys("\n$x.bar.bb")
+    editor.send_keys("\n$y.bar.bb")
     editor.send_keys(:enter)
     editor.send_keys("$")
+    assert_includes editor.value, expanded.call("y"), "bar then bold should compose in one token: #{editor.value.inspect}"
 
-    editor.send_keys("\n$x.bb.bar")
+    editor.send_keys("\n$z.bb.bar")
     editor.send_keys(:enter)
     editor.send_keys("$")
+    assert_includes editor.value, expanded.call("z"), "bold then bar should compose in one token: #{editor.value.inspect}"
 
-    editor.send_keys("\n$x.bb")
+    editor.send_keys("\n$w.bb")
     editor.send_keys(:enter)
     editor.send_keys(".bar")
     editor.send_keys(:enter)
     editor.send_keys("$")
+    assert_includes editor.value, expanded.call("w"), "bold then bar should compose across commits: #{editor.value.inspect}"
 
-    assert_equal 4, editor.value.scan("$\\mathbf{\\bar{x}}$").length
+    assert_equal ["x", "y", "z", "w"].map { |symbol| expanded.call(symbol) }.length,
+      ["x", "y", "z", "w"].sum { |symbol| editor.value.scan(expanded.call(symbol)).length }
 
     ["x.bb.bb", "x.bar.bar", "x.bar.hat"].each do |token|
       editor.send_keys("\n$#{token}")
