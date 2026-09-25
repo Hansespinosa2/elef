@@ -20,6 +20,8 @@ class DocumentsTest < ApplicationSystemTestCase
         selected = page.execute_script(<<~JAVASCRIPT, target, source_text)
           const root = arguments[0];
           const needle = arguments[1];
+          const editableBlock = root.closest("[contenteditable='true']") || root;
+          editableBlock.focus({ preventScroll: true });
           const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
           const nodes = [];
           while (walker.nextNode()) {
@@ -48,10 +50,14 @@ class DocumentsTest < ApplicationSystemTestCase
           const selection = window.getSelection();
           selection.removeAllRanges();
           selection.addRange(range);
-          return true;
+          return {
+            focused: document.activeElement === editableBlock,
+            selected: selection.toString() === needle
+          };
         JAVASCRIPT
-        assert selected, "could not select visual text #{source_text.inspect}"
-        target.send_keys(replacement)
+        assert selected && selected["focused"] && selected["selected"],
+          "could not focus #{source_text.inspect} and select it for visual editing"
+        target.find(:xpath, "ancestor-or-self::*[@contenteditable='true'][1]").send_keys(replacement)
         return
       rescue Selenium::WebDriver::Error::StaleElementReferenceError
         attempts += 1
@@ -199,6 +205,45 @@ class DocumentsTest < ApplicationSystemTestCase
     page.driver.browser.manage.window.resize_to(1400, 1000)
   end
 
+  test "document and presentation graph panels share the workspace shell styling" do
+    Document.create!(title: "Graph styling document", source: "# Graph styling document")
+    Presentation.create!(title: "Graph styling presentation", source: "# Graph styling presentation")
+
+    visit documents_path
+    document_panel_style = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const panel = document.querySelector('.document-graph-panel');
+        const description = panel.querySelector('.mb-4 > div > p:not(.eyebrow)');
+        return {
+          background: getComputedStyle(panel).backgroundColor,
+          border: getComputedStyle(panel).borderColor,
+          shadow: getComputedStyle(panel).boxShadow,
+          heading: getComputedStyle(panel.querySelector('h2')).color,
+          description: getComputedStyle(description).color,
+          legend: getComputedStyle(panel.querySelector('.document-graph-legend')).color
+        };
+      })()
+    JAVASCRIPT
+
+    visit presentations_path
+    presentation_panel_style = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const panel = document.querySelector('.lineage-panel');
+        const description = panel.querySelector('.mb-4 > div > p:not(.eyebrow)');
+        return {
+          background: getComputedStyle(panel).backgroundColor,
+          border: getComputedStyle(panel).borderColor,
+          shadow: getComputedStyle(panel).boxShadow,
+          heading: getComputedStyle(panel.querySelector('h2')).color,
+          description: getComputedStyle(description).color,
+          legend: getComputedStyle(panel.querySelector('.lineage-legend')).color
+        };
+      })()
+    JAVASCRIPT
+
+    assert_equal presentation_panel_style, document_panel_style
+  end
+
   test "renaming a document preserves linked previews" do
     target = Document.create!(title: "Rename target", source: "# Target")
     incoming = Document.create!(title: "Rename source", source: "See [[Rename target]]")
@@ -269,6 +314,30 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: "# Typing notes\n\nBody changed", wait: 5
   end
 
+  test "visual edits preserve soft line breaks around inline math" do
+    source = <<~MARKDOWN
+      # Notes
+
+      The relationship is $E = mc^2$ in inline form, while this display
+      equation gives the reader a larger landmark.
+    MARKDOWN
+    document = Document.create!(title: "Soft breaks with math", source: source)
+
+    visit edit_document_path(document)
+    rendered_text = page.execute_script(<<~JAVASCRIPT)
+      const block = [...document.querySelectorAll(".document-editor-block")]
+        .find((element) => element.textContent.includes("The relationship"));
+      block.style.whiteSpace = "pre-line";
+      return block.innerText;
+    JAVASCRIPT
+    assert_includes rendered_text, "display\nequation"
+
+    type_visual_text(".document-editor-block", "The relationship", "The equation relationship")
+
+    assert_field "Markdown source", with: source.sub("The relationship", "The equation relationship"), wait: 5
+    refute_includes find_field("Markdown source").value, "\uE000"
+  end
+
   test "typing in visual and source modes has identical fixture Markdown" do
     fixtures = [
       {
@@ -336,7 +405,9 @@ class DocumentsTest < ApplicationSystemTestCase
       visit edit_document_path(source)
       assert_field "Markdown source", with: source_expected
       assert_equal expected, source_expected
-      assert_equal visual.reload.source, source.reload.source, "visual/source mismatch for #{fixture[:id]}"
+      visual_source = visual.reload.source.gsub(/\r\n?/, "\n")
+      source_source = source.reload.source.gsub(/\r\n?/, "\n")
+      assert_equal visual_source, source_source, "visual/source mismatch for #{fixture[:id]}"
     end
   end
 

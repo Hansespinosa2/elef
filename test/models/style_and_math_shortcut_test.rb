@@ -43,6 +43,9 @@ class StyleAndMathShortcutTest < ActiveSupport::TestCase
 
     assert_equal "\\nabla", catalog.find { |item| item[:aliases].include?("nabla") }[:expansion]
     assert_equal "\\to", catalog.find { |item| item[:aliases].include?("to") }[:expansion]
+    assert_equal "\\bar{${1}}", catalog.find { |item| item[:aliases].include?("bar") }[:expansion]
+    assert_equal "\\longrightarrow", catalog.find { |item| item[:aliases].include?("longright") }[:expansion]
+    refute_includes catalog.find { |item| item[:name] == "Implies" }[:aliases], "longrightarrow"
     assert_equal "\\inf", catalog.find { |item| item[:aliases].include?("inf") }[:expansion]
     assert_equal "\\sum", catalog.find { |item| item[:aliases].include?("sum") }[:expansion]
 

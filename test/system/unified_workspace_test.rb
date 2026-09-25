@@ -35,6 +35,63 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     assert_includes source, "\\alpha"
   end
 
+  test "shows dark math shortcut cards with rendered LaTeX examples" do
+    document = Document.create!(title: "Math shortcut previews", source: "# Math shortcut previews")
+
+    visit edit_document_path(document)
+    editor = find(".cm-content")
+    editor.click
+    editor.send_keys("\n$@g")
+
+    gamma = find(".math-shortcut-option", text: /Gamma/, wait: 5)
+    within(gamma) do
+      assert_selector ".math-shortcut-trigger", text: "@g"
+      assert_selector ".math-shortcut-latex code", text: "\\gamma"
+      assert_selector ".math-shortcut-example-arrow", count: 2
+      assert_selector ".math-shortcut-preview-render .katex-html", text: "γ", wait: 5
+    end
+    asset_response = page.evaluate_async_script(<<~JAVASCRIPT)
+      const done = arguments[arguments.length - 1]
+      const assetUrl = document.querySelector('.source-field').getAttribute('data-math-shortcut-palette-katex-url-value')
+      fetch(assetUrl).then((response) => done({ status: response.status, contentType: response.headers.get('content-type') }))
+        .catch(() => done({ status: 0, contentType: '' }))
+    JAVASCRIPT
+    assert_equal 200, asset_response["status"]
+    assert_match(/javascript/, asset_response["contentType"])
+    assert_equal "rgb(17, 22, 26)", page.evaluate_script("getComputedStyle(document.querySelector('.math-shortcut-palette')).backgroundColor")
+    assert_equal "rgb(32, 44, 50)", page.evaluate_script("getComputedStyle(document.querySelector('.math-shortcut-option.is-selected')).backgroundColor")
+
+    editor.send_keys(:enter)
+    editor.send_keys(" x.bar")
+    bar = find(".math-shortcut-option", text: /Bar/, wait: 5)
+    within(bar) do
+      assert_selector ".math-shortcut-trigger", text: "x.bar"
+      assert_selector ".math-shortcut-latex code", text: "\\bar{x}"
+      assert_selector ".math-shortcut-preview-render .katex-html", wait: 5
+    end
+
+    editor.send_keys(:enter)
+    editor.send_keys(" @longright")
+    arrow = find(".math-shortcut-option", text: /Long right arrow/, wait: 5)
+    within(arrow) do
+      assert_selector ".math-shortcut-trigger", text: "@longright"
+      assert_selector ".math-shortcut-latex code", text: "\\longrightarrow"
+      assert_selector ".math-shortcut-preview-render .katex-html", wait: 5
+    end
+  end
+
+  test "uses dark Aradia surfaces for math shortcut settings" do
+    visit math_shortcuts_path
+
+    assert_selector ".math-shortcut-card"
+    assert_equal "rgb(24, 33, 38)", page.evaluate_script("getComputedStyle(document.querySelector('.math-shortcut-card')).backgroundColor")
+
+    click_on "New shortcut"
+    assert_selector ".math-shortcut-form"
+    assert_equal "rgb(24, 33, 38)", page.evaluate_script("getComputedStyle(document.querySelector('.math-shortcut-form')).backgroundColor")
+    assert_equal "rgb(17, 22, 26)", page.evaluate_script("getComputedStyle(document.querySelector('.math-shortcut-form input')).backgroundColor")
+  end
+
   test "expands common TeX operators and walks fraction tab stops" do
     document = Document.create!(title: "TeX operators", source: "# TeX operators")
 
@@ -96,7 +153,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     assert_includes source, "\\end{gathered}"
   end
 
-  test "collapses front matter and reveals it on demand" do
+  test "front matter can be revealed and hidden again on demand" do
     document = Document.create!(
       title: "Metadata notes",
       source: "---\ntheme: dark\ntypography: modern\n---\n# Metadata notes\n\nBody"
@@ -107,6 +164,33 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     click_on "Reveal source metadata"
     assert_no_selector ".cm-foldPlaceholder"
     assert_selector ".cm-content", text: "theme: dark"
+
+    click_on "Hide source metadata"
+    assert_selector ".cm-foldPlaceholder"
+
+    click_on "Reveal source metadata"
+    assert_no_selector ".cm-foldPlaceholder"
+  end
+
+  test "appearance changes update visible source metadata" do
+    document = Document.create!(
+      title: "Appearance metadata",
+      source: "---\ntheme: light\ntypography: book\n---\n# Appearance metadata\n\nBody"
+    )
+
+    visit edit_document_path(document)
+    click_on "Reveal source metadata"
+    select "Dark", from: "Theme"
+    select "Modern", from: "Typography"
+
+    assert_selector ".document-reader.document-theme-dark.document-typography-modern", wait: 5
+    assert_selector '[data-autosave-target="status"]', exact_text: "Saved", wait: 5
+    assert_match /^theme: dark\r?$/m, find_field("Markdown source").value
+    assert_match /^typography: modern\r?$/m, find_field("Markdown source").value
+    assert_match /^theme: dark\r?$/m, document.reload.source
+    assert_match /^typography: modern\r?$/m, document.reload.source
+    refute_match /^theme: light\r?$/m, find_field("Markdown source").value
+    refute_match /^typography: book\r?$/m, find_field("Markdown source").value
   end
 
   test "keeps visual editing and the source-left preview-right layout usable at desktop and narrow widths" do

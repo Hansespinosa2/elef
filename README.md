@@ -123,11 +123,24 @@ the worktree while the local Caddy router forwards it to that task's isolated
 container. Each agent gets a separate backend port internally; those ports are
 loopback-only and do not appear in the browser URL.
 
-Use `scripts/elef-agent stop editor-fix` to stop the task while preserving its
-worktree, then `scripts/elef-agent up editor-fix` to recreate its disposable
-container and start Rails again. Use `scripts/elef-agent status` to see
-container and HTTP readiness states. Stop or remove the task to unregister its
-route.
+Startup output is streamed as each container boots and saved with private
+permissions under `~/Library/Application Support/Elef/agent-router/logs/`.
+The default readiness timeout is five minutes; set
+`ELEF_AGENT_STARTUP_TIMEOUT=600` to allow up to ten minutes.
+On failure, the launcher prints backend and HTTPS status codes, the final
+container output and boot log, and keeps the stopped container for inspection.
+New containers mount personal skills from
+`~/Development/GitHub/andy-skills/skills` when present, falling back to
+`$CODEX_HOME/skills` (or `~/.codex/skills`). The launcher reports the selected
+source. Set `ELEF_USER_SKILLS_DIR` to choose another source; already-running
+containers retain their existing skill mount.
+
+`start` creates a new task name. If a task already has a branch/worktree (for
+example, after its first startup failed), use `scripts/elef-agent up TASK` to
+restart Rails and `scripts/elef-agent resume TASK` to continue its Codex
+session. Use `scripts/elef-agent stop editor-fix` to stop a task while
+preserving its worktree. Use `scripts/elef-agent status` to see container and
+HTTP readiness states.
 
 ## Validation
 
@@ -148,8 +161,11 @@ bin/dev
 
 ## Automatic deployment
 
-After CI succeeds, GitHub Actions publishes the approved commit to the
-`elef-deploy-main` ref. This only publishes a Git ref; it does not upload the
-app or choose a deployment machine. A machine deploys only when its local
-watcher is installed and running. The documented setup runs that watcher on
-the Mac mini, but it does not enforce a hardware identity.
+Pull requests run the seven required CI checks once. After a PR is merged,
+GitHub Actions verifies those checks against the exact tested source tree
+before publishing the approved commit to `elef-deploy-dev` or
+`elef-deploy-main`. The post-merge workflow does not rerun the test suite. It
+only publishes a Git ref; it does not upload the app or choose a deployment
+machine. A machine deploys only when its local watcher is installed and
+running. The documented setup runs that watcher on the Mac mini, but it does
+not enforce a hardware identity.

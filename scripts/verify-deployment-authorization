@@ -1,0 +1,207 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+branch="${GITHUB_REF_NAME:?GITHUB_REF_NAME is required}"
+sha="${GITHUB_SHA:?GITHUB_SHA is required}"
+repository="${GITHUB_REPOSITORY:?GITHUB_REPOSITORY is required}"
+remote="${DEPLOYMENT_REMOTE:-origin}"
+
+case "$branch" in
+  dev|main) ;;
+  *) echo "No deployment authorization is configured for $branch" >&2; exit 1 ;;
+esac
+
+for command_name in gh jq git; do
+  if ! command -v "$command_name" >/dev/null 2>&1; then
+    echo "Required command is not installed: $command_name" >&2
+    exit 1
+  fi
+done
+
+current_sha="$(git ls-remote --heads "$remote" "refs/heads/$branch" | awk 'NR == 1 { print $1 }')"
+if [[ "$current_sha" != "$sha" ]]; then
+  echo "Skipping stale deployment authorization for $sha; $branch is now $current_sha"
+  exit 0
+fi
+
+pull_requests="$(gh api "repos/$repository/commits/$sha/pulls?per_page=100")"
+pull_number="$(jq -r --arg branch "$branch" --arg sha "$sha" '
+  [.[] | select(.merged_at != null and .merge_commit_sha == $sha and .base.ref == $branch) | .number]
+  | if length == 1 then .[0] else empty end
+' <<<"$pull_requests")"
+
+if [[ -z "$pull_number" ]]; then
+  echo "Cannot authorize deployment of $sha: expected exactly one merged PR into $branch" >&2
+  exit 1
+fi
+
+pull_request="$(gh api "repos/$repository/pulls/$pull_number")"
+pull_head_sha="$(jq -r '.head.sha // empty' <<<"$pull_request")"
+pull_head_ref="$(jq -r '.head.ref // empty' <<<"$pull_request")"
+if [[ "$(jq -r '.merged_at != null' <<<"$pull_request")" != true || \
+      "$(jq -r '.merge_commit_sha // empty' <<<"$pull_request")" != "$sha" || \
+      "$(jq -r '.base.ref // empty' <<<"$pull_request")" != "$branch" || \
+      -z "$pull_head_sha" || -z "$pull_head_ref" ]]; then
+  echo "Cannot authorize deployment of $sha: PR #$pull_number metadata does not match the merged ref" >&2
+  exit 1
+fi
+
+required_checks=(scan_ruby scan_js test sqlite-test system-test production-smoke development-smoke)
+required_jobs=("${required_checks[@]}" record-ci-attestation)
+
+find_pr_run() {
+  local pull_view candidate_run_ids candidate_id candidate_run
+
+  pull_view="$(gh pr view "$pull_number" --repo "$repository" --json statusCheckRollup)"
+  candidate_run_ids="$(jq -r --argjson required_checks "$(printf '%s\n' "${required_checks[@]}" | jq -R . | jq -s .)" '
+    [.statusCheckRollup[]?
+     | select(.workflowName == "CI")
+     | select(.name as $name | $required_checks | index($name) != null)
+     | select((.detailsUrl // "") | test("/actions/runs/[0-9]+/job/"))
+     | {run_id: (.detailsUrl | capture("/actions/runs/(?<id>[0-9]+)/job/").id), started_at: (.startedAt // "")}]
+    | group_by(.run_id)
+    | map({run_id: .[0].run_id, started_at: (map(.started_at) | max)})
+    | sort_by(.started_at)
+    | reverse
+    | .[].run_id
+  ' <<<"$pull_view")"
+
+  while IFS= read -r candidate_id; do
+    [[ -n "$candidate_id" ]] || continue
+    if candidate_run="$(gh api "repos/$repository/actions/runs/$candidate_id")" && \
+       jq -e --arg head "$pull_head_sha" --arg ref "$pull_head_ref" '
+         .event == "pull_request"
+         and .head_sha == $head
+         and .head_branch == $ref
+         and .path == ".github/workflows/ci.yml"
+       ' <<<"$candidate_run" >/dev/null; then
+      printf '%s\n' "$candidate_run"
+      return 0
+    fi
+  done <<<"$candidate_run_ids"
+
+  return 1
+}
+
+wait_attempts="${DEPLOYMENT_AUTH_WAIT_ATTEMPTS:-240}"
+wait_interval="${DEPLOYMENT_AUTH_WAIT_INTERVAL:-15}"
+if [[ ! "$wait_attempts" =~ ^[1-9][0-9]*$ || ! "$wait_interval" =~ ^[0-9]+$ ]]; then
+  echo "Deployment authorization wait settings must be non-negative integers" >&2
+  exit 1
+fi
+
+run=""
+for ((attempt = 1; attempt <= wait_attempts; attempt++)); do
+  if run="$(find_pr_run)"; then
+    break
+  fi
+
+  if (( attempt == wait_attempts )); then
+    echo "Timed out waiting for PR #$pull_number to expose its CI run in the check rollup" >&2
+    exit 1
+  fi
+
+  echo "Waiting for PR #$pull_number CI check runs to appear"
+  sleep "$wait_interval"
+done
+
+run_id="$(jq -r '.id' <<<"$run")"
+run_attempt="$(jq -r '.run_attempt // 1' <<<"$run")"
+run_url="$(jq -r '.html_url // empty' <<<"$run")"
+
+for ((attempt = 1; attempt <= wait_attempts; attempt++)); do
+  run_status="$(gh api "repos/$repository/actions/runs/$run_id")"
+  run_event="$(jq -r '.event // empty' <<<"$run_status")"
+  run_status_value="$(jq -r '.status // empty' <<<"$run_status")"
+  run_conclusion="$(jq -r '.conclusion // empty' <<<"$run_status")"
+  latest_attempt="$(jq -r '.run_attempt // 1' <<<"$run_status")"
+
+  if [[ "$run_event" != pull_request ]]; then
+    echo "CI run $run_id is not a pull_request run" >&2
+    exit 1
+  fi
+
+  if [[ "$latest_attempt" != "$run_attempt" ]]; then
+    echo "CI run $run_id was rerun while deployment authorization was waiting; refusing a stale attempt" >&2
+    exit 1
+  fi
+
+  if [[ "$run_status_value" == completed ]]; then
+    break
+  fi
+
+  if (( attempt == wait_attempts )); then
+    echo "Timed out waiting for PR #$pull_number CI run $run_id to finish" >&2
+    exit 1
+  fi
+
+  echo "Waiting for PR #$pull_number CI run $run_id to finish ($run_status_value)"
+  sleep "$wait_interval"
+done
+
+if [[ "$run_conclusion" != success ]]; then
+  echo "Cannot authorize deployment of $sha: PR #$pull_number CI run $run_id concluded $run_conclusion${run_url:+ ($run_url)}" >&2
+  exit 1
+fi
+
+jobs="$(gh api "repos/$repository/actions/runs/$run_id/jobs?filter=latest&per_page=100")"
+for job_name in "${required_jobs[@]}"; do
+  matching_jobs="$(jq -c --arg name "$job_name" '[.jobs[]? | select(.name == $name)]' <<<"$jobs")"
+  job_count="$(jq 'length' <<<"$matching_jobs")"
+  job_conclusion="$(jq -r 'if length == 1 then .[0].conclusion // "" else "" end' <<<"$matching_jobs")"
+
+  if [[ "$job_count" != 1 || "$job_conclusion" != success ]]; then
+    echo "Cannot authorize deployment of $sha: CI job '$job_name' is missing or not successful in run $run_id" >&2
+    exit 1
+  fi
+done
+
+artifact_name="ci-attestation-pr${pull_number}-run${run_id}-attempt${run_attempt}"
+artifacts="$(gh api "repos/$repository/actions/runs/$run_id/artifacts?per_page=100")"
+artifact_count="$(jq --arg name "$artifact_name" '[.artifacts[]? | select(.name == $name and .expired == false)] | length' <<<"$artifacts")"
+if [[ "$artifact_count" != 1 ]]; then
+  echo "Cannot authorize deployment of $sha: expected one unexpired CI attestation artifact '$artifact_name'" >&2
+  exit 1
+fi
+
+temporary_directory="$(mktemp -d)"
+trap 'rm -rf "$temporary_directory"' EXIT
+gh run download "$run_id" --name "$artifact_name" --dir "$temporary_directory"
+attestation="$temporary_directory/deployment-attestation.json"
+if [[ ! -f "$attestation" ]]; then
+  echo "CI run $run_id did not contain deployment-attestation.json" >&2
+  exit 1
+fi
+
+if ! jq -e \
+  --argjson pr "$pull_number" \
+  --argjson run "$run_id" \
+  --argjson attempt "$run_attempt" \
+  ' .pr_number == $pr
+    and .workflow_run_id == $run
+    and .run_attempt == $attempt
+    and (.tested_sha | type == "string" and test("^[0-9a-f]{40}([0-9a-f]{24})?$"))
+    and (.tested_tree | type == "string" and test("^[0-9a-f]{40}([0-9a-f]{24})?$"))' \
+  "$attestation" >/dev/null; then
+  echo "CI run $run_id contains an invalid deployment attestation" >&2
+  exit 1
+fi
+
+tested_tree="$(jq -r '.tested_tree' "$attestation")"
+merged_tree="$(git rev-parse "$sha^{tree}")"
+if [[ "$tested_tree" != "$merged_tree" ]]; then
+  echo "Cannot authorize deployment of $sha: merged tree $merged_tree differs from PR #$pull_number tested tree $tested_tree" >&2
+  exit 1
+fi
+
+latest_run="$(find_pr_run)" || {
+  echo "Cannot revalidate PR #$pull_number CI run after waiting" >&2
+  exit 1
+}
+if [[ "$(jq -r '.id' <<<"$latest_run")" != "$run_id" || \
+      "$(jq -r '.run_attempt // 1' <<<"$latest_run")" != "$run_attempt" ]]; then
+  echo "A newer CI run appeared for PR #$pull_number while deployment authorization was waiting; rerun the deployment check" >&2
+  exit 1
+fi
+
+echo "PR #$pull_number CI run $run_id passed all seven required checks; tested tree $tested_tree matches merged commit $sha"

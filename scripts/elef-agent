@@ -16,16 +16,24 @@ CONTAINER_MEMORY="${ELEF_AGENT_MEMORY:-1536M}"
 AGENT_DATABASE="${ELEF_AGENT_DATABASE:-sqlite}"
 WORKTREE_ROOT="${ELEF_WORKTREE_ROOT:-$(dirname "$REPO")/elef-worktrees}"
 CODEX_HOME_HOST="${CODEX_HOME:-$HOME/.codex}"
+DEVELOPMENT_SKILLS_HOST="$HOME/Development/GitHub/andy-skills/skills"
 if [[ -n "${ELEF_USER_SKILLS_DIR:-}" ]]; then
   USER_SKILLS_HOST="$ELEF_USER_SKILLS_DIR"
-elif [[ -d "$HOME/.agents/skills" ]]; then
-  USER_SKILLS_HOST="$HOME/.agents/skills"
+elif [[ -d "$DEVELOPMENT_SKILLS_HOST" ]]; then
+  USER_SKILLS_HOST="$DEVELOPMENT_SKILLS_HOST"
 else
   USER_SKILLS_HOST="$CODEX_HOME_HOST/skills"
 fi
 GH_CONFIG_HOST="${GH_CONFIG_DIR:-$HOME/.config/gh}"
 AGENT_STATE_ROOT="${ELEF_AGENT_STATE_ROOT:-$HOME/Library/Application Support/Elef/agent-router}"
 CADDYFILE="${ELEF_AGENT_CADDYFILE:-$AGENT_STATE_ROOT/Caddyfile}"
+STARTUP_TIMEOUT="${ELEF_AGENT_STARTUP_TIMEOUT:-300}"
+STARTUP_LOG_PID=""
+STARTUP_LOG_LINE_COUNT=0
+STARTUP_BACKEND_CODE=000
+STARTUP_ROUTE_CODE=000
+STARTUP_HTTP_CODE=000
+STARTUP_FAILURE_REASON=""
 
 die() { echo "error: $*" >&2; exit 1; }
 need_container() { command -v "$CONTAINER_CLI" >/dev/null || die "Apple Container CLI not found"; }
@@ -36,11 +44,15 @@ validate_agent_database() {
     *) die "ELEF_AGENT_DATABASE must be sqlite or postgres (got: $AGENT_DATABASE)" ;;
   esac
 }
+validate_startup_timeout() {
+  [[ "$STARTUP_TIMEOUT" =~ ^[1-9][0-9]*$ ]] || \
+    die "ELEF_AGENT_STARTUP_TIMEOUT must be a positive number of seconds (got: $STARTUP_TIMEOUT)"
+}
 registered_worktree_for() {
   local branch
   branch="refs/heads/$(branch_for "$1")"
   git worktree list --porcelain 2>/dev/null | awk -v branch="$branch" '
-    /^worktree / { path = substr($0, 9) }
+    /^worktree / { path = substr($0, 10) }
     $1 == "branch" && $2 == branch { print path; exit }
   '
 }
@@ -93,10 +105,16 @@ assert_task_branch_available() {
   branch="$(branch_for "$task")"
   if git show-ref --verify --quiet "refs/heads/$branch"; then
     registered="$(registered_worktree_for "$task")"
-    if [[ -n "$registered" && ! -e "$registered" ]]; then
-      die "branch $branch is registered to a missing worktree at $registered; inspect that path and prune the stale Git worktree record before reusing this task name"
+    if [[ -n "$registered" ]]; then
+      if [[ ! -e "$registered" ]]; then
+        die "branch $branch has a stale worktree record for missing path '$registered'. No state was changed; inspect 'git worktree list --porcelain' and recover this existing task before starting another task with the same name"
+      fi
+      if worktree_is_valid "$task" "$registered"; then
+        die "task $task already exists at '$registered'; use '$0 up $task' to restart Rails or '$0 resume $task' to continue its Codex session"
+      fi
+      die "branch $branch is registered to '$registered', but that directory is not a valid task worktree; inspect it before pruning or recreating anything"
     fi
-    die "branch already exists: $branch"
+    die "branch $branch already exists without a registered task worktree; inspect it before reusing the task name"
   fi
 }
 route_for() { printf '%s/routes/%s' "$AGENT_STATE_ROOT" "$1"; }
@@ -242,10 +260,9 @@ EOF
 }
 
 reload_router() {
-  router_ready || die "Caddy is not installed; run '$0 setup' first"
+  router_ready || return 1
   render_routes
-  caddy reload --config "$CADDYFILE" --adapter caddyfile >/dev/null 2>&1 || \
-    die "Caddy is not running; run '$0 setup' first"
+  caddy reload --config "$CADDYFILE" --adapter caddyfile >/dev/null 2>&1
 }
 
 setup() {
@@ -362,19 +379,69 @@ route_up() {
   fi
 }
 
+startup_log_path() {
+  local task="$1" directory
+  directory="$AGENT_STATE_ROOT/logs"
+  mkdir -p "$directory"
+  (umask 077; mktemp "$directory/${task}.startup.XXXXXX")
+}
+
+start_startup_log_capture() {
+  local name="$1" log_file="$2"
+  STARTUP_LOG_LINE_COUNT=0
+  "$CONTAINER_CLI" logs --follow "$name" >>"$log_file" 2>&1 &
+  STARTUP_LOG_PID=$!
+}
+
+stop_startup_log_capture() {
+  [[ -n "$STARTUP_LOG_PID" ]] || return 0
+  kill "$STARTUP_LOG_PID" >/dev/null 2>&1 || true
+  wait "$STARTUP_LOG_PID" 2>/dev/null || true
+  STARTUP_LOG_PID=""
+}
+
+emit_startup_log_updates() {
+  local log_file="$1" line_count
+  [[ -f "$log_file" ]] || return 0
+  line_count="$(wc -l <"$log_file" | tr -d '[:space:]')"
+  [[ "$line_count" =~ ^[0-9]+$ ]] || line_count=0
+  (( line_count > STARTUP_LOG_LINE_COUNT )) || return 0
+  tail -n "+$((STARTUP_LOG_LINE_COUNT + 1))" "$log_file"
+  STARTUP_LOG_LINE_COUNT="$line_count"
+}
+
 wait_for_http() {
-  local task="$1" port="$2" attempt backend_code route_code
-  for attempt in {1..120}; do
-    backend_code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 2 "http://127.0.0.1:${port}/" 2>/dev/null || true)"
+  local task="$1" port="$2" name="$3" log_file="$4" attempt=0 backend_code route_code deadline
+  STARTUP_BACKEND_CODE=000
+  STARTUP_ROUTE_CODE=000
+  STARTUP_HTTP_CODE=000
+  STARTUP_FAILURE_REASON=""
+  deadline=$((SECONDS + STARTUP_TIMEOUT))
+  while (( attempt == 0 || SECONDS < deadline )); do
+    ((attempt += 1))
+    backend_code="$(curl -sS -o /dev/null -w '%{http_code}' --connect-timeout 1 --max-time 2 "http://127.0.0.1:$port/" 2>/dev/null || true)"
+    route_code=000
     if [[ "$backend_code" =~ ^[1-5][0-9][0-9]$ ]]; then
-      route_code="$(curl -k -sS -o /dev/null -w '%{http_code}' --max-time 2 "https://$(host_for "$task").localhost" 2>/dev/null || true)"
+      route_code="$(curl -k -sS -o /dev/null -w '%{http_code}' --connect-timeout 1 --max-time 2 "https://$(host_for "$task").localhost" 2>/dev/null || true)"
       if [[ "$route_code" =~ ^[1-5][0-9][0-9]$ && "$route_code" != 502 && "$route_code" != 503 && "$route_code" != 504 ]]; then
-        printf '%s' "$route_code"
+        STARTUP_BACKEND_CODE="$backend_code"
+        STARTUP_ROUTE_CODE="$route_code"
+        STARTUP_HTTP_CODE="$route_code"
+        emit_startup_log_updates "$log_file"
         return 0
       fi
     fi
+    STARTUP_BACKEND_CODE="$backend_code"
+    STARTUP_ROUTE_CODE="$route_code"
+    emit_startup_log_updates "$log_file"
+    if (( attempt >= 10 )) && ! container_running "$name"; then
+      STARTUP_FAILURE_REASON="the task container stopped before Rails became reachable"
+      return 1
+    fi
+    (( SECONDS < deadline )) || break
     sleep 1
   done
+  STARTUP_FAILURE_REASON="timed out after ${STARTUP_TIMEOUT}s waiting for the backend and HTTPS route"
   return 1
 }
 
@@ -384,6 +451,79 @@ report_readiness() {
     echo "Rails reachable at https://$(host_for "$task").localhost (HTTP $code); application is unhealthy" >&2
   else
     echo "Rails ready at https://$(host_for "$task").localhost (HTTP $code)"
+  fi
+}
+
+append_startup_diagnostics() {
+  local task="$1" name="$2" log_file="$3" container_state
+  if container_running "$name"; then container_state=running; else container_state=stopped_or_unavailable; fi
+  {
+    printf '\n--- Elef startup failure summary ---\n'
+    printf 'task: %s\ncontainer: %s\ncontainer_state: %s\n' "$task" "$name" "$container_state"
+    printf 'failure: %s\n' "$STARTUP_FAILURE_REASON"
+    printf 'last_backend_http_status: %s\nlast_https_route_http_status: %s\n' "$STARTUP_BACKEND_CODE" "$STARTUP_ROUTE_CODE"
+    printf 'url: https://%s.localhost\n' "$(host_for "$task")"
+    printf '\n--- Apple Container CLI version ---\n'
+    "$CONTAINER_CLI" --version 2>&1 || true
+    printf '\n--- Container stdout/stderr snapshot ---\n'
+    "$CONTAINER_CLI" logs "$name" 2>&1 || true
+    printf '\n--- Container boot log snapshot ---\n'
+    "$CONTAINER_CLI" logs --boot "$name" 2>&1 || true
+    printf '\n--- Recent Apple Container service logs ---\n'
+    "$CONTAINER_CLI" system logs --last 5m 2>&1 || true
+  } >>"$log_file"
+}
+
+fail_task_startup() {
+  local task="$1" name="$2" log_file="$3" route
+  stop_startup_log_capture
+  if container_exists "$name"; then
+    "$CONTAINER_CLI" stop "$name" >/dev/null 2>&1 || true
+  fi
+  route="$(route_for "$(host_for "$task")")"
+  rm -f "$route"
+  reload_router || true
+  append_startup_diagnostics "$task" "$name" "$log_file"
+  emit_startup_log_updates "$log_file" >&2
+  printf 'error: startup failed for %s: %s\n' "$task" "$STARTUP_FAILURE_REASON" >&2
+  printf 'Last backend HTTP status: %s; HTTPS route HTTP status: %s\n' "$STARTUP_BACKEND_CODE" "$STARTUP_ROUTE_CODE" >&2
+  printf 'Full startup diagnostics: %s\n' "$log_file" >&2
+  if container_exists "$name"; then
+    printf 'The stopped container was retained for inspection: %s\n' "$name" >&2
+    printf 'Inspect its logs with: %s logs %s\n' "$CONTAINER_CLI" "$name" >&2
+    printf 'After reviewing the log, retry this existing task with: %s up %s\n' "$0" "$task" >&2
+  else
+    printf 'The container no longer exists; the startup log above is preserved.\n' >&2
+  fi
+  printf '\nMost recent startup diagnostics:\n' >&2
+  tail -n 80 "$log_file" >&2
+  exit 1
+}
+
+await_task_readiness() {
+  local task="$1" name="$2" backend_port="$3" log_file
+  log_file="$(startup_log_path "$task")"
+  {
+    printf 'task: %s\ncontainer: %s\n' "$task" "$name"
+    printf 'started_at_utc: %s\nreadiness_timeout_seconds: %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$STARTUP_TIMEOUT"
+    printf '\n--- Live container startup output ---\n'
+  } >"$log_file"
+  STARTUP_LOG_LINE_COUNT="$(wc -l <"$log_file" | tr -d '[:space:]')"
+  start_startup_log_capture "$name" "$log_file"
+  trap 'stop_startup_log_capture' EXIT
+  echo "Waiting up to ${STARTUP_TIMEOUT}s for Rails; startup output is streamed and saved to $log_file"
+  if ! route_up "$task" "$backend_port"; then
+    STARTUP_FAILURE_REASON="unable to register the local HTTPS route"
+    fail_task_startup "$task" "$name" "$log_file"
+  fi
+  if wait_for_http "$task" "$backend_port" "$name" "$log_file"; then
+    stop_startup_log_capture
+    emit_startup_log_updates "$log_file"
+    trap - EXIT
+    echo "Startup log: $log_file"
+    report_readiness "$task" "$STARTUP_HTTP_CODE"
+  else
+    fail_task_startup "$task" "$name" "$log_file"
   fi
 }
 
@@ -411,6 +551,7 @@ run_container() {
     --volume "$codex_state:/home/developer/.codex"
   )
   if [[ -d "$USER_SKILLS_HOST" ]]; then
+    echo "Mounting Codex skills from $USER_SKILLS_HOST"
     mounts+=(--volume "$USER_SKILLS_HOST:/home/developer/.codex/skills:ro")
   else
     echo "warning: user skills directory not found: $USER_SKILLS_HOST" >&2
@@ -431,29 +572,14 @@ run_container() {
 start_task() {
   local task="$1" wt="$2" name="$3" token="$4" backend_port="$5" image="$6"
   run_container "$task" "$wt" "$name" "$token" "$backend_port" "$image"
-  if ! route_up "$task" "$backend_port"; then
-    "$CONTAINER_CLI" stop "$name" >/dev/null 2>&1 || true
-    "$CONTAINER_CLI" delete "$name" >/dev/null 2>&1 || true
-    die "unable to register route for $task"
-  fi
-  local code
-  if ! code="$(wait_for_http "$task" "$backend_port")"; then
-    local logs
-    logs="$($CONTAINER_CLI logs "$name" 2>/dev/null || true)"
-    "$CONTAINER_CLI" stop "$name" >/dev/null 2>&1 || true
-    "$CONTAINER_CLI" delete "$name" >/dev/null 2>&1 || true
-    rm -f "$(route_for "$(host_for "$task")")"
-    reload_router || true
-    printf '%s\n' "$logs" | tail -40 >&2
-    die "Rails did not become reachable for $task"
-  fi
-  report_readiness "$task" "$code"
+  await_task_readiness "$task" "$name" "$backend_port"
 }
 
 start() {
   local task="${1:-}" base="${2:-HEAD}" current_base wt name branch token backend_port host image
   [[ -n "$task" ]] || die "usage: elef-agent start TASK [BASE]"
   validate_agent_database
+  validate_startup_timeout
   safe_name "$task"
   assert_task_branch_available "$task"
   if [[ "$base" == "HEAD" ]]; then
@@ -485,9 +611,9 @@ start() {
     git branch -D "$branch" >/dev/null 2>&1 || true
     die "unable to build image $image"
   fi
-  start_task "$task" "$wt" "$name" "$token" "$backend_port" "$image"
   remember_image "$task" "$image"
   remember_database "$task"
+  start_task "$task" "$wt" "$name" "$token" "$backend_port" "$image"
   echo "Started $name"
   echo "Worktree: $wt"
   echo "Branch:   $branch"
@@ -500,6 +626,7 @@ up() {
   local task="${1:-}" wt name token backend_port host image
   [[ -n "$task" ]] || die "usage: elef-agent up TASK"
   safe_name "$task"
+  validate_startup_timeout
   [[ -n "${ELEF_AGENT_DATABASE:-}" ]] || AGENT_DATABASE="$(existing_database_for "$task")"
   validate_agent_database
   wt="$(require_worktree "$task")"; name="$(container_for "$task")"; host="$(host_for "$task")"
@@ -514,6 +641,8 @@ up() {
   "$CONTAINER_CLI" system start >/dev/null
   image="$(existing_image_for "$task")"
   ensure_image "$image"
+  remember_image "$task" "$image"
+  remember_database "$task"
   if container_exists "$name"; then
     # Recreate the disposable container so tasks created by older launcher
     # versions receive the managed web-process command as well.
@@ -521,22 +650,7 @@ up() {
     "$CONTAINER_CLI" delete "$name" >/dev/null 2>&1 || true
   fi
   run_container "$task" "$wt" "$name" "$token" "$backend_port" "$image"
-  if ! route_up "$task" "$backend_port"; then
-    "$CONTAINER_CLI" stop "$name" >/dev/null 2>&1 || true
-    "$CONTAINER_CLI" delete "$name" >/dev/null 2>&1 || true
-    die "unable to register route for $task"
-  fi
-  local code
-  if ! code="$(wait_for_http "$task" "$backend_port")"; then
-    "$CONTAINER_CLI" logs "$name" 2>/dev/null | tail -40 >&2 || true
-    "$CONTAINER_CLI" stop "$name" >/dev/null 2>&1 || true
-    "$CONTAINER_CLI" delete "$name" >/dev/null 2>&1 || true
-    rm -f "$(route_for "$host")"
-    reload_router || true
-    die "Rails did not become reachable for $task"
-  fi
-  report_readiness "$task" "$code"
-  remember_database "$task"
+  await_task_readiness "$task" "$name" "$backend_port"
 }
 
 restore_terminal() {
@@ -607,7 +721,7 @@ stop() {
   restore_task_terminal "$task"
   "$CONTAINER_CLI" stop "$(container_for "$task")" || echo "warning: container may already be stopped" >&2
   rm -f "$(route_for "$host")"
-  reload_router
+  reload_router || die "Caddy is not running; route removed but its configuration could not be reloaded"
 }
 
 remove() {
@@ -779,7 +893,7 @@ Commands:
                         agent image, start its container and Rails, then launch
                         Codex immediately. Use for a brand-new isolated task.
                         BASE defaults to HEAD; it may be a branch, tag, or
-                        commit.
+                        commit. Pass 'dev' explicitly to pin a task to dev.
 
   codex TASK [PROMPT...] Launch Codex inside a running task container.
                         Use for the first implementation prompt or a follow-up
@@ -828,31 +942,35 @@ Environment overrides:
   ELEF_WORKTREE_ROOT            Worktree parent (default: ../elef-worktrees)
   ELEF_AGENT_STATE_ROOT         Router state directory
   ELEF_AGENT_CADDYFILE          Caddyfile path
-  ELEF_USER_SKILLS_DIR          Host skills directory (default: ~/.agents/skills,
-                                or $CODEX_HOME_HOST/skills)
+  ELEF_USER_SKILLS_DIR          Host skills directory (default: ~/Development/GitHub/
+                                andy-skills/skills when present, else
+                                CODEX_HOME/skills when set, else ~/.codex/skills)
   ELEF_AGENT_CODEX_VERSION      Codex version used in the image
   ELEF_AGENT_CHROME_DEVTOOLS_MCP_VERSION
                                 Chrome DevTools MCP version used in the image
   ELEF_AGENT_DATABASE            Agent database: sqlite (default) or postgres
+  ELEF_AGENT_STARTUP_TIMEOUT     Seconds to wait for Rails (default: 300)
 
 For command syntax, run '$0 --help'. Run commands from the Elef repository root.
 EOF
 }
 
-case "${1:-}" in
-  -h|--help|help) shift; help "$@" ;;
-  setup) shift; setup "$@" ;;
-  status) shift; status "$@" ;;
-  start) shift; start "$@" ;;
-  up) shift; up "$@" ;;
-  shell) shift; [[ -n "${1:-}" ]] || die "usage: elef-agent shell TASK [COMMAND...]"; task="$1"; shift; exec_in "$task" bash "$@" ;;
-  codex) shift; [[ -n "${1:-}" ]] || die "usage: elef-agent codex TASK [PROMPT...]"; task="$1"; shift; exec_in "$task" codex --dangerously-bypass-approvals-and-sandbox -m "$CODEX_MODEL" -c 'model_reasoning_effort="max"' -c 'plan_mode_reasoning_effort="max"' "$@" ;;
-  fork) shift; [[ -n "${1:-}" ]] || die "usage: elef-agent fork TASK [PROMPT...]"; task="$1"; shift; exec_in "$task" codex --dangerously-bypass-approvals-and-sandbox -m "$CODEX_MODEL" -c 'model_reasoning_effort="max"' -c 'plan_mode_reasoning_effort="max"' fork --last "$@" ;;
-  resume) shift; [[ -n "${1:-}" ]] || die "usage: elef-agent resume TASK"; task="$1"; shift; exec_in "$task" codex --dangerously-bypass-approvals-and-sandbox -m "$CODEX_MODEL" -c 'model_reasoning_effort="max"' -c 'plan_mode_reasoning_effort="max"' resume --last "$@" ;;
-  stop) shift; stop "$@" ;;
-  cleanup) shift; cleanup "$@" ;;
-  finish) shift; finish "$@" ;;
-  remove) shift; remove "$@" ;;
-  build) validate_agent_database; ensure_image "$(new_image_for)" ;;
-  *) echo "usage: $0 {setup|status|start|up|codex|fork|resume|shell|stop|cleanup|finish|remove|build} TASK [ARGS...]" >&2; exit 2 ;;
-esac
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  case "${1:-}" in
+    -h|--help|help) shift; help "$@" ;;
+    setup) shift; setup "$@" ;;
+    status) shift; status "$@" ;;
+    start) shift; start "$@" ;;
+    up) shift; up "$@" ;;
+    shell) shift; [[ -n "${1:-}" ]] || die "usage: elef-agent shell TASK [COMMAND...]"; task="$1"; shift; exec_in "$task" bash "$@" ;;
+    codex) shift; [[ -n "${1:-}" ]] || die "usage: elef-agent codex TASK [PROMPT...]"; task="$1"; shift; exec_in "$task" codex --dangerously-bypass-approvals-and-sandbox -m "$CODEX_MODEL" -c 'model_reasoning_effort="max"' -c 'plan_mode_reasoning_effort="max"' "$@" ;;
+    fork) shift; [[ -n "${1:-}" ]] || die "usage: elef-agent fork TASK [PROMPT...]"; task="$1"; shift; exec_in "$task" codex --dangerously-bypass-approvals-and-sandbox -m "$CODEX_MODEL" -c 'model_reasoning_effort="max"' -c 'plan_mode_reasoning_effort="max"' fork --last "$@" ;;
+    resume) shift; [[ -n "${1:-}" ]] || die "usage: elef-agent resume TASK"; task="$1"; shift; exec_in "$task" codex --dangerously-bypass-approvals-and-sandbox -m "$CODEX_MODEL" -c 'model_reasoning_effort="max"' -c 'plan_mode_reasoning_effort="max"' resume --last "$@" ;;
+    stop) shift; stop "$@" ;;
+    cleanup) shift; cleanup "$@" ;;
+    finish) shift; finish "$@" ;;
+    remove) shift; remove "$@" ;;
+    build) validate_agent_database; ensure_image "$(new_image_for)" ;;
+    *) echo "usage: $0 {setup|status|start|up|codex|fork|resume|shell|stop|cleanup|finish|remove|build} TASK [ARGS...]" >&2; exit 2 ;;
+  esac
+fi

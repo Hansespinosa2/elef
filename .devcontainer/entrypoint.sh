@@ -4,6 +4,17 @@ set -euo pipefail
 GIT_CONFIG_GLOBAL="${GIT_CONFIG_GLOBAL:-$HOME/.config/git/config}"
 export GIT_CONFIG_GLOBAL
 
+report_startup_error() {
+  local status="$?" line="${BASH_LINENO[0]:-$LINENO}"
+  printf '[elef-entrypoint] ERROR: command failed at line %s (exit %s)\n' "$line" "$status" >&2
+  exit "$status"
+}
+trap report_startup_error ERR
+
+log_startup_step() {
+  printf '[elef-entrypoint] %s\n' "$1"
+}
+
 mkdir -p "$CODEX_HOME" "$HOME/.config/gh" "$(dirname "$GIT_CONFIG_GLOBAL")"
 if [[ -f "$HOME/.gitconfig" && ! -e "$GIT_CONFIG_GLOBAL" ]]; then
   cp "$HOME/.gitconfig" "$GIT_CONFIG_GLOBAL"
@@ -46,10 +57,15 @@ start_local_postgres() {
 
 if [[ "${1:-}" == web ]]; then
   shift
+  log_startup_step "starting the task database"
   start_local_postgres
+  log_startup_step "installing Ruby dependencies"
   bundle install
+  log_startup_step "preparing the database"
   bin/rails db:prepare
+  log_startup_step "building Tailwind CSS"
   bin/rails tailwindcss:build
+  log_startup_step "starting Rails on ${BIND:-0.0.0.0}:${PORT:-3000}"
   exec bin/rails server -b "${BIND:-0.0.0.0}" -p "${PORT:-3000}" "$@"
 fi
 

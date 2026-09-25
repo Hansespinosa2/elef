@@ -91,7 +91,7 @@
 
     <div class="editor-layout">
       <div class="source-pane">
-    <div class="field source-field relative mb-4" data-controller="editor snippet-palette math-shorthand math-shortcut-palette<%= " document-link-palette" if work.document? %>" data-editor-initial-source-value="<%= ERB::Util.html_escape(work.source.to_s.to_json) %>" data-snippet-palette-snippets-value="<%= json_escape(Snippets::Catalog.for_editor.to_json) %>" data-math-shortcut-palette-shortcuts-value="<%= json_escape(MathShortcuts::Catalog.for_editor(workspace: work.workspace || Workspace.default).to_json) %>"<% if work.document? %> data-document-link-palette-titles-value="<%= ERB::Util.html_escape(document_link_titles(workspace: work.workspace).to_json) %>"<% end %><% if work.presentation? %> data-presentation-editor-target="source"<% end %>>
+    <div class="field source-field relative mb-4" data-controller="editor snippet-palette math-shorthand math-shortcut-palette<%= " document-link-palette" if work.document? %>" data-editor-initial-source-value="<%= ERB::Util.html_escape(work.source.to_s.to_json) %>" data-snippet-palette-snippets-value="<%= json_escape(Snippets::Catalog.for_editor.to_json) %>" data-math-shortcut-palette-shortcuts-value="<%= json_escape(MathShortcuts::Catalog.for_editor(workspace: work.workspace || Workspace.default).to_json) %>" data-math-shortcut-palette-katex-url-value="<%= asset_path("katex.js") %>"<% if work.document? %> data-document-link-palette-titles-value="<%= ERB::Util.html_escape(document_link_titles(workspace: work.workspace).to_json) %>"<% end %><% if work.presentation? %> data-presentation-editor-target="source"<% end %>>
       <% source_id = form.field_id(:source) %>
       <% editor_id = "#{source_id}_editor" %>
       <%= form.label :source, "Markdown source", for: source_id, id: "#{editor_id}_label", class: "sr-only" %>
@@ -103,7 +103,7 @@
         </div>
         <span class="editor-mode" data-editor-target="mode" data-mode="standard" aria-live="polite">Standard</span>
         <span class="editor-command" data-editor-target="command" aria-live="polite"></span>
-        <button type="button" class="editor-reveal-metadata" data-action="editor#revealMetadata">Reveal source metadata</button>
+        <button type="button" class="editor-reveal-metadata" data-editor-target="metadataToggle" data-action="editor#toggleMetadataVisibility">Reveal source metadata</button>
         <details class="editor-settings ml-auto">
           <summary>Vim settings</summary>
           <div class="editor-settings-panel">
@@ -111,21 +111,12 @@
               <input type="checkbox" data-editor-target="vimToggle" data-action="change->editor#toggleVim">
               <span>Enable Vim mode in this browser</span>
             </label>
-            <label class="editor-setting-row">
-              <span>Shift+Space in Normal mode</span>
-              <select data-editor-target="mapping" data-action="change->editor#mappingChanged">
-                <option value="standard">Move forward a word (standard)</option>
-                <option value="insert">Enter Insert mode</option>
-                <option value="disabled">Unmapped</option>
-              </select>
-            </label>
-            <label class="editor-setting-row">
-              <span>Escape aliases in Insert mode</span>
-              <select data-editor-target="escapeAlias" data-action="change->editor#escapeAliasChanged">
-                <option value="none">Escape only</option>
-                <option value="shift-space">Escape or Shift+Space</option>
-              </select>
-            </label>
+            <div class="editor-setting-row editor-setting-key">
+              <label for="<%= editor_id %>_escape_key">Remap Vim Escape</label>
+              <input id="<%= editor_id %>_escape_key" type="text" readonly placeholder="Escape (default)" data-editor-target="escapeKey" data-action="keydown->editor#captureEscapeKey" aria-label="Choose a key to remap Vim Escape">
+              <button type="button" data-action="editor#clearEscapeKey">Clear</button>
+            </div>
+            <p class="field-hint">Focus the field and press a key or key combination to set it as Escape in every Vim mode.</p>
             <label class="editor-setting-row">
               <span>Line numbers</span>
               <select data-editor-target="lineNumbers" data-action="change->editor#lineNumbersChanged">

@@ -29,9 +29,43 @@ bash -n "$launcher" "$entrypoint"
 assert_contains "$launcher" 'SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"'
 assert_contains "$launcher" 'cd "$REPO"'
 assert_contains "$launcher" 'CODEX_MODEL="gpt-6-luna"'
-assert_contains "$launcher" 'USER_SKILLS_HOST="$HOME/.agents/skills"'
+assert_contains "$launcher" 'DEVELOPMENT_SKILLS_HOST="$HOME/Development/GitHub/andy-skills/skills"'
+assert_contains "$launcher" 'USER_SKILLS_HOST="$DEVELOPMENT_SKILLS_HOST"'
+assert_contains "$launcher" 'USER_SKILLS_HOST="$CODEX_HOME_HOST/skills"'
+assert_contains "$launcher" 'Mounting Codex skills from $USER_SKILLS_HOST'
+assert_not_contains "$launcher" 'USER_SKILLS_HOST="$HOME/.agents/skills"'
 assert_not_contains "$launcher" 'Documents/GitHub/andy-skills/skills'
+skills_test_root="$(mktemp -d)"
+trap 'rm -rf -- "$skills_test_root"' EXIT
+development_home="$skills_test_root/development-home"
+mkdir -p "$development_home/Development/GitHub/andy-skills/skills" \
+  "$development_home/.agents/skills" "$development_home/.codex/skills"
+selected_skills="$(HOME="$development_home" CODEX_HOME="$development_home/.codex" \
+  bash -c 'source "$1"; printf "%s" "$USER_SKILLS_HOST"' _ "$launcher")"
+[[ "$selected_skills" == "$development_home/Development/GitHub/andy-skills/skills" ]] || {
+  echo "expected the Development skills checkout, got '$selected_skills'" >&2
+  exit 1
+}
+
+fallback_home="$skills_test_root/fallback-home"
+mkdir -p "$fallback_home/.agents/skills" "$fallback_home/.codex/skills"
+selected_skills="$(HOME="$fallback_home" CODEX_HOME="$fallback_home/.codex" \
+  bash -c 'source "$1"; printf "%s" "$USER_SKILLS_HOST"' _ "$launcher")"
+[[ "$selected_skills" == "$fallback_home/.codex/skills" ]] || {
+  echo "expected CODEX_HOME skills fallback, got '$selected_skills'" >&2
+  exit 1
+}
+
+override_skills="$skills_test_root/custom-skills"
+selected_skills="$(HOME="$fallback_home" CODEX_HOME="$fallback_home/.codex" \
+  ELEF_USER_SKILLS_DIR="$override_skills" \
+  bash -c 'source "$1"; printf "%s" "$USER_SKILLS_HOST"' _ "$launcher")"
+[[ "$selected_skills" == "$override_skills" ]] || {
+  echo "expected ELEF_USER_SKILLS_DIR override, got '$selected_skills'" >&2
+  exit 1
+}
 assert_contains "$launcher" 'registered_worktree_for'
+assert_contains "$launcher" 'path = substr($0, 10)'
 assert_contains "$launcher" 'worktree_is_valid "$1" "$preferred"'
 assert_contains "$launcher" 'worktree_is_valid "$1" "$registered"'
 assert_contains "$launcher" 'local task="$1" path="$2"'
@@ -40,7 +74,7 @@ assert_contains "$launcher" 'task directory is not a valid checkout'
 assert_contains "$launcher" 'git worktree repair'
 assert_contains "$launcher" 'wt="$(require_worktree "$task")"'
 assert_contains "$launcher" 'assert_no_active_terminal "$task"'
-assert_contains "$launcher" 'prune the stale Git worktree record'
+assert_contains "$launcher" 'has a stale worktree record for missing path'
 assert_contains "$launcher" 'ensure_image "$image"'
 assert_contains "$launcher" 'npm view @openai/codex version --silent'
 assert_contains "$launcher" 'existing_image_for "$task"'
@@ -51,6 +85,17 @@ assert_contains "$launcher" '--env GIT_CONFIG_GLOBAL=/home/developer/.config/git
 assert_contains "$launcher" '--memory "$CONTAINER_MEMORY"'
 assert_contains "$launcher" '"$image" web'
 assert_contains "$launcher" 'AGENT_DATABASE="${ELEF_AGENT_DATABASE:-sqlite}"'
+assert_contains "$launcher" 'STARTUP_TIMEOUT="${ELEF_AGENT_STARTUP_TIMEOUT:-300}"'
+assert_contains "$launcher" 'validate_startup_timeout'
+assert_contains "$launcher" '"$CONTAINER_CLI" logs --follow "$name"'
+assert_contains "$launcher" '"$CONTAINER_CLI" logs --boot "$name"'
+assert_contains "$launcher" '"$CONTAINER_CLI" system logs --last 5m'
+assert_contains "$launcher" 'Full startup diagnostics:'
+assert_contains "$launcher" 'The stopped container was retained for inspection:'
+assert_contains "$launcher" 'task $task already exists at'
+assert_contains "$launcher" 'use '\''$0 up $task'\'' to restart Rails'
+assert_contains "$launcher" 'STARTUP_BACKEND_CODE'
+assert_contains "$launcher" 'STARTUP_ROUTE_CODE'
 assert_contains "$launcher" 'ELEF_AGENT_DATABASE must be sqlite or postgres'
 assert_contains "$launcher" '--env "ELEF_USE_SQLITE=$sqlite_env"'
 assert_contains "$launcher" 'validate_agent_database'
@@ -92,6 +137,10 @@ assert_contains "$launcher" 'ensure_base_current "$base"'
 assert_contains "$launcher" 'ELEF_AGENT_DATABASE            Agent database: sqlite (default) or postgres'
 assert_contains "$launcher" 'rm -rf -- "$state"'
 assert_contains "$entrypoint" 'bin/rails server -b "${BIND:-0.0.0.0}" -p "${PORT:-3000}"'
+assert_contains "$entrypoint" 'trap report_startup_error ERR'
+assert_contains "$entrypoint" 'log_startup_step "installing Ruby dependencies"'
+assert_contains "$entrypoint" 'log_startup_step "preparing the database"'
+assert_contains "$entrypoint" 'log_startup_step "building Tailwind CSS"'
 assert_contains "$entrypoint" 'GIT_CONFIG_GLOBAL="${GIT_CONFIG_GLOBAL:-$HOME/.config/git/config}"'
 assert_contains "$entrypoint" 'credential.helper'
 assert_contains "$containerfile" 'ARG CODEX_VERSION=latest'
