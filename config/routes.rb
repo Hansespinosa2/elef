@@ -39,6 +39,7 @@ Rails.application.routes.draw do
       post :import
     end
     member do
+      get :print
       post :restore
       get :history
       get :export

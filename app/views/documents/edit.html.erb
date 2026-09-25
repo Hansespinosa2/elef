@@ -4,5 +4,8 @@
     <p class="eyebrow mb-1 text-xs font-extrabold uppercase tracking-[0.12em] text-[#6d4aff]">Visual editor</p>
     <h1 class="mb-0 text-4xl font-bold">Edit <%= @document.title %></h1>
   </div>
+  <div class="flex flex-wrap items-center gap-3">
+    <%= link_to "Print / Save PDF", print_document_path(@document), class: "button inline-flex min-h-10 items-center rounded-full border border-[#ddd5c8] bg-[#fffdf8] px-4 py-2 font-bold no-underline hover:bg-[#f7efe2]" %>
+  </div>
 </div>
 <%= render "works/form", work: @document %>
