@@ -1,6 +1,7 @@
 import { Controller } from "@hotwired/stimulus"
 import { editorFor } from "controllers/editor_controller"
-import { expandMathShorthand, insideMath } from "controllers/math_shorthand_controller"
+import { application } from "controllers/application"
+import { insideMath, parseMathShorthand } from "controllers/math_shorthand_controller"
 
 let katexLoadPromise
 
@@ -86,6 +87,7 @@ export default class extends Controller {
   }
 
   keydown(event) {
+    if (event.defaultPrevented || event.elefMathShorthandHandled) return
     if (event.key === "Escape" && !this.paletteTarget.hidden) {
       event.preventDefault()
       this.close()
@@ -105,7 +107,7 @@ export default class extends Controller {
       return
     }
     if (["Enter", "Tab"].includes(event.key) && !this.paletteTarget.hidden) {
-      if (this.validExactShorthandAtCaret()) return
+      if (this.validExactShorthandAtCaret() || this.validAppendedShorthandAtCaret()) return
       event.preventDefault()
       this.insertSelected()
       return
@@ -161,7 +163,15 @@ export default class extends Controller {
 
     const before = editor.value.slice(0, editor.selectionStart)
     const match = before.match(/([A-Za-z][A-Za-z0-9]*(?:\.[A-Za-z][A-Za-z0-9]*)+)$/)
-    return !this.selectionMoved && Boolean(match && expandMathShorthand(match[1]))
+    return !this.selectionMoved && Boolean(match && parseMathShorthand(match[1]))
+  }
+
+  validAppendedShorthandAtCaret() {
+    const editor = this.editorController
+    if (!editor) return false
+
+    const shorthand = application.getControllerForElementAndIdentifier(this.element, "math-shorthand")
+    return Boolean(shorthand?.hasRecognizedAppendedModifiers(editor, editor.selectionStart))
   }
 
   fuzzyScore(shortcut, query) {

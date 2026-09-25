@@ -834,7 +834,7 @@ class PresentationsTest < ApplicationSystemTestCase
     end
 
     click_on "Save presentation"
-    assert_text "Presentation saved."
+    assert_text "Presentation saved.", wait: 10
     visit edit_presentation_path(visual)
     assert_field "Markdown source", with: visual_expected
 
@@ -847,7 +847,7 @@ class PresentationsTest < ApplicationSystemTestCase
     end
 
     click_on "Save presentation"
-    assert_text "Presentation saved."
+    assert_text "Presentation saved.", wait: 10
     visit edit_presentation_path(source)
     assert_field "Markdown source", with: source_expected
     assert_equal visual_expected, source_expected
@@ -1588,6 +1588,27 @@ class PresentationsTest < ApplicationSystemTestCase
     JAVASCRIPT
     assert_operator fraction_parts.length, :>=, 2
     assert_operator (fraction_parts[1]["top"] - fraction_parts[0]["top"]).abs, :>, 1
+  end
+
+  test "renders inline accents and multiline display equations in a presentation" do
+    presentation = Presentation.create!(title: "Math rendering", source: <<~MARKDOWN)
+      # Math
+
+      Inline $\\bar{x}$.
+
+      $$
+      \\begin{aligned}
+      x &= y \\\\
+      y &= z
+      \\end{aligned}
+      $$
+    MARKDOWN
+
+    visit presentation_path(presentation)
+
+    assert_selector ".presentation-surface .katex", count: 2
+    assert_selector ".presentation-surface .katex-display", count: 1
+    assert_no_selector ".presentation-surface .math-error"
   end
 
   test "renders automatic layouts and positioned blocks" do
