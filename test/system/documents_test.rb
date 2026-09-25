@@ -329,6 +329,33 @@ class DocumentsTest < ApplicationSystemTestCase
     active_document_block.send_keys(:enter)
     active_document_block.send_keys("- THis is the first item of a list")
     assert_field "Markdown source", with: /\n\n- THis is the first item of a list\z/, wait: 5
+    list_keydown_state = page.evaluate_script(<<~JAVASCRIPT)
+      const form = document.querySelector('form.visual-editor-form');
+      const controller = window.Stimulus.getControllerForElementAndIdentifier(form, 'visual-editor');
+      const block = document.activeElement.closest('.document-editor-block[data-editor-block-id]');
+      const mappedBlock = controller.map?.slides?.flatMap((slide) => slide.blocks || [])
+        .find((candidate) => candidate.id === block?.dataset.editorBlockId);
+      const region = controller.map?.editable_regions?.find((candidate) => candidate.block_id === mappedBlock?.id);
+      const markdown = region ? controller.editorController.value.slice(region.content_range.start, region.content_range.end) : null;
+      return {
+        focusedBlock: Boolean(block && block === controller.focusedProjectionBlock()),
+        editable: block ? controller.canEditBlock(block) : false,
+        mappedBlock: Boolean(mappedBlock),
+        region: Boolean(region),
+        markdown,
+        kind: markdown === null ? null : controller.currentBlockKind(markdown, region.kind),
+        atEnd: block ? controller.selectionIsAtEnd(block) : false
+      };
+    JAVASCRIPT
+    assert_equal({
+      "focusedBlock" => true,
+      "editable" => true,
+      "mappedBlock" => true,
+      "region" => true,
+      "markdown" => "- THis is the first item of a list",
+      "kind" => "list",
+      "atEnd" => true
+    }, list_keydown_state)
     active_document_block.send_keys(:enter)
     assert_field "Markdown source", with: /- THis is the first item of a list\n- \z/, wait: 5
     assert_selector ".document-editor-block ul > li", count: 2, wait: 5
