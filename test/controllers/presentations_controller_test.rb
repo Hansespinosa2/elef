@@ -116,6 +116,7 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_select "form[action='#{publish_presentation_path(presentations(:one))}'] button.button", text: "Present"
     assert_select 'form[data-controller~="autosave"] form', count: 0
     assert_select '[data-autosave-target="retry"]'
+    assert_select '[data-preview-target="retry"]'
     assert_select '[data-controller~="editor"]'
     assert_select '[data-editor-target="surface"][aria-labelledby]'
     assert_select 'textarea[name="presentation[source]"][data-editor-target="input"]'
@@ -345,6 +346,26 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_equal "new-2", response.parsed_body["revision"]
     assert_equal 2, response.parsed_body["html"].scan('class="slide ').length
+    assert_equal "presentation", response.parsed_body.dig("editor_map", "mode")
+    assert_equal 2, response.parsed_body.dig("editor_map", "slides").length
+  end
+
+  test "editor preview returns editable projections without changing saved output routes" do
+    presentation = Presentation.create!(title: "Editable deck", source: "# First\n\nBody")
+
+    post preview_presentation_path(presentation), params: {
+      presentation: { source: "# Draft\n\nBody" }, projection: "editor", revision: "editor-1"
+    }, as: :json
+
+    assert_response :success
+    assert_includes response.parsed_body["html"], 'contenteditable="true"'
+    assert_equal "editor-1", response.parsed_body["revision"]
+    assert_equal "# First\n\nBody", presentation.reload.source
+
+    get presentation_path(presentation)
+
+    assert_response :success
+    assert_select '[contenteditable="true"]', count: 0
   end
 
   test "the root library shows all work while the presentations URL stays presentation-focused" do

@@ -9,6 +9,7 @@ module WorkPreview
     Rails.logger.warn("Work preview failed (#{error.class}): #{error.message}")
     render json: {
       html: nil,
+      editor_map: nil,
       warnings: ["Preview could not be rendered. Check the latest Markdown edit."],
       revision: work_preview_revision(work)
     }, status: :unprocessable_content
@@ -34,6 +35,12 @@ module WorkPreview
     preview_work.theme = attributes[:theme] if attributes.key?(:theme)
     preview_work.typography = attributes[:typography] if attributes.key?(:typography)
 
+    editor_map = Presentations::Document.editor_map(
+      source.gsub(/\r\n?/, "\n"),
+      source_name: title.presence || preview_work.default_title,
+      mode: preview_work.work_type.to_sym
+    )
+
     html = if preview_work.presentation?
       margin = preview_work.document.margin_settings
       settings = {
@@ -46,20 +53,34 @@ module WorkPreview
           "slide_count" => margin.slide_count
         }
       }
-      settings["asset_owner_id"] = work.id
-      Presentations::RenderCache.fetch(
-        source: source,
-        settings: settings,
-        asset_manifest: PresentationRelease.asset_manifest_for(work)
-      ) do
-        render_to_string(partial: "works/preview", formats: [:html], locals: { work: preview_work })
+      if params[:projection].to_s == "editor"
+        render_to_string(
+          partial: "works/preview",
+          formats: [:html],
+          locals: { work: preview_work, editable: true, editor_map: editor_map }
+        )
+      else
+        settings["asset_owner_id"] = work.id if work.persisted?
+        asset_manifest = work.persisted? ? PresentationRelease.asset_manifest_for(work) : []
+        Presentations::RenderCache.fetch(source: source, settings: settings, asset_manifest: asset_manifest) do
+          render_to_string(
+            partial: "works/preview",
+            formats: [:html],
+            locals: { work: preview_work, editable: false, editor_map: editor_map }
+          )
+        end
       end
     else
-      render_to_string(partial: "works/preview", formats: [:html], locals: { work: preview_work })
+      render_to_string(
+        partial: "works/preview",
+        formats: [:html],
+        locals: { work: preview_work, editable: params[:projection].to_s == "editor", editor_map: editor_map }
+      )
     end
 
     {
       html: html,
+      editor_map: editor_map,
       warnings: preview_work.preview_warnings,
       revision: work_preview_revision(work)
     }

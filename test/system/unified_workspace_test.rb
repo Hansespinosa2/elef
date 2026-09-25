@@ -109,23 +109,63 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     assert_selector ".cm-content", text: "theme: dark"
   end
 
-  test "keeps the source pane wider on desktop and stacks on narrow screens" do
+  test "keeps visual editing and the source-left preview-right layout usable at desktop and narrow widths" do
     document = Document.create!(title: "Responsive editor", source: "# Responsive editor\n\nBody")
 
     visit edit_document_path(document)
+    assert_selector ".editor-shell"
+    assert_selector ".editor-projection", visible: true
+    assert_selector ".editor-mode-button.is-active", text: "Visual"
+    assert_selector ".editor-layout .source-pane"
+
+    page.driver.browser.manage.window.resize_to(1400, 900)
+    click_on "Source"
+    assert_selector ".editor-mode-button[aria-pressed='true']", text: "Source"
+    assert_selector ".editor-projection[aria-label='Rendered preview']", visible: true
+
     desktop = page.evaluate_script(<<~JAVASCRIPT)
       (() => {
-        const layout = document.querySelector(".editor-layout");
-        const source = layout.querySelector(".source-pane").getBoundingClientRect();
-        const preview = layout.querySelector(".preview-pane").getBoundingClientRect();
-        return { source: source.width, preview: preview.width };
+        const source = document.querySelector('.source-pane').getBoundingClientRect();
+        const projection = document.querySelector(".editor-projection").getBoundingClientRect();
+        return {
+          sourceLeft: source.left,
+          sourceRight: source.right,
+          sourceWidth: source.width,
+          previewLeft: projection.left,
+          projection: projection.width,
+          viewport: window.innerWidth,
+          document: document.documentElement.scrollWidth
+        };
       })()
     JAVASCRIPT
-    assert_operator desktop["source"], :>, desktop["preview"]
+    assert_operator desktop["sourceWidth"], :>, 0
+    assert_operator desktop["sourceRight"], :<=, desktop["previewLeft"]
+    assert_operator desktop["projection"], :>, 0
+    assert_operator desktop["document"], :<=, desktop["viewport"] + 1
 
     page.driver.browser.manage.window.resize_to(700, 900)
-    assert_equal "flex", page.evaluate_script("getComputedStyle(document.querySelector('.editor-layout')).display")
-    assert_equal "column", page.evaluate_script("getComputedStyle(document.querySelector('.editor-layout')).flexDirection")
+    narrow = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const source = document.querySelector('.source-pane').getBoundingClientRect();
+        const projection = document.querySelector(".editor-projection").getBoundingClientRect();
+        return {
+          sourceBottom: source.bottom,
+          previewTop: projection.top,
+          sourceWidth: source.width,
+          projection: projection.width,
+          viewport: window.innerWidth,
+          document: document.documentElement.scrollWidth
+        };
+      })()
+    JAVASCRIPT
+    assert_operator narrow["sourceWidth"], :>, 0
+    assert_operator narrow["sourceBottom"], :<=, narrow["previewTop"] + 1
+    assert_operator narrow["projection"], :>, 0
+    assert_operator narrow["document"], :<=, narrow["viewport"] + 1
+
+    click_on "Visual"
+    assert_selector ".editor-mode-button[aria-pressed='true']", text: "Visual"
+    assert_selector ".editor-projection[aria-label='Visual editing surface']", visible: true
   ensure
     page.driver.browser.manage.window.resize_to(1400, 1000)
   end

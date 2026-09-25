@@ -5,6 +5,8 @@ export default class extends Controller {
 
   connect() {
     this.selectedIndex = 0
+    this.projectionPending = false
+    this.installedSource = this.source
     this.preview = this.element.querySelector('[data-preview-target="container"]')
     this.mediaLoaded = () => this.scheduleMeasurement()
     this.preview?.addEventListener("load", this.mediaLoaded, true)
@@ -24,16 +26,22 @@ export default class extends Controller {
   }
 
   sourceChanged() {
+    this.projectionPending = this.source !== this.installedSource
     this.countTarget.textContent = `${this.sourceRanges().length} slides`
+    this.renderOverview()
   }
 
   previewUpdated() {
+    this.installedSource = this.source
+    this.projectionPending = false
     this.selectedIndex = Math.min(this.selectedIndex, Math.max(0, this.sourceRanges().length - 1))
     this.renderOverview()
     this.scheduleMeasurement()
   }
 
   select(event) {
+    if (this.projectionPending) return
+
     this.selectedIndex = Number(event.currentTarget.dataset.slideIndex || 0)
     this.element.dataset.selectedSlideIndex = String(this.selectedIndex)
     this.renderOverview()
@@ -86,6 +94,8 @@ export default class extends Controller {
   }
 
   applySlides(slides, selectedIndex) {
+    if (this.projectionPending) return
+
     const source = this.source
     const ranges = this.sourceRanges(source)
     const bodyStart = ranges[0]?.start ?? 0
@@ -122,6 +132,7 @@ export default class extends Controller {
       card.dataset.action = "slide-overview#select"
       card.setAttribute("aria-label", `Select slide ${index + 1}: ${title}`)
       card.setAttribute("aria-current", index === this.selectedIndex ? "true" : "false")
+      card.disabled = this.projectionPending
 
       const thumbnail = document.createElement("span")
       thumbnail.className = "slide-overview-thumbnail"
@@ -129,7 +140,14 @@ export default class extends Controller {
       if (frame) {
         const clone = frame.cloneNode(true)
         clone.removeAttribute("data-controller")
+        clone.querySelectorAll(".presentation-editor-slide-toolbar, .presentation-editor-block-controls").forEach((element) => element.remove())
         clone.querySelectorAll("[data-controller]").forEach((element) => element.removeAttribute("data-controller"))
+        clone.querySelectorAll("[contenteditable], [data-action], [data-editor-block-id], [data-editor-region-id]").forEach((element) => {
+          element.removeAttribute("contenteditable")
+          element.removeAttribute("data-action")
+          element.removeAttribute("data-editor-block-id")
+          element.removeAttribute("data-editor-region-id")
+        })
         clone.querySelectorAll("a, button, input, video").forEach((element) => {
           element.tabIndex = -1
           if (element instanceof HTMLVideoElement) element.controls = false
@@ -191,11 +209,11 @@ export default class extends Controller {
   updateActionAvailability(count) {
     const buttons = this.element.querySelectorAll(".slide-overview-actions button")
     const [add, duplicate, remove, up, down] = buttons
-    add.disabled = false
-    duplicate.disabled = count === 0
-    remove.disabled = count === 0
-    up.disabled = this.selectedIndex <= 0
-    down.disabled = this.selectedIndex >= count - 1
+    add.disabled = this.projectionPending
+    duplicate.disabled = this.projectionPending || count === 0
+    remove.disabled = this.projectionPending || count === 0
+    up.disabled = this.projectionPending || this.selectedIndex <= 0
+    down.disabled = this.projectionPending || this.selectedIndex >= count - 1
   }
 
   sourceRanges(source = this.source) {
