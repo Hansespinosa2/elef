@@ -13,9 +13,9 @@ the only network boundary. This is a private, single-user deployment.
 ```
 
 The `ops/` directory belongs to this Mac mini workspace; it is not part of the
-`dev` or `main` checkout. Production uses the SQLite databases and uploaded
-files in the `elef_main_storage` Docker volume. Development has a separate
-PostgreSQL database volume and storage volume.
+`dev` or `main` checkout. Production uses PostgreSQL and uploaded files in
+separate persistent volumes. Development has its own PostgreSQL database and
+storage volumes, isolated from production.
 
 Keep the branch contract simple:
 
@@ -145,9 +145,9 @@ health endpoints are checked locally by Compose and by the deployment watcher.
 ## Backups and recovery
 
 Each automatic production deployment stores a checksummed archive of the
-production storage volume in `ops/backups/production/<timestamp>/`. The archive
-contains SQLite databases and Active Storage files. Create a manual snapshot at
-any time with:
+production database and storage in `ops/backups/production/<timestamp>/`. The
+archive contains a PostgreSQL dump and Active Storage files. Create a manual
+snapshot at any time with:
 
 ```sh
 ops/elef-production backup

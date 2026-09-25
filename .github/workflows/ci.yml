@@ -12,37 +12,30 @@ permissions:
 jobs:
   scan_ruby:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
-
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
           bundler-cache: true
-
       - name: Scan for known security vulnerabilities in gems used
         run: bin/bundler-audit
 
   scan_js:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
-
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
           bundler-cache: true
-
       - name: Scan for security vulnerabilities in JavaScript dependencies
         run: bin/importmap audit
 
   test:
     runs-on: ubuntu-latest
-
     services:
       postgres:
         image: postgres:17
@@ -55,12 +48,10 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
-
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
           bundler-cache: true
-
       - name: Run tests
         env:
           RAILS_ENV: test
@@ -68,11 +59,8 @@ jobs:
           PGUSER: postgres
           PGPASSWORD: postgres
           PGTESTDATABASE: elef_test
-          # RAILS_MASTER_KEY: ${{ secrets.RAILS_MASTER_KEY }}
-          # REDIS_URL: redis://localhost:6379/0
         run: bin/rails db:test:prepare test
-
-      - name: Check repository launchers and personal deployment files
+      - name: Check repository launchers and deployment files
         run: |
           bash test/scripts/elef-agent_test.sh
           bash test/scripts/personal_instance_test.sh
@@ -81,25 +69,21 @@ jobs:
 
   sqlite-test:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
-
+        uses: actions/checkout@v7
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
           bundler-cache: true
-
       - name: Run SQLite compatibility tests
         env:
           RAILS_ENV: test
-          ELEF_USE_SQLITE: 1
+          ELEF_USE_SQLITE: "1"
         run: bin/rails db:test:prepare test
 
   system-test:
     runs-on: ubuntu-latest
-
     services:
       postgres:
         image: postgres:17
@@ -112,12 +96,10 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
-
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
           bundler-cache: true
-
       - name: Run System Tests
         env:
           RAILS_ENV: test
@@ -126,10 +108,7 @@ jobs:
           PGUSER: postgres
           PGPASSWORD: postgres
           PGTESTDATABASE: elef_test
-          # RAILS_MASTER_KEY: ${{ secrets.RAILS_MASTER_KEY }}
-          # REDIS_URL: redis://localhost:6379/0
         run: bin/rails db:test:prepare test:system
-
       - name: Keep screenshots from failed system tests
         uses: actions/upload-artifact@v7
         if: failure()
@@ -138,42 +117,16 @@ jobs:
           path: ${{ github.workspace }}/tmp/screenshots
           if-no-files-found: ignore
 
-  publish-deployment-ref:
-    name: Authorize deployment after CI
-    if: github.event_name == 'push' && (github.ref_name == 'dev' || github.ref_name == 'main')
-    needs: [ scan_ruby, scan_js, test, sqlite-test, system-test, production-smoke, development-smoke ]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout the tested commit
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ github.sha }}
-          fetch-depth: 0
-          persist-credentials: true
-
-      - name: Publish the CI-approved deployment ref
-        env:
-          GITHUB_REF_NAME: ${{ github.ref_name }}
-          GITHUB_SHA: ${{ github.sha }}
-          DEPLOYMENT_REMOTE: origin
-        run: scripts/publish-deployment-ref
-
   production-smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
-
+        uses: actions/checkout@v7
       - name: Validate production Compose configuration
         run: docker compose --project-name elef-ci --env-file .env.personal.example --file compose.personal.yml config --quiet
-
       - name: Build production image
         run: docker compose --project-name elef-ci --env-file .env.personal.example --file compose.personal.yml build web
-
       - name: Boot and smoke-test production stack
         run: |
           set -euo pipefail
@@ -182,7 +135,6 @@ jobs:
             "${compose[@]}" down -v --remove-orphans
           }
           trap cleanup EXIT
-
           "${compose[@]}" up -d --no-build
           for attempt in $(seq 1 60); do
             if curl --fail --silent http://127.0.0.1:3000/up >/dev/null; then
@@ -195,23 +147,18 @@ jobs:
             fi
             sleep 2
           done
-
           "${compose[@]}" exec -T web bin/rails runner 'abort "wrong Rails environment" unless Rails.env.production?; abort "wrong database adapter" unless ActiveRecord::Base.connection.adapter_name == "PostgreSQL"; storage = Rails.root.join("storage"); probe = storage.join(".write-check"); File.write(probe, "ok"); File.delete(probe); puts "production smoke ok"'
 
   development-smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
-
+        uses: actions/checkout@v7
       - name: Validate development Compose configuration
         run: docker compose --project-name elef-development-ci --env-file .env.development.example --file compose.development.yml config --quiet
-
       - name: Build development image
         run: docker compose --project-name elef-development-ci --env-file .env.development.example --file compose.development.yml build web
-
       - name: Prepare and smoke-test development stack
         run: |
           set -euo pipefail
@@ -220,7 +167,27 @@ jobs:
             "${compose[@]}" down -v --remove-orphans
           }
           trap cleanup EXIT
-
           "${compose[@]}" up -d db
           "${compose[@]}" run --rm --no-deps web bin/rails db:prepare
           "${compose[@]}" run --rm --no-deps web bin/rails runner 'abort "wrong Rails environment" unless Rails.env.development?; abort "wrong database adapter" unless ActiveRecord::Base.connection.adapter_name == "PostgreSQL"; storage = Rails.root.join("storage"); probe = storage.join(".write-check"); File.write(probe, "ok"); File.delete(probe); puts "development smoke ok"'
+
+  publish-deployment-ref:
+    name: Authorize deployment after CI
+    if: github.event_name == 'push' && (github.ref_name == 'dev' || github.ref_name == 'main')
+    needs: [ scan_ruby, scan_js, test, sqlite-test, system-test, production-smoke, development-smoke ]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout the tested commit
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Publish the CI-approved deployment ref
+        env:
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_SHA: ${{ github.sha }}
+          DEPLOYMENT_REMOTE: origin
+        run: scripts/publish-deployment-ref
