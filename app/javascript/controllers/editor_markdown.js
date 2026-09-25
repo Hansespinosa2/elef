@@ -14,7 +14,10 @@ export function markdownForVisibleText(markdown, text, kind, element = null) {
   const sourceAtoms = sourceAtomCounts(source)
   if (element?.querySelectorAll && sourceAtoms.total !== protectedElements.length) return source
   const atomText = protectedElements.length ? visibleTextWithProtectedAtoms(element, protectedElements.length) : text
-  const value = visibleText(atomText.replace(/\u00a0/g, " ").replace(/[ \t]+/g, " "))
+  const renderedText = visibleText(atomText.replace(/\u00a0/g, " ").replace(/[ \t]+/g, " "))
+  const value = kind === "list" || kind === "quote"
+    ? renderedText
+    : normalizeInlineRenderedText(renderedText)
   const formatBudget = inlineFormatBudget(element)
 
   if (kind === "list" || kind === "quote") {
@@ -24,7 +27,9 @@ export function markdownForVisibleText(markdown, text, kind, element = null) {
   }
 
   const preserved = preserveInlineMarkdown(source, value, protectedElements, formatBudget)
-  return preserved === null ? value : preserved
+  // A failed source projection must never serialize display-only atoms or
+  // lossy rendered text into canonical Markdown.
+  return preserved === null ? source : preserved
 }
 
 // Server-rendered math is held while its contenteditable block has focus so
@@ -130,6 +135,18 @@ function visibleText(text) {
 
 function rawVisibleText(text) {
   return (text || "").replace(/\u00a0/g, " ").replace(/\n+$/, "")
+}
+
+function normalizeInlineRenderedText(text) {
+  // Inline projection treats Markdown soft line breaks as ordinary spaces,
+  // while a blank line inserted in a contenteditable block starts a new
+  // paragraph and must remain structural Markdown.
+  return text
+    .replace(/\r\n?/g, "\n")
+    .replace(/[ \t]*\n[ \t]*/g, "\n")
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.replace(/\n/g, " ").replace(/[ \t]+/g, " "))
+    .join("\n\n")
 }
 
 function markdownForCode(source, value) {

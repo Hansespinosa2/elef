@@ -4,6 +4,10 @@ require "stringio"
 require "tempfile"
 
 class PresentationsTest < ApplicationSystemTestCase
+  def primary_modifier
+    RUBY_PLATFORM.match?(/darwin/) ? :meta : :control
+  end
+
   def wait_for_fresh_projection
     assert_selector "form.visual-editor-form:not([data-preview-projection-stale='true'])", wait: 5
   end
@@ -759,7 +763,7 @@ class PresentationsTest < ApplicationSystemTestCase
       selection.removeAllRanges();
       selection.addRange(range);
     JAVASCRIPT
-    title.send_keys(:control, "a")
+    title.send_keys(primary_modifier, "a")
     title.send_keys("The State of Testing — Updated")
 
     assert_field "Markdown source", with: "---\npresentationTheme: light\npresentationTypography: modern\n---\n# The State of Testing — Updated\n\n## A field report on making ideas easier to shape, review, and revisit\n\n- **Prepared for:**", wait: 5
@@ -773,7 +777,7 @@ class PresentationsTest < ApplicationSystemTestCase
     find("[data-presentation-editor-action='add-block-after']").click
     block = find(".editor-projection .slide-block", text: "New block", wait: 5)
     block.click
-    block.send_keys(:control, "a")
+    block.send_keys(primary_modifier, "a")
     block.send_keys("## Test")
 
     assert_field "Markdown source", with: "# Existing slide\n\n## Test", wait: 5
@@ -1034,7 +1038,7 @@ class PresentationsTest < ApplicationSystemTestCase
     before_add = page.evaluate_script("document.querySelector('.source-field').editorController.value")
     find('button[aria-label="Add slide after selected"]').click
     assert_selector ".slide-overview-card", count: 4
-    page.driver.browser.action.key_down(:control).send_keys("z").key_up(:control).perform
+    page.driver.browser.action.key_down(primary_modifier).send_keys("z").key_up(primary_modifier).perform
     assert_selector ".slide-overview-card", count: 3
     assert_selector ".slide-overview-actions button:not([disabled])", minimum: 1, wait: 8
     assert_equal before_add, page.evaluate_script("document.querySelector('.source-field').editorController.value")
