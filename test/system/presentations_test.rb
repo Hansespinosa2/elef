@@ -48,7 +48,7 @@ class PresentationsTest < ApplicationSystemTestCase
         JAVASCRIPT
         assert selected && selected["focused"] && selected["selected"],
           "could not focus #{visible_text.inspect} and select it for visual editing"
-        page.driver.browser.action.send_keys(replacement).perform
+        target.find(:xpath, "ancestor-or-self::*[@contenteditable='true'][1]").send_keys(replacement)
         return
       rescue Selenium::WebDriver::Error::StaleElementReferenceError
         attempts += 1
