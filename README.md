@@ -158,3 +158,11 @@ Run the development server and Tailwind watcher together with:
 ```bash
 bin/dev
 ```
+
+## Automatic deployment
+
+After CI succeeds, GitHub Actions publishes the approved commit to the
+`elef-deploy-main` ref. This only publishes a Git ref; it does not upload the
+app or choose a deployment machine. A machine deploys only when its local
+watcher is installed and running. The documented setup runs that watcher on
+the Mac mini, but it does not enforce a hardware identity.
