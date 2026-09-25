@@ -6,6 +6,7 @@
     <p class="mt-2 text-[#6f675c]">Continuous Markdown rendered from the saved source.</p>
   </div>
   <div class="show-actions flex flex-wrap items-center gap-3">
+    <%= link_to "Print / Save PDF", print_document_path(@document), class: "button inline-flex min-h-10 items-center rounded-full border border-[#ddd5c8] bg-[#fffdf8] px-4 py-2 font-bold no-underline hover:bg-[#f7efe2]" %>
     <%= link_to "Library", documents_path, class: "button inline-flex min-h-10 items-center rounded-full border border-[#ddd5c8] bg-[#fffdf8] px-4 py-2 font-bold no-underline hover:bg-[#f7efe2]" %>
     <%= link_to "Edit", edit_document_path(@document), class: "button primary inline-flex min-h-10 items-center rounded-full border border-[#6d4aff] bg-[#6d4aff] px-4 py-2 font-bold text-white no-underline hover:brightness-95" %>
   </div>

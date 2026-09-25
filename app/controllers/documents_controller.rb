@@ -2,7 +2,7 @@ class DocumentsController < ApplicationController
   include WorkPreview
   include WorkPersistence
 
-  before_action :set_document, only: %i[show edit update destroy rename restore history export upload_asset media_asset]
+  before_action :set_document, only: %i[show edit update destroy rename restore history export print upload_asset media_asset]
   before_action :set_preview_document, only: :preview
 
   def index
@@ -53,6 +53,10 @@ class DocumentsController < ApplicationController
   end
 
   def show
+  end
+
+  def print
+    render layout: "presentation"
   end
 
   def edit

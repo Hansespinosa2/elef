@@ -1357,4 +1357,84 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_equal 3, heights.length
     assert heights.all? { |height| height < 120 }, "horizontal-only blocks should not become vertical stages: #{heights.inspect}"
   end
+
+  test "maintains standard aspect ratio and fixed text wrapping across viewports" do
+    document = Document.create!(
+      title: "Aspect ratio document",
+      source: <<~MARKDOWN
+        # Standard Aspect Ratio Title
+
+        This is a paragraph with several words designed to check that resizing the window or browser does not re-wrap any words.
+      MARKDOWN
+    )
+
+    visit document_path(document)
+
+    assert_selector ".document-page", count: 1
+    page.driver.browser.manage.window.resize_to(1400, 1000)
+
+    desktop_measurements = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const frame = document.querySelector('.document-page-frame');
+        const page = document.querySelector('.document-page');
+        const paragraph = page.querySelector('p');
+        const frameRect = frame.getBoundingClientRect();
+        return {
+          frameAspect: frameRect.width / frameRect.height,
+          pageWidth: page.offsetWidth,
+          pageHeight: page.offsetHeight,
+          paragraphLines: paragraph.getClientRects().length,
+          paragraphText: paragraph.innerText
+        };
+      })()
+    JAVASCRIPT
+
+    assert_in_delta 816.0 / 1154.0, desktop_measurements["frameAspect"], 0.05
+    assert_equal 816, desktop_measurements["pageWidth"]
+    assert_equal 1154, desktop_measurements["pageHeight"]
+
+    # Resize to mobile / tablet width (600px)
+    page.driver.browser.manage.window.resize_to(600, 900)
+
+    mobile_measurements = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const frame = document.querySelector('.document-page-frame');
+        const page = document.querySelector('.document-page');
+        const paragraph = page.querySelector('p');
+        const frameRect = frame.getBoundingClientRect();
+        return {
+          frameAspect: frameRect.width / frameRect.height,
+          pageWidth: page.offsetWidth,
+          pageHeight: page.offsetHeight,
+          paragraphLines: paragraph.getClientRects().length,
+          paragraphText: paragraph.innerText
+        };
+      })()
+    JAVASCRIPT
+
+    assert_in_delta 816.0 / 1154.0, mobile_measurements["frameAspect"], 0.05
+    assert_equal 816, mobile_measurements["pageWidth"]
+    assert_equal 1154, mobile_measurements["pageHeight"]
+    assert_equal desktop_measurements["paragraphLines"], mobile_measurements["paragraphLines"], "Text line count should not re-wrap when scaling"
+    assert_equal desktop_measurements["paragraphText"], mobile_measurements["paragraphText"]
+  ensure
+    page.driver.browser.manage.window.resize_to(1400, 1000)
+  end
+
+  test "print view renders paginated document and triggers window.print" do
+    document = Document.create!(
+      title: "Printable Document",
+      source: "# Page 1\n\nFirst page body\n\n---\n\n# Page 2\n\nSecond page body"
+    )
+
+    visit print_document_path(document)
+
+    assert_text "Printable Document"
+    assert_selector ".document-print-toolbar", text: /Printable Document/
+    assert_selector ".document-page", minimum: 1
+
+    page.execute_script("window.print = () => { window.printWasRequested = true }")
+    click_on "Print / Save PDF"
+    assert_equal true, page.evaluate_script("window.printWasRequested")
+  end
 end

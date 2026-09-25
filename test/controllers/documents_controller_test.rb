@@ -248,4 +248,14 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "bad-1", response.parsed_body["revision"]
     assert_equal "# Saved", document.reload.source
   end
+
+  test "print view renders toolbar and paginated pages for a document" do
+    document = Document.create!(title: "Printable Document", source: "# Page 1\n\nContent\n\n---\n\n# Page 2\n\nMore")
+
+    get print_document_path(document)
+    assert_response :success
+    assert_select ".document-print-toolbar", text: /Printable Document/
+    assert_select ".document-print-toolbar button", text: "Print / Save PDF"
+    assert_select ".document-surface"
+  end
 end
