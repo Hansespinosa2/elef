@@ -62,7 +62,6 @@ class VimEditorTest < ApplicationSystemTestCase
     assert_operator panel["left"], :>=, panel["sourceLeft"]
     assert_operator panel["right"], :<=, panel["sourceRight"]
     assert_in_delta panel["sourceRight"], panel["right"], 1
-    save_screenshot("tmp/screenshots/editor/mobile-vim-settings.png")
   ensure
     page.driver.browser.execute_cdp("Emulation.clearDeviceMetricsOverride")
     page.driver.browser.manage.window.resize_to(1400, 1000)

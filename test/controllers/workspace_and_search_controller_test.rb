@@ -60,4 +60,19 @@ class WorkspaceAndSearchControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_equal [work.id], response.parsed_body["results"].map { |result| result["id"] }
   end
+
+  test "workspace settings update handles validation failure" do
+    original_default = Workspace.method(:default)
+    mock_workspace = Workspace.default
+    mock_workspace.define_singleton_method(:update_style_defaults) do |**|
+      raise ActiveRecord::RecordInvalid.new(mock_workspace)
+    end
+    Workspace.define_singleton_method(:default) { mock_workspace }
+
+    patch settings_path, params: { workspace: { theme: "dark", typography: "technical" } }
+    assert_redirected_to settings_path
+    assert_equal "Choose a valid workspace appearance.", flash[:alert]
+  ensure
+    Workspace.define_singleton_method(:default, original_default) if original_default
+  end
 end
