@@ -678,31 +678,13 @@ class DocumentsTest < ApplicationSystemTestCase
     editor.click
     editor.send_keys(:end)
     expanded = ->(symbol) { "$\\mathbf{\\bar{#{symbol}}}$" }
-    chain_state = -> do
-      page.evaluate_script(<<~JAVASCRIPT)
-        (() => {
-          const root = document.querySelector(".source-field");
-          const shorthand = window.Stimulus.getControllerForElementAndIdentifier(root, "math-shorthand");
-          const palette = window.Stimulus.getControllerForElementAndIdentifier(root, "math-shortcut-palette");
-          return {
-            expansion: shorthand?.lastExpansion || null,
-            source: shorthand?.editorController?.value || null,
-            caret: shorthand?.editorController?.selectionStart ?? null,
-            paletteHidden: palette?.paletteTarget?.hidden ?? null,
-            paletteQuery: palette?.query || null
-          };
-        })()
-      JAVASCRIPT
-    end
 
     editor.send_keys("\n$x.bar")
     editor.send_keys(:enter)
-    after_bar = chain_state.call
     editor.send_keys(".bb")
-    after_suffix = chain_state.call
     editor.send_keys(:enter)
     editor.send_keys("$")
-    assert_includes editor.value, expanded.call("x"), "bar then bold should compose across commits: #{editor.value.inspect}; after bar #{after_bar.inspect}; after suffix #{after_suffix.inspect}"
+    assert_includes editor.value, expanded.call("x"), "bar then bold should compose across commits: #{editor.value.inspect}"
 
     editor.send_keys("\n$y.bar.bb")
     editor.send_keys(:enter)
@@ -723,6 +705,13 @@ class DocumentsTest < ApplicationSystemTestCase
 
     assert_equal ["x", "y", "z", "w"].map { |symbol| expanded.call(symbol) }.length,
       ["x", "y", "z", "w"].sum { |symbol| editor.value.scan(expanded.call(symbol)).length }
+
+    editor.send_keys("\n$v.bar")
+    editor.send_keys(:enter)
+    editor.send_keys(".hat")
+    editor.send_keys(:enter)
+    assert_includes editor.value, "$\\bar{v}.hat\n", "conflicting modifiers across commits should stay literal: #{editor.value.inspect}"
+    editor.send_keys("$")
 
     ["x.bb.bb", "x.bar.bar", "x.bar.hat"].each do |token|
       editor.send_keys("\n$#{token}")

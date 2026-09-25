@@ -223,4 +223,18 @@ export default class extends Controller {
 
     return { ...parsed, start: previous.start }
   }
+
+  hasRecognizedAppendedModifiers(editor, caret) {
+    if (editor.selectionStart !== editor.selectionEnd || caret !== editor.selectionStart) return false
+
+    const previous = this.lastExpansion
+    if (!previous || caret < previous.end) return false
+    if (editor.value.slice(previous.start, previous.end) !== previous.expansion) return false
+
+    const suffix = editor.value.slice(previous.end, caret)
+    if (!/^(?:\.[A-Za-z][A-Za-z0-9]*)+$/.test(suffix)) return false
+
+    const token = [previous.base, ...previous.modifiers, ...suffix.slice(1).split(".")].join(".")
+    return Boolean(parseMathShorthand(token))
+  }
 }
