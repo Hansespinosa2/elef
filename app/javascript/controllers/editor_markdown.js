@@ -36,6 +36,14 @@ export function markdownForVisibleText(markdown, text, kind, element = null, { d
   return preserved === null ? source : preserved
 }
 
+export function sourceOffsetForVisiblePosition(source, element, visiblePosition) {
+  const protectedElements = protectedElementsFor(element)
+  if (sourceAtomCounts(source).total !== protectedElements.length) return null
+
+  const projection = inlineProjection(source, 0, protectedElements, 0, inlineFormatBudget(element))
+  return projection.boundaries[visiblePosition] ?? null
+}
+
 // Server-rendered math is held while its contenteditable block has focus so
 // that its HTML and source map stay atomic. Project completed expressions into
 // the active block locally, keeping their Markdown delimiters in the source.

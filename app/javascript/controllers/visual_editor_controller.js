@@ -1,6 +1,6 @@
 import { Controller } from "@hotwired/stimulus"
 import { editorFor } from "controllers/editor_controller"
-import { markdownForVisibleText, renderInlineMath } from "controllers/editor_markdown"
+import { markdownForVisibleText, renderInlineMath, sourceOffsetForVisiblePosition } from "controllers/editor_markdown"
 
 export default class extends Controller {
   static targets = ["projection"]
@@ -129,17 +129,16 @@ export default class extends Controller {
     }
 
     event.preventDefault()
-    if (region.role === "title") {
-      const insertAt = end
-      this.replaceAndFocus(blockElement, insertAt, insertAt, "\n\n", {
-        sourceOffset: insertAt + 2,
-        location: "empty_block"
-      })
-    } else if (kind === "list" || kind === "quote") {
+    if (kind === "list" || kind === "quote") {
       this.continueStructuredBlock(blockElement, region, kind, markdown, source, emptyListItem || emptyQuoteLine)
     } else {
-      this.replaceAndFocus(blockElement, end, end, "\n\n", {
-        sourceOffset: end + 2,
+      const localOffset = this.sourceOffsetForSelection(blockElement, markdown)
+      const splitOffset = localOffset === null ? markdown.length : Math.min(localOffset, markdown.length)
+      const before = markdown.slice(0, splitOffset).replace(/[ \t]+$/, "")
+      const after = markdown.slice(splitOffset).replace(/^[ \t]+/, "")
+      const replacement = `${before}\n\n${after}`
+      this.replaceAndFocus(blockElement, start, end, replacement, {
+        sourceOffset: start + before.length + 2,
         location: "empty_block"
       })
     }
@@ -323,6 +322,37 @@ export default class extends Controller {
   selectionIsInsideBlock(element) {
     const selection = window.getSelection()
     return Boolean(selection?.isCollapsed && selection.anchorNode && element.contains(selection.anchorNode))
+  }
+
+  sourceOffsetForSelection(element, markdown) {
+    const selection = window.getSelection()
+    if (!selection?.isCollapsed || !element.contains(selection.anchorNode)) return null
+
+    const beforeCaret = document.createRange()
+    beforeCaret.selectNodeContents(element)
+    beforeCaret.setEnd(selection.anchorNode, selection.anchorOffset)
+    const prefix = document.createElement("div")
+    prefix.append(beforeCaret.cloneContents())
+    const protectedElements = [...prefix.querySelectorAll("[data-editor-math-source], [data-editor-image-source]")]
+    protectedElements.forEach((protectedElement, index) => {
+      protectedElement.replaceWith(document.createTextNode(`\uE000${index.toString(36)}\uE001`))
+    })
+    prefix.setAttribute("aria-hidden", "true")
+    prefix.contentEditable = "false"
+    prefix.style.cssText = "position:fixed;left:-100000px;top:0;pointer-events:none;z-index:-1"
+    const parent = element.parentElement || document.body
+    parent.append(prefix)
+    let visiblePosition
+    try {
+      visiblePosition = (prefix.innerText || prefix.textContent || "")
+        .replace(/\u00a0/g, " ")
+        .replace(/\n+$/, "")
+        .replace(/[\t\n\f\r ]+/g, " ").length
+    } finally {
+      prefix.remove()
+    }
+
+    return sourceOffsetForVisiblePosition(markdown, element, visiblePosition)
   }
 
   replaceAndFocus(blockElement, from, to, replacement, caret) {

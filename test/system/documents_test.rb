@@ -424,6 +424,38 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_selector ".document-editor-block strong", text: "Keep formatting"
   end
 
+  test "enter splits a document block at the visible caret" do
+    document = Document.create!(title: "Caret split", source: "# Notes\n\nAlpha beta gamma")
+    visit edit_document_path(document)
+    wait_for_fresh_projection
+
+    block = find(".document-editor-block", text: "Alpha beta gamma")
+    page.execute_script(<<~JAVASCRIPT, block)
+      const block = arguments[0];
+      const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+      let textNode;
+      while (walker.nextNode()) {
+        if (walker.currentNode.textContent.includes('gamma')) {
+          textNode = walker.currentNode;
+          break;
+        }
+      }
+      if (!textNode) throw new Error('Paragraph text was not found');
+      const range = document.createRange();
+      range.setStart(textNode, textNode.textContent.indexOf('gamma'));
+      range.collapse(true);
+      block.focus();
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+    JAVASCRIPT
+    block.send_keys(:enter)
+
+    assert_field "Markdown source", with: "# Notes\n\nAlpha beta\n\ngamma", wait: 5
+    assert_selector ".document-editor-block", text: "Alpha beta"
+    assert_selector ".document-editor-block", text: "gamma"
+  end
+
   test "visual document blocks accept direct keyboard edits" do
     document = Document.create!(title: "Typing notes", source: "# Typing notes\n\nBody")
 
