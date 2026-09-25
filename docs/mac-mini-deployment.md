@@ -32,6 +32,12 @@ the workflow advances one of these refs to the tested commit:
 - `elef-deploy-dev` for `dev`
 - `elef-deploy-main` for `main`
 
+GitHub Actions only publishes these refs after CI succeeds; it does not deploy
+the app or select a machine. Deployment happens on a computer only while its
+machine-local watcher is installed and running. This runbook installs that
+watcher on the Mac mini. The setup does not enforce a hardware identity, so a
+watcher installed and running on another computer would deploy there too.
+
 The Mac mini's per-user launchd job checks those refs once a minute. It fetches
 the approved commit, builds from an immutable source snapshot under
 `ops/releases/`, starts the matching Compose instance, and checks the health
