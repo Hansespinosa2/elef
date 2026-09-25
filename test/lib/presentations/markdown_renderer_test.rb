@@ -31,7 +31,7 @@ class PresentationsMarkdownRendererTest < ActiveSupport::TestCase
 
   test "renders safe images with editor source metadata" do
     html = Presentations::MarkdownRenderer.render("![Sample diagram](/images/diagram.png 'Diagram title')")
-    assert_includes html, '<img src="/images/diagram.png" alt="Sample diagram" title="Diagram title" data-editor-image-source="true" contenteditable="false">'
+    assert_includes html, '<img class="presentation-media presentation-media-contain" src="/images/diagram.png" alt="Sample diagram" title="Diagram title" data-editor-image-source="true" contenteditable="false">'
   end
 
   test "strips images with unsafe URLs" do
