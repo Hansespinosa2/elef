@@ -2,6 +2,7 @@ require "redcarpet"
 require "rouge"
 require "rouge/plugins/redcarpet"
 require "katex"
+require "cgi"
 
 module Presentations
   class HtmlRenderer < Redcarpet::Render::HTML
@@ -118,6 +119,7 @@ module Presentations
     end
 
     def katex(expression, display_mode:)
+      expression = CGI.unescapeHTML(expression)
       annotate_editor_math(Katex.render(expression, display_mode: display_mode), expression)
     rescue StandardError
       %(<span class="math-error" data-editor-math-source="#{ERB::Util.html_escape(expression)}" contenteditable="false" title="Invalid TeX">#{ERB::Util.html_escape(expression)}</span>)

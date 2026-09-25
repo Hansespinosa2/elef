@@ -1,0 +1,8 @@
+<nav class="settings-navigation mb-8 flex flex-wrap gap-2" aria-label="Settings sections">
+  <% appearance_active = controller_name == "workspace_settings" %>
+  <% snippets_active = controller_name == "snippets" %>
+  <% math_active = controller_name == "math_shortcuts" %>
+  <%= link_to "Appearance", settings_path, class: "settings-navigation-link #{'is-active' if appearance_active}", aria: (appearance_active ? { current: "page" } : {}) %>
+  <%= link_to "Snippets", snippets_path, class: "settings-navigation-link #{'is-active' if snippets_active}", aria: (snippets_active ? { current: "page" } : {}) %>
+  <%= link_to "Math shortcuts", math_shortcuts_path, class: "settings-navigation-link #{'is-active' if math_active}", aria: (math_active ? { current: "page" } : {}) %>
+</nav>

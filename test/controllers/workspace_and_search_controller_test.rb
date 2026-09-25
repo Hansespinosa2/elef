@@ -8,6 +8,8 @@ class WorkspaceAndSearchControllerTest < ActionDispatch::IntegrationTest
     assert_equal ["dark", "technical"], [Workspace.default.default_theme, Workspace.default.default_typography]
 
     get settings_path
+    assert_select "nav[aria-label='Settings sections'] a[aria-current='page']", text: "Appearance"
+    assert_select "form.settings-card select.settings-control", count: 2
     assert_select "select[name='workspace[theme]'] option[selected][value='dark']"
     assert_select "select[name='workspace[typography]'] option[selected][value='technical']"
   end
