@@ -2,9 +2,30 @@ import { Controller } from "@hotwired/stimulus"
 import { editorFor } from "controllers/editor_controller"
 import { expandMathShorthand, insideMath } from "controllers/math_shorthand_controller"
 
+let katexLoadPromise
+
+function loadKatex(url) {
+  if (window.katex) return Promise.resolve(window.katex)
+  if (katexLoadPromise) return katexLoadPromise
+
+  katexLoadPromise = new Promise((resolve, reject) => {
+    const script = document.createElement("script")
+    script.src = url
+    script.async = true
+    script.onload = () => window.katex ? resolve(window.katex) : reject(new Error("KaTeX did not load"))
+    script.onerror = () => reject(new Error("KaTeX could not be loaded"))
+    document.head.append(script)
+  }).catch((error) => {
+    katexLoadPromise = null
+    throw error
+  })
+
+  return katexLoadPromise
+}
+
 export default class extends Controller {
   static targets = ["editor", "palette"]
-  static values = { shortcuts: Array }
+  static values = { shortcuts: Array, katexUrl: String }
 
   connect() {
     this.matches = []
@@ -171,15 +192,59 @@ export default class extends Controller {
       const option = document.createElement("button")
       option.type = "button"
       option.role = "option"
-      option.className = `snippet-option${index === this.selectedIndex ? " is-selected" : ""}`
+      option.className = `snippet-option math-shortcut-option${index === this.selectedIndex ? " is-selected" : ""}`
       option.id = `${this.paletteTarget.id}-option-${index}`
+      option.dataset.shortcutId = shortcut.id
       option.setAttribute("aria-selected", String(index === this.selectedIndex))
-      const title = document.createElement("strong")
-      title.textContent = `${shortcut.prefix}${shortcut.aliases[0]}`
-      const details = document.createElement("span")
-      const preview = (shortcut.expansion || "").replace(/\$\{\d+(?::[^}]*)?\}/g, "□")
-      details.textContent = `${shortcut.name} · ${shortcut.description || "Math shortcut"} · ${preview}`
-      option.append(title, details)
+
+      const header = document.createElement("span")
+      header.className = "math-shortcut-option-header"
+      const trigger = document.createElement("code")
+      trigger.className = "math-shortcut-trigger"
+      trigger.textContent = this.triggerFor(shortcut, this.query)
+      const triggerBlock = document.createElement("span")
+      triggerBlock.className = "math-shortcut-trigger-block"
+      const triggerLabel = document.createElement("span")
+      triggerLabel.className = "math-shortcut-example-label"
+      triggerLabel.textContent = "Shortcut"
+      triggerBlock.append(triggerLabel, trigger)
+      const title = document.createElement("span")
+      title.className = "math-shortcut-title"
+      const name = document.createElement("strong")
+      name.textContent = shortcut.name
+      const description = document.createElement("span")
+      description.className = "math-shortcut-description"
+      description.textContent = shortcut.description || "Math shortcut"
+      title.append(name, description)
+      header.append(title)
+
+      const example = document.createElement("span")
+      example.className = "math-shortcut-example"
+      const latex = this.previewExpansion(shortcut, this.query)
+      const source = document.createElement("span")
+      source.className = "math-shortcut-latex"
+      const sourceLabel = document.createElement("span")
+      sourceLabel.className = "math-shortcut-example-label"
+      sourceLabel.textContent = "LaTeX"
+      const sourceCode = document.createElement("code")
+      sourceCode.textContent = latex
+      source.append(sourceLabel, sourceCode)
+
+      const preview = document.createElement("span")
+      preview.className = "math-shortcut-preview"
+      const previewLabel = document.createElement("span")
+      previewLabel.className = "math-shortcut-example-label"
+      previewLabel.textContent = "Preview"
+      const rendered = document.createElement("span")
+      rendered.className = "math-shortcut-preview-render"
+      rendered.dataset.latex = latex
+      preview.append(previewLabel, rendered)
+      const firstArrow = this.exampleArrow()
+      const secondArrow = this.exampleArrow()
+      example.append(triggerBlock, firstArrow, source, secondArrow, preview)
+
+      option.setAttribute("aria-label", `${trigger.textContent} inserts ${latex}, ${shortcut.name}`)
+      option.append(header, example)
       option.addEventListener("mousedown", (event) => {
         event.preventDefault()
         this.selectedIndex = index
@@ -190,6 +255,51 @@ export default class extends Controller {
     this.paletteTarget.hidden = false
     this.updateAccessibility()
     this.positionPalette()
+    this.renderPreviews()
+  }
+
+  exampleArrow() {
+    const arrow = document.createElement("span")
+    arrow.className = "math-shortcut-example-arrow"
+    arrow.setAttribute("aria-hidden", "true")
+    arrow.textContent = "→"
+    return arrow
+  }
+
+  triggerFor(shortcut, query) {
+    const aliases = shortcut.aliases || []
+    const alias = aliases
+      .map((candidate) => ({ candidate, score: this.fuzzyScore({ name: "", aliases: [candidate] }, query.text) }))
+      .sort((left, right) => right.score - left.score)[0]?.candidate || ""
+
+    if (shortcut.prefix === "." && query.base) return `${query.base}.${alias}`
+    return `${shortcut.prefix}${alias}`
+  }
+
+  previewExpansion(shortcut, query) {
+    const source = shortcut.expansion || ""
+    const examples = ["x", "y", "z"]
+    return source.replace(/\$\{(\d+)(?::([^}]*))?\}/g, (_placeholder, number, defaultValue) => {
+      const slot = Number(number)
+      if (shortcut.prefix === "." && slot === 1 && query.base) return query.base
+      return defaultValue || examples[slot - 1] || "x"
+    })
+  }
+
+  renderPreviews() {
+    this.katexPromise ||= loadKatex(this.katexUrlValue).catch(() => null)
+    this.katexPromise.then((katex) => {
+      if (!katex || !this.element.isConnected) return
+      this.paletteTarget.querySelectorAll(".math-shortcut-preview-render").forEach((container) => {
+        if (container.dataset.rendered === "true") return
+        try {
+          container.innerHTML = katex.renderToString(container.dataset.latex || "", { throwOnError: false })
+        } catch (_error) {
+          container.textContent = container.dataset.latex || ""
+        }
+        container.dataset.rendered = "true"
+      })
+    })
   }
 
   positionPalette() {

@@ -121,9 +121,9 @@ export default class extends Controller {
       if (details) details.open = true
       summary?.focus()
       this.close()
-    } else if (id === "reveal-metadata") {
+    } else if (id === "toggle-metadata") {
       const editor = document.querySelector(".source-field")?.editorController
-      editor?.revealMetadata()
+      editor?.toggleMetadataVisibility()
       this.close()
     }
   }

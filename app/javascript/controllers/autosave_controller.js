@@ -17,6 +17,7 @@ export default class extends Controller {
 
   connect() {
     this.timer = null
+    this.timerGeneration = 0
     this.saving = false
     this.active = true
     this.pendingSubmit = null
@@ -34,17 +35,16 @@ export default class extends Controller {
 
   disconnect() {
     this.active = false
-    clearTimeout(this.timer)
-    this.timer = null
+    this.clearSaveTimer()
     clearTimeout(this.requestTimeout)
+    this.requestTimeout = null
     this.requestController?.abort()
   }
 
   // Let an outstanding PATCH finish before the explicit form submission so
   // an older autosave cannot overwrite the manually saved version.
   submit(event) {
-    clearTimeout(this.timer)
-    this.timer = null
+    this.clearSaveTimer()
     if (!this.saveEnabledValue) {
       this.clearLocalDraft()
       return
@@ -56,8 +56,9 @@ export default class extends Controller {
   }
 
   schedule() {
-    clearTimeout(this.timer)
-    this.timer = null
+    if (this.synchronizingCanonicalSource) return
+
+    this.clearSaveTimer()
     const snapshot = this.snapshot()
     if (!this.saving && !this.saveFailed && this.savedSnapshot === snapshot) {
       this.setStatus("Saved")
@@ -67,7 +68,7 @@ export default class extends Controller {
 
     this.setStatus("Unsaved changes")
     this.persistLocalDraft(snapshot)
-    this.timer = setTimeout(() => this.save(), this.delayValue)
+    this.scheduleSave(this.delayValue)
   }
 
   retry() {
@@ -111,8 +112,7 @@ export default class extends Controller {
       sourceField.dispatchEvent(new Event("input", { bubbles: true }))
     }
     this.updateRevisionTokens(current)
-    clearTimeout(this.timer)
-    this.timer = null
+    this.clearSaveTimer()
     this.clearLocalDraft()
     this.conflictPayload = null
     this.savedSnapshot = null
@@ -123,8 +123,7 @@ export default class extends Controller {
   }
 
   async save() {
-    clearTimeout(this.timer)
-    this.timer = null
+    this.clearSaveTimer()
     if (this.saving || !this.active || !this.saveEnabledValue) return
     const snapshot = this.snapshot()
     this.saving = true
@@ -169,8 +168,7 @@ export default class extends Controller {
 
       if (response.status === 409) {
         if (!this.active) return
-        clearTimeout(this.timer)
-        this.timer = null
+        this.clearSaveTimer()
         this.savedSnapshot = null
         this.saveFailed = false
         this.conflictPayload = payload
@@ -183,19 +181,23 @@ export default class extends Controller {
 
       if (!this.active) return
       this.updateRevisionTokens(payload)
-      this.savedSnapshot = snapshot
+      let savedSnapshot = snapshot
+      if (this.snapshot() === snapshot && typeof payload.source === "string") {
+        this.synchronizeCanonicalSource(payload.source)
+        savedSnapshot = this.snapshot()
+      }
+      this.savedSnapshot = savedSnapshot
       this.saveFailed = false
-      this.element.dispatchEvent(new CustomEvent("autosave:saved", { detail: { snapshot, payload } }))
+      this.element.dispatchEvent(new CustomEvent("autosave:saved", { detail: { snapshot: savedSnapshot, payload } }))
       const currentSnapshot = this.snapshot()
-      clearTimeout(this.timer)
-      this.timer = null
-      this.setStatus(currentSnapshot === snapshot ? "Saved" : "Unsaved changes")
-      if (currentSnapshot === snapshot) this.clearLocalDraft()
+      this.clearSaveTimer()
+      this.setStatus(currentSnapshot === savedSnapshot ? "Saved" : "Unsaved changes")
+      if (currentSnapshot === savedSnapshot) this.clearLocalDraft()
       // schedule() may have fired while this request was in flight.
       // Persist the newer fields even if that debounce timer already elapsed.
-      if (currentSnapshot !== snapshot) {
+      if (currentSnapshot !== savedSnapshot) {
         this.persistLocalDraft(currentSnapshot)
-        this.timer = setTimeout(() => this.save(), 0)
+        this.scheduleSave(0)
       }
     } catch (_error) {
       if (this.active) {
@@ -214,7 +216,7 @@ export default class extends Controller {
       if (this.active && this.pendingSubmit) {
         const submitter = this.pendingSubmit
         this.pendingSubmit = null
-        clearTimeout(this.timer)
+        this.clearSaveTimer()
         this.element.requestSubmit(submitter)
       }
     }
@@ -222,6 +224,22 @@ export default class extends Controller {
 
   snapshot() {
     return this.fieldTargets.map(field => field.value).join("\u001f")
+  }
+
+  clearSaveTimer() {
+    this.timerGeneration += 1
+    if (this.timer !== null) clearTimeout(this.timer)
+    this.timer = null
+  }
+
+  scheduleSave(delay) {
+    this.clearSaveTimer()
+    const generation = this.timerGeneration
+    this.timer = setTimeout(() => {
+      if (generation !== this.timerGeneration) return
+      this.timer = null
+      this.save()
+    }, delay)
   }
 
   setStatus(text, state = "") {
@@ -240,6 +258,24 @@ export default class extends Controller {
     if (tokenField && payload.revision_token) tokenField.value = payload.revision_token
     if (lockField && payload.lock_version !== undefined) lockField.value = payload.lock_version
     this.updateReleaseStatus(payload)
+  }
+
+  synchronizeCanonicalSource(source) {
+    const sourceField = this.element.querySelector('[name$="[source]"]')
+    if (!sourceField || sourceField.value === source) return
+
+    this.synchronizingCanonicalSource = true
+    try {
+      const editor = this.element.querySelector(".source-field")?.editorController
+      if (editor?.replaceServerSource) {
+        editor.replaceServerSource(source)
+      } else {
+        sourceField.value = source
+        sourceField.dispatchEvent(new Event("input", { bubbles: true }))
+      }
+    } finally {
+      this.synchronizingCanonicalSource = false
+    }
   }
 
   updateReleaseStatus(payload) {
@@ -289,8 +325,8 @@ export default class extends Controller {
     if (!this.active) return
     this.recoveryNotice = true
     this.setStatus("Recovered unsent changes", "recovered")
-    clearTimeout(this.timer)
-    this.timer = setTimeout(() => this.save(), this.delayValue)
+    this.clearSaveTimer()
+    this.scheduleSave(this.delayValue)
   }
 
   openDatabase() {

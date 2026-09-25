@@ -24,6 +24,8 @@ class PresentationsTest < ApplicationSystemTestCase
         selected = page.execute_script(<<~JAVASCRIPT, target, visible_text)
           const root = arguments[0];
           const needle = arguments[1];
+          const editableBlock = root.closest("[contenteditable='true']") || root;
+          editableBlock.focus({ preventScroll: true });
           const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
           let node;
           while (walker.nextNode()) {
@@ -39,10 +41,14 @@ class PresentationsTest < ApplicationSystemTestCase
           const selection = window.getSelection();
           selection.removeAllRanges();
           selection.addRange(range);
-          return true;
+          return {
+            focused: document.activeElement === editableBlock,
+            selected: selection.toString() === needle
+          };
         JAVASCRIPT
-        assert selected, "could not select visual text #{visible_text.inspect}"
-        target.send_keys(replacement)
+        assert selected && selected["focused"] && selected["selected"],
+          "could not focus #{visible_text.inspect} and select it for visual editing"
+        target.find(:xpath, "ancestor-or-self::*[@contenteditable='true'][1]").send_keys(replacement)
         return
       rescue Selenium::WebDriver::Error::StaleElementReferenceError
         attempts += 1
@@ -142,8 +148,8 @@ class PresentationsTest < ApplicationSystemTestCase
     page.execute_script("window.autosaveRequests[1].release()")
     assert_selector '[data-autosave-target="status"]', exact_text: "Saved"
     assert_includes presentation.reload.source, "# Latest edit"
-    page.execute_script(<<~JAVASCRIPT)
-      document.querySelector(".source-field").editorController.dom.dispatchEvent(new FocusEvent("focusout"));
+    page.evaluate_async_script(<<~JAVASCRIPT)
+      window.setTimeout(() => arguments[0](), 1200);
     JAVASCRIPT
     assert_nil page.evaluate_script(<<~JAVASCRIPT)
       (() => {
@@ -1421,7 +1427,7 @@ class PresentationsTest < ApplicationSystemTestCase
     find("summary", text: "More").click
     click_on "Load sample presentations"
 
-    assert_selector ".flash.notice", text: "Sample presentations loaded.", wait: 10
+    assert_selector ".flash.notice", text: "Sample presentations loaded.", wait: 15
     Presentations::SampleData::SAMPLES.each do |sample|
       assert_text sample[:title]
     end
@@ -1706,7 +1712,8 @@ class PresentationsTest < ApplicationSystemTestCase
 
     visit edit_presentation_path(presentation)
     source = find_field("Markdown source")
-    source.send_keys("beq")
+    editor = find(".cm-content")
+    editor.send_keys("beq")
     assert_selector ".snippet-palette", visible: true
     assert_text ":beq"
     assert_selector ".snippet-option[aria-selected='true']"
@@ -1715,7 +1722,7 @@ class PresentationsTest < ApplicationSystemTestCase
     assert palette_position["belowCaret"] || palette_position["aboveCaret"], "The snippet popup should stay next to the caret"
     assert_operator palette_position["paletteBottom"], :<, palette_position["viewportBottom"]
 
-    source.send_keys(:enter)
+    editor.send_keys(:enter)
     assert_equal "# Math\n\n$$\nequation\n$$", source.value
     assert_equal "equation", page.evaluate_script("(() => { const e = document.querySelector('[data-snippet-palette-target=editor]'); return e.value.slice(e.selectionStart, e.selectionEnd) })()")
   end

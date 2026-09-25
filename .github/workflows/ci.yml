@@ -63,6 +63,7 @@ jobs:
       - name: Check repository launchers and deployment files
         run: |
           bash test/scripts/elef-agent_test.sh
+          bash test/scripts/elef_agent_startup_test.sh
           bash test/scripts/personal_instance_test.sh
           bash test/scripts/development_instance_test.sh
           bash test/scripts/deployment_ref_monotonicity_test.sh

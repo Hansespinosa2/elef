@@ -1,7 +1,7 @@
 import { Controller } from "@hotwired/stimulus"
 import { Compartment, EditorState } from "@codemirror/state"
 import { EditorView } from "@codemirror/view"
-import { foldEffect, unfoldAll } from "@codemirror/language"
+import { foldEffect, foldedRanges, unfoldEffect } from "@codemirror/language"
 import { basicSetup } from "codemirror"
 import { markdown } from "@codemirror/lang-markdown"
 import { tags } from "@lezer/highlight"
@@ -9,11 +9,30 @@ import { Vim, getCM, vim } from "@replit/codemirror-vim"
 import { livePreviewField, livePreviewMode } from "controllers/live_preview"
 
 const ENABLED_STORAGE_KEY = "elef.editor.vim.enabled"
-const MAPPING_STORAGE_KEY = "elef.editor.vim.normalMapping"
-const ESCAPE_ALIAS_STORAGE_KEY = "elef.editor.vim.escapeAlias"
+const ESCAPE_KEY_STORAGE_KEY = "elef.editor.vim.escapeKey"
+const LEGACY_ESCAPE_ALIAS_STORAGE_KEY = "elef.editor.vim.escapeAlias"
 const LINE_NUMBERS_STORAGE_KEY = "elef.editor.lineNumbers"
 const MODE_AWARE_CURSOR_STORAGE_KEY = "elef.editor.vim.modeAwareCursor"
 const SHIFT_SPACE = "<S-Space>"
+const VIM_ESCAPE_MODES = ["normal", "insert", "visual", "operatorPending"]
+let activeEscapeKey = ""
+
+const VIM_KEY_NAMES = {
+  " ": "Space",
+  ArrowDown: "Down",
+  ArrowLeft: "Left",
+  ArrowRight: "Right",
+  ArrowUp: "Up",
+  Backspace: "BS",
+  Enter: "CR",
+  Delete: "Del",
+  Escape: "Esc",
+  Insert: "Ins",
+  PageDown: "PageDown",
+  PageUp: "PageUp"
+}
+
+const VIM_MODIFIER_NAMES = { A: "Alt", C: "Ctrl", M: "Meta", S: "Shift" }
 
 const elefMetadata = {
   defineNodes: [{ name: "ElefMetadata", block: true, style: tags.processingInstruction }],
@@ -57,15 +76,14 @@ const theme = EditorView.theme({
 }, { dark: true })
 
 export default class extends Controller {
-  static targets = ["surface", "input", "mode", "command", "vimToggle", "mapping", "editingMode", "visualButton", "sourceButton", "escapeAlias", "lineNumbers", "modeAwareCursor"]
+  static targets = ["surface", "input", "mode", "command", "vimToggle", "escapeKey", "editingMode", "visualButton", "sourceButton", "lineNumbers", "modeAwareCursor", "metadataToggle"]
 
   connect() {
     this.editorController = this
     this.element.editorController = this
     this.destroyed = false
     this.vimEnabled = this.readBoolean(ENABLED_STORAGE_KEY)
-    this.mapping = this.readMapping()
-    this.escapeAlias = this.readEscapeAlias()
+    this.escapeKey = this.readEscapeKey()
     this.lineNumberMode = this.readLineNumberMode()
     this.modeAwareCursor = this.readBoolean(MODE_AWARE_CURSOR_STORAGE_KEY)
     this.initialSource = this.readInitialSource()
@@ -120,8 +138,7 @@ export default class extends Controller {
     })
 
     this.vimToggleTarget.checked = this.vimEnabled
-    this.mappingTarget.value = this.mapping
-    this.escapeAliasTarget.value = this.escapeAlias
+    this.escapeKeyTarget.value = this.escapeKeyDisplay(this.escapeKey)
     this.lineNumbersTarget.value = this.lineNumberMode
     this.modeAwareCursorTarget.checked = this.modeAwareCursor
     this.applyMapping()
@@ -135,11 +152,12 @@ export default class extends Controller {
   }
 
   disconnect() {
+    this.destroyed = true
+    if (this.lineNumberFrame) cancelAnimationFrame(this.lineNumberFrame)
     this.form?.removeEventListener("submit", this.handleSubmit)
     this.resizeObserver?.disconnect()
     window.removeEventListener("resize", this.updateVisualSurfaceGeometry)
     this.form?.removeEventListener("formdata", this.handleFormData)
-    this.destroyed = true
     this.inputTarget.removeEventListener("input", this.handleExternalInput)
     this.inputTarget.removeEventListener("change", this.handleExternalChange)
     this.inputTarget.removeEventListener("click", this.handleProxyClick)
@@ -167,16 +185,22 @@ export default class extends Controller {
     }, 0)
   }
 
-  mappingChanged(event) {
-    this.mapping = this.normalizeMapping(event.target.value)
-    this.writeValue(MAPPING_STORAGE_KEY, this.mapping)
+  captureEscapeKey(event) {
+    const key = this.vimKeyFromEvent(event)
+    if (!key) return
+
+    event.preventDefault()
+    event.stopPropagation()
+    this.escapeKey = key
+    this.escapeKeyTarget.value = this.escapeKeyDisplay(key)
+    this.writeValue(ESCAPE_KEY_STORAGE_KEY, key)
     this.applyMapping()
-    this.updateMode()
   }
 
-  escapeAliasChanged(event) {
-    this.escapeAlias = this.normalizeEscapeAlias(event.target.value)
-    this.writeValue(ESCAPE_ALIAS_STORAGE_KEY, this.escapeAlias)
+  clearEscapeKey() {
+    this.escapeKey = ""
+    this.escapeKeyTarget.value = ""
+    this.writeValue(ESCAPE_KEY_STORAGE_KEY, "")
     this.applyMapping()
   }
 
@@ -192,11 +216,20 @@ export default class extends Controller {
     this.applyCursorStyle()
   }
 
-  revealMetadata() {
-    if (!this.view) return
-    unfoldAll(this.view)
-    const metadataLine = this.view.state.doc.line(1)
-    this.view.dispatch({ selection: { anchor: metadataLine.from }, scrollIntoView: true })
+  toggleMetadataVisibility() {
+    if (!this.view || !this.frontmatterRange) return
+
+    if (this.frontmatterIsFolded()) {
+      this.view.dispatch({
+        effects: unfoldEffect.of(this.frontmatterRange),
+        selection: { anchor: this.frontmatterRange.from },
+        scrollIntoView: true
+      })
+    } else {
+      this.view.dispatch({ effects: foldEffect.of(this.frontmatterRange) })
+    }
+
+    this.syncMetadataToggle()
     this.focus()
   }
 
@@ -283,6 +316,29 @@ export default class extends Controller {
     this.syncInput()
   }
 
+  replaceServerSource(source) {
+    const current = this.value
+    if (typeof source !== "string" || source === current) return
+
+    let from = 0
+    const sharedLength = Math.min(current.length, source.length)
+    while (from < sharedLength && current.charCodeAt(from) === source.charCodeAt(from)) from += 1
+
+    let currentEnd = current.length
+    let sourceEnd = source.length
+    while (currentEnd > from && sourceEnd > from && current.charCodeAt(currentEnd - 1) === source.charCodeAt(sourceEnd - 1)) {
+      currentEnd -= 1
+      sourceEnd -= 1
+    }
+
+    const frontmatterWasFolded = this.frontmatterIsFolded()
+    this.view.dispatch({ changes: { from, to: currentEnd, insert: source.slice(from, sourceEnd) } })
+
+    if (frontmatterWasFolded && this.frontmatterRange && !this.frontmatterIsFolded()) {
+      this.view.dispatch({ effects: foldEffect.of(this.frontmatterRange) })
+    }
+  }
+
   replaceRange(insert, from, to = from) {
     const end = from + insert.length
     this.view.dispatch({
@@ -296,9 +352,12 @@ export default class extends Controller {
     this.reportLivePreviewState(update.state)
     if (update.docChanged) {
       this.syncInput()
+      this.refreshFrontmatterRange()
       this.dispatchFieldEvent("input")
     }
     if (update.selectionSet || update.docChanged) this.updateMode()
+    if (update.selectionSet || update.docChanged || update.viewportChanged) this.scheduleLineNumberUpdate()
+    this.syncMetadataToggle()
   }
 
   reportLivePreviewState(state) {
@@ -438,33 +497,57 @@ export default class extends Controller {
 
   applyMapping() {
     try {
-      Vim.unmap(SHIFT_SPACE, "normal")
-      Vim.unmap(SHIFT_SPACE, "insert")
-      if (this.mapping === "insert") Vim.map(SHIFT_SPACE, "i", "normal")
-      if (this.escapeAlias === "shift-space") Vim.map(SHIFT_SPACE, "<Esc>", "insert")
+      if (activeEscapeKey) {
+        Vim.unmap(activeEscapeKey)
+        VIM_ESCAPE_MODES.forEach((mode) => Vim.unmap(activeEscapeKey, mode))
+      }
+      activeEscapeKey = this.escapeKey === "<Esc>" ? "" : this.escapeKey
+      if (activeEscapeKey && activeEscapeKey !== "<Esc>") {
+        VIM_ESCAPE_MODES.forEach((mode) => Vim.map(activeEscapeKey, "<Esc>", mode))
+      }
     } catch (_error) {
       // A browser without the optional Vim engine should still have a usable editor.
     }
   }
 
-  readMapping() {
-    return this.normalizeMapping(this.readValue(MAPPING_STORAGE_KEY) || "standard")
-  }
+  readEscapeKey() {
+    const saved = this.readValue(ESCAPE_KEY_STORAGE_KEY)
+    if (saved !== null) return this.normalizeEscapeKey(saved)
 
-  readEscapeAlias() {
-    return this.normalizeEscapeAlias(this.readValue(ESCAPE_ALIAS_STORAGE_KEY) || "none")
+    return this.readValue(LEGACY_ESCAPE_ALIAS_STORAGE_KEY) === "shift-space" ? SHIFT_SPACE : ""
   }
 
   readLineNumberMode() {
     return this.normalizeLineNumberMode(this.readValue(LINE_NUMBERS_STORAGE_KEY) || "absolute")
   }
 
-  normalizeMapping(value) {
-    return ["standard", "insert", "disabled"].includes(value) ? value : "standard"
+  normalizeEscapeKey(value) {
+    if (typeof value !== "string" || value.length === 0) return ""
+    if (value.startsWith("<")) return /^(?:<(?:[CSMA]-)*[A-Za-z0-9]+>)+$/.test(value) ? value : ""
+    return Array.from(value).length === 1 ? value : ""
   }
 
-  normalizeEscapeAlias(value) {
-    return ["none", "shift-space"].includes(value) ? value : "none"
+  vimKeyFromEvent(event) {
+    if (["Shift", "Control", "Alt", "Meta", "Unidentified"].includes(event.key)) return ""
+
+    const isLetter = /^[A-Za-z]$/.test(event.key)
+    let key = VIM_KEY_NAMES[event.key] || event.key
+    const modifiers = []
+    if (event.ctrlKey) modifiers.push("C")
+    if (event.shiftKey && (!Array.from(event.key).length || key.length > 1 || isLetter)) modifiers.push("S")
+    if (event.altKey) modifiers.push("A")
+    if (event.metaKey) modifiers.push("M")
+    if (event.shiftKey && isLetter) key = key.toLowerCase()
+
+    if (Array.from(key).length !== 1 || modifiers.length > 0) return `<${modifiers.join("-")}${modifiers.length ? "-" : ""}${key}>`
+    return key
+  }
+
+  escapeKeyDisplay(key) {
+    if (!key) return ""
+    if (!key.startsWith("<")) return key
+
+    return key.slice(1, -1).split("-").map((part) => VIM_MODIFIER_NAMES[part] || part).join("+")
   }
 
   normalizeLineNumberMode(value) {
@@ -472,31 +555,76 @@ export default class extends Controller {
   }
 
   collapseFrontmatter() {
-    const match = this.value.match(/^---\r?\n[\s\S]*?\r?\n---(?=\r?\n|$)/)
-    if (!match || match[0].length <= 4) return
+    this.refreshFrontmatterRange()
+    if (!this.frontmatterRange) return
 
     setTimeout(() => {
-      if (this.destroyed) return
-      this.view.dispatch({ effects: foldEffect.of({ from: 0, to: match[0].length }) })
+      if (this.destroyed || !this.frontmatterRange || this.frontmatterIsFolded()) return
+      this.view.dispatch({ effects: foldEffect.of(this.frontmatterRange) })
+      this.syncMetadataToggle()
     }, 0)
+  }
+
+  refreshFrontmatterRange() {
+    const match = this.value.match(/^---\r?\n[\s\S]*?\r?\n---(?=\r?\n|$)/)
+    this.frontmatterRange = match && match[0].length > 4 ? { from: 0, to: match[0].length } : null
+    this.syncMetadataToggle()
+  }
+
+  frontmatterIsFolded() {
+    if (!this.frontmatterRange) return false
+
+    let folded = false
+    foldedRanges(this.view.state).between(this.frontmatterRange.from, this.frontmatterRange.to, (from, to) => {
+      if (from === this.frontmatterRange.from && to === this.frontmatterRange.to) folded = true
+    })
+    return folded
+  }
+
+  syncMetadataToggle() {
+    if (!this.hasMetadataToggleTarget) return
+
+    const hasMetadata = Boolean(this.frontmatterRange)
+    this.metadataToggleTarget.disabled = !hasMetadata
+    this.metadataToggleTarget.textContent = hasMetadata && !this.frontmatterIsFolded() ? "Hide source metadata" : "Reveal source metadata"
   }
 
   applyLineNumbers() {
     this.surfaceTarget.dataset.lineNumbers = this.lineNumberMode
-    requestAnimationFrame(() => {
-      if (this.destroyed || this.lineNumberMode !== "relative") return
-      const gutter = this.surfaceTarget.querySelector(".cm-lineNumbers")
+    const gutter = this.view.dom.querySelector(".cm-lineNumbers")
+    if (gutter) gutter.style.display = this.lineNumberMode === "off" ? "none" : ""
+    this.scheduleLineNumberUpdate()
+  }
+
+  scheduleLineNumberUpdate() {
+    if (this.destroyed || this.lineNumberMode === "off" || this.lineNumberFrame) return
+
+    this.lineNumberFrame = requestAnimationFrame(() => {
+      this.lineNumberFrame = null
+      if (this.destroyed || this.lineNumberMode === "off") return
+
+      const gutter = this.view.dom.querySelector(".cm-lineNumbers")
       if (!gutter) return
-      const activeLine = this.view.state.doc.lineAt(this.selectionStart).number
+
+      const contentLeft = this.view.contentDOM.getBoundingClientRect().left + 1
+      const activeLine = this.view.state.doc.lineAt(this.view.state.selection.main.head).number
       gutter.querySelectorAll(".cm-gutterElement").forEach((element) => {
-        const absolute = Number(element.textContent)
-        if (Number.isFinite(absolute)) element.textContent = String(Math.abs(activeLine - absolute) || 0)
+        if (element.style.visibility === "hidden") return
+
+        const rect = element.getBoundingClientRect()
+        const position = this.view.posAtCoords({ x: contentLeft, y: rect.top + rect.height / 2 })
+        if (position === null) return
+
+        const line = this.view.state.doc.lineAt(position).number
+        const number = this.lineNumberMode === "relative" ? Math.abs(activeLine - line) : line
+        element.textContent = String(number)
       })
     })
   }
 
   applyCursorStyle() {
     this.surfaceTarget.dataset.modeAwareCursor = String(this.modeAwareCursor)
+    this.surfaceTarget.dataset.editorMode = this.element.dataset.editorMode || "standard"
   }
 
   readBoolean(key) {
