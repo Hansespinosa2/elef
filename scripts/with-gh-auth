@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  echo "usage: scripts/with-gh-auth {agy|codex|opencode|hermes} [args...]" >&2
+  exit 64
+}
+
+fail() {
+  echo "with-gh-auth: $*" >&2
+  exit 1
+}
+
+[[ $# -ge 1 ]] || usage
+agent="$1"
+shift
+
+case "$agent" in
+  agy|codex|opencode|hermes) ;;
+  *) fail "unsupported agent command: $agent" ;;
+esac
+
+token="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
+if [[ -z "$token" ]]; then
+  gh_command="$(type -P gh || true)"
+  [[ -n "$gh_command" ]] || fail "gh is not on PATH; activate mise or install GitHub CLI"
+  token="$("$gh_command" auth token --hostname github.com 2>/dev/null)" || \
+    fail "could not read the host GitHub CLI login; run 'gh auth status' in the host shell"
+fi
+[[ -n "$token" ]] || fail "GitHub CLI returned an empty token"
+
+# Keep the keyring credential in memory and expose it only to the selected
+# agent process and its descendants.
+export GH_TOKEN="$token"
+export GITHUB_TOKEN="$token"
+unset token
+exec "$agent" "$@"

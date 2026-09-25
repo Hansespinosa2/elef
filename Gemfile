@@ -6,8 +6,8 @@ gem "rubyzip", "~> 3.0"
 # The modern asset pipeline for Rails [https://github.com/rails/propshaft]
 gem "propshaft"
 gem "tailwindcss-rails"
-# PostgreSQL is the canonical hosted and CI database. SQLite is the default for
-# disposable agent containers and remains available for explicit local checks.
+# PostgreSQL is the canonical hosted and CI database. SQLite remains available
+# for explicit local checks.
 gem "pg", ">= 1.5"
 gem "sqlite3", ">= 2.1"
 # Use the Puma web server [https://github.com/puma/puma]
