@@ -416,8 +416,10 @@ export default class extends Controller {
     if (!pending || !this.map) return
 
     const blocks = this.map.slides?.flatMap((slide) => slide.blocks || []) || []
-    const candidate = blocks.find((block) => block.empty_placeholder && block.range.start === pending.sourceOffset) ||
-      blocks.find((block) => block.range.start <= pending.sourceOffset && block.range.end >= pending.sourceOffset)
+    const containsCaret = (block) => block.range.start <= pending.sourceOffset && block.range.end >= pending.sourceOffset
+    const candidate = blocks.find((block) => block.empty_placeholder && containsCaret(block)) ||
+      blocks.find((block) => !block.empty_placeholder && block.range.start <= pending.sourceOffset && block.range.end > pending.sourceOffset) ||
+      blocks.find((block) => !block.empty_placeholder && block.range.end === pending.sourceOffset)
     const element = candidate && this.projectionTarget.querySelector(`[data-editor-block-id="${CSS.escape(candidate.id)}"]`)
     if (!candidate || !element) return
 
