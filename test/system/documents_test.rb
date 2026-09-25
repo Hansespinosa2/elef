@@ -93,6 +93,13 @@ class DocumentsTest < ApplicationSystemTestCase
     find(".cm-content").send_keys(replacement)
   end
 
+  def active_document_block
+    assert_selector ".document-editor-block[data-editor-block-id]:focus", wait: 5
+    block_id = page.evaluate_script("document.activeElement.closest('.document-editor-block')?.dataset.editorBlockId")
+    assert block_id, "expected the visual document editor to keep a block focused"
+    find(".document-editor-block[data-editor-block-id='#{block_id}']")
+  end
+
   test "suggests document links in the Markdown editor" do
     Document.create!(title: "Research target", source: "# Target")
     document = Document.create!(title: "Research source", source: "# Source")
@@ -279,8 +286,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "creates a document and updates its continuous live preview" do
     visit new_document_path
-    assert_field "Title", with: ""
-    fill_in "Title", with: "Research notes"
+    assert_no_selector "#document_title"
     fill_in "Markdown source", with: "# Research notes\n\nFirst section\n\n---\n\nSecond section"
     assert_selector ".document-surface", text: "Second section", wait: 5
     assert_selector ".document-surface hr"
@@ -288,10 +294,110 @@ class DocumentsTest < ApplicationSystemTestCase
 
     assert_text "Document saved."
     assert_current_path %r{/documents/\d+/edit}
+    assert_equal "Research notes", Document.order(:id).last.title
     assert_selector ".document-surface h1", text: "Research notes"
     fill_in "Markdown source", with: "# Research notes\n\nA live update\n\n---\n\nSecond section"
     assert_selector ".document-surface", text: "A live update", wait: 5
     assert_includes Document.order(:id).last.source, "Second section"
+  end
+
+  test "new document typing keeps Markdown blocks, title, lists, quotes, and math in sync" do
+    expected_source = File.read(Rails.root.join("test/fixtures/files/visual_editor_document_flow.md")).chomp
+
+    visit root_path
+    find(".new-work-menu summary").click
+    find(".new-work-option", text: "Document").click
+    wait_for_fresh_projection
+
+    assert_no_selector "#document_title"
+    assert_selector ".document-editor-block h1", text: "Untitled document"
+    focused_title = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const heading = document.querySelector('.document-editor-block h1');
+        const selection = window.getSelection();
+        if (!heading || !selection?.isCollapsed || !heading.contains(selection.anchorNode)) return false;
+        const end = document.createRange();
+        end.selectNodeContents(heading);
+        end.collapse(false);
+        return selection.anchorNode === end.endContainer && selection.anchorOffset === end.endOffset;
+      })()
+    JAVASCRIPT
+    assert_equal true, focused_title, "new documents should focus the end of the first heading"
+
+    title = find(".document-editor-block", text: "Untitled document")
+    title.send_keys(*Array.new("Untitled document".length + 6, :backspace))
+    assert_field "Markdown source", with: "# ", wait: 5
+    title.send_keys(*Array.new(6, :backspace))
+    assert_field "Markdown source", with: "# ", wait: 5
+    title.send_keys(" This is my First Document")
+    assert_field "Markdown source", with: "# This is my First Document", wait: 5
+    title.send_keys(:enter)
+    assert_field "Markdown source", with: "# This is my First Document\n\n", wait: 5
+
+    first_paragraph = active_document_block
+    first_paragraph.send_keys("This is my first line in this document and it is a normal paragraph that may even wrap around. It creates one coherent block of text that can span one line or multiple depending on font or any other specific formatting, but it is one block.")
+    assert_equal "true", first_paragraph["contenteditable"], "typing should keep the focused block editable while preview refreshes"
+    first_paragraph.send_keys(:enter)
+    assert_field "Markdown source", with: /one block\.\n\n\z/, wait: 5
+    empty_paragraph = active_document_block
+    assert_equal "true", empty_paragraph["data-editor-empty-block"], "Enter should focus a new empty document block"
+    empty_paragraph.send_keys(:backspace)
+    assert_field "Markdown source", with: /one block\.\z/, wait: 5
+    paragraph_after_backspace = active_document_block
+    assert_includes paragraph_after_backspace.text, "This is my first line in this document"
+    paragraph_after_backspace.send_keys(:enter)
+    list_block = active_document_block
+    assert_equal "true", list_block["data-editor-empty-block"], "Enter after Backspace should focus a new empty block"
+    list_block.send_keys("- THis is the first item of a list")
+    assert_field "Markdown source", with: /\n\n- THis is the first item of a list\z/, wait: 5
+    active_document_block.send_keys(:enter)
+    assert_field "Markdown source", with: /- THis is the first item of a list\n- \z/, wait: 5
+    assert_selector ".document-editor-block ul > li", count: 2, wait: 5
+    active_document_block.send_keys("This is the second item of the same list.")
+    assert_field "Markdown source", with: /- THis is the first item of a list\n- This is the second item of the same list\.\z/, wait: 5
+    active_document_block.send_keys(:enter)
+    active_document_block.send_keys(:enter)
+    assert_field "Markdown source", with: /- This is the second item of the same list\.\n\n\z/, wait: 5
+
+    # Backspace on the empty paragraph removes it and returns the caret to the list.
+    active_document_block.send_keys(:backspace)
+    assert_field "Markdown source", with: /- This is the second item of the same list\.\z/, wait: 5
+    active_document_block.send_keys(:enter)
+    active_document_block.send_keys(:enter)
+    active_document_block.send_keys("> A quoted line")
+    active_document_block.send_keys(:enter)
+    active_document_block.send_keys("with a second line")
+    active_document_block.send_keys(:enter)
+    active_document_block.send_keys(:enter)
+    assert_field "Markdown source", with: /> A quoted line\n> with a second line\n\n\z/, wait: 5
+
+    active_document_block.send_keys("Inline math: $E = mc^2$.")
+    active_document_block.send_keys(:enter)
+    active_document_block.send_keys("Display math: $$\\frac{1}{2}$$.")
+    active_document_block.send_keys(:enter)
+    active_document_block.send_keys("A final paragraph.")
+    assert_field "Markdown source", with: expected_source, wait: 5
+    assert_selector ".document-editor-block .katex", minimum: 2, wait: 5
+
+    click_on "Save document"
+    assert_text "Document saved."
+    document = Document.order(:id).last
+    assert_equal "This is my First Document", document.title
+    assert_equal expected_source, document.source
+
+    visit edit_document_path(document)
+    assert_no_selector "#document_title"
+    assert_selector ".document-editor-block h1", text: "This is my First Document"
+    assert_field "Markdown source", with: expected_source
+
+    final_paragraph = find(".document-editor-block", text: "A final paragraph.")
+    final_paragraph.click
+    focused_paragraph = page.evaluate_script(
+      "document.activeElement.closest('.document-editor-block')?.textContent.includes('A final paragraph.')"
+    )
+    assert_equal true, focused_paragraph
+    final_paragraph.send_keys(:end, " Continued")
+    assert_field "Markdown source", with: expected_source.sub("A final paragraph.", "A final paragraph. Continued"), wait: 5
   end
 
   test "visual document editing preserves untouched Markdown and survives reopening" do
@@ -316,6 +422,38 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: "# Renamed\n\n**Keep formatting**\n\nUnchanged"
     assert_selector ".document-editor-block", text: "Renamed"
     assert_selector ".document-editor-block strong", text: "Keep formatting"
+  end
+
+  test "enter splits a document block at the visible caret" do
+    document = Document.create!(title: "Caret split", source: "# Notes\n\nAlpha beta gamma")
+    visit edit_document_path(document)
+    wait_for_fresh_projection
+
+    block = find(".document-editor-block", text: "Alpha beta gamma")
+    page.execute_script(<<~JAVASCRIPT, block)
+      const block = arguments[0];
+      const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+      let textNode;
+      while (walker.nextNode()) {
+        if (walker.currentNode.textContent.includes('gamma')) {
+          textNode = walker.currentNode;
+          break;
+        }
+      }
+      if (!textNode) throw new Error('Paragraph text was not found');
+      const range = document.createRange();
+      range.setStart(textNode, textNode.textContent.indexOf('gamma'));
+      range.collapse(true);
+      block.focus();
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+    JAVASCRIPT
+    block.send_keys(:enter)
+
+    assert_field "Markdown source", with: "# Notes\n\nAlpha beta\n\ngamma", wait: 5
+    assert_selector ".document-editor-block", text: "Alpha beta"
+    assert_selector ".document-editor-block", text: "gamma"
   end
 
   test "visual document blocks accept direct keyboard edits" do
@@ -381,9 +519,7 @@ class DocumentsTest < ApplicationSystemTestCase
     fixtures.each do |fixture|
       baseline = Documents::SampleData::SAMPLES.find { |sample| sample[:id] == fixture[:id] }.fetch(:source)
       visual = Document.create!(title: "Visual #{fixture[:id]}", source: baseline)
-      source = Document.create!(title: "Source #{fixture[:id]}", source: baseline)
       expected = baseline.dup
-      source_expected = baseline.dup
 
       visit edit_document_path(visual)
       fixture[:operations].each do |selector, visible_text, source_text, replacement|
@@ -397,8 +533,11 @@ class DocumentsTest < ApplicationSystemTestCase
       click_on "Save document"
       assert_selector ".flash.notice", text: "Document saved.", wait: 10
       assert_field "Markdown source", with: expected
-      visual.reload
+      visual_source = visual.reload.source.gsub(/\r\n?/, "\n")
+      visual.destroy!
 
+      source = Document.create!(title: "Source #{fixture[:id]}", source: baseline)
+      source_expected = baseline.dup
       visit edit_document_path(source)
       click_on "Source"
       fixture[:operations].each do |_selector, _visible_text, source_text, replacement|
@@ -411,7 +550,6 @@ class DocumentsTest < ApplicationSystemTestCase
       assert_selector ".flash.notice", text: "Document saved.", wait: 10
       assert_field "Markdown source", with: source_expected
       assert_equal expected, source_expected
-      visual_source = visual.reload.source.gsub(/\r\n?/, "\n")
       source_source = source.reload.source.gsub(/\r\n?/, "\n")
       assert_equal visual_source, source_source, "visual/source mismatch for #{fixture[:id]}"
     end
@@ -548,7 +686,8 @@ class DocumentsTest < ApplicationSystemTestCase
   test "new document renders inline and display math before its first save" do
     visit new_document_path
 
-    block = find(".document-editor-block", text: "Start writing Markdown here.")
+    find(".document-editor-block h1", text: "Untitled document").send_keys(:enter)
+    block = find(".document-editor-block[data-editor-empty-block='true']")
     block.click
     page.execute_script(<<~JAVASCRIPT, block)
       const block = arguments[0];

@@ -2,7 +2,7 @@ import "katex"
 
 const INLINE_MATH = /(?<!\\)\\\[([\s\S]+?)\\\]|(?<!\\)\$\$([\s\S]+?)\$\$(?!\$)|(?<!\\)\\\(([^\r\n]+?)\\\)|(?<![\\$])\$(?!\$|\s)([^$\r\n]+?)(?<!\s)\$(?!\$)/g
 
-export function markdownForVisibleText(markdown, text, kind, element = null) {
+export function markdownForVisibleText(markdown, text, kind, element = null, { documentMode = false } = {}) {
   const source = markdown || ""
   const rawValue = rawVisibleText(text)
 
@@ -13,23 +13,35 @@ export function markdownForVisibleText(markdown, text, kind, element = null) {
   const protectedElements = protectedElementsFor(element)
   const sourceAtoms = sourceAtomCounts(source)
   if (element?.querySelectorAll && sourceAtoms.total !== protectedElements.length) return source
-  const atomText = protectedElements.length ? visibleTextWithProtectedAtoms(element, protectedElements.length) : text
-  const renderedText = visibleText(atomText.replace(/\u00a0/g, " ").replace(/[ \t]+/g, " "))
-  const value = kind === "list" || kind === "quote"
-    ? renderedText
-    : normalizeInlineRenderedText(renderedText)
+  const structured = kind === "list" || kind === "quote"
+  const sourceText = documentMode && structured ? String(text || "").replace(/\u00a0/g, " ") : rawValue
+  const atomText = protectedElements.length ? visibleTextWithProtectedAtoms(element, protectedElements.length) : sourceText
+  const normalizedText = atomText.replace(/\u00a0/g, " ").replace(/[ \t]+/g, " ")
+  const renderedText = documentMode && structured ? normalizedText : visibleText(normalizedText)
+  const value = structured ? renderedText : normalizeInlineRenderedText(renderedText)
   const formatBudget = inlineFormatBudget(element)
 
   if (kind === "list" || kind === "quote") {
-    const projection = structuredBlockProjection(source, kind, protectedElements, formatBudget)
-    const preserved = preserveProjectedMarkdown(source, value, projection)
+    const projection = structuredBlockProjection(source, kind, protectedElements, formatBudget, { preserveEmptyLines: documentMode })
+    const structuredValue = documentMode ? addStructuredMarkers(source, value, kind) : value
+    const preserved = preserveProjectedMarkdown(source, structuredValue, projection, { preserveLineBreaks: documentMode })
     if (preserved !== null) return preserved
   }
+
+  if (source === "" && documentMode) return value
 
   const preserved = preserveInlineMarkdown(source, value, protectedElements, formatBudget)
   // A failed source projection must never serialize display-only atoms or
   // lossy rendered text into canonical Markdown.
   return preserved === null ? source : preserved
+}
+
+export function sourceOffsetForVisiblePosition(source, element, visiblePosition) {
+  const protectedElements = protectedElementsFor(element)
+  if (sourceAtomCounts(source).total !== protectedElements.length) return null
+
+  const projection = inlineProjection(source, 0, protectedElements, 0, inlineFormatBudget(element))
+  return projection.boundaries[visiblePosition] ?? null
 }
 
 // Server-rendered math is held while its contenteditable block has focus so
@@ -264,9 +276,9 @@ function preserveInlineMarkdown(source, value, protectedElements, formatBudget) 
   return preserveProjectedMarkdown(source, value, inlineProjection(source, 0, protectedElements, 0, formatBudget))
 }
 
-function preserveProjectedMarkdown(source, value, projection) {
-  const leading = projection.text.match(/^\s*/)?.[0].length || 0
-  const trailing = projection.text.match(/\s*$/)?.[0].length || 0
+function preserveProjectedMarkdown(source, value, projection, { preserveLineBreaks = false } = {}) {
+  const leading = preserveLineBreaks ? 0 : projection.text.match(/^\s*/)?.[0].length || 0
+  const trailing = preserveLineBreaks ? 0 : projection.text.match(/\s*$/)?.[0].length || 0
   const end = projection.text.length - trailing
   const previous = projection.text.slice(leading, end)
   const boundaries = projection.boundaries.slice(leading, end + 1)
@@ -371,7 +383,7 @@ function inlineProjection(source, sourceOffset = 0, protectedElements = [], prot
   return { text, boundaries, hasSyntax, atomCount: protectedIndex }
 }
 
-function structuredBlockProjection(source, kind, protectedElements, formatBudget = null) {
+function structuredBlockProjection(source, kind, protectedElements, formatBudget = null, { preserveEmptyLines = false } = {}) {
   const lines = source.split("\n")
   const boundaries = []
   let text = ""
@@ -398,6 +410,8 @@ function structuredBlockProjection(source, kind, protectedElements, formatBudget
         boundaries[text.length] = projection.boundaries[offset + width]
         offset += width
       }
+    } else if (preserveEmptyLines && prefixLength) {
+      boundaries[text.length] = sourceOffset + prefixLength
     }
 
     if (lineIndex < lines.length - 1) {
@@ -409,6 +423,19 @@ function structuredBlockProjection(source, kind, protectedElements, formatBudget
   })
 
   return { text, boundaries, hasSyntax, atomCount: protectedIndex }
+}
+
+function addStructuredMarkers(source, value, kind) {
+  const sourceLines = source.split("\n")
+  const lines = value.split("\n")
+  if (lines.length <= sourceLines.length) return value
+
+  const lastLine = sourceLines.at(-1) || ""
+  const marker = kind === "quote"
+    ? lastLine.match(/^[ \t]*>[ \t]?/)?.[0] || "> "
+    : lastLine.match(/^[ \t]*(?:[-*+]|\d+[.)])[ \t]+/)?.[0] || "- "
+  for (let index = sourceLines.length; index < lines.length; index += 1) lines[index] = `${marker}${lines[index]}`
+  return lines.join("\n")
 }
 
 function inlineTokenAt(source, formatBudget = null, previousCharacter = "") {

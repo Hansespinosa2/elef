@@ -67,7 +67,9 @@ class DocumentsController < ApplicationController
   end
 
   def rename
-    if @document.update(title: params.require(:document).permit(:title)[:title])
+    title = params.require(:document).permit(:title)[:title]
+    source = Presentations::Document.replace_first_h1(@document.source, title)
+    if @document.update(source: source)
       redirect_to documents_path, notice: "Document renamed."
     else
       redirect_to documents_path, alert: @document.errors.full_messages.to_sentence
@@ -145,12 +147,12 @@ class DocumentsController < ApplicationController
   end
 
   def document_params
-    params.require(:document).permit(:title, :source, :theme, :typography)
+    params.require(:document).permit(:source, :theme, :typography)
   end
 
   def document_update_params
     params.require(:document).permit(
-      :title, :source, :lock_version, :base_revision, :base_revision_id,
+      :source, :lock_version, :base_revision, :base_revision_id,
       :revision_token, :edit_session_id, :checkpoint, :reason, :theme, :typography
     )
   end

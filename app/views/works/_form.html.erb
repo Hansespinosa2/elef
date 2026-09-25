@@ -21,6 +21,8 @@
 <% form_data[:media_work_kind_value] = work.kind %>
 <% form_data[:media_upload_url_value] = persisted ? (work.document? ? upload_asset_document_path(work) : upload_asset_presentation_path(work)) : "" %>
 <% form_data[:media_enabled_value] = persisted %>
+<% form_data[:visual_editor_focus_title_value] = work.document? && !persisted %>
+<% form_data[:action] += " keydown->visual-editor#projectionKeydown" if work.document? %>
 <% if persisted %>
   <% form_data[:autosave_work_id_value] = work.id %>
   <% form_data[:autosave_work_kind_value] = work.kind %>
@@ -64,13 +66,15 @@
 
   <section class="editor-shell" aria-label="Visual <%= type_label.downcase %> editor">
     <header class="editor-shell-header">
-      <div class="editor-title-field">
-        <%= form.label :title, class: "editor-title-label" %>
-        <%= form.text_field :title,
-          class: "editor-title-input",
-          data: { dirty_target: "field", autosave_target: "field", action: "input->dirty#markDirty" },
-          autocomplete: "off" %>
-      </div>
+      <% unless work.document? %>
+        <div class="editor-title-field">
+          <%= form.label :title, class: "editor-title-label" %>
+          <%= form.text_field :title,
+            class: "editor-title-input",
+            data: { dirty_target: "field", autosave_target: "field", action: "input->dirty#markDirty" },
+            autocomplete: "off" %>
+        </div>
+      <% end %>
       <div class="editor-kind-badge"><%= type_label %></div>
     </header>
 

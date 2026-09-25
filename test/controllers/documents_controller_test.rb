@@ -7,14 +7,16 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
 
   test "creates, edits, previews, renames, and deletes a document" do
     assert_difference("Document.count") do
-      post documents_path, params: { document: { title: "Notes", source: "# Notes" } }
+      post documents_path, params: { document: { title: "Separate document title", source: "# Notes" } }
     end
     document = Document.order(:id).last
     assert_redirected_to edit_document_path(document)
+    assert_equal "Notes", document.title
 
     patch document_path(document), params: { document: { source: "# Updated" } }, as: :json
     assert_response :ok
     assert_equal "# Updated", document.reload.source
+    assert_equal "Updated", document.title
 
     post preview_document_path(document), params: {
       document: { title: "Draft", source: "# Unsaved\n\n---\n\nMore" }, revision: "draft-2"
@@ -22,11 +24,13 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_equal "draft-2", response.parsed_body["revision"]
     assert_includes response.parsed_body["html"], "<hr"
+    assert_includes response.parsed_body["html"], "<h1>Unsaved</h1>"
     assert_equal "# Updated", document.reload.source
 
     patch rename_document_path(document), params: { document: { title: "Renamed" } }
     assert_redirected_to documents_path
     assert_equal "Renamed", document.reload.title
+    assert_equal "# Renamed", document.source
 
     assert_difference("Document.count", -1) { delete document_path(document) }
     assert_redirected_to documents_path
@@ -159,6 +163,7 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
 
     assert_redirected_to documents_path
     assert_equal "New title", target.reload.title
+    assert_equal "# New title", target.source
     assert_equal "[[Old title]]\n\n`[[Old title]]`\n\n```\n[[Old title]]\n```", incoming.reload.source
     get document_path(incoming)
     assert_select "a.document-link[href='#{document_path(target)}']", text: "New title"

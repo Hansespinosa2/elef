@@ -1,6 +1,8 @@
 class Document < Work
   WORK_TYPE = "document".freeze
-  DEFAULT_SOURCE = "# Untitled document\n\nStart writing Markdown here.".freeze
+  DEFAULT_SOURCE = "# Untitled document".freeze
+
+  before_validation :derive_title_from_source, if: -> { persisted? && will_save_change_to_source? }
 
   default_scope { where(kind: WORK_TYPE) }
 
@@ -60,6 +62,14 @@ class Document < Work
   alias backlinks incoming_backlinks
 
   private
+
+  def derive_title
+    self.title = Presentations::Document.extract_first_h1(source.to_s).presence || default_title
+  end
+
+  def derive_title_from_source
+    derive_title
+  end
 
   def resolve_link_token(token)
     self.class.resolve_link(token.title.split("|", 2).first, workspace: workspace || Workspace.default)
