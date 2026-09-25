@@ -1,0 +1,21 @@
+<% if work.presentation? %>
+  <div class="library-preview" data-controller="presentation-canvas">
+    <div class="library-preview-stage presentation-surface work-surface slides slides-theme-<%= work.theme %> slides-typography-<%= work.typography %> work-theme-<%= work.theme %> work-typography-<%= work.typography %>">
+      <%= render "presentations/slide",
+            slide: work.slides.first || Presentations::Document::Slide.new(id: "empty", index: 0, markdown: "", layout: "body"),
+            presentation: work,
+            margin_settings: work.document.margin_settings %>
+    </div>
+  </div>
+<% else %>
+  <div class="library-preview" data-controller="presentation-canvas" data-presentation-canvas-design-width-value="832" data-presentation-canvas-design-height-value="1152">
+    <div class="library-preview-page document-reader document-theme-<%= work.theme %> document-typography-<%= work.typography %> work-theme-<%= work.theme %> work-typography-<%= work.typography %>" data-presentation-canvas-target="canvas">
+      <div class="document-surface is-paginated">
+        <article class="document-page" aria-label="Document page 1">
+          <div class="document-page-content"><%= work.preview_page_html %></div>
+          <footer class="document-page-footer" aria-hidden="true"><span class="document-page-number">Page 1</span></footer>
+        </article>
+      </div>
+    </div>
+  </div>
+<% end %>

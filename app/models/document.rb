@@ -8,18 +8,6 @@ class Document < Work
 
   validates :title, uniqueness: { scope: [:workspace_id, :kind] }
 
-  def preview_html
-    preview_workspace = workspace || Workspace.default
-    Presentations::DocumentRenderer.render(
-      source,
-      source_name: title,
-      parsed: parsed_document,
-      documents: Document.where(workspace: preview_workspace),
-      workspace: preview_workspace,
-      media_resolver: ->(identifier) { Presentations::MediaAssets.resolve_media(self, identifier) }
-    )
-  end
-
   def document_key
     document_detail&.document_key
   end

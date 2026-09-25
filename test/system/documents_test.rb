@@ -271,9 +271,9 @@ class DocumentsTest < ApplicationSystemTestCase
     incoming = Document.create!(title: "Rename source", source: "See [[Rename target]]")
 
     visit documents_path
-    target_card = find("##{ActionView::RecordIdentifier.dom_id(target)}")
-    page.execute_script("arguments[0].querySelector('details').open = true", target_card)
     within("##{ActionView::RecordIdentifier.dom_id(target)}") do
+      find(".library-card-menu-trigger").click
+      find("summary", text: "Rename").click
       find("input[type='text']").set("Renamed target")
       click_on "Save title"
     end
@@ -1284,7 +1284,7 @@ class DocumentsTest < ApplicationSystemTestCase
     find("summary", text: "More").click
     click_on "Load sample documents"
 
-    assert_selector ".document-graph-node", count: Documents::SampleData::SAMPLES.length
+    assert_selector ".document-graph-node", count: Documents::SampleData::SAMPLES.length, wait: 10
     assert_selector ".document-graph-edge", minimum: 1
     coordinates = page.evaluate_script(<<~JAVASCRIPT)
       JSON.parse(document.querySelector(".document-graph").dataset.documentGraphDataValue)
