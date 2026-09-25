@@ -1844,4 +1844,122 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_equal 720, page.evaluate_script("document.querySelector('.slide').offsetHeight")
     assert_equal "112px", page.evaluate_script("getComputedStyle(document.querySelector('.slide h1')).fontSize")
   end
+
+  test "new presentation allows uploading dummy images to blank slides in Markdown and visual editor with rendering and folder sync" do
+    require "zlib"
+    generate_test_png = lambda do |width, height|
+      raw = []
+      height.times do
+        raw << 0
+        width.times { raw.push(70, 130, 210, 255) }
+      end
+      compressed = Zlib::Deflate.deflate(raw.pack("C*"))
+      png = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A].pack("C*")
+      ihdr = [width, height, 8, 6, 0, 0, 0].pack("NNCCCCC")
+      png << [ihdr.bytesize].pack("N") << "IHDR" << ihdr << [Zlib.crc32("IHDR" + ihdr)].pack("N")
+      png << [compressed.bytesize].pack("N") << "IDAT" << compressed << [Zlib.crc32("IDAT" + compressed)].pack("N")
+      png << [0].pack("N") << "IEND" << [Zlib.crc32("IEND")].pack("N")
+      png
+    end
+
+    image_one_file = Tempfile.new(["dummy_stock_photo", ".png"])
+    image_one_file.binmode
+    image_one_file.write(generate_test_png.call(120, 80))
+    image_one_file.flush
+
+    image_two_file = Tempfile.new(["dummy_screenshot", ".png"])
+    image_two_file.binmode
+    image_two_file.write(generate_test_png.call(160, 90))
+    image_two_file.flush
+
+    visit new_presentation_path
+    assert_selector ".editor-shell", wait: 8
+
+    # Switch to Source (Markdown) mode
+    click_on "Source"
+    assert_selector ".editor-mode-button[data-editor-target='sourceButton'][aria-pressed='true']", wait: 8
+
+    # Create a presentation with a blank slide between slide 1 and slide 3
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      editor.replaceRange(
+        "# Intro slide\\n\\n---\\n\\n---\\n# Outro slide",
+        0,
+        editor.value.length
+      );
+    JAVASCRIPT
+
+    # Position cursor on the blank slide
+    blank_slide_pos = page.evaluate_script("document.querySelector('.source-field').editorController.value.indexOf('---') + 4")
+    page.execute_script("document.querySelector('.source-field').editorController.setSelectionRange(#{blank_slide_pos})")
+
+    # Upload first dummy image while in Markdown mode on the blank slide
+    page.execute_script("document.querySelector('[data-media-target=input]').hidden = false")
+    find('[data-media-target="input"]').set(image_one_file.path)
+
+    # Verify upload status and Markdown insertion
+    assert_selector ".media-upload-status", text: /dummy_stock_photo.*added to the Markdown source/i, wait: 8
+    source_val = page.evaluate_script("document.querySelector('.source-field').editorController.value")
+    assert_includes source_val, "elef-asset:"
+
+    # Verify rendering of the image on the blank slide
+    assert_selector ".preview-pane .slide-image img.presentation-media", wait: 8
+    natural_width = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const img = document.querySelector(".preview-pane .slide-image img.presentation-media");
+        return img ? img.naturalWidth : 0;
+      })()
+    JAVASCRIPT
+    assert_operator natural_width, :>, 0, "Uploaded image should render with positive naturalWidth in Markdown mode"
+
+    # Switch to Visual mode
+    click_on "Visual"
+    assert_selector ".editor-mode-button[data-editor-target='visualButton'][aria-pressed='true']", wait: 8
+
+    # Append a blank slide
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      editor.replaceRange(editor.value + "\\n---\\n", 0, editor.value.length);
+    JAVASCRIPT
+
+    # Wait for the empty slide to appear in visual mode with Add image button
+    assert_selector ".preview-pane .empty-slide-add-image", wait: 8
+
+    # Click Add image on the blank slide in the visual editor
+    find(".preview-pane .empty-slide-add-image", match: :first).click
+    find('[data-media-target="input"]').set(image_two_file.path)
+
+    # Verify upload of second dummy image onto the blank slide in the visual editor
+    assert_selector ".media-upload-status", text: /dummy_screenshot.*added to the Markdown source/i, wait: 8
+    assert_selector ".preview-pane img.presentation-media", minimum: 2, wait: 8
+
+    second_img_width = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const imgs = document.querySelectorAll(".preview-pane img.presentation-media");
+        const lastImg = imgs[imgs.length - 1];
+        return lastImg ? lastImg.naturalWidth : 0;
+      })()
+    JAVASCRIPT
+    assert_operator second_img_width, :>, 0, "Uploaded image should render with positive naturalWidth in Visual Editor mode"
+
+    # Wait for autosave to ensure persistence
+    assert_selector '[data-autosave-target="status"]', exact_text: "Saved", wait: 8
+
+    # Verify folder storage on disk next to presentation.md
+    presentation = Presentation.last
+    storage_dir = presentation.storage_dir
+    assert File.exist?(storage_dir.join("presentation.md")), "presentation.md should be saved in presentation folder"
+    assert File.exist?(storage_dir.join("source.md")), "source.md should be saved in presentation folder"
+    assert Dir.exist?(storage_dir.join("assets")), "assets/ directory should exist next to presentation.md"
+
+    portable_content = File.read(storage_dir.join("presentation.md"))
+    assert_includes portable_content, "assets/dummy_stock_photo", "presentation.md should reference assets folder"
+    assert_includes portable_content, "assets/dummy_screenshot", "presentation.md should reference assets folder"
+
+    assert File.exist?(storage_dir.join("assets/#{File.basename(image_one_file.path)}"))
+    assert File.exist?(storage_dir.join("assets/#{File.basename(image_two_file.path)}"))
+  ensure
+    image_one_file&.close!
+    image_two_file&.close!
+  end
 end

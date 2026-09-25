@@ -864,6 +864,7 @@ module Presentations
     def infer_layout(blocks)
       meaningful = blocks.reject { |block| block.markdown.blank? }
       return "body" if meaningful.empty?
+      return "image" if meaningful.length == 1 && image_block?(meaningful.first.markdown)
 
       if heading_for(meaningful.first.markdown)&.fetch(:level, nil) == 1
         section_blocks = meaningful.drop(1).select { |block| heading_for(block.markdown) }

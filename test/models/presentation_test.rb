@@ -544,4 +544,33 @@ class PresentationTest < ActiveSupport::TestCase
       assert_equal parent.source, child.fork_source
     end
   end
+
+  test "infers image layout for a slide containing only an image without headings" do
+    slide = Presentations::Document.parse("![Dummy](dummy.png)").slides.first
+
+    assert_equal "image", slide.layout
+    assert_equal "![Dummy](dummy.png)", slide.markdown
+  end
+
+  test "resolves media blobs and converts markdown to portable asset paths" do
+    presentation = Presentation.create!(title: "Portable Deck", source: "# Start")
+    bytes = "image data".b
+    presentation.assets.attach(io: StringIO.new(bytes), filename: "photo.png", content_type: "image/png")
+    blob = presentation.assets.blobs.last
+    digest = Digest::SHA256.hexdigest(bytes)
+    blob.update!(metadata: blob.metadata.merge("elef_sha256" => digest))
+
+    resolved_by_digest = Presentations::MediaAssets.resolve_blob(presentation, digest)
+    assert_equal blob, resolved_by_digest
+
+    resolved_by_filename = Presentations::MediaAssets.resolve_blob(presentation, "photo.png")
+    assert_equal blob, resolved_by_filename
+
+    resolved_by_path = Presentations::MediaAssets.resolve_blob(presentation, "assets/photo.png")
+    assert_equal blob, resolved_by_path
+
+    raw_source = "# Title\n\n![My Photo](elef-asset:#{digest} \"fit:contain\")"
+    portable = Presentations::MediaAssets.portable_markdown(raw_source, presentation)
+    assert_equal "# Title\n\n![My Photo](assets/photo.png \"fit:contain\")", portable
+  end
 end
