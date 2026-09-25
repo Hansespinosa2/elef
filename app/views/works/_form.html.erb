@@ -1,14 +1,20 @@
 <% persisted = work.persisted? %>
 <% type_label = work_type_label(work) %>
-<% controllers = %w[dirty preview autosave] %>
-<% controllers << "document-scroll-sync" if work.document? %>
+<% editor_map = Presentations::Document.editor_map(
+  work.source.to_s.gsub(/\r\n?/, "\n"),
+  source_name: work.title.presence || work.default_title,
+  mode: work.work_type.to_sym
+) %>
+<% controllers = %w[dirty preview autosave visual-editor] %>
+<% controllers << "presentation-editor" if work.presentation? %>
 <% controllers.concat(%w[slide-overview media]) if work.presentation? %>
 <% actions = ["submit->dirty#allowSubmit", "input->dirty#markDirty"] %>
 <% actions += ["input->preview#schedule", "change->preview#schedule"] %>
 <% actions += ["submit->autosave#submit", "input->autosave#schedule", "change->autosave#schedule", "autosave:saving->dirty#markSaving", "autosave:saved->dirty#markSaved"] %>
 <% actions += ["input->slide-overview#sourceChanged", "change->slide-overview#sourceChanged", "preview:updated->slide-overview#previewUpdated", "paste->media#paste"] if work.presentation? %>
-<% form_data = { controller: controllers.join(" "), action: actions.join(" "), dirty_unsaved_message_value: "You have unsaved #{type_label.downcase} changes. Leave without saving?" } %>
+<% form_data = { controller: controllers.join(" "), action: actions.join(" "), editor_mode: "visual", dirty_unsaved_message_value: "You have unsaved #{type_label.downcase} changes. Leave without saving?" } %>
 <% form_data[:preview_url_value] = persisted ? work_preview_path(work) : work_preview_collection_path(work) %>
+<% form_data[:visual_editor_kind_value] = work.kind %>
 <% form_data[:media_upload_url_value] = persisted && work.presentation? ? upload_asset_presentation_path(work) : "" if work.presentation? %>
 <% form_data[:media_enabled_value] = persisted if work.presentation? %>
 <% if persisted %>
@@ -19,15 +25,23 @@
   <% form_data[:autosave_work_kind_value] = work.kind %>
   <% form_data[:autosave_save_enabled_value] = false %>
 <% end %>
-<% editor_data = { dirty_target: "field", autosave_target: "field", snippet_palette_target: "editor", math_shorthand_target: "editor", math_shortcut_palette_target: "editor", action: "input->dirty#markDirty input->snippet-palette#input keydown->snippet-palette#keydown keydown->math-shorthand#keydown input->math-shortcut-palette#input keydown->math-shortcut-palette#keydown" } %>
+<% editor_data = {
+  dirty_target: "field",
+  autosave_target: "field",
+  snippet_palette_target: "editor",
+  math_shorthand_target: "editor",
+  math_shortcut_palette_target: "editor",
+  editor_target: "input",
+  action: "input->dirty#markDirty input->snippet-palette#input keydown->snippet-palette#keydown keydown->math-shorthand#keydown input->math-shortcut-palette#input keydown->math-shortcut-palette#keydown"
+} %>
 <% if work.document? %>
   <% editor_data[:document_link_palette_target] = "editor" %>
   <% editor_data[:action] += " input->document-link-palette#input keydown->document-link-palette#keydown" %>
 <% end %>
-<% editor_data[:editor_target] = "input" %>
-<%= form_with model: work, class: "editor-layout grid gap-6 max-[920px]:flex max-[920px]:flex-col", data: form_data do |form| %>
+
+<%= form_with model: work, class: "visual-editor-form", data: form_data do |form| %>
   <% if work.errors.any? %>
-    <section class="error-panel col-span-full rounded-2xl border border-[#efb0a8] bg-[#fff1ee] p-4 text-[#a63a2d]" aria-label="Validation errors">
+    <section class="error-panel rounded-2xl border border-[#efb0a8] bg-[#fff1ee] p-4 text-[#a63a2d]" aria-label="Validation errors">
       <h2><%= pluralize(work.errors.count, "error") %> prevented saving</h2>
       <ul>
         <% work.errors.full_messages.each do |message| %>
@@ -37,22 +51,56 @@
     </section>
   <% end %>
 
-  <section class="source-pane rounded-2xl border border-[#ddd5c8] bg-[#fffdf8] p-4">
-    <% if persisted %>
-      <%= form.hidden_field :lock_version, value: work.lock_version %>
-      <%= form.hidden_field :base_revision, value: work.revision_token %>
-      <%= form.hidden_field :edit_session_id, value: SecureRandom.uuid %>
-    <% end %>
-    <div class="field mb-4">
-      <%= form.label :title, class: "mb-1 block font-extrabold" %>
-      <%= form.text_field :title, class: "w-full rounded-xl border border-[#ddd5c8] bg-white p-3 text-[#1e1c18] outline-none focus:border-[#6d4aff] focus:ring-2 focus:ring-[#6d4aff]/20", data: { dirty_target: "field", autosave_target: "field", action: "input->dirty#markDirty" }, autocomplete: "off" %>
+  <% if persisted %>
+    <%= form.hidden_field :lock_version, value: work.lock_version %>
+    <%= form.hidden_field :base_revision, value: work.revision_token %>
+    <%= form.hidden_field :edit_session_id, value: SecureRandom.uuid %>
+  <% end %>
+
+  <section class="editor-shell" aria-label="Visual <%= type_label.downcase %> editor">
+    <header class="editor-shell-header">
+      <div class="editor-title-field">
+        <%= form.label :title, class: "editor-title-label" %>
+        <%= form.text_field :title,
+          class: "editor-title-input",
+          data: { dirty_target: "field", autosave_target: "field", action: "input->dirty#markDirty" },
+          autocomplete: "off" %>
+      </div>
+      <div class="editor-kind-badge"><%= type_label %></div>
+    </header>
+
+    <div class="field appearance-fields mb-4 grid gap-3 sm:grid-cols-2">
+      <div>
+        <%= form.label :theme, "Theme", class: "mb-1 block font-extrabold" %>
+        <%= form.select :theme,
+          [["Workspace default", ""], ["Light", "light"], ["Dark", "dark"], ["Match", "match"]],
+          { selected: work.theme_override },
+          class: "w-full rounded-xl border border-[#ddd5c8] bg-white p-3 text-[#1e1c18]",
+          data: { dirty_target: "field", autosave_target: "field", action: "change->dirty#markDirty" } %>
+      </div>
+      <div>
+        <%= form.label :typography, "Typography", class: "mb-1 block font-extrabold" %>
+        <%= form.select :typography,
+          [["Workspace default", ""], ["Book", "book"], ["Modern", "modern"], ["Technical", "technical"]],
+          { selected: work.typography_override },
+          class: "w-full rounded-xl border border-[#ddd5c8] bg-white p-3 text-[#1e1c18]",
+          data: { dirty_target: "field", autosave_target: "field", action: "change->dirty#markDirty" } %>
+      </div>
+      <p class="field-hint sm:col-span-2">Appearance overrides stay in the Markdown front matter.</p>
     </div>
 
-    <div class="field source-field relative mb-4" data-controller="editor snippet-palette math-shorthand math-shortcut-palette<%= " document-link-palette" if work.document? %>" data-editor-initial-source-value="<%= ERB::Util.html_escape(work.source.to_s.to_json) %>" data-snippet-palette-snippets-value="<%= json_escape(Snippets::Catalog.for_editor.to_json) %>" data-math-shortcut-palette-shortcuts-value="<%= json_escape(MathShortcuts::Catalog.for_editor(workspace: work.workspace || Workspace.default).to_json) %>" data-math-shortcut-palette-katex-url-value="<%= asset_path("katex.js") %>"<% if work.document? %> data-document-link-palette-titles-value="<%= ERB::Util.html_escape(document_link_titles(workspace: work.workspace).to_json) %>"<% end %>>
+    <div class="editor-layout">
+      <div class="source-pane">
+    <div class="field source-field relative mb-4" data-controller="editor snippet-palette math-shorthand math-shortcut-palette<%= " document-link-palette" if work.document? %>" data-editor-initial-source-value="<%= ERB::Util.html_escape(work.source.to_s.to_json) %>" data-snippet-palette-snippets-value="<%= json_escape(Snippets::Catalog.for_editor.to_json) %>" data-math-shortcut-palette-shortcuts-value="<%= json_escape(MathShortcuts::Catalog.for_editor(workspace: work.workspace || Workspace.default).to_json) %>" data-math-shortcut-palette-katex-url-value="<%= asset_path("katex.js") %>"<% if work.document? %> data-document-link-palette-titles-value="<%= ERB::Util.html_escape(document_link_titles(workspace: work.workspace).to_json) %>"<% end %><% if work.presentation? %> data-presentation-editor-target="source"<% end %>>
       <% source_id = form.field_id(:source) %>
       <% editor_id = "#{source_id}_editor" %>
-      <%= form.label :source, "Markdown source", for: source_id, id: "#{editor_id}_label", class: "mb-1 block font-extrabold" %>
-      <div class="editor-toolbar mb-2 flex flex-wrap items-center gap-2" aria-label="Editor controls">
+      <%= form.label :source, "Markdown source", for: source_id, id: "#{editor_id}_label", class: "sr-only" %>
+      <div class="editor-toolbar" aria-label="Editor controls">
+        <div class="editor-mode-switch" role="group" aria-label="Editing mode">
+          <button type="button" class="editor-mode-button is-active" data-editor-target="visualButton" data-action="click->editor#showVisual" aria-pressed="true">Visual</button>
+          <button type="button" class="editor-mode-button" data-editor-target="sourceButton" data-action="click->editor#showSource" aria-pressed="false">Source</button>
+          <span class="editor-editing-mode" data-editor-target="editingMode" aria-live="polite">Visual</span>
+        </div>
         <span class="editor-mode" data-editor-target="mode" data-mode="standard" aria-live="polite">Standard</span>
         <span class="editor-command" data-editor-target="command" aria-live="polite"></span>
         <button type="button" class="editor-reveal-metadata" data-editor-target="metadataToggle" data-action="editor#toggleMetadataVisibility">Reveal source metadata</button>
@@ -103,52 +151,15 @@
       <div id="<%= editor_id %>_snippet_palette" class="snippet-palette" data-snippet-palette-target="palette" hidden role="listbox" aria-label="Snippet suggestions"></div>
       <div id="<%= editor_id %>_math_shortcut_palette" class="snippet-palette math-shortcut-palette" data-math-shortcut-palette-target="palette" hidden role="listbox" aria-label="Math shortcut suggestions"></div>
       <% if work.document? %><div id="<%= editor_id %>_document_link_palette" class="snippet-palette" data-document-link-palette-target="palette" hidden role="listbox" aria-label="Document link suggestions"></div><% end %>
-      <p class="field-hint">Use <code>:trigger</code> for Markdown, LaTeX, and Elef snippets<%= ". Type <code>[[</code> to link another document." if work.document? %>. In math, type <code>@nabla</code>, <code>@frac</code>, or <code>@sum</code>; Tab walks multi-slot expressions. Exact transforms such as <code>$x.hat.b.T$</code> still commit with Enter or Tab.</p>
+      <p class="field-hint editor-mode-hint">Visual mode keeps Markdown source canonical. Use Source mode for unsupported syntax, inline media, or to edit LaTeX expressions directly. Type <code>:trigger</code> for snippets<% if work.document? %>. Type <code>[[</code> to link another document.<% end %>. In math, type <code>@nabla</code>, <code>@frac</code>, or <code>@sum</code>; Tab walks multi-slot expressions. Exact transforms such as <code>$x.hat.b.T$</code> commit with Enter or Tab.</p>
     </div>
 
-    <div class="field appearance-fields mb-4 grid gap-3 sm:grid-cols-2">
-      <div>
-        <%= form.label :theme, "Theme", class: "mb-1 block font-extrabold" %>
-        <%= form.select :theme, [["Workspace default", ""], ["Light", "light"], ["Dark", "dark"], ["Match", "match"]], { selected: work.theme_override }, class: "w-full rounded-xl border border-[#ddd5c8] bg-white p-3 text-[#1e1c18]", data: { dirty_target: "field", autosave_target: "field", action: "change->dirty#markDirty" } %>
+    <% if work.presentation? %>
+      <div class="presentation-editor-tools" aria-label="Presentation editing tools">
+        <span class="presentation-editor-help">Edit slide text directly. Use the controls on each slide for structure and positioning.</span>
       </div>
-      <div>
-        <%= form.label :typography, "Typography", class: "mb-1 block font-extrabold" %>
-        <%= form.select :typography, [["Workspace default", ""], ["Book", "book"], ["Modern", "modern"], ["Technical", "technical"]], { selected: work.typography_override }, class: "w-full rounded-xl border border-[#ddd5c8] bg-white p-3 text-[#1e1c18]", data: { dirty_target: "field", autosave_target: "field", action: "change->dirty#markDirty" } %>
-      </div>
-      <p class="field-hint sm:col-span-2">These values stay in the Markdown front matter when overridden.</p>
-    </div>
-    <div class="editor-actions flex flex-wrap items-center gap-3">
-      <%= form.submit "Save #{type_label.downcase}", class: "button primary inline-flex min-h-10 cursor-pointer items-center gap-1 rounded-full border border-[#6d4aff] bg-[#6d4aff] px-4 py-2 font-bold text-white hover:brightness-95", data: { dirty_target: "saveButton" } %>
-      <% if persisted %>
-        <%= link_to "View saved preview", work_show_path(work), class: "button inline-flex min-h-10 items-center rounded-full border border-[#ddd5c8] bg-[#fffdf8] px-4 py-2 font-bold no-underline hover:bg-[#f7efe2]" %>
-        <span class="dirty-state text-[#6f675c] font-bold" data-autosave-target="status" aria-live="polite">Saved</span>
-        <button type="button" class="autosave-retry" data-autosave-target="retry" data-action="autosave#retry" hidden>Retry save</button>
-        <div class="autosave-conflict" data-autosave-target="conflict" hidden role="status">
-          <p data-autosave-target="conflictMessage">A newer version is active; your draft was preserved.</p>
-          <details>
-            <summary>Compare with the active version</summary>
-            <pre data-autosave-target="serverSource"></pre>
-          </details>
-          <button type="button" data-action="autosave#keepLocal">Keep local draft</button>
-          <button type="button" data-action="autosave#discardLocal">Discard local draft</button>
-        </div>
-        <% if work.presentation? %>
-          <span class="release-state text-[#6f675c]" data-release-status="<%= work.published_release_status %>">
-            <% if work.published_release_status == "stale" %>Published release is stale — republish to present the latest draft.<% elsif work.published_release_status == "current" %>Published release is current.<% end %>
-          </span>
-        <% end %>
-      <% else %>
-        <span class="dirty-state text-[#6f675c] font-bold" data-dirty-target="status" data-autosave-target="status" aria-live="polite">Saved</span>
-      <% end %>
-      <span class="dirty-state text-[#6f675c] font-bold" data-preview-target="status" aria-live="polite"></span>
-    </div>
-  </section>
+    <% end %>
 
-  <aside class="preview-pane rounded-2xl border border-[#ddd5c8] bg-[#fffdf8] p-4" aria-label="<%= work.document? ? "Rendered document preview" : "Rendered slide preview" %>" <%= tag.attributes(data: { document_scroll_sync_target: ("preview" if work.document?), action: ("dragover->media#dragOver dragleave->media#dragLeave drop->media#drop" if work.presentation?) }) %>>
-    <div class="preview-heading">
-      <h2>Live preview</h2>
-      <p><%= work.document? ? "Continuous Markdown preview updates as you write." : "Markdown is split into slides for this presentation." %></p>
-    </div>
     <% if work.presentation? %>
       <section class="slide-overview" aria-labelledby="slide-overview-heading">
         <div class="slide-overview-heading-row">
@@ -171,9 +182,43 @@
         </section>
       </section>
     <% end %>
-    <%= render "works/warnings", warnings: work.preview_warnings %>
-    <div data-preview-target="container">
-      <%= render "works/preview", work: work %>
+
+      </div>
+    <script type="application/json" data-editor-map-json><%= raw json_escape(editor_map.to_json) %></script>
+    <div class="editor-projection preview-pane" data-visual-editor-target="projection" data-preview-target="container" aria-label="Visual editing surface"<% if work.presentation? %> data-action="dragover->media#dragOver dragleave->media#dragLeave drop->media#drop"<% end %>>
+      <%= render "works/preview", work: work, editable: true, editor_map: editor_map %>
     </div>
-  </aside>
+    </div>
+
+    <%= render "works/warnings", warnings: work.preview_warnings %>
+    <div class="editor-footer">
+      <div class="editor-actions">
+        <%= form.submit "Save #{type_label.downcase}", class: "button primary", data: { dirty_target: "saveButton" } %>
+        <% if persisted %>
+          <%= link_to "Preview", work_show_path(work), class: "button", data: { dirty_navigation: true } %>
+          <span class="dirty-state" data-autosave-target="status" aria-live="polite">Saved</span>
+          <button type="button" class="autosave-retry" data-autosave-target="retry" data-action="autosave#retry" hidden>Retry save</button>
+          <div class="autosave-conflict" data-autosave-target="conflict" hidden role="status">
+            <p data-autosave-target="conflictMessage">A newer version is active; your draft was preserved.</p>
+            <details>
+              <summary>Compare with the active version</summary>
+              <pre data-autosave-target="serverSource"></pre>
+            </details>
+            <button type="button" data-action="autosave#keepLocal">Keep local draft</button>
+            <button type="button" data-action="autosave#discardLocal">Discard local draft</button>
+          </div>
+          <% if work.presentation? %>
+            <span class="release-state" data-release-status="<%= work.published_release_status %>">
+              <% if work.published_release_status == "stale" %>Published release is stale — republish to present the latest draft.<% elsif work.published_release_status == "current" %>Published release is current.<% end %>
+            </span>
+          <% end %>
+        <% else %>
+          <span class="dirty-state" data-dirty-target="status" data-autosave-target="status" aria-live="polite">Saved</span>
+        <% end %>
+        <span class="dirty-state" data-preview-target="status" aria-live="polite"></span>
+        <button type="button" class="preview-retry" data-preview-target="retry" data-action="preview#retry" hidden>Retry preview</button>
+      </div>
+      <% if work.presentation? %><span class="presentation-editor-status" data-presentation-editor-target="status" aria-live="polite"></span><% end %>
+    </div>
+  </section>
 <% end %>

@@ -1,5 +1,19 @@
-<div class="document-reader document-theme-<%= document.theme %> document-typography-<%= document.typography %> work-theme-<%= document.theme %> work-typography-<%= document.typography %>" data-controller="document-pages">
+<% editable = local_assigns[:editable] || false %>
+<% editor_map = local_assigns[:editor_map] %>
+<div class="document-reader document-theme-<%= document.theme %> document-typography-<%= document.typography %> work-theme-<%= document.theme %> work-typography-<%= document.typography %><%= ' document-editor-projection' if editable %>"<%= raw(' data-controller="document-pages"') unless editable %>>
   <div class="document-surface" data-document-pages-target="surface">
-    <%= document.preview_html %>
+    <% if editable %>
+      <%= Presentations::DocumentRenderer.render(
+        document.source,
+        source_name: document.title,
+        parsed: document.parsed_document,
+        documents: Document.where(workspace: document.workspace || Workspace.default),
+        workspace: document.workspace || Workspace.default,
+        editable: true,
+        editor_map: editor_map
+      ) %>
+    <% else %>
+      <%= document.preview_html %>
+    <% end %>
   </div>
 </div>

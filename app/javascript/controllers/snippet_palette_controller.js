@@ -165,7 +165,10 @@ export default class extends Controller {
 
     const paletteRect = this.paletteTarget.getBoundingClientRect()
     const left = Math.max(8, Math.min(markerRect.left, window.innerWidth - paletteRect.width - 8))
-    const top = Math.max(8, Math.min(markerRect.bottom + 4, window.innerHeight - paletteRect.height - 8))
+    const maxTop = window.innerHeight - paletteRect.height - 8
+    const belowTop = markerRect.bottom + 4
+    const aboveTop = markerRect.top - paletteRect.height - 4
+    const top = belowTop <= maxTop ? belowTop : Math.max(8, Math.min(aboveTop, maxTop))
     this.paletteTarget.style.left = `${left}px`
     this.paletteTarget.style.top = `${top}px`
   }

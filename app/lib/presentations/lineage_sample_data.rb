@@ -636,41 +636,43 @@ module Presentations
     end.freeze
 
     def load!
-      records = {}
+      Presentation.transaction do
+        records = {}
 
-      SAMPLES.each do |attributes|
-        record = Presentation.joins(:presentation_detail).find_by(presentation_details: { sample_id: attributes[:id] }) || Presentation.new
-        record.assign_attributes(
-          sample_id: attributes[:id],
-          title: attributes[:title],
-          source: attributes[:source],
-          created_at: attributes[:created_at]
-        )
-        records[attributes[:id]] = record
-      end
-
-      SAMPLES.each do |attributes|
-        record = records.fetch(attributes[:id])
-        parent = records[attributes[:parent]]
-        record.parent = parent
-        record.fork_type = attributes[:fork_type] if attributes[:fork_type]
-        record.save!
-        if parent
-          edge = PresentationLineageEdge.find_or_initialize_by(child_work: record)
-          edge.assign_attributes(
-            parent_work: parent,
-            origin_revision: parent.latest_checkpoint,
-            fork_type: attributes[:fork_type],
-            parent_title_snapshot: parent.title,
-            origin_source_snapshot: parent.source
+        SAMPLES.each do |attributes|
+          record = Presentation.joins(:presentation_detail).find_by(presentation_details: { sample_id: attributes[:id] }) || Presentation.new
+          record.assign_attributes(
+            sample_id: attributes[:id],
+            title: attributes[:title],
+            source: attributes[:source],
+            created_at: attributes[:created_at]
           )
-          edge.save!
-        else
-          PresentationLineageEdge.where(child_work: record).delete_all
+          records[attributes[:id]] = record
         end
-      end
 
-      records.values
+        SAMPLES.each do |attributes|
+          record = records.fetch(attributes[:id])
+          parent = records[attributes[:parent]]
+          record.parent = parent
+          record.fork_type = attributes[:fork_type] if attributes[:fork_type]
+          record.save!
+          if parent
+            edge = PresentationLineageEdge.find_or_initialize_by(child_work: record)
+            edge.assign_attributes(
+              parent_work: parent,
+              origin_revision: parent.latest_checkpoint,
+              fork_type: attributes[:fork_type],
+              parent_title_snapshot: parent.title,
+              origin_source_snapshot: parent.source
+            )
+            edge.save!
+          else
+            PresentationLineageEdge.where(child_work: record).delete_all
+          end
+        end
+
+        records.values
+      end
     end
   end
 end

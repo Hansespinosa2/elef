@@ -6,6 +6,7 @@ import { basicSetup } from "codemirror"
 import { markdown } from "@codemirror/lang-markdown"
 import { tags } from "@lezer/highlight"
 import { Vim, getCM, vim } from "@replit/codemirror-vim"
+import { livePreviewField, livePreviewMode } from "controllers/live_preview"
 
 const ENABLED_STORAGE_KEY = "elef.editor.vim.enabled"
 const ESCAPE_KEY_STORAGE_KEY = "elef.editor.vim.escapeKey"
@@ -75,7 +76,7 @@ const theme = EditorView.theme({
 }, { dark: true })
 
 export default class extends Controller {
-  static targets = ["surface", "input", "mode", "command", "vimToggle", "escapeKey", "lineNumbers", "modeAwareCursor", "metadataToggle"]
+  static targets = ["surface", "input", "mode", "command", "vimToggle", "escapeKey", "editingMode", "visualButton", "sourceButton", "lineNumbers", "modeAwareCursor", "metadataToggle"]
 
   connect() {
     this.editorController = this
@@ -88,6 +89,13 @@ export default class extends Controller {
     this.initialSource = this.readInitialSource()
     this.lineSeparator = this.initialSource.match(/\r\n|\r|\n/)?.[0] || "\n"
     this.vimCompartment = new Compartment()
+    this.updateVisualSurfaceGeometry = () => this.syncVisualSurfaceGeometry()
+    this.resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(this.updateVisualSurfaceGeometry)
+    window.addEventListener("resize", this.updateVisualSurfaceGeometry)
+    this.toolbar = this.element.querySelector(".editor-toolbar")
+    this.resizeObserver?.observe(this.element)
+    if (this.toolbar) this.resizeObserver?.observe(this.toolbar)
+    this.syncVisualSurfaceGeometry()
     this.inputTarget.addEventListener("input", this.handleExternalInput = () => this.handleExternalInputEvent())
     this.inputTarget.addEventListener("change", this.handleExternalChange = () => this.handleExternalInputEvent())
     this.inputTarget.addEventListener("click", this.handleProxyClick = () => this.focus())
@@ -101,6 +109,7 @@ export default class extends Controller {
           this.vimCompartment.of(this.vimEnabled ? vim() : []),
           basicSetup,
           markdown({ extensions: elefMetadata }),
+          livePreviewField,
           theme,
           EditorView.updateListener.of((update) => this.handleUpdate(update))
         ]
@@ -123,6 +132,7 @@ export default class extends Controller {
     this.inputTarget.addEventListener("keydown", this.handleProxyKeydown = (event) => this.forwardProxyKeydown(event))
     this.form = this.element.closest("form")
     this.form?.addEventListener("submit", this.handleSubmit = () => this.syncInput())
+    this.reportLivePreviewState(this.view.state)
     this.form?.addEventListener("formdata", this.handleFormData = (event) => {
       if (this.inputTarget.name) event.formData.set(this.inputTarget.name, this.sourceValue)
     })
@@ -135,15 +145,18 @@ export default class extends Controller {
     this.applyLineNumbers()
     this.applyCursorStyle()
     this.bindVimEvents()
+    this.setEditingMode("visual", { silent: true })
     this.updateMode()
     this.collapseFrontmatter()
-    this.element.dispatchEvent(new CustomEvent("elef:editor-ready", { detail: { editor: this }, bubbles: false }))
+    this.element.dispatchEvent(new CustomEvent("elef:editor-ready", { detail: { editor: this }, bubbles: true }))
   }
 
   disconnect() {
     this.destroyed = true
     if (this.lineNumberFrame) cancelAnimationFrame(this.lineNumberFrame)
     this.form?.removeEventListener("submit", this.handleSubmit)
+    this.resizeObserver?.disconnect()
+    window.removeEventListener("resize", this.updateVisualSurfaceGeometry)
     this.form?.removeEventListener("formdata", this.handleFormData)
     this.inputTarget.removeEventListener("input", this.handleExternalInput)
     this.inputTarget.removeEventListener("change", this.handleExternalChange)
@@ -224,6 +237,41 @@ export default class extends Controller {
     this.syncInput()
   }
 
+  showVisual(event) {
+    event?.preventDefault()
+    this.setEditingMode("visual")
+  }
+
+  showSource(event) {
+    event?.preventDefault()
+    this.setEditingMode("source")
+  }
+
+  setEditingMode(mode, { silent = false } = {}) {
+    this.editingMode = mode === "source" ? "source" : "visual"
+    this.view?.dispatch({ effects: livePreviewMode.of(this.editingMode === "visual") })
+    this.element.dataset.editorEditingMode = this.editingMode
+    this.form?.setAttribute("data-editor-mode", this.editingMode)
+    if (this.hasEditingModeTarget) this.editingModeTarget.textContent = this.editingMode === "visual" ? "Visual" : "Source"
+    if (this.hasVisualButtonTarget) this.visualButtonTarget.setAttribute("aria-pressed", String(this.editingMode === "visual"))
+    if (this.hasSourceButtonTarget) this.sourceButtonTarget.setAttribute("aria-pressed", String(this.editingMode === "source"))
+    if (!silent) {
+      this.form?.dispatchEvent(new CustomEvent("elef:editor-mode-change", {
+        bubbles: true,
+        detail: { mode: this.editingMode, editor: this }
+      }))
+    }
+  }
+
+  syncVisualSurfaceGeometry() {
+    if (!this.toolbar) return
+
+    const toolbarHeight = this.toolbar.getBoundingClientRect().height
+    const surfaceHeight = Math.max(0, this.element.getBoundingClientRect().height - toolbarHeight)
+    this.element.style.setProperty("--editor-toolbar-height", `${toolbarHeight}px`)
+    this.element.style.setProperty("--editor-surface-height", `${surfaceHeight}px`)
+  }
+
   get value() {
     return this.view.state.doc.sliceString(0, this.view.state.doc.length, "\n")
   }
@@ -301,6 +349,7 @@ export default class extends Controller {
   }
 
   handleUpdate(update) {
+    this.reportLivePreviewState(update.state)
     if (update.docChanged) {
       this.syncInput()
       this.refreshFrontmatterRange()
@@ -309,6 +358,24 @@ export default class extends Controller {
     if (update.selectionSet || update.docChanged) this.updateMode()
     if (update.selectionSet || update.docChanged || update.viewportChanged) this.scheduleLineNumberUpdate()
     this.syncMetadataToggle()
+  }
+
+  reportLivePreviewState(state) {
+    const projection = state.field(livePreviewField, false)
+    if (!projection) return
+
+    if (projection.error && projection.error !== this.livePreviewError) {
+      this.livePreviewError = projection.error
+      this.element.dispatchEvent(new CustomEvent("elef:live-preview-error", {
+        bubbles: true,
+        detail: {
+          message: "Live Markdown projection is unavailable. Your source remains editable; switch to Source mode or reload to restore it."
+        }
+      }))
+    } else if (!projection.error && this.livePreviewError) {
+      this.livePreviewError = null
+      this.element.dispatchEvent(new CustomEvent("elef:live-preview-recovered", { bubbles: true }))
+    }
   }
 
   handleExternalInputEvent() {
@@ -411,6 +478,7 @@ export default class extends Controller {
       this.modeTarget.dataset.mode = "standard"
       if (this.hasCommandTarget) this.commandTarget.textContent = ""
       this.element.dataset.editorVimEnabled = "false"
+      if (this.form) this.form.dataset.editorVimEnabled = "false"
       this.element.dataset.editorMode = "standard"
       this.applyCursorStyle()
       return
@@ -421,6 +489,7 @@ export default class extends Controller {
     this.modeTarget.textContent = label
     this.modeTarget.dataset.mode = label.toLowerCase()
     this.element.dataset.editorVimEnabled = "true"
+    if (this.form) this.form.dataset.editorVimEnabled = "true"
     this.element.dataset.editorMode = label.toLowerCase()
     this.applyCursorStyle()
     if (this.hasCommandTarget) this.commandTarget.textContent = this.vim?.state?.vim?.status || ""

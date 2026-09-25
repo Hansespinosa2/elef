@@ -2,12 +2,34 @@ module Presentations
   module DocumentRenderer
     module_function
 
-    def render(source, source_name: "Untitled document", parsed: nil, documents: nil, workspace: nil)
+    def render(source, source_name: "Untitled document", parsed: nil, documents: nil, workspace: nil, editable: false, editor_map: nil)
       parsed ||= Presentations::Document.parse(source.to_s, source_name: source_name, mode: :document)
       workspace ||= documents&.first&.workspace || Workspace.default
       documents ||= ::Document.where(workspace: workspace).to_a
       slide = parsed.slides.first
       return "".html_safe unless slide
+
+      if editable
+        editor_map ||= Presentations::Document.editor_map(source.to_s.gsub(/\r\n?/, "\n"), source_name: source_name, mode: :document)
+        mapped_blocks = editor_map.dig(:slides, 0, :blocks) || []
+        mapped_regions = editor_map.dig(:slides, 0, :editable_regions) || []
+        html = slide.blocks.map.with_index do |block, index|
+          mapped = mapped_blocks[index]
+          region = mapped_regions.find { |candidate| candidate[:block_id] == mapped&.dig(:id) }
+          valid_mapping = valid_editable_mapping?(mapped, region, block.markdown, editor_map[:source_length])
+          classes = position_classes(block.position)
+          class_names = ["document-editor-block", classes].reject(&:blank?).join(" ")
+          if valid_mapping
+            attributes = %( class="#{ERB::Util.html_escape(class_names)}" data-editor-region-id="#{ERB::Util.html_escape(mapped[:editable_region_id].to_s)}" data-editor-block-id="#{ERB::Util.html_escape(mapped[:id].to_s)}" contenteditable="true" role="textbox" aria-label="Editable Markdown block" aria-multiline="true" spellcheck="true" data-action="input->visual-editor#projectionInput focus->visual-editor#blockFocus blur->visual-editor#blockBlur")
+          else
+            attributes = %( class="#{ERB::Util.html_escape(class_names)}" contenteditable="false" aria-readonly="true")
+          end
+          rendered = DocumentLinks::Renderer.render(block.markdown, documents: documents, workspace: workspace)
+          rendered = editable_media(rendered, block.markdown) if valid_mapping && mapped[:kind] == "image"
+          %(<div#{attributes}>#{rendered}</div>)
+        end.join
+        return html.html_safe
+      end
 
       if slide.blocks.any? { |block| block.position }
         rendered = slide.blocks.map.with_index do |block, index|
@@ -53,12 +75,27 @@ module Presentations
       line ? line + 1 : source_anchor_lines(source)[offset] || 1
     end
 
+    def valid_editable_mapping?(mapped, region, markdown, source_length)
+      return false unless mapped && region && region[:editable]
+      return false unless mapped[:markdown] == markdown && mapped[:editable_region_id] == region[:id]
+      return false unless region[:block_id] == mapped[:id]
+
+      range = region[:content_range]
+      range.is_a?(Hash) && range[:start].is_a?(Integer) && range[:end].is_a?(Integer) &&
+        range[:start] >= 0 && range[:start] <= range[:end] && range[:end] <= source_length.to_i
+    end
+
     def position_classes(position)
       return "" unless position
 
       classes = ["position-#{position.horizontal}", "position-#{position.vertical}"]
       classes << "position-vertical" if position.vertical_explicit
       classes.join(" ")
+    end
+
+    def editable_media(rendered, markdown)
+      alt = markdown.to_s.match(/\A\s*!\[([^\]]*)\]/)&.[](1).to_s
+      %(<figure class="editor-media">#{rendered}<figcaption class="editor-media-caption" aria-label="Editable image alt text" title="Edit image alt text">#{ERB::Util.html_escape(alt)}</figcaption></figure>)
     end
   end
 end

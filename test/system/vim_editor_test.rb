@@ -3,26 +3,65 @@ require "application_system_test_case"
 class VimEditorTest < ApplicationSystemTestCase
   test "editor controls fit a narrow viewport and retain resizing" do
     document = Document.create!(title: "Mobile editor", source: "# Mobile")
+    page.driver.browser.execute_cdp("Emulation.clearDeviceMetricsOverride")
+    page.driver.browser.manage.window.resize_to(1400, 1000)
     visit edit_document_path(document)
     [500, 390, 320].each do |width|
       page.driver.browser.execute_cdp("Emulation.setDeviceMetricsOverride", width: width, height: 800, deviceScaleFactor: 1, mobile: false)
-      assert_operator page.evaluate_script("document.documentElement.scrollWidth"), :<=,
-        page.evaluate_script("window.innerWidth")
+      metrics = page.evaluate_script(<<~JAVASCRIPT)
+        (() => {
+          const viewport = window.innerWidth;
+          const overflow = [...document.querySelectorAll("body *")].map((element) => {
+            const rect = element.getBoundingClientRect();
+            return { tag: element.tagName, className: String(element.className).slice(0, 80), left: rect.left, right: rect.right,
+              width: rect.width, scrollWidth: element.scrollWidth, clientWidth: element.clientWidth };
+          }).filter((element) => element.width > 0 && (element.left < -1 || element.right > viewport + 1))
+            .sort((left, right) => right.right - left.right).slice(0, 8);
+          return { viewport, scrollWidth: document.documentElement.scrollWidth, overflow };
+        })()
+      JAVASCRIPT
+      assert_operator metrics["scrollWidth"], :<=, metrics["viewport"], "emulated width #{width}: #{metrics.inspect}"
     end
 
     page.driver.browser.execute_cdp("Emulation.setDeviceMetricsOverride", width: 500, height: 800, deviceScaleFactor: 1, mobile: false)
+    page.evaluate_script("new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))")
     assert_equal "vertical", page.evaluate_script("getComputedStyle(document.querySelector('.editor-surface')).resize")
     assert_equal "hidden", page.evaluate_script("getComputedStyle(document.querySelector('.editor-surface')).overflow")
+    assert_equal "none", page.evaluate_script("getComputedStyle(document.querySelector('.editor-input-proxy')).resize")
+    geometry = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.source-field .editor-surface').getBoundingClientRect();
+        const source = document.querySelector('.source-field').getBoundingClientRect();
+        const toolbar = document.querySelector('.editor-toolbar').getBoundingClientRect();
+        const projection = document.querySelector('.editor-projection').getBoundingClientRect();
+        const editor = document.querySelector('.source-field .cm-editor').getBoundingClientRect();
+        const fieldStyle = getComputedStyle(document.querySelector('.source-field'));
+        return {
+          surface: { top: surface.top, bottom: surface.bottom, height: surface.height, position: getComputedStyle(document.querySelector('.editor-surface')).position },
+          source: { top: source.top, bottom: source.bottom, height: source.height, position: fieldStyle.position },
+          toolbar: { top: toolbar.top, bottom: toolbar.bottom, height: toolbar.height },
+          editor: { top: editor.top, bottom: editor.bottom, height: editor.height },
+          projectionTop: projection.top,
+          configuredToolbarHeight: document.querySelector('.source-field').style.getPropertyValue('--editor-toolbar-height'),
+          configuredSurfaceHeight: document.querySelector('.source-field').style.getPropertyValue('--editor-surface-height')
+        };
+      })()
+    JAVASCRIPT
+    assert_operator geometry.dig("surface", "bottom"), :<=, geometry["projectionTop"], geometry.inspect
 
     find("summary", text: "Vim settings").click
     panel = page.evaluate_script(<<~JAVASCRIPT)
       (() => {
         const rect = document.querySelector('.editor-settings-panel').getBoundingClientRect()
-        return { left: rect.left, right: rect.right, width: rect.width }
+        const source = document.querySelector('.source-field').getBoundingClientRect()
+        return { left: rect.left, right: rect.right, width: rect.width, sourceLeft: source.left, sourceRight: source.right }
       })()
     JAVASCRIPT
     assert_operator panel["left"], :>=, 0
     assert_operator panel["right"], :<=, page.evaluate_script("window.innerWidth")
+    assert_operator panel["left"], :>=, panel["sourceLeft"]
+    assert_operator panel["right"], :<=, panel["sourceRight"]
+    assert_in_delta panel["sourceRight"], panel["right"], 1
     save_screenshot("tmp/screenshots/editor/mobile-vim-settings.png")
   ensure
     page.driver.browser.execute_cdp("Emulation.clearDeviceMetricsOverride")
@@ -225,10 +264,11 @@ class VimEditorTest < ApplicationSystemTestCase
       ```
     MARKDOWN
     visit edit_document_path(document)
+    page.execute_script("document.querySelector('.source-field').editorController.setSelectionRange(document.querySelector('.source-field').editorController.value.length)")
 
     styles = page.evaluate_script(<<~JAVASCRIPT)
       (() => {
-        const find = (text) => [...document.querySelectorAll(".cm-line span")].find((node) => node.textContent === text)
+        const find = (text) => [...document.querySelectorAll(".cm-line span")].find((node) => node.textContent.trim() === text)
         const describe = (node) => node && ({
           className: node.className,
           color: getComputedStyle(node).color,
@@ -261,6 +301,63 @@ class VimEditorTest < ApplicationSystemTestCase
       assert_equal styles["metadata"][property], styles["strong"][property]
     end
     assert_nil styles["fenced"]
+  end
+
+  test "live preview leaves Markdown-looking code literal in fenced and inline code" do
+    source = <<~MARKDOWN
+      # Literal code
+
+      ```markdown
+      **bold** *italic* $x$ $$y$$ [link](/path) ![image](/image.svg) [[document]]
+      ```
+
+      Inline code: `$z$ **not bold**`
+    MARKDOWN
+    document = Document.create!(title: "Literal code", source: source)
+
+    visit edit_document_path(document)
+
+    assert_field "Markdown source", with: source
+    code_state = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const fencedLine = [...document.querySelectorAll('.cm-line.cm-live-code-line')]
+          .find((line) => line.textContent.includes('**bold**'));
+        const inlineCode = [...document.querySelectorAll('.cm-live-inline-code')]
+          .find((node) => node.textContent.includes('$z$'));
+        const previewSyntax = '.cm-live-strong, .cm-live-emphasis, .cm-live-link, .cm-live-document-link, .cm-live-widget-math, .cm-live-image';
+        return {
+          fencedText: fencedLine?.textContent,
+          fencedDecorations: fencedLine?.querySelector(previewSyntax) !== null,
+          inlineText: inlineCode?.textContent,
+          inlineDecorations: inlineCode?.querySelector(previewSyntax) !== null
+        };
+      })()
+    JAVASCRIPT
+
+    assert_equal "**bold** *italic* $x$ $$y$$ [link](/path) ![image](/image.svg) [[document]]", code_state["fencedText"]
+    refute code_state["fencedDecorations"]
+    assert_equal "$z$ **not bold**", code_state["inlineText"]
+    refute code_state["inlineDecorations"]
+  end
+
+  test "live preview reveals syntax around the active source range" do
+    document = Document.create!(title: "Active syntax", source: "# Heading\n\n**Bold**")
+    visit edit_document_path(document)
+
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      editor.setSelectionRange(editor.value.indexOf('Bold') + 1);
+    JAVASCRIPT
+
+    active_syntax = page.evaluate_script(<<~JAVASCRIPT)
+      [...document.querySelectorAll('.cm-live-active-syntax')].map((element) => ({
+        text: element.textContent,
+        fontSize: getComputedStyle(element).fontSize,
+        color: getComputedStyle(element).color
+      }))
+    JAVASCRIPT
+    assert active_syntax.any? { |entry| entry["text"].include?("*") }
+    refute active_syntax.any? { |entry| entry["fontSize"] == "0px" }
   end
 
   test "Vim edits update a presentation preview and autosave" do

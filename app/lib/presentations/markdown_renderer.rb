@@ -41,7 +41,7 @@ module Presentations
       return "" unless safe_url?(link)
 
       title_attribute = title.present? ? %( title="#{ERB::Util.html_escape(title)}") : ""
-      %(<img src="#{ERB::Util.html_escape(link)}" alt="#{ERB::Util.html_escape(alt_text)}"#{title_attribute}>)
+      %(<img src="#{ERB::Util.html_escape(link)}" alt="#{ERB::Util.html_escape(alt_text)}"#{title_attribute} data-editor-image-source="true" contenteditable="false">)
     end
 
     def block_code(code, language)
@@ -118,9 +118,16 @@ module Presentations
     end
 
     def katex(expression, display_mode:)
-      Katex.render(expression, display_mode: display_mode)
+      annotate_editor_math(Katex.render(expression, display_mode: display_mode), expression)
     rescue StandardError
-      %(<span class="math-error" title="Invalid TeX">#{ERB::Util.html_escape(expression)}</span>)
+      %(<span class="math-error" data-editor-math-source="#{ERB::Util.html_escape(expression)}" contenteditable="false" title="Invalid TeX">#{ERB::Util.html_escape(expression)}</span>)
+    end
+
+    def annotate_editor_math(rendered, expression)
+      source = ERB::Util.html_escape(expression)
+      rendered.sub(/\A<span\b([^>]*)>/) do
+        %(<span#{$1} data-editor-math-source="#{source}" contenteditable="false">)
+      end
     end
   end
 end
