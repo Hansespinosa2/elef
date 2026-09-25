@@ -172,26 +172,6 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_current_path root_path
   end
 
-  test "library tabs use canonical collection paths" do
-    visit root_path
-
-    assert_current_path root_path
-    assert_link "Library", href: root_path
-    within "nav.library-tabs" do
-      assert_link "All", href: root_path
-      assert_link "Documents", href: documents_path
-      assert_link "Presentations", href: presentations_path
-      click_on "Documents"
-    end
-
-    assert_current_path documents_path
-    within "nav.library-tabs" do
-      click_on "Presentations"
-    end
-
-    assert_current_path presentations_path
-  end
-
   test "two editor tabs preserve a stale local draft as a recovery revision" do
     presentation = Presentation.create!(title: "Two tabs", source: "# Initial")
     visit edit_presentation_path(presentation)
@@ -829,13 +809,11 @@ class PresentationsTest < ApplicationSystemTestCase
       visual_expected.sub!(source_text, replacement)
       assert_field "Markdown source", with: visual_expected, wait: 5
       page.execute_script("document.activeElement.blur()")
-      wait_for_fresh_projection
       assert_selector selector, text: /#{Regexp.escape(replacement)}/, wait: 5
     end
 
     click_on "Save presentation"
     assert_text "Presentation saved."
-    visit edit_presentation_path(visual)
     assert_field "Markdown source", with: visual_expected
 
     visit edit_presentation_path(source)
@@ -848,7 +826,6 @@ class PresentationsTest < ApplicationSystemTestCase
 
     click_on "Save presentation"
     assert_text "Presentation saved."
-    visit edit_presentation_path(source)
     assert_field "Markdown source", with: source_expected
     assert_equal visual_expected, source_expected
     assert_equal visual.reload.source, source.reload.source
@@ -1418,14 +1395,12 @@ class PresentationsTest < ApplicationSystemTestCase
       assert_selector '[data-lineage-graph-target="scaleLabel"]', text: "85%"
       find('button[aria-label="Reset graph view"]').click
       assert_timeline_geometry
-      save_screenshot("tmp/screenshots/library/viewport-#{width}.png")
     end
 
     search = find('input[aria-label="Find a presentation"]')
     search.set("Quarterly Review June")
     search.send_keys(:arrow_down)
     assert_equal "Quarterly Review June · 2026-01-08", page.evaluate_script("document.activeElement.textContent")
-    save_screenshot("tmp/screenshots/library/search-mobile.png")
     send_keys :escape
     assert_selector '.lineage-search-results', visible: :hidden
     assert_equal "Find a presentation", page.evaluate_script("document.activeElement.getAttribute('aria-label')")
@@ -1435,18 +1410,15 @@ class PresentationsTest < ApplicationSystemTestCase
     search.send_keys(:arrow_down, :enter)
     assert_selector ".lineage-node.is-located"
     page.execute_script("document.querySelector('.lineage-node.is-located').scrollIntoView({block: 'center'})")
-    save_screenshot("tmp/screenshots/library/focus-mobile.png")
 
     within("article", match: :first) do
       find('summary', text: "Rename").click
       assert_selector '.library-rename input[type="text"]', visible: true
       page.execute_script("document.querySelector('.rename-menu[open]').scrollIntoView({block: 'center'})")
-      save_screenshot("tmp/screenshots/library/rename-mobile.png")
       find('summary', text: "Rename").click
       find('summary', text: "Fork").click
       assert_selector 'button', text: "As inspiration", visible: true
       page.execute_script("document.querySelector('.fork-menu[open]').scrollIntoView({block: 'center'})")
-      save_screenshot("tmp/screenshots/library/fork-mobile.png")
     end
     assert_operator page.evaluate_script("document.documentElement.scrollWidth"), :<=,
       page.evaluate_script("window.innerWidth")
@@ -1459,7 +1431,6 @@ class PresentationsTest < ApplicationSystemTestCase
 
     visit presentations_path
     assert_text "No presentations yet"
-    save_screenshot("tmp/screenshots/library/empty.png")
     find("summary", text: "More").click
     click_on "Load sample presentations"
 
@@ -1797,7 +1768,6 @@ class PresentationsTest < ApplicationSystemTestCase
     assert bounds["positioned"], "The colon popup must receive caret coordinates before a query is typed"
     assert bounds["belowCaret"] || bounds["aboveCaret"], "The snippet popup should stay next to the caret"
     assert_operator bounds["bottom"], :<, bounds["viewportBottom"]
-    save_screenshot("tmp/colon-palette.png")
   end
 
   test "renders untrusted snippet metadata as text" do

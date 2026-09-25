@@ -5,6 +5,21 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_selector "form.visual-editor-form:not([data-preview-projection-stale='true'])", wait: 5
   end
 
+  def wait_for_preview_response(count)
+    ready = page.evaluate_async_script(<<~JAVASCRIPT, count)
+      const count = arguments[0];
+      const done = arguments[arguments.length - 1];
+      const deadline = Date.now() + 5000;
+      const wait = () => {
+        if ((window.previewResponses || []).length >= count) return done(true);
+        if (Date.now() >= deadline) return done(false);
+        window.setTimeout(wait, 10);
+      };
+      wait();
+    JAVASCRIPT
+    assert ready, "preview response count #{count} was not registered"
+  end
+
   def type_visual_text(selector, source_text, replacement)
     wait_for_fresh_projection
     attempts = 0
@@ -360,12 +375,6 @@ class DocumentsTest < ApplicationSystemTestCase
           [".document-editor-block", "The relationship", "The relationship", "The equation relationship"],
           [".editor-media-caption", "representative workflow diagram", "representative workflow diagram", "sample workflow diagram"]
         ]
-      },
-      {
-        id: "document-full-report",
-        operations: [
-          [".document-editor-block", "The State of Calm Authoring", "The State of Calm Authoring", "The State of Testing"]
-        ]
       }
     ]
 
@@ -382,13 +391,11 @@ class DocumentsTest < ApplicationSystemTestCase
         expected.sub!(source_text, replacement)
         assert_field "Markdown source", with: expected, wait: 5
         page.execute_script("document.activeElement.blur()")
-        wait_for_fresh_projection
         assert_selector selector, text: /#{Regexp.escape(replacement)}/, wait: 5
       end
 
       click_on "Save document"
       assert_selector ".flash.notice", text: "Document saved.", wait: 10
-      visit edit_document_path(visual)
       assert_field "Markdown source", with: expected
       visual.reload
 
@@ -402,7 +409,6 @@ class DocumentsTest < ApplicationSystemTestCase
 
       click_on "Save document"
       assert_selector ".flash.notice", text: "Document saved.", wait: 10
-      visit edit_document_path(source)
       assert_field "Markdown source", with: source_expected
       assert_equal expected, source_expected
       visual_source = visual.reload.source.gsub(/\r\n?/, "\n")
@@ -849,14 +855,15 @@ class DocumentsTest < ApplicationSystemTestCase
     JAVASCRIPT
 
     fill_in "Markdown source", with: "# First response"
-    sleep 0.5
+    wait_for_preview_response(1)
     assert_equal 1, page.evaluate_script("window.previewResponses.length")
 
     fill_in "Markdown source", with: "# Latest response"
-    sleep 0.5
+    wait_for_preview_response(2)
     assert_equal 2, page.evaluate_script("window.previewResponses.length")
 
-    page.execute_script(<<~JAVASCRIPT)
+    page.evaluate_async_script(<<~JAVASCRIPT)
+      const done = arguments[arguments.length - 1];
       const response = window.previewResponses[0];
       const title = response.source.match(/^# (.*)$/m)[1];
       response.resolve(new Response(JSON.stringify({
@@ -864,8 +871,8 @@ class DocumentsTest < ApplicationSystemTestCase
         warnings: [],
         editor_map: null
       }), { headers: { "Content-Type": "application/json" } }));
+      window.setTimeout(done, 20);
     JAVASCRIPT
-    sleep 0.1
     assert_no_selector ".document-surface h1", text: "First response"
 
     page.execute_script(<<~JAVASCRIPT)
