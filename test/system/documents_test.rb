@@ -319,8 +319,10 @@ class DocumentsTest < ApplicationSystemTestCase
     title.send_keys(:enter)
     assert_field "Markdown source", with: "# This is my First Document\n\n", wait: 5
 
-    active_document_block.send_keys("This is my first line in this document and it is a normal paragraph that may even wrap around. It creates one coherent block of text that can span one line or multiple depending on font or any other specific formatting, but it is one block.")
-    active_document_block.send_keys(:enter)
+    first_paragraph = active_document_block
+    first_paragraph.send_keys("This is my first line in this document and it is a normal paragraph that may even wrap around. It creates one coherent block of text that can span one line or multiple depending on font or any other specific formatting, but it is one block.")
+    assert_equal "true", first_paragraph["contenteditable"], "typing should keep the focused block editable while preview refreshes"
+    first_paragraph.send_keys(:enter)
     assert_field "Markdown source", with: /one block\.\n\n\z/, wait: 5
     active_document_block.send_keys(:backspace)
     assert_field "Markdown source", with: /one block\.\z/, wait: 5
@@ -468,9 +470,7 @@ class DocumentsTest < ApplicationSystemTestCase
     fixtures.each do |fixture|
       baseline = Documents::SampleData::SAMPLES.find { |sample| sample[:id] == fixture[:id] }.fetch(:source)
       visual = Document.create!(title: "Visual #{fixture[:id]}", source: baseline)
-      source = Document.create!(title: "Source #{fixture[:id]}", source: baseline)
       expected = baseline.dup
-      source_expected = baseline.dup
 
       visit edit_document_path(visual)
       fixture[:operations].each do |selector, visible_text, source_text, replacement|
@@ -486,8 +486,11 @@ class DocumentsTest < ApplicationSystemTestCase
       assert_selector ".flash.notice", text: "Document saved.", wait: 10
       visit edit_document_path(visual)
       assert_field "Markdown source", with: expected
-      visual.reload
+      visual_source = visual.reload.source.gsub(/\r\n?/, "\n")
+      visual.destroy!
 
+      source = Document.create!(title: "Source #{fixture[:id]}", source: baseline)
+      source_expected = baseline.dup
       visit edit_document_path(source)
       click_on "Source"
       fixture[:operations].each do |_selector, _visible_text, source_text, replacement|

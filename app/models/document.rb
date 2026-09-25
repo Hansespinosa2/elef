@@ -31,15 +31,6 @@ class Document < Work
     document_aliases.order(:created_at, :id)
   end
 
-  private
-
-  def derive_title_from_source
-    self.title = Presentations::Document.normalize_folder_name(
-      Presentations::Document.extract_first_h1(source.to_s),
-      fallback: default_title
-    )
-  end
-
   def self.resolve_link(token, workspace: Workspace.default)
     token = token.to_s
     if (key = token[/\A(?:document|id):(.+)\z/, 1])
@@ -70,6 +61,10 @@ class Document < Work
   alias backlinks incoming_backlinks
 
   private
+
+  def derive_title_from_source
+    self.title = Presentations::Document.extract_first_h1(source.to_s).presence || default_title
+  end
 
   def resolve_link_token(token)
     self.class.resolve_link(token.title.split("|", 2).first, workspace: workspace || Workspace.default)

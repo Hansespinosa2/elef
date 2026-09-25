@@ -82,7 +82,7 @@ class PresentationsDocumentRendererTest < ActiveSupport::TestCase
     )
     list_items = Nokogiri::HTML.fragment(list_html).css(".document-editor-block ul > li")
 
-    assert_equal 2, list_items.length
+    assert_equal 2, list_items.length, list_html
     assert_equal ["br"], list_items.last.element_children.map(&:name)
 
     quote_source = "# Heading\n\n> First line\n> "

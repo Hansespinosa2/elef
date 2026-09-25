@@ -15,7 +15,7 @@ class WorkspaceAndSearchControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "creates a document with generic appearance overrides" do
-    post documents_path, params: { document: { title: "Styled notes", source: "# Notes", theme: "dark", typography: "technical" } }
+    post documents_path, params: { document: { title: "Ignored title", source: "# Styled notes", theme: "dark", typography: "technical" } }
 
     document = Document.find_by!(title: "Styled notes")
     assert_redirected_to edit_document_path(document)

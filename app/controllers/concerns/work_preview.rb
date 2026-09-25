@@ -27,10 +27,7 @@ module WorkPreview
     raise ArgumentError, "Markdown source must be plain text" unless source.is_a?(String)
 
     title = if work.document?
-      Presentations::Document.normalize_folder_name(
-        Presentations::Document.extract_first_h1(source),
-        fallback: work.title.presence || work.default_title
-      )
+      Presentations::Document.extract_first_h1(source).presence || work.title.presence || work.default_title
     else
       attributes[:title].presence || params[:title].presence || work.title
     end

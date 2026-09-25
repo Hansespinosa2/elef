@@ -46,13 +46,11 @@ export default class extends Controller {
     this.syncProjectionEditability()
   }
 
-  blockFocus(event) {
-    this.activeProjectionBlock = event.currentTarget
+  blockFocus() {
     this.element.dataset.editorProjectionActive = "true"
   }
 
   blockBlur() {
-    this.activeProjectionBlock = null
     delete this.element.dataset.editorProjectionActive
     this.syncProjectionEditability()
   }
@@ -146,20 +144,24 @@ export default class extends Controller {
 
   previewUpdated(payload) {
     if (payload?.editor_map) this.map = payload.editor_map
-    this.syncProjectionEditability({ preserveActive: Boolean(this.activeProjectionBlock && this.element.dataset.editorProjectionActive === "true") })
+    this.syncProjectionEditability({ preserveActive: Boolean(this.focusedProjectionBlock()) })
     this.restorePendingCaret()
   }
 
   previewStale(detail = {}) {
-    this.syncProjectionEditability({ preserveActive: detail.preserveActive })
+    this.syncProjectionEditability({ preserveActive: detail.preserveActive || Boolean(this.focusedProjectionBlock()) })
   }
 
   canEditBlock(blockElement) {
     if (this.element.dataset.editorMode !== "visual") return false
     if (this.element.previewController?.projectionFresh !== false) return true
 
-    return this.activeProjectionBlock === blockElement &&
-      document.activeElement?.closest?.("[contenteditable='true']") === blockElement
+    return this.focusedProjectionBlock() === blockElement
+  }
+
+  focusedProjectionBlock() {
+    const block = document.activeElement?.closest?.(".document-editor-block[data-editor-block-id]")
+    return block && this.hasProjectionTarget && this.projectionTarget.contains(block) ? block : null
   }
 
   syncProjectionEditability({ preserveActive = false } = {}) {
