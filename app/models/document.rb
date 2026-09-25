@@ -1,6 +1,8 @@
 class Document < Work
   WORK_TYPE = "document".freeze
-  DEFAULT_SOURCE = "# Untitled document\n\nStart writing Markdown here.".freeze
+  DEFAULT_SOURCE = "# Untitled document".freeze
+
+  before_validation :derive_title_from_source, if: -> { persisted? && will_save_change_to_source? }
 
   default_scope { where(kind: WORK_TYPE) }
 
@@ -27,6 +29,15 @@ class Document < Work
 
   def aliases
     document_aliases.order(:created_at, :id)
+  end
+
+  private
+
+  def derive_title_from_source
+    self.title = Presentations::Document.normalize_folder_name(
+      Presentations::Document.extract_first_h1(source.to_s),
+      fallback: default_title
+    )
   end
 
   def self.resolve_link(token, workspace: Workspace.default)

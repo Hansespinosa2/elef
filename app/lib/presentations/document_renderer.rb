@@ -12,9 +12,23 @@ module Presentations
       if editable
         editor_map ||= Presentations::Document.editor_map(source.to_s.gsub(/\r\n?/, "\n"), source_name: source_name, mode: :document)
         mapped_blocks = editor_map.dig(:slides, 0, :blocks) || []
+        mapped_content_blocks = mapped_blocks.reject { |mapped| mapped[:empty_placeholder] }
+        empty_blocks = mapped_blocks.select { |mapped| mapped[:empty_placeholder] }
         mapped_regions = editor_map.dig(:slides, 0, :editable_regions) || []
-        html = slide.blocks.map.with_index do |block, index|
-          mapped = mapped_blocks[index]
+        html = +""
+        empty_block_index = 0
+        append_empty_block = lambda do |mapped|
+          region = mapped_regions.find { |candidate| candidate[:block_id] == mapped[:id] }
+          next unless region&.dig(:editable)
+
+          html << %(<div class="document-editor-block" data-editor-region-id="#{ERB::Util.html_escape(region[:id])}" data-editor-block-id="#{ERB::Util.html_escape(mapped[:id])}" data-editor-empty-block="true" contenteditable="true" role="textbox" aria-label="Editable Markdown block" aria-multiline="true" spellcheck="true" data-action="input->visual-editor#projectionInput focus->visual-editor#blockFocus blur->visual-editor#blockBlur"><p><br></p></div>)
+        end
+        slide.blocks.each_with_index do |block, index|
+          mapped = mapped_content_blocks[index]
+          while (placeholder = empty_blocks[empty_block_index]) && placeholder[:range][:start] <= (mapped&.dig(:range, :start) || Float::INFINITY)
+            append_empty_block.call(placeholder)
+            empty_block_index += 1
+          end
           region = mapped_regions.find { |candidate| candidate[:block_id] == mapped&.dig(:id) }
           valid_mapping = valid_editable_mapping?(mapped, region, block.markdown, editor_map[:source_length])
           classes = position_classes(block.position)
@@ -24,10 +38,21 @@ module Presentations
           else
             attributes = %( class="#{ERB::Util.html_escape(class_names)}" contenteditable="false" aria-readonly="true")
           end
-          rendered = DocumentLinks::Renderer.render(block.markdown, documents: documents, workspace: workspace)
+          rendered = if region&.dig(:empty_heading)
+            "<h1><br></h1>"
+          else
+            DocumentLinks::Renderer.render(block.markdown, documents: documents, workspace: workspace)
+          end
           rendered = editable_media(rendered, block.markdown) if valid_mapping && mapped[:kind] == "image"
-          %(<div#{attributes}>#{rendered}</div>)
-        end.join
+          if valid_mapping && %w[list quote].include?(mapped[:kind])
+            rendered = editable_trailing_structured_line(rendered, block.markdown, mapped[:kind])
+          end
+          html << %(<div#{attributes}>#{rendered}</div>)
+        end
+        while (placeholder = empty_blocks[empty_block_index])
+          append_empty_block.call(placeholder)
+          empty_block_index += 1
+        end
         return html.html_safe
       end
 
@@ -96,6 +121,40 @@ module Presentations
     def editable_media(rendered, markdown)
       alt = markdown.to_s.match(/\A\s*!\[([^\]]*)\]/)&.[](1).to_s
       %(<figure class="editor-media">#{rendered}<figcaption class="editor-media-caption" aria-label="Editable image alt text" title="Edit image alt text">#{ERB::Util.html_escape(alt)}</figcaption></figure>)
+    end
+
+    def editable_trailing_structured_line(rendered, markdown, kind)
+      last_line = markdown.to_s.split("\n").last.to_s
+      empty_list_item = kind == "list" && last_line.match?(/\A[ \t]*(?:[-*+]|\d+[.)])[ \t]*\z/)
+      empty_quote_line = kind == "quote" && last_line.match?(/\A[ \t]*>[ \t]*\z/)
+      return rendered unless empty_list_item || empty_quote_line
+
+      fragment = Nokogiri::HTML.fragment(rendered)
+      if empty_list_item
+        list = fragment.element_children.find { |child| %w[ol ul].include?(child.name) }
+        return rendered unless list
+
+        last_item = list.element_children.reverse.find { |child| child.name == "li" }
+        if last_item && last_item.text.strip.blank?
+          last_item.children.remove
+          last_item.add_child("<br>")
+        else
+          list.add_child("<li><br></li>")
+        end
+      else
+        quote = fragment.element_children.find { |child| child.name == "blockquote" }
+        return rendered unless quote
+
+        last_line = quote.element_children.reverse.find { |child| %w[div p].include?(child.name) }
+        if last_line && last_line.text.strip.blank?
+          last_line.children.remove
+          last_line.add_child("<br>")
+        else
+          quote.add_child("<p><br></p>")
+        end
+      end
+
+      fragment.to_html
     end
   end
 end

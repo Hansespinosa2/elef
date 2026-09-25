@@ -10,6 +10,14 @@ class WorkTest < ActiveSupport::TestCase
     refute Document.new(title: "Wrong", source: "# Wrong", work_type: "presentation").valid?
   end
 
+  test "updates a document title when its first heading changes" do
+    document = Document.create!(source: "# First title\n\nBody")
+
+    document.update!(source: "# Updated title\n\nBody")
+
+    assert_equal "Updated title", document.title
+  end
+
   test "documents stay continuous while presentations split standalone separators" do
     source = "# Notes\n\nFirst\n\n---\n\nSecond"
 
