@@ -15,6 +15,8 @@
 <% form_data = { controller: controllers.join(" "), action: actions.join(" "), editor_mode: "visual", dirty_unsaved_message_value: "You have unsaved #{type_label.downcase} changes. Leave without saving?" } %>
 <% form_data[:preview_url_value] = persisted ? work_preview_path(work) : work_preview_collection_path(work) %>
 <% form_data[:visual_editor_kind_value] = work.kind %>
+<% form_data[:visual_editor_focus_title_value] = work.document? && !persisted %>
+<% form_data[:action] += " keydown->visual-editor#projectionKeydown" if work.document? %>
 <% form_data[:media_upload_url_value] = persisted && work.presentation? ? upload_asset_presentation_path(work) : "" if work.presentation? %>
 <% form_data[:media_enabled_value] = persisted if work.presentation? %>
 <% if persisted %>
@@ -59,13 +61,15 @@
 
   <section class="editor-shell" aria-label="Visual <%= type_label.downcase %> editor">
     <header class="editor-shell-header">
-      <div class="editor-title-field">
-        <%= form.label :title, class: "editor-title-label" %>
-        <%= form.text_field :title,
-          class: "editor-title-input",
-          data: { dirty_target: "field", autosave_target: "field", action: "input->dirty#markDirty" },
-          autocomplete: "off" %>
-      </div>
+      <% unless work.document? %>
+        <div class="editor-title-field">
+          <%= form.label :title, class: "editor-title-label" %>
+          <%= form.text_field :title,
+            class: "editor-title-input",
+            data: { dirty_target: "field", autosave_target: "field", action: "input->dirty#markDirty" },
+            autocomplete: "off" %>
+        </div>
+      <% end %>
       <div class="editor-kind-badge"><%= type_label %></div>
     </header>
 
