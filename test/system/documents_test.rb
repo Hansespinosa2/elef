@@ -678,13 +678,29 @@ class DocumentsTest < ApplicationSystemTestCase
     editor.click
     editor.send_keys(:end)
     expanded = ->(symbol) { "$\\mathbf{\\bar{#{symbol}}}$" }
+    chain_state = -> do
+      page.evaluate_script(<<~JAVASCRIPT)
+        const root = document.querySelector(".source-field");
+        const shorthand = window.Stimulus.getControllerForElementAndIdentifier(root, "math-shorthand");
+        const palette = window.Stimulus.getControllerForElementAndIdentifier(root, "math-shortcut-palette");
+        ({
+          expansion: shorthand?.lastExpansion || null,
+          source: shorthand?.editorController?.value || null,
+          caret: shorthand?.editorController?.selectionStart ?? null,
+          paletteHidden: palette?.paletteTarget?.hidden ?? null,
+          paletteQuery: palette?.query || null
+        })
+      JAVASCRIPT
+    end
 
     editor.send_keys("\n$x.bar")
     editor.send_keys(:enter)
+    after_bar = chain_state.call
     editor.send_keys(".bb")
+    after_suffix = chain_state.call
     editor.send_keys(:enter)
     editor.send_keys("$")
-    assert_includes editor.value, expanded.call("x"), "bar then bold should compose across commits: #{editor.value.inspect}"
+    assert_includes editor.value, expanded.call("x"), "bar then bold should compose across commits: #{editor.value.inspect}; after bar #{after_bar.inspect}; after suffix #{after_suffix.inspect}"
 
     editor.send_keys("\n$y.bar.bb")
     editor.send_keys(:enter)
