@@ -5,6 +5,9 @@ on:
   push:
     branches: [ main ]
 
+permissions:
+  contents: read
+
 jobs:
   scan_ruby:
     runs-on: ubuntu-latest
@@ -61,6 +64,27 @@ jobs:
           # REDIS_URL: redis://localhost:6379/0
         run: bin/rails db:test:prepare test
 
+      - name: Check deployment ref monotonicity
+        run: bash test/scripts/deployment_ref_monotonicity_test.sh
+
+  sqlite-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          bundler-cache: true
+
+      - name: Run SQLite compatibility tests
+        env:
+          RAILS_ENV: test
+          ELEF_USE_SQLITE: "1"
+        run: bin/rails db:test:prepare test
+
   system-test:
     runs-on: ubuntu-latest
 
@@ -93,3 +117,57 @@ jobs:
           name: screenshots
           path: ${{ github.workspace }}/tmp/screenshots
           if-no-files-found: ignore
+
+  production-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          bundler-cache: true
+
+      - name: Boot and smoke-test the production Rails environment
+        run: bash test/scripts/rails_environment_smoke_test.sh production 3000
+
+  development-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          bundler-cache: true
+
+      - name: Boot and smoke-test the development Rails environment
+        run: bash test/scripts/rails_environment_smoke_test.sh development 3001
+
+  publish-deployment-ref:
+    name: Authorize deployment after CI
+    if: github.event_name == 'push' && github.ref_name == 'main'
+    needs: [ scan_ruby, scan_js, test, sqlite-test, system-test, production-smoke, development-smoke ]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout the tested commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Publish the CI-approved deployment ref
+        env:
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_SHA: ${{ github.sha }}
+          DEPLOYMENT_REMOTE: origin
+        run: scripts/publish-deployment-ref

@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+remote="${DEPLOYMENT_REMOTE:-origin}"
+branch="${GITHUB_REF_NAME:?GITHUB_REF_NAME is required}"
+sha="${GITHUB_SHA:?GITHUB_SHA is required}"
+
+case "$branch" in
+  dev|main) deployment_ref="refs/heads/elef-deploy-$branch" ;;
+  *) echo "No deployment ref is configured for $branch; skipping"; exit 0 ;;
+esac
+
+current_sha="$(git ls-remote --heads "$remote" "refs/heads/$branch" | awk 'NR == 1 { print $1 }')"
+if [[ "$current_sha" != "$sha" ]]; then
+  echo "Skipping stale run for $sha; $branch is now $current_sha"
+  exit 0
+fi
+
+# Fetch the current marker tip so Git can verify ancestry. A normal push is a
+# server-side compare-and-swap: concurrent or out-of-order updates cannot move
+# this ref backwards. Rebased or force-pushed source history fails closed.
+if git ls-remote --exit-code --heads "$remote" "$deployment_ref" >/dev/null; then
+  git fetch --no-tags "$remote" "$deployment_ref:refs/remotes/deployment/$branch"
+fi
+
+if ! git push "$remote" "$sha:$deployment_ref"; then
+  echo "Deployment ref update rejected; refusing a non-fast-forward update to $deployment_ref" >&2
+  exit 1
+fi
