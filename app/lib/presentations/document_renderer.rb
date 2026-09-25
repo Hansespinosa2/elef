@@ -140,6 +140,7 @@ module Presentations
 
       token = "ELEFCARETPLACEHOLDER"
       token += "_" while markdown.include?(token)
+      lines.insert(-1, marker.rstrip) if kind == "quote" && lines.length > 1
       lines[-1] = "#{marker}#{token}"
       [lines.join("\n"), token]
     end

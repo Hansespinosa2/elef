@@ -96,7 +96,7 @@ class PresentationsDocumentRendererTest < ActiveSupport::TestCase
     )
     quote_lines = Nokogiri::HTML.fragment(quote_html).css(".document-editor-block blockquote > p")
 
-    assert_equal 2, quote_lines.length
+    assert_equal 2, quote_lines.length, quote_html
     assert_equal ["br"], quote_lines.last.element_children.map(&:name)
   end
 end

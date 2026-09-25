@@ -62,8 +62,12 @@ class Document < Work
 
   private
 
-  def derive_title_from_source
+  def derive_title
     self.title = Presentations::Document.extract_first_h1(source.to_s).presence || default_title
+  end
+
+  def derive_title_from_source
+    derive_title
   end
 
   def resolve_link_token(token)

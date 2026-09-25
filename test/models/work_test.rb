@@ -18,6 +18,12 @@ class WorkTest < ActiveSupport::TestCase
     assert_equal "Updated title", document.title
   end
 
+  test "preserves the exact first heading as a new document title" do
+    document = Document.create!(source: "# Notes: one\n\nBody")
+
+    assert_equal "Notes: one", document.title
+  end
+
   test "documents stay continuous while presentations split standalone separators" do
     source = "# Notes\n\nFirst\n\n---\n\nSecond"
 
