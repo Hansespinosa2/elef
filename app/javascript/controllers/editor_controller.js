@@ -127,13 +127,27 @@ export default class extends Controller {
       selectionEnd: { configurable: true, get: () => this.selectionEnd },
       setSelectionRange: { configurable: true, value: (anchor, head = anchor) => this.setSelectionRange(anchor, head) }
     })
-    this.view.dom.addEventListener("focusout", this.handleFocusOut = () => this.dispatchFieldEvent("change"))
+    this.view.dom.addEventListener("focusin", this.handleFocusIn = () => {
+      this.changedSinceFocusOut = false
+    })
+    this.view.dom.addEventListener("focusout", this.handleFocusOut = () => {
+      if (this.changedSinceFocusOut) {
+        this.changedSinceFocusOut = false
+        this.dispatchFieldEvent("change")
+      } else {
+        this.syncInput()
+      }
+    })
     this.view.dom.addEventListener("keydown", this.handleVimKeydown = () => queueMicrotask(() => this.updateMode()))
     this.inputTarget.addEventListener("keydown", this.handleProxyKeydown = (event) => this.forwardProxyKeydown(event))
     this.form = this.element.closest("form")
-    this.form?.addEventListener("submit", this.handleSubmit = () => this.syncInput())
+    this.form?.addEventListener("submit", this.handleSubmit = () => {
+      this.projectionController()?.flushPendingProjectionEdits?.()
+      this.syncInput()
+    })
     this.reportLivePreviewState(this.view.state)
     this.form?.addEventListener("formdata", this.handleFormData = (event) => {
+      this.projectionController()?.flushPendingProjectionEdits?.()
       if (this.inputTarget.name) event.formData.set(this.inputTarget.name, this.sourceValue)
     })
 
@@ -163,6 +177,7 @@ export default class extends Controller {
     this.inputTarget.removeEventListener("click", this.handleProxyClick)
     this.inputTarget.removeEventListener("keydown", this.handleProxyKeydown)
     this.surfaceTarget.removeEventListener("click", this.handleSurfaceClick)
+    this.view?.dom.removeEventListener("focusin", this.handleFocusIn)
     this.view?.dom.removeEventListener("focusout", this.handleFocusOut)
     this.view?.dom.removeEventListener("keydown", this.handleVimKeydown)
     this.unbindVimEvents()
@@ -248,7 +263,17 @@ export default class extends Controller {
   }
 
   setEditingMode(mode, { silent = false } = {}) {
-    this.editingMode = mode === "source" ? "source" : "visual"
+    const nextMode = mode === "source" ? "source" : "visual"
+    const previousMode = this.editingMode
+    if (!silent && previousMode === nextMode) return
+
+    const projectionController = this.projectionController()
+    if (!silent && previousMode === "visual") projectionController?.flushPendingProjectionEdits?.()
+    const visualCaret = previousMode === "visual" ? projectionController?.captureCaret?.() : null
+    const sourceOffset = visualCaret?.sourceOffset ?? this.view.state.selection.main.head
+    const preferredBlockId = visualCaret?.blockId ?? null
+
+    this.editingMode = nextMode
     this.view?.dispatch({ effects: livePreviewMode.of(this.editingMode === "visual") })
     this.element.dataset.editorEditingMode = this.editingMode
     this.form?.setAttribute("data-editor-mode", this.editingMode)
@@ -264,7 +289,22 @@ export default class extends Controller {
         bubbles: true,
         detail: { mode: this.editingMode, editor: this }
       }))
+
+      requestAnimationFrame(() => {
+        if (this.destroyed || this.editingMode !== nextMode) return
+        if (nextMode === "source") {
+          if (this.vimEnabled && this.vimMode.startsWith("visual")) Vim.handleKey(this.vim, "<Esc>", "user")
+          this.view.dispatch({ selection: { anchor: sourceOffset } })
+          this.view.focus()
+        } else {
+          this.projectionController()?.restoreCaret?.(sourceOffset, preferredBlockId)
+        }
+      })
     }
+  }
+
+  projectionController() {
+    return this.form?.presentationEditorController || this.form?.visualEditorController || null
   }
 
   syncVisualSurfaceGeometry() {
@@ -355,9 +395,15 @@ export default class extends Controller {
     })
   }
 
+  replaceRanges(changes) {
+    if (this.destroyed || !this.view || !changes?.length) return
+    this.view.dispatch({ changes, userEvent: "input" })
+  }
+
   handleUpdate(update) {
     this.reportLivePreviewState(update.state)
     if (update.docChanged) {
+      this.changedSinceFocusOut = true
       this.syncInput()
       this.refreshFrontmatterRange()
       this.syncFrontmatterVisibility()

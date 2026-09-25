@@ -161,6 +161,7 @@ body.elef-app {
 .visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-scroller { scrollbar-width: none; }
 .visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-scroller::-webkit-scrollbar { display: none; }
 .visual-editor-form[data-editor-mode="visual"][data-editor-vim-enabled="true"] .source-field .editor-surface { display: block; margin-top: 0.75rem; }
+.visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-cursorLayer { display: none; }
 .visual-editor-form[data-editor-mode="source"] .source-field .editor-surface { display: block; }
 .visual-editor-form[data-editor-mode="source"] .source-field.is-source-hidden { display: block; }
 .editor-layout, .source-pane { min-width: 0; }
