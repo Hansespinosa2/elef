@@ -825,6 +825,26 @@ class PresentationsTest < ApplicationSystemTestCase
 
     visit edit_presentation_path(visual)
     operations.each_with_index do |(selector, visible_text, source_text, replacement), operation_index|
+      if operation_index == 4
+        trace = page.execute_script(<<~JAVASCRIPT)
+          const form = document.querySelector('.visual-editor-form');
+          const controller = form.presentationEditorController;
+          const source = controller.editorController.value;
+          const target = [...document.querySelectorAll('.editor-projection .slide-block')]
+            .find((element) => element.textContent.includes('formula'));
+          const region = controller.map.editable_regions.find((item) => item.block_id === target.dataset.editorBlockId);
+          const block = controller.findBlock(target.dataset.editorBlockId);
+          return {
+            activeId: target.dataset.editorBlockId,
+            region,
+            block,
+            sourceLength: source.length,
+            mapSourceLength: controller.map.source_length,
+            mappedSource: source.slice(region.content_range.start, region.content_range.end)
+          };
+        JAVASCRIPT
+        puts "PRESENTATION_CODE_TRACE #{trace.to_json}"
+      end
       type_visual_text(selector, visible_text, replacement)
       if operation_index == 1
         trace = page.execute_script(<<~JAVASCRIPT)
