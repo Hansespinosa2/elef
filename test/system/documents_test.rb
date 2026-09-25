@@ -504,7 +504,6 @@ class DocumentsTest < ApplicationSystemTestCase
       visit edit_document_path(source)
       assert_field "Markdown source", with: source_expected
       assert_equal expected, source_expected
-      visual_source = visual.reload.source.gsub(/\r\n?/, "\n")
       source_source = source.reload.source.gsub(/\r\n?/, "\n")
       assert_equal visual_source, source_source, "visual/source mismatch for #{fixture[:id]}"
     end
