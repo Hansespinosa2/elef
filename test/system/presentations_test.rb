@@ -729,7 +729,8 @@ class PresentationsTest < ApplicationSystemTestCase
 
     visit edit_presentation_path(presentation)
     source = find_field("Markdown source")
-    source.send_keys("beq")
+    editor = find(".cm-content")
+    editor.send_keys("beq")
     assert_selector ".snippet-palette", visible: true
     assert_text ":beq"
     assert_selector ".snippet-option[aria-selected='true']"
@@ -738,7 +739,7 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_operator palette_position["paletteTop"], :>, palette_position["caretLineBottom"]
     assert_operator palette_position["paletteTop"], :<, palette_position["editorBottom"]
 
-    source.send_keys(:enter)
+    editor.send_keys(:enter)
     assert_equal "# Math\n\n$$\nequation\n$$", source.value
     assert_equal "equation", page.evaluate_script("(() => { const e = document.querySelector('[data-snippet-palette-target=editor]'); return e.value.slice(e.selectionStart, e.selectionEnd) })()")
   end
