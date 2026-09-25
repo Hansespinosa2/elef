@@ -161,8 +161,11 @@ bin/dev
 
 ## Automatic deployment
 
-After CI succeeds, GitHub Actions publishes the approved commit to the
-`elef-deploy-main` ref. This only publishes a Git ref; it does not upload the
-app or choose a deployment machine. A machine deploys only when its local
-watcher is installed and running. The documented setup runs that watcher on
-the Mac mini, but it does not enforce a hardware identity.
+Pull requests run the seven required CI checks once. After a PR is merged,
+GitHub Actions verifies those checks against the exact tested source tree
+before publishing the approved commit to `elef-deploy-dev` or
+`elef-deploy-main`. The post-merge workflow does not rerun the test suite. It
+only publishes a Git ref; it does not upload the app or choose a deployment
+machine. A machine deploys only when its local watcher is installed and
+running. The documented setup runs that watcher on the Mac mini, but it does
+not enforce a hardware identity.
