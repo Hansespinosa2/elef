@@ -314,6 +314,30 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: "# Typing notes\n\nBody changed", wait: 5
   end
 
+  test "visual edits preserve soft line breaks around inline math" do
+    source = <<~MARKDOWN
+      # Notes
+
+      The relationship is $E = mc^2$ in inline form, while this display
+      equation gives the reader a larger landmark.
+    MARKDOWN
+    document = Document.create!(title: "Soft breaks with math", source: source)
+
+    visit edit_document_path(document)
+    rendered_text = page.execute_script(<<~JAVASCRIPT)
+      const block = [...document.querySelectorAll(".document-editor-block")]
+        .find((element) => element.textContent.includes("The relationship"));
+      block.style.whiteSpace = "pre-line";
+      return block.innerText;
+    JAVASCRIPT
+    assert_includes rendered_text, "display\nequation"
+
+    type_visual_text(".document-editor-block", "The relationship", "The equation relationship")
+
+    assert_field "Markdown source", with: source.sub("The relationship", "The equation relationship"), wait: 5
+    refute_includes find_field("Markdown source").value, "\uE000"
+  end
+
   test "typing in visual and source modes has identical fixture Markdown" do
     fixtures = [
       {
