@@ -680,16 +680,18 @@ class DocumentsTest < ApplicationSystemTestCase
     expanded = ->(symbol) { "$\\mathbf{\\bar{#{symbol}}}$" }
     chain_state = -> do
       page.evaluate_script(<<~JAVASCRIPT)
-        const root = document.querySelector(".source-field");
-        const shorthand = window.Stimulus.getControllerForElementAndIdentifier(root, "math-shorthand");
-        const palette = window.Stimulus.getControllerForElementAndIdentifier(root, "math-shortcut-palette");
-        ({
-          expansion: shorthand?.lastExpansion || null,
-          source: shorthand?.editorController?.value || null,
-          caret: shorthand?.editorController?.selectionStart ?? null,
-          paletteHidden: palette?.paletteTarget?.hidden ?? null,
-          paletteQuery: palette?.query || null
-        })
+        (() => {
+          const root = document.querySelector(".source-field");
+          const shorthand = window.Stimulus.getControllerForElementAndIdentifier(root, "math-shorthand");
+          const palette = window.Stimulus.getControllerForElementAndIdentifier(root, "math-shortcut-palette");
+          return {
+            expansion: shorthand?.lastExpansion || null,
+            source: shorthand?.editorController?.value || null,
+            caret: shorthand?.editorController?.selectionStart ?? null,
+            paletteHidden: palette?.paletteTarget?.hidden ?? null,
+            paletteQuery: palette?.query || null
+          };
+        })()
       JAVASCRIPT
     end
 
