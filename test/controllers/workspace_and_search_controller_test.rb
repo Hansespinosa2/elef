@@ -14,6 +14,17 @@ class WorkspaceAndSearchControllerTest < ActionDispatch::IntegrationTest
     assert_select "select[name='workspace[typography]'] option[selected][value='technical']"
   end
 
+  test "updates one workspace appearance default without replacing the other via json" do
+    workspace = Workspace.default
+    workspace.update_style_defaults(theme: "light", typography: "technical")
+
+    patch settings_path, params: { workspace: { theme: "dark" } }, as: :json
+
+    assert_response :success
+    assert_equal({ "theme" => "dark", "typography" => "technical" }, response.parsed_body)
+    assert_equal ["dark", "technical"], [workspace.reload.default_theme, workspace.default_typography]
+  end
+
   test "creates a document with generic appearance overrides" do
     post documents_path, params: { document: { title: "Ignored title", source: "# Styled notes", theme: "dark", typography: "technical" } }
 

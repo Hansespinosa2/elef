@@ -414,6 +414,11 @@ body.elef-app {
   padding: 0.45rem 0.6rem;
   width: 100%;
 }
+.command-palette-hint {
+  color: var(--oradia-muted);
+  font-size: 0.68rem;
+  margin: 0.3rem 0.35rem 0;
+}
 
 /* filters */
 .command-palette-filters {

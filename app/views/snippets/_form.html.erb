@@ -6,11 +6,28 @@
     <% if snippet.errors.any? %>
       <div class="error-panel rounded-xl border p-4"><%= snippet.errors.full_messages.to_sentence %></div>
     <% end %>
-    <%= form.text_field :name, placeholder: "Name", required: true, class: "settings-control rounded-xl border p-3" %>
-    <%= form.text_field :trigger, placeholder: "Trigger without colon, e.g. beq", required: true, class: "settings-control rounded-xl border p-3 font-mono" %>
-    <%= form.text_field :description, placeholder: "Description", class: "settings-control rounded-xl border p-3" %>
-    <%= form.select :category, Snippet::CATEGORIES, {}, class: "settings-control rounded-xl border p-3" %>
-    <%= form.text_area :body, rows: 12, placeholder: "Markdown body. Use ${1:placeholder} for tab stops.", required: true, class: "settings-control rounded-xl border p-3 font-mono" %>
+    <div class="field">
+      <%= form.label :name, "Name", class: "mb-1 block font-extrabold" %>
+      <%= form.text_field :name, required: true, autofocus: snippet.new_record?, data: { controller: "autofocus" }, class: "settings-control w-full rounded-xl border p-3" %>
+    </div>
+    <div class="field">
+      <%= form.label :trigger, "Trigger", class: "mb-1 block font-extrabold" %>
+      <%= form.text_field :trigger, placeholder: "e.g. beq", required: true, class: "settings-control w-full rounded-xl border p-3 font-mono" %>
+      <p class="field-hint">Type this trigger with a leading colon in the editor.</p>
+    </div>
+    <div class="field">
+      <%= form.label :description, "Description", class: "mb-1 block font-extrabold" %>
+      <%= form.text_field :description, class: "settings-control w-full rounded-xl border p-3" %>
+    </div>
+    <div class="field">
+      <%= form.label :category, "Category", class: "mb-1 block font-extrabold" %>
+      <%= form.select :category, Snippet::CATEGORIES, {}, class: "settings-control w-full rounded-xl border p-3" %>
+    </div>
+    <div class="field">
+      <%= form.label :body, "Body", class: "mb-1 block font-extrabold" %>
+      <%= form.text_area :body, rows: 12, placeholder: "Markdown body. Use ${1:placeholder} for tab stops.", required: true, class: "settings-control w-full rounded-xl border p-3 font-mono" %>
+      <p class="field-hint">Use <code>${1:placeholder}</code> to mark a Tab stop.</p>
+    </div>
     <div class="flex gap-3">
       <%= form.submit "Save snippet", class: "button primary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" %>
       <%= link_to "Cancel", snippets_path, class: "button inline-flex min-h-10 items-center rounded-full border px-4 py-2 font-bold no-underline" %>

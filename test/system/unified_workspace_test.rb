@@ -20,6 +20,53 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     assert_current_path new_presentation_path
   end
 
+  test "creates a snippet from the command palette using only the keyboard" do
+    visit root_path
+    page.driver.browser.action.key_down(:control).send_keys("k").key_up(:control).perform
+
+    input = find("[data-command-palette-target='input']")
+    input.send_keys("new snippet", :enter)
+
+    assert_current_path new_snippet_path
+    assert_selector "#snippet_name:focus"
+    assert_selector "label[for='snippet_name']", text: "Name"
+    assert_selector "label[for='snippet_trigger']", text: "Trigger"
+    assert_selector "label[for='snippet_body']", text: "Body"
+
+    keyboard = page.driver.browser.action
+    keyboard.send_keys("Meeting outline").send_keys(:tab).send_keys("agenda")
+      .send_keys(:tab).send_keys("A reusable meeting outline")
+      .send_keys(:tab).send_keys(:tab).send_keys("# Agenda")
+      .send_keys(:enter).send_keys(:enter).send_keys("- ${1:topic}")
+      .send_keys(:tab).send_keys(:enter).perform
+
+    assert_current_path snippets_path
+    assert_selector ".flash", text: "Snippet created."
+    assert_selector ".snippet-card", text: "Meeting outline"
+    snippet = Snippet.find_by!(trigger: "agenda")
+    assert_equal "# Agenda\n\n- ${1:topic}", snippet.body
+  end
+
+  test "changes a workspace appearance default from the command palette using only the keyboard" do
+    workspace = Workspace.default
+    workspace.update_style_defaults(theme: "match", typography: "book")
+    visit root_path
+    page.driver.browser.action.key_down(:control).send_keys("k").key_up(:control).perform
+
+    input = find("[data-command-palette-target='input']")
+    input.send_keys("change workspace appearance", :enter)
+    assert_selector "#command-palette-heading", text: "Change workspace appearance"
+    assert_selector ".command-palette-hint", text: /Esc back/
+
+    input.send_keys(:enter)
+    assert_selector "#command-palette-heading", text: "Change default theme"
+    input.send_keys(:arrow_down, :arrow_down, :enter)
+
+    assert_selector "[data-command-palette-target='status']", text: "Workspace default theme set to Dark. Applies to new and unstyled work; work-specific settings take precedence."
+    assert_equal "dark", workspace.reload.default_theme
+    assert_equal "book", workspace.default_typography
+  end
+
   test "Mod+P searches document and presentation content with work type filters" do
     document = Document.create!(title: "Field archive", source: "# Field archive\n\nA memorable\nphrase from an old survey")
     presentation = Presentation.create!(title: "Survey talk", source: "# Survey talk\n\nA memorable\nphrase from an old survey")
