@@ -24,6 +24,8 @@ class PresentationsTest < ApplicationSystemTestCase
         selected = page.execute_script(<<~JAVASCRIPT, target, visible_text)
           const root = arguments[0];
           const needle = arguments[1];
+          const editableBlock = root.closest("[contenteditable='true']") || root;
+          editableBlock.focus({ preventScroll: true });
           const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
           let node;
           while (walker.nextNode()) {
@@ -39,10 +41,14 @@ class PresentationsTest < ApplicationSystemTestCase
           const selection = window.getSelection();
           selection.removeAllRanges();
           selection.addRange(range);
-          return true;
+          return {
+            focused: document.activeElement === editableBlock,
+            selected: selection.toString() === needle
+          };
         JAVASCRIPT
-        assert selected, "could not select visual text #{visible_text.inspect}"
-        target.send_keys(replacement)
+        assert selected && selected["focused"] && selected["selected"],
+          "could not focus #{visible_text.inspect} and select it for visual editing"
+        page.driver.browser.action.send_keys(replacement).perform
         return
       rescue Selenium::WebDriver::Error::StaleElementReferenceError
         attempts += 1
