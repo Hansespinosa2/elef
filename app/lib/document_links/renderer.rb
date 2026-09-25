@@ -2,7 +2,7 @@ module DocumentLinks
   module Renderer
     module_function
 
-    def render(markdown, documents: nil, workspace: nil)
+    def render(markdown, documents: nil, workspace: nil, media_resolver: nil)
       workspace ||= documents&.first&.workspace || Workspace.default
       documents = (documents || Document.where(workspace: workspace)).to_a
       documents_by_title = documents.index_by(&:title)
@@ -23,7 +23,7 @@ module DocumentLinks
         placeholder
       end
 
-      html = Presentations::MarkdownRenderer.render(annotated)
+      html = Presentations::MarkdownRenderer.render(annotated, media_resolver: media_resolver)
       replacements.each { |placeholder, replacement| html = html.gsub(placeholder) { replacement } }
       html.html_safe
     end

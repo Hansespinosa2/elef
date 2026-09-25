@@ -35,11 +35,11 @@ class PresentationsController < ApplicationController
     @presentation = Presentation.new(presentation_params)
     respond_to do |format|
       if @presentation.save
-        format.html { redirect_to edit_presentation_path(@presentation), notice: "Presentation saved." }
+        format.html { redirect_to edit_presentation_path(@presentation, editor_mode: submitted_editor_mode), notice: "Presentation saved." }
         format.json do
           render json: {
             id: @presentation.id,
-            edit_url: edit_presentation_path(@presentation),
+            edit_url: edit_presentation_path(@presentation, editor_mode: submitted_editor_mode),
             upload_url: upload_asset_presentation_path(@presentation),
             lock_version: @presentation.lock_version,
             revision_token: @presentation.revision_token
@@ -260,6 +260,10 @@ class PresentationsController < ApplicationController
       :title, :source, :theme, :typography, :lock_version, :base_revision,
       :base_revision_id, :revision_token, :edit_session_id, :checkpoint, :reason
     )
+  end
+
+  def submitted_editor_mode
+    "source" if params[:editor_mode] == "source"
   end
 
   def pptx_params

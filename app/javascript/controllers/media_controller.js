@@ -2,7 +2,7 @@ import { Controller } from "@hotwired/stimulus"
 
 export default class extends Controller {
   static targets = ["input", "fit", "status"]
-  static values = { uploadUrl: String, enabled: Boolean }
+  static values = { uploadUrl: String, enabled: Boolean, workKind: String }
 
   connect() {
     this.pendingRange = null
@@ -95,20 +95,23 @@ export default class extends Controller {
     if (this.enabledValue && this.uploadUrlValue) return true
 
     const form = this.element.closest("form") || this.element
-    const titleInput = form.querySelector('input[name="presentation[title]"]')
-    const title = titleInput?.value || "Untitled presentation"
-    const source = this.editor?.value || form.querySelector('textarea[name="presentation[source]"]')?.value || ""
-    const theme = form.querySelector('select[name="presentation[theme]"]')?.value || ""
-    const typography = form.querySelector('select[name="presentation[typography]"]')?.value || ""
+    const kind = this.hasWorkKindValue ? this.workKindValue : "presentation"
+    const collection = kind === "document" ? "documents" : "presentations"
+    const fallbackTitle = kind === "document" ? "Untitled document" : "Untitled presentation"
+    const title = form.querySelector(`input[name="${kind}[title]"]`)?.value || fallbackTitle
+    const source = this.editor?.value || form.querySelector(`textarea[name="${kind}[source]"]`)?.value || ""
+    const theme = form.querySelector(`select[name="${kind}[theme]"]`)?.value || ""
+    const typography = form.querySelector(`select[name="${kind}[typography]"]`)?.value || ""
 
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || ""
     const body = new FormData()
-    body.append("presentation[title]", title)
-    body.append("presentation[source]", source)
-    body.append("presentation[theme]", theme)
-    body.append("presentation[typography]", typography)
+    body.append(`${kind}[title]`, title)
+    body.append(`${kind}[source]`, source)
+    body.append(`${kind}[theme]`, theme)
+    body.append(`${kind}[typography]`, typography)
+    body.append("editor_mode", form.querySelector('[name="editor_mode"]')?.value || "visual")
 
-    const response = await fetch("/presentations", {
+    const response = await fetch(`/${collection}`, {
       method: "POST",
       headers: {
         Accept: "application/json",
@@ -119,14 +122,14 @@ export default class extends Controller {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}))
-      throw new Error(errorData.errors?.join(", ") || "Failed to save new presentation before upload.")
+      throw new Error(errorData.errors?.join(", ") || `Failed to save new ${kind} before upload.`)
     }
 
     const data = await response.json()
     this.enabledValue = true
     this.uploadUrlValue = data.upload_url
     if (form) {
-      form.action = `/presentations/${data.id}`
+      form.action = `/${collection}/${data.id}`
       let methodInput = form.querySelector('input[name="_method"]')
       if (!methodInput) {
         methodInput = document.createElement("input")
@@ -135,36 +138,36 @@ export default class extends Controller {
         methodInput.value = "patch"
         form.prepend(methodInput)
       }
-      let lockInput = form.querySelector('input[name="presentation[lock_version]"]')
+      let lockInput = form.querySelector(`input[name="${kind}[lock_version]"]`)
       if (!lockInput) {
         lockInput = document.createElement("input")
         lockInput.type = "hidden"
-        lockInput.name = "presentation[lock_version]"
+        lockInput.name = `${kind}[lock_version]`
         form.prepend(lockInput)
       }
       lockInput.value = data.lock_version ?? 0
 
-      let baseRevInput = form.querySelector('input[name="presentation[base_revision]"]')
+      let baseRevInput = form.querySelector(`input[name="${kind}[base_revision]"]`)
       if (!baseRevInput) {
         baseRevInput = document.createElement("input")
         baseRevInput.type = "hidden"
-        baseRevInput.name = "presentation[base_revision]"
+        baseRevInput.name = `${kind}[base_revision]`
         form.prepend(baseRevInput)
       }
       baseRevInput.value = data.revision_token || ""
 
-      let sessionInput = form.querySelector('input[name="presentation[edit_session_id]"]')
+      let sessionInput = form.querySelector(`input[name="${kind}[edit_session_id]"]`)
       if (!sessionInput) {
         sessionInput = document.createElement("input")
         sessionInput.type = "hidden"
-        sessionInput.name = "presentation[edit_session_id]"
+        sessionInput.name = `${kind}[edit_session_id]`
         sessionInput.value = globalThis.crypto?.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2)
         form.prepend(sessionInput)
       }
 
       const previewController = this.application.getControllerForElementAndIdentifier(this.element, "preview")
       if (previewController) {
-        previewController.urlValue = `/presentations/${data.id}/preview`
+        previewController.urlValue = `/${collection}/${data.id}/preview`
       }
       const autosaveController = this.application.getControllerForElementAndIdentifier(this.element, "autosave")
       if (autosaveController) {
@@ -173,7 +176,7 @@ export default class extends Controller {
         autosaveController.updateRevisionTokens(data)
       }
     }
-    window.history.replaceState({}, "", data.edit_url)
+    window.history.replaceState({}, "", data.edit_url || `/${collection}/${data.id}/edit`)
     return true
   }
 

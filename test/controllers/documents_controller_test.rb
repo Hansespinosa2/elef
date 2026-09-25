@@ -36,6 +36,32 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to documents_path
   end
 
+  test "uploads and serves image assets for documents" do
+    document = Document.create!(title: "Document media", source: "# Media")
+    bytes = Base64.decode64("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+i9MwAAAAASUVORK5CYII=")
+    Tempfile.create(["pixel", ".png"]) do |file|
+      file.binmode
+      file.write(bytes)
+      file.rewind
+      upload = Rack::Test::UploadedFile.new(file.path, "image/png")
+      post upload_asset_document_path(document), params: { file: upload, alt: "Pixel" }, headers: { "Accept" => "application/json" }
+    end
+
+    assert_response :created
+    digest = Digest::SHA256.hexdigest(bytes)
+    assert_equal digest, response.parsed_body["digest"]
+    assert_equal "![Pixel](elef-asset:#{digest} \"fit:contain\")", response.parsed_body["source"]
+
+    document.reload.update!(source: "# Media\n\n#{response.parsed_body["source"]}")
+    get document_path(document)
+    assert_response :success
+    assert_select ".document-surface img.presentation-media[src='/documents/#{document.id}/assets/#{digest}'][alt='Pixel']"
+
+    get media_asset_document_path(document, digest)
+    assert_response :redirect
+    assert_includes response.location, "/rails/active_storage/blobs/redirect/"
+  end
+
   test "document library is separate from the combined library" do
     document = Document.create!(title: "Notes", source: "# Notes")
 

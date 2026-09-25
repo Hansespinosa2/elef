@@ -26,7 +26,7 @@ export default class extends Controller {
     this.element.addEventListener("click", this.clickHandler)
     this.projectionLinkHandler = (event) => this.projectionLinkClicked(event)
     this.element.addEventListener("click", this.projectionLinkHandler)
-    this.applyMode("visual")
+    this.applyMode(this.element.getAttribute("data-editor-mode") || "visual")
     this.updateBlockBoundaries()
   }
 

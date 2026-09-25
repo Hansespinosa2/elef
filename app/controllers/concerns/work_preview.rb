@@ -86,6 +86,7 @@ module WorkPreview
     {
       html: html,
       editor_map: editor_map,
+      style: { theme: preview_work.theme_override, typography: preview_work.typography_override },
       warnings: preview_work.preview_warnings,
       revision: work_preview_revision(work)
     }
