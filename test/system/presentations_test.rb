@@ -830,8 +830,10 @@ class PresentationsTest < ApplicationSystemTestCase
         trace = page.execute_script(<<~JAVASCRIPT)
           const form = document.querySelector('.visual-editor-form');
           const controller = form.presentationEditorController;
+          const editor = controller.editorController;
           const active = document.activeElement.closest('[data-editor-block-id]');
-          const source = controller.editorController.value;
+          const source = editor.value;
+          const rawDoc = editor.view.state.doc.sliceString(0, editor.view.state.doc.length, "\\r\\n");
           const region = controller.map.editable_regions.find((item) => item.block_id === active.dataset.editorBlockId);
           const block = controller.findBlock(active.dataset.editorBlockId);
           const from = region.content_range.start;
@@ -841,6 +843,12 @@ class PresentationsTest < ApplicationSystemTestCase
             innerText: active.innerText,
             textContent: active.textContent,
             innerHTML: active.innerHTML,
+            lineSeparator: editor.lineSeparator,
+            sourceLength: source.length,
+            sourceLineEndings: { crlf: (source.match(/\\r\\n/g) || []).length, lf: (source.match(/(?<!\\r)\\n/g) || []).length },
+            rawDocLineEndings: { crlf: (rawDoc.match(/\\r\\n/g) || []).length, lf: (rawDoc.match(/(?<!\\r)\\n/g) || []).length },
+            textareaLineEndings: { crlf: (editor.inputTarget.value.match(/\\r\\n/g) || []).length, lf: (editor.inputTarget.value.match(/(?<!\\r)\\n/g) || []).length },
+            mapSourceLength: controller.map.source_length,
             region,
             block,
             mappedSource: source.slice(from, to),
