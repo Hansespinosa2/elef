@@ -38,14 +38,19 @@ module Presentations
           else
             attributes = %( class="#{ERB::Util.html_escape(class_names)}" contenteditable="false" aria-readonly="true")
           end
+          render_source, caret_token = if valid_mapping && %w[list quote].include?(mapped[:kind])
+            editable_structured_render_source(mapped[:markdown], mapped[:kind])
+          else
+            [block.markdown, nil]
+          end
           rendered = if region&.dig(:empty_heading)
             "<h1><br></h1>"
           else
-            DocumentLinks::Renderer.render(block.markdown, documents: documents, workspace: workspace)
+            DocumentLinks::Renderer.render(render_source, documents: documents, workspace: workspace)
           end
           rendered = editable_media(rendered, block.markdown) if valid_mapping && mapped[:kind] == "image"
           if valid_mapping && %w[list quote].include?(mapped[:kind])
-            rendered = editable_trailing_structured_line(rendered, block.markdown, mapped[:kind])
+            rendered = editable_trailing_structured_line(rendered, mapped[:markdown], mapped[:kind], caret_token)
           end
           html << %(<div#{attributes}>#{rendered}</div>)
         end
@@ -123,35 +128,41 @@ module Presentations
       %(<figure class="editor-media">#{rendered}<figcaption class="editor-media-caption" aria-label="Editable image alt text" title="Edit image alt text">#{ERB::Util.html_escape(alt)}</figcaption></figure>)
     end
 
-    def editable_trailing_structured_line(rendered, markdown, kind)
+    def editable_structured_render_source(markdown, kind)
+      lines = markdown.to_s.split("\n")
+      last_line = lines.last.to_s
+      marker = if kind == "list"
+        last_line.match(/\A([ \t]*(?:[-*+]|\d+[.)])[ \t]*)\z/)&.[](1)
+      elsif kind == "quote"
+        last_line.match(/\A([ \t]*>[ \t]*)\z/)&.[](1)
+      end
+      return [markdown, nil] unless marker
+
+      token = "ELEFCARETPLACEHOLDER"
+      token += "_" while markdown.include?(token)
+      lines[-1] = "#{marker}#{token}"
+      [lines.join("\n"), token]
+    end
+
+    def editable_trailing_structured_line(rendered, markdown, kind, caret_token = nil)
       last_line = markdown.to_s.split("\n").last.to_s
       empty_list_item = kind == "list" && last_line.match?(/\A[ \t]*(?:[-*+]|\d+[.)])[ \t]*\z/)
       empty_quote_line = kind == "quote" && last_line.match?(/\A[ \t]*>[ \t]*\z/)
-      return rendered unless empty_list_item || empty_quote_line
+      return rendered unless caret_token && (empty_list_item || empty_quote_line)
 
       fragment = Nokogiri::HTML.fragment(rendered)
       if empty_list_item
-        list = fragment.element_children.find { |child| %w[ol ul].include?(child.name) }
-        return rendered unless list
+        last_item = fragment.css("li").reverse.find { |item| item.text.include?(caret_token) }
+        return rendered unless last_item
 
-        last_item = list.element_children.reverse.find { |child| child.name == "li" }
-        if last_item && last_item.text.strip.blank?
-          last_item.children.remove
-          last_item.add_child("<br>")
-        else
-          list.add_child("<li><br></li>")
-        end
+        last_item.children.remove
+        last_item.add_child("<br>")
       else
-        quote = fragment.element_children.find { |child| child.name == "blockquote" }
-        return rendered unless quote
+        quote_line = fragment.css("blockquote p, blockquote div").reverse.find { |line| line.text.include?(caret_token) }
+        return rendered unless quote_line
 
-        last_line = quote.element_children.reverse.find { |child| %w[div p].include?(child.name) }
-        if last_line && last_line.text.strip.blank?
-          last_line.children.remove
-          last_line.add_child("<br>")
-        else
-          quote.add_child("<p><br></p>")
-        end
+        quote_line.children.remove
+        quote_line.add_child("<br>")
       end
 
       fragment.to_html
