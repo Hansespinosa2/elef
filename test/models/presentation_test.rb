@@ -382,6 +382,44 @@ class PresentationTest < ActiveSupport::TestCase
     assert_empty fragment.css(".math-error")
   end
 
+  test "renders inline accents and multiline display math before Markdown transforms TeX" do
+    html = Presentations::MarkdownRenderer.render(<<~MARKDOWN)
+      Inline accent: $\\bar{x}$.
+
+      $$
+      \\begin{aligned}
+      x &= y \\\\
+      y &= z
+      \\end{aligned}
+      $$
+    MARKDOWN
+    fragment = Nokogiri::HTML.fragment(html)
+
+    assert_equal 2, fragment.css(".katex").length
+    assert_equal 1, fragment.css(".katex-display").length
+    assert_empty fragment.css(".math-error")
+  end
+
+  test "renders a stress fixture with inline, display, matrix, and aligned math" do
+    source = Rails.root.join("test/fixtures/files/latex_stress.md").read
+    fragment = Nokogiri::HTML.fragment(Presentations::MarkdownRenderer.render(source))
+
+    assert_equal 11, fragment.css(".katex").length
+    assert_equal 3, fragment.css(".katex-display").length
+    assert_empty fragment.css(".math-error")
+    assert_equal 3, fragment.css("code").length
+    assert_equal ["$x^2$", "$x^2$", "$x^2$"], fragment.css("code").map { |code| code.text.strip }
+  end
+
+  test "does not render math-looking link destinations or leak math placeholders" do
+    html = Presentations::MarkdownRenderer.render("[Formula link](/docs/$formula$)")
+    fragment = Nokogiri::HTML.fragment(html)
+
+    assert_equal "/docs/$formula$", fragment.at_css("a")["href"]
+    assert_empty fragment.css(".katex")
+    refute_includes html, "ELEFMATH"
+  end
+
   test "rejects dangerous link and image protocols" do
     html = Presentations::MarkdownRenderer.render("[unsafe](javascript:alert(1)) ![image](javascript:alert(1))")
 
@@ -505,5 +543,34 @@ class PresentationTest < ActiveSupport::TestCase
       assert_equal parent.title, child.fork_parent_title
       assert_equal parent.source, child.fork_source
     end
+  end
+
+  test "infers image layout for a slide containing only an image without headings" do
+    slide = Presentations::Document.parse("![Dummy](dummy.png)").slides.first
+
+    assert_equal "image", slide.layout
+    assert_equal "![Dummy](dummy.png)", slide.markdown
+  end
+
+  test "resolves media blobs and converts markdown to portable asset paths" do
+    presentation = Presentation.create!(title: "Portable Deck", source: "# Start")
+    bytes = "image data".b
+    presentation.assets.attach(io: StringIO.new(bytes), filename: "photo.png", content_type: "image/png")
+    blob = presentation.assets.blobs.last
+    digest = Digest::SHA256.hexdigest(bytes)
+    blob.update!(metadata: blob.metadata.merge("elef_sha256" => digest))
+
+    resolved_by_digest = Presentations::MediaAssets.resolve_blob(presentation, digest)
+    assert_equal blob, resolved_by_digest
+
+    resolved_by_filename = Presentations::MediaAssets.resolve_blob(presentation, "photo.png")
+    assert_equal blob, resolved_by_filename
+
+    resolved_by_path = Presentations::MediaAssets.resolve_blob(presentation, "assets/photo.png")
+    assert_equal blob, resolved_by_path
+
+    raw_source = "# Title\n\n![My Photo](elef-asset:#{digest} \"fit:contain\")"
+    portable = Presentations::MediaAssets.portable_markdown(raw_source, presentation)
+    assert_equal "# Title\n\n![My Photo](assets/photo.png \"fit:contain\")", portable
   end
 end

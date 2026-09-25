@@ -338,27 +338,158 @@ body.elef-app {
 .editor-layout { grid-template-columns: minmax(0, 1.2fr) minmax(22rem, 0.8fr); }
 
 .command-palette-root { position: relative; }
+
+/* ── triggers ── */
 .command-palette-triggers { align-items: center; display: flex; gap: 0.45rem; }
 .command-palette-trigger { background: var(--oradia-slate-800); border: 1px solid var(--oradia-slate-700); border-radius: 999px; color: var(--oradia-muted); cursor: pointer; font: inherit; font-size: 0.8rem; font-weight: 700; padding: 0.48rem 0.75rem; }
 .command-palette-trigger:hover, .command-palette-trigger:focus-visible { border-color: var(--oradia-green); color: var(--oradia-ink); }
 .command-palette-trigger kbd { border: 1px solid var(--oradia-slate-700); border-radius: 0.3rem; font-family: var(--oradia-mono); font-size: 0.7rem; margin-left: 0.35rem; padding: 0.1rem 0.3rem; }
-.command-palette { background: transparent; border: 0; max-width: calc(100vw - 2rem); padding: 0; width: min(42rem, calc(100vw - 2rem)); }
+
+/* ── dialog shell ── */
+/* Break out of header flow: fixed, horizontally centered, top-anchored like VSCode. */
+.command-palette {
+  background: transparent;
+  border: 0;
+  inset: auto auto 0 50%;
+  margin-left: calc(-1 * min(42rem, calc(100vw - 2rem)) / 2);
+  max-width: calc(100vw - 2rem);
+  padding: 0;
+  position: fixed;
+  top: 1.25rem;
+  width: min(42rem, calc(100vw - 2rem));
+  z-index: 9999;
+}
 .command-palette::backdrop { background: rgba(0, 0, 0, 0.58); backdrop-filter: blur(3px); }
-.command-palette-panel { background: var(--oradia-slate-900); border: 1px solid var(--oradia-slate-700); border-radius: 1rem; box-shadow: 0 24px 80px #0008; color: var(--oradia-ink); overflow: hidden; padding: 0.8rem; }
-.command-palette-heading { align-items: center; display: flex; justify-content: space-between; padding: 0.25rem 0.35rem 0.7rem; }
-.command-palette-heading h2 { font-family: var(--oradia-serif); font-size: 1.2rem; margin: 0; }
-.command-palette-heading button { background: transparent; border: 1px solid var(--oradia-slate-700); border-radius: 0.4rem; color: var(--oradia-muted); cursor: pointer; padding: 0.25rem 0.45rem; }
-.command-palette-panel > input { background: var(--oradia-slate-950); border: 1px solid var(--oradia-slate-700); border-radius: 0.65rem; box-sizing: border-box; color: var(--oradia-ink); font: inherit; padding: 0.8rem; width: 100%; }
-.command-palette-filters { display: flex; flex-wrap: wrap; gap: 0.4rem; padding-top: 0.7rem; }
+.command-palette-panel {
+  background: var(--oradia-slate-900);
+  border: 1px solid var(--oradia-slate-700);
+  border-radius: 0.85rem;
+  box-shadow: 0 24px 80px #0008;
+  color: var(--oradia-ink);
+  overflow: hidden;
+  padding: 0.5rem 0.6rem 0.4rem;
+}
+
+/* heading */
+.command-palette-heading {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  padding: 0 0.15rem 0.35rem;
+}
+.command-palette-heading h2 {
+  font-family: var(--oradia-serif);
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0;
+}
+.command-palette-heading button {
+  background: transparent;
+  border: 1px solid var(--oradia-slate-700);
+  border-radius: 0.35rem;
+  color: var(--oradia-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.65rem;
+  padding: 0.15rem 0.4rem;
+}
+
+/* input */
+.command-palette-panel > input {
+  background: var(--oradia-slate-950);
+  border: 1px solid var(--oradia-slate-700);
+  border-radius: 0.5rem;
+  box-sizing: border-box;
+  color: var(--oradia-ink);
+  font: inherit;
+  font-size: 0.875rem;
+  padding: 0.45rem 0.6rem;
+  width: 100%;
+}
+
+/* filters */
+.command-palette-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  padding-top: 0.35rem;
+}
 .command-palette-filters[hidden] { display: none; }
-.command-palette-filters button { background: transparent; border: 1px solid var(--oradia-slate-700); border-radius: 999px; color: var(--oradia-muted); cursor: pointer; font: inherit; font-size: 0.75rem; padding: 0.35rem 0.65rem; }
-.command-palette-filters button[aria-pressed="true"], .command-palette-filters button:hover { background: var(--oradia-slate-800); border-color: var(--oradia-green); color: var(--oradia-ink); }
-.command-palette-results { max-height: min(55vh, 28rem); overflow: auto; padding-top: 0.5rem; }
-.command-palette-option { background: transparent; border: 1px solid transparent; border-radius: 0.65rem; color: var(--oradia-ink); cursor: pointer; display: grid; gap: 0.15rem; padding: 0.65rem 0.75rem; text-align: left; width: 100%; }
-.command-palette-option span { color: var(--oradia-muted); font-size: 0.78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.command-palette-option:hover, .command-palette-option[aria-selected="true"] { background: var(--oradia-slate-800); border-color: var(--oradia-slate-700); }
-.command-palette-empty { color: var(--oradia-muted); font-size: 0.85rem; margin: 0; padding: 0.8rem 0.75rem; }
-.command-palette-status { color: var(--oradia-muted); font-size: 0.75rem; margin: 0.45rem 0.35rem 0; min-height: 1em; }
+.command-palette-filters button {
+  background: transparent;
+  border: 1px solid var(--oradia-slate-700);
+  border-radius: 999px;
+  color: var(--oradia-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.65rem;
+  padding: 0.15rem 0.5rem;
+}
+.command-palette-filters button[aria-pressed="true"], .command-palette-filters button:hover {
+  background: var(--oradia-slate-800);
+  border-color: var(--oradia-green);
+  color: var(--oradia-ink);
+}
+
+/* results list */
+.command-palette-results {
+  max-height: min(50vh, 24rem);
+  overflow: auto;
+  padding-top: 0.15rem;
+}
+
+/* option row — single line, label left, metadata right */
+.command-palette-option {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 0.4rem;
+  color: var(--oradia-ink);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.3rem 0.45rem;
+  text-align: left;
+  width: 100%;
+  font-size: 0.82rem;
+  line-height: 1.3;
+}
+.command-palette-option strong {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 0 1 auto;
+}
+.command-palette-option span {
+  color: var(--oradia-muted);
+  font-size: 0.68rem;
+  flex: 0 0 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.command-palette-option:hover, .command-palette-option[aria-selected="true"] {
+  background: var(--oradia-slate-800);
+  border-color: var(--oradia-slate-700);
+}
+
+.command-palette-empty {
+  color: var(--oradia-muted);
+  font-size: 0.78rem;
+  margin: 0;
+  padding: 0.5rem 0.45rem;
+  text-align: center;
+}
+
+.command-palette-status {
+  color: var(--oradia-muted);
+  font-size: 0.65rem;
+  margin: 0.2rem 0.3rem 0;
+  min-height: 1em;
+  text-align: center;
+}
 
 .presentation-surface { font-family: var(--oradia-sans); }
 .presentation-surface.work-theme-dark .slide { background: linear-gradient(135deg, var(--oradia-slate-800), var(--oradia-slate-950)); border-color: var(--oradia-slate-700); color: var(--oradia-ink); }
@@ -686,7 +817,25 @@ body.elef-app {
 .slide table { border-collapse: collapse; width: 100%; }
 .slide th,
 .slide td { border: 1px solid var(--presentation-line); padding: 0.35rem 0.5rem; }
-.empty-slide { color: var(--presentation-muted); font-style: italic; }
+.empty-slide {
+  color: var(--presentation-muted);
+  font-style: italic;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.25rem;
+  width: 100%;
+  height: 100%;
+}
+.empty-slide p { margin: 0; }
+.empty-slide-add-image {
+  font-style: normal;
+  font-size: 1.1rem;
+  padding: 0.5rem 1.2rem;
+  border-radius: 0.6rem;
+  cursor: pointer;
+}
 .math-error { color: var(--presentation-danger); font-family: "SFMono-Regular", Consolas, monospace; }
 
 .slide-frame {

@@ -50,6 +50,21 @@ class Presentation < Work
   validate :cannot_fork_from_itself
   validate :fork_type_is_supported
 
+  after_save :sync_storage_folder
+  after_destroy :remove_storage_folder
+
+  def sync_storage_folder
+    Presentations::FolderSync.sync!(self)
+  end
+
+  def remove_storage_folder
+    Presentations::FolderSync.remove!(self)
+  end
+
+  def storage_dir
+    Presentations::FolderSync.presentation_dir(self)
+  end
+
   def presentation_detail_record
     presentation_detail
   end
