@@ -1,11 +1,9 @@
 module PresentationsHelper
   def render_markdown(markdown, work: @presentation)
-    return Presentations::MarkdownRenderer.render(markdown) unless work&.id && markdown.to_s.match?(/elef-asset:[0-9a-f]{64}/)
+    return Presentations::MarkdownRenderer.render(markdown) unless work&.id
 
-    assets = (@presentation_media_assets ||= {})[work.id] ||= Presentations::MediaAssets.index(work)
-    resolver = lambda do |digest|
-      blob = assets[digest]
-      blob && ["/presentations/#{work.id}/assets/#{digest}", blob.content_type]
+    resolver = lambda do |identifier|
+      Presentations::MediaAssets.resolve_media(work, identifier)
     end
     Presentations::MarkdownRenderer.render(markdown, media_resolver: resolver)
   end

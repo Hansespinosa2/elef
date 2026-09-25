@@ -71,6 +71,7 @@ export default class extends Controller {
   }
 
   keydown(event) {
+    if (event.defaultPrevented) return
     const editor = this.editorController
     if (!editor) return
 

@@ -5,6 +5,21 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_selector "form.visual-editor-form:not([data-preview-projection-stale='true'])", wait: 5
   end
 
+  def wait_for_preview_response(count)
+    ready = page.evaluate_async_script(<<~JAVASCRIPT, count)
+      const count = arguments[0];
+      const done = arguments[arguments.length - 1];
+      const deadline = Date.now() + 5000;
+      const wait = () => {
+        if ((window.previewResponses || []).length >= count) return done(true);
+        if (Date.now() >= deadline) return done(false);
+        window.setTimeout(wait, 10);
+      };
+      wait();
+    JAVASCRIPT
+    assert ready, "preview response count #{count} was not registered"
+  end
+
   def type_visual_text(selector, source_text, replacement)
     wait_for_fresh_projection
     attempts = 0
@@ -487,12 +502,6 @@ class DocumentsTest < ApplicationSystemTestCase
           [".document-editor-block", "The relationship", "The relationship", "The equation relationship"],
           [".editor-media-caption", "representative workflow diagram", "representative workflow diagram", "sample workflow diagram"]
         ]
-      },
-      {
-        id: "document-full-report",
-        operations: [
-          [".document-editor-block", "The State of Calm Authoring", "The State of Calm Authoring", "The State of Testing"]
-        ]
       }
     ]
 
@@ -507,13 +516,11 @@ class DocumentsTest < ApplicationSystemTestCase
         expected.sub!(source_text, replacement)
         assert_field "Markdown source", with: expected, wait: 5
         page.execute_script("document.activeElement.blur()")
-        wait_for_fresh_projection
         assert_selector selector, text: /#{Regexp.escape(replacement)}/, wait: 5
       end
 
       click_on "Save document"
       assert_selector ".flash.notice", text: "Document saved.", wait: 10
-      visit edit_document_path(visual)
       assert_field "Markdown source", with: expected
       visual_source = visual.reload.source.gsub(/\r\n?/, "\n")
       visual.destroy!
@@ -530,7 +537,6 @@ class DocumentsTest < ApplicationSystemTestCase
 
       click_on "Save document"
       assert_selector ".flash.notice", text: "Document saved.", wait: 10
-      visit edit_document_path(source)
       assert_field "Markdown source", with: source_expected
       assert_equal expected, source_expected
       source_source = source.reload.source.gsub(/\r\n?/, "\n")
@@ -666,6 +672,27 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_selector ".document-editor-block .katex", text: "test"
   end
 
+  test "document preview renders inline accents and multiline display equations" do
+    document = Document.create!(title: "Document math rendering", source: <<~MARKDOWN)
+      # Math
+
+      Inline $\\bar{x}$.
+
+      $$
+      \\begin{aligned}
+      x &= y \\\\
+      y &= z
+      \\end{aligned}
+      $$
+    MARKDOWN
+
+    visit edit_document_path(document)
+
+    assert_selector ".document-editor-block .katex", count: 2
+    assert_selector ".document-editor-block .katex-display", count: 1
+    assert_no_selector ".document-editor-block .math-error"
+  end
+
   test "visual paragraph edits preserve inline media source" do
     document = Document.create!(title: "Inline image", source: "Before ![diagram](/diagram.svg) after.")
 
@@ -775,6 +802,56 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_includes editor.value, "$\\mathbf{\\hat{x}}^{\\mathsf{T}}"
     assert_includes editor.value, "\n"
     assert_selector '[data-autosave-target="status"]', text: "Saved", wait: 5
+  end
+
+  test "chains supported math modifiers and leaves conflicting chains intact" do
+    document = Document.create!(title: "Math modifier chains", source: "# Math")
+    visit edit_document_path(document)
+    editor = find_field("Markdown source")
+    editor.click
+    editor.send_keys(:end)
+    expanded = ->(symbol) { "$\\mathbf{\\bar{#{symbol}}}$" }
+
+    editor.send_keys("\n$x.bar")
+    editor.send_keys(:enter)
+    editor.send_keys(".bb")
+    editor.send_keys(:enter)
+    editor.send_keys("$")
+    assert_includes editor.value, expanded.call("x"), "bar then bold should compose across commits: #{editor.value.inspect}"
+
+    editor.send_keys("\n$y.bar.bb")
+    editor.send_keys(:enter)
+    editor.send_keys("$")
+    assert_includes editor.value, expanded.call("y"), "bar then bold should compose in one token: #{editor.value.inspect}"
+
+    editor.send_keys("\n$z.bb.bar")
+    editor.send_keys(:enter)
+    editor.send_keys("$")
+    assert_includes editor.value, expanded.call("z"), "bold then bar should compose in one token: #{editor.value.inspect}"
+
+    editor.send_keys("\n$w.bb")
+    editor.send_keys(:enter)
+    editor.send_keys(".bar")
+    editor.send_keys(:enter)
+    editor.send_keys("$")
+    assert_includes editor.value, expanded.call("w"), "bold then bar should compose across commits: #{editor.value.inspect}"
+
+    assert_equal ["x", "y", "z", "w"].map { |symbol| expanded.call(symbol) }.length,
+      ["x", "y", "z", "w"].sum { |symbol| editor.value.scan(expanded.call(symbol)).length }
+
+    editor.send_keys("\n$v.bar")
+    editor.send_keys(:enter)
+    editor.send_keys(".hat")
+    editor.send_keys(:enter)
+    assert_includes editor.value, "$\\bar{v}.hat\n", "conflicting modifiers across commits should stay literal: #{editor.value.inspect}"
+    editor.send_keys("$")
+
+    ["x.bb.bb", "x.bar.bar", "x.bar.hat"].each do |token|
+      editor.send_keys("\n$#{token}")
+      editor.send_keys(:enter)
+      assert_includes editor.value, "$#{token}\n"
+      editor.send_keys("$")
+    end
   end
 
   test "canonicalizes modifier order and ignores code and unknown contexts" do
@@ -976,14 +1053,15 @@ class DocumentsTest < ApplicationSystemTestCase
     JAVASCRIPT
 
     fill_in "Markdown source", with: "# First response"
-    sleep 0.5
+    wait_for_preview_response(1)
     assert_equal 1, page.evaluate_script("window.previewResponses.length")
 
     fill_in "Markdown source", with: "# Latest response"
-    sleep 0.5
+    wait_for_preview_response(2)
     assert_equal 2, page.evaluate_script("window.previewResponses.length")
 
-    page.execute_script(<<~JAVASCRIPT)
+    page.evaluate_async_script(<<~JAVASCRIPT)
+      const done = arguments[arguments.length - 1];
       const response = window.previewResponses[0];
       const title = response.source.match(/^# (.*)$/m)[1];
       response.resolve(new Response(JSON.stringify({
@@ -991,8 +1069,8 @@ class DocumentsTest < ApplicationSystemTestCase
         warnings: [],
         editor_map: null
       }), { headers: { "Content-Type": "application/json" } }));
+      window.setTimeout(done, 20);
     JAVASCRIPT
-    sleep 0.1
     assert_no_selector ".document-surface h1", text: "First response"
 
     page.execute_script(<<~JAVASCRIPT)

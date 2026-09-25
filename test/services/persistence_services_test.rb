@@ -159,7 +159,7 @@ class PersistenceServicesTest < ActiveSupport::TestCase
     PresentationReleasePublisher.call(presentation)
     Drafts::Save.call(
       presentation.reload,
-      source: "# Current draft",
+      source: "# Current draft\n\n![Visual](elef-asset:#{media_digest} \"fit:cover\")",
       lock_version: presentation.lock_version,
       base_revision: presentation.revision_token,
       checkpoint: true
@@ -167,9 +167,14 @@ class PersistenceServicesTest < ActiveSupport::TestCase
     target_workspace = Workspace.create!(name: "Package import", slug: "package-import-#{SecureRandom.hex(6)}")
 
     package = WorkPackage::Exporter.call(presentation.reload, include_revisions: true)
+    Zip::File.open_buffer(package) do |zip|
+      assert zip.find_entry("presentation.md")
+      assert_includes zip.read("presentation.md"), "assets/visual.png"
+      assert zip.find_entry("assets/visual.png")
+    end
     imported = WorkPackage::Importer.call(StringIO.new(package), workspace: target_workspace)
 
-    assert_equal "# Current draft", imported.source
+    assert_equal "# Current draft\n\n![Visual](elef-asset:#{media_digest} \"fit:cover\")", imported.source
     assert_equal source_with_media, imported.published_release.presentation.source
     assert_equal presentation.published_release.source_digest, imported.published_release.source_digest
     assert_equal %w[diagram.txt visual.png], imported.assets.map { |asset| asset.filename.to_s }
