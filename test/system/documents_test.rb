@@ -330,6 +330,8 @@ class DocumentsTest < ApplicationSystemTestCase
     active_document_block.send_keys("- THis is the first item of a list")
     assert_field "Markdown source", with: /\n\n- THis is the first item of a list\z/, wait: 5
     active_document_block.send_keys(:enter)
+    assert_field "Markdown source", with: /- THis is the first item of a list\n- \z/, wait: 5
+    assert_selector ".document-editor-block ul > li", count: 2, wait: 5
     active_document_block.send_keys("This is the second item of the same list.")
     assert_field "Markdown source", with: /- THis is the first item of a list\n- This is the second item of the same list\.\z/, wait: 5
     active_document_block.send_keys(:enter)
