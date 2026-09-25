@@ -188,7 +188,10 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
 
     visit edit_document_path(document)
     assert_selector ".cm-foldPlaceholder", wait: 5
-    click_on "Reveal source metadata"
+    assert_no_selector ".editor-reveal-metadata", visible: true
+    click_on "Source"
+    assert_no_selector ".cm-foldPlaceholder"
+    assert_selector ".editor-reveal-metadata", text: "Hide source metadata", visible: true
     assert_no_selector ".cm-foldPlaceholder"
     assert_selector ".cm-content", text: "theme: dark"
 
@@ -206,7 +209,8 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     )
 
     visit edit_document_path(document)
-    click_on "Reveal source metadata"
+    assert_selector "select#document_theme", visible: true
+    assert_no_selector ".editor-reveal-metadata", visible: true
     select "Dark", from: "Theme"
     select "Modern", from: "Typography"
 
@@ -218,6 +222,55 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     assert_match /^typography: modern\r?$/m, document.reload.source
     refute_match /^theme: light\r?$/m, find_field("Markdown source").value
     refute_match /^typography: book\r?$/m, find_field("Markdown source").value
+  end
+
+  test "appearance controls and metadata toggle follow the editing mode" do
+    document = Document.create!(
+      title: "Mode bound appearance",
+      source: "---\ntheme: light\ntypography: book\n---\n# Mode bound appearance\n\nBody"
+    )
+
+    visit edit_document_path(document)
+    assert_selector "select#document_theme", visible: true
+    assert_selector "select#document_typography", visible: true
+    assert_no_selector ".editor-reveal-metadata", visible: true
+    assert_equal "rgb(17, 22, 26)", page.evaluate_script("getComputedStyle(document.querySelector('select#document_theme')).backgroundColor")
+
+    click_on "Source"
+    assert_no_selector "select#document_theme", visible: true
+    assert_no_selector "select#document_typography", visible: true
+    assert_selector ".editor-reveal-metadata", text: "Hide source metadata", visible: true
+    assert_equal "true", page.evaluate_script("document.querySelector('#document_theme').disabled").to_s
+
+    type_source_text(document.source, "theme: light", "theme: dark")
+    assert_selector ".document-reader.document-theme-dark", wait: 5
+
+    click_on "Visual"
+    assert_selector "select#document_theme", visible: true
+    assert_equal "dark", page.evaluate_script("document.querySelector('#document_theme').value")
+    assert_no_selector ".editor-reveal-metadata", visible: true
+  end
+
+  test "saving a source mode metadata edit preserves the source mode" do
+    document = Document.create!(
+      title: "Source mode metadata save",
+      source: "---\ntheme: light\ntypography: book\n---\n# Source mode metadata save\n\nBody"
+    )
+
+    visit edit_document_path(document)
+    click_on "Source"
+    type_source_text(document.source, "theme: light", "theme: dark")
+    assert_selector ".document-reader.document-theme-dark", wait: 5
+    assert_equal "source", page.evaluate_script("document.querySelector('[name=editor_mode]').value")
+    click_on "Save document"
+
+    assert_selector ".flash.notice", text: "Document saved.", wait: 10
+    assert_includes page.current_url, "editor_mode=source"
+    assert_equal "source", page.evaluate_script("document.querySelector('.visual-editor-form').dataset.editorMode")
+    assert_selector ".editor-mode-button[aria-pressed='true']", text: "Source"
+    assert_selector ".editor-reveal-metadata", text: "Hide source metadata", visible: true
+    assert_no_selector "select#document_theme", visible: true
+    assert_match /^theme: dark\r?$/m, document.reload.source
   end
 
   test "keeps visual editing and the source-left preview-right layout usable at desktop and narrow widths" do
@@ -279,5 +332,18 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     assert_selector ".editor-projection[aria-label='Visual editing surface']", visible: true
   ensure
     page.driver.browser.manage.window.resize_to(1400, 1000)
+  end
+
+  private
+
+  def type_source_text(source, source_text, replacement)
+    start = source.index(source_text)
+    assert start, "could not find source text #{source_text.inspect}"
+    page.execute_script(<<~JAVASCRIPT, start, start + source_text.length)
+      const editor = document.querySelector('.source-field').editorController;
+      editor.setSelectionRange(arguments[0], arguments[1]);
+      editor.focus();
+    JAVASCRIPT
+    find(".cm-content").send_keys(replacement)
   end
 end

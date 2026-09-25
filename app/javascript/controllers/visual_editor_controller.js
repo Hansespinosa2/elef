@@ -22,7 +22,7 @@ export default class extends Controller {
     this.element.addEventListener("elef:preview-stale", this.previewStaleHandler)
     this.projectionLinkHandler = (event) => this.projectionLinkClicked(event)
     this.element.addEventListener("click", this.projectionLinkHandler)
-    this.applyMode("visual")
+    this.applyMode(this.element.getAttribute("data-editor-mode") || "visual")
   }
 
   disconnect() {

@@ -2,7 +2,7 @@ class DocumentsController < ApplicationController
   include WorkPreview
   include WorkPersistence
 
-  before_action :set_document, only: %i[show edit update destroy rename restore history export]
+  before_action :set_document, only: %i[show edit update destroy rename restore history export upload_asset media_asset]
   before_action :set_preview_document, only: :preview
 
   def index
@@ -33,10 +33,22 @@ class DocumentsController < ApplicationController
 
   def create
     @document = Document.new(document_params)
-    if @document.save
-      redirect_to edit_document_path(@document), notice: "Document saved."
-    else
-      render :new, status: :unprocessable_content
+    respond_to do |format|
+      if @document.save
+        format.html { redirect_to edit_document_path(@document, editor_mode: submitted_editor_mode), notice: "Document saved." }
+        format.json do
+          render json: {
+            id: @document.id,
+            edit_url: edit_document_path(@document, editor_mode: submitted_editor_mode),
+            upload_url: upload_asset_document_path(@document),
+            lock_version: @document.lock_version,
+            revision_token: @document.revision_token
+          }, status: :created
+        end
+      else
+        format.html { render :new, status: :unprocessable_content }
+        format.json { render json: { errors: @document.errors.full_messages }, status: :unprocessable_content }
+      end
     end
   end
 
@@ -85,6 +97,39 @@ class DocumentsController < ApplicationController
     export_work(@document)
   end
 
+  def upload_asset
+    upload = params.require(:file)
+    content_type = upload.content_type.to_s
+    unless content_type.start_with?("image/")
+      return render json: { error: "Choose an image file." }, status: :unprocessable_content
+    end
+    if upload.size.to_i > 50.megabytes
+      return render json: { error: "Media files must be 50 MB or smaller." }, status: :unprocessable_content
+    end
+
+    @document.assets.attach(io: upload, filename: upload.original_filename, content_type: content_type)
+    blob = @document.assets.blobs.last
+    digest = Presentations::MediaAssets.digest(blob)
+    @document.reload
+    render json: {
+      digest: digest,
+      lock_version: @document.lock_version,
+      revision_token: @document.revision_token,
+      source: Presentations::MediaAssets.markdown_source(
+        digest,
+        alt: params[:alt].presence || File.basename(upload.original_filename, ".*"),
+        fit: %w[contain cover].include?(params[:fit]) ? params[:fit] : "contain"
+      )
+    }, status: :created
+  end
+
+  def media_asset
+    blob = Presentations::MediaAssets.resolve_blob(@document, params[:digest])
+    return head :not_found unless blob
+
+    redirect_to rails_blob_path(blob, disposition: "inline"), allow_other_host: false
+  end
+
   def import
     import_work(params[:package] || params[:file])
   end
@@ -108,6 +153,10 @@ class DocumentsController < ApplicationController
       :title, :source, :lock_version, :base_revision, :base_revision_id,
       :revision_token, :edit_session_id, :checkpoint, :reason, :theme, :typography
     )
+  end
+
+  def submitted_editor_mode
+    "source" if params[:editor_mode] == "source"
   end
 
   def sample_conflict_alert(conflicts)

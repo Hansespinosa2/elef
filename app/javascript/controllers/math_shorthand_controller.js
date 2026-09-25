@@ -94,6 +94,25 @@ export function insideMath(text, caret) {
     }
 
     for (let index = 0; index < line.length;) {
+      if (inlineCodeLength === null && line.startsWith("\\(", index)) {
+        delimiter = delimiter === "\\)" ? null : delimiter || "\\)"
+        index += 2
+        continue
+      }
+
+      if (inlineCodeLength === null && line.startsWith("\\[", index)) {
+        delimiter = delimiter === "\\]" ? null : delimiter || "\\]"
+        index += 2
+        continue
+      }
+
+      if (inlineCodeLength === null && (line.startsWith("\\)", index) || line.startsWith("\\]", index))) {
+        const closing = line.slice(index, index + 2)
+        if (delimiter === closing) delimiter = null
+        index += 2
+        continue
+      }
+
       if (line[index] === "\\") {
         index += 2
         continue

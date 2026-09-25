@@ -1,6 +1,6 @@
 import "katex"
 
-const INLINE_MATH = /(?<!\\)\$\$([\s\S]+?)\$\$(?!\$)|(?<![\\$])\$(?!\$|\s)([^$\r\n]+?)(?<!\s)\$(?!\$)/g
+const INLINE_MATH = /(?<!\\)\\\[([\s\S]+?)\\\]|(?<!\\)\$\$([\s\S]+?)\$\$(?!\$)|(?<!\\)\\\(([^\r\n]+?)\\\)|(?<![\\$])\$(?!\$|\s)([^$\r\n]+?)(?<!\s)\$(?!\$)/g
 
 export function markdownForVisibleText(markdown, text, kind, element = null) {
   const source = markdown || ""
@@ -69,8 +69,8 @@ export function renderInlineMath(element) {
       const to = from + match[0].length
       appendText(cursor, from)
 
-      const expression = match[1] ?? match[2]
-      const displayMode = match[1] !== undefined
+      const expression = match[1] ?? match[2] ?? match[3] ?? match[4]
+      const displayMode = match[1] !== undefined || match[2] !== undefined
       const rendered = document.createElement("span")
       try {
         rendered.innerHTML = katex.renderToString(expression, { displayMode, throwOnError: true })
@@ -462,6 +462,12 @@ function inlineTokenAt(source, formatBudget = null, previousCharacter = "") {
     match = source.match(/^(?<!_)(_)([\s\S]+?)\1(?!_)/)
     if (match) return { length: match[0].length, content: match[2], contentOffset: 1, kind: "format", formatType: "emphasis" }
   }
+
+  match = source.match(/^\\\[([\s\S]+?)\\\]/)
+  if (match) return { length: match[0].length, content: match[1], kind: "math" }
+
+  match = source.match(/^\\\(([^\r\n]+?)\\\)/)
+  if (match) return { length: match[0].length, content: match[1], kind: "math" }
 
   match = source.match(/^\$\$([\s\S]+?)\$\$(?!\$)/)
   if (match) return { length: match[0].length, content: match[1], kind: "math" }

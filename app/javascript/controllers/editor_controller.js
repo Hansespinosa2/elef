@@ -145,7 +145,7 @@ export default class extends Controller {
     this.applyLineNumbers()
     this.applyCursorStyle()
     this.bindVimEvents()
-    this.setEditingMode("visual", { silent: true })
+    this.setEditingMode(this.form?.dataset.editorMode || "visual", { silent: true })
     this.updateMode()
     this.collapseFrontmatter()
     this.element.dispatchEvent(new CustomEvent("elef:editor-ready", { detail: { editor: this }, bubbles: true }))
@@ -252,9 +252,13 @@ export default class extends Controller {
     this.view?.dispatch({ effects: livePreviewMode.of(this.editingMode === "visual") })
     this.element.dataset.editorEditingMode = this.editingMode
     this.form?.setAttribute("data-editor-mode", this.editingMode)
+    const modeInput = this.form?.querySelector('[name="editor_mode"]')
+    if (modeInput) modeInput.value = this.editingMode
     if (this.hasEditingModeTarget) this.editingModeTarget.textContent = this.editingMode === "visual" ? "Visual" : "Source"
     if (this.hasVisualButtonTarget) this.visualButtonTarget.setAttribute("aria-pressed", String(this.editingMode === "visual"))
     if (this.hasSourceButtonTarget) this.sourceButtonTarget.setAttribute("aria-pressed", String(this.editingMode === "source"))
+    this.syncFrontmatterVisibility()
+    this.syncMetadataToggle()
     if (!silent) {
       this.form?.dispatchEvent(new CustomEvent("elef:editor-mode-change", {
         bubbles: true,
@@ -356,6 +360,7 @@ export default class extends Controller {
     if (update.docChanged) {
       this.syncInput()
       this.refreshFrontmatterRange()
+      this.syncFrontmatterVisibility()
       this.dispatchFieldEvent("input")
     }
     if (update.selectionSet || update.docChanged) this.updateMode()
@@ -568,10 +573,24 @@ export default class extends Controller {
     if (!this.frontmatterRange) return
 
     setTimeout(() => {
-      if (this.destroyed || !this.frontmatterRange || this.frontmatterIsFolded()) return
-      this.view.dispatch({ effects: foldEffect.of(this.frontmatterRange) })
+      if (this.destroyed || !this.frontmatterRange) return
+      this.syncFrontmatterVisibility()
       this.syncMetadataToggle()
     }, 0)
+  }
+
+  syncFrontmatterVisibility() {
+    if (!this.view || !this.frontmatterRange) return
+
+    if (this.editingMode === "source" && this.frontmatterIsFolded()) {
+      this.view.dispatch({
+        effects: unfoldEffect.of(this.frontmatterRange),
+        selection: { anchor: this.frontmatterRange.from },
+        scrollIntoView: true
+      })
+    } else if (this.editingMode === "visual" && !this.frontmatterIsFolded()) {
+      this.view.dispatch({ effects: foldEffect.of(this.frontmatterRange) })
+    }
   }
 
   refreshFrontmatterRange() {
@@ -594,6 +613,7 @@ export default class extends Controller {
     if (!this.hasMetadataToggleTarget) return
 
     const hasMetadata = Boolean(this.frontmatterRange)
+    this.metadataToggleTarget.hidden = this.editingMode !== "source"
     this.metadataToggleTarget.disabled = !hasMetadata
     this.metadataToggleTarget.textContent = hasMetadata && !this.frontmatterIsFolded() ? "Hide source metadata" : "Reveal source metadata"
   }

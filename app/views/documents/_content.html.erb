@@ -9,6 +9,7 @@
         parsed: document.parsed_document,
         documents: Document.where(workspace: document.workspace || Workspace.default),
         workspace: document.workspace || Workspace.default,
+        media_resolver: ->(identifier) { Presentations::MediaAssets.resolve_media(document, identifier) },
         editable: true,
         editor_map: editor_map
       ) %>

@@ -66,7 +66,8 @@ module Presentations
       return nil unless blob
 
       sha = digest(blob)
-      ["/presentations/#{work.id}/assets/#{sha}", blob.content_type]
+      owner_path = work.document? ? "documents" : "presentations"
+      ["/#{owner_path}/#{work.id}/assets/#{sha}", blob.content_type]
     end
 
     def markdown_source(identifier, alt:, fit:)

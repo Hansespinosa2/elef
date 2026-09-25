@@ -13,7 +13,8 @@ class Document < Work
       source_name: title,
       parsed: parsed_document,
       documents: Document.where(workspace: preview_workspace),
-      workspace: preview_workspace
+      workspace: preview_workspace,
+      media_resolver: ->(identifier) { Presentations::MediaAssets.resolve_media(self, identifier) }
     )
   end
 

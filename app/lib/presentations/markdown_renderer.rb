@@ -140,7 +140,26 @@ module Presentations
         end
 
         character = markdown[cursor]
-        if character == "\\" && cursor + 1 < markdown.length
+        if inline_code_length.nil? && ["\\(", "\\["].include?(markdown[cursor, 2]) && !escaped_math_delimiter?(markdown, cursor)
+          opening_delimiter = markdown[cursor, 2]
+          closing_delimiter = opening_delimiter == "\\(" ? "\\)" : "\\]"
+          closing = math_closing_index(markdown, cursor + opening_delimiter.length, closing_delimiter)
+
+          if closing
+            expression = markdown[(cursor + opening_delimiter.length)...closing]
+            placeholder = "#{nonce}#{placeholders.length}Z"
+            placeholders[placeholder] = {
+              expression: expression,
+              display_mode: opening_delimiter == "\\[",
+              source: markdown[cursor...(closing + closing_delimiter.length)]
+            }
+            protected_source << placeholder
+            cursor = closing + closing_delimiter.length
+          else
+            protected_source << markdown[cursor, 2]
+            cursor += 2
+          end
+        elsif character == "\\" && cursor + 1 < markdown.length
           protected_source << markdown[cursor, 2]
           cursor += 2
         elsif character == "`"
@@ -158,12 +177,17 @@ module Presentations
         elsif character == "$"
           dollar_run = markdown[cursor..].match(/\A\$+/)[0].length
           delimiter_length = dollar_run == 1 || dollar_run == 2 ? dollar_run : 0
-          closing = delimiter_length.positive? ? math_closing_index(markdown, cursor + delimiter_length, delimiter_length) : nil
+          delimiter = "$" * delimiter_length
+          closing = delimiter_length.positive? ? math_closing_index(markdown, cursor + delimiter_length, delimiter) : nil
 
           if closing
             expression = markdown[(cursor + delimiter_length)...closing]
             placeholder = "#{nonce}#{placeholders.length}Z"
-            placeholders[placeholder] = { expression: expression, display_mode: delimiter_length == 2 }
+            placeholders[placeholder] = {
+              expression: expression,
+              display_mode: delimiter_length == 2,
+              source: markdown[cursor...(closing + delimiter_length)]
+            }
             protected_source << placeholder
             cursor = closing + delimiter_length
           else
@@ -205,20 +229,23 @@ module Presentations
     end
 
     def math_source(math)
+      return math[:source] if math[:source]
+
       delimiter = math[:display_mode] ? "$$" : "$"
       "#{delimiter}#{math[:expression]}#{delimiter}"
     end
 
-    def math_closing_index(markdown, cursor, delimiter_length)
-      delimiter = "$" * delimiter_length
+    def math_closing_index(markdown, cursor, delimiter)
       search_from = cursor
 
       while (closing = markdown.index(delimiter, search_from))
+        dollar_delimiter = delimiter.start_with?("$")
+        delimiter_length = delimiter.length
         if !escaped_math_delimiter?(markdown, closing) &&
-            (delimiter_length == 2 || !markdown[closing + 1..].to_s.start_with?("$")) &&
-            (delimiter_length == 2 || markdown[closing - 1] != "$")
+            (!dollar_delimiter || delimiter_length == 2 || !markdown[closing + 1..].to_s.start_with?("$")) &&
+            (!dollar_delimiter || delimiter_length == 2 || markdown[closing - 1] != "$")
           expression = markdown[cursor...closing]
-          valid_expression = if delimiter_length == 2
+          valid_expression = if delimiter == "$$" || delimiter == "\\]"
             expression.strip.present?
           else
             expression.present? && !expression.include?("\n") && !expression.match?(/\A\s|\s\z/)

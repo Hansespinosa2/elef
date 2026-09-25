@@ -545,6 +545,49 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_selector ".document-editor-block .katex", text: "test"
   end
 
+  test "new document renders inline and display math before its first save" do
+    visit new_document_path
+
+    block = find(".document-editor-block", text: "Start writing Markdown here.")
+    block.click
+    page.execute_script(<<~JAVASCRIPT, block)
+      const block = arguments[0];
+      const range = document.createRange();
+      range.selectNodeContents(block);
+      range.collapse(false);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+    JAVASCRIPT
+    block.send_keys(" $\\bar{x}$ and $$x^2$$ and \\(\\bar{y}\\) and \\[y^2\\]")
+
+    assert_includes find_field("Markdown source").value, "$\\bar{x}$ and $$x^2$$ and \\(\\bar{y}\\) and \\[y^2\\]"
+    assert_selector ".document-editor-block .katex", minimum: 4, wait: 5
+    assert_selector ".document-editor-block .katex-display", minimum: 2
+    assert_no_selector ".document-editor-block .math-error"
+
+    page.execute_script("document.activeElement.blur()")
+    assert_selector ".document-editor-block .katex-display", minimum: 1, wait: 5
+    assert_no_selector ".preview-warnings li", text: /preview could not be rendered/i
+  end
+
+  test "new document source mode renders inline and display math before its first save" do
+    visit new_document_path
+    click_on "Source"
+
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      editor.setSelectionRange(editor.value.length);
+      editor.focus();
+    JAVASCRIPT
+    find(".cm-content").send_keys("\n\n$\\bar{x}$ and \\(\\bar{y}\\)\n\n$$x^2$$\n\n\\[y^2\\]")
+
+    assert_includes find_field("Markdown source").value, "$\\bar{x}$ and \\(\\bar{y}\\)\n\n$$x^2$$\n\n\\[y^2\\]"
+    assert_selector ".preview-pane .katex", minimum: 4, wait: 5
+    assert_selector ".preview-pane .katex-display", minimum: 2
+    assert_no_selector ".preview-pane .math-error"
+  end
+
   test "document preview renders inline accents and multiline display equations" do
     document = Document.create!(title: "Document math rendering", source: <<~MARKDOWN)
       # Math
@@ -581,6 +624,30 @@ class DocumentsTest < ApplicationSystemTestCase
     JAVASCRIPT
 
     assert_field "Markdown source", with: "Earlier ![diagram](/diagram.svg) after.", wait: 5
+  end
+
+  test "a new document uploads and displays an attached image before its first manual save" do
+    visit new_document_path
+    media_file = Tempfile.new(["document-pixel", ".png"])
+    media_file.binmode
+    media_file.write(Base64.decode64("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+i9MwAAAAASUVORK5CYII="))
+    media_file.flush
+
+    page.execute_script("const editor = document.querySelector('.source-field').editorController; editor.setSelectionRange(editor.value.length);")
+    page.execute_script("document.querySelector('[data-media-target=input]').hidden = false")
+    find('[data-media-target="input"]').set(media_file.path)
+
+    assert_selector ".media-upload-status", text: /document-pixel.*added to the Markdown source/i, wait: 8
+    assert_includes find_field("Markdown source").value, "elef-asset:"
+    assert_selector ".preview-pane img.presentation-media", wait: 8
+    natural_width = page.evaluate_script("document.querySelector('.preview-pane img.presentation-media').naturalWidth")
+    assert_operator natural_width, :>, 0
+
+    document = Document.order(:id).last
+    assert document.assets.attached?
+    assert_selector '[data-autosave-target="status"]', exact_text: "Saved", wait: 8
+  ensure
+    media_file&.close!
   end
 
   test "visual edits preserve nested task lists and untouched item formatting" do

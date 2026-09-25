@@ -88,6 +88,16 @@ class PresentationsMarkdownRendererTest < ActiveSupport::TestCase
     assert_includes display_html, 'data-editor-math-source="\sum_{i=1}^n i"'
   end
 
+  test "renders parenthesized inline and bracketed display math via KaTeX" do
+    inline_html = Presentations::MarkdownRenderer.render("Inline \\(\\bar{x}\\).")
+    assert_includes inline_html, 'class="katex"'
+    assert_includes inline_html, 'data-editor-math-source="\\bar{x}"'
+
+    display_html = Presentations::MarkdownRenderer.render("\\[\\sum_{i=1}^n i\\]")
+    assert_includes display_html, 'class="katex-display"'
+    assert_includes display_html, 'data-editor-math-source="\\sum_{i=1}^n i"'
+  end
+
   test "preserves escaped dollar signs without rendering math" do
     html = Presentations::MarkdownRenderer.render("The item costs \\$50 and the other costs \\$100.")
     refute_includes html, 'class="katex"'
