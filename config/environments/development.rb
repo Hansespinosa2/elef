@@ -3,6 +3,11 @@ require "active_support/core_ext/integer/time"
 Rails.application.configure do
   # Settings specified here will take precedence over those in config/application.rb.
 
+  # Permit the configured private proxy hostname while keeping Rails' local
+  # development host checks enabled for every other hostname.
+  allowed_hosts = ENV.fetch("ELEF_ALLOWED_HOSTS", "").split(",").map(&:strip).reject(&:empty?)
+  config.hosts.concat(allowed_hosts) if allowed_hosts.any?
+
   # Make code changes take effect immediately without server restart.
   config.enable_reloading = true
 
