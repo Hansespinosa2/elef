@@ -9,7 +9,11 @@ module Presentations
       return cached if cached.present?
 
       calculated = Digest::SHA256.hexdigest(blob.download)
-      blob.update!(metadata: blob.metadata.merge("elef_sha256" => calculated)) if blob.persisted?
+      if blob.persisted?
+        new_metadata = blob.metadata.merge("elef_sha256" => calculated)
+        blob.update_columns(metadata: new_metadata)
+        blob.metadata = new_metadata
+      end
       calculated
     rescue StandardError
       Digest::SHA256.hexdigest(blob.download)
