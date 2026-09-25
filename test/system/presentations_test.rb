@@ -199,7 +199,8 @@ class PresentationsTest < ApplicationSystemTestCase
     page.refresh
 
     assert_field "Markdown source", with: "# Unsent after refresh", wait: 5
-    assert_selector '[data-autosave-target="status"]', exact_text: "Saved", wait: 5
+    assert_selector '[data-autosave-target="status"]', text: "Recovered unsent changes", wait: 5
+    assert_selector '[data-autosave-target="status"]', exact_text: "Saved", wait: 10
     assert_includes presentation.reload.source, "# Unsent after refresh"
   end
 
@@ -813,7 +814,7 @@ class PresentationsTest < ApplicationSystemTestCase
     end
 
     click_on "Save presentation"
-    assert_text "Presentation saved."
+    assert_selector ".flash.notice", text: "Presentation saved.", wait: 10
     assert_field "Markdown source", with: visual_expected
 
     visit edit_presentation_path(source)
@@ -825,7 +826,7 @@ class PresentationsTest < ApplicationSystemTestCase
     end
 
     click_on "Save presentation"
-    assert_text "Presentation saved."
+    assert_selector ".flash.notice", text: "Presentation saved.", wait: 10
     assert_field "Markdown source", with: source_expected
     assert_equal visual_expected, source_expected
     assert_equal visual.reload.source, source.reload.source
