@@ -824,59 +824,8 @@ class PresentationsTest < ApplicationSystemTestCase
     source_expected = baseline.dup
 
     visit edit_presentation_path(visual)
-    operations.each_with_index do |(selector, visible_text, source_text, replacement), operation_index|
-      if operation_index == 4
-        trace = page.execute_script(<<~JAVASCRIPT)
-          const form = document.querySelector('.visual-editor-form');
-          const controller = form.presentationEditorController;
-          const source = controller.editorController.value;
-          const target = [...document.querySelectorAll('.editor-projection .slide-block')]
-            .find((element) => element.textContent.includes('formula'));
-          const region = controller.map.editable_regions.find((item) => item.block_id === target.dataset.editorBlockId);
-          const block = controller.findBlock(target.dataset.editorBlockId);
-          return {
-            activeId: target.dataset.editorBlockId,
-            region,
-            block,
-            sourceLength: source.length,
-            mapSourceLength: controller.map.source_length,
-            mappedSource: source.slice(region.content_range.start, region.content_range.end)
-          };
-        JAVASCRIPT
-        puts "PRESENTATION_CODE_TRACE #{trace.to_json}"
-      end
+    operations.each do |selector, visible_text, source_text, replacement|
       type_visual_text(selector, visible_text, replacement)
-      if operation_index == 1
-        trace = page.execute_script(<<~JAVASCRIPT)
-          const form = document.querySelector('.visual-editor-form');
-          const controller = form.presentationEditorController;
-          const editor = controller.editorController;
-          const active = document.activeElement.closest('[data-editor-block-id]');
-          const source = editor.value;
-          const rawDoc = editor.view.state.doc.sliceString(0, editor.view.state.doc.length, "\\r\\n");
-          const region = controller.map.editable_regions.find((item) => item.block_id === active.dataset.editorBlockId);
-          const block = controller.findBlock(active.dataset.editorBlockId);
-          const from = region.content_range.start;
-          const to = region.content_range.end;
-          return {
-            activeId: active.dataset.editorBlockId,
-            innerText: active.innerText,
-            textContent: active.textContent,
-            innerHTML: active.innerHTML,
-            lineSeparator: editor.lineSeparator,
-            sourceLength: source.length,
-            sourceLineEndings: { crlf: (source.match(/\\r\\n/g) || []).length, lf: (source.match(/(?<!\\r)\\n/g) || []).length },
-            rawDocLineEndings: { crlf: (rawDoc.match(/\\r\\n/g) || []).length, lf: (rawDoc.match(/(?<!\\r)\\n/g) || []).length },
-            textareaLineEndings: { crlf: (editor.inputTarget.value.match(/\\r\\n/g) || []).length, lf: (editor.inputTarget.value.match(/(?<!\\r)\\n/g) || []).length },
-            mapSourceLength: controller.map.source_length,
-            region,
-            block,
-            mappedSource: source.slice(from, to),
-            sourceAround: source.slice(Math.max(0, from - 40), Math.min(source.length, to + 40))
-          };
-        JAVASCRIPT
-        puts "PRESENTATION_PARITY_TRACE #{trace.to_json}"
-      end
       visual_expected.sub!(source_text, replacement)
       assert_field "Markdown source", with: visual_expected, wait: 5
       page.execute_script("document.activeElement.blur()")
@@ -903,6 +852,38 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: source_expected
     assert_equal visual_expected, source_expected
     assert_equal visual.reload.source, source.reload.source
+  end
+
+  test "CRLF autosave responses preserve source offsets for later visual edits" do
+    presentation = Presentation.create!(
+      title: "CRLF canonical source",
+      source: "# Stable offsets\n\nFirst paragraph.\n\n## Later section\n\nFinal paragraph."
+    )
+    canonical_source = presentation.source.sub("First paragraph.", "Server-saved paragraph.")
+
+    visit edit_presentation_path(presentation)
+    page.execute_script(<<~JAVASCRIPT, canonical_source.gsub("\n", "\r\n"))
+      const editor = document.querySelector(".source-field").editorController;
+      editor.replaceServerSource(arguments[0]);
+    JAVASCRIPT
+
+    assert_field "Markdown source", with: canonical_source, wait: 5
+    wait_for_fresh_projection
+    lengths = page.execute_script(<<~JAVASCRIPT)
+      const form = document.querySelector(".visual-editor-form");
+      const editor = form.querySelector(".source-field").editorController;
+      return {
+        editor: editor.value.length,
+        document: editor.view.state.doc.length,
+        sourceMap: form.presentationEditorController.map.source_length
+      };
+    JAVASCRIPT
+    assert_equal canonical_source.length, lengths.fetch("editor")
+    assert_equal canonical_source.length, lengths.fetch("document")
+    assert_equal canonical_source.length, lengths.fetch("sourceMap")
+
+    type_visual_text(".slide-block", "Final paragraph.", "Edited final paragraph.")
+    assert_field "Markdown source", with: canonical_source.sub("Final paragraph.", "Edited final paragraph."), wait: 5
   end
 
   test "new inline math renders before a visual block loses focus" do

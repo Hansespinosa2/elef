@@ -317,22 +317,25 @@ export default class extends Controller {
   }
 
   replaceServerSource(source) {
+    if (typeof source !== "string") return
+
     const current = this.value
-    if (typeof source !== "string" || source === current) return
+    const normalizedSource = this.normalizeLineEndings(source)
+    if (normalizedSource === current) return
 
     let from = 0
-    const sharedLength = Math.min(current.length, source.length)
-    while (from < sharedLength && current.charCodeAt(from) === source.charCodeAt(from)) from += 1
+    const sharedLength = Math.min(current.length, normalizedSource.length)
+    while (from < sharedLength && current.charCodeAt(from) === normalizedSource.charCodeAt(from)) from += 1
 
     let currentEnd = current.length
-    let sourceEnd = source.length
-    while (currentEnd > from && sourceEnd > from && current.charCodeAt(currentEnd - 1) === source.charCodeAt(sourceEnd - 1)) {
+    let sourceEnd = normalizedSource.length
+    while (currentEnd > from && sourceEnd > from && current.charCodeAt(currentEnd - 1) === normalizedSource.charCodeAt(sourceEnd - 1)) {
       currentEnd -= 1
       sourceEnd -= 1
     }
 
     const frontmatterWasFolded = this.frontmatterIsFolded()
-    this.view.dispatch({ changes: { from, to: currentEnd, insert: source.slice(from, sourceEnd) } })
+    this.view.dispatch({ changes: { from, to: currentEnd, insert: this.toEditorLineEndings(normalizedSource.slice(from, sourceEnd)) } })
 
     if (frontmatterWasFolded && this.frontmatterRange && !this.frontmatterIsFolded()) {
       this.view.dispatch({ effects: foldEffect.of(this.frontmatterRange) })
@@ -379,14 +382,15 @@ export default class extends Controller {
   }
 
   handleExternalInputEvent() {
-    if (this.syncingInput || this.normalizeLineEndings(this.inputTarget.value) === this.normalizeLineEndings(this.value)) return
+    const source = this.normalizeLineEndings(this.inputTarget.value)
+    if (this.syncingInput || source === this.value) return
 
     const selection = {
-      anchor: this.inputTarget.selectionStart ?? this.inputTarget.value.length,
-      head: this.inputTarget.selectionEnd ?? this.inputTarget.value.length
+      anchor: this.inputTarget.selectionStart ?? source.length,
+      head: this.inputTarget.selectionEnd ?? source.length
     }
     this.view.dispatch({
-      changes: { from: 0, to: this.view.state.doc.length, insert: this.inputTarget.value },
+      changes: { from: 0, to: this.view.state.doc.length, insert: this.toEditorLineEndings(source) },
       selection
     })
   }
@@ -415,6 +419,11 @@ export default class extends Controller {
 
   normalizeLineEndings(value) {
     return value.replace(/\r\n|\r/g, "\n")
+  }
+
+  toEditorLineEndings(value) {
+    const normalized = this.normalizeLineEndings(value)
+    return this.lineSeparator === "\n" ? normalized : normalized.replace(/\n/g, this.lineSeparator)
   }
 
   dispatchFieldEvent(type) {
