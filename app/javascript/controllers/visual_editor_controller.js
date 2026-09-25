@@ -84,7 +84,7 @@ export default class extends Controller {
     )
     if (replacement === currentSource) return
 
-    this.shiftMapAfterEdit(from, to, replacement.length)
+    this.shiftMapAfterEdit(from, to, replacement.length, blockElement.dataset.editorBlockId)
     this.editorController.replaceRange(replacement, from, to)
     if (region.kind !== "code") renderInlineMath(blockElement)
   }
@@ -194,21 +194,23 @@ export default class extends Controller {
     })
   }
 
-  shiftMapAfterEdit(from, to, replacementLength) {
+  shiftMapAfterEdit(from, to, replacementLength, editedBlockId = null) {
     if (!this.map) return
 
     const delta = replacementLength - (to - from)
-    const shiftRange = (range) => {
+    const shiftRange = (range, editedBlock) => {
       if (!range) return
       const shiftStart = (position) => {
+        if (position === from && editedBlock) return position
         if (position <= from) return position
         if (position >= to) return position + delta
         return from
       }
       const shiftEnd = (position) => {
-        if (position < from) return position
+        if (from === to && position === from) return editedBlock ? from + replacementLength : position
+        if (position <= from) return position
         if (position >= to) return position + delta
-        return from + replacementLength
+        return editedBlock ? from + replacementLength : from
       }
       range.start = shiftStart(range.start)
       range.end = Math.max(range.start, shiftEnd(range.end))
@@ -217,10 +219,11 @@ export default class extends Controller {
     const shiftObject = (object) => {
       if (!object || shifted.has(object)) return
       shifted.add(object)
-      shiftRange(object.range)
-      shiftRange(object.source_range)
-      shiftRange(object.content_range)
-      shiftRange(object.delimiter_range)
+      const editedBlock = object.id === editedBlockId || object.block_id === editedBlockId
+      shiftRange(object.range, editedBlock)
+      shiftRange(object.source_range, editedBlock)
+      shiftRange(object.content_range, editedBlock)
+      shiftRange(object.delimiter_range, editedBlock)
     }
 
     this.map.source_length = Number(this.map.source_length || 0) + delta
@@ -326,7 +329,7 @@ export default class extends Controller {
 
   replaceAndFocus(blockElement, from, to, replacement, caret) {
     this.pendingCaret = caret
-    this.shiftMapAfterEdit(from, to, replacement.length)
+    this.shiftMapAfterEdit(from, to, replacement.length, blockElement.dataset.editorBlockId)
     this.editorController.replaceRange(replacement, from, to)
     blockElement.blur()
   }
@@ -391,7 +394,7 @@ export default class extends Controller {
       const deleteFrom = endings.at(-2).index
       const deleteTo = block.range.start
       this.pendingCaret = { sourceOffset: deleteFrom, location: "block_end" }
-      this.shiftMapAfterEdit(deleteFrom, deleteTo, 0)
+      this.shiftMapAfterEdit(deleteFrom, deleteTo, 0, block.id)
       this.editorController.replaceRange("", deleteFrom, deleteTo)
       blockElement.blur()
       return true
