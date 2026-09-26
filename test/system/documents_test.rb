@@ -1423,6 +1423,7 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_includes last_fragment.text, "Continued"
     assert_equal "true", last_fragment["contenteditable"], "the oversized paragraph should remain editable after its source update"
     assert_equal true, page.evaluate_script("document.activeElement === arguments[0]", last_fragment)
+    source_before_enter = find_field("Markdown source").value
     page.execute_script(<<~JAVASCRIPT)
       const controller = document.querySelector('.visual-editor-form').visualEditorController;
       const editor = controller.editorController;
@@ -1454,6 +1455,9 @@ class DocumentsTest < ApplicationSystemTestCase
     last_fragment.send_keys(:enter)
     assert_equal true, page.evaluate_script("window.documentPaginationEnterPrevented"), "Enter should be handled by the visual document editor"
     probe = page.evaluate_script("window.documentPaginationEnterProbe")
+    source_after_enter = find_field("Markdown source").value
+    first_difference = source_before_enter.chars.zip(source_after_enter.chars).index { |left, right| left != right }
+    puts "DOCUMENT_ENTER_PROBE=#{probe.inspect} source_lengths=#{source_before_enter.length},#{source_after_enter.length} first_difference=#{first_difference} source_tail=#{source_after_enter[-40..].inspect}"
     assert_equal "Enter", probe.dig("keydown", "key"), probe.inspect
     assert probe["replaceAndFocus"], probe.inspect
     assert probe["replaceRange"], probe.inspect
