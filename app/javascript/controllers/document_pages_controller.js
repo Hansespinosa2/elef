@@ -16,10 +16,14 @@ export default class extends Controller {
     this.reflowFrame = null
     this.reflowTimer = null
     this.boundResize = () => this.resizeFrames()
+    this.boundFocusOut = () => queueMicrotask(() => {
+      if (this.active && !this.focusedEditable()) this.schedulePagination()
+    })
     this.resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(this.boundResize)
     this.mutationObserver = typeof MutationObserver === "undefined" ? null : new MutationObserver(() => this.schedulePagination())
 
     window.addEventListener("resize", this.boundResize)
+    this.surfaceTarget.addEventListener("focusout", this.boundFocusOut)
     this.paginate()
     this.mutationObserver?.observe(this.surfaceTarget, { childList: true, characterData: true, subtree: true })
 
@@ -33,6 +37,7 @@ export default class extends Controller {
   disconnect() {
     this.active = false
     window.removeEventListener("resize", this.boundResize)
+    this.surfaceTarget.removeEventListener("focusout", this.boundFocusOut)
     this.resizeObserver?.disconnect()
     this.mutationObserver?.disconnect()
     cancelAnimationFrame(this.resizeFrame)
@@ -49,13 +54,18 @@ export default class extends Controller {
 
   schedulePagination() {
     if (!this.active) return
+    if (this.focusedEditable()) {
+      clearTimeout(this.reflowTimer)
+      this.reflowTimer = null
+      return
+    }
     clearTimeout(this.reflowTimer)
     this.reflowTimer = setTimeout(() => {
       this.reflowTimer = null
       if (!this.active || this.reflowFrame) return
       this.reflowFrame = requestAnimationFrame(() => {
         this.reflowFrame = null
-        if (!this.active || this.pagesStillFit()) return
+        if (!this.active || this.focusedEditable() || this.pagesStillFit()) return
         this.paginate()
       })
     }, 300)
@@ -489,5 +499,10 @@ export default class extends Controller {
   pagesStillFit() {
     const pages = [...this.surfaceTarget.querySelectorAll(".document-page-content")]
     return pages.length > 0 && pages.every((content) => !this.overflows({ content }))
+  }
+
+  focusedEditable() {
+    const active = document.activeElement
+    return Boolean(active?.isContentEditable && this.surfaceTarget.contains(active))
   }
 }

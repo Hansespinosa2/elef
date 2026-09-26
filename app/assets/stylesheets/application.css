@@ -1180,6 +1180,7 @@ body.elef-app {
   width: 210mm;
 }
 .document-page-content { box-sizing: border-box; flex: 1 1 auto; min-height: 0; overflow: hidden; width: 100%; }
+.document-page-content:focus-within { overflow: auto; }
 .document-page-footer { border-top: 1px solid var(--presentation-line); color: var(--oradia-paper-muted); flex: 0 0 auto; font-size: 11px; letter-spacing: 0.08em; margin-top: 16px; padding-top: 12px; text-align: right; text-transform: uppercase; }
 .document-page.is-overflowing-content .document-page-content { overflow: auto; }
 
