@@ -174,8 +174,7 @@ class PresentationsController < ApplicationController
       return render json: { error: "Media files must be 50 MB or smaller." }, status: :unprocessable_content
     end
 
-    @presentation.assets.attach(io: upload, filename: upload.original_filename, content_type: content_type)
-    blob = @presentation.assets.blobs.last
+    blob = Presentations::MediaAssets.attach_upload(@presentation, upload, content_type: content_type)
     digest = Digest::SHA256.hexdigest(blob.download)
     blob.update!(metadata: blob.metadata.merge("elef_sha256" => digest))
     @presentation.reload

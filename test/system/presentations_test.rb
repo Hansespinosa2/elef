@@ -1176,6 +1176,7 @@ class PresentationsTest < ApplicationSystemTestCase
     media_file.write(Base64.decode64("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+i9MwAAAAASUVORK5CYII="))
     media_file.flush
     page.execute_script("document.querySelector('.source-field').editorController.setSelectionRange(document.querySelector('.source-field').editorController.value.length)")
+    click_on "Add image or MP4"
     page.execute_script("document.querySelector('[data-media-target=input]').hidden = false")
     find('[data-media-target="input"]').set(media_file.path)
 
@@ -1185,6 +1186,30 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_operator page.evaluate_script("document.querySelector('.preview-pane img.presentation-media').naturalWidth"), :>, 0
     assert_equal "image/png", presentation.reload.assets.blobs.last.content_type
     assert_selector '[data-autosave-target="status"]', exact_text: "Saved", wait: 8
+    assert_includes presentation.reload.source, "elef-asset:"
+  ensure
+    media_file&.close!
+  end
+
+  test "a new presentation uploads and saves an image through Add image" do
+    visit new_presentation_path
+    media_file = Tempfile.new(["new-presentation-pixel", ".png"])
+    media_file.binmode
+    media_file.write(Base64.decode64("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+i9MwAAAAASUVORK5CYII="))
+    media_file.flush
+
+    page.execute_script("window.mediaPickerClicks = 0; document.querySelector('[data-media-target=input]').click = () => { window.mediaPickerClicks++ }")
+    click_on "Add image or MP4"
+    assert_equal 1, page.evaluate_script("window.mediaPickerClicks")
+    page.execute_script("document.querySelector('[data-media-target=input]').hidden = false")
+    find('[data-media-target="input"]').set(media_file.path)
+
+    assert_selector ".media-upload-status", text: /new-presentation-pixel.*added to the Markdown source/i, wait: 8
+    assert_includes find_field("Markdown source").value, "elef-asset:"
+    assert_selector ".preview-pane img.presentation-media", wait: 8
+    assert_operator page.evaluate_script("document.querySelector('.preview-pane img.presentation-media').naturalWidth"), :>, 0
+    assert_selector '[data-autosave-target="status"]', exact_text: "Saved", wait: 8
+    assert_includes Presentation.order(:id).last.reload.source, "elef-asset:"
   ensure
     media_file&.close!
   end
