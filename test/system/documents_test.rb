@@ -1405,8 +1405,18 @@ class DocumentsTest < ApplicationSystemTestCase
 
     last_fragment = all(".document-editor-block[data-editor-block-id]").last
     assert_includes last_fragment.text, "next A4 page."
-    last_fragment.click
-    last_fragment.send_keys(:end, " Continued")
+    page.execute_script(<<~JAVASCRIPT, last_fragment)
+      const block = arguments[0];
+      const paragraph = block.querySelector('p') || block;
+      const range = document.createRange();
+      range.selectNodeContents(paragraph);
+      range.collapse(false);
+      block.focus({ preventScroll: true });
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+    JAVASCRIPT
+    last_fragment.send_keys(" Continued")
     assert_field "Markdown source", with: source.sub(paragraph, "#{paragraph} Continued"), wait: 5
 
     last_fragment = all(".document-editor-block[data-editor-block-id]").last

@@ -12,6 +12,7 @@ export default class extends Controller {
   connect() {
     this.active = true
     this.nextFlowId = 0
+    this.nextCaretTargetId = 0
     this.resizeFrame = null
     this.reflowFrame = null
     this.reflowTimer = null
@@ -432,7 +433,25 @@ export default class extends Controller {
     const index = fragments.indexOf(block)
     const prefix = fragments.slice(0, Math.max(0, index)).reduce((sum, fragment) => sum + this.visibleTextLength(fragment), 0)
     const local = visibleOffsetAtPoint(block, selection.focusNode, selection.focusOffset)
-    return local === null ? null : { blockId: block.dataset.editorBlockId, flowId, visibleOffset: prefix + local }
+    if (local === null) return null
+
+    const listItem = node?.closest?.("li")
+    let caretTargetId = null
+    let caretTargetOffset = null
+    if (listItem && block.contains(listItem)) {
+      this.nextCaretTargetId += 1
+      caretTargetId = `caret-${this.nextCaretTargetId}`
+      caretTargetOffset = visibleOffsetAtPoint(listItem, selection.focusNode, selection.focusOffset)
+      listItem.dataset.documentPageCaretTarget = caretTargetId
+    }
+
+    return {
+      blockId: block.dataset.editorBlockId,
+      flowId,
+      visibleOffset: prefix + local,
+      caretTargetId,
+      caretTargetOffset
+    }
   }
 
   restoreCaret(caret) {
@@ -440,19 +459,33 @@ export default class extends Controller {
     const block = fragments.find((fragment) => fragment.dataset.editorBlockId === caret.blockId)
     if (!block || block.contentEditable !== "true") return
 
-    let offset = caret.visibleOffset
     let target = block
-    for (const fragment of fragments) {
-      const length = this.visibleTextLength(fragment)
-      if (offset <= length) {
-        target = fragment
-        break
+    let point = null
+    if (caret.caretTargetId) {
+      const markedTargets = [...this.surfaceTarget.querySelectorAll("[data-document-page-caret-target]")]
+      const caretTarget = markedTargets.find((element) => element.dataset.documentPageCaretTarget === caret.caretTargetId)
+      markedTargets.forEach((element) => element.removeAttribute("data-document-page-caret-target"))
+      const targetBlock = caretTarget?.closest?.("[data-editor-block-id]")
+      if (caretTarget && targetBlock?.contentEditable === "true") {
+        target = targetBlock
+        point = pointAtVisibleOffset(caretTarget, caret.caretTargetOffset || 0)
       }
-      offset -= length
-      target = fragment
     }
 
-    const point = pointAtVisibleOffset(target, offset)
+    if (!point) {
+      let offset = caret.visibleOffset
+      for (const fragment of fragments) {
+        const length = this.visibleTextLength(fragment)
+        if (offset <= length) {
+          target = fragment
+          break
+        }
+        offset -= length
+        target = fragment
+      }
+      point = pointAtVisibleOffset(target, offset)
+    }
+
     target.focus({ preventScroll: true })
     window.getSelection()?.setPosition(point[0], point[1])
   }
