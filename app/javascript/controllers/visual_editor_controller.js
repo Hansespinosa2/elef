@@ -222,9 +222,20 @@ export default class extends Controller {
     if (!block || !region || region.role === "title" || ["list", "quote"].includes(region.kind)) return
     if (blockElement.querySelector("img, video, iframe, [data-editor-math-source]")) return
 
+    const source = this.editorController.value
+    const { start, end } = region.content_range
+    const sourceMarkdown = source.slice(start, end)
+    const visibleMarkdown = block.empty_placeholder ? this.editableText(blockElement, region.kind, sourceMarkdown) : ""
+    const markdown = block.empty_placeholder && sourceMarkdown === "" ? visibleMarkdown : sourceMarkdown
+    const kind = this.currentBlockKind(markdown, this.currentBlockKind(visibleMarkdown, region.kind))
+
+    if (this.removeEmptyBlock(blockElement, block, region, kind, markdown, source)) {
+      event.preventDefault()
+      return
+    }
+
     event.preventDefault()
     this.flushPendingProjectionEdits()
-    const source = this.editorController.value
     const updated = removeEmptyBlockSource(source, block.range.start, block.range.end)
     if (updated === source) return
     this.pendingCaret = { sourceOffset: Math.min(block.range.start, updated.length), location: "block_end" }
@@ -266,7 +277,7 @@ export default class extends Controller {
     const emptyListItem = kind === "list" && this.hasEmptyTrailingMarker(markdown, "list")
     const emptyQuoteLine = kind === "quote" && this.hasEmptyTrailingMarker(markdown, "quote")
 
-    if (event.key === "Backspace") {
+    if (["Backspace", "Delete"].includes(event.key)) {
       if (region.role === "title" && markdown.trim() === "") {
         event.preventDefault()
         return
