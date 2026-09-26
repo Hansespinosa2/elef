@@ -179,8 +179,8 @@ class PersistenceServicesTest < ActiveSupport::TestCase
     assert_equal presentation.published_release.source_digest, imported.published_release.source_digest
     assert_equal %w[diagram.txt visual.png], imported.assets.map { |asset| asset.filename.to_s }
     assert_equal "text/plain", imported.assets.first.content_type
-    assert_includes imported.assets.blobs.map { |blob| Presentations::MediaAssets.digest(blob) }, media_digest
-    assert_includes imported.published_release.presentation.assets.blobs.map { |blob| Presentations::MediaAssets.digest(blob) }, media_digest
+    assert_includes imported.assets.blobs.map { |blob| WorkAssets.digest(blob) }, media_digest
+    assert_includes imported.published_release.presentation.assets.blobs.map { |blob| WorkAssets.digest(blob) }, media_digest
     assert_equal presentation.presentation_detail.settings, imported.presentation_detail.settings
     assert_equal PresentationRelease.asset_manifest_for(imported), imported.published_release.asset_manifest
   end

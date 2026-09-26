@@ -62,7 +62,7 @@ class Document < Work
   private
 
   def derive_title
-    self.title = Presentations::Document.extract_first_h1(source.to_s).presence || default_title
+    self.title = Source::Document.extract_first_h1(source.to_s).presence || default_title
   end
 
   def derive_title_from_source

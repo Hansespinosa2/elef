@@ -1,10 +1,10 @@
 module PresentationsHelper
   def render_markdown(markdown, work: @presentation)
-    return Presentations::MarkdownRenderer.render(markdown) unless work&.id
+    return Source::Renderer.render(markdown) unless work&.id
 
     @media_resolvers ||= {}
-    resolver = (@media_resolvers[work.object_id] ||= Presentations::MediaAssets.resolver_for(work))
-    Presentations::MarkdownRenderer.render(markdown, media_resolver: resolver)
+    resolver = (@media_resolvers[work.object_id] ||= WorkAssets.resolver_for(work))
+    Source::Renderer.render(markdown, media_resolver: resolver)
   end
 
   def render_editor_block(markdown, editor_block, work: @presentation)
