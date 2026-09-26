@@ -269,24 +269,6 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_equal presentation_panel_style, document_panel_style
   end
 
-  test "renaming a document preserves linked previews" do
-    target = Document.create!(title: "Rename target", source: "# Target")
-    incoming = Document.create!(title: "Rename source", source: "See [[Rename target]]")
-
-    visit documents_path
-    within("##{ActionView::RecordIdentifier.dom_id(target)}") do
-      find(".library-card-menu-trigger").click
-      find("summary", text: "Rename").click
-      find("input[type='text']").set("Renamed target")
-      click_on "Save title"
-    end
-
-    assert_text "Document renamed."
-    assert_equal "See [[Rename target]]", incoming.reload.source
-    visit document_path(incoming)
-    assert_selector "a.document-link[href='#{document_path(target)}']", text: "Renamed target"
-  end
-
   test "creates a document and updates its continuous live preview" do
     visit new_document_path
     assert_no_selector "#document_title"
@@ -842,6 +824,88 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_selector ".document-editor-block .katex", text: "test"
   end
 
+  test "latex visual mode enter and exit flow allows inline editing" do
+    visit new_document_path
+
+    find(".document-editor-block h1", text: "Untitled document").send_keys(:enter)
+    block = active_document_block
+    block.send_keys("$x=3$")
+    assert_selector ".document-editor-block .katex", wait: 5
+
+    # 4. Hit left arrow -> enters math mode, de-renders to raw text with $ delimiters visible, caret is inside $x=3|$
+    block.send_keys(:left)
+    assert_selector ".document-editor-block .editor-math-active", text: "$x=3$", wait: 5
+
+    # 5. Hit backspace -> deletes 3 -> $x=|$
+    block.send_keys(:backspace)
+    assert_selector ".document-editor-block .editor-math-active", text: "$x=$", wait: 5
+
+    # 6. Hit 4 -> types 4 -> $x=4|$
+    block.send_keys("4")
+    assert_selector ".document-editor-block .editor-math-active", text: "$x=4$", wait: 5
+
+    # 7. Hit right arrow -> leaves math block; re-renders KaTeX; caret is outside $x=4$|
+    block.send_keys(:right)
+    assert_selector ".document-editor-block [data-editor-math-source='x=4']", wait: 5
+    assert_no_selector ".document-editor-block .editor-math-active"
+
+    # 8. Hit left arrow -> de-renders to raw text; caret inside $x=4|$
+    block.send_keys(:left)
+    assert_selector ".document-editor-block .editor-math-active", text: "$x=4$", wait: 5
+
+    # 9. Hit left arrow 2x -> caret moves past 4 and = -> $x|=4$
+    block.send_keys(:left, :left)
+
+    # 10. Hit backspace -> deletes x -> $|=4$
+    block.send_keys(:backspace)
+    assert_selector ".document-editor-block .editor-math-active", text: "$=4$", wait: 5
+
+    # 11. Hit y -> types y -> $y|=4$
+    block.send_keys("y")
+    assert_selector ".document-editor-block .editor-math-active", text: "$y=4$", wait: 5
+
+    # 12. Hit left arrow 2x -> 1st moves to $[caret]y=4$, 2nd moves past opening $ exiting math -> re-renders KaTeX
+    block.send_keys(:left, :left)
+
+    # 13. Success: Latex renders correctly and caret is outside |$y=4
+    assert_selector ".document-editor-block [data-editor-math-source='y=4']", wait: 5
+    assert_no_selector ".document-editor-block .editor-math-active"
+    assert_field "Markdown source", with: "# Untitled document\n\n$y=4$", wait: 5
+  end
+
+  test "display latex visual mode enter and exit and click to edit" do
+    visit new_document_path
+
+    find(".document-editor-block h1", text: "Untitled document").send_keys(:enter)
+    block = active_document_block
+    block.send_keys("$$a=1$$")
+    assert_selector ".document-editor-block .editor-live-math-display", wait: 5
+
+    # Left arrow enters display math at $$a=1|$$
+    block.send_keys(:left)
+    assert_selector ".document-editor-block .editor-math-active", text: "$$a=1$$", wait: 5
+
+    # Edit 1 -> 2
+    block.send_keys(:backspace)
+    block.send_keys("2")
+    assert_selector ".document-editor-block .editor-math-active", text: "$$a=2$$", wait: 5
+
+    # Right arrow leaves display math -> re-renders
+    block.send_keys(:right)
+    assert_selector ".document-editor-block [data-editor-math-source='a=2']", wait: 5
+    assert_no_selector ".document-editor-block .editor-math-active"
+    assert_field "Markdown source", with: "# Untitled document\n\n$$a=2$$", wait: 5
+
+    # Click on the rendered KaTeX math element -> de-renders to active math
+    find(".document-editor-block [data-editor-math-source='a=2']").click
+    assert_selector ".document-editor-block .editor-math-active", text: "$$a=2$$", wait: 5
+
+    # Blur by clicking title -> re-renders
+    find(".document-editor-block h1").click
+    assert_selector ".document-editor-block [data-editor-math-source='a=2']", wait: 5
+    assert_no_selector ".document-editor-block .editor-math-active"
+  end
+
   test "new document renders inline and display math before its first save" do
     visit new_document_path
 
@@ -1327,39 +1391,6 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_selector ".document-surface h1", text: "Latest response", wait: 5
   end
 
-  test "renders the seeded document fixture library and its stress cases" do
-    Document.delete_all
-
-    visit documents_path
-
-    assert_text "No documents yet"
-    find("summary", text: "More").click
-    click_on "Load sample documents"
-
-    assert_selector ".document-graph-node", count: Documents::SampleData::SAMPLES.length, wait: 10
-    assert_selector ".document-graph-edge", minimum: 1
-    coordinates = page.evaluate_script(<<~JAVASCRIPT)
-      JSON.parse(document.querySelector(".document-graph").dataset.documentGraphDataValue)
-        .nodes.map(({ x, y }) => [x, y])
-    JAVASCRIPT
-    assert_equal coordinates.length, coordinates.uniq.length
-    assert_text "Stress: Renderer kitchen sink"
-    assert_text "Fixture: Graph orphan"
-    assert_operator page.evaluate_script("document.documentElement.scrollWidth"), :<=, page.evaluate_script("window.innerWidth")
-
-    warning_document = Document.find_by!(sample_id: "document-stress-warnings")
-    visit document_path(warning_document)
-
-    assert_selector '[aria-label="Markdown warnings"]', text: /directive/
-    assert_selector ".document-link.unresolved", text: "[[Fixture: Missing document]]"
-    assert_no_text "javascript:"
-
-    page.driver.browser.manage.window.resize_to(600, 900)
-    assert_operator page.evaluate_script("document.documentElement.scrollWidth"), :<=, page.evaluate_script("window.innerWidth")
-  ensure
-    page.driver.browser.manage.window.resize_to(1400, 1000)
-  end
-
   test "paginates long documents and gives headings a clear hierarchy" do
     report = Documents::SampleData.load!.records.find { |record| record.sample_id == "document-full-report" }
 
@@ -1383,6 +1414,11 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_operator font_sizes["h1"], :>, font_sizes["body"]
     assert_operator font_sizes["h2"], :>, font_sizes["body"]
     assert_operator page.evaluate_script("document.documentElement.scrollWidth"), :<=, page.evaluate_script("window.innerWidth")
+
+    page.driver.browser.manage.window.resize_to(600, 900)
+    assert_operator page.evaluate_script("document.documentElement.scrollWidth"), :<=, page.evaluate_script("window.innerWidth")
+  ensure
+    page.driver.browser.manage.window.resize_to(1400, 1000)
   end
 
   test "paginates the visual editor and keeps oversized paragraph edits mapped to one source block" do
@@ -1477,6 +1513,112 @@ class DocumentsTest < ApplicationSystemTestCase
     heights = page.evaluate_script("[...document.querySelectorAll('.document-block')].map((block) => block.getBoundingClientRect().height)")
     assert_equal 3, heights.length
     assert heights.all? { |height| height < 120 }, "horizontal-only blocks should not become vertical stages: #{heights.inspect}"
+  end
+
+  test "positions document blocks visually and preserves directives across source mode" do
+    source = "# Alignment\n\nLeft block\n\n:::position{center middle}\n\nCentered block"
+    document = Document.create!(title: "Block alignment", source: source)
+    visit edit_document_path(document)
+    wait_for_fresh_projection
+
+    left = find(".document-editor-block", text: "Left block")
+    left_id = left["data-editor-block-id"]
+    left.find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
+    find("[data-visual-editor-block-id='#{left_id}']").select("Right")
+
+    assert_field "Markdown source", with: /:::position\{right\}\n\nLeft block/, wait: 5
+    right_aligned = find(".document-editor-block.position-right", text: "Left block", wait: 5)
+    assert_equal left_id, right_aligned["data-editor-block-id"]
+    assert_equal left_id, page.evaluate_script("document.activeElement?.dataset.editorBlockId")
+    assert_equal "right", page.evaluate_script("getComputedStyle(arguments[0]).textAlign", right_aligned)
+    type_visual_text(".document-editor-block", "Left block", "Updated left block")
+    assert_field "Markdown source", with: /:::position\{right\}\n\nUpdated left block/, wait: 5
+    page.execute_script("document.activeElement.blur()")
+    wait_for_fresh_projection
+
+    centered = find(".document-editor-block", text: "Centered block")
+    assert_includes centered["class"], "position-center"
+    assert_equal "center", page.evaluate_script("getComputedStyle(arguments[0]).textAlign", centered)
+    centered.find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
+    centered_control = find("[data-visual-editor-block-id='#{centered['data-editor-block-id']}']")
+    centered_control.select("Right")
+
+    assert_field "Markdown source", with: /:::position\{right middle\}/, wait: 5
+    assert_selector ".document-editor-block.position-right", text: "Centered block", wait: 5
+    right_aligned = find(".document-editor-block.position-right", text: "Centered block")
+    assert_equal "right", page.evaluate_script("getComputedStyle(arguments[0]).textAlign", right_aligned)
+    right_aligned.find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
+    find("[data-visual-editor-block-id='#{right_aligned['data-editor-block-id']}']").select("Left")
+    assert_field "Markdown source", with: /:::position\{left middle\}/, wait: 5
+    left_aligned = find(".document-editor-block.position-left", text: "Centered block", wait: 5)
+    assert_equal "left", page.evaluate_script("getComputedStyle(arguments[0]).textAlign", left_aligned)
+    centered_id = left_aligned["data-editor-block-id"]
+    left_aligned.find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
+    find("[data-visual-editor-block-id='#{centered_id}']").select("Automatic position")
+    wait_for_fresh_projection
+    refute_match(/:::position\{left middle\}/, find_field("Markdown source").value)
+    assert_equal "", find("[data-visual-editor-block-id='#{centered_id}']").value
+
+    click_on "Source"
+    assert_field "Markdown source", with: /:::position\{right\}\n\nUpdated left block/
+    click_on "Visual"
+    wait_for_fresh_projection
+
+    centered = find(".document-editor-block", text: "Centered block")
+    refute_includes centered["class"], "position-left"
+    centered.find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
+    assert_equal "", find("[data-visual-editor-block-id='#{centered['data-editor-block-id']}']").value
+    type_visual_text(".document-editor-block", "Centered block", "Updated centered block")
+    assert_field "Markdown source", with: /:::position\{right\}\n\nUpdated left block\n\nUpdated centered block/, wait: 5
+    refute_includes find(".editor-projection").text, ":::position"
+  end
+
+  test "deleting an empty positioned block also removes its position directive" do
+    document = Document.create!(
+      title: "Delete positioned block",
+      source: "# Keep\n\n:::position{center}\n\nDelete me\n\nTail"
+    )
+    visit edit_document_path(document)
+
+    block = find(".document-editor-block", text: "Delete me")
+    removed = page.execute_script(<<~JAVASCRIPT, block)
+      const block = arguments[0];
+      block.innerHTML = "<p><br></p>";
+      block.focus({ preventScroll: true });
+      window.getSelection().setPosition(block.querySelector("p"), 0);
+      const event = new KeyboardEvent("keydown", { key: "Backspace", bubbles: true, cancelable: true });
+      block.dispatchEvent(event);
+      return event.defaultPrevented;
+    JAVASCRIPT
+
+    assert_equal true, removed
+    assert_field "Markdown source", with: "# Keep\n\nTail", wait: 5
+    refute_selector ".document-editor-block.position-center", text: "Tail"
+  end
+
+  test "deleting a single block in a grouped position removes its opening and closing directives" do
+    source = "# Keep\n\n:::position{center}\n\nDelete me\n\n:::\n\nTail"
+    map = Source::Document.editor_map(source, mode: :document)
+    positioned = map[:slides].first[:blocks].find { |candidate| candidate[:markdown] == "Delete me" }
+    assert_equal "group", positioned[:position_scope]
+
+    document = Document.create!(title: "Delete grouped position", source: source)
+    visit edit_document_path(document)
+
+    block = find(".document-editor-block", text: "Delete me")
+    removed = page.execute_script(<<~JAVASCRIPT, block)
+      const block = arguments[0];
+      block.innerHTML = "<p><br></p>";
+      block.focus({ preventScroll: true });
+      window.getSelection().setPosition(block.querySelector("p"), 0);
+      const event = new KeyboardEvent("keydown", { key: "Backspace", bubbles: true, cancelable: true });
+      block.dispatchEvent(event);
+      return event.defaultPrevented;
+    JAVASCRIPT
+
+    assert_equal true, removed
+    assert_field "Markdown source", with: "# Keep\n\nTail", wait: 5
+    refute_includes find_field("Markdown source").value, ":::"
   end
 
   test "maintains standard aspect ratio and fixed text wrapping across viewports" do

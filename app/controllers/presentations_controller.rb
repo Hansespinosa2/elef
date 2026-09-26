@@ -8,7 +8,6 @@ class PresentationsController < ApplicationController
   def index
     @filter = "presentations"
     @works = Presentation.includes(:presentation_detail).recent_first
-    @presentations = @works
     @lineage_presentations = @works.select(&:presentation?)
     render "library/index"
   end
@@ -175,8 +174,7 @@ class PresentationsController < ApplicationController
     end
 
     blob = WorkAssets.attach_upload(@presentation, upload, content_type: content_type)
-    digest = Digest::SHA256.hexdigest(blob.download)
-    blob.update!(metadata: blob.metadata.merge("elef_sha256" => digest))
+    digest = WorkAssets.digest(blob)
     @presentation.reload
     Presentations::FolderSync.sync!(@presentation)
     render json: {

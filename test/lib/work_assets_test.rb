@@ -1,6 +1,6 @@
 require "test_helper"
 
-class PresentationsMediaAssetsTest < ActiveSupport::TestCase
+class WorkAssetsTest < ActiveSupport::TestCase
   test "asset routes include the configured relative URL root" do
     previous_root = Rails.application.config.relative_url_root
     Rails.application.config.relative_url_root = "/apps/elef/dev"

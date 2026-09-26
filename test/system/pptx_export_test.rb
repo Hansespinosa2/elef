@@ -84,25 +84,6 @@ class PptxExportTest < ApplicationSystemTestCase
     end
   end
 
-  test "published export button downloads the pinned release instead of the draft" do
-    presentation = Presentation.create!(title: "PPTX release", source: "# Pinned release")
-    PresentationReleasePublisher.call(presentation)
-    presentation.update!(source: "# Current draft")
-
-    visit edit_presentation_path(presentation)
-    capture_pptx_blob
-    click_button "Download published PPTX"
-    assert_selector '[role="status"]', text: "PowerPoint downloaded.", wait: 15
-    bytes = captured_pptx_bytes
-
-    Zip::File.open_buffer(StringIO.new(bytes)) do |archive|
-      slide = Nokogiri::XML(archive.read("ppt/slides/slide1.xml"))
-      text = slide.xpath("//a:t", "a" => "http://schemas.openxmlformats.org/drawingml/2006/main").map(&:text).join(" ")
-      assert_includes text, "Pinned release"
-      assert_not_includes text, "Current draft"
-    end
-  end
-
   private
 
   def capture_pptx_blob

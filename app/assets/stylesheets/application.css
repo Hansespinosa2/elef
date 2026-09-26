@@ -136,6 +136,21 @@ body.elef-app {
 .editor-mode[data-mode="visual"] { color: var(--oradia-vim-visual); }
 .visual-editor-form { display: grid; gap: 1rem; min-width: 0; max-width: 100%; overflow-x: clip; }
 .editor-live-math-display { display: inline-block; margin: 0; text-align: left; vertical-align: baseline; }
+.editor-math-active {
+  background: rgba(159, 197, 169, 0.16);
+  border-radius: 0.25rem;
+  box-shadow: 0 0 0 1px rgba(159, 197, 169, 0.35);
+  color: inherit;
+  font-family: var(--oradia-mono);
+  outline: none;
+  padding: 0.05rem 0.25rem;
+  white-space: pre-wrap;
+}
+.editor-math-active.editor-live-math-display {
+  display: inline-block;
+  margin: 0.25rem 0;
+  text-align: left;
+}
 .editor-shell { background: var(--oradia-slate-900); border: 1px solid var(--oradia-line); border-radius: 1rem; box-shadow: 0 18px 45px rgba(0, 0, 0, 0.16); min-width: 0; max-width: 100%; overflow-x: clip; padding: clamp(1rem, 2.5vw, 1.5rem); }
 .editor-shell-header { align-items: flex-start; display: flex; gap: 1rem; justify-content: space-between; margin-bottom: 1rem; }
 .editor-title-field { flex: 1 1 auto; min-width: 0; }
@@ -173,6 +188,7 @@ body.elef-app {
 .visual-editor-form[data-editor-mode="source"] .presentation-editor-block-controls { display: none; }
 .visual-editor-form[data-editor-mode="source"] .document-editor-block:hover,
 .visual-editor-form[data-editor-mode="source"] .document-editor-block:focus { background: transparent; outline-color: transparent; }
+.visual-editor-form[data-editor-mode="source"] .document-block-position-control { display: none; }
 @media (max-width: 900px) {
   .visual-editor-form[data-editor-mode="source"] .editor-layout { grid-template-columns: minmax(0, 1fr); }
   .visual-editor-form[data-editor-mode="source"] .editor-projection { max-height: 60vh; }
@@ -196,6 +212,16 @@ body.elef-app {
 .document-editor-block { border-radius: 0.45rem; outline: 1px solid transparent; outline-offset: 0.35rem; transition: background 120ms ease, outline-color 120ms ease; }
 .document-editor-block:hover, .document-editor-block:focus { background: rgba(159, 197, 169, 0.08); outline-color: rgba(79, 139, 104, 0.42); }
 .document-editor-block:focus { outline-width: 2px; }
+.document-editor-block-shell { position: relative; width: 100%; }
+.document-editor-block.position-left { text-align: left; }
+.document-editor-block.position-center { text-align: center; }
+.document-editor-block.position-right { text-align: right; }
+.document-block-position-control { align-items: center; background: rgba(24, 33, 38, 0.94); border: 1px solid rgba(48, 64, 71, 0.9); border-radius: 999px; color: #e9eee9; display: flex; font-size: 0.68rem; font-weight: 700; gap: 0.35rem; opacity: 0; padding: 0.25rem 0.4rem 0.25rem 0.55rem; pointer-events: none; position: absolute; right: 0.25rem; top: 0.15rem; transition: opacity 120ms ease; z-index: 4; }
+.document-editor-block-shell:hover .document-block-position-control,
+.document-editor-block-shell:focus-within .document-block-position-control,
+.document-block-position-control:focus-within { opacity: 1; pointer-events: auto; }
+.document-block-position-control select { background: transparent; border: 0; color: inherit; cursor: pointer; font: inherit; outline-offset: 2px; padding: 0.1rem 0.15rem; }
+.document-block-position-control option { background: var(--oradia-slate-900); color: var(--oradia-ink); }
 .editor-media { margin: 0; }
 .editor-media-caption { border-top: 1px dashed var(--oradia-paper-line); color: var(--oradia-paper-muted); font-size: 0.78rem; margin-top: 0.4rem; padding-top: 0.25rem; }
 .presentation-editor-tools { align-items: center; display: flex; flex-wrap: wrap; gap: 0.75rem; justify-content: space-between; margin: 0.9rem 0; }

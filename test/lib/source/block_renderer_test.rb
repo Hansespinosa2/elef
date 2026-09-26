@@ -1,6 +1,6 @@
 require "test_helper"
 
-class PresentationsDocumentRendererTest < ActiveSupport::TestCase
+class SourceBlockRendererTest < ActiveSupport::TestCase
   test "keeps document blocks without valid source regions non-editable" do
     source = "# Heading\n\nBody"
     editor_map = Source::Document.editor_map(source, mode: :document)
@@ -126,6 +126,37 @@ class PresentationsDocumentRendererTest < ActiveSupport::TestCase
     assert_equal "position-center position-middle position-vertical", Source::BlockRenderer.position_classes(pos_staged)
 
     assert_equal "", Source::BlockRenderer.position_classes(nil)
+  end
+
+  test "maps document position metadata to its content block in the editable preview" do
+    source = "# Alignment\n\nLeft block\n\n:::position{center}\n\nCentered block\n\n:::position{right}\n\nRight block"
+    editor_map = Source::Document.editor_map(source, mode: :document)
+    slide = editor_map[:slides].first
+    blocks = slide[:blocks].reject { |block| block[:empty_placeholder] }
+    centered = blocks.find { |block| block[:markdown] == "Centered block" }
+    centered_directive = slide[:directives].find { |directive| directive[:id] == centered[:position_directive_id] }
+
+    assert_equal [nil, "center", "right"], blocks.drop(1).map { |block| block.dig(:position, :horizontal) }
+    assert_equal source.index("Centered block"), centered[:range][:start]
+    assert_equal source.index(":::position{center}"), centered_directive[:range][:start]
+
+    html = Source::BlockRenderer.render(
+      source,
+      editable: true,
+      editor_map: editor_map,
+      documents: [],
+      workspace: Workspace.default
+    )
+    fragment = Nokogiri::HTML.fragment(html)
+    centered_element = fragment.css(".document-editor-block").find { |block| block.text.include?("Centered block") }
+    centered_control = fragment.css("[data-visual-editor-block-id]").find { |control| control["data-visual-editor-block-id"] == centered[:id] }
+    left_block = blocks.find { |block| block[:markdown] == "Left block" }
+    left_control = fragment.css("[data-visual-editor-block-id]").find { |control| control["data-visual-editor-block-id"] == left_block[:id] }
+
+    assert_includes centered_element["class"], "position-center"
+    assert_equal "center", centered_control.at_css("option[selected]")["value"]
+    assert_equal "", left_control.at_css("option[selected]")["value"]
+    refute_includes html, ":::position"
   end
 
   test "validates editable mapping boundary conditions" do
