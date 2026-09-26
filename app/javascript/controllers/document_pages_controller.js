@@ -65,7 +65,7 @@ export default class extends Controller {
       if (!this.active || this.reflowFrame) return
       this.reflowFrame = requestAnimationFrame(() => {
         this.reflowFrame = null
-        if (!this.active || this.focusedEditable() || this.pagesStillFit()) return
+        if (!this.active || this.focusedEditable() || !this.projectionFresh() || this.pagesStillFit()) return
         this.paginate()
       })
     }, 300)
@@ -504,5 +504,9 @@ export default class extends Controller {
   focusedEditable() {
     const active = document.activeElement
     return Boolean(active?.isContentEditable && this.surfaceTarget.contains(active))
+  }
+
+  projectionFresh() {
+    return this.element.closest("form")?.previewController?.projectionFresh !== false
   }
 }
