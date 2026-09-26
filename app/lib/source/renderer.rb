@@ -151,7 +151,9 @@ module Source
             placeholders[placeholder] = {
               expression: expression,
               display_mode: opening_delimiter == "\\[",
-              source: markdown[cursor...(closing + closing_delimiter.length)]
+              source: markdown[cursor...(closing + closing_delimiter.length)],
+              open_delimiter: opening_delimiter,
+              close_delimiter: closing_delimiter
             }
             protected_source << placeholder
             cursor = closing + closing_delimiter.length
@@ -188,7 +190,9 @@ module Source
             placeholders[placeholder] = {
               expression: expression,
               display_mode: delimiter_length == 2,
-              source: markdown[cursor...(closing + delimiter_length)]
+              source: markdown[cursor...(closing + delimiter_length)],
+              open_delimiter: delimiter,
+              close_delimiter: delimiter
             }
             protected_source << placeholder
             cursor = closing + delimiter_length
@@ -210,7 +214,12 @@ module Source
 
       pattern = Regexp.union(expressions.keys)
       rendered = expressions.transform_values do |math|
-        katex(math[:expression], display_mode: math[:display_mode])
+        katex(
+          math[:expression],
+          display_mode: math[:display_mode],
+          open_delimiter: math[:open_delimiter] || (math[:display_mode] ? "$$" : "$"),
+          close_delimiter: math[:close_delimiter] || (math[:display_mode] ? "$$" : "$")
+        )
       end
       code_depth = 0
       html.split(/(<[^>]*>)/m).map do |segment|
@@ -267,17 +276,26 @@ module Source
       slash_count.odd?
     end
 
-    def katex(expression, display_mode:)
+    def katex(expression, display_mode:, open_delimiter: (display_mode ? "$$" : "$"), close_delimiter: (display_mode ? "$$" : "$"))
       expression = CGI.unescapeHTML(expression)
-      annotate_editor_math(Katex.render(expression, display_mode: display_mode), expression)
+      annotate_editor_math(
+        Katex.render(expression, display_mode: display_mode),
+        expression,
+        open_delimiter: open_delimiter,
+        close_delimiter: close_delimiter
+      )
     rescue StandardError
-      %(<span class="math-error" data-editor-math-source="#{ERB::Util.html_escape(expression)}" contenteditable="false" title="Invalid TeX">#{ERB::Util.html_escape(expression)}</span>)
+      open_attr = ERB::Util.html_escape(open_delimiter)
+      close_attr = ERB::Util.html_escape(close_delimiter)
+      %(<span class="math-error" data-editor-math-source="#{ERB::Util.html_escape(expression)}" data-editor-math-open="#{open_attr}" data-editor-math-close="#{close_attr}" contenteditable="false" title="Invalid TeX">#{ERB::Util.html_escape(expression)}</span>)
     end
 
-    def annotate_editor_math(rendered, expression)
+    def annotate_editor_math(rendered, expression, open_delimiter: "$", close_delimiter: "$")
       source = ERB::Util.html_escape(expression)
+      open_attr = ERB::Util.html_escape(open_delimiter)
+      close_attr = ERB::Util.html_escape(close_delimiter)
       rendered.sub(/\A<span\b([^>]*)>/) do
-        %(<span#{$1} data-editor-math-source="#{source}" contenteditable="false">)
+        %(<span#{$1} data-editor-math-source="#{source}" data-editor-math-open="#{open_attr}" data-editor-math-close="#{close_attr}" contenteditable="false">)
       end
     end
   end

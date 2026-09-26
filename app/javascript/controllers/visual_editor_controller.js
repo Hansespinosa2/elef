@@ -9,6 +9,7 @@ import {
   visibleOffsetAtPoint,
   visibleOffsetForSourceOffset
 } from "controllers/editor_caret"
+import { handleMathClick, handleMathKeydown, syncActiveMath } from "controllers/editor_math"
 
 export default class extends Controller {
   static targets = ["projection"]
@@ -69,12 +70,15 @@ export default class extends Controller {
   }
 
   blockBlur() {
+    syncActiveMath(this.projectionTarget, () => this.flushPendingProjectionEdits())
     this.flushPendingProjectionEdits()
     delete this.element.dataset.editorProjectionActive
     this.syncProjectionEditability()
   }
 
   projectionLinkClicked(event) {
+    if (handleMathClick(event, this.projectionTarget)) return
+    syncActiveMath(this.projectionTarget, () => this.flushPendingProjectionEdits())
     const link = event.target.closest?.(".editor-projection [contenteditable='true'] a")
     if (!link) return
 
@@ -193,6 +197,7 @@ export default class extends Controller {
   }
 
   rememberProjectionCaret() {
+    syncActiveMath(this.projectionTarget, () => this.flushPendingProjectionEdits())
     const selection = window.getSelection()
     if (!selection?.focusNode) return
     const node = selection.focusNode.nodeType === Node.ELEMENT_NODE ? selection.focusNode : selection.focusNode.parentElement
@@ -212,6 +217,10 @@ export default class extends Controller {
   }
 
   blockKeydown(event) {
+    if (this.pendingProjectionFrame || this.pendingProjectionEdits?.size) {
+      this.flushPendingProjectionEdits()
+    }
+    if (handleMathKeydown(event, this.projectionTarget, () => this.flushPendingProjectionEdits())) return
     if (moveCaretBetweenBlocks(event, this.projectionTarget)) return
     if (!["Backspace", "Delete"].includes(event.key)) return
 

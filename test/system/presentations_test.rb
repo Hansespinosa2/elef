@@ -819,6 +819,44 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: "# **Visual** deck\n\nAfter $\\frac{x}{y}$ and $$\\sum_{i=1}^{n} i$$ after.", wait: 5
   end
 
+  test "latex visual mode enter and exit flow in presentation block" do
+    presentation = Presentation.create!(
+      title: "Math deck",
+      source: "# Slide\n\nInitial text"
+    )
+
+    visit edit_presentation_path(presentation)
+    block = find(".editor-projection .slide-block", text: "Initial text")
+    block.click
+
+    page.execute_script(<<~JAVASCRIPT, block)
+      const block = arguments[0];
+      const range = document.createRange();
+      range.selectNodeContents(block);
+      range.collapse(false);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+    JAVASCRIPT
+    block.send_keys(" $x=3$")
+    assert_selector ".editor-projection .katex", text: "x=3", wait: 5
+
+    # Hit left arrow to enter math mode at $x=3|$
+    block.send_keys(:left)
+    assert_selector ".editor-projection .editor-math-active", text: "$x=3$", wait: 5
+
+    # Edit 3 -> 4
+    block.send_keys(:backspace)
+    block.send_keys("4")
+    assert_selector ".editor-projection .editor-math-active", text: "$x=4$", wait: 5
+
+    # Hit right arrow to exit math mode
+    block.send_keys(:right)
+    assert_selector ".editor-projection [data-editor-math-source='x=4']", wait: 5
+    assert_no_selector ".editor-projection .editor-math-active"
+    assert_field "Markdown source", with: "# Slide\n\nInitial text $x=4$", wait: 5
+  end
+
   test "real visual keystrokes preserve the exact title source" do
     source = <<~MARKDOWN.chomp
       ---
