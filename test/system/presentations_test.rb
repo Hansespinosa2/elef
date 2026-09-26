@@ -1182,6 +1182,7 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_selector ".media-upload-status", text: /pixel.*added to the Markdown source/i, wait: 8
     assert_includes page.evaluate_script("document.querySelector('.source-field').editorController.value"), "elef-asset:"
     assert_selector ".preview-pane .presentation-media-contain", wait: 8
+    assert_operator page.evaluate_script("document.querySelector('.preview-pane img.presentation-media').naturalWidth"), :>, 0
     assert_equal "image/png", presentation.reload.assets.blobs.last.content_type
     assert_selector '[data-autosave-target="status"]', exact_text: "Saved", wait: 8
   ensure

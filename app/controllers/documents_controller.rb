@@ -133,7 +133,8 @@ class DocumentsController < ApplicationController
     blob = Presentations::MediaAssets.resolve_blob(@document, params[:digest])
     return head :not_found unless blob
 
-    redirect_to rails_blob_path(blob, disposition: "inline"), allow_other_host: false
+    response.headers["Cache-Control"] = "private, max-age=3600"
+    send_data blob.download, type: blob.content_type, disposition: :inline, filename: blob.filename.to_s
   end
 
   def import

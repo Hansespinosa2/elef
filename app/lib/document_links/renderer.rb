@@ -3,11 +3,15 @@ module DocumentLinks
     module_function
 
     def render(markdown, documents: nil, workspace: nil, media_resolver: nil)
+      unless markdown.to_s.include?("[[")
+        return Presentations::MarkdownRenderer.render(markdown, media_resolver: media_resolver)
+      end
+
       workspace ||= documents&.first&.workspace || Workspace.default
-      documents = (documents || Document.where(workspace: workspace)).to_a
+      documents = (documents || Document.where(workspace: workspace).includes(:document_detail, :document_aliases)).to_a
       documents_by_title = documents.index_by(&:title)
       documents_by_key = documents.index_by(&:document_key)
-      documents_by_alias = documents.flat_map { |document| document.aliases.map { |alias_record| [alias_record.alias_name, document] } }.to_h
+      documents_by_alias = documents.flat_map { |document| document.document_aliases.map { |alias_record| [alias_record.alias_name, document] } }.to_h
       replacements = {}
 
       annotated = DocumentLinks::Parser.replace(markdown) do |token|

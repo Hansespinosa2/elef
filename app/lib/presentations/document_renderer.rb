@@ -15,10 +15,11 @@ module Presentations
         mapped_content_blocks = mapped_blocks.reject { |mapped| mapped[:empty_placeholder] }
         empty_blocks = mapped_blocks.select { |mapped| mapped[:empty_placeholder] }
         mapped_regions = editor_map.dig(:slides, 0, :editable_regions) || []
+        regions_by_block_id = mapped_regions.index_by { |region| region[:block_id] }
         html = +""
         empty_block_index = 0
         append_empty_block = lambda do |mapped|
-          region = mapped_regions.find { |candidate| candidate[:block_id] == mapped[:id] }
+          region = regions_by_block_id[mapped[:id]]
           next unless region&.dig(:editable)
 
           html << %(<div class="document-editor-block" data-editor-region-id="#{ERB::Util.html_escape(region[:id])}" data-editor-block-id="#{ERB::Util.html_escape(mapped[:id])}" data-editor-empty-block="true" contenteditable="true" role="textbox" aria-label="Editable Markdown block" aria-multiline="true" spellcheck="true" data-action="input->visual-editor#projectionInput focus->visual-editor#blockFocus blur->visual-editor#blockBlur"><p><br></p></div>)
@@ -29,7 +30,7 @@ module Presentations
             append_empty_block.call(placeholder)
             empty_block_index += 1
           end
-          region = mapped_regions.find { |candidate| candidate[:block_id] == mapped&.dig(:id) }
+          region = regions_by_block_id[mapped&.dig(:id)]
           valid_mapping = valid_editable_mapping?(mapped, region, block.markdown, editor_map[:source_length])
           classes = position_classes(block.position)
           class_names = ["document-editor-block", classes].reject(&:blank?).join(" ")
@@ -62,9 +63,12 @@ module Presentations
       end
 
       if slide.blocks.any? { |block| block.position }
+        lines_by_content = {}
+        source.to_s.lines.each_with_index { |line, line_index| lines_by_content[line.strip] ||= line_index + 1 }
+        anchor_lines = source_anchor_lines(source)
         rendered = slide.blocks.map.with_index do |block, index|
           classes = position_classes(block.position)
-          line = source_line_for(source, block.markdown, index)
+          line = lines_by_content[block.markdown.to_s.lines.first.to_s.strip] || anchor_lines[index] || 1
           %(<div class="document-block #{classes}" data-source-anchor="line-#{line}" data-source-line="#{line}">#{DocumentLinks::Renderer.render(block.markdown, documents: documents, workspace: workspace, media_resolver: media_resolver)}</div>)
         end.join.html_safe
       else

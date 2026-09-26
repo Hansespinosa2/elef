@@ -284,6 +284,17 @@ class PresentationTest < ActiveSupport::TestCase
     assert_equal ["# First", "---", "Second"], map[:slides].first[:blocks].map { |block| block[:markdown] }
   end
 
+  test "maps blank document blocks after emoji to UTF-16 offsets" do
+    source = "# A😀\n\n\n\nBody"
+    map = Presentations::Document.editor_map(source, mode: :document)
+    blocks = map[:slides].first[:blocks]
+
+    assert_equal source.encode("UTF-16LE").bytesize / 2, map[:source_length]
+    assert_equal source[0...source.index("Body")].encode("UTF-16LE").bytesize / 2,
+      blocks.last[:range][:start]
+    assert blocks.any? { |block| block[:empty_placeholder] }
+  end
+
   test "marks Markdown that the visual serializer cannot round-trip as read-only" do
     sources = [
       "```ruby\nputs 1",

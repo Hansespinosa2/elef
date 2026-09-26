@@ -47,18 +47,19 @@ module Presentations
 
       assets_map[identifier_str] ||
         assets_map[cleaned] ||
-        assets_map[File.basename(identifier_str)] ||
-        work.assets.blobs.find do |blob|
-          sha = digest(blob)
-          fname = blob.filename.to_s
-          sha == identifier_str ||
-            sha == cleaned ||
-            fname == identifier_str ||
-            fname == cleaned ||
-            fname == File.basename(identifier_str) ||
-            blob.key == identifier_str ||
-            blob.id.to_s == identifier_str
-        end
+        assets_map[File.basename(identifier_str)]
+    end
+
+    def resolver_for(work)
+      assets_map = nil
+      owner_path = work.document? ? "documents" : "presentations"
+      lambda do |identifier|
+        assets_map ||= index(work)
+        value = identifier.to_s.strip
+        cleaned = value.sub(/\Aelef-asset:/, "").sub(/\A\.?\/?assets\//, "").strip
+        blob = assets_map[value] || assets_map[cleaned] || assets_map[File.basename(value)]
+        blob && ["/#{owner_path}/#{work.id}/assets/#{digest(blob)}", blob.content_type]
+      end
     end
 
     def resolve_media(work, identifier)
