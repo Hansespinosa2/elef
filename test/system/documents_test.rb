@@ -1423,6 +1423,26 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_includes last_fragment.text, "Continued"
     assert_equal "true", last_fragment["contenteditable"], "the oversized paragraph should remain editable after its source update"
     assert_equal true, page.evaluate_script("document.activeElement === arguments[0]", last_fragment)
+    page.execute_script(<<~JAVASCRIPT)
+      const controller = document.querySelector('.visual-editor-form').visualEditorController;
+      const editor = controller.editorController;
+      window.documentPaginationEnterProbe = {};
+      const projectionKeydown = controller.projectionKeydown.bind(controller);
+      controller.projectionKeydown = (event) => {
+        window.documentPaginationEnterProbe.keydown = { key: event.key, preventedBefore: event.defaultPrevented };
+        return projectionKeydown(event);
+      };
+      const replaceAndFocus = controller.replaceAndFocus.bind(controller);
+      controller.replaceAndFocus = (block, from, to, replacement, caret) => {
+        window.documentPaginationEnterProbe.replaceAndFocus = { from, to, replacementLength: replacement.length, replacementTail: replacement.slice(-30), caret };
+        return replaceAndFocus(block, from, to, replacement, caret);
+      };
+      const replaceRange = editor.replaceRange.bind(editor);
+      editor.replaceRange = (insert, from, to) => {
+        window.documentPaginationEnterProbe.replaceRange = { from, to, insertLength: insert.length, insertTail: insert.slice(-30) };
+        return replaceRange(insert, from, to);
+      };
+    JAVASCRIPT
     page.execute_script(<<~JAVASCRIPT, last_fragment)
       const block = arguments[0];
       document.addEventListener('keydown', (event) => {
@@ -1433,6 +1453,10 @@ class DocumentsTest < ApplicationSystemTestCase
     JAVASCRIPT
     last_fragment.send_keys(:enter)
     assert_equal true, page.evaluate_script("window.documentPaginationEnterPrevented"), "Enter should be handled by the visual document editor"
+    probe = page.evaluate_script("window.documentPaginationEnterProbe")
+    assert_equal "Enter", probe.dig("keydown", "key"), probe.inspect
+    assert probe["replaceAndFocus"], probe.inspect
+    assert probe["replaceRange"], probe.inspect
     assert_field "Markdown source", with: /Continued\n\n\z/, wait: 5
     active_document_block.send_keys(:backspace)
     assert_field "Markdown source", with: /Continued\z/, wait: 5
