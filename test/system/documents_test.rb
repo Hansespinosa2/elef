@@ -1425,6 +1425,8 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_equal "right", page.evaluate_script("getComputedStyle(arguments[0]).textAlign", right_aligned)
     type_visual_text(".document-editor-block", "Left block", "Updated left block")
     assert_field "Markdown source", with: /:::position\{right\}\n\nUpdated left block/, wait: 5
+    page.execute_script("document.activeElement.blur()")
+    wait_for_fresh_projection
 
     centered = find(".document-editor-block", text: "Centered block")
     assert_includes centered["class"], "position-center"
