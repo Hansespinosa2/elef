@@ -586,6 +586,10 @@ class DocumentsTest < ApplicationSystemTestCase
 
     first_block = find(".document-editor-block", text: /This report examines a simple proposition/)
     assert first_block
+    first_block_id = first_block["data-editor-block-id"]
+    assert first_block_id
+
+    before = find_field("Markdown source").value
 
     # Hit Enter at the end of the block
     created = page.execute_script(<<~JAVASCRIPT, first_block)
@@ -603,7 +607,11 @@ class DocumentsTest < ApplicationSystemTestCase
     JAVASCRIPT
     assert_equal true, created
 
-    # Wait for the empty placeholder block to appear in the DOM
+    # Wait for the source to reflect the split (extra blank line), then for the preview to re-render
+    assert_no_field "Markdown source", with: before, wait: 5
+    wait_for_fresh_projection
+
+    # The empty placeholder block should now be in the DOM
     empty_block = find(".document-editor-block[data-editor-empty-block='true']", wait: 5)
     assert empty_block
 
@@ -619,7 +627,8 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_equal true, deleted
 
     # The Markdown source should be back to the original source without collapsing paragraphs
-    assert_field "Markdown source", with: sample[:source], wait: 5
+    assert_field "Markdown source", with: before, wait: 5
+    assert_equal first_block_id, active_document_block["data-editor-block-id"]
   end
 
   test "hitting enter at the end of a block and then backspace removes the empty block without collapsing surrounding blocks" do
@@ -630,6 +639,9 @@ class DocumentsTest < ApplicationSystemTestCase
 
     first_block = find(".document-editor-block", text: /This report examines a simple proposition/)
     assert first_block
+    first_block_id = first_block["data-editor-block-id"]
+    assert first_block_id
+    before = find_field("Markdown source").value
 
     # Hit Enter at the end of the block
     created = page.execute_script(<<~JAVASCRIPT, first_block)
@@ -647,7 +659,11 @@ class DocumentsTest < ApplicationSystemTestCase
     JAVASCRIPT
     assert_equal true, created
 
-    # Wait for the empty placeholder block to appear in the DOM
+    # Wait for the source to reflect the split (extra blank line), then for the preview to re-render
+    assert_no_field "Markdown source", with: before, wait: 5
+    wait_for_fresh_projection
+
+    # The empty placeholder block should now be in the DOM
     empty_block = find(".document-editor-block[data-editor-empty-block='true']", wait: 5)
     assert empty_block
 
@@ -663,7 +679,8 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_equal true, deleted
 
     # The Markdown source should be back to the original source without collapsing paragraphs
-    assert_field "Markdown source", with: sample[:source], wait: 5
+    assert_field "Markdown source", with: before, wait: 5
+    assert_equal first_block_id, active_document_block["data-editor-block-id"]
   end
 
   test "visual edits preserve soft line breaks around inline math" do

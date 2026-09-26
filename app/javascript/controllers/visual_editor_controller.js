@@ -206,6 +206,15 @@ export default class extends Controller {
     if (visibleOffset !== null) this.lastProjectionCaret = { blockId: block.dataset.editorBlockId, visibleOffset }
   }
 
+  blockMarkdown(blockElement, region, block, source) {
+    const { start, end } = region.content_range
+    const sourceMarkdown = source.slice(start, end)
+    const visibleMarkdown = block.empty_placeholder ? this.editableText(blockElement, region.kind, sourceMarkdown) : ""
+    const markdown = block.empty_placeholder && sourceMarkdown === "" ? visibleMarkdown : sourceMarkdown
+    const kind = this.currentBlockKind(markdown, this.currentBlockKind(visibleMarkdown, region.kind))
+    return { markdown, kind, start, end }
+  }
+
   blockKeydown(event) {
     if (moveCaretBetweenBlocks(event, this.projectionTarget)) return
     if (!["Backspace", "Delete"].includes(event.key)) return
@@ -222,20 +231,15 @@ export default class extends Controller {
     if (!block || !region || region.role === "title" || ["list", "quote"].includes(region.kind)) return
     if (blockElement.querySelector("img, video, iframe, [data-editor-math-source]")) return
 
+    event.preventDefault()
+    this.flushPendingProjectionEdits()
     const source = this.editorController.value
-    const { start, end } = region.content_range
-    const sourceMarkdown = source.slice(start, end)
-    const visibleMarkdown = block.empty_placeholder ? this.editableText(blockElement, region.kind, sourceMarkdown) : ""
-    const markdown = block.empty_placeholder && sourceMarkdown === "" ? visibleMarkdown : sourceMarkdown
-    const kind = this.currentBlockKind(markdown, this.currentBlockKind(visibleMarkdown, region.kind))
+    const { markdown, kind } = this.blockMarkdown(blockElement, region, block, source)
 
     if (this.removeEmptyBlock(blockElement, block, region, kind, markdown, source)) {
-      event.preventDefault()
       return
     }
 
-    event.preventDefault()
-    this.flushPendingProjectionEdits()
     const updated = removeEmptyBlockSource(source, block.range.start, block.range.end)
     if (updated === source) return
     this.pendingCaret = { sourceOffset: Math.min(block.range.start, updated.length), location: "block_end" }
@@ -258,6 +262,7 @@ export default class extends Controller {
   }
 
   projectionKeydown(event) {
+    if (event.defaultPrevented) return
     if (this.kindValue !== "document" || event.isComposing || event.altKey || event.ctrlKey || event.metaKey) return
 
     const blockElement = event.target.closest?.(".document-editor-block[data-editor-block-id]")
@@ -269,11 +274,7 @@ export default class extends Controller {
     if (!block || !region) return
 
     const source = this.editorController.value
-    const { start, end } = region.content_range
-    const sourceMarkdown = source.slice(start, end)
-    const visibleMarkdown = block.empty_placeholder ? this.editableText(blockElement, region.kind, sourceMarkdown) : ""
-    const markdown = block.empty_placeholder && sourceMarkdown === "" ? visibleMarkdown : sourceMarkdown
-    const kind = this.currentBlockKind(markdown, this.currentBlockKind(visibleMarkdown, region.kind))
+    const { markdown, kind, start, end } = this.blockMarkdown(blockElement, region, block, source)
     const emptyListItem = kind === "list" && this.hasEmptyTrailingMarker(markdown, "list")
     const emptyQuoteLine = kind === "quote" && this.hasEmptyTrailingMarker(markdown, "quote")
 
