@@ -1423,7 +1423,16 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_includes last_fragment.text, "Continued"
     assert_equal "true", last_fragment["contenteditable"], "the oversized paragraph should remain editable after its source update"
     assert_equal true, page.evaluate_script("document.activeElement === arguments[0]", last_fragment)
+    page.execute_script(<<~JAVASCRIPT, last_fragment)
+      const block = arguments[0];
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' && event.target.closest?.('.document-editor-block') === block) {
+          window.documentPaginationEnterPrevented = event.defaultPrevented;
+        }
+      }, { once: true });
+    JAVASCRIPT
     last_fragment.send_keys(:enter)
+    assert_equal true, page.evaluate_script("window.documentPaginationEnterPrevented"), "Enter should be handled by the visual document editor"
     assert_field "Markdown source", with: /Continued\n\n\z/, wait: 5
     active_document_block.send_keys(:backspace)
     assert_field "Markdown source", with: /Continued\z/, wait: 5
