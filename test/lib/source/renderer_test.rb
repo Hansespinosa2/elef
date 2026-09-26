@@ -82,20 +82,28 @@ class SourceRendererTest < ActiveSupport::TestCase
     inline_html = Source::Renderer.render("Equation: $E = mc^2$ in line.")
     assert_includes inline_html, 'class="katex"'
     assert_includes inline_html, 'data-editor-math-source="E = mc^2"'
+    assert_includes inline_html, 'data-editor-math-open="$"'
+    assert_includes inline_html, 'data-editor-math-close="$"'
 
     display_html = Source::Renderer.render("$$\\sum_{i=1}^n i$$")
     assert_includes display_html, 'class="katex-display"'
     assert_includes display_html, 'data-editor-math-source="\sum_{i=1}^n i"'
+    assert_includes display_html, 'data-editor-math-open="$$"'
+    assert_includes display_html, 'data-editor-math-close="$$"'
   end
 
   test "renders parenthesized inline and bracketed display math via KaTeX" do
     inline_html = Source::Renderer.render("Inline \\(\\bar{x}\\).")
     assert_includes inline_html, 'class="katex"'
     assert_includes inline_html, 'data-editor-math-source="\\bar{x}"'
+    assert_includes inline_html, 'data-editor-math-open="\("'
+    assert_includes inline_html, 'data-editor-math-close="\)"'
 
     display_html = Source::Renderer.render("\\[\\sum_{i=1}^n i\\]")
     assert_includes display_html, 'class="katex-display"'
     assert_includes display_html, 'data-editor-math-source="\\sum_{i=1}^n i"'
+    assert_includes display_html, 'data-editor-math-open="\["'
+    assert_includes display_html, 'data-editor-math-close="\]"'
   end
 
   test "preserves escaped dollar signs without rendering math" do

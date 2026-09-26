@@ -839,6 +839,88 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_selector ".document-editor-block .katex", text: "test"
   end
 
+  test "latex visual mode enter and exit flow allows inline editing" do
+    visit new_document_path
+
+    find(".document-editor-block h1", text: "Untitled document").send_keys(:enter)
+    block = active_document_block
+    block.send_keys("$x=3$")
+    assert_selector ".document-editor-block .katex", wait: 5
+
+    # 4. Hit left arrow -> enters math mode, de-renders to raw text with $ delimiters visible, caret is inside $x=3|$
+    block.send_keys(:left)
+    assert_selector ".document-editor-block .editor-math-active", text: "$x=3$", wait: 5
+
+    # 5. Hit backspace -> deletes 3 -> $x=|$
+    block.send_keys(:backspace)
+    assert_selector ".document-editor-block .editor-math-active", text: "$x=$", wait: 5
+
+    # 6. Hit 4 -> types 4 -> $x=4|$
+    block.send_keys("4")
+    assert_selector ".document-editor-block .editor-math-active", text: "$x=4$", wait: 5
+
+    # 7. Hit right arrow -> leaves math block; re-renders KaTeX; caret is outside $x=4$|
+    block.send_keys(:right)
+    assert_selector ".document-editor-block [data-editor-math-source='x=4']", wait: 5
+    assert_no_selector ".document-editor-block .editor-math-active"
+
+    # 8. Hit left arrow -> de-renders to raw text; caret inside $x=4|$
+    block.send_keys(:left)
+    assert_selector ".document-editor-block .editor-math-active", text: "$x=4$", wait: 5
+
+    # 9. Hit left arrow 2x -> caret moves past 4 and = -> $x|=4$
+    block.send_keys(:left, :left)
+
+    # 10. Hit backspace -> deletes x -> $|=4$
+    block.send_keys(:backspace)
+    assert_selector ".document-editor-block .editor-math-active", text: "$=4$", wait: 5
+
+    # 11. Hit y -> types y -> $y|=4$
+    block.send_keys("y")
+    assert_selector ".document-editor-block .editor-math-active", text: "$y=4$", wait: 5
+
+    # 12. Hit left arrow 2x -> 1st moves to $[caret]y=4$, 2nd moves past opening $ exiting math -> re-renders KaTeX
+    block.send_keys(:left, :left)
+
+    # 13. Success: Latex renders correctly and caret is outside |$y=4
+    assert_selector ".document-editor-block [data-editor-math-source='y=4']", wait: 5
+    assert_no_selector ".document-editor-block .editor-math-active"
+    assert_field "Markdown source", with: "# Untitled document\n\n$y=4$", wait: 5
+  end
+
+  test "display latex visual mode enter and exit and click to edit" do
+    visit new_document_path
+
+    find(".document-editor-block h1", text: "Untitled document").send_keys(:enter)
+    block = active_document_block
+    block.send_keys("$$a=1$$")
+    assert_selector ".document-editor-block .editor-live-math-display", wait: 5
+
+    # Left arrow enters display math at $$a=1|$$
+    block.send_keys(:left)
+    assert_selector ".document-editor-block .editor-math-active", text: "$$a=1$$", wait: 5
+
+    # Edit 1 -> 2
+    block.send_keys(:backspace)
+    block.send_keys("2")
+    assert_selector ".document-editor-block .editor-math-active", text: "$$a=2$$", wait: 5
+
+    # Right arrow leaves display math -> re-renders
+    block.send_keys(:right)
+    assert_selector ".document-editor-block [data-editor-math-source='a=2']", wait: 5
+    assert_no_selector ".document-editor-block .editor-math-active"
+    assert_field "Markdown source", with: "# Untitled document\n\n$$a=2$$", wait: 5
+
+    # Click on the rendered KaTeX math element -> de-renders to active math
+    find(".document-editor-block [data-editor-math-source='a=2']").click
+    assert_selector ".document-editor-block .editor-math-active", text: "$$a=2$$", wait: 5
+
+    # Blur by clicking title -> re-renders
+    find(".document-editor-block h1").click
+    assert_selector ".document-editor-block [data-editor-math-source='a=2']", wait: 5
+    assert_no_selector ".document-editor-block .editor-math-active"
+  end
+
   test "new document renders inline and display math before its first save" do
     visit new_document_path
 
