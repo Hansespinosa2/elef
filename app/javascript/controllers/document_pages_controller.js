@@ -435,14 +435,14 @@ export default class extends Controller {
     const local = visibleOffsetAtPoint(block, selection.focusNode, selection.focusOffset)
     if (local === null) return null
 
-    const listItem = node?.closest?.("li")
+    const structuredLine = node?.closest?.("li, blockquote > p, blockquote > div")
     let caretTargetId = null
     let caretTargetOffset = null
-    if (listItem && block.contains(listItem)) {
+    if (structuredLine && block.contains(structuredLine)) {
       this.nextCaretTargetId += 1
       caretTargetId = `caret-${this.nextCaretTargetId}`
-      caretTargetOffset = visibleOffsetAtPoint(listItem, selection.focusNode, selection.focusOffset)
-      listItem.dataset.documentPageCaretTarget = caretTargetId
+      caretTargetOffset = visibleOffsetAtPoint(structuredLine, selection.focusNode, selection.focusOffset)
+      structuredLine.dataset.documentPageCaretTarget = caretTargetId
     }
 
     return {

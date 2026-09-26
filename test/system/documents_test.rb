@@ -1421,7 +1421,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
     last_fragment = all(".document-editor-block[data-editor-block-id]").last
     assert_includes last_fragment.text, "Continued"
-    last_fragment.send_keys(:end, :enter)
+    last_fragment.send_keys(:enter)
     assert_field "Markdown source", with: /Continued\n\n\z/, wait: 5
     active_document_block.send_keys(:backspace)
     assert_field "Markdown source", with: /Continued\z/, wait: 5
