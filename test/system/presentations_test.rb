@@ -879,7 +879,7 @@ class PresentationsTest < ApplicationSystemTestCase
       editor.setSelectionRange(editor.value.length);
       editor.focus();
     JAVASCRIPT
-    find(".cm-content").send_keys("\n\n## Test")
+    find(".cm-content").send_keys(:end, :enter, :enter, "## Test")
     assert_field "Markdown source", with: "# Existing slide\n\n## Test", wait: 5
     click_on "Save presentation"
     assert_selector ".flash.notice", text: "Presentation saved.", wait: 10

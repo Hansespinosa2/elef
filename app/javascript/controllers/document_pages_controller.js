@@ -14,6 +14,7 @@ export default class extends Controller {
     this.nextFlowId = 0
     this.resizeFrame = null
     this.reflowFrame = null
+    this.reflowTimer = null
     this.boundResize = () => this.resizeFrames()
     this.resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(this.boundResize)
     this.mutationObserver = typeof MutationObserver === "undefined" ? null : new MutationObserver(() => this.schedulePagination())
@@ -24,7 +25,7 @@ export default class extends Controller {
 
     if (document.fonts?.ready) {
       document.fonts.ready.then(() => {
-        if (this.active) this.paginate()
+        if (this.active) this.schedulePagination()
       })
     }
   }
@@ -36,6 +37,7 @@ export default class extends Controller {
     this.mutationObserver?.disconnect()
     cancelAnimationFrame(this.resizeFrame)
     cancelAnimationFrame(this.reflowFrame)
+    clearTimeout(this.reflowTimer)
   }
 
   resizeFrames() {
@@ -46,11 +48,17 @@ export default class extends Controller {
   }
 
   schedulePagination() {
-    if (!this.active || this.reflowFrame) return
-    this.reflowFrame = requestAnimationFrame(() => {
-      this.reflowFrame = null
-      this.paginate()
-    })
+    if (!this.active) return
+    clearTimeout(this.reflowTimer)
+    this.reflowTimer = setTimeout(() => {
+      this.reflowTimer = null
+      if (!this.active || this.reflowFrame) return
+      this.reflowFrame = requestAnimationFrame(() => {
+        this.reflowFrame = null
+        if (!this.active || this.pagesStillFit()) return
+        this.paginate()
+      })
+    }, 300)
   }
 
   paginate() {
@@ -99,6 +107,7 @@ export default class extends Controller {
     this.resizeFrames()
     this.mutationObserver?.takeRecords()
     if (caret) requestAnimationFrame(() => this.restoreCaret(caret))
+    this.surfaceTarget.dispatchEvent(new CustomEvent("elef:document-paginated", { bubbles: true }))
   }
 
   logicalBlocks() {
@@ -475,5 +484,10 @@ export default class extends Controller {
 
   overflows({ content }) {
     return content.scrollHeight > content.clientHeight + 1
+  }
+
+  pagesStillFit() {
+    const pages = [...this.surfaceTarget.querySelectorAll(".document-page-content")]
+    return pages.length > 0 && pages.every((content) => !this.overflows({ content }))
   }
 }

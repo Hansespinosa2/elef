@@ -30,6 +30,13 @@ export default class extends Controller {
     this.element.addEventListener("elef:preview-updated", this.previewHandler)
     this.previewStaleHandler = (event) => this.previewStale(event.detail)
     this.element.addEventListener("elef:preview-stale", this.previewStaleHandler)
+    this.documentPaginatedHandler = () => {
+      if (!this.focusTitleValue) return
+      if (this.initialTitleFocusSettled) return
+      this.focusNewDocumentTitle()
+      if (this.projectionTarget.querySelector(".document-editor-block h1")) this.initialTitleFocusSettled = true
+    }
+    this.element.addEventListener("elef:document-paginated", this.documentPaginatedHandler)
     this.projectionLinkHandler = (event) => this.projectionLinkClicked(event)
     this.element.addEventListener("click", this.projectionLinkHandler)
     this.hasPresentationProjection = Boolean(this.element.querySelector(".presentation-editor-projection"))
@@ -48,6 +55,7 @@ export default class extends Controller {
     this.element.removeEventListener("elef:editor-mode-change", this.modeChangedHandler)
     this.element.removeEventListener("elef:preview-updated", this.previewHandler)
     this.element.removeEventListener("elef:preview-stale", this.previewStaleHandler)
+    this.element.removeEventListener("elef:document-paginated", this.documentPaginatedHandler)
     this.element.removeEventListener("click", this.projectionLinkHandler)
     this.element.removeEventListener("keydown", this.blockKeydownHandler, true)
     document.removeEventListener("selectionchange", this.selectionChangeHandler)
@@ -327,6 +335,7 @@ export default class extends Controller {
     this.syncProjectionEditability({ preserveActive: Boolean(this.focusedProjectionBlock()) })
     this.restorePendingCaret()
     this.restoreProjectionCaret()
+    this.focusNewDocumentTitle()
   }
 
   previewStale(detail = {}) {
@@ -456,7 +465,12 @@ export default class extends Controller {
   }
 
   focusNewDocumentTitle() {
-    if (!this.focusTitleValue || this.initialTitleFocused || !this.hasProjectionTarget) return
+    if (!this.focusTitleValue || !this.hasProjectionTarget || this.initialTitleFocusSettled) return
+
+    if (this.initialTitleFocused) {
+      const activeProjection = document.activeElement?.closest?.(".document-editor-block[data-editor-block-id]")
+      if (activeProjection || (document.activeElement !== document.body && document.activeElement !== document.documentElement)) return
+    }
 
     const heading = this.projectionTarget.querySelector(".document-editor-block h1")
     const block = heading?.closest(".document-editor-block[contenteditable='true']")
