@@ -2,7 +2,7 @@ module MathShortcuts
   class Catalog
     PLACEHOLDER = /\$\{(\d+)(?::([^}]*))?\}/.freeze
     DEFAULTS = [
-      { id: "default-bold", name: "Bold", aliases: %w[b bold], prefix: ".", description: "Bold mathematical symbols", expansion: "\\mathbf{${1}}", built_in: true },
+      { id: "default-bold", name: "Bold", aliases: %w[b bb bold], prefix: ".", description: "Bold mathematical symbols", expansion: "\\mathbf{${1}}", built_in: true },
       { id: "default-hat", name: "Hat", aliases: %w[h hat], prefix: ".", description: "Put a hat over a symbol", expansion: "\\hat{${1}}", built_in: true },
       { id: "default-tilde", name: "Tilde", aliases: %w[t tilde], prefix: ".", description: "Put a tilde over a symbol", expansion: "\\tilde{${1}}", built_in: true },
       { id: "default-transpose", name: "Transpose", aliases: %w[T tr transpose], prefix: ".", description: "Add a mathematical transpose", expansion: "${1}^{\\mathsf{T}}", built_in: true },
@@ -13,7 +13,7 @@ module MathShortcuts
       { id: "default-overline", name: "Overline", aliases: %w[overline], prefix: ".", description: "Put a line over a symbol", expansion: "\\overline{${1}}", built_in: true },
       { id: "default-ddot", name: "Double dot", aliases: %w[ddot], prefix: ".", description: "Put two dots over a symbol", expansion: "\\ddot{${1}}", built_in: true },
       { id: "default-check", name: "Check", aliases: %w[check], prefix: ".", description: "Put a check accent over a symbol", expansion: "\\check{${1}}", built_in: true },
-      { id: "default-blackboard", name: "Blackboard bold", aliases: %w[bb blackboard], prefix: ".", description: "Use blackboard bold typography", expansion: "\\mathbb{${1}}", built_in: true },
+      { id: "default-blackboard", name: "Blackboard bold", aliases: %w[blackboard], prefix: ".", description: "Use blackboard bold typography", expansion: "\\mathbb{${1}}", built_in: true },
       { id: "default-calligraphic", name: "Calligraphic", aliases: %w[cal calligraphic], prefix: ".", description: "Use calligraphic typography", expansion: "\\mathcal{${1}}", built_in: true },
       { id: "default-roman", name: "Roman", aliases: %w[rm roman], prefix: ".", description: "Use upright roman typography", expansion: "\\mathrm{${1}}", built_in: true },
       { id: "default-sans", name: "Sans serif", aliases: %w[sf sans], prefix: ".", description: "Use sans-serif typography", expansion: "\\mathsf{${1}}", built_in: true },

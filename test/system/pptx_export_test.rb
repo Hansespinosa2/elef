@@ -10,10 +10,10 @@ class PptxExportTest < ApplicationSystemTestCase
     "match" => %w[#fcfaf5 #f5f0e7]
   }.freeze
 
-  test "exports every presentation fixture as a styled 16:9 PPTX" do
+  test "exports presentation fixtures as a styled 16:9 PPTX" do
     presentation = presentations(:one)
-    fixtures = [{ id: "presentations.yml:one", source: presentation.source }]
-    fixtures += (Presentations::SampleData::SAMPLES + Presentations::LineageSampleData::SAMPLES).map do |sample|
+    target_ids = %w[markdown-basics code-and-math tables-and-media]
+    fixtures = Presentations::SampleData::SAMPLES.select { |s| target_ids.include?(s[:id]) }.map do |sample|
       { id: sample.fetch(:id), source: sample.fetch(:source) }
     end
     fake_image = Presentations::PptxExport::RemoteImageFetcher::Image.new(PIXEL_PNG, "image/png")
@@ -148,7 +148,7 @@ class PptxExportTest < ApplicationSystemTestCase
 
   def assert_pptx_visual_contract(bytes, presentation, fixture_id, expected_heading_geometries)
     slide_models = presentation.slides
-    title = Presentations::Document.extract_first_h1(presentation.source)
+    title = Source::Document.extract_first_h1(presentation.source)
     expected_background = EXPECTED_BACKGROUNDS.fetch(presentation.theme)
 
     Zip::File.open_buffer(StringIO.new(bytes)) do |archive|

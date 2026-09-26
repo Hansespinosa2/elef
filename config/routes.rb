@@ -19,8 +19,8 @@ Rails.application.routes.draw do
       get :print
       match :pptx, via: %i[get post], defaults: { format: :json }
       post :upload_asset, path: "assets"
-      get "assets/:digest", action: :media_asset, as: :media_asset
-      get "pptx_assets/:digest", action: :pptx_asset, as: :pptx_asset
+      get "assets/*digest", action: :media_asset, as: :media_asset, format: false
+      get "pptx_assets/*digest", action: :pptx_asset, as: :pptx_asset, format: false
       post :publish
       post :restore
       get :history
@@ -39,6 +39,9 @@ Rails.application.routes.draw do
       post :import
     end
     member do
+      post :upload_asset, path: "assets"
+      get "assets/*digest", action: :media_asset, as: :media_asset, format: false
+      get :print
       post :restore
       get :history
       get :export

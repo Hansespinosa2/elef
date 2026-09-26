@@ -2,12 +2,16 @@ module DocumentLinks
   module Renderer
     module_function
 
-    def render(markdown, documents: nil, workspace: nil)
+    def render(markdown, documents: nil, workspace: nil, media_resolver: nil)
+      unless markdown.to_s.include?("[[")
+        return Source::Renderer.render(markdown, media_resolver: media_resolver)
+      end
+
       workspace ||= documents&.first&.workspace || Workspace.default
-      documents = (documents || Document.where(workspace: workspace)).to_a
+      documents = (documents || Document.where(workspace: workspace).includes(:document_detail, :document_aliases)).to_a
       documents_by_title = documents.index_by(&:title)
       documents_by_key = documents.index_by(&:document_key)
-      documents_by_alias = documents.flat_map { |document| document.aliases.map { |alias_record| [alias_record.alias_name, document] } }.to_h
+      documents_by_alias = documents.flat_map { |document| document.document_aliases.map { |alias_record| [alias_record.alias_name, document] } }.to_h
       replacements = {}
 
       annotated = DocumentLinks::Parser.replace(markdown) do |token|
@@ -23,7 +27,7 @@ module DocumentLinks
         placeholder
       end
 
-      html = Presentations::MarkdownRenderer.render(annotated)
+      html = Source::Renderer.render(annotated, media_resolver: media_resolver)
       replacements.each { |placeholder, replacement| html = html.gsub(placeholder) { replacement } }
       html.html_safe
     end

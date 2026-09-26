@@ -40,43 +40,7 @@
 <section class="library-list mt-8 grid gap-4" aria-label="Saved <%= current_filter %>">
   <% if @works.any? %>
     <% @works.each do |work| %>
-      <article id="<%= work_dom_id(work) %>" class="library-card flex items-center justify-between rounded-2xl border border-[#ddd5c8] bg-[#fffdf8] p-5 max-[920px]:flex-col max-[920px]:items-stretch">
-        <div>
-          <p class="eyebrow mb-1 text-xs font-extrabold uppercase tracking-[0.12em] text-[#6d4aff]"><%= work_type_label(work) %></p>
-          <h2 class="mb-2 text-2xl font-bold"><%= link_to work.title, work_edit_path(work), class: "hover:underline" %></h2>
-          <p class="text-[#6f675c]">
-            <% if work.presentation? %><%= pluralize(work.slides.length, "slide") %> · <% else %>Continuous Markdown · <% end %>
-            Updated <%= time_ago_in_words(work.updated_at) %> ago
-          </p>
-          <% if work.presentation? && work.parent %><p class="mt-1 text-sm text-[#6f675c]">Forked from <%= work.parent.title %> · <%= work.fork_type %></p><% elsif work.presentation? && work.fork_parent_title.present? %><p class="mt-1 text-sm text-[#a63a2d]">Parent no longer available · <%= work.fork_type %></p><% end %>
-        </div>
-        <div class="library-actions">
-          <div class="library-open-actions">
-            <%= link_to "Edit", work_edit_path(work), class: "button primary" %>
-            <%= link_to "Preview", work_show_path(work), class: "hover:underline" %>
-            <%= button_to "Present", publish_presentation_path(work), method: :post, class: "button inline-flex min-h-10 items-center rounded-full border border-[#304047] bg-[#202c32] px-4 py-2 font-bold text-[#e9eee9] hover:bg-[#304047]", form: { data: { turbo: false } } if work.presentation? %>
-          </div>
-          <div class="library-manage-actions">
-            <details class="rename-menu relative">
-              <summary>Rename</summary>
-              <%= form_with scope: work_param_key(work), url: work_rename_path(work), method: :patch, class: "library-rename inline-flex items-center gap-2" do |form| %>
-                <%= form.text_field :title, id: "#{work_dom_id(work)}_rename_title", value: work.title, aria: { label: "Rename #{work.title}" }, class: "w-40 rounded-lg border border-[#ddd5c8] bg-white px-2 py-1" %>
-                <%= form.submit "Save title", class: "cursor-pointer rounded-full border border-[#ddd5c8] bg-[#fffdf8] px-3 py-1 font-bold" %>
-              <% end %>
-            </details>
-            <% if work.presentation? %>
-              <details class="fork-menu relative">
-                <summary class="cursor-pointer list-none rounded-full border border-[#ddd5c8] bg-[#fffdf8] px-3 py-1 font-bold">Fork</summary>
-                <div class="fork-menu-options absolute right-0 z-10 mt-2 grid min-w-44 gap-1 rounded-xl border border-[#ddd5c8] bg-[#fffdf8] p-2 shadow-lg">
-                  <%= button_to "As continuation", fork_presentation_path(work), method: :post, params: { fork_type: "continuation" }, class: "cursor-pointer rounded-lg px-3 py-2 text-left font-bold hover:bg-[#f7efe2]" %>
-                  <%= button_to "As inspiration", fork_presentation_path(work), method: :post, params: { fork_type: "inspiration" }, class: "cursor-pointer rounded-lg px-3 py-2 text-left font-bold hover:bg-[#f7efe2]" %>
-                </div>
-              </details>
-            <% end %>
-            <%= button_to "Delete", work_delete_path(work), method: :delete, form: { data: { turbo_confirm: "Delete #{work.title}?" } }, class: "cursor-pointer rounded-full border border-[#efb0a8] bg-[#fff1ee] px-3 py-1 font-bold text-[#a63a2d]" %>
-          </div>
-        </div>
-      </article>
+      <%= render "library/work_card", work: work %>
     <% end %>
   <% else %>
     <div class="empty-state flex items-center justify-between rounded-2xl border border-[#ddd5c8] bg-[#fffdf8] p-5 max-[920px]:flex-col max-[920px]:items-stretch">

@@ -149,8 +149,10 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     digest = Digest::SHA256.hexdigest(bytes)
     assert_equal digest, response.parsed_body["digest"]
     assert_equal "![Pixel](elef-asset:#{digest} \"fit:cover\")", response.parsed_body["source"]
+    assert_equal presentation.reload.lock_version, response.parsed_body["lock_version"]
     blob = presentation.assets.blobs.last
     assert_equal digest, blob.metadata["elef_sha256"]
+    assert blob.analyzed?
 
     presentation.reload.update!(source: "# Pixel\n\n#{response.parsed_body["source"]}")
     get presentation_path(presentation)
@@ -158,8 +160,9 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_select ".presentation-media-cover[src='/presentations/#{presentation.id}/assets/#{digest}'][alt='Pixel']"
 
     get media_asset_presentation_path(presentation, digest)
-    assert_response :redirect
-    assert_includes response.location, "/rails/active_storage/blobs/redirect/"
+    assert_response :success
+    assert_equal "image/png", response.media_type
+    assert_equal bytes, response.body.b
 
     video_bytes = "mp4 test bytes".b
     Tempfile.create(["clip", ".mp4"]) do |file|
@@ -606,5 +609,39 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_select '[aria-label="Markdown warnings"]', text: /directive/
     assert_select ".slide", text: /Content/
     refute_includes response.body, ":::unknown"
+  end
+
+  test "create responds to JSON format with edit and upload urls" do
+    post presentations_path, params: { presentation: { title: "JSON Deck", source: "# New Deck" } }, headers: { "Accept" => "application/json" }
+
+    assert_response :created
+    json = response.parsed_body
+    assert json["id"]
+    assert_equal edit_presentation_path(json["id"]), json["edit_url"]
+    assert_equal upload_asset_presentation_path(json["id"]), json["upload_url"]
+  end
+
+  test "media_asset serves assets by filename and relative path as well as digest" do
+    presentation = Presentation.create!(title: "Asset routing deck", source: "# Asset Deck")
+    bytes = "image bytes".b
+    presentation.assets.attach(io: StringIO.new(bytes), filename: "diagram.png", content_type: "image/png")
+    digest = Digest::SHA256.hexdigest(bytes)
+    blob = presentation.assets.blobs.last
+    blob.update!(metadata: blob.metadata.merge("elef_sha256" => digest))
+
+    # Request by digest
+    get media_asset_presentation_path(presentation, digest)
+    assert_response :success
+    assert_equal bytes, response.body.b
+
+    # Request by filename
+    get media_asset_presentation_path(presentation, "diagram.png")
+    assert_response :success
+    assert_equal bytes, response.body.b
+
+    # Request by relative path
+    get media_asset_presentation_path(presentation, "assets/diagram.png")
+    assert_response :success
+    assert_equal bytes, response.body.b
   end
 end

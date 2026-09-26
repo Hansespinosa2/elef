@@ -1,24 +1,41 @@
 <% content_for :title, "Math shortcuts" %>
+<%= render "layouts/settings_navigation" %>
+
 <section class="page-title mb-8 flex items-end justify-between gap-4 max-[720px]:flex-col max-[720px]:items-stretch">
   <div>
-    <p class="eyebrow mb-1 text-xs font-extrabold uppercase tracking-[0.12em] text-[#6d4aff]">Authoring tools</p>
+    <p class="eyebrow mb-1 text-xs font-extrabold uppercase tracking-[0.12em]">Authoring settings</p>
     <h1 class="mb-2 text-4xl font-bold">Math shortcuts</h1>
-    <p class="math-shortcut-intro text-[#6f675c]">Use <code>.</code> transforms and <code>@</code> aliases for Greek letters, operators, relations, and structures inside math.</p>
+    <p class="math-shortcut-intro text-[#6f675c]">Type <code>x.bar.bb</code> to combine an accent and bold style in either order. One accent, one style, and transpose can be combined; repeated or conflicting modifiers stay as typed. Use <code>@</code> aliases for Greek letters, operators, and structures.</p>
   </div>
-  <%= link_to "New shortcut", new_math_shortcut_path, class: "button primary inline-flex min-h-10 items-center rounded-full border border-[#6d4aff] bg-[#6d4aff] px-4 py-2 font-bold text-white no-underline" %>
+  <%= link_to "New shortcut", new_math_shortcut_path, class: "button primary inline-flex min-h-10 items-center rounded-full border px-4 py-2 font-bold text-white no-underline" %>
 </section>
 
-<section class="math-shortcut-list grid gap-3" aria-label="Math shortcuts">
+<section class="math-shortcut-list" aria-label="Math shortcuts">
   <% @math_shortcuts.each do |shortcut| %>
-    <article class="math-shortcut-card flex items-center justify-between gap-4 rounded-2xl border border-[#ddd5c8] bg-[#fffdf8] p-4 max-[720px]:items-start max-[720px]:flex-col">
-      <div>
-        <p class="text-sm font-bold text-[#6f675c]"><%= shortcut.prefix %><%= shortcut.aliases.join(", ") %><% if shortcut.built_in? %> · Built in<% end %></p>
-        <h2 class="text-xl font-bold"><%= shortcut.name %></h2>
-        <p class="text-sm text-[#6f675c]"><%= shortcut.description %></p>
-        <code class="math-shortcut-expansion"><%= shortcut.expansion %></code>
+    <% example_expansion = math_shortcut_example_expansion(shortcut) %>
+    <article class="math-shortcut-card settings-card rounded-2xl border p-4">
+      <div class="math-shortcut-heading flex items-start justify-between gap-3">
+        <div class="min-w-0">
+          <p class="math-shortcut-alias"><code><%= shortcut.prefix %><%= shortcut.aliases.join(", ") %></code></p>
+          <h2 class="mt-1 text-xl font-bold"><%= shortcut.name %></h2>
+          <p class="mt-1 text-sm text-[#6f675c]"><%= shortcut.description %></p>
+        </div>
+        <span class="snippet-origin-badge"><%= shortcut.built_in? ? "Built-in" : "Personal" %></span>
       </div>
+
+      <div class="math-shortcut-card-example mt-4" aria-label="Shortcut example">
+        <p class="snippet-example-label mb-2">Example</p>
+        <div class="math-shortcut-flow">
+          <div class="math-shortcut-step"><span>Type</span><code><%= math_shortcut_example_input(shortcut) %></code></div>
+          <span class="math-shortcut-arrow" aria-hidden="true">→</span>
+          <div class="math-shortcut-step"><span>LaTeX</span><code><%= example_expansion %></code></div>
+          <span class="math-shortcut-arrow" aria-hidden="true">→</span>
+          <div class="math-shortcut-step math-shortcut-result"><span>Result</span><div><%= render_markdown("$#{example_expansion}$") %></div></div>
+        </div>
+      </div>
+
       <% unless shortcut.built_in? %>
-        <div class="flex gap-2">
+        <div class="mt-4 flex gap-2">
           <%= link_to "Edit", edit_math_shortcut_path(shortcut), class: "button rounded-full border border-[#ddd5c8] px-3 py-1 font-bold no-underline" %>
           <%= button_to "Delete", math_shortcut_path(shortcut), method: :delete, class: "math-shortcut-delete rounded-full border border-[#efb0a8] bg-[#fff1ee] px-3 py-1 font-bold text-[#a63a2d]" %>
         </div>

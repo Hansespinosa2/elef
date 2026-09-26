@@ -59,7 +59,7 @@ module Presentations
     private
 
     def filename
-      basename = Document.normalize_folder_name(@presentation.title, fallback: "Presentation")
+      basename = Source::Document.normalize_folder_name(@presentation.title, fallback: "Presentation")
       "#{basename}.pptx"
     end
 
@@ -84,7 +84,7 @@ module Presentations
     end
 
     def markdown_html(markdown)
-      html = MarkdownRenderer.render(markdown, media_resolver: method(:resolve_asset))
+      html = Source::Renderer.render(markdown, media_resolver: method(:resolve_asset))
       fragment = Nokogiri::HTML::DocumentFragment.parse(html.to_s)
       fragment.css("img[src]").each do |image|
         source = image["src"].to_s
@@ -96,7 +96,7 @@ module Presentations
     end
 
     def resolve_asset(digest)
-      blob = (@asset_index ||= MediaAssets.index(@presentation))[digest]
+      blob = (@asset_index ||= WorkAssets.index(@presentation))[digest]
       raise Error, "A referenced Elef image or video is unavailable for PPTX export." unless blob
 
       query = "version=#{@version}"

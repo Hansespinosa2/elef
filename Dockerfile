@@ -7,7 +7,7 @@ ENV APP_HOME=/rails \
     RAILS_ENV=production
 
 RUN apt-get update \
-  && apt-get install --no-install-recommends -y build-essential ca-certificates curl libpq-dev \
+  && apt-get install --no-install-recommends -y build-essential ca-certificates curl libpq-dev nodejs \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR ${APP_HOME}

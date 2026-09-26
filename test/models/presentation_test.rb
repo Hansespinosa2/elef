@@ -10,7 +10,7 @@ class PresentationTest < ActiveSupport::TestCase
 
   test "preserves empty slides and ignores front matter and fenced separators" do
     source = "---\ntitle: Demo\ntheme: dark\n---\n```yaml\n---\n```\n---\n---"
-    document = Presentations::Document.parse(source, source_name: "Demo")
+    document = Source::Document.parse(source, source_name: "Demo")
 
     assert_equal "dark", document.theme
     assert_equal ["```yaml\n---\n```", "", ""], document.slides.map(&:markdown)
@@ -18,7 +18,7 @@ class PresentationTest < ActiveSupport::TestCase
 
   test "maps source ranges around front matter, fenced separators, CRLF, and unicode" do
     source = "---\r\ntitle: Café 😀\r\n---\r\n# One 😀\r\n```md\r\n---\r\n```\r\n---\r\n---"
-    ranges = Presentations::Document.slide_source_ranges(source)
+    ranges = Source::Document.slide_source_ranges(source)
 
     assert_equal 3, ranges.length
     assert_equal source.index("# One"), ranges.first[:start]
@@ -30,22 +30,22 @@ class PresentationTest < ActiveSupport::TestCase
 
   test "keeps language-like and mixed fences inside a slide" do
     source = "# Code\n\n```\n```ruby\n---\n~~~\n---\n```\n\n---\n# Next"
-    document = Presentations::Document.parse(source)
+    document = Source::Document.parse(source)
 
     assert_equal ["# Code\n\n```\n```ruby\n---\n~~~\n---\n```", "# Next"],
       document.slides.map(&:markdown)
   end
 
   test "malformed front matter remains ordinary Markdown" do
-    document = Presentations::Document.parse("---\ntheme: dark")
+    document = Source::Document.parse("---\ntheme: dark")
 
     assert_equal "match", document.theme
     assert_equal ["", "theme: dark"], document.slides.map(&:markdown)
   end
 
   test "defaults typography to book" do
-    assert_equal "book", Presentations::Document.parse("# Title").typography
-    assert_equal "book", Presentations::Document.parse("---\ntypography: unknown\n---\n# Title").typography
+    assert_equal "book", Source::Document.parse("# Title").typography
+    assert_equal "book", Source::Document.parse("---\ntypography: unknown\n---\n# Title").typography
   end
 
   test "parses margin settings and slide context directives" do
@@ -68,7 +68,7 @@ class PresentationTest < ActiveSupport::TestCase
       # Shift
     MARKDOWN
 
-    document = Presentations::Document.parse(source)
+    document = Source::Document.parse(source)
 
     assert_equal [true, false, true, false], [
       document.margin_settings.section,
@@ -86,13 +86,13 @@ class PresentationTest < ActiveSupport::TestCase
   end
 
   test "enables all margin regions by default" do
-    settings = Presentations::Document.parse("# Slide").margin_settings
+    settings = Source::Document.parse("# Slide").margin_settings
 
     assert_equal [true, true, true, true], [settings.section, settings.subsection, settings.footnote, settings.slide_count]
   end
 
   test "parses nested and escaped footnote braces at the end of a slide" do
-    document = Presentations::Document.parse(<<~MARKDOWN)
+    document = Source::Document.parse(<<~MARKDOWN)
       # Explain the configuration
 
       The note belongs to this slide.
@@ -110,7 +110,7 @@ class PresentationTest < ActiveSupport::TestCase
   end
 
   test "warns and removes section directives that are not at the beginning" do
-    document = Presentations::Document.parse(<<~MARKDOWN)
+    document = Source::Document.parse(<<~MARKDOWN)
       # Intro
 
       :::footnote{Too early}
@@ -147,14 +147,14 @@ class PresentationTest < ActiveSupport::TestCase
   end
 
   test "automatic layouts do not require a layout directive" do
-    slide = Presentations::Document.parse("# Welcome\n\nA clear opening.").slides.first
+    slide = Source::Document.parse("# Welcome\n\nA clear opening.").slides.first
 
     assert_equal "statement", slide.layout
     assert_equal "# Welcome\n\nA clear opening.", slide.markdown
   end
 
   test "infers column layouts from repeated sibling headings" do
-    two_column = Presentations::Document.parse(<<~MARKDOWN).slides.first
+    two_column = Source::Document.parse(<<~MARKDOWN).slides.first
       # Compare approaches
 
       ## Fast
@@ -165,7 +165,7 @@ class PresentationTest < ActiveSupport::TestCase
 
       Validate carefully.
     MARKDOWN
-    three_column = Presentations::Document.parse(<<~MARKDOWN).slides.first
+    three_column = Source::Document.parse(<<~MARKDOWN).slides.first
       # Three priorities
 
       ## Speed
@@ -188,21 +188,21 @@ class PresentationTest < ActiveSupport::TestCase
   end
 
   test "infers focused content layouts and keeps mixed content as body" do
-    assert_equal "statement", Presentations::Document.parse("# Takeaway\n\nMake it clear.").slides.first.layout
-    assert_equal "image", Presentations::Document.parse("# Visual\n\n![Alt](image.png)").slides.first.layout
-    assert_equal "table", Presentations::Document.parse("# Data\n\n| A | B |\n| --- | --- |\n| 1 | 2 |").slides.first.layout
-    assert_equal "code", Presentations::Document.parse("# Example\n\n```ruby\nputs 1\n```").slides.first.layout
-    assert_equal "body", Presentations::Document.parse("# Mixed\n\nA paragraph.\n\n- One\n- Two").slides.first.layout
+    assert_equal "statement", Source::Document.parse("# Takeaway\n\nMake it clear.").slides.first.layout
+    assert_equal "image", Source::Document.parse("# Visual\n\n![Alt](image.png)").slides.first.layout
+    assert_equal "table", Source::Document.parse("# Data\n\n| A | B |\n| --- | --- |\n| 1 | 2 |").slides.first.layout
+    assert_equal "code", Source::Document.parse("# Example\n\n```ruby\nputs 1\n```").slides.first.layout
+    assert_equal "body", Source::Document.parse("# Mixed\n\nA paragraph.\n\n- One\n- Two").slides.first.layout
   end
 
   test "recognizes fenced code with a longer closing fence" do
-    slide = Presentations::Document.parse("# Example\n\n```ruby\nputs 1\n````").slides.first
+    slide = Source::Document.parse("# Example\n\n```ruby\nputs 1\n````").slides.first
 
     assert_equal "code", slide.layout
   end
 
   test "parses block positioning and removes extension directives" do
-    document = Presentations::Document.parse(<<~MARKDOWN)
+    document = Source::Document.parse(<<~MARKDOWN)
       # Positioned
 
       :::position{center middle}
@@ -223,7 +223,7 @@ class PresentationTest < ActiveSupport::TestCase
   end
 
   test "records whether a vertical position was explicitly requested" do
-    document = Presentations::Document.parse(<<~MARKDOWN)
+    document = Source::Document.parse(<<~MARKDOWN)
       :::position{center}
 
       Horizontal only.
@@ -239,7 +239,7 @@ class PresentationTest < ActiveSupport::TestCase
   test "builds an ephemeral editor map with UTF-16 ranges and known directives" do
     source = "---\npresentationTheme: dark\n---\n# 🚀 Intro\n\n:::position{center middle}\n\nA **message**.\n\n:::\n---\n:::unknown\n\n# Next"
 
-    map = Presentations::Document.editor_map(source, source_name: "Deck", mode: :presentation)
+    map = Source::Document.editor_map(source, source_name: "Deck", mode: :presentation)
 
     assert_equal 1, map[:version]
     assert_equal "presentation", map[:mode]
@@ -258,7 +258,7 @@ class PresentationTest < ActiveSupport::TestCase
   test "maps a single-block position directive without leaking it to the next block" do
     source = "# Slide\n\n:::position{center}\n\nFirst\n\nSecond"
 
-    blocks = Presentations::Document.editor_map(source, mode: :presentation)[:slides].first[:blocks]
+    blocks = Source::Document.editor_map(source, mode: :presentation)[:slides].first[:blocks]
 
     assert_equal [nil, "center", nil], blocks.map { |block| block[:position]&.fetch(:horizontal) }
     assert_equal [nil, "block", nil], blocks.map { |block| block[:position_scope] }
@@ -267,7 +267,7 @@ class PresentationTest < ActiveSupport::TestCase
   test "maps shared position scopes to every block inside the group" do
     source = "# Slide\n\n:::position{center}\n\nFirst\n\nSecond\n\n:::\n\nOutside"
 
-    blocks = Presentations::Document.editor_map(source, mode: :presentation)[:slides].first[:blocks]
+    blocks = Source::Document.editor_map(source, mode: :presentation)[:slides].first[:blocks]
 
     assert_equal [nil, "group", "group", nil], blocks.map { |block| block[:position_scope] }
     assert_equal blocks[1][:position_directive_id], blocks[2][:position_directive_id]
@@ -277,11 +277,22 @@ class PresentationTest < ActiveSupport::TestCase
   test "keeps a document editor map as one source surface across horizontal rules" do
     source = "# First\n\n---\n\nSecond"
 
-    map = Presentations::Document.editor_map(source, mode: :document)
+    map = Source::Document.editor_map(source, mode: :document)
 
     assert_equal 1, map[:slides].length
     assert_equal source.length, map[:slides].first[:range][:end]
     assert_equal ["# First", "---", "Second"], map[:slides].first[:blocks].map { |block| block[:markdown] }
+  end
+
+  test "maps blank document blocks after emoji to UTF-16 offsets" do
+    source = "# A😀\n\n\n\nBody"
+    map = Source::Document.editor_map(source, mode: :document)
+    blocks = map[:slides].first[:blocks]
+
+    assert_equal source.encode("UTF-16LE").bytesize / 2, map[:source_length]
+    assert_equal source[0...source.index("Body")].encode("UTF-16LE").bytesize / 2,
+      blocks.last[:range][:start]
+    assert blocks.any? { |block| block[:empty_placeholder] }
   end
 
   test "marks Markdown that the visual serializer cannot round-trip as read-only" do
@@ -299,14 +310,14 @@ class PresentationTest < ActiveSupport::TestCase
       "| A |\n| --- |",
       "| A | B |\n| --- |\n| 1 | 2 | 3 |"
     ]
-    maps = sources.map { |source| Presentations::Document.editor_map(source, mode: :document) }
+    maps = sources.map { |source| Source::Document.editor_map(source, mode: :document) }
 
     assert_equal "code", maps.first[:slides].first[:blocks].first[:kind]
     assert_equal [false] * sources.length, maps.map { |map| map[:slides].first[:editable_regions].first[:editable] }
   end
 
   test "warns and removes unknown presentation directives" do
-    document = Presentations::Document.parse("# Slide\n\n:::unknown\n\nContent")
+    document = Source::Document.parse("# Slide\n\n:::unknown\n\nContent")
 
     refute_includes document.slides.first.markdown, ":::unknown"
     assert_equal 1, document.warnings.length
@@ -316,8 +327,8 @@ class PresentationTest < ActiveSupport::TestCase
   test "detects keys inside front matter" do
     source = "---\ntheme: dark\ntypography: modern\n---\n# Title"
 
-    assert Presentations::Document.front_matter_has_key?(source, "typography")
-    refute Presentations::Document.front_matter_has_key?(source, "missing")
+    assert Source::Document.front_matter_has_key?(source, "typography")
+    refute Source::Document.front_matter_has_key?(source, "missing")
   end
 
   test "blank source is a valid one-slide presentation" do
@@ -333,7 +344,7 @@ class PresentationTest < ActiveSupport::TestCase
   end
 
   test "renders supported markdown, code, images, links, tables, strikethrough, and math" do
-    html = Presentations::MarkdownRenderer.render(<<~MARKDOWN)
+    html = Source::Renderer.render(<<~MARKDOWN)
       # Heading
 
       - item
@@ -367,15 +378,61 @@ class PresentationTest < ActiveSupport::TestCase
   end
 
   test "does not render math inside inline code or escaped delimiters" do
-    html = Presentations::MarkdownRenderer.render("`$x^2$` and $x^2$ and \\$x$")
+    html = Source::Renderer.render("`$x^2$` and $x^2$ and \\$x$")
 
     assert_equal 1, html.scan('class="katex"').length
     assert_includes html, "<code>$x^2$</code>"
     assert_includes html, "\\$x$"
   end
 
+  test "renders ampersands in matrix math after markdown escaping" do
+    html = Source::Renderer.render("$$\\begin{bmatrix} a & b \\\\ c & d \\end{bmatrix}$$")
+    fragment = Nokogiri::HTML.fragment(html)
+
+    assert_equal 1, fragment.css(".katex-display .katex").length
+    assert_empty fragment.css(".math-error")
+  end
+
+  test "renders inline accents and multiline display math before Markdown transforms TeX" do
+    html = Source::Renderer.render(<<~MARKDOWN)
+      Inline accent: $\\bar{x}$.
+
+      $$
+      \\begin{aligned}
+      x &= y \\\\
+      y &= z
+      \\end{aligned}
+      $$
+    MARKDOWN
+    fragment = Nokogiri::HTML.fragment(html)
+
+    assert_equal 2, fragment.css(".katex").length
+    assert_equal 1, fragment.css(".katex-display").length
+    assert_empty fragment.css(".math-error")
+  end
+
+  test "renders a stress fixture with inline, display, matrix, and aligned math" do
+    source = Rails.root.join("test/fixtures/files/latex_stress.md").read
+    fragment = Nokogiri::HTML.fragment(Source::Renderer.render(source))
+
+    assert_equal 11, fragment.css(".katex").length
+    assert_equal 3, fragment.css(".katex-display").length
+    assert_empty fragment.css(".math-error")
+    assert_equal 3, fragment.css("code").length
+    assert_equal ["$x^2$", "$x^2$", "$x^2$"], fragment.css("code").map { |code| code.text.strip }
+  end
+
+  test "does not render math-looking link destinations or leak math placeholders" do
+    html = Source::Renderer.render("[Formula link](/docs/$formula$)")
+    fragment = Nokogiri::HTML.fragment(html)
+
+    assert_equal "/docs/$formula$", fragment.at_css("a")["href"]
+    assert_empty fragment.css(".katex")
+    refute_includes html, "ELEFMATH"
+  end
+
   test "rejects dangerous link and image protocols" do
-    html = Presentations::MarkdownRenderer.render("[unsafe](javascript:alert(1)) ![image](javascript:alert(1))")
+    html = Source::Renderer.render("[unsafe](javascript:alert(1)) ![image](javascript:alert(1))")
 
     refute_includes html, "javascript:"
     refute_includes html, "<a"
@@ -419,19 +476,19 @@ class PresentationTest < ActiveSupport::TestCase
   test "renders every sample's representative content" do
     Presentations::SampleData.load!
 
-    code_and_math = Presentations::MarkdownRenderer.render(
+    code_and_math = Source::Renderer.render(
       Presentation.find_by!(sample_id: "code-and-math").source
     )
     assert_includes code_and_math, "katex"
     assert_includes code_and_math, "process_records"
-    tables_and_media = Presentations::MarkdownRenderer.render(
+    tables_and_media = Source::Renderer.render(
       Presentation.find_by!(sample_id: "tables-and-media").source
     )
 
     assert_includes tables_and_media, "<table>"
     assert_includes tables_and_media, 'src="https://example.com/elef-workflow.png"'
     assert_includes tables_and_media, 'href="https://example.com/elef"'
-    assert_includes Presentations::MarkdownRenderer.render(
+    assert_includes Source::Renderer.render(
       Presentation.find_by!(sample_id: "code-and-math").source
     ), "$not_math$"
   end
@@ -497,5 +554,34 @@ class PresentationTest < ActiveSupport::TestCase
       assert_equal parent.title, child.fork_parent_title
       assert_equal parent.source, child.fork_source
     end
+  end
+
+  test "infers image layout for a slide containing only an image without headings" do
+    slide = Source::Document.parse("![Dummy](dummy.png)").slides.first
+
+    assert_equal "image", slide.layout
+    assert_equal "![Dummy](dummy.png)", slide.markdown
+  end
+
+  test "resolves media blobs and converts markdown to portable asset paths" do
+    presentation = Presentation.create!(title: "Portable Deck", source: "# Start")
+    bytes = "image data".b
+    presentation.assets.attach(io: StringIO.new(bytes), filename: "photo.png", content_type: "image/png")
+    blob = presentation.assets.blobs.last
+    digest = Digest::SHA256.hexdigest(bytes)
+    blob.update!(metadata: blob.metadata.merge("elef_sha256" => digest))
+
+    resolved_by_digest = WorkAssets.resolve_blob(presentation, digest)
+    assert_equal blob, resolved_by_digest
+
+    resolved_by_filename = WorkAssets.resolve_blob(presentation, "photo.png")
+    assert_equal blob, resolved_by_filename
+
+    resolved_by_path = WorkAssets.resolve_blob(presentation, "assets/photo.png")
+    assert_equal blob, resolved_by_path
+
+    raw_source = "# Title\n\n![My Photo](elef-asset:#{digest} \"fit:contain\")"
+    portable = WorkAssets.portable_markdown(raw_source, presentation)
+    assert_equal "# Title\n\n![My Photo](assets/photo.png \"fit:contain\")", portable
   end
 end

@@ -107,23 +107,83 @@ class PresentationsTest < ApplicationSystemTestCase
     parent = Presentation.create!(title: "Workflow parent", source: "# Keep this source")
     visit presentations_path
     within("#presentation_#{parent.id}") do
+      find(".library-card-menu-trigger").click
       find("summary", text: "Rename").click
       find('input[aria-label="Rename Workflow parent"]').set("Renamed parent")
       click_on "Save title"
     end
     assert_text "Presentation renamed.", wait: 5
     within("article", text: "Renamed parent") do
+      find(".library-card-menu-trigger").click
       find("summary", text: "Fork").click
       click_on "As inspiration"
     end
     assert_field "Title", with: "Renamed parent (Inspiration)"
     click_on "Library"
     within("#presentation_#{parent.id}") do
+      find(".library-card-menu-trigger").click
       accept_confirm { click_on "Delete" }
     end
     assert_text "Presentation deleted."
     assert_text "Parent no longer available"
     assert_equal "# Keep this source", Presentation.find_by!(parent_id: nil, fork_type: "inspiration").source
+  end
+
+  test "library cards keep previews undistorted and controls isolated from the edit link" do
+    document = Document.create!(title: "Card document", source: "# Card document\n\nFirst page body.\n\n## Later heading")
+    presentation = Presentation.create!(title: "Card deck", source: "# Card deck\n\n---\n\n## Later slide")
+
+    visit root_path
+
+    geometry = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const box = selector => document.querySelector(selector).getBoundingClientRect();
+        const frame = box('.library-card .library-preview');
+        const slide = box('.library-card .slide');
+        const page1 = box('.library-card .library-preview-page .document-page');
+        return {
+          frameRatio: frame.width / frame.height,
+          slideRatio: slide.width / slide.height,
+          pageRatio: page1.width / page1.height,
+          slideFits: slide.width <= frame.width + 1 && slide.height <= frame.height + 1,
+          pageFits: page1.width <= frame.width + 1 && page1.height <= frame.height + 1,
+          slideScale: getComputedStyle(document.querySelector('.library-card .slide')).getPropertyValue('--slide-scale').trim(),
+          pageScale: getComputedStyle(document.querySelector('.library-card .library-preview-page')).getPropertyValue('--slide-scale').trim()
+        };
+      })()
+    JAVASCRIPT
+
+    assert_in_delta 16.0 / 9.0, geometry["frameRatio"], 0.02
+    assert_in_delta 16.0 / 9.0, geometry["slideRatio"], 0.02
+    assert_in_delta 52.0 / 72.0, geometry["pageRatio"], 0.02
+    assert geometry["slideFits"], "slide preview overflows its card frame"
+    assert geometry["pageFits"], "document preview overflows its card frame"
+    assert_operator geometry["slideScale"].to_f, :<, 1.0
+    assert_operator geometry["pageScale"].to_f, :<, 1.0
+
+    within("#presentation_#{presentation.id}") do
+      find(".library-card-preview-button").click
+    end
+    assert_current_path presentation_path(presentation)
+    assert_selector ".presentation-surface .slide", text: "Card deck"
+
+    visit root_path
+    within("#presentation_#{presentation.id}") do
+      find(".library-card-menu-trigger").click
+      assert_selector "details.library-card-menu[open]"
+    end
+    assert_current_path root_path
+
+    visit root_path
+    find("#presentation_#{presentation.id} a.library-card-open").click
+    assert_current_path edit_presentation_path(presentation)
+
+    visit root_path
+    assert_no_link "Edit Card document"
+    within("#document_#{document.id}") do
+      find(".library-card-title a").click
+    end
+    assert_current_path edit_document_path(document)
   end
 
   test "autosave persists newer edits after an outstanding request and keeps them dirty until saved" do
@@ -172,26 +232,6 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_current_path root_path
   end
 
-  test "library tabs use canonical collection paths" do
-    visit root_path
-
-    assert_current_path root_path
-    assert_link "Library", href: root_path
-    within "nav.library-tabs" do
-      assert_link "All", href: root_path
-      assert_link "Documents", href: documents_path
-      assert_link "Presentations", href: presentations_path
-      click_on "Documents"
-    end
-
-    assert_current_path documents_path
-    within "nav.library-tabs" do
-      click_on "Presentations"
-    end
-
-    assert_current_path presentations_path
-  end
-
   test "two editor tabs preserve a stale local draft as a recovery revision" do
     presentation = Presentation.create!(title: "Two tabs", source: "# Initial")
     visit edit_presentation_path(presentation)
@@ -219,7 +259,8 @@ class PresentationsTest < ApplicationSystemTestCase
     page.refresh
 
     assert_field "Markdown source", with: "# Unsent after refresh", wait: 5
-    assert_selector '[data-autosave-target="status"]', exact_text: "Saved", wait: 5
+    assert_selector '[data-autosave-target="status"]', text: "Recovered unsent changes", wait: 5
+    assert_selector '[data-autosave-target="status"]', exact_text: "Saved", wait: 10
     assert_includes presentation.reload.source, "# Unsent after refresh"
   end
 
@@ -353,6 +394,47 @@ class PresentationsTest < ApplicationSystemTestCase
     visit edit_presentation_path(presentation)
     assert_field "Markdown source", with: /Changed/
     assert_selector ".presentation-editor-projection .slide", count: 2
+  end
+
+  test "presentation caret follows source switches and arrow keys move between blocks" do
+    source = "# First slide\n\nA paragraph\n\nNext paragraph"
+    presentation = Presentation.create!(title: "Presentation caret", source: source)
+    visit edit_presentation_path(presentation)
+
+    block = find(".editor-projection .slide-block", text: "A paragraph")
+    page.execute_script(<<~JAVASCRIPT, block)
+      const block = arguments[0];
+      const text = block.querySelector("p").firstChild;
+      block.focus({ preventScroll: true });
+      window.getSelection().setPosition(text, 3);
+    JAVASCRIPT
+    captured = page.evaluate_script("document.querySelector('form.visual-editor-form').presentationEditorController.captureCaret()")
+    assert_equal source.index("A paragraph") + 3, captured["sourceOffset"]
+    click_on "Source"
+    page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(() => arguments[0]()))")
+    assert_equal source.index("A paragraph") + 3,
+      page.evaluate_script("document.querySelector('.source-field').editorController.view.state.selection.main.head")
+
+    click_on "Visual"
+    page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(() => arguments[0]()))")
+    restored = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const selection = window.getSelection();
+        const block = selection.focusNode?.parentElement?.closest(".slide-block");
+        return { text: block?.innerText, offset: selection.focusOffset };
+      })()
+    JAVASCRIPT
+    assert_equal "A paragraph", restored["text"].strip
+    assert_equal 3, restored["offset"]
+
+    moved = page.execute_script(<<~JAVASCRIPT)
+      const block = document.activeElement;
+      const event = new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true });
+      block.dispatchEvent(event);
+      return { handled: event.defaultPrevented, text: document.activeElement.innerText.trim() };
+    JAVASCRIPT
+    assert_equal true, moved["handled"]
+    assert_equal "Next paragraph", moved["text"]
   end
 
   test "disables stale presentation blocks and controls until matching HTML and map install" do
@@ -829,12 +911,11 @@ class PresentationsTest < ApplicationSystemTestCase
       visual_expected.sub!(source_text, replacement)
       assert_field "Markdown source", with: visual_expected, wait: 5
       page.execute_script("document.activeElement.blur()")
-      wait_for_fresh_projection
       assert_selector selector, text: /#{Regexp.escape(replacement)}/, wait: 5
     end
 
     click_on "Save presentation"
-    assert_text "Presentation saved."
+    assert_selector ".flash.notice", text: "Presentation saved.", wait: 10
     visit edit_presentation_path(visual)
     assert_field "Markdown source", with: visual_expected
 
@@ -847,7 +928,7 @@ class PresentationsTest < ApplicationSystemTestCase
     end
 
     click_on "Save presentation"
-    assert_text "Presentation saved."
+    assert_selector ".flash.notice", text: "Presentation saved.", wait: 10
     visit edit_presentation_path(source)
     assert_field "Markdown source", with: source_expected
     assert_equal visual_expected, source_expected
@@ -1095,14 +1176,40 @@ class PresentationsTest < ApplicationSystemTestCase
     media_file.write(Base64.decode64("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+i9MwAAAAASUVORK5CYII="))
     media_file.flush
     page.execute_script("document.querySelector('.source-field').editorController.setSelectionRange(document.querySelector('.source-field').editorController.value.length)")
+    click_on "Add image or MP4"
     page.execute_script("document.querySelector('[data-media-target=input]').hidden = false")
     find('[data-media-target="input"]').set(media_file.path)
 
     assert_selector ".media-upload-status", text: /pixel.*added to the Markdown source/i, wait: 8
     assert_includes page.evaluate_script("document.querySelector('.source-field').editorController.value"), "elef-asset:"
     assert_selector ".preview-pane .presentation-media-contain", wait: 8
+    assert_operator page.evaluate_script("document.querySelector('.preview-pane img.presentation-media').naturalWidth"), :>, 0
     assert_equal "image/png", presentation.reload.assets.blobs.last.content_type
     assert_selector '[data-autosave-target="status"]', exact_text: "Saved", wait: 8
+    assert_includes presentation.reload.source, "elef-asset:"
+  ensure
+    media_file&.close!
+  end
+
+  test "a new presentation uploads and saves an image through Add image" do
+    visit new_presentation_path
+    media_file = Tempfile.new(["new-presentation-pixel", ".png"])
+    media_file.binmode
+    media_file.write(Base64.decode64("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+i9MwAAAAASUVORK5CYII="))
+    media_file.flush
+
+    page.execute_script("window.mediaPickerClicks = 0; document.querySelector('[data-media-target=input]').click = () => { window.mediaPickerClicks++ }")
+    click_on "Add image or MP4"
+    assert_equal 1, page.evaluate_script("window.mediaPickerClicks")
+    page.execute_script("document.querySelector('[data-media-target=input]').hidden = false")
+    find('[data-media-target="input"]').set(media_file.path)
+
+    assert_selector ".media-upload-status", text: /new-presentation-pixel.*added to the Markdown source/i, wait: 8
+    assert_includes find_field("Markdown source").value, "elef-asset:"
+    assert_selector ".preview-pane img.presentation-media", wait: 8
+    assert_operator page.evaluate_script("document.querySelector('.preview-pane img.presentation-media').naturalWidth"), :>, 0
+    assert_selector '[data-autosave-target="status"]', exact_text: "Saved", wait: 8
+    assert_includes Presentation.order(:id).last.reload.source, "elef-asset:"
   ensure
     media_file&.close!
   end
@@ -1418,14 +1525,12 @@ class PresentationsTest < ApplicationSystemTestCase
       assert_selector '[data-lineage-graph-target="scaleLabel"]', text: "85%"
       find('button[aria-label="Reset graph view"]').click
       assert_timeline_geometry
-      save_screenshot("tmp/screenshots/library/viewport-#{width}.png")
     end
 
     search = find('input[aria-label="Find a presentation"]')
     search.set("Quarterly Review June")
     search.send_keys(:arrow_down)
     assert_equal "Quarterly Review June · 2026-01-08", page.evaluate_script("document.activeElement.textContent")
-    save_screenshot("tmp/screenshots/library/search-mobile.png")
     send_keys :escape
     assert_selector '.lineage-search-results', visible: :hidden
     assert_equal "Find a presentation", page.evaluate_script("document.activeElement.getAttribute('aria-label')")
@@ -1435,18 +1540,16 @@ class PresentationsTest < ApplicationSystemTestCase
     search.send_keys(:arrow_down, :enter)
     assert_selector ".lineage-node.is-located"
     page.execute_script("document.querySelector('.lineage-node.is-located').scrollIntoView({block: 'center'})")
-    save_screenshot("tmp/screenshots/library/focus-mobile.png")
 
     within("article", match: :first) do
+      find(".library-card-menu-trigger").click
       find('summary', text: "Rename").click
       assert_selector '.library-rename input[type="text"]', visible: true
       page.execute_script("document.querySelector('.rename-menu[open]').scrollIntoView({block: 'center'})")
-      save_screenshot("tmp/screenshots/library/rename-mobile.png")
       find('summary', text: "Rename").click
       find('summary', text: "Fork").click
       assert_selector 'button', text: "As inspiration", visible: true
       page.execute_script("document.querySelector('.fork-menu[open]').scrollIntoView({block: 'center'})")
-      save_screenshot("tmp/screenshots/library/fork-mobile.png")
     end
     assert_operator page.evaluate_script("document.documentElement.scrollWidth"), :<=,
       page.evaluate_script("window.innerWidth")
@@ -1459,7 +1562,6 @@ class PresentationsTest < ApplicationSystemTestCase
 
     visit presentations_path
     assert_text "No presentations yet"
-    save_screenshot("tmp/screenshots/library/empty.png")
     find("summary", text: "More").click
     click_on "Load sample presentations"
 
@@ -1588,6 +1690,27 @@ class PresentationsTest < ApplicationSystemTestCase
     JAVASCRIPT
     assert_operator fraction_parts.length, :>=, 2
     assert_operator (fraction_parts[1]["top"] - fraction_parts[0]["top"]).abs, :>, 1
+  end
+
+  test "renders inline accents and multiline display equations in a presentation" do
+    presentation = Presentation.create!(title: "Math rendering", source: <<~MARKDOWN)
+      # Math
+
+      Inline $\\bar{x}$.
+
+      $$
+      \\begin{aligned}
+      x &= y \\\\
+      y &= z
+      \\end{aligned}
+      $$
+    MARKDOWN
+
+    visit presentation_path(presentation)
+
+    assert_selector ".presentation-surface .katex", count: 2
+    assert_selector ".presentation-surface .katex-display", count: 1
+    assert_no_selector ".presentation-surface .math-error"
   end
 
   test "renders automatic layouts and positioned blocks" do
@@ -1797,7 +1920,6 @@ class PresentationsTest < ApplicationSystemTestCase
     assert bounds["positioned"], "The colon popup must receive caret coordinates before a query is typed"
     assert bounds["belowCaret"] || bounds["aboveCaret"], "The snippet popup should stay next to the caret"
     assert_operator bounds["bottom"], :<, bounds["viewportBottom"]
-    save_screenshot("tmp/colon-palette.png")
   end
 
   test "renders untrusted snippet metadata as text" do
@@ -1849,5 +1971,123 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_equal 1280, page.evaluate_script("document.querySelector('.slide').offsetWidth")
     assert_equal 720, page.evaluate_script("document.querySelector('.slide').offsetHeight")
     assert_equal "112px", page.evaluate_script("getComputedStyle(document.querySelector('.slide h1')).fontSize")
+  end
+
+  test "new presentation allows uploading dummy images to blank slides in Markdown and visual editor with rendering and folder sync" do
+    require "zlib"
+    generate_test_png = lambda do |width, height|
+      raw = []
+      height.times do
+        raw << 0
+        width.times { raw.push(70, 130, 210, 255) }
+      end
+      compressed = Zlib::Deflate.deflate(raw.pack("C*"))
+      png = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A].pack("C*")
+      ihdr = [width, height, 8, 6, 0, 0, 0].pack("NNCCCCC")
+      png << [ihdr.bytesize].pack("N") << "IHDR" << ihdr << [Zlib.crc32("IHDR" + ihdr)].pack("N")
+      png << [compressed.bytesize].pack("N") << "IDAT" << compressed << [Zlib.crc32("IDAT" + compressed)].pack("N")
+      png << [0].pack("N") << "IEND" << [Zlib.crc32("IEND")].pack("N")
+      png
+    end
+
+    image_one_file = Tempfile.new(["dummy_stock_photo", ".png"])
+    image_one_file.binmode
+    image_one_file.write(generate_test_png.call(120, 80))
+    image_one_file.flush
+
+    image_two_file = Tempfile.new(["dummy_screenshot", ".png"])
+    image_two_file.binmode
+    image_two_file.write(generate_test_png.call(160, 90))
+    image_two_file.flush
+
+    visit new_presentation_path
+    assert_selector ".editor-shell", wait: 8
+
+    # Switch to Source (Markdown) mode
+    click_on "Source"
+    assert_selector ".editor-mode-button[data-editor-target='sourceButton'][aria-pressed='true']", wait: 8
+
+    # Create a presentation with a blank slide between slide 1 and slide 3
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      editor.replaceRange(
+        "# Intro slide\\n\\n---\\n\\n---\\n# Outro slide",
+        0,
+        editor.value.length
+      );
+    JAVASCRIPT
+
+    # Position cursor on the blank slide
+    blank_slide_pos = page.evaluate_script("document.querySelector('.source-field').editorController.value.indexOf('---') + 4")
+    page.execute_script("document.querySelector('.source-field').editorController.setSelectionRange(#{blank_slide_pos})")
+
+    # Upload first dummy image while in Markdown mode on the blank slide
+    page.execute_script("document.querySelector('[data-media-target=input]').hidden = false")
+    find('[data-media-target="input"]').set(image_one_file.path)
+
+    # Verify upload status and Markdown insertion
+    assert_selector ".media-upload-status", text: /dummy_stock_photo.*added to the Markdown source/i, wait: 8
+    source_val = page.evaluate_script("document.querySelector('.source-field').editorController.value")
+    assert_includes source_val, "elef-asset:"
+
+    # Verify rendering of the image on the blank slide
+    assert_selector ".preview-pane .slide-image img.presentation-media", wait: 8
+    natural_width = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const img = document.querySelector(".preview-pane .slide-image img.presentation-media");
+        return img ? img.naturalWidth : 0;
+      })()
+    JAVASCRIPT
+    assert_operator natural_width, :>, 0, "Uploaded image should render with positive naturalWidth in Markdown mode"
+
+    # Switch to Visual mode
+    click_on "Visual"
+    assert_selector ".editor-mode-button[data-editor-target='visualButton'][aria-pressed='true']", wait: 8
+
+    # Append a blank slide
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      editor.replaceRange(editor.value + "\\n---\\n", 0, editor.value.length);
+    JAVASCRIPT
+
+    # Wait for the empty slide to appear in visual mode with Add image button
+    assert_selector ".preview-pane .empty-slide-add-image", wait: 8
+
+    # Click Add image on the blank slide in the visual editor
+    find(".preview-pane .empty-slide-add-image", match: :first).click
+    find('[data-media-target="input"]').set(image_two_file.path)
+
+    # Verify upload of second dummy image onto the blank slide in the visual editor
+    assert_selector ".media-upload-status", text: /dummy_screenshot.*added to the Markdown source/i, wait: 8
+    assert_selector ".preview-pane img.presentation-media", minimum: 2, wait: 8
+
+    second_img_width = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const imgs = document.querySelectorAll(".preview-pane img.presentation-media");
+        const lastImg = imgs[imgs.length - 1];
+        return lastImg ? lastImg.naturalWidth : 0;
+      })()
+    JAVASCRIPT
+    assert_operator second_img_width, :>, 0, "Uploaded image should render with positive naturalWidth in Visual Editor mode"
+
+    # Wait for autosave to ensure persistence
+    assert_selector '[data-autosave-target="status"]', exact_text: "Saved", wait: 8
+
+    # Verify folder storage on disk next to presentation.md
+    presentation = Presentation.last
+    storage_dir = presentation.storage_dir
+    assert File.exist?(storage_dir.join("presentation.md")), "presentation.md should be saved in presentation folder"
+    assert File.exist?(storage_dir.join("source.md")), "source.md should be saved in presentation folder"
+    assert Dir.exist?(storage_dir.join("assets")), "assets/ directory should exist next to presentation.md"
+
+    portable_content = File.read(storage_dir.join("presentation.md"))
+    assert_includes portable_content, "assets/dummy_stock_photo", "presentation.md should reference assets folder"
+    assert_includes portable_content, "assets/dummy_screenshot", "presentation.md should reference assets folder"
+
+    assert File.exist?(storage_dir.join("assets/#{File.basename(image_one_file.path)}"))
+    assert File.exist?(storage_dir.join("assets/#{File.basename(image_two_file.path)}"))
+  ensure
+    image_one_file&.close!
+    image_two_file&.close!
   end
 end

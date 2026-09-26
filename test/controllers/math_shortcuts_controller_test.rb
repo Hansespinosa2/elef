@@ -6,7 +6,11 @@ class MathShortcutsControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :success
     assert_select ".math-shortcut-card", minimum: 10
+    assert_select ".math-shortcut-intro", text: /One accent, one style, and transpose/
     assert_select ".math-shortcut-card", text: /Alpha/
+    assert_select ".math-shortcut-card", text: /x\.bar/
+    assert_select ".math-shortcut-step code", text: "\\bar{x}"
+    assert_select ".math-shortcut-flow .math-shortcut-result .katex", minimum: 1
   end
 
   test "creates updates and deletes a personal math shortcut" do

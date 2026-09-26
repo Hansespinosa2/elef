@@ -4,15 +4,18 @@ module WorkPersistence
   private
 
   def save_draft(work, attributes)
+    attributes = attributes.to_h.symbolize_keys
+    attributes.delete(:editor_mode)
+    editor_mode = "source" if params[:editor_mode] == "source"
     result = Drafts::Save.call(work, attributes)
     if result.success?
       respond_to do |format|
-        format.html { redirect_to work_edit_path(work), notice: "#{work_type_label(work)} saved." }
+        format.html { redirect_to work_edit_path(work, editor_mode: editor_mode), notice: "#{work_type_label(work)} saved." }
         format.json { render json: draft_payload(result), status: :ok }
       end
     elsif result.conflict?
       respond_to do |format|
-        format.html { redirect_to work_edit_path(work), alert: result.message }
+        format.html { redirect_to work_edit_path(work, editor_mode: editor_mode), alert: result.message }
         format.json { render json: draft_conflict_payload(result), status: :conflict }
       end
     else
@@ -80,8 +83,8 @@ module WorkPersistence
     }
   end
 
-  def work_edit_path(work)
-    work.document? ? edit_document_path(work) : edit_presentation_path(work)
+  def work_edit_path(work, **options)
+    work.document? ? edit_document_path(work, **options) : edit_presentation_path(work, **options)
   end
 
   def edit_template_for(work)

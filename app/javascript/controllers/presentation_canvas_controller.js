@@ -4,6 +4,7 @@ const DESIGN_WIDTH = 1280
 
 export default class extends Controller {
   static targets = ["canvas"]
+  static values = { designWidth: Number, designHeight: Number }
 
   connect() {
     this.resizeObserver = new ResizeObserver(() => this.resizeCanvas())
@@ -16,7 +17,16 @@ export default class extends Controller {
   }
 
   resizeCanvas() {
-    const scale = this.element.clientWidth / DESIGN_WIDTH
-    this.canvasTarget.style.setProperty("--slide-scale", scale)
+    this.canvasTarget.style.setProperty("--slide-scale", this.canvasScale())
+  }
+
+  canvasScale() {
+    const designWidth = this.designWidthValue || DESIGN_WIDTH
+    if (!this.hasDesignHeightValue) return this.element.clientWidth / designWidth
+
+    return Math.min(
+      this.element.clientWidth / designWidth,
+      this.element.clientHeight / this.designHeightValue
+    )
   }
 }

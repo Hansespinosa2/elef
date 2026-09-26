@@ -1,19 +1,93 @@
 require "application_system_test_case"
 
 class UnifiedWorkspaceTest < ApplicationSystemTestCase
-  test "opens the command palette with Mod+K and searches works" do
-    target = Document.create!(title: "Palette target", source: "# Palette target")
+  test "Mod+K opens Elef actions without listing work" do
+    document = Document.create!(title: "Palette target", source: "# Palette target")
+
+    visit edit_document_path(document)
+    page.driver.browser.action.key_down(:control).send_keys("k").key_up(:control).perform
+    assert_selector "dialog.command-palette[open]"
+    assert_selector "#command-palette-heading", text: "Command palette"
+    assert_selector ".command-palette-option", text: "New presentation"
+    assert_selector ".command-palette-option", text: "Open settings"
+    assert_no_selector ".command-palette-option", text: document.title
+
+    fill_in "Filter commands…", with: "new presentation"
+    assert_selector ".command-palette-option", text: "New presentation"
+    assert_no_selector ".command-palette-option", text: document.title
+    find(".command-palette-option", text: "New presentation").click
+
+    assert_current_path new_presentation_path
+  end
+
+  test "creates a snippet from the command palette using only the keyboard" do
+    visit root_path
+    page.driver.browser.action.key_down(:control).send_keys("k").key_up(:control).perform
+
+    input = find("[data-command-palette-target='input']")
+    input.send_keys("new snippet", :enter)
+
+    assert_current_path new_snippet_path
+    assert_selector "#snippet_name:focus"
+    assert_selector "label[for='snippet_name']", text: "Name"
+    assert_selector "label[for='snippet_trigger']", text: "Trigger"
+    assert_selector "label[for='snippet_body']", text: "Body"
+
+    keyboard = page.driver.browser.action
+    keyboard.send_keys("Meeting outline").send_keys(:tab).send_keys("agenda")
+      .send_keys(:tab).send_keys("A reusable meeting outline")
+      .send_keys(:tab).send_keys(:tab).send_keys("# Agenda")
+      .send_keys(:enter).send_keys(:enter).send_keys("- ${1:topic}")
+      .send_keys(:tab).send_keys(:enter).perform
+
+    assert_current_path snippets_path
+    assert_selector ".flash", text: "Snippet created."
+    assert_selector ".snippet-card", text: "Meeting outline"
+    snippet = Snippet.find_by!(trigger: "agenda")
+    assert_equal "# Agenda\n\n- ${1:topic}", snippet.body
+  end
+
+  test "changes a workspace appearance default from the command palette using only the keyboard" do
+    workspace = Workspace.default
+    workspace.update_style_defaults(theme: "match", typography: "book")
+    visit root_path
+    page.driver.browser.action.key_down(:control).send_keys("k").key_up(:control).perform
+
+    input = find("[data-command-palette-target='input']")
+    input.send_keys("change workspace appearance", :enter)
+    assert_selector "#command-palette-heading", text: "Change workspace appearance"
+    assert_selector ".command-palette-hint", text: /Esc back/
+
+    input.send_keys(:enter)
+    assert_selector "#command-palette-heading", text: "Change default theme"
+    input.send_keys(:arrow_down, :arrow_down, :enter)
+
+    assert_selector "[data-command-palette-target='status']", text: "Workspace default theme set to Dark. Applies to new and unstyled work; work-specific settings take precedence."
+    assert_equal "dark", workspace.reload.default_theme
+    assert_equal "book", workspace.default_typography
+  end
+
+  test "Mod+P searches document and presentation content with work type filters" do
+    document = Document.create!(title: "Field archive", source: "# Field archive\n\nA memorable\nphrase from an old survey")
+    presentation = Presentation.create!(title: "Survey talk", source: "# Survey talk\n\nA memorable\nphrase from an old survey")
     source = Document.create!(title: "Palette source", source: "# Palette source")
 
     visit edit_document_path(source)
-    page.driver.browser.action.key_down(:control).send_keys("k").key_up(:control).perform
+    page.driver.browser.action.key_down(:control).send_keys("p").key_up(:control).perform
     assert_selector "dialog.command-palette[open]"
+    assert_selector "#command-palette-heading", text: "Search presentations and documents"
+    assert_selector ".command-palette-filters button[aria-pressed='true']", text: "All work"
 
-    fill_in "Search works or run a command…", with: "Palette target"
-    assert_selector ".command-palette-option", text: target.title, wait: 5
-    find(".command-palette-option", text: target.title).click
+    fill_in "Search by title, alias, heading, or content…", with: '"memorable phrase"'
+    assert_selector ".command-palette-option", text: document.title, wait: 5
+    assert_selector ".command-palette-option", text: presentation.title, wait: 5
 
-    assert_current_path document_path(target)
+    click_on "Documents"
+    assert_selector ".command-palette-option", text: document.title, wait: 5
+    assert_no_selector ".command-palette-option", text: presentation.title
+    find(".command-palette-option", text: document.title).click
+
+    assert_current_path document_path(document)
   end
 
   test "uses the math shortcut palette for aliases inside math" do
@@ -161,7 +235,10 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
 
     visit edit_document_path(document)
     assert_selector ".cm-foldPlaceholder", wait: 5
-    click_on "Reveal source metadata"
+    assert_no_selector ".editor-reveal-metadata", visible: true
+    click_on "Source"
+    assert_no_selector ".cm-foldPlaceholder"
+    assert_selector ".editor-reveal-metadata", text: "Hide source metadata", visible: true
     assert_no_selector ".cm-foldPlaceholder"
     assert_selector ".cm-content", text: "theme: dark"
 
@@ -179,7 +256,8 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     )
 
     visit edit_document_path(document)
-    click_on "Reveal source metadata"
+    assert_selector "select#document_theme", visible: true
+    assert_no_selector ".editor-reveal-metadata", visible: true
     select "Dark", from: "Theme"
     select "Modern", from: "Typography"
 
@@ -191,6 +269,55 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     assert_match /^typography: modern\r?$/m, document.reload.source
     refute_match /^theme: light\r?$/m, find_field("Markdown source").value
     refute_match /^typography: book\r?$/m, find_field("Markdown source").value
+  end
+
+  test "appearance controls and metadata toggle follow the editing mode" do
+    document = Document.create!(
+      title: "Mode bound appearance",
+      source: "---\ntheme: light\ntypography: book\n---\n# Mode bound appearance\n\nBody"
+    )
+
+    visit edit_document_path(document)
+    assert_selector "select#document_theme", visible: true
+    assert_selector "select#document_typography", visible: true
+    assert_no_selector ".editor-reveal-metadata", visible: true
+    assert_equal "rgb(17, 22, 26)", page.evaluate_script("getComputedStyle(document.querySelector('select#document_theme')).backgroundColor")
+
+    click_on "Source"
+    assert_no_selector "select#document_theme", visible: true
+    assert_no_selector "select#document_typography", visible: true
+    assert_selector ".editor-reveal-metadata", text: "Hide source metadata", visible: true
+    assert_equal "true", page.evaluate_script("document.querySelector('#document_theme').disabled").to_s
+
+    type_source_text(document.source, "theme: light", "theme: dark")
+    assert_selector ".document-reader.document-theme-dark", wait: 5
+
+    click_on "Visual"
+    assert_selector "select#document_theme", visible: true
+    assert_equal "dark", page.evaluate_script("document.querySelector('#document_theme').value")
+    assert_no_selector ".editor-reveal-metadata", visible: true
+  end
+
+  test "saving a source mode metadata edit preserves the source mode" do
+    document = Document.create!(
+      title: "Source mode metadata save",
+      source: "---\ntheme: light\ntypography: book\n---\n# Source mode metadata save\n\nBody"
+    )
+
+    visit edit_document_path(document)
+    click_on "Source"
+    type_source_text(document.source, "theme: light", "theme: dark")
+    assert_selector ".document-reader.document-theme-dark", wait: 5
+    assert_equal "source", page.evaluate_script("document.querySelector('[name=editor_mode]').value")
+    click_on "Save document"
+
+    assert_selector ".flash.notice", text: "Document saved.", wait: 10
+    assert_includes page.current_url, "editor_mode=source"
+    assert_equal "source", page.evaluate_script("document.querySelector('.visual-editor-form').dataset.editorMode")
+    assert_selector ".editor-mode-button[aria-pressed='true']", text: "Source"
+    assert_selector ".editor-reveal-metadata", text: "Hide source metadata", visible: true
+    assert_no_selector "select#document_theme", visible: true
+    assert_match /^theme: dark\r?$/m, document.reload.source
   end
 
   test "keeps visual editing and the source-left preview-right layout usable at desktop and narrow widths" do
@@ -252,5 +379,18 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     assert_selector ".editor-projection[aria-label='Visual editing surface']", visible: true
   ensure
     page.driver.browser.manage.window.resize_to(1400, 1000)
+  end
+
+  private
+
+  def type_source_text(source, source_text, replacement)
+    start = source.index(source_text)
+    assert start, "could not find source text #{source_text.inspect}"
+    page.execute_script(<<~JAVASCRIPT, start, start + source_text.length)
+      const editor = document.querySelector('.source-field').editorController;
+      editor.setSelectionRange(arguments[0], arguments[1]);
+      editor.focus();
+    JAVASCRIPT
+    find(".cm-content").send_keys(replacement)
   end
 end

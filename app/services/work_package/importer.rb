@@ -148,17 +148,19 @@ module WorkPackage
       @asset_blobs_by_key = {}
       manifest.fetch("assets", []).each do |asset|
         path = asset.fetch("path")
-        content = entries[path]
+        filename = asset.fetch("filename")
+        clean_filename = filename.to_s.gsub(/[^a-zA-Z0-9_.-]/, "_")
+        content = entries[path] || entries["assets/#{filename}"] || entries["assets/#{clean_filename}"]
         next unless content
 
         work.reload.assets.attach(
           io: StringIO.new(content),
-          filename: asset.fetch("filename"),
+          filename: filename,
           content_type: asset["content_type"]
         )
         blob = work.assets.attachments.last&.blob
         if blob
-          digest = Presentations::MediaAssets.digest(blob)
+          digest = WorkAssets.digest(blob)
           expected_digest = asset["sha256"].presence
           if expected_digest.present? && expected_digest != digest
             raise ArgumentError, "Work package asset digest does not match its contents"
@@ -168,6 +170,7 @@ module WorkPackage
         @asset_blobs_by_key[asset["key"].to_s] = blob if blob
         @asset_blobs_by_key[asset["id"].to_s] = blob if blob
       end
+      Presentations::FolderSync.sync!(work) if work.presentation?
     end
 
     def import_release(work, manifest, entries)

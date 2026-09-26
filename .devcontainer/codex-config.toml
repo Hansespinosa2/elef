@@ -2,10 +2,6 @@ model = "gpt-6-luna"
 model_reasoning_effort = "max"
 plan_mode_reasoning_effort = "max"
 
-[mcp_servers.github]
-url = "https://api.githubcopilot.com/mcp/"
-bearer_token_env_var = "GITHUB_TOKEN"
-
 [mcp_servers.chrome_devtools]
 command = "chrome-devtools-mcp"
 args = ["--headless"]

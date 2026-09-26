@@ -10,6 +10,20 @@ class WorkTest < ActiveSupport::TestCase
     refute Document.new(title: "Wrong", source: "# Wrong", work_type: "presentation").valid?
   end
 
+  test "updates a document title when its first heading changes" do
+    document = Document.create!(source: "# First title\n\nBody")
+
+    document.update!(source: "# Updated title\n\nBody")
+
+    assert_equal "Updated title", document.title
+  end
+
+  test "preserves the exact first heading as a new document title" do
+    document = Document.create!(source: "# Notes: one\n\nBody")
+
+    assert_equal "Notes: one", document.title
+  end
+
   test "documents stay continuous while presentations split standalone separators" do
     source = "# Notes\n\nFirst\n\n---\n\nSecond"
 
@@ -40,5 +54,31 @@ class WorkTest < ActiveSupport::TestCase
 
     refute_includes inline.preview_html, "position-vertical"
     assert_includes staged.preview_html, "position-vertical"
+  end
+
+  test "page previews render only the leading blocks of the first page" do
+    document = Document.create!(
+      title: "Budgeted preview",
+      source: "# Budgeted preview\n\nOne.\n\nTwo.\n\nThree.\n\nFour."
+    )
+
+    html = document.preview_page_html
+
+    assert_includes html, "Budgeted preview"
+    assert_includes html, "One."
+    assert_includes html, "Two."
+    refute_includes html, "Three."
+    assert_includes document.preview_html, "Four."
+  end
+
+  test "page previews honour an explicit block budget and empty sources" do
+    document = Document.create!(title: "Budgeted preview", source: "# Budgeted preview\n\nOne.\n\nTwo.\n\nThree.")
+
+    assert_includes document.preview_page_html(blocks: 2), "One."
+    refute_includes document.preview_page_html(blocks: 2), "Two."
+    assert_includes document.preview_page_html(characters: 24), "One."
+    refute_includes document.preview_page_html(characters: 24), "Two."
+    assert_equal "<h1>Budgeted preview</h1>\n", document.preview_page_html(characters: 5)
+    assert_equal "", Document.create!(title: "Empty", source: "").preview_page_html
   end
 end

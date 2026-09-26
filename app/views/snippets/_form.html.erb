@@ -1,15 +1,33 @@
 <div class="max-w-4xl">
+  <%= render "layouts/settings_navigation" %>
   <p class="eyebrow mb-1 text-xs font-extrabold uppercase tracking-[0.12em]">Snippet manager</p>
   <h1 class="text-4xl font-bold"><%= heading %></h1>
-  <%= form_with model: snippet, class: "mt-6 grid gap-4 rounded-2xl border border-[#304047] bg-[#182126] p-6" do |form| %>
+  <%= form_with model: snippet, class: "settings-card mt-6 grid gap-4 rounded-2xl border p-6" do |form| %>
     <% if snippet.errors.any? %>
       <div class="error-panel rounded-xl border p-4"><%= snippet.errors.full_messages.to_sentence %></div>
     <% end %>
-    <%= form.text_field :name, placeholder: "Name", required: true, class: "rounded-xl border border-[#304047] bg-[#11161a] p-3 text-[#e9eee9]" %>
-    <%= form.text_field :trigger, placeholder: "Trigger without colon, e.g. beq", required: true, class: "rounded-xl border border-[#304047] bg-[#11161a] p-3 font-mono text-[#e9eee9]" %>
-    <%= form.text_field :description, placeholder: "Description", class: "rounded-xl border border-[#304047] bg-[#11161a] p-3 text-[#e9eee9]" %>
-    <%= form.select :category, Snippet::CATEGORIES, {}, class: "rounded-xl border border-[#304047] bg-[#11161a] p-3 text-[#e9eee9]" %>
-    <%= form.text_area :body, rows: 12, placeholder: "Markdown body. Use ${1:placeholder} for tab stops.", required: true, class: "rounded-xl border border-[#304047] bg-[#11161a] p-3 font-mono text-[#e9eee9]" %>
+    <div class="field">
+      <%= form.label :name, "Name", class: "mb-1 block font-extrabold" %>
+      <%= form.text_field :name, required: true, autofocus: snippet.new_record?, data: { controller: "autofocus" }, class: "settings-control w-full rounded-xl border p-3" %>
+    </div>
+    <div class="field">
+      <%= form.label :trigger, "Trigger", class: "mb-1 block font-extrabold" %>
+      <%= form.text_field :trigger, placeholder: "e.g. beq", required: true, class: "settings-control w-full rounded-xl border p-3 font-mono" %>
+      <p class="field-hint">Type this trigger with a leading colon in the editor.</p>
+    </div>
+    <div class="field">
+      <%= form.label :description, "Description", class: "mb-1 block font-extrabold" %>
+      <%= form.text_field :description, class: "settings-control w-full rounded-xl border p-3" %>
+    </div>
+    <div class="field">
+      <%= form.label :category, "Category", class: "mb-1 block font-extrabold" %>
+      <%= form.select :category, Snippet::CATEGORIES, {}, class: "settings-control w-full rounded-xl border p-3" %>
+    </div>
+    <div class="field">
+      <%= form.label :body, "Body", class: "mb-1 block font-extrabold" %>
+      <%= form.text_area :body, rows: 12, placeholder: "Markdown body. Use ${1:placeholder} for tab stops.", required: true, class: "settings-control w-full rounded-xl border p-3 font-mono" %>
+      <p class="field-hint">Use <code>${1:placeholder}</code> to mark a Tab stop.</p>
+    </div>
     <div class="flex gap-3">
       <%= form.submit "Save snippet", class: "button primary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" %>
       <%= link_to "Cancel", snippets_path, class: "button inline-flex min-h-10 items-center rounded-full border px-4 py-2 font-bold no-underline" %>

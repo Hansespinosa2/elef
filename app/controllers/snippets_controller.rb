@@ -2,8 +2,14 @@ class SnippetsController < ApplicationController
   def index
     @query = params[:q].to_s
     @category = params[:category].to_s
-    @snippets = Snippet.search(@query)
+    matching_snippets = Snippet.search(@query)
+    @snippet_category_counts = matching_snippets.group_by(&:category).transform_values(&:size)
+    @snippets = matching_snippets
     @snippets = @snippets.select { |snippet| snippet.category == @category } if @category.present?
+    @snippet_groups = Snippet::CATEGORIES.filter_map do |category|
+      snippets = @snippets.select { |snippet| snippet.category == category }
+      [category, snippets] if snippets.any?
+    end
   end
 
   def new

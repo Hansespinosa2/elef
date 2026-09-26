@@ -1,0 +1,11 @@
+<% content_for :title, "Print #{@document.title}" %>
+<main class="document-print work-theme-<%= @document.theme %> work-typography-<%= @document.typography %> document-theme-<%= @document.theme %> document-typography-<%= @document.typography %>" data-controller="print-view">
+  <div class="presentation-print-toolbar document-print-toolbar" aria-label="Print controls">
+    <%= link_to "Back to editor", edit_document_path(@document), class: "button" %>
+    <button type="button" class="button primary" data-action="print-view#print">Print / Save PDF</button>
+    <span><%= @document.title %></span>
+  </div>
+  <div class="document-print-pages">
+    <%= render "documents/content", document: @document %>
+  </div>
+</main>

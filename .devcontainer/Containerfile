@@ -19,19 +19,11 @@ RUN apt-get update \
     && apt-get update \
     && apt-get install --no-install-recommends -y nodejs \
     && rm -rf /var/lib/apt/lists/* \
-    && curl --fail --silent --show-error https://cli.github.com/packages/githubcli-archive-keyring.gpg \
-       -o /usr/share/keyrings/githubcli-archive-keyring.gpg \
-    && chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
-    && printf 'deb [arch=%s signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main\n' "$(dpkg --print-architecture)" \
-       > /etc/apt/sources.list.d/github-cli.list \
-    && apt-get update \
-    && apt-get install --no-install-recommends -y gh \
-    && rm -rf /var/lib/apt/lists/* \
     && gem install bundler -v 4.0.6 \
     && npm install --global "@openai/codex@${CODEX_VERSION}" "chrome-devtools-mcp@${CHROME_DEVTOOLS_MCP_VERSION}" \
     && if getent group "${DEV_GID}" >/dev/null; then DEV_GROUP="$(getent group "${DEV_GID}" | cut -d: -f1)"; else groupadd --gid "${DEV_GID}" developer; DEV_GROUP=developer; fi \
     && useradd --uid "${DEV_UID}" --gid "${DEV_GID}" --create-home --shell /bin/bash developer \
-    && mkdir --parents /workspace /home/developer/.codex/skills /home/developer/.config/gh \
+    && mkdir --parents /workspace /home/developer/.codex/skills \
     && chown --recursive "developer:${DEV_GROUP}" /workspace /home/developer
 
 COPY .devcontainer/codex-config.toml /etc/elef/codex-config.toml

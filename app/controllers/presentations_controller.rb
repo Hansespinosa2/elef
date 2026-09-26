@@ -33,10 +33,22 @@ class PresentationsController < ApplicationController
 
   def create
     @presentation = Presentation.new(presentation_params)
-    if @presentation.save
-      redirect_to edit_presentation_path(@presentation), notice: "Presentation saved."
-    else
-      render :new, status: :unprocessable_content
+    respond_to do |format|
+      if @presentation.save
+        format.html { redirect_to edit_presentation_path(@presentation, editor_mode: submitted_editor_mode), notice: "Presentation saved." }
+        format.json do
+          render json: {
+            id: @presentation.id,
+            edit_url: edit_presentation_path(@presentation, editor_mode: submitted_editor_mode),
+            upload_url: upload_asset_presentation_path(@presentation),
+            lock_version: @presentation.lock_version,
+            revision_token: @presentation.revision_token
+          }, status: :created
+        end
+      else
+        format.html { render :new, status: :unprocessable_content }
+        format.json { render json: { errors: @presentation.errors.full_messages }, status: :unprocessable_content }
+      end
     end
   end
 
@@ -137,13 +149,13 @@ class PresentationsController < ApplicationController
         blob_id = asset["id"] || asset[:id]
         candidate = ActiveStorage::Blob.find_by(id: blob_id) if blob_id
         candidate && candidate.key == (asset["key"] || asset[:key]) &&
-          Presentations::MediaAssets.digest(candidate) == params[:digest]
+          WorkAssets.digest(candidate) == params[:digest]
       end
       asset_id = manifest_asset && (manifest_asset["id"] || manifest_asset[:id])
       ActiveStorage::Blob.find_by(id: asset_id) if asset_id
     else
       @presentation.assets.blobs.find do |asset|
-        Presentations::MediaAssets.digest(asset) == params[:digest]
+        WorkAssets.digest(asset) == params[:digest]
       end
     end
     return head :not_found unless blob
@@ -162,16 +174,16 @@ class PresentationsController < ApplicationController
       return render json: { error: "Media files must be 50 MB or smaller." }, status: :unprocessable_content
     end
 
-    @presentation.assets.attach(io: upload, filename: upload.original_filename, content_type: content_type)
-    blob = @presentation.assets.blobs.last
+    blob = WorkAssets.attach_upload(@presentation, upload, content_type: content_type)
     digest = Digest::SHA256.hexdigest(blob.download)
     blob.update!(metadata: blob.metadata.merge("elef_sha256" => digest))
     @presentation.reload
+    Presentations::FolderSync.sync!(@presentation)
     render json: {
       digest: digest,
       lock_version: @presentation.lock_version,
       revision_token: @presentation.revision_token,
-      source: Presentations::MediaAssets.markdown_source(
+      source: WorkAssets.markdown_source(
         digest,
         alt: params[:alt].presence || File.basename(upload.original_filename, ".*"),
         fit: %w[contain cover].include?(params[:fit]) ? params[:fit] : "contain"
@@ -180,12 +192,11 @@ class PresentationsController < ApplicationController
   end
 
   def media_asset
-    return head :not_found unless params[:digest].to_s.match?(/\A[0-9a-f]{64}\z/)
-
-    blob = @presentation.assets.blobs.find { |asset| Presentations::MediaAssets.digest(asset) == params[:digest] }
+    blob = WorkAssets.resolve_blob(@presentation, params[:digest])
     return head :not_found unless blob
 
-    redirect_to rails_blob_path(blob, disposition: "inline"), allow_other_host: false
+    response.headers["Cache-Control"] = "private, max-age=3600"
+    send_data blob.download, type: blob.content_type, disposition: :inline, filename: blob.filename.to_s
   end
 
   def publish
@@ -249,6 +260,10 @@ class PresentationsController < ApplicationController
       :title, :source, :theme, :typography, :lock_version, :base_revision,
       :base_revision_id, :revision_token, :edit_session_id, :checkpoint, :reason
     )
+  end
+
+  def submitted_editor_mode
+    "source" if params[:editor_mode] == "source"
   end
 
   def pptx_params

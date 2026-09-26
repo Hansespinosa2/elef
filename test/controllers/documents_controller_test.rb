@@ -7,14 +7,16 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
 
   test "creates, edits, previews, renames, and deletes a document" do
     assert_difference("Document.count") do
-      post documents_path, params: { document: { title: "Notes", source: "# Notes" } }
+      post documents_path, params: { document: { title: "Separate document title", source: "# Notes" } }
     end
     document = Document.order(:id).last
     assert_redirected_to edit_document_path(document)
+    assert_equal "Notes", document.title
 
     patch document_path(document), params: { document: { source: "# Updated" } }, as: :json
     assert_response :ok
     assert_equal "# Updated", document.reload.source
+    assert_equal "Updated", document.title
 
     post preview_document_path(document), params: {
       document: { title: "Draft", source: "# Unsaved\n\n---\n\nMore" }, revision: "draft-2"
@@ -22,14 +24,58 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_equal "draft-2", response.parsed_body["revision"]
     assert_includes response.parsed_body["html"], "<hr"
+    assert_includes response.parsed_body["html"], "<h1>Unsaved</h1>"
     assert_equal "# Updated", document.reload.source
 
     patch rename_document_path(document), params: { document: { title: "Renamed" } }
     assert_redirected_to documents_path
     assert_equal "Renamed", document.reload.title
+    assert_equal "# Renamed", document.source
 
     assert_difference("Document.count", -1) { delete document_path(document) }
     assert_redirected_to documents_path
+  end
+
+  test "new document uses an available untitled heading" do
+    Document.create!(source: Document::DEFAULT_SOURCE)
+
+    get new_document_path
+    assert_response :success
+    assert_select ".document-editor-block h1", "Untitled document 2"
+
+    assert_difference("Document.count") do
+      post documents_path, params: { document: { source: Document.available_default_source } }, as: :json
+    end
+    assert_response :created
+  end
+
+  test "uploads and serves image assets for documents" do
+    document = Document.create!(title: "Document media", source: "# Media")
+    bytes = Base64.decode64("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+i9MwAAAAASUVORK5CYII=")
+    Tempfile.create(["pixel", ".png"]) do |file|
+      file.binmode
+      file.write(bytes)
+      file.rewind
+      upload = Rack::Test::UploadedFile.new(file.path, "image/png")
+      post upload_asset_document_path(document), params: { file: upload, alt: "Pixel" }, headers: { "Accept" => "application/json" }
+    end
+
+    assert_response :created
+    digest = Digest::SHA256.hexdigest(bytes)
+    assert_equal digest, response.parsed_body["digest"]
+    assert_equal "![Pixel](elef-asset:#{digest} \"fit:contain\")", response.parsed_body["source"]
+    assert_equal document.reload.lock_version, response.parsed_body["lock_version"]
+    assert document.assets.blobs.last.analyzed?
+
+    document.reload.update!(source: "# Media\n\n#{response.parsed_body["source"]}")
+    get document_path(document)
+    assert_response :success
+    assert_select ".document-surface img.presentation-media[src='/documents/#{document.id}/assets/#{digest}'][alt='Pixel']"
+
+    get media_asset_document_path(document, digest)
+    assert_response :success
+    assert_equal "image/png", response.media_type
+    assert_equal bytes, response.body.b
   end
 
   test "document library is separate from the combined library" do
@@ -133,6 +179,7 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
 
     assert_redirected_to documents_path
     assert_equal "New title", target.reload.title
+    assert_equal "# New title", target.source
     assert_equal "[[Old title]]\n\n`[[Old title]]`\n\n```\n[[Old title]]\n```", incoming.reload.source
     get document_path(incoming)
     assert_select "a.document-link[href='#{document_path(target)}']", text: "New title"
@@ -216,5 +263,15 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
     refute_includes response.parsed_body["warnings"].join, "Markdown source must be plain text"
     assert_equal "bad-1", response.parsed_body["revision"]
     assert_equal "# Saved", document.reload.source
+  end
+
+  test "print view renders toolbar and paginated pages for a document" do
+    document = Document.create!(title: "Printable Document", source: "# Page 1\n\nContent\n\n---\n\n# Page 2\n\nMore")
+
+    get print_document_path(document)
+    assert_response :success
+    assert_select ".document-print-toolbar", text: /Printable Document/
+    assert_select ".document-print-toolbar button", text: "Print / Save PDF"
+    assert_select ".document-surface"
   end
 end

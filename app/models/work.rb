@@ -6,6 +6,8 @@ class Work < ApplicationRecord
   WORK_TYPES = %w[document presentation].freeze
   DEFAULT_SOURCE = "# Untitled work\n\nStart writing Markdown here.".freeze
   CHECKPOINT_INTERVAL = 30.seconds
+  PREVIEW_PAGE_BLOCKS = 3
+  PREVIEW_PAGE_CHARACTERS = 400
 
   belongs_to :workspace
   belongs_to :latest_checkpoint, class_name: "WorkRevision", optional: true
@@ -76,14 +78,14 @@ class Work < ApplicationRecord
 
   def parsed_document(source_override = nil)
     if source_override
-      return Presentations::Document.parse(
+      return Source::Document.parse(
         source_override.to_s,
         source_name: title.presence || default_title,
         mode: kind.to_sym
       )
     end
 
-    @parsed_document ||= Presentations::Document.parse(
+    @parsed_document ||= Source::Document.parse(
       source.to_s,
       source_name: title.presence || default_title,
       mode: kind.to_sym
@@ -101,39 +103,71 @@ class Work < ApplicationRecord
   end
 
   def theme
-    Presentations::Document.style_overrides(source)[:theme] || workspace_style_defaults[:theme]
+    Source::Document.style_overrides(source)[:theme] || workspace_style_defaults[:theme]
   end
 
   def typography
-    Presentations::Document.style_overrides(source)[:typography] || workspace_style_defaults[:typography]
+    Source::Document.style_overrides(source)[:typography] || workspace_style_defaults[:typography]
   end
 
   def theme_override
-    Presentations::Document.style_overrides(source)[:theme]
+    Source::Document.style_overrides(source)[:theme]
   end
 
   def typography_override
-    Presentations::Document.style_overrides(source)[:typography]
+    Source::Document.style_overrides(source)[:typography]
   end
 
   def theme=(value)
-    self.source = Presentations::Document.with_front_matter_value(
+    self.source = Source::Document.with_front_matter_value(
       source.to_s,
       "theme",
-      value.blank? ? nil : Presentations::Document.normalize_theme_value(value)
+      value.blank? ? nil : Source::Document.normalize_theme_value(value)
     )
   end
 
   def typography=(value)
-    self.source = Presentations::Document.with_front_matter_value(
+    self.source = Source::Document.with_front_matter_value(
       source.to_s,
       "typography",
-      value.blank? ? nil : Presentations::Document.normalize_typography_value(value)
+      value.blank? ? nil : Source::Document.normalize_typography_value(value)
     )
   end
 
   def preview_warnings
     parsed_document.warnings
+  end
+
+  def preview_html
+    preview_workspace = workspace || Workspace.default
+    Source::BlockRenderer.render(
+      source,
+      source_name: title,
+      parsed: parsed_document,
+      documents: Document.where(workspace: preview_workspace),
+      workspace: preview_workspace,
+      media_resolver: WorkAssets.resolver_for(self)
+    )
+  end
+
+  def preview_page_html(blocks: PREVIEW_PAGE_BLOCKS, characters: PREVIEW_PAGE_CHARACTERS)
+    page = parsed_document.slides.first
+    return "".html_safe unless page
+
+    preview_workspace = workspace || Workspace.default
+    linked_documents = Document.where(workspace: preview_workspace).to_a
+    rendered = +""
+    rendered_length = 0
+
+    page.blocks.each_with_index do |block, index|
+      markdown = block.markdown.to_s
+      break if index.positive? && (index >= blocks || rendered_length + markdown.length > characters)
+
+      rendered_length += markdown.length
+      rendered << DocumentLinks::Renderer.render(markdown, documents: linked_documents, workspace: preview_workspace)
+    end
+
+    rendered.html_safe
   end
 
   def source=(value)
@@ -224,8 +258,8 @@ class Work < ApplicationRecord
   end
 
   def derive_title
-    self.title = Presentations::Document.normalize_folder_name(
-      Presentations::Document.extract_first_h1(source.to_s),
+    self.title = Source::Document.normalize_folder_name(
+      Source::Document.extract_first_h1(source.to_s),
       fallback: default_title
     )
   end

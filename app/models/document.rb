@@ -1,21 +1,22 @@
 class Document < Work
   WORK_TYPE = "document".freeze
-  DEFAULT_SOURCE = "# Untitled document\n\nStart writing Markdown here.".freeze
+  DEFAULT_SOURCE = "# Untitled document".freeze
+
+  def self.available_default_source(workspace: Workspace.default)
+    title = "Untitled document"
+    suffix = 2
+    while exists?(workspace: workspace, title: title)
+      title = "Untitled document #{suffix}"
+      suffix += 1
+    end
+    "# #{title}"
+  end
+
+  before_validation :derive_title_from_source, if: -> { persisted? && will_save_change_to_source? }
 
   default_scope { where(kind: WORK_TYPE) }
 
   validates :title, uniqueness: { scope: [:workspace_id, :kind] }
-
-  def preview_html
-    preview_workspace = workspace || Workspace.default
-    Presentations::DocumentRenderer.render(
-      source,
-      source_name: title,
-      parsed: parsed_document,
-      documents: Document.where(workspace: preview_workspace),
-      workspace: preview_workspace
-    )
-  end
 
   def document_key
     document_detail&.document_key
@@ -59,6 +60,14 @@ class Document < Work
   alias backlinks incoming_backlinks
 
   private
+
+  def derive_title
+    self.title = Source::Document.extract_first_h1(source.to_s).presence || default_title
+  end
+
+  def derive_title_from_source
+    derive_title
+  end
 
   def resolve_link_token(token)
     self.class.resolve_link(token.title.split("|", 2).first, workspace: workspace || Workspace.default)

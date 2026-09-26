@@ -1,4 +1,4 @@
-module Presentations
+module Source
   module Document
     Position = Data.define(:horizontal, :vertical, :vertical_explicit)
     Block = Data.define(:markdown, :position)
@@ -186,6 +186,46 @@ module Presentations
       nil
     end
 
+    def replace_first_h1(source, title)
+      normalized_source = source.to_s
+      normalized_title = title.to_s.tr("\r\n", " ").squish
+      front_matter = initial_front_matter(normalized_source)
+      body_start = front_matter&.body_start || 0
+      fence = nil
+
+      source_lines(normalized_source).each do |line|
+        next if line.end_pos <= body_start
+
+        incoming_fence = fence_marker(line.text)
+        if fence
+          fence = toggle_fence(fence, incoming_fence) if incoming_fence
+          next
+        elsif incoming_fence
+          fence = incoming_fence
+          next
+        end
+
+        heading = line.text.match(/\A([ \t]{0,3}#)(?:[ \t]+|(?=\z)).*\z/)
+        next unless heading
+
+        updated = normalized_source.dup
+        updated[line.start...line.end_pos] = "#{heading[1]} #{normalized_title}#{line.ending}"
+        return updated
+      end
+
+      body = normalized_source[body_start..].to_s
+      prefix = normalized_source[0...body_start].to_s
+      eol = if normalized_source.include?("\r\n")
+        "\r\n"
+      elsif normalized_source.include?("\r")
+        "\r"
+      else
+        "\n"
+      end
+      separator = body.blank? ? "" : eol * 2
+      "#{prefix}# #{normalized_title}#{separator}#{body}"
+    end
+
     def normalize_folder_name(title, fallback: "Untitled presentation")
       value = (title.presence || fallback).unicode_normalize(:nfkc)
       value = value.gsub(/[<>:"\/\\|?*\u0000-\u001f]/, " ").gsub(/\s+/, " ").gsub(/[. ]+\z/, "").strip
@@ -228,6 +268,10 @@ module Presentations
       mode = mode.to_sym
       raise ArgumentError, "Unsupported document mode" unless %i[presentation document].include?(mode)
 
+      previous_offsets = Thread.current[:elef_editor_utf16_offsets]
+      offsets = [0]
+      source.each_codepoint { |codepoint| offsets << offsets[-1] + (codepoint > 0xFFFF ? 2 : 1) }
+      Thread.current[:elef_editor_utf16_offsets] = [source, offsets]
       parsed = parse(source, source_name: source_name, mode: mode)
       front_matter = initial_front_matter(source)
       slide_ranges = if mode == :document
@@ -259,6 +303,11 @@ module Presentations
           index,
           mode: mode
         )
+        if mode == :document
+          empty_blocks = empty_editor_blocks(source, index, blocks)
+          blocks = (blocks + empty_blocks.map(&:first)).sort_by { |block| block[:range][:start] }
+          regions.concat(empty_blocks.map(&:last))
+        end
         slide_map = {
           id: "slide-#{index + 1}",
           index: index,
@@ -278,6 +327,8 @@ module Presentations
       end
 
       map
+    ensure
+      Thread.current[:elef_editor_utf16_offsets] = previous_offsets if defined?(previous_offsets)
     end
 
     def editor_blocks(source, start_pos, end_pos, slide, slide_index, mode: :presentation)
@@ -323,7 +374,8 @@ module Presentations
           slide_index,
           block_index,
           kind,
-          slide
+          slide,
+          mode
         )
         regions << region
         block[:editable_region_id] = region[:id]
@@ -428,7 +480,7 @@ module Presentations
       }
     end
 
-    def editable_region_for_block(source, block_start, markdown, block_id, slide_index, block_index, kind, slide)
+    def editable_region_for_block(source, block_start, markdown, block_id, slide_index, block_index, kind, slide, mode)
       editable = client_can_round_trip?(markdown, kind)
       heading = markdown.match(/\A(\s{0,3})(#+)(\s+)(.+?)(\s*#*\s*)\z/m)
       if heading
@@ -437,13 +489,30 @@ module Presentations
         return {
           id: "slide-#{slide_index + 1}-region-#{block_index + 1}",
           block_id: block_id,
-          role: slide&.title == markdown ? "title" : "heading",
+          role: (mode == :document && block_index.zero?) || slide&.title == markdown ? "title" : "heading",
           kind: "heading",
           text: heading[4].strip,
           range: utf16_range(source, block_start, block_start + markdown.length),
           source_range: utf16_range(source, block_start, block_start + markdown.length),
           content_range: utf16_range(source, text_start, text_end),
           editable: editable
+        }
+      end
+
+      empty_heading = markdown.match(/\A(\s{0,3}#)[ \t]*\z/)
+      if empty_heading
+        text_start = block_start + empty_heading.end(0)
+        return {
+          id: "slide-#{slide_index + 1}-region-#{block_index + 1}",
+          block_id: block_id,
+          role: "title",
+          kind: "heading",
+          text: "",
+          range: utf16_range(source, block_start, block_start + markdown.length),
+          source_range: utf16_range(source, block_start, block_start + markdown.length),
+          content_range: utf16_range(source, text_start, text_start),
+          editable: editable,
+          empty_heading: true
         }
       end
 
@@ -462,6 +531,7 @@ module Presentations
 
     def editable_block_kind(markdown)
       return "heading" if heading_for(markdown)
+      return "heading" if markdown.match?(/\A\s{0,3}#(?:[ \t]+)?\z/)
       return "code" if fenced_code_source?(markdown) || indented_code_source?(markdown)
       return "image" if image_block?(markdown)
       return "table" if table_block?(markdown)
@@ -470,6 +540,69 @@ module Presentations
       return "rule" if markdown.match?(/\A\s*(?:-{3,}|\*{3,}|_{3,})\s*\z/)
 
       "paragraph"
+    end
+
+    def empty_editor_blocks(source, slide_index, blocks)
+      placeholders = []
+      sequence = 0
+
+      blocks.each_cons(2) do |previous, following|
+        start_index = character_index_for_utf16(source, previous[:content_range][:end])
+        end_index = character_index_for_utf16(source, following[:range][:start])
+        separator = source[start_index...end_index].to_s
+        next unless separator.match?(/\A[ \t]*(?:(?:\r\n|\r|\n)[ \t]*)*\z/)
+
+        line_endings = separator.scan(/\r\n|\r|\n/)
+        empty_count = [line_endings.length / 2 - 1, 0].max
+        1.upto(empty_count) do |empty_index|
+          character_offset = start_index + line_endings.take(empty_index * 2).sum(&:length)
+          sequence += 1
+          placeholders << empty_editor_block(source, slide_index, sequence, character_offset)
+        end
+      end
+
+      trailing_source = source[/((?:\r\n|\r|\n)+)\z/, 1].to_s
+      trailing_endings = trailing_source.scan(/\r\n|\r|\n/)
+      trailing_count = trailing_endings.length / 2
+      trailing_start = source.length - trailing_source.length
+      1.upto(trailing_count) do |empty_index|
+        character_offset = trailing_start + trailing_endings.take(empty_index * 2).sum(&:length)
+        sequence += 1
+        placeholders << empty_editor_block(source, slide_index, sequence, character_offset)
+      end
+
+      placeholders
+    end
+
+    def empty_editor_block(source, slide_index, sequence, character_offset)
+      offset = utf16_index(source, character_offset)
+      block_id = "slide-#{slide_index + 1}-empty-#{sequence}"
+      region_id = "slide-#{slide_index + 1}-empty-region-#{sequence}"
+      range = { start: offset, end: offset }
+      block = {
+        id: block_id,
+        index: sequence,
+        kind: "paragraph",
+        markdown: "",
+        range: range.dup,
+        source_range: range.dup,
+        content_range: range.dup,
+        editable_region_id: region_id,
+        empty_placeholder: true
+      }
+      region = {
+        id: region_id,
+        block_id: block_id,
+        role: "block",
+        kind: "paragraph",
+        text: "",
+        range: range.dup,
+        source_range: range.dup,
+        content_range: range.dup,
+        editable: true,
+        empty_placeholder: true
+      }
+      [block, region]
     end
 
     def client_can_round_trip?(markdown, kind)
@@ -569,7 +702,31 @@ module Presentations
     end
 
     def utf16_index(source, character_index)
+      cached = Thread.current[:elef_editor_utf16_offsets]
+      return cached[1][character_index] if cached && cached[0].equal?(source) && character_index.between?(0, cached[1].length - 1)
+
       utf16_length(source.to_s[0...character_index].to_s)
+    end
+
+    def character_index_for_utf16(source, offset)
+      cached = Thread.current[:elef_editor_utf16_offsets]
+      if cached && cached[0].equal?(source)
+        index = cached[1].bsearch_index { |width| width >= offset }
+        return index if index && cached[1][index] == offset
+        return index ? index - 1 : source.length
+      end
+
+      units = 0
+      index = 0
+      source.to_s.each_char do |character|
+        width = utf16_length(character)
+        break if units + width > offset
+
+        units += width
+        index += 1
+        break if units == offset
+      end
+      index
     end
 
     def utf16_range(source, start_pos, end_pos)
@@ -864,6 +1021,7 @@ module Presentations
     def infer_layout(blocks)
       meaningful = blocks.reject { |block| block.markdown.blank? }
       return "body" if meaningful.empty?
+      return "image" if meaningful.length == 1 && image_block?(meaningful.first.markdown)
 
       if heading_for(meaningful.first.markdown)&.fetch(:level, nil) == 1
         section_blocks = meaningful.drop(1).select { |block| heading_for(block.markdown) }

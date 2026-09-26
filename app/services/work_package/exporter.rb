@@ -16,12 +16,18 @@ module WorkPackage
       manifest = manifest_payload
       buffer = Zip::OutputStream.write_buffer do |zip|
         write_entry(zip, "source.md", @work.source.to_s)
+        if @work.presentation?
+          write_entry(zip, "presentation.md", WorkAssets.portable_markdown(@work.source.to_s, @work))
+        end
         write_entry(zip, "manifest.json", JSON.pretty_generate(manifest))
         write_entry(zip, "metadata.json", JSON.pretty_generate(metadata_payload))
         @work.assets.each do |asset|
           filename = asset.blob.filename.to_s
-          path = "assets/#{asset.blob.key}-#{sanitize_filename(filename)}"
-          write_entry(zip, path, asset.blob.download)
+          clean_filename = sanitize_filename(filename)
+          legacy_path = "assets/#{asset.blob.key}-#{clean_filename}"
+          write_entry(zip, legacy_path, asset.blob.download)
+          portable_path = "assets/#{clean_filename}"
+          write_entry(zip, portable_path, asset.blob.download) if portable_path != legacy_path
         end
         if @include_revisions
           @work.work_revisions.history.each do |revision|
@@ -116,7 +122,7 @@ module WorkPackage
         "content_type" => blob.content_type,
         "byte_size" => blob.byte_size,
         "checksum" => blob.checksum,
-        "sha256" => Presentations::MediaAssets.digest(blob),
+        "sha256" => WorkAssets.digest(blob),
         "path" => "assets/#{blob.key}-#{sanitize_filename(blob.filename.to_s)}"
       }
     end
