@@ -19,7 +19,7 @@ module Source
 
       theme = theme_from_source(source)
       typography = typography_from_source(source)
-      margin_settings = presentation_margin_settings_from_source(source)
+      margin_settings = margin_settings_from_source(source)
       content = content_without_front_matter(source)
       sections = mode == :document ? [content] : split_sections(content)
       context = { section: nil, subsection: nil }
@@ -97,7 +97,7 @@ module Source
       }
     end
 
-    def presentation_margin_settings_from_source(source)
+    def margin_settings_from_source(source)
       settings = { section: true, subsection: true, footnote: true, slide_count: true }
       front_matter = initial_front_matter(source)
       return MarginSettings.new(**settings) unless front_matter
@@ -531,7 +531,7 @@ module Source
 
     def editable_block_kind(markdown)
       return "heading" if heading_for(markdown)
-      return "heading" if markdown.match?(/\A\s{0,3}#(?:[ \t]+)?\z/)
+      return "heading" if markdown.match?(/\A\s{0,3}#[ \t]*\z/)
       return "code" if fenced_code_source?(markdown) || indented_code_source?(markdown)
       return "image" if image_block?(markdown)
       return "table" if table_block?(markdown)
