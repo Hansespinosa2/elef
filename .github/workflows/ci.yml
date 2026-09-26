@@ -117,22 +117,14 @@ jobs:
       - name: Run System Tests
         env:
           RAILS_ENV: test
-          PARALLEL_WORKERS: "2"
+          PARALLEL_WORKERS: "1"
           PGHOST: 127.0.0.1
           PGUSER: postgres
           PGPASSWORD: postgres
           PGTESTDATABASE: elef_test
         run: |
           bin/rails db:test:prepare
-          PARALLEL_WORKERS=1 bin/rails test test/system/pptx_export_test.rb
-
-          system_test_files=()
-          for file in test/system/*_test.rb; do
-            if [[ "$file" != "test/system/pptx_export_test.rb" ]]; then
-              system_test_files+=("$file")
-            fi
-          done
-          bin/rails test "${system_test_files[@]}"
+          bin/rails test test/system
       - name: Keep screenshots from failed system tests
         uses: actions/upload-artifact@v7
         if: failure()
