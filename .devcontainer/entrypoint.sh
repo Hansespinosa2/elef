@@ -15,17 +15,13 @@ log_startup_step() {
   printf '[elef-entrypoint] %s\n' "$1"
 }
 
-mkdir -p "$CODEX_HOME" "$HOME/.config/gh" "$(dirname "$GIT_CONFIG_GLOBAL")"
+mkdir -p "$CODEX_HOME" "$(dirname "$GIT_CONFIG_GLOBAL")"
 if [[ -f "$HOME/.gitconfig" && ! -e "$GIT_CONFIG_GLOBAL" ]]; then
   cp "$HOME/.gitconfig" "$GIT_CONFIG_GLOBAL"
 fi
 
 if [[ ! -e "$CODEX_HOME/config.toml" ]]; then
   cp /etc/elef/codex-config.toml "$CODEX_HOME/config.toml"
-fi
-
-if command -v gh >/dev/null 2>&1; then
-  git config --global credential.helper '!gh auth git-credential' || true
 fi
 
 start_local_postgres() {

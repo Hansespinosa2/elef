@@ -97,23 +97,6 @@ For the recommended long-running Mac mini setup, keep a `main` checkout in a
 development checkout has its own PostgreSQL, storage, and port through
 `compose.development.yml`; see [the Mac mini deployment runbook](docs/mac-mini-deployment.md).
 
-## Native agent GitHub access
-
-Agents run natively on Omarchy. Authenticate the host GitHub CLI with
-`gh auth login --hostname github.com` and check it with `gh auth status`.
-Install the shell wrappers once:
-
-```bash
-scripts/install-agent-gh-auth
-```
-
-The wrappers cover `agy`, `codex`, `opencode`, and `hermes`. They retrieve the
-current token with `gh auth token` when launching an agent and pass it as
-`GH_TOKEN` and `GITHUB_TOKEN` to that agent and its child processes. The token
-is not written to disk. To launch one agent without installing shell
-wrappers, use `scripts/with-gh-auth codex [args...]` (or replace `codex` with
-one of the other supported agent commands).
-
 ## Validation
 
 ```bash

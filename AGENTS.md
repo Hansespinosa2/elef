@@ -11,12 +11,9 @@
 - Restart only for boot-time changes.
 - Do not use the retired `scripts/elef-agent` Apple Container/worktree workflow.
 
-## GitHub Credentials
-- The user's GitHub CLI login is stored by `gh` on the host.
-- Use inherited `GH_TOKEN`/`GITHUB_TOKEN` when present. The installed shell wrappers obtain the current token with `gh auth token` and pass it only to the agent process tree.
-- If the wrappers are not installed, launch a CLI with `scripts/with-gh-auth <agy|codex|opencode|hermes> [args...]`; install them for normal terminal launches with `scripts/install-agent-gh-auth`.
-- Never print, request, save, or commit token values. Do not copy credentials into `.env` files.
-- For direct GitHub CLI operations, use `gh` and report the result without exposing credentials.
+## GitHub
+- Use the available GitHub integration for GitHub work.
+- Never print, request, save, or commit credentials. Do not copy credentials into `.env` files.
 
 ## Testing
 - Unit-test parsing/rendering, request-test Rails boundaries, and use headless
