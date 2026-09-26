@@ -318,7 +318,10 @@ export default class extends Controller {
     if (kind === "list" || kind === "quote") {
       this.continueStructuredBlock(blockElement, region, kind, markdown, source, emptyListItem || emptyQuoteLine)
     } else {
-      const localOffset = this.sourceOffsetForSelection(blockElement, markdown)
+      // At a logical block end, fragment/visible-text offset reconstruction
+      // can lose the contribution from earlier page fragments. The source
+      // boundary is exact in this case and avoids splitting in the wrong page.
+      const localOffset = atEnd ? markdown.length : this.sourceOffsetForSelection(blockElement, markdown)
       const splitOffset = localOffset === null ? markdown.length : Math.min(localOffset, markdown.length)
       const before = markdown.slice(0, splitOffset).replace(/[ \t]+$/, "")
       const after = markdown.slice(splitOffset).replace(/^[ \t]+/, "")

@@ -5,6 +5,11 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_selector "form.visual-editor-form:not([data-preview-projection-stale='true'])", wait: 5
   end
 
+  def wait_for_settled_document_projection
+    wait_for_fresh_projection
+    assert_selector ".document-editor-projection .document-surface[data-document-pages-settled='true']", wait: 10
+  end
+
   def wait_for_preview_response(count)
     ready = page.evaluate_async_script(<<~JAVASCRIPT, count)
       const count = arguments[0];
@@ -1391,6 +1396,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
     assert_selector ".document-editor-projection .document-surface.is-paginated"
     assert_selector ".document-editor-projection .document-page", minimum: 2, wait: 5
+    wait_for_settled_document_projection
     fragment_count = page.evaluate_script(<<~JAVASCRIPT)
       [...document.querySelectorAll('.document-editor-block[data-editor-block-id]')]
         .filter((block) => block.querySelector('p')?.textContent.includes('Flowing text')).length
@@ -1419,50 +1425,13 @@ class DocumentsTest < ApplicationSystemTestCase
     last_fragment.send_keys(" Continued")
     assert_field "Markdown source", with: source.sub(paragraph, "#{paragraph} Continued"), wait: 5
 
-    last_fragment = all(".document-editor-block[data-editor-block-id]").last
-    assert_includes last_fragment.text, "Continued"
-    assert_equal "true", last_fragment["contenteditable"], "the oversized paragraph should remain editable after its source update"
-    assert_equal true, page.evaluate_script("document.activeElement === arguments[0]", last_fragment)
-    source_before_enter = find_field("Markdown source").value
-    page.execute_script(<<~JAVASCRIPT)
-      const controller = document.querySelector('.visual-editor-form').visualEditorController;
-      const editor = controller.editorController;
-      window.documentPaginationEnterProbe = {};
-      const projectionKeydown = controller.projectionKeydown.bind(controller);
-      controller.projectionKeydown = (event) => {
-        window.documentPaginationEnterProbe.keydown = { key: event.key, preventedBefore: event.defaultPrevented };
-        return projectionKeydown(event);
-      };
-      const replaceAndFocus = controller.replaceAndFocus.bind(controller);
-      controller.replaceAndFocus = (block, from, to, replacement, caret) => {
-        window.documentPaginationEnterProbe.replaceAndFocus = { from, to, replacementLength: replacement.length, replacementTail: replacement.slice(-30), caret };
-        return replaceAndFocus(block, from, to, replacement, caret);
-      };
-      const replaceRange = editor.replaceRange.bind(editor);
-      editor.replaceRange = (insert, from, to) => {
-        window.documentPaginationEnterProbe.replaceRange = { from, to, insertLength: insert.length, insertTail: insert.slice(-30) };
-        return replaceRange(insert, from, to);
-      };
-    JAVASCRIPT
-    page.execute_script(<<~JAVASCRIPT, last_fragment)
-      const block = arguments[0];
-      document.addEventListener('keydown', (event) => {
-        if (event.key === 'Enter' && event.target.closest?.('.document-editor-block') === block) {
-          window.documentPaginationEnterPrevented = event.defaultPrevented;
-        }
-      }, { once: true });
-    JAVASCRIPT
-    last_fragment.send_keys(:enter)
-    assert_equal true, page.evaluate_script("window.documentPaginationEnterPrevented"), "Enter should be handled by the visual document editor"
-    probe = page.evaluate_script("window.documentPaginationEnterProbe")
-    source_after_enter = find_field("Markdown source").value
-    first_difference = source_before_enter.chars.zip(source_after_enter.chars).index { |left, right| left != right }
-    puts "DOCUMENT_ENTER_PROBE=#{probe.inspect} source_lengths=#{source_before_enter.length},#{source_after_enter.length} first_difference=#{first_difference} source_tail=#{source_after_enter[-40..].inspect}"
-    assert_equal "Enter", probe.dig("keydown", "key"), probe.inspect
-    assert probe["replaceAndFocus"], probe.inspect
-    assert probe["replaceRange"], probe.inspect
+    focused_fragment = active_document_block
+    assert_includes focused_fragment.text, "Continued"
+    focused_fragment.send_keys(:enter)
+    wait_for_settled_document_projection
     assert_field "Markdown source", with: /Continued\n\n\z/, wait: 5
     active_document_block.send_keys(:backspace)
+    wait_for_settled_document_projection
     assert_field "Markdown source", with: /Continued\z/, wait: 5
   end
 

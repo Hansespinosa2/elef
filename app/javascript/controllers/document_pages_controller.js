@@ -13,6 +13,7 @@ export default class extends Controller {
     this.active = true
     this.nextFlowId = 0
     this.nextCaretTargetId = 0
+    this.paginationGeneration = 0
     this.resizeFrame = null
     this.reflowFrame = null
     this.reflowTimer = null
@@ -25,6 +26,7 @@ export default class extends Controller {
 
     window.addEventListener("resize", this.boundResize)
     this.surfaceTarget.addEventListener("focusout", this.boundFocusOut)
+    this.surfaceTarget.dataset.documentPagesSettled = "false"
     this.paginate()
     this.mutationObserver?.observe(this.surfaceTarget, { childList: true, characterData: true, subtree: true })
 
@@ -55,6 +57,7 @@ export default class extends Controller {
 
   schedulePagination() {
     if (!this.active) return
+    this.surfaceTarget.dataset.documentPagesSettled = "false"
     if (this.focusedEditable()) {
       clearTimeout(this.reflowTimer)
       this.reflowTimer = null
@@ -66,7 +69,11 @@ export default class extends Controller {
       if (!this.active || this.reflowFrame) return
       this.reflowFrame = requestAnimationFrame(() => {
         this.reflowFrame = null
-        if (!this.active || this.focusedEditable() || !this.projectionFresh() || this.pagesStillFit()) return
+        if (!this.active || this.focusedEditable() || !this.projectionFresh()) return
+        if (this.pagesStillFit()) {
+          this.finishPagination()
+          return
+        }
         this.paginate()
       })
     }, 300)
@@ -75,7 +82,9 @@ export default class extends Controller {
   paginate() {
     if (!this.surfaceTarget || !this.active) return
 
-    const caret = this.captureCaret()
+    const generation = ++this.paginationGeneration
+    const caret = this.captureCaret() || this.pendingCaretRestore
+    this.pendingCaretRestore = caret
     this.resizeObserver?.disconnect()
     const blocks = this.logicalBlocks()
     blocks.forEach((block) => this.ensureFlowId(block))
@@ -117,8 +126,19 @@ export default class extends Controller {
 
     this.resizeFrames()
     this.mutationObserver?.takeRecords()
-    if (caret) requestAnimationFrame(() => this.restoreCaret(caret))
-    this.surfaceTarget.dispatchEvent(new CustomEvent("elef:document-paginated", { bubbles: true }))
+    requestAnimationFrame(() => {
+      if (!this.active || generation !== this.paginationGeneration) return
+      if (caret) this.restoreCaret(caret)
+      this.pendingCaretRestore = null
+      this.finishPagination({ paginated: true })
+    })
+  }
+
+  finishPagination({ paginated = false } = {}) {
+    if (!this.active || !this.surfaceTarget) return
+    this.surfaceTarget.dataset.documentPagesSettled = "true"
+    this.surfaceTarget.dispatchEvent(new CustomEvent("elef:document-pages-settled", { bubbles: true }))
+    if (paginated) this.surfaceTarget.dispatchEvent(new CustomEvent("elef:document-paginated", { bubbles: true }))
   }
 
   logicalBlocks() {
