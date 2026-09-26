@@ -23,11 +23,11 @@ class DocumentsController < ApplicationController
   end
 
   def new
-    @document = Document.new(source: Document::DEFAULT_SOURCE)
+    @document = Document.new(source: Document.available_default_source)
   end
 
   def start
-    document = Document.create!(source: Document::DEFAULT_SOURCE)
+    document = Document.create!(source: Document.available_default_source)
     redirect_to edit_document_path(document), notice: "New document started."
   end
 
@@ -113,8 +113,7 @@ class DocumentsController < ApplicationController
       return render json: { error: "Media files must be 50 MB or smaller." }, status: :unprocessable_content
     end
 
-    @document.assets.attach(io: upload, filename: upload.original_filename, content_type: content_type)
-    blob = @document.assets.blobs.last
+    blob = Presentations::MediaAssets.attach_upload(@document, upload, content_type: content_type)
     digest = Presentations::MediaAssets.digest(blob)
     @document.reload
     render json: {
