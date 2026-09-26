@@ -578,6 +578,51 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: "# Navigation\n\nFirst block\n\nThird block", wait: 5
   end
 
+  test "hitting enter at the end of a block and deleting the empty block preserves surrounding blocks" do
+    %w[Delete Backspace].each do |key|
+      sample = Documents::SampleData::SAMPLES.find { |s| s[:id] == "document-full-report" }
+      document = Document.create!(title: "#{sample[:title]} #{key}", source: sample[:source])
+      visit edit_document_path(document)
+      wait_for_fresh_projection
+
+      first_block = find(".document-editor-block", text: /This report examines a simple proposition/)
+      first_block_id = first_block["data-editor-block-id"]
+      assert first_block_id
+      before = find_field("Markdown source").value
+
+      # Hit Enter at the end of the block
+      created = page.execute_script(<<~JAVASCRIPT, first_block)
+        const block = arguments[0];
+        block.focus({ preventScroll: true });
+        const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+        let lastTextNode = null;
+        while (walker.nextNode()) {
+          lastTextNode = walker.currentNode;
+        }
+        window.getSelection().setPosition(lastTextNode, lastTextNode.textContent.length);
+        const enterEvent = new KeyboardEvent("keydown", { key: "Enter", code: "Enter", bubbles: true, cancelable: true });
+        block.dispatchEvent(enterEvent);
+        return enterEvent.defaultPrevented;
+      JAVASCRIPT
+      assert_equal true, created
+
+      # Wait for the source to reflect the split (extra blank line), then for the preview to re-render
+      assert_no_field "Markdown source", with: before, wait: 5
+      wait_for_fresh_projection
+
+      # The empty placeholder block should now be focused
+      empty_block = active_document_block
+      assert_equal "true", empty_block["data-editor-empty-block"]
+
+      # Press Delete or Backspace on the empty block
+      empty_block.send_keys(key == "Delete" ? :delete : :backspace)
+
+      # The Markdown source should be back to the original source without collapsing paragraphs
+      assert_field "Markdown source", with: before, wait: 5
+      assert_equal first_block_id, active_document_block["data-editor-block-id"]
+    end
+  end
+
   test "visual edits preserve soft line breaks around inline math" do
     source = <<~MARKDOWN
       # Notes
