@@ -100,9 +100,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   def active_document_block
     assert_selector ".document-editor-block[data-editor-block-id]:focus", wait: 5
-    block_id = page.evaluate_script("document.activeElement.closest('.document-editor-block')?.dataset.editorBlockId")
-    assert block_id, "expected the visual document editor to keep a block focused"
-    find(".document-editor-block[data-editor-block-id='#{block_id}']")
+    find(".document-editor-block[data-editor-block-id]:focus")
   end
 
   test "suggests document links in the Markdown editor" do
