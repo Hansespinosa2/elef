@@ -21,7 +21,7 @@ module Presentations
       FileUtils.mkdir_p(dir)
 
       # 1. Write portable presentation markdown
-      portable_source = MediaAssets.portable_markdown(presentation.source.to_s, presentation)
+      portable_source = WorkAssets.portable_markdown(presentation.source.to_s, presentation)
       File.write(dir.join("presentation.md"), portable_source)
 
       # 2. Write raw source

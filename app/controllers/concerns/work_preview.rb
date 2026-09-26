@@ -27,7 +27,7 @@ module WorkPreview
     raise ArgumentError, "Markdown source must be plain text" unless source.is_a?(String)
 
     title = if work.document?
-      Presentations::Document.extract_first_h1(source).presence || work.title.presence || work.default_title
+      Source::Document.extract_first_h1(source).presence || work.title.presence || work.default_title
     else
       attributes[:title].presence || params[:title].presence || work.title
     end
@@ -40,7 +40,7 @@ module WorkPreview
     preview_work.theme = attributes[:theme] if attributes.key?(:theme)
     preview_work.typography = attributes[:typography] if attributes.key?(:typography)
 
-    editor_map = Presentations::Document.editor_map(
+    editor_map = Source::Document.editor_map(
       source.gsub(/\r\n?/, "\n"),
       source_name: title.presence || preview_work.default_title,
       mode: preview_work.work_type.to_sym

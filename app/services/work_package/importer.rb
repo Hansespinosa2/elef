@@ -160,7 +160,7 @@ module WorkPackage
         )
         blob = work.assets.attachments.last&.blob
         if blob
-          digest = Presentations::MediaAssets.digest(blob)
+          digest = WorkAssets.digest(blob)
           expected_digest = asset["sha256"].presence
           if expected_digest.present? && expected_digest != digest
             raise ArgumentError, "Work package asset digest does not match its contents"

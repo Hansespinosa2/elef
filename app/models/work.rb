@@ -76,14 +76,14 @@ class Work < ApplicationRecord
 
   def parsed_document(source_override = nil)
     if source_override
-      return Presentations::Document.parse(
+      return Source::Document.parse(
         source_override.to_s,
         source_name: title.presence || default_title,
         mode: kind.to_sym
       )
     end
 
-    @parsed_document ||= Presentations::Document.parse(
+    @parsed_document ||= Source::Document.parse(
       source.to_s,
       source_name: title.presence || default_title,
       mode: kind.to_sym
@@ -101,34 +101,34 @@ class Work < ApplicationRecord
   end
 
   def theme
-    Presentations::Document.style_overrides(source)[:theme] || workspace_style_defaults[:theme]
+    Source::Document.style_overrides(source)[:theme] || workspace_style_defaults[:theme]
   end
 
   def typography
-    Presentations::Document.style_overrides(source)[:typography] || workspace_style_defaults[:typography]
+    Source::Document.style_overrides(source)[:typography] || workspace_style_defaults[:typography]
   end
 
   def theme_override
-    Presentations::Document.style_overrides(source)[:theme]
+    Source::Document.style_overrides(source)[:theme]
   end
 
   def typography_override
-    Presentations::Document.style_overrides(source)[:typography]
+    Source::Document.style_overrides(source)[:typography]
   end
 
   def theme=(value)
-    self.source = Presentations::Document.with_front_matter_value(
+    self.source = Source::Document.with_front_matter_value(
       source.to_s,
       "theme",
-      value.blank? ? nil : Presentations::Document.normalize_theme_value(value)
+      value.blank? ? nil : Source::Document.normalize_theme_value(value)
     )
   end
 
   def typography=(value)
-    self.source = Presentations::Document.with_front_matter_value(
+    self.source = Source::Document.with_front_matter_value(
       source.to_s,
       "typography",
-      value.blank? ? nil : Presentations::Document.normalize_typography_value(value)
+      value.blank? ? nil : Source::Document.normalize_typography_value(value)
     )
   end
 
@@ -138,13 +138,13 @@ class Work < ApplicationRecord
 
   def preview_html
     preview_workspace = workspace || Workspace.default
-    Presentations::DocumentRenderer.render(
+    Source::BlockRenderer.render(
       source,
       source_name: title,
       parsed: parsed_document,
       documents: Document.where(workspace: preview_workspace),
       workspace: preview_workspace,
-      media_resolver: Presentations::MediaAssets.resolver_for(self)
+      media_resolver: WorkAssets.resolver_for(self)
     )
   end
 
@@ -236,8 +236,8 @@ class Work < ApplicationRecord
   end
 
   def derive_title
-    self.title = Presentations::Document.normalize_folder_name(
-      Presentations::Document.extract_first_h1(source.to_s),
+    self.title = Source::Document.normalize_folder_name(
+      Source::Document.extract_first_h1(source.to_s),
       fallback: default_title
     )
   end

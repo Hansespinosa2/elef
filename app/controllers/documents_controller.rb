@@ -23,11 +23,11 @@ class DocumentsController < ApplicationController
   end
 
   def new
-    @document = Document.new(source: Document::DEFAULT_SOURCE)
+    @document = Document.new(source: Document.available_default_source)
   end
 
   def start
-    document = Document.create!(source: Document::DEFAULT_SOURCE)
+    document = Document.create!(source: Document.available_default_source)
     redirect_to edit_document_path(document), notice: "New document started."
   end
 
@@ -72,7 +72,7 @@ class DocumentsController < ApplicationController
 
   def rename
     title = params.require(:document).permit(:title)[:title]
-    source = Presentations::Document.replace_first_h1(@document.source, title)
+    source = Source::Document.replace_first_h1(@document.source, title)
     if @document.update(source: source)
       redirect_to documents_path, notice: "Document renamed."
     else
@@ -113,15 +113,14 @@ class DocumentsController < ApplicationController
       return render json: { error: "Media files must be 50 MB or smaller." }, status: :unprocessable_content
     end
 
-    @document.assets.attach(io: upload, filename: upload.original_filename, content_type: content_type)
-    blob = @document.assets.blobs.last
-    digest = Presentations::MediaAssets.digest(blob)
+    blob = WorkAssets.attach_upload(@document, upload, content_type: content_type)
+    digest = WorkAssets.digest(blob)
     @document.reload
     render json: {
       digest: digest,
       lock_version: @document.lock_version,
       revision_token: @document.revision_token,
-      source: Presentations::MediaAssets.markdown_source(
+      source: WorkAssets.markdown_source(
         digest,
         alt: params[:alt].presence || File.basename(upload.original_filename, ".*"),
         fit: %w[contain cover].include?(params[:fit]) ? params[:fit] : "contain"
@@ -130,7 +129,7 @@ class DocumentsController < ApplicationController
   end
 
   def media_asset
-    blob = Presentations::MediaAssets.resolve_blob(@document, params[:digest])
+    blob = WorkAssets.resolve_blob(@document, params[:digest])
     return head :not_found unless blob
 
     response.headers["Cache-Control"] = "private, max-age=3600"

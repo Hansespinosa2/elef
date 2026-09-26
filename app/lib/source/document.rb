@@ -1,4 +1,4 @@
-module Presentations
+module Source
   module Document
     Position = Data.define(:horizontal, :vertical, :vertical_explicit)
     Block = Data.define(:markdown, :position)

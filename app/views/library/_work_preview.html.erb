@@ -2,7 +2,7 @@
   <div class="library-preview" data-controller="presentation-canvas">
     <div class="library-preview-stage presentation-surface work-surface slides slides-theme-<%= work.theme %> slides-typography-<%= work.typography %> work-theme-<%= work.theme %> work-typography-<%= work.typography %>">
       <%= render "presentations/slide",
-            slide: work.slides.first || Presentations::Document::Slide.new(id: "empty", index: 0, markdown: "", layout: "body"),
+            slide: work.slides.first || Source::Document::Slide.new(id: "empty", index: 0, markdown: "", layout: "body"),
             presentation: work,
             margin_settings: work.document.margin_settings %>
     </div>
