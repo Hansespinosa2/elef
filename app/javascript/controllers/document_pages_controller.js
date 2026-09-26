@@ -423,6 +423,10 @@ export default class extends Controller {
     const block = node?.closest?.("[data-editor-block-id][contenteditable='true']")
     if (!block || !this.surfaceTarget.contains(block)) return null
 
+    // A fresh preview arrives as unpaginated HTML, so its focused block has no
+    // flow ID yet. Assign one before paginate() replaces the surface; otherwise
+    // restoreCaret() cannot find the new fragment and the editor loses focus.
+    this.ensureFlowId(block)
     const flowId = block.dataset.documentPageFlowId
     const fragments = flowId ? this.pageFragments(flowId) : [block]
     const index = fragments.indexOf(block)
