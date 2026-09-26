@@ -629,7 +629,7 @@ export default class extends Controller {
     remaining.selectNodeContents(element)
     remaining.setStart(selection.anchorNode, selection.anchorOffset)
     const fragment = remaining.cloneContents()
-    return fragment.textContent.replace(/[\u200b\ufeff]/g, "") === "" &&
+    return fragment.textContent.replace(/[\u200b\ufeff\n]/g, "") === "" &&
       !fragment.querySelector("[data-editor-math-source], [data-editor-image-source], img")
   }
 
@@ -877,7 +877,7 @@ export default class extends Controller {
     let length = 0
     while (walker.nextNode()) {
       const node = walker.currentNode
-      if (node.parentElement?.closest(".katex-mathml, [aria-hidden='true'], [contenteditable='false']")) continue
+      if (node.parentElement?.closest(".katex-mathml, [aria-hidden='true']")) continue
       length += node.textContent.length
     }
     return length

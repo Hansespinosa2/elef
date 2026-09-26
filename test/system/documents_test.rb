@@ -36,7 +36,6 @@ class DocumentsTest < ApplicationSystemTestCase
       assert target, "could not find visual text #{source_text.inspect} in #{selector}"
 
       begin
-        target.click
         selected = page.execute_script(<<~JAVASCRIPT, target, source_text)
           const root = arguments[0];
           const needle = arguments[1];
