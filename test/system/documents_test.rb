@@ -1359,6 +1359,66 @@ class DocumentsTest < ApplicationSystemTestCase
     assert heights.all? { |height| height < 120 }, "horizontal-only blocks should not become vertical stages: #{heights.inspect}"
   end
 
+  test "positions document blocks visually and preserves directives across source mode" do
+    source = "# Alignment\n\nLeft block\n\n:::position{center middle}\n\nCentered block"
+    document = Document.create!(title: "Block alignment", source: source)
+    visit edit_document_path(document)
+    wait_for_fresh_projection
+
+    centered = find(".document-editor-block", text: "Centered block")
+    assert_includes centered["class"], "position-center"
+    assert_equal "center", page.evaluate_script("getComputedStyle(arguments[0]).textAlign", centered)
+    centered.find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
+    centered_control = find("[data-visual-editor-block-id='#{centered['data-editor-block-id']}']")
+    centered_control.select("Right")
+
+    assert_field "Markdown source", with: /:::position\{right middle\}/, wait: 5
+    assert_selector ".document-editor-block.position-right", text: "Centered block", wait: 5
+    right_aligned = find(".document-editor-block.position-right", text: "Centered block")
+    assert_equal "right", page.evaluate_script("getComputedStyle(arguments[0]).textAlign", right_aligned)
+    right_aligned.find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
+    find("[data-visual-editor-block-id='#{right_aligned['data-editor-block-id']}']").select("Left")
+    assert_field "Markdown source", with: /:::position\{left middle\}/, wait: 5
+    left_aligned = find(".document-editor-block.position-left", text: "Centered block", wait: 5)
+    assert_equal "left", page.evaluate_script("getComputedStyle(arguments[0]).textAlign", left_aligned)
+
+    click_on "Source"
+    assert_field "Markdown source", with: /:::position\{left middle\}/
+    click_on "Visual"
+    wait_for_fresh_projection
+
+    centered = find(".document-editor-block", text: "Centered block")
+    assert_includes centered["class"], "position-left"
+    centered.find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
+    assert_equal "left", find("[data-visual-editor-block-id='#{centered['data-editor-block-id']}']")["value"]
+    type_visual_text(".document-editor-block", "Centered block", "Updated centered block")
+    assert_field "Markdown source", with: /:::position\{left middle\}\n\nUpdated centered block/, wait: 5
+    refute_includes find(".editor-projection").text, ":::position"
+  end
+
+  test "deleting an empty positioned block also removes its position directive" do
+    document = Document.create!(
+      title: "Delete positioned block",
+      source: "# Keep\n\n:::position{center}\n\nDelete me\n\nTail"
+    )
+    visit edit_document_path(document)
+
+    block = find(".document-editor-block", text: "Delete me")
+    removed = page.execute_script(<<~JAVASCRIPT, block)
+      const block = arguments[0];
+      block.innerHTML = "<p><br></p>";
+      block.focus({ preventScroll: true });
+      window.getSelection().setPosition(block.querySelector("p"), 0);
+      const event = new KeyboardEvent("keydown", { key: "Backspace", bubbles: true, cancelable: true });
+      block.dispatchEvent(event);
+      return event.defaultPrevented;
+    JAVASCRIPT
+
+    assert_equal true, removed
+    assert_field "Markdown source", with: "# Keep\n\nTail", wait: 5
+    refute_selector ".document-editor-block.position-center", text: "Tail"
+  end
+
   test "maintains standard aspect ratio and fixed text wrapping across viewports" do
     document = Document.create!(
       title: "Aspect ratio document",

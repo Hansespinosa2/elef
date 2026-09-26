@@ -128,6 +128,34 @@ class PresentationsDocumentRendererTest < ActiveSupport::TestCase
     assert_equal "", Presentations::DocumentRenderer.position_classes(nil)
   end
 
+  test "maps document position metadata to its content block in the editable preview" do
+    source = "# Alignment\n\nLeft block\n\n:::position{center}\n\nCentered block\n\n:::position{right}\n\nRight block"
+    editor_map = Presentations::Document.editor_map(source, mode: :document)
+    slide = editor_map[:slides].first
+    blocks = slide[:blocks].reject { |block| block[:empty_placeholder] }
+    centered = blocks.find { |block| block[:markdown] == "Centered block" }
+    centered_directive = slide[:directives].find { |directive| directive[:id] == centered[:position_directive_id] }
+
+    assert_equal [nil, "center", "right"], blocks.drop(1).map { |block| block.dig(:position, :horizontal) }
+    assert_equal source.index("Centered block"), centered[:range][:start]
+    assert_equal source.index(":::position{center}"), centered_directive[:range][:start]
+
+    html = Presentations::DocumentRenderer.render(
+      source,
+      editable: true,
+      editor_map: editor_map,
+      documents: [],
+      workspace: Workspace.default
+    )
+    fragment = Nokogiri::HTML.fragment(html)
+    centered_element = fragment.css(".document-editor-block").find { |block| block.text.include?("Centered block") }
+    centered_control = fragment.css("[data-visual-editor-block-id]").find { |control| control["data-visual-editor-block-id"] == centered[:id] }
+
+    assert_includes centered_element["class"], "position-center"
+    assert_equal "center", centered_control.at_css("option[selected]")["value"]
+    refute_includes html, ":::position"
+  end
+
   test "validates editable mapping boundary conditions" do
     renderer = Presentations::DocumentRenderer
     region = { id: 1, block_id: "b1", editable: true, content_range: { start: 0, end: 10 } }
