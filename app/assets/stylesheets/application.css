@@ -509,7 +509,7 @@ body.elef-app {
 .presentation-surface.work-theme-dark .slide { background: linear-gradient(135deg, var(--oradia-slate-800), var(--oradia-slate-950)); border-color: var(--oradia-slate-700); color: var(--oradia-ink); }
 .presentation-surface.work-theme-dark .slide :is(h1, h2, h3, h4, h5, h6) { color: var(--oradia-ink); }
 .presentation-surface.work-theme-light .slide { background: linear-gradient(135deg, #fffdf8, #f5f0e7); color: var(--oradia-paper-ink); }
-.presentation-surface.work-theme-match .slide { background: linear-gradient(135deg, var(--oradia-paper-bright), var(--oradia-paper)); }
+.presentation-surface.work-theme-match .slide { background: linear-gradient(135deg, var(--oradia-paper-bright), var(--oradia-paper)); color: var(--oradia-paper-ink); }
 .presentation-surface h1,
 .presentation-surface h2,
 .presentation-surface h3,
