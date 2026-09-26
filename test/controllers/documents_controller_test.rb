@@ -58,8 +58,9 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
     assert_select ".document-surface img.presentation-media[src='/documents/#{document.id}/assets/#{digest}'][alt='Pixel']"
 
     get media_asset_document_path(document, digest)
-    assert_response :redirect
-    assert_includes response.location, "/rails/active_storage/blobs/redirect/"
+    assert_response :success
+    assert_equal "image/png", response.media_type
+    assert_equal bytes, response.body.b
   end
 
   test "document library is separate from the combined library" do

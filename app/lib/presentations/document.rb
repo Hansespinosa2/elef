@@ -268,6 +268,10 @@ module Presentations
       mode = mode.to_sym
       raise ArgumentError, "Unsupported document mode" unless %i[presentation document].include?(mode)
 
+      previous_offsets = Thread.current[:elef_editor_utf16_offsets]
+      offsets = [0]
+      source.each_codepoint { |codepoint| offsets << offsets[-1] + (codepoint > 0xFFFF ? 2 : 1) }
+      Thread.current[:elef_editor_utf16_offsets] = [source, offsets]
       parsed = parse(source, source_name: source_name, mode: mode)
       front_matter = initial_front_matter(source)
       slide_ranges = if mode == :document
@@ -323,6 +327,8 @@ module Presentations
       end
 
       map
+    ensure
+      Thread.current[:elef_editor_utf16_offsets] = previous_offsets if defined?(previous_offsets)
     end
 
     def editor_blocks(source, start_pos, end_pos, slide, slide_index, mode: :presentation)
@@ -696,10 +702,20 @@ module Presentations
     end
 
     def utf16_index(source, character_index)
+      cached = Thread.current[:elef_editor_utf16_offsets]
+      return cached[1][character_index] if cached && cached[0].equal?(source) && character_index.between?(0, cached[1].length - 1)
+
       utf16_length(source.to_s[0...character_index].to_s)
     end
 
     def character_index_for_utf16(source, offset)
+      cached = Thread.current[:elef_editor_utf16_offsets]
+      if cached && cached[0].equal?(source)
+        index = cached[1].bsearch_index { |width| width >= offset }
+        return index if index && cached[1][index] == offset
+        return index ? index - 1 : source.length
+      end
+
       units = 0
       index = 0
       source.to_s.each_char do |character|

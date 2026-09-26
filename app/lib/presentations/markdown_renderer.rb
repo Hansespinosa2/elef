@@ -163,7 +163,8 @@ module Presentations
           protected_source << markdown[cursor, 2]
           cursor += 2
         elsif character == "`"
-          run_length = markdown[cursor..].match(/\A`+/)[0].length
+          run_length = 1
+          run_length += 1 while markdown[cursor + run_length] == "`"
           if inline_code_length.nil?
             inline_code_length = run_length
           elsif inline_code_length == run_length
@@ -175,7 +176,8 @@ module Presentations
           protected_source << character
           cursor += 1
         elsif character == "$"
-          dollar_run = markdown[cursor..].match(/\A\$+/)[0].length
+          dollar_run = 1
+          dollar_run += 1 while markdown[cursor + dollar_run] == "$"
           delimiter_length = dollar_run == 1 || dollar_run == 2 ? dollar_run : 0
           delimiter = "$" * delimiter_length
           closing = delimiter_length.positive? ? math_closing_index(markdown, cursor + delimiter_length, delimiter) : nil
@@ -204,27 +206,23 @@ module Presentations
     end
 
     def render_protected_math(html, expressions)
+      return html if expressions.empty?
+
+      pattern = Regexp.union(expressions.keys)
+      rendered = expressions.transform_values do |math|
+        katex(math[:expression], display_mode: math[:display_mode])
+      end
       code_depth = 0
       html.split(/(<[^>]*>)/m).map do |segment|
         if segment.start_with?("<")
           code_depth += 1 if segment.match?(/\A<(?:pre|code)\b/i)
           code_depth = [code_depth - 1, 0].max if segment.match?(/\A<\/(?:pre|code)\b/i)
-          expressions.each do |placeholder, math|
-            source = ERB::Util.html_escape(math_source(math))
-            segment = segment.gsub(placeholder) { source }
-          end
-          next segment
+          next segment.gsub(pattern) { |placeholder| ERB::Util.html_escape(math_source(expressions.fetch(placeholder))) }
         end
 
-        expressions.each do |placeholder, math|
-          replacement = if code_depth.positive?
-            ERB::Util.html_escape(math_source(math))
-          else
-            katex(math[:expression], display_mode: math[:display_mode])
-          end
-          segment = segment.gsub(placeholder) { replacement }
+        segment.gsub(pattern) do |placeholder|
+          code_depth.positive? ? ERB::Util.html_escape(math_source(expressions.fetch(placeholder))) : rendered.fetch(placeholder)
         end
-        segment
       end.join
     end
 

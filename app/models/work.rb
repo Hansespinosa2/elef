@@ -146,7 +146,7 @@ class Work < ApplicationRecord
       parsed: parsed_document,
       documents: Document.where(workspace: preview_workspace),
       workspace: preview_workspace,
-      media_resolver: ->(identifier) { Presentations::MediaAssets.resolve_media(self, identifier) }
+      media_resolver: Presentations::MediaAssets.resolver_for(self)
     )
   end
 

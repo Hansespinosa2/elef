@@ -2,9 +2,8 @@ module PresentationsHelper
   def render_markdown(markdown, work: @presentation)
     return Presentations::MarkdownRenderer.render(markdown) unless work&.id
 
-    resolver = lambda do |identifier|
-      Presentations::MediaAssets.resolve_media(work, identifier)
-    end
+    @media_resolvers ||= {}
+    resolver = (@media_resolvers[work.object_id] ||= Presentations::MediaAssets.resolver_for(work))
     Presentations::MarkdownRenderer.render(markdown, media_resolver: resolver)
   end
 

@@ -158,8 +158,9 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_select ".presentation-media-cover[src='/presentations/#{presentation.id}/assets/#{digest}'][alt='Pixel']"
 
     get media_asset_presentation_path(presentation, digest)
-    assert_response :redirect
-    assert_includes response.location, "/rails/active_storage/blobs/redirect/"
+    assert_response :success
+    assert_equal "image/png", response.media_type
+    assert_equal bytes, response.body.b
 
     video_bytes = "mp4 test bytes".b
     Tempfile.create(["clip", ".mp4"]) do |file|
@@ -628,17 +629,17 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
 
     # Request by digest
     get media_asset_presentation_path(presentation, digest)
-    assert_response :redirect
-    assert_includes response.location, "/rails/active_storage/blobs/redirect/"
+    assert_response :success
+    assert_equal bytes, response.body.b
 
     # Request by filename
     get media_asset_presentation_path(presentation, "diagram.png")
-    assert_response :redirect
-    assert_includes response.location, "/rails/active_storage/blobs/redirect/"
+    assert_response :success
+    assert_equal bytes, response.body.b
 
     # Request by relative path
     get media_asset_presentation_path(presentation, "assets/diagram.png")
-    assert_response :redirect
-    assert_includes response.location, "/rails/active_storage/blobs/redirect/"
+    assert_response :success
+    assert_equal bytes, response.body.b
   end
 end

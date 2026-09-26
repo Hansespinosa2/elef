@@ -893,6 +893,7 @@ class DocumentsTest < ApplicationSystemTestCase
     natural_width = page.evaluate_script("document.querySelector('.preview-pane img.presentation-media').naturalWidth")
     assert_operator natural_width, :>, 0
 
+
     document = Document.order(:id).last
     assert document.assets.attached?
     assert_selector '[data-autosave-target="status"]', exact_text: "Saved", wait: 8

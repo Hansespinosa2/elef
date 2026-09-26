@@ -28,7 +28,10 @@ class PreviewWidget extends WidgetType {
       const image = document.createElement("img")
       image.className = "cm-live-image"
       image.alt = this.attributes.alt || ""
-      image.src = this.attributes.src || ""
+      const source = this.attributes.src || ""
+      const assetDigest = source.match(/^elef-asset:([0-9a-f]{64})$/)?.[1]
+      const uploadUrl = document.querySelector("form[data-media-upload-url-value]")?.dataset.mediaUploadUrlValue
+      image.src = assetDigest && uploadUrl ? `${uploadUrl}/${assetDigest}` : source
       image.title = this.attributes.alt || ""
       return image
     }
@@ -152,7 +155,7 @@ function addInlineMarkup(decorations, state, source, ranges) {
     for (const match of segment.matchAll(imagePattern)) {
       const from = absolute(match.index)
       const to = from + match[0].length
-      if (!overlapsCode(from, to) && safeUrl(match[2])) {
+      if (!overlapsCode(from, to) && (safeUrl(match[2]) || /^elef-asset:[0-9a-f]{64}$/.test(match[2]))) {
         addHidden(decorations, state, from, to, new PreviewWidget("image", "", { alt: match[1], src: match[2] }), [from, to])
       }
     }
