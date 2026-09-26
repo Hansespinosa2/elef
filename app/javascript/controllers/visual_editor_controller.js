@@ -56,10 +56,6 @@ export default class extends Controller {
     if (this.element.visualEditorController === this) delete this.element.visualEditorController
   }
 
-  modeChanged(event) {
-    this.applyMode(event.detail.mode)
-  }
-
   applyMode(mode) {
     const visual = mode !== "source"
     this.element.dataset.editorMode = visual ? "visual" : "source"

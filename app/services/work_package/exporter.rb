@@ -17,7 +17,7 @@ module WorkPackage
       buffer = Zip::OutputStream.write_buffer do |zip|
         write_entry(zip, "source.md", @work.source.to_s)
         if @work.presentation?
-          write_entry(zip, "presentation.md", Presentations::MediaAssets.portable_markdown(@work.source.to_s, @work))
+          write_entry(zip, "presentation.md", WorkAssets.portable_markdown(@work.source.to_s, @work))
         end
         write_entry(zip, "manifest.json", JSON.pretty_generate(manifest))
         write_entry(zip, "metadata.json", JSON.pretty_generate(metadata_payload))
@@ -122,7 +122,7 @@ module WorkPackage
         "content_type" => blob.content_type,
         "byte_size" => blob.byte_size,
         "checksum" => blob.checksum,
-        "sha256" => Presentations::MediaAssets.digest(blob),
+        "sha256" => WorkAssets.digest(blob),
         "path" => "assets/#{blob.key}-#{sanitize_filename(blob.filename.to_s)}"
       }
     end

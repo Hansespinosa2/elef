@@ -4,7 +4,7 @@ module DocumentLinks
 
     def render(markdown, documents: nil, workspace: nil, media_resolver: nil)
       unless markdown.to_s.include?("[[")
-        return Presentations::MarkdownRenderer.render(markdown, media_resolver: media_resolver)
+        return Source::Renderer.render(markdown, media_resolver: media_resolver)
       end
 
       workspace ||= documents&.first&.workspace || Workspace.default
@@ -27,7 +27,7 @@ module DocumentLinks
         placeholder
       end
 
-      html = Presentations::MarkdownRenderer.render(annotated, media_resolver: media_resolver)
+      html = Source::Renderer.render(annotated, media_resolver: media_resolver)
       replacements.each { |placeholder, replacement| html = html.gsub(placeholder) { replacement } }
       html.html_safe
     end
