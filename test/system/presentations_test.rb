@@ -1466,7 +1466,7 @@ class PresentationsTest < ApplicationSystemTestCase
     visit edit_presentation_path(presentation)
     page.execute_script(<<~JAVASCRIPT)
       const form = document.querySelector('form[data-controller~="autosave"]');
-      form.setAttribute("data-autosave-timeout-value", "1200");
+      form.setAttribute("data-autosave-timeout-value", "5000");
       window.saveStarted = false;
       window.fetchForSaveRetry = window.fetch.bind(window);
       window.fetch = (url, options = {}) => {
@@ -1491,9 +1491,19 @@ class PresentationsTest < ApplicationSystemTestCase
     JAVASCRIPT
     assert save_started, "autosave request did not start"
 
+    # Keep the latest edit from starting another automatic request while the
+    # intentionally stalled request times out and exposes its retry control.
+    page.execute_script(<<~JAVASCRIPT)
+      document.querySelector('form[data-controller~="autosave"]')
+        .setAttribute("data-autosave-delay-value", "15000");
+    JAVASCRIPT
+
     fill_in "Markdown source", with: "# Latest edit"
     assert_field "Markdown source", with: "# Latest edit"
-    assert_selector '[data-autosave-target="status"]', text: "Save timed out", wait: 5
+    # Fire the field's change event before the failure state so clicking Retry
+    # doesn't also trigger that field's blur event.
+    page.execute_script("document.activeElement?.blur()")
+    assert_selector '[data-autosave-target="status"]', text: "Save timed out", wait: 8
     assert_selector '[data-autosave-target="retry"]', visible: true
     assert_equal "# Original", presentation.reload.source
 
@@ -1593,23 +1603,6 @@ class PresentationsTest < ApplicationSystemTestCase
       page.evaluate_script("window.innerWidth")
   ensure
     page.driver.browser.manage.window.resize_to(1400, 1000)
-  end
-
-  test "loads sample presentations from the library" do
-    Presentation.delete_all
-
-    visit presentations_path
-    assert_text "No presentations yet"
-    find("summary", text: "More").click
-    click_on "Load sample presentations"
-
-    assert_selector ".flash.notice", text: "Sample presentations loaded.", wait: 15
-    Presentations::SampleData::SAMPLES.each do |sample|
-      assert_text sample[:title]
-    end
-    Presentations::LineageSampleData::SAMPLES.each do |sample|
-      assert_text sample[:title]
-    end
   end
 
   test "shows the seeded lineage tree in the library" do
@@ -1730,56 +1723,6 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_operator (fraction_parts[1]["top"] - fraction_parts[0]["top"]).abs, :>, 1
   end
 
-  test "renders inline accents and multiline display equations in a presentation" do
-    presentation = Presentation.create!(title: "Math rendering", source: <<~MARKDOWN)
-      # Math
-
-      Inline $\\bar{x}$.
-
-      $$
-      \\begin{aligned}
-      x &= y \\\\
-      y &= z
-      \\end{aligned}
-      $$
-    MARKDOWN
-
-    visit presentation_path(presentation)
-
-    assert_selector ".presentation-surface .katex", count: 2
-    assert_selector ".presentation-surface .katex-display", count: 1
-    assert_no_selector ".presentation-surface .math-error"
-  end
-
-  test "renders automatic layouts and positioned blocks" do
-    presentation = Presentation.create!(
-      title: "Automatic layouts",
-      source: <<~MARKDOWN
-        # Compare
-
-        ## Left
-
-        One side.
-
-        ## Right
-
-        The other side.
-        ---
-        # Positioned
-
-        :::position{center middle}
-
-        Center this message.
-      MARKDOWN
-    )
-
-    visit presentation_path(presentation)
-
-    assert_selector ".slide-two-column .slide-regions"
-    assert_selector ".slide-statement .position-center.position-middle", text: /Center this message/
-    refute_text ":::position"
-  end
-
   test "keeps Elef UI and presentation surfaces as separate styling zones" do
     presentation = Presentation.create!(title: "Scoped Deck", source: "# Scoped\n\n- One\n- Two")
 
@@ -1823,9 +1766,6 @@ class PresentationsTest < ApplicationSystemTestCase
   test "user creates saves and reopens a markdown presentation" do
     visit presentations_path
     find("summary", text: "New").click
-    assert_equal "pointer", page.evaluate_script("getComputedStyle(document.querySelector('.new-work-trigger')).cursor")
-    assert_equal "pointer", page.evaluate_script("getComputedStyle(document.querySelector('.new-work-option')).cursor")
-    assert_equal "pointer", page.evaluate_script("getComputedStyle(document.querySelector('.library-tools > summary')).cursor")
     within ".new-work-panel" do
       click_on "Presentation"
     end

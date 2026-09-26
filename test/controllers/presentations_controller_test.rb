@@ -417,12 +417,20 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
   test "loads sample presentations idempotently and preserves unrelated records" do
     unrelated = Presentation.create!(title: "Personal deck", source: "# Keep me")
 
+    get presentations_path
+    assert_select "form[action='#{load_samples_presentations_path}'] button", text: "Load sample presentations"
+
     expected_seed_records = Presentations::SampleData::SAMPLES.length + Presentations::LineageSampleData::SAMPLES.length
     assert_difference("Presentation.count", expected_seed_records) do
       post load_samples_presentations_path
     end
     assert_redirected_to presentations_path
     assert_equal "Sample presentations loaded.", flash[:notice]
+    follow_redirect!
+    (Presentations::SampleData::SAMPLES + Presentations::LineageSampleData::SAMPLES).each do |sample|
+      assert_select ".library-card-title", text: sample[:title]
+    end
+
     Presentations::SampleData::SAMPLES.each do |sample|
       assert_equal sample[:source], Presentation.find_by!(sample_id: sample[:id]).reload.source
     end
@@ -510,6 +518,33 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_select 'link[href*="tailwind"]', count: 0
     assert_select 'link[rel="icon"][href="/icon.svg"]'
     assert_select ".presentation-slide", 2
+  end
+
+  test "renders inferred layouts and positioned blocks in the saved preview" do
+    presentation = Presentation.create!(title: "Automatic layouts", source: <<~MARKDOWN)
+      # Compare
+
+      ## Left
+
+      One side.
+
+      ## Right
+
+      The other side.
+      ---
+      # Positioned
+
+      :::position{center middle}
+
+      Center this message.
+    MARKDOWN
+
+    get presentation_path(presentation)
+
+    assert_response :success
+    assert_select ".slide-two-column .slide-regions"
+    assert_select ".slide-statement .position-center.position-middle", text: /Center this message/
+    assert_no_match /:::position/, response.body
   end
 
   test "renders margin metadata and slide count in both views" do
