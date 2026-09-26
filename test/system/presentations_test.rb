@@ -1466,7 +1466,7 @@ class PresentationsTest < ApplicationSystemTestCase
     visit edit_presentation_path(presentation)
     page.execute_script(<<~JAVASCRIPT)
       const form = document.querySelector('form[data-controller~="autosave"]');
-      form.setAttribute("data-autosave-timeout-value", "1200");
+      form.setAttribute("data-autosave-timeout-value", "5000");
       window.saveStarted = false;
       window.fetchForSaveRetry = window.fetch.bind(window);
       window.fetch = (url, options = {}) => {
@@ -1491,9 +1491,19 @@ class PresentationsTest < ApplicationSystemTestCase
     JAVASCRIPT
     assert save_started, "autosave request did not start"
 
+    # Keep the latest edit from starting another automatic request while the
+    # intentionally stalled request times out and exposes its retry control.
+    page.execute_script(<<~JAVASCRIPT)
+      document.querySelector('form[data-controller~="autosave"]')
+        .setAttribute("data-autosave-delay-value", "15000");
+    JAVASCRIPT
+
     fill_in "Markdown source", with: "# Latest edit"
     assert_field "Markdown source", with: "# Latest edit"
-    assert_selector '[data-autosave-target="status"]', text: "Save timed out", wait: 5
+    # Fire the field's change event before the failure state so clicking Retry
+    # doesn't also trigger that field's blur event.
+    page.execute_script("document.activeElement?.blur()")
+    assert_selector '[data-autosave-target="status"]', text: "Save timed out", wait: 8
     assert_selector '[data-autosave-target="retry"]', visible: true
     assert_equal "# Original", presentation.reload.source
 
