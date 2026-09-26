@@ -6,7 +6,11 @@ module Presentations
     module_function
 
     def base_path
-      Rails.env.test? ? Rails.root.join("tmp/storage/presentations") : Rails.root.join("storage/presentations")
+      if Rails.env.test?
+        Rails.root.join("tmp/storage/presentations", Process.pid.to_s)
+      else
+        Rails.root.join("storage/presentations")
+      end
     end
 
     def presentation_dir(presentation)
