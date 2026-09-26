@@ -1,14 +1,14 @@
 require "test_helper"
 
-class PresentationsDocumentRendererTest < ActiveSupport::TestCase
+class SourceBlockRendererTest < ActiveSupport::TestCase
   test "keeps document blocks without valid source regions non-editable" do
     source = "# Heading\n\nBody"
-    editor_map = Presentations::Document.editor_map(source, mode: :document)
+    editor_map = Source::Document.editor_map(source, mode: :document)
     editor_map[:slides].first[:editable_regions].reject! do |region|
       region[:block_id] == editor_map[:slides].first[:blocks].second[:id]
     end
 
-    html = Presentations::DocumentRenderer.render(
+    html = Source::BlockRenderer.render(
       source,
       editable: true,
       editor_map: editor_map,
@@ -29,9 +29,9 @@ class PresentationsDocumentRendererTest < ActiveSupport::TestCase
 
   test "keeps an empty first heading editable and maps a trailing blank paragraph" do
     empty_title_source = "# "
-    empty_title_map = Presentations::Document.editor_map(empty_title_source, mode: :document)
+    empty_title_map = Source::Document.editor_map(empty_title_source, mode: :document)
     empty_title_region = empty_title_map[:editable_regions].first
-    empty_title_html = Presentations::DocumentRenderer.render(
+    empty_title_html = Source::BlockRenderer.render(
       empty_title_source,
       editable: true,
       editor_map: empty_title_map,
@@ -43,8 +43,8 @@ class PresentationsDocumentRendererTest < ActiveSupport::TestCase
     assert_equal empty_title_region[:content_range][:start], empty_title_region[:content_range][:end]
     assert_includes empty_title_html, "<h1><br></h1>"
 
-    trailing_blank_map = Presentations::Document.editor_map("# Heading\n\n", mode: :document)
-    trailing_blank_html = Presentations::DocumentRenderer.render(
+    trailing_blank_map = Source::Document.editor_map("# Heading\n\n", mode: :document)
+    trailing_blank_html = Source::BlockRenderer.render(
       "# Heading\n\n",
       editable: true,
       editor_map: trailing_blank_map,
@@ -56,8 +56,8 @@ class PresentationsDocumentRendererTest < ActiveSupport::TestCase
     assert_includes trailing_blank_html, 'data-editor-empty-block="true"'
 
     internal_blank_source = "# Heading\n\n\n\nBody"
-    internal_blank_map = Presentations::Document.editor_map(internal_blank_source, mode: :document)
-    internal_blank_html = Presentations::DocumentRenderer.render(
+    internal_blank_map = Source::Document.editor_map(internal_blank_source, mode: :document)
+    internal_blank_html = Source::BlockRenderer.render(
       internal_blank_source,
       editable: true,
       editor_map: internal_blank_map,
@@ -72,8 +72,8 @@ class PresentationsDocumentRendererTest < ActiveSupport::TestCase
 
   test "renders empty trailing list and quote lines as editable caret targets" do
     list_source = "# Heading\n\n- First item\n- "
-    list_map = Presentations::Document.editor_map(list_source, mode: :document)
-    list_html = Presentations::DocumentRenderer.render(
+    list_map = Source::Document.editor_map(list_source, mode: :document)
+    list_html = Source::BlockRenderer.render(
       list_source,
       editable: true,
       editor_map: list_map,
@@ -86,8 +86,8 @@ class PresentationsDocumentRendererTest < ActiveSupport::TestCase
     assert_equal ["br"], list_items.last.element_children.map(&:name)
 
     quote_source = "# Heading\n\n> First line\n> "
-    quote_map = Presentations::Document.editor_map(quote_source, mode: :document)
-    quote_html = Presentations::DocumentRenderer.render(
+    quote_map = Source::Document.editor_map(quote_source, mode: :document)
+    quote_html = Source::BlockRenderer.render(
       quote_source,
       editable: true,
       editor_map: quote_map,
@@ -102,7 +102,7 @@ class PresentationsDocumentRendererTest < ActiveSupport::TestCase
 
   test "annotates non-editable document blocks with source line anchors" do
     source = "---\ntheme: dark\n---\n# Title\n\nParagraph content.\n\n- List item"
-    html = Presentations::DocumentRenderer.render(
+    html = Source::BlockRenderer.render(
       source,
       editable: false,
       documents: [],
@@ -120,17 +120,17 @@ class PresentationsDocumentRendererTest < ActiveSupport::TestCase
     Position = Struct.new(:horizontal, :vertical, :vertical_explicit)
 
     pos_default = Position.new("center", "top", false)
-    assert_equal "position-center position-top", Presentations::DocumentRenderer.position_classes(pos_default)
+    assert_equal "position-center position-top", Source::BlockRenderer.position_classes(pos_default)
 
     pos_staged = Position.new("center", "middle", true)
-    assert_equal "position-center position-middle position-vertical", Presentations::DocumentRenderer.position_classes(pos_staged)
+    assert_equal "position-center position-middle position-vertical", Source::BlockRenderer.position_classes(pos_staged)
 
-    assert_equal "", Presentations::DocumentRenderer.position_classes(nil)
+    assert_equal "", Source::BlockRenderer.position_classes(nil)
   end
 
   test "maps document position metadata to its content block in the editable preview" do
     source = "# Alignment\n\nLeft block\n\n:::position{center}\n\nCentered block\n\n:::position{right}\n\nRight block"
-    editor_map = Presentations::Document.editor_map(source, mode: :document)
+    editor_map = Source::Document.editor_map(source, mode: :document)
     slide = editor_map[:slides].first
     blocks = slide[:blocks].reject { |block| block[:empty_placeholder] }
     centered = blocks.find { |block| block[:markdown] == "Centered block" }
@@ -140,7 +140,7 @@ class PresentationsDocumentRendererTest < ActiveSupport::TestCase
     assert_equal source.index("Centered block"), centered[:range][:start]
     assert_equal source.index(":::position{center}"), centered_directive[:range][:start]
 
-    html = Presentations::DocumentRenderer.render(
+    html = Source::BlockRenderer.render(
       source,
       editable: true,
       editor_map: editor_map,
@@ -150,14 +150,17 @@ class PresentationsDocumentRendererTest < ActiveSupport::TestCase
     fragment = Nokogiri::HTML.fragment(html)
     centered_element = fragment.css(".document-editor-block").find { |block| block.text.include?("Centered block") }
     centered_control = fragment.css("[data-visual-editor-block-id]").find { |control| control["data-visual-editor-block-id"] == centered[:id] }
+    left_block = blocks.find { |block| block[:markdown] == "Left block" }
+    left_control = fragment.css("[data-visual-editor-block-id]").find { |control| control["data-visual-editor-block-id"] == left_block[:id] }
 
     assert_includes centered_element["class"], "position-center"
     assert_equal "center", centered_control.at_css("option[selected]")["value"]
+    assert_equal "", left_control.at_css("option[selected]")["value"]
     refute_includes html, ":::position"
   end
 
   test "validates editable mapping boundary conditions" do
-    renderer = Presentations::DocumentRenderer
+    renderer = Source::BlockRenderer
     region = { id: 1, block_id: "b1", editable: true, content_range: { start: 0, end: 10 } }
     mapped = { id: "b1", markdown: "hello", editable_region_id: 1 }
 
@@ -186,7 +189,7 @@ class PresentationsDocumentRendererTest < ActiveSupport::TestCase
   test "wraps editable media in figure and caption" do
     rendered = '<img src="/pic.png" alt="Alt text">'
     markdown = '![Alt text](/pic.png)'
-    html = Presentations::DocumentRenderer.editable_media(rendered, markdown)
+    html = Source::BlockRenderer.editable_media(rendered, markdown)
 
     assert_includes html, '<figure class="editor-media">'
     assert_includes html, '<figcaption class="editor-media-caption" aria-label="Editable image alt text" title="Edit image alt text">Alt text</figcaption>'

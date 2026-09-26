@@ -149,8 +149,10 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     digest = Digest::SHA256.hexdigest(bytes)
     assert_equal digest, response.parsed_body["digest"]
     assert_equal "![Pixel](elef-asset:#{digest} \"fit:cover\")", response.parsed_body["source"]
+    assert_equal presentation.reload.lock_version, response.parsed_body["lock_version"]
     blob = presentation.assets.blobs.last
     assert_equal digest, blob.metadata["elef_sha256"]
+    assert blob.analyzed?
 
     presentation.reload.update!(source: "# Pixel\n\n#{response.parsed_body["source"]}")
     get presentation_path(presentation)

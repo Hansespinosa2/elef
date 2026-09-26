@@ -148,7 +148,7 @@ class PptxExportTest < ApplicationSystemTestCase
 
   def assert_pptx_visual_contract(bytes, presentation, fixture_id, expected_heading_geometries)
     slide_models = presentation.slides
-    title = Presentations::Document.extract_first_h1(presentation.source)
+    title = Source::Document.extract_first_h1(presentation.source)
     expected_background = EXPECTED_BACKGROUNDS.fetch(presentation.theme)
 
     Zip::File.open_buffer(StringIO.new(bytes)) do |archive|

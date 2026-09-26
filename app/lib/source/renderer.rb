@@ -5,7 +5,7 @@ require "katex"
 require "cgi"
 require "securerandom"
 
-module Presentations
+module Source
   class HtmlRenderer < Redcarpet::Render::HTML
     include Rouge::Plugins::Redcarpet
 
@@ -69,7 +69,7 @@ module Presentations
     end
   end
 
-  module MarkdownRenderer
+  module Renderer
     module_function
 
     def render(markdown, media_resolver: nil)

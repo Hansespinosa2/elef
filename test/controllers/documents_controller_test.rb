@@ -36,6 +36,19 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to documents_path
   end
 
+  test "new document uses an available untitled heading" do
+    Document.create!(source: Document::DEFAULT_SOURCE)
+
+    get new_document_path
+    assert_response :success
+    assert_select ".document-editor-block h1", "Untitled document 2"
+
+    assert_difference("Document.count") do
+      post documents_path, params: { document: { source: Document.available_default_source } }, as: :json
+    end
+    assert_response :created
+  end
+
   test "uploads and serves image assets for documents" do
     document = Document.create!(title: "Document media", source: "# Media")
     bytes = Base64.decode64("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+i9MwAAAAASUVORK5CYII=")
@@ -51,6 +64,8 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
     digest = Digest::SHA256.hexdigest(bytes)
     assert_equal digest, response.parsed_body["digest"]
     assert_equal "![Pixel](elef-asset:#{digest} \"fit:contain\")", response.parsed_body["source"]
+    assert_equal document.reload.lock_version, response.parsed_body["lock_version"]
+    assert document.assets.blobs.last.analyzed?
 
     document.reload.update!(source: "# Media\n\n#{response.parsed_body["source"]}")
     get document_path(document)

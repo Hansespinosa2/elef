@@ -1,16 +1,16 @@
-module Presentations
-  module DocumentRenderer
+module Source
+  module BlockRenderer
     module_function
 
     def render(source, source_name: "Untitled document", parsed: nil, documents: nil, workspace: nil, media_resolver: nil, editable: false, editor_map: nil)
-      parsed ||= Presentations::Document.parse(source.to_s, source_name: source_name, mode: :document)
+      parsed ||= Source::Document.parse(source.to_s, source_name: source_name, mode: :document)
       workspace ||= documents&.first&.workspace || Workspace.default
       documents ||= ::Document.where(workspace: workspace).to_a
       slide = parsed.slides.first
       return "".html_safe unless slide
 
       if editable
-        editor_map ||= Presentations::Document.editor_map(source.to_s.gsub(/\r\n?/, "\n"), source_name: source_name, mode: :document)
+        editor_map ||= Source::Document.editor_map(source.to_s.gsub(/\r\n?/, "\n"), source_name: source_name, mode: :document)
         mapped_blocks = editor_map.dig(:slides, 0, :blocks) || []
         mapped_content_blocks = mapped_blocks.reject { |mapped| mapped[:empty_placeholder] }
         empty_blocks = mapped_blocks.select { |mapped| mapped[:empty_placeholder] }
@@ -93,7 +93,7 @@ module Presentations
     end
 
     def source_anchor_lines(source)
-      front_matter = Presentations::Document.initial_front_matter(source.to_s)
+      front_matter = Source::Document.initial_front_matter(source.to_s)
       body_line = front_matter ? source.to_s[0...front_matter.body_start].to_s.count("\n") + 1 : 1
       lines = source.to_s.lines.each_with_index.filter_map do |line, index|
         next if index + 1 < body_line || line.strip.blank? || line.match?(/\A\s*:::/)
@@ -130,10 +130,13 @@ module Presentations
     def position_control(mapped)
       return "" unless mapped
 
-      horizontal = mapped.dig(:position, :horizontal) || "left"
-      options = %w[left center right].map do |value|
-        selected = value == horizontal ? " selected" : ""
-        %(<option value="#{value}"#{selected}>#{value.titleize}</option>)
+      horizontal = mapped.dig(:position, :horizontal)
+      options = [["Automatic position", "", horizontal.nil?]] + %w[left center right].map do |value|
+        [value.titleize, value, value == horizontal]
+      end
+      options = options.map do |label, value, selected|
+        selected = selected ? " selected" : ""
+        %(<option value="#{value}"#{selected}>#{ERB::Util.html_escape(label)}</option>)
       end.join
 
       %(<label class="document-block-position-control">Align <select aria-label="Block alignment" data-visual-editor-block-id="#{ERB::Util.html_escape(mapped[:id].to_s)}" data-action="change->visual-editor#positionChanged">#{options}</select></label>)

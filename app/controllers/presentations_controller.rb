@@ -149,13 +149,13 @@ class PresentationsController < ApplicationController
         blob_id = asset["id"] || asset[:id]
         candidate = ActiveStorage::Blob.find_by(id: blob_id) if blob_id
         candidate && candidate.key == (asset["key"] || asset[:key]) &&
-          Presentations::MediaAssets.digest(candidate) == params[:digest]
+          WorkAssets.digest(candidate) == params[:digest]
       end
       asset_id = manifest_asset && (manifest_asset["id"] || manifest_asset[:id])
       ActiveStorage::Blob.find_by(id: asset_id) if asset_id
     else
       @presentation.assets.blobs.find do |asset|
-        Presentations::MediaAssets.digest(asset) == params[:digest]
+        WorkAssets.digest(asset) == params[:digest]
       end
     end
     return head :not_found unless blob
@@ -174,8 +174,7 @@ class PresentationsController < ApplicationController
       return render json: { error: "Media files must be 50 MB or smaller." }, status: :unprocessable_content
     end
 
-    @presentation.assets.attach(io: upload, filename: upload.original_filename, content_type: content_type)
-    blob = @presentation.assets.blobs.last
+    blob = WorkAssets.attach_upload(@presentation, upload, content_type: content_type)
     digest = Digest::SHA256.hexdigest(blob.download)
     blob.update!(metadata: blob.metadata.merge("elef_sha256" => digest))
     @presentation.reload
@@ -184,7 +183,7 @@ class PresentationsController < ApplicationController
       digest: digest,
       lock_version: @presentation.lock_version,
       revision_token: @presentation.revision_token,
-      source: Presentations::MediaAssets.markdown_source(
+      source: WorkAssets.markdown_source(
         digest,
         alt: params[:alt].presence || File.basename(upload.original_filename, ".*"),
         fit: %w[contain cover].include?(params[:fit]) ? params[:fit] : "contain"
@@ -193,7 +192,7 @@ class PresentationsController < ApplicationController
   end
 
   def media_asset
-    blob = Presentations::MediaAssets.resolve_blob(@presentation, params[:digest])
+    blob = WorkAssets.resolve_blob(@presentation, params[:digest])
     return head :not_found unless blob
 
     response.headers["Cache-Control"] = "private, max-age=3600"

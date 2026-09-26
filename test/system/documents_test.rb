@@ -578,6 +578,51 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: "# Navigation\n\nFirst block\n\nThird block", wait: 5
   end
 
+  test "hitting enter at the end of a block and deleting the empty block preserves surrounding blocks" do
+    %w[Delete Backspace].each do |key|
+      sample = Documents::SampleData::SAMPLES.find { |s| s[:id] == "document-full-report" }
+      document = Document.create!(title: "#{sample[:title]} #{key}", source: sample[:source])
+      visit edit_document_path(document)
+      wait_for_fresh_projection
+
+      first_block = find(".document-editor-block", text: /This report examines a simple proposition/)
+      first_block_id = first_block["data-editor-block-id"]
+      assert first_block_id
+      before = find_field("Markdown source").value
+
+      # Hit Enter at the end of the block
+      created = page.execute_script(<<~JAVASCRIPT, first_block)
+        const block = arguments[0];
+        block.focus({ preventScroll: true });
+        const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+        let lastTextNode = null;
+        while (walker.nextNode()) {
+          lastTextNode = walker.currentNode;
+        }
+        window.getSelection().setPosition(lastTextNode, lastTextNode.textContent.length);
+        const enterEvent = new KeyboardEvent("keydown", { key: "Enter", code: "Enter", bubbles: true, cancelable: true });
+        block.dispatchEvent(enterEvent);
+        return enterEvent.defaultPrevented;
+      JAVASCRIPT
+      assert_equal true, created
+
+      # Wait for the source to reflect the split (extra blank line), then for the preview to re-render
+      assert_no_field "Markdown source", with: before, wait: 5
+      wait_for_fresh_projection
+
+      # The empty placeholder block should now be focused
+      empty_block = active_document_block
+      assert_equal "true", empty_block["data-editor-empty-block"]
+
+      # Press Delete or Backspace on the empty block
+      empty_block.send_keys(key == "Delete" ? :delete : :backspace)
+
+      # The Markdown source should be back to the original source without collapsing paragraphs
+      assert_field "Markdown source", with: before, wait: 5
+      assert_equal first_block_id, active_document_block["data-editor-block-id"]
+    end
+  end
+
   test "visual edits preserve soft line breaks around inline math" do
     source = <<~MARKDOWN
       # Notes
@@ -883,7 +928,9 @@ class DocumentsTest < ApplicationSystemTestCase
     media_file.write(Base64.decode64("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+i9MwAAAAASUVORK5CYII="))
     media_file.flush
 
-    page.execute_script("const editor = document.querySelector('.source-field').editorController; editor.setSelectionRange(editor.value.length);")
+    page.execute_script("window.mediaPickerClicks = 0; document.querySelector('[data-media-target=input]').click = () => { window.mediaPickerClicks++ }")
+    click_on "Add image"
+    assert_equal 1, page.evaluate_script("window.mediaPickerClicks")
     page.execute_script("document.querySelector('[data-media-target=input]').hidden = false")
     find('[data-media-target="input"]').set(media_file.path)
 
@@ -897,6 +944,7 @@ class DocumentsTest < ApplicationSystemTestCase
     document = Document.order(:id).last
     assert document.assets.attached?
     assert_selector '[data-autosave-target="status"]', exact_text: "Saved", wait: 8
+    assert_includes document.reload.source, "elef-asset:"
   ensure
     media_file&.close!
   end
@@ -1365,6 +1413,19 @@ class DocumentsTest < ApplicationSystemTestCase
     visit edit_document_path(document)
     wait_for_fresh_projection
 
+    left = find(".document-editor-block", text: "Left block")
+    left_id = left["data-editor-block-id"]
+    left.find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
+    find("[data-visual-editor-block-id='#{left_id}']").select("Right")
+
+    assert_field "Markdown source", with: /:::position\{right\}\n\nLeft block/, wait: 5
+    right_aligned = find(".document-editor-block.position-right", text: "Left block", wait: 5)
+    assert_equal left_id, right_aligned["data-editor-block-id"]
+    assert_equal left_id, page.evaluate_script("document.activeElement?.dataset.editorBlockId")
+    assert_equal "right", page.evaluate_script("getComputedStyle(arguments[0]).textAlign", right_aligned)
+    type_visual_text(".document-editor-block", "Left block", "Updated left block")
+    assert_field "Markdown source", with: /:::position\{right\}\n\nUpdated left block/, wait: 5
+
     centered = find(".document-editor-block", text: "Centered block")
     assert_includes centered["class"], "position-center"
     assert_equal "center", page.evaluate_script("getComputedStyle(arguments[0]).textAlign", centered)
@@ -1381,18 +1442,24 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: /:::position\{left middle\}/, wait: 5
     left_aligned = find(".document-editor-block.position-left", text: "Centered block", wait: 5)
     assert_equal "left", page.evaluate_script("getComputedStyle(arguments[0]).textAlign", left_aligned)
+    centered_id = left_aligned["data-editor-block-id"]
+    left_aligned.find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
+    find("[data-visual-editor-block-id='#{centered_id}']").select("Automatic position")
+    wait_for_fresh_projection
+    refute_match(/:::position\{left middle\}/, find_field("Markdown source").value)
+    assert_equal "", find("[data-visual-editor-block-id='#{centered_id}']").value
 
     click_on "Source"
-    assert_field "Markdown source", with: /:::position\{left middle\}/
+    assert_field "Markdown source", with: /:::position\{right\}\n\nUpdated left block/
     click_on "Visual"
     wait_for_fresh_projection
 
     centered = find(".document-editor-block", text: "Centered block")
-    assert_includes centered["class"], "position-left"
+    refute_includes centered["class"], "position-left"
     centered.find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
-    assert_equal "left", find("[data-visual-editor-block-id='#{centered['data-editor-block-id']}']")["value"]
+    assert_equal "", find("[data-visual-editor-block-id='#{centered['data-editor-block-id']}']").value
     type_visual_text(".document-editor-block", "Centered block", "Updated centered block")
-    assert_field "Markdown source", with: /:::position\{left middle\}\n\nUpdated centered block/, wait: 5
+    assert_field "Markdown source", with: /:::position\{right\}\n\nUpdated left block\n\nUpdated centered block/, wait: 5
     refute_includes find(".editor-projection").text, ":::position"
   end
 
@@ -1417,6 +1484,31 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_equal true, removed
     assert_field "Markdown source", with: "# Keep\n\nTail", wait: 5
     refute_selector ".document-editor-block.position-center", text: "Tail"
+  end
+
+  test "deleting a single block in a grouped position removes its opening and closing directives" do
+    source = "# Keep\n\n:::position{center}\n\nDelete me\n\n:::\n\nTail"
+    map = Source::Document.editor_map(source, mode: :document)
+    positioned = map[:slides].first[:blocks].find { |candidate| candidate[:markdown] == "Delete me" }
+    assert_equal "group", positioned[:position_scope]
+
+    document = Document.create!(title: "Delete grouped position", source: source)
+    visit edit_document_path(document)
+
+    block = find(".document-editor-block", text: "Delete me")
+    removed = page.execute_script(<<~JAVASCRIPT, block)
+      const block = arguments[0];
+      block.innerHTML = "<p><br></p>";
+      block.focus({ preventScroll: true });
+      window.getSelection().setPosition(block.querySelector("p"), 0);
+      const event = new KeyboardEvent("keydown", { key: "Backspace", bubbles: true, cancelable: true });
+      block.dispatchEvent(event);
+      return event.defaultPrevented;
+    JAVASCRIPT
+
+    assert_equal true, removed
+    assert_field "Markdown source", with: "# Keep\n\nTail", wait: 5
+    refute_includes find_field("Markdown source").value, ":::"
   end
 
   test "maintains standard aspect ratio and fixed text wrapping across viewports" do

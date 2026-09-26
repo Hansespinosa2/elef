@@ -56,10 +56,6 @@ export default class extends Controller {
     if (this.element.visualEditorController === this) delete this.element.visualEditorController
   }
 
-  modeChanged(event) {
-    this.applyMode(event.detail.mode)
-  }
-
   applyMode(mode) {
     const visual = mode !== "source"
     this.element.dataset.editorMode = visual ? "visual" : "source"
@@ -206,6 +202,15 @@ export default class extends Controller {
     if (visibleOffset !== null) this.lastProjectionCaret = { blockId: block.dataset.editorBlockId, visibleOffset }
   }
 
+  blockMarkdown(blockElement, region, block, source) {
+    const { start, end } = region.content_range
+    const sourceMarkdown = source.slice(start, end)
+    const visibleMarkdown = block.empty_placeholder ? this.editableText(blockElement, region.kind, sourceMarkdown) : ""
+    const markdown = block.empty_placeholder && sourceMarkdown === "" ? visibleMarkdown : sourceMarkdown
+    const kind = this.currentBlockKind(markdown, this.currentBlockKind(visibleMarkdown, region.kind))
+    return { markdown, kind, start, end }
+  }
+
   blockKeydown(event) {
     if (moveCaretBetweenBlocks(event, this.projectionTarget)) return
     if (!["Backspace", "Delete"].includes(event.key)) return
@@ -225,6 +230,12 @@ export default class extends Controller {
     event.preventDefault()
     this.flushPendingProjectionEdits()
     const source = this.editorController.value
+    const { markdown, kind } = this.blockMarkdown(blockElement, region, block, source)
+
+    if (this.removeEmptyBlock(blockElement, block, region, kind, markdown, source)) {
+      return
+    }
+
     const { from, to } = this.blockSourceRange(block)
     const updated = removeEmptyBlockSource(source, from, to)
     if (updated === source) return
@@ -272,6 +283,7 @@ export default class extends Controller {
   }
 
   projectionKeydown(event) {
+    if (event.defaultPrevented) return
     if (this.kindValue !== "document" || event.isComposing || event.altKey || event.ctrlKey || event.metaKey) return
 
     const blockElement = event.target.closest?.(".document-editor-block[data-editor-block-id]")
@@ -283,15 +295,11 @@ export default class extends Controller {
     if (!block || !region) return
 
     const source = this.editorController.value
-    const { start, end } = region.content_range
-    const sourceMarkdown = source.slice(start, end)
-    const visibleMarkdown = block.empty_placeholder ? this.editableText(blockElement, region.kind, sourceMarkdown) : ""
-    const markdown = block.empty_placeholder && sourceMarkdown === "" ? visibleMarkdown : sourceMarkdown
-    const kind = this.currentBlockKind(markdown, this.currentBlockKind(visibleMarkdown, region.kind))
+    const { markdown, kind, start, end } = this.blockMarkdown(blockElement, region, block, source)
     const emptyListItem = kind === "list" && this.hasEmptyTrailingMarker(markdown, "list")
     const emptyQuoteLine = kind === "quote" && this.hasEmptyTrailingMarker(markdown, "quote")
 
-    if (event.key === "Backspace") {
+    if (["Backspace", "Delete"].includes(event.key)) {
       if (region.role === "title" && markdown.trim() === "") {
         event.preventDefault()
         return
@@ -334,15 +342,54 @@ export default class extends Controller {
     this.flushPendingProjectionEdits()
     const blockId = control.dataset.visualEditorBlockId
     const block = this.map?.slides?.flatMap((slide) => slide.blocks || []).find((candidate) => candidate.id === blockId)
-    if (!block || !["left", "center", "right"].includes(control.value)) return
-
-    const horizontal = control.value
-    if ((block.position?.horizontal || "left") === horizontal) return
+    if (!block || !["", "left", "center", "right"].includes(control.value)) return
 
     const source = this.editorController.value
     const slide = this.map.slides.find((candidate) => candidate.blocks?.some((item) => item.id === block.id))
     const directive = slide?.directives?.find((candidate) => candidate.id === block.position_directive_id)
+    if (!slide) return
+
+    const horizontal = control.value
+    if (!horizontal) {
+      if (!directive) return
+
+      const directiveIndex = slide.directives.findIndex((candidate) => candidate.id === directive.id)
+      const ranges = [directive.range]
+      if (block.position_scope === "group") {
+        const closing = slide.directives.slice(directiveIndex + 1).find((candidate) => candidate.type === "position_close")
+        if (closing) ranges.push(closing.range)
+      }
+
+      const caret = this.captureCaret()
+      const region = this.regionForBlock(block.id)
+      let sourceOffset = caret?.blockId === block.id
+        ? caret.sourceOffset
+        : (region?.content_range.start ?? block.range.start)
+      let updated = source
+      ranges.sort((left, right) => right.start - left.start).forEach((range) => {
+        const before = updated.slice(0, range.start)
+        let after = updated.slice(range.end)
+        if (before.endsWith("\n\n") && after.startsWith("\n")) after = after.slice(1)
+        const next = `${before}${after}`
+        if (range.start < sourceOffset) sourceOffset += next.length - updated.length
+        this.shiftMapAfterEdit(range.start, range.end, 0)
+        updated = next
+      })
+
+      if (updated === source) return
+      this.pendingCaretRestore = { sourceOffset, preferredBlockId: block.id }
+      this.editorController.replaceRange(updated, 0, source.length)
+      return
+    }
+
+    if (!["left", "center", "right"].includes(horizontal)) return
+    if ((block.position?.horizontal || "left") === horizontal) return
+
     const caret = this.captureCaret()
+    const region = this.regionForBlock(block.id)
+    const sourceOffset = caret?.blockId === block.id
+      ? caret.sourceOffset
+      : (region?.content_range.start ?? block.range.start)
     let from
     let to
     let replacement
@@ -360,11 +407,9 @@ export default class extends Controller {
     }
 
     const delta = replacement.length - (to - from)
-    if (caret) {
-      this.pendingCaretRestore = {
-        sourceOffset: caret.sourceOffset >= to ? caret.sourceOffset + delta : caret.sourceOffset,
-        preferredBlockId: caret.blockId
-      }
+    this.pendingCaretRestore = {
+      sourceOffset: sourceOffset >= to ? sourceOffset + delta : sourceOffset,
+      preferredBlockId: block.id
     }
     this.shiftMapAfterEdit(from, to, replacement.length, directive ? null : block.id)
     if (!directive) {

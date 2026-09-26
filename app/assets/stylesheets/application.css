@@ -148,6 +148,8 @@ body.elef-app {
 .visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface { display: block; height: min(12rem, 30vh); min-height: 8rem; opacity: 1; }
 .visual-editor-form[data-editor-mode="visual"] .source-field.is-source-hidden .editor-surface { display: block; }
 .visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface { clip-path: inset(0); height: var(--editor-surface-height, 3.4rem); left: 0; min-height: 0; pointer-events: auto; position: absolute; right: 0; top: var(--editor-toolbar-height, 2.4rem); z-index: 6; }
+.visual-editor-form[data-editor-mode="visual"] .media-editor-controls { pointer-events: none; position: relative; z-index: 7; }
+.visual-editor-form[data-editor-mode="visual"] .media-editor-controls > * { pointer-events: auto; }
 .visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-editor { min-height: 0; }
 .visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-editor,
 .visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-scroller,
@@ -197,8 +199,8 @@ body.elef-app {
 .document-editor-block:focus { outline-width: 2px; }
 .document-editor-block-shell { position: relative; width: 100%; }
 .document-editor-block.position-left { text-align: left; }
-.document-editor-block.position-center { align-self: center; text-align: center; }
-.document-editor-block.position-right { align-self: flex-end; text-align: right; }
+.document-editor-block.position-center { text-align: center; }
+.document-editor-block.position-right { text-align: right; }
 .document-block-position-control { align-items: center; background: rgba(24, 33, 38, 0.94); border: 1px solid rgba(48, 64, 71, 0.9); border-radius: 999px; color: #e9eee9; display: flex; font-size: 0.68rem; font-weight: 700; gap: 0.35rem; opacity: 0; padding: 0.25rem 0.4rem 0.25rem 0.55rem; pointer-events: none; position: absolute; right: 0.25rem; top: 0.15rem; transition: opacity 120ms ease; z-index: 4; }
 .document-editor-block-shell:hover .document-block-position-control,
 .document-editor-block-shell:focus-within .document-block-position-control,
