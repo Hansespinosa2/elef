@@ -1022,8 +1022,9 @@ body.elef-app {
 .library-preview-stage > .slide { left: 0; position: absolute; top: 0; }
 .library-preview > .library-preview-page {
   left: 50%; position: absolute; top: 50%;
-  transform: translate(-50%, -50%) scale(var(--slide-scale, 1)); width: 52rem;
+  height: 1123px; transform: translate(-50%, -50%) scale(var(--slide-scale, 1)); width: 794px;
 }
+.library-preview .document-surface > .document-page-frame:not(:first-child) { left: -100000px; margin: 0; position: absolute; top: 0; visibility: hidden; }
 .library-card-open { border-radius: 0.55rem; inset: 0; position: absolute; z-index: 1; }
 .library-card-open:hover, .library-card-open:focus-visible { box-shadow: 0 0 0 3px var(--oradia-green); }
 .library-card-controls { display: flex; inset: 0; justify-content: space-between; padding: 0.55rem; pointer-events: none; position: absolute; z-index: 2; }
@@ -1095,44 +1096,44 @@ body.elef-app {
 .library-tab:hover, .library-tab.is-active { background: var(--oradia-slate-800); color: var(--oradia-ink); }
 .preview-warnings { margin-bottom: 1rem; }
 .preview-warnings[hidden] { display: none; }
-.document-reader { container-type: inline-size; width: 100%; }
-.document-surface { background: linear-gradient(135deg, var(--oradia-paper-bright), var(--oradia-paper)); border: 1px solid var(--oradia-paper-line); border-radius: 0.75rem; box-shadow: 0 24px 60px rgba(35, 29, 20, 0.08); color: var(--oradia-paper-ink); font-family: var(--oradia-sans); padding: clamp(1.5rem, 5vw, 5rem); }
-.document-surface.is-paginated { background: transparent; border: 0; box-shadow: none; display: grid; gap: clamp(1rem, 2vw, 1.5rem); padding: 0; }
+.document-reader { width: 100%; }
+.document-surface { color: var(--oradia-paper-ink); font-family: var(--oradia-sans); }
+.document-surface.is-paginated { background: transparent; border: 0; box-shadow: none; display: grid; gap: 24px; padding: 0; }
 .document-surface h1, .document-surface h2, .document-surface h3, .document-surface h4, .document-surface h5, .document-surface h6 { color: var(--oradia-paper-ink); font-family: var(--oradia-serif); letter-spacing: -0.025em; margin-top: 0; }
-.document-surface h1 { font-size: clamp(2.5rem, 4.5vw, 4rem); line-height: 1.05; margin-bottom: 1.5rem; }
-.document-surface h2 { font-size: clamp(1.85rem, 3vw, 2.5rem); line-height: 1.15; margin-bottom: 1rem; margin-top: 2.75rem; }
-.document-surface h3 { font-size: clamp(1.4rem, 2.25vw, 1.85rem); line-height: 1.2; margin-bottom: 0.75rem; margin-top: 2rem; }
-.document-surface h4, .document-surface h5, .document-surface h6 { font-size: clamp(1.15rem, 1.8vw, 1.45rem); line-height: 1.25; margin-bottom: 0.6rem; margin-top: 1.5rem; }
-.document-surface p, .document-surface li, .document-surface blockquote, .document-surface td, .document-surface th { font-size: clamp(1rem, 1.15vw, 1.18rem); line-height: 1.65; }
-.document-surface p { margin-bottom: 1.1rem; }
+.document-surface h1 { font-size: 48px; line-height: 1.05; margin-bottom: 24px; }
+.document-surface h2 { font-size: 32px; line-height: 1.15; margin-bottom: 16px; margin-top: 40px; }
+.document-surface h3 { font-size: 25px; line-height: 1.2; margin-bottom: 12px; margin-top: 30px; }
+.document-surface h4, .document-surface h5, .document-surface h6 { font-size: 20px; line-height: 1.25; margin-bottom: 10px; margin-top: 24px; }
+.document-surface p, .document-surface li, .document-surface blockquote, .document-surface td, .document-surface th { font-size: 18px; line-height: 1.6; }
+.document-surface p { margin-bottom: 18px; }
 .document-surface > :first-child, .document-page-content > :first-child { margin-top: 0; }
 .document-surface > :last-child, .document-page-content > :last-child { margin-bottom: 0; }
 .document-surface ul { list-style: disc; padding-left: 1.5em; }
 .document-surface ol { list-style: decimal; padding-left: 1.5em; }
-.document-surface blockquote { border-left: 0.25rem solid var(--oradia-green-deep); color: var(--oradia-paper-muted); margin: 1.75rem 0; padding: 0.25rem 0 0.25rem 1.25rem; }
-.document-surface hr { border: 0; border-top: 1px solid var(--presentation-line); margin: 2rem 0; }
+.document-surface blockquote { border-left: 4px solid var(--oradia-green-deep); color: var(--oradia-paper-muted); margin: 28px 0; padding: 4px 0 4px 20px; }
+.document-surface hr { border: 0; border-top: 1px solid var(--presentation-line); margin: 30px 0; }
 .document-block { width: 100%; }
 .document-block.position-left { text-align: left; }
 .document-block.position-center { align-self: center; text-align: center; }
 .document-block.position-right { align-self: flex-end; text-align: right; }
-.document-block.position-vertical { display: flex; flex-direction: column; min-height: clamp(12rem, 35vh, 28rem); }
+.document-block.position-vertical { display: flex; flex-direction: column; min-height: 320px; }
 .document-block.position-top { justify-content: flex-start; }
 .document-block.position-middle { justify-content: center; }
 .document-block.position-bottom { justify-content: flex-end; }
-.document-surface pre { background: #191714; border: 1px solid rgba(255, 247, 232, 0.12); border-radius: 0.75rem; color: #fff7e8; font-size: 0.92em; line-height: 1.5; margin: 1.25rem 0; max-width: 100%; overflow: auto; padding: 1rem; }
+.document-surface pre { background: #191714; border: 1px solid rgba(255, 247, 232, 0.12); border-radius: 0.75rem; color: #fff7e8; font-size: 16px; line-height: 1.5; margin: 20px 0; max-height: 850px; max-width: 100%; overflow: auto; padding: 16px; }
 .document-surface pre code { display: block; font-family: var(--oradia-mono); min-width: max-content; }
 .document-surface code { font-family: var(--oradia-mono); }
 .document-surface table { border-collapse: collapse; max-width: 100%; width: 100%; }
 .document-surface th, .document-surface td { border: 1px solid var(--presentation-line); padding: 0.35rem 0.5rem; }
-.document-surface img { max-width: 100%; }
+.document-surface img { max-height: 850px; max-width: 100%; object-fit: contain; }
 .document-surface a { color: inherit; }
 .document-surface .document-link { color: var(--oradia-green-deep); font-weight: 700; text-decoration: underline; text-decoration-color: #9fc5a988; text-underline-offset: 0.16em; }
 .document-surface .document-link.unresolved { color: var(--presentation-danger); font-weight: 700; text-decoration: underline wavy; text-underline-offset: 0.16em; }
 .document-reader { overflow: hidden; }
-.document-reader.document-theme-dark .document-surface { background: linear-gradient(135deg, var(--oradia-slate-800), var(--oradia-slate-900)); border-color: var(--oradia-slate-700); color: var(--oradia-ink); }
-.document-reader.document-theme-dark .document-surface :is(h1, h2, h3, h4, h5, h6) { color: var(--oradia-ink); }
-.document-reader.document-theme-dark .document-surface blockquote { color: var(--oradia-muted); }
-.document-reader.document-theme-light .document-surface { background: #fffdf8; }
+.document-reader.document-theme-dark .document-page { background: linear-gradient(135deg, var(--oradia-slate-800), var(--oradia-slate-900)); border-color: var(--oradia-slate-700); color: var(--oradia-ink); }
+.document-reader.document-theme-dark .document-surface :is(h1, h2, h3, h4, h5, h6), .document-reader.document-theme-dark .document-page :is(h1, h2, h3, h4, h5, h6) { color: var(--oradia-ink); }
+.document-reader.document-theme-dark .document-page blockquote { color: var(--oradia-muted); }
+.document-reader.document-theme-light .document-page { background: #fffdf8; }
 .document-reader.document-typography-book .document-surface :is(h1, h2, h3, h4, h5, h6) { font-family: var(--oradia-serif); }
 .document-reader.document-typography-modern .document-surface :is(h1, h2, h3, h4, h5, h6) { font-family: Baskerville, "Iowan Old Style", Georgia, serif; font-weight: 600; }
 .document-reader.document-typography-technical .document-surface { font-family: var(--oradia-sans); }
@@ -1145,12 +1146,12 @@ body.elef-app {
 .linked-context { color: var(--oradia-ink); }
 .linked-context .document-link { color: var(--oradia-green); font-weight: 700; }
 .document-page-frame {
-  aspect-ratio: 816 / 1154;
+  aspect-ratio: 210 / 297;
   margin: 0 auto;
   max-width: 100%;
   overflow: hidden;
   position: relative;
-  width: 51rem;
+  width: 794px;
 }
 .document-page-frame > .document-page {
   bottom: auto;
@@ -1167,22 +1168,21 @@ body.elef-app {
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  height: 1154px;
+  height: 297mm;
   margin: 0;
   max-width: none;
   overflow: hidden;
-  padding: 4.5rem;
+  padding: 16mm;
   transform: scale(var(--document-page-scale, 1));
   transform-origin: top left;
-  width: 816px;
+  width: 210mm;
 }
 .document-page-content { box-sizing: border-box; flex: 1 1 auto; min-height: 0; overflow: hidden; width: 100%; }
-.document-page-footer { border-top: 1px solid var(--presentation-line); color: var(--oradia-paper-muted); flex: 0 0 auto; font-size: 0.72rem; letter-spacing: 0.08em; margin-top: 1rem; padding-top: 0.75rem; text-align: right; text-transform: uppercase; }
-.document-page.is-overflowing { height: auto; min-height: 1154px; overflow: visible; }
-.document-page.is-overflowing .document-page-content { overflow: visible; }
+.document-page-footer { border-top: 1px solid var(--presentation-line); color: var(--oradia-paper-muted); flex: 0 0 auto; font-size: 11px; letter-spacing: 0.08em; margin-top: 16px; padding-top: 12px; text-align: right; text-transform: uppercase; }
+.document-page.is-overflowing-content .document-page-content { overflow: auto; }
 
 .document-print { page: document; }
-@page document { size: 8.5in 11in; margin: 0; }
+@page document { size: A4 portrait; margin: 0; }
 @media print {
   html:has(.document-print), body:has(.document-print) { background: white !important; margin: 0 !important; padding: 0 !important; }
   .document-print { background: white !important; color-adjust: exact; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
@@ -1191,23 +1191,23 @@ body.elef-app {
   .document-print-pages .document-page-frame {
     aspect-ratio: auto;
     break-after: page;
-    height: 11in;
+    height: 297mm;
     margin: 0;
     max-width: none;
     overflow: hidden;
     page-break-after: always;
-    width: 8.5in;
+    width: 210mm;
   }
   .document-print-pages .document-page-frame:last-child { break-after: auto; page-break-after: auto; }
   .document-print .document-page {
     border: 0;
     border-radius: 0;
     box-shadow: none;
-    height: 11in;
-    padding: 4.5rem;
+    height: 297mm;
+    padding: 16mm;
     position: static;
     transform: none;
-    width: 8.5in;
+    width: 210mm;
   }
   .document-print .document-page-content { overflow: visible; }
   .document-reader { container-type: normal; }

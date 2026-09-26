@@ -1334,6 +1334,62 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_operator page.evaluate_script("document.documentElement.scrollWidth"), :<=, page.evaluate_script("window.innerWidth")
   end
 
+  test "paginates the visual editor and keeps oversized paragraph edits mapped to one source block" do
+    paragraph = ("Flowing text stays at a fixed size and carries onto the next A4 page. " * 190).strip
+    source = "# A4 flow\n\n#{paragraph}"
+    document = Document.create!(title: "Flowing editor", source: source)
+
+    visit edit_document_path(document)
+
+    assert_selector ".document-editor-projection .document-surface.is-paginated"
+    assert_selector ".document-editor-projection .document-page", minimum: 2, wait: 5
+    fragment_count = page.evaluate_script(<<~JAVASCRIPT)
+      [...document.querySelectorAll('.document-editor-block[data-editor-block-id]')]
+        .filter((block) => block.querySelector('p')?.textContent.includes('Flowing text')).length
+    JAVASCRIPT
+    assert_operator fragment_count, :>=, 2
+    assert_equal paragraph, page.evaluate_script(<<~JAVASCRIPT)
+      [...document.querySelectorAll('.document-editor-block[data-editor-block-id]')]
+        .filter((block) => block.querySelector('p')?.textContent.includes('Flowing text'))
+        .map((block) => block.querySelector('p').textContent)
+        .join('')
+    JAVASCRIPT
+
+    last_fragment = all(".document-editor-block[data-editor-block-id]").last
+    assert_includes last_fragment.text, "next A4 page."
+    last_fragment.click
+    last_fragment.send_keys(:end, " Continued")
+    assert_field "Markdown source", with: source.sub(paragraph, "#{paragraph} Continued"), wait: 5
+
+    last_fragment = all(".document-editor-block[data-editor-block-id]").last
+    assert_includes last_fragment.text, "Continued"
+    last_fragment.send_keys(:end, :enter)
+    assert_field "Markdown source", with: /Continued\n\n\z/, wait: 5
+    active_document_block.send_keys(:backspace)
+    assert_field "Markdown source", with: /Continued\z/, wait: 5
+  end
+
+  test "removes an empty visual block at the beginning without shifting the following page content" do
+    document = Document.create!(title: "Leading empty block", source: "# First page\n\nBody text")
+    visit edit_document_path(document)
+
+    body = find(".document-editor-block", text: "Body text")
+    page.execute_script(<<~JAVASCRIPT, body)
+      const block = arguments[0];
+      const text = block.querySelector('p').firstChild;
+      block.focus({ preventScroll: true });
+      window.getSelection().setPosition(text, 0);
+      block.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    JAVASCRIPT
+    assert_selector ".document-editor-block[data-editor-empty-block='true']", count: 1, wait: 5
+
+    first_empty = find(".document-editor-block[data-editor-empty-block='true']")
+    first_empty.send_keys(:backspace)
+    assert_selector ".document-editor-block", text: "Body text", wait: 5
+    assert_no_selector ".document-editor-block[data-editor-empty-block='true']"
+    assert_includes find_field("Markdown source").value, "Body text"
+  end
+
   test "horizontal-only document positions stay content-sized" do
     document = Document.create!(
       title: "Inline positions",
@@ -1379,20 +1435,24 @@ class DocumentsTest < ApplicationSystemTestCase
         const frame = document.querySelector('.document-page-frame');
         const page = document.querySelector('.document-page');
         const paragraph = page.querySelector('p');
+        const textRange = document.createRange();
+        textRange.selectNodeContents(paragraph);
         const frameRect = frame.getBoundingClientRect();
         return {
           frameAspect: frameRect.width / frameRect.height,
           pageWidth: page.offsetWidth,
           pageHeight: page.offsetHeight,
-          paragraphLines: paragraph.getClientRects().length,
+          paragraphFontSize: Number.parseFloat(getComputedStyle(paragraph).fontSize),
+          paragraphLines: textRange.getClientRects().length,
           paragraphText: paragraph.innerText
         };
       })()
     JAVASCRIPT
 
-    assert_in_delta 816.0 / 1154.0, desktop_measurements["frameAspect"], 0.05
-    assert_equal 816, desktop_measurements["pageWidth"]
-    assert_equal 1154, desktop_measurements["pageHeight"]
+    assert_in_delta 210.0 / 297.0, desktop_measurements["frameAspect"], 0.005
+    assert_equal 794, desktop_measurements["pageWidth"]
+    assert_equal 1123, desktop_measurements["pageHeight"]
+    assert_equal 18, desktop_measurements["paragraphFontSize"]
 
     # Resize to mobile / tablet width (600px)
     page.driver.browser.manage.window.resize_to(600, 900)
@@ -1402,20 +1462,24 @@ class DocumentsTest < ApplicationSystemTestCase
         const frame = document.querySelector('.document-page-frame');
         const page = document.querySelector('.document-page');
         const paragraph = page.querySelector('p');
+        const textRange = document.createRange();
+        textRange.selectNodeContents(paragraph);
         const frameRect = frame.getBoundingClientRect();
         return {
           frameAspect: frameRect.width / frameRect.height,
           pageWidth: page.offsetWidth,
           pageHeight: page.offsetHeight,
-          paragraphLines: paragraph.getClientRects().length,
+          paragraphFontSize: Number.parseFloat(getComputedStyle(paragraph).fontSize),
+          paragraphLines: textRange.getClientRects().length,
           paragraphText: paragraph.innerText
         };
       })()
     JAVASCRIPT
 
-    assert_in_delta 816.0 / 1154.0, mobile_measurements["frameAspect"], 0.05
-    assert_equal 816, mobile_measurements["pageWidth"]
-    assert_equal 1154, mobile_measurements["pageHeight"]
+    assert_in_delta 210.0 / 297.0, mobile_measurements["frameAspect"], 0.005
+    assert_equal 794, mobile_measurements["pageWidth"]
+    assert_equal 1123, mobile_measurements["pageHeight"]
+    assert_equal 18, mobile_measurements["paragraphFontSize"]
     assert_equal desktop_measurements["paragraphLines"], mobile_measurements["paragraphLines"], "Text line count should not re-wrap when scaling"
     assert_equal desktop_measurements["paragraphText"], mobile_measurements["paragraphText"]
   ensure

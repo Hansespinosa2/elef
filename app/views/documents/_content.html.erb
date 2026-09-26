@@ -1,6 +1,6 @@
 <% editable = local_assigns[:editable] || false %>
 <% editor_map = local_assigns[:editor_map] %>
-<div class="document-reader document-theme-<%= document.theme %> document-typography-<%= document.typography %> work-theme-<%= document.theme %> work-typography-<%= document.typography %><%= ' document-editor-projection' if editable %>"<%= raw(' data-controller="document-pages"') unless editable %>>
+<div class="document-reader document-theme-<%= document.theme %> document-typography-<%= document.typography %> work-theme-<%= document.theme %> work-typography-<%= document.typography %><%= ' document-editor-projection' if editable %>" data-controller="document-pages">
   <div class="document-surface" data-document-pages-target="surface">
     <% if editable %>
       <%= Presentations::DocumentRenderer.render(
