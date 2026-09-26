@@ -104,6 +104,11 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
 
     assert_redirected_to documents_path
     assert_equal "Sample documents loaded.", flash[:notice]
+    follow_redirect!
+    assert_select ".document-graph-node", count: Document.count
+    assert_select ".document-graph-node[data-title='Stress: Renderer kitchen sink']"
+    assert_select ".document-graph-node[data-title='Fixture: Graph orphan']"
+
     Documents::SampleData::SAMPLES.each do |sample|
       assert_equal sample[:source], Document.find_by!(sample_id: sample[:id]).reload.source
     end
@@ -114,6 +119,12 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
 
     assert_equal ["Personal notes", "# Keep me"], [unrelated.reload.title, unrelated.source]
     assert_equal expected_seed_records, Document.where.not(sample_id: nil).count
+
+    warning_document = Document.find_by!(sample_id: "document-stress-warnings")
+    get document_path(warning_document)
+    assert_select '[aria-label="Markdown warnings"]', text: /directive/
+    assert_select ".document-link.unresolved", text: "[[Fixture: Missing document]]"
+    assert_select "a[href^='javascript:']", count: 0
   end
 
   test "reports a sample title collision without overwriting the existing document" do
@@ -174,6 +185,11 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
   test "renaming a document preserves incoming links through aliases" do
     target = Document.create!(title: "Old title", source: "# Old title")
     incoming = Document.create!(title: "Incoming", source: "[[Old title]]\n\n`[[Old title]]`\n\n```\n[[Old title]]\n```")
+
+    get documents_path
+    assert_select "##{ActionView::RecordIdentifier.dom_id(target)} form[action='#{rename_document_path(target)}']" do
+      assert_select 'input[name="document[title]"]'
+    end
 
     patch rename_document_path(target), params: { document: { title: "New title" } }
 

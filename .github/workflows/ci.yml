@@ -117,7 +117,7 @@ jobs:
       - name: Run System Tests
         env:
           RAILS_ENV: test
-          PARALLEL_WORKERS: "1"
+          PARALLEL_WORKERS: "2"
           PGHOST: 127.0.0.1
           PGUSER: postgres
           PGPASSWORD: postgres

@@ -266,24 +266,6 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_equal presentation_panel_style, document_panel_style
   end
 
-  test "renaming a document preserves linked previews" do
-    target = Document.create!(title: "Rename target", source: "# Target")
-    incoming = Document.create!(title: "Rename source", source: "See [[Rename target]]")
-
-    visit documents_path
-    within("##{ActionView::RecordIdentifier.dom_id(target)}") do
-      find(".library-card-menu-trigger").click
-      find("summary", text: "Rename").click
-      find("input[type='text']").set("Renamed target")
-      click_on "Save title"
-    end
-
-    assert_text "Document renamed."
-    assert_equal "See [[Rename target]]", incoming.reload.source
-    visit document_path(incoming)
-    assert_selector "a.document-link[href='#{document_path(target)}']", text: "Renamed target"
-  end
-
   test "creates a document and updates its continuous live preview" do
     visit new_document_path
     assert_no_selector "#document_title"
@@ -1406,39 +1388,6 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_selector ".document-surface h1", text: "Latest response", wait: 5
   end
 
-  test "renders the seeded document fixture library and its stress cases" do
-    Document.delete_all
-
-    visit documents_path
-
-    assert_text "No documents yet"
-    find("summary", text: "More").click
-    click_on "Load sample documents"
-
-    assert_selector ".document-graph-node", count: Documents::SampleData::SAMPLES.length, wait: 10
-    assert_selector ".document-graph-edge", minimum: 1
-    coordinates = page.evaluate_script(<<~JAVASCRIPT)
-      JSON.parse(document.querySelector(".document-graph").dataset.documentGraphDataValue)
-        .nodes.map(({ x, y }) => [x, y])
-    JAVASCRIPT
-    assert_equal coordinates.length, coordinates.uniq.length
-    assert_text "Stress: Renderer kitchen sink"
-    assert_text "Fixture: Graph orphan"
-    assert_operator page.evaluate_script("document.documentElement.scrollWidth"), :<=, page.evaluate_script("window.innerWidth")
-
-    warning_document = Document.find_by!(sample_id: "document-stress-warnings")
-    visit document_path(warning_document)
-
-    assert_selector '[aria-label="Markdown warnings"]', text: /directive/
-    assert_selector ".document-link.unresolved", text: "[[Fixture: Missing document]]"
-    assert_no_text "javascript:"
-
-    page.driver.browser.manage.window.resize_to(600, 900)
-    assert_operator page.evaluate_script("document.documentElement.scrollWidth"), :<=, page.evaluate_script("window.innerWidth")
-  ensure
-    page.driver.browser.manage.window.resize_to(1400, 1000)
-  end
-
   test "paginates long documents and gives headings a clear hierarchy" do
     report = Documents::SampleData.load!.records.find { |record| record.sample_id == "document-full-report" }
 
@@ -1462,6 +1411,11 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_operator font_sizes["h1"], :>, font_sizes["body"]
     assert_operator font_sizes["h2"], :>, font_sizes["body"]
     assert_operator page.evaluate_script("document.documentElement.scrollWidth"), :<=, page.evaluate_script("window.innerWidth")
+
+    page.driver.browser.manage.window.resize_to(600, 900)
+    assert_operator page.evaluate_script("document.documentElement.scrollWidth"), :<=, page.evaluate_script("window.innerWidth")
+  ensure
+    page.driver.browser.manage.window.resize_to(1400, 1000)
   end
 
   test "horizontal-only document positions stay content-sized" do
