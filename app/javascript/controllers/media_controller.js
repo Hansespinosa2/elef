@@ -96,7 +96,6 @@ export default class extends Controller {
 
     const form = this.element.closest("form") || this.element
     const kind = this.hasWorkKindValue ? this.workKindValue : "presentation"
-    const collection = kind === "document" ? "documents" : "presentations"
     const fallbackTitle = kind === "document" ? "Untitled document" : "Untitled presentation"
     const title = form.querySelector(`input[name="${kind}[title]"]`)?.value || fallbackTitle
     const source = this.editor?.value || form.querySelector(`textarea[name="${kind}[source]"]`)?.value || ""
@@ -128,8 +127,9 @@ export default class extends Controller {
     const data = await response.json()
     this.enabledValue = true
     this.uploadUrlValue = data.upload_url
+    const workUrl = data.upload_url.replace(/\/assets\/?$/, "")
     if (form) {
-      form.action = `/${collection}/${data.id}`
+      form.action = workUrl
       let methodInput = form.querySelector('input[name="_method"]')
       if (!methodInput) {
         methodInput = document.createElement("input")
@@ -167,7 +167,7 @@ export default class extends Controller {
 
       const previewController = this.application.getControllerForElementAndIdentifier(this.element, "preview")
       if (previewController) {
-        previewController.urlValue = `/${collection}/${data.id}/preview`
+        previewController.urlValue = `${workUrl}/preview`
       }
       const autosaveController = this.application.getControllerForElementAndIdentifier(this.element, "autosave")
       if (autosaveController) {
@@ -176,7 +176,7 @@ export default class extends Controller {
         autosaveController.updateRevisionTokens(data)
       }
     }
-    window.history.replaceState({}, "", data.edit_url || `/${collection}/${data.id}/edit`)
+    window.history.replaceState({}, "", data.edit_url || `${workUrl}/edit`)
     return true
   }
 
