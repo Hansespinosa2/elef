@@ -111,7 +111,7 @@ export default class extends Controller {
     body.append(`${kind}[typography]`, typography)
     body.append("editor_mode", form.querySelector('[name="editor_mode"]')?.value || "visual")
 
-    const response = await fetch(`/${collection}`, {
+    const response = await fetch(form.action, {
       method: "POST",
       headers: {
         Accept: "application/json",

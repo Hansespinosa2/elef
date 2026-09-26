@@ -52,13 +52,12 @@ module Presentations
 
     def resolver_for(work)
       assets_map = nil
-      owner_path = work.document? ? "documents" : "presentations"
       lambda do |identifier|
         assets_map ||= index(work)
         value = identifier.to_s.strip
         cleaned = value.sub(/\Aelef-asset:/, "").sub(/\A\.?\/?assets\//, "").strip
         blob = assets_map[value] || assets_map[cleaned] || assets_map[File.basename(value)]
-        blob && ["/#{owner_path}/#{work.id}/assets/#{digest(blob)}", blob.content_type]
+        blob && [asset_path(work, digest(blob)), blob.content_type]
       end
     end
 
@@ -66,9 +65,25 @@ module Presentations
       blob = resolve_blob(work, identifier)
       return nil unless blob
 
-      sha = digest(blob)
-      owner_path = work.document? ? "documents" : "presentations"
-      ["/#{owner_path}/#{work.id}/assets/#{sha}", blob.content_type]
+      [asset_path(work, digest(blob)), blob.content_type]
+    end
+
+    def asset_path(work, sha)
+      helper = work.document? ? :media_asset_document_path : :media_asset_presentation_path
+      Rails.application.routes.url_helpers.public_send(
+        helper, work, sha, script_name: Rails.application.config.relative_url_root
+      )
+    end
+
+    def attach_upload(work, upload, content_type:)
+      blob = ActiveStorage::Blob.create_and_upload!(
+        io: upload, filename: upload.original_filename, content_type: content_type
+      )
+      # Analysis touches the owning work. Finish it before attachment so the
+      # upload response carries the lock version autosave will actually see.
+      blob.analyze
+      work.assets.attach(blob)
+      blob
     end
 
     def markdown_source(identifier, alt:, fit:)

@@ -2,6 +2,16 @@ class Document < Work
   WORK_TYPE = "document".freeze
   DEFAULT_SOURCE = "# Untitled document".freeze
 
+  def self.available_default_source(workspace: Workspace.default)
+    title = "Untitled document"
+    suffix = 2
+    while exists?(workspace: workspace, title: title)
+      title = "Untitled document #{suffix}"
+      suffix += 1
+    end
+    "# #{title}"
+  end
+
   before_validation :derive_title_from_source, if: -> { persisted? && will_save_change_to_source? }
 
   default_scope { where(kind: WORK_TYPE) }

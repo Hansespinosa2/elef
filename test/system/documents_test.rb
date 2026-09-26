@@ -883,7 +883,9 @@ class DocumentsTest < ApplicationSystemTestCase
     media_file.write(Base64.decode64("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+i9MwAAAAASUVORK5CYII="))
     media_file.flush
 
-    page.execute_script("const editor = document.querySelector('.source-field').editorController; editor.setSelectionRange(editor.value.length);")
+    page.execute_script("window.mediaPickerClicks = 0; document.querySelector('[data-media-target=input]').click = () => { window.mediaPickerClicks++ }")
+    click_on "Add image"
+    assert_equal 1, page.evaluate_script("window.mediaPickerClicks")
     page.execute_script("document.querySelector('[data-media-target=input]').hidden = false")
     find('[data-media-target="input"]').set(media_file.path)
 
@@ -896,6 +898,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
     document = Document.order(:id).last
     assert document.assets.attached?
+    assert_includes document.reload.source, "elef-asset:"
     assert_selector '[data-autosave-target="status"]', exact_text: "Saved", wait: 8
   ensure
     media_file&.close!
