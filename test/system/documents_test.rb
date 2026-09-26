@@ -898,8 +898,8 @@ class DocumentsTest < ApplicationSystemTestCase
 
     document = Document.order(:id).last
     assert document.assets.attached?
-    assert_includes document.reload.source, "elef-asset:"
     assert_selector '[data-autosave-target="status"]', exact_text: "Saved", wait: 8
+    assert_includes document.reload.source, "elef-asset:"
   ensure
     media_file&.close!
   end

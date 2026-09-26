@@ -148,7 +148,8 @@ body.elef-app {
 .visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface { display: block; height: min(12rem, 30vh); min-height: 8rem; opacity: 1; }
 .visual-editor-form[data-editor-mode="visual"] .source-field.is-source-hidden .editor-surface { display: block; }
 .visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface { clip-path: inset(0); height: var(--editor-surface-height, 3.4rem); left: 0; min-height: 0; pointer-events: auto; position: absolute; right: 0; top: var(--editor-toolbar-height, 2.4rem); z-index: 6; }
-.visual-editor-form[data-editor-mode="visual"] .media-editor-controls { position: relative; z-index: 7; }
+.visual-editor-form[data-editor-mode="visual"] .media-editor-controls { pointer-events: none; position: relative; z-index: 7; }
+.visual-editor-form[data-editor-mode="visual"] .media-editor-controls > * { pointer-events: auto; }
 .visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-editor { min-height: 0; }
 .visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-editor,
 .visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-scroller,
