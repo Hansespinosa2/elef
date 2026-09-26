@@ -578,109 +578,49 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: "# Navigation\n\nFirst block\n\nThird block", wait: 5
   end
 
-  test "hitting enter at the end of a block and then delete removes the empty block without collapsing surrounding blocks" do
-    sample = Documents::SampleData::SAMPLES.find { |s| s[:id] == "document-full-report" }
-    document = Document.create!(title: sample[:title], source: sample[:source])
-    visit edit_document_path(document)
-    wait_for_fresh_projection
+  test "hitting enter at the end of a block and deleting the empty block preserves surrounding blocks" do
+    %w[Delete Backspace].each do |key|
+      sample = Documents::SampleData::SAMPLES.find { |s| s[:id] == "document-full-report" }
+      document = Document.create!(title: "#{sample[:title]} #{key}", source: sample[:source])
+      visit edit_document_path(document)
+      wait_for_fresh_projection
 
-    first_block = find(".document-editor-block", text: /This report examines a simple proposition/)
-    assert first_block
-    first_block_id = first_block["data-editor-block-id"]
-    assert first_block_id
+      first_block = find(".document-editor-block", text: /This report examines a simple proposition/)
+      first_block_id = first_block["data-editor-block-id"]
+      assert first_block_id
+      before = find_field("Markdown source").value
 
-    before = find_field("Markdown source").value
+      # Hit Enter at the end of the block
+      created = page.execute_script(<<~JAVASCRIPT, first_block)
+        const block = arguments[0];
+        block.focus({ preventScroll: true });
+        const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+        let lastTextNode = null;
+        while (walker.nextNode()) {
+          lastTextNode = walker.currentNode;
+        }
+        window.getSelection().setPosition(lastTextNode, lastTextNode.textContent.length);
+        const enterEvent = new KeyboardEvent("keydown", { key: "Enter", code: "Enter", bubbles: true, cancelable: true });
+        block.dispatchEvent(enterEvent);
+        return enterEvent.defaultPrevented;
+      JAVASCRIPT
+      assert_equal true, created
 
-    # Hit Enter at the end of the block
-    created = page.execute_script(<<~JAVASCRIPT, first_block)
-      const block = arguments[0];
-      block.focus({ preventScroll: true });
-      const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
-      let lastTextNode = null;
-      while (walker.nextNode()) {
-        lastTextNode = walker.currentNode;
-      }
-      window.getSelection().setPosition(lastTextNode, lastTextNode.textContent.length);
-      const enterEvent = new KeyboardEvent("keydown", { key: "Enter", code: "Enter", bubbles: true, cancelable: true });
-      block.dispatchEvent(enterEvent);
-      return enterEvent.defaultPrevented;
-    JAVASCRIPT
-    assert_equal true, created
+      # Wait for the source to reflect the split (extra blank line), then for the preview to re-render
+      assert_no_field "Markdown source", with: before, wait: 5
+      wait_for_fresh_projection
 
-    # Wait for the source to reflect the split (extra blank line), then for the preview to re-render
-    assert_no_field "Markdown source", with: before, wait: 5
-    wait_for_fresh_projection
+      # The empty placeholder block should now be focused
+      empty_block = active_document_block
+      assert_equal "true", empty_block["data-editor-empty-block"]
 
-    # The empty placeholder block should now be in the DOM
-    empty_block = find(".document-editor-block[data-editor-empty-block='true']", wait: 5)
-    assert empty_block
+      # Press Delete or Backspace on the empty block
+      empty_block.send_keys(key == "Delete" ? :delete : :backspace)
 
-    # Press Delete on the empty block
-    deleted = page.execute_script(<<~JAVASCRIPT, empty_block)
-      const block = arguments[0];
-      block.focus({ preventScroll: true });
-      window.getSelection().setPosition(block, 0);
-      const deleteEvent = new KeyboardEvent("keydown", { key: "Delete", code: "Delete", bubbles: true, cancelable: true });
-      block.dispatchEvent(deleteEvent);
-      return deleteEvent.defaultPrevented;
-    JAVASCRIPT
-    assert_equal true, deleted
-
-    # The Markdown source should be back to the original source without collapsing paragraphs
-    assert_field "Markdown source", with: before, wait: 5
-    assert_equal first_block_id, active_document_block["data-editor-block-id"]
-  end
-
-  test "hitting enter at the end of a block and then backspace removes the empty block without collapsing surrounding blocks" do
-    sample = Documents::SampleData::SAMPLES.find { |s| s[:id] == "document-full-report" }
-    document = Document.create!(title: sample[:title], source: sample[:source])
-    visit edit_document_path(document)
-    wait_for_fresh_projection
-
-    first_block = find(".document-editor-block", text: /This report examines a simple proposition/)
-    assert first_block
-    first_block_id = first_block["data-editor-block-id"]
-    assert first_block_id
-    before = find_field("Markdown source").value
-
-    # Hit Enter at the end of the block
-    created = page.execute_script(<<~JAVASCRIPT, first_block)
-      const block = arguments[0];
-      block.focus({ preventScroll: true });
-      const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
-      let lastTextNode = null;
-      while (walker.nextNode()) {
-        lastTextNode = walker.currentNode;
-      }
-      window.getSelection().setPosition(lastTextNode, lastTextNode.textContent.length);
-      const enterEvent = new KeyboardEvent("keydown", { key: "Enter", code: "Enter", bubbles: true, cancelable: true });
-      block.dispatchEvent(enterEvent);
-      return enterEvent.defaultPrevented;
-    JAVASCRIPT
-    assert_equal true, created
-
-    # Wait for the source to reflect the split (extra blank line), then for the preview to re-render
-    assert_no_field "Markdown source", with: before, wait: 5
-    wait_for_fresh_projection
-
-    # The empty placeholder block should now be in the DOM
-    empty_block = find(".document-editor-block[data-editor-empty-block='true']", wait: 5)
-    assert empty_block
-
-    # Press Backspace on the empty block
-    deleted = page.execute_script(<<~JAVASCRIPT, empty_block)
-      const block = arguments[0];
-      block.focus({ preventScroll: true });
-      window.getSelection().setPosition(block, 0);
-      const backspaceEvent = new KeyboardEvent("keydown", { key: "Backspace", code: "Backspace", bubbles: true, cancelable: true });
-      block.dispatchEvent(backspaceEvent);
-      return backspaceEvent.defaultPrevented;
-    JAVASCRIPT
-    assert_equal true, deleted
-
-    # The Markdown source should be back to the original source without collapsing paragraphs
-    assert_field "Markdown source", with: before, wait: 5
-    assert_equal first_block_id, active_document_block["data-editor-block-id"]
+      # The Markdown source should be back to the original source without collapsing paragraphs
+      assert_field "Markdown source", with: before, wait: 5
+      assert_equal first_block_id, active_document_block["data-editor-block-id"]
+    end
   end
 
   test "visual edits preserve soft line breaks around inline math" do
