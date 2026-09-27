@@ -1,6 +1,8 @@
 Rails.application.routes.draw do
   root "library#index"
 
+  post "bug_reports", to: "bug_reports#create", as: :bug_reports
+
   resource :settings, only: %i[show update], controller: "workspace_settings"
   get "search", to: "library#search", as: :search
 

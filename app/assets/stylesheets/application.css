@@ -382,6 +382,31 @@ body.elef-app {
 .command-palette-trigger:hover, .command-palette-trigger:focus-visible { border-color: var(--oradia-green); color: var(--oradia-ink); }
 .command-palette-trigger kbd { border: 1px solid var(--oradia-slate-700); border-radius: 0.3rem; font-family: var(--oradia-mono); font-size: 0.7rem; margin-left: 0.35rem; padding: 0.1rem 0.3rem; }
 
+/* ── bug reports ── */
+.bug-report-root { align-items: center; display: flex; flex: 0 0 auto; }
+.bug-report-trigger { background: var(--oradia-green-deep); border: 1px solid var(--oradia-green-deep); border-radius: 999px; color: #f5faf5; cursor: pointer; font: inherit; font-size: 0.8rem; font-weight: 800; padding: 0.48rem 0.8rem; }
+.bug-report-trigger:hover, .bug-report-trigger:focus-visible { background: var(--oradia-green); border-color: var(--oradia-green); color: var(--oradia-slate-950); }
+.bug-report-dialog { background: transparent; border: 0; color: var(--oradia-ink); max-height: calc(100dvh - 2rem); max-width: calc(100vw - 2rem); overflow: auto; padding: 0; width: min(44rem, calc(100vw - 2rem)); }
+.bug-report-dialog::backdrop { background: rgba(0, 0, 0, 0.62); backdrop-filter: blur(3px); }
+.bug-report-panel { background: var(--oradia-slate-900); border: 1px solid var(--oradia-slate-700); border-radius: 0.9rem; box-shadow: 0 24px 80px #0008; padding: 1.2rem; }
+.bug-report-heading { align-items: flex-start; display: flex; justify-content: space-between; }
+.bug-report-heading h2 { font-size: 1.35rem; margin: 0; }
+.bug-report-heading .eyebrow { font-size: 0.72rem; margin: 0 0 0.25rem; }
+.bug-report-close { background: transparent; border: 1px solid var(--oradia-slate-700); border-radius: 0.4rem; color: var(--oradia-muted); cursor: pointer; font: inherit; font-size: 1.2rem; line-height: 1; padding: 0.25rem 0.45rem; }
+.bug-report-intro { color: var(--oradia-muted); font-size: 0.88rem; line-height: 1.5; margin: 0.75rem 0 1rem; }
+.bug-report-field { display: grid; gap: 0.4rem; margin-top: 0.9rem; }
+.bug-report-field label { font-size: 0.86rem; font-weight: 800; }
+.bug-report-field textarea { background: var(--oradia-slate-950); border: 1px solid var(--oradia-slate-700); border-radius: 0.55rem; box-sizing: border-box; color: var(--oradia-ink); font: inherit; line-height: 1.45; padding: 0.65rem 0.75rem; resize: vertical; width: 100%; }
+.bug-report-field textarea:focus { border-color: var(--oradia-green); box-shadow: 0 0 0 3px rgba(159, 197, 169, 0.18); outline: none; }
+.bug-report-actions { display: flex; flex-wrap: wrap; gap: 0.6rem; justify-content: flex-end; margin-top: 1rem; }
+.bug-report-actions .button { border-radius: 0.55rem; cursor: pointer; font: inherit; font-size: 0.86rem; font-weight: 800; padding: 0.55rem 0.8rem; }
+.bug-report-actions .button.primary { background: var(--oradia-green-deep); border: 1px solid var(--oradia-green-deep); color: #f5faf5; }
+.bug-report-actions .button.primary:disabled { opacity: 0.65; }
+.bug-report-error { background: #3a2428; border: 1px solid #92565e; border-radius: 0.55rem; color: #f3c7c9; line-height: 1.45; margin-top: 0.9rem; padding: 0.7rem 0.8rem; }
+.bug-report-error[hidden], .bug-report-success[hidden] { display: none; }
+.bug-report-success { line-height: 1.5; margin-top: 1rem; }
+.bug-report-success a { color: var(--oradia-green); }
+
 /* ── dialog shell ── */
 /* Break out of header flow: fixed, horizontally centered, top-anchored like VSCode. */
 .command-palette {

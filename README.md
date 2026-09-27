@@ -41,6 +41,14 @@ For a server-only session, build Tailwind first with
 Propshaft's dynamic asset resolver and ignores production-style manifests in
 `public/assets`, so stylesheet changes are picked up after refresh.
 
+To enable in-app bug reports, provide `GITHUB_TOKEN` and `GITHUB_REPOSITORY`
+(`owner/repository`) to the Rails server process. The token needs permission to
+create issues in that repository. The personal and development Compose stacks
+forward these server environment variables. Provide the token through your
+process or deployment secret manager; do not put it in source control. Set
+`ELEF_BUILD_ID` when a deployment has a build identifier to include it in issue
+environment details.
+
 ## Personal PostgreSQL instance
 
 The repository includes a production-like, single-user Docker Compose stack.
