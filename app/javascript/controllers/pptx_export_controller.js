@@ -114,8 +114,10 @@ function slideMarkup(slide, model) {
   const topMargin = margin.section || margin.subsection
     ? `<div class="slide-margin slide-margin-top" aria-hidden="true">${margin.subsection ? `<span class="slide-margin-subsection">${escapeHtml(slide.subsection || "")}</span>` : ""}${margin.section ? `<span class="slide-margin-section">${escapeHtml(slide.section || "")}</span>` : ""}</div>`
     : ""
+  const titlePosition = slide.title_position
+  const titleClasses = titlePosition ? `position-${titlePosition.horizontal} position-${titlePosition.vertical}` : ""
   const content = slide.title_html
-    ? `<div class="slide-content"><div class="slide-title">${slide.title_html}</div><div class="slide-regions">${slide.regions.map((region) => `<div class="slide-region">${region.map(blockMarkup).join("")}</div>`).join("")}</div></div>`
+    ? `<div class="slide-content"><div class="slide-title slide-block ${titleClasses}">${slide.title_html}</div><div class="slide-regions">${slide.regions.map((region) => `<div class="slide-region">${region.map(blockMarkup).join("")}</div>`).join("")}</div></div>`
     : `<div class="slide-content">${slide.blocks.length ? slide.blocks.map(blockMarkup).join("") : '<p class="empty-slide">Empty slide</p>'}</div>`
   const footnote = margin.footnote && slide.footnote_html
     ? `<span class="slide-margin-footnote"><span class="slide-margin-footnote-marker">*</span><span class="slide-margin-footnote-text">${slide.footnote_html}</span></span>`

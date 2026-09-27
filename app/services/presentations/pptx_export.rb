@@ -68,6 +68,7 @@ module Presentations
         index: slide.index,
         layout: slide.layout,
         title_html: slide.title.present? ? markdown_html(slide.title) : nil,
+        title_position: slide.title.present? ? slide.blocks.first&.position&.to_h : nil,
         blocks: slide.blocks.map { |block| block_payload(block) },
         regions: slide.regions.map { |region| region.blocks.map { |block| block_payload(block) } },
         section: slide.section,

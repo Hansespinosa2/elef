@@ -103,6 +103,88 @@ class PresentationsTest < ApplicationSystemTestCase
     assert ready, "autosave request #{index} was not registered"
   end
 
+  test "new presentation source positions its title explicitly and lets that position be changed" do
+    expected_source = <<~MARKDOWN.chomp
+      :::position{center middle}
+      # Untitled Document
+
+      :::position {center}
+      Start writing Markdown here.
+    MARKDOWN
+
+    visit new_presentation_path
+
+    assert_field "Markdown source", with: expected_source
+    assert_selector ".slide-statement .slide-block.position-center.position-middle", text: "Untitled Document", wait: 5
+    assert_selector ".slide-statement .slide-block.position-center.position-top", text: "Start writing Markdown here."
+
+    initial_alignment = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const title = document.querySelector('.slide-statement .slide-block.position-center.position-middle');
+        const titleRect = title.getBoundingClientRect();
+        const slideRect = title.closest('.slide').getBoundingClientRect();
+        const style = getComputedStyle(title);
+        return {
+          alignSelf: style.alignSelf,
+          marginTop: style.marginTop,
+          marginBottom: style.marginBottom,
+          titleCenterY: titleRect.top + titleRect.height / 2,
+          slideCenterY: slideRect.top + slideRect.height / 2
+        };
+      })()
+    JAVASCRIPT
+    assert_equal "center", initial_alignment["alignSelf"]
+    assert_equal initial_alignment["marginTop"], initial_alignment["marginBottom"]
+    assert_in_delta initial_alignment["slideCenterY"], initial_alignment["titleCenterY"], 50
+
+    find("select[data-presentation-editor-position][data-slide-index='0'][data-block-index='0']").select("Right Bottom")
+    assert_field "Markdown source", with: /:::position\{right bottom\}\n# Untitled Document/, wait: 5
+    wait_for_fresh_projection
+    assert_selector ".slide-statement .slide-block.position-right.position-bottom", text: "Untitled Document", wait: 5
+
+    updated_alignment = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const title = document.querySelector('.slide-statement .slide-block.position-right.position-bottom');
+        const style = getComputedStyle(title);
+        return { alignSelf: style.alignSelf, textAlign: style.textAlign, marginTop: parseFloat(style.marginTop) };
+      })()
+    JAVASCRIPT
+    assert_equal "flex-end", updated_alignment["alignSelf"]
+    assert_equal "right", updated_alignment["textAlign"]
+    assert_operator updated_alignment["marginTop"], :>, 0
+  end
+
+  test "layouts and themes sample preserves positions while adding and deleting blocks" do
+    Presentations::SampleData.load!
+    sample = Presentation.find_by!(sample_id: "layouts-and-themes")
+    visit edit_presentation_path(sample)
+    wait_for_fresh_projection
+
+    assert_selector ".slide-statement .slide-block.position-center.position-middle", text: "Designing a visual system"
+    assert_selector ".slide-statement .slide-block.position-center.position-top", text: /This deck exercises automatic layouts/
+
+    find("select[data-presentation-editor-position][data-slide-index='2'][data-block-index='0']").select("Right Top")
+    assert_field "Markdown source", with: /:::position\{right top\}\n\n# Establish a visual contract/, wait: 5
+    assert_selector ".slide-two-column .slide-title.slide-block.position-right.position-top", text: "Establish a visual contract", wait: 5
+
+    find("select[data-presentation-editor-position][data-slide-index='0'][data-block-index='0']").select("Right Bottom")
+    assert_field "Markdown source", with: /:::position\{right bottom\}\n# Designing a visual system/, wait: 5
+    assert_selector ".slide-statement .slide-block.position-right.position-bottom", text: "Designing a visual system", wait: 5
+
+    find("[data-presentation-editor-action='add-block-after'][data-slide-index='0'][data-block-index='1']").click
+    assert_field "Markdown source", with: /about consistent presentation design\.\n\nNew block/
+    assert_selector ".slide[data-slide-index='0'] .slide-block", text: "New block", wait: 5
+    accept_confirm("Delete this block?") do
+      find("[data-presentation-editor-action='delete-block'][data-slide-index='0'][data-block-index='2']").click
+    end
+    wait_for_fresh_projection
+
+    source = find_field("Markdown source").value
+    assert_includes source, ":::position{right bottom}\n# Designing a visual system"
+    assert_includes source, ":::position {center}\nThis deck exercises automatic layouts"
+    refute_includes source, "New block"
+  end
+
   test "library renames forks and deletes a presentation through its controls" do
     parent = Presentation.create!(title: "Workflow parent", source: "# Keep this source")
     visit presentations_path
