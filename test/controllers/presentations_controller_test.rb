@@ -323,7 +323,9 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     get pptx_presentation_path(presentation, version: "published")
     assert_response :success
     html = response.parsed_body.dig("slides", 0, "blocks", 1, "html")
-    assert_includes html, "/presentations/#{presentation.id}/pptx_assets/#{digest}?version=published&amp;release_id=#{release_id}"
+    assert_includes html, "/presentations/#{presentation.id}/pptx_assets/#{digest}?"
+    assert_match(/(?:\?|&amp;)version=published(?:&amp;|")/, html)
+    assert_match(/(?:\?|&amp;)release_id=#{release_id}(?:&amp;|")/, html)
 
     presentation.update!(source: "# New release")
     post publish_presentation_path(presentation)
