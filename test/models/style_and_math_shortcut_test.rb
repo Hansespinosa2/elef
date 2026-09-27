@@ -42,16 +42,27 @@ class StyleAndMathShortcutTest < ActiveSupport::TestCase
 
   test "includes uppercase and lowercase Greek letter shortcuts" do
     catalog = MathShortcuts::Catalog.for_editor
-    greek = {
-      "A" => "A", "B" => "B", "G" => "\\Gamma", "D" => "\\Delta",
-      "E" => "E", "Z" => "Z", "H" => "H", "Q" => "\\Theta",
-      "I" => "I", "K" => "K", "L" => "\\Lambda", "M" => "M",
-      "N" => "N", "X" => "\\Xi", "O" => "O", "P" => "\\Pi",
-      "R" => "P", "S" => "\\Sigma", "T" => "T", "U" => "\\Upsilon",
-      "F" => "\\Phi", "C" => "X", "Y" => "\\Psi", "W" => "\\Omega"
+    lowercase_greek = {
+      "a" => "\\alpha", "b" => "\\beta", "c" => "\\chi", "d" => "\\delta",
+      "e" => "\\epsilon", "f" => "\\phi", "g" => "\\gamma", "h" => "\\eta",
+      "i" => "\\iota", "k" => "\\kappa", "l" => "\\lambda", "m" => "\\mu",
+      "n" => "\\nu", "o" => "\\omega", "p" => "\\pi", "q" => "\\theta",
+      "r" => "\\rho", "s" => "\\sigma", "t" => "\\tau", "u" => "\\upsilon",
+      "w" => "\\omega", "x" => "\\xi", "y" => "\\psi", "z" => "\\zeta"
+    }
+    uppercase_greek = {
+      "D" => "\\Delta", "F" => "\\Phi", "G" => "\\Gamma", "L" => "\\Lambda",
+      "P" => "\\Pi", "Q" => "\\Theta", "S" => "\\Sigma", "U" => "\\Upsilon",
+      "W" => "\\Omega", "X" => "\\Xi", "Y" => "\\Psi"
     }
 
-    greek.each do |letter, expansion|
+    expected_aliases = lowercase_greek.keys + uppercase_greek.keys
+    actual_aliases = catalog.flat_map do |item|
+      item[:prefix] == "@" ? item[:aliases].select { |alias_name| alias_name.match?(/\A[A-Za-z]\z/) } : []
+    end
+    assert_equal expected_aliases.sort, actual_aliases.sort, "single-letter @ aliases should only name supported Greek shortcuts"
+
+    lowercase_greek.merge(uppercase_greek).each do |letter, expansion|
       shortcut = catalog.find { |item| item[:prefix] == "@" && item[:aliases].include?(letter) }
       assert_equal expansion, shortcut&.fetch(:expansion), "@#{letter} should expand to #{expansion}"
 
@@ -60,9 +71,12 @@ class StyleAndMathShortcutTest < ActiveSupport::TestCase
       refute_includes html, 'class="math-error"', "@#{letter} should not produce a math error"
     end
 
-    assert_equal "\\alpha", catalog.find { |item| item[:prefix] == "@" && item[:aliases].include?("a") }[:expansion]
-    assert_equal "\\omega", catalog.find { |item| item[:prefix] == "@" && item[:aliases].include?("w") }[:expansion]
-    assert_equal "\\omicron", catalog.find { |item| item[:prefix] == "@" && item[:aliases].include?("omicron") }[:expansion]
+    %w[ve vf vs vq vp vr].each do |alias_name|
+      shortcut = catalog.find { |item| item[:prefix] == "@" && item[:aliases].include?(alias_name) }
+      html = Source::Renderer.render("$#{shortcut[:expansion]}$")
+      assert_includes html, 'class="katex"', "@#{alias_name} should render through KaTeX"
+      refute_includes html, 'class="math-error"', "@#{alias_name} should not produce a math error"
+    end
   end
 
   test "includes common TeX operators and expands multiple math slots in order" do

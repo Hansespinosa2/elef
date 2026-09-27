@@ -123,8 +123,10 @@ export default class extends Controller {
     const query = this.queryAtCaret()
     if (!query) return this.close()
 
+    const singleLetterAlias = query.prefix === "@" && /^[A-Za-z]$/.test(query.text)
     const matches = this.shortcutsValue
       .filter((shortcut) => shortcut.prefix === query.prefix)
+      .filter((shortcut) => !singleLetterAlias || shortcut.aliases.includes(query.text))
       .map((shortcut) => ({ shortcut, score: this.fuzzyScore(shortcut, query.text) }))
       .filter(({ score }) => score >= 0)
       .sort((left, right) => right.score - left.score || left.shortcut.name.localeCompare(right.shortcut.name))

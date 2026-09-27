@@ -108,11 +108,21 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     assert_includes source, "$\\mathbf{x}"
     assert_includes source, "\\alpha"
 
-    editor.send_keys("\n@A")
-    capital_alpha = find(".math-shortcut-option", text: /Capital Alpha/, wait: 5)
-    within(capital_alpha) do
-      assert_selector ".math-shortcut-trigger", text: "@A"
-      assert_selector ".math-shortcut-latex code", text: "A"
+    editor.send_keys("\n@Q")
+    capital_theta = find(".math-shortcut-option", text: /Capital Theta/, wait: 5)
+    within(capital_theta) do
+      assert_selector ".math-shortcut-trigger", text: "@Q"
+      assert_selector ".math-shortcut-latex code", text: "\\Theta"
+      assert_selector ".math-shortcut-preview-render .katex-html"
+      assert_no_selector ".math-shortcut-preview-render .katex-error"
+    end
+    editor.send_keys(:enter)
+
+    editor.send_keys("\n@q")
+    theta = find(".math-shortcut-option", text: /^Theta/, wait: 5)
+    within(theta) do
+      assert_selector ".math-shortcut-trigger", text: "@q"
+      assert_selector ".math-shortcut-latex code", text: "\\theta"
       assert_selector ".math-shortcut-preview-render .katex-html"
       assert_no_selector ".math-shortcut-preview-render .katex-error"
     end
@@ -127,8 +137,12 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     editor.send_keys(:enter)
 
     source = find_field("Markdown source").value
-    assert_includes source, "\nA\n"
+    assert_includes source, "\\Theta"
+    assert_includes source, "\\theta"
     assert_includes source, "\\omega"
+
+    editor.send_keys("\n@A")
+    assert_no_selector ".math-shortcut-palette:not([hidden])", wait: 1
   end
 
   test "shows dark math shortcut cards with rendered LaTeX examples" do
