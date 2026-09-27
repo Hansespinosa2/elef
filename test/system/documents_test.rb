@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 20370)
-Total output lines: 1729
-
 require "application_system_test_case"
 
 class DocumentsTest < ApplicationSystemTestCase
@@ -494,7 +491,731 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_equal expected, page.evaluate_script("document.querySelector('.source-field').editorController.view.state.selection.main.head")
 
     click_on "Visual"
-    page.evaluate_async_script("requestAnimatio…8370 tokens truncated…ditor.value.length, editor.value.length);")
+    page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(() => arguments[0]()))")
+    restored = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const selection = window.getSelection();
+        const element = selection.focusNode?.nodeType === Node.ELEMENT_NODE ? selection.focusNode : selection.focusNode?.parentElement;
+        const block = element?.closest(".document-editor-block");
+        return { text: block?.innerText, offset: selection.focusOffset, active: document.activeElement === block };
+      })()
+    JAVASCRIPT
+    assert_equal "First paragraph", restored["text"].strip
+    assert_equal 5, restored["offset"]
+    assert_equal true, restored["active"]
+
+    click_on "Source"
+    page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(() => arguments[0]()))")
+    second_position = source.index("Second paragraph") + 7
+    page.execute_script("document.querySelector('.source-field').editorController.setSelectionRange(arguments[0])", second_position)
+    click_on "Visual"
+    page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(() => arguments[0]()))")
+    restored = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const selection = window.getSelection();
+        const element = selection.focusNode?.nodeType === Node.ELEMENT_NODE ? selection.focusNode : selection.focusNode?.parentElement;
+        const block = element?.closest(".document-editor-block");
+        return { text: block?.innerText, offset: selection.focusOffset, active: document.activeElement === block };
+      })()
+    JAVASCRIPT
+    assert_equal "Second paragraph", restored["text"].strip
+    assert_equal 7, restored["offset"]
+    assert_equal true, restored["active"]
+  end
+
+  test "up and down move the caret between visual blocks and backspace removes an empty block" do
+    document = Document.create!(
+      title: "Block navigation",
+      source: "# Navigation\n\nFirst block\n\nSecond block\n\nThird block"
+    )
+    visit edit_document_path(document)
+
+    first = find(".document-editor-block", text: "First block")
+    navigation = page.execute_script(<<~JAVASCRIPT, first)
+      const block = arguments[0];
+      const text = block.querySelector("p").firstChild;
+      block.focus({ preventScroll: true });
+      window.getSelection().setPosition(text, text.textContent.length);
+      const down = new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true });
+      block.dispatchEvent(down);
+      const next = document.activeElement;
+      const held = new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true, repeat: true });
+      next.dispatchEvent(held);
+      return [down.defaultPrevented, held.defaultPrevented];
+    JAVASCRIPT
+    assert_equal [true, true], navigation
+    assert_equal "Third block", page.evaluate_script("document.activeElement.innerText.trim()")
+
+    empty = find(".document-editor-block", text: "Second block")
+    removed = page.execute_script(<<~JAVASCRIPT, empty)
+      const block = arguments[0];
+      block.innerHTML = "<br>";
+      block.focus({ preventScroll: true });
+      window.getSelection().setPosition(block, 0);
+      const event = new KeyboardEvent("keydown", { key: "Backspace", bubbles: true, cancelable: true });
+      block.dispatchEvent(event);
+      return event.defaultPrevented;
+    JAVASCRIPT
+    assert_equal true, removed
+    assert_field "Markdown source", with: "# Navigation\n\nFirst block\n\nThird block", wait: 5
+  end
+
+  test "hitting enter at the end of a block and deleting the empty block preserves surrounding blocks" do
+    %w[Delete Backspace].each do |key|
+      sample = Documents::SampleData::SAMPLES.find { |s| s[:id] == "document-full-report" }
+      document = Document.create!(title: "#{sample[:title]} #{key}", source: sample[:source])
+      visit edit_document_path(document)
+      wait_for_fresh_projection
+
+      first_block = find(".document-editor-block", text: /This report examines a simple proposition/)
+      first_block_id = first_block["data-editor-block-id"]
+      assert first_block_id
+      before = find_field("Markdown source").value
+
+      # Hit Enter at the end of the block
+      created = page.execute_script(<<~JAVASCRIPT, first_block)
+        const block = arguments[0];
+        block.focus({ preventScroll: true });
+        const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+        let lastTextNode = null;
+        while (walker.nextNode()) {
+          lastTextNode = walker.currentNode;
+        }
+        window.getSelection().setPosition(lastTextNode, lastTextNode.textContent.length);
+        const enterEvent = new KeyboardEvent("keydown", { key: "Enter", code: "Enter", bubbles: true, cancelable: true });
+        block.dispatchEvent(enterEvent);
+        return enterEvent.defaultPrevented;
+      JAVASCRIPT
+      assert_equal true, created
+
+      # Wait for the source to reflect the split (extra blank line), then for the preview to re-render
+      assert_no_field "Markdown source", with: before, wait: 5
+      wait_for_fresh_projection
+
+      # The empty placeholder block should now be focused
+      empty_block = active_document_block
+      assert_equal "true", empty_block["data-editor-empty-block"]
+
+      # Press Delete or Backspace on the empty block
+      empty_block.send_keys(key == "Delete" ? :delete : :backspace)
+
+      # The Markdown source should be back to the original source without collapsing paragraphs
+      assert_field "Markdown source", with: before, wait: 5
+      assert_equal first_block_id, active_document_block["data-editor-block-id"]
+    end
+  end
+
+  test "visual edits preserve soft line breaks around inline math" do
+    source = <<~MARKDOWN
+      # Notes
+
+      The relationship is $E = mc^2$ in inline form, while this display
+      equation gives the reader a larger landmark.
+    MARKDOWN
+    document = Document.create!(title: "Soft breaks with math", source: source)
+
+    visit edit_document_path(document)
+    rendered_text = page.execute_script(<<~JAVASCRIPT)
+      const block = [...document.querySelectorAll(".document-editor-block")]
+        .find((element) => element.textContent.includes("The relationship"));
+      block.style.whiteSpace = "pre-line";
+      return block.innerText;
+    JAVASCRIPT
+    assert_includes rendered_text, "display\nequation"
+
+    type_visual_text(".document-editor-block", "The relationship", "The equation relationship")
+
+    assert_field "Markdown source", with: source.sub("The relationship", "The equation relationship"), wait: 5
+    refute_includes find_field("Markdown source").value, "\uE000"
+  end
+
+  test "typing in visual and source modes has identical fixture Markdown" do
+    fixtures = [
+      {
+        id: "document-markdown-tour",
+        operations: [
+          [".document-editor-block", "Fixture: Markdown tour", "Fixture: Markdown tour", "Markdown parity tour"],
+          [".document-editor-block", "qualification", "qualification", "qualified note"],
+          [".document-editor-block", "Start with the question.", "Start with the question.", "Start with the right question."],
+          [".document-editor-block", "Gather context.", "Gather context.", "Gather useful context."],
+          [".document-editor-block", "The best source is readable before it is rendered.", "The best source is readable before it is rendered.", "The best source stays readable before it is rendered."],
+          [".document-editor-block", "visit the Elef project", "visit the Elef project", "visit the Elef authoring project"]
+        ]
+      },
+      {
+        id: "document-components",
+        operations: [
+          [".document-editor-block", "Fixture: Rich components", "Fixture: Rich components", "Rich component parity"],
+          [".document-editor-block", "Markdown first", "Markdown first", "Markdown-first"],
+          [".document-editor-block", "render(document.source)", "render(document.source)", "render(source)"],
+          [".document-editor-block", "The relationship", "The relationship", "The equation relationship"],
+          [".editor-media-caption", "representative workflow diagram", "representative workflow diagram", "sample workflow diagram"]
+        ]
+      }
+    ]
+
+    fixtures.each do |fixture|
+      baseline = Documents::SampleData::SAMPLES.find { |sample| sample[:id] == fixture[:id] }.fetch(:source)
+      visual = Document.create!(title: "Visual #{fixture[:id]}", source: baseline)
+      expected = baseline.dup
+
+      visit edit_document_path(visual)
+      fixture[:operations].each do |selector, visible_text, source_text, replacement|
+        type_visual_text(selector, visible_text, replacement)
+        expected.sub!(source_text, replacement)
+        assert_field "Markdown source", with: expected, wait: 5
+        page.execute_script("document.activeElement.blur()")
+        assert_selector selector, text: /#{Regexp.escape(replacement)}/, wait: 5
+      end
+
+      click_on "Save document"
+      assert_selector ".flash.notice", text: "Document saved.", wait: 10
+      assert_field "Markdown source", with: expected
+      visual_source = visual.reload.source.gsub(/\r\n?/, "\n")
+      visual.destroy!
+
+      source = Document.create!(title: "Source #{fixture[:id]}", source: baseline)
+      source_expected = baseline.dup
+      visit edit_document_path(source)
+      click_on "Source"
+      fixture[:operations].each do |_selector, _visible_text, source_text, replacement|
+        type_source_text(source_expected, source_text, replacement)
+        source_expected.sub!(source_text, replacement)
+        assert_field "Markdown source", with: source_expected, wait: 5
+      end
+
+      click_on "Save document"
+      assert_selector ".flash.notice", text: "Document saved.", wait: 10
+      assert_field "Markdown source", with: source_expected
+      assert_equal expected, source_expected
+      source_source = source.reload.source.gsub(/\r\n?/, "\n")
+      assert_equal visual_source, source_source, "visual/source mismatch for #{fixture[:id]}"
+    end
+  end
+
+  test "visual rich blocks preserve table and image Markdown while editing" do
+    document = Document.create!(
+      title: "Rich notes",
+      source: "# Rich notes\n\n| Name | Value |\n| --- | --- |\n| **One** | Two |\n\n![Old alt](/icon.svg)"
+    )
+
+    visit edit_document_path(document)
+
+    assert_selector ".document-editor-block table"
+    assert_selector ".document-editor-block .editor-media-caption", text: "Old alt"
+
+    page.execute_script(<<~JAVASCRIPT)
+      const tableBlock = [...document.querySelectorAll('.document-editor-block')]
+        .find((block) => block.querySelector('table'));
+      tableBlock.focus();
+      tableBlock.querySelector('tbody td:last-child').innerText = 'Updated';
+      tableBlock.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'Updated' }));
+    JAVASCRIPT
+    assert_field "Markdown source", with: /\| \*\*One\*\* \| Updated \|/, wait: 5
+    assert_includes find_field("Markdown source").value, "![Old alt](/icon.svg)"
+    page.execute_script("document.activeElement.blur()")
+    assert_selector ".document-editor-block table", text: "Updated", wait: 5
+    assert_no_selector 'form[data-preview-projection-stale="true"]', wait: 5
+
+    page.execute_script(<<~JAVASCRIPT)
+      const imageBlock = [...document.querySelectorAll('.document-editor-block')]
+        .find((block) => block.querySelector('.editor-media-caption'));
+      imageBlock.focus();
+      const caption = imageBlock.querySelector('.editor-media-caption');
+      caption.innerText = 'New alt';
+      caption.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'New alt' }));
+    JAVASCRIPT
+    assert_field "Markdown source", with: /!\[New alt\]\(\/icon\.svg\)/, wait: 5
+    assert_includes find_field("Markdown source").value, "| **One** | Updated |"
+  end
+
+  test "visual inline edits preserve surrounding Markdown syntax" do
+    document = Document.create!(
+      title: "Inline notes",
+      source: "# Inline notes\n\nA **bold** and *italic* link [target](/path)."
+    )
+
+    visit edit_document_path(document)
+
+    page.execute_script(<<~JAVASCRIPT)
+      const block = [...document.querySelectorAll('.document-editor-block')]
+        .find((candidate) => candidate.querySelector('strong'));
+      block.querySelector('strong').innerText = 'updated';
+      block.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'updated' }));
+    JAVASCRIPT
+
+    assert_field "Markdown source", with: "# Inline notes\n\nA **updated** and *italic* link [target](/path).", wait: 5
+  end
+
+  test "visual heading edits preserve inline formatting" do
+    document = Document.create!(title: "Styled heading", source: "# **Styled** and *clear*")
+
+    visit edit_document_path(document)
+    page.execute_script(<<~JAVASCRIPT)
+      const heading = document.querySelector('.document-editor-block strong');
+      heading.textContent = 'Updated';
+      heading.closest('.document-editor-block').dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'Updated' }));
+    JAVASCRIPT
+
+    assert_field "Markdown source", with: "# **Updated** and *clear*", wait: 5
+  end
+
+  test "visual paragraph edits preserve inline and display LaTeX source" do
+    source = 'Before $\\frac{a}{b}$ between $$\\sum_{i=1}^{n} i$$ after.'
+    document = Document.create!(title: "Math preservation", source: source)
+
+    visit edit_document_path(document)
+    assert_selector '.document-editor-block [data-editor-math-source][contenteditable="false"]', count: 2
+
+    page.execute_script(<<~JAVASCRIPT)
+      const block = document.querySelector('.document-editor-block');
+      block.focus();
+      const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+      let node;
+      while ((node = walker.nextNode()) && !node.textContent.includes('Before ')) {}
+      node.textContent = node.textContent.replace('Before ', 'Earlier ');
+      block.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'Earlier' }));
+    JAVASCRIPT
+    assert_field "Markdown source", with: 'Earlier $\\frac{a}{b}$ between $$\\sum_{i=1}^{n} i$$ after.', wait: 5
+    page.execute_script("document.activeElement.blur()")
+    wait_for_fresh_projection
+
+    page.execute_script(<<~JAVASCRIPT)
+      const block = document.querySelector('.document-editor-block');
+      block.focus();
+      const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+      let node;
+      while ((node = walker.nextNode()) && !node.textContent.includes(' after.')) {}
+      node.textContent = node.textContent.replace(' after.', ' still here.');
+      block.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'still here' }));
+    JAVASCRIPT
+    assert_field "Markdown source", with: 'Earlier $\\frac{a}{b}$ between $$\\sum_{i=1}^{n} i$$ still here.', wait: 5
+  end
+
+  test "new inline math renders while the visual document block stays focused" do
+    document = Document.create!(title: "Inline math typing", source: "# Math\n\nAn equation")
+
+    visit edit_document_path(document)
+    block = find(".document-editor-block", text: "An equation")
+    block.click
+    page.execute_script(<<~JAVASCRIPT, block)
+      const block = arguments[0];
+      const range = document.createRange();
+      range.selectNodeContents(block);
+      range.collapse(false);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+    JAVASCRIPT
+    block.send_keys(" $test$")
+
+    assert_field "Markdown source", with: "# Math\n\nAn equation $test$", wait: 5
+    assert_selector ".document-editor-block .katex", text: "test", wait: 5
+    block.send_keys(" after")
+    assert_field "Markdown source", with: "# Math\n\nAn equation $test$ after", wait: 5
+
+    click_on "Save document"
+    assert_text "Document saved."
+    visit edit_document_path(document)
+    assert_field "Markdown source", with: "# Math\n\nAn equation $test$ after"
+    assert_selector ".document-editor-block .katex", text: "test"
+  end
+
+  test "latex visual mode enter and exit flow allows inline editing" do
+    visit new_document_path
+
+    find(".document-editor-block h1", text: "Untitled document").send_keys(:enter)
+    block = active_document_block
+    block.send_keys("$x=3$")
+    assert_selector ".document-editor-block .katex", wait: 5
+
+    # 4. Hit left arrow -> enters math mode, de-renders to raw text with $ delimiters visible, caret is inside $x=3|$
+    block.send_keys(:left)
+    assert_selector ".document-editor-block .editor-math-active", text: "$x=3$", wait: 5
+
+    # 5. Hit backspace -> deletes 3 -> $x=|$
+    block.send_keys(:backspace)
+    assert_selector ".document-editor-block .editor-math-active", text: "$x=$", wait: 5
+
+    # 6. Hit 4 -> types 4 -> $x=4|$
+    block.send_keys("4")
+    assert_selector ".document-editor-block .editor-math-active", text: "$x=4$", wait: 5
+
+    # 7. Hit right arrow -> leaves math block; re-renders KaTeX; caret is outside $x=4$|
+    block.send_keys(:right)
+    assert_selector ".document-editor-block [data-editor-math-source='x=4']", wait: 5
+    assert_no_selector ".document-editor-block .editor-math-active"
+
+    # 8. Hit left arrow -> de-renders to raw text; caret inside $x=4|$
+    block.send_keys(:left)
+    assert_selector ".document-editor-block .editor-math-active", text: "$x=4$", wait: 5
+
+    # 9. Hit left arrow 2x -> caret moves past 4 and = -> $x|=4$
+    block.send_keys(:left, :left)
+
+    # 10. Hit backspace -> deletes x -> $|=4$
+    block.send_keys(:backspace)
+    assert_selector ".document-editor-block .editor-math-active", text: "$=4$", wait: 5
+
+    # 11. Hit y -> types y -> $y|=4$
+    block.send_keys("y")
+    assert_selector ".document-editor-block .editor-math-active", text: "$y=4$", wait: 5
+
+    # 12. Hit left arrow 2x -> 1st moves to $[caret]y=4$, 2nd moves past opening $ exiting math -> re-renders KaTeX
+    block.send_keys(:left, :left)
+
+    # 13. Success: Latex renders correctly and caret is outside |$y=4
+    assert_selector ".document-editor-block [data-editor-math-source='y=4']", wait: 5
+    assert_no_selector ".document-editor-block .editor-math-active"
+    assert_field "Markdown source", with: "# Untitled document\n\n$y=4$", wait: 5
+  end
+
+  test "display latex visual mode enter and exit and click to edit" do
+    visit new_document_path
+
+    find(".document-editor-block h1", text: "Untitled document").send_keys(:enter)
+    block = active_document_block
+    block.send_keys("$$a=1$$")
+    assert_selector ".document-editor-block .editor-live-math-display", wait: 5
+
+    # Left arrow enters display math at $$a=1|$$
+    block.send_keys(:left)
+    assert_selector ".document-editor-block .editor-math-active", text: "$$a=1$$", wait: 5
+
+    # Edit 1 -> 2
+    block.send_keys(:backspace)
+    block.send_keys("2")
+    assert_selector ".document-editor-block .editor-math-active", text: "$$a=2$$", wait: 5
+
+    # Right arrow leaves display math -> re-renders
+    block.send_keys(:right)
+    assert_selector ".document-editor-block [data-editor-math-source='a=2']", wait: 5
+    assert_no_selector ".document-editor-block .editor-math-active"
+    assert_field "Markdown source", with: "# Untitled document\n\n$$a=2$$", wait: 5
+
+    # Click on the rendered KaTeX math element -> de-renders to active math
+    find(".document-editor-block [data-editor-math-source='a=2']").click
+    assert_selector ".document-editor-block .editor-math-active", text: "$$a=2$$", wait: 5
+
+    # Blur by clicking title -> re-renders
+    find(".document-editor-block h1").click
+    assert_selector ".document-editor-block [data-editor-math-source='a=2']", wait: 5
+    assert_no_selector ".document-editor-block .editor-math-active"
+  end
+
+  test "new document renders inline and display math before its first save" do
+    visit new_document_path
+
+    find(".document-editor-block h1", text: "Untitled document").send_keys(:enter)
+    block = find(".document-editor-block[data-editor-empty-block='true']")
+    block.click
+    page.execute_script(<<~JAVASCRIPT, block)
+      const block = arguments[0];
+      const range = document.createRange();
+      range.selectNodeContents(block);
+      range.collapse(false);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+    JAVASCRIPT
+    block.send_keys(" $\\bar{x}$ and $$x^2$$ and \\(\\bar{y}\\) and \\[y^2\\]")
+
+    assert_includes find_field("Markdown source").value, "$\\bar{x}$ and $$x^2$$ and \\(\\bar{y}\\) and \\[y^2\\]"
+    assert_selector ".document-editor-block .katex", minimum: 4, wait: 5
+    assert_selector ".document-editor-block .katex-display", minimum: 2
+    assert_no_selector ".document-editor-block .math-error"
+
+    page.execute_script("document.activeElement.blur()")
+    assert_selector ".document-editor-block .katex-display", minimum: 1, wait: 5
+    assert_no_selector ".preview-warnings li", text: /preview could not be rendered/i
+  end
+
+  test "new document source mode renders inline and display math before its first save" do
+    visit new_document_path
+    click_on "Source"
+
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      editor.setSelectionRange(editor.value.length);
+      editor.focus();
+    JAVASCRIPT
+    find(".cm-content").send_keys("\n\n$\\bar{x}$ and \\(\\bar{y}\\)\n\n$$x^2$$\n\n\\[y^2\\]")
+
+    assert_includes find_field("Markdown source").value, "$\\bar{x}$ and \\(\\bar{y}\\)\n\n$$x^2$$\n\n\\[y^2\\]"
+    assert_selector ".preview-pane .katex", minimum: 4, wait: 5
+    assert_selector ".preview-pane .katex-display", minimum: 2
+    assert_no_selector ".preview-pane .math-error"
+  end
+
+  test "document preview renders inline accents and multiline display equations" do
+    document = Document.create!(title: "Document math rendering", source: <<~MARKDOWN)
+      # Math
+
+      Inline $\\bar{x}$.
+
+      $$
+      \\begin{aligned}
+      x &= y \\\\
+      y &= z
+      \\end{aligned}
+      $$
+    MARKDOWN
+
+    visit edit_document_path(document)
+
+    assert_selector ".document-editor-block .katex", count: 2
+    assert_selector ".document-editor-block .katex-display", count: 1
+    assert_no_selector ".document-editor-block .math-error"
+  end
+
+  test "visual paragraph edits preserve inline media source" do
+    document = Document.create!(title: "Inline image", source: "Before ![diagram](/diagram.svg) after.")
+
+    visit edit_document_path(document)
+    assert_selector '.document-editor-block [data-editor-image-source][contenteditable="false"]'
+    page.execute_script(<<~JAVASCRIPT)
+      const block = document.querySelector('.document-editor-block');
+      const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+      let node;
+      while ((node = walker.nextNode()) && !node.textContent.includes('Before ')) {}
+      node.textContent = node.textContent.replace('Before ', 'Earlier ');
+      block.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'Earlier' }));
+    JAVASCRIPT
+
+    assert_field "Markdown source", with: "Earlier ![diagram](/diagram.svg) after.", wait: 5
+  end
+
+  test "a new document uploads and displays an attached image before its first manual save" do
+    visit new_document_path
+    media_file = Tempfile.new(["document-pixel", ".png"])
+    media_file.binmode
+    media_file.write(Base64.decode64("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+i9MwAAAAASUVORK5CYII="))
+    media_file.flush
+
+    page.execute_script("window.mediaPickerClicks = 0; document.querySelector('[data-media-target=input]').click = () => { window.mediaPickerClicks++ }")
+    click_on "Add image"
+    assert_equal 1, page.evaluate_script("window.mediaPickerClicks")
+    page.execute_script("document.querySelector('[data-media-target=input]').hidden = false")
+    find('[data-media-target="input"]').set(media_file.path)
+
+    assert_selector ".media-upload-status", text: /document-pixel.*added to the Markdown source/i, wait: 8
+    assert_includes find_field("Markdown source").value, "elef-asset:"
+    assert_selector ".preview-pane img.presentation-media", wait: 8
+    natural_width = page.evaluate_script("document.querySelector('.preview-pane img.presentation-media').naturalWidth")
+    assert_operator natural_width, :>, 0
+
+
+    document = Document.order(:id).last
+    assert document.assets.attached?
+    assert_selector '[data-autosave-target="status"]', exact_text: "Saved", wait: 8
+    assert_includes document.reload.source, "elef-asset:"
+  ensure
+    media_file&.close!
+  end
+
+  test "visual edits preserve nested task lists and untouched item formatting" do
+    source = "- [ ] Keep **this**\n  - Nested [link](/path)\n- [x] Already done"
+    document = Document.create!(title: "List preservation", source: source)
+
+    visit edit_document_path(document)
+    page.execute_script(<<~JAVASCRIPT)
+      const strong = document.querySelector('.document-editor-block strong');
+      strong.textContent = 'that';
+      strong.closest('.document-editor-block').dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'that' }));
+    JAVASCRIPT
+
+    assert_field "Markdown source", with: "- [ ] Keep **that**\n  - Nested [link](/path)\n- [x] Already done", wait: 5
+  end
+
+  test "visual code editing preserves fenced language and indentation" do
+    document = Document.create!(
+      title: "Code notes",
+      source: "# Code\n\n```ruby\n  records.each do |record|\n    process(record)\n  end\n````"
+    )
+
+    visit edit_document_path(document)
+
+    page.execute_script(<<~JAVASCRIPT)
+      const codeBlock = [...document.querySelectorAll('.document-editor-block')]
+        .find((block) => block.querySelector('pre'));
+      codeBlock.querySelector('code').innerText = '  updated\\n    indented';
+      codeBlock.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'updated' }));
+    JAVASCRIPT
+
+    assert_field "Markdown source", with: "# Code\n\n```ruby\n  updated\n    indented\n````", wait: 5
+  end
+
+  test "keeps an unterminated fenced block read-only and preserves it across save and reopen" do
+    source = "# Code notes\n\n```ruby\nputs 1"
+    document = Document.create!(title: "Unterminated code", source: source)
+
+    visit edit_document_path(document)
+
+    assert_selector '.document-editor-block[aria-readonly="true"] pre code', text: "puts 1"
+    assert_no_selector '.document-editor-block[contenteditable="true"] pre'
+    page.execute_script(<<~JAVASCRIPT)
+      const block = document.querySelector('.document-editor-block[aria-readonly="true"]');
+      block.textContent = 'flattened code';
+      block.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'flattened code' }));
+    JAVASCRIPT
+
+    assert_field "Markdown source", with: source
+    click_on "Save document"
+    assert_text "Document saved."
+    visit edit_document_path(document)
+
+    assert_field "Markdown source", with: source
+    assert_selector '.document-editor-block[aria-readonly="true"] pre code', text: "puts 1"
+  end
+
+  test "keeps reference links, autolinks, HTML, and rules read-only through save and reopen" do
+    source = "[Guide][guide]\n\n[guide]: /guide\n\n<https://example.test>\n\n<kbd>Shift</kbd>\n\nfoo*bar*baz and value_name_value\n\n> outer\n> > nested quote\n\n| A |\n| --- |\n\n---"
+    document = Document.create!(title: "Unsupported Markdown", source: source)
+
+    visit edit_document_path(document)
+
+    assert_selector '.document-editor-block[aria-readonly="true"]', minimum: 8, visible: false
+    assert_selector '.document-editor-block[aria-readonly="true"] blockquote', text: "nested quote"
+    assert_no_selector '.document-editor-block[contenteditable="true"]'
+    page.execute_script(<<~JAVASCRIPT)
+      document.querySelectorAll('.document-editor-block[aria-readonly="true"]').forEach((block) => {
+        block.textContent = 'flattened output';
+        block.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'flattened output' }));
+      });
+    JAVASCRIPT
+
+    assert_field "Markdown source", with: source
+    click_on "Save document"
+    assert_text "Document saved."
+    visit edit_document_path(document)
+
+    assert_field "Markdown source", with: source
+    assert_selector '.document-editor-block[aria-readonly="true"]', minimum: 8, visible: false
+  end
+
+  test "expands math shorthand only when committed inside math" do
+    document = Document.create!(title: "Math notes", source: "# Math")
+    visit edit_document_path(document)
+    editor = find_field("Markdown source")
+    editor.click
+    editor.send_keys(:end)
+    editor.send_keys("\n$x.hat.b.T")
+    editor.send_keys(:enter)
+
+    assert_includes editor.value, "$\\mathbf{\\hat{x}}^{\\mathsf{T}}"
+    assert_includes editor.value, "\n"
+    assert_selector '[data-autosave-target="status"]', text: "Saved", wait: 5
+  end
+
+  test "wraps TeX commands with math modifiers for Greek letters and operators" do
+    document = Document.create!(title: "TeX command modifiers", source: "# Math")
+    visit edit_document_path(document)
+    editor = find_field("Markdown source")
+    editor.click
+    editor.send_keys(:end)
+
+    editor.send_keys("\n$\\chi.bar")
+    editor.send_keys(:enter)
+    assert_includes editor.value, "$\\bar{\\chi}"
+
+    editor.send_keys("$\n$\\alpha.hat")
+    editor.send_keys(:tab)
+    assert_includes editor.value, "$\\hat{\\alpha}"
+
+    editor.send_keys("$\n$\\beta.tilde")
+    editor.send_keys(:enter)
+    assert_includes editor.value, "$\\tilde{\\beta}"
+
+    greek_commands = %w[
+      alpha beta gamma delta epsilon varepsilon zeta eta theta vartheta iota kappa lambda mu nu xi
+      pi varpi rho varrho sigma varsigma tau upsilon phi varphi chi psi omega
+      Gamma Delta Theta Lambda Xi Pi Sigma Upsilon Phi Psi Omega
+    ]
+    editor.send_keys("$\n$")
+    greek_commands.each do |command|
+      editor.send_keys(" \\#{command}.bar")
+      editor.send_keys(:enter)
+      editor.send_keys(" ")
+    end
+    editor.send_keys("$")
+
+    greek_commands.each do |command|
+      assert_includes editor.value, "\\bar{\\#{command}}", "\\#{command} should be wrapped as a TeX command"
+    end
+
+    editor.send_keys("\n$\\nabla.vec")
+    editor.send_keys(:enter)
+    assert_includes editor.value, "$\\vec{\\nabla}", "operators should also be wrapped as TeX commands"
+  end
+
+  test "chains supported math modifiers and leaves conflicting chains intact" do
+    document = Document.create!(title: "Math modifier chains", source: "# Math")
+    visit edit_document_path(document)
+    editor = find_field("Markdown source")
+    editor.click
+    editor.send_keys(:end)
+    expanded = ->(symbol) { "$\\mathbf{\\bar{#{symbol}}}$" }
+
+    editor.send_keys("\n$x.bar")
+    editor.send_keys(:enter)
+    editor.send_keys(".bb")
+    editor.send_keys(:enter)
+    editor.send_keys("$")
+    assert_includes editor.value, expanded.call("x"), "bar then bold should compose across commits: #{editor.value.inspect}"
+
+    editor.send_keys("\n$y.bar.bb")
+    editor.send_keys(:enter)
+    editor.send_keys("$")
+    assert_includes editor.value, expanded.call("y"), "bar then bold should compose in one token: #{editor.value.inspect}"
+
+    editor.send_keys("\n$z.bb.bar")
+    editor.send_keys(:enter)
+    editor.send_keys("$")
+    assert_includes editor.value, expanded.call("z"), "bold then bar should compose in one token: #{editor.value.inspect}"
+
+    editor.send_keys("\n$w.bb")
+    editor.send_keys(:enter)
+    editor.send_keys(".bar")
+    editor.send_keys(:enter)
+    editor.send_keys("$")
+    assert_includes editor.value, expanded.call("w"), "bold then bar should compose across commits: #{editor.value.inspect}"
+
+    assert_equal ["x", "y", "z", "w"].map { |symbol| expanded.call(symbol) }.length,
+      ["x", "y", "z", "w"].sum { |symbol| editor.value.scan(expanded.call(symbol)).length }
+
+    editor.send_keys("\n$v.bar")
+    editor.send_keys(:enter)
+    editor.send_keys(".hat")
+    editor.send_keys(:enter)
+    assert_includes editor.value, "$\\bar{v}.hat\n", "conflicting modifiers across commits should stay literal: #{editor.value.inspect}"
+    editor.send_keys("$")
+
+    ["x.bb.bb", "x.bar.bar", "x.bar.hat"].each do |token|
+      editor.send_keys("\n$#{token}")
+      editor.send_keys(:enter)
+      assert_includes editor.value, "$#{token}\n"
+      editor.send_keys("$")
+    end
+  end
+
+  test "canonicalizes modifier order and ignores code and unknown contexts" do
+    document = Document.create!(title: "Math contexts", source: "# Math")
+    visit edit_document_path(document)
+    editor = find_field("Markdown source")
+    source = "# Math\n\nOutside x.hat.b\n\n```\n$x.hat.b\n```\n\n$x.T.b.hat\n\n$x.unknown"
+    page.execute_script(<<~JAVASCRIPT, source)
+      const editor = document.querySelector('textarea[name="document[source]"]');
+      editor.value = arguments[0];
+      editor.focus();
+      editor.setSelectionRange(editor.value.indexOf("\\n\\n$x.unknown"), editor.value.indexOf("\\n\\n$x.unknown"));
+    JAVASCRIPT
+    editor.send_keys(:tab)
+
+    assert_includes editor.value, "Outside x.hat.b"
+    assert_includes editor.value, "\n$x.hat.b\n```"
+    assert_includes editor.value, "$\\mathbf{\\hat{x}}^{\\mathsf{T}}"
+
+    page.execute_script("const editor = document.querySelector('textarea[name=\"document[source]\"]'); editor.focus(); editor.setSelectionRange(editor.value.length, editor.value.length);")
     editor.send_keys(:enter)
     assert_includes editor.value, "$x.unknown\n"
   end
