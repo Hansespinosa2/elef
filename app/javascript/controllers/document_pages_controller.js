@@ -111,7 +111,7 @@ export default class extends Controller {
 
       if (unit.length > 1) {
         unit.slice(0, -1).forEach((block) => currentPage.content.append(block))
-        this.flowBlock(unit.at(-1), pages, currentPage)
+        this.flowBlock(unit.at(-1), pages, currentPage, unit.slice(0, -1))
       } else {
         this.flowBlock(unit[0], pages, currentPage)
       }
@@ -191,15 +191,36 @@ export default class extends Controller {
   pageUnits(blocks) {
     const units = []
 
-    for (let index = 0; index < blocks.length; index += 1) {
-      const block = blocks[index]
-      const unit = [block]
-
-      if (this.isHeading(block) && blocks[index + 1]) {
-        unit.push(blocks[index + 1])
+    let index = 0
+    while (index < blocks.length) {
+      const unit = []
+      while (blocks[index]?.matches(".document-source-anchor")) {
+        unit.push(blocks[index])
         index += 1
       }
 
+      const block = blocks[index]
+      if (!block) {
+        if (unit.length) units.push(unit)
+        break
+      }
+
+      unit.push(block)
+      index += 1
+      if (this.isHeading(block)) {
+        while (true) {
+          while (blocks[index]?.matches(".document-source-anchor")) {
+            unit.push(blocks[index])
+            index += 1
+          }
+
+          const next = blocks[index]
+          if (!next) break
+          unit.push(next)
+          index += 1
+          if (!this.isHeading(next)) break
+        }
+      }
       units.push(unit)
     }
 
@@ -210,7 +231,7 @@ export default class extends Controller {
     return /^H[1-6]$/.test(block.tagName) || Boolean(block.querySelector(":scope > h1, :scope > h2, :scope > h3, :scope > h4, :scope > h5, :scope > h6"))
   }
 
-  flowBlock(block, pages, page) {
+  flowBlock(block, pages, page, keepWith = []) {
     let remainder = block
     let currentPage = page
 
@@ -220,7 +241,24 @@ export default class extends Controller {
       currentPage.content.removeChild(remainder)
 
       let split = this.splitBlock(remainder, currentPage)
+
+      if (!split && keepWith.length && keepWith.every((node) => currentPage.content.contains(node))) {
+        if (currentPage.content.childElementCount > keepWith.length) {
+          keepWith.forEach((node) => currentPage.content.removeChild(node))
+          currentPage = this.createPage(pages.length + 1)
+          pages.push(currentPage)
+          currentPage.content.append(...keepWith)
+          split = this.splitBlock(remainder, currentPage)
+        }
+      }
+
       if (!split && currentPage.content.childElementCount > 0) {
+        if (keepWith.length && keepWith.every((node) => currentPage.content.contains(node))) {
+          currentPage.content.append(remainder)
+          currentPage.page.classList.add("is-overflowing-content")
+          return
+        }
+
         currentPage = this.createPage(pages.length + 1)
         pages.push(currentPage)
         split = this.splitBlock(remainder, currentPage)
@@ -236,6 +274,7 @@ export default class extends Controller {
       }
 
       currentPage.content.append(split[0])
+      keepWith = []
       remainder = split[1]
       currentPage = this.createPage(pages.length + 1)
       pages.push(currentPage)

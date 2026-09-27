@@ -1468,6 +1468,71 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: /Continued\z/, wait: 5
   end
 
+  test "keeps a heading with its following paragraph when the page is full" do
+    filler = "Filler content leaves room for the heading, but not its paragraph."
+    paragraph = "The first paragraph fragment must stay with its heading."
+    document = Document.create!(title: "Heading pagination", source: "#{filler}\n\n## Section heading\n\n#{paragraph}")
+
+    visit document_path(document)
+    assert_selector ".document-surface.is-paginated"
+    assert_selector ".document-surface[data-document-pages-settled='true']", wait: 5
+
+    first_pagination_settled = page.evaluate_async_script(<<~JAVASCRIPT)
+      const done = arguments[arguments.length - 1];
+      const surface = document.querySelector(".document-surface");
+      const filler = [...surface.querySelectorAll("p")].find((paragraph) => paragraph.textContent === #{filler.to_json});
+      const heading = surface.querySelector("h2");
+      const content = filler.closest(".document-page-content");
+      filler.style.margin = "0";
+      heading.style.marginTop = "0";
+      const headingStyle = getComputedStyle(heading);
+      const headingHeight = heading.getBoundingClientRect().height + parseFloat(headingStyle.marginBottom);
+      filler.style.height = `${content.clientHeight - headingHeight - 1}px`;
+      const reader = heading.closest("[data-controller~='document-pages']");
+      surface.addEventListener("elef:document-pages-settled", () => done(true), { once: true });
+      window.Stimulus.getControllerForElementAndIdentifier(reader, "document-pages").paginate();
+    JAVASCRIPT
+    assert first_pagination_settled, "document pagination did not settle"
+
+    pages_after_move = page.evaluate_script(<<~JAVASCRIPT)
+      [...document.querySelectorAll(".document-page-content")].map((content) => ({
+        heading: content.querySelector("h2")?.textContent,
+        paragraphs: [...content.querySelectorAll("p")].map((paragraph) => paragraph.textContent)
+      }))
+    JAVASCRIPT
+    filler_page_index = pages_after_move.index { |entry| entry["paragraphs"].include?(filler) }
+    heading_page_index = pages_after_move.index { |entry| entry["heading"] == "Section heading" }
+    assert_operator heading_page_index, :>, filler_page_index
+    heading_page = pages_after_move[heading_page_index]
+    assert heading_page, "expected the section heading to remain on a page"
+    assert_equal [paragraph], heading_page["paragraphs"]
+
+    final_pagination_settled = page.evaluate_async_script(<<~JAVASCRIPT)
+      const done = arguments[arguments.length - 1];
+      const surface = document.querySelector(".document-surface");
+      const heading = surface.querySelector("h2");
+      const content = heading.closest(".document-page-content");
+      heading.style.marginBottom = `${content.clientHeight}px`;
+      const reader = heading.closest("[data-controller~='document-pages']");
+      surface.addEventListener("elef:document-pages-settled", () => done(true), { once: true });
+      window.Stimulus.getControllerForElementAndIdentifier(reader, "document-pages").paginate();
+    JAVASCRIPT
+    assert final_pagination_settled, "document pagination did not settle"
+
+    final_heading_page = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const heading = [...document.querySelectorAll(".document-page-content")]
+        .find((content) => content.querySelector("h2")?.textContent === "Section heading");
+        return {
+          paragraphs: [...heading.querySelectorAll("p")].map((paragraph) => paragraph.textContent),
+          overflowing: heading.closest(".document-page").classList.contains("is-overflowing-content")
+        };
+      })()
+    JAVASCRIPT
+    assert_equal [paragraph], final_heading_page["paragraphs"]
+    assert final_heading_page["overflowing"]
+  end
+
   test "removes an empty visual block at the beginning without shifting the following page content" do
     document = Document.create!(title: "Leading empty block", source: "# First page\n\nBody text")
     visit edit_document_path(document)
