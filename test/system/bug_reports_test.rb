@@ -3,6 +3,8 @@ require "application_system_test_case"
 class BugReportsTest < ApplicationSystemTestCase
   test "snapshots before opening, keeps reporter activity out, allows editing, and preserves a failed report" do
     visit root_path
+    assert_selector '#bug-report-recording-disclosure', visible: true, text: /typed text.*automatically kept in memory for up to 60 seconds.*may be included/i
+    assert_selector 'button[aria-describedby="bug-report-recording-disclosure"]', text: "Report Bug"
     controller_loaded = Selenium::WebDriver::Wait.new(timeout: 5).until do
       page.evaluate_script('Boolean(window.Stimulus.getControllerForElementAndIdentifier(document.querySelector(".bug-report-root"), "bug-report"))')
     end

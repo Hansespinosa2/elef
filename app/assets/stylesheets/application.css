@@ -383,9 +383,10 @@ body.elef-app {
 .command-palette-trigger kbd { border: 1px solid var(--oradia-slate-700); border-radius: 0.3rem; font-family: var(--oradia-mono); font-size: 0.7rem; margin-left: 0.35rem; padding: 0.1rem 0.3rem; }
 
 /* ── bug reports ── */
-.bug-report-root { align-items: center; display: flex; flex: 0 0 auto; }
+.bug-report-root { align-items: center; display: flex; flex: 0 1 auto; gap: 0.65rem; max-width: 34rem; }
 .bug-report-trigger { background: var(--oradia-green-deep); border: 1px solid var(--oradia-green-deep); border-radius: 999px; color: #f5faf5; cursor: pointer; font: inherit; font-size: 0.8rem; font-weight: 800; padding: 0.48rem 0.8rem; }
 .bug-report-trigger:hover, .bug-report-trigger:focus-visible { background: var(--oradia-green); border-color: var(--oradia-green); color: var(--oradia-slate-950); }
+.bug-report-disclosure { background: var(--oradia-slate-800); border-left: 3px solid var(--oradia-green); border-radius: 0.35rem; color: var(--oradia-ink); flex: 1 1 auto; font-size: 0.72rem; line-height: 1.4; margin: 0; max-width: 25rem; padding: 0.45rem 0.55rem; }
 .bug-report-dialog { background: transparent; border: 0; color: var(--oradia-ink); max-height: calc(100dvh - 2rem); max-width: calc(100vw - 2rem); overflow: auto; padding: 0; width: min(44rem, calc(100vw - 2rem)); }
 .bug-report-dialog::backdrop { background: rgba(0, 0, 0, 0.62); backdrop-filter: blur(3px); }
 .bug-report-panel { background: var(--oradia-slate-900); border: 1px solid var(--oradia-slate-700); border-radius: 0.9rem; box-shadow: 0 24px 80px #0008; padding: 1.2rem; }

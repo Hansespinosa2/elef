@@ -27,7 +27,8 @@
           <%= link_to "Settings", settings_path, class: "app-nav-link rounded-lg px-3 py-2 text-sm font-bold no-underline text-[#aab7b1] #{'is-active' if %w[workspace_settings snippets math_shortcuts].include?(controller_name)}" %>
         </nav>
         <div class="bug-report-root" data-controller="bug-report" data-bug-report-endpoint-value="<%= bug_reports_path %>">
-          <button type="button" class="bug-report-trigger" data-action="bug-report#open" data-bug-report-ignore aria-haspopup="dialog" aria-controls="bug-report-dialog">Report Bug</button>
+          <p id="bug-report-recording-disclosure" class="bug-report-disclosure">While you use Elef, recent clicks, typed text, keys, and page paths are automatically kept in memory for up to 60 seconds to prepare bug reports. If submitted, these may be included. Review and edit the generated steps first; recognized sensitive fields are redacted.</p>
+          <button type="button" class="bug-report-trigger" data-action="bug-report#open" data-bug-report-ignore aria-haspopup="dialog" aria-controls="bug-report-dialog" aria-describedby="bug-report-recording-disclosure">Report Bug</button>
           <dialog id="bug-report-dialog" class="bug-report-dialog" data-bug-report-target="dialog" data-bug-report-ignore data-action="close->bug-report#closed cancel->bug-report#cancel" aria-labelledby="bug-report-heading">
             <section class="bug-report-panel">
               <header class="bug-report-heading">

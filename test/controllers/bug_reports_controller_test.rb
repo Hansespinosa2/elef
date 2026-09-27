@@ -30,6 +30,8 @@ class BugReportsControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :success
     assert_select 'button[data-action="bug-report#open"][data-bug-report-ignore]', text: "Report Bug"
+    assert_select '#bug-report-recording-disclosure', text: /typed text.*automatically kept in memory for up to 60 seconds.*If submitted, these may be included.*review and edit the generated steps/i
+    assert_select 'button[aria-describedby="bug-report-recording-disclosure"]'
     assert_select 'dialog#bug-report-dialog'
     assert_select 'textarea[name="expected"][required]'
     assert_select 'textarea[name="actual"][required]'
