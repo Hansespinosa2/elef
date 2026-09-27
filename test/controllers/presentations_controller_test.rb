@@ -230,6 +230,27 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_includes payload.dig("slides", 1, "blocks", 0, "html"), "Two"
   end
 
+  test "new presentations can export their unsaved form values without persistence" do
+    presentation_count = Presentation.count
+
+    post pptx_presentations_path(version: "draft"), params: {
+      presentation: {
+        title: "Unsaved new deck",
+        source: "# Unsaved new slide\n\nDraft body.",
+        theme: "dark",
+        typography: "technical"
+      }
+    }, as: :json
+
+    assert_response :success
+    payload = response.parsed_body
+    assert_equal "Unsaved new deck.pptx", payload["filename"]
+    assert_equal "dark", payload.dig("presentation", "theme")
+    assert_equal "technical", payload.dig("presentation", "typography")
+    assert_includes payload.dig("slides", 0, "blocks", 0, "html"), "Draft body."
+    assert_equal presentation_count, Presentation.count
+  end
+
   test "PPTX POST exports unsaved form values without persisting them" do
     presentation = Presentation.create!(title: "Saved presentation", source: "# Saved source")
 
@@ -337,6 +358,16 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_select '[data-controller="pptx-export"][data-pptx-export-url-value=?]', pptx_presentation_path(presentation, version: "published") do
       assert_select "button", text: "Download published PPTX"
     end
+
+    get new_presentation_path
+    assert_select '[data-controller="pptx-export"][data-pptx-export-url-value=?][data-pptx-export-current-draft-value="true"]',
+      pptx_presentations_path(version: "draft") do
+      assert_select "button", text: "Download PPTX draft"
+    end
+    assert_select '[data-pptx-export-library-url-value="/vendor/pptxgen.bundle.js"]'
+
+    get new_presentation_path, headers: { "SCRIPT_NAME" => "/apps/elef/dev" }
+    assert_select '[data-pptx-export-library-url-value="/apps/elef/dev/vendor/pptxgen.bundle.js"]'
   end
 
   test "previews an unsaved presentation without creating a record" do
