@@ -54,9 +54,9 @@ class PresentationsPptxExportTest < ActiveSupport::TestCase
   end
 
   test "uses the mounted route prefix for Elef attachment URLs" do
-    presentation = Presentation.create!(title: "Mounted asset", source: "# Mounted\n\n![Pixel](elef-asset:#{"0" * 64})")
-    presentation.assets.attach(io: StringIO.new(PIXEL_PNG), filename: "pixel.png", content_type: "image/png")
     digest = Digest::SHA256.hexdigest(PIXEL_PNG)
+    presentation = Presentation.create!(title: "Mounted asset", source: "# Mounted\n\n![Pixel](elef-asset:#{digest})")
+    presentation.assets.attach(io: StringIO.new(PIXEL_PNG), filename: "pixel.png", content_type: "image/png")
     blob = presentation.assets.blobs.last
     blob.update!(metadata: blob.metadata.merge("elef_sha256" => digest))
     previous_root = Rails.application.config.relative_url_root
@@ -64,7 +64,7 @@ class PresentationsPptxExportTest < ActiveSupport::TestCase
 
     payload = Presentations::PptxExport.new(presentation).as_json
 
-    assert_includes payload.dig(:slides, 0, :blocks, 0, :html),
+    assert_includes payload.dig(:slides, 0, :blocks, 1, :html),
       "/apps/elef/dev/presentations/#{presentation.id}/pptx_assets/#{digest}?version=draft"
   ensure
     Rails.application.config.relative_url_root = previous_root

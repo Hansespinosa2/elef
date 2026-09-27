@@ -247,7 +247,7 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "Unsaved new deck.pptx", payload["filename"]
     assert_equal "dark", payload.dig("presentation", "theme")
     assert_equal "technical", payload.dig("presentation", "typography")
-    assert_includes payload.dig("slides", 0, "blocks", 0, "html"), "Draft body."
+    assert_includes payload.dig("slides", 0, "blocks", 1, "html"), "Draft body."
     assert_equal presentation_count, Presentation.count
   end
 
