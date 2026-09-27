@@ -112,7 +112,9 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     capital_alpha = find(".math-shortcut-option", text: /Capital Alpha/, wait: 5)
     within(capital_alpha) do
       assert_selector ".math-shortcut-trigger", text: "@A"
-      assert_selector ".math-shortcut-latex code", text: "\\Alpha"
+      assert_selector ".math-shortcut-latex code", text: "A"
+      assert_selector ".math-shortcut-preview-render .katex-html"
+      assert_no_selector ".math-shortcut-preview-render .katex-error"
     end
     editor.send_keys(:enter)
 
@@ -125,7 +127,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     editor.send_keys(:enter)
 
     source = find_field("Markdown source").value
-    assert_includes source, "\\Alpha"
+    assert_includes source, "\nA\n"
     assert_includes source, "\\omega"
   end
 

@@ -43,17 +43,21 @@ class StyleAndMathShortcutTest < ActiveSupport::TestCase
   test "includes uppercase and lowercase Greek letter shortcuts" do
     catalog = MathShortcuts::Catalog.for_editor
     greek = {
-      "A" => "\\Alpha", "B" => "\\Beta", "G" => "\\Gamma", "D" => "\\Delta",
-      "E" => "\\Epsilon", "Z" => "\\Zeta", "H" => "\\Eta", "Q" => "\\Theta",
-      "I" => "\\Iota", "K" => "\\Kappa", "L" => "\\Lambda", "M" => "\\Mu",
-      "N" => "\\Nu", "X" => "\\Xi", "O" => "\\Omicron", "P" => "\\Pi",
-      "R" => "\\Rho", "S" => "\\Sigma", "T" => "\\Tau", "U" => "\\Upsilon",
-      "F" => "\\Phi", "C" => "\\Chi", "Y" => "\\Psi", "W" => "\\Omega"
+      "A" => "A", "B" => "B", "G" => "\\Gamma", "D" => "\\Delta",
+      "E" => "E", "Z" => "Z", "H" => "H", "Q" => "\\Theta",
+      "I" => "I", "K" => "K", "L" => "\\Lambda", "M" => "M",
+      "N" => "N", "X" => "\\Xi", "O" => "O", "P" => "\\Pi",
+      "R" => "P", "S" => "\\Sigma", "T" => "T", "U" => "\\Upsilon",
+      "F" => "\\Phi", "C" => "X", "Y" => "\\Psi", "W" => "\\Omega"
     }
 
     greek.each do |letter, expansion|
       shortcut = catalog.find { |item| item[:prefix] == "@" && item[:aliases].include?(letter) }
       assert_equal expansion, shortcut&.fetch(:expansion), "@#{letter} should expand to #{expansion}"
+
+      html = Source::Renderer.render("$#{expansion}$")
+      assert_includes html, 'class="katex"', "@#{letter} should render through KaTeX"
+      refute_includes html, 'class="math-error"', "@#{letter} should not produce a math error"
     end
 
     assert_equal "\\alpha", catalog.find { |item| item[:prefix] == "@" && item[:aliases].include?("a") }[:expansion]
