@@ -78,26 +78,6 @@
       <div class="editor-kind-badge"><%= type_label %></div>
     </header>
 
-    <div class="field appearance-fields mb-4 grid gap-3 sm:grid-cols-2" data-controller="appearance" aria-label="Visual appearance controls">
-      <div data-appearance-target="themeField"<%= " hidden" unless editor_mode == "visual" %>>
-        <%= form.label :theme, "Theme", class: "appearance-label mb-1 block font-extrabold" %>
-        <%= form.select :theme,
-          [["Workspace default", ""], ["Light", "light"], ["Dark", "dark"], ["Match", "match"]],
-          { selected: work.theme_override },
-          class: "appearance-select w-full rounded-xl p-3",
-          data: { appearance_target: "theme", dirty_target: "field", autosave_target: "field", action: "change->dirty#markDirty" } %>
-      </div>
-      <div data-appearance-target="typographyField"<%= " hidden" unless editor_mode == "visual" %>>
-        <%= form.label :typography, "Typography", class: "appearance-label mb-1 block font-extrabold" %>
-        <%= form.select :typography,
-          [["Workspace default", ""], ["Book", "book"], ["Modern", "modern"], ["Technical", "technical"]],
-          { selected: work.typography_override },
-          class: "appearance-select w-full rounded-xl p-3",
-          data: { appearance_target: "typography", dirty_target: "field", autosave_target: "field", action: "change->dirty#markDirty" } %>
-      </div>
-      <p class="field-hint appearance-hint sm:col-span-2" data-appearance-target="hint">Appearance overrides stay in the Markdown front matter.</p>
-    </div>
-
     <div class="editor-layout">
       <div class="source-pane">
     <div class="field source-field relative mb-4" data-controller="editor snippet-palette math-shorthand math-shortcut-palette<%= " document-link-palette" if work.document? %>" data-editor-initial-source-value="<%= ERB::Util.html_escape(work.source.to_s.to_json) %>" data-snippet-palette-snippets-value="<%= json_escape(Snippets::Catalog.for_editor.to_json) %>" data-math-shortcut-palette-shortcuts-value="<%= json_escape(MathShortcuts::Catalog.for_editor(workspace: work.workspace || Workspace.default).to_json) %>" data-math-shortcut-palette-katex-url-value="<%= asset_path("katex.js") %>"<% if work.document? %> data-document-link-palette-titles-value="<%= ERB::Util.html_escape(document_link_titles(workspace: work.workspace).to_json) %>"<% end %><% if work.presentation? %> data-presentation-editor-target="source"<% end %>>
@@ -112,6 +92,28 @@
         </div>
         <span class="editor-mode" data-editor-target="mode" data-mode="standard" aria-live="polite">Standard</span>
         <span class="editor-command" data-editor-target="command" aria-live="polite"></span>
+        <details class="editor-settings appearance-settings" data-controller="appearance" data-appearance-target="panelContainer"<%= " hidden" unless editor_mode == "visual" %>>
+          <summary class="editor-reveal-metadata">Appearance</summary>
+          <div class="editor-settings-panel appearance-fields" aria-label="Visual appearance controls">
+            <div data-appearance-target="themeField">
+              <%= form.label :theme, "Theme", class: "appearance-label mb-1 block font-extrabold" %>
+              <%= form.select :theme,
+                [["Workspace default", ""], ["Light", "light"], ["Dark", "dark"], ["Match", "match"]],
+                { selected: work.theme_override },
+                class: "appearance-select w-full rounded-xl p-3",
+                data: { appearance_target: "theme", dirty_target: "field", autosave_target: "field", action: "change->dirty#markDirty" } %>
+            </div>
+            <div data-appearance-target="typographyField">
+              <%= form.label :typography, "Typography", class: "appearance-label mb-1 block font-extrabold" %>
+              <%= form.select :typography,
+                [["Workspace default", ""], ["Book", "book"], ["Modern", "modern"], ["Technical", "technical"]],
+                { selected: work.typography_override },
+                class: "appearance-select w-full rounded-xl p-3",
+                data: { appearance_target: "typography", dirty_target: "field", autosave_target: "field", action: "change->dirty#markDirty" } %>
+            </div>
+            <p class="field-hint appearance-hint" data-appearance-target="hint">Appearance overrides stay in the Markdown front matter.</p>
+          </div>
+        </details>
         <button type="button" class="editor-reveal-metadata" data-editor-target="metadataToggle" data-action="editor#toggleMetadataVisibility"<%= " hidden" if editor_mode == "visual" %>>Reveal source metadata</button>
         <details class="editor-settings ml-auto">
           <summary>Vim settings</summary>

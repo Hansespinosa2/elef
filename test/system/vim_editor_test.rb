@@ -52,7 +52,7 @@ class VimEditorTest < ApplicationSystemTestCase
     find("summary", text: "Vim settings").click
     panel = page.evaluate_script(<<~JAVASCRIPT)
       (() => {
-        const rect = document.querySelector('.editor-settings-panel').getBoundingClientRect()
+        const rect = document.querySelector('.editor-settings:not(.appearance-settings) .editor-settings-panel').getBoundingClientRect()
         const source = document.querySelector('.source-field').getBoundingClientRect()
         return { left: rect.left, right: rect.right, width: rect.width, sourceLeft: source.left, sourceRight: source.right }
       })()

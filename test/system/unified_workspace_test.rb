@@ -235,7 +235,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
 
     visit edit_document_path(document)
     assert_selector ".cm-foldPlaceholder", wait: 5
-    assert_no_selector ".editor-reveal-metadata", visible: true
+    assert_no_selector "button.editor-reveal-metadata", visible: true
     click_on "Source"
     assert_no_selector ".cm-foldPlaceholder"
     assert_selector ".editor-reveal-metadata", text: "Hide source metadata", visible: true
@@ -256,8 +256,11 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     )
 
     visit edit_document_path(document)
+    assert_selector "summary.editor-reveal-metadata", text: "Appearance", visible: true
+    assert_no_selector "button.editor-reveal-metadata", text: "Reveal source metadata", visible: true
+    assert_no_selector "select#document_theme", visible: true
+    find("summary.editor-reveal-metadata", text: "Appearance").click
     assert_selector "select#document_theme", visible: true
-    assert_no_selector ".editor-reveal-metadata", visible: true
     select "Dark", from: "Theme"
     select "Modern", from: "Typography"
 
@@ -278,12 +281,18 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     )
 
     visit edit_document_path(document)
+    assert_selector "summary.editor-reveal-metadata", text: "Appearance", visible: true
+    assert_no_selector "select#document_theme", visible: true
+    assert_no_selector "select#document_typography", visible: true
+    assert_no_selector "button.editor-reveal-metadata", text: "Reveal source metadata", visible: true
+
+    find("summary.editor-reveal-metadata", text: "Appearance").click
     assert_selector "select#document_theme", visible: true
     assert_selector "select#document_typography", visible: true
-    assert_no_selector ".editor-reveal-metadata", visible: true
     assert_equal "rgb(17, 22, 26)", page.evaluate_script("getComputedStyle(document.querySelector('select#document_theme')).backgroundColor")
 
     click_on "Source"
+    assert_no_selector "summary.editor-reveal-metadata", text: "Appearance", visible: true
     assert_no_selector "select#document_theme", visible: true
     assert_no_selector "select#document_typography", visible: true
     assert_selector ".editor-reveal-metadata", text: "Hide source metadata", visible: true
@@ -293,9 +302,11 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     assert_selector ".document-reader.document-theme-dark", wait: 5
 
     click_on "Visual"
+    assert_selector "summary.editor-reveal-metadata", text: "Appearance", visible: true
+    find("summary.editor-reveal-metadata", text: "Appearance").click
     assert_selector "select#document_theme", visible: true
     assert_equal "dark", page.evaluate_script("document.querySelector('#document_theme').value")
-    assert_no_selector ".editor-reveal-metadata", visible: true
+    assert_no_selector "button.editor-reveal-metadata", text: "Reveal source metadata", visible: true
   end
 
   test "saving a source mode metadata edit preserves the source mode" do

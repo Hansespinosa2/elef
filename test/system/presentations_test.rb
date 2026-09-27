@@ -103,6 +103,20 @@ class PresentationsTest < ApplicationSystemTestCase
     assert ready, "autosave request #{index} was not registered"
   end
 
+  test "appearance controls are collapsed in the presentation editor" do
+    presentation = Presentation.create!(title: "Appearance popup", source: "# Appearance popup")
+
+    visit edit_presentation_path(presentation)
+
+    assert_selector "summary.editor-reveal-metadata", text: "Appearance", visible: true
+    assert_no_selector "select#presentation_theme", visible: true
+    assert_no_selector "select#presentation_typography", visible: true
+
+    find("summary.editor-reveal-metadata", text: "Appearance").click
+    assert_selector "select#presentation_theme", visible: true
+    assert_selector "select#presentation_typography", visible: true
+  end
+
   test "library renames forks and deletes a presentation through its controls" do
     parent = Presentation.create!(title: "Workflow parent", source: "# Keep this source")
     visit presentations_path
@@ -1772,6 +1786,7 @@ class PresentationsTest < ApplicationSystemTestCase
 
     fill_in "Title", with: "System Deck"
     source = "# First\n\nBody\n---\n# Second"
+    find("summary.editor-reveal-metadata", text: "Appearance").click
     select "Book", from: "Typography"
     normalized_source = "---\ntypography: book\n---\n#{source}"
     fill_in "Markdown source", with: source
