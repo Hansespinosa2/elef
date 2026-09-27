@@ -55,7 +55,7 @@ function normalizedModifiers(names) {
 }
 
 export function parseMathShorthand(token) {
-  const match = token.match(/^([A-Za-z][A-Za-z0-9]*)(?:\.([A-Za-z][A-Za-z0-9]*))+$/)
+  const match = token.match(/^(\\[A-Za-z][A-Za-z0-9]*|[A-Za-z][A-Za-z0-9]*)(?:\.[A-Za-z][A-Za-z0-9]*)+$/)
   if (!match) return null
 
   const [base, ...names] = token.split(".")
@@ -201,7 +201,7 @@ export default class extends Controller {
     }
 
     const before = editor.value.slice(0, caret)
-    const match = before.match(/([A-Za-z][A-Za-z0-9]*(?:\.[A-Za-z][A-Za-z0-9]*)*)$/)
+    const match = before.match(/((?:\\[A-Za-z][A-Za-z0-9]*|[A-Za-z][A-Za-z0-9]*)(?:\.[A-Za-z][A-Za-z0-9]*)+)$/)
     if (!match) return
 
     const parsed = parseMathShorthand(match[1])
