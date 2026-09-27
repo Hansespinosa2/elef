@@ -2,6 +2,14 @@ class BugReportsController < ApplicationController
   EXPECTED_MAX_LENGTH = 10_000
   ACTUAL_MAX_LENGTH = 10_000
   STEPS_MAX_LENGTH = 20_000
+  RATE_LIMIT_STORE = ActiveSupport::Cache::MemoryStore.new
+
+  rate_limit to: 5,
+    within: 10.minutes,
+    by: -> { request.remote_ip },
+    store: RATE_LIMIT_STORE,
+    with: -> { render json: { error: "Too many bug reports were submitted. Wait a few minutes and try again." }, status: :too_many_requests },
+    only: :create
 
   def create
     submitted_report = params[:bug_report]

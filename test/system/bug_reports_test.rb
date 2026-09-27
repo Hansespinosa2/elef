@@ -39,5 +39,26 @@ class BugReportsTest < ApplicationSystemTestCase
     assert_equal "1. Open Commands\n2. Choose Search", steps_field.value
     assert_equal "/bug_reports", page.evaluate_script("window.bugReportRequest.url")
     assert_equal({ "expected" => "The palette closes", "actual" => "It remained open", "steps" => "1. Open Commands\n2. Choose Search" }, page.evaluate_script("window.bugReportRequest.body.bug_report"))
+
+    page.execute_script(<<~JS)
+      window.fetch = async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({ url: "https://github.com/acme/elef/issues/27" })
+      });
+    JS
+    click_button "Create GitHub issue"
+
+    assert_selector '[data-bug-report-target="success"][role="status"]', text: "Bug report submitted."
+    assert_selector '[data-bug-report-target="issueLink"][href="https://github.com/acme/elef/issues/27"]', text: "View GitHub issue"
+
+    click_button "Done"
+    click_button "Report Bug"
+    later_steps = find_field("Steps to reproduce").value
+    assert_includes later_steps, 'Clicked "Open command palette"'
+    refute_includes later_steps, "Report Bug"
+    refute_includes later_steps, "The palette closes"
+    refute_includes later_steps, "It remained open"
+    refute_includes later_steps, "Choose Search"
   end
 end

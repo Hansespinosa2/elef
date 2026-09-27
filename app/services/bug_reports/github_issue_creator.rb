@@ -39,7 +39,7 @@ module BugReports
     def validate_configuration
       if @token.empty? || @repository.empty?
         "GitHub issue reporting is not configured. Set GITHUB_TOKEN and GITHUB_REPOSITORY on the Elef server."
-      elsif !REPOSITORY_FORMAT.match?(@repository)
+      elsif !REPOSITORY_FORMAT.match?(@repository) || @repository.split("/").any? { |segment| %w[. ..].include?(segment) }
         "GitHub issue reporting is not configured. GITHUB_REPOSITORY must use owner/repository format."
       end
     end

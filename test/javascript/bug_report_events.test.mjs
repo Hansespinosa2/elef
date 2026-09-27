@@ -168,8 +168,10 @@ test("redacts password, secret, email, and sensitive autocomplete values before 
   const apiToken = new FakeElement("input", { attributes: { type: "text", name: "api_token" } })
   const email = new FakeElement("input", { attributes: { type: "email", name: "account[email]" } })
   const cardNumber = new FakeElement("input", { attributes: { type: "text", autocomplete: "cc-number" } })
+  const privateGroup = new FakeElement("div", { attributes: { "data-sensitive": "" } })
+  const privateField = new FakeElement("input", { attributes: { type: "text", name: "custom_value" }, parent: privateGroup })
 
-  for (const field of [password, apiToken, email, cardNumber]) {
+  for (const field of [password, apiToken, email, cardNumber, privateField]) {
     assert.equal(isSensitiveField(field), true)
     instance.recordTyping(field, "never-store-this")
   }
@@ -191,6 +193,33 @@ test("keeps normal text and compacts contiguous typing into one readable action"
   const snapshot = instance.snapshot()
   assert.equal(snapshot.at(-1).text, "Quarterly Review")
   assert.match(formatReproductionSteps(snapshot), /Typed "Quarterly Review" into document title field/)
+})
+
+test("keeps same-field typing as separate steps when there is a long pause", () => {
+  const { instance, setTime } = recorder()
+  const field = new FakeElement("textarea", { labels: [{ textContent: "Notes" }] })
+  setTime(0)
+  instance.recordTyping(field, "First thought")
+  setTime(2_000)
+  instance.recordTyping(field, "Later edit")
+
+  assert.equal(instance.snapshot().filter((event) => event.type === "typing").length, 2)
+  assert.equal(formatReproductionSteps(instance.snapshot()), [
+    '1. Navigated to "/documents/42"',
+    '2. Typed "First thought" into notes field',
+    '3. Typed "Later edit" into notes field'
+  ].join("\n"))
+})
+
+test("caps generated steps at the report field limit and marks omitted interactions", () => {
+  const { instance } = recorder()
+  for (let index = 0; index < 300; index += 1) {
+    instance.record({ type: "click", target: `button ${"x".repeat(100)}` }, index)
+  }
+
+  const steps = formatReproductionSteps(instance.snapshot())
+  assert.ok(steps.length <= 18_000)
+  assert.match(steps, /Additional interactions omitted to fit the report/)
 })
 
 test("caps a single stored typing action so large text cannot bypass the bounded buffer", () => {

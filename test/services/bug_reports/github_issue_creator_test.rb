@@ -60,11 +60,14 @@ class BugReports::GithubIssueCreatorTest < ActiveSupport::TestCase
     http = FakeHttp.new(response: RuntimeError.new("API must not be called"))
     missing = BugReports::GithubIssueCreator.new(token: "", repository: "acme/elef", http: http).call(title: "Bug", body: "Body")
     invalid_repository = BugReports::GithubIssueCreator.new(token: "server-secret", repository: "https://github.com/acme/elef", http: http).call(title: "Bug", body: "Body")
+    traversal_repository = BugReports::GithubIssueCreator.new(token: "server-secret", repository: "../issues", http: http).call(title: "Bug", body: "Body")
 
     refute_predicate missing, :success?
     assert_includes missing.error, "GITHUB_TOKEN and GITHUB_REPOSITORY"
     refute_predicate invalid_repository, :success?
     assert_includes invalid_repository.error, "owner/repository"
+    refute_predicate traversal_repository, :success?
+    assert_includes traversal_repository.error, "owner/repository"
     assert_nil http.host
   end
 

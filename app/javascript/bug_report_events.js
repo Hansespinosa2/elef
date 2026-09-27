@@ -3,11 +3,13 @@ export const MAX_EVENT_COUNT = 500
 
 const TYPING_COMPACTION_MS = 1_500
 const MAX_TYPED_TEXT_LENGTH = 500
+const MAX_REPRODUCTION_STEPS_LENGTH = 18_000
 const PRUNE_INTERVAL_MS = 5_000
 const SENSITIVE_NAME = /(?:pass(?:word|code)?|secret|token|api[_ -]?key|access[_ -]?key|credential|auth(?:entication|orization)?|e-?mail|phone|telephone|mobile|credit[_ -]?card|card[_ -]?(?:number|cvc|cvv|security)|cc[_ -]?(?:num(?:ber)?|csc|cvc|cvv|exp)|security[_ -]?code|\bcvv\b|\bcvc\b|\bcsc\b|\bpan\b|social[_ -]?security|\bssn\b)/i
 const SENSITIVE_AUTOCOMPLETE = /^(?:current-password|new-password|one-time-code|cc-(?:number|csc|exp|exp-month|exp-year|name|type))$/i
 const IGNORE_SELECTOR = "[data-bug-report-ignore], [data-bug-reporting-ui]"
 const INTERACTIVE_SELECTOR = "button, a[href], input, textarea, select, summary, [role='button'], [role='link'], [contenteditable='true'], [data-action], [tabindex]:not([tabindex='-1'])"
+const SENSITIVE_MARKERS = ["data-sensitive", "data-private", "data-secret", "aria-sensitive"]
 
 function elementFor(target) {
   if (target?.nodeType === 3) return target.parentElement
@@ -57,7 +59,7 @@ function associatedLabel(element) {
 function hasSensitiveMetadata(element) {
   if (!element) return false
   if (attribute(element, "type").toLowerCase() === "password") return true
-  if (["data-sensitive", "data-private", "data-secret", "aria-sensitive"].some((name) => element.hasAttribute?.(name))) return true
+  if (SENSITIVE_MARKERS.some((name) => element.hasAttribute?.(name))) return true
 
   const autocomplete = attribute(element, "autocomplete").split(/\s+/).filter(Boolean)
   if (autocomplete.some((token) => SENSITIVE_AUTOCOMPLETE.test(token))) return true
@@ -70,6 +72,7 @@ function hasSensitiveMetadata(element) {
 export function isSensitiveField(target) {
   let element = elementFor(target)
   while (element) {
+    if (SENSITIVE_MARKERS.some((name) => element.hasAttribute?.(name))) return true
     if (isTextEntry(element) && hasSensitiveMetadata(element)) return true
     element = element.parentElement
   }
@@ -329,10 +332,14 @@ export function formatReproductionSteps(events) {
     }
     if (event.type === "typing" && event.target) {
       const current = actions.at(-1)
-      if (current?.type === "typing" && current.target === event.target && current.redacted === Boolean(event.redacted)) {
+      const hasTimestamps = Number.isFinite(current?.at) && Number.isFinite(event.at)
+      const elapsed = hasTimestamps ? event.at - current.at : 0
+      const withinTypingWindow = !hasTimestamps || (elapsed >= 0 && elapsed <= TYPING_COMPACTION_MS)
+      if (current?.type === "typing" && current.target === event.target && current.redacted === Boolean(event.redacted) && withinTypingWindow) {
         if (!current.redacted) current.text += String(event.text || "")
+        if (hasTimestamps) current.at = event.at
       } else {
-        actions.push({ type: "typing", target: cleanLabel(event.target), text: event.redacted ? "[REDACTED]" : String(event.text || ""), redacted: Boolean(event.redacted) })
+        actions.push({ type: "typing", target: cleanLabel(event.target), text: event.redacted ? "[REDACTED]" : String(event.text || ""), redacted: Boolean(event.redacted), at: event.at })
       }
       continue
     }
@@ -353,7 +360,23 @@ export function formatReproductionSteps(events) {
   })
 
   if (lines.length === 0) lines.push("No interactions captured")
-  return lines.map((line, index) => `${index + 1}. ${line}`).join("\n")
+  const numberedLines = []
+  let totalLength = 0
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index]
+    const numbered = `${numberedLines.length + 1}. ${line}`
+    const separatorLength = numberedLines.length ? 1 : 0
+    const hasMoreLines = index < lines.length - 1
+    const reservedOmissionLength = hasMoreLines ? `\n${numberedLines.length + 2}. Additional interactions omitted to fit the report.`.length : 0
+    if (totalLength + separatorLength + numbered.length + reservedOmissionLength > MAX_REPRODUCTION_STEPS_LENGTH) {
+      const omission = `${numberedLines.length + 1}. Additional interactions omitted to fit the report.`
+      if (totalLength + separatorLength + omission.length <= MAX_REPRODUCTION_STEPS_LENGTH) numberedLines.push(omission)
+      break
+    }
+    numberedLines.push(numbered)
+    totalLength += separatorLength + numbered.length
+  }
+  return numberedLines.join("\n")
 }
 
 const sharedRecorderKey = Symbol.for("elef.bugReportEventRecorder")

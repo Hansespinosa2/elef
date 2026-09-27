@@ -4,16 +4,22 @@ class BugReportsControllerTest < ActionDispatch::IntegrationTest
   FakeResult = Data.define(:success?, :url, :error)
 
   class FakeIssueCreator
-    attr_reader :arguments
+    attr_reader :arguments, :call_count
 
     def initialize(result: FakeResult.new(true, "https://github.com/acme/elef/issues/27", nil))
       @result = result
+      @call_count = 0
     end
 
     def call(**arguments)
+      @call_count += 1
       @arguments = arguments
       @result
     end
+  end
+
+  setup do
+    BugReportsController::RATE_LIMIT_STORE.clear
   end
 
   test "application layout exposes the report dialog and keeps server credentials out of client markup" do
@@ -89,6 +95,26 @@ class BugReportsControllerTest < ActionDispatch::IntegrationTest
     assert_response :service_unavailable
     assert_equal "GitHub issue reporting is not configured.", response.parsed_body["error"]
     assert_equal "Keep this", creator.arguments[:body].match(/\*\*Expected:\*\* (.+)/)[1]
+  end
+
+  test "limits issue creation attempts per source IP and returns a useful 429 response" do
+    creator = FakeIssueCreator.new
+    with_issue_creator(creator) do
+      5.times do
+        post bug_reports_path,
+          params: { bug_report: { expected: "Expected", actual: "Actual", steps: "1. Reproduce" } },
+          as: :json
+        assert_response :success
+      end
+
+      post bug_reports_path,
+        params: { bug_report: { expected: "Expected", actual: "Actual", steps: "1. Reproduce" } },
+        as: :json
+    end
+
+    assert_response :too_many_requests
+    assert_equal "Too many bug reports were submitted. Wait a few minutes and try again.", response.parsed_body["error"]
+    assert_equal 5, creator.call_count
   end
 
   private

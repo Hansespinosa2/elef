@@ -47,7 +47,8 @@ create issues in that repository. The personal and development Compose stacks
 forward these server environment variables. Provide the token through your
 process or deployment secret manager; do not put it in source control. Set
 `ELEF_BUILD_ID` when a deployment has a build identifier to include it in issue
-environment details.
+environment details. Issue submissions are limited to five attempts per source
+IP address per Rails process in ten minutes.
 
 ## Personal PostgreSQL instance
 
