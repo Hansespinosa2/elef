@@ -107,6 +107,26 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     source = find_field("Markdown source").value
     assert_includes source, "$\\mathbf{x}"
     assert_includes source, "\\alpha"
+
+    editor.send_keys("\n@A")
+    capital_alpha = find(".math-shortcut-option", text: /Capital Alpha/, wait: 5)
+    within(capital_alpha) do
+      assert_selector ".math-shortcut-trigger", text: "@A"
+      assert_selector ".math-shortcut-latex code", text: "\\Alpha"
+    end
+    editor.send_keys(:enter)
+
+    editor.send_keys("\n@w")
+    omega = find(".math-shortcut-option", text: /^Omega/, wait: 5)
+    within(omega) do
+      assert_selector ".math-shortcut-trigger", text: "@w"
+      assert_selector ".math-shortcut-latex code", text: "\\omega"
+    end
+    editor.send_keys(:enter)
+
+    source = find_field("Markdown source").value
+    assert_includes source, "\\Alpha"
+    assert_includes source, "\\omega"
   end
 
   test "shows dark math shortcut cards with rendered LaTeX examples" do

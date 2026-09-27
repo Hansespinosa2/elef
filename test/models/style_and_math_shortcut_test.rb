@@ -40,6 +40,27 @@ class StyleAndMathShortcutTest < ActiveSupport::TestCase
     refute_includes MathShortcuts::Catalog::DEFAULTS.find { |item| item[:name] == "Blackboard bold" }[:aliases], "bb"
   end
 
+  test "includes uppercase and lowercase Greek letter shortcuts" do
+    catalog = MathShortcuts::Catalog.for_editor
+    greek = {
+      "A" => "\\Alpha", "B" => "\\Beta", "G" => "\\Gamma", "D" => "\\Delta",
+      "E" => "\\Epsilon", "Z" => "\\Zeta", "H" => "\\Eta", "Q" => "\\Theta",
+      "I" => "\\Iota", "K" => "\\Kappa", "L" => "\\Lambda", "M" => "\\Mu",
+      "N" => "\\Nu", "X" => "\\Xi", "O" => "\\Omicron", "P" => "\\Pi",
+      "R" => "\\Rho", "S" => "\\Sigma", "T" => "\\Tau", "U" => "\\Upsilon",
+      "F" => "\\Phi", "C" => "\\Chi", "Y" => "\\Psi", "W" => "\\Omega"
+    }
+
+    greek.each do |letter, expansion|
+      shortcut = catalog.find { |item| item[:prefix] == "@" && item[:aliases].include?(letter) }
+      assert_equal expansion, shortcut&.fetch(:expansion), "@#{letter} should expand to #{expansion}"
+    end
+
+    assert_equal "\\alpha", catalog.find { |item| item[:prefix] == "@" && item[:aliases].include?("a") }[:expansion]
+    assert_equal "\\omega", catalog.find { |item| item[:prefix] == "@" && item[:aliases].include?("w") }[:expansion]
+    assert_equal "\\omicron", catalog.find { |item| item[:prefix] == "@" && item[:aliases].include?("omicron") }[:expansion]
+  end
+
   test "includes common TeX operators and expands multiple math slots in order" do
     catalog = MathShortcuts::Catalog.for_editor
 

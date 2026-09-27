@@ -175,18 +175,26 @@ export default class extends Controller {
   }
 
   fuzzyScore(shortcut, query) {
-    const candidates = [shortcut.name, ...(shortcut.aliases || [])].map((value) => value.toLowerCase())
+    const candidates = [shortcut.name, ...(shortcut.aliases || [])]
     const needle = query.toLowerCase()
-    if (!needle) return 1
+    if (!query) return 1
+    const caseMismatch = (shortcut.aliases || []).some((alias) => (
+      alias.length === 1 && alias.toLowerCase() === needle && alias !== query
+    ))
+    if (caseMismatch) return -1
+
     let best = -1
     candidates.forEach((candidate) => {
-      if (candidate === needle) best = Math.max(best, 100)
-      else if (candidate.startsWith(needle)) best = Math.max(best, 80 - candidate.length)
-      else if (candidate.includes(needle)) best = Math.max(best, 50 - candidate.indexOf(needle))
+      const normalized = candidate.toLowerCase()
+      if (candidate === query) best = Math.max(best, 120)
+      else if (normalized === needle) best = Math.max(best, 100)
+      else if (candidate.startsWith(query)) best = Math.max(best, 80 - candidate.length)
+      else if (normalized.startsWith(needle)) best = Math.max(best, 60 - candidate.length)
+      else if (normalized.includes(needle)) best = Math.max(best, 50 - normalized.indexOf(needle))
       else {
         let index = 0
         for (const character of needle) {
-          index = candidate.indexOf(character, index)
+          index = normalized.indexOf(character, index)
           if (index < 0) break
           index += 1
         }
