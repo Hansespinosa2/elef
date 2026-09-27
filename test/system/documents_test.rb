@@ -1107,6 +1107,47 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_selector '[data-autosave-target="status"]', text: "Saved", wait: 5
   end
 
+  test "wraps TeX commands with math modifiers for Greek letters and operators" do
+    document = Document.create!(title: "TeX command modifiers", source: "# Math")
+    visit edit_document_path(document)
+    editor = find_field("Markdown source")
+    editor.click
+    editor.send_keys(:end)
+
+    editor.send_keys("\n$\\chi.bar")
+    editor.send_keys(:enter)
+    assert_includes editor.value, "$\\bar{\\chi}"
+
+    editor.send_keys("$\n$\\alpha.hat")
+    editor.send_keys(:tab)
+    assert_includes editor.value, "$\\hat{\\alpha}"
+
+    editor.send_keys("$\n$\\beta.tilde")
+    editor.send_keys(:enter)
+    assert_includes editor.value, "$\\tilde{\\beta}"
+
+    greek_commands = %w[
+      alpha beta gamma delta epsilon varepsilon zeta eta theta vartheta iota kappa lambda mu nu xi
+      pi varpi rho varrho sigma varsigma tau upsilon phi varphi chi psi omega
+      Gamma Delta Theta Lambda Xi Pi Sigma Upsilon Phi Psi Omega
+    ]
+    editor.send_keys("$\n$")
+    greek_commands.each do |command|
+      editor.send_keys(" \\#{command}.bar")
+      editor.send_keys(:enter)
+      editor.send_keys(" ")
+    end
+    editor.send_keys("$")
+
+    greek_commands.each do |command|
+      assert_includes editor.value, "\\bar{\\#{command}}", "\\#{command} should be wrapped as a TeX command"
+    end
+
+    editor.send_keys("\n$\\nabla.vec")
+    editor.send_keys(:enter)
+    assert_includes editor.value, "$\\vec{\\nabla}", "operators should also be wrapped as TeX commands"
+  end
+
   test "chains supported math modifiers and leaves conflicting chains intact" do
     document = Document.create!(title: "Math modifier chains", source: "# Math")
     visit edit_document_path(document)
