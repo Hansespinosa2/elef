@@ -280,12 +280,13 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     visit edit_document_path(document)
     assert_selector "select#document_theme", visible: true
     assert_selector "select#document_typography", visible: true
-    assert_no_selector ".editor-reveal-metadata", visible: true
+    assert_selector ".appearance-hint", visible: true
     assert_equal "rgb(17, 22, 26)", page.evaluate_script("getComputedStyle(document.querySelector('select#document_theme')).backgroundColor")
 
     click_on "Source"
     assert_no_selector "select#document_theme", visible: true
     assert_no_selector "select#document_typography", visible: true
+    assert_no_selector ".appearance-hint", visible: true
     assert_selector ".editor-reveal-metadata", text: "Hide source metadata", visible: true
     assert_equal "true", page.evaluate_script("document.querySelector('#document_theme').disabled").to_s
 
@@ -294,6 +295,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
 
     click_on "Visual"
     assert_selector "select#document_theme", visible: true
+    assert_selector ".appearance-hint", visible: true
     assert_equal "dark", page.evaluate_script("document.querySelector('#document_theme').value")
     assert_no_selector ".editor-reveal-metadata", visible: true
   end
