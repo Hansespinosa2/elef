@@ -253,21 +253,6 @@ body.elef-app {
   .visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface { clip-path: inset(0); }
 }
 .field-hint { color: var(--oradia-muted); font-size: 0.82rem; line-height: 1.45; margin: 0.5rem 0 0; }
-.editor-settings { position: relative; }
-.editor-settings summary { border: 1px solid var(--oradia-slate-700); border-radius: 999px; color: var(--oradia-muted); cursor: pointer; padding: 0.28rem 0.7rem; }
-.editor-settings summary:hover, .editor-settings[open] summary { background: var(--oradia-slate-800); color: var(--oradia-ink); }
-.editor-settings-panel { background: var(--oradia-slate-900); border: 1px solid var(--oradia-slate-700); border-radius: 0.75rem; box-sizing: border-box; box-shadow: 0 18px 45px #0006; display: grid; gap: 0.7rem; left: auto; max-width: calc(100vw - 2rem); padding: 0.8rem; position: absolute; right: 0; top: calc(100% + 0.5rem); width: min(24rem, calc(100vw - 2rem)); z-index: 30; }
-.editor-settings:not([open]) .editor-settings-panel { display: none; }
-@media (max-width: 540px) {
-  .editor-settings { position: static; }
-  .editor-settings-panel { left: 0; right: 0; top: var(--editor-toolbar-height, 2.4rem); width: auto; max-width: none; }
-}
-.editor-setting-row { align-items: center; color: var(--oradia-muted); display: flex; gap: 0.55rem; justify-content: space-between; }
-.editor-setting-toggle { justify-content: flex-start; }
-.editor-setting-row select { background: var(--oradia-slate-950); border: 1px solid var(--oradia-slate-700); border-radius: 0.45rem; color: var(--oradia-ink); max-width: 14rem; padding: 0.3rem; }
-.editor-setting-key { flex-wrap: wrap; }
-.editor-setting-key input { background: var(--oradia-slate-950); border: 1px solid var(--oradia-slate-700); border-radius: 0.45rem; color: var(--oradia-ink); min-width: 0; padding: 0.3rem; width: 8rem; }
-.editor-setting-key button { background: var(--oradia-slate-800); border: 1px solid var(--oradia-slate-700); border-radius: 0.45rem; color: var(--oradia-ink); cursor: pointer; padding: 0.3rem 0.5rem; }
 .editor-reveal-metadata { background: transparent; border: 1px solid var(--oradia-slate-700); border-radius: 999px; color: var(--oradia-muted); cursor: pointer; padding: 0.28rem 0.7rem; }
 .editor-reveal-metadata:hover, .editor-reveal-metadata:focus-visible { background: var(--oradia-slate-800); color: var(--oradia-ink); }
 .editor-reveal-metadata[hidden],

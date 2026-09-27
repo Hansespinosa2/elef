@@ -12,6 +12,12 @@ class WorkspaceAndSearchControllerTest < ActionDispatch::IntegrationTest
     assert_select "form.settings-card select.settings-control", count: 2
     assert_select "select[name='workspace[theme]'] option[selected][value='dark']"
     assert_select "select[name='workspace[typography]'] option[selected][value='technical']"
+    assert_select "article#vim-settings.settings-card[data-controller='vim-settings']" do
+      assert_select "input[data-vim-settings-target='vimToggle']"
+      assert_select "input[data-vim-settings-target='escapeKey']"
+      assert_select "select[data-vim-settings-target='lineNumbers']"
+      assert_select "input[data-vim-settings-target='modeAwareCursor']"
+    end
   end
 
   test "updates one workspace appearance default without replacing the other via json" do

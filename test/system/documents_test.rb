@@ -117,10 +117,9 @@ class DocumentsTest < ApplicationSystemTestCase
     Document.create!(title: "Research target", source: "# Target")
     document = Document.create!(title: "Research source", source: "# Source")
 
+    visit settings_path
+    find("[data-vim-settings-target='vimToggle']").check
     visit edit_document_path(document)
-    find("summary", text: "Vim settings").click
-    find("[data-editor-target='vimToggle']").check
-    find("summary", text: "Vim settings").click
 
     editor = find(".cm-content")
     editor.click

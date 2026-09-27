@@ -121,7 +121,6 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_select '[data-editor-target="surface"][aria-labelledby]'
     assert_select 'textarea[name="presentation[source]"][data-editor-target="input"]'
     assert_select '[data-editor-target="mode"]', text: "Standard"
-    assert_select '[data-editor-target="vimToggle"]'
     assert_select 'button[data-dirty-navigation]', text: "Present"
     assert_select "a[href='#{print_presentation_path(presentations(:one))}']", text: "Print draft / save PDF"
     get new_presentation_path

@@ -151,10 +151,10 @@ export default class extends Controller {
       if (this.inputTarget.name) event.formData.set(this.inputTarget.name, this.sourceValue)
     })
 
-    this.vimToggleTarget.checked = this.vimEnabled
-    this.escapeKeyTarget.value = this.escapeKeyDisplay(this.escapeKey)
-    this.lineNumbersTarget.value = this.lineNumberMode
-    this.modeAwareCursorTarget.checked = this.modeAwareCursor
+    if (this.hasVimToggleTarget) this.vimToggleTarget.checked = this.vimEnabled
+    if (this.hasEscapeKeyTarget) this.escapeKeyTarget.value = this.escapeKeyDisplay(this.escapeKey)
+    if (this.hasLineNumbersTarget) this.lineNumbersTarget.value = this.lineNumberMode
+    if (this.hasModeAwareCursorTarget) this.modeAwareCursorTarget.checked = this.modeAwareCursor
     this.applyMapping()
     this.applyLineNumbers()
     this.applyCursorStyle()
@@ -186,8 +186,15 @@ export default class extends Controller {
   }
 
   toggleVim(event) {
-    this.vimEnabled = event.target.checked
+    if (event && typeof event.target?.checked === "boolean") {
+      this.vimEnabled = event.target.checked
+    } else if (typeof event === "boolean") {
+      this.vimEnabled = event
+    } else {
+      this.vimEnabled = !this.vimEnabled
+    }
     this.writeBoolean(ENABLED_STORAGE_KEY, this.vimEnabled)
+    if (this.hasVimToggleTarget) this.vimToggleTarget.checked = this.vimEnabled
     this.view.dispatch({
       effects: this.vimCompartment.reconfigure(this.vimEnabled ? vim() : [])
     })
@@ -207,14 +214,14 @@ export default class extends Controller {
     event.preventDefault()
     event.stopPropagation()
     this.escapeKey = key
-    this.escapeKeyTarget.value = this.escapeKeyDisplay(key)
+    if (this.hasEscapeKeyTarget) this.escapeKeyTarget.value = this.escapeKeyDisplay(key)
     this.writeValue(ESCAPE_KEY_STORAGE_KEY, key)
     this.applyMapping()
   }
 
   clearEscapeKey() {
     this.escapeKey = ""
-    this.escapeKeyTarget.value = ""
+    if (this.hasEscapeKeyTarget) this.escapeKeyTarget.value = ""
     this.writeValue(ESCAPE_KEY_STORAGE_KEY, "")
     this.applyMapping()
   }
