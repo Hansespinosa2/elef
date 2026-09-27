@@ -6,7 +6,7 @@ const MAX_TYPED_TEXT_LENGTH = 500
 const MAX_REPRODUCTION_STEPS_LENGTH = 18_000
 const PRUNE_INTERVAL_MS = 5_000
 const SENSITIVE_NAME = /(?:pass(?:word|code)?|secret|token|api[_ -]?key|access[_ -]?key|credential|auth(?:entication|orization)?|e-?mail|phone|telephone|mobile|credit[_ -]?card|card[_ -]?(?:number|cvc|cvv|security)|cc[_ -]?(?:num(?:ber)?|csc|cvc|cvv|exp)|security[_ -]?code|\bcvv\b|\bcvc\b|\bcsc\b|\bpan\b|social[_ -]?security|\bssn\b)/i
-const SENSITIVE_AUTOCOMPLETE = /^(?:current-password|new-password|one-time-code|cc-(?:number|csc|exp|exp-month|exp-year|name|type))$/i
+const SENSITIVE_AUTOCOMPLETE = /^(?:current-password|new-password|one-time-code|email|tel(?:-(?:country-code|national|area-code|local|local-prefix|local-suffix|extension))?|cc-(?:number|csc|exp|exp-month|exp-year|name|type))$/i
 const IGNORE_SELECTOR = "[data-bug-report-ignore], [data-bug-reporting-ui]"
 const INTERACTIVE_SELECTOR = "button, a[href], input, textarea, select, summary, [role='button'], [role='link'], [contenteditable='true'], [data-action], [tabindex]:not([tabindex='-1'])"
 const SENSITIVE_MARKERS = ["data-sensitive", "data-private", "data-secret", "aria-sensitive"]
@@ -58,7 +58,7 @@ function associatedLabel(element) {
 
 function hasSensitiveMetadata(element) {
   if (!element) return false
-  if (attribute(element, "type").toLowerCase() === "password") return true
+  if (/^(?:password|email|tel)$/i.test(attribute(element, "type"))) return true
   if (SENSITIVE_MARKERS.some((name) => element.hasAttribute?.(name))) return true
 
   const autocomplete = attribute(element, "autocomplete").split(/\s+/).filter(Boolean)

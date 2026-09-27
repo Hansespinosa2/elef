@@ -162,16 +162,19 @@ test("describes clicks with accessible labels and toolbar context", () => {
   assert.equal(describeTarget(identifiedButton), 'button data-testid "export-menu"')
 })
 
-test("redacts password, secret, email, and sensitive autocomplete values before buffering", () => {
+test("redacts password, secret, email, telephone, and sensitive autocomplete values before buffering", () => {
   const { instance } = recorder()
   const password = new FakeElement("input", { attributes: { type: "password", name: "account[password]" } })
   const apiToken = new FakeElement("input", { attributes: { type: "text", name: "api_token" } })
-  const email = new FakeElement("input", { attributes: { type: "email", name: "account[email]" } })
+  const email = new FakeElement("input", { attributes: { type: "email", name: "contact" } })
+  const telephone = new FakeElement("input", { attributes: { type: "tel", name: "contact" } })
+  const autocompleteEmail = new FakeElement("input", { attributes: { type: "text", name: "contact", autocomplete: "email" } })
+  const autocompleteTelephone = new FakeElement("input", { attributes: { type: "text", name: "contact", autocomplete: "section-user tel-national" } })
   const cardNumber = new FakeElement("input", { attributes: { type: "text", autocomplete: "cc-number" } })
   const privateGroup = new FakeElement("div", { attributes: { "data-sensitive": "" } })
   const privateField = new FakeElement("input", { attributes: { type: "text", name: "custom_value" }, parent: privateGroup })
 
-  for (const field of [password, apiToken, email, cardNumber, privateField]) {
+  for (const field of [password, apiToken, email, telephone, autocompleteEmail, autocompleteTelephone, cardNumber, privateField]) {
     assert.equal(isSensitiveField(field), true)
     instance.recordTyping(field, "never-store-this")
   }
