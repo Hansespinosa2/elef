@@ -43,6 +43,25 @@ class PresentationsPptxExportTest < ActiveSupport::TestCase
     end
   end
 
+  test "preserves positions for extracted column titles in the PPTX model" do
+    presentation = Presentation.new(title: "Positioned title", source: <<~MARKDOWN)
+      :::position{right top}
+      # Compare
+
+      ## Left
+
+      One side.
+
+      ## Right
+
+      The other side.
+    MARKDOWN
+
+    title_position = Presentations::PptxExport.new(presentation).as_json.dig(:slides, 0, :title_position)
+
+    assert_equal({ horizontal: "right", vertical: "top", vertical_explicit: true }, title_position)
+  end
+
   test "fails clearly when an Elef attachment reference cannot be resolved" do
     presentation = Presentation.new(title: "Missing asset", source: "# Missing\n\n![Missing](elef-asset:#{"0" * 64})")
 

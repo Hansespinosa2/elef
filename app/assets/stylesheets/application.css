@@ -669,19 +669,7 @@ body.elef-app {
   width: auto;
 }
 
-.slide-block.position-left { align-self: flex-start; text-align: left; }
-.slide-block.position-center { align-self: center; text-align: center; }
-.slide-block.position-right { align-self: flex-end; text-align: right; }
-.slide-block.position-middle { margin-bottom: auto; margin-top: auto; }
-.slide-block.position-bottom { margin-top: auto; }
-
-.slide-statement {
-  justify-content: center;
-  text-align: center;
-}
-
 .slide-statement .slide-block {
-  align-self: center;
   max-width: 80%;
 }
 
@@ -720,6 +708,19 @@ body.elef-app {
   width: 100%;
 }
 
+.slide-image .slide-block.position-top,
+.slide-image .slide-block.position-middle,
+.slide-image .slide-block.position-bottom {
+  flex: 0 0 auto;
+  max-height: 100%;
+}
+
+.slide-image .slide-block[class*="position-"] img {
+  height: auto;
+  max-width: 100%;
+  width: auto;
+}
+
 .slide-table table { font-size: clamp(0.85rem, 1.7vw, 1.4rem); }
 
 .slide-code .slide-block,
@@ -740,6 +741,28 @@ body.elef-app {
   justify-content: flex-start;
   text-align: center;
 }
+
+.slide .slide-block.position-left {
+  align-self: flex-start;
+  max-width: 100%;
+  text-align: left;
+  width: fit-content;
+}
+
+.slide .slide-block.position-center {
+  align-self: center;
+  text-align: center;
+}
+
+.slide .slide-block.position-right {
+  align-self: flex-end;
+  max-width: 100%;
+  text-align: right;
+  width: fit-content;
+}
+
+.slide .slide-block.position-middle { margin-bottom: auto; margin-top: auto; }
+.slide .slide-block.position-bottom { margin-top: auto; }
 
 .slide h1 { font-size: 7rem; line-height: 0.95; }
 .slide h2 { font-size: 5rem; }

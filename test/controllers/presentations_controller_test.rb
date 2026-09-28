@@ -125,6 +125,7 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_select "a[href='#{print_presentation_path(presentations(:one))}']", text: "Print draft / save PDF"
     get new_presentation_path
     assert_select 'form[data-controller~="autosave"][data-autosave-save-enabled-value="false"]'
+    assert_select "textarea[name='presentation[source]']", text: Presentation::DEFAULT_SOURCE
     assert_select 'form[data-controller~="preview"]'
     assert_select 'form[data-preview-url-value="/presentations/preview"]'
     assert_select 'form[data-controller~="slide-overview"][data-controller~="media"]'
@@ -554,6 +555,7 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
 
   test "renders inferred layouts and positioned blocks in the saved preview" do
     presentation = Presentation.create!(title: "Automatic layouts", source: <<~MARKDOWN)
+      :::position{right top}
       # Compare
 
       ## Left
@@ -575,6 +577,7 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :success
     assert_select ".slide-two-column .slide-regions"
+    assert_select ".slide-two-column .slide-title.slide-block.position-right.position-top", text: "Compare"
     assert_select ".slide-statement .position-center.position-middle", text: /Center this message/
     assert_no_match /:::position/, response.body
   end
