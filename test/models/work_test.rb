@@ -56,29 +56,14 @@ class WorkTest < ActiveSupport::TestCase
     assert_includes staged.preview_html, "position-vertical"
   end
 
-  test "page previews render only the leading blocks of the first page" do
+  test "document previews retain the full source for shared A4 pagination" do
     document = Document.create!(
       title: "Budgeted preview",
       source: "# Budgeted preview\n\nOne.\n\nTwo.\n\nThree.\n\nFour."
     )
 
-    html = document.preview_page_html
+    html = document.preview_html
 
-    assert_includes html, "Budgeted preview"
-    assert_includes html, "One."
-    assert_includes html, "Two."
-    refute_includes html, "Three."
-    assert_includes document.preview_html, "Four."
-  end
-
-  test "page previews honour an explicit block budget and empty sources" do
-    document = Document.create!(title: "Budgeted preview", source: "# Budgeted preview\n\nOne.\n\nTwo.\n\nThree.")
-
-    assert_includes document.preview_page_html(blocks: 2), "One."
-    refute_includes document.preview_page_html(blocks: 2), "Two."
-    assert_includes document.preview_page_html(characters: 24), "One."
-    refute_includes document.preview_page_html(characters: 24), "Two."
-    assert_equal "<h1>Budgeted preview</h1>\n", document.preview_page_html(characters: 5)
-    assert_equal "", Document.create!(title: "Empty", source: "").preview_page_html
+    %w[Budgeted One Two Three Four].each { |text| assert_includes html, text }
   end
 end

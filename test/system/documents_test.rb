@@ -5,6 +5,11 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_selector "form.visual-editor-form:not([data-preview-projection-stale='true'])", wait: 5
   end
 
+  def wait_for_settled_document_projection
+    wait_for_fresh_projection
+    assert_selector ".document-editor-projection .document-surface[data-document-pages-settled='true']", wait: 10
+  end
+
   def wait_for_preview_response(count)
     ready = page.evaluate_async_script(<<~JAVASCRIPT, count)
       const count = arguments[0];
@@ -31,7 +36,6 @@ class DocumentsTest < ApplicationSystemTestCase
       assert target, "could not find visual text #{source_text.inspect} in #{selector}"
 
       begin
-        target.click
         selected = page.execute_script(<<~JAVASCRIPT, target, source_text)
           const root = arguments[0];
           const needle = arguments[1];
@@ -95,9 +99,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   def active_document_block
     assert_selector ".document-editor-block[data-editor-block-id]:focus", wait: 5
-    block_id = page.evaluate_script("document.activeElement.closest('.document-editor-block')?.dataset.editorBlockId")
-    assert block_id, "expected the visual document editor to keep a block focused"
-    find(".document-editor-block[data-editor-block-id='#{block_id}']")
+    find(".document-editor-block[data-editor-block-id]:focus")
   end
 
   test "suggests document links in the Markdown editor" do
@@ -1458,6 +1460,260 @@ class DocumentsTest < ApplicationSystemTestCase
     page.driver.browser.manage.window.resize_to(1400, 1000)
   end
 
+  test "paginates the visual editor and keeps oversized paragraph edits mapped to one source block" do
+    paragraph = ("Flowing text stays at a fixed size and carries onto the next A4 page. " * 190).strip
+    source = "# A4 flow\n\n#{paragraph}"
+    document = Document.create!(title: "Flowing editor", source: source)
+
+    visit edit_document_path(document)
+
+    assert_selector ".document-editor-projection .document-surface.is-paginated"
+    assert_selector ".document-editor-projection .document-page", minimum: 2, wait: 5
+    wait_for_settled_document_projection
+    fragment_count = page.evaluate_script(<<~JAVASCRIPT)
+      [...document.querySelectorAll('.document-editor-block[data-editor-block-id]')]
+        .filter((block) => block.querySelector('p')?.textContent.includes('Flowing text')).length
+    JAVASCRIPT
+    assert_operator fragment_count, :>=, 2
+    assert_equal paragraph, page.evaluate_script(<<~JAVASCRIPT)
+      [...document.querySelectorAll('.document-editor-block[data-editor-block-id]')]
+        .filter((block) => block.querySelector('p')?.textContent.includes('Flowing text'))
+        .map((block) => block.querySelector('p').textContent)
+        .join('')
+    JAVASCRIPT
+
+    last_fragment = all(".document-editor-block[data-editor-block-id]").last
+    assert_includes last_fragment.text, "next A4 page."
+    page.execute_script(<<~JAVASCRIPT, last_fragment)
+      const block = arguments[0];
+      const paragraph = block.querySelector('p') || block;
+      const range = document.createRange();
+      range.selectNodeContents(paragraph);
+      range.collapse(false);
+      block.focus({ preventScroll: true });
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+    JAVASCRIPT
+    last_fragment.send_keys(" Continued")
+    assert_field "Markdown source", with: source.sub(paragraph, "#{paragraph} Continued"), wait: 5
+
+    focused_fragment = active_document_block
+    assert_includes focused_fragment.text, "Continued"
+    focused_fragment.send_keys(:enter)
+    wait_for_settled_document_projection
+    assert_field "Markdown source", with: /Continued\n\n\z/, wait: 5
+    active_document_block.send_keys(:backspace)
+    wait_for_settled_document_projection
+    assert_field "Markdown source", with: /Continued\z/, wait: 5
+  end
+
+  test "repacks document and removes trailing page when content is shortened" do
+    paragraph = ("Flowing text stays at a fixed size and carries onto the next A4 page. " * 60).strip
+    source = "# A4 flow\n\n#{paragraph}"
+    document = Document.create!(title: "Flowing editor", source: source)
+
+    visit edit_document_path(document)
+
+    assert_selector ".document-editor-projection .document-surface.is-paginated"
+    assert_selector ".document-editor-projection .document-page", minimum: 2, wait: 5
+    wait_for_settled_document_projection
+
+    page.execute_script(<<~JAVASCRIPT)
+      const blocks = document.querySelectorAll(".document-editor-block[data-editor-block-id]");
+      const paragraphFragment = [...blocks].find((block) => (block.querySelector('p') || block).textContent.includes('Flowing text'));
+      if (!paragraphFragment) return;
+      const rootBlock = paragraphFragment.closest("[data-document-page-flow-id]") || paragraphFragment;
+      const flowId = rootBlock.dataset.documentPageFlowId;
+      document.querySelectorAll(`[data-document-page-flow-id='${flowId}']`).forEach((frag, idx) => {
+        if (idx === 0) {
+          (frag.querySelector('p') || frag).textContent = "Short text.";
+        } else {
+          frag.remove();
+        }
+      });
+      const reader = rootBlock.closest("[data-controller~='document-pages']");
+      window.Stimulus.getControllerForElementAndIdentifier(reader, "document-pages").schedulePagination();
+    JAVASCRIPT
+    wait_for_settled_document_projection
+
+    assert_selector ".document-editor-projection .document-page", count: 1
+  end
+
+  test "paginates oversized lists across pages and preserves list editing" do
+    items = (1..60).map { |n| "- List item #{n} with explanatory text" }.join("\n")
+    document = Document.create!(title: "List pagination", source: items)
+
+    visit edit_document_path(document)
+
+    assert_selector ".document-editor-projection .document-surface.is-paginated"
+    assert_selector ".document-editor-projection .document-page", minimum: 2, wait: 5
+    wait_for_settled_document_projection
+
+    assert_selector ".document-page-frame:first-child li", text: "List item 1 with explanatory text"
+    assert_selector ".document-page-frame:last-child li", text: "List item 60 with explanatory text"
+
+    page.execute_script(<<~JAVASCRIPT)
+      const blocks = document.querySelectorAll(".document-editor-block[data-editor-block-id]");
+      const block = blocks[blocks.length - 1];
+      const item = block.querySelector('li:last-child') || block;
+      const range = document.createRange();
+      range.selectNodeContents(item);
+      range.collapse(false);
+      block.focus({ preventScroll: true });
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+    JAVASCRIPT
+    active_document_block.send_keys(" extra")
+    assert_field "Markdown source", with: /List item 60 with explanatory text extra/, wait: 5
+  end
+
+  test "paginates oversized blockquotes across pages and preserves quote editing" do
+    quotes = (1..50).map { |n| "> Paragraph #{n} inside the blockquote explaining something at length." }.join("\n>\n")
+    document = Document.create!(title: "Quote pagination", source: quotes)
+
+    visit edit_document_path(document)
+
+    assert_selector ".document-editor-projection .document-surface.is-paginated"
+    assert_selector ".document-editor-projection .document-page", minimum: 2, wait: 5
+    wait_for_settled_document_projection
+
+    assert_selector ".document-page-frame:first-child blockquote p", text: /Paragraph 1/
+    assert_selector ".document-page-frame:last-child blockquote p", text: /Paragraph 50/
+
+    page.execute_script(<<~JAVASCRIPT)
+      const blocks = document.querySelectorAll(".document-editor-block[data-editor-block-id]");
+      const block = blocks[blocks.length - 1];
+      const quote = block.querySelector('blockquote p:last-child') || block;
+      const range = document.createRange();
+      range.selectNodeContents(quote);
+      range.collapse(false);
+      block.focus({ preventScroll: true });
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+    JAVASCRIPT
+    active_document_block.send_keys(" noted")
+    assert_field "Markdown source", with: /Paragraph 50 inside the blockquote.*noted/, wait: 5
+  end
+
+  test "paginates oversized tables across pages" do
+    rows = (1..60).map { |n| "| Row #{n} | Value #{n} description text |" }.join("\n")
+    source = "# Table pagination\n\n| Item | Description |\n| --- | --- |\n#{rows}"
+    document = Document.create!(title: "Table pagination", source: source)
+
+    visit document_path(document)
+
+    assert_selector ".document-surface.is-paginated"
+    assert_selector ".document-page", minimum: 2, wait: 5
+    assert_selector ".document-surface[data-document-pages-settled='true']", wait: 10
+
+    assert_selector ".document-page-frame:first-child table tbody tr", text: /Row 1/
+    assert_selector ".document-page-frame:last-child table tbody tr", text: /Row 60/
+  end
+
+  test "paginates oversized code blocks across pages" do
+    lines = (1..70).map { |n| "const line#{n} = 'code statement number #{n}';" }.join("\n")
+    source = "# Code pagination\n\n```javascript\n#{lines}\n```"
+    document = Document.create!(title: "Code pagination", source: source)
+
+    visit document_path(document)
+
+    assert_selector ".document-surface.is-paginated"
+    assert_selector ".document-page", minimum: 2, wait: 5
+    assert_selector ".document-surface[data-document-pages-settled='true']", wait: 10
+
+    assert_selector ".document-page-frame:first-child pre", text: /line1/
+    assert_selector ".document-page-frame:last-child pre", text: /line70/
+  end
+
+  test "keeps a heading with its following paragraph when the page is full" do
+    filler = "Filler content leaves room for the heading, but not its paragraph."
+    paragraph = "The first paragraph fragment must stay with its heading."
+    document = Document.create!(title: "Heading pagination", source: "#{filler}\n\n## Section heading\n\n#{paragraph}")
+
+    visit document_path(document)
+    assert_selector ".document-surface.is-paginated"
+    assert_selector ".document-surface[data-document-pages-settled='true']", wait: 5
+
+    first_pagination_settled = page.evaluate_async_script(<<~JAVASCRIPT)
+      const done = arguments[arguments.length - 1];
+      const surface = document.querySelector(".document-surface");
+      const filler = [...surface.querySelectorAll("p")].find((paragraph) => paragraph.textContent === #{filler.to_json});
+      const heading = surface.querySelector("h2");
+      const content = filler.closest(".document-page-content");
+      filler.style.margin = "0";
+      heading.style.marginTop = "0";
+      const headingStyle = getComputedStyle(heading);
+      const headingHeight = heading.getBoundingClientRect().height + parseFloat(headingStyle.marginBottom);
+      filler.style.height = `${content.clientHeight - headingHeight - 1}px`;
+      const reader = heading.closest("[data-controller~='document-pages']");
+      surface.addEventListener("elef:document-pages-settled", () => done(true), { once: true });
+      window.Stimulus.getControllerForElementAndIdentifier(reader, "document-pages").paginate();
+    JAVASCRIPT
+    assert first_pagination_settled, "document pagination did not settle"
+
+    pages_after_move = page.evaluate_script(<<~JAVASCRIPT)
+      [...document.querySelectorAll(".document-page-content")].map((content) => ({
+        heading: content.querySelector("h2")?.textContent,
+        paragraphs: [...content.querySelectorAll("p")].map((paragraph) => paragraph.textContent)
+      }))
+    JAVASCRIPT
+    filler_page_index = pages_after_move.index { |entry| entry["paragraphs"].include?(filler) }
+    heading_page_index = pages_after_move.index { |entry| entry["heading"] == "Section heading" }
+    assert_operator heading_page_index, :>, filler_page_index
+    heading_page = pages_after_move[heading_page_index]
+    assert heading_page, "expected the section heading to remain on a page"
+    assert_equal [paragraph], heading_page["paragraphs"]
+
+    final_pagination_settled = page.evaluate_async_script(<<~JAVASCRIPT)
+      const done = arguments[arguments.length - 1];
+      const surface = document.querySelector(".document-surface");
+      const heading = surface.querySelector("h2");
+      const content = heading.closest(".document-page-content");
+      heading.style.marginBottom = `${content.clientHeight}px`;
+      const reader = heading.closest("[data-controller~='document-pages']");
+      surface.addEventListener("elef:document-pages-settled", () => done(true), { once: true });
+      window.Stimulus.getControllerForElementAndIdentifier(reader, "document-pages").paginate();
+    JAVASCRIPT
+    assert final_pagination_settled, "document pagination did not settle"
+
+    final_heading_page = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const heading = [...document.querySelectorAll(".document-page-content")]
+        .find((content) => content.querySelector("h2")?.textContent === "Section heading");
+        return {
+          paragraphs: [...heading.querySelectorAll("p")].map((paragraph) => paragraph.textContent),
+          overflowing: heading.closest(".document-page").classList.contains("is-overflowing-content")
+        };
+      })()
+    JAVASCRIPT
+    assert_equal [paragraph], final_heading_page["paragraphs"]
+    assert final_heading_page["overflowing"]
+  end
+
+  test "removes an empty visual block at the beginning without shifting the following page content" do
+    document = Document.create!(title: "Leading empty block", source: "# First page\n\nBody text")
+    visit edit_document_path(document)
+
+    body = find(".document-editor-block", text: "Body text")
+    page.execute_script(<<~JAVASCRIPT, body)
+      const block = arguments[0];
+      const text = block.querySelector('p').firstChild;
+      block.focus({ preventScroll: true });
+      window.getSelection().setPosition(text, 0);
+      block.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    JAVASCRIPT
+    assert_selector ".document-editor-block[data-editor-empty-block='true']", count: 1, wait: 5
+
+    first_empty = find(".document-editor-block[data-editor-empty-block='true']")
+    first_empty.send_keys(:backspace)
+    assert_selector ".document-editor-block", text: "Body text", wait: 5
+    assert_no_selector ".document-editor-block[data-editor-empty-block='true']"
+    assert_includes find_field("Markdown source").value, "Body text"
+  end
+
   test "horizontal-only document positions stay content-sized" do
     document = Document.create!(
       title: "Inline positions",
@@ -1666,20 +1922,24 @@ class DocumentsTest < ApplicationSystemTestCase
         const frame = document.querySelector('.document-page-frame');
         const page = document.querySelector('.document-page');
         const paragraph = page.querySelector('p');
+        const textRange = document.createRange();
+        textRange.selectNodeContents(paragraph);
         const frameRect = frame.getBoundingClientRect();
         return {
           frameAspect: frameRect.width / frameRect.height,
           pageWidth: page.offsetWidth,
           pageHeight: page.offsetHeight,
-          paragraphLines: paragraph.getClientRects().length,
+          paragraphFontSize: Number.parseFloat(getComputedStyle(paragraph).fontSize),
+          paragraphLines: textRange.getClientRects().length,
           paragraphText: paragraph.innerText
         };
       })()
     JAVASCRIPT
 
-    assert_in_delta 816.0 / 1154.0, desktop_measurements["frameAspect"], 0.05
-    assert_equal 816, desktop_measurements["pageWidth"]
-    assert_equal 1154, desktop_measurements["pageHeight"]
+    assert_in_delta 210.0 / 297.0, desktop_measurements["frameAspect"], 0.005
+    assert_equal 794, desktop_measurements["pageWidth"]
+    assert_equal 1123, desktop_measurements["pageHeight"]
+    assert_equal 18, desktop_measurements["paragraphFontSize"]
 
     # Resize to mobile / tablet width (600px)
     page.driver.browser.manage.window.resize_to(600, 900)
@@ -1689,20 +1949,24 @@ class DocumentsTest < ApplicationSystemTestCase
         const frame = document.querySelector('.document-page-frame');
         const page = document.querySelector('.document-page');
         const paragraph = page.querySelector('p');
+        const textRange = document.createRange();
+        textRange.selectNodeContents(paragraph);
         const frameRect = frame.getBoundingClientRect();
         return {
           frameAspect: frameRect.width / frameRect.height,
           pageWidth: page.offsetWidth,
           pageHeight: page.offsetHeight,
-          paragraphLines: paragraph.getClientRects().length,
+          paragraphFontSize: Number.parseFloat(getComputedStyle(paragraph).fontSize),
+          paragraphLines: textRange.getClientRects().length,
           paragraphText: paragraph.innerText
         };
       })()
     JAVASCRIPT
 
-    assert_in_delta 816.0 / 1154.0, mobile_measurements["frameAspect"], 0.05
-    assert_equal 816, mobile_measurements["pageWidth"]
-    assert_equal 1154, mobile_measurements["pageHeight"]
+    assert_in_delta 210.0 / 297.0, mobile_measurements["frameAspect"], 0.005
+    assert_equal 794, mobile_measurements["pageWidth"]
+    assert_equal 1123, mobile_measurements["pageHeight"]
+    assert_equal 18, mobile_measurements["paragraphFontSize"]
     assert_equal desktop_measurements["paragraphLines"], mobile_measurements["paragraphLines"], "Text line count should not re-wrap when scaling"
     assert_equal desktop_measurements["paragraphText"], mobile_measurements["paragraphText"]
   ensure

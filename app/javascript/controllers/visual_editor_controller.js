@@ -31,6 +31,13 @@ export default class extends Controller {
     this.element.addEventListener("elef:preview-updated", this.previewHandler)
     this.previewStaleHandler = (event) => this.previewStale(event.detail)
     this.element.addEventListener("elef:preview-stale", this.previewStaleHandler)
+    this.documentPaginatedHandler = () => {
+      if (!this.focusTitleValue) return
+      if (this.initialTitleFocusSettled) return
+      this.focusNewDocumentTitle()
+      if (this.projectionTarget.querySelector(".document-editor-block h1")) this.initialTitleFocusSettled = true
+    }
+    this.element.addEventListener("elef:document-paginated", this.documentPaginatedHandler)
     this.projectionLinkHandler = (event) => this.projectionLinkClicked(event)
     this.element.addEventListener("click", this.projectionLinkHandler)
     this.hasPresentationProjection = Boolean(this.element.querySelector(".presentation-editor-projection"))
@@ -49,6 +56,7 @@ export default class extends Controller {
     this.element.removeEventListener("elef:editor-mode-change", this.modeChangedHandler)
     this.element.removeEventListener("elef:preview-updated", this.previewHandler)
     this.element.removeEventListener("elef:preview-stale", this.previewStaleHandler)
+    this.element.removeEventListener("elef:document-paginated", this.documentPaginatedHandler)
     this.element.removeEventListener("click", this.projectionLinkHandler)
     this.element.removeEventListener("keydown", this.blockKeydownHandler, true)
     document.removeEventListener("selectionchange", this.selectionChangeHandler)
@@ -117,7 +125,7 @@ export default class extends Controller {
       ? (selection.focusNode.nodeType === Node.ELEMENT_NODE ? selection.focusNode : selection.focusNode.parentElement)?.closest?.("[data-editor-block-id]")
       : null
     const current = block && this.projectionTarget?.contains(block)
-      ? { blockId: block.dataset.editorBlockId, visibleOffset: visibleOffsetAtPoint(block, selection.focusNode, selection.focusOffset) }
+      ? { blockId: block.dataset.editorBlockId, visibleOffset: this.visibleOffsetInBlockGroup(block, selection.focusNode, selection.focusOffset) }
       : this.lastProjectionCaret
     if (!current || current.visibleOffset === null || current.visibleOffset === undefined) return null
 
@@ -143,15 +151,23 @@ export default class extends Controller {
       }, null)
     if (!region) return false
 
-    const block = [...this.projectionTarget.querySelectorAll("[data-editor-block-id]")]
-      .find((candidate) => candidate.dataset.editorBlockId === region.block_id)
+    const source = this.editorController.value.slice(region.content_range.start, region.content_range.end)
+    const blocks = this.blockFragments(region.block_id)
+    let visibleOffset = visibleOffsetForSourceOffset(source, sourceOffset - region.content_range.start)
+    let block = blocks.at(-1)
+    for (const candidate of blocks) {
+      const length = this.visibleTextLength(candidate)
+      if (visibleOffset <= length) {
+        block = candidate
+        break
+      }
+      visibleOffset -= length
+    }
     if (!block) return false
     if (block.contentEditable !== "true") {
       if (this.element.previewController?.projectionFresh === false) this.pendingCaretRestore = { sourceOffset, preferredBlockId }
       return false
     }
-    const source = this.editorController.value.slice(region.content_range.start, region.content_range.end)
-    const visibleOffset = visibleOffsetForSourceOffset(source, sourceOffset - region.content_range.start)
     const point = pointAtVisibleOffset(block, visibleOffset)
     block.focus({ preventScroll: true })
     window.getSelection()?.setPosition(point[0], point[1])
@@ -164,21 +180,26 @@ export default class extends Controller {
     this.pendingProjectionFrame = null
     if (!this.pendingProjectionEdits?.size || !this.editorController) return
 
-    const edits = [...this.pendingProjectionEdits.values()].map((edit) => ({
-      ...edit,
-      replacement: markdownForVisibleText(
-        edit.source,
-        this.editableText(edit.blockElement, edit.kind, edit.source),
-        edit.kind,
-        edit.blockElement,
-        { documentMode: this.kindValue === "document" }
-      )
-    })).filter((edit) => edit.replacement !== edit.source)
+    const edits = [...this.pendingProjectionEdits.values()].map((edit) => {
+      const blockElement = this.combinedBlockForId(edit.blockId) || edit.blockElement
+      return {
+        ...edit,
+        blockElement,
+        replacement: markdownForVisibleText(
+          edit.source,
+          this.editableText(blockElement, edit.kind, edit.source),
+          edit.kind,
+          blockElement,
+          { documentMode: this.kindValue === "document" }
+        )
+      }
+    }).filter((edit) => edit.replacement !== edit.source)
     this.pendingProjectionEdits.clear()
     if (edits.length === 0) return
 
     edits.forEach((edit) => {
-      if (edit.kind !== "code") renderInlineMath(edit.blockElement)
+      if (edit.kind === "code") return
+      this.blockFragments(edit.blockId).forEach((fragment) => renderInlineMath(fragment))
     })
     const changes = edits.map((edit) => ({ from: edit.from, to: edit.to, insert: edit.replacement }))
       .sort((left, right) => left.from - right.from)
@@ -203,7 +224,7 @@ export default class extends Controller {
     const node = selection.focusNode.nodeType === Node.ELEMENT_NODE ? selection.focusNode : selection.focusNode.parentElement
     const block = node?.closest?.("[data-editor-block-id]")
     if (!block || !this.projectionTarget?.contains(block)) return
-    const visibleOffset = visibleOffsetAtPoint(block, selection.focusNode, selection.focusOffset)
+    const visibleOffset = this.visibleOffsetInBlockGroup(block, selection.focusNode, selection.focusOffset)
     if (visibleOffset !== null) this.lastProjectionCaret = { blockId: block.dataset.editorBlockId, visibleOffset }
   }
 
@@ -331,7 +352,10 @@ export default class extends Controller {
     if (kind === "list" || kind === "quote") {
       this.continueStructuredBlock(blockElement, region, kind, markdown, source, emptyListItem || emptyQuoteLine)
     } else {
-      const localOffset = this.sourceOffsetForSelection(blockElement, markdown)
+      // At a logical block end, fragment/visible-text offset reconstruction
+      // can lose the contribution from earlier page fragments. The source
+      // boundary is exact in this case and avoids splitting in the wrong page.
+      const localOffset = atEnd ? markdown.length : this.sourceOffsetForSelection(blockElement, markdown)
       const splitOffset = localOffset === null ? markdown.length : Math.min(localOffset, markdown.length)
       const before = markdown.slice(0, splitOffset).replace(/[ \t]+$/, "")
       const after = markdown.slice(splitOffset).replace(/^[ \t]+/, "")
@@ -439,6 +463,7 @@ export default class extends Controller {
     this.syncProjectionEditability({ preserveActive: Boolean(this.focusedProjectionBlock()) })
     this.restorePendingCaret()
     this.restoreProjectionCaret()
+    this.focusNewDocumentTitle()
   }
 
   previewStale(detail = {}) {
@@ -539,6 +564,7 @@ export default class extends Controller {
   }
 
   editableText(element, kind, source = "") {
+    element = this.combinedBlockElement(element)
     let value
     let structuredLines
     if (kind === "list" && !element.querySelector("li li")) {
@@ -570,7 +596,12 @@ export default class extends Controller {
   }
 
   focusNewDocumentTitle() {
-    if (!this.focusTitleValue || this.initialTitleFocused || !this.hasProjectionTarget) return
+    if (!this.focusTitleValue || !this.hasProjectionTarget || this.initialTitleFocusSettled) return
+
+    if (this.initialTitleFocused) {
+      const activeProjection = document.activeElement?.closest?.(".document-editor-block[data-editor-block-id]")
+      if (activeProjection || (document.activeElement !== document.body && document.activeElement !== document.documentElement)) return
+    }
 
     const heading = this.projectionTarget.querySelector(".document-editor-block h1")
     const block = heading?.closest(".document-editor-block[contenteditable='true']")
@@ -590,6 +621,7 @@ export default class extends Controller {
   }
 
   selectionIsAtEnd(element) {
+    if (this.blockFragments(element.dataset.editorBlockId).at(-1) !== element) return false
     const selection = window.getSelection()
     if (!selection?.isCollapsed || !element.contains(selection.anchorNode)) return false
 
@@ -597,7 +629,7 @@ export default class extends Controller {
     remaining.selectNodeContents(element)
     remaining.setStart(selection.anchorNode, selection.anchorOffset)
     const fragment = remaining.cloneContents()
-    return fragment.textContent.replace(/[\u200b\ufeff]/g, "") === "" &&
+    return fragment.textContent.replace(/[\u200b\ufeff\n]/g, "") === "" &&
       !fragment.querySelector("[data-editor-math-source], [data-editor-image-source], img")
   }
 
@@ -646,7 +678,10 @@ export default class extends Controller {
       prefix.remove()
     }
 
-    return sourceOffsetForVisiblePosition(markdown, element, visiblePosition)
+    const previousLength = this.blockFragments(element.dataset.editorBlockId)
+      .slice(0, this.blockFragments(element.dataset.editorBlockId).indexOf(element))
+      .reduce((sum, fragment) => sum + this.visibleTextLength(fragment), 0)
+    return sourceOffsetForVisiblePosition(markdown, this.combinedBlockElement(element), previousLength + visiblePosition)
   }
 
   replaceAndFocus(blockElement, from, to, replacement, caret) {
@@ -742,7 +777,20 @@ export default class extends Controller {
     const candidate = blocks.find((block) => block.empty_placeholder && containsCaret(block)) ||
       blocks.find((block) => !block.empty_placeholder && block.range.start <= pending.sourceOffset && block.range.end > pending.sourceOffset) ||
       blocks.find((block) => !block.empty_placeholder && block.range.end === pending.sourceOffset)
-    const element = candidate && this.projectionTarget.querySelector(`[data-editor-block-id="${CSS.escape(candidate.id)}"]`)
+    const elements = candidate ? this.blockFragments(candidate.id) : []
+    let visibleOffset = candidate ? visibleOffsetForSourceOffset(
+      this.editorController.value.slice(candidate.range.start, candidate.range.end),
+      pending.sourceOffset - candidate.range.start
+    ) : 0
+    let element = elements.at(-1)
+    for (const fragment of elements) {
+      const length = this.visibleTextLength(fragment)
+      if (visibleOffset <= length) {
+        element = fragment
+        break
+      }
+      visibleOffset -= length
+    }
     if (!candidate || !element) return
 
     this.pendingCaret = null
@@ -760,6 +808,79 @@ export default class extends Controller {
                 ? element.querySelector("p") || element
               : element
     this.focusAtEnd(element, target)
+  }
+
+  blockFragments(blockId) {
+    if (!blockId || !this.hasProjectionTarget) return []
+    return [...this.projectionTarget.querySelectorAll(`[data-editor-block-id="${CSS.escape(blockId)}"]`)]
+  }
+
+  combinedBlockForId(blockId) {
+    const fragments = this.blockFragments(blockId)
+    return fragments.length ? this.combinedBlockElement(fragments[0], fragments) : null
+  }
+
+  combinedBlockElement(element, fragments = null) {
+    if (!element?.dataset?.editorBlockId) return element
+    const group = fragments || this.blockFragments(element.dataset.editorBlockId)
+    if (group.length < 2) return element
+
+    const combined = group[0].cloneNode(true)
+    const combinedTarget = combined.matches("[data-document-page-flow-content]")
+      ? combined
+      : combined.querySelector("[data-document-page-flow-content]")
+    if (!combinedTarget) return element
+
+    group.slice(1).forEach((fragment) => {
+      const target = fragment.matches("[data-document-page-flow-content]")
+        ? fragment
+        : fragment.querySelector("[data-document-page-flow-content]")
+      if (!target || target.tagName !== combinedTarget.tagName) return
+      [...target.childNodes].forEach((child) => combinedTarget.append(child.cloneNode(true)))
+    })
+    combinedTarget.removeAttribute("data-document-page-flow-content")
+    this.mergeAdjacentInlineElements(combinedTarget)
+    return combined
+  }
+
+  mergeAdjacentInlineElements(root) {
+    const inlineTags = new Set(["A", "B", "CODE", "DEL", "EM", "I", "MARK", "S", "SMALL", "SPAN", "STRONG", "SUB", "SUP", "U"])
+    const sameAttributes = (left, right) => left.tagName === right.tagName &&
+      [...left.attributes].map((attribute) => [attribute.name, attribute.value]).join("\u0000") ===
+      [...right.attributes].map((attribute) => [attribute.name, attribute.value]).join("\u0000")
+
+    root.querySelectorAll("*").forEach((parent) => {
+      let previous = null
+      ;[...parent.children].forEach((child) => {
+        this.mergeAdjacentInlineElements(child)
+        if (previous && inlineTags.has(child.tagName) && sameAttributes(previous, child)) {
+          while (child.firstChild) previous.append(child.firstChild)
+          child.remove()
+        } else {
+          previous = child
+        }
+      })
+    })
+  }
+
+  visibleOffsetInBlockGroup(block, node, offset) {
+    const localOffset = visibleOffsetAtPoint(block, node, offset)
+    if (localOffset === null) return null
+    const fragments = this.blockFragments(block.dataset.editorBlockId)
+    const index = fragments.indexOf(block)
+    return fragments.slice(0, Math.max(0, index)).reduce((sum, fragment) => sum + this.visibleTextLength(fragment), 0) + localOffset
+  }
+
+  visibleTextLength(element) {
+    if (!element) return 0
+    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT)
+    let length = 0
+    while (walker.nextNode()) {
+      const node = walker.currentNode
+      if (node.parentElement?.closest(".katex-mathml, [aria-hidden='true']")) continue
+      length += node.textContent.length
+    }
+    return length
   }
 
   focusAtEnd(block, target = block) {
