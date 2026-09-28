@@ -478,6 +478,19 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_selector ".presentation-editor-projection .slide", count: 2
   end
 
+  test "positions blocks in a new presentation through the visual control" do
+    visit new_presentation_path
+    wait_for_fresh_projection
+
+    position = find("select[data-presentation-editor-position][data-slide-index='0'][data-block-index='1']")
+    position.select("Left Top")
+    assert_field "Markdown source", with: /:::position\{left top\}/, wait: 5
+
+    wait_for_fresh_projection
+    find("select[data-presentation-editor-position][data-slide-index='0'][data-block-index='1']").select("Center Middle")
+    assert_field "Markdown source", with: /:::position\{center middle\}/, wait: 5
+  end
+
   test "presentation caret follows source switches and arrow keys move between blocks" do
     source = "# First slide\n\nA paragraph\n\nNext paragraph"
     presentation = Presentation.create!(title: "Presentation caret", source: source)

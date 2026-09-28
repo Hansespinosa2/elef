@@ -392,7 +392,7 @@ export default class extends Controller {
     }
 
     if (!["left", "center", "right"].includes(horizontal)) return
-    if ((block.position?.horizontal || "left") === horizontal) return
+    if (directive && (block.position?.horizontal || "left") === horizontal) return
 
     const caret = this.captureCaret()
     const region = this.regionForBlock(block.id)

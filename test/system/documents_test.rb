@@ -1541,6 +1541,63 @@ class DocumentsTest < ApplicationSystemTestCase
     refute_includes find(".editor-projection").text, ":::position"
   end
 
+  test "positions the first document block when no source content precedes it" do
+    document = Document.create!(title: "First block alignment", source: "Test")
+    visit edit_document_path(document)
+    wait_for_fresh_projection
+
+    block = find(".document-editor-block", text: "Test")
+    block_id = block["data-editor-block-id"]
+    block.find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
+    find("[data-visual-editor-block-id='#{block_id}']").select("Left")
+
+    assert_field "Markdown source", with: /\A:::position\{left\}\n\nTest\z/, wait: 5
+
+    find(".document-editor-block[data-editor-block-id='#{block_id}']").find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
+    find("[data-visual-editor-block-id='#{block_id}']").select("Center")
+
+    assert_field "Markdown source", with: /\A:::position\{center\}\n\nTest\z/, wait: 5
+
+    find(".document-editor-block[data-editor-block-id='#{block_id}']").find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
+    find("[data-visual-editor-block-id='#{block_id}']").select("Right")
+    assert_field "Markdown source", with: /\A:::position\{right\}\n\nTest\z/, wait: 5
+  end
+
+  test "changes a position directive on the first document block" do
+    document = Document.create!(title: "Change first block alignment", source: ":::position{right}\n\nTest")
+    visit edit_document_path(document)
+    wait_for_fresh_projection
+
+    block = find(".document-editor-block", text: "Test")
+    block_id = block["data-editor-block-id"]
+    block.find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
+    find("[data-visual-editor-block-id='#{block_id}']").select("Center")
+
+    assert_field "Markdown source", with: /\A:::position\{center\}\n\nTest\z/, wait: 5
+  end
+
+  test "changes a position directive added in source mode" do
+    document = Document.create!(title: "Source mode alignment", source: "Test")
+    visit edit_document_path(document)
+    wait_for_fresh_projection
+
+    click_on "Source"
+    page.execute_script(<<~JAVASCRIPT)
+      document.querySelector(".source-field").editorController.replaceRange(":::position{right}\\n\\n", 0, 0)
+    JAVASCRIPT
+    assert_field "Markdown source", with: /\A:::position\{right\}\n\nTest\z/, wait: 5
+    click_on "Visual"
+    wait_for_fresh_projection
+    assert_field "Markdown source", with: /\A:::position\{right\}\n\nTest\z/, wait: 5
+
+    block = find(".document-editor-block", text: "Test")
+    block_id = block["data-editor-block-id"]
+    block.find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
+    find("[data-visual-editor-block-id='#{block_id}']").select("Center")
+
+    assert_field "Markdown source", with: /\A:::position\{center\}\n\nTest\z/, wait: 5
+  end
+
   test "deleting an empty positioned block also removes its position directive" do
     document = Document.create!(
       title: "Delete positioned block",
