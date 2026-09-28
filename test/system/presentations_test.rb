@@ -115,6 +115,12 @@ class PresentationsTest < ApplicationSystemTestCase
     find("summary.editor-reveal-metadata", text: "Appearance").click
     assert_selector "select#presentation_theme", visible: true
     assert_selector "select#presentation_typography", visible: true
+
+    panel_background = page.evaluate_script(
+      'window.getComputedStyle(document.querySelector(".appearance-settings .editor-settings-panel")).backgroundColor'
+    )
+    assert_not_equal "rgba(0, 0, 0, 0)", panel_background
+    assert_not_equal "transparent", panel_background
   end
 
   test "library renames forks and deletes a presentation through its controls" do
