@@ -1946,6 +1946,27 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_equal "equation", page.evaluate_script("(() => { const e = document.querySelector('[data-snippet-palette-target=editor]'); return e.value.slice(e.selectionStart, e.selectionEnd) })()")
   end
 
+  test "prioritizes an exact math snippet trigger and filters suggestions for math context" do
+    Snippet.create!(name: "Array command", trigger: "array", category: "LaTeX", body: "\\operatorname{array}")
+    Snippet.create!(name: "Alpha command", trigger: "a", category: "LaTeX", body: "\\alpha")
+    Snippet.create!(name: "Aligned block", trigger: "aligned", category: "LaTeX", body: "$$\n\\begin{aligned}\nx &= y\n\\end{aligned}\n$$")
+    Snippet.create!(name: "Array notes", trigger: "array-notes", category: "Markdown", body: "- ${1:item}")
+    presentation = Presentation.create!(title: "Math snippet search", source: "# Math\n\n$$\n")
+
+    visit edit_presentation_path(presentation)
+    editor = find(".cm-content")
+    editor.send_keys(":a")
+
+    assert_selector ".snippet-option.is-selected", text: /Alpha command/
+    assert_selector ".snippet-option", text: /:array.*Array command/m
+    assert_no_selector ".snippet-option", text: /Aligned block|Array notes/
+
+    editor.send_keys(:enter)
+    source = find_field("Markdown source").value
+    assert_includes source, "$$\n\\alpha"
+    refute_includes source, "\\operatorname{array}"
+  end
+
   test "keeps multiple snippet placeholders aligned while tabbing" do
     Snippet.create!(name: "Two fields", trigger: "twice", description: "Two tab stops", category: "Markdown", body: "A ${1:first} B ${2:second}")
     presentation = Presentation.create!(title: "Multiple stops", source: "# Snippets\n\n:")

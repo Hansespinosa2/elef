@@ -92,6 +92,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
 
   test "uses the math shortcut palette for aliases inside math" do
     document = Document.create!(title: "Math palette", source: "# Math palette")
+    MathShortcut.create!(name: "Array", aliases: ["array"], prefix: "@", expansion: "\\operatorname{array}")
 
     visit edit_document_path(document)
     page.execute_script("const editor = document.querySelector('.source-field').editorController; editor.setSelectionRange(editor.value.length, editor.value.length); editor.focus();")
@@ -102,14 +103,16 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
 
     editor.send_keys("\n@a")
     assert_selector ".math-shortcut-palette .snippet-option", text: /Alpha/, wait: 5
+    assert_selector ".math-shortcut-option.is-selected", text: /Alpha/
     editor.send_keys(:enter)
 
     source = find_field("Markdown source").value
     assert_includes source, "$\\mathbf{x}"
     assert_includes source, "\\alpha"
+    refute_includes source, "\\operatorname{array}"
   end
 
-  test "shows dark math shortcut cards with rendered LaTeX examples" do
+  test "shows compact math shortcut suggestions with their LaTeX expansion" do
     document = Document.create!(title: "Math shortcut previews", source: "# Math shortcut previews")
 
     visit edit_document_path(document)
@@ -120,18 +123,11 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     gamma = find(".math-shortcut-option", text: /Gamma/, wait: 5)
     within(gamma) do
       assert_selector ".math-shortcut-trigger", text: "@g"
-      assert_selector ".math-shortcut-latex code", text: "\\gamma"
-      assert_selector ".math-shortcut-example-arrow", count: 2
-      assert_selector ".math-shortcut-preview-render .katex-html", text: "γ", wait: 5
+      assert_selector ".math-shortcut-expansion", text: "\\gamma"
+      assert_no_selector ".math-shortcut-preview-render"
     end
-    asset_response = page.evaluate_async_script(<<~JAVASCRIPT)
-      const done = arguments[arguments.length - 1]
-      const assetUrl = document.querySelector('.source-field').getAttribute('data-math-shortcut-palette-katex-url-value')
-      fetch(assetUrl).then((response) => done({ status: response.status, contentType: response.headers.get('content-type') }))
-        .catch(() => done({ status: 0, contentType: '' }))
-    JAVASCRIPT
-    assert_equal 200, asset_response["status"]
-    assert_match(/javascript/, asset_response["contentType"])
+    assert_operator page.all(".math-shortcut-option").length, :<=, 6
+    assert_operator page.evaluate_script("document.querySelector('.math-shortcut-palette').getBoundingClientRect().height"), :<, 300
     assert_equal "rgb(17, 22, 26)", page.evaluate_script("getComputedStyle(document.querySelector('.math-shortcut-palette')).backgroundColor")
     assert_equal "rgb(32, 44, 50)", page.evaluate_script("getComputedStyle(document.querySelector('.math-shortcut-option.is-selected')).backgroundColor")
 
@@ -140,8 +136,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     bar = find(".math-shortcut-option", text: /Bar/, wait: 5)
     within(bar) do
       assert_selector ".math-shortcut-trigger", text: "x.bar"
-      assert_selector ".math-shortcut-latex code", text: "\\bar{x}"
-      assert_selector ".math-shortcut-preview-render .katex-html", wait: 5
+      assert_selector ".math-shortcut-expansion", text: "\\bar{x}"
     end
 
     editor.send_keys(:enter)
@@ -149,8 +144,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     arrow = find(".math-shortcut-option", text: /Long right arrow/, wait: 5)
     within(arrow) do
       assert_selector ".math-shortcut-trigger", text: "@longright"
-      assert_selector ".math-shortcut-latex code", text: "\\longrightarrow"
-      assert_selector ".math-shortcut-preview-render .katex-html", wait: 5
+      assert_selector ".math-shortcut-expansion", text: "\\longrightarrow"
     end
   end
 
