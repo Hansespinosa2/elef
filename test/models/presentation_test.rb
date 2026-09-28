@@ -8,6 +8,27 @@ class PresentationTest < ActiveSupport::TestCase
     assert_equal ["# One", "# Two"], presentation.slides.map(&:markdown)
   end
 
+  test "new presentations use source directives to position the starter title and body" do
+    expected_source = <<~MARKDOWN.chomp
+      :::position{center middle}
+      # Untitled Document
+
+      :::position {center}
+      Start writing Markdown here.
+    MARKDOWN
+
+    assert_equal expected_source, Presentation::DEFAULT_SOURCE
+
+    slide = Source::Document.parse(expected_source).slides.first
+    assert_equal ["center", "middle"], [slide.blocks.first.position.horizontal, slide.blocks.first.position.vertical]
+    assert_equal ["center", "top"], [slide.blocks.second.position.horizontal, slide.blocks.second.position.vertical]
+
+    editor_slide = Source::Document.editor_map(expected_source).dig(:slides, 0)
+    assert_equal ["center", "middle"], editor_slide[:blocks].first[:position].values_at(:horizontal, :vertical)
+    assert_equal ["center", "top"], editor_slide[:blocks].second[:position].values_at(:horizontal, :vertical)
+    assert_empty slide.warnings
+  end
+
   test "preserves empty slides and ignores front matter and fenced separators" do
     source = "---\ntitle: Demo\ntheme: dark\n---\n```yaml\n---\n```\n---\n---"
     document = Source::Document.parse(source, source_name: "Demo")
@@ -467,6 +488,8 @@ class PresentationTest < ActiveSupport::TestCase
     end
     assert layouts.slides.any? { |slide| slide.blocks.any? { |block| block.position&.horizontal == "center" && block.position.vertical == "middle" } }
     assert layouts.slides.any? { |slide| slide.blocks.any? { |block| block.position&.horizontal == "right" && block.position.vertical == "bottom" } }
+    assert_equal ["center", "middle"], [layouts.slides.first.blocks.first.position.horizontal, layouts.slides.first.blocks.first.position.vertical]
+    assert_equal ["center", "top"], [layouts.slides.first.blocks.second.position.horizontal, layouts.slides.first.blocks.second.position.vertical]
     assert_includes Presentation.find_by!(sample_id: "tables-and-media").slides.map(&:layout), "image"
     assert_includes Presentation.find_by!(sample_id: "code-and-math").slides.map(&:layout), "code"
     assert_includes Presentation.find_by!(sample_id: "tables-and-media").slides.map(&:layout), "table"

@@ -68,6 +68,7 @@ module Presentations
         index: slide.index,
         layout: slide.layout,
         title_html: slide.title.present? ? markdown_html(slide.title) : nil,
+        title_position: slide.title.present? ? slide.blocks.first&.position&.to_h : nil,
         blocks: slide.blocks.map { |block| block_payload(block) },
         regions: slide.regions.map { |region| region.blocks.map { |block| block_payload(block) } },
         section: slide.section,
@@ -99,9 +100,14 @@ module Presentations
       blob = (@asset_index ||= WorkAssets.index(@presentation))[digest]
       raise Error, "A referenced Elef image or video is unavailable for PPTX export." unless blob
 
-      query = "version=#{@version}"
-      query += "&release_id=#{@release_id}" if @version == "published" && @release_id
-      ["/presentations/#{@presentation.id}/pptx_assets/#{digest}?#{query}", blob.content_type]
+      path = Rails.application.routes.url_helpers.pptx_asset_presentation_path(
+        id: @presentation.id,
+        digest: digest,
+        version: @version,
+        release_id: @release_id,
+        script_name: Rails.application.config.relative_url_root
+      )
+      [path, blob.content_type]
     end
 
     def remote_image_url?(source)

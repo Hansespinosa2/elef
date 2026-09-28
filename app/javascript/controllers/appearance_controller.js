@@ -67,9 +67,7 @@ export default class extends Controller {
       this.typographyFieldTarget.hidden = !visual
     }
     if (this.hasHintTarget) {
-      this.hintTarget.textContent = visual
-        ? "Appearance overrides stay in the Markdown front matter."
-        : "Source mode keeps appearance in the Markdown front matter. Reveal source metadata to edit it."
+      this.hintTarget.hidden = !visual
     }
 
     const editable = visual && !this.sourceStyleStale

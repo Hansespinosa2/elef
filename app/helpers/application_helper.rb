@@ -39,6 +39,11 @@ module ApplicationHelper
     work.document? ? "document" : "presentation"
   end
 
+  def pptx_library_path
+    script_name = request.script_name.presence || Rails.application.config.relative_url_root
+    "#{script_name.to_s.chomp("/")}/vendor/pptxgen.bundle.js"
+  end
+
   def work_dom_id(work)
     "#{work.document? ? "document" : "presentation"}_#{work.id}"
   end

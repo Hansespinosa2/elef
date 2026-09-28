@@ -115,8 +115,10 @@ module Presentations
           #{MARKER_KEY}: layouts-and-themes
           theme: dark
           ---
+          :::position{center middle}
           # Designing a visual system
 
+          :::position {center}
           This deck exercises automatic layouts while telling a complete story
           about consistent presentation design.
           ---

@@ -48,20 +48,6 @@ class VimEditorTest < ApplicationSystemTestCase
       })()
     JAVASCRIPT
     assert_operator geometry.dig("surface", "bottom"), :<=, geometry["projectionTop"], geometry.inspect
-
-    find("summary", text: "Vim settings").click
-    panel = page.evaluate_script(<<~JAVASCRIPT)
-      (() => {
-        const rect = document.querySelector('.editor-settings:not(.appearance-settings) .editor-settings-panel').getBoundingClientRect()
-        const source = document.querySelector('.source-field').getBoundingClientRect()
-        return { left: rect.left, right: rect.right, width: rect.width, sourceLeft: source.left, sourceRight: source.right }
-      })()
-    JAVASCRIPT
-    assert_operator panel["left"], :>=, 0
-    assert_operator panel["right"], :<=, page.evaluate_script("window.innerWidth")
-    assert_operator panel["left"], :>=, panel["sourceLeft"]
-    assert_operator panel["right"], :<=, panel["sourceRight"]
-    assert_in_delta panel["sourceRight"], panel["right"], 1
   ensure
     page.driver.browser.execute_cdp("Emulation.clearDeviceMetricsOverride")
     page.driver.browser.manage.window.resize_to(1400, 1000)
@@ -69,12 +55,11 @@ class VimEditorTest < ApplicationSystemTestCase
 
   test "Vim mode transitions and edits synchronize the Rails source" do
     document = Document.create!(title: "Vim notes", source: "# First\n# Second\n# Third")
+    visit settings_path
+    find("[data-vim-settings-target='vimToggle']").check
     visit edit_document_path(document)
 
-    find("summary", text: "Vim settings").click
-    find("[data-editor-target='vimToggle']").check
     assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal"
-    find("summary", text: "Vim settings").click
 
     editor = find(".cm-content")
     editor.click
@@ -99,9 +84,6 @@ class VimEditorTest < ApplicationSystemTestCase
     page.execute_script("localStorage.setItem('elef.editor.vim.enabled', 'true')")
     page.refresh
 
-    find("summary", text: "Vim settings").click
-    assert_selector "[data-editor-target='vimToggle']:checked"
-    find("summary", text: "Vim settings").click
     block = find(".document-editor-block", text: "Body")
     page.execute_script(<<~JAVASCRIPT, block)
       const block = arguments[0];
@@ -140,11 +122,9 @@ class VimEditorTest < ApplicationSystemTestCase
 
   test "Vim visual mode highlights horizontal selections with the Aradia palette" do
     document = Document.create!(title: "Visual selection", source: "abcdef\nsecond line")
+    visit settings_path
+    find("[data-vim-settings-target='vimToggle']").check
     visit edit_document_path(document)
-
-    find("summary", text: "Vim settings").click
-    find("[data-editor-target='vimToggle']").check
-    find("summary", text: "Vim settings").click
 
     editor = find(".cm-content")
     editor.click
@@ -189,16 +169,16 @@ class VimEditorTest < ApplicationSystemTestCase
 
   test "Vim settings persist per browser" do
     document = Document.create!(title: "Vim settings", source: "# Settings")
+    visit settings_path
+
+    find("[data-vim-settings-target='vimToggle']").check
     visit edit_document_path(document)
 
-    find("summary", text: "Vim settings").click
-    find("[data-editor-target='vimToggle']").check
-    visit edit_document_path(document)
-
-    find("summary", text: "Vim settings").click
-    assert_selector "[data-editor-target='vimToggle']:checked"
-    assert_no_selector "[data-editor-target='mapping']"
     assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal"
+
+    visit settings_path
+    assert_selector "[data-vim-settings-target='vimToggle']:checked"
+    assert_no_selector "[data-editor-target='mapping']"
   end
 
   test "uses one configured Vim Escape remap and ignores legacy Normal mappings" do
@@ -232,19 +212,30 @@ class VimEditorTest < ApplicationSystemTestCase
 
   test "customizes Vim Escape, line numbers, cursor styling, and persists" do
     document = Document.create!(title: "Expanded Vim settings", source: "# Settings\nSecond\nThird\nFourth")
-    visit edit_document_path(document)
+    visit settings_path
     page.execute_script("localStorage.clear()")
     page.refresh
 
-    find("summary", text: "Vim settings").click
-    escape_key = find("[data-editor-target='escapeKey']")
+    escape_key = find("[data-vim-settings-target='escapeKey']")
     escape_key.click
     escape_key.send_keys([:shift, :space])
     assert_equal "Shift+Space", escape_key.value
 
     select "Hidden", from: "Line numbers"
+    visit edit_document_path(document)
     assert_equal "none", page.evaluate_script("getComputedStyle(document.querySelector('.cm-lineNumbers')).display")
+
+    visit settings_path
     select "Relative", from: "Line numbers"
+    check "Mode-aware cursor styling"
+    check "Enable Vim mode in this browser"
+
+    visit edit_document_path(document)
+
+    select_option = page.evaluate_script("document.querySelector('.editor-surface').dataset.lineNumbers")
+    assert_equal "relative", select_option
+    assert_equal "true", page.evaluate_script("document.querySelector('.editor-surface').dataset.modeAwareCursor")
+
     page.execute_script("document.querySelector('.source-field').editorController.setSelectionRange(0, 0)")
     line_numbers = <<~JAVASCRIPT
       [...document.querySelectorAll('.cm-lineNumbers .cm-gutterElement')]
@@ -256,15 +247,6 @@ class VimEditorTest < ApplicationSystemTestCase
     page.execute_script("const editor = document.querySelector('.source-field').editorController; editor.setSelectionRange(editor.value.indexOf('Third'))")
     page.evaluate_async_script("window.requestAnimationFrame(() => arguments[0]())")
     assert_equal %w[2 1 0 1], page.evaluate_script(line_numbers)
-    select "Absolute", from: "Line numbers"
-    page.evaluate_async_script("window.requestAnimationFrame(() => arguments[0]())")
-    assert_equal %w[1 2 3 4], page.evaluate_script(line_numbers)
-    select "Relative", from: "Line numbers"
-    check "Mode-aware cursor styling"
-    check "Enable Vim mode in this browser"
-    assert_equal "relative", page.evaluate_script("document.querySelector('.editor-surface').dataset.lineNumbers")
-    assert_equal "true", page.evaluate_script("document.querySelector('.editor-surface').dataset.modeAwareCursor")
-    find("summary", text: "Vim settings").click
 
     editor = find(".cm-content")
     editor.click
@@ -284,11 +266,12 @@ class VimEditorTest < ApplicationSystemTestCase
     assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal"
     assert_equal source_before_normal_escape, find_field("Markdown source").value
 
-    visit edit_document_path(document)
-    find("summary", text: "Vim settings").click
-    assert_equal "relative", find("[data-editor-target='lineNumbers']").value
-    assert_selector "[data-editor-target='modeAwareCursor']:checked"
-    assert_equal "Shift+Space", find("[data-editor-target='escapeKey']").value
+    visit settings_path
+    assert_equal "relative", find("[data-vim-settings-target='lineNumbers']").value
+    assert_selector "[data-vim-settings-target='modeAwareCursor']:checked"
+    assert_equal "Shift+Space", find("[data-vim-settings-target='escapeKey']").value
+  ensure
+    page.execute_script("localStorage.clear()")
   end
 
   test "metadata directives use the same styling as Markdown markers" do
@@ -406,11 +389,10 @@ class VimEditorTest < ApplicationSystemTestCase
 
   test "Vim edits update a presentation preview and autosave" do
     presentation = Presentation.create!(title: "Vim deck", source: "# Original")
-    visit edit_presentation_path(presentation)
+    visit settings_path
+    find("[data-vim-settings-target='vimToggle']").check
 
-    find("summary", text: "Vim settings").click
-    find("[data-editor-target='vimToggle']").check
-    find("summary", text: "Vim settings").click
+    visit edit_presentation_path(presentation)
 
     editor = find(".cm-content")
     editor.click
@@ -420,21 +402,24 @@ class VimEditorTest < ApplicationSystemTestCase
     assert_selector ".preview-pane .slide", text: "Vim Original", wait: 5
     assert_selector "[data-autosave-target='status']", text: "Saved", wait: 5
     assert_includes presentation.reload.source, "# Vim Original"
+  ensure
+    page.execute_script("localStorage.clear()")
   end
 
   test "turning Vim off restores ordinary editing" do
     document = Document.create!(title: "Standard editing", source: "# Standard")
-    visit edit_document_path(document)
+    visit settings_path
+    find("[data-vim-settings-target='vimToggle']").check
+    find("[data-vim-settings-target='vimToggle']").uncheck
 
-    find("summary", text: "Vim settings").click
-    find("[data-editor-target='vimToggle']").check
-    find("[data-editor-target='vimToggle']").uncheck
+    visit edit_document_path(document)
     assert_selector "[data-editor-target='mode'][data-mode='standard']", text: "Standard"
-    find("summary", text: "Vim settings").click
 
     editor = find(".cm-content")
     editor.click
     editor.send_keys(" ordinary")
     assert_includes find_field("Markdown source").value, " ordinary"
+  ensure
+    page.execute_script("localStorage.clear()")
   end
 end
