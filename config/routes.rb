@@ -13,6 +13,7 @@ Rails.application.routes.draw do
       post :start
       post :preview
       post :import
+      post :pptx, defaults: { format: :json }
     end
     member do
       get :present

@@ -40,7 +40,7 @@
           { id: "library-presentations", label: "Browse presentations", description: "Open the presentation library", url: presentations_path },
           { id: "save", label: "Save current work", description: "Submit the active editor", requiresEditor: true },
           { id: "toggle-vim", label: "Toggle Vim mode", description: "Change the active editor mode", requiresEditor: true },
-          { id: "vim-settings", label: "Open Vim settings", description: "Configure the browser-local editor preferences", requiresEditor: true },
+          { id: "vim-settings", label: "Open Vim settings", description: "Configure browser-local Vim and editor preferences", url: settings_path(anchor: "vim-settings") },
           { id: "toggle-metadata", label: "Toggle source metadata", description: "Show or hide Markdown front matter", requiresEditor: true }
         ].to_json) %>">
           <div class="command-palette-triggers" aria-label="Open Elef tools">

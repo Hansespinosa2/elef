@@ -451,13 +451,13 @@ module Source
         end
 
         return true if line.text.strip == ":::"
-        return false if line.text.match?(/\A\s*:::position\{/)
+        return false if line.text.match?(/\A\s*:::position[ \t]*\{/)
       end
       false
     end
 
     def editor_directive(source, start_pos, end_pos, text, slide_index, directive_index)
-      position_match = text.match(/\A:::position\{([^}]*)\}/)
+      position_match = text.match(/\A:::position[ \t]*\{([^}]*)\}/)
       margin_match = text.match(/\A:::(section|subsection|footnote)\{/)
       type = if text == ":::"
         "position_close"
@@ -1007,7 +1007,7 @@ module Source
     end
 
     def position_from_block(block)
-      match = block.match(/\A\s*:::position\{([^}]*)\}\s*\z/)
+      match = block.match(/\A\s*:::position[ \t]*\{([^}]*)\}\s*\z/)
       return unless match
 
       values = match[1].split.map(&:downcase)

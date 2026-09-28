@@ -1,6 +1,12 @@
 class Presentation < Work
   WORK_TYPE = "presentation".freeze
-  DEFAULT_SOURCE = "# Untitled presentation\n\nStart writing Markdown here.".freeze
+  DEFAULT_SOURCE = <<~MARKDOWN.chomp.freeze
+    :::position{center middle}
+    # Untitled Document
+
+    :::position {center}
+    Start writing Markdown here.
+  MARKDOWN
   FORK_TYPES = PresentationLineageEdge::FORK_TYPES
 
   default_scope { where(kind: WORK_TYPE) }

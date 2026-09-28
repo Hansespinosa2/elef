@@ -121,11 +121,11 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_select '[data-editor-target="surface"][aria-labelledby]'
     assert_select 'textarea[name="presentation[source]"][data-editor-target="input"]'
     assert_select '[data-editor-target="mode"]', text: "Standard"
-    assert_select '[data-editor-target="vimToggle"]'
     assert_select 'button[data-dirty-navigation]', text: "Present"
     assert_select "a[href='#{print_presentation_path(presentations(:one))}']", text: "Print draft / save PDF"
     get new_presentation_path
     assert_select 'form[data-controller~="autosave"][data-autosave-save-enabled-value="false"]'
+    assert_select "textarea[name='presentation[source]']", text: Presentation::DEFAULT_SOURCE
     assert_select 'form[data-controller~="preview"]'
     assert_select 'form[data-preview-url-value="/presentations/preview"]'
     assert_select 'form[data-controller~="slide-overview"][data-controller~="media"]'
@@ -230,6 +230,27 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_includes payload.dig("slides", 1, "blocks", 0, "html"), "Two"
   end
 
+  test "new presentations can export their unsaved form values without persistence" do
+    presentation_count = Presentation.count
+
+    post pptx_presentations_path(version: "draft"), params: {
+      presentation: {
+        title: "Unsaved new deck",
+        source: "# Unsaved new slide\n\nDraft body.",
+        theme: "dark",
+        typography: "technical"
+      }
+    }, as: :json
+
+    assert_response :success
+    payload = response.parsed_body
+    assert_equal "Unsaved new deck.pptx", payload["filename"]
+    assert_equal "dark", payload.dig("presentation", "theme")
+    assert_equal "technical", payload.dig("presentation", "typography")
+    assert_includes payload.dig("slides", 0, "blocks", 1, "html"), "Draft body."
+    assert_equal presentation_count, Presentation.count
+  end
+
   test "PPTX POST exports unsaved form values without persisting them" do
     presentation = Presentation.create!(title: "Saved presentation", source: "# Saved source")
 
@@ -302,7 +323,9 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     get pptx_presentation_path(presentation, version: "published")
     assert_response :success
     html = response.parsed_body.dig("slides", 0, "blocks", 1, "html")
-    assert_includes html, "/presentations/#{presentation.id}/pptx_assets/#{digest}?version=published&amp;release_id=#{release_id}"
+    assert_includes html, "/presentations/#{presentation.id}/pptx_assets/#{digest}?"
+    assert_match(/(?:\?|&amp;)version=published(?:&amp;|")/, html)
+    assert_match(/(?:\?|&amp;)release_id=#{release_id}(?:&amp;|")/, html)
 
     presentation.update!(source: "# New release")
     post publish_presentation_path(presentation)
@@ -337,6 +360,16 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_select '[data-controller="pptx-export"][data-pptx-export-url-value=?]', pptx_presentation_path(presentation, version: "published") do
       assert_select "button", text: "Download published PPTX"
     end
+
+    get new_presentation_path
+    assert_select '[data-controller="pptx-export"][data-pptx-export-url-value=?][data-pptx-export-current-draft-value="true"]',
+      pptx_presentations_path(version: "draft") do
+      assert_select "button", text: "Download PPTX draft"
+    end
+    assert_select '[data-pptx-export-library-url-value="/vendor/pptxgen.bundle.js"]'
+
+    get new_presentation_path, headers: { "SCRIPT_NAME" => "/apps/elef/dev" }
+    assert_select '[data-pptx-export-library-url-value="/apps/elef/dev/vendor/pptxgen.bundle.js"]'
   end
 
   test "previews an unsaved presentation without creating a record" do
@@ -522,6 +555,7 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
 
   test "renders inferred layouts and positioned blocks in the saved preview" do
     presentation = Presentation.create!(title: "Automatic layouts", source: <<~MARKDOWN)
+      :::position{right top}
       # Compare
 
       ## Left
@@ -543,6 +577,7 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :success
     assert_select ".slide-two-column .slide-regions"
+    assert_select ".slide-two-column .slide-title.slide-block.position-right.position-top", text: "Compare"
     assert_select ".slide-statement .position-center.position-middle", text: /Center this message/
     assert_no_match /:::position/, response.body
   end

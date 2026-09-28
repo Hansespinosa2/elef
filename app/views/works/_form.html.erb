@@ -95,12 +95,12 @@
           class: "appearance-select w-full rounded-xl p-3",
           data: { appearance_target: "typography", dirty_target: "field", autosave_target: "field", action: "change->dirty#markDirty" } %>
       </div>
-      <p class="field-hint appearance-hint sm:col-span-2" data-appearance-target="hint">Appearance overrides stay in the Markdown front matter.</p>
+      <p class="field-hint appearance-hint sm:col-span-2" data-appearance-target="hint"<%= " hidden" unless editor_mode == "visual" %>>Appearance overrides stay in the Markdown front matter.</p>
     </div>
 
     <div class="editor-layout">
       <div class="source-pane">
-    <div class="field source-field relative mb-4" data-controller="editor snippet-palette math-shorthand math-shortcut-palette<%= " document-link-palette" if work.document? %>" data-editor-initial-source-value="<%= ERB::Util.html_escape(work.source.to_s.to_json) %>" data-snippet-palette-snippets-value="<%= json_escape(Snippets::Catalog.for_editor.to_json) %>" data-math-shortcut-palette-shortcuts-value="<%= json_escape(MathShortcuts::Catalog.for_editor(workspace: work.workspace || Workspace.default).to_json) %>" data-math-shortcut-palette-katex-url-value="<%= asset_path("katex.js") %>"<% if work.document? %> data-document-link-palette-titles-value="<%= ERB::Util.html_escape(document_link_titles(workspace: work.workspace).to_json) %>"<% end %><% if work.presentation? %> data-presentation-editor-target="source"<% end %>>
+    <div class="field source-field relative mb-4" data-controller="editor snippet-palette math-shorthand math-shortcut-palette<%= " document-link-palette" if work.document? %>" data-editor-initial-source-value="<%= ERB::Util.html_escape(work.source.to_s.to_json) %>" data-snippet-palette-snippets-value="<%= json_escape(Snippets::Catalog.for_editor.to_json) %>" data-math-shortcut-palette-shortcuts-value="<%= json_escape(MathShortcuts::Catalog.for_editor(workspace: work.workspace || Workspace.default).to_json) %>"<% if work.document? %> data-document-link-palette-titles-value="<%= ERB::Util.html_escape(document_link_titles(workspace: work.workspace).to_json) %>"<% end %><% if work.presentation? %> data-presentation-editor-target="source"<% end %>>
       <% source_id = form.field_id(:source) %>
       <% editor_id = "#{source_id}_editor" %>
       <%= form.label :source, "Markdown source", for: source_id, id: "#{editor_id}_label", class: "sr-only" %>
@@ -113,33 +113,6 @@
         <span class="editor-mode" data-editor-target="mode" data-mode="standard" aria-live="polite">Standard</span>
         <span class="editor-command" data-editor-target="command" aria-live="polite"></span>
         <button type="button" class="editor-reveal-metadata" data-editor-target="metadataToggle" data-action="editor#toggleMetadataVisibility"<%= " hidden" if editor_mode == "visual" %>>Reveal source metadata</button>
-        <details class="editor-settings ml-auto">
-          <summary>Vim settings</summary>
-          <div class="editor-settings-panel">
-            <label class="editor-setting-row editor-setting-toggle">
-              <input type="checkbox" data-editor-target="vimToggle" data-action="change->editor#toggleVim">
-              <span>Enable Vim mode in this browser</span>
-            </label>
-            <div class="editor-setting-row editor-setting-key">
-              <label for="<%= editor_id %>_escape_key">Remap Vim Escape</label>
-              <input id="<%= editor_id %>_escape_key" type="text" readonly placeholder="Escape (default)" data-editor-target="escapeKey" data-action="keydown->editor#captureEscapeKey" aria-label="Choose a key to remap Vim Escape">
-              <button type="button" data-action="editor#clearEscapeKey">Clear</button>
-            </div>
-            <p class="field-hint">Focus the field and press a key or key combination to set it as Escape in every Vim mode.</p>
-            <label class="editor-setting-row">
-              <span>Line numbers</span>
-              <select data-editor-target="lineNumbers" data-action="change->editor#lineNumbersChanged">
-                <option value="absolute">Absolute</option>
-                <option value="relative">Relative</option>
-                <option value="off">Hidden</option>
-              </select>
-            </label>
-            <label class="editor-setting-row editor-setting-toggle">
-              <input type="checkbox" data-editor-target="modeAwareCursor" data-action="change->editor#modeAwareCursorChanged">
-              <span>Mode-aware cursor styling</span>
-            </label>
-          </div>
-        </details>
       </div>
       <div class="media-editor-controls mb-3 flex flex-wrap items-center gap-2" aria-label="Media controls">
         <button type="button" class="button secondary" data-action="media#choose">Add <%= work.document? ? "image" : "image or MP4" %></button>
