@@ -6,7 +6,7 @@ let pptxLibraryPromise
 
 export default class extends Controller {
   static targets = ["status"]
-  static values = { url: String, currentDraft: Boolean }
+  static values = { url: String, libraryUrl: String, currentDraft: Boolean }
 
   async download(event) {
     event.preventDefault()
@@ -29,7 +29,7 @@ export default class extends Controller {
       const model = await response.json()
       if (!response.ok) throw new Error(model.error || "The PowerPoint export could not be prepared.")
 
-      await loadPptxLibrary()
+      await loadPptxLibrary(this.libraryUrlValue)
       const pptx = createPresentation(model)
       const stage = createRenderStage(model)
       document.body.append(stage)
@@ -58,16 +58,31 @@ export default class extends Controller {
   }
 }
 
-function loadPptxLibrary() {
+function loadPptxLibrary(url) {
   if (window.PptxGenJS) return Promise.resolve()
   if (pptxLibraryPromise) return pptxLibraryPromise
 
-  pptxLibraryPromise = new Promise((resolve, reject) => {
+  const loading = new Promise((resolve, reject) => {
     const script = document.createElement("script")
-    script.src = "/vendor/pptxgen.bundle.js"
-    script.onload = () => window.PptxGenJS ? resolve() : reject(new Error("The PowerPoint generator did not load."))
-    script.onerror = () => reject(new Error("The PowerPoint generator could not be loaded."))
+    script.src = url
+    script.onload = () => {
+      if (window.PptxGenJS) {
+        resolve()
+      } else {
+        script.remove()
+        reject(new Error("The PowerPoint generator did not load."))
+      }
+    }
+    script.onerror = () => {
+      script.remove()
+      reject(new Error("The PowerPoint generator could not be loaded."))
+    }
     document.head.append(script)
+  })
+
+  pptxLibraryPromise = loading.catch((error) => {
+    pptxLibraryPromise = undefined
+    throw error
   })
   return pptxLibraryPromise
 }

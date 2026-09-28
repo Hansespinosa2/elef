@@ -1,4 +1,5 @@
 require "test_helper"
+require "stringio"
 
 class PresentationsPptxExportTest < ActiveSupport::TestCase
   PIXEL_PNG = Base64.decode64("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+i9MwAAAAASUVORK5CYII=").freeze
@@ -50,6 +51,23 @@ class PresentationsPptxExportTest < ActiveSupport::TestCase
     end
 
     assert_match /referenced Elef image or video is unavailable/, error.message
+  end
+
+  test "uses the mounted route prefix for Elef attachment URLs" do
+    digest = Digest::SHA256.hexdigest(PIXEL_PNG)
+    presentation = Presentation.create!(title: "Mounted asset", source: "# Mounted\n\n![Pixel](elef-asset:#{digest})")
+    presentation.assets.attach(io: StringIO.new(PIXEL_PNG), filename: "pixel.png", content_type: "image/png")
+    blob = presentation.assets.blobs.last
+    blob.update!(metadata: blob.metadata.merge("elef_sha256" => digest))
+    previous_root = Rails.application.config.relative_url_root
+    Rails.application.config.relative_url_root = "/apps/elef/dev"
+
+    payload = Presentations::PptxExport.new(presentation).as_json
+
+    assert_includes payload.dig(:slides, 0, :blocks, 1, :html),
+      "/apps/elef/dev/presentations/#{presentation.id}/pptx_assets/#{digest}?version=draft"
+  ensure
+    Rails.application.config.relative_url_root = previous_root
   end
 
   test "rejects unsafe remote image schemes and private host addresses" do

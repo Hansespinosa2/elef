@@ -2,7 +2,8 @@ class PresentationsController < ApplicationController
   include WorkPreview
   include WorkPersistence
 
-  before_action :set_presentation, only: %i[show edit update present print pptx pptx_asset publish destroy rename fork restore history export upload_asset media_asset]
+  before_action :set_presentation, only: %i[show edit update present print pptx pptx_asset publish destroy rename fork restore history export upload_asset media_asset],
+    unless: -> { action_name == "pptx" && params[:id].blank? }
   before_action :set_preview_presentation, only: :preview
 
   def index
@@ -104,7 +105,13 @@ class PresentationsController < ApplicationController
 
     presentation = @presentation
     release_id = nil
-    if version == "published"
+    if presentation.nil?
+      return head :not_found unless request.post? && version == "draft"
+
+      presentation = Presentation.new(pptx_params)
+      presentation.work_type = "presentation"
+      presentation.workspace = Workspace.default
+    elsif version == "published"
       release = @presentation.published_release
       return head :not_found unless release
       release_id = release.id
