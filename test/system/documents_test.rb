@@ -1468,6 +1468,126 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: /Continued\z/, wait: 5
   end
 
+  test "repacks document and removes trailing page when content is shortened" do
+    paragraph = ("Flowing text stays at a fixed size and carries onto the next A4 page. " * 60).strip
+    source = "# A4 flow\n\n#{paragraph}"
+    document = Document.create!(title: "Flowing editor", source: source)
+
+    visit edit_document_path(document)
+
+    assert_selector ".document-editor-projection .document-surface.is-paginated"
+    assert_selector ".document-editor-projection .document-page", minimum: 2, wait: 5
+    wait_for_settled_document_projection
+
+    page.execute_script(<<~JAVASCRIPT)
+      const blocks = document.querySelectorAll(".document-editor-block[data-editor-block-id]");
+      const paragraphFragment = [...blocks].find((block) => (block.querySelector('p') || block).textContent.includes('Flowing text'));
+      if (!paragraphFragment) return;
+      const rootBlock = paragraphFragment.closest("[data-document-page-flow-id]") || paragraphFragment;
+      const flowId = rootBlock.dataset.documentPageFlowId;
+      document.querySelectorAll(`[data-document-page-flow-id='${flowId}']`).forEach((frag, idx) => {
+        if (idx === 0) {
+          (frag.querySelector('p') || frag).textContent = "Short text.";
+        } else {
+          frag.remove();
+        }
+      });
+      const reader = rootBlock.closest("[data-controller~='document-pages']");
+      window.Stimulus.getControllerForElementAndIdentifier(reader, "document-pages").schedulePagination();
+    JAVASCRIPT
+    wait_for_settled_document_projection
+
+    assert_selector ".document-editor-projection .document-page", count: 1
+  end
+
+  test "paginates oversized lists across pages and preserves list editing" do
+    items = (1..60).map { |n| "- List item #{n} with explanatory text" }.join("\n")
+    document = Document.create!(title: "List pagination", source: items)
+
+    visit edit_document_path(document)
+
+    assert_selector ".document-editor-projection .document-surface.is-paginated"
+    assert_selector ".document-editor-projection .document-page", minimum: 2, wait: 5
+    wait_for_settled_document_projection
+
+    assert_selector ".document-page-frame:first-child li", text: "List item 1 with explanatory text"
+    assert_selector ".document-page-frame:last-child li", text: "List item 60 with explanatory text"
+
+    page.execute_script(<<~JAVASCRIPT)
+      const blocks = document.querySelectorAll(".document-editor-block[data-editor-block-id]");
+      const block = blocks[blocks.length - 1];
+      const item = block.querySelector('li:last-child') || block;
+      const range = document.createRange();
+      range.selectNodeContents(item);
+      range.collapse(false);
+      block.focus({ preventScroll: true });
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+    JAVASCRIPT
+    active_document_block.send_keys(" extra")
+    assert_field "Markdown source", with: /List item 60 with explanatory text extra/, wait: 5
+  end
+
+  test "paginates oversized blockquotes across pages and preserves quote editing" do
+    quotes = (1..50).map { |n| "> Paragraph #{n} inside the blockquote explaining something at length." }.join("\n>\n")
+    document = Document.create!(title: "Quote pagination", source: quotes)
+
+    visit edit_document_path(document)
+
+    assert_selector ".document-editor-projection .document-surface.is-paginated"
+    assert_selector ".document-editor-projection .document-page", minimum: 2, wait: 5
+    wait_for_settled_document_projection
+
+    assert_selector ".document-page-frame:first-child blockquote p", text: /Paragraph 1/
+    assert_selector ".document-page-frame:last-child blockquote p", text: /Paragraph 50/
+
+    page.execute_script(<<~JAVASCRIPT)
+      const blocks = document.querySelectorAll(".document-editor-block[data-editor-block-id]");
+      const block = blocks[blocks.length - 1];
+      const quote = block.querySelector('blockquote p:last-child') || block;
+      const range = document.createRange();
+      range.selectNodeContents(quote);
+      range.collapse(false);
+      block.focus({ preventScroll: true });
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+    JAVASCRIPT
+    active_document_block.send_keys(" noted")
+    assert_field "Markdown source", with: /Paragraph 50 inside the blockquote.*noted/, wait: 5
+  end
+
+  test "paginates oversized tables across pages" do
+    rows = (1..60).map { |n| "| Row #{n} | Value #{n} description text |" }.join("\n")
+    source = "# Table pagination\n\n| Item | Description |\n| --- | --- |\n#{rows}"
+    document = Document.create!(title: "Table pagination", source: source)
+
+    visit document_path(document)
+
+    assert_selector ".document-surface.is-paginated"
+    assert_selector ".document-page", minimum: 2, wait: 5
+    assert_selector ".document-surface[data-document-pages-settled='true']", wait: 10
+
+    assert_selector ".document-page-frame:first-child table tbody tr", text: /Row 1/
+    assert_selector ".document-page-frame:last-child table tbody tr", text: /Row 60/
+  end
+
+  test "paginates oversized code blocks across pages" do
+    lines = (1..70).map { |n| "const line#{n} = 'code statement number #{n}';" }.join("\n")
+    source = "# Code pagination\n\n```javascript\n#{lines}\n```"
+    document = Document.create!(title: "Code pagination", source: source)
+
+    visit document_path(document)
+
+    assert_selector ".document-surface.is-paginated"
+    assert_selector ".document-page", minimum: 2, wait: 5
+    assert_selector ".document-surface[data-document-pages-settled='true']", wait: 10
+
+    assert_selector ".document-page-frame:first-child pre", text: /line1/
+    assert_selector ".document-page-frame:last-child pre", text: /line70/
+  end
+
   test "keeps a heading with its following paragraph when the page is full" do
     filler = "Filler content leaves room for the heading, but not its paragraph."
     paragraph = "The first paragraph fragment must stay with its heading."

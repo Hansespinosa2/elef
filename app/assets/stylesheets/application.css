@@ -1148,7 +1148,7 @@ body.elef-app {
 .document-block.position-top { justify-content: flex-start; }
 .document-block.position-middle { justify-content: center; }
 .document-block.position-bottom { justify-content: flex-end; }
-.document-surface pre { background: #191714; border: 1px solid rgba(255, 247, 232, 0.12); border-radius: 0.75rem; color: #fff7e8; font-size: 16px; line-height: 1.5; margin: 20px 0; max-height: 850px; max-width: 100%; overflow: auto; padding: 16px; }
+.document-surface pre { background: #191714; border: 1px solid rgba(255, 247, 232, 0.12); border-radius: 0.75rem; color: #fff7e8; font-size: 16px; line-height: 1.5; margin: 20px 0; max-width: 100%; overflow: auto; padding: 16px; }
 .document-surface pre code { display: block; font-family: var(--oradia-mono); min-width: max-content; }
 .document-surface code { font-family: var(--oradia-mono); }
 .document-surface table { border-collapse: collapse; max-width: 100%; width: 100%; }

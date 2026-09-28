@@ -70,10 +70,6 @@ export default class extends Controller {
       this.reflowFrame = requestAnimationFrame(() => {
         this.reflowFrame = null
         if (!this.active || this.focusedEditable() || !this.projectionFresh()) return
-        if (this.pagesStillFit()) {
-          this.finishPagination()
-          return
-        }
         this.paginate()
       })
     }, 300)
@@ -590,11 +586,6 @@ export default class extends Controller {
 
   overflows({ content }) {
     return content.scrollHeight > content.clientHeight + 1
-  }
-
-  pagesStillFit() {
-    const pages = [...this.surfaceTarget.querySelectorAll(".document-page-content")]
-    return pages.length > 0 && pages.every((content) => !this.overflows({ content }))
   }
 
   focusedEditable() {
