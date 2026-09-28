@@ -95,7 +95,7 @@
           class: "appearance-select w-full rounded-xl p-3",
           data: { appearance_target: "typography", dirty_target: "field", autosave_target: "field", action: "change->dirty#markDirty" } %>
       </div>
-      <p class="field-hint appearance-hint sm:col-span-2" data-appearance-target="hint">Appearance overrides stay in the Markdown front matter.</p>
+      <p class="field-hint appearance-hint sm:col-span-2" data-appearance-target="hint"<%= " hidden" unless editor_mode == "visual" %>>Appearance overrides stay in the Markdown front matter.</p>
     </div>
 
     <div class="editor-layout">
