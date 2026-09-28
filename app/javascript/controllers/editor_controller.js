@@ -300,6 +300,7 @@ export default class extends Controller {
       requestAnimationFrame(() => {
         if (this.destroyed || this.editingMode !== nextMode) return
         if (nextMode === "source") {
+          if (this.view.dom.contains(document.activeElement)) return
           if (this.vimEnabled && this.vimMode.startsWith("visual")) Vim.handleKey(this.vim, "<Esc>", "user")
           this.view.dispatch({ selection: { anchor: sourceOffset } })
           this.view.focus()

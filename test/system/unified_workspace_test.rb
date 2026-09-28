@@ -110,6 +110,38 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     assert_includes source, "$\\mathbf{x}"
     assert_includes source, "\\alpha"
     refute_includes source, "\\operatorname{array}"
+
+    editor.send_keys("\n@Q")
+    capital_theta = find(".math-shortcut-option", text: /Capital Theta/, wait: 5)
+    within(capital_theta) do
+      assert_selector ".math-shortcut-trigger", text: "@Q"
+      assert_selector ".math-shortcut-expansion", text: "\\Theta"
+    end
+    editor.send_keys(:enter)
+
+    editor.send_keys("\n@q")
+    theta = find(".math-shortcut-option", text: /^Theta/, wait: 5)
+    within(theta) do
+      assert_selector ".math-shortcut-trigger", text: "@q"
+      assert_selector ".math-shortcut-expansion", text: "\\theta"
+    end
+    editor.send_keys(:enter)
+
+    editor.send_keys("\n@w")
+    omega = find(".math-shortcut-option", text: /^Omega/, wait: 5)
+    within(omega) do
+      assert_selector ".math-shortcut-trigger", text: "@w"
+      assert_selector ".math-shortcut-expansion", text: "\\omega"
+    end
+    editor.send_keys(:enter)
+
+    source = find_field("Markdown source").value
+    assert_includes source, "\\Theta"
+    assert_includes source, "\\theta"
+    assert_includes source, "\\omega"
+
+    editor.send_keys("\n@A")
+    assert_no_selector ".math-shortcut-palette:not([hidden])", wait: 1
   end
 
   test "shows compact math shortcut suggestions with their LaTeX expansion" do
