@@ -103,6 +103,26 @@ class PresentationsTest < ApplicationSystemTestCase
     assert ready, "autosave request #{index} was not registered"
   end
 
+  test "appearance controls are collapsed in the presentation editor" do
+    presentation = Presentation.create!(title: "Appearance popup", source: "# Appearance popup")
+
+    visit edit_presentation_path(presentation)
+
+    assert_selector "summary.editor-reveal-metadata", text: "Appearance", visible: true
+    assert_no_selector "select#presentation_theme", visible: true
+    assert_no_selector "select#presentation_typography", visible: true
+
+    find("summary.editor-reveal-metadata", text: "Appearance").click
+    assert_selector "select#presentation_theme", visible: true
+    assert_selector "select#presentation_typography", visible: true
+
+    panel_background = page.evaluate_script(
+      'window.getComputedStyle(document.querySelector(".appearance-settings .editor-settings-panel")).backgroundColor'
+    )
+    assert_not_equal "rgba(0, 0, 0, 0)", panel_background
+    assert_not_equal "transparent", panel_background
+  end
+
   test "new presentation source positions its title explicitly and lets that position be changed" do
     expected_source = <<~MARKDOWN.chomp
       :::position{center middle}
@@ -1867,6 +1887,7 @@ class PresentationsTest < ApplicationSystemTestCase
 
     fill_in "Title", with: "System Deck"
     source = "# First\n\nBody\n---\n# Second"
+    find("summary.editor-reveal-metadata", text: "Appearance").click
     select "Book", from: "Typography"
     normalized_source = "---\ntypography: book\n---\n#{source}"
     fill_in "Markdown source", with: source
