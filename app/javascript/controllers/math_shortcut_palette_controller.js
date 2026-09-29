@@ -1,7 +1,7 @@
 import { Controller } from "@hotwired/stimulus"
 import { editorFor } from "controllers/editor_controller"
 import { application } from "controllers/application"
-import { insideMath, parseMathShorthand } from "controllers/math_shorthand_controller"
+import { editorInsideMath, mathShorthandAtEditor, parseMathShorthand } from "controllers/math_shorthand_controller"
 import { authoringRegistryFor } from "controllers/authoring_registry"
 
 export default class extends Controller {
@@ -143,17 +143,18 @@ export default class extends Controller {
     const editor = this.editorController
     if (!editor || editor.selectionStart !== editor.selectionEnd) return null
     const caret = editor.selectionStart
-    if (!insideMath(editor.value, caret)) return null
-    const before = editor.value.slice(0, caret)
+    if (!editorInsideMath(editor, caret)) return null
+    const line = editor.view.state.doc.lineAt(caret)
+    const before = line.text.slice(0, caret - line.from)
     const match = before.match(/((?:@[A-Za-z][A-Za-z0-9]*|\\[A-Za-z][A-Za-z0-9]*|[A-Za-z][A-Za-z0-9]*)(?:\.[A-Za-z]+)*)?([.@])([A-Za-z0-9_-]*|=)$/)
     if (!match) return null
 
     return {
       prefix: match[2],
       text: match[3],
-      start: match[2] === "." && match[1] ? match.index : match.index + (match[1]?.length || 0),
+      start: line.from + (match[2] === "." && match[1] ? match.index : match.index + (match[1]?.length || 0)),
       base: match[1] || "",
-      baseStart: match.index
+      baseStart: line.from + match.index
     }
   }
 
@@ -161,7 +162,8 @@ export default class extends Controller {
     const editor = this.editorController
     if (!editor) return false
 
-    const before = editor.value.slice(0, editor.selectionStart)
+    const line = editor.view.state.doc.lineAt(editor.selectionStart)
+    const before = line.text.slice(0, editor.selectionStart - line.from)
     const match = before.match(/([A-Za-z][A-Za-z0-9]*(?:\.[A-Za-z][A-Za-z0-9]*)+)$/)
     return !this.selectionMoved && Boolean(match && parseMathShorthand(match[1]))
   }
@@ -171,7 +173,7 @@ export default class extends Controller {
     if (!editor) return false
 
     const shorthand = application.getControllerForElementAndIdentifier(this.element, "math-shorthand")
-    return Boolean(shorthand?.hasRecognizedAppendedModifiers(editor, editor.selectionStart))
+    return Boolean(shorthand?.hasRecognizedAppendedModifiers(editor, editor.selectionStart) || mathShorthandAtEditor(editor, editor.selectionStart)?.status === "valid")
   }
 
   matchScore(shortcut, query) {

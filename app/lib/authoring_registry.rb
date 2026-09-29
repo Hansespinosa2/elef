@@ -2,22 +2,38 @@
 module AuthoringRegistry
   module_function
 
+  LEGACY_DIRECTIVE_TRIGGERS = {
+    "sse" => "section",
+    "sss" => "subsection",
+    "foot" => "footnote"
+  }.freeze
+
+  DIRECTIVE_SCHEMAS = {
+    "align" => { grammar: ["alignment_or_position", "vertical_position?"], argument_count: { minimum: 1, maximum: 2 }, values: [["left", "center", "right", "top", "middle", "bottom"], ["top", "middle", "bottom"]] },
+    "section" => { grammar: ["text"], argument_count: 1, values: [] },
+    "subsection" => { grammar: ["text"], argument_count: 1, values: [] },
+    "footnote" => { grammar: ["text"], argument_count: 1, values: [] }
+  }.freeze
+
   def for_editor(workspace: Workspace.default)
     snippet_entries = Snippets::Catalog.for_editor.map do |snippet|
       namespace = snippet[:category] == "Elef DSL" ? ":" : "/"
+      canonical_trigger = LEGACY_DIRECTIVE_TRIGGERS.fetch(snippet[:trigger], snippet[:trigger])
+      aliases = canonical_trigger == snippet[:trigger] ? [] : [snippet[:trigger]]
       placeholders = snippet[:body].to_s.scan(/\$\{(\d+)(?::([^}]*))?\}/).map do |number, label|
         { position: number.to_i, label: label.to_s }
       end
       {
         **snippet,
         namespace: namespace,
-        aliases: [],
-        search_terms: [snippet[:trigger], snippet[:name], snippet[:description]].compact,
+        trigger: canonical_trigger,
+        aliases: aliases,
+        search_terms: [canonical_trigger, *aliases, snippet[:name], snippet[:description]].compact,
         contexts: ["source"],
         behavior: { type: "insert", template: snippet[:body], placeholders: placeholders },
         commit_behavior: "accept_palette_selection",
-        documentation_example: "#{namespace}#{snippet[:trigger]} → #{snippet[:body]}",
-        argument_schema: snippet[:trigger] == "align" ? { grammar: ["horizontal", "vertical"], values: [["left", "center", "right", "top", "middle", "bottom"], ["top", "middle", "bottom"]] } : nil
+        documentation_example: "#{namespace}#{canonical_trigger} → #{snippet[:body]}",
+        argument_schema: namespace == ":" ? DIRECTIVE_SCHEMAS.fetch(canonical_trigger, { grammar: ["free_text"] }) : nil
       }
     end
 

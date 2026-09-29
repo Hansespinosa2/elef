@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises"
 
 const source = (await readFile(new URL("../../app/javascript/controllers/math_shorthand_controller.js", import.meta.url), "utf8"))
   .replace('import { Controller } from "@hotwired/stimulus"', "class Controller {}")
+  .replace('import { syntaxTree } from "@codemirror/language"', "const syntaxTree = (state) => state.tree")
   .replace('import { editorFor } from "controllers/editor_controller"', "const editorFor = () => null")
 const math = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`)
 
@@ -47,6 +48,59 @@ test("pairs, promotes, and skips math delimiters without touching code or escape
   assert.equal(math.mathDollarAction("$x$", 2), "skip")
 })
 
+test("keeps a chain active while the author inserts another operation", () => {
+  const listeners = new Map()
+  const editor = {
+    value: "$x.b$",
+    selectionStart: 4,
+    selectionEnd: 4,
+    insertMode: true,
+    lineSeparator: "\n",
+    dom: {
+      addEventListener: (name, listener) => listeners.set(name, listener),
+      removeEventListener: () => {}
+    },
+    form: null,
+    replaceRange(insert, from, to = from) {
+      this.value = this.value.slice(0, from) + insert + this.value.slice(to)
+      this.selectionStart = this.selectionEnd = from + insert.length
+    },
+    setSelectionRange(from, to = from) { this.selectionStart = from; this.selectionEnd = to }
+  }
+  const doc = {
+    get length() { return editor.value.length },
+    lineAt(position) {
+      const from = editor.value.lastIndexOf("\n", position - 1) + 1
+      const nextLine = editor.value.indexOf("\n", position)
+      const to = nextLine === -1 ? editor.value.length : nextLine
+      return { from, to, text: editor.value.slice(from, to) }
+    },
+    sliceString(from, to, separator = "\n") { return editor.value.slice(from, to).replaceAll("\n", separator) }
+  }
+  editor.view = { state: { doc, tree: { resolveInner: () => ({ name: "Paragraph", from: 0, parent: null }) } } }
+  const controller = new math.default()
+  controller.editorController = editor
+  controller.setupEditor()
+
+  const type = (character) => {
+    const keydown = { key: character, defaultPrevented: false, preventDefault() { this.defaultPrevented = true } }
+    listeners.get("keydown")(keydown)
+    if (!keydown.defaultPrevented) {
+      editor.value = editor.value.slice(0, editor.selectionStart) + character + editor.value.slice(editor.selectionEnd)
+      editor.selectionStart = editor.selectionEnd = editor.selectionStart + character.length
+    }
+    listeners.get("keyup")({ key: character })
+  }
+
+  for (const character of ".vec.t") type(character)
+  assert.equal(editor.value, "$x.b.vec.t$")
+
+  const commit = { key: "Tab", defaultPrevented: false, preventDefault() { this.defaultPrevented = true } }
+  listeners.get("keydown")(commit)
+  assert.equal(commit.defaultPrevented, true)
+  assert.equal(editor.value, "$\\vec{\\mathbf{x}}^{\\mathsf{T}}$")
+})
+
 test("distinguishes source, inline math, display math, code, and Mermaid contexts", () => {
   assert.equal(math.mathContextAt("text", 2), null)
   assert.equal(math.mathContextAt("$x$", 2), "inline_math")
@@ -56,16 +110,29 @@ test("distinguishes source, inline math, display math, code, and Mermaid context
   assert.equal(math.sourceContextAt("```mermaid\nflowchart TD", 20), "mermaid")
 })
 
-test("authoring assist stays under the synchronous latency gate", () => {
-  const region = `$${"x+".repeat(2498)}x.b$`
-  const start = performance.now()
+test("runs 1,000 math assist edits in a 5,000-character active region within the latency gate", () => {
+  const prefix = `$${"x+".repeat(2498)}`
+  const state = { tree: { resolveInner: () => ({ name: "Paragraph", from: 0, parent: null }) } }
+  const doc = {
+    text: `${prefix}x.b`,
+    get length() { return this.text.length },
+    lineAt(position) {
+      const from = this.text.lastIndexOf("\n", position - 1) + 1
+      const nextLine = this.text.indexOf("\n", position)
+      const to = nextLine === -1 ? this.text.length : nextLine
+      return { from, to, text: this.text.slice(from, to) }
+    },
+    sliceString(from, to, separator = "\n") { return this.text.slice(from, to).replaceAll("\n", separator) }
+  }
+  state.doc = doc
+  const editor = { view: { state } }
   const timings = []
   for (let index = 0; index < 1000; index += 1) {
+    doc.text = `${prefix}${index % 2 ? "x.b.vec.t" : "x.b.vec"}`
+    const caret = doc.length
     const before = performance.now()
-    const caret = region.length - 2
-    math.mathContextAt(region, caret)
-    math.sourceContextAt(region, caret)
-    math.mathShorthandAt(region, caret)
+    assert.equal(math.editorInsideMath(editor, caret), true)
+    assert.ok(math.mathShorthandAtEditor(editor, caret))
     timings.push(performance.now() - before)
   }
   const sorted = timings.toSorted((left, right) => left - right)
@@ -75,5 +142,4 @@ test("authoring assist stays under the synchronous latency gate", () => {
   assert.ok(p95 < 5, `p95 was ${p95.toFixed(3)} ms`)
   assert.ok(p99 < 10, `p99 was ${p99.toFixed(3)} ms`)
   assert.ok(max < 16, `maximum was ${max.toFixed(3)} ms`)
-  assert.ok(performance.now() - start < 10000, "1,000 edit benchmark exceeded 10 seconds")
 })

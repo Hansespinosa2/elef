@@ -1,6 +1,6 @@
 import { Controller } from "@hotwired/stimulus"
 import { editorFor } from "controllers/editor_controller"
-import { insideCode, insideMath } from "controllers/math_shorthand_controller"
+import { editorInsideCode, editorInsideMath } from "controllers/math_shorthand_controller"
 import { authoringRegistryFor } from "controllers/authoring_registry"
 
 export default class extends Controller {
@@ -113,7 +113,7 @@ export default class extends Controller {
   refresh() {
     const editor = this.editorController
     if (!editor) return this.close()
-    if (insideMath(editor.value, editor.selectionStart) || insideCode(editor.value, editor.selectionStart)) return this.close()
+    if (editorInsideMath(editor, editor.selectionStart) || editorInsideCode(editor, editor.selectionStart)) return this.close()
     const directiveQuery = this.directiveQueryAtCaret()
     if (directiveQuery) {
       this.query = directiveQuery.text
@@ -129,6 +129,20 @@ export default class extends Controller {
     }
     const query = this.queryAtCaret()
     if (!query) return this.close()
+
+    if (query.prefix === ":") {
+      const directive = this.registry.find((entry) => entry.namespace === ":" && (entry.trigger === query.text || (entry.aliases || []).includes(query.text)))
+      if (directive) {
+        this.query = query.text
+        this.queryPrefix = ":"
+        this.queryStart = query.start
+        this.argumentQuery = null
+        this.matches = [directive]
+        this.selectedIndex = 0
+        this.insertSelected()
+        return
+      }
+    }
 
     this.argumentQuery = null
     this.query = query.text
@@ -148,7 +162,8 @@ export default class extends Controller {
     const editor = this.editorController
     if (!editor || editor.selectionStart !== editor.selectionEnd) return null
 
-    const beforeCaret = editor.value.slice(0, editor.selectionStart)
+    const line = editor.view.state.doc.lineAt(editor.selectionStart)
+    const beforeCaret = line.text.slice(0, editor.selectionStart - line.from)
     const match = beforeCaret.match(/([/:])([a-z0-9-]*)$/i)
     if (!match) return null
 
@@ -159,7 +174,7 @@ export default class extends Controller {
     return {
       prefix: match[1],
       text: match[2].toLowerCase(),
-      start: editor.selectionStart - match[2].length - 1
+      start: line.from + triggerStart
     }
   }
 
@@ -167,7 +182,8 @@ export default class extends Controller {
     const editor = this.editorController
     if (!editor || editor.selectionStart !== editor.selectionEnd) return null
     const caret = editor.selectionStart
-    const before = editor.value.slice(0, caret)
+    const line = editor.view.state.doc.lineAt(caret)
+    const before = line.text.slice(0, caret - line.from)
     const match = before.match(/:::align\{([^}]*)$/)
     if (!match) return null
     const argumentText = match[1]
@@ -198,6 +214,11 @@ export default class extends Controller {
 
     const triggerScore = this.fieldScore(trigger, query, 9000)
     if (triggerScore !== null) return triggerScore
+
+    const aliasScores = (snippet.aliases || [])
+      .map((alias) => this.fieldScore(String(alias).toLowerCase(), query, 8500))
+      .filter((score) => score !== null)
+    if (aliasScores.length) return Math.max(...aliasScores)
 
     const nameScore = this.fieldScore(name, query, 8000)
     if (nameScore !== null) return nameScore

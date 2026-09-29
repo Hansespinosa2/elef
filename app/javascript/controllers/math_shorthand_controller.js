@@ -1,4 +1,5 @@
 import { Controller } from "@hotwired/stimulus"
+import { syntaxTree } from "@codemirror/language"
 import { editorFor } from "controllers/editor_controller"
 
 const MODIFIER_ALIASES = Object.freeze({ b: "bold", bb: "blackboard", vec: "vector", v: "vector", t: "transpose", T: "transpose", inv: "inverse" })
@@ -48,6 +49,21 @@ export function mathShorthandAt(text, caret) {
   const source = text.slice(start, end)
   const parsed = parseMathShorthand(source)
   return parsed ? { ...parsed, start, end, source } : null
+}
+
+export function mathShorthandAtEditor(editor, caret) {
+  const doc = editor?.view?.state?.doc
+  if (!doc || caret < 0 || caret > doc.length || !editorInsideMath(editor, caret)) return null
+  const line = doc.lineAt(caret)
+  const localCaret = caret - line.from
+  const tokenCharacter = /[A-Za-z0-9.@\\]/
+  let start = localCaret
+  let end = localCaret
+  while (start > 0 && tokenCharacter.test(line.text[start - 1])) start -= 1
+  while (end < line.text.length && tokenCharacter.test(line.text[end])) end += 1
+  const source = line.text.slice(start, end)
+  const parsed = parseMathShorthand(source)
+  return parsed ? { ...parsed, start: line.from + start, end: line.from + end, source } : null
 }
 
 export function mathContextAt(text, caret) {
@@ -159,6 +175,72 @@ export function insideCode(text, caret) {
   return sourceContextAt(text, caret) !== null
 }
 
+function syntaxAncestors(editor, caret) {
+  const state = editor?.view?.state
+  if (!state) return []
+  const position = Math.max(0, Math.min(caret, state.doc.length))
+  const node = syntaxTree(state).resolveInner(position, -1)
+  const ancestors = []
+  for (let current = node; current; current = current.parent) ancestors.push(current)
+  return ancestors
+}
+
+export function editorSourceContextAt(editor, caret) {
+  const state = editor?.view?.state
+  if (!state) {
+    const line = editor?.value?.split("\n").at(-1) || ""
+    return sourceContextAt(line, line.length)
+  }
+
+  const ancestors = syntaxAncestors(editor, caret)
+  const inlineCode = ancestors.some((node) => node.name === "InlineCode")
+  if (inlineCode) return "code_span"
+
+  const fencedCode = ancestors.find((node) => node.name === "FencedCode")
+  if (!fencedCode) return null
+  const openingLine = state.doc.lineAt(fencedCode.from).text
+  const info = openingLine.match(/^[ \t]{0,3}(?:`{3,}|~{3,})(.*)$/)?.[1]?.trim() || ""
+  return /^mermaid(?:\s|$)/i.test(info) ? "mermaid" : "code_fence"
+}
+
+export function editorInsideCode(editor, caret) {
+  return editorSourceContextAt(editor, caret) !== null
+}
+
+export function editorMathContextAt(editor, caret) {
+  const state = editor?.view?.state
+  if (!state) {
+    const text = editor?.value || ""
+    return mathContextAt(text, caret)
+  }
+  if (caret < 0 || caret > state.doc.length || editorInsideCode(editor, caret)) return null
+
+  const paragraph = syntaxAncestors(editor, caret).find((node) => node.name === "Paragraph")
+  const line = state.doc.lineAt(caret)
+  const from = paragraph?.from ?? line.from
+  const prefix = state.doc.sliceString(from, caret, "\n")
+  return mathContextAt(prefix, prefix.length)
+}
+
+export function editorInsideMath(editor, caret) {
+  return editorMathContextAt(editor, caret) !== null
+}
+
+function mathDollarActionAtEditor(editor, caret) {
+  const state = editor?.view?.state
+  if (!state) return mathDollarAction(editor?.value || "", caret)
+  if (editorInsideCode(editor, caret)) return "literal"
+  const line = state.doc.lineAt(caret)
+  const localCaret = caret - line.from
+  if (escapedAt(line.text.slice(0, localCaret), localCaret)) return "literal"
+
+  const before = state.doc.sliceString(Math.max(0, caret - 2), caret, "\n")
+  const after = state.doc.sliceString(caret, Math.min(state.doc.length, caret + 2), "\n")
+  if (before.endsWith("$") && after.startsWith("$") && !(before.endsWith("$$") && after.startsWith("$$"))) return "promote"
+  if (state.doc.sliceString(caret, caret + 1) === "$" && editorInsideMath(editor, caret)) return "skip"
+  return "pair"
+}
+
 export default class extends Controller {
   static targets = ["editor"]
 
@@ -189,8 +271,14 @@ export default class extends Controller {
     this.editorController ||= editorFor(this.element)
     if (this.editorController && !this.keydownBound) {
       this.handleEditorKeydown = (event) => this.keydown(event)
-      this.handleEditorKeyup = () => this.leaveChainAfterCursorMove()
-      this.handleEditorMousedown = () => { this.pendingChain = mathShorthandAt(this.editorController.value, this.editorController.selectionStart) }
+      this.handleEditorKeyup = (event) => {
+        if (this.isEditingKey(event)) {
+          this.pendingChain = mathShorthandAtEditor(this.editorController, this.editorController.selectionStart)
+          return
+        }
+        this.leaveChainAfterCursorMove()
+      }
+      this.handleEditorMousedown = () => { this.pendingChain = mathShorthandAtEditor(this.editorController, this.editorController.selectionStart) }
       this.handleEditorClick = () => queueMicrotask(() => this.leaveChainAfterCursorMove())
       this.handleEditorFocusout = () => this.commitAll()
       this.handleFormSubmit = () => this.commitAll()
@@ -210,7 +298,7 @@ export default class extends Controller {
     if (!editor || !editor.insertMode) return
     const caret = editor.selectionStart
     if (event.key === "$" && editor.selectionStart === editor.selectionEnd) {
-      const action = mathDollarAction(editor.value, caret)
+      const action = mathDollarActionAtEditor(editor, caret)
       if (action === "promote") {
         event.preventDefault()
         editor.replaceRange("$$$$", caret - 1, caret + 1)
@@ -227,7 +315,7 @@ export default class extends Controller {
         return
       }
     }
-    this.pendingChain = mathShorthandAt(editor.value, caret)
+    this.pendingChain = mathShorthandAtEditor(editor, caret)
     if (!this.pendingChain || this.pendingChain.status !== "valid" || editor.selectionStart !== editor.selectionEnd) return
 
     if (event.key === " " || event.code === "Space" || event.key === "Enter" || event.key === "Tab") {
@@ -235,6 +323,11 @@ export default class extends Controller {
       const suffix = event.key === " " || event.code === "Space" ? " " : event.key === "Enter" ? editor.lineSeparator : ""
       this.commit(this.pendingChain, suffix)
     }
+  }
+
+  isEditingKey(event) {
+    if (event.ctrlKey || event.metaKey || event.altKey) return false
+    return event.key?.length === 1 || ["Backspace", "Delete"].includes(event.key)
   }
 
   commit(chain, suffix = "") {
@@ -270,7 +363,7 @@ export default class extends Controller {
   }
 
   hasRecognizedAppendedModifiers(editor, caret) {
-    return mathShorthandAt(editor.value, caret)?.status === "valid"
+    return mathShorthandAtEditor(editor, caret)?.status === "valid"
   }
 }
 

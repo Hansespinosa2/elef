@@ -1786,6 +1786,101 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_selector '[data-autosave-target="status"]', text: "Saved", wait: 5
   end
 
+  test "supports editing an active math chain before committing it" do
+    document = Document.create!(title: "Editable math chain", source: "# Math")
+    visit edit_document_path(document)
+    editor = find_field("Markdown source")
+    editor.click
+    editor.send_keys(:end)
+    editor.send_keys("\n$x.vec.t")
+
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector(".source-field").editorController;
+      const source = editor.value;
+      editor.setSelectionRange(source.indexOf("x.vec.t") + 1);
+    JAVASCRIPT
+    editor.send_keys(".b")
+    assert_includes editor.value, "$x.b.vec.t$"
+
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector(".source-field").editorController;
+      editor.setSelectionRange(editor.value.indexOf("$", editor.value.indexOf("x.b.vec.t")));
+    JAVASCRIPT
+    editor.send_keys(:tab)
+
+    assert_includes editor.value, "\\vec{\\mathbf{x}}^{\\mathsf{T}}"
+    refute_includes editor.value, "x.b.vec.t"
+  end
+
+  test "canonicalizes an active math chain before autosave" do
+    document = Document.create!(title: "Autosaved math chain", source: "# Math")
+    visit edit_document_path(document)
+    editor = find_field("Markdown source")
+    editor.click
+    editor.send_keys(:end)
+    editor.send_keys("\n$x.b")
+    assert_includes editor.value, "$x.b$"
+
+    assert_selector '[data-autosave-target="status"]', text: "Unsaved changes", wait: 3
+    assert_selector '[data-autosave-target="status"]', text: "Saved", wait: 10
+    assert_includes find_field("Markdown source").value, "$\\mathbf{x}$"
+    assert_includes document.reload.source, "$\\mathbf{x}$"
+    refute_includes document.reload.source, "x.b"
+  end
+
+  test "typing a colon directive inserts canonical source and guides align arguments" do
+    document = Document.create!(title: "Directive palette", source: "# Notes")
+    visit edit_document_path(document)
+    editor = find_field("Markdown source")
+    editor.click
+    editor.send_keys(:end)
+    editor.send_keys("\n:align")
+
+    assert_includes editor.value, ":::align{}"
+    refute_includes editor.value.lines, ":align"
+    assert_selector ".snippet-palette [role='option'] strong", text: "left"
+    assert_selector ".snippet-palette [role='option'] strong", text: "center"
+
+    editor.send_keys("center ")
+    assert_includes editor.value, ":::align{center }"
+    assert_selector ".snippet-palette [role='option'] strong", text: "top"
+    assert_selector ".snippet-palette [role='option'] strong", text: "middle"
+    assert_selector ".snippet-palette [role='option'] strong", text: "bottom"
+    assert_no_selector ".snippet-palette [role='option'] strong", text: "left"
+  end
+
+  test "slash palette inserts canonical image and Mermaid source" do
+    document = Document.create!(title: "Source palette", source: "# Notes")
+    visit edit_document_path(document)
+    editor = find_field("Markdown source")
+    editor.click
+    editor.send_keys(:end)
+    editor.send_keys("\n/image")
+    assert_selector ".snippet-palette [role='option']", text: /Image/
+    editor.send_keys(:enter)
+
+    assert_includes editor.value, "![description](image URL)"
+    refute_includes editor.value, "/image"
+    selected_image_placeholder = page.evaluate_script(<<~JAVASCRIPT)
+      const editor = document.querySelector(".source-field").editorController;
+      editor.value.slice(editor.selectionStart, editor.selectionEnd);
+    JAVASCRIPT
+    assert_equal "description", selected_image_placeholder
+
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector(".source-field").editorController;
+      editor.setSelectionRange(editor.value.length);
+    JAVASCRIPT
+    editor.send_keys("\n/diagram")
+    assert_selector ".snippet-palette [role='option']", text: /Diagram/
+    editor.send_keys(:enter)
+
+    assert_includes editor.value, "```mermaid"
+    assert_includes editor.value, "flowchart TD"
+    assert_includes editor.value, "A --> B"
+    refute_includes editor.value, "/diagram"
+  end
+
   test "supports only the v1 math transforms and preserves invalid chains" do
     document = Document.create!(title: "Math transforms", source: "# Math")
     visit edit_document_path(document)
