@@ -57,6 +57,19 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "# Server", presentation.reload.source
   end
 
+  test "invalid HTML draft saves re-render the edit form instead of redirecting" do
+    presentation = presentations(:one)
+    source = presentation.source
+
+    patch presentation_path(presentation), params: {
+      presentation: { title: "x" * 121, source: "# Rejected" }
+    }
+
+    assert_response :unprocessable_content
+    assert_select "form[action='#{presentation_path(presentation)}']"
+    assert_equal source, presentation.reload.source
+  end
+
   test "forks both relationship types and rejects unsupported types" do
     parent = presentations(:one)
     Presentation::FORK_TYPES.each do |type|
