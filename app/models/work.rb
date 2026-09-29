@@ -4,7 +4,6 @@ class Work < ApplicationRecord
   self.table_name = "works"
 
   WORK_TYPES = %w[document presentation].freeze
-  DEFAULT_SOURCE = "# Untitled work\n\nStart writing Markdown here.".freeze
   CHECKPOINT_INTERVAL = 30.seconds
 
   belongs_to :workspace
@@ -195,10 +194,6 @@ class Work < ApplicationRecord
 
   def initial_revision_metadata
     @initial_revision_metadata || {}
-  end
-
-  def source_digest
-    draft_digest
   end
 
   private

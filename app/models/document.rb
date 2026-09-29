@@ -57,8 +57,6 @@ class Document < Work
     candidates.select { |document| document.outgoing_documents.any? { |target| target.id == id } }
   end
 
-  alias backlinks incoming_backlinks
-
   private
 
   def derive_title
