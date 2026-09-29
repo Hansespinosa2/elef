@@ -23,8 +23,19 @@ class DocumentSampleDataTest < ActiveSupport::TestCase
     sample = Documents::SampleData::SAMPLES.find { |entry| entry[:id] == "document-design-principles" }
     assert sample
 
-    headings = sample[:source].scan(/^## \d+\. (.+)$/)
-    assert_equal 10, headings.length
+    headings = sample[:source].scan(/^## \d+\. (.+)$/).flatten
+    assert_equal [
+      "A movement made is a moment wasted",
+      "A beautifully tall ceiling",
+      "A gently rising floor",
+      "Welcome in",
+      "You see is what you get",
+      "Idea to keyboard",
+      "Keyboard to eyes",
+      "Presentations are for you; Docs are for me",
+      "Nothing good is lost",
+      "Let polish earn its place"
+    ], headings
 
     sections = sample[:source].split(/^## \d+\. /).drop(1)
     sections.each_with_index do |section, index|

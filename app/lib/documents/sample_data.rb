@@ -48,7 +48,7 @@ module Documents
       {
         id: "document-design-principles",
         title: "Fixture: Elef design principles",
-        purpose: "Describe ten source-first, recoverable principles demonstrated by Elef's README and core code.",
+        purpose: "Express ten principles for a keyboard-first, welcoming, transparent authoring experience.",
         source: <<~MARKDOWN
           ---
           theme: match
@@ -56,69 +56,78 @@ module Documents
           ---
           # Fixture: Elef design principles
 
-          These principles describe behavior visible in Elef's README and implementation.
-          They are a compact guide to the contracts the editor, parser, renderer, and
-          persistence layer already share.
+          These principles describe how creating and presenting with Elef should
+          feel: direct, welcoming, discoverable, and faithful to the author's intent.
 
-          ## 1. Markdown stays canonical
+          ## 1. A movement made is a moment wasted
 
-          Elef stores raw Markdown as a work's source. Parsers, previews, and exports
-          derive their output from that source, so authors can inspect, copy, review,
-          and reuse the content without treating generated HTML as the editable record.
+          Optimize aggressively for the keyboard, and make every keystroke earn its
+          place. Frequent actions should be close at hand, while shortcuts should
+          remove friction instead of adding ceremony. The mouse remains welcome, but
+          the fastest path should let focused authors keep their attention on the work.
 
-          ## 2. One source speaks two modes
+          ## 2. A beautifully tall ceiling
 
-          Documents and slide decks use the same `Source::Document` parser and `Work`
-          model. The mode decides whether standalone, un-fenced `---` lines divide
-          slides; the authored Markdown remains the source in either mode.
+          Let people grow from first draft to confident mastery without outgrowing
+          Elef. Deeper controls and useful key bindings should make real tasks faster
+          as soon as they are learned, and mastery should feel joyful: the author is
+          capable, in command, and delighted by what the tool makes possible.
 
-          ## 3. Syntax depends on context
+          ## 3. A gently rising floor
 
-          Front matter is read at the start of a source, and delimiter-looking lines
-          inside fenced code stay code. The parser gives syntax meaning from its
-          context, preserving examples and ordinary Markdown content.
+          Make the first useful step obvious, then teach through use rather than
+          homework. Buttons can pair a clear label or icon with their key binding, so
+          clicking gets the job done and quietly teaches a faster path for next time.
+          New capabilities should appear when they are relevant, with room to explore.
 
-          ## 4. Visual edits still write Markdown
+          ## 4. Welcome in
 
-          The editor maps rendered blocks to source ranges. Visual and source modes
-          therefore edit the same Markdown string, while source offsets keep
-          selections, formatting, and structured edits connected to their content.
+          Meet people where they already work. Markdown, LaTeX, PowerPoint, Word,
+          Google Docs, and Obsidian experts should feel at home, while newcomers should
+          feel just as able to begin. Keep familiar strengths close and make the
+          experience feel immediately freeing, whatever the author's starting point.
 
-          ## 5. Never leave save state invisible
+          ## 5. You see is what you get
 
-          Autosave reports unsaved, saving, saved, timeout, and error states. It
-          writes a browser recovery copy before sending a save request and warns the
-          author when that recovery storage is unavailable.
+          Keep the relationship between source, preview, saving, and export easy to
+          understand. Familiar actions should behave predictably, with visible state
+          when work is being saved or recovered. An author can download a tidy folder,
+          inspect it, and understand the work without needing Elef to explain it.
 
-          ## 6. Conflicts preserve author choices
+          ## 6. Idea to keyboard
 
-          A stale save returns the current server version and a recovery revision.
-          The editor lets authors keep their local draft or discard it for the server
-          version, so concurrent edits have an explicit resolution path.
+          Keep the author's attention on the idea, not on operating the editor. As
+          fluency grows, typing and arranging should feel direct enough that the tool
+          fades into the act of thinking and making. Every interaction should help
+          intent reach the page with less translation.
 
-          ## 7. History is part of the work
+          ## 7. Keyboard to eyes
 
-          Revisions retain source snapshots, digests, parent revisions, and reasons
-          such as checkpoint, recovery, restore, and publish. Restore and presentation
-          lineage keep the origin of later work available for review.
+          Let authors express meaning in semantic terms and let Elef turn it into
+          deliberate visual structure: semantic input, geometric output. The author
+          should be able to shape hierarchy and emphasis without manually fighting
+          every coordinate, while retaining a clear path to refine the result.
 
-          ## 8. Missing links stay legible
+          ## 8. Presentations are for you; Docs are for me
 
-          Resolved document links navigate to their targets; missing links render as
-          visible unresolved text. The document graph deduplicates repeated edges
-          while allowing cycles and standalone documents.
+          Give each format the job its audience needs. A presentation helps a speaker
+          guide attention in the room; a document helps a reader move at their own
+          pace, find detail, and return to it later. Shared ideas can serve both without
+          forcing both experiences to behave the same way.
 
-          ## 9. Treat source as untrusted input
+          ## 9. Nothing good is lost
 
-          The Markdown renderer filters raw HTML, escapes generated attributes, and
-          rejects unsafe link protocols. Uploaded media passes through a controlled
-          resolver, keeping useful Markdown features within clear output boundaries.
+          Make experimentation feel safe. Show whether work is saved, keep recoverable
+          drafts when trouble interrupts, and make meaningful revisions available to
+          restore. People can explore more freely when a mistake does not threaten the
+          work they have already made.
 
-          ## 10. Prove the whole writing loop
+          ## 10. Let polish earn its place
 
-          Rails views, Turbo, Stimulus, and importmap provide the interface. Tests
-          cover parsing, rendering, request boundaries, and headless browser workflows;
-          CI builds Tailwind and runs against PostgreSQL and SQLite.
+          Every visual detail should orient, teach, reassure, or reduce effort. Keep
+          the interface calm enough for ideas to lead, and make refinement serve
+          comprehension rather than decoration. Delight belongs in the clarity and
+          care of the whole experience.
         MARKDOWN
       },
       {
