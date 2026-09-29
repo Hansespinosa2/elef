@@ -197,11 +197,7 @@ class PresentationsController < ApplicationController
   end
 
   def media_asset
-    blob = WorkAssets.resolve_blob(@presentation, params[:digest])
-    return head :not_found unless blob
-
-    response.headers["Cache-Control"] = "private, max-age=3600"
-    send_data blob.download, type: blob.content_type, disposition: :inline, filename: blob.filename.to_s
+    send_work_media_asset(@presentation)
   end
 
   def publish

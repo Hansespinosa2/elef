@@ -87,6 +87,14 @@ module WorkPersistence
     work.document? ? edit_document_path(work, **options) : edit_presentation_path(work, **options)
   end
 
+  def send_work_media_asset(work)
+    blob = WorkAssets.resolve_blob(work, params[:digest])
+    return head :not_found unless blob
+
+    response.headers["Cache-Control"] = "private, max-age=3600"
+    send_data blob.download, type: blob.content_type, disposition: :inline, filename: blob.filename.to_s
+  end
+
   def work_type_label(work)
     work.document? ? "Document" : "Presentation"
   end
