@@ -69,8 +69,9 @@ module MathShortcuts
       { id: "default-sum", name: "Summation", aliases: %w[sum summation], prefix: "@", description: "Summation operator", expansion: "\\sum", built_in: true },
       { id: "default-prod", name: "Product", aliases: %w[prod product], prefix: "@", description: "Product operator", expansion: "\\prod", built_in: true },
       { id: "default-int", name: "Integral", aliases: %w[int integral], prefix: "@", description: "Integral operator", expansion: "\\int", built_in: true },
-      { id: "default-partial", name: "Partial", aliases: %w[partial], prefix: "@", description: "Partial derivative symbol", expansion: "\\partial", built_in: true },
-      { id: "default-infty", name: "Infinity", aliases: %w[infty infinity], prefix: "@", description: "Infinity symbol", expansion: "\\infty", built_in: true },
+      { id: "default-partial", name: "Partial", aliases: %w[6 partial], prefix: "@", description: "Partial derivative symbol", expansion: "\\partial", built_in: true },
+      { id: "default-infty", name: "Infinity", aliases: %w[8 infty infinity], prefix: "@", description: "Infinity symbol", expansion: "\\infty", built_in: true },
+      { id: "default-superscript-circle", name: "Superscript circle", aliases: %w[0], prefix: "@", description: "Superscript circle", expansion: "^\\circ", built_in: true },
       { id: "default-forall", name: "For all", aliases: %w[forall], prefix: "@", description: "Universal quantifier", expansion: "\\forall", built_in: true },
       { id: "default-exists", name: "There exists", aliases: %w[exists], prefix: "@", description: "Existential quantifier", expansion: "\\exists", built_in: true },
       { id: "default-in", name: "Element of", aliases: %w[in element], prefix: "@", description: "Set membership relation", expansion: "\\in", built_in: true },
@@ -81,7 +82,7 @@ module MathShortcuts
       { id: "default-approx", name: "Approximately", aliases: %w[approx], prefix: "@", description: "Approximation relation", expansion: "\\approx", built_in: true },
       { id: "default-times", name: "Times", aliases: %w[times], prefix: "@", description: "Multiplication symbol", expansion: "\\times", built_in: true },
       { id: "default-cdot", name: "Dot product", aliases: %w[cdot dotproduct], prefix: "@", description: "Centered multiplication dot", expansion: "\\cdot", built_in: true },
-      { id: "default-equiv", name: "Equivalent", aliases: %w[equiv equivalent], prefix: "@", description: "Equivalent relation", expansion: "\\equiv", built_in: true },
+      { id: "default-equiv", name: "Equivalent", aliases: ["=", "equiv", "equivalent"], prefix: "@", description: "Equivalent relation", expansion: "\\equiv", built_in: true },
       { id: "default-sim", name: "Similar", aliases: %w[sim similar], prefix: "@", description: "Similarity relation", expansion: "\\sim", built_in: true },
       { id: "default-propto", name: "Proportional", aliases: %w[propto proportional], prefix: "@", description: "Proportionality relation", expansion: "\\propto", built_in: true },
       { id: "default-perp", name: "Perpendicular", aliases: %w[perp perpendicular], prefix: "@", description: "Perpendicular relation", expansion: "\\perp", built_in: true },
@@ -111,20 +112,47 @@ module MathShortcuts
     end
 
     def self.for_editor(workspace: Workspace.default)
-      persisted = all(workspace: workspace).map do |shortcut|
-        {
-          id: shortcut.id,
-          name: shortcut.name,
-          aliases: shortcut.aliases,
-          description: shortcut.description,
-          prefix: shortcut.prefix,
-          expansion: shortcut.expansion,
-          built_in: shortcut.built_in
-        }
+      persisted_shortcuts = all(workspace: workspace).to_a
+      personal_aliases = persisted_shortcuts.reject(&:built_in).flat_map do |shortcut|
+        shortcut.aliases.map { |alias_name| [shortcut.prefix, alias_name] }
       end
-      persisted_aliases = persisted.flat_map { |shortcut| shortcut[:aliases].map { |alias_name| [shortcut[:prefix], alias_name] } }
-      defaults = DEFAULTS.reject do |shortcut|
-        shortcut[:aliases].any? { |alias_name| persisted_aliases.include?([shortcut[:prefix], alias_name]) }
+      persisted_built_in_keys = persisted_shortcuts.filter_map do |shortcut|
+        [shortcut.name, shortcut.prefix] if shortcut.built_in
+      end
+      persisted = persisted_shortcuts.filter_map do |shortcut|
+        built_in_default = if shortcut.built_in
+          DEFAULTS.find { |item| item[:name] == shortcut.name && item[:prefix] == shortcut.prefix }
+        end
+        next if shortcut.built_in && built_in_default.nil?
+
+        if built_in_default
+          aliases = built_in_default[:aliases].reject do |alias_name|
+            personal_aliases.include?([shortcut.prefix, alias_name])
+          end
+          next if aliases.empty?
+
+          built_in_default.merge(id: shortcut.id, aliases: aliases)
+        else
+          {
+            id: shortcut.id,
+            name: shortcut.name,
+            aliases: shortcut.aliases,
+            description: shortcut.description,
+            prefix: shortcut.prefix,
+            expansion: shortcut.expansion,
+            built_in: shortcut.built_in
+          }
+        end
+      end
+      defaults = DEFAULTS.filter_map do |shortcut|
+        next if persisted_built_in_keys.include?([shortcut[:name], shortcut[:prefix]])
+
+        aliases = shortcut[:aliases].reject do |alias_name|
+          personal_aliases.include?([shortcut[:prefix], alias_name])
+        end
+        next if aliases.empty?
+
+        shortcut.merge(aliases: aliases)
       end
       defaults + persisted
     end
@@ -132,6 +160,16 @@ module MathShortcuts
     def self.for_ui(workspace: Workspace.default)
       persisted = all(workspace: workspace).index_by { |shortcut| shortcut.id.to_s }
       for_editor(workspace: workspace).map do |attributes|
+        next MathShortcut.new(
+          name: attributes[:name],
+          aliases: attributes[:aliases],
+          description: attributes[:description],
+          prefix: attributes[:prefix],
+          expansion: attributes[:expansion],
+          built_in: attributes[:built_in],
+          workspace: workspace
+        ) if attributes[:built_in]
+
         persisted[attributes[:id].to_s] || MathShortcut.new(
           name: attributes[:name],
           aliases: attributes[:aliases],
