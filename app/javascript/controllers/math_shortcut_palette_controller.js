@@ -112,11 +112,16 @@ export default class extends Controller {
       this.insertSelected()
       return
     }
-    queueMicrotask(() => this.refresh())
+    this.schedule()
   }
 
   schedule() {
-    queueMicrotask(() => this.refresh())
+    if (this.refreshScheduled) return
+    this.refreshScheduled = true
+    queueMicrotask(() => {
+      this.refreshScheduled = false
+      this.refresh()
+    })
   }
 
   refresh() {
@@ -146,11 +151,11 @@ export default class extends Controller {
     const editor = this.editorController
     if (!editor || editor.editingMode !== "source" || editor.selectionStart !== editor.selectionEnd) return null
     const caret = editor.selectionStart
-    if (!editorInsideMath(editor, caret)) return null
     const line = editor.view.state.doc.lineAt(caret)
     const before = line.text.slice(0, caret - line.from)
     const match = before.match(/((?:@[A-Za-z][A-Za-z0-9]*|\\[A-Za-z][A-Za-z0-9]*|[A-Za-z][A-Za-z0-9]*)(?:\.[A-Za-z]+)*)?([.@])([A-Za-z0-9_-]*|=)$/)
     if (!match) return null
+    if (!editorInsideMath(editor, caret)) return null
 
     return {
       prefix: match[2],

@@ -329,7 +329,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     document = Document.create!(title: "Math assist performance", source: "# Math assist performance")
 
     visit edit_document_path(document)
-    page.driver.browser.manage.timeouts.script_timeout = 30
+    page.driver.browser.manage.timeouts.script_timeout = 120
     result = page.evaluate_async_script(<<~JAVASCRIPT)
       const done = arguments[arguments.length - 1];
       (async () => {

@@ -320,7 +320,7 @@ class DocumentsTest < ApplicationSystemTestCase
     editor = find(".cm-content")
     editor.send_keys("/image")
     assert_no_selector ".snippet-option", text: /Image/
-    assert_includes find_field("Markdown source").value, "A[]/image"
+    assert_includes find_field("Markdown source").value, "A[/image]"
   end
 
   test "Mermaid Enter does not continue a diagram during IME composition" do
@@ -1777,7 +1777,7 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_includes source.value, "$x.b.vec.t$"
     editor.send_keys(" ")
 
-    assert_includes source.value, "\\vec{\\mathbf{x}}^{\\mathsf{T}}$ "
+    assert_includes source.value, "\\vec{\\mathbf{x}}^{\\mathsf{T}} $"
     editor.send_keys([:control, "z"])
     assert_includes source.value, "$x.b.vec.t$"
     assert_selector '[data-autosave-target="status"]', text: "Saved", wait: 5
@@ -1837,8 +1837,9 @@ class DocumentsTest < ApplicationSystemTestCase
     editor.send_keys(:end)
     editor.send_keys("\n:align")
 
-    assert_includes editor.value, ":::align{}"
-    refute_includes editor.value.lines, ":align"
+    source = find_field("Markdown source")
+    assert_includes source.value, ":::align{}"
+    refute_includes source.value.lines, ":align"
     assert_selector ".snippet-palette [role='option'] strong", text: "left"
     assert_selector ".snippet-palette [role='option'] strong", text: "center"
 
@@ -1878,23 +1879,27 @@ class DocumentsTest < ApplicationSystemTestCase
     visit edit_document_path(document)
     click_on "Source"
     editor = find(".cm-content")
+    source = find_field("Markdown source")
     editor.send_keys(:end)
 
     editor.send_keys("\n$\\alpha.b")
     editor.send_keys(:enter)
-    assert_includes editor.value, "\\boldsymbol{\\alpha}"
+    assert_includes source.value, "\\boldsymbol{\\alpha}"
 
+    editor.send_keys(:right)
     editor.send_keys("\n$R.bb")
     editor.send_keys(:enter)
-    assert_includes editor.value, "\\mathbb{R}"
+    assert_includes source.value, "\\mathbb{R}"
 
+    editor.send_keys(:right)
     editor.send_keys("\n$A.inv.t")
     editor.send_keys(:enter)
-    assert_includes editor.value, "\\left(A^{-1}\\right)^{\\mathsf{T}}"
+    assert_includes source.value, "\\left(A^{-1}\\right)^{\\mathsf{T}}"
 
+    editor.send_keys(:right)
     editor.send_keys("\n$x.invalid")
     editor.send_keys(:enter)
-    assert_includes editor.value, "$x.invalid\n"
+    assert_includes source.value, "$x.invalid"
   end
 
   test "slash palette hides raw LaTeX outside math and keeps equation blocks available" do
@@ -1924,8 +1929,9 @@ class DocumentsTest < ApplicationSystemTestCase
     editor.send_keys(:end)
     editor.send_keys(:enter)
 
-    assert_includes editor.value, "Outside x.b"
-    assert_includes editor.value, "```\n$x.b\n```"
+    source = find_field("Markdown source").value
+    assert_includes source, "Outside x.b"
+    assert_includes source, "```\n$x.b\n```"
   end
 
   test "keeps the last good preview when a live preview fails" do

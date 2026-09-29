@@ -2152,6 +2152,11 @@ class PresentationsTest < ApplicationSystemTestCase
     click_on "Source"
     source = find_field("Markdown source")
     editor = find(".cm-content")
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector(".source-field").editorController;
+      editor.setSelectionRange(editor.value.length);
+      editor.focus();
+    JAVASCRIPT
     editor.send_keys("beq")
     assert_selector ".snippet-palette", visible: true
     assert_text "/beq"
@@ -2175,7 +2180,7 @@ class PresentationsTest < ApplicationSystemTestCase
     editor.send_keys("\n$@a")
 
     assert_selector ".math-shortcut-option.is-selected", text: /Alpha/
-    assert_no_selector ".snippet-palette [role='option']"
+    assert_no_selector "[data-snippet-palette-target='palette'] [role='option']"
 
     editor.send_keys(:enter)
     source = find_field("Markdown source").value
@@ -2190,6 +2195,11 @@ class PresentationsTest < ApplicationSystemTestCase
     click_on "Source"
     source = find_field("Markdown source")
     editor = find(".cm-content")
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector(".source-field").editorController;
+      editor.setSelectionRange(editor.value.length);
+      editor.focus();
+    JAVASCRIPT
     editor.send_keys("twice")
     editor.send_keys(:enter)
 
@@ -2227,6 +2237,11 @@ class PresentationsTest < ApplicationSystemTestCase
 
     visit edit_presentation_path(presentation)
     click_on "Source"
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector(".source-field").editorController;
+      editor.setSelectionRange(editor.value.length);
+      editor.focus();
+    JAVASCRIPT
     find(".cm-content").send_keys("unsafe")
 
     assert_selector ".snippet-option span", text: '<img src=x onerror="alert(1)"> · Markdown'

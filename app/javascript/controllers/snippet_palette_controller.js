@@ -116,8 +116,11 @@ export default class extends Controller {
   refresh() {
     const editor = this.editorController
     if (!editor || editor.editingMode !== "source") return this.close()
-    if (editorInsideMath(editor, editor.selectionStart) || editorInsideCode(editor, editor.selectionStart)) return this.close()
     const directiveQuery = this.directiveQueryAtCaret()
+    const query = directiveQuery || this.queryAtCaret()
+    if (!query) return this.close()
+    if (editorInsideMath(editor, editor.selectionStart) || editorInsideCode(editor, editor.selectionStart)) return this.close()
+
     if (directiveQuery) {
       this.query = directiveQuery.text
       this.queryPrefix = ":"
@@ -130,8 +133,6 @@ export default class extends Controller {
       this.renderPalette()
       return
     }
-    const query = this.queryAtCaret()
-    if (!query) return this.close()
 
     const mermaidCommand = this.registry.find((entry) =>
       entry.namespace === "/" && entry.trigger === "diagram" && entry.behavior?.type === "mermaid_assist"
