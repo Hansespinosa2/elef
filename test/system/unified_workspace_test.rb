@@ -261,6 +261,49 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     assert_no_selector ".math-error"
   end
 
+  test "inserts structured math entries with ordered placeholder stops" do
+    document = Document.create!(title: "Structured math", source: "# Math\n\n$$x$$")
+
+    visit edit_document_path(document)
+    editor = find(".cm-content")
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector(".source-field").editorController;
+      const opening = editor.value.indexOf("$$x") + 2;
+      editor.setSelectionRange(opening);
+      editor.focus();
+    JAVASCRIPT
+
+    editor.send_keys("@frac")
+    assert_selector ".math-shortcut-option", text: /Fraction/, wait: 5
+    editor.send_keys(:enter, "n", :tab, "d", :tab, " +@choose")
+    assert_selector ".math-shortcut-option", text: /Choose/, wait: 5
+    editor.send_keys(:enter, "n", :tab, "k", :tab, " +@cases")
+    assert_selector ".math-shortcut-option", text: /Cases/, wait: 5
+    editor.send_keys(:enter, "f(x)", :tab, "x>0", :tab, "0", :tab, "otherwise", :tab, " +@equation")
+    assert_selector ".math-shortcut-option", text: /Equation/, wait: 5
+    editor.send_keys(:enter, "lhs", :tab, "rhs", :tab, " +@gather")
+    assert_selector ".math-shortcut-option", text: /Gather/, wait: 5
+    editor.send_keys(:enter, "g_1", :tab, "g_2", :tab)
+
+    source = find_field("Markdown source").value
+    expected = [
+      "\\frac{n}{d}",
+      "\\binom{n}{k}",
+      "\\begin{cases}",
+      "f(x) & x>0",
+      "0 & otherwise",
+      "\\begin{aligned}",
+      "lhs &= rhs",
+      "\\begin{gathered}",
+      "g_1 \\\\",
+      "g_2"
+    ]
+    positions = expected.map { |fragment| source.index(fragment) }
+    assert positions.all?, "missing structured output in #{source.inspect}"
+    assert_equal positions.sort, positions, "math placeholders or commands were reordered"
+    %w[@frac @choose @cases @equation @gather].each { |command| refute_includes source, command }
+  end
+
   test "uses the selected math transform without duplicating its base" do
     document = Document.create!(title: "Selected math transform", source: "# Math")
 
