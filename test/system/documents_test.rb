@@ -1828,6 +1828,23 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_equal "# Math\n$x.b$", document.reload.source.gsub(/\r\n?/, "\n")
   end
 
+  test "explicitly saving commits an active math chain" do
+    document = Document.create!(title: "Explicitly saved math chain", source: "# Math")
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    source = find_field("Markdown source")
+    editor.send_keys(:end)
+    editor.send_keys("\n$x.b")
+    assert_includes source.value, "$x.b$"
+
+    click_on "Save document"
+    assert_text "Document saved."
+
+    assert_includes source.value, "$\\mathbf{x}$"
+    assert_equal source.value.gsub(/\r\n?/, "\n"), document.reload.source.gsub(/\r\n?/, "\n")
+  end
+
   test "typing a colon directive inserts canonical source and guides align arguments" do
     document = Document.create!(title: "Directive palette", source: "# Notes")
     visit edit_document_path(document)
