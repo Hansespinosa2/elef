@@ -1961,9 +1961,9 @@ class DocumentsTest < ApplicationSystemTestCase
     click_on "Source"
     editor = find(".cm-content")
     source = find_field("Markdown source")
-    page.execute_script(<<~JAVASCRIPT)
+    page.execute_script(<<~JAVASCRIPT, "\\mathbf{z}")
       const editor = document.querySelector(".source-field").editorController;
-      const atom = "\\mathbf{z}";
+      const atom = arguments[0];
       const start = editor.value.indexOf(`$${atom}$`);
       if (start < 0) throw new Error(`Missing math atom ${atom}`);
       editor.setSelectionRange(start + atom.length + 1);
