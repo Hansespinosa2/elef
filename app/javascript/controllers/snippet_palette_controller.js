@@ -176,7 +176,7 @@ export default class extends Controller {
     const text = trailingSpace ? "" : (completed.at(-1) || "")
     const choices = position === 0
       ? ["left", "center", "right", "top", "middle", "bottom"]
-      : position === 1 && completed.length === 1
+      : position === 1 && completed.length === 1 && ["left", "center", "right", "top", "middle", "bottom"].includes(completed[0])
         ? ["top", "middle", "bottom"]
         : []
     if (!choices.length) return null
@@ -236,7 +236,7 @@ export default class extends Controller {
       option.setAttribute("aria-selected", String(index === this.selectedIndex))
       option.className = `snippet-option${index === this.selectedIndex ? " is-selected" : ""}`
       const trigger = document.createElement("strong")
-      trigger.textContent = `${this.queryPrefix || "/"}${snippet.trigger}`
+      trigger.textContent = this.argumentQuery ? snippet.trigger : `${this.queryPrefix || "/"}${snippet.trigger}`
       const details = document.createElement("span")
       details.textContent = `${snippet.name} · ${snippet.category}`
       option.append(trigger, details)

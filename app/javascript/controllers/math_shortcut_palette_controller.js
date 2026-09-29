@@ -122,6 +122,7 @@ export default class extends Controller {
     const singleCharacterAlias = query.prefix === "@" && query.text.length === 1
     const matches = this.shortcutsValue
       .filter((shortcut) => shortcut.prefix === query.prefix)
+      .filter((shortcut) => query.prefix !== "." || (shortcut.built_in && ["Bold", "Blackboard bold", "Vector", "Transpose", "Inverse"].includes(shortcut.name)))
       .filter((shortcut) => !singleCharacterAlias || (shortcut.aliases || []).includes(query.text))
       .map((shortcut) => ({ shortcut, score: this.matchScore(shortcut, query.text) }))
       .filter(({ score }) => score !== null)
