@@ -1977,6 +1977,26 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_equal source.value, document.reload.source
   end
 
+  test "Enter in an empty display-math pair creates a blank line between delimiters" do
+    document = Document.create!(title: "Empty display math", source: "# Math\n\n$$$$")
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    source = find_field("Markdown source")
+    prefix_length = "# Math\n\n".length
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector(".source-field").editorController;
+      editor.setSelectionRange(editor.value.length - 2);
+      editor.focus();
+    JAVASCRIPT
+
+    editor.send_keys(:enter)
+
+    assert_equal "# Math\n\n$$\n\n$$", source.value
+    caret = page.evaluate_script("document.querySelector('.source-field').editorController.selectionStart")
+    assert_equal prefix_length + 3, caret
+  end
+
   test "slash palette hides raw LaTeX outside math and keeps equation blocks available" do
     document = Document.create!(title: "Slash context", source: "# Notes")
     visit edit_document_path(document)

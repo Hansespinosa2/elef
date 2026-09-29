@@ -87,3 +87,5 @@ No grouped postfix operations, arbitrary-expression postfix operations, structur
 ## 9. `$` math pairing
 
 Outside code contexts, `$` should create `$|$`. If the pair is empty and the author immediately types another `$`, promote it to `$$|$$`. Typing an expected closing `$` moves over the existing delimiter. Pairing does not activate inside fenced code, inline code, or for escaped `\\$`.
+
+When the caret is inside an empty standalone display pair, `$$|$$`, plain Enter creates `$$\n|\n$$` and leaves the caret on the empty line.

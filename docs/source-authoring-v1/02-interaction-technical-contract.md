@@ -44,6 +44,8 @@ Never simplify algebra or reorder mathematical operations because they may be eq
 
 Palettes share one interaction model: typing filters; exact canonical matches rank first, exact aliases next, fuzzy semantic matches after; Up/Down navigate; Enter accepts; Escape closes without changing source; ordinary cursor/editing shortcuts work when navigation is inactive; palette focus does not make text navigation unreliable. Directive palettes are restricted to values valid at the current argument position.
 
+Plain Enter between the delimiters of an empty standalone display pair `$$|$$` inserts one blank math line and keeps the caret on that line. Enter behavior in inline math, code, and other source contexts remains unchanged.
+
 ## 10. Placeholders
 
 Structured insertions support ordered placeholders. `\\frac{|}{}` uses Tab to move numerator, denominator, then out. The same applies to tables, code blocks, directives, matrices, cases, and diagram templates.

@@ -110,6 +110,75 @@ test("pairs, promotes, and skips math delimiters without touching code or escape
   assert.equal(math.mathDollarAction("$x$", 2), "skip")
 })
 
+test("Enter in an empty paired display-math delimiter creates a blank body line", () => {
+  const listeners = new Map()
+  const editor = {
+    value: "$$$$",
+    selectionStart: 2,
+    selectionEnd: 2,
+    editingMode: "source",
+    insertMode: true,
+    lineSeparator: "\n",
+    dom: {
+      addEventListener: (name, listener) => listeners.set(name, listener),
+      removeEventListener: () => {}
+    },
+    form: null,
+    replaceRange(insert, from, to = from) {
+      this.value = this.value.slice(0, from) + insert + this.value.slice(to)
+      this.selectionStart = this.selectionEnd = from + insert.length
+    },
+    setSelectionRange(from, to = from) { this.selectionStart = from; this.selectionEnd = to }
+  }
+  const doc = {
+    get length() { return editor.value.length },
+    lineAt(position) {
+      const from = editor.value.lastIndexOf("\n", position - 1) + 1
+      const nextLine = editor.value.indexOf("\n", position)
+      const to = nextLine === -1 ? editor.value.length : nextLine
+      return { from, to, text: editor.value.slice(from, to) }
+    },
+    sliceString(from, to, separator = "\n") { return editor.value.slice(from, to).replaceAll("\n", separator) }
+  }
+  let inCodeFence = false
+  editor.view = {
+    state: {
+      doc,
+      tree: {
+        resolveInner: () => inCodeFence
+          ? ({ name: "CodeText", parent: { name: "FencedCode", from: 0, parent: null } })
+          : ({ name: "Text", parent: { name: "Paragraph", from: 0, parent: null } })
+      }
+    }
+  }
+  const controller = new math.default()
+  controller.editorController = editor
+  controller.setupEditor()
+
+  const event = { key: "Enter", defaultPrevented: false, preventDefault() { this.defaultPrevented = true } }
+  listeners.get("keydown")(event)
+
+  assert.equal(event.defaultPrevented, true)
+  assert.equal(editor.value, "$$\n\n$$")
+  assert.equal(editor.selectionStart, 3)
+  assert.equal(editor.selectionEnd, 3)
+
+  editor.value = "$x$"
+  editor.setSelectionRange(2)
+  const inlineEnter = { key: "Enter", defaultPrevented: false, preventDefault() { this.defaultPrevented = true } }
+  listeners.get("keydown")(inlineEnter)
+  assert.equal(inlineEnter.defaultPrevented, false)
+  assert.equal(editor.value, "$x$")
+
+  editor.value = "```\n$$$$\n```"
+  editor.setSelectionRange(6)
+  inCodeFence = true
+  const codeEnter = { key: "Enter", defaultPrevented: false, preventDefault() { this.defaultPrevented = true } }
+  listeners.get("keydown")(codeEnter)
+  assert.equal(codeEnter.defaultPrevented, false)
+  assert.equal(editor.value, "```\n$$$$\n```")
+})
+
 test("keeps a chain active while the author inserts another operation", () => {
   const listeners = new Map()
   const editor = {

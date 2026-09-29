@@ -327,6 +327,17 @@ export default class extends Controller {
     const editor = this.editorController
     if (!editor || editor.editingMode !== "source" || !editor.insertMode) return
     const caret = editor.selectionStart
+    const plainEnter = event.key === "Enter" && !event.isComposing && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey
+    if (plainEnter && editor.selectionStart === editor.selectionEnd) {
+      const line = editor.view?.state?.doc.lineAt(caret)
+      if (line?.text === "$$$$" && caret - line.from === 2 && editorMathContextAt(editor, caret) === "display_math") {
+        event.preventDefault()
+        const separator = editor.lineSeparator || "\n"
+        editor.replaceRange(`${separator}${separator}`, caret, caret)
+        editor.setSelectionRange(caret + separator.length)
+        return
+      }
+    }
     if (event.key === "$" && editor.selectionStart === editor.selectionEnd) {
       const action = mathDollarActionAtEditor(editor, caret)
       if (action === "promote") {

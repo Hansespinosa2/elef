@@ -38,6 +38,8 @@ Commit `x.b` to canonical LaTeX, press Undo once, and verify exact restoration t
 
 Outside code, `$` creates `$|$`; immediately typing another `$` in the untouched pair creates `$$|$$`. Fenced code, inline code, and escaped `\\$` get literal dollars; expected closing `$` moves over the existing delimiter.
 
+Given `$$|$$` on a standalone line, plain Enter yields `$$\n|\n$$`; the caret remains between the delimiters. Enter in inline math and fenced code remains unchanged.
+
 ## 10. Palette tests
 
 For every palette, Down/Up navigate, Enter accepts, Escape closes without changing source, typing filters, mouse is unnecessary, and normal cursor/editing keys work when navigation is inactive.
