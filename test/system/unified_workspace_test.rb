@@ -421,6 +421,25 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     page.driver.browser.manage.window.resize_to(1400, 1000)
   end
 
+  test "source mode keeps the first document page within the side preview width" do
+    visit new_document_path
+    page.driver.browser.manage.window.resize_to(1400, 900)
+    click_on "Source"
+
+    geometry = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const preview = document.querySelector(".editor-projection").getBoundingClientRect();
+        const page = document.querySelector(".document-page").getBoundingClientRect();
+        return { previewLeft: preview.left, previewRight: preview.right, pageLeft: page.left, pageRight: page.right };
+      })()
+    JAVASCRIPT
+
+    assert_operator geometry["pageLeft"], :>=, geometry["previewLeft"]
+    assert_operator geometry["pageRight"], :<=, geometry["previewRight"]
+  ensure
+    page.driver.browser.manage.window.resize_to(1400, 1000)
+  end
+
   private
 
   def type_source_text(source, source_text, replacement)

@@ -208,6 +208,7 @@ body.elef-app {
 .editor-projection { background: var(--oradia-paper-bright); border: 1px solid var(--oradia-paper-line); border-radius: 0.85rem; box-shadow: 0 14px 35px rgba(0, 0, 0, 0.14); color: var(--oradia-paper-ink); min-height: 22rem; overflow: hidden; padding: clamp(0.75rem, 2vw, 1.25rem); position: relative; z-index: 5; }
 .editor-projection.preview-pane { background: var(--oradia-paper-bright) !important; border-color: var(--oradia-paper-line) !important; box-shadow: 0 14px 35px rgba(0, 0, 0, 0.14); }
 .editor-projection .document-reader { container-type: inline-size; }
+.editor-projection .document-page-frame { width: min(794px, 100%); }
 .editor-projection .document-surface { border: 0; border-radius: 0; box-shadow: none; min-height: 20rem; padding: clamp(1rem, 4vw, 3.5rem); }
 .document-editor-block { border-radius: 0.45rem; outline: 1px solid transparent; outline-offset: 0.35rem; transition: background 120ms ease, outline-color 120ms ease; }
 .document-editor-block:hover, .document-editor-block:focus { background: rgba(159, 197, 169, 0.08); outline-color: rgba(79, 139, 104, 0.42); }
