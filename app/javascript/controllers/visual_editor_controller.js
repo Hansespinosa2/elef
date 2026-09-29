@@ -338,7 +338,22 @@ export default class extends Controller {
       if (this.removeEmptyBlock(blockElement, block, region, kind, markdown, source)) event.preventDefault()
       return
     }
-    if (event.key !== "Enter" || event.shiftKey || kind === "code") return
+    if (event.key !== "Enter" || event.shiftKey) return
+
+    if (kind === "code") {
+      const openingFence = markdown.match(/^([ \t]*)(`{3,}|~{3,})([^\r\n]*)$/)
+      if (!openingFence || !this.selectionIsAtEnd(blockElement)) return
+
+      event.preventDefault()
+      const [, indentation, fence] = openingFence
+      const lineEnding = source.match(/\r\n|\r|\n/)?.[0] || "\n"
+      const replacement = `${markdown}${lineEnding}${lineEnding}${indentation}${fence}`
+      this.replaceAndFocus(blockElement, start, end, replacement, {
+        sourceOffset: start + markdown.length + lineEnding.length,
+        location: "block_end"
+      })
+      return
+    }
 
     const atEnd = this.selectionIsAtEnd(blockElement)
     const rawStructuredBlock = (kind === "list" && !blockElement.querySelector("ul, ol")) ||

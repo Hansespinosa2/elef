@@ -1062,6 +1062,20 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: "- [ ] Keep **that**\n  - Nested [link](/path)\n- [x] Already done", wait: 5
   end
 
+  test "enter after a code fence opener inserts a closing fence" do
+    visit new_document_path
+
+    find(".document-editor-block h1", text: "Untitled document").send_keys(:enter)
+    block = active_document_block
+    block.send_keys("```sql", :enter)
+
+    assert_field "Markdown source", with: /```sql\n\n```/, wait: 5
+    assert_selector ".document-editor-block[contenteditable='true'] pre code", text: "", wait: 5
+
+    active_document_block.send_keys("SELECT * FROM TABLE")
+    assert_field "Markdown source", with: /```sql\nSELECT \* FROM TABLE\n```/, wait: 5
+  end
+
   test "visual code editing preserves fenced language and indentation" do
     document = Document.create!(
       title: "Code notes",
