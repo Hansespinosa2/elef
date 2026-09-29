@@ -9,7 +9,7 @@ import {
   visibleOffsetAtPoint,
   visibleOffsetForSourceOffset
 } from "controllers/editor_caret"
-import { handleMathClick, handleMathKeydown, syncActiveMath } from "controllers/editor_math"
+import { finishMathBeforeEnter, handleMathClick, handleMathKeydown, syncActiveMath } from "controllers/editor_math"
 
 export default class extends Controller {
   static targets = ["projection"]
@@ -331,6 +331,7 @@ export default class extends Controller {
 
     const blockElement = event.target.closest?.(".document-editor-block[data-editor-block-id]")
     if (!blockElement || !this.canEditBlock(blockElement)) return
+    finishMathBeforeEnter(event, this.projectionTarget, () => this.flushPendingProjectionEdits())
 
     const block = this.map?.slides?.flatMap((slide) => slide.blocks || [])
       .find((candidate) => candidate.id === blockElement.dataset.editorBlockId)
