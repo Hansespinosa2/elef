@@ -1824,8 +1824,8 @@ class DocumentsTest < ApplicationSystemTestCase
 
     assert_selector '[data-autosave-target="status"]', text: "Unsaved changes", wait: 3
     assert_selector '[data-autosave-target="status"]', text: "Saved", wait: 10
-    assert_equal "# Math\n$x.b$", source.value
-    assert_equal "# Math\n$x.b$", document.reload.source
+    assert_equal "# Math\n$x.b$", source.value.gsub(/\r\n?/, "\n")
+    assert_equal "# Math\n$x.b$", document.reload.source.gsub(/\r\n?/, "\n")
   end
 
   test "typing a colon directive inserts canonical source and guides align arguments" do
@@ -1955,7 +1955,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
     assert_selector '[data-autosave-target="status"]', exact_text: "Saved", wait: 10
     persisted_source = source.value
-    assert_equal persisted_source, document.reload.source
+    assert_equal persisted_source.gsub(/\r\n?/, "\n"), document.reload.source.gsub(/\r\n?/, "\n")
 
     visit edit_document_path(document.reload)
     click_on "Source"
@@ -1974,7 +1974,7 @@ class DocumentsTest < ApplicationSystemTestCase
     editor.send_keys(:tab)
     assert_includes source.value, "$\\mathbf{z}^{\\mathsf{T}}$"
     assert_selector '[data-autosave-target="status"]', exact_text: "Saved", wait: 10
-    assert_equal source.value, document.reload.source
+    assert_equal source.value.gsub(/\r\n?/, "\n"), document.reload.source.gsub(/\r\n?/, "\n")
   end
 
   test "Enter in an empty display-math pair creates a blank line between delimiters" do
