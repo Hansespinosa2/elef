@@ -55,10 +55,21 @@ module Source
       sections = []
       section = []
       fence = nil
+      math_fence = nil
 
       normalized.split("\n", -1).each do |line|
         next_fence = fence_marker(line)
         fence = toggle_fence(fence, next_fence) if next_fence
+
+        if fence.nil? && math_fence
+          math_fence = nil if display_math_fence_marker(line) == math_fence
+          section << line
+          next
+        elsif fence.nil? && (opening_math_fence = display_math_fence_opener(line))
+          math_fence = opening_math_fence
+          section << line
+          next
+        end
 
         if fence.nil? && line.match?(/\A---[ \t]*\z/)
           sections << normalize_section(section.join("\n"))
@@ -240,12 +251,21 @@ module Source
       ranges = []
       slide_start = body_start
       fence = nil
+      math_fence = nil
 
       source_lines(source).each do |line|
         next if line.end_pos <= body_start
 
         next_fence = fence_marker(line.text)
         fence = toggle_fence(fence, next_fence) if next_fence
+
+        if fence.nil? && math_fence
+          math_fence = nil if display_math_fence_marker(line.text) == math_fence
+          next
+        elsif fence.nil? && (opening_math_fence = display_math_fence_opener(line.text))
+          math_fence = opening_math_fence
+          next
+        end
 
         if fence.nil? && line.text.match?(/\A---[ \t]*\z/)
           ranges << { index: ranges.length, start: slide_start, end: line.start, delimiter_start: line.start, delimiter_end: line.end_pos }
@@ -340,6 +360,7 @@ module Source
       current = []
       pending_position = nil
       fence = nil
+      math_fence = nil
 
       flush = lambda do
         next if current.empty?
@@ -392,6 +413,16 @@ module Source
         elsif incoming_fence
           current << line
           fence = incoming_fence
+          next
+        end
+
+        if math_fence
+          current << line
+          math_fence = nil if display_math_fence_marker(line.text) == math_fence
+          next
+        elsif (opening_math_fence = display_math_fence_opener(line.text))
+          current << line
+          math_fence = opening_math_fence
           next
         end
 
@@ -670,7 +701,11 @@ module Source
     end
 
     def unsupported_escaped_punctuation?(markdown)
-      without_math = markdown.gsub(/(?<!\\)\$\$[\s\S]+?\$\$(?!\$)|(?<![\\$])\$(?!\$|\s)[^$\r\n]+?(?<!\s)\$(?!\$)/, "")
+      without_math = if display_math_fence_source?(markdown)
+        ""
+      else
+        markdown.gsub(/(?<!\\)\$\$[\s\S]+?\$\$(?!\$)|(?<![\\$])\$(?!\$|\s)[^$\r\n]+?(?<!\s)\$(?!\$)/, "")
+      end
       without_math.each_char.with_index.any? do |character, index|
         next false unless character == "\\"
 
@@ -822,6 +857,26 @@ module Source
       { marker: match[1][0], length: match[1].length, closing: match[2].match?(/\A[ \t]*\z/) }
     end
 
+    def display_math_fence_marker(line)
+      line.match(/\A[ \t]{0,3}(\$\$|\\\[|\\\])[ \t]*\z/)&.[](1)
+    end
+
+    def display_math_fence_opener(line)
+      case display_math_fence_marker(line)
+      when "$$" then "$$"
+      when "\\[" then "\\]"
+      end
+    end
+
+    def display_math_fence_source?(markdown)
+      lines = markdown.to_s.split(/\r\n|\r|\n/, -1)
+      opener = display_math_fence_opener(lines.first.to_s)
+      return false unless opener
+      return true if lines.length == 1
+
+      display_math_fence_marker(lines.last.to_s) == opener
+    end
+
     def toggle_fence(current, incoming)
       return incoming unless current
       return nil if current[:marker] == incoming[:marker] &&
@@ -862,6 +917,7 @@ module Source
       warnings = []
       leading = true
       fence = nil
+      math_fence = nil
       footnote = nil
 
       lines.each_with_index do |line, index|
@@ -873,6 +929,15 @@ module Source
         elsif incoming_fence
           content << line
           fence = incoming_fence
+          leading = false
+          next
+        elsif math_fence
+          math_fence = nil if display_math_fence_marker(line) == math_fence
+          content << line
+          next
+        elsif (opening_math_fence = display_math_fence_opener(line))
+          math_fence = opening_math_fence
+          content << line
           leading = false
           next
         end
@@ -986,10 +1051,21 @@ module Source
       blocks = []
       current = []
       fence = nil
+      math_fence = nil
 
       markdown.split("\n", -1).each do |line|
         next_fence = fence_marker(line)
         fence = toggle_fence(fence, next_fence) if next_fence
+
+        if fence.nil? && math_fence
+          math_fence = nil if display_math_fence_marker(line) == math_fence
+          current << line
+          next
+        elsif fence.nil? && (opening_math_fence = display_math_fence_opener(line))
+          math_fence = opening_math_fence
+          current << line
+          next
+        end
 
         if fence.nil? && line.match?(/\A\s*:::/)
           blocks << current.join("\n") if current.any?

@@ -66,8 +66,10 @@ jobs:
           PGPASSWORD: postgres
           PGTESTDATABASE: elef_test
         run: bin/rails db:test:prepare test
-      - name: Run deterministic bug report recorder tests
-        run: node test/javascript/bug_report_events.test.mjs
+      - name: Run deterministic JavaScript unit tests
+        run: |
+          node test/javascript/bug_report_events.test.mjs
+          node --test test/javascript/editor_markdown_math.test.mjs
       - name: Check repository launchers and deployment files
         run: |
           bash test/scripts/elef-agent_test.sh

@@ -9,7 +9,7 @@ import {
   visibleOffsetAtPoint,
   visibleOffsetForSourceOffset
 } from "controllers/editor_caret"
-import { finishMathBeforeEnter, handleMathClick, handleMathKeydown, syncActiveMath } from "controllers/editor_math"
+import { deRenderMath, finishMathBeforeEnter, handleMathClick, handleMathKeydown, syncActiveMath } from "controllers/editor_math"
 
 export default class extends Controller {
   static targets = ["projection"]
@@ -352,7 +352,30 @@ export default class extends Controller {
       if (this.removeEmptyBlock(blockElement, block, region, kind, markdown, source)) event.preventDefault()
       return
     }
-    if (event.key !== "Enter" || event.shiftKey || kind === "code") return
+    if (event.key !== "Enter" || event.shiftKey) return
+
+    const openingCodeFence = kind === "code"
+      ? markdown.match(/^([ \t]*)(`{3,}|~{3,})([^\r\n]*)$/)
+      : null
+    const openingMathFence = kind === "paragraph"
+      ? markdown.match(/^([ \t]{0,3})(\$\$|\\\[)[ \t]*$/)
+      : null
+    if (openingCodeFence || openingMathFence) {
+      if (!this.selectionIsAtEnd(blockElement)) return
+
+      event.preventDefault()
+      const [, indentation, marker] = openingCodeFence || openingMathFence
+      const closingMarker = openingCodeFence
+        ? marker
+        : marker === "$$" ? "$$" : "\\]"
+      const lineEnding = source.match(/\r\n|\r|\n/)?.[0] || "\n"
+      const replacement = markdown + lineEnding + lineEnding + indentation + closingMarker
+      this.replaceAndFocus(blockElement, start, end, replacement, {
+        sourceOffset: start + markdown.length + lineEnding.length,
+        location: openingMathFence ? "math_expression_start" : "block_end"
+      })
+      return
+    }
 
     const atEnd = this.selectionIsAtEnd(blockElement)
     const rawStructuredBlock = (kind === "list" && !blockElement.querySelector("ul, ol")) ||
@@ -822,6 +845,17 @@ export default class extends Controller {
     if (!candidate || !element) return
 
     this.pendingCaret = null
+    if (pending.location === "math_expression_start") {
+      const mathElement = element.querySelector("[data-editor-math-source]:not([data-editor-math-active])")
+      if (mathElement) {
+        element.focus({ preventScroll: true })
+        if (deRenderMath(mathElement, { caret: "start" })) {
+          this.lastProjectionCaret = { blockId: candidate.id, visibleOffset }
+          return
+        }
+      }
+    }
+
     const target = pending.location === "list_item_end"
       ? element.querySelector("li:last-child") || element
       : pending.location === "quote_line_end"

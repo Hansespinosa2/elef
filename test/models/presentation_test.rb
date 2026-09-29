@@ -37,6 +37,17 @@ class PresentationTest < ActiveSupport::TestCase
     assert_equal ["```yaml\n---\n```", "", ""], document.slides.map(&:markdown)
   end
 
+  test "keeps slide ranges aligned when separators appear inside display math" do
+    [["$$", "$$"], ["\\[", "\\]"]].each do |opening, closing|
+      source = "# Math\n\n#{opening}\n---\n#{closing}\n\n---\n# Next"
+      map = Source::Document.editor_map(source, mode: :presentation)
+
+      assert_equal 2, map[:slides].length
+      assert_equal "#{opening}\n---\n#{closing}", map[:slides].first[:blocks].last[:markdown]
+      assert_equal "# Next", map[:slides].last[:blocks].first[:markdown]
+    end
+  end
+
   test "maps source ranges around front matter, fenced separators, CRLF, and unicode" do
     source = "---\r\ntitle: Café 😀\r\n---\r\n# One 😀\r\n```md\r\n---\r\n```\r\n---\r\n---"
     ranges = Source::Document.slide_source_ranges(source)
@@ -315,6 +326,23 @@ class PresentationTest < ActiveSupport::TestCase
     assert_equal [nil, "group", "group", nil], blocks.map { |block| block[:position_scope] }
     assert_equal blocks[1][:position_directive_id], blocks[2][:position_directive_id]
     refute_equal blocks[1][:position_directive_id], blocks[3][:position_directive_id]
+  end
+
+  test "keeps blank lines inside display math fences in one editable block" do
+    [["$$", "$$"], ["\\[", "\\]"]].each do |opening, closing|
+      source = "# Math\n\n#{opening}\n\n#{closing}"
+      map = Source::Document.editor_map(source, mode: :document)
+      blocks = map[:slides].first[:blocks]
+      math_block = blocks.last
+      region = map[:slides].first[:editable_regions].find { |candidate| candidate[:block_id] == math_block[:id] }
+
+      assert_equal "#{opening}\n\n#{closing}", math_block[:markdown]
+      assert_equal true, region[:editable]
+
+      opener_map = Source::Document.editor_map("# Math\n\n#{opening}", mode: :document)
+      opener_region = opener_map[:slides].first[:editable_regions].last
+      assert_equal true, opener_region[:editable]
+    end
   end
 
   test "keeps a document editor map as one source surface across horizontal rules" do

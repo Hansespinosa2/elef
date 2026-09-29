@@ -29,7 +29,8 @@ export function deRenderMath(mathElement, { caret = "end", clickEvent = null } =
     const offset = Math.max(open.length, fullText.length - close.length)
     selection?.setBaseAndExtent(textNode, offset, textNode, offset)
   } else if (caret === "start") {
-    const offset = open.length
+    const openingLineBreak = source.match(/^(?:\r\n|\r|\n)/)?.[0].length || 0
+    const offset = open.length + (isDisplay ? openingLineBreak : 0)
     selection?.setBaseAndExtent(textNode, offset, textNode, offset)
   } else if (caret === "click" && clickEvent) {
     let offset = null

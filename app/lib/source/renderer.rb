@@ -253,7 +253,12 @@ module Source
             (!dollar_delimiter || delimiter_length == 2 || markdown[closing - 1] != "$")
           expression = markdown[cursor...closing]
           valid_expression = if delimiter == "$$" || delimiter == "\\]"
-            expression.strip.present?
+            expression.strip.present? || empty_display_math_block?(
+              markdown,
+              cursor - delimiter_length,
+              closing,
+              delimiter
+            )
           else
             expression.present? && !expression.include?("\n") && !expression.match?(/\A\s|\s\z/)
           end
@@ -264,6 +269,22 @@ module Source
       end
 
       nil
+    end
+
+    def empty_display_math_block?(markdown, opening_index, closing_index, delimiter)
+      expression = markdown[(opening_index + delimiter.length)...closing_index]
+      return false unless expression&.blank?
+
+      opening_delimiter = delimiter == "$$" ? "$$" : "\\["
+      opening_line_start = opening_index.zero? ? 0 : (markdown.rindex("\n", opening_index - 1) || -1) + 1
+      opening_line_end = markdown.index("\n", opening_index) || markdown.length
+      opening_line = markdown[opening_line_start...opening_line_end].to_s
+      closing_line_start = (markdown.rindex("\n", closing_index - 1) || -1) + 1
+      closing_line_end = markdown.index("\n", closing_index) || markdown.length
+      closing_line = markdown[closing_line_start...closing_line_end].to_s
+
+      opening_line.match?(/\A[ \t]{0,3}#{Regexp.escape(opening_delimiter)}[ \t]*\r?\z/) &&
+        closing_line.match?(/\A[ \t]{0,3}#{Regexp.escape(delimiter)}[ \t]*\r?\z/)
     end
 
     def escaped_math_delimiter?(markdown, index)

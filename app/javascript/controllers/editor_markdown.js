@@ -13,6 +13,8 @@ export function markdownForVisibleText(markdown, text, kind, element = null, { d
   const protectedElements = protectedElementsFor(element)
   const allMathElements = allMathElementsFor(element)
   const activeCount = allMathElements.filter((candidate) => candidate.dataset.editorMathActive === "true").length
+  const activeDisplayMath = activeDisplayMathBlock(source, allMathElements)
+  if (activeDisplayMath !== null) return activeDisplayMath
   const sourceAtoms = sourceAtomCounts(source)
   const expectedAtoms = protectedElements.length + activeCount
   if (element?.querySelectorAll && sourceAtoms.total !== expectedAtoms &&
@@ -309,6 +311,28 @@ function markdownForImage(source, element, fallback) {
   const alt = visibleText(caption?.innerText || caption?.textContent || fallback)
   const title = image[4] ? ` ${image[4]}` : ""
   return `${image[1]}![${alt}](${image[3]}${title})${image[5]}`
+}
+
+function activeDisplayMathBlock(source, allMathElements) {
+  const activeMath = allMathElements.find((candidate) => candidate.dataset.editorMathActive === "true")
+  if (!activeMath) return null
+
+  const opening = activeMath.dataset.editorMathOpen || "$"
+  const closing = activeMath.dataset.editorMathClose || opening
+  if (!["$$", "\\["].includes(opening)) return null
+
+  const fullText = activeMath.textContent || ""
+  if (!fullText.startsWith(opening) || !fullText.endsWith(closing)) return null
+
+  const openingIndex = source.indexOf(opening)
+  const closingIndex = source.lastIndexOf(closing)
+  if (openingIndex < 0 || closingIndex < openingIndex + opening.length) return null
+
+  const before = source.slice(0, openingIndex)
+  const after = source.slice(closingIndex + closing.length)
+  if (!/^[ \t]{0,3}$/.test(before) || !/^[ \t]*$/.test(after)) return null
+
+  return before + fullText + after
 }
 
 function preserveInlineMarkdown(source, value, protectedElements, formatBudget, allMathElements = []) {
