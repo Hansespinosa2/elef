@@ -40,6 +40,13 @@ export default class extends Controller {
     this.element.addEventListener("elef:document-paginated", this.documentPaginatedHandler)
     this.projectionLinkHandler = (event) => this.projectionLinkClicked(event)
     this.element.addEventListener("click", this.projectionLinkHandler)
+    this.positionControlOutsidePointerDown = (event) => {
+      const targetControl = event.target.closest?.(".document-block-position-control")
+      this.projectionTarget.querySelectorAll(".document-block-position-control.is-open").forEach((control) => {
+        if (control !== targetControl) control.classList.remove("is-open")
+      })
+    }
+    document.addEventListener("pointerdown", this.positionControlOutsidePointerDown, true)
     this.hasPresentationProjection = Boolean(this.element.querySelector(".presentation-editor-projection"))
     if (!this.hasPresentationProjection) {
       this.blockKeydownHandler = (event) => this.blockKeydown(event)
@@ -58,6 +65,7 @@ export default class extends Controller {
     this.element.removeEventListener("elef:preview-stale", this.previewStaleHandler)
     this.element.removeEventListener("elef:document-paginated", this.documentPaginatedHandler)
     this.element.removeEventListener("click", this.projectionLinkHandler)
+    document.removeEventListener("pointerdown", this.positionControlOutsidePointerDown, true)
     this.element.removeEventListener("keydown", this.blockKeydownHandler, true)
     document.removeEventListener("selectionchange", this.selectionChangeHandler)
     if (this.pendingProjectionFrame) cancelAnimationFrame(this.pendingProjectionFrame)
@@ -68,6 +76,11 @@ export default class extends Controller {
   applyMode(mode) {
     const visual = mode !== "source"
     this.element.dataset.editorMode = visual ? "visual" : "source"
+    if (!visual) {
+      this.projectionTarget.querySelectorAll(".document-block-position-control.is-open").forEach((control) => {
+        control.classList.remove("is-open")
+      })
+    }
     if (!visual) this.pendingCaretRestore = null
     if (this.hasProjectionTarget) this.projectionTarget.setAttribute("aria-label", visual ? "Visual editing surface" : "Rendered preview")
     this.syncProjectionEditability()
@@ -392,7 +405,9 @@ export default class extends Controller {
 
   positionChanged(event) {
     const control = event.target.closest?.("[data-visual-editor-block-id]")
-    if (!control || !this.editorController || this.element.dataset.editorMode !== "visual" ||
+    if (!control) return
+    control.closest(".document-block-position-control")?.classList.remove("is-open")
+    if (!this.editorController || this.element.dataset.editorMode !== "visual" ||
       this.element.previewController?.projectionFresh === false) return
 
     this.flushPendingProjectionEdits()
@@ -479,6 +494,17 @@ export default class extends Controller {
     }
     const updated = `${source.slice(0, from)}${replacement}${source.slice(to)}`
     this.editorController.replaceRange(updated, 0, source.length)
+  }
+
+  positionControlOpened(event) {
+    // Pin the hover-only trigger even if the native select temporarily loses focus.
+    event.target.closest?.(".document-block-position-control")?.classList.add("is-open")
+  }
+
+  positionControlKeydown(event) {
+    if (!["Escape", "Tab"].includes(event.key)) return
+
+    event.target.closest?.(".document-block-position-control")?.classList.remove("is-open")
   }
 
   previewUpdated(payload) {
