@@ -403,6 +403,17 @@ export default class extends Controller {
     })
   }
 
+  replaceRangeWithSelection(insert, from, to, selection) {
+    const anchor = from + selection.from
+    const head = from + selection.to
+    this.view.dispatch({
+      changes: { from, to, insert },
+      selection: { anchor, head },
+      userEvent: "input",
+      scrollIntoView: true
+    })
+  }
+
   replaceRanges(changes) {
     if (this.destroyed || !this.view || !changes?.length) return
     this.view.dispatch({ changes, userEvent: "input" })

@@ -102,6 +102,124 @@ class DocumentsTest < ApplicationSystemTestCase
     find(".document-editor-block[data-editor-block-id]:focus")
   end
 
+  test "source mode inserts and continues Mermaid flowcharts with Enter and branching keys" do
+    document = Document.create!(title: "Mermaid process", source: "# Existing text")
+
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      editor.setSelectionRange(editor.value.length);
+      editor.focus();
+    JAVASCRIPT
+    editor.send_keys(:enter, "/diagram")
+
+    assert_selector ".mermaid-assist-option", text: "Flowchart / process", wait: 5
+    find(".mermaid-assist-option", text: "Flowchart / process").click
+    source = find_field("Markdown source")
+    assert_includes source.value, "```mermaid\nflowchart LR\n    A[]\n```"
+    assert_equal "[]", page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const editor = document.querySelector('.source-field').editorController;
+        return editor.value.slice(editor.selectionStart - 1, editor.selectionStart + 1);
+      })()
+    JAVASCRIPT
+
+    editor.send_keys("Research", :enter)
+    assert_field "Markdown source", with: /A\[Research\] --> B\[\]/, wait: 5
+    editor.send_keys("Design", :enter)
+    assert_field "Markdown source", with: /A\[Research\] --> B\[Design\] --> C\[\]/, wait: 5
+
+    editor.send_keys(:tab)
+    assert_field "Markdown source", with: /C --> D\[\]/, wait: 5
+    branch_source = source.value
+    editor.send_keys(:shift, :tab)
+    assert_equal branch_source, source.value
+    assert_equal "C", page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const editor = document.querySelector('.source-field').editorController;
+        return editor.value[editor.selectionStart];
+      })()
+    JAVASCRIPT
+    editor.send_keys(:shift, :tab)
+    assert_includes source.value, "B[Design] --> C[]"
+    assert_match(/\ADesign\]/, page.evaluate_script(<<~JAVASCRIPT))
+      (() => {
+        const editor = document.querySelector('.source-field').editorController;
+        return editor.value.slice(editor.selectionStart, editor.selectionStart + 7);
+      })()
+    JAVASCRIPT
+    node_ids = source.value.scan(/\b([A-Z])(?=\[)/).flatten
+    assert_equal node_ids.uniq, node_ids
+  end
+
+  test "mermaid continuation falls back safely when the caret is in the middle of a label" do
+    source = "```mermaid\nflowchart LR\n    A[Research] --> B[Design]\n```"
+    document = Document.create!(title: "Mermaid middle edit", source: source)
+
+    visit edit_document_path(document)
+    click_on "Source"
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      const position = editor.value.indexOf('Research') + 3;
+      editor.setSelectionRange(position);
+      editor.focus();
+    JAVASCRIPT
+    find(".cm-content").send_keys(:enter)
+
+    edited = find_field("Markdown source").value
+    assert_match(/Res\s+earch\] --> B\[Design\]/, edited)
+    refute_match(/--> C\[\]/, edited)
+  end
+
+  test "Mermaid autocomplete offers existing flowchart nodes when completing an edge" do
+    source = "```mermaid\nflowchart LR\n    A[Research]\n    A --> \n```"
+    document = Document.create!(title: "Mermaid node completion", source: source)
+
+    visit edit_document_path(document)
+    click_on "Source"
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      editor.setSelectionRange(editor.value.indexOf('\\n```'));
+      editor.focus();
+    JAVASCRIPT
+    editor = find(".cm-content")
+    editor.send_keys("A")
+
+    assert_selector ".mermaid-assist-option", text: "A", wait: 5
+    editor.send_keys(:enter)
+    assert_includes find_field("Markdown source").value, "A --> A\n```"
+  end
+
+  test "normal source Enter and snippet Tab completion remain available outside Mermaid" do
+    Snippet.create!(name: "Two text fields", trigger: "pair", category: "Markdown", body: "${1:first} ${2:second}")
+    document = Document.create!(title: "Ordinary source", source: "# Existing")
+
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      editor.setSelectionRange(editor.value.length);
+      editor.focus();
+    JAVASCRIPT
+    editor.send_keys(:enter, "Plain text", :enter, ":pair")
+
+    assert_selector ".snippet-option", text: "Two text fields", wait: 5
+    assert_selector '[data-mermaid-assist-target="palette"]', visible: false
+    editor.send_keys(:enter)
+    source = find_field("Markdown source")
+    assert_includes source.value, "Plain text\nfirst second"
+    editor.send_keys(:tab)
+    assert_equal "second", page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const editor = document.querySelector('.source-field').editorController;
+        return editor.value.slice(editor.selectionStart, editor.selectionEnd);
+      })()
+    JAVASCRIPT
+  end
+
   test "suggests document links in the Markdown editor" do
     Document.create!(title: "Research target", source: "# Target")
     document = Document.create!(title: "Research source", source: "# Source")

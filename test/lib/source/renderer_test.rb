@@ -78,6 +78,17 @@ class SourceRendererTest < ActiveSupport::TestCase
     assert_includes html, "hello"
   end
 
+  test "preserves manually authored Mermaid as an ordinary fenced code block" do
+    source = "```mermaid\nflowchart LR\n    A[Research] --> B[Design]\n```"
+    html = Source::Renderer.render(source)
+
+    assert_includes html, "<pre><code"
+    assert_includes html, "flowchart LR"
+    assert_includes html, "A[Research]"
+    assert_includes html, "B[Design]"
+    refute_includes html, "undefined"
+  end
+
   test "renders inline and display math via KaTeX" do
     inline_html = Source::Renderer.render("Equation: $E = mc^2$ in line.")
     assert_includes inline_html, 'class="katex"'
