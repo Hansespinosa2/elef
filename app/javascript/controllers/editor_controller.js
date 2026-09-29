@@ -68,10 +68,11 @@ const theme = EditorView.theme({
     padding: "0.75rem"
   },
   ".cm-cursor, .cm-dropCursor": { borderLeftColor: "#9fc5a9" },
+  ".cm-fat-cursor": { backgroundColor: "#9fc5a9", minWidth: "1ch" },
   ".cm-selectionBackground, ::selection": { backgroundColor: "#304047" },
   ".cm-focused": { outline: "none" },
   ".cm-gutters": { backgroundColor: "#11161a", borderRight: "1px solid #304047" },
-  ".cm-activeLine": { backgroundColor: "#182126" },
+  ".cm-activeLine": { backgroundColor: "rgba(255, 255, 255, 0.035)" },
   ".cm-activeLineGutter": { backgroundColor: "#182126" }
 }, { dark: true })
 
@@ -596,10 +597,11 @@ export default class extends Controller {
   }
 
   updateMode() {
-    if (!this.hasModeTarget) return
     if (!this.vimEnabled) {
-      this.modeTarget.textContent = "Standard"
-      this.modeTarget.dataset.mode = "standard"
+      if (this.hasModeTarget) {
+        this.modeTarget.textContent = "Standard"
+        this.modeTarget.dataset.mode = "standard"
+      }
       if (this.hasCommandTarget) this.commandTarget.textContent = ""
       this.element.dataset.editorVimEnabled = "false"
       if (this.form) this.form.dataset.editorVimEnabled = "false"
@@ -610,8 +612,10 @@ export default class extends Controller {
 
     const mode = this.vimMode
     const label = mode.startsWith("visual") ? "Visual" : mode === "insert" ? "Insert" : "Normal"
-    this.modeTarget.textContent = label
-    this.modeTarget.dataset.mode = label.toLowerCase()
+    if (this.hasModeTarget) {
+      this.modeTarget.textContent = label
+      this.modeTarget.dataset.mode = label.toLowerCase()
+    }
     this.element.dataset.editorVimEnabled = "true"
     if (this.form) this.form.dataset.editorVimEnabled = "true"
     this.element.dataset.editorMode = label.toLowerCase()
@@ -762,6 +766,7 @@ export default class extends Controller {
   }
 
   applyCursorStyle() {
+    this.surfaceTarget.dataset.editorVimEnabled = String(this.vimEnabled)
     this.surfaceTarget.dataset.modeAwareCursor = String(this.modeAwareCursor)
     this.surfaceTarget.dataset.editorMode = this.element.dataset.editorMode || "standard"
   }
