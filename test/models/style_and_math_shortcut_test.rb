@@ -31,8 +31,10 @@ class StyleAndMathShortcutTest < ActiveSupport::TestCase
 
   test "math shortcuts normalize aliases and expose built-in editor data" do
     shortcut = MathShortcut.create!(name: "Bold", aliases: "b, bold", prefix: ".", expansion: "\\\\mathbf{${1}}")
+    symbol_shortcut = MathShortcut.create!(name: "Equivalent test shortcut", aliases: "=", prefix: "@", expansion: "\\equiv")
 
     assert_equal %w[b bold], shortcut.reload.aliases
+    assert_equal ["="], symbol_shortcut.reload.aliases
     assert_includes MathShortcuts::Catalog.for_editor, { id: shortcut.id, name: "Bold", aliases: %w[b bold], description: "", prefix: ".", expansion: "\\\\mathbf{${1}}", built_in: false }
     assert MathShortcuts::Catalog.for_editor.any? { |item| item[:aliases].include?("alpha") }
     assert_equal "\\mathbf{${1}}", MathShortcuts::Catalog::DEFAULTS.find { |item| item[:name] == "Bold" }[:expansion]
@@ -89,6 +91,10 @@ class StyleAndMathShortcutTest < ActiveSupport::TestCase
     refute_includes catalog.find { |item| item[:name] == "Implies" }[:aliases], "longrightarrow"
     assert_equal "\\inf", catalog.find { |item| item[:aliases].include?("inf") }[:expansion]
     assert_equal "\\sum", catalog.find { |item| item[:aliases].include?("sum") }[:expansion]
+    assert_equal "\\infty", catalog.find { |item| item[:prefix] == "@" && item[:aliases].include?("8") }[:expansion]
+    assert_equal "\\partial", catalog.find { |item| item[:prefix] == "@" && item[:aliases].include?("6") }[:expansion]
+    assert_equal "^\\circ", catalog.find { |item| item[:prefix] == "@" && item[:aliases].include?("0") }[:expansion]
+    assert_equal "\\equiv", catalog.find { |item| item[:prefix] == "@" && item[:aliases].include?("=") }[:expansion]
 
     assert_equal(
       { text: "\\frac{}{}", stops: [{ number: 1, start: 6, length: 0 }, { number: 2, start: 8, length: 0 }] },
@@ -98,5 +104,23 @@ class StyleAndMathShortcutTest < ActiveSupport::TestCase
       { text: "\\mathbf{q}", stops: [{ number: 1, start: 8, length: 1 }] },
       MathShortcuts::Catalog.expand("\\mathbf{${1}}", value: "q")
     )
+  end
+
+  test "ignores stale built-in shortcuts and preserves unshadowed default aliases" do
+    workspace = Workspace.create!(name: "Legacy math shortcuts", slug: "legacy-math-#{SecureRandom.hex(5)}")
+    MathShortcut.create!(workspace: workspace, name: "Capital Beta", aliases: ["B", "Beta"], prefix: "@", expansion: "B", built_in: true)
+    MathShortcut.create!(workspace: workspace, name: "Custom beta", aliases: ["beta"], prefix: "@", expansion: "\\operatorname{custombeta}")
+    MathShortcut.create!(workspace: workspace, name: "Capital Theta", aliases: ["Q", "Theta"], prefix: "@", expansion: "\\Theta", built_in: true)
+
+    catalog = MathShortcuts::Catalog.for_editor(workspace: workspace)
+    beta = catalog.find { |item| item[:id] == "default-beta" }
+    theta = catalog.find { |item| item[:id] == "default-theta" }
+    capital_theta = catalog.find { |item| item[:name] == "Capital Theta" }
+
+    refute catalog.any? { |item| item[:name] == "Capital Beta" }, "removed built-in shortcuts should not survive from old seed data"
+    assert_equal ["b"], beta[:aliases], "a custom @beta mapping should not remove the @b default"
+    assert_equal "\\beta", beta[:expansion]
+    assert_equal ["q", "th", "theta"], theta[:aliases]
+    assert_equal %w[Q Theta], capital_theta[:aliases], "current built-ins should use case-sensitive default aliases"
   end
 end

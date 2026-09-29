@@ -144,6 +144,43 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     assert_no_selector ".math-shortcut-palette:not([hidden])", wait: 1
   end
 
+  test "shows and accepts beta and theta shortcuts after an inline math opener" do
+    document = Document.create!(title: "Greek math palette", source: "# Greek math palette")
+
+    visit edit_document_path(document)
+    editor = find(".cm-content")
+    editor.click
+    editor.send_keys("\n$ @b")
+
+    beta = find(".math-shortcut-option", text: /Beta/, wait: 5)
+    within(beta) do
+      assert_selector ".math-shortcut-trigger", text: "@b"
+      assert_selector ".math-shortcut-expansion", text: "\\beta"
+    end
+    editor.send_keys(:tab)
+    assert_includes find_field("Markdown source").value, "$ \\beta"
+
+    editor.send_keys(" @q")
+    theta = find(".math-shortcut-option", text: /^Theta/, wait: 5)
+    within(theta) do
+      assert_selector ".math-shortcut-trigger", text: "@q"
+      assert_selector ".math-shortcut-expansion", text: "\\theta"
+    end
+    editor.send_keys(:tab)
+    source = find_field("Markdown source").value
+    assert_includes source, "\\beta"
+    assert_includes source, "\\theta"
+
+    editor.send_keys(" @=")
+    equivalent = find(".math-shortcut-option", text: /Equivalent/, wait: 5)
+    within(equivalent) do
+      assert_selector ".math-shortcut-trigger", text: "@="
+      assert_selector ".math-shortcut-expansion", text: "\\equiv"
+    end
+    editor.send_keys(:tab)
+    assert_includes find_field("Markdown source").value, "\\equiv"
+  end
+
   test "shows compact math shortcut suggestions with their LaTeX expansion" do
     document = Document.create!(title: "Math shortcut previews", source: "# Math shortcut previews")
 

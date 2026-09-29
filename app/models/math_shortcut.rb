@@ -46,7 +46,7 @@ class MathShortcut < ApplicationRecord
 
   def aliases_are_usable
     aliases.each do |value|
-      errors.add(:aliases, "must contain only letters, numbers, hyphens, or underscores") unless value.match?(/\A[A-Za-z][A-Za-z0-9_-]*\z/)
+      errors.add(:aliases, "must contain a word alias or one shortcut character") unless value.match?(/\A(?:[A-Za-z][A-Za-z0-9_-]*|[0-9]|[[:punct:]])\z/)
     end
   end
 end
