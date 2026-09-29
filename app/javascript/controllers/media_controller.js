@@ -1,5 +1,35 @@
 import { Controller } from "@hotwired/stimulus"
 
+const IMAGE_TYPES_BY_EXTENSION = {
+  avif: "image/avif",
+  bmp: "image/bmp",
+  gif: "image/gif",
+  heic: "image/heic",
+  heif: "image/heif",
+  jpeg: "image/jpeg",
+  jpg: "image/jpeg",
+  png: "image/png",
+  svg: "image/svg+xml",
+  tif: "image/tiff",
+  tiff: "image/tiff",
+  webp: "image/webp"
+}
+
+function filesFromTransfer(transfer) {
+  const files = [...(transfer?.files || [])]
+  for (const item of transfer?.items || []) {
+    if (item.kind !== "file") continue
+    const file = item.getAsFile?.()
+    if (file && !files.includes(file)) files.push(file)
+  }
+  return files
+}
+
+function imageTypeForFilename(filename = "") {
+  const extension = filename.match(/\.([^.]+)$/)?.[1]?.toLowerCase()
+  return extension ? IMAGE_TYPES_BY_EXTENSION[extension] : null
+}
+
 export default class extends Controller {
   static targets = ["input", "fit", "status"]
   static values = { uploadUrl: String, enabled: Boolean, workKind: String }
@@ -37,9 +67,23 @@ export default class extends Controller {
   }
 
   paste(event) {
-    const file = [...(event.clipboardData?.files || [])][0]
-    if (!file) return
+    const files = filesFromTransfer(event.clipboardData)
+    if (!files.length) return
     event.preventDefault()
+
+    const editor = this.editor
+    const sourcePaste = this.isSourceEditorTarget(event.target)
+    const file = sourcePaste ? files.find((candidate) => this.isImageFile(candidate)) : files[0]
+    if (!file) {
+      this.setStatus("Choose an image file to insert into source mode.")
+      return
+    }
+
+    if (sourcePaste) {
+      const rangeId = editor.trackMediaRange({ from: editor.selectionStart, to: editor.selectionEnd })
+      this.upload(file, null, { rangeId, imageOnly: true })
+      return
+    }
 
     const slideElement = document.activeElement?.closest?.("[data-slide-index], [data-editor-slide-id]") ||
       event.target?.closest?.("[data-slide-index], [data-editor-slide-id]")
@@ -48,11 +92,65 @@ export default class extends Controller {
       targetIndex = this.slideIndexFromElement(slideElement)
     }
 
-    const editor = this.editor
     const range = targetIndex !== null
       ? this.rangeForSlide(targetIndex)
       : (editor ? { from: editor.selectionStart, to: editor.selectionEnd } : null)
     this.upload(file, range)
+  }
+
+  sourceDragOver(event) {
+    if (this.editor?.editingMode !== "source") return
+    const hasFiles = event.dataTransfer?.types?.includes("Files") || filesFromTransfer(event.dataTransfer).length > 0
+    if (!hasFiles) return
+    event.preventDefault()
+    event.dataTransfer.dropEffect = "copy"
+    event.currentTarget.classList.add("is-media-drop-target")
+  }
+
+  sourceDragLeave(event) {
+    if (event.currentTarget.contains(event.relatedTarget)) return
+    event.currentTarget.classList.remove("is-media-drop-target")
+  }
+
+  sourceDrop(event) {
+    if (this.editor?.editingMode !== "source") return
+    const files = filesFromTransfer(event.dataTransfer)
+    if (!files.length) return
+
+    event.preventDefault()
+    event.stopPropagation()
+    event.currentTarget.classList.remove("is-media-drop-target")
+
+    const file = files.find((candidate) => this.isImageFile(candidate))
+    if (!file) {
+      this.setStatus("Choose an image file to insert into source mode.")
+      return
+    }
+
+    const editor = this.editor
+    const position = editor.view.posAtCoords({ x: event.clientX, y: event.clientY })
+    const fallback = editor.selectionEnd
+    const range = { from: position ?? fallback, to: position ?? fallback }
+    const rangeId = editor.trackMediaRange(range)
+    this.upload(file, null, { rangeId, imageOnly: true })
+  }
+
+  isSourceEditorTarget(target) {
+    return this.editor?.editingMode === "source" && Boolean(target?.closest?.(".editor-surface"))
+  }
+
+  isImageFile(file) {
+    if (file.type?.startsWith("image/")) return true
+    return ["", "application/octet-stream"].includes(file.type || "") && Boolean(imageTypeForFilename(file.name))
+  }
+
+  fileForSourceUpload(file) {
+    const inferredType = imageTypeForFilename(file.name)
+    const type = file.type?.startsWith("image/") ? file.type : inferredType || file.type
+    const extension = Object.entries(IMAGE_TYPES_BY_EXTENSION).find(([, mimeType]) => mimeType === type)?.[0] || "png"
+    const name = file.name || `pasted-image.${extension}`
+    if (name === file.name && type === file.type) return file
+    return new File([file], name, { type, lastModified: file.lastModified })
   }
 
   dragOver(event) {
@@ -180,14 +278,17 @@ export default class extends Controller {
     return true
   }
 
-  async upload(file, range) {
+  async upload(file, range, { rangeId = null, imageOnly = false } = {}) {
+    const fileName = file.name || "pasted-image"
+    this.setStatus(`${this.enabledValue && this.uploadUrlValue ? "Uploading" : "Preparing"} ${fileName}…`, true)
     try {
       if (!this.enabledValue || !this.uploadUrlValue) {
         await this.ensurePersisted()
       }
-      this.setStatus(`Uploading ${file.name}…`)
+      this.setStatus(`Uploading ${fileName}…`, true)
       const body = new FormData()
-      body.append("file", file, file.name)
+      const uploadFile = imageOnly ? this.fileForSourceUpload(file) : file
+      body.append("file", uploadFile, uploadFile.name)
       body.append("fit", this.hasFitTarget ? this.fitTarget.value : "contain")
 
       const response = await fetch(this.uploadUrlValue, {
@@ -205,13 +306,17 @@ export default class extends Controller {
 
       const editor = this.editor
       if (!editor) throw new Error("The Markdown editor is not ready yet.")
-      const insertionPoint = range || { from: editor.selectionStart, to: editor.selectionEnd }
+      const trackedRange = rangeId === null ? null : editor.consumeMediaRange(rangeId)
+      if (rangeId !== null && !trackedRange) throw new Error("The source editor changed before the image finished uploading.")
+      const insertionPoint = trackedRange || range || { from: editor.selectionStart, to: editor.selectionEnd }
       const markdown = this.withSpacing(editor.value, insertionPoint, result.source)
       editor.replaceRange(markdown, insertionPoint.from, insertionPoint.to)
       editor.focus()
-      this.setStatus(`${file.name} added to the Markdown source.`)
+      this.setStatus(`${fileName} added to the Markdown source.`)
     } catch (error) {
       this.setStatus(error.message || "Media could not be uploaded.")
+    } finally {
+      if (rangeId !== null) this.editor?.releaseMediaRange(rangeId)
     }
   }
 
@@ -250,8 +355,10 @@ export default class extends Controller {
     return range ? { from: range.end, to: range.end } : { from: editor.selectionEnd, to: editor.selectionEnd }
   }
 
-  setStatus(message) {
-    if (this.hasStatusTarget) this.statusTarget.textContent = message
+  setStatus(message, busy = false) {
+    if (!this.hasStatusTarget) return
+    this.statusTarget.textContent = message
+    this.statusTarget.setAttribute("aria-busy", String(busy))
   }
 
   get editor() {

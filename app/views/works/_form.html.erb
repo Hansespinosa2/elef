@@ -12,7 +12,7 @@
 <% actions = ["submit->dirty#allowSubmit", "input->dirty#markDirty"] %>
 <% actions += ["input->preview#schedule", "change->preview#schedule"] %>
 <% actions += ["submit->autosave#submit", "input->autosave#schedule", "change->autosave#schedule", "autosave:saving->dirty#markSaving", "autosave:saved->dirty#markSaved"] %>
-<% actions << "paste->media#paste" %>
+<% actions << "paste->media#paste:capture" %>
 <% actions += ["input->slide-overview#sourceChanged", "change->slide-overview#sourceChanged", "preview:updated->slide-overview#previewUpdated"] if work.presentation? %>
 <% editor_mode = visual_mode ? "visual" : "source" %>
 <% form_data = { controller: controllers.join(" "), action: actions.join(" "), editor_mode: editor_mode, dirty_unsaved_message_value: "You have unsaved #{type_label.downcase} changes. Leave without saving?" } %>
@@ -125,9 +125,9 @@
           </select>
         </label>
         <input type="file" accept="<%= work.document? ? "image/*" : "image/*,video/mp4" %>" hidden data-media-target="input" data-action="change->media#selected">
-        <span class="media-upload-status" data-media-target="status" role="status" aria-live="polite"></span>
+        <span class="media-upload-status" data-media-target="status" role="status" aria-live="polite" aria-busy="false"></span>
       </div>
-      <div id="<%= editor_id %>" class="editor-surface" aria-labelledby="<%= editor_id %>_label" data-editor-target="surface" data-snippet-palette-target="editor" data-math-shorthand-target="editor" data-math-shortcut-palette-target="editor"></div>
+      <div id="<%= editor_id %>" class="editor-surface" aria-labelledby="<%= editor_id %>_label" data-editor-target="surface" data-snippet-palette-target="editor" data-math-shorthand-target="editor" data-math-shortcut-palette-target="editor" data-action="dragover->media#sourceDragOver:capture dragleave->media#sourceDragLeave drop->media#sourceDrop:capture"></div>
       <%= form.text_area :source, rows: 24, id: source_id, class: "editor-input-proxy", spellcheck: "false", tabindex: "-1", aria: { label: "Markdown source" }, data: editor_data %>
       <div id="<%= editor_id %>_snippet_palette" class="snippet-palette" data-snippet-palette-target="palette" hidden role="listbox" aria-label="Snippet suggestions"></div>
       <div id="<%= editor_id %>_math_shortcut_palette" class="snippet-palette math-shortcut-palette" data-math-shortcut-palette-target="palette" hidden role="listbox" aria-label="Math shortcut suggestions"></div>
