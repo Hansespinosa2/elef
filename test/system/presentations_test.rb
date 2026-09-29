@@ -183,9 +183,9 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_selector ".slide-statement .slide-block.position-center.position-middle", text: "Designing a visual system"
     assert_selector ".slide-statement .slide-block.position-center.position-top", text: /This deck exercises automatic layouts/
 
-    find("select[data-presentation-editor-align][data-slide-index='2'][data-block-index='0']").select("Left")
-    assert_field "Markdown source", with: /:::align\{left\}\n\n# Establish a visual contract/, wait: 5
-    assert_selector ".slide-two-column .slide-title.slide-block.position-left.position-top", text: "Establish a visual contract", wait: 5
+    find("select[data-presentation-editor-align][data-slide-index='2'][data-block-index='0']").select("Right")
+    assert_field "Markdown source", with: /:::align\{right\}\n\n# Establish a visual contract/, wait: 5
+    assert_selector ".slide-two-column .slide-title.slide-block.position-right.position-top", text: "Establish a visual contract", wait: 5
 
     find("select[data-presentation-editor-align][data-slide-index='0'][data-block-index='0']").select("Bottom Right")
     assert_field "Markdown source", with: /:::align\{bottom right\}\n# Designing a visual system/, wait: 5

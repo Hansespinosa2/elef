@@ -1843,7 +1843,7 @@ class DocumentsTest < ApplicationSystemTestCase
     centered.find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
     assert_equal "left", find("[data-visual-editor-block-id='#{centered['data-editor-block-id']}']").value
     type_visual_text(".document-editor-block", "Centered block", "Updated centered block")
-    assert_field "Markdown source", with: /:::align\{right\}\n\nUpdated left block\n\nUpdated centered block/, wait: 5
+    assert_field "Markdown source", with: /:::align\{right\}\n\nUpdated left block\n\n:::align\{center left\}\n\nUpdated centered block/, wait: 5
     refute_includes find(".editor-projection").text, ":::align"
   end
 
