@@ -282,7 +282,7 @@ class VimEditorTest < ApplicationSystemTestCase
 
       **Bold**
 
-      :::position{center}
+      :::align{center}
 
       Visible text.
 
@@ -303,7 +303,7 @@ class VimEditorTest < ApplicationSystemTestCase
           fontStyle: getComputedStyle(node).fontStyle
         })
 
-        const metadata = find(":::position{center}")
+        const metadata = find(":::align{center}")
         const heading = find("#")
         const quote = find(">")
         const strong = find("**")

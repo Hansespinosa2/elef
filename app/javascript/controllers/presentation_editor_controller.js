@@ -248,7 +248,7 @@ export default class extends Controller {
     if (updated !== source) this.replaceSource(updated)
   }
 
-  positionChanged(event) {
+  alignmentChanged(event) {
     if (!this.canOperateOnProjection()) return
     const select = event.target
     const source = this.sourceValue()
@@ -258,20 +258,20 @@ export default class extends Controller {
     if (!block) return
 
     const directive = this.map.slides[slideIndex].directives.find((candidate) => candidate.id === block.position_directive_id)
-    const position = select.value
+    const alignment = select.value
     let updated
     if (directive) {
       const from = directive.range.start
       const to = directive.range.end
-      if (position) {
+      if (alignment) {
         const lineEnding = source.slice(from, to).match(/\r\n|\n|\r$/)?.[0] || ""
-        updated = `${source.slice(0, from)}:::position{${position}}${lineEnding}${source.slice(to)}`
+        updated = `${source.slice(0, from)}:::align{${alignment}}${lineEnding}${source.slice(to)}`
       } else {
         updated = this.removePositionDirectives(source, this.map.slides[slideIndex], directive)
       }
-    } else if (position) {
+    } else if (alignment) {
       const from = block.range.start
-      updated = `${source.slice(0, from)}:::position{${position}}\n\n${source.slice(from)}`
+      updated = `${source.slice(0, from)}:::align{${alignment}}\n\n${source.slice(from)}`
     } else {
       return
     }
@@ -660,7 +660,7 @@ export default class extends Controller {
   }
 
   setControlsDisabled(disabled) {
-    this.element.querySelectorAll("[data-presentation-editor-action], [data-presentation-editor-position]").forEach((control) => {
+    this.element.querySelectorAll("[data-presentation-editor-action], [data-presentation-editor-align]").forEach((control) => {
       if (disabled) {
         if (control.dataset.editorOperationPending !== "true") {
           control.dataset.editorOriginalDisabled = String(control.disabled)

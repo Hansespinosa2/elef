@@ -35,15 +35,14 @@
           <button type="button" data-presentation-editor-action="delete-block" data-slide-index="<%= slide.index %>" data-block-index="0"<%= " disabled" if slide.blocks.length == 1 %>>Delete</button>
           <button type="button" aria-label="Move block up" data-presentation-editor-action="move-block-up" data-slide-index="<%= slide.index %>" data-block-index="0" disabled>↑</button>
           <button type="button" aria-label="Move block down" data-presentation-editor-action="move-block-down" data-slide-index="<%= slide.index %>" data-block-index="0"<%= " disabled" if slide.blocks.length == 1 %>>↓</button>
-          <select aria-label="Block position" data-presentation-editor-position data-slide-index="<%= slide.index %>" data-block-index="0" data-action="change->presentation-editor#positionChanged">
-            <option value="">Automatic position</option>
-            <% %w[left center right].each do |horizontal| %>
-              <% %w[top middle bottom].each do |vertical| %>
-                <% value = "#{horizontal} #{vertical}" %>
-                <option value="<%= value %>"<%= " selected" if slide.blocks.first.position && slide.blocks.first.position.horizontal == horizontal && slide.blocks.first.position.vertical == vertical %>><%= value.titleize %></option>
+          <label>Align <select aria-label="Block alignment" data-presentation-editor-align data-slide-index="<%= slide.index %>" data-block-index="0" data-action="change->presentation-editor#alignmentChanged">
+            <% %w[top middle bottom].each do |vertical| %>
+              <% %w[left center right].each do |horizontal| %>
+                <% value = vertical == "top" ? horizontal : "#{vertical == "middle" ? "center" : vertical} #{horizontal}" %>
+                <option value="<%= value %>"<%= " selected" if alignment_value(slide.blocks.first.position) == value %>><%= value.titleize %></option>
               <% end %>
             <% end %>
-          </select>
+          </select></label>
         </div>
       <% end %>
       <div class="slide-regions">
@@ -62,15 +61,14 @@
                   <button type="button" data-presentation-editor-action="delete-block" data-slide-index="<%= slide.index %>" data-block-index="<%= block_index %>"<%= " disabled" if slide.blocks.length == 1 %>>Delete</button>
                   <button type="button" aria-label="Move block up" data-presentation-editor-action="move-block-up" data-slide-index="<%= slide.index %>" data-block-index="<%= block_index %>"<%= " disabled" if block_index.zero? %>>↑</button>
                   <button type="button" aria-label="Move block down" data-presentation-editor-action="move-block-down" data-slide-index="<%= slide.index %>" data-block-index="<%= block_index %>"<%= " disabled" if block_index == slide.blocks.length - 1 %>>↓</button>
-                  <select aria-label="Block position" data-presentation-editor-position data-slide-index="<%= slide.index %>" data-block-index="<%= block_index %>" data-action="change->presentation-editor#positionChanged">
-                    <option value="">Automatic position</option>
-                    <% %w[left center right].each do |horizontal| %>
-                      <% %w[top middle bottom].each do |vertical| %>
-                        <% value = "#{horizontal} #{vertical}" %>
-                        <option value="<%= value %>"<%= " selected" if block.position && block.position.horizontal == horizontal && block.position.vertical == vertical %>><%= value.titleize %></option>
+                  <label>Align <select aria-label="Block alignment" data-presentation-editor-align data-slide-index="<%= slide.index %>" data-block-index="<%= block_index %>" data-action="change->presentation-editor#alignmentChanged">
+                    <% %w[top middle bottom].each do |vertical| %>
+                      <% %w[left center right].each do |horizontal| %>
+                        <% value = vertical == "top" ? horizontal : "#{vertical == "middle" ? "center" : vertical} #{horizontal}" %>
+                        <option value="<%= value %>"<%= " selected" if alignment_value(block.position) == value %>><%= value.titleize %></option>
                       <% end %>
                     <% end %>
-                  </select>
+                  </select></label>
                 </div>
               <% end %>
             <% end %>
@@ -97,15 +95,14 @@
             <button type="button" data-presentation-editor-action="delete-block" data-slide-index="<%= slide.index %>" data-block-index="<%= block_index %>"<%= " disabled" if slide.blocks.length == 1 %>>Delete</button>
             <button type="button" aria-label="Move block up" data-presentation-editor-action="move-block-up" data-slide-index="<%= slide.index %>" data-block-index="<%= block_index %>"<%= " disabled" if block_index.zero? %>>↑</button>
             <button type="button" aria-label="Move block down" data-presentation-editor-action="move-block-down" data-slide-index="<%= slide.index %>" data-block-index="<%= block_index %>"<%= " disabled" if block_index == slide.blocks.length - 1 %>>↓</button>
-            <select aria-label="Block position" data-presentation-editor-position data-slide-index="<%= slide.index %>" data-block-index="<%= block_index %>" data-action="change->presentation-editor#positionChanged">
-              <option value="">Automatic position</option>
-              <% %w[left center right].each do |horizontal| %>
-                <% %w[top middle bottom].each do |vertical| %>
-                  <% value = "#{horizontal} #{vertical}" %>
-                  <option value="<%= value %>"<%= " selected" if block.position && block.position.horizontal == horizontal && block.position.vertical == vertical %>><%= value.titleize %></option>
+            <label>Align <select aria-label="Block alignment" data-presentation-editor-align data-slide-index="<%= slide.index %>" data-block-index="<%= block_index %>" data-action="change->presentation-editor#alignmentChanged">
+              <% %w[top middle bottom].each do |vertical| %>
+                <% %w[left center right].each do |horizontal| %>
+                  <% value = vertical == "top" ? horizontal : "#{vertical == "middle" ? "center" : vertical} #{horizontal}" %>
+                  <option value="<%= value %>"<%= " selected" if alignment_value(block.position) == value %>><%= value.titleize %></option>
                 <% end %>
               <% end %>
-            </select>
+            </select></label>
           </div>
         <% end %>
       <% end %>

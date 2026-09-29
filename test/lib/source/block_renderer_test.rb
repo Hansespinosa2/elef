@@ -129,7 +129,7 @@ class SourceBlockRendererTest < ActiveSupport::TestCase
   end
 
   test "maps document position metadata to its content block in the editable preview" do
-    source = "# Alignment\n\nLeft block\n\n:::position{center}\n\nCentered block\n\n:::position{right}\n\nRight block"
+    source = "# Alignment\n\nLeft block\n\n:::align{center}\n\nCentered block\n\n:::align{right}\n\nRight block"
     editor_map = Source::Document.editor_map(source, mode: :document)
     slide = editor_map[:slides].first
     blocks = slide[:blocks].reject { |block| block[:empty_placeholder] }
@@ -138,7 +138,7 @@ class SourceBlockRendererTest < ActiveSupport::TestCase
 
     assert_equal [nil, "center", "right"], blocks.drop(1).map { |block| block.dig(:position, :horizontal) }
     assert_equal source.index("Centered block"), centered[:range][:start]
-    assert_equal source.index(":::position{center}"), centered_directive[:range][:start]
+    assert_equal source.index(":::align{center}"), centered_directive[:range][:start]
 
     html = Source::BlockRenderer.render(
       source,
@@ -155,8 +155,9 @@ class SourceBlockRendererTest < ActiveSupport::TestCase
 
     assert_includes centered_element["class"], "position-center"
     assert_equal "center", centered_control.at_css("option[selected]")["value"]
-    assert_equal "", left_control.at_css("option[selected]")["value"]
-    refute_includes html, ":::position"
+    assert_equal "left", left_control.at_css("option[selected]")["value"]
+    refute_includes html, "Automatic position"
+    refute_includes html, ":::align"
   end
 
   test "validates editable mapping boundary conditions" do

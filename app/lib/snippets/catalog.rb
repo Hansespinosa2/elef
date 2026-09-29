@@ -25,7 +25,7 @@ module Snippets
       { id: "default-sup", name: "Superscript", trigger: "sup", description: "A superscript", category: "LaTeX", body: "^{${1:power}}", built_in: true },
       { id: "default-sub", name: "Subscript", trigger: "sub", description: "A subscript", category: "LaTeX", body: "_{${1:index}}", built_in: true },
       { id: "default-mtext", name: "Text in math", trigger: "mtext", description: "Readable text inside math", category: "LaTeX", body: "\\text{${1:text}}", built_in: true },
-      { id: "default-pos", name: "Position directive", trigger: "pos", description: "Position one to three tokens", category: "Elef DSL", body: ":::position{${1}}", built_in: true },
+      { id: "default-align", name: "Align directive", trigger: "align", description: "Align a block horizontally or vertically", category: "Elef DSL", body: ":::align{${1:left}}", built_in: true },
       { id: "default-sse", name: "Section directive", trigger: "sse", description: "Create a section", category: "Elef DSL", body: ":::section{${1:section name}}", built_in: true },
       { id: "default-sss", name: "Subsection directive", trigger: "sss", description: "Create a subsection", category: "Elef DSL", body: ":::subsection{${1:subsection name}}", built_in: true },
       { id: "default-foot", name: "Footnote directive", trigger: "foot", description: "Add a footnote", category: "Elef DSL", body: ":::footnote{${1:footnote text}}", built_in: true }

@@ -380,7 +380,7 @@ export default class extends Controller {
     }
   }
 
-  positionChanged(event) {
+  alignmentChanged(event) {
     const control = event.target.closest?.("[data-visual-editor-block-id]")
     if (!control) return
     control.closest(".document-block-position-control")?.classList.remove("is-open")
@@ -445,13 +445,14 @@ export default class extends Controller {
       from = directive.range.start
       to = directive.range.end
       const lineEnding = source.slice(from, to).match(/(?:\r\n|\r|\n)$/)?.[0] || ""
-      const vertical = block.position?.vertical_explicit ? ` ${block.position.vertical}` : ""
-      replacement = `:::position{${horizontal}${vertical}}${lineEnding}`
+      const vertical = block.position?.vertical_explicit ? block.position.vertical : null
+      const verticalAlignment = vertical === "middle" ? "center" : vertical
+      replacement = `:::align{${verticalAlignment ? `${verticalAlignment} ` : ""}${horizontal}}${lineEnding}`
     } else {
       from = block.range.start
       to = from
       const lineEnding = source.match(/\r\n|\r|\n/)?.[0] || "\n"
-      replacement = `:::position{${horizontal}}${lineEnding}${lineEnding}`
+      replacement = `:::align{${horizontal}}${lineEnding}${lineEnding}`
     }
 
     const delta = replacement.length - (to - from)
