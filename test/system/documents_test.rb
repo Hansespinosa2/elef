@@ -1844,7 +1844,7 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_selector ".snippet-palette [role='option'] strong", text: "center"
 
     editor.send_keys("center ")
-    assert_includes editor.value, ":::align{center }"
+    assert_includes source.value, ":::align{center }"
     assert_selector ".snippet-palette [role='option'] strong", text: "top"
     assert_selector ".snippet-palette [role='option'] strong", text: "middle"
     assert_selector ".snippet-palette [role='option'] strong", text: "bottom"

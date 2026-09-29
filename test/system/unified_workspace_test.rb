@@ -329,7 +329,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     document = Document.create!(title: "Math assist performance", source: "# Math assist performance")
 
     visit edit_document_path(document)
-    page.driver.browser.manage.timeouts.script_timeout = 120
+    page.driver.browser.manage.timeouts.script_timeout = 30
     result = page.evaluate_async_script(<<~JAVASCRIPT)
       const done = arguments[arguments.length - 1];
       (async () => {
@@ -343,24 +343,37 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
           editor.vimEnabled = false;
 
           const prefix = "$" + "x+".repeat(2496);
-          editor.setExternalValue(prefix + "x.b.vec");
-          editor.setSelectionRange(editor.value.length);
-          const parsedTree = ensureSyntaxTree(editor.view.state, editor.view.state.doc.length, 1000);
-          if (!parsedTree || parsedTree.length < editor.view.state.doc.length) {
+          let state = editor.view.state.update({
+            changes: { from: 0, to: editor.view.state.doc.length, insert: prefix + "x.b.vec" },
+            selection: { anchor: prefix.length + "x.b.vec".length }
+          }).state;
+          const parsedTree = ensureSyntaxTree(state, state.doc.length, 1000);
+          if (!parsedTree || parsedTree.length < state.doc.length) {
             throw new Error("CodeMirror did not parse the full 5,000-character math region");
           }
+
+          const benchmarkEditor = {
+            editingMode: "source",
+            insertMode: true,
+            get selectionStart() { return state.selection.main.head; },
+            get selectionEnd() { return state.selection.main.head; },
+            get value() { return state.doc.toString(); },
+            view: { get state() { return state; } }
+          };
+          shorthand.editorController = benchmarkEditor;
+          palette.editorController = benchmarkEditor;
 
           const timings = [];
           let maximumRegionLength = 0;
           for (let index = 0; index < 1010; index += 1) {
             const suffix = index % 2 === 0 ? "x.b" : "x.b.vec";
             const from = prefix.length;
-            editor.view.dispatch({
-              changes: { from, to: editor.view.state.doc.length, insert: suffix },
+            state = state.update({
+              changes: { from, to: state.doc.length, insert: suffix },
               selection: { anchor: from + suffix.length },
               userEvent: "input"
-            });
-            maximumRegionLength = Math.max(maximumRegionLength, editor.view.state.doc.length);
+            }).state;
+            maximumRegionLength = Math.max(maximumRegionLength, state.doc.length);
 
             const before = performance.now();
             shorthand.keydown({ key: "x", defaultPrevented: false });
