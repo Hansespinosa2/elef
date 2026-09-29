@@ -20,7 +20,7 @@ module WorkPersistence
       end
     else
       respond_to do |format|
-        format.html { render edit_template_for(work), status: :unprocessable_content }
+        format.html { render :edit, status: :unprocessable_content }
         format.json { render json: { errors: result.errors, current: draft_payload(result) }, status: :unprocessable_content }
       end
     end
@@ -85,10 +85,6 @@ module WorkPersistence
 
   def work_edit_path(work, **options)
     work.document? ? edit_document_path(work, **options) : edit_presentation_path(work, **options)
-  end
-
-  def edit_template_for(work)
-    work.document? ? :edit : :edit
   end
 
   def work_type_label(work)
