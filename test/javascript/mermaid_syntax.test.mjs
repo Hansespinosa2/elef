@@ -121,6 +121,14 @@ test("completion suggests flowchart nodes, sequence participants, and existing s
   assert.ok(stateCompletion?.matches.some((match) => match.text === "Idle"))
 })
 
+test("flowchart completion parses the longer ---x and ---o operators first", () => {
+  const source = fenced("flowchart LR\n    A[Research]\n    B[Review]\n    A ---x B ---o A")
+  const caret = source.indexOf("A ---x B ---o A") + "A ---x B ---o A".length
+  const completion = mermaid.mermaidCompletion(source, caret)
+
+  assert.ok(completion?.matches.some((match) => match.text === "A"))
+})
+
 test("ambiguous, middle-of-line, and unsupported contexts fall back without edits", () => {
   const flowchart = fenced("flowchart LR\n    A[Research] --> B[Design]")
   const middle = flowchart.indexOf("Research") + 3

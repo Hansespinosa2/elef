@@ -1,4 +1,4 @@
-const FLOWCHART_OPERATORS = ["-.->", "-->>", "==>", "-->", "---", "--x", "--o", "---x", "---o"]
+const FLOWCHART_OPERATORS = ["-.->", "-->>", "---x", "---o", "==>", "--x", "--o", "-->", "---"]
 const IDENTIFIER = "[A-Za-z_][A-Za-z0-9_-]*"
 
 export const MERMAID_DIAGRAMS = [
@@ -45,7 +45,7 @@ export function slashDiagramQuery(source, caret) {
   const before = source.slice(line.from, caret)
   const after = source.slice(caret, line.to)
   const match = before.match(/(?:^|\s)(\/[A-Za-z]*)$/)
-  if (!match || after.trim() || insideMarkdownFence(source, caret) || insideInlineCode(before)) return null
+  if (!match || after.trim() || markdownFenceAt(source, caret) || insideInlineCode(before)) return null
 
   const start = line.from + match.index + match[0].lastIndexOf("/")
   const text = match[1].toLowerCase()
@@ -151,11 +151,7 @@ export function mermaidTabEdit(source, caret, { shift = false } = {}) {
   return { from: context.line.to, to: context.line.to, insert, selection: { from: selection, to: selection } }
 }
 
-export function insideMarkdownFence(source, caret) {
-  return markdownFenceAt(source, caret) !== null
-}
-
-export function mermaidContextAt(source, caret) {
+function mermaidContextAt(source, caret) {
   const fence = markdownFenceAt(source, caret)
   if (!fence || !fence.mermaid) return null
 
@@ -323,7 +319,7 @@ function markdownFenceAt(source, caret) {
       } else if (value[0] === active.character && value.length >= active.length && info === "") {
         const closeFrom = lineStart
         if (caret >= active.contentFrom && caret < closeFrom) {
-          return { ...active, contentTo: closeFrom, end: lineEnd, closed: true }
+          return { mermaid: active.mermaid, contentFrom: active.contentFrom, contentTo: closeFrom }
         }
         active = null
       }
@@ -333,7 +329,7 @@ function markdownFenceAt(source, caret) {
   }
 
   if (active && caret >= active.contentFrom && caret <= source.length) {
-    return { ...active, contentTo: source.length, end: source.length, closed: false }
+    return { mermaid: active.mermaid, contentFrom: active.contentFrom, contentTo: source.length }
   }
 
   return null

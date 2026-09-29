@@ -361,6 +361,7 @@ export default class extends Controller {
   }
 
   setSelectionRange(anchor, head = anchor) {
+    if (this.destroyed || !this.view) return
     const length = this.view.state.doc.length
     const safeAnchor = Math.max(0, Math.min(anchor, length))
     const safeHead = Math.max(0, Math.min(head, length))
@@ -395,6 +396,7 @@ export default class extends Controller {
   }
 
   replaceRange(insert, from, to = from) {
+    if (this.destroyed || !this.view) return
     const end = from + insert.length
     this.view.dispatch({
       changes: { from, to, insert },
@@ -404,6 +406,7 @@ export default class extends Controller {
   }
 
   replaceRangeWithSelection(insert, from, to, selection) {
+    if (this.destroyed || !this.view) return
     const anchor = from + selection.from
     const head = from + selection.to
     this.view.dispatch({
@@ -421,6 +424,9 @@ export default class extends Controller {
 
   handleUpdate(update) {
     this.reportLivePreviewState(update.state)
+    if (update.selectionSet) {
+      this.element.dispatchEvent(new Event("elef:editor-selection-change"))
+    }
     if (update.docChanged) {
       this.changedSinceFocusOut = true
       this.syncInput()

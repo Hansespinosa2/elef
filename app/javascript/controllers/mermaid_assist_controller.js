@@ -6,27 +6,42 @@ export default class extends Controller {
   static targets = ["palette"]
 
   connect() {
+    this.connected = true
+    this.composing = false
     this.editorController = editorFor(this.element)
     this.editorReady = () => {
-      this.editorController ||= editorFor(this.element)
+      this.editorController = editorFor(this.element)
       this.setupEditor()
     }
+    this.editorSelectionChange = () => this.refresh()
     this.element.addEventListener("elef:editor-ready", this.editorReady)
+    this.element.addEventListener("elef:editor-selection-change", this.editorSelectionChange)
     this.positionPalette = this.positionPalette.bind(this)
     window.addEventListener("resize", this.positionPalette)
     this.setupEditor()
   }
 
   disconnect() {
+    this.connected = false
+    this.composing = false
     window.removeEventListener("resize", this.positionPalette)
     this.element.removeEventListener("elef:editor-ready", this.editorReady)
-    if (this.scrollBound) this.editorController?.scrollElement.removeEventListener("scroll", this.positionPalette)
-    if (this.editorController && this.keydownBound) this.editorController.dom.removeEventListener("keydown", this.handleEditorKeydown, true)
+    this.element.removeEventListener("elef:editor-selection-change", this.editorSelectionChange)
+    this.detachEditorListeners()
     this.close()
+    this.editorController = null
   }
 
   setupEditor() {
-    if (!this.editorController) return
+    if (!this.connected) return
+
+    const currentEditor = editorFor(this.element)
+    if (currentEditor !== this.editorController) {
+      this.detachEditorListeners()
+      this.close()
+      this.editorController = currentEditor
+    }
+    if (!this.editorAvailable()) return
 
     const editor = this.editorController
     const controls = new Set((editor.dom.getAttribute("aria-controls") || "").split(/\s+/).filter(Boolean))
@@ -42,17 +57,59 @@ export default class extends Controller {
       editor.dom.addEventListener("keydown", this.handleEditorKeydown, true)
       this.keydownBound = true
     }
+    if (!this.focusBound) {
+      this.handleEditorFocusIn = () => queueMicrotask(() => this.refresh())
+      this.handleEditorFocusOut = () => this.close()
+      this.handleCompositionStart = () => {
+        this.composing = true
+        this.close()
+      }
+      this.handleCompositionEnd = () => {
+        this.composing = false
+        queueMicrotask(() => this.refresh())
+      }
+      editor.dom.addEventListener("focusin", this.handleEditorFocusIn)
+      editor.dom.addEventListener("focusout", this.handleEditorFocusOut)
+      editor.dom.addEventListener("compositionstart", this.handleCompositionStart)
+      editor.dom.addEventListener("compositionend", this.handleCompositionEnd)
+      this.focusBound = true
+    }
     this.updateAccessibility()
   }
 
-  input() {
+  detachEditorListeners() {
+    const editor = this.editorController
+    if (editor && this.scrollBound && editor.view) editor.view.scrollDOM.removeEventListener("scroll", this.positionPalette)
+    if (editor && this.keydownBound && editor.view) editor.view.dom.removeEventListener("keydown", this.handleEditorKeydown, true)
+    if (editor && this.focusBound && editor.view) {
+      editor.view.dom.removeEventListener("focusin", this.handleEditorFocusIn)
+      editor.view.dom.removeEventListener("focusout", this.handleEditorFocusOut)
+      editor.view.dom.removeEventListener("compositionstart", this.handleCompositionStart)
+      editor.view.dom.removeEventListener("compositionend", this.handleCompositionEnd)
+    }
+    this.scrollBound = false
+    this.keydownBound = false
+    this.focusBound = false
+  }
+
+  editorAvailable() {
+    return Boolean(this.editorController && !this.editorController.destroyed && this.editorController.view && !this.editorController.view.destroyed)
+  }
+
+  input(event) {
+    if (this.composing || event?.isComposing) return
     queueMicrotask(() => this.refresh())
   }
 
   keydown(event) {
-    if (event.defaultPrevented) return
+    if (event.defaultPrevented || this.composing || event.isComposing || event.keyCode === 229) return
     const editor = this.editorController
-    if (editor?.editingMode !== "source" || !editor.insertMode || editor.selectionStart !== editor.selectionEnd) return
+    if (!this.editorAvailable()) return this.close()
+    if (this.otherPaletteOpen()) {
+      if (!this.paletteTarget.hidden) this.close()
+      return
+    }
+    if (editor.editingMode !== "source" || editor.selectionStart !== editor.selectionEnd) return
 
     if (!this.paletteTarget.hidden) {
       if (!this.modelStillMatches()) {
@@ -62,17 +119,21 @@ export default class extends Controller {
 
       if (event.key === "ArrowDown") {
         event.preventDefault()
+        event.stopPropagation()
         this.selectedIndex = Math.min(this.selectedIndex + 1, this.matches.length - 1)
         this.renderPalette()
       } else if (event.key === "ArrowUp") {
         event.preventDefault()
+        event.stopPropagation()
         this.selectedIndex = Math.max(this.selectedIndex - 1, 0)
         this.renderPalette()
       } else if (["Enter", "Tab"].includes(event.key)) {
         event.preventDefault()
+        event.stopPropagation()
         this.acceptSelected()
       } else if (event.key === "Escape") {
         event.preventDefault()
+        event.stopPropagation()
         this.close()
       } else {
         queueMicrotask(() => this.refresh())
@@ -80,16 +141,20 @@ export default class extends Controller {
       return
     }
 
+    if (!editor.insertMode) return
+
     if (event.key === "Enter") {
       const edit = mermaidEnterEdit(editor.value, editor.selectionStart)
       if (edit) {
         event.preventDefault()
+        event.stopPropagation()
         this.applyEdit(edit)
       }
     } else if (event.key === "Tab") {
       const edit = mermaidTabEdit(editor.value, editor.selectionStart, { shift: event.shiftKey })
       if (edit) {
         event.preventDefault()
+        event.stopPropagation()
         this.applyEdit(edit)
       }
     }
@@ -97,7 +162,8 @@ export default class extends Controller {
 
   refresh() {
     const editor = this.editorController
-    if (!editor || editor.editingMode !== "source" || editor.selectionStart !== editor.selectionEnd || !editor.insertMode) return this.close()
+    if (!this.connected || this.composing || !this.editorAvailable() || !editor.dom.contains(document.activeElement) || editor.editingMode !== "source" || editor.selectionStart !== editor.selectionEnd || !editor.insertMode) return this.close()
+    if (this.otherPaletteOpen()) return this.close()
 
     const source = editor.value
     const caret = editor.selectionStart
@@ -137,9 +203,14 @@ export default class extends Controller {
     const model = this.model
     if (!model) return false
     const editor = this.editorController
-    if (!editor || editor.editingMode !== "source" || editor.selectionStart !== editor.selectionEnd) return false
+    if (!this.editorAvailable() || editor.editingMode !== "source" || editor.selectionStart !== editor.selectionEnd) return false
 
-    const current = model.kind.startsWith("diagram-") ? slashDiagramQuery(editor.value, editor.selectionStart) : mermaidCompletion(editor.value, editor.selectionStart)
+    if (model.kind.startsWith("diagram-")) {
+      const current = slashDiagramQuery(editor.value, editor.selectionStart)
+      return Boolean(current && current.kind === model.kind && current.start === model.from && current.end === model.to && current.text === model.query)
+    }
+
+    const current = mermaidCompletion(editor.value, editor.selectionStart)
     return Boolean(current && current.kind === model.kind && current.from === model.from && current.to === model.to && current.query === model.query)
   }
 
@@ -178,7 +249,7 @@ export default class extends Controller {
     const editor = this.editorController
     const model = this.model
     const match = this.matches[this.selectedIndex]
-    if (!editor || !model || !match) return this.close()
+    if (!this.editorAvailable() || !model || !match) return this.close()
 
     if (model.kind === "diagram-command") {
       editor.replaceRange("/diagram", model.from, model.to)
@@ -201,6 +272,7 @@ export default class extends Controller {
   }
 
   applyEdit(edit) {
+    if (!this.editorAvailable()) return this.close()
     if (edit.moveTo !== undefined) {
       this.editorController.setSelectionRange(edit.moveTo)
     } else {
@@ -221,6 +293,11 @@ export default class extends Controller {
     this.updateAccessibility()
   }
 
+  otherPaletteOpen() {
+    return this.hasPaletteTarget && [...this.element.querySelectorAll('[role="listbox"]')]
+      .some((palette) => palette !== this.paletteTarget && !palette.hidden)
+  }
+
   updateAccessibility() {
     const editor = this.editorController?.dom
     if (!editor) return
@@ -233,7 +310,7 @@ export default class extends Controller {
   }
 
   positionPalette() {
-    if (this.paletteTarget.hidden || !this.editorController) return
+    if (!this.editorAvailable() || this.paletteTarget.hidden) return
 
     const editorRect = this.editorController.dom.getBoundingClientRect()
     const markerRect = this.editorController.view.coordsAtPos(this.editorController.selectionStart) || editorRect
