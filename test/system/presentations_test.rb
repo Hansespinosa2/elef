@@ -1972,6 +1972,54 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_current_path presentation_path(presentation)
   end
 
+  test "source mode inserts a Mermaid sequence starter and continues with existing participants" do
+    presentation = Presentation.create!(title: "Mermaid sequence", source: "# Existing slide")
+
+    visit edit_presentation_path(presentation)
+    click_on "Source"
+    editor = find(".cm-content")
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      editor.setSelectionRange(editor.value.length);
+      editor.focus();
+    JAVASCRIPT
+    editor.send_keys(:enter, "/diagram")
+
+    assert_selector ".mermaid-assist-option", text: "Sequence diagram", wait: 5
+    find(".mermaid-assist-option", text: "Sequence diagram").click
+    source = find_field("Markdown source")
+    assert_includes source.value, "sequenceDiagram\n    participant Alice\n    participant Bob\n    Alice->>Bob: Message"
+    assert_equal "Message", page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const editor = document.querySelector('.source-field').editorController;
+        return editor.value.slice(editor.selectionStart, editor.selectionEnd);
+      })()
+    JAVASCRIPT
+
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      const participant = editor.value.indexOf('Alice->>Bob:') + 'Alice->>'.length;
+      editor.setSelectionRange(participant, participant + 3);
+      editor.focus();
+    JAVASCRIPT
+    editor.send_keys("Bo")
+    assert_selector ".mermaid-assist-option", text: "Bob", wait: 5
+    editor.send_keys(:enter)
+    assert_includes source.value, "Alice->>Bob: Message"
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      const message = editor.value.indexOf('Message');
+      editor.setSelectionRange(message, message + 'Message'.length);
+      editor.focus();
+    JAVASCRIPT
+
+    editor.send_keys("Request", :enter)
+    assert_includes source.value, "Alice->>Bob: Request\n    Bob->>Alice: Message"
+    click_on "Save presentation"
+    assert_selector ".flash.notice", text: "Presentation saved.", wait: 10
+    assert_equal source.value, presentation.reload.source
+  end
+
   test "inserts a fuzzy snippet and moves through its placeholder" do
     Snippet.create!(name: "Block equation", trigger: "beq", description: "A block LaTeX equation", category: "LaTeX", body: "$$\n${1:equation}\n$$")
     presentation = Presentation.create!(title: "Snippet deck", source: "# Math\n\n:")

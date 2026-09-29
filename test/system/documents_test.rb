@@ -102,6 +102,365 @@ class DocumentsTest < ApplicationSystemTestCase
     find(".document-editor-block[data-editor-block-id]:focus")
   end
 
+  test "source mode inserts and continues Mermaid flowcharts with Enter and branching keys" do
+    document = Document.create!(title: "Mermaid process", source: "# Existing text")
+
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      editor.setSelectionRange(editor.value.length);
+      editor.focus();
+    JAVASCRIPT
+    editor.send_keys(:enter, "/diagram")
+
+    assert_selector ".mermaid-assist-option", text: "Flowchart / process", wait: 5
+    find(".mermaid-assist-option", text: "Flowchart / process").click
+    source = find_field("Markdown source")
+    assert_includes source.value, "```mermaid\nflowchart LR\n    A[]\n```"
+    assert_equal "[]", page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const editor = document.querySelector('.source-field').editorController;
+        return editor.value.slice(editor.selectionStart - 1, editor.selectionStart + 1);
+      })()
+    JAVASCRIPT
+
+    editor.send_keys("Research", :enter)
+    assert_field "Markdown source", with: /A\[Research\] --> B\[\]/, wait: 5
+    editor.send_keys("Design", :enter)
+    assert_field "Markdown source", with: /A\[Research\] --> B\[Design\] --> C\[\]/, wait: 5
+
+    editor.send_keys(:tab)
+    assert_field "Markdown source", with: /C --> D\[\]/, wait: 5
+    branch_source = source.value
+    editor.send_keys(:shift, :tab)
+    assert_equal branch_source, source.value
+    assert_equal "C", page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const editor = document.querySelector('.source-field').editorController;
+        return editor.value[editor.selectionStart];
+      })()
+    JAVASCRIPT
+    editor.send_keys(:shift, :tab)
+    assert_includes source.value, "B[Design] --> C[]"
+    assert_match(/\ADesign\]/, page.evaluate_script(<<~JAVASCRIPT))
+      (() => {
+        const editor = document.querySelector('.source-field').editorController;
+        return editor.value.slice(editor.selectionStart, editor.selectionStart + 7);
+      })()
+    JAVASCRIPT
+    node_ids = source.value.scan(/\b([A-Z])(?=\[)/).flatten
+    assert_equal node_ids.uniq, node_ids
+  end
+
+  test "source mode keeps /diagram keyboard navigation open through selection" do
+    document = Document.create!(title: "Mermaid keyboard command", source: "# Existing text")
+
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      editor.setSelectionRange(editor.value.length);
+      editor.focus();
+    JAVASCRIPT
+    editor.send_keys(:enter, "/diag")
+
+    assert_selector ".mermaid-assist-option", text: "/diagram", wait: 5
+    editor.send_keys(:enter)
+    assert_selector ".mermaid-assist-option", text: "Flowchart / process", wait: 5
+    assert_selector '[data-mermaid-assist-target="palette"]:not([hidden])'
+
+    editor.send_keys(:arrow_down)
+    assert_selector ".mermaid-assist-option[aria-selected='true']", text: "Sequence diagram"
+    assert_selector '[data-mermaid-assist-target="palette"]:not([hidden])'
+    editor.send_keys(:arrow_up)
+    assert_selector ".mermaid-assist-option[aria-selected='true']", text: "Flowchart / process"
+    assert_selector '[data-mermaid-assist-target="palette"]:not([hidden])'
+
+    editor.send_keys(:arrow_down, :enter)
+    assert_field "Markdown source", with: /sequenceDiagram/, wait: 5
+    assert_no_selector '[data-mermaid-assist-target="palette"]:not([hidden])'
+  end
+
+  test "source mode accepts a Mermaid diagram type with Tab" do
+    document = Document.create!(title: "Mermaid keyboard Tab", source: "# Existing text")
+
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      editor.setSelectionRange(editor.value.length);
+      editor.focus();
+    JAVASCRIPT
+    editor.send_keys(:enter, "/diagram")
+    assert_selector ".mermaid-assist-option", text: "Flowchart / process", wait: 5
+    editor.send_keys(:arrow_down)
+    assert_selector ".mermaid-assist-option[aria-selected='true']", text: "Sequence diagram", wait: 5
+    assert_selector '[data-mermaid-assist-target="palette"]:not([hidden])'
+
+    editor.send_keys(:tab)
+    assert_field "Markdown source", with: /sequenceDiagram/, wait: 5
+    assert_no_selector '[data-mermaid-assist-target="palette"]:not([hidden])'
+  end
+
+  test "source mode dismisses Mermaid suggestions when the caret leaves their context" do
+    document = Document.create!(title: "Mermaid stale suggestion", source: "# Existing text")
+
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      editor.setSelectionRange(editor.value.length);
+      editor.focus();
+    JAVASCRIPT
+    editor.send_keys(:enter, "/diagram")
+    assert_selector '[data-mermaid-assist-target="palette"]:not([hidden])', wait: 5
+
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      editor.setSelectionRange(0);
+    JAVASCRIPT
+    assert_no_selector '[data-mermaid-assist-target="palette"]:not([hidden])', wait: 5
+  end
+
+  test "Mermaid source assist restores keyboard listeners after Stimulus reconnects" do
+    document = Document.create!(title: "Mermaid reconnect", source: "# Existing text")
+
+    visit edit_document_path(document)
+    click_on "Source"
+    page.evaluate_async_script(<<~JAVASCRIPT)
+      const done = arguments[arguments.length - 1];
+      const root = document.querySelector('.source-field');
+      const controllers = root.dataset.controller.split(/\\s+/);
+      root.dataset.controller = controllers.filter((name) => name !== 'mermaid-assist').join(' ');
+      setTimeout(() => {
+        root.dataset.controller = controllers.join(' ');
+        setTimeout(done, 50);
+      }, 50);
+    JAVASCRIPT
+
+    editor = find(".cm-content")
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      editor.setSelectionRange(editor.value.length);
+      editor.focus();
+    JAVASCRIPT
+    assert_equal true, page.evaluate_script("window.Stimulus.getControllerForElementAndIdentifier(document.querySelector('.source-field'), 'mermaid-assist').keydownBound")
+    editor.send_keys(:enter, "/diag")
+    assert_selector ".mermaid-assist-option", text: "/diagram", wait: 5
+    editor.send_keys(:enter)
+    assert_selector ".mermaid-assist-option", text: "Flowchart / process", wait: 5
+    editor.send_keys(:enter)
+    assert_field "Markdown source", with: /flowchart LR/, wait: 5
+  end
+
+  test "Mermaid source assist ignores mutations after its editor view is destroyed" do
+    source = "```mermaid\nflowchart LR\n    A[Research]\n```"
+    document = Document.create!(title: "Mermaid editor teardown", source: source)
+
+    visit edit_document_path(document)
+    click_on "Source"
+    results = page.evaluate_async_script(<<~JAVASCRIPT)
+      const done = arguments[arguments.length - 1];
+      const root = document.querySelector('.source-field');
+      const controllers = root.dataset.controller.split(/\\s+/);
+      const editor = root.editorController;
+      const assist = window.Stimulus.getControllerForElementAndIdentifier(root, 'mermaid-assist');
+      root.dataset.controller = controllers.filter((name) => name !== 'editor').join(' ');
+      setTimeout(() => {
+        const original = editor.value;
+        let noThrow = true;
+        try {
+          editor.dom.dispatchEvent(new KeyboardEvent('keydown', {
+            key: 'Enter', bubbles: true, cancelable: true
+          }));
+          editor.setSelectionRange(0);
+          editor.replaceRange('bad', 0, 0);
+          editor.replaceRangeWithSelection('bad', 0, 0, { from: 0, to: 0 });
+        } catch (_error) {
+          noThrow = false;
+        }
+        const results = {
+          noThrow,
+          unchanged: editor.value === original,
+          staleEditorDestroyed: editor.destroyed,
+          assistRetargeted: assist.editorController === editor
+        };
+        root.dataset.controller = controllers.join(' ');
+        setTimeout(() => done({ ...results, assistRetargetedAfterReconnect: assist.editorController === root.editorController }), 100);
+      }, 100);
+    JAVASCRIPT
+
+    assert_equal({
+      "noThrow" => true,
+      "unchanged" => true,
+      "staleEditorDestroyed" => true,
+      "assistRetargeted" => true,
+      "assistRetargetedAfterReconnect" => true
+    }, results)
+    assert page.evaluate_script("Boolean(document.querySelector('.source-field').editorController)")
+  end
+
+  test "Mermaid Enter does not take over an active snippet palette" do
+    Snippet.create!(name: "Two text fields", trigger: "pair", category: "Markdown", body: "${1:first} ${2:second}")
+    source = "```mermaid\nflowchart LR\n    A[]\n```"
+    document = Document.create!(title: "Mermaid palette coexistence", source: source)
+
+    visit edit_document_path(document)
+    click_on "Source"
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      const position = editor.value.indexOf('A[]') + 2;
+      editor.setSelectionRange(position);
+      editor.focus();
+    JAVASCRIPT
+    editor = find(".cm-content")
+    editor.send_keys(":pair")
+    assert_selector ".snippet-option", text: "Two text fields", wait: 5
+    editor.send_keys(:enter)
+
+    assert_includes find_field("Markdown source").value, "A[first second]"
+    refute_includes find_field("Markdown source").value, "--> B[]"
+  end
+
+  test "Mermaid Enter does not continue a diagram during IME composition" do
+    source = "```mermaid\nflowchart LR\n    A[Research]\n```"
+    document = Document.create!(title: "Mermaid IME composition", source: source)
+
+    visit edit_document_path(document)
+    click_on "Source"
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      const caret = editor.value.indexOf('Research') + 'Research'.length;
+      editor.setSelectionRange(caret);
+      editor.focus();
+      editor.dom.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+      const event = new KeyboardEvent('keydown', {
+        key: 'Enter', code: 'Enter', keyCode: 229, which: 229,
+        bubbles: true, cancelable: true, isComposing: true
+      });
+      editor.dom.dispatchEvent(event);
+      editor.dom.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: '' }));
+    JAVASCRIPT
+    refute_includes find_field("Markdown source").value, "--> B[]"
+  end
+
+  test "Mermaid suggestions stay dismissed during IME composition and refresh afterward" do
+    document = Document.create!(title: "Mermaid IME suggestions", source: "# Existing text")
+
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      editor.setSelectionRange(editor.value.length);
+      editor.focus();
+    JAVASCRIPT
+    editor.send_keys(:enter, "/diagram")
+    assert_selector '[data-mermaid-assist-target="palette"]:not([hidden])', wait: 5
+
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      editor.dom.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+      editor.inputTarget.dispatchEvent(new Event('input', { bubbles: true }));
+    JAVASCRIPT
+    assert_no_selector '[data-mermaid-assist-target="palette"]:not([hidden])', wait: 5
+    refute_includes find_field("Markdown source").value, "```mermaid"
+
+    page.execute_script(<<~JAVASCRIPT)
+      document.querySelector('.source-field').editorController.dom.dispatchEvent(
+        new CompositionEvent('compositionend', { bubbles: true, data: '' })
+      );
+    JAVASCRIPT
+    assert_selector '[data-mermaid-assist-target="palette"]:not([hidden])', wait: 5
+  end
+
+  test "CRLF Mermaid source keeps valid insertion positions" do
+    source = "# Existing text\r\n\r\n```mermaid\r\nflowchart LR\r\n    A[Research]\r\n```"
+    document = Document.create!(title: "Mermaid CRLF", source: source)
+
+    visit edit_document_path(document)
+    click_on "Source"
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      const caret = editor.value.indexOf('Research') + 'Research'.length;
+      editor.setSelectionRange(caret);
+      editor.focus();
+    JAVASCRIPT
+    find(".cm-content").send_keys(:enter)
+    assert_field "Markdown source", with: /A\[Research\] --> B\[\]/, wait: 5
+  end
+
+  test "mermaid continuation falls back safely when the caret is in the middle of a label" do
+    source = "```mermaid\nflowchart LR\n    A[Research] --> B[Design]\n```"
+    document = Document.create!(title: "Mermaid middle edit", source: source)
+
+    visit edit_document_path(document)
+    click_on "Source"
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      const position = editor.value.indexOf('Research') + 3;
+      editor.setSelectionRange(position);
+      editor.focus();
+    JAVASCRIPT
+    find(".cm-content").send_keys(:enter)
+
+    edited = find_field("Markdown source").value
+    assert_match(/Res\s+earch\] --> B\[Design\]/, edited)
+    refute_match(/--> C\[\]/, edited)
+  end
+
+  test "Mermaid autocomplete offers existing flowchart nodes when completing an edge" do
+    source = "```mermaid\nflowchart LR\n    A[Research]\n    A --> \n```"
+    document = Document.create!(title: "Mermaid node completion", source: source)
+
+    visit edit_document_path(document)
+    click_on "Source"
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      editor.setSelectionRange(editor.value.indexOf('\\n```'));
+      editor.focus();
+    JAVASCRIPT
+    editor = find(".cm-content")
+    editor.send_keys("A")
+
+    assert_selector ".mermaid-assist-option", text: "A", wait: 5
+    editor.send_keys(:enter)
+    assert_includes find_field("Markdown source").value, "A --> A\n```"
+  end
+
+  test "normal source Enter and snippet Tab completion remain available outside Mermaid" do
+    Snippet.create!(name: "Two text fields", trigger: "pair", category: "Markdown", body: "${1:first} ${2:second}")
+    document = Document.create!(title: "Ordinary source", source: "# Existing")
+
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      editor.setSelectionRange(editor.value.length);
+      editor.focus();
+    JAVASCRIPT
+    editor.send_keys(:enter, "Plain text", :enter, ":pair")
+
+    assert_selector ".snippet-option", text: "Two text fields", wait: 5
+    assert_selector '[data-mermaid-assist-target="palette"]', visible: false
+    editor.send_keys(:enter)
+    source = find_field("Markdown source")
+    assert_includes source.value, "Plain text\nfirst second"
+    editor.send_keys(:tab)
+    assert_equal "second", page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const editor = document.querySelector('.source-field').editorController;
+        return editor.value.slice(editor.selectionStart, editor.selectionEnd);
+      })()
+    JAVASCRIPT
+  end
+
   test "suggests document links in the Markdown editor" do
     Document.create!(title: "Research target", source: "# Target")
     document = Document.create!(title: "Research source", source: "# Source")
