@@ -98,28 +98,7 @@ class DocumentsController < ApplicationController
   end
 
   def upload_asset
-    upload = params.require(:file)
-    content_type = upload.content_type.to_s
-    unless content_type.start_with?("image/")
-      return render json: { error: "Choose an image file." }, status: :unprocessable_content
-    end
-    if upload.size.to_i > 50.megabytes
-      return render json: { error: "Media files must be 50 MB or smaller." }, status: :unprocessable_content
-    end
-
-    blob = WorkAssets.attach_upload(@document, upload, content_type: content_type)
-    digest = WorkAssets.digest(blob)
-    @document.reload
-    render json: {
-      digest: digest,
-      lock_version: @document.lock_version,
-      revision_token: @document.revision_token,
-      source: WorkAssets.markdown_source(
-        digest,
-        alt: params[:alt].presence || File.basename(upload.original_filename, ".*"),
-        fit: %w[contain cover].include?(params[:fit]) ? params[:fit] : "contain"
-      )
-    }, status: :created
+    upload_work_asset(@document)
   end
 
   def media_asset

@@ -171,29 +171,7 @@ class PresentationsController < ApplicationController
   end
 
   def upload_asset
-    upload = params.require(:file)
-    content_type = upload.content_type.to_s
-    unless content_type.start_with?("image/") || content_type == "video/mp4"
-      return render json: { error: "Choose an image or MP4 video." }, status: :unprocessable_content
-    end
-    if upload.size.to_i > 50.megabytes
-      return render json: { error: "Media files must be 50 MB or smaller." }, status: :unprocessable_content
-    end
-
-    blob = WorkAssets.attach_upload(@presentation, upload, content_type: content_type)
-    digest = WorkAssets.digest(blob)
-    @presentation.reload
-    Presentations::FolderSync.sync!(@presentation)
-    render json: {
-      digest: digest,
-      lock_version: @presentation.lock_version,
-      revision_token: @presentation.revision_token,
-      source: WorkAssets.markdown_source(
-        digest,
-        alt: params[:alt].presence || File.basename(upload.original_filename, ".*"),
-        fit: %w[contain cover].include?(params[:fit]) ? params[:fit] : "contain"
-      )
-    }, status: :created
+    upload_work_asset(@presentation, allow_video: true) { |work| Presentations::FolderSync.sync!(work) }
   end
 
   def media_asset

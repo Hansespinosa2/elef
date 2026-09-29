@@ -1,6 +1,8 @@
 module WorkPersistence
   extend ActiveSupport::Concern
 
+  MAX_UPLOAD_BYTES = 50.megabytes
+
   private
 
   def save_draft(work, attributes)
@@ -107,6 +109,35 @@ module WorkPersistence
       format.html { redirect_to work_edit_path(work), notice: "Revision restored." }
       format.json { render json: payload, status: :ok }
     end
+  end
+
+  # allow_video adds MP4 to the accepted types; the optional block runs after the
+  # work is reloaded, for callers that mirror the work to another store.
+  def upload_work_asset(work, allow_video: false, &after_save)
+    upload = params.require(:file)
+    content_type = upload.content_type.to_s
+    unless content_type.start_with?("image/") || (allow_video && content_type == "video/mp4")
+      error = allow_video ? "Choose an image or MP4 video." : "Choose an image file."
+      return render json: { error: error }, status: :unprocessable_content
+    end
+    if upload.size.to_i > MAX_UPLOAD_BYTES
+      return render json: { error: "Media files must be #{MAX_UPLOAD_BYTES / 1.megabyte} MB or smaller." }, status: :unprocessable_content
+    end
+
+    blob = WorkAssets.attach_upload(work, upload, content_type: content_type)
+    digest = WorkAssets.digest(blob)
+    work.reload
+    after_save&.call(work)
+    render json: {
+      digest: digest,
+      lock_version: work.lock_version,
+      revision_token: work.revision_token,
+      source: WorkAssets.markdown_source(
+        digest,
+        alt: params[:alt].presence || File.basename(upload.original_filename, ".*"),
+        fit: %w[contain cover].include?(params[:fit]) ? params[:fit] : "contain"
+      )
+    }, status: :created
   end
 
   def work_type_label(work)
