@@ -6,7 +6,7 @@ module WorkPersistence
   def save_draft(work, attributes)
     attributes = attributes.to_h.symbolize_keys
     attributes.delete(:editor_mode)
-    editor_mode = "source" if params[:editor_mode] == "source"
+    editor_mode = submitted_editor_mode
     result = Drafts::Save.call(work, attributes)
     if result.success?
       respond_to do |format|
@@ -89,6 +89,10 @@ module WorkPersistence
 
   def work_type_label(work)
     work.document? ? "Document" : "Presentation"
+  end
+
+  def submitted_editor_mode
+    "source" if params[:editor_mode] == "source"
   end
 
   def merge_draft_tokens(attributes)

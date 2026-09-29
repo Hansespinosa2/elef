@@ -267,10 +267,6 @@ class PresentationsController < ApplicationController
     )
   end
 
-  def submitted_editor_mode
-    "source" if params[:editor_mode] == "source"
-  end
-
   def pptx_params
     params.require(:presentation).permit(:title, :source, :theme, :typography)
   end

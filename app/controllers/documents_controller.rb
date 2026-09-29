@@ -161,10 +161,6 @@ class DocumentsController < ApplicationController
     )
   end
 
-  def submitted_editor_mode
-    "source" if params[:editor_mode] == "source"
-  end
-
   def sample_conflict_alert(conflicts)
     noun = conflicts.one? ? "document" : "documents"
     title_noun = conflicts.one? ? "title" : "titles"
