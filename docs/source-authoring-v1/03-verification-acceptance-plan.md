@@ -20,7 +20,7 @@ Mappings: `@a → \\alpha`, `@b → \\beta`, `@g → \\gamma`, `@D → \\Delta`.
 
 ## 5. `.` transform tests
 
-Before commit `x.b` stays literal; after commit it is `\\mathbf{x}`. `@a.b` becomes `\\boldsymbol{\\alpha}` or an explicitly chosen equivalent that renders bold Greek. Also verify `R.bb → \\mathbb{R}`, `x.vec → \\vec{x}`, canonical `A.t`, and `A.inv → A^{-1}`. `x.b.vec.t` becomes a structurally correct form such as `\\vec{\\mathbf{x}}^{\\mathsf{T}}`. `A.inv.t` and `A.t.inv` stay structurally distinct; no algebraic reorder.
+Before commit `x.b` stays literal; after commit it is `\\mathbf{x}`. `@a.b` becomes `\\boldsymbol{\\alpha}` or an explicitly chosen equivalent that renders bold Greek. Also verify `R.bb → \\mathbb{R}`, `x.vec → \\vec{x}`, `x.hat → \\hat{x}`, `x.tilde → \\tilde{x}`, canonical `A.t`, and `A.inv → A^{-1}`. `x.b.vec.t` becomes a structurally correct form such as `\\vec{\\mathbf{x}}^{\\mathsf{T}}`. `@a.hat`, `x.b.hat`, and `x.tilde.t` remain shorthand until commit and then produce valid canonical LaTeX. `A.inv.t` and `A.t.inv` stay structurally distinct; no algebraic reorder.
 
 ## 6. Active-chain editing
 

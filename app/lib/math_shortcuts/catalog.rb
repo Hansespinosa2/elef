@@ -7,6 +7,8 @@ module MathShortcuts
       { id: "default-transpose", name: "Transpose", aliases: %w[t T transpose], prefix: ".", description: "Add a mathematical transpose", expansion: "${1}^{\\mathsf{T}}", built_in: true },
       { id: "default-vector", name: "Vector", aliases: %w[vec v vector], prefix: ".", description: "Put a vector arrow over a symbol", expansion: "\\vec{${1}}", built_in: true },
       { id: "default-bar", name: "Bar", aliases: %w[bar], prefix: ".", description: "Put a bar over a symbol", expansion: "\\bar{${1}}", built_in: true },
+      { id: "default-hat", name: "Hat", aliases: %w[hat], prefix: ".", description: "Put a hat over an atomic symbol", expansion: "\\hat{${1}}", built_in: true },
+      { id: "default-tilde", name: "Tilde", aliases: %w[tilde], prefix: ".", description: "Put a tilde over an atomic symbol", expansion: "\\tilde{${1}}", built_in: true },
       { id: "default-inverse", name: "Inverse", aliases: %w[inv inverse], prefix: ".", description: "Take the inverse of an object", expansion: "${1}^{-1}", built_in: true },
       { id: "default-alpha", name: "Alpha", aliases: %w[a alpha], prefix: "@", description: "Greek alpha", expansion: "\\alpha", built_in: true },
       { id: "default-beta", name: "Beta", aliases: %w[b beta], prefix: "@", description: "Greek beta", expansion: "\\beta", built_in: true },

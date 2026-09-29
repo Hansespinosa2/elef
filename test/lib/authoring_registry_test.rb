@@ -30,4 +30,15 @@ class AuthoringRegistryTest < ActiveSupport::TestCase
     assert_equal ["source"], equation[:contexts]
     assert_equal ["source"], inline_equation[:contexts]
   end
+
+  test "registers local hat and tilde transforms as decorations" do
+    registry = AuthoringRegistry.for_editor(workspace: Workspace.default)
+    hat = registry.find { |entry| entry[:namespace] == "." && entry[:trigger] == "hat" }
+    tilde = registry.find { |entry| entry[:namespace] == "." && entry[:trigger] == "tilde" }
+
+    assert_equal "\\hat{${1}}", hat.dig(:behavior, :template)
+    assert_equal "decoration", hat.dig(:behavior, :operator_class)
+    assert_equal "\\tilde{${1}}", tilde.dig(:behavior, :template)
+    assert_equal "decoration", tilde.dig(:behavior, :operator_class)
+  end
 end

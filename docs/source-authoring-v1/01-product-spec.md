@@ -72,6 +72,8 @@ Required transforms:
 - `.b` semantic mathematical bold: `x.b → \\mathbf{x}`. Greek uses a valid bold form such as `\\boldsymbol{\\alpha}`.
 - `.bb` blackboard bold: `R.bb → \\mathbb{R}`; e.g. `E.bb[X \\mid Y] → \\mathbb{E}[X \\mid Y]`.
 - `.vec`: `x.vec → \\vec{x}`.
+- `.hat`: `x.hat → \\hat{x}` as a local decoration on an atomic operand.
+- `.tilde`: `x.tilde → \\tilde{x}` as a local decoration on an atomic operand.
 - `.t`: lowercase canonical transpose name and the repository's canonical transpose representation. `.T` may remain as a compatibility alias; docs/autocomplete show `.t`.
 - `.inv`: `A.inv → A^{-1}`.
 
@@ -79,7 +81,7 @@ Styles/decorations may canonicalize to structurally correct LaTeX order (`x.b.ve
 
 ## 8. v1 exclusions
 
-No grouped postfix operations, arbitrary-expression postfix operations, structural infix chaining, `./`, `.choose`, `.hat`, `.abs`, `.sqrt`, `.sum`, algebraic simplification, or automatic distribution. Fractions are `@frac`; combinations are `@choose`; hats are ordinary LaTeX or an `@` insertion until separately designed.
+No grouped postfix operations, arbitrary-expression postfix operations, structural infix chaining, `./`, `.choose`, `.abs`, `.sqrt`, `.sum`, algebraic simplification, or automatic distribution. Fractions are `@frac`; combinations are `@choose`. `.hat` and `.tilde` stay local to atomic operands and do not add grouped or wide-accent behavior.
 
 ## 9. `$` math pairing
 

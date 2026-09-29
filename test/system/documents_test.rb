@@ -1901,6 +1901,26 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_includes source.value, "$x.invalid"
   end
 
+  test "commits local hat and tilde transforms while keeping each active chain literal" do
+    document = Document.create!(title: "Math accents", source: "# Math")
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    source = find_field("Markdown source")
+    editor.send_keys(:end)
+
+    editor.send_keys("\n$x.hat")
+    assert_includes source.value, "$x.hat$"
+    editor.send_keys(:tab)
+    assert_includes source.value, "$\\hat{x}$"
+
+    editor.send_keys(:right)
+    editor.send_keys("\n$x.tilde.t")
+    assert_includes source.value, "$x.tilde.t$"
+    editor.send_keys(:tab)
+    assert_includes source.value, "\\tilde{x}^{\\mathsf{T}}"
+  end
+
   test "slash palette hides raw LaTeX outside math and keeps equation blocks available" do
     document = Document.create!(title: "Slash context", source: "# Notes")
     visit edit_document_path(document)

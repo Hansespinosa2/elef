@@ -31,11 +31,20 @@ test("serializes v1 math transforms and the existing bar decoration", () => {
   assert.equal(math.expandMathShorthand("x.b.vec.t"), "\\vec{\\mathbf{x}}^{\\mathsf{T}}")
 })
 
+test("supports local hat and tilde decorations in valid postfix chains", () => {
+  assert.equal(math.expandMathShorthand("x.hat"), "\\hat{x}")
+  assert.equal(math.expandMathShorthand("x.tilde"), "\\tilde{x}")
+  assert.equal(math.expandMathShorthand("@a.hat"), "\\hat{\\alpha}")
+  assert.equal(math.expandMathShorthand("x.b.hat"), "\\hat{\\mathbf{x}}")
+  assert.equal(math.expandMathShorthand("x.tilde.t"), "\\tilde{x}^{\\mathsf{T}}")
+  assert.equal(math.expandMathShorthand("x.hat.tilde"), null)
+})
+
 test("preserves mathematical postfix sequence and rejects deferred grammar", () => {
   assert.equal(math.expandMathShorthand("A.inv.t"), "\\left(A^{-1}\\right)^{\\mathsf{T}}")
   assert.equal(math.expandMathShorthand("A.t.inv"), "\\left(A^{\\mathsf{T}}\\right)^{-1}")
   assert.notEqual(math.expandMathShorthand("A.inv.t"), math.expandMathShorthand("A.t.inv"))
-  for (const source of ["x.invalid", "x.hat", "x.abs", "x.sqrt", "x.b.bb", "x.vec.bar", "x.vec.vec"]) {
+  for (const source of ["x.invalid", "x.abs", "x.sqrt", "x.b.bb", "x.vec.bar", "x.vec.vec"]) {
     assert.equal(math.expandMathShorthand(source), null)
   }
 })

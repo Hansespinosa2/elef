@@ -35,7 +35,7 @@ v1 needs no complete TeX parser. It supports atomic operands, supported `@` toke
 ## 8. Operator classes
 
 - **Style:** `.b`, `.bb`; may target the base and canonicalize independent of purely stylistic/decorative order.
-- **Decoration:** `.vec`; operates on the current object.
+- **Decoration:** `.vec`, `.bar`, `.hat`, `.tilde`; operates on the current atomic object.
 - **Mathematical postfix:** `.t`, `.inv`; preserve semantic order.
 
 Never simplify algebra or reorder mathematical operations because they may be equivalent under assumptions.
