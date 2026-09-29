@@ -95,6 +95,10 @@ module WorkPersistence
     send_data blob.download, type: blob.content_type, disposition: :inline, filename: blob.filename.to_s
   end
 
+  def render_work_history(work)
+    render json: work.work_revisions.history.map { |revision| revision_payload(revision) }
+  end
+
   def work_type_label(work)
     work.document? ? "Document" : "Presentation"
   end

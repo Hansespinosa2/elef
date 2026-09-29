@@ -221,7 +221,7 @@ class PresentationsController < ApplicationController
   end
 
   def history
-    render json: @presentation.work_revisions.history.map { |revision| revision_payload(revision) }
+    render_work_history(@presentation)
   end
 
   def restore

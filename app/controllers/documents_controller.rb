@@ -86,7 +86,7 @@ class DocumentsController < ApplicationController
   end
 
   def history
-    render json: @document.work_revisions.history.map { |revision| revision_payload(revision) }
+    render_work_history(@document)
   end
 
   def restore
