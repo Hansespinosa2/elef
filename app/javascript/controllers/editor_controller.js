@@ -169,6 +169,7 @@ export default class extends Controller {
 
   disconnect() {
     this.destroyed = true
+    this.pendingMediaRanges?.clear()
     if (this.lineNumberFrame) cancelAnimationFrame(this.lineNumberFrame)
     this.form?.removeEventListener("submit", this.handleSubmit)
     this.resizeObserver?.disconnect()
@@ -444,8 +445,11 @@ export default class extends Controller {
   }
 
   mapPendingMediaRanges(changes) {
+    // Replacing a value for an existing Map key is safe during iteration and keeps its insertion order.
     for (const [id, range] of this.pendingMediaRanges) {
       if (range.collapsed) {
+        // Left bias keeps concurrent insertions at one offset anchored before inserted text.
+        // Thus uploads started at the same cursor appear in reverse completion order.
         const position = changes.mapPos(range.from, -1)
         this.pendingMediaRanges.set(id, { from: position, to: position, collapsed: true })
         continue
