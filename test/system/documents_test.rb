@@ -871,6 +871,24 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: "# Untitled document\n\n$y=4$", wait: 5
   end
 
+  test "typing after clearing inline math stays inside the expression" do
+    visit new_document_path
+
+    find(".document-editor-block h1", text: "Untitled document").send_keys(:enter)
+    block = active_document_block
+    block.send_keys("$x$")
+    assert_selector ".document-editor-block [data-editor-math-source='x']", wait: 5
+
+    block.send_keys(:left)
+    assert_selector ".document-editor-block .editor-math-active", text: "$x$", wait: 5
+    block.send_keys(:backspace)
+    assert_selector ".document-editor-block .editor-math-active", text: "$$", wait: 5
+    block.send_keys("x=3")
+
+    assert_selector ".document-editor-block .editor-math-active", text: "$x=3$", wait: 5
+    assert_field "Markdown source", with: "# Untitled document\n\n$x=3$", wait: 5
+  end
+
   test "display latex visual mode enter and exit and click to edit" do
     visit new_document_path
 
