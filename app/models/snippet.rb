@@ -1,5 +1,5 @@
 class Snippet < ApplicationRecord
-  CATEGORIES = ["Markdown", "LaTeX", "Elef DSL"].freeze
+  CATEGORIES = ["Markdown", "LaTeX", "Mermaid", "Elef DSL"].freeze
 
   belongs_to :workspace
 

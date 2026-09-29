@@ -1770,131 +1770,58 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_selector '.document-editor-block[aria-readonly="true"]', minimum: 8, visible: false
   end
 
-  test "expands math shorthand only when committed inside math" do
+  test "keeps an active math chain literal until commit and supports one-step undo" do
     document = Document.create!(title: "Math notes", source: "# Math")
     visit edit_document_path(document)
     editor = find_field("Markdown source")
     editor.click
     editor.send_keys(:end)
-    editor.send_keys("\n$x.hat.b.T")
-    editor.send_keys(:enter)
+    editor.send_keys("\n$x.b.vec.t")
+    assert_includes editor.value, "$x.b.vec.t$"
+    editor.send_keys(" ")
 
-    assert_includes editor.value, "$\\mathbf{\\hat{x}}^{\\mathsf{T}}"
-    assert_includes editor.value, "\n"
+    assert_includes editor.value, "\\vec{\\mathbf{x}}^{\\mathsf{T}} "
+    editor.send_keys([:control, "z"])
+    assert_includes editor.value, "$x.b.vec.t$"
     assert_selector '[data-autosave-target="status"]', text: "Saved", wait: 5
   end
 
-  test "wraps TeX commands with math modifiers for Greek letters and operators" do
-    document = Document.create!(title: "TeX command modifiers", source: "# Math")
+  test "supports only the v1 math transforms and preserves invalid chains" do
+    document = Document.create!(title: "Math transforms", source: "# Math")
     visit edit_document_path(document)
     editor = find_field("Markdown source")
     editor.click
     editor.send_keys(:end)
 
-    editor.send_keys("\n$\\chi.bar")
+    editor.send_keys("\n$\\alpha.b")
     editor.send_keys(:enter)
-    assert_includes editor.value, "$\\bar{\\chi}"
+    assert_includes editor.value, "\\boldsymbol{\\alpha}"
 
-    editor.send_keys("$\n$\\alpha.hat")
-    editor.send_keys(:tab)
-    assert_includes editor.value, "$\\hat{\\alpha}"
-
-    editor.send_keys("$\n$\\beta.tilde")
+    editor.send_keys("\n$R.bb")
     editor.send_keys(:enter)
-    assert_includes editor.value, "$\\tilde{\\beta}"
+    assert_includes editor.value, "\\mathbb{R}"
 
-    greek_commands = %w[
-      alpha beta gamma delta epsilon varepsilon zeta eta theta vartheta iota kappa lambda mu nu xi
-      pi varpi rho varrho sigma varsigma tau upsilon phi varphi chi psi omega
-      Gamma Delta Theta Lambda Xi Pi Sigma Upsilon Phi Psi Omega
-    ]
-    editor.send_keys("$\n$")
-    greek_commands.each do |command|
-      editor.send_keys(" \\#{command}.bar")
-      editor.send_keys(:enter)
-      editor.send_keys(" ")
-    end
-    editor.send_keys("$")
-
-    greek_commands.each do |command|
-      assert_includes editor.value, "\\bar{\\#{command}}", "\\#{command} should be wrapped as a TeX command"
-    end
-
-    editor.send_keys("\n$\\nabla.vec")
+    editor.send_keys("\n$A.inv.t")
     editor.send_keys(:enter)
-    assert_includes editor.value, "$\\vec{\\nabla}", "operators should also be wrapped as TeX commands"
+    assert_includes editor.value, "\\left(A^{\\mathsf{T}}\\right)^{-1}"
+
+    editor.send_keys("\n$x.invalid")
+    editor.send_keys(:enter)
+    assert_includes editor.value, "$x.invalid\n"
   end
 
-  test "chains supported math modifiers and leaves conflicting chains intact" do
-    document = Document.create!(title: "Math modifier chains", source: "# Math")
-    visit edit_document_path(document)
-    editor = find_field("Markdown source")
-    editor.click
-    editor.send_keys(:end)
-    expanded = ->(symbol) { "$\\mathbf{\\bar{#{symbol}}}$" }
-
-    editor.send_keys("\n$x.bar")
-    editor.send_keys(:enter)
-    editor.send_keys(".bb")
-    editor.send_keys(:enter)
-    editor.send_keys("$")
-    assert_includes editor.value, expanded.call("x"), "bar then bold should compose across commits: #{editor.value.inspect}"
-
-    editor.send_keys("\n$y.bar.bb")
-    editor.send_keys(:enter)
-    editor.send_keys("$")
-    assert_includes editor.value, expanded.call("y"), "bar then bold should compose in one token: #{editor.value.inspect}"
-
-    editor.send_keys("\n$z.bb.bar")
-    editor.send_keys(:enter)
-    editor.send_keys("$")
-    assert_includes editor.value, expanded.call("z"), "bold then bar should compose in one token: #{editor.value.inspect}"
-
-    editor.send_keys("\n$w.bb")
-    editor.send_keys(:enter)
-    editor.send_keys(".bar")
-    editor.send_keys(:enter)
-    editor.send_keys("$")
-    assert_includes editor.value, expanded.call("w"), "bold then bar should compose across commits: #{editor.value.inspect}"
-
-    assert_equal ["x", "y", "z", "w"].map { |symbol| expanded.call(symbol) }.length,
-      ["x", "y", "z", "w"].sum { |symbol| editor.value.scan(expanded.call(symbol)).length }
-
-    editor.send_keys("\n$v.bar")
-    editor.send_keys(:enter)
-    editor.send_keys(".hat")
-    editor.send_keys(:enter)
-    assert_includes editor.value, "$\\bar{v}.hat\n", "conflicting modifiers across commits should stay literal: #{editor.value.inspect}"
-    editor.send_keys("$")
-
-    ["x.bb.bb", "x.bar.bar", "x.bar.hat"].each do |token|
-      editor.send_keys("\n$#{token}")
-      editor.send_keys(:enter)
-      assert_includes editor.value, "$#{token}\n"
-      editor.send_keys("$")
-    end
-  end
-
-  test "canonicalizes modifier order and ignores code and unknown contexts" do
+  test "leaves dot syntax literal outside math and inside code" do
     document = Document.create!(title: "Math contexts", source: "# Math")
     visit edit_document_path(document)
     editor = find_field("Markdown source")
-    source = "# Math\n\nOutside x.hat.b\n\n```\n$x.hat.b\n```\n\n$x.T.b.hat\n\n$x.unknown"
-    page.execute_script(<<~JAVASCRIPT, source)
-      const editor = document.querySelector('textarea[name="document[source]"]');
-      editor.value = arguments[0];
-      editor.focus();
-      editor.setSelectionRange(editor.value.indexOf("\\n\\n$x.unknown"), editor.value.indexOf("\\n\\n$x.unknown"));
-    JAVASCRIPT
-    editor.send_keys(:tab)
-
-    assert_includes editor.value, "Outside x.hat.b"
-    assert_includes editor.value, "\n$x.hat.b\n```"
-    assert_includes editor.value, "$\\mathbf{\\hat{x}}^{\\mathsf{T}}"
-
-    page.execute_script("const editor = document.querySelector('textarea[name=\"document[source]\"]'); editor.focus(); editor.setSelectionRange(editor.value.length, editor.value.length);")
+    editor.click
+    editor.send_keys(:end)
+    editor.send_keys("\nOutside x.b\n\n```\n$x.b\n```")
+    editor.send_keys(:end)
     editor.send_keys(:enter)
-    assert_includes editor.value, "$x.unknown\n"
+
+    assert_includes editor.value, "Outside x.b"
+    assert_includes editor.value, "```\n$x.b\n```"
   end
 
   test "keeps the last good preview when a live preview fails" do

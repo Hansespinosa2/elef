@@ -2,6 +2,17 @@ module Snippets
   class Catalog
     DEFAULTS = [
       { id: "default-bold", name: "Bold text", trigger: "bold", description: "Emphasized Markdown text", category: "Markdown", body: "**${1:text}**", built_in: true },
+      { id: "default-image", name: "Image", trigger: "image", description: "Markdown image", category: "Markdown", body: "![${1:description}](${2:image URL})", built_in: true },
+      { id: "default-table", name: "Table", trigger: "table", description: "Markdown table", category: "Markdown", body: "| ${1:Column 1} | ${2:Column 2} |\n| --- | --- |\n| ${3:Value 1} | ${4:Value 2} |", built_in: true },
+      { id: "default-code", name: "Code block", trigger: "code", description: "Fenced code block", category: "Markdown", body: "```\n${1:code}\n```", built_in: true },
+      { id: "default-quote", name: "Quote", trigger: "quote", description: "Markdown blockquote", category: "Markdown", body: "> ${1:quoted text}", built_in: true },
+      { id: "default-callout", name: "Callout", trigger: "callout", description: "Highlighted callout", category: "Markdown", body: "> [!NOTE]\n> ${1:Callout text}", built_in: true },
+      { id: "default-columns", name: "Columns", trigger: "columns", description: "Two-column layout", category: "Markdown", body: ":::columns\n:::column\n${1:Left column}\n:::column\n${2:Right column}\n:::", built_in: true },
+      { id: "default-slide", name: "Slide", trigger: "slide", description: "Start a new slide", category: "Markdown", body: "---\n\n# ${1:Slide title}\n\n${2:Content}", built_in: true },
+      { id: "default-section", name: "Section", trigger: "section", description: "Markdown section heading", category: "Markdown", body: "## ${1:Section title}", built_in: true },
+      { id: "default-footnote", name: "Footnote", trigger: "footnote", description: "Markdown footnote", category: "Markdown", body: "[^${1:1}]: ${2:Footnote text}", built_in: true },
+      { id: "default-equation", name: "Equation", trigger: "equation", description: "Display math equation", category: "LaTeX", body: "$$\n${1:equation}\n$$", built_in: true },
+      { id: "default-diagram", name: "Diagram", trigger: "diagram", description: "Mermaid diagram", category: "Mermaid", body: "```mermaid\n${1:flowchart TD}\n  ${2:A --> B}\n```", built_in: true },
       { id: "default-list", name: "Bullet list", trigger: "list", description: "A short Markdown list", category: "Markdown", body: "- ${1:first item}\n- ${2:second item}", built_in: true },
       { id: "default-bit", name: "Bullet list (BIT)", trigger: "bit", description: "A short Markdown bullet list", category: "Markdown", body: "- ${1:first item}\n- ${2:second item}", built_in: true },
       { id: "default-ben", name: "Numbered list (BEN)", trigger: "ben", description: "A short Markdown numbered list", category: "Markdown", body: "1. ${1:first item}\n2. ${2:second item}", built_in: true },
@@ -25,7 +36,7 @@ module Snippets
       { id: "default-sup", name: "Superscript", trigger: "sup", description: "A superscript", category: "LaTeX", body: "^{${1:power}}", built_in: true },
       { id: "default-sub", name: "Subscript", trigger: "sub", description: "A subscript", category: "LaTeX", body: "_{${1:index}}", built_in: true },
       { id: "default-mtext", name: "Text in math", trigger: "mtext", description: "Readable text inside math", category: "LaTeX", body: "\\text{${1:text}}", built_in: true },
-      { id: "default-align", name: "Align directive", trigger: "align", description: "Align a block horizontally or vertically", category: "Elef DSL", body: ":::align{${1:left}}", built_in: true },
+      { id: "default-align", name: "Align directive", trigger: "align", description: "Align a block horizontally or vertically", category: "Elef DSL", body: ":::align{${1}}", built_in: true },
       { id: "default-sse", name: "Section directive", trigger: "sse", description: "Create a section", category: "Elef DSL", body: ":::section{${1:section name}}", built_in: true },
       { id: "default-sss", name: "Subsection directive", trigger: "sss", description: "Create a subsection", category: "Elef DSL", body: ":::subsection{${1:subsection name}}", built_in: true },
       { id: "default-foot", name: "Footnote directive", trigger: "foot", description: "Add a footnote", category: "Elef DSL", body: ":::footnote{${1:footnote text}}", built_in: true }

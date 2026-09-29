@@ -143,7 +143,7 @@ export default class extends Controller {
     const caret = editor.selectionStart
     if (!insideMath(editor.value, caret)) return null
     const before = editor.value.slice(0, caret)
-    const match = before.match(/([A-Za-z][A-Za-z0-9]*)?([.@])([A-Za-z0-9_-]*|=)$/)
+    const match = before.match(/((?:@[A-Za-z][A-Za-z0-9]*|\\[A-Za-z][A-Za-z0-9]*|[A-Za-z][A-Za-z0-9]*)(?:\.[A-Za-z]+)*)?([.@])([A-Za-z0-9_-]*|=)$/)
     if (!match) return null
 
     return {
@@ -296,6 +296,16 @@ export default class extends Controller {
     const shortcut = this.matches?.[this.selectedIndex]
     const query = this.query
     if (!shortcut || !query || !this.editorController) return this.close()
+
+    if (shortcut.prefix === ".") {
+      const canonical = { "default-bold": "b", "default-blackboard": "bb", "default-vector": "vec", "default-transpose": "t", "default-inverse": "inv" }
+      const operation = canonical[shortcut.id] || shortcut.aliases?.[0]
+      const source = query.base ? `${query.base}.${operation}` : `.${operation}`
+      this.close()
+      this.editorController.replaceRange(source, query.start, this.editorController.selectionStart)
+      this.editorController.focus()
+      return
+    }
 
     const expansion = this.expandShortcut(shortcut, query)
     const base = query.start

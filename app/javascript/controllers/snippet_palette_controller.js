@@ -1,6 +1,6 @@
 import { Controller } from "@hotwired/stimulus"
 import { editorFor } from "controllers/editor_controller"
-import { insideMath } from "controllers/math_shorthand_controller"
+import { insideCode, insideMath } from "controllers/math_shorthand_controller"
 
 export default class extends Controller {
   static targets = ["editor", "palette"]
@@ -84,7 +84,7 @@ export default class extends Controller {
       return
     }
 
-    const query = this.queryAtCaret()
+    const query = this.directiveQueryAtCaret() || this.queryAtCaret()
     if (!query || query.start !== this.queryStart || query.text !== this.query) {
       this.close()
       return
@@ -112,14 +112,29 @@ export default class extends Controller {
   refresh() {
     const editor = this.editorController
     if (!editor) return this.close()
+    if (insideMath(editor.value, editor.selectionStart) || insideCode(editor.value, editor.selectionStart)) return this.close()
+    const directiveQuery = this.directiveQueryAtCaret()
+    if (directiveQuery) {
+      this.query = directiveQuery.text
+      this.queryPrefix = ":"
+      this.queryStart = directiveQuery.start
+      this.argumentQuery = directiveQuery
+      this.matches = directiveQuery.choices
+        .filter((value) => this.fieldScore(value, directiveQuery.text, 10000) !== null)
+        .map((value) => ({ id: `directive-${value}`, trigger: value, name: value, category: "Elef argument", body: value }))
+      this.selectedIndex = 0
+      this.renderPalette()
+      return
+    }
     const query = this.queryAtCaret()
     if (!query) return this.close()
 
+    this.argumentQuery = null
     this.query = query.text
+    this.queryPrefix = query.prefix
     this.queryStart = query.start
-    const mathContext = insideMath(editor.value, editor.selectionStart)
     this.matches = this.snippetsValue
-      .filter((snippet) => !mathContext || this.supportsMathContext(snippet))
+      .filter((snippet) => query.prefix === ":" ? snippet.category === "Elef DSL" : snippet.category !== "Elef DSL")
       .map((snippet) => ({ snippet, score: this.score(snippet) }))
       .filter((result) => result.score !== null)
       .sort((a, b) => b.score - a.score || a.snippet.trigger.localeCompare(b.snippet.trigger) || a.snippet.name.localeCompare(b.snippet.name))
@@ -133,17 +148,39 @@ export default class extends Controller {
     if (!editor || editor.selectionStart !== editor.selectionEnd) return null
 
     const beforeCaret = editor.value.slice(0, editor.selectionStart)
-    const match = beforeCaret.match(/:([a-z0-9-]*)$/i)
+    const match = beforeCaret.match(/([/:])([a-z0-9-]*)$/i)
     if (!match) return null
 
     const triggerStart = match.index
     const previousCharacter = beforeCaret[triggerStart - 1]
-    if (previousCharacter === ":" || previousCharacter === "\\") return null
+    if (previousCharacter === ":" || previousCharacter === "/" || previousCharacter === "\\") return null
 
     return {
-      text: match[1].toLowerCase(),
-      start: editor.selectionStart - match[1].length - 1
+      prefix: match[1],
+      text: match[2].toLowerCase(),
+      start: editor.selectionStart - match[2].length - 1
     }
+  }
+
+  directiveQueryAtCaret() {
+    const editor = this.editorController
+    if (!editor || editor.selectionStart !== editor.selectionEnd) return null
+    const caret = editor.selectionStart
+    const before = editor.value.slice(0, caret)
+    const match = before.match(/:::align\{([^}]*)$/)
+    if (!match) return null
+    const argumentText = match[1]
+    const trailingSpace = /\s$/.test(argumentText)
+    const completed = argumentText.trim().split(/\s+/).filter(Boolean)
+    const position = trailingSpace ? completed.length : Math.max(completed.length - 1, 0)
+    const text = trailingSpace ? "" : (completed.at(-1) || "")
+    const choices = position === 0
+      ? ["left", "center", "right", "top", "middle", "bottom"]
+      : position === 1 && completed.length === 1
+        ? ["top", "middle", "bottom"]
+        : []
+    if (!choices.length) return null
+    return { prefix: ":", text, start: caret - text.length, choices }
   }
 
   supportsMathContext(snippet) {
@@ -199,7 +236,7 @@ export default class extends Controller {
       option.setAttribute("aria-selected", String(index === this.selectedIndex))
       option.className = `snippet-option${index === this.selectedIndex ? " is-selected" : ""}`
       const trigger = document.createElement("strong")
-      trigger.textContent = `:${snippet.trigger}`
+      trigger.textContent = `${this.queryPrefix || "/"}${snippet.trigger}`
       const details = document.createElement("span")
       details.textContent = `${snippet.name} · ${snippet.category}`
       option.append(trigger, details)
@@ -239,6 +276,12 @@ export default class extends Controller {
 
     const editor = this.editorController
     if (!editor) return this.close()
+    if (this.argumentQuery) {
+      editor.replaceRange(snippet.trigger, this.queryStart, editor.selectionStart)
+      this.close()
+      editor.focus()
+      return
+    }
     const before = editor.value.slice(0, this.queryStart)
     const after = editor.value.slice(editor.selectionStart)
     const expansion = this.expand(snippet.body)
@@ -253,6 +296,7 @@ export default class extends Controller {
     editor.replaceRange(expansion.text, this.queryStart, editor.selectionStart)
     editor.focus()
     this.selectStop(this.stops[0])
+    queueMicrotask(() => this.refresh())
   }
 
   expand(body) {
@@ -309,6 +353,7 @@ export default class extends Controller {
   close() {
     this.paletteTarget.hidden = true
     this.matches = []
+    this.argumentQuery = null
     this.updateAccessibility()
   }
 }
