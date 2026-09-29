@@ -296,7 +296,7 @@ export default class extends Controller {
   keydown(event) {
     if (event.defaultPrevented || event.elefMathShorthandHandled) return
     const editor = this.editorController
-    if (!editor || !editor.insertMode) return
+    if (!editor || editor.editingMode !== "source" || !editor.insertMode) return
     const caret = editor.selectionStart
     if (event.key === "$" && editor.selectionStart === editor.selectionEnd) {
       const action = mathDollarActionAtEditor(editor, caret)

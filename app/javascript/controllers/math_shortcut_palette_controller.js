@@ -82,7 +82,10 @@ export default class extends Controller {
       return
     }
     const editor = this.editorController
-    if (!editor?.insertMode) return
+    if (!editor || editor.editingMode !== "source" || !editor.insertMode) {
+      this.close()
+      return
+    }
 
     if (!this.paletteTarget.hidden) {
       const currentQuery = this.queryAtCaret()
@@ -141,7 +144,7 @@ export default class extends Controller {
 
   queryAtCaret() {
     const editor = this.editorController
-    if (!editor || editor.selectionStart !== editor.selectionEnd) return null
+    if (!editor || editor.editingMode !== "source" || editor.selectionStart !== editor.selectionEnd) return null
     const caret = editor.selectionStart
     if (!editorInsideMath(editor, caret)) return null
     const line = editor.view.state.doc.lineAt(caret)

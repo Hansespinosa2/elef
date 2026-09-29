@@ -2146,14 +2146,15 @@ class PresentationsTest < ApplicationSystemTestCase
 
   test "inserts a fuzzy snippet and moves through its placeholder" do
     Snippet.create!(name: "Block equation", trigger: "beq", description: "A block LaTeX equation", category: "LaTeX", body: "$$\n${1:equation}\n$$")
-    presentation = Presentation.create!(title: "Snippet deck", source: "# Math\n\n:")
+    presentation = Presentation.create!(title: "Snippet deck", source: "# Math\n\n/")
 
     visit edit_presentation_path(presentation)
+    click_on "Source"
     source = find_field("Markdown source")
     editor = find(".cm-content")
     editor.send_keys("beq")
     assert_selector ".snippet-palette", visible: true
-    assert_text ":beq"
+    assert_text "/beq"
     assert_selector ".snippet-option[aria-selected='true']"
     assert_equal "true", page.evaluate_script("document.querySelector('.cm-editor').getAttribute('aria-expanded')")
     palette_position = page.evaluate_script("(() => { const element = document.querySelector('[data-controller~=editor]'); const editor = element.editorController; const caret = editor.view.coordsAtPos(editor.selectionStart); const palette = document.querySelector('[data-snippet-palette-target=palette]').getBoundingClientRect(); return { belowCaret: Math.abs(palette.top - caret.bottom - 4) < 2, aboveCaret: Math.abs(palette.bottom - caret.top + 4) < 2, paletteBottom: palette.bottom, viewportBottom: window.innerHeight }; })()")
@@ -2165,35 +2166,32 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_equal "equation", page.evaluate_script("(() => { const e = document.querySelector('[data-snippet-palette-target=editor]'); return e.value.slice(e.selectionStart, e.selectionEnd) })()")
   end
 
-  test "prioritizes an exact math snippet trigger and filters suggestions for math context" do
-    Snippet.create!(name: "Array command", trigger: "array", category: "LaTeX", body: "\\operatorname{array}")
-    Snippet.create!(name: "Alpha command", trigger: "a", category: "LaTeX", body: "\\alpha")
-    Snippet.create!(name: "Aligned block", trigger: "aligned", category: "LaTeX", body: "$$\n\\begin{aligned}\nx &= y\n\\end{aligned}\n$$")
-    Snippet.create!(name: "Array notes", trigger: "array-notes", category: "Markdown", body: "- ${1:item}")
-    presentation = Presentation.create!(title: "Math snippet search", source: "# Math\n\n$$\n")
+  test "uses the math palette inside math and keeps document commands in their namespace" do
+    presentation = Presentation.create!(title: "Math authoring namespaces", source: "# Math")
 
     visit edit_presentation_path(presentation)
+    click_on "Source"
     editor = find(".cm-content")
-    editor.send_keys(":a")
+    editor.send_keys("\n$@a")
 
-    assert_selector ".snippet-option.is-selected", text: /Alpha command/
-    assert_selector ".snippet-option", text: /:array.*Array command/m
-    assert_no_selector ".snippet-option", text: /Aligned block|Array notes/
+    assert_selector ".math-shortcut-option.is-selected", text: /Alpha/
+    assert_no_selector ".snippet-palette [role='option']"
 
     editor.send_keys(:enter)
     source = find_field("Markdown source").value
-    assert_includes source, "$$\n\\alpha"
-    refute_includes source, "\\operatorname{array}"
+    assert_includes source, "$\\alpha$"
   end
 
   test "keeps multiple snippet placeholders aligned while tabbing" do
     Snippet.create!(name: "Two fields", trigger: "twice", description: "Two tab stops", category: "Markdown", body: "A ${1:first} B ${2:second}")
-    presentation = Presentation.create!(title: "Multiple stops", source: "# Snippets\n\n:")
+    presentation = Presentation.create!(title: "Multiple stops", source: "# Snippets\n\n/")
 
     visit edit_presentation_path(presentation)
+    click_on "Source"
     source = find_field("Markdown source")
-    source.send_keys("twice")
-    source.send_keys(:enter)
+    editor = find(".cm-content")
+    editor.send_keys("twice")
+    editor.send_keys(:enter)
 
     selected_text = "(() => { const e = document.querySelector('[data-snippet-palette-target=editor]'); return e.value.slice(e.selectionStart, e.selectionEnd) })()"
     assert_equal "first", page.evaluate_script(selected_text)
@@ -2201,13 +2199,14 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_equal "second", page.evaluate_script(selected_text)
   end
 
-  test "positions the palette when only the colon trigger is typed" do
-    Snippet.create!(name: "Equation", trigger: "beq", category: "LaTeX", body: "x")
+  test "positions the palette when only the slash trigger is typed" do
+    Snippet.create!(name: "Equation", trigger: "beq", category: "LaTeX", body: "$$\n${1:equation}\n$$")
     visit new_presentation_path
+    click_on "Source"
     source = find_field("Markdown source")
     source.fill_in with: "# Math\n\n"
-    source.send_keys(":")
-    assert_selector ".snippet-option", text: ":beq"
+    find(".cm-content").send_keys("/")
+    assert_selector ".snippet-option", text: "/beq"
     bounds = page.evaluate_script(<<~JS)
       (() => {
         const element = document.querySelector('[data-controller~="editor"]');
@@ -2217,18 +2216,18 @@ class PresentationsTest < ApplicationSystemTestCase
         return { positioned: palette.style.top !== '', belowCaret: Math.abs(p.top - caret.bottom - 4) < 2, aboveCaret: Math.abs(p.bottom - caret.top + 4) < 2, bottom: p.bottom, viewportBottom: window.innerHeight };
       })()
     JS
-    assert bounds["positioned"], "The colon popup must receive caret coordinates before a query is typed"
+    assert bounds["positioned"], "The slash popup must receive caret coordinates before a query is typed"
     assert bounds["belowCaret"] || bounds["aboveCaret"], "The snippet popup should stay next to the caret"
     assert_operator bounds["bottom"], :<, bounds["viewportBottom"]
   end
 
   test "renders untrusted snippet metadata as text" do
     Snippet.create!(name: '<img src=x onerror="alert(1)">', trigger: "unsafe", description: "Untrusted", category: "Markdown", body: "text")
-    presentation = Presentation.create!(title: "Safe snippets", source: "# Safe\n\n:")
+    presentation = Presentation.create!(title: "Safe snippets", source: "# Safe\n\n/")
 
     visit edit_presentation_path(presentation)
-    source = find_field("Markdown source")
-    source.send_keys("unsafe")
+    click_on "Source"
+    find(".cm-content").send_keys("unsafe")
 
     assert_selector ".snippet-option span", text: '<img src=x onerror="alert(1)"> · Markdown'
     assert_no_selector ".snippet-option img"

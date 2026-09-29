@@ -75,7 +75,10 @@ export default class extends Controller {
   keydown(event) {
     if (event.defaultPrevented) return
     const editor = this.editorController
-    if (!editor) return
+    if (!editor || editor.editingMode !== "source") {
+      this.close()
+      return
+    }
 
     if (this.paletteTarget.hidden) {
       if (event.key === "Tab" && this.stops.length > 0) {
@@ -112,7 +115,7 @@ export default class extends Controller {
 
   refresh() {
     const editor = this.editorController
-    if (!editor) return this.close()
+    if (!editor || editor.editingMode !== "source") return this.close()
     if (editorInsideMath(editor, editor.selectionStart) || editorInsideCode(editor, editor.selectionStart)) return this.close()
     const directiveQuery = this.directiveQueryAtCaret()
     if (directiveQuery) {
@@ -129,6 +132,11 @@ export default class extends Controller {
     }
     const query = this.queryAtCaret()
     if (!query) return this.close()
+
+    const mermaidCommand = this.registry.find((entry) =>
+      entry.namespace === "/" && entry.trigger === "diagram" && entry.behavior?.type === "mermaid_assist"
+    )
+    if (query.prefix === "/" && query.text && mermaidCommand?.trigger.startsWith(query.text)) return this.close()
 
     if (query.prefix === ":") {
       const directive = this.registry.find((entry) => entry.namespace === ":" && (entry.trigger === query.text || (entry.aliases || []).includes(query.text)))

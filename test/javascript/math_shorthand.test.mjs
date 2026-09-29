@@ -65,6 +65,7 @@ test("keeps a chain active while the author inserts another operation", () => {
     value: "$x.b$",
     selectionStart: 4,
     selectionEnd: 4,
+    editingMode: "source",
     insertMode: true,
     lineSeparator: "\n",
     dom: {
@@ -118,6 +119,7 @@ test("keeps a chain active while the caret moves inside it and commits after lea
     value: "$x.vec.t$",
     selectionStart: 8,
     selectionEnd: 8,
+    editingMode: "source",
     insertMode: true,
     lineSeparator: "\n",
     dom: {

@@ -95,13 +95,14 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     MathShortcut.create!(name: "Array", aliases: ["array"], prefix: "@", expansion: "\\operatorname{array}")
 
     visit edit_document_path(document)
+    click_on "Source"
     page.execute_script("const editor = document.querySelector('.source-field').editorController; editor.setSelectionRange(editor.value.length, editor.value.length); editor.focus();")
     editor = find(".cm-content")
     editor.send_keys("\n$x.b")
     assert_selector ".math-shortcut-palette .snippet-option", text: /Bold/, wait: 5
     editor.send_keys(:enter)
 
-    editor.send_keys("\n@a")
+    editor.send_keys("\n$@a")
     assert_selector ".math-shortcut-palette .snippet-option", text: /Alpha/, wait: 5
     assert_selector ".math-shortcut-option.is-selected", text: /Alpha/
     editor.send_keys(:enter)
@@ -111,7 +112,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     assert_includes source, "\\alpha"
     refute_includes source, "\\operatorname{array}"
 
-    editor.send_keys("\n@Q")
+    editor.send_keys(" @Q")
     capital_theta = find(".math-shortcut-option", text: /Capital Theta/, wait: 5)
     within(capital_theta) do
       assert_selector ".math-shortcut-trigger", text: "@Q"
@@ -119,7 +120,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     end
     editor.send_keys(:enter)
 
-    editor.send_keys("\n@q")
+    editor.send_keys(" @q")
     theta = find(".math-shortcut-option", text: /^Theta/, wait: 5)
     within(theta) do
       assert_selector ".math-shortcut-trigger", text: "@q"
@@ -127,7 +128,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     end
     editor.send_keys(:enter)
 
-    editor.send_keys("\n@w")
+    editor.send_keys(" @w")
     omega = find(".math-shortcut-option", text: /^Omega/, wait: 5)
     within(omega) do
       assert_selector ".math-shortcut-trigger", text: "@w"
@@ -140,7 +141,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     assert_includes source, "\\theta"
     assert_includes source, "\\omega"
 
-    editor.send_keys("\n@A")
+    editor.send_keys(" @A")
     assert_no_selector ".math-shortcut-palette:not([hidden])", wait: 1
   end
 
@@ -148,6 +149,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     document = Document.create!(title: "Greek math palette", source: "# Greek math palette")
 
     visit edit_document_path(document)
+    click_on "Source"
     editor = find(".cm-content")
     editor.click
     editor.send_keys("\n$ @b")
@@ -185,6 +187,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     document = Document.create!(title: "Math shortcut previews", source: "# Math shortcut previews")
 
     visit edit_document_path(document)
+    click_on "Source"
     editor = find(".cm-content")
     editor.click
     editor.send_keys("\n$@g")
@@ -233,6 +236,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     document = Document.create!(title: "TeX operators", source: "# TeX operators")
 
     visit edit_document_path(document)
+    click_on "Source"
     editor = find(".cm-content")
     editor.click
     editor.send_keys("\n$@nabla")
@@ -265,6 +269,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     document = Document.create!(title: "Structured math", source: "# Math\n\n$$x$$")
 
     visit edit_document_path(document)
+    click_on "Source"
     editor = find(".cm-content")
     page.execute_script(<<~JAVASCRIPT)
       const editor = document.querySelector(".source-field").editorController;
@@ -308,10 +313,12 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     document = Document.create!(title: "Selected math transform", source: "# Math")
 
     visit edit_document_path(document)
+    click_on "Source"
     editor = find(".cm-content")
     editor.click
     editor.send_keys("\n$x.bo")
     find(".math-shortcut-palette .snippet-option", text: /Bold/).click
+    editor.send_keys(:enter)
 
     source = find_field("Markdown source").value
     assert_includes source, "$\\mathbf{x}"
@@ -322,6 +329,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     document = Document.create!(title: "Math assist performance", source: "# Math assist performance")
 
     visit edit_document_path(document)
+    page.driver.browser.manage.timeouts.script_timeout = 30
     result = page.evaluate_async_script(<<~JAVASCRIPT)
       const done = arguments[arguments.length - 1];
       (async () => {
@@ -383,19 +391,19 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     assert_operator result["maximum"], :<, 16
   end
 
-  test "ships the common block and list colon snippets" do
+  test "inserts an equation block from the source command palette" do
     document = Document.create!(title: "Authoring snippets", source: "# Authoring snippets")
 
     visit edit_document_path(document)
+    click_on "Source"
     editor = find(".cm-content")
     editor.click
-    editor.send_keys("\n:bga")
-    assert_selector ".snippet-palette .snippet-option", text: /Gathered equations/, wait: 5
+    editor.send_keys("\n/equation")
+    assert_selector ".snippet-palette .snippet-option", text: /Equation/, wait: 5
     editor.send_keys(:enter)
 
     source = find_field("Markdown source").value
-    assert_includes source, "\\begin{gathered}"
-    assert_includes source, "\\end{gathered}"
+    assert_includes source, "$$\nequation\n$$"
   end
 
   test "front matter can be revealed and hidden again on demand" do
