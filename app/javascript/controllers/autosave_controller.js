@@ -125,7 +125,6 @@ export default class extends Controller {
   async save() {
     this.clearSaveTimer()
     if (this.saving || !this.active || !this.saveEnabledValue) return
-    this.element.querySelector(".source-field")?.dispatchEvent(new CustomEvent("elef:before-save", { bubbles: true }))
     const snapshot = this.snapshot()
     this.saving = true
     this.element.dispatchEvent(new CustomEvent("autosave:saving"))

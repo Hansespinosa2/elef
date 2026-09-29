@@ -1812,7 +1812,7 @@ class DocumentsTest < ApplicationSystemTestCase
     refute_includes source_field.value, "x.b.vec.t"
   end
 
-  test "canonicalizes an active math chain before autosave" do
+  test "autosave preserves an active math chain verbatim" do
     document = Document.create!(title: "Autosaved math chain", source: "# Math")
     visit edit_document_path(document)
     click_on "Source"
@@ -1824,9 +1824,8 @@ class DocumentsTest < ApplicationSystemTestCase
 
     assert_selector '[data-autosave-target="status"]', text: "Unsaved changes", wait: 3
     assert_selector '[data-autosave-target="status"]', text: "Saved", wait: 10
-    assert_includes find_field("Markdown source").value, "$\\mathbf{x}$"
-    assert_includes document.reload.source, "$\\mathbf{x}$"
-    refute_includes document.reload.source, "x.b"
+    assert_equal "# Math\n$x.b$", source.value
+    assert_equal "# Math\n$x.b$", document.reload.source
   end
 
   test "typing a colon directive inserts canonical source and guides align arguments" do

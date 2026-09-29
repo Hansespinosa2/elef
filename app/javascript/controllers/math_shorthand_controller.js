@@ -249,9 +249,7 @@ export default class extends Controller {
     this.lastExpansion = null
     this.editorController = editorFor(this.element)
     this.editorReady = () => { this.editorController ||= editorFor(this.element); this.setupEditor() }
-    this.beforeSave = () => this.commitAll()
     this.element.addEventListener("elef:editor-ready", this.editorReady)
-    this.element.addEventListener("elef:before-save", this.beforeSave)
     this.setupEditor()
   }
 
@@ -265,7 +263,6 @@ export default class extends Controller {
       this.editorController.form?.removeEventListener("submit", this.handleFormSubmit, true)
     }
     this.element.removeEventListener("elef:editor-ready", this.editorReady)
-    this.element.removeEventListener("elef:before-save", this.beforeSave)
   }
 
   setupEditor() {
