@@ -704,6 +704,28 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_equal upload_asset_presentation_path(json["id"]), json["upload_url"]
   end
 
+  test "rejects image and video uploads over the 50 MB media limit" do
+    presentation = Presentation.create!(title: "Oversized media", source: "# Media")
+
+    Tempfile.create(["huge", ".png"]) do |file|
+      file.truncate(50.megabytes + 1)
+      upload = Rack::Test::UploadedFile.new(file.path, "image/png")
+      post upload_asset_presentation_path(presentation), params: { file: upload }, headers: { "Accept" => "application/json" }
+    end
+    assert_response :unprocessable_content
+    assert_equal "Media files must be 50 MB or smaller.", response.parsed_body["error"]
+
+    Tempfile.create(["huge", ".mp4"]) do |file|
+      file.truncate(50.megabytes + 1)
+      upload = Rack::Test::UploadedFile.new(file.path, "video/mp4")
+      post upload_asset_presentation_path(presentation), params: { file: upload }, headers: { "Accept" => "application/json" }
+    end
+    assert_response :unprocessable_content
+    assert_equal "Media files must be 50 MB or smaller.", response.parsed_body["error"]
+
+    assert_empty presentation.assets.reload
+  end
+
   test "history lists revisions newest first with their payload fields" do
     presentation = Presentation.create!(title: "History deck", source: "# First")
     later = presentation.work_revisions.create!(

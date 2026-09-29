@@ -78,6 +78,19 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
     assert_equal bytes, response.body.b
   end
 
+  test "rejects image uploads over the 50 MB media limit" do
+    document = Document.create!(title: "Oversized document media", source: "# Media")
+    Tempfile.create(["huge", ".png"]) do |file|
+      file.truncate(50.megabytes + 1)
+      upload = Rack::Test::UploadedFile.new(file.path, "image/png")
+      post upload_asset_document_path(document), params: { file: upload }, headers: { "Accept" => "application/json" }
+    end
+
+    assert_response :unprocessable_content
+    assert_equal "Media files must be 50 MB or smaller.", response.parsed_body["error"]
+    assert_empty document.assets.reload
+  end
+
   test "history lists revisions newest first with their payload fields" do
     document = Document.create!(title: "History document", source: "# First")
     later = document.work_revisions.create!(
