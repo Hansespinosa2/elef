@@ -1,6 +1,28 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { readFile } from "node:fs/promises"
+import { performance } from "node:perf_hooks"
+
+async function importVendoredModule(filename, imports = {}) {
+  const vendorRoot = new URL("../../vendor/javascript/", import.meta.url)
+  let moduleSource = await readFile(new URL(filename, vendorRoot), "utf8")
+  for (const [specifier, url] of Object.entries(imports)) {
+    moduleSource = moduleSource.replaceAll(JSON.stringify(specifier), JSON.stringify(url))
+  }
+  const url = `data:text/javascript;base64,${Buffer.from(moduleSource).toString("base64")}`
+  return { url, module: await import(url) }
+}
+
+const lezerCommon = await importVendoredModule("@lezer--common.js")
+const findClusterBreak = await importVendoredModule("@marijn--find-cluster-break.js")
+const lezerHighlight = await importVendoredModule("@lezer--highlight.js", { "@lezer/common": lezerCommon.url })
+const lezerMarkdown = await importVendoredModule("@lezer--markdown.js", {
+  "@lezer/common": lezerCommon.url,
+  "@lezer/highlight": lezerHighlight.url
+})
+const codemirrorState = await importVendoredModule("@codemirror--state.js", {
+  "@marijn/find-cluster-break": findClusterBreak.url
+})
 
 const source = (await readFile(new URL("../../app/javascript/controllers/math_shorthand_controller.js", import.meta.url), "utf8"))
   .replace('import { Controller } from "@hotwired/stimulus"', "class Controller {}")
@@ -326,4 +348,43 @@ test("uses the editor syntax tree to classify code and scan only the active math
   }
   assert.equal(math.editorSourceContextAt(fencedEditor, 15), "mermaid")
   assert.equal(math.editorInsideMath(fencedEditor, 15), false)
+})
+
+test("keeps synchronous math assist within the performance gate during 1,000 real editor-state edits", (t) => {
+  const { EditorState } = codemirrorState.module
+  const body = "x + ".repeat(1250)
+  const source = `$$${body}$$`
+  assert.equal(body.length, 5000)
+
+  let editorState = EditorState.create({ doc: source })
+  let viewState = { doc: editorState.doc, tree: lezerMarkdown.module.parser.parse(editorState.doc.toString()) }
+  const editor = { view: { get state() { return viewState } } }
+  const editPosition = 2 + 4500
+  const measurements = []
+
+  for (let edit = 0; edit < 1100; edit += 1) {
+    const replacement = edit % 2 === 0 ? "y" : "x"
+    editorState = editorState.update({
+      changes: { from: editPosition, to: editPosition + 1, insert: replacement }
+    }).state
+    viewState = {
+      doc: editorState.doc,
+      tree: lezerMarkdown.module.parser.parse(editorState.doc.toString())
+    }
+
+    const startedAt = performance.now()
+    const chain = math.mathShorthandAtEditor(editor, editPosition + 1)
+    const elapsed = performance.now() - startedAt
+    assert.equal(chain, null)
+    if (edit >= 100) measurements.push(elapsed)
+  }
+
+  const sorted = measurements.toSorted((a, b) => a - b)
+  const p95 = sorted[Math.ceil(sorted.length * 0.95) - 1]
+  const p99 = sorted[Math.ceil(sorted.length * 0.99) - 1]
+  const maximum = sorted.at(-1)
+  t.diagnostic(`Math assist: p95 ${p95.toFixed(3)} ms, p99 ${p99.toFixed(3)} ms, max ${maximum.toFixed(3)} ms`)
+  assert.ok(p95 < 5, `p95 was ${p95.toFixed(3)} ms (limit 5 ms)`)
+  assert.ok(p99 < 10, `p99 was ${p99.toFixed(3)} ms (limit 10 ms)`)
+  assert.ok(maximum < 16, `maximum was ${maximum.toFixed(3)} ms (limit 16 ms)`)
 })
