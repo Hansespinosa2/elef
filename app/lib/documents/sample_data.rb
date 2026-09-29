@@ -46,6 +46,82 @@ module Documents
         MARKDOWN
       },
       {
+        id: "document-design-principles",
+        title: "Fixture: Elef design principles",
+        purpose: "Describe ten source-first, recoverable principles demonstrated by Elef's README and core code.",
+        source: <<~MARKDOWN
+          ---
+          theme: match
+          typography: book
+          ---
+          # Fixture: Elef design principles
+
+          These principles describe behavior visible in Elef's README and implementation.
+          They are a compact guide to the contracts the editor, parser, renderer, and
+          persistence layer already share.
+
+          ## 1. Markdown stays canonical
+
+          Elef stores raw Markdown as a work's source. Parsers, previews, and exports
+          derive their output from that source, so authors can inspect, copy, review,
+          and reuse the content without treating generated HTML as the editable record.
+
+          ## 2. One source speaks two modes
+
+          Documents and slide decks use the same `Source::Document` parser and `Work`
+          model. The mode decides whether standalone, un-fenced `---` lines divide
+          slides; the authored Markdown remains the source in either mode.
+
+          ## 3. Syntax depends on context
+
+          Front matter is read at the start of a source, and delimiter-looking lines
+          inside fenced code stay code. The parser gives syntax meaning from its
+          context, preserving examples and ordinary Markdown content.
+
+          ## 4. Visual edits still write Markdown
+
+          The editor maps rendered blocks to source ranges. Visual and source modes
+          therefore edit the same Markdown string, while source offsets keep
+          selections, formatting, and structured edits connected to their content.
+
+          ## 5. Never leave save state invisible
+
+          Autosave reports unsaved, saving, saved, timeout, and error states. It
+          writes a browser recovery copy before sending a save request and warns the
+          author when that recovery storage is unavailable.
+
+          ## 6. Conflicts preserve author choices
+
+          A stale save returns the current server version and a recovery revision.
+          The editor lets authors keep their local draft or discard it for the server
+          version, so concurrent edits have an explicit resolution path.
+
+          ## 7. History is part of the work
+
+          Revisions retain source snapshots, digests, parent revisions, and reasons
+          such as checkpoint, recovery, restore, and publish. Restore and presentation
+          lineage keep the origin of later work available for review.
+
+          ## 8. Missing links stay legible
+
+          Resolved document links navigate to their targets; missing links render as
+          visible unresolved text. The document graph deduplicates repeated edges
+          while allowing cycles and standalone documents.
+
+          ## 9. Treat source as untrusted input
+
+          The Markdown renderer filters raw HTML, escapes generated attributes, and
+          rejects unsafe link protocols. Uploaded media passes through a controlled
+          resolver, keeping useful Markdown features within clear output boundaries.
+
+          ## 10. Prove the whole writing loop
+
+          Rails views, Turbo, Stimulus, and importmap provide the interface. Tests
+          cover parsing, rendering, request boundaries, and headless browser workflows;
+          CI builds Tailwind and runs against PostgreSQL and SQLite.
+        MARKDOWN
+      },
+      {
         id: "document-components",
         title: "Fixture: Rich components",
         purpose: "Prove tables, fenced code, inline and display math, and safe media in a document.",

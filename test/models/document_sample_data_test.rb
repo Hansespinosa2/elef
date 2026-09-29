@@ -19,6 +19,24 @@ class DocumentSampleDataTest < ActiveSupport::TestCase
     assert_equal records.length, records.map(&:title).uniq.length
   end
 
+  test "loads ten concise Elef design principles as a rendered document" do
+    sample = Documents::SampleData::SAMPLES.find { |entry| entry[:id] == "document-design-principles" }
+    assert sample
+
+    headings = sample[:source].scan(/^## \d+\. (.+)$/)
+    assert_equal 10, headings.length
+
+    sections = sample[:source].split(/^## \d+\. /).drop(1)
+    sections.each_with_index do |section, index|
+      explanation = section.lines.drop(1).join(" ")
+      assert_operator explanation.split.size, :<=, 100, "#{headings[index]} explanation should be at most 100 words"
+    end
+
+    document = Documents::SampleData.load!.records.find { |record| record.sample_id == sample[:id] }
+    assert document
+    assert_equal 10, document.preview_html.scan(/<h2(?:\s|>)/).length
+  end
+
   test "reloads managed documents idempotently and preserves unrelated documents" do
     unrelated = Document.create!(title: "Personal notes", source: "# Keep me")
 
