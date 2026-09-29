@@ -1725,7 +1725,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
     assert drop_result["dragoverPrevented"]
     assert drop_result["dropPrevented"]
-    assert_selector ".media-upload-status", text: "Only image files can be dropped here — to use an image from a web page, save it first.", wait: 5
+    assert_selector ".media-upload-status", text: "Only image files can be dropped here — to use an image from a web page, save it first.", wait: 8
     assert_equal "false", page.find(".media-upload-status")["aria-busy"]
     assert_equal before_drop, page.evaluate_script("document.querySelector('.source-field').editorController.value")
   end
@@ -1770,6 +1770,36 @@ class DocumentsTest < ApplicationSystemTestCase
     assert result["prevented"]
     assert_equal "copy", result["dropEffect"]
     assert result["hasDropTargetClass"]
+  end
+
+  test "source mode ignores plain text drops so CodeMirror retains native behavior" do
+    document = Document.create!(title: "Plain text drop", source: "# Plain text drop\n\nExisting text.")
+    visit edit_document_path(document, editor_mode: "source")
+
+    before_value = page.evaluate_script("document.querySelector('.source-field').editorController.value")
+
+    result = page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      const transfer = new DataTransfer();
+      transfer.setData('text/plain', 'ordinary words');
+      const options = { bubbles: true, cancelable: true, dataTransfer: transfer, clientX: 100, clientY: 100 };
+      const dragover = new DragEvent('dragover', options);
+      const drop = new DragEvent('drop', options);
+      editor.view.contentDOM.dispatchEvent(dragover);
+      editor.view.contentDOM.dispatchEvent(drop);
+      const status = document.querySelector('.media-upload-status');
+      return {
+        dragoverPrevented: dragover.defaultPrevented,
+        status: status?.textContent,
+        busy: status?.getAttribute('aria-busy'),
+        value: editor.value
+      };
+    JAVASCRIPT
+
+    refute result["dragoverPrevented"]
+    assert_equal "", result["status"].to_s
+    assert_equal "false", result["busy"]
+    assert_includes result["value"], "ordinary words"
   end
 
   test "visual edits preserve nested task lists and untouched item formatting" do

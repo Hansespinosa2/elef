@@ -59,12 +59,6 @@ export function isMediaTransferTypes(types) {
 export function urlFromTransfer(transfer) {
   if (!transfer) return null
 
-  const uriList = transfer.getData?.("text/uri-list")
-  if (uriList) {
-    const uri = uriList.split(/\r?\n/).map(line => line.trim()).find(line => line && !line.startsWith("#"))
-    if (uri) return uri
-  }
-
   const html = transfer.getData?.("text/html")
   if (html) {
     if (typeof DOMParser !== "undefined") {
@@ -77,6 +71,12 @@ export function urlFromTransfer(transfer) {
       const match = html.match(/<img[^>]+src=["']([^"']+)["']/i)
       if (match?.[1]) return match[1]
     }
+  }
+
+  const uriList = transfer.getData?.("text/uri-list")
+  if (uriList) {
+    const uri = uriList.split(/\r?\n/).map(line => line.trim()).find(line => line && !line.startsWith("#"))
+    if (uri) return uri
   }
 
   const plain = transfer.getData?.("text/plain")?.trim()
@@ -196,6 +196,8 @@ export default class extends Controller {
 
   async sourceDrop(event) {
     if (!this.isSourceEditorTarget(event.currentTarget)) return
+    const types = Array.from(event.dataTransfer?.types || [])
+    if (!isMediaTransferTypes(types)) return
 
     const editor = this.editor
     if (!editor?.view) {
@@ -244,7 +246,10 @@ export default class extends Controller {
   async fileFromUrl(url) {
     if (!url) return null
     try {
-      const response = await fetch(url)
+      const signal = typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function"
+        ? AbortSignal.timeout(5000)
+        : undefined
+      const response = await fetch(url, { signal })
       if (!response.ok) return null
       const blob = await response.blob()
 

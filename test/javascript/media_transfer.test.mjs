@@ -68,6 +68,17 @@ test("urlFromTransfer extracts image source from HTML markup", () => {
   assert.equal(urlFromTransfer(transfer), "https://example.com/preview.png")
 })
 
+test("urlFromTransfer prefers img src over link href when image is wrapped in anchor", () => {
+  const transfer = {
+    getData: (type) => {
+      if (type === "text/uri-list") return "https://example.com/article"
+      if (type === "text/html") return '<a href="https://example.com/article"><img src="https://example.com/photo.png"></a>'
+      return ""
+    }
+  }
+  assert.equal(urlFromTransfer(transfer), "https://example.com/photo.png")
+})
+
 test("urlFromTransfer extracts plain text URLs", () => {
   const transfer = {
     getData: (type) => (type === "text/plain" ? "https://example.com/logo.webp" : "")
