@@ -14,7 +14,9 @@ export function markdownForVisibleText(markdown, text, kind, element = null, { d
   const allMathElements = allMathElementsFor(element)
   const activeCount = allMathElements.filter((candidate) => candidate.dataset.editorMathActive === "true").length
   const sourceAtoms = sourceAtomCounts(source)
-  if (element?.querySelectorAll && sourceAtoms.total !== (protectedElements.length + activeCount)) return source
+  const expectedAtoms = protectedElements.length + activeCount
+  if (element?.querySelectorAll && sourceAtoms.total !== expectedAtoms &&
+    !hasMatchingActiveMathDelimiter(source, allMathElements, sourceAtoms.total, expectedAtoms)) return source
   const structured = kind === "list" || kind === "quote"
   const sourceText = documentMode && structured ? String(text || "").replace(/\u00a0/g, " ") : rawValue
   const atomText = protectedElements.length ? visibleTextWithProtectedAtoms(element, protectedElements.length) : sourceText
@@ -42,7 +44,10 @@ export function sourceOffsetForVisiblePosition(source, element, visiblePosition)
   const protectedElements = protectedElementsFor(element)
   const allMathElements = allMathElementsFor(element)
   const activeCount = allMathElements.filter((candidate) => candidate.dataset.editorMathActive === "true").length
-  if (sourceAtomCounts(source).total !== (protectedElements.length + activeCount)) return null
+  const sourceAtoms = sourceAtomCounts(source).total
+  const expectedAtoms = protectedElements.length + activeCount
+  if (sourceAtoms !== expectedAtoms &&
+    !hasMatchingActiveMathDelimiter(source, allMathElements, sourceAtoms, expectedAtoms)) return null
 
   const projection = inlineProjection(source, 0, protectedElements, 0, inlineFormatBudget(element), allMathElements)
   return projection.boundaries[visiblePosition] ?? null
@@ -562,6 +567,35 @@ export function protectedElementsFor(element) {
 
 export function allMathElementsFor(element) {
   return [...(element?.querySelectorAll?.("[data-editor-math-source], [data-editor-math-active]") || [])]
+}
+
+function hasMatchingActiveMathDelimiter(source, allMathElements, sourceAtoms, expectedAtoms) {
+  const missingAtoms = expectedAtoms - sourceAtoms
+  if (missingAtoms <= 0) return false
+
+  let matched = 0
+  const availableDelimiters = new Map()
+  allMathElements.forEach((element) => {
+    if (matched >= missingAtoms || element.dataset.editorMathActive !== "true") return
+
+    const open = element.dataset.editorMathOpen || "$"
+    const close = element.dataset.editorMathClose || open
+    const delimiter = `${open}${close}`
+    if (!availableDelimiters.has(delimiter)) {
+      availableDelimiters.set(delimiter, source.split(delimiter).length - 1)
+    }
+
+    // The source can still have an empty expression while the active span
+    // already contains newly typed text and its pending projection has not
+    // flushed yet.
+    const available = availableDelimiters.get(delimiter)
+    if (available > 0) {
+      availableDelimiters.set(delimiter, available - 1)
+      matched += 1
+    }
+  })
+
+  return matched === missingAtoms
 }
 
 function atomMarker(index) {
