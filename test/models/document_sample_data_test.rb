@@ -93,7 +93,7 @@ class DocumentSampleDataTest < ActiveSupport::TestCase
     assert_includes positioned_html, "document-block position-left position-top"
     assert_includes positioned_html, "document-block position-center position-middle"
     assert_includes positioned_html, "document-block position-right position-bottom"
-    refute_includes positioned_html, ":::position"
+    refute_includes positioned_html, ":::align"
 
     boundaries_html = documents.fetch("document-boundaries").preview_html
     assert_includes boundaries_html, "<hr"

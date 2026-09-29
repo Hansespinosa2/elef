@@ -130,8 +130,8 @@ module Source
     def position_control(mapped)
       return "" unless mapped
 
-      horizontal = mapped.dig(:position, :horizontal)
-      options = [["Automatic position", "", horizontal.nil?]] + %w[left center right].map do |value|
+      horizontal = mapped.dig(:position, :horizontal) || "left"
+      options = %w[left center right].map do |value|
         [value.titleize, value, value == horizontal]
       end
       options = options.map do |label, value, selected|
@@ -139,7 +139,7 @@ module Source
         %(<option value="#{value}"#{selected}>#{ERB::Util.html_escape(label)}</option>)
       end.join
 
-      %(<label class="document-block-position-control" data-action="pointerdown->visual-editor#positionControlOpened">Align <select aria-label="Block alignment" data-visual-editor-block-id="#{ERB::Util.html_escape(mapped[:id].to_s)}" data-action="focus->visual-editor#positionControlOpened keydown->visual-editor#positionControlKeydown change->visual-editor#positionChanged">#{options}</select></label>)
+      %(<label class="document-block-position-control" data-action="pointerdown->visual-editor#positionControlOpened">Align <select aria-label="Block alignment" data-visual-editor-block-id="#{ERB::Util.html_escape(mapped[:id].to_s)}" data-action="focus->visual-editor#positionControlOpened keydown->visual-editor#positionControlKeydown change->visual-editor#alignmentChanged">#{options}</select></label>)
     end
 
     def editable_media(rendered, markdown)

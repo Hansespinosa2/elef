@@ -1770,15 +1770,15 @@ class DocumentsTest < ApplicationSystemTestCase
     document = Document.create!(
       title: "Inline positions",
       source: <<~MARKDOWN
-        :::position{left}
+        :::align{left}
 
         Left stays ordinary.
 
-        :::position{center}
+        :::align{center}
 
         Center stays ordinary.
 
-        :::position{right}
+        :::align{right}
 
         Right stays ordinary.
       MARKDOWN
@@ -1792,7 +1792,7 @@ class DocumentsTest < ApplicationSystemTestCase
   end
 
   test "positions document blocks visually and preserves directives across source mode" do
-    source = "# Alignment\n\nLeft block\n\n:::position{center middle}\n\nCentered block"
+    source = "# Alignment\n\nLeft block\n\n:::align{center center}\n\nCentered block"
     document = Document.create!(title: "Block alignment", source: source)
     visit edit_document_path(document)
     wait_for_fresh_projection
@@ -1802,13 +1802,13 @@ class DocumentsTest < ApplicationSystemTestCase
     left.find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
     find("[data-visual-editor-block-id='#{left_id}']").select("Right")
 
-    assert_field "Markdown source", with: /:::position\{right\}\n\nLeft block/, wait: 5
+    assert_field "Markdown source", with: /:::align\{right\}\n\nLeft block/, wait: 5
     right_aligned = find(".document-editor-block.position-right", text: "Left block", wait: 5)
     assert_equal left_id, right_aligned["data-editor-block-id"]
     assert_equal left_id, page.evaluate_script("document.activeElement?.dataset.editorBlockId")
     assert_equal "right", page.evaluate_script("getComputedStyle(arguments[0]).textAlign", right_aligned)
     type_visual_text(".document-editor-block", "Left block", "Updated left block")
-    assert_field "Markdown source", with: /:::position\{right\}\n\nUpdated left block/, wait: 5
+    assert_field "Markdown source", with: /:::align\{right\}\n\nUpdated left block/, wait: 5
     page.execute_script("document.activeElement.blur()")
     wait_for_fresh_projection
 
@@ -1819,34 +1819,32 @@ class DocumentsTest < ApplicationSystemTestCase
     centered_control = find("[data-visual-editor-block-id='#{centered['data-editor-block-id']}']")
     centered_control.select("Right")
 
-    assert_field "Markdown source", with: /:::position\{right middle\}/, wait: 5
+    assert_field "Markdown source", with: /:::align\{center right\}/, wait: 5
     assert_selector ".document-editor-block.position-right", text: "Centered block", wait: 5
     right_aligned = find(".document-editor-block.position-right", text: "Centered block")
     assert_equal "right", page.evaluate_script("getComputedStyle(arguments[0]).textAlign", right_aligned)
     right_aligned.find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
     find("[data-visual-editor-block-id='#{right_aligned['data-editor-block-id']}']").select("Left")
-    assert_field "Markdown source", with: /:::position\{left middle\}/, wait: 5
+    assert_field "Markdown source", with: /:::align\{center left\}/, wait: 5
     left_aligned = find(".document-editor-block.position-left", text: "Centered block", wait: 5)
     assert_equal "left", page.evaluate_script("getComputedStyle(arguments[0]).textAlign", left_aligned)
     centered_id = left_aligned["data-editor-block-id"]
     left_aligned.find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
-    find("[data-visual-editor-block-id='#{centered_id}']").select("Automatic position")
-    wait_for_fresh_projection
-    refute_match(/:::position\{left middle\}/, find_field("Markdown source").value)
-    assert_equal "", find("[data-visual-editor-block-id='#{centered_id}']").value
+    assert_equal "left", find("[data-visual-editor-block-id='#{centered_id}']").value
 
     click_on "Source"
-    assert_field "Markdown source", with: /:::position\{right\}\n\nUpdated left block/
+    assert_field "Markdown source", with: /:::align\{right\}\n\nUpdated left block/
+    assert_field "Markdown source", with: /:::align\{center left\}\n\nCentered block/
     click_on "Visual"
     wait_for_fresh_projection
 
     centered = find(".document-editor-block", text: "Centered block")
-    refute_includes centered["class"], "position-left"
+    assert_includes centered["class"], "position-left"
     centered.find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
-    assert_equal "", find("[data-visual-editor-block-id='#{centered['data-editor-block-id']}']").value
+    assert_equal "left", find("[data-visual-editor-block-id='#{centered['data-editor-block-id']}']").value
     type_visual_text(".document-editor-block", "Centered block", "Updated centered block")
-    assert_field "Markdown source", with: /:::position\{right\}\n\nUpdated left block\n\nUpdated centered block/, wait: 5
-    refute_includes find(".editor-projection").text, ":::position"
+    assert_field "Markdown source", with: /:::align\{right\}\n\nUpdated left block\n\n:::align\{center left\}\n\nUpdated centered block/, wait: 5
+    refute_includes find(".editor-projection").text, ":::align"
   end
 
   test "positions the first document block when no source content precedes it" do
@@ -1857,18 +1855,18 @@ class DocumentsTest < ApplicationSystemTestCase
     block = find(".document-editor-block", text: "Test")
     block_id = block["data-editor-block-id"]
     block.find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
-    find("[data-visual-editor-block-id='#{block_id}']").select("Left")
-
-    assert_field "Markdown source", with: /\A:::position\{left\}\n\nTest\z/, wait: 5
+    alignment = find("[data-visual-editor-block-id='#{block_id}']")
+    assert_equal "left", alignment.value
+    assert_field "Markdown source", with: "Test"
 
     find(".document-editor-block[data-editor-block-id='#{block_id}']").find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
-    find("[data-visual-editor-block-id='#{block_id}']").select("Center")
+    alignment.select("Center")
 
-    assert_field "Markdown source", with: /\A:::position\{center\}\n\nTest\z/, wait: 5
+    assert_field "Markdown source", with: /\A:::align\{center\}\n\nTest\z/, wait: 5
 
     find(".document-editor-block[data-editor-block-id='#{block_id}']").find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
     find("[data-visual-editor-block-id='#{block_id}']").select("Right")
-    assert_field "Markdown source", with: /\A:::position\{right\}\n\nTest\z/, wait: 5
+    assert_field "Markdown source", with: /\A:::align\{right\}\n\nTest\z/, wait: 5
   end
 
   test "pins the block alignment control until selection is dismissed" do
@@ -1915,13 +1913,13 @@ class DocumentsTest < ApplicationSystemTestCase
 
     block.find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
     control.select("Center")
-    assert_field "Markdown source", with: /\A:::position\{center\}\n\n# Untitled document\z/, wait: 5
+    assert_field "Markdown source", with: /\A:::align\{center\}\n\n# Untitled document\z/, wait: 5
     centered_heading = find(".document-editor-block.position-center h1", text: "Untitled document", wait: 5)
     assert_equal "center", page.evaluate_script("getComputedStyle(arguments[0]).textAlign", centered_heading)
   end
 
   test "changes a position directive on the first document block" do
-    document = Document.create!(title: "Change first block alignment", source: ":::position{right}\n\nTest")
+    document = Document.create!(title: "Change first block alignment", source: ":::align{right}\n\nTest")
     visit edit_document_path(document)
     wait_for_fresh_projection
 
@@ -1930,7 +1928,7 @@ class DocumentsTest < ApplicationSystemTestCase
     block.find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
     find("[data-visual-editor-block-id='#{block_id}']").select("Center")
 
-    assert_field "Markdown source", with: /\A:::position\{center\}\n\nTest\z/, wait: 5
+    assert_field "Markdown source", with: /\A:::align\{center\}\n\nTest\z/, wait: 5
   end
 
   test "changes a position directive added in source mode" do
@@ -1940,25 +1938,25 @@ class DocumentsTest < ApplicationSystemTestCase
 
     click_on "Source"
     page.execute_script(<<~JAVASCRIPT)
-      document.querySelector(".source-field").editorController.replaceRange(":::position{right}\\n\\n", 0, 0)
+      document.querySelector(".source-field").editorController.replaceRange(":::align{right}\\n\\n", 0, 0)
     JAVASCRIPT
-    assert_field "Markdown source", with: /\A:::position\{right\}\n\nTest\z/, wait: 5
+    assert_field "Markdown source", with: /\A:::align\{right\}\n\nTest\z/, wait: 5
     click_on "Visual"
     wait_for_fresh_projection
-    assert_field "Markdown source", with: /\A:::position\{right\}\n\nTest\z/, wait: 5
+    assert_field "Markdown source", with: /\A:::align\{right\}\n\nTest\z/, wait: 5
 
     block = find(".document-editor-block", text: "Test")
     block_id = block["data-editor-block-id"]
     block.find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
     find("[data-visual-editor-block-id='#{block_id}']").select("Center")
 
-    assert_field "Markdown source", with: /\A:::position\{center\}\n\nTest\z/, wait: 5
+    assert_field "Markdown source", with: /\A:::align\{center\}\n\nTest\z/, wait: 5
   end
 
   test "deleting an empty positioned block also removes its position directive" do
     document = Document.create!(
       title: "Delete positioned block",
-      source: "# Keep\n\n:::position{center}\n\nDelete me\n\nTail"
+      source: "# Keep\n\n:::align{center}\n\nDelete me\n\nTail"
     )
     visit edit_document_path(document)
 
@@ -1979,7 +1977,7 @@ class DocumentsTest < ApplicationSystemTestCase
   end
 
   test "deleting a single block in a grouped position removes its opening and closing directives" do
-    source = "# Keep\n\n:::position{center}\n\nDelete me\n\n:::\n\nTail"
+    source = "# Keep\n\n:::align{center}\n\nDelete me\n\n:::\n\nTail"
     map = Source::Document.editor_map(source, mode: :document)
     positioned = map[:slides].first[:blocks].find { |candidate| candidate[:markdown] == "Delete me" }
     assert_equal "group", positioned[:position_scope]

@@ -135,13 +135,16 @@ slide; a single dominant image, table, or fenced code block receives a focused
 composition; and a single short prose block becomes a statement slide. Ambiguous
 content remains a body slide.
 
-Authors may add bounded block positioning with `:::position{...}` using the values
-`left`, `center`, `right`, `top`, `middle`, and `bottom`. A directive can apply to
-the next Markdown block or wrap multiple blocks until a closing `:::`. Extension
-directives are removed from rendered content and warned about when malformed.
-Whitespace before the opening brace is accepted; visual controls write the
-canonical form without that space. Ordinary Markdown is never rejected merely
-because it does not match a layout shape.
+Authors may align a block with `:::align{left}`, `:::align{center}`, or
+`:::align{center left}`. A single value sets horizontal alignment; two values set
+vertical then horizontal alignment (`top`, `center`, or `bottom`, followed by
+`left`, `center`, or `right`). A directive can apply to the next Markdown block
+or wrap multiple blocks until a closing `:::`. The older `:::position{...}` form
+remains readable for existing documents. Extension directives are removed from
+rendered content and warned about when malformed. Whitespace before the opening
+brace is accepted; visual controls write the canonical form without that space.
+Ordinary Markdown is never rejected merely because it does not match a layout
+shape.
 
 ### 4.4 Semantic components and layout
 

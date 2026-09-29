@@ -173,29 +173,29 @@ module Documents
       {
         id: "document-positioned-content",
         title: "Fixture: Positioned content",
-        purpose: "Prove document block positioning without exposing the positioning directive.",
+        purpose: "Prove document block alignment without exposing the alignment directive.",
         source: <<~MARKDOWN
           ---
           theme: dark
           ---
           # Fixture: Positioned content
 
-          Position directives are useful when a document needs a deliberately
+          Align directives are useful when a document needs a deliberately
           composed block while the surrounding source stays easy to read.
 
-          :::position{left top}
+          :::align{top left}
 
           ### Left and top
 
           This block demonstrates the first supported alignment combination.
 
-          :::position{center middle}
+          :::align{center center}
 
           ### Center and middle
 
           This block is centered within the document preview.
 
-          :::position{right bottom}
+          :::align{bottom right}
 
           ### Right and bottom
 
@@ -384,11 +384,11 @@ module Documents
 
           Content after an unknown directive remains readable.
 
-          :::position{diagonal}
+          :::align{diagonal}
 
-          This malformed position should produce a warning.
+          This malformed alignment should produce a warning.
 
-          :::position{left
+          :::align{left
 
           This incomplete directive is another malformed boundary.
 

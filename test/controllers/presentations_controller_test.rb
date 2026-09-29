@@ -555,7 +555,7 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
 
   test "renders inferred layouts and positioned blocks in the saved preview" do
     presentation = Presentation.create!(title: "Automatic layouts", source: <<~MARKDOWN)
-      :::position{right top}
+      :::align{top right}
       # Compare
 
       ## Left
@@ -568,7 +568,7 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
       ---
       # Positioned
 
-      :::position{center middle}
+      :::align{center center}
 
       Center this message.
     MARKDOWN
@@ -579,7 +579,7 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_select ".slide-two-column .slide-regions"
     assert_select ".slide-two-column .slide-title.slide-block.position-right.position-top", text: "Compare"
     assert_select ".slide-statement .position-center.position-middle", text: /Center this message/
-    assert_no_match /:::position/, response.body
+    assert_no_match /:::align/, response.body
   end
 
   test "renders margin metadata and slide count in both views" do

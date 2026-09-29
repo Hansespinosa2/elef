@@ -26,6 +26,15 @@ module PresentationsHelper
     "position-#{position.horizontal} position-#{position.vertical}"
   end
 
+  def alignment_value(position)
+    return "left" unless position
+    return position.horizontal if position.vertical == "top"
+    return position.horizontal unless position.vertical_explicit
+
+    vertical = position.vertical == "middle" ? "center" : position.vertical
+    "#{vertical} #{position.horizontal}"
+  end
+
   def total_slides(presentation = nil)
     (presentation || @presentation)&.slides&.length || 0
   end

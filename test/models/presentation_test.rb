@@ -10,10 +10,10 @@ class PresentationTest < ActiveSupport::TestCase
 
   test "new presentations use source directives to position the starter title and body" do
     expected_source = <<~MARKDOWN.chomp
-      :::position{center middle}
+      :::align{center center}
       # Untitled Document
 
-      :::position {center}
+      :::align {center}
       Start writing Markdown here.
     MARKDOWN
 
@@ -226,11 +226,11 @@ class PresentationTest < ActiveSupport::TestCase
     document = Source::Document.parse(<<~MARKDOWN)
       # Positioned
 
-      :::position{center middle}
+      :::align{center center}
 
       A centered message.
 
-      :::position{right bottom}
+      :::align{bottom right}
       - One
       - Two
     MARKDOWN
@@ -243,13 +243,35 @@ class PresentationTest < ActiveSupport::TestCase
     assert_empty document.warnings
   end
 
+  test "align directives use vertical then horizontal order and retain position compatibility" do
+    document = Source::Document.parse(<<~MARKDOWN)
+      :::align{center left}
+
+      Centered vertically and aligned left.
+
+      :::align{left}
+
+      Left aligned.
+
+      :::position{right bottom}
+
+      Existing source still works.
+    MARKDOWN
+
+    positions = document.slides.first.blocks.map(&:position)
+
+    assert_equal [["left", "middle"], ["left", "top"], ["right", "bottom"]],
+      positions.map { |position| [position.horizontal, position.vertical] }
+    assert_equal [true, false, true], positions.map(&:vertical_explicit)
+  end
+
   test "records whether a vertical position was explicitly requested" do
     document = Source::Document.parse(<<~MARKDOWN)
-      :::position{center}
+      :::align{center}
 
       Horizontal only.
 
-      :::position{center middle}
+      :::align{center center}
 
       Horizontal and vertical.
     MARKDOWN
@@ -258,7 +280,7 @@ class PresentationTest < ActiveSupport::TestCase
   end
 
   test "builds an ephemeral editor map with UTF-16 ranges and known directives" do
-    source = "---\npresentationTheme: dark\n---\n# 🚀 Intro\n\n:::position{center middle}\n\nA **message**.\n\n:::\n---\n:::unknown\n\n# Next"
+    source = "---\npresentationTheme: dark\n---\n# 🚀 Intro\n\n:::align{center center}\n\nA **message**.\n\n:::\n---\n:::unknown\n\n# Next"
 
     map = Source::Document.editor_map(source, source_name: "Deck", mode: :presentation)
 
@@ -277,7 +299,7 @@ class PresentationTest < ActiveSupport::TestCase
   end
 
   test "maps a single-block position directive without leaking it to the next block" do
-    source = "# Slide\n\n:::position{center}\n\nFirst\n\nSecond"
+    source = "# Slide\n\n:::align{center}\n\nFirst\n\nSecond"
 
     blocks = Source::Document.editor_map(source, mode: :presentation)[:slides].first[:blocks]
 
@@ -286,7 +308,7 @@ class PresentationTest < ActiveSupport::TestCase
   end
 
   test "maps shared position scopes to every block inside the group" do
-    source = "# Slide\n\n:::position{center}\n\nFirst\n\nSecond\n\n:::\n\nOutside"
+    source = "# Slide\n\n:::align{center}\n\nFirst\n\nSecond\n\n:::\n\nOutside"
 
     blocks = Source::Document.editor_map(source, mode: :presentation)[:slides].first[:blocks]
 
@@ -484,7 +506,8 @@ class PresentationTest < ActiveSupport::TestCase
     assert_includes layouts.slides.map(&:layout), "statement"
     assert_equal 5, layouts.slides.count { |slide| slide.layout == "three-column" }
     %w[left center right].product(%w[top middle bottom]).each do |horizontal, vertical|
-      assert_includes layouts.source, ":::position{#{horizontal} #{vertical}}"
+      vertical_value = vertical == "middle" ? "center" : vertical
+      assert_includes layouts.source, ":::align{#{vertical_value} #{horizontal}}"
     end
     assert layouts.slides.any? { |slide| slide.blocks.any? { |block| block.position&.horizontal == "center" && block.position.vertical == "middle" } }
     assert layouts.slides.any? { |slide| slide.blocks.any? { |block| block.position&.horizontal == "right" && block.position.vertical == "bottom" } }
