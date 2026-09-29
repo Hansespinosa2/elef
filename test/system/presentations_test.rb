@@ -1380,6 +1380,130 @@ class PresentationsTest < ApplicationSystemTestCase
     media_file&.close!
   end
 
+  test "source mode pastes and drops local images at the cursor and keeps text paste working" do
+    presentation = Presentation.create!(title: "Source image gestures", source: "# Source image gestures\n\nLead text.\n\nTail text.")
+    visit edit_presentation_path(presentation, editor_mode: "source")
+    png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+i9MwAAAAASUVORK5CYII="
+
+    paste_result = page.execute_script(<<~JAVASCRIPT, png)
+      const editor = document.querySelector('.source-field').editorController;
+      const insertion = editor.value.indexOf('Tail text.');
+      editor.setSelectionRange(insertion);
+      editor.focus();
+      const bytes = Uint8Array.from(atob(arguments[0]), character => character.charCodeAt(0));
+      const transfer = new DataTransfer();
+      transfer.items.add(new File([bytes], 'pasted-presentation.png', { type: 'image/png' }));
+      const event = new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: transfer });
+      editor.view.contentDOM.dispatchEvent(event);
+      return { prevented: event.defaultPrevented, sourceMode: editor.editingMode };
+    JAVASCRIPT
+    assert_equal "source", paste_result["sourceMode"]
+    assert paste_result["prevented"]
+    assert_selector ".media-upload-status", text: /pasted-presentation\.png added to the Markdown source/i, wait: 8
+
+    pasted_source = page.evaluate_script("document.querySelector('.source-field').editorController.value")
+    assert_operator pasted_source.index("Lead text."), :<, pasted_source.index("elef-asset:")
+    assert_operator pasted_source.index("elef-asset:"), :<, pasted_source.index("Tail text.")
+    assert_selector ".preview-pane img.presentation-media", count: 1, wait: 8
+    assert_operator page.evaluate_script("document.querySelector('.preview-pane img.presentation-media').naturalWidth"), :>, 0
+
+    drop_result = page.execute_script(<<~JAVASCRIPT, png)
+      const editor = document.querySelector('.source-field').editorController;
+      const insertion = editor.value.indexOf('Tail text.');
+      const coordinates = editor.view.coordsAtPos(insertion);
+      const resolvedPosition = editor.view.posAtCoords({ x: coordinates.left, y: (coordinates.top + coordinates.bottom) / 2 });
+      const bytes = Uint8Array.from(atob(arguments[0]), character => character.charCodeAt(0));
+      const transfer = new DataTransfer();
+      transfer.items.add(new File([bytes], 'dropped-presentation.png', { type: 'image/png' }));
+      const options = {
+        bubbles: true,
+        cancelable: true,
+        dataTransfer: transfer,
+        clientX: coordinates.left,
+        clientY: (coordinates.top + coordinates.bottom) / 2
+      };
+      const dragover = new DragEvent('dragover', options);
+      const drop = new DragEvent('drop', options);
+      editor.view.contentDOM.dispatchEvent(dragover);
+      editor.view.contentDOM.dispatchEvent(drop);
+      return { intendedPosition: insertion, resolvedPosition, dragoverPrevented: dragover.defaultPrevented, dropPrevented: drop.defaultPrevented };
+    JAVASCRIPT
+    assert drop_result["dragoverPrevented"], drop_result.inspect
+    assert drop_result["dropPrevented"], drop_result.inspect
+    assert_equal drop_result["intendedPosition"], drop_result["resolvedPosition"], drop_result.inspect
+    assert_selector ".media-upload-status", text: /dropped-presentation\.png added to the Markdown source/i, wait: 8
+
+    dropped_source = page.evaluate_script("document.querySelector('.source-field').editorController.value")
+    assert_equal 2, dropped_source.scan("elef-asset:").length
+    assert_operator dropped_source.index("elef-asset:"), :<, dropped_source.rindex("elef-asset:")
+    assert_operator dropped_source.rindex("elef-asset:"), :<, dropped_source.index("Tail text.")
+    assert_selector ".preview-pane img.presentation-media", count: 2, wait: 8
+    assert_equal 2, presentation.reload.assets.count
+    assert_selector '[data-autosave-target="status"]', exact_text: "Saved", wait: 8
+
+    text_paste = page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      editor.setSelectionRange(editor.value.length);
+      editor.focus();
+      const transfer = new DataTransfer();
+      transfer.setData('text/plain', 'ordinary pasted words');
+      const event = new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: transfer });
+      editor.view.contentDOM.dispatchEvent(event);
+      return { prevented: event.defaultPrevented, source: editor.value };
+    JAVASCRIPT
+    assert text_paste["prevented"]
+    assert_includes text_paste["source"], "ordinary pasted words"
+
+    before_unsupported_paste = page.evaluate_script("document.querySelector('.source-field').editorController.value")
+    unsupported_paste = page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      const transfer = new DataTransfer();
+      transfer.items.add(new File(['not an image'], 'notes.txt', { type: 'text/plain' }));
+      const event = new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: transfer });
+      editor.view.contentDOM.dispatchEvent(event);
+      return { prevented: event.defaultPrevented, source: editor.value };
+    JAVASCRIPT
+    assert unsupported_paste["prevented"]
+    assert_equal before_unsupported_paste, unsupported_paste["source"]
+    assert_selector ".media-upload-status", text: "Choose an image file to insert into source mode."
+    assert_equal "false", page.find(".media-upload-status")["aria-busy"]
+  end
+
+  test "pasting a local image into the presentation title field does not intercept it" do
+    presentation = Presentation.create!(title: "Untouched title", source: "# Untouched title\n\nKeep this source.")
+    visit edit_presentation_path(presentation, editor_mode: "source")
+
+    result = page.execute_script(<<~JAVASCRIPT)
+      const title = document.querySelector('.visual-editor-form .editor-title-input');
+      const source = document.querySelector('.source-field').editorController.value;
+      let uploadAttempts = 0;
+      window.fetch = (url, options = {}) => {
+        if (options.method === 'POST' && String(url).endsWith('/assets')) {
+          uploadAttempts += 1;
+          return Promise.resolve(new Response('{}', { status: 422, headers: { 'Content-Type': 'application/json' } }));
+        }
+        return Promise.reject(new Error('Unexpected request'));
+      };
+      const transfer = new DataTransfer();
+      transfer.items.add(new File(['image bytes'], 'title-paste.png', { type: 'image/png' }));
+      const event = new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: transfer });
+      title.dispatchEvent(event);
+      return {
+        prevented: event.defaultPrevented,
+        uploadAttempts,
+        source,
+        currentSource: document.querySelector('.source-field').editorController.value,
+        title: title.value
+      };
+    JAVASCRIPT
+
+    refute result["prevented"]
+    assert_equal 0, result["uploadAttempts"]
+    assert_equal "# Untouched title\n\nKeep this source.", result["source"]
+    assert_equal result["source"], result["currentSource"]
+    assert_equal "Untouched title", result["title"]
+  end
+
   test "print view selects draft content and sizes slides for one landscape page each" do
     media_bytes = Base64.decode64("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+i9MwAAAAASUVORK5CYII=")
     media_digest = Digest::SHA256.hexdigest(media_bytes)
@@ -1445,7 +1569,7 @@ class PresentationsTest < ApplicationSystemTestCase
       const transfer = new DataTransfer();
       const bytes = Uint8Array.from(atob("#{png}"), character => character.charCodeAt(0));
       transfer.items.add(new File([bytes], "pasted.png", { type: "image/png" }));
-      document.querySelector("form.visual-editor-form").dispatchEvent(new ClipboardEvent("paste", {
+      document.querySelector(".editor-projection [data-editor-block-id][contenteditable='true']").dispatchEvent(new ClipboardEvent("paste", {
         bubbles: true, cancelable: true, clipboardData: transfer
       }));
     JAVASCRIPT

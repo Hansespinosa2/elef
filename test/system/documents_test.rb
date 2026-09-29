@@ -1440,6 +1440,223 @@ class DocumentsTest < ApplicationSystemTestCase
     media_file&.close!
   end
 
+  test "source mode pastes and drops local images at the cursor and keeps text paste working" do
+    document = Document.create!(title: "Source image gestures", source: "# Source image gestures\n\nLead text.\n\nTail text.")
+    visit edit_document_path(document, editor_mode: "source")
+    png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+i9MwAAAAASUVORK5CYII="
+
+    paste_result = page.execute_script(<<~JAVASCRIPT, png)
+      const editor = document.querySelector('.source-field').editorController;
+      const insertion = editor.value.indexOf('Tail text.');
+      editor.setSelectionRange(insertion);
+      editor.focus();
+      const originalFetch = window.fetch.bind(window);
+      window.fetch = (url, options = {}) => {
+        if (options.method === 'POST' && String(url).endsWith('/assets')) {
+          const uploadedFile = options.body.get('file');
+          window.sourceImageUpload = { name: uploadedFile.name, type: uploadedFile.type };
+          window.fetch = originalFetch;
+          return new Promise((resolve, reject) => {
+            window.setTimeout(() => originalFetch(url, options).then(resolve, reject), 250);
+          });
+        }
+        return originalFetch(url, options);
+      };
+      const bytes = Uint8Array.from(atob(arguments[0]), character => character.charCodeAt(0));
+      const transfer = new DataTransfer();
+      transfer.items.add(new File([bytes], 'blob', { type: '' }));
+      const event = new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: transfer });
+      editor.view.contentDOM.dispatchEvent(event);
+      const status = document.querySelector('.media-upload-status');
+      return { prevented: event.defaultPrevented, sourceMode: editor.editingMode, progress: status.textContent, busy: status.getAttribute('aria-busy') };
+    JAVASCRIPT
+    assert_equal "source", paste_result["sourceMode"]
+    assert paste_result["prevented"]
+    assert_equal "Preparing image…", paste_result["progress"]
+    assert_equal "true", paste_result["busy"]
+    assert_selector ".media-upload-status", text: "Uploading blob.png…", wait: 5
+    assert_equal({ "name" => "blob.png", "type" => "image/png" }, page.evaluate_script("window.sourceImageUpload"))
+
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      const insertion = editor.value.indexOf('Tail text.');
+      editor.replaceRange('Inserted while importing. ', insertion, insertion);
+    JAVASCRIPT
+    assert_selector ".media-upload-status", text: /blob\.png added to the Markdown source/i, wait: 8
+
+    pasted_source = page.evaluate_script("document.querySelector('.source-field').editorController.value")
+    assert_operator pasted_source.index("Lead text."), :<, pasted_source.index("elef-asset:")
+    assert_operator pasted_source.index("elef-asset:"), :<, pasted_source.index("Inserted while importing.")
+    assert_operator pasted_source.index("Inserted while importing."), :<, pasted_source.index("Tail text.")
+    assert_selector ".preview-pane img.presentation-media", count: 1, wait: 8
+    assert_operator page.evaluate_script("document.querySelector('.preview-pane img.presentation-media').naturalWidth"), :>, 0
+
+    drop_result = page.execute_script(<<~JAVASCRIPT, png)
+      const editor = document.querySelector('.source-field').editorController;
+      const insertion = editor.value.indexOf('Tail text.');
+      const coordinates = editor.view.coordsAtPos(insertion);
+      const resolvedPosition = editor.view.posAtCoords({ x: coordinates.left, y: (coordinates.top + coordinates.bottom) / 2 });
+      const bytes = Uint8Array.from(atob(arguments[0]), character => character.charCodeAt(0));
+      const transfer = new DataTransfer();
+      transfer.items.add(new File([bytes], 'dropped-document.png', { type: 'image/png' }));
+      const options = {
+        bubbles: true,
+        cancelable: true,
+        dataTransfer: transfer,
+        clientX: coordinates.left,
+        clientY: (coordinates.top + coordinates.bottom) / 2
+      };
+      const dragover = new DragEvent('dragover', options);
+      const drop = new DragEvent('drop', options);
+      editor.view.contentDOM.dispatchEvent(dragover);
+      editor.view.contentDOM.dispatchEvent(drop);
+      const status = document.querySelector('.media-upload-status');
+      return { intendedPosition: insertion, resolvedPosition, dragoverPrevented: dragover.defaultPrevented, dropPrevented: drop.defaultPrevented, progress: status.textContent, busy: status.getAttribute('aria-busy') };
+    JAVASCRIPT
+    assert drop_result["dragoverPrevented"], drop_result.inspect
+    assert drop_result["dropPrevented"], drop_result.inspect
+    assert_equal drop_result["intendedPosition"], drop_result["resolvedPosition"], drop_result.inspect
+    assert_equal "Preparing image…", drop_result["progress"]
+    assert_equal "true", drop_result["busy"]
+    assert_selector ".media-upload-status", text: "Uploading dropped-document.png…", wait: 5
+    assert_selector ".media-upload-status", text: /dropped-document\.png added to the Markdown source/i, wait: 8
+
+    dropped_source = page.evaluate_script("document.querySelector('.source-field').editorController.value")
+    assert_equal 2, dropped_source.scan("elef-asset:").length
+    assert_operator dropped_source.index("elef-asset:"), :<, dropped_source.rindex("elef-asset:")
+    assert_operator dropped_source.rindex("elef-asset:"), :<, dropped_source.index("Tail text.")
+    assert_selector ".preview-pane img.presentation-media", count: 2, wait: 8
+    assert_equal 2, document.reload.assets.count
+    assert_selector '[data-autosave-target="status"]', exact_text: "Saved", wait: 8
+
+    before_failed_upload = page.evaluate_script("document.querySelector('.source-field').editorController.value")
+    failed_upload = page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      const originalFetch = window.fetch.bind(window);
+      window.fetch = (url, options = {}) => {
+        if (options.method === 'POST' && String(url).endsWith('/assets')) {
+          window.fetch = originalFetch;
+          return Promise.resolve(new Response(JSON.stringify({ error: 'Upload rejected.' }), {
+            status: 422,
+            headers: { 'Content-Type': 'application/json' }
+          }));
+        }
+        return originalFetch(url, options);
+      };
+      const transfer = new DataTransfer();
+      transfer.items.add(new File(['not a valid image'], 'failed-document.png', { type: 'image/png' }));
+      const event = new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: transfer });
+      editor.view.contentDOM.dispatchEvent(event);
+      return { prevented: event.defaultPrevented };
+    JAVASCRIPT
+    assert failed_upload["prevented"]
+    assert_selector ".media-upload-status", exact_text: "Upload rejected.", wait: 5
+    assert_equal "false", page.find(".media-upload-status")["aria-busy"]
+    assert_equal before_failed_upload, page.evaluate_script("document.querySelector('.source-field').editorController.value")
+
+    text_paste = page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      editor.setSelectionRange(editor.value.length);
+      editor.focus();
+      const transfer = new DataTransfer();
+      transfer.setData('text/plain', 'ordinary pasted words');
+      const event = new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: transfer });
+      editor.view.contentDOM.dispatchEvent(event);
+      return { prevented: event.defaultPrevented, source: editor.value };
+    JAVASCRIPT
+    assert text_paste["prevented"]
+    assert_includes text_paste["source"], "ordinary pasted words"
+
+    before_unsupported_paste = page.evaluate_script("document.querySelector('.source-field').editorController.value")
+    unsupported_paste = page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      const transfer = new DataTransfer();
+      transfer.items.add(new File(['not an image'], 'notes.txt', { type: 'text/plain' }));
+      const event = new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: transfer });
+      editor.view.contentDOM.dispatchEvent(event);
+      return { prevented: event.defaultPrevented, source: editor.value };
+    JAVASCRIPT
+    assert unsupported_paste["prevented"]
+    assert_equal before_unsupported_paste, unsupported_paste["source"]
+    assert_selector ".media-upload-status", text: "Choose an image file to insert into source mode."
+    assert_equal "false", page.find(".media-upload-status")["aria-busy"]
+  end
+
+  test "media transfer handling deduplicates file-list and item entries" do
+    document = Document.create!(title: "Media transfer deduplication", source: "# Media transfer deduplication")
+    visit edit_document_path(document, editor_mode: "source")
+
+    result = page.evaluate_async_script(<<~JAVASCRIPT)
+      const done = arguments[0];
+      const waitForMedia = () => {
+        const media = window.Stimulus.getControllerForElementAndIdentifier(document.querySelector('.visual-editor-form'), 'media');
+        if (!media) {
+          window.setTimeout(waitForMedia, 10);
+          return;
+        }
+        const listed = new File(['same bytes'], 'same.png', { type: 'image/png' });
+        const itemCopy = new File(['same bytes'], 'same.png', { type: 'image/png' });
+        let duplicateItemReads = 0;
+        const combined = media.filesFromTransfer({
+          files: [listed],
+          items: [{ kind: 'file', getAsFile: () => { duplicateItemReads += 1; return itemCopy; } }]
+        });
+        const fromItems = media.filesFromTransfer({
+          files: [],
+          items: [{ kind: 'file', getAsFile: () => itemCopy }]
+        });
+        done({ combinedCount: combined.length, duplicateItemReads, fallbackCount: fromItems.length });
+      };
+      waitForMedia();
+    JAVASCRIPT
+
+    assert_equal 1, result["combinedCount"]
+    assert_equal 0, result["duplicateItemReads"]
+    assert_equal 1, result["fallbackCount"]
+  end
+
+  test "source media paste and drop tolerate an unavailable editor and disconnect clears tracked ranges" do
+    document = Document.create!(title: "Source image readiness", source: "# Source image readiness\n\nKeep this source.")
+    visit edit_document_path(document, editor_mode: "source")
+    png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+i9MwAAAAASUVORK5CYII="
+
+    unavailable_result = page.execute_script(<<~JAVASCRIPT, png)
+      const sourceField = document.querySelector('.source-field');
+      const editor = sourceField.editorController;
+      const source = editor.value;
+      const surface = document.querySelector('.editor-surface');
+      const bytes = Uint8Array.from(atob(arguments[0]), character => character.charCodeAt(0));
+      const transfer = new DataTransfer();
+      transfer.items.add(new File([bytes], 'readiness.png', { type: 'image/png' }));
+      delete sourceField.editorController;
+      const paste = new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: transfer });
+      surface.dispatchEvent(paste);
+      const drop = new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: transfer, clientX: 0, clientY: 0 });
+      surface.dispatchEvent(drop);
+      sourceField.editorController = editor;
+      return { pastePrevented: paste.defaultPrevented, dropPrevented: drop.defaultPrevented, source, currentSource: editor.value };
+    JAVASCRIPT
+    refute unavailable_result["pastePrevented"]
+    refute unavailable_result["dropPrevented"]
+    assert_equal unavailable_result["source"], unavailable_result["currentSource"]
+    assert_selector ".media-upload-status", text: /source editor is not ready yet/i
+    assert_equal "false", page.find(".media-upload-status")["aria-busy"]
+
+    lifecycle_result = page.evaluate_async_script(<<~JAVASCRIPT)
+      const done = arguments[0];
+      const sourceField = document.querySelector('.source-field');
+      const editor = sourceField.editorController;
+      editor.trackMediaRange({ from: 0, to: 0 });
+      sourceField.remove();
+      requestAnimationFrame(() => requestAnimationFrame(() => done({
+        pendingRanges: editor.pendingMediaRanges.size,
+        destroyed: editor.destroyed
+      })));
+    JAVASCRIPT
+    assert_equal 0, lifecycle_result["pendingRanges"]
+    assert lifecycle_result["destroyed"]
+  end
+
   test "visual edits preserve nested task lists and untouched item formatting" do
     source = "- [ ] Keep **this**\n  - Nested [link](/path)\n- [x] Already done"
     document = Document.create!(title: "List preservation", source: source)

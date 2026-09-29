@@ -82,6 +82,8 @@ export default class extends Controller {
     this.editorController = this
     this.element.editorController = this
     this.destroyed = false
+    this.pendingMediaRanges = new Map()
+    this.nextMediaRangeId = 0
     this.vimEnabled = this.readBoolean(ENABLED_STORAGE_KEY)
     this.escapeKey = this.readEscapeKey()
     this.lineNumberMode = this.readLineNumberMode()
@@ -167,6 +169,7 @@ export default class extends Controller {
 
   disconnect() {
     this.destroyed = true
+    this.pendingMediaRanges?.clear()
     if (this.lineNumberFrame) cancelAnimationFrame(this.lineNumberFrame)
     this.form?.removeEventListener("submit", this.handleSubmit)
     this.resizeObserver?.disconnect()
@@ -422,12 +425,31 @@ export default class extends Controller {
     this.view.dispatch({ changes, userEvent: "input" })
   }
 
+  trackMediaRange(range) {
+    const id = ++this.nextMediaRangeId
+    const from = Math.max(0, Math.min(range.from, this.view.state.doc.length))
+    const to = Math.max(from, Math.min(range.to, this.view.state.doc.length))
+    this.pendingMediaRanges.set(id, { from, to, collapsed: from === to })
+    return id
+  }
+
+  consumeMediaRange(id) {
+    const range = this.pendingMediaRanges.get(id)
+    this.pendingMediaRanges.delete(id)
+    return range ? { from: range.from, to: range.to } : null
+  }
+
+  releaseMediaRange(id) {
+    this.pendingMediaRanges.delete(id)
+  }
+
   handleUpdate(update) {
     this.reportLivePreviewState(update.state)
     if (update.selectionSet) {
       this.element.dispatchEvent(new Event("elef:editor-selection-change"))
     }
     if (update.docChanged) {
+      this.mapPendingMediaRanges(update.changes)
       this.changedSinceFocusOut = true
       this.syncInput()
       this.refreshFrontmatterRange()
@@ -437,6 +459,23 @@ export default class extends Controller {
     if (update.selectionSet || update.docChanged) this.updateMode()
     if (update.selectionSet || update.docChanged || update.viewportChanged) this.scheduleLineNumberUpdate()
     this.syncMetadataToggle()
+  }
+
+  mapPendingMediaRanges(changes) {
+    // Replacing a value for an existing Map key is safe during iteration and keeps its insertion order.
+    for (const [id, range] of this.pendingMediaRanges) {
+      if (range.collapsed) {
+        // Left bias keeps concurrent insertions at one offset anchored before inserted text.
+        // Thus uploads started at the same cursor appear in reverse completion order.
+        const position = changes.mapPos(range.from, -1)
+        this.pendingMediaRanges.set(id, { from: position, to: position, collapsed: true })
+        continue
+      }
+
+      const from = changes.mapPos(range.from, 1)
+      const to = Math.max(from, changes.mapPos(range.to, -1))
+      this.pendingMediaRanges.set(id, { from, to, collapsed: from === to })
+    }
   }
 
   reportLivePreviewState(state) {
