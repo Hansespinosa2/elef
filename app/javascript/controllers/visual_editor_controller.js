@@ -9,7 +9,7 @@ import {
   visibleOffsetAtPoint,
   visibleOffsetForSourceOffset
 } from "controllers/editor_caret"
-import { handleMathClick, handleMathKeydown, syncActiveMath } from "controllers/editor_math"
+import { deRenderMath, handleMathClick, handleMathKeydown, syncActiveMath } from "controllers/editor_math"
 
 export default class extends Controller {
   static targets = ["projection"]
@@ -371,7 +371,7 @@ export default class extends Controller {
       const replacement = markdown + lineEnding + lineEnding + indentation + closingMarker
       this.replaceAndFocus(blockElement, start, end, replacement, {
         sourceOffset: start + markdown.length + lineEnding.length,
-        location: "block_end"
+        location: openingMathFence ? "math_expression_start" : "block_end"
       })
       return
     }
@@ -843,6 +843,17 @@ export default class extends Controller {
     if (!candidate || !element) return
 
     this.pendingCaret = null
+    if (pending.location === "math_expression_start") {
+      const mathElement = element.querySelector("[data-editor-math-source]:not([data-editor-math-active])")
+      if (mathElement) {
+        element.focus({ preventScroll: true })
+        if (deRenderMath(mathElement, { caret: "start" })) {
+          this.lastProjectionCaret = { blockId: candidate.id, visibleOffset }
+          return
+        }
+      }
+    }
+
     const target = pending.location === "list_item_end"
       ? element.querySelector("li:last-child") || element
       : pending.location === "quote_line_end"

@@ -106,6 +106,16 @@ class SourceRendererTest < ActiveSupport::TestCase
     assert_includes display_html, 'data-editor-math-close="\]"'
   end
 
+  test "renders empty block display math as an editable math atom" do
+    [["$$", "$$"], ["\\[", "\\]"]].each do |opening, closing|
+      html = Source::Renderer.render("#{opening}\n\n#{closing}")
+
+      assert_includes html, 'data-editor-math-source="'
+      assert_includes html, %(data-editor-math-open="#{opening}")
+      assert_includes html, %(data-editor-math-close="#{closing}")
+    end
+  end
+
   test "preserves escaped dollar signs without rendering math" do
     html = Source::Renderer.render("The item costs \\$50 and the other costs \\$100.")
     refute_includes html, 'class="katex"'
