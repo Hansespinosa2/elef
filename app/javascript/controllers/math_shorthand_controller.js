@@ -50,7 +50,8 @@ export function mathShorthandAt(text, caret) {
   return parsed ? { ...parsed, start, end, source } : null
 }
 
-export function insideMath(text, caret) {
+export function mathContextAt(text, caret) {
+  if (caret < 0 || caret > text.length) return null
   const before = text.slice(0, caret)
   let delimiter = null
   let fence = null
@@ -117,10 +118,16 @@ export function insideMath(text, caret) {
       }
     }
   }
-  return delimiter !== null
+  if (delimiter === null) return null
+  return delimiter === "$$" || delimiter === "\\[" ? "display_math" : "inline_math"
 }
 
-export function insideCode(text, caret) {
+export function insideMath(text, caret) {
+  return mathContextAt(text, caret) !== null
+}
+
+export function sourceContextAt(text, caret) {
+  if (caret < 0 || caret > text.length) return null
   const before = text.slice(0, caret)
   let fence = null
   let inlineCodeLength = null
@@ -131,7 +138,7 @@ export function insideCode(text, caret) {
       continue
     }
     if (fenceMatch) {
-      fence = { character: fenceMatch[1][0], length: fenceMatch[1].length }
+      fence = { character: fenceMatch[1][0], length: fenceMatch[1].length, info: fenceMatch[2].trim() }
       continue
     }
     for (let index = 0; index < line.length;) {
@@ -144,7 +151,12 @@ export function insideCode(text, caret) {
       index += length
     }
   }
-  return Boolean(fence || inlineCodeLength !== null)
+  if (fence) return /^mermaid(?:\s|$)/i.test(fence.info) ? "mermaid" : "code_fence"
+  return inlineCodeLength !== null ? "code_span" : null
+}
+
+export function insideCode(text, caret) {
+  return sourceContextAt(text, caret) !== null
 }
 
 export default class extends Controller {
@@ -154,7 +166,9 @@ export default class extends Controller {
     this.lastExpansion = null
     this.editorController = editorFor(this.element)
     this.editorReady = () => { this.editorController ||= editorFor(this.element); this.setupEditor() }
+    this.beforeSave = () => this.commitAll()
     this.element.addEventListener("elef:editor-ready", this.editorReady)
+    this.element.addEventListener("elef:before-save", this.beforeSave)
     this.setupEditor()
   }
 
@@ -168,6 +182,7 @@ export default class extends Controller {
       this.editorController.form?.removeEventListener("submit", this.handleFormSubmit, true)
     }
     this.element.removeEventListener("elef:editor-ready", this.editorReady)
+    this.element.removeEventListener("elef:before-save", this.beforeSave)
   }
 
   setupEditor() {

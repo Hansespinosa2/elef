@@ -47,13 +47,25 @@ test("pairs, promotes, and skips math delimiters without touching code or escape
   assert.equal(math.mathDollarAction("$x$", 2), "skip")
 })
 
+test("distinguishes source, inline math, display math, code, and Mermaid contexts", () => {
+  assert.equal(math.mathContextAt("text", 2), null)
+  assert.equal(math.mathContextAt("$x$", 2), "inline_math")
+  assert.equal(math.mathContextAt("$$x$$", 3), "display_math")
+  assert.equal(math.sourceContextAt("`code`", 3), "code_span")
+  assert.equal(math.sourceContextAt("```text\nx\n```", 8), "code_fence")
+  assert.equal(math.sourceContextAt("```mermaid\nflowchart TD", 20), "mermaid")
+})
+
 test("authoring assist stays under the synchronous latency gate", () => {
   const region = `$${"x+".repeat(2498)}x.b$`
   const start = performance.now()
   const timings = []
   for (let index = 0; index < 1000; index += 1) {
     const before = performance.now()
-    math.mathShorthandAt(region, region.length - 2)
+    const caret = region.length - 2
+    math.mathContextAt(region, caret)
+    math.sourceContextAt(region, caret)
+    math.mathShorthandAt(region, caret)
     timings.push(performance.now() - before)
   }
   const sorted = timings.toSorted((left, right) => left - right)
