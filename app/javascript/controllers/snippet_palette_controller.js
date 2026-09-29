@@ -1,12 +1,13 @@
 import { Controller } from "@hotwired/stimulus"
 import { editorFor } from "controllers/editor_controller"
 import { insideCode, insideMath } from "controllers/math_shorthand_controller"
+import { authoringRegistryFor } from "controllers/authoring_registry"
 
 export default class extends Controller {
   static targets = ["editor", "palette"]
-  static values = { snippets: Array }
 
   connect() {
+    this.registry = authoringRegistryFor(this.element)
     this.matches = []
     this.selectedIndex = 0
     this.stops = []
@@ -133,8 +134,8 @@ export default class extends Controller {
     this.query = query.text
     this.queryPrefix = query.prefix
     this.queryStart = query.start
-    this.matches = this.snippetsValue
-      .filter((snippet) => query.prefix === ":" ? snippet.category === "Elef DSL" : snippet.category !== "Elef DSL")
+    this.matches = this.registry
+      .filter((entry) => entry.namespace === query.prefix)
       .map((snippet) => ({ snippet, score: this.score(snippet) }))
       .filter((result) => result.score !== null)
       .sort((a, b) => b.score - a.score || a.snippet.trigger.localeCompare(b.snippet.trigger) || a.snippet.name.localeCompare(b.snippet.name))
@@ -174,11 +175,10 @@ export default class extends Controller {
     const completed = argumentText.trim().split(/\s+/).filter(Boolean)
     const position = trailingSpace ? completed.length : Math.max(completed.length - 1, 0)
     const text = trailingSpace ? "" : (completed.at(-1) || "")
-    const choices = position === 0
-      ? ["left", "center", "right", "top", "middle", "bottom"]
-      : position === 1 && completed.length === 1 && ["left", "center", "right", "top", "middle", "bottom"].includes(completed[0])
-        ? ["top", "middle", "bottom"]
-        : []
+    const directive = this.registry.find((entry) => entry.namespace === ":" && entry.trigger === "align")
+    const values = directive?.argument_schema?.values || []
+    const previousValuesAreValid = completed.slice(0, position).every((value, index) => values[index]?.includes(value))
+    const choices = previousValuesAreValid ? (values[position] || []) : []
     if (!choices.length) return null
     return { prefix: ":", text, start: caret - text.length, choices }
   }

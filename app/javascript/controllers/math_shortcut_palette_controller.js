@@ -2,12 +2,13 @@ import { Controller } from "@hotwired/stimulus"
 import { editorFor } from "controllers/editor_controller"
 import { application } from "controllers/application"
 import { insideMath, parseMathShorthand } from "controllers/math_shorthand_controller"
+import { authoringRegistryFor } from "controllers/authoring_registry"
 
 export default class extends Controller {
   static targets = ["editor", "palette"]
-  static values = { shortcuts: Array }
 
   connect() {
+    this.registry = authoringRegistryFor(this.element)
     this.matches = []
     this.selectedIndex = 0
     this.stops = []
@@ -120,9 +121,9 @@ export default class extends Controller {
     if (!query) return this.close()
 
     const singleCharacterAlias = query.prefix === "@" && query.text.length === 1
-    const matches = this.shortcutsValue
-      .filter((shortcut) => shortcut.prefix === query.prefix)
-      .filter((shortcut) => query.prefix !== "." || (shortcut.built_in && ["Bold", "Blackboard bold", "Vector", "Transpose", "Inverse"].includes(shortcut.name)))
+    const matches = this.registry
+      .filter((shortcut) => shortcut.namespace === query.prefix)
+      .filter((shortcut) => query.prefix !== "." || (shortcut.built_in && shortcut.behavior?.operator_class))
       .filter((shortcut) => !singleCharacterAlias || (shortcut.aliases || []).includes(query.text))
       .map((shortcut) => ({ shortcut, score: this.matchScore(shortcut, query.text) }))
       .filter(({ score }) => score !== null)
