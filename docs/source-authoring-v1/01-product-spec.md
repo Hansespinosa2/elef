@@ -1,6 +1,6 @@
 # 01 — Product Specification
 
-**Status:** Proposed  
+**Status:** Proposed
 **Scope:** Source-mode authoring for documents and presentations
 
 ## 1. Goal

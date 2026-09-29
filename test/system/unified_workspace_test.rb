@@ -318,6 +318,71 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     refute_includes source, "$x\\mathbf{x}"
   end
 
+  test "meets the synchronous math-assist latency gate across 1000 CodeMirror edits" do
+    document = Document.create!(title: "Math assist performance", source: "# Math assist performance")
+
+    visit edit_document_path(document)
+    result = page.evaluate_async_script(<<~JAVASCRIPT)
+      const done = arguments[arguments.length - 1];
+      (async () => {
+        try {
+          const source = document.querySelector(".source-field");
+          const editor = source.editorController;
+          const shorthand = Stimulus.getControllerForElementAndIdentifier(source, "math-shorthand");
+          const palette = Stimulus.getControllerForElementAndIdentifier(source, "math-shortcut-palette");
+          const { ensureSyntaxTree } = await import("@codemirror/language");
+          editor.setEditingMode("source", { silent: true });
+          editor.vimEnabled = false;
+
+          const prefix = "$" + "x+".repeat(2496);
+          editor.setExternalValue(prefix + "x.b.vec");
+          editor.setSelectionRange(editor.value.length);
+          const parsedTree = ensureSyntaxTree(editor.view.state, editor.view.state.doc.length, 1000);
+          if (!parsedTree || parsedTree.length < editor.view.state.doc.length) {
+            throw new Error("CodeMirror did not parse the full 5,000-character math region");
+          }
+
+          const timings = [];
+          let maximumRegionLength = 0;
+          for (let index = 0; index < 1010; index += 1) {
+            const suffix = index % 2 === 0 ? "x.b" : "x.b.vec";
+            const from = prefix.length;
+            editor.view.dispatch({
+              changes: { from, to: editor.view.state.doc.length, insert: suffix },
+              selection: { anchor: from + suffix.length },
+              userEvent: "input"
+            });
+            maximumRegionLength = Math.max(maximumRegionLength, editor.view.state.doc.length);
+
+            const before = performance.now();
+            shorthand.keydown({ key: "x", defaultPrevented: false });
+            palette.queryAtCaret();
+            const elapsed = performance.now() - before;
+            if (index >= 10) timings.push(elapsed);
+          }
+
+          const sorted = timings.toSorted((left, right) => left - right);
+          done({
+            samples: timings.length,
+            maximumRegionLength,
+            p95: sorted[Math.floor(sorted.length * 0.95)],
+            p99: sorted[Math.floor(sorted.length * 0.99)],
+            maximum: sorted.at(-1)
+          });
+        } catch (error) {
+          done({ error: String(error?.stack || error) });
+        }
+      })();
+    JAVASCRIPT
+
+    assert_nil result["error"], "browser benchmark failed: #{result['error']}"
+    assert_equal 1000, result["samples"]
+    assert_equal 5000, result["maximumRegionLength"]
+    assert_operator result["p95"], :<, 5
+    assert_operator result["p99"], :<, 10
+    assert_operator result["maximum"], :<, 16
+  end
+
   test "ships the common block and list colon snippets" do
     document = Document.create!(title: "Authoring snippets", source: "# Authoring snippets")
 

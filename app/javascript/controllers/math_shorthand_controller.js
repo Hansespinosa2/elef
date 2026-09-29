@@ -341,9 +341,9 @@ export default class extends Controller {
     const chain = this.pendingChain
     const editor = this.editorController
     if (!chain || !editor) return
-    this.pendingChain = null
     const caret = editor.selectionStart
     if (editor.selectionStart === editor.selectionEnd && caret >= chain.start && caret <= chain.end) return
+    this.pendingChain = null
     this.commit(chain)
   }
 
