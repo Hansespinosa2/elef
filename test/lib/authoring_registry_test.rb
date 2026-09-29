@@ -16,4 +16,16 @@ class AuthoringRegistryTest < ActiveSupport::TestCase
     assert_equal 1, footnote.dig(:argument_schema, :argument_count)
     assert_equal ["top", "middle", "bottom"], align.dig(:argument_schema, :values, 1)
   end
+
+  test "restricts raw LaTeX snippets to math and keeps delimited equations in source" do
+    registry = AuthoringRegistry.for_editor(workspace: Workspace.default)
+
+    fraction = registry.find { |entry| entry[:namespace] == "/" && entry[:trigger] == "frac" }
+    equation = registry.find { |entry| entry[:namespace] == "/" && entry[:trigger] == "equation" }
+    inline_equation = registry.find { |entry| entry[:namespace] == "/" && entry[:trigger] == "ieq" }
+
+    assert_equal ["math"], fraction[:contexts]
+    assert_equal ["source"], equation[:contexts]
+    assert_equal ["source"], inline_equation[:contexts]
+  end
 end

@@ -29,7 +29,7 @@ module AuthoringRegistry
         trigger: canonical_trigger,
         aliases: aliases,
         search_terms: [canonical_trigger, *aliases, snippet[:name], snippet[:description]].compact,
-        contexts: ["source"],
+        contexts: snippet[:category] == "LaTeX" && !snippet[:body].to_s.match?(/\A\s*\$/) ? ["math"] : ["source"],
         behavior: { type: "insert", template: snippet[:body], placeholders: placeholders },
         commit_behavior: "accept_palette_selection",
         documentation_example: "#{namespace}#{canonical_trigger} → #{snippet[:body]}",

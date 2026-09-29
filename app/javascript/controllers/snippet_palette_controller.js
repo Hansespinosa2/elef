@@ -150,6 +150,7 @@ export default class extends Controller {
     this.queryStart = query.start
     this.matches = this.registry
       .filter((entry) => entry.namespace === query.prefix)
+      .filter((entry) => (entry.contexts || []).includes("source"))
       .map((snippet) => ({ snippet, score: this.score(snippet) }))
       .filter((result) => result.score !== null)
       .sort((a, b) => b.score - a.score || a.snippet.trigger.localeCompare(b.snippet.trigger) || a.snippet.name.localeCompare(b.snippet.name))
@@ -197,10 +198,6 @@ export default class extends Controller {
     const choices = previousValuesAreValid ? (values[position] || []) : []
     if (!choices.length) return null
     return { prefix: ":", text, start: caret - text.length, choices }
-  }
-
-  supportsMathContext(snippet) {
-    return snippet.category === "LaTeX" && !/^\s*\$/.test(snippet.body || "")
   }
 
   score(snippet) {

@@ -1905,6 +1905,23 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_includes editor.value, "$x.invalid\n"
   end
 
+  test "slash palette hides raw LaTeX outside math and keeps equation blocks available" do
+    document = Document.create!(title: "Slash context", source: "# Notes")
+    visit edit_document_path(document)
+    editor = find_field("Markdown source")
+    editor.click
+    editor.send_keys(:end)
+    editor.send_keys("\n/frac")
+
+    assert_no_selector ".snippet-palette [role='option']", text: /Fraction/, wait: 1
+
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector(".source-field").editorController;
+      editor.replaceRange("/equation", editor.value.length - "/frac".length, editor.value.length);
+    JAVASCRIPT
+    assert_selector ".snippet-palette [role='option']", text: /Equation/, wait: 5
+  end
+
   test "leaves dot syntax literal outside math and inside code" do
     document = Document.create!(title: "Math contexts", source: "# Math")
     visit edit_document_path(document)
