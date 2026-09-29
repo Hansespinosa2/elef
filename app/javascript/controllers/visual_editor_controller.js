@@ -340,14 +340,22 @@ export default class extends Controller {
     }
     if (event.key !== "Enter" || event.shiftKey) return
 
-    if (kind === "code") {
-      const openingFence = markdown.match(/^([ \t]*)(`{3,}|~{3,})([^\r\n]*)$/)
-      if (!openingFence || !this.selectionIsAtEnd(blockElement)) return
+    const openingCodeFence = kind === "code"
+      ? markdown.match(/^([ \t]*)(`{3,}|~{3,})([^\r\n]*)$/)
+      : null
+    const openingMathFence = kind === "paragraph"
+      ? markdown.match(/^([ \t]{0,3})(\$\$|\\\[)[ \t]*$/)
+      : null
+    if (openingCodeFence || openingMathFence) {
+      if (!this.selectionIsAtEnd(blockElement)) return
 
       event.preventDefault()
-      const [, indentation, fence] = openingFence
+      const [, indentation, marker] = openingCodeFence || openingMathFence
+      const closingMarker = openingCodeFence
+        ? marker
+        : marker === "$$" ? "$$" : "\\]"
       const lineEnding = source.match(/\r\n|\r|\n/)?.[0] || "\n"
-      const replacement = `${markdown}${lineEnding}${lineEnding}${indentation}${fence}`
+      const replacement = markdown + lineEnding + lineEnding + indentation + closingMarker
       this.replaceAndFocus(blockElement, start, end, replacement, {
         sourceOffset: start + markdown.length + lineEnding.length,
         location: "block_end"

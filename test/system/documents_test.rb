@@ -1062,18 +1062,37 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: "- [ ] Keep **that**\n  - Nested [link](/path)\n- [x] Already done", wait: 5
   end
 
-  test "enter after a code fence opener inserts a closing fence" do
-    visit new_document_path
+  test "enter after a code fence opener inserts a matching closing fence" do
+    [["```sql", "```"], ["~~~sql", "~~~"]].each do |opening, closing|
+      visit new_document_path
 
-    find(".document-editor-block h1", text: "Untitled document").send_keys(:enter)
-    block = active_document_block
-    block.send_keys("```sql", :enter)
+      find(".document-editor-block h1", text: "Untitled document").send_keys(:enter)
+      active_document_block.send_keys(opening, :enter)
 
-    assert_field "Markdown source", with: /```sql\n\n```/, wait: 5
-    assert_selector ".document-editor-block[contenteditable='true'] pre code", text: "", wait: 5
+      expected = Regexp.new(Regexp.escape("#{opening}\n\n#{closing}"))
+      assert_field "Markdown source", with: expected, wait: 5
+      assert_selector ".document-editor-block[contenteditable='true'] pre code", text: "", wait: 5
 
-    active_document_block.send_keys("SELECT * FROM TABLE")
-    assert_field "Markdown source", with: /```sql\nSELECT \* FROM TABLE\n```/, wait: 5
+      active_document_block.send_keys("SELECT * FROM TABLE")
+      completed = Regexp.new(Regexp.escape("#{opening}\nSELECT * FROM TABLE\n#{closing}"))
+      assert_field "Markdown source", with: completed, wait: 5
+    end
+  end
+
+  test "enter after a display math opener inserts its matching closing fence" do
+    [["$$", "$$"], ["\\[", "\\]"]].each do |opening, closing|
+      visit new_document_path
+      find(".document-editor-block h1", text: "Untitled document").send_keys(:enter)
+      active_document_block.send_keys(opening, :enter)
+
+      expected = Regexp.new(Regexp.escape("#{opening}\n\n#{closing}"))
+      assert_field "Markdown source", with: expected, wait: 5
+
+      active_document_block.send_keys("x=1")
+      completed = Regexp.new(Regexp.escape("#{opening}\nx=1\n#{closing}"))
+      assert_field "Markdown source", with: completed, wait: 5
+      assert_selector ".document-editor-block .editor-live-math-display", wait: 5
+    end
   end
 
   test "visual code editing preserves fenced language and indentation" do

@@ -295,6 +295,23 @@ class PresentationTest < ActiveSupport::TestCase
     refute_equal blocks[1][:position_directive_id], blocks[3][:position_directive_id]
   end
 
+  test "keeps blank lines inside display math fences in one editable block" do
+    [["$$", "$$"], ["\\[", "\\]"]].each do |opening, closing|
+      source = "# Math\n\n#{opening}\n\n#{closing}"
+      map = Source::Document.editor_map(source, mode: :document)
+      blocks = map[:slides].first[:blocks]
+      math_block = blocks.last
+      region = map[:slides].first[:editable_regions].find { |candidate| candidate[:block_id] == math_block[:id] }
+
+      assert_equal "#{opening}\n\n#{closing}", math_block[:markdown]
+      assert_equal true, region[:editable]
+
+      opener_map = Source::Document.editor_map("# Math\n\n#{opening}", mode: :document)
+      opener_region = opener_map[:slides].first[:editable_regions].last
+      assert_equal true, opener_region[:editable]
+    end
+  end
+
   test "keeps a document editor map as one source surface across horizontal rules" do
     source = "# First\n\n---\n\nSecond"
 
