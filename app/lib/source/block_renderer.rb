@@ -139,7 +139,7 @@ module Source
         %(<option value="#{value}"#{selected}>#{ERB::Util.html_escape(label)}</option>)
       end.join
 
-      %(<label class="document-block-position-control">Align <select aria-label="Block alignment" data-visual-editor-block-id="#{ERB::Util.html_escape(mapped[:id].to_s)}" data-action="change->visual-editor#positionChanged">#{options}</select></label>)
+      %(<label class="document-block-position-control" data-action="pointerdown->visual-editor#positionControlOpened">Align <select aria-label="Block alignment" data-visual-editor-block-id="#{ERB::Util.html_escape(mapped[:id].to_s)}" data-action="focus->visual-editor#positionControlOpened keydown->visual-editor#positionControlKeydown change->visual-editor#positionChanged">#{options}</select></label>)
     end
 
     def editable_media(rendered, markdown)
