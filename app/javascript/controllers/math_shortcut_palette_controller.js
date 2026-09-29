@@ -119,10 +119,10 @@ export default class extends Controller {
     const query = this.queryAtCaret()
     if (!query) return this.close()
 
-    const singleLetterAlias = query.prefix === "@" && /^[A-Za-z]$/.test(query.text)
+    const singleCharacterAlias = query.prefix === "@" && query.text.length === 1
     const matches = this.shortcutsValue
       .filter((shortcut) => shortcut.prefix === query.prefix)
-      .filter((shortcut) => !singleLetterAlias || (shortcut.aliases || []).includes(query.text))
+      .filter((shortcut) => !singleCharacterAlias || (shortcut.aliases || []).includes(query.text))
       .map((shortcut) => ({ shortcut, score: this.matchScore(shortcut, query.text) }))
       .filter(({ score }) => score !== null)
       .sort((left, right) => right.score - left.score || left.shortcut.name.localeCompare(right.shortcut.name))
@@ -143,7 +143,7 @@ export default class extends Controller {
     const caret = editor.selectionStart
     if (!insideMath(editor.value, caret)) return null
     const before = editor.value.slice(0, caret)
-    const match = before.match(/([A-Za-z][A-Za-z0-9]*)?([.@])([A-Za-z0-9_-]*)$/)
+    const match = before.match(/([A-Za-z][A-Za-z0-9]*)?([.@])([A-Za-z0-9_-]*|=)$/)
     if (!match) return null
 
     return {
