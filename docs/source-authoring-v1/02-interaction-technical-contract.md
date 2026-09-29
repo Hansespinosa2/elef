@@ -30,7 +30,7 @@ Distinguish Markdown/source, inline math, display math, code span, code fence, M
 
 An AST is an internal representation of mathematical structure rather than raw characters. `x.b.vec.t` represents `Transpose(Vector(Bold(x)))`; canonical `\\vec{\\mathbf{x}}^{\\mathsf{T}}` should be understood as an equivalent local structure where needed. AST is internal and never persisted.
 
-v1 needs no complete TeX parser. It supports atomic operands, supported `@` tokens, supported postfix transforms, and safely recognizable canonical LaTeX atoms. During ordinary typing, parse only the active math region, not the whole document.
+v1 needs no complete TeX parser. It supports atomic operands, supported `@` tokens, supported postfix transforms, and safely recognizable canonical LaTeX atoms. Existing one-symbol forms such as `\\mathbf{x}`, `\\boldsymbol{\\alpha}`, and `\\vec{x}` can be operands for postfix transforms, based only on visible source; grouped or binary expressions are not inferred. During ordinary typing, parse only the active math region, not the whole document.
 
 ## 8. Operator classes
 

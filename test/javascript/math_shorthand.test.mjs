@@ -40,6 +40,17 @@ test("supports local hat and tilde decorations in valid postfix chains", () => {
   assert.equal(math.expandMathShorthand("x.hat.tilde"), null)
 })
 
+test("transforms supported existing canonical LaTeX atoms from their visible source", () => {
+  assert.equal(math.expandMathShorthand("x.t"), "x^{\\mathsf{T}}")
+  assert.equal(math.expandMathShorthand("\\mathbf{x}.t"), "\\mathbf{x}^{\\mathsf{T}}")
+  assert.equal(math.expandMathShorthand("\\vec{x}.t"), "\\vec{x}^{\\mathsf{T}}")
+  assert.equal(math.expandMathShorthand("x.inv"), "x^{-1}")
+  assert.equal(math.expandMathShorthand("\\mathbf{x}.inv"), "\\mathbf{x}^{-1}")
+  assert.equal(math.expandMathShorthand("\\vec{x}.inv"), "\\vec{x}^{-1}")
+  assert.equal(math.expandMathShorthand("\\mathbf{x+y}.t"), null)
+  assert.equal(math.expandMathShorthand("(x+y).t"), null)
+})
+
 test("preserves mathematical postfix sequence and rejects deferred grammar", () => {
   assert.equal(math.expandMathShorthand("A.inv.t"), "\\left(A^{-1}\\right)^{\\mathsf{T}}")
   assert.equal(math.expandMathShorthand("A.t.inv"), "\\left(A^{\\mathsf{T}}\\right)^{-1}")
@@ -56,6 +67,37 @@ test("finds a complete active chain at a cursor inside its source", () => {
   )
   assert.equal(math.mathShorthandAt("`$x.b$`", 4), null)
   assert.equal(math.mathShorthandAt("```\n$x.b$\n```", 7), null)
+  assert.deepEqual(
+    (({ start, end, source, expansion }) => ({ start, end, source, expansion }))(math.mathShorthandAt("$\\mathbf{x}.t$", 13)),
+    { start: 1, end: 13, source: "\\mathbf{x}.t", expansion: "\\mathbf{x}^{\\mathsf{T}}" }
+  )
+
+  const text = "$\\vec{x}.inv$"
+  const doc = {
+    length: text.length,
+    lineAt: () => ({ from: 0, to: text.length, text }),
+    sliceString: (from, to, separator = "\n") => text.slice(from, to).replaceAll("\n", separator)
+  }
+  const editor = { view: { state: { doc, tree: { resolveInner: () => ({ name: "Text", parent: { name: "Paragraph", from: 0, parent: null } }) } } } }
+  const chain = math.mathShorthandAtEditor(editor, text.length - 1)
+  assert.equal(chain.source, "\\vec{x}.inv")
+  assert.equal(chain.expansion, "\\vec{x}^{-1}")
+})
+
+test("commits canonical atom chains on an explicit whole-editor commit", () => {
+  const editor = {
+    value: "$\\mathbf{x}.t$ and $\\vec{y}.inv$",
+    replaceRanges(changes) {
+      for (const change of [...changes].sort((left, right) => right.from - left.from)) {
+        this.value = `${this.value.slice(0, change.from)}${change.insert}${this.value.slice(change.to)}`
+      }
+    }
+  }
+  const controller = new math.default()
+  controller.editorController = editor
+  controller.commitAll()
+
+  assert.equal(editor.value, "$\\mathbf{x}^{\\mathsf{T}}$ and $\\vec{y}^{-1}$")
 })
 
 test("pairs, promotes, and skips math delimiters without touching code or escapes", () => {

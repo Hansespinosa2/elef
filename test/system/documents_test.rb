@@ -1921,6 +1921,62 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_includes source.value, "\\tilde{x}^{\\mathsf{T}}"
   end
 
+  test "applies transpose and inverse to existing canonical LaTeX atoms after reload" do
+    source_text = ["# Math", "", "$x$", "$\\mathbf{x}$", "$\\vec{x}$", "$y$", "$\\mathbf{y}$", "$\\vec{y}$", "$\\mathbf{z}$"].join("\n")
+    document = Document.create!(title: "Canonical math atoms", source: source_text)
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    source = find_field("Markdown source")
+
+    transforms = [
+      ["x", ".t", "x^{\\mathsf{T}}"],
+      ["\\mathbf{x}", ".t", "\\mathbf{x}^{\\mathsf{T}}"],
+      ["\\vec{x}", ".t", "\\vec{x}^{\\mathsf{T}}"],
+      ["y", ".inv", "y^{-1}"],
+      ["\\mathbf{y}", ".inv", "\\mathbf{y}^{-1}"],
+      ["\\vec{y}", ".inv", "\\vec{y}^{-1}"]
+    ]
+
+    transforms.each do |atom, operation, expansion|
+      page.execute_script(<<~JAVASCRIPT, atom)
+        const editor = document.querySelector(".source-field").editorController;
+        const atom = arguments[0];
+        const start = editor.value.indexOf(`$${atom}$`);
+        if (start < 0) throw new Error(`Missing math atom ${atom}`);
+        editor.setSelectionRange(start + atom.length + 1);
+        editor.focus();
+      JAVASCRIPT
+      editor.send_keys(operation)
+      assert_includes source.value, "$#{atom}#{operation}$"
+      editor.send_keys(:tab)
+      assert_includes source.value, "$#{expansion}$"
+    end
+
+    assert_selector '[data-autosave-target="status"]', exact_text: "Saved", wait: 10
+    persisted_source = source.value
+    assert_equal persisted_source, document.reload.source
+
+    visit edit_document_path(document.reload)
+    click_on "Source"
+    editor = find(".cm-content")
+    source = find_field("Markdown source")
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector(".source-field").editorController;
+      const atom = "\\mathbf{z}";
+      const start = editor.value.indexOf(`$${atom}$`);
+      if (start < 0) throw new Error(`Missing math atom ${atom}`);
+      editor.setSelectionRange(start + atom.length + 1);
+      editor.focus();
+    JAVASCRIPT
+    editor.send_keys(".t")
+    assert_includes source.value, "$\\mathbf{z}.t$"
+    editor.send_keys(:tab)
+    assert_includes source.value, "$\\mathbf{z}^{\\mathsf{T}}$"
+    assert_selector '[data-autosave-target="status"]', exact_text: "Saved", wait: 10
+    assert_equal source.value, document.reload.source
+  end
+
   test "slash palette hides raw LaTeX outside math and keeps equation blocks available" do
     document = Document.create!(title: "Slash context", source: "# Notes")
     visit edit_document_path(document)

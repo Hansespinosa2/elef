@@ -76,6 +76,7 @@ Required transforms:
 - `.tilde`: `x.tilde → \\tilde{x}` as a local decoration on an atomic operand.
 - `.t`: lowercase canonical transpose name and the repository's canonical transpose representation. `.T` may remain as a compatibility alias; docs/autocomplete show `.t`.
 - `.inv`: `A.inv → A^{-1}`.
+- Existing canonical one-symbol atoms such as `\\mathbf{x}` and `\\vec{x}` remain valid operands for `.t` and `.inv`, based only on the visible source.
 
 Styles/decorations may canonicalize to structurally correct LaTeX order (`x.b.vec` and `x.vec.b` may both become `\\vec{\\mathbf{x}}`). Mathematical transforms preserve semantic sequence: `A.inv.t` and `A.t.inv` remain structurally distinct. Never reorder mathematical operations using algebraic identities.
 
