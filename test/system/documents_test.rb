@@ -1871,6 +1871,55 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: /\A:::position\{right\}\n\nTest\z/, wait: 5
   end
 
+  test "pins the block alignment control until selection is dismissed" do
+    visit root_path
+    find(".new-work-menu summary").click
+    find(".new-work-option", text: "Document").click
+    wait_for_fresh_projection
+
+    block = find(".document-editor-block", text: "Untitled document")
+    block.find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
+    control = find("[data-visual-editor-block-id='#{block['data-editor-block-id']}']")
+    select_style = page.evaluate_script(<<~JAVASCRIPT, control)
+      (() => {
+        const style = getComputedStyle(arguments[0]);
+        return { borderWidth: style.borderTopWidth, borderStyle: style.borderTopStyle, background: style.backgroundColor };
+      })()
+    JAVASCRIPT
+    assert_equal "1px", select_style["borderWidth"]
+    assert_equal "solid", select_style["borderStyle"]
+    refute_equal "rgba(0, 0, 0, 0)", select_style["background"]
+    control.click
+    # Simulate the select losing DOM focus while its native popup is being used.
+    page.execute_script("arguments[0].blur()", control)
+    page.driver.browser.action.move_to_location(20, 20).perform
+
+    control_state = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const label = document.querySelector('.document-block-position-control');
+        return { open: label.classList.contains('is-open'), opacity: getComputedStyle(label).opacity, pointerEvents: getComputedStyle(label).pointerEvents };
+      })()
+    JAVASCRIPT
+    assert_equal true, control_state["open"]
+    assert_equal "1", control_state["opacity"]
+    assert_equal "auto", control_state["pointerEvents"]
+
+    page.execute_script("document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))")
+    dismissed_state = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const label = document.querySelector('.document-block-position-control');
+        return label.classList.contains('is-open');
+      })()
+    JAVASCRIPT
+    assert_equal false, dismissed_state
+
+    block.find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
+    control.select("Center")
+    assert_field "Markdown source", with: /\A:::position\{center\}\n\n# Untitled document\z/, wait: 5
+    centered_heading = find(".document-editor-block.position-center h1", text: "Untitled document", wait: 5)
+    assert_equal "center", page.evaluate_script("getComputedStyle(arguments[0]).textAlign", centered_heading)
+  end
+
   test "changes a position directive on the first document block" do
     document = Document.create!(title: "Change first block alignment", source: ":::position{right}\n\nTest")
     visit edit_document_path(document)
