@@ -9,7 +9,7 @@ import {
   visibleOffsetAtPoint,
   visibleOffsetForSourceOffset
 } from "controllers/editor_caret"
-import { deRenderMath, handleMathClick, handleMathKeydown, syncActiveMath } from "controllers/editor_math"
+import { deRenderMath, finishMathBeforeEnter, handleMathClick, handleMathKeydown, syncActiveMath } from "controllers/editor_math"
 
 export default class extends Controller {
   static targets = ["projection"]
@@ -331,6 +331,7 @@ export default class extends Controller {
 
     const blockElement = event.target.closest?.(".document-editor-block[data-editor-block-id]")
     if (!blockElement || !this.canEditBlock(blockElement)) return
+    finishMathBeforeEnter(event, this.projectionTarget, () => this.flushPendingProjectionEdits())
 
     const block = this.map?.slides?.flatMap((slide) => slide.blocks || [])
       .find((candidate) => candidate.id === blockElement.dataset.editorBlockId)
@@ -403,7 +404,7 @@ export default class extends Controller {
     }
   }
 
-  positionChanged(event) {
+  alignmentChanged(event) {
     const control = event.target.closest?.("[data-visual-editor-block-id]")
     if (!control) return
     control.closest(".document-block-position-control")?.classList.remove("is-open")
@@ -468,13 +469,14 @@ export default class extends Controller {
       from = directive.range.start
       to = directive.range.end
       const lineEnding = source.slice(from, to).match(/(?:\r\n|\r|\n)$/)?.[0] || ""
-      const vertical = block.position?.vertical_explicit ? ` ${block.position.vertical}` : ""
-      replacement = `:::position{${horizontal}${vertical}}${lineEnding}`
+      const vertical = block.position?.vertical_explicit ? block.position.vertical : null
+      const verticalAlignment = vertical === "middle" ? "center" : vertical
+      replacement = `:::align{${verticalAlignment ? `${verticalAlignment} ` : ""}${horizontal}}${lineEnding}`
     } else {
       from = block.range.start
       to = from
       const lineEnding = source.match(/\r\n|\r|\n/)?.[0] || "\n"
-      replacement = `:::position{${horizontal}}${lineEnding}${lineEnding}`
+      replacement = `:::align{${horizontal}}${lineEnding}${lineEnding}`
     }
 
     const delta = replacement.length - (to - from)

@@ -115,10 +115,10 @@ module Presentations
           #{MARKER_KEY}: layouts-and-themes
           theme: dark
           ---
-          :::position{center middle}
+          :::align{center center}
           # Designing a visual system
 
-          :::position {center}
+          :::align {center}
           This deck exercises automatic layouts while telling a complete story
           about consistent presentation design.
           ---
@@ -192,7 +192,7 @@ module Presentations
           ---
           # Review the whole arc
 
-          :::position{center middle}
+          :::align{center center}
 
           Before presenting, check the sequence at thumbnail scale:
 
@@ -209,14 +209,14 @@ module Presentations
 
           ## Bullets
 
-          :::position{center middle}
+          :::align{center center}
 
           - Center the important points.
           - Keep the list easy to scan.
 
           ## Code
 
-          :::position{right bottom}
+          :::align{bottom right}
 
           ```ruby
           layout = infer_layout(document)
@@ -227,19 +227,19 @@ module Presentations
 
           ## First
 
-          :::position{left top}
+          :::align{top left}
 
           Start with the question.
 
           ## Second
 
-          :::position{center middle}
+          :::align{center center}
 
           Compare the alternatives.
 
           ## Third
 
-          :::position{right bottom}
+          :::align{bottom right}
 
           Make the decision.
           ---
@@ -247,19 +247,19 @@ module Presentations
 
           ## Left
 
-          :::position{left top}
+          :::align{top left}
 
           Left aligned.
 
           ## Center
 
-          :::position{center top}
+          :::align{top center}
 
           Center aligned.
 
           ## Right
 
-          :::position{right top}
+          :::align{top right}
 
           Right aligned.
           ---
@@ -267,19 +267,19 @@ module Presentations
 
           ## Top
 
-          :::position{left top}
+          :::align{top left}
 
           Top aligned.
 
           ## Middle
 
-          :::position{left middle}
+          :::align{center left}
 
           Middle aligned.
 
           ## Bottom
 
-          :::position{center bottom}
+          :::align{bottom center}
 
           Bottom aligned.
           ---
@@ -287,19 +287,19 @@ module Presentations
 
           ## Lower left
 
-          :::position{left bottom}
+          :::align{bottom left}
 
           Lower-left content.
 
           ## Center right
 
-          :::position{right middle}
+          :::align{center right}
 
           Middle-right content.
 
           ## Lower center
 
-          :::position{center bottom}
+          :::align{bottom center}
 
           Lower-center content.
         MARKDOWN

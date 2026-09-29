@@ -191,6 +191,19 @@ export function handleMathKeydown(event, rootElement, onFlush = null) {
   return false
 }
 
+export function finishMathBeforeEnter(event, rootElement, onFlush = null) {
+  if (event.key !== "Enter" || event.isComposing || event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) return false
+
+  const selection = window.getSelection()
+  if (!selection?.isCollapsed) return false
+
+  const info = getActiveMathInfo(selection, rootElement)
+  if (!info || info.offset < info.fullText.length - info.close.length) return false
+
+  reRenderMath(info.activeSpan, { caret: "after" }, onFlush)
+  return true
+}
+
 export function handleMathClick(event, rootElement) {
   const math = event.target.closest?.("[data-editor-math-source]:not([data-editor-math-active])")
   if (math && rootElement?.contains(math)) {

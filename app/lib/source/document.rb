@@ -473,13 +473,13 @@ module Source
         end
 
         return true if line.text.strip == ":::"
-        return false if line.text.match?(/\A\s*:::position[ \t]*\{/)
+        return false if line.text.match?(/\A\s*:::(?:align|position)[ \t]*\{/)
       end
       false
     end
 
     def editor_directive(source, start_pos, end_pos, text, slide_index, directive_index)
-      position_match = text.match(/\A:::position[ \t]*\{([^}]*)\}/)
+      position_match = text.match(/\A:::(align|position)[ \t]*\{([^}]*)\}/)
       margin_match = text.match(/\A:::(section|subsection|footnote)\{/)
       type = if text == ":::"
         "position_close"
@@ -490,7 +490,7 @@ module Source
       else
         "unknown"
       end
-      value = position_match && position_match[1]
+      value = position_match && position_match[2]
       {
         id: "slide-#{slide_index + 1}-directive-#{directive_index + 1}",
         type: type,
@@ -1023,7 +1023,7 @@ module Source
             blocks << Block.new(raw_blocks[index + 1], position)
             index += 2
           else
-            warnings << "Position directive has no following Markdown block."
+            warnings << "Alignment directive has no following Markdown block."
             index += 1
           end
         elsif block == ":::" || block.start_with?(":::")
@@ -1074,12 +1074,17 @@ module Source
     end
 
     def position_from_block(block)
-      match = block.match(/\A\s*:::position[ \t]*\{([^}]*)\}\s*\z/)
+      match = block.match(/\A\s*:::(align|position)[ \t]*\{([^}]*)\}\s*\z/)
       return unless match
 
-      values = match[1].split.map(&:downcase)
+      directive = match[1]
+      values = match[2].split.map(&:downcase)
       horizontal = values.find { |value| %w[left center right].include?(value) }
       vertical = values.find { |value| %w[top middle bottom].include?(value) }
+      if directive == "align" && values.length == 2 && %w[top center middle bottom].include?(values.first) && %w[left center right].include?(values.last)
+        horizontal = values.last
+        vertical = values.first == "center" ? "middle" : values.first
+      end
       return unless horizontal || vertical
 
       Position.new(horizontal || "left", vertical || "top", vertical.present?)

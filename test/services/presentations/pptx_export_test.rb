@@ -45,7 +45,7 @@ class PresentationsPptxExportTest < ActiveSupport::TestCase
 
   test "preserves positions for extracted column titles in the PPTX model" do
     presentation = Presentation.new(title: "Positioned title", source: <<~MARKDOWN)
-      :::position{right top}
+      :::align{top right}
       # Compare
 
       ## Left

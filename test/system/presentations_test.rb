@@ -125,10 +125,10 @@ class PresentationsTest < ApplicationSystemTestCase
 
   test "new presentation source positions its title explicitly and lets that position be changed" do
     expected_source = <<~MARKDOWN.chomp
-      :::position{center middle}
+      :::align{center center}
       # Untitled Document
 
-      :::position {center}
+      :::align {center}
       Start writing Markdown here.
     MARKDOWN
 
@@ -157,8 +157,8 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_equal initial_alignment["marginTop"], initial_alignment["marginBottom"]
     assert_in_delta initial_alignment["slideCenterY"], initial_alignment["titleCenterY"], 50
 
-    find("select[data-presentation-editor-position][data-slide-index='0'][data-block-index='0']").select("Right Bottom")
-    assert_field "Markdown source", with: /:::position\{right bottom\}\n# Untitled Document/, wait: 5
+    find("select[data-presentation-editor-align][data-slide-index='0'][data-block-index='0']").select("Bottom Right")
+    assert_field "Markdown source", with: /:::align\{bottom right\}\n# Untitled Document/, wait: 5
     wait_for_fresh_projection
     assert_selector ".slide-statement .slide-block.position-right.position-bottom", text: "Untitled Document", wait: 5
 
@@ -183,12 +183,12 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_selector ".slide-statement .slide-block.position-center.position-middle", text: "Designing a visual system"
     assert_selector ".slide-statement .slide-block.position-center.position-top", text: /This deck exercises automatic layouts/
 
-    find("select[data-presentation-editor-position][data-slide-index='2'][data-block-index='0']").select("Right Top")
-    assert_field "Markdown source", with: /:::position\{right top\}\n\n# Establish a visual contract/, wait: 5
+    find("select[data-presentation-editor-align][data-slide-index='2'][data-block-index='0']").select("Right")
+    assert_field "Markdown source", with: /:::align\{right\}\n\n# Establish a visual contract/, wait: 5
     assert_selector ".slide-two-column .slide-title.slide-block.position-right.position-top", text: "Establish a visual contract", wait: 5
 
-    find("select[data-presentation-editor-position][data-slide-index='0'][data-block-index='0']").select("Right Bottom")
-    assert_field "Markdown source", with: /:::position\{right bottom\}\n# Designing a visual system/, wait: 5
+    find("select[data-presentation-editor-align][data-slide-index='0'][data-block-index='0']").select("Bottom Right")
+    assert_field "Markdown source", with: /:::align\{bottom right\}\n# Designing a visual system/, wait: 5
     assert_selector ".slide-statement .slide-block.position-right.position-bottom", text: "Designing a visual system", wait: 5
 
     find("[data-presentation-editor-action='add-block-after'][data-slide-index='0'][data-block-index='1']").click
@@ -200,8 +200,8 @@ class PresentationsTest < ApplicationSystemTestCase
     wait_for_fresh_projection
 
     source = find_field("Markdown source").value
-    assert_includes source, ":::position{right bottom}\n# Designing a visual system"
-    assert_includes source, ":::position {center}\nThis deck exercises automatic layouts"
+    assert_includes source, ":::align{bottom right}\n# Designing a visual system"
+    assert_includes source, ":::align {center}\nThis deck exercises automatic layouts"
     refute_includes source, "New block"
   end
 
@@ -488,8 +488,8 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_selector ".presentation-editor-projection .slide", count: 2, wait: 5
     wait_for_fresh_projection
 
-    find("select[data-presentation-editor-position][data-slide-index='0'][data-block-index='1']").select("Center Middle")
-    assert_field "Markdown source", with: /:::position\{center middle\}/, wait: 5
+    find("select[data-presentation-editor-align][data-slide-index='0'][data-block-index='1']").select("Center Center")
+    assert_field "Markdown source", with: /:::align\{center center\}/, wait: 5
 
     click_on "Save presentation"
     assert_text "Presentation saved."
@@ -502,13 +502,26 @@ class PresentationsTest < ApplicationSystemTestCase
     visit new_presentation_path
     wait_for_fresh_projection
 
-    position = find("select[data-presentation-editor-position][data-slide-index='0'][data-block-index='1']")
-    position.select("Left Top")
-    assert_field "Markdown source", with: /:::position\{left top\}/, wait: 5
+    alignment = find("select[data-presentation-editor-align][data-slide-index='0'][data-block-index='1']")
+    alignment.select("Left")
+    assert_field "Markdown source", with: /:::align\{left\}/, wait: 5
 
     wait_for_fresh_projection
-    find("select[data-presentation-editor-position][data-slide-index='0'][data-block-index='1']").select("Center Middle")
-    assert_field "Markdown source", with: /:::position\{center middle\}/, wait: 5
+    find("select[data-presentation-editor-align][data-slide-index='0'][data-block-index='1']").select("Center Center")
+    assert_field "Markdown source", with: /:::align\{center center\}/, wait: 5
+  end
+
+  test "an unaligned presentation block defaults to Align Left" do
+    presentation = Presentation.create!(title: "Default alignment", source: "# Slide\n\nPlain block")
+    visit edit_presentation_path(presentation)
+    wait_for_fresh_projection
+
+    control = find("select[data-presentation-editor-align][data-slide-index='0'][data-block-index='1']")
+
+    assert_equal "left", control.value
+    assert_no_selector "select[data-presentation-editor-align] option[value='']"
+    assert_text "Align"
+    assert_no_text "Automatic position"
   end
 
   test "presentation caret follows source switches and arrow keys move between blocks" do
@@ -700,7 +713,7 @@ class PresentationsTest < ApplicationSystemTestCase
   test "single-block position directives move with their content and are deleted with it" do
     presentation = Presentation.create!(
       title: "Positioned structure",
-      source: "# Slide\n\n:::position{center middle}\n\nPositioned\n\nPlain"
+      source: "# Slide\n\n:::align{center center}\n\nPositioned\n\nPlain"
     )
 
     visit edit_presentation_path(presentation)
@@ -708,14 +721,14 @@ class PresentationsTest < ApplicationSystemTestCase
     refute_selector ".slide-block.position-center", text: "Plain"
 
     find("[data-presentation-editor-action='move-block-down'][data-block-index='1']").click
-    assert_field "Markdown source", with: "# Slide\n\nPlain\n\n:::position{center middle}\n\nPositioned", wait: 5
+    assert_field "Markdown source", with: "# Slide\n\nPlain\n\n:::align{center center}\n\nPositioned", wait: 5
     wait_for_fresh_projection
     assert_selector ".slide-block.position-center.position-middle", text: "Positioned", wait: 5
     refute_selector ".slide-block.position-center", text: "Plain"
 
     assert_selector "[data-presentation-editor-action='add-block-after'][data-block-index='1']:not([disabled])", wait: 5
     find("[data-presentation-editor-action='add-block-after'][data-block-index='1']").click
-    assert_field "Markdown source", with: "# Slide\n\nPlain\n\nNew block\n\n:::position{center middle}\n\nPositioned", wait: 5
+    assert_field "Markdown source", with: "# Slide\n\nPlain\n\nNew block\n\n:::align{center center}\n\nPositioned", wait: 5
     wait_for_fresh_projection
     assert_selector ".slide-block", text: "New block", wait: 5
     refute_selector ".slide-block.position-center", text: "New block"
@@ -724,20 +737,20 @@ class PresentationsTest < ApplicationSystemTestCase
       find("[data-presentation-editor-action='delete-block'][data-block-index='3']").click
     end
     wait_for_fresh_projection
-    refute_includes find_field("Markdown source").value, ":::position{center middle}"
+    refute_includes find_field("Markdown source").value, ":::align{center center}"
     assert_no_selector ".slide-block.position-center", wait: 5
 
     click_on "Save presentation"
     assert_selector ".flash.notice", text: "Presentation saved.", wait: 10
     visit edit_presentation_path(presentation)
     assert_field "Markdown source", with: /# Slide\n\nPlain\n\nNew block/
-    refute_includes find_field("Markdown source").value, ":::position{center middle}"
+    refute_includes find_field("Markdown source").value, ":::align{center center}"
   end
 
   test "shared position groups stay intact and cannot be split by block reordering" do
     presentation = Presentation.create!(
       title: "Position group",
-      source: "# Slide\n\n:::position{center}\n\nFirst\n\nSecond\n\n:::\n\nOutside"
+      source: "# Slide\n\n:::align{center}\n\nFirst\n\nSecond\n\n:::\n\nOutside"
     )
 
     visit edit_presentation_path(presentation)
@@ -746,7 +759,7 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_selector "[data-presentation-editor-action='move-block-up'][data-block-index='3'][disabled]"
 
     find("[data-presentation-editor-action='move-block-down'][data-block-index='1']").click
-    assert_field "Markdown source", with: "# Slide\n\n:::position{center}\n\nSecond\n\nFirst\n\n:::\n\nOutside", wait: 5
+    assert_field "Markdown source", with: "# Slide\n\n:::align{center}\n\nSecond\n\nFirst\n\n:::\n\nOutside", wait: 5
     wait_for_fresh_projection
     assert_selector ".slide-block.position-center", text: "First", wait: 5
     assert_selector ".slide-block.position-center", text: "Second"
@@ -756,7 +769,7 @@ class PresentationsTest < ApplicationSystemTestCase
       find("[data-presentation-editor-action='delete-block'][data-block-index='2']").click
     end
     wait_for_fresh_projection
-    assert_includes find_field("Markdown source").value, ":::position{center}"
+    assert_includes find_field("Markdown source").value, ":::align{center}"
 
     assert_selector "[data-presentation-editor-action='delete-block'][data-block-index='1']:not([disabled])", wait: 5
     accept_confirm do
@@ -764,7 +777,7 @@ class PresentationsTest < ApplicationSystemTestCase
     end
     wait_for_fresh_projection
     final_source = find_field("Markdown source").value
-    refute_includes final_source, ":::position{center}"
+    refute_includes final_source, ":::align{center}"
     refute_includes final_source, ":::"
     assert_includes final_source, "Outside"
   end
