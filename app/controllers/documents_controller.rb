@@ -90,13 +90,7 @@ class DocumentsController < ApplicationController
   end
 
   def restore
-    revision = @document.work_revisions.find(params.require(:revision_id))
-    result = DraftRestorer.call(@document, revision)
-    payload = draft_payload(Drafts::Save::Result.new(:saved, result.work, result.revision, nil, [], nil))
-    respond_to do |format|
-      format.html { redirect_to edit_document_path(@document), notice: "Revision restored." }
-      format.json { render json: payload, status: :ok }
-    end
+    restore_work_revision(@document)
   end
 
   def export

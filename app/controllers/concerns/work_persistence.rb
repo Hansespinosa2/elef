@@ -99,6 +99,16 @@ module WorkPersistence
     render json: work.work_revisions.history.map { |revision| revision_payload(revision) }
   end
 
+  def restore_work_revision(work)
+    revision = work.work_revisions.find(params.require(:revision_id))
+    result = DraftRestorer.call(work, revision)
+    payload = draft_payload(Drafts::Save::Result.new(:saved, result.work, result.revision, nil, [], nil))
+    respond_to do |format|
+      format.html { redirect_to work_edit_path(work), notice: "Revision restored." }
+      format.json { render json: payload, status: :ok }
+    end
+  end
+
   def work_type_label(work)
     work.document? ? "Document" : "Presentation"
   end

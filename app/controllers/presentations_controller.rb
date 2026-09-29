@@ -225,13 +225,7 @@ class PresentationsController < ApplicationController
   end
 
   def restore
-    revision = @presentation.work_revisions.find(params.require(:revision_id))
-    result = DraftRestorer.call(@presentation, revision)
-    payload = draft_payload(Drafts::Save::Result.new(:saved, result.work, result.revision, nil, [], nil))
-    respond_to do |format|
-      format.html { redirect_to edit_presentation_path(@presentation), notice: "Revision restored." }
-      format.json { render json: payload, status: :ok }
-    end
+    restore_work_revision(@presentation)
   end
 
   def export
