@@ -251,12 +251,21 @@ module Source
       ranges = []
       slide_start = body_start
       fence = nil
+      math_fence = nil
 
       source_lines(source).each do |line|
         next if line.end_pos <= body_start
 
         next_fence = fence_marker(line.text)
         fence = toggle_fence(fence, next_fence) if next_fence
+
+        if fence.nil? && math_fence
+          math_fence = nil if display_math_fence_marker(line.text) == math_fence
+          next
+        elsif fence.nil? && (opening_math_fence = display_math_fence_opener(line.text))
+          math_fence = opening_math_fence
+          next
+        end
 
         if fence.nil? && line.text.match?(/\A---[ \t]*\z/)
           ranges << { index: ranges.length, start: slide_start, end: line.start, delimiter_start: line.start, delimiter_end: line.end_pos }

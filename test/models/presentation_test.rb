@@ -37,6 +37,17 @@ class PresentationTest < ActiveSupport::TestCase
     assert_equal ["```yaml\n---\n```", "", ""], document.slides.map(&:markdown)
   end
 
+  test "keeps slide ranges aligned when separators appear inside display math" do
+    [["$$", "$$"], ["\\[", "\\]"]].each do |opening, closing|
+      source = "# Math\n\n#{opening}\n---\n#{closing}\n\n---\n# Next"
+      map = Source::Document.editor_map(source, mode: :presentation)
+
+      assert_equal 2, map[:slides].length
+      assert_equal "#{opening}\n---\n#{closing}", map[:slides].first[:blocks].last[:markdown]
+      assert_equal "# Next", map[:slides].last[:blocks].first[:markdown]
+    end
+  end
+
   test "maps source ranges around front matter, fenced separators, CRLF, and unicode" do
     source = "---\r\ntitle: Café 😀\r\n---\r\n# One 😀\r\n```md\r\n---\r\n```\r\n---\r\n---"
     ranges = Source::Document.slide_source_ranges(source)
