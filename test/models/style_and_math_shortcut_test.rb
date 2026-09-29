@@ -35,6 +35,8 @@ class StyleAndMathShortcutTest < ActiveSupport::TestCase
 
     assert_equal %w[b bold], shortcut.reload.aliases
     assert_equal ["="], symbol_shortcut.reload.aliases
+    refute MathShortcut.new(name: "Dollar", aliases: ["$"], prefix: "@", expansion: "\\$").valid?
+    refute MathShortcut.new(name: "Comma", aliases: [","], prefix: "@", expansion: ",").valid?
     assert_includes MathShortcuts::Catalog.for_editor, { id: shortcut.id, name: "Bold", aliases: %w[b bold], description: "", prefix: ".", expansion: "\\\\mathbf{${1}}", built_in: false }
     assert MathShortcuts::Catalog.for_editor.any? { |item| item[:aliases].include?("alpha") }
     assert_equal "\\mathbf{${1}}", MathShortcuts::Catalog::DEFAULTS.find { |item| item[:name] == "Bold" }[:expansion]
@@ -122,5 +124,23 @@ class StyleAndMathShortcutTest < ActiveSupport::TestCase
     assert_equal "\\beta", beta[:expansion]
     assert_equal ["q", "th", "theta"], theta[:aliases]
     assert_equal %w[Q Theta], capital_theta[:aliases], "current built-ins should use case-sensitive default aliases"
+  end
+
+  test "personal aliases shadow persisted built-ins in the editor and settings catalog" do
+    workspace = Workspace.create!(name: "Persisted math shortcuts", slug: "persisted-math-#{SecureRandom.hex(5)}")
+    persisted_beta = MathShortcut.create!(workspace: workspace, name: "Beta", aliases: ["legacybeta"], prefix: "@", expansion: "\\operatorname{oldbeta}", built_in: true)
+    personal_beta = MathShortcut.create!(workspace: workspace, name: "Custom beta", aliases: ["beta"], prefix: "@", expansion: "\\operatorname{custombeta}")
+
+    editor_beta = MathShortcuts::Catalog.for_editor(workspace: workspace).find { |item| item[:id] == persisted_beta.id }
+    assert_equal ["b"], editor_beta[:aliases]
+    assert_equal "\\beta", editor_beta[:expansion]
+
+    settings = MathShortcuts::Catalog.for_ui(workspace: workspace)
+    settings_beta = settings.find { |item| item.name == "Beta" }
+    settings_personal = settings.find { |item| item.id == personal_beta.id }
+    assert_equal ["b"], settings_beta.aliases
+    assert_equal "\\beta", settings_beta.expansion
+    assert settings_beta.built_in?
+    assert settings_personal.persisted?, "personal shortcuts should remain editable persisted records"
   end
 end

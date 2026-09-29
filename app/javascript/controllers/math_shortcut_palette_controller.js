@@ -143,7 +143,7 @@ export default class extends Controller {
     const caret = editor.selectionStart
     if (!insideMath(editor.value, caret)) return null
     const before = editor.value.slice(0, caret)
-    const match = before.match(/([A-Za-z][A-Za-z0-9]*)?([.@])([A-Za-z0-9_-]*|[^\w\s])$/)
+    const match = before.match(/([A-Za-z][A-Za-z0-9]*)?([.@])([A-Za-z0-9_-]*|=)$/)
     if (!match) return null
 
     return {

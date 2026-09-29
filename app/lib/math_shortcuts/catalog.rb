@@ -112,14 +112,26 @@ module MathShortcuts
     end
 
     def self.for_editor(workspace: Workspace.default)
-      persisted = all(workspace: workspace).filter_map do |shortcut|
+      persisted_shortcuts = all(workspace: workspace).to_a
+      personal_aliases = persisted_shortcuts.reject(&:built_in).flat_map do |shortcut|
+        shortcut.aliases.map { |alias_name| [shortcut.prefix, alias_name] }
+      end
+      persisted_built_in_keys = persisted_shortcuts.filter_map do |shortcut|
+        [shortcut.name, shortcut.prefix] if shortcut.built_in
+      end
+      persisted = persisted_shortcuts.filter_map do |shortcut|
         built_in_default = if shortcut.built_in
           DEFAULTS.find { |item| item[:name] == shortcut.name && item[:prefix] == shortcut.prefix }
         end
         next if shortcut.built_in && built_in_default.nil?
 
         if built_in_default
-          built_in_default.merge(id: shortcut.id)
+          aliases = built_in_default[:aliases].reject do |alias_name|
+            personal_aliases.include?([shortcut.prefix, alias_name])
+          end
+          next if aliases.empty?
+
+          built_in_default.merge(id: shortcut.id, aliases: aliases)
         else
           {
             id: shortcut.id,
@@ -132,9 +144,12 @@ module MathShortcuts
           }
         end
       end
-      persisted_aliases = persisted.flat_map { |shortcut| shortcut[:aliases].map { |alias_name| [shortcut[:prefix], alias_name] } }
       defaults = DEFAULTS.filter_map do |shortcut|
-        aliases = shortcut[:aliases].reject { |alias_name| persisted_aliases.include?([shortcut[:prefix], alias_name]) }
+        next if persisted_built_in_keys.include?([shortcut[:name], shortcut[:prefix]])
+
+        aliases = shortcut[:aliases].reject do |alias_name|
+          personal_aliases.include?([shortcut[:prefix], alias_name])
+        end
         next if aliases.empty?
 
         shortcut.merge(aliases: aliases)
@@ -145,6 +160,16 @@ module MathShortcuts
     def self.for_ui(workspace: Workspace.default)
       persisted = all(workspace: workspace).index_by { |shortcut| shortcut.id.to_s }
       for_editor(workspace: workspace).map do |attributes|
+        next MathShortcut.new(
+          name: attributes[:name],
+          aliases: attributes[:aliases],
+          description: attributes[:description],
+          prefix: attributes[:prefix],
+          expansion: attributes[:expansion],
+          built_in: attributes[:built_in],
+          workspace: workspace
+        ) if attributes[:built_in]
+
         persisted[attributes[:id].to_s] || MathShortcut.new(
           name: attributes[:name],
           aliases: attributes[:aliases],
