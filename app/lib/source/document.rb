@@ -84,21 +84,11 @@ module Source
     end
 
     def theme_from_source(source)
-      front_matter = initial_front_matter(source)
-      return "match" unless front_matter
-
-      front_matter.lines[1...front_matter.closing_line].each do |line|
-        match = line.text.match(/\Atheme\s*:\s*(.*)\z/)
-        return normalize_theme_value(match[1]) if match
-      end
-      "match"
+      normalized_override(source, "theme", method(:normalize_theme_value)) || "match"
     end
 
     def typography_from_source(source)
-      value = front_matter_value(source, "typography", default: nil) { |raw| raw }
-      return "book" unless value
-
-      normalize_typography_value(value)
+      normalized_override(source, "typography", method(:normalize_typography_value)) || "book"
     end
 
     def style_overrides(source)
