@@ -78,6 +78,50 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
     assert_equal bytes, response.body.b
   end
 
+  test "history lists revisions newest first with their payload fields" do
+    document = Document.create!(title: "History document", source: "# First")
+    later = document.work_revisions.create!(
+      workspace: document.workspace,
+      source: "# Second",
+      source_digest: WorkRevision.digest("# Second"),
+      reason: "checkpoint",
+      status: "checkpoint"
+    )
+
+    get history_document_path(document)
+
+    assert_response :success
+    json = response.parsed_body
+    assert_equal [later.id, document.work_revisions.order(:id).first.id], json.map { |entry| entry["id"] }
+    assert_equal %w[created_at id reason source source_digest status].sort, json.first.keys.sort
+    assert_equal "# Second", json.first["source"]
+    assert_equal WorkRevision.digest("# Second"), json.first["source_digest"]
+    assert_equal "checkpoint", json.first["reason"]
+    assert_equal "checkpoint", json.first["status"]
+    assert json.first["created_at"].present?
+  end
+
+  test "restore reinstates a chosen revision and reports the restored draft" do
+    document = Document.create!(title: "Restore document", source: "# First")
+    document.update!(source: "# Second")
+    original = document.work_revisions.order(:id).first
+
+    post restore_document_path(document), params: { revision_id: original.id }
+
+    assert_redirected_to edit_document_path(document)
+    assert_equal "Revision restored.", flash[:notice]
+    assert_equal "# First", document.reload.source
+
+    document.update!(source: "# Third")
+    post restore_document_path(document), params: { revision_id: original.id }, as: :json
+
+    assert_response :ok
+    assert_equal "# First", response.parsed_body["source"]
+    assert_equal "saved", response.parsed_body["status"]
+    assert_equal "restore", response.parsed_body.dig("latest_checkpoint", "reason")
+    assert_equal "# First", document.reload.source
+  end
+
   test "document library is separate from the combined library" do
     document = Document.create!(title: "Notes", source: "# Notes")
 
