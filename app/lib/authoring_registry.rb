@@ -67,7 +67,7 @@ module AuthoringRegistry
   def operator_class(name)
     case name
     when "Bold", "Blackboard bold" then "style"
-    when "Vector" then "decoration"
+    when "Vector", "Bar" then "decoration"
     when "Transpose", "Inverse" then "mathematical_postfix"
     else nil
     end

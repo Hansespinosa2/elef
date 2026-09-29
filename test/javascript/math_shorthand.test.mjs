@@ -17,12 +17,14 @@ const paletteSource = (await readFile(new URL("../../app/javascript/controllers/
 const mathPalette = await import(`data:text/javascript;base64,${Buffer.from(paletteSource).toString("base64")}`)
 delete globalThis.__mathTestHelpers
 
-test("serializes only the supported v1 math transforms", () => {
+test("serializes v1 math transforms and the existing bar decoration", () => {
   assert.equal(math.expandMathShorthand("x.b"), "\\mathbf{x}")
   assert.equal(math.expandMathShorthand("\\alpha.b"), "\\boldsymbol{\\alpha}")
   assert.equal(math.expandMathShorthand("@a.b"), "\\boldsymbol{\\alpha}")
   assert.equal(math.expandMathShorthand("R.bb"), "\\mathbb{R}")
   assert.equal(math.expandMathShorthand("x.vec"), "\\vec{x}")
+  assert.equal(math.expandMathShorthand("x.bar"), "\\bar{x}")
+  assert.equal(math.expandMathShorthand("x.bar.b"), "\\bar{\\mathbf{x}}")
   assert.equal(math.expandMathShorthand("A.t"), "A^{\\mathsf{T}}")
   assert.equal(math.expandMathShorthand("A.T"), "A^{\\mathsf{T}}")
   assert.equal(math.expandMathShorthand("A.inv"), "A^{-1}")
@@ -33,7 +35,7 @@ test("preserves mathematical postfix sequence and rejects deferred grammar", () 
   assert.equal(math.expandMathShorthand("A.inv.t"), "\\left(A^{-1}\\right)^{\\mathsf{T}}")
   assert.equal(math.expandMathShorthand("A.t.inv"), "\\left(A^{\\mathsf{T}}\\right)^{-1}")
   assert.notEqual(math.expandMathShorthand("A.inv.t"), math.expandMathShorthand("A.t.inv"))
-  for (const source of ["x.invalid", "x.hat", "x.abs", "x.sqrt", "x.b.bb", "x.vec.vec"]) {
+  for (const source of ["x.invalid", "x.hat", "x.abs", "x.sqrt", "x.b.bb", "x.vec.bar", "x.vec.vec"]) {
     assert.equal(math.expandMathShorthand(source), null)
   }
 })

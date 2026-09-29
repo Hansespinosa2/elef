@@ -2,7 +2,7 @@ import { Controller } from "@hotwired/stimulus"
 import { syntaxTree } from "@codemirror/language"
 import { editorFor } from "controllers/editor_controller"
 
-const MODIFIER_ALIASES = Object.freeze({ b: "bold", bb: "blackboard", vec: "vector", v: "vector", t: "transpose", T: "transpose", inv: "inverse" })
+const MODIFIER_ALIASES = Object.freeze({ b: "bold", bb: "blackboard", bar: "bar", vec: "vector", v: "vector", t: "transpose", T: "transpose", inv: "inverse" })
 const GREEK_OPERAND = /^\\(?:alpha|beta|gamma|delta|epsilon|varepsilon|zeta|eta|theta|vartheta|iota|kappa|lambda|mu|nu|xi|pi|varpi|rho|varrho|sigma|varsigma|tau|upsilon|phi|varphi|chi|psi|omega|Gamma|Delta|Theta|Lambda|Xi|Pi|Sigma|Upsilon|Phi|Psi|Omega)$/
 const ATOMIC_MATH_SHORTCUTS = Object.freeze({ "@a": "\\alpha", "@b": "\\beta", "@g": "\\gamma", "@m": "\\mu", "@n": "\\nu", "@r": "\\rho", "@D": "\\Delta" })
 
@@ -13,15 +13,16 @@ export function parseMathShorthand(token) {
   const [base, ...names] = token.split(".")
   const modifiers = names.map((name) => MODIFIER_ALIASES[name] || null)
   if (modifiers.some((modifier) => !modifier)) return null
-  if (modifiers.filter((modifier) => ["bold", "blackboard"].includes(modifier)).length > 1 || modifiers.filter((modifier) => modifier === "vector").length > 1 || modifiers.filter((modifier) => ["transpose", "inverse"].includes(modifier)).length > 2 || modifiers.filter((modifier) => modifier === "transpose").length > 1 || modifiers.filter((modifier) => modifier === "inverse").length > 1) {
+  if (modifiers.filter((modifier) => ["bold", "blackboard"].includes(modifier)).length > 1 || modifiers.filter((modifier) => ["bar", "vector"].includes(modifier)).length > 1 || modifiers.filter((modifier) => ["transpose", "inverse"].includes(modifier)).length > 2 || modifiers.filter((modifier) => modifier === "transpose").length > 1 || modifiers.filter((modifier) => modifier === "inverse").length > 1) {
     return { status: "invalid", base, modifiers }
   }
 
   const operand = ATOMIC_MATH_SHORTCUTS[base] || base
   const style = modifiers.find((modifier) => ["bold", "blackboard"].includes(modifier))
-  const vector = modifiers.includes("vector")
+  const decoration = modifiers.find((modifier) => ["bar", "vector"].includes(modifier))
   let value = style === "bold" ? `${GREEK_OPERAND.test(operand) ? "\\boldsymbol" : "\\mathbf"}{${operand}}` : style === "blackboard" ? `\\mathbb{${operand}}` : operand
-  if (vector) value = `\\vec{${value}}`
+  if (decoration === "bar") value = `\\bar{${value}}`
+  if (decoration === "vector") value = `\\vec{${value}}`
   let postfixCount = 0
   for (const modifier of modifiers) {
     if (modifier === "transpose" || modifier === "inverse") {
