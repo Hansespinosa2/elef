@@ -181,9 +181,11 @@ body.elef-app {
 .visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-cursorLayer { display: none; }
 .visual-editor-form[data-editor-mode="source"] .source-field .editor-surface { display: block; }
 .visual-editor-form[data-editor-mode="source"] .source-field.is-source-hidden { display: block; }
-.editor-layout, .source-pane { min-width: 0; }
+.editor-layout, .source-pane, .preview-pane { min-width: 0; }
 .visual-editor-form[data-editor-mode="source"] .editor-layout { align-items: start; display: grid; gap: clamp(0.75rem, 1.5vw, 1.25rem); grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr); }
 .visual-editor-form[data-editor-mode="source"] .editor-projection { max-height: min(74vh, 58rem); min-height: 24rem; overflow: auto; }
+.visual-editor-form[data-editor-mode="source"] .document-editor-projection,
+.visual-editor-form[data-editor-mode="source"] .document-editor-projection .document-surface { min-width: 0; width: 100%; }
 .visual-editor-form[data-editor-mode="source"] .presentation-editor-slide-toolbar,
 .visual-editor-form[data-editor-mode="source"] .presentation-editor-block-controls { display: none; }
 .visual-editor-form[data-editor-mode="source"] .document-editor-block:hover,

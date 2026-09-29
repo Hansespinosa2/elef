@@ -948,6 +948,40 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_no_selector ".preview-pane .math-error"
   end
 
+  test "source mode fits the first document page inside the side preview" do
+    visit new_document_path
+    click_on "Source"
+    wait_for_settled_document_projection
+
+    bounds = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const preview = document.querySelector(".preview-pane");
+        const frame = preview.querySelector(".document-page-frame");
+        const previewStyle = getComputedStyle(preview);
+        const previewRect = preview.getBoundingClientRect();
+        const frameRect = frame.getBoundingClientRect();
+        return {
+          frameLeft: frameRect.left,
+          frameTop: frameRect.top,
+          frameRight: frameRect.right,
+          frameBottom: frameRect.bottom,
+          contentLeft: previewRect.left + parseFloat(previewStyle.borderLeftWidth) + parseFloat(previewStyle.paddingLeft),
+          contentTop: previewRect.top + parseFloat(previewStyle.borderTopWidth) + parseFloat(previewStyle.paddingTop),
+          contentRight: previewRect.right - parseFloat(previewStyle.borderRightWidth) - parseFloat(previewStyle.paddingRight),
+          contentBottom: previewRect.bottom - parseFloat(previewStyle.borderBottomWidth) - parseFloat(previewStyle.paddingBottom)
+        };
+      })()
+    JAVASCRIPT
+
+    assert_operator bounds["frameLeft"], :>=, bounds["contentLeft"], bounds.inspect
+    assert_operator bounds["frameTop"], :>=, bounds["contentTop"], bounds.inspect
+    assert_operator bounds["frameRight"], :<=, bounds["contentRight"], bounds.inspect
+    assert_operator bounds["frameBottom"], :<=, bounds["contentBottom"], bounds.inspect
+
+    click_on "Visual"
+    assert_equal "", page.evaluate_script('document.querySelector(".document-page-frame").style.width')
+  end
+
   test "document preview renders inline accents and multiline display equations" do
     document = Document.create!(title: "Document math rendering", source: <<~MARKDOWN)
       # Math
