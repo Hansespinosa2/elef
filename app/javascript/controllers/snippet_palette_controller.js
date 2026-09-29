@@ -151,6 +151,7 @@ export default class extends Controller {
     this.matches = this.registry
       .filter((entry) => entry.namespace === query.prefix)
       .filter((entry) => (entry.contexts || []).includes("source"))
+      .filter((entry) => entry.behavior?.type === "insert")
       .map((snippet) => ({ snippet, score: this.score(snippet) }))
       .filter((result) => result.score !== null)
       .sort((a, b) => b.score - a.score || a.snippet.trigger.localeCompare(b.snippet.trigger) || a.snippet.name.localeCompare(b.snippet.name))

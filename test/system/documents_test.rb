@@ -1849,7 +1849,7 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_no_selector ".snippet-palette [role='option'] strong", text: "left"
   end
 
-  test "slash palette inserts canonical image and Mermaid source" do
+  test "slash palette inserts canonical image source" do
     document = Document.create!(title: "Source palette", source: "# Notes")
     visit edit_document_path(document)
     editor = find_field("Markdown source")
@@ -1867,18 +1867,6 @@ class DocumentsTest < ApplicationSystemTestCase
     JAVASCRIPT
     assert_equal "description", selected_image_placeholder
 
-    page.execute_script(<<~JAVASCRIPT)
-      const editor = document.querySelector(".source-field").editorController;
-      editor.setSelectionRange(editor.value.length);
-    JAVASCRIPT
-    editor.send_keys("\n/diagram")
-    assert_selector ".snippet-palette [role='option']", text: /Diagram/
-    editor.send_keys(:enter)
-
-    assert_includes editor.value, "```mermaid"
-    assert_includes editor.value, "flowchart TD"
-    assert_includes editor.value, "A --> B"
-    refute_includes editor.value, "/diagram"
   end
 
   test "supports only the v1 math transforms and preserves invalid chains" do
