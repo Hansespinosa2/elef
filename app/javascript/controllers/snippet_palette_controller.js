@@ -1,5 +1,6 @@
 import { Controller } from "@hotwired/stimulus"
 import { editorFor } from "controllers/editor_controller"
+import { insideMath } from "controllers/math_shorthand_controller"
 
 export default class extends Controller {
   static targets = ["editor", "palette"]
@@ -83,6 +84,12 @@ export default class extends Controller {
       return
     }
 
+    const query = this.queryAtCaret()
+    if (!query || query.start !== this.queryStart || query.text !== this.query) {
+      this.close()
+      return
+    }
+
     if (event.key === "ArrowDown") {
       event.preventDefault()
       this.selectedIndex = Math.min(this.selectedIndex + 1, Math.min(this.matches.length, 5) - 1)
@@ -97,37 +104,89 @@ export default class extends Controller {
     } else if (event.key === "Escape") {
       event.preventDefault()
       this.close()
+    } else {
+      queueMicrotask(() => this.refresh())
     }
   }
 
   refresh() {
     const editor = this.editorController
     if (!editor) return this.close()
-    const beforeCaret = editor.value.slice(0, editor.selectionStart)
-    const match = beforeCaret.match(/:([a-z0-9-]*)$/i)
-    if (!match) return this.close()
+    const query = this.queryAtCaret()
+    if (!query) return this.close()
 
-    this.query = match[1].toLowerCase()
-    this.queryStart = editor.selectionStart - this.query.length - 1
+    this.query = query.text
+    this.queryStart = query.start
+    const mathContext = insideMath(editor.value, editor.selectionStart)
     this.matches = this.snippetsValue
+      .filter((snippet) => !mathContext || this.supportsMathContext(snippet))
       .map((snippet) => ({ snippet, score: this.score(snippet) }))
       .filter((result) => result.score !== null)
-      .sort((a, b) => a.score - b.score || a.snippet.trigger.localeCompare(b.snippet.trigger) || a.snippet.name.localeCompare(b.snippet.name))
+      .sort((a, b) => b.score - a.score || a.snippet.trigger.localeCompare(b.snippet.trigger) || a.snippet.name.localeCompare(b.snippet.name))
       .map((result) => result.snippet)
     this.selectedIndex = 0
     this.renderPalette()
   }
 
-  score(snippet) {
-    const text = `${snippet.trigger} ${snippet.name} ${snippet.description}`.toLowerCase()
-    if (!this.query) return 0
-    if (snippet.trigger.startsWith(this.query)) return 0
-    let index = -1
-    for (const character of this.query) {
-      index = text.indexOf(character, index + 1)
-      if (index === -1) return null
+  queryAtCaret() {
+    const editor = this.editorController
+    if (!editor || editor.selectionStart !== editor.selectionEnd) return null
+
+    const beforeCaret = editor.value.slice(0, editor.selectionStart)
+    const match = beforeCaret.match(/:([a-z0-9-]*)$/i)
+    if (!match) return null
+
+    const triggerStart = match.index
+    const previousCharacter = beforeCaret[triggerStart - 1]
+    if (previousCharacter === ":" || previousCharacter === "\\") return null
+
+    return {
+      text: match[1].toLowerCase(),
+      start: editor.selectionStart - match[1].length - 1
     }
-    return index + (snippet.trigger.includes(this.query) ? 1 : 10)
+  }
+
+  supportsMathContext(snippet) {
+    return snippet.category === "LaTeX" && !/^\s*\$/.test(snippet.body || "")
+  }
+
+  score(snippet) {
+    const query = this.query
+    const trigger = snippet.trigger.toLowerCase()
+    const name = (snippet.name || "").toLowerCase()
+    const description = (snippet.description || "").toLowerCase()
+    const category = (snippet.category || "").toLowerCase()
+    if (!this.query) return 0
+    if (trigger === query) return 10000
+
+    const triggerScore = this.fieldScore(trigger, query, 9000)
+    if (triggerScore !== null) return triggerScore
+
+    const nameScore = this.fieldScore(name, query, 8000)
+    if (nameScore !== null) return nameScore
+
+    const descriptionScore = this.fieldScore(description, query, 5000)
+    const categoryScore = this.fieldScore(category, query, 4000)
+    return [descriptionScore, categoryScore].filter((score) => score !== null).sort((a, b) => b - a)[0] ?? null
+  }
+
+  fieldScore(value, query, weight) {
+    if (!query) return weight
+    if (value === query) return weight + 1000
+    if (value.startsWith(query)) return weight + 800 - value.length
+    if (query.length < 2) return null
+    const index = value.indexOf(query)
+    if (index !== -1) return weight + 600 - index
+
+    let previous = -1
+    let gap = 0
+    for (const character of query) {
+      const index = value.indexOf(character, previous + 1)
+      if (index === -1) return null
+      if (previous !== -1) gap += index - previous - 1
+      previous = index
+    }
+    return weight + 400 - gap - previous / 100
   }
 
   renderPalette() {

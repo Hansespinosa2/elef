@@ -54,8 +54,8 @@ class LibraryControllerTest < ActionDispatch::IntegrationTest
       get path
 
       assert_select "article#document_#{document.id}" do
-        assert_select ".library-preview .library-preview-page .document-page", 1
-        assert_select ".library-preview .document-page-content h1", text: "Card document"
+        assert_select ".library-preview .document-reader[data-controller~='document-pages'] .document-surface", 1
+        assert_select ".library-preview .document-surface h1", text: "Card document"
         assert_select ".library-preview .slide", 0
       end
     end
@@ -114,7 +114,7 @@ class LibraryControllerTest < ActionDispatch::IntegrationTest
 
     assert_select ".library-preview[data-controller='presentation-canvas']"
     assert_select ".library-preview-stage > .slide", minimum: 1
-    assert_select ".library-preview[data-presentation-canvas-design-width-value='832'][data-presentation-canvas-design-height-value='1152']",
+    assert_select ".library-preview[data-presentation-canvas-design-width-value='794'][data-presentation-canvas-design-height-value='1123']",
       minimum: 1
     assert_select ".library-preview-page[data-presentation-canvas-target='canvas']", minimum: 1
   end

@@ -235,14 +235,13 @@ export default class extends Controller {
       this.close()
     } else if (id === "toggle-vim") {
       const toggle = document.querySelector("[data-editor-target='vimToggle']")
-      if (toggle) toggle.click()
+      if (toggle) {
+        toggle.click()
+      } else {
+        const editor = document.querySelector(".source-field")?.editorController
+        editor?.toggleVim()
+      }
       this.close()
-    } else if (id === "vim-settings") {
-      const summary = document.querySelector(".editor-settings summary")
-      const details = summary?.closest("details")
-      if (details) details.open = true
-      this.close()
-      summary?.focus()
     } else if (id === "toggle-metadata") {
       const editor = document.querySelector(".source-field")?.editorController
       editor?.toggleMetadataVisibility()

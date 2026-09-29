@@ -11,8 +11,12 @@ export function markdownForVisibleText(markdown, text, kind, element = null, { d
   if (kind === "code") return markdownForCode(source, rawValue)
 
   const protectedElements = protectedElementsFor(element)
+  const allMathElements = allMathElementsFor(element)
+  const activeCount = allMathElements.filter((candidate) => candidate.dataset.editorMathActive === "true").length
   const sourceAtoms = sourceAtomCounts(source)
-  if (element?.querySelectorAll && sourceAtoms.total !== protectedElements.length) return source
+  const expectedAtoms = protectedElements.length + activeCount
+  if (element?.querySelectorAll && sourceAtoms.total !== expectedAtoms &&
+    !hasMatchingActiveMathDelimiter(source, allMathElements, sourceAtoms.total, expectedAtoms)) return source
   const structured = kind === "list" || kind === "quote"
   const sourceText = documentMode && structured ? String(text || "").replace(/\u00a0/g, " ") : rawValue
   const atomText = protectedElements.length ? visibleTextWithProtectedAtoms(element, protectedElements.length) : sourceText
@@ -22,7 +26,7 @@ export function markdownForVisibleText(markdown, text, kind, element = null, { d
   const formatBudget = inlineFormatBudget(element)
 
   if (kind === "list" || kind === "quote") {
-    const projection = structuredBlockProjection(source, kind, protectedElements, formatBudget, { preserveEmptyLines: documentMode })
+    const projection = structuredBlockProjection(source, kind, protectedElements, formatBudget, { preserveEmptyLines: documentMode }, allMathElements)
     const structuredValue = documentMode ? addStructuredMarkers(source, value, kind) : value
     const preserved = preserveProjectedMarkdown(source, structuredValue, projection, { preserveLineBreaks: documentMode })
     if (preserved !== null) return preserved
@@ -30,7 +34,7 @@ export function markdownForVisibleText(markdown, text, kind, element = null, { d
 
   if (source === "" && documentMode) return value
 
-  const preserved = preserveInlineMarkdown(source, value, protectedElements, formatBudget)
+  const preserved = preserveInlineMarkdown(source, value, protectedElements, formatBudget, allMathElements)
   // A failed source projection must never serialize display-only atoms or
   // lossy rendered text into canonical Markdown.
   return preserved === null ? source : preserved
@@ -38,9 +42,14 @@ export function markdownForVisibleText(markdown, text, kind, element = null, { d
 
 export function sourceOffsetForVisiblePosition(source, element, visiblePosition) {
   const protectedElements = protectedElementsFor(element)
-  if (sourceAtomCounts(source).total !== protectedElements.length) return null
+  const allMathElements = allMathElementsFor(element)
+  const activeCount = allMathElements.filter((candidate) => candidate.dataset.editorMathActive === "true").length
+  const sourceAtoms = sourceAtomCounts(source).total
+  const expectedAtoms = protectedElements.length + activeCount
+  if (sourceAtoms !== expectedAtoms &&
+    !hasMatchingActiveMathDelimiter(source, allMathElements, sourceAtoms, expectedAtoms)) return null
 
-  const projection = inlineProjection(source, 0, protectedElements, 0, inlineFormatBudget(element))
+  const projection = inlineProjection(source, 0, protectedElements, 0, inlineFormatBudget(element), allMathElements)
   return projection.boundaries[visiblePosition] ?? null
 }
 
@@ -55,7 +64,7 @@ export function renderInlineMath(element) {
   const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT)
   while (walker.nextNode()) {
     const node = walker.currentNode
-    if (!node.parentElement?.closest("pre, code, [data-editor-math-source]")) textNodes.push(node)
+    if (!node.parentElement?.closest("pre, code, [data-editor-math-source], [data-editor-math-active]")) textNodes.push(node)
   }
 
   let renderedCount = 0
@@ -83,12 +92,16 @@ export function renderInlineMath(element) {
 
       const expression = match[1] ?? match[2] ?? match[3] ?? match[4]
       const displayMode = match[1] !== undefined || match[2] !== undefined
+      const openDelimiter = match[1] !== undefined ? "\\[" : match[2] !== undefined ? "$$" : match[3] !== undefined ? "\\(" : "$"
+      const closeDelimiter = match[1] !== undefined ? "\\]" : match[2] !== undefined ? "$$" : match[3] !== undefined ? "\\)" : "$"
       const rendered = document.createElement("span")
       try {
         rendered.innerHTML = katex.renderToString(expression, { displayMode, throwOnError: true })
         const math = rendered.firstElementChild
         if (!math) throw new Error("KaTeX produced no output")
         math.dataset.editorMathSource = expression
+        math.dataset.editorMathOpen = openDelimiter
+        math.dataset.editorMathClose = closeDelimiter
         if (displayMode) math.classList.add("editor-live-math-display")
         math.contentEditable = "false"
         fragment.append(math)
@@ -98,6 +111,8 @@ export function renderInlineMath(element) {
         const mathError = document.createElement("span")
         mathError.className = "math-error"
         mathError.dataset.editorMathSource = expression
+        mathError.dataset.editorMathOpen = openDelimiter
+        mathError.dataset.editorMathClose = closeDelimiter
         mathError.contentEditable = "false"
         mathError.title = "Invalid TeX"
         mathError.textContent = expression
@@ -272,8 +287,8 @@ function markdownForImage(source, element, fallback) {
   return `${image[1]}![${alt}](${image[3]}${title})${image[5]}`
 }
 
-function preserveInlineMarkdown(source, value, protectedElements, formatBudget) {
-  return preserveProjectedMarkdown(source, value, inlineProjection(source, 0, protectedElements, 0, formatBudget))
+function preserveInlineMarkdown(source, value, protectedElements, formatBudget, allMathElements = []) {
+  return preserveProjectedMarkdown(source, value, inlineProjection(source, 0, protectedElements, 0, formatBudget, allMathElements))
 }
 
 function preserveProjectedMarkdown(source, value, projection, { preserveLineBreaks = false } = {}) {
@@ -305,11 +320,12 @@ function commonEditBounds(previous, next) {
   return { prefix, suffix }
 }
 
-function inlineProjection(source, sourceOffset = 0, protectedElements = [], protectedStartIndex = 0, formatBudget = null) {
+function inlineProjection(source, sourceOffset = 0, protectedElements = [], protectedStartIndex = 0, formatBudget = null, allMathElements = []) {
   let text = ""
   const boundaries = []
   let hasSyntax = false
   let protectedIndex = 0
+  let mathIndex = 0
 
   const appendPlain = (value, sourceStart) => {
     if (!value) return
@@ -366,30 +382,50 @@ function inlineProjection(source, sourceOffset = 0, protectedElements = [], prot
 
     hasSyntax = true
     if (token.formatType && formatBudget) formatBudget[token.formatType] = Math.max(0, formatBudget[token.formatType] - 1)
-    if (token.kind === "math" || token.kind === "image") {
+    if (token.kind === "math") {
+      const mathElement = allMathElements[mathIndex]
+      const isActive = mathElement?.dataset?.editorMathActive === "true"
+      if (isActive) {
+        appendPlain(source.slice(index, index + token.length), sourceOffset + index)
+      } else {
+        const protectedElement = protectedElements[protectedIndex]
+        appendProtected(protectedElement ? atomMarker(protectedStartIndex + protectedIndex) : token.content, sourceOffset + index, sourceOffset + index + token.length)
+        protectedIndex += 1
+      }
+      mathIndex += 1
+    } else if (token.kind === "image") {
       const protectedElement = protectedElements[protectedIndex]
       appendProtected(protectedElement ? atomMarker(protectedStartIndex + protectedIndex) : token.content, sourceOffset + index, sourceOffset + index + token.length)
       protectedIndex += 1
     } else if (["code", "document_link", "escape"].includes(token.kind)) {
       appendPlain(token.content, sourceOffset + index + token.contentOffset)
     } else {
-      const content = inlineProjection(token.content, sourceOffset + index + token.contentOffset, protectedElements.slice(protectedIndex), protectedStartIndex + protectedIndex, formatBudget)
+      const content = inlineProjection(
+        token.content,
+        sourceOffset + index + token.contentOffset,
+        protectedElements.slice(protectedIndex),
+        protectedStartIndex + protectedIndex,
+        formatBudget,
+        allMathElements.slice(mathIndex)
+      )
       appendProjection(content)
       protectedIndex += content.atomCount
+      mathIndex += content.mathCount || 0
     }
     index += token.length
   }
 
-  return { text, boundaries, hasSyntax, atomCount: protectedIndex }
+  return { text, boundaries, hasSyntax, atomCount: protectedIndex, mathCount: mathIndex }
 }
 
-function structuredBlockProjection(source, kind, protectedElements, formatBudget = null, { preserveEmptyLines = false } = {}) {
+function structuredBlockProjection(source, kind, protectedElements, formatBudget = null, { preserveEmptyLines = false } = {}, allMathElements = []) {
   const lines = source.split("\n")
   const boundaries = []
   let text = ""
   let hasSyntax = false
   let sourceOffset = 0
   let protectedIndex = 0
+  let mathIndex = 0
 
   lines.forEach((line, lineIndex) => {
     const prefix = kind === "quote"
@@ -397,8 +433,16 @@ function structuredBlockProjection(source, kind, protectedElements, formatBudget
       : line.match(/^[ \t]*(?:[-*+]|\d+[.)])[ \t]+/)
     const prefixLength = prefix?.[0].length || 0
     hasSyntax ||= prefixLength > 0
-    const projection = inlineProjection(line.slice(prefixLength), sourceOffset + prefixLength, protectedElements.slice(protectedIndex), protectedIndex, formatBudget)
+    const projection = inlineProjection(
+      line.slice(prefixLength),
+      sourceOffset + prefixLength,
+      protectedElements.slice(protectedIndex),
+      protectedIndex,
+      formatBudget,
+      allMathElements.slice(mathIndex)
+    )
     protectedIndex += projection.atomCount
+    mathIndex += projection.mathCount || 0
     hasSyntax ||= projection.hasSyntax
 
     if (projection.text) {
@@ -517,8 +561,41 @@ function inlineFormatBudget(element) {
   }
 }
 
-function protectedElementsFor(element) {
-  return [...(element?.querySelectorAll?.("[data-editor-math-source], [data-editor-image-source]") || [])]
+export function protectedElementsFor(element) {
+  return [...(element?.querySelectorAll?.("[data-editor-math-source]:not([data-editor-math-active]), [data-editor-image-source]") || [])]
+}
+
+export function allMathElementsFor(element) {
+  return [...(element?.querySelectorAll?.("[data-editor-math-source], [data-editor-math-active]") || [])]
+}
+
+function hasMatchingActiveMathDelimiter(source, allMathElements, sourceAtoms, expectedAtoms) {
+  const missingAtoms = expectedAtoms - sourceAtoms
+  if (missingAtoms <= 0) return false
+
+  let matched = 0
+  const availableDelimiters = new Map()
+  allMathElements.forEach((element) => {
+    if (matched >= missingAtoms || element.dataset.editorMathActive !== "true") return
+
+    const open = element.dataset.editorMathOpen || "$"
+    const close = element.dataset.editorMathClose || open
+    const delimiter = `${open}${close}`
+    if (!availableDelimiters.has(delimiter)) {
+      availableDelimiters.set(delimiter, source.split(delimiter).length - 1)
+    }
+
+    // The source can still have an empty expression while the active span
+    // already contains newly typed text and its pending projection has not
+    // flushed yet.
+    const available = availableDelimiters.get(delimiter)
+    if (available > 0) {
+      availableDelimiters.set(delimiter, available - 1)
+      matched += 1
+    }
+  })
+
+  return matched === missingAtoms
 }
 
 function atomMarker(index) {

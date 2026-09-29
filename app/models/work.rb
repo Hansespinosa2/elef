@@ -6,8 +6,6 @@ class Work < ApplicationRecord
   WORK_TYPES = %w[document presentation].freeze
   DEFAULT_SOURCE = "# Untitled work\n\nStart writing Markdown here.".freeze
   CHECKPOINT_INTERVAL = 30.seconds
-  PREVIEW_PAGE_BLOCKS = 3
-  PREVIEW_PAGE_CHARACTERS = 400
 
   belongs_to :workspace
   belongs_to :latest_checkpoint, class_name: "WorkRevision", optional: true
@@ -148,26 +146,6 @@ class Work < ApplicationRecord
       workspace: preview_workspace,
       media_resolver: WorkAssets.resolver_for(self)
     )
-  end
-
-  def preview_page_html(blocks: PREVIEW_PAGE_BLOCKS, characters: PREVIEW_PAGE_CHARACTERS)
-    page = parsed_document.slides.first
-    return "".html_safe unless page
-
-    preview_workspace = workspace || Workspace.default
-    linked_documents = Document.where(workspace: preview_workspace).to_a
-    rendered = +""
-    rendered_length = 0
-
-    page.blocks.each_with_index do |block, index|
-      markdown = block.markdown.to_s
-      break if index.positive? && (index >= blocks || rendered_length + markdown.length > characters)
-
-      rendered_length += markdown.length
-      rendered << DocumentLinks::Renderer.render(markdown, documents: linked_documents, workspace: preview_workspace)
-    end
-
-    rendered.html_safe
   end
 
   def source=(value)

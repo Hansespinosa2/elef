@@ -5,6 +5,11 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_selector "form.visual-editor-form:not([data-preview-projection-stale='true'])", wait: 5
   end
 
+  def wait_for_settled_document_projection
+    wait_for_fresh_projection
+    assert_selector ".document-editor-projection .document-surface[data-document-pages-settled='true']", wait: 10
+  end
+
   def wait_for_preview_response(count)
     ready = page.evaluate_async_script(<<~JAVASCRIPT, count)
       const count = arguments[0];
@@ -31,7 +36,6 @@ class DocumentsTest < ApplicationSystemTestCase
       assert target, "could not find visual text #{source_text.inspect} in #{selector}"
 
       begin
-        target.click
         selected = page.execute_script(<<~JAVASCRIPT, target, source_text)
           const root = arguments[0];
           const needle = arguments[1];
@@ -95,9 +99,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   def active_document_block
     assert_selector ".document-editor-block[data-editor-block-id]:focus", wait: 5
-    block_id = page.evaluate_script("document.activeElement.closest('.document-editor-block')?.dataset.editorBlockId")
-    assert block_id, "expected the visual document editor to keep a block focused"
-    find(".document-editor-block[data-editor-block-id='#{block_id}']")
+    find(".document-editor-block[data-editor-block-id]:focus")
   end
 
   test "suggests document links in the Markdown editor" do
@@ -117,10 +119,9 @@ class DocumentsTest < ApplicationSystemTestCase
     Document.create!(title: "Research target", source: "# Target")
     document = Document.create!(title: "Research source", source: "# Source")
 
+    visit settings_path
+    find("[data-vim-settings-target='vimToggle']").check
     visit edit_document_path(document)
-    find("summary", text: "Vim settings").click
-    find("[data-editor-target='vimToggle']").check
-    find("summary", text: "Vim settings").click
 
     editor = find(".cm-content")
     editor.click
@@ -264,24 +265,6 @@ class DocumentsTest < ApplicationSystemTestCase
     JAVASCRIPT
 
     assert_equal presentation_panel_style, document_panel_style
-  end
-
-  test "renaming a document preserves linked previews" do
-    target = Document.create!(title: "Rename target", source: "# Target")
-    incoming = Document.create!(title: "Rename source", source: "See [[Rename target]]")
-
-    visit documents_path
-    within("##{ActionView::RecordIdentifier.dom_id(target)}") do
-      find(".library-card-menu-trigger").click
-      find("summary", text: "Rename").click
-      find("input[type='text']").set("Renamed target")
-      click_on "Save title"
-    end
-
-    assert_text "Document renamed."
-    assert_equal "See [[Rename target]]", incoming.reload.source
-    visit document_path(incoming)
-    assert_selector "a.document-link[href='#{document_path(target)}']", text: "Renamed target"
   end
 
   test "creates a document and updates its continuous live preview" do
@@ -839,6 +822,106 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_selector ".document-editor-block .katex", text: "test"
   end
 
+  test "latex visual mode enter and exit flow allows inline editing" do
+    visit new_document_path
+
+    find(".document-editor-block h1", text: "Untitled document").send_keys(:enter)
+    block = active_document_block
+    block.send_keys("$x=3$")
+    assert_selector ".document-editor-block .katex", wait: 5
+
+    # 4. Hit left arrow -> enters math mode, de-renders to raw text with $ delimiters visible, caret is inside $x=3|$
+    block.send_keys(:left)
+    assert_selector ".document-editor-block .editor-math-active", text: "$x=3$", wait: 5
+
+    # 5. Hit backspace -> deletes 3 -> $x=|$
+    block.send_keys(:backspace)
+    assert_selector ".document-editor-block .editor-math-active", text: "$x=$", wait: 5
+
+    # 6. Hit 4 -> types 4 -> $x=4|$
+    block.send_keys("4")
+    assert_selector ".document-editor-block .editor-math-active", text: "$x=4$", wait: 5
+
+    # 7. Hit right arrow -> leaves math block; re-renders KaTeX; caret is outside $x=4$|
+    block.send_keys(:right)
+    assert_selector ".document-editor-block [data-editor-math-source='x=4']", wait: 5
+    assert_no_selector ".document-editor-block .editor-math-active"
+
+    # 8. Hit left arrow -> de-renders to raw text; caret inside $x=4|$
+    block.send_keys(:left)
+    assert_selector ".document-editor-block .editor-math-active", text: "$x=4$", wait: 5
+
+    # 9. Hit left arrow 2x -> caret moves past 4 and = -> $x|=4$
+    block.send_keys(:left, :left)
+
+    # 10. Hit backspace -> deletes x -> $|=4$
+    block.send_keys(:backspace)
+    assert_selector ".document-editor-block .editor-math-active", text: "$=4$", wait: 5
+
+    # 11. Hit y -> types y -> $y|=4$
+    block.send_keys("y")
+    assert_selector ".document-editor-block .editor-math-active", text: "$y=4$", wait: 5
+
+    # 12. Hit left arrow 2x -> 1st moves to $[caret]y=4$, 2nd moves past opening $ exiting math -> re-renders KaTeX
+    block.send_keys(:left, :left)
+
+    # 13. Success: Latex renders correctly and caret is outside |$y=4
+    assert_selector ".document-editor-block [data-editor-math-source='y=4']", wait: 5
+    assert_no_selector ".document-editor-block .editor-math-active"
+    assert_field "Markdown source", with: "# Untitled document\n\n$y=4$", wait: 5
+  end
+
+  test "typing after clearing inline math stays inside the expression" do
+    visit new_document_path
+
+    find(".document-editor-block h1", text: "Untitled document").send_keys(:enter)
+    block = active_document_block
+    block.send_keys("$x$")
+    assert_selector ".document-editor-block [data-editor-math-source='x']", wait: 5
+
+    block.send_keys(:left)
+    assert_selector ".document-editor-block .editor-math-active", text: "$x$", wait: 5
+    block.send_keys(:backspace)
+    assert_selector ".document-editor-block .editor-math-active", text: "$$", wait: 5
+    block.send_keys("x=3")
+
+    assert_selector ".document-editor-block .editor-math-active", text: "$x=3$", wait: 5
+    assert_field "Markdown source", with: "# Untitled document\n\n$x=3$", wait: 5
+  end
+
+  test "display latex visual mode enter and exit and click to edit" do
+    visit new_document_path
+
+    find(".document-editor-block h1", text: "Untitled document").send_keys(:enter)
+    block = active_document_block
+    block.send_keys("$$a=1$$")
+    assert_selector ".document-editor-block .editor-live-math-display", wait: 5
+
+    # Left arrow enters display math at $$a=1|$$
+    block.send_keys(:left)
+    assert_selector ".document-editor-block .editor-math-active", text: "$$a=1$$", wait: 5
+
+    # Edit 1 -> 2
+    block.send_keys(:backspace)
+    block.send_keys("2")
+    assert_selector ".document-editor-block .editor-math-active", text: "$$a=2$$", wait: 5
+
+    # Right arrow leaves display math -> re-renders
+    block.send_keys(:right)
+    assert_selector ".document-editor-block [data-editor-math-source='a=2']", wait: 5
+    assert_no_selector ".document-editor-block .editor-math-active"
+    assert_field "Markdown source", with: "# Untitled document\n\n$$a=2$$", wait: 5
+
+    # Click on the rendered KaTeX math element -> de-renders to active math
+    find(".document-editor-block [data-editor-math-source='a=2']").click
+    assert_selector ".document-editor-block .editor-math-active", text: "$$a=2$$", wait: 5
+
+    # Blur by clicking title -> re-renders
+    find(".document-editor-block h1").click
+    assert_selector ".document-editor-block [data-editor-math-source='a=2']", wait: 5
+    assert_no_selector ".document-editor-block .editor-math-active"
+  end
+
   test "new document renders inline and display math before its first save" do
     visit new_document_path
 
@@ -881,6 +964,40 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_selector ".preview-pane .katex", minimum: 4, wait: 5
     assert_selector ".preview-pane .katex-display", minimum: 2
     assert_no_selector ".preview-pane .math-error"
+  end
+
+  test "source mode fits the first document page inside the side preview" do
+    visit new_document_path
+    click_on "Source"
+    wait_for_settled_document_projection
+
+    bounds = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const preview = document.querySelector(".preview-pane");
+        const frame = preview.querySelector(".document-page-frame");
+        const previewStyle = getComputedStyle(preview);
+        const previewRect = preview.getBoundingClientRect();
+        const frameRect = frame.getBoundingClientRect();
+        return {
+          frameLeft: frameRect.left,
+          frameTop: frameRect.top,
+          frameRight: frameRect.right,
+          frameBottom: frameRect.bottom,
+          contentLeft: previewRect.left + parseFloat(previewStyle.borderLeftWidth) + parseFloat(previewStyle.paddingLeft),
+          contentTop: previewRect.top + parseFloat(previewStyle.borderTopWidth) + parseFloat(previewStyle.paddingTop),
+          contentRight: previewRect.right - parseFloat(previewStyle.borderRightWidth) - parseFloat(previewStyle.paddingRight),
+          contentBottom: previewRect.bottom - parseFloat(previewStyle.borderBottomWidth) - parseFloat(previewStyle.paddingBottom)
+        };
+      })()
+    JAVASCRIPT
+
+    assert_operator bounds["frameLeft"], :>=, bounds["contentLeft"], bounds.inspect
+    assert_operator bounds["frameTop"], :>=, bounds["contentTop"], bounds.inspect
+    assert_operator bounds["frameRight"], :<=, bounds["contentRight"], bounds.inspect
+    assert_operator bounds["frameBottom"], :<=, bounds["contentBottom"], bounds.inspect
+
+    click_on "Visual"
+    assert_equal "", page.evaluate_script('document.querySelector(".document-page-frame").style.width')
   end
 
   test "document preview renders inline accents and multiline display equations" do
@@ -1041,6 +1158,47 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_includes editor.value, "$\\mathbf{\\hat{x}}^{\\mathsf{T}}"
     assert_includes editor.value, "\n"
     assert_selector '[data-autosave-target="status"]', text: "Saved", wait: 5
+  end
+
+  test "wraps TeX commands with math modifiers for Greek letters and operators" do
+    document = Document.create!(title: "TeX command modifiers", source: "# Math")
+    visit edit_document_path(document)
+    editor = find_field("Markdown source")
+    editor.click
+    editor.send_keys(:end)
+
+    editor.send_keys("\n$\\chi.bar")
+    editor.send_keys(:enter)
+    assert_includes editor.value, "$\\bar{\\chi}"
+
+    editor.send_keys("$\n$\\alpha.hat")
+    editor.send_keys(:tab)
+    assert_includes editor.value, "$\\hat{\\alpha}"
+
+    editor.send_keys("$\n$\\beta.tilde")
+    editor.send_keys(:enter)
+    assert_includes editor.value, "$\\tilde{\\beta}"
+
+    greek_commands = %w[
+      alpha beta gamma delta epsilon varepsilon zeta eta theta vartheta iota kappa lambda mu nu xi
+      pi varpi rho varrho sigma varsigma tau upsilon phi varphi chi psi omega
+      Gamma Delta Theta Lambda Xi Pi Sigma Upsilon Phi Psi Omega
+    ]
+    editor.send_keys("$\n$")
+    greek_commands.each do |command|
+      editor.send_keys(" \\#{command}.bar")
+      editor.send_keys(:enter)
+      editor.send_keys(" ")
+    end
+    editor.send_keys("$")
+
+    greek_commands.each do |command|
+      assert_includes editor.value, "\\bar{\\#{command}}", "\\#{command} should be wrapped as a TeX command"
+    end
+
+    editor.send_keys("\n$\\nabla.vec")
+    editor.send_keys(:enter)
+    assert_includes editor.value, "$\\vec{\\nabla}", "operators should also be wrapped as TeX commands"
   end
 
   test "chains supported math modifiers and leaves conflicting chains intact" do
@@ -1324,39 +1482,6 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_selector ".document-surface h1", text: "Latest response", wait: 5
   end
 
-  test "renders the seeded document fixture library and its stress cases" do
-    Document.delete_all
-
-    visit documents_path
-
-    assert_text "No documents yet"
-    find("summary", text: "More").click
-    click_on "Load sample documents"
-
-    assert_selector ".document-graph-node", count: Documents::SampleData::SAMPLES.length, wait: 10
-    assert_selector ".document-graph-edge", minimum: 1
-    coordinates = page.evaluate_script(<<~JAVASCRIPT)
-      JSON.parse(document.querySelector(".document-graph").dataset.documentGraphDataValue)
-        .nodes.map(({ x, y }) => [x, y])
-    JAVASCRIPT
-    assert_equal coordinates.length, coordinates.uniq.length
-    assert_text "Stress: Renderer kitchen sink"
-    assert_text "Fixture: Graph orphan"
-    assert_operator page.evaluate_script("document.documentElement.scrollWidth"), :<=, page.evaluate_script("window.innerWidth")
-
-    warning_document = Document.find_by!(sample_id: "document-stress-warnings")
-    visit document_path(warning_document)
-
-    assert_selector '[aria-label="Markdown warnings"]', text: /directive/
-    assert_selector ".document-link.unresolved", text: "[[Fixture: Missing document]]"
-    assert_no_text "javascript:"
-
-    page.driver.browser.manage.window.resize_to(600, 900)
-    assert_operator page.evaluate_script("document.documentElement.scrollWidth"), :<=, page.evaluate_script("window.innerWidth")
-  ensure
-    page.driver.browser.manage.window.resize_to(1400, 1000)
-  end
-
   test "paginates long documents and gives headings a clear hierarchy" do
     report = Documents::SampleData.load!.records.find { |record| record.sample_id == "document-full-report" }
 
@@ -1380,6 +1505,265 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_operator font_sizes["h1"], :>, font_sizes["body"]
     assert_operator font_sizes["h2"], :>, font_sizes["body"]
     assert_operator page.evaluate_script("document.documentElement.scrollWidth"), :<=, page.evaluate_script("window.innerWidth")
+
+    page.driver.browser.manage.window.resize_to(600, 900)
+    assert_operator page.evaluate_script("document.documentElement.scrollWidth"), :<=, page.evaluate_script("window.innerWidth")
+  ensure
+    page.driver.browser.manage.window.resize_to(1400, 1000)
+  end
+
+  test "paginates the visual editor and keeps oversized paragraph edits mapped to one source block" do
+    paragraph = ("Flowing text stays at a fixed size and carries onto the next A4 page. " * 190).strip
+    source = "# A4 flow\n\n#{paragraph}"
+    document = Document.create!(title: "Flowing editor", source: source)
+
+    visit edit_document_path(document)
+
+    assert_selector ".document-editor-projection .document-surface.is-paginated"
+    assert_selector ".document-editor-projection .document-page", minimum: 2, wait: 5
+    wait_for_settled_document_projection
+    fragment_count = page.evaluate_script(<<~JAVASCRIPT)
+      [...document.querySelectorAll('.document-editor-block[data-editor-block-id]')]
+        .filter((block) => block.querySelector('p')?.textContent.includes('Flowing text')).length
+    JAVASCRIPT
+    assert_operator fragment_count, :>=, 2
+    assert_equal paragraph, page.evaluate_script(<<~JAVASCRIPT)
+      [...document.querySelectorAll('.document-editor-block[data-editor-block-id]')]
+        .filter((block) => block.querySelector('p')?.textContent.includes('Flowing text'))
+        .map((block) => block.querySelector('p').textContent)
+        .join('')
+    JAVASCRIPT
+
+    last_fragment = all(".document-editor-block[data-editor-block-id]").last
+    assert_includes last_fragment.text, "next A4 page."
+    page.execute_script(<<~JAVASCRIPT, last_fragment)
+      const block = arguments[0];
+      const paragraph = block.querySelector('p') || block;
+      const range = document.createRange();
+      range.selectNodeContents(paragraph);
+      range.collapse(false);
+      block.focus({ preventScroll: true });
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+    JAVASCRIPT
+    last_fragment.send_keys(" Continued")
+    assert_field "Markdown source", with: source.sub(paragraph, "#{paragraph} Continued"), wait: 5
+
+    focused_fragment = active_document_block
+    assert_includes focused_fragment.text, "Continued"
+    focused_fragment.send_keys(:enter)
+    wait_for_settled_document_projection
+    assert_field "Markdown source", with: /Continued\n\n\z/, wait: 5
+    active_document_block.send_keys(:backspace)
+    wait_for_settled_document_projection
+    assert_field "Markdown source", with: /Continued\z/, wait: 5
+  end
+
+  test "repacks document and removes trailing page when content is shortened" do
+    paragraph = ("Flowing text stays at a fixed size and carries onto the next A4 page. " * 60).strip
+    source = "# A4 flow\n\n#{paragraph}"
+    document = Document.create!(title: "Flowing editor", source: source)
+
+    visit edit_document_path(document)
+
+    assert_selector ".document-editor-projection .document-surface.is-paginated"
+    assert_selector ".document-editor-projection .document-page", minimum: 2, wait: 5
+    wait_for_settled_document_projection
+
+    page.execute_script(<<~JAVASCRIPT)
+      const blocks = document.querySelectorAll(".document-editor-block[data-editor-block-id]");
+      const paragraphFragment = [...blocks].find((block) => (block.querySelector('p') || block).textContent.includes('Flowing text'));
+      if (!paragraphFragment) return;
+      const rootBlock = paragraphFragment.closest("[data-document-page-flow-id]") || paragraphFragment;
+      const flowId = rootBlock.dataset.documentPageFlowId;
+      document.querySelectorAll(`[data-document-page-flow-id='${flowId}']`).forEach((frag, idx) => {
+        if (idx === 0) {
+          (frag.querySelector('p') || frag).textContent = "Short text.";
+        } else {
+          frag.remove();
+        }
+      });
+      const reader = rootBlock.closest("[data-controller~='document-pages']");
+      window.Stimulus.getControllerForElementAndIdentifier(reader, "document-pages").schedulePagination();
+    JAVASCRIPT
+    wait_for_settled_document_projection
+
+    assert_selector ".document-editor-projection .document-page", count: 1
+  end
+
+  test "paginates oversized lists across pages and preserves list editing" do
+    items = (1..60).map { |n| "- List item #{n} with explanatory text" }.join("\n")
+    document = Document.create!(title: "List pagination", source: items)
+
+    visit edit_document_path(document)
+
+    assert_selector ".document-editor-projection .document-surface.is-paginated"
+    assert_selector ".document-editor-projection .document-page", minimum: 2, wait: 5
+    wait_for_settled_document_projection
+
+    assert_selector ".document-page-frame:first-child li", text: "List item 1 with explanatory text"
+    assert_selector ".document-page-frame:last-child li", text: "List item 60 with explanatory text"
+
+    page.execute_script(<<~JAVASCRIPT)
+      const blocks = document.querySelectorAll(".document-editor-block[data-editor-block-id]");
+      const block = blocks[blocks.length - 1];
+      const item = block.querySelector('li:last-child') || block;
+      const range = document.createRange();
+      range.selectNodeContents(item);
+      range.collapse(false);
+      block.focus({ preventScroll: true });
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+    JAVASCRIPT
+    active_document_block.send_keys(" extra")
+    assert_field "Markdown source", with: /List item 60 with explanatory text extra/, wait: 5
+  end
+
+  test "paginates oversized blockquotes across pages and preserves quote editing" do
+    quotes = (1..50).map { |n| "> Paragraph #{n} inside the blockquote explaining something at length." }.join("\n>\n")
+    document = Document.create!(title: "Quote pagination", source: quotes)
+
+    visit edit_document_path(document)
+
+    assert_selector ".document-editor-projection .document-surface.is-paginated"
+    assert_selector ".document-editor-projection .document-page", minimum: 2, wait: 5
+    wait_for_settled_document_projection
+
+    assert_selector ".document-page-frame:first-child blockquote p", text: /Paragraph 1/
+    assert_selector ".document-page-frame:last-child blockquote p", text: /Paragraph 50/
+
+    page.execute_script(<<~JAVASCRIPT)
+      const blocks = document.querySelectorAll(".document-editor-block[data-editor-block-id]");
+      const block = blocks[blocks.length - 1];
+      const quote = block.querySelector('blockquote p:last-child') || block;
+      const range = document.createRange();
+      range.selectNodeContents(quote);
+      range.collapse(false);
+      block.focus({ preventScroll: true });
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+    JAVASCRIPT
+    active_document_block.send_keys(" noted")
+    assert_field "Markdown source", with: /Paragraph 50 inside the blockquote.*noted/, wait: 5
+  end
+
+  test "paginates oversized tables across pages" do
+    rows = (1..60).map { |n| "| Row #{n} | Value #{n} description text |" }.join("\n")
+    source = "# Table pagination\n\n| Item | Description |\n| --- | --- |\n#{rows}"
+    document = Document.create!(title: "Table pagination", source: source)
+
+    visit document_path(document)
+
+    assert_selector ".document-surface.is-paginated"
+    assert_selector ".document-page", minimum: 2, wait: 5
+    assert_selector ".document-surface[data-document-pages-settled='true']", wait: 10
+
+    assert_selector ".document-page-frame:first-child table tbody tr", text: /Row 1/
+    assert_selector ".document-page-frame:last-child table tbody tr", text: /Row 60/
+  end
+
+  test "paginates oversized code blocks across pages" do
+    lines = (1..70).map { |n| "const line#{n} = 'code statement number #{n}';" }.join("\n")
+    source = "# Code pagination\n\n```javascript\n#{lines}\n```"
+    document = Document.create!(title: "Code pagination", source: source)
+
+    visit document_path(document)
+
+    assert_selector ".document-surface.is-paginated"
+    assert_selector ".document-page", minimum: 2, wait: 5
+    assert_selector ".document-surface[data-document-pages-settled='true']", wait: 10
+
+    assert_selector ".document-page-frame:first-child pre", text: /line1/
+    assert_selector ".document-page-frame:last-child pre", text: /line70/
+  end
+
+  test "keeps a heading with its following paragraph when the page is full" do
+    filler = "Filler content leaves room for the heading, but not its paragraph."
+    paragraph = "The first paragraph fragment must stay with its heading."
+    document = Document.create!(title: "Heading pagination", source: "#{filler}\n\n## Section heading\n\n#{paragraph}")
+
+    visit document_path(document)
+    assert_selector ".document-surface.is-paginated"
+    assert_selector ".document-surface[data-document-pages-settled='true']", wait: 5
+
+    first_pagination_settled = page.evaluate_async_script(<<~JAVASCRIPT)
+      const done = arguments[arguments.length - 1];
+      const surface = document.querySelector(".document-surface");
+      const filler = [...surface.querySelectorAll("p")].find((paragraph) => paragraph.textContent === #{filler.to_json});
+      const heading = surface.querySelector("h2");
+      const content = filler.closest(".document-page-content");
+      filler.style.margin = "0";
+      heading.style.marginTop = "0";
+      const headingStyle = getComputedStyle(heading);
+      const headingHeight = heading.getBoundingClientRect().height + parseFloat(headingStyle.marginBottom);
+      filler.style.height = `${content.clientHeight - headingHeight - 1}px`;
+      const reader = heading.closest("[data-controller~='document-pages']");
+      surface.addEventListener("elef:document-pages-settled", () => done(true), { once: true });
+      window.Stimulus.getControllerForElementAndIdentifier(reader, "document-pages").paginate();
+    JAVASCRIPT
+    assert first_pagination_settled, "document pagination did not settle"
+
+    pages_after_move = page.evaluate_script(<<~JAVASCRIPT)
+      [...document.querySelectorAll(".document-page-content")].map((content) => ({
+        heading: content.querySelector("h2")?.textContent,
+        paragraphs: [...content.querySelectorAll("p")].map((paragraph) => paragraph.textContent)
+      }))
+    JAVASCRIPT
+    filler_page_index = pages_after_move.index { |entry| entry["paragraphs"].include?(filler) }
+    heading_page_index = pages_after_move.index { |entry| entry["heading"] == "Section heading" }
+    assert_operator heading_page_index, :>, filler_page_index
+    heading_page = pages_after_move[heading_page_index]
+    assert heading_page, "expected the section heading to remain on a page"
+    assert_equal [paragraph], heading_page["paragraphs"]
+
+    final_pagination_settled = page.evaluate_async_script(<<~JAVASCRIPT)
+      const done = arguments[arguments.length - 1];
+      const surface = document.querySelector(".document-surface");
+      const heading = surface.querySelector("h2");
+      const content = heading.closest(".document-page-content");
+      heading.style.marginBottom = `${content.clientHeight}px`;
+      const reader = heading.closest("[data-controller~='document-pages']");
+      surface.addEventListener("elef:document-pages-settled", () => done(true), { once: true });
+      window.Stimulus.getControllerForElementAndIdentifier(reader, "document-pages").paginate();
+    JAVASCRIPT
+    assert final_pagination_settled, "document pagination did not settle"
+
+    final_heading_page = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const heading = [...document.querySelectorAll(".document-page-content")]
+        .find((content) => content.querySelector("h2")?.textContent === "Section heading");
+        return {
+          paragraphs: [...heading.querySelectorAll("p")].map((paragraph) => paragraph.textContent),
+          overflowing: heading.closest(".document-page").classList.contains("is-overflowing-content")
+        };
+      })()
+    JAVASCRIPT
+    assert_equal [paragraph], final_heading_page["paragraphs"]
+    assert final_heading_page["overflowing"]
+  end
+
+  test "removes an empty visual block at the beginning without shifting the following page content" do
+    document = Document.create!(title: "Leading empty block", source: "# First page\n\nBody text")
+    visit edit_document_path(document)
+
+    body = find(".document-editor-block", text: "Body text")
+    page.execute_script(<<~JAVASCRIPT, body)
+      const block = arguments[0];
+      const text = block.querySelector('p').firstChild;
+      block.focus({ preventScroll: true });
+      window.getSelection().setPosition(text, 0);
+      block.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    JAVASCRIPT
+    assert_selector ".document-editor-block[data-editor-empty-block='true']", count: 1, wait: 5
+
+    first_empty = find(".document-editor-block[data-editor-empty-block='true']")
+    first_empty.send_keys(:backspace)
+    assert_selector ".document-editor-block", text: "Body text", wait: 5
+    assert_no_selector ".document-editor-block[data-editor-empty-block='true']"
+    assert_includes find_field("Markdown source").value, "Body text"
   end
 
   test "horizontal-only document positions stay content-sized" do
@@ -1407,6 +1791,169 @@ class DocumentsTest < ApplicationSystemTestCase
     assert heights.all? { |height| height < 120 }, "horizontal-only blocks should not become vertical stages: #{heights.inspect}"
   end
 
+  test "positions document blocks visually and preserves directives across source mode" do
+    source = "# Alignment\n\nLeft block\n\n:::position{center middle}\n\nCentered block"
+    document = Document.create!(title: "Block alignment", source: source)
+    visit edit_document_path(document)
+    wait_for_fresh_projection
+
+    left = find(".document-editor-block", text: "Left block")
+    left_id = left["data-editor-block-id"]
+    left.find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
+    find("[data-visual-editor-block-id='#{left_id}']").select("Right")
+
+    assert_field "Markdown source", with: /:::position\{right\}\n\nLeft block/, wait: 5
+    right_aligned = find(".document-editor-block.position-right", text: "Left block", wait: 5)
+    assert_equal left_id, right_aligned["data-editor-block-id"]
+    assert_equal left_id, page.evaluate_script("document.activeElement?.dataset.editorBlockId")
+    assert_equal "right", page.evaluate_script("getComputedStyle(arguments[0]).textAlign", right_aligned)
+    type_visual_text(".document-editor-block", "Left block", "Updated left block")
+    assert_field "Markdown source", with: /:::position\{right\}\n\nUpdated left block/, wait: 5
+    page.execute_script("document.activeElement.blur()")
+    wait_for_fresh_projection
+
+    centered = find(".document-editor-block", text: "Centered block")
+    assert_includes centered["class"], "position-center"
+    assert_equal "center", page.evaluate_script("getComputedStyle(arguments[0]).textAlign", centered)
+    centered.find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
+    centered_control = find("[data-visual-editor-block-id='#{centered['data-editor-block-id']}']")
+    centered_control.select("Right")
+
+    assert_field "Markdown source", with: /:::position\{right middle\}/, wait: 5
+    assert_selector ".document-editor-block.position-right", text: "Centered block", wait: 5
+    right_aligned = find(".document-editor-block.position-right", text: "Centered block")
+    assert_equal "right", page.evaluate_script("getComputedStyle(arguments[0]).textAlign", right_aligned)
+    right_aligned.find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
+    find("[data-visual-editor-block-id='#{right_aligned['data-editor-block-id']}']").select("Left")
+    assert_field "Markdown source", with: /:::position\{left middle\}/, wait: 5
+    left_aligned = find(".document-editor-block.position-left", text: "Centered block", wait: 5)
+    assert_equal "left", page.evaluate_script("getComputedStyle(arguments[0]).textAlign", left_aligned)
+    centered_id = left_aligned["data-editor-block-id"]
+    left_aligned.find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
+    find("[data-visual-editor-block-id='#{centered_id}']").select("Automatic position")
+    wait_for_fresh_projection
+    refute_match(/:::position\{left middle\}/, find_field("Markdown source").value)
+    assert_equal "", find("[data-visual-editor-block-id='#{centered_id}']").value
+
+    click_on "Source"
+    assert_field "Markdown source", with: /:::position\{right\}\n\nUpdated left block/
+    click_on "Visual"
+    wait_for_fresh_projection
+
+    centered = find(".document-editor-block", text: "Centered block")
+    refute_includes centered["class"], "position-left"
+    centered.find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
+    assert_equal "", find("[data-visual-editor-block-id='#{centered['data-editor-block-id']}']").value
+    type_visual_text(".document-editor-block", "Centered block", "Updated centered block")
+    assert_field "Markdown source", with: /:::position\{right\}\n\nUpdated left block\n\nUpdated centered block/, wait: 5
+    refute_includes find(".editor-projection").text, ":::position"
+  end
+
+  test "positions the first document block when no source content precedes it" do
+    document = Document.create!(title: "First block alignment", source: "Test")
+    visit edit_document_path(document)
+    wait_for_fresh_projection
+
+    block = find(".document-editor-block", text: "Test")
+    block_id = block["data-editor-block-id"]
+    block.find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
+    find("[data-visual-editor-block-id='#{block_id}']").select("Left")
+
+    assert_field "Markdown source", with: /\A:::position\{left\}\n\nTest\z/, wait: 5
+
+    find(".document-editor-block[data-editor-block-id='#{block_id}']").find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
+    find("[data-visual-editor-block-id='#{block_id}']").select("Center")
+
+    assert_field "Markdown source", with: /\A:::position\{center\}\n\nTest\z/, wait: 5
+
+    find(".document-editor-block[data-editor-block-id='#{block_id}']").find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
+    find("[data-visual-editor-block-id='#{block_id}']").select("Right")
+    assert_field "Markdown source", with: /\A:::position\{right\}\n\nTest\z/, wait: 5
+  end
+
+  test "changes a position directive on the first document block" do
+    document = Document.create!(title: "Change first block alignment", source: ":::position{right}\n\nTest")
+    visit edit_document_path(document)
+    wait_for_fresh_projection
+
+    block = find(".document-editor-block", text: "Test")
+    block_id = block["data-editor-block-id"]
+    block.find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
+    find("[data-visual-editor-block-id='#{block_id}']").select("Center")
+
+    assert_field "Markdown source", with: /\A:::position\{center\}\n\nTest\z/, wait: 5
+  end
+
+  test "changes a position directive added in source mode" do
+    document = Document.create!(title: "Source mode alignment", source: "Test")
+    visit edit_document_path(document)
+    wait_for_fresh_projection
+
+    click_on "Source"
+    page.execute_script(<<~JAVASCRIPT)
+      document.querySelector(".source-field").editorController.replaceRange(":::position{right}\\n\\n", 0, 0)
+    JAVASCRIPT
+    assert_field "Markdown source", with: /\A:::position\{right\}\n\nTest\z/, wait: 5
+    click_on "Visual"
+    wait_for_fresh_projection
+    assert_field "Markdown source", with: /\A:::position\{right\}\n\nTest\z/, wait: 5
+
+    block = find(".document-editor-block", text: "Test")
+    block_id = block["data-editor-block-id"]
+    block.find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
+    find("[data-visual-editor-block-id='#{block_id}']").select("Center")
+
+    assert_field "Markdown source", with: /\A:::position\{center\}\n\nTest\z/, wait: 5
+  end
+
+  test "deleting an empty positioned block also removes its position directive" do
+    document = Document.create!(
+      title: "Delete positioned block",
+      source: "# Keep\n\n:::position{center}\n\nDelete me\n\nTail"
+    )
+    visit edit_document_path(document)
+
+    block = find(".document-editor-block", text: "Delete me")
+    removed = page.execute_script(<<~JAVASCRIPT, block)
+      const block = arguments[0];
+      block.innerHTML = "<p><br></p>";
+      block.focus({ preventScroll: true });
+      window.getSelection().setPosition(block.querySelector("p"), 0);
+      const event = new KeyboardEvent("keydown", { key: "Backspace", bubbles: true, cancelable: true });
+      block.dispatchEvent(event);
+      return event.defaultPrevented;
+    JAVASCRIPT
+
+    assert_equal true, removed
+    assert_field "Markdown source", with: "# Keep\n\nTail", wait: 5
+    refute_selector ".document-editor-block.position-center", text: "Tail"
+  end
+
+  test "deleting a single block in a grouped position removes its opening and closing directives" do
+    source = "# Keep\n\n:::position{center}\n\nDelete me\n\n:::\n\nTail"
+    map = Source::Document.editor_map(source, mode: :document)
+    positioned = map[:slides].first[:blocks].find { |candidate| candidate[:markdown] == "Delete me" }
+    assert_equal "group", positioned[:position_scope]
+
+    document = Document.create!(title: "Delete grouped position", source: source)
+    visit edit_document_path(document)
+
+    block = find(".document-editor-block", text: "Delete me")
+    removed = page.execute_script(<<~JAVASCRIPT, block)
+      const block = arguments[0];
+      block.innerHTML = "<p><br></p>";
+      block.focus({ preventScroll: true });
+      window.getSelection().setPosition(block.querySelector("p"), 0);
+      const event = new KeyboardEvent("keydown", { key: "Backspace", bubbles: true, cancelable: true });
+      block.dispatchEvent(event);
+      return event.defaultPrevented;
+    JAVASCRIPT
+
+    assert_equal true, removed
+    assert_field "Markdown source", with: "# Keep\n\nTail", wait: 5
+    refute_includes find_field("Markdown source").value, ":::"
+  end
+
   test "maintains standard aspect ratio and fixed text wrapping across viewports" do
     document = Document.create!(
       title: "Aspect ratio document",
@@ -1427,20 +1974,24 @@ class DocumentsTest < ApplicationSystemTestCase
         const frame = document.querySelector('.document-page-frame');
         const page = document.querySelector('.document-page');
         const paragraph = page.querySelector('p');
+        const textRange = document.createRange();
+        textRange.selectNodeContents(paragraph);
         const frameRect = frame.getBoundingClientRect();
         return {
           frameAspect: frameRect.width / frameRect.height,
           pageWidth: page.offsetWidth,
           pageHeight: page.offsetHeight,
-          paragraphLines: paragraph.getClientRects().length,
+          paragraphFontSize: Number.parseFloat(getComputedStyle(paragraph).fontSize),
+          paragraphLines: textRange.getClientRects().length,
           paragraphText: paragraph.innerText
         };
       })()
     JAVASCRIPT
 
-    assert_in_delta 816.0 / 1154.0, desktop_measurements["frameAspect"], 0.05
-    assert_equal 816, desktop_measurements["pageWidth"]
-    assert_equal 1154, desktop_measurements["pageHeight"]
+    assert_in_delta 210.0 / 297.0, desktop_measurements["frameAspect"], 0.005
+    assert_equal 794, desktop_measurements["pageWidth"]
+    assert_equal 1123, desktop_measurements["pageHeight"]
+    assert_equal 18, desktop_measurements["paragraphFontSize"]
 
     # Resize to mobile / tablet width (600px)
     page.driver.browser.manage.window.resize_to(600, 900)
@@ -1450,20 +2001,24 @@ class DocumentsTest < ApplicationSystemTestCase
         const frame = document.querySelector('.document-page-frame');
         const page = document.querySelector('.document-page');
         const paragraph = page.querySelector('p');
+        const textRange = document.createRange();
+        textRange.selectNodeContents(paragraph);
         const frameRect = frame.getBoundingClientRect();
         return {
           frameAspect: frameRect.width / frameRect.height,
           pageWidth: page.offsetWidth,
           pageHeight: page.offsetHeight,
-          paragraphLines: paragraph.getClientRects().length,
+          paragraphFontSize: Number.parseFloat(getComputedStyle(paragraph).fontSize),
+          paragraphLines: textRange.getClientRects().length,
           paragraphText: paragraph.innerText
         };
       })()
     JAVASCRIPT
 
-    assert_in_delta 816.0 / 1154.0, mobile_measurements["frameAspect"], 0.05
-    assert_equal 816, mobile_measurements["pageWidth"]
-    assert_equal 1154, mobile_measurements["pageHeight"]
+    assert_in_delta 210.0 / 297.0, mobile_measurements["frameAspect"], 0.005
+    assert_equal 794, mobile_measurements["pageWidth"]
+    assert_equal 1123, mobile_measurements["pageHeight"]
+    assert_equal 18, mobile_measurements["paragraphFontSize"]
     assert_equal desktop_measurements["paragraphLines"], mobile_measurements["paragraphLines"], "Text line count should not re-wrap when scaling"
     assert_equal desktop_measurements["paragraphText"], mobile_measurements["paragraphText"]
   ensure

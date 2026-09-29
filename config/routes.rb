@@ -1,6 +1,8 @@
 Rails.application.routes.draw do
   root "library#index"
 
+  post "bug_reports", to: "bug_reports#create", as: :bug_reports
+
   resource :settings, only: %i[show update], controller: "workspace_settings"
   get "search", to: "library#search", as: :search
 
@@ -13,6 +15,7 @@ Rails.application.routes.draw do
       post :start
       post :preview
       post :import
+      post :pptx, defaults: { format: :json }
     end
     member do
       get :present

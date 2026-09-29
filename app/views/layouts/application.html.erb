@@ -26,6 +26,47 @@
           <%= link_to "Library", root_path, class: "app-nav-link rounded-lg px-3 py-2 text-sm font-bold no-underline text-[#aab7b1] #{'is-active' if %w[library presentations documents].include?(controller_name)}" %>
           <%= link_to "Settings", settings_path, class: "app-nav-link rounded-lg px-3 py-2 text-sm font-bold no-underline text-[#aab7b1] #{'is-active' if %w[workspace_settings snippets math_shortcuts].include?(controller_name)}" %>
         </nav>
+        <div class="bug-report-root" data-controller="bug-report" data-bug-report-endpoint-value="<%= bug_reports_path %>">
+          <p id="bug-report-recording-disclosure" class="bug-report-disclosure">While you use Elef, recent clicks, typed text, keys, and page paths are automatically kept in memory for up to 60 seconds to prepare bug reports. If submitted, these may be included. Review and edit the generated steps first; recognized sensitive fields are redacted.</p>
+          <button type="button" class="bug-report-trigger" data-action="bug-report#open" data-bug-report-ignore aria-haspopup="dialog" aria-controls="bug-report-dialog" aria-describedby="bug-report-recording-disclosure">Report Bug</button>
+          <dialog id="bug-report-dialog" class="bug-report-dialog" data-bug-report-target="dialog" data-bug-report-ignore data-action="close->bug-report#closed cancel->bug-report#cancel" aria-labelledby="bug-report-heading">
+            <section class="bug-report-panel">
+              <header class="bug-report-heading">
+                <div>
+                  <p class="eyebrow">Help improve Elef</p>
+                  <h2 id="bug-report-heading">Report a bug</h2>
+                </div>
+                <button type="button" class="bug-report-close" data-action="bug-report#close" aria-label="Close bug report">×</button>
+              </header>
+              <form data-bug-report-target="form" data-action="submit->bug-report#submit">
+                <p class="bug-report-intro">Review the recent reproduction steps, then describe what you expected and what happened. You can edit the generated steps before submitting.</p>
+                <div class="bug-report-error" data-bug-report-target="error" role="alert" hidden></div>
+                <div class="bug-report-field">
+                  <label for="bug-report-expected">Expected behavior</label>
+                  <textarea id="bug-report-expected" name="expected" rows="3" maxlength="10000" required data-bug-report-target="expected"></textarea>
+                </div>
+                <div class="bug-report-field">
+                  <label for="bug-report-actual">Actual behavior</label>
+                  <textarea id="bug-report-actual" name="actual" rows="3" maxlength="10000" required data-bug-report-target="actual"></textarea>
+                </div>
+                <div class="bug-report-field">
+                  <label for="bug-report-steps">Steps to reproduce</label>
+                  <textarea id="bug-report-steps" name="steps" rows="7" maxlength="20000" required data-bug-report-target="steps" aria-describedby="bug-report-steps-hint"></textarea>
+                  <p id="bug-report-steps-hint" class="field-hint">One step per line. These steps are editable and are sent with the issue.</p>
+                </div>
+                <footer class="bug-report-actions">
+                  <button type="button" class="button" data-action="bug-report#close">Cancel</button>
+                  <button type="submit" class="button primary" data-bug-report-target="submit">Create GitHub issue</button>
+                </footer>
+              </form>
+              <div class="bug-report-success" data-bug-report-target="success" role="status" hidden>
+                <p>Bug report submitted.</p>
+                <a data-bug-report-target="issueLink" target="_blank" rel="noopener noreferrer">View GitHub issue</a>
+                <div class="bug-report-actions"><button type="button" class="button primary" data-action="bug-report#close">Done</button></div>
+              </div>
+            </section>
+          </dialog>
+        </div>
         <div class="command-palette-root" data-controller="command-palette" data-command-palette-search-url-value="<%= search_path %>" data-command-palette-settings-url-value="<%= settings_path %>" data-command-palette-theme-value="<%= workspace_for_command_palette&.default_theme || Workspace::DEFAULT_THEME %>" data-command-palette-typography-value="<%= workspace_for_command_palette&.default_typography || Workspace::DEFAULT_TYPOGRAPHY %>" data-command-palette-commands-value="<%= json_escape([
           { id: "quick-open", label: "Search presentations and documents", description: "Find by title, alias, heading, or content", shortcutKey: "p" },
           { id: "new-presentation", label: "New presentation", description: "Create slide-based Markdown", url: new_presentation_path },
@@ -40,7 +81,7 @@
           { id: "library-presentations", label: "Browse presentations", description: "Open the presentation library", url: presentations_path },
           { id: "save", label: "Save current work", description: "Submit the active editor", requiresEditor: true },
           { id: "toggle-vim", label: "Toggle Vim mode", description: "Change the active editor mode", requiresEditor: true },
-          { id: "vim-settings", label: "Open Vim settings", description: "Configure the browser-local editor preferences", requiresEditor: true },
+          { id: "vim-settings", label: "Open Vim settings", description: "Configure browser-local Vim and editor preferences", url: settings_path(anchor: "vim-settings") },
           { id: "toggle-metadata", label: "Toggle source metadata", description: "Show or hide Markdown front matter", requiresEditor: true }
         ].to_json) %>">
           <div class="command-palette-triggers" aria-label="Open Elef tools">

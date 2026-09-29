@@ -3,30 +3,9 @@ import { editorFor } from "controllers/editor_controller"
 import { application } from "controllers/application"
 import { insideMath, parseMathShorthand } from "controllers/math_shorthand_controller"
 
-let katexLoadPromise
-
-function loadKatex(url) {
-  if (window.katex) return Promise.resolve(window.katex)
-  if (katexLoadPromise) return katexLoadPromise
-
-  katexLoadPromise = new Promise((resolve, reject) => {
-    const script = document.createElement("script")
-    script.src = url
-    script.async = true
-    script.onload = () => window.katex ? resolve(window.katex) : reject(new Error("KaTeX did not load"))
-    script.onerror = () => reject(new Error("KaTeX could not be loaded"))
-    document.head.append(script)
-  }).catch((error) => {
-    katexLoadPromise = null
-    throw error
-  })
-
-  return katexLoadPromise
-}
-
 export default class extends Controller {
   static targets = ["editor", "palette"]
-  static values = { shortcuts: Array, katexUrl: String }
+  static values = { shortcuts: Array }
 
   connect() {
     this.matches = []
@@ -39,10 +18,14 @@ export default class extends Controller {
       this.setupEditor()
     }
     this.element.addEventListener("elef:editor-ready", this.editorReady)
+    this.positionPalette = this.positionPalette.bind(this)
     this.setupEditor()
+    window.addEventListener("resize", this.positionPalette)
   }
 
   disconnect() {
+    window.removeEventListener("resize", this.positionPalette)
+    if (this.scrollBound) this.editorController?.scrollElement.removeEventListener("scroll", this.positionPalette)
     if (this.editorController && this.keydownBound) {
       this.editorController.dom.removeEventListener("keydown", this.handleEditorKeydown, true)
     }
@@ -51,6 +34,10 @@ export default class extends Controller {
 
   setupEditor() {
     if (this.editorController) this.setupAccessibility()
+    if (this.editorController && !this.scrollBound) {
+      this.editorController.scrollElement.addEventListener("scroll", this.positionPalette)
+      this.scrollBound = true
+    }
     if (this.editorController && !this.keydownBound) {
       this.handleEditorKeydown = (event) => this.keydown(event)
       this.editorController.dom.addEventListener("keydown", this.handleEditorKeydown, true)
@@ -93,7 +80,16 @@ export default class extends Controller {
       this.close()
       return
     }
-    if (!this.editorController?.insertMode) return
+    const editor = this.editorController
+    if (!editor?.insertMode) return
+
+    if (!this.paletteTarget.hidden) {
+      const currentQuery = this.queryAtCaret()
+      if (!currentQuery || currentQuery.prefix !== this.query.prefix || currentQuery.text !== this.query.text || currentQuery.start !== this.query.start) {
+        this.close()
+        return
+      }
+    }
 
     if (event.key === "Tab" && this.paletteTarget.hidden && this.stops.length > 0) {
       event.preventDefault()
@@ -123,18 +119,20 @@ export default class extends Controller {
     const query = this.queryAtCaret()
     if (!query) return this.close()
 
+    const singleLetterAlias = query.prefix === "@" && /^[A-Za-z]$/.test(query.text)
     const matches = this.shortcutsValue
       .filter((shortcut) => shortcut.prefix === query.prefix)
-      .map((shortcut) => ({ shortcut, score: this.fuzzyScore(shortcut, query.text) }))
-      .filter(({ score }) => score >= 0)
+      .filter((shortcut) => !singleLetterAlias || (shortcut.aliases || []).includes(query.text))
+      .map((shortcut) => ({ shortcut, score: this.matchScore(shortcut, query.text) }))
+      .filter(({ score }) => score !== null)
       .sort((left, right) => right.score - left.score || left.shortcut.name.localeCompare(right.shortcut.name))
-      .slice(0, 8)
+      .slice(0, 6)
       .map(({ shortcut }) => shortcut)
 
     if (matches.length === 0) return this.close()
     this.query = query
     this.matches = matches
-    this.selectedIndex = Math.min(this.selectedIndex || 0, matches.length - 1)
+    this.selectedIndex = 0
     this.selectionMoved = false
     this.render()
   }
@@ -174,26 +172,43 @@ export default class extends Controller {
     return Boolean(shorthand?.hasRecognizedAppendedModifiers(editor, editor.selectionStart))
   }
 
-  fuzzyScore(shortcut, query) {
-    const candidates = [shortcut.name, ...(shortcut.aliases || [])].map((value) => value.toLowerCase())
-    const needle = query.toLowerCase()
-    if (!needle) return 1
-    let best = -1
-    candidates.forEach((candidate) => {
-      if (candidate === needle) best = Math.max(best, 100)
-      else if (candidate.startsWith(needle)) best = Math.max(best, 80 - candidate.length)
-      else if (candidate.includes(needle)) best = Math.max(best, 50 - candidate.indexOf(needle))
-      else {
-        let index = 0
-        for (const character of needle) {
-          index = candidate.indexOf(character, index)
-          if (index < 0) break
-          index += 1
-        }
-        if (index > 0) best = Math.max(best, 20 - index)
-      }
-    })
-    return best
+  matchScore(shortcut, query) {
+    if (!query) return 0
+
+    const candidates = (shortcut.aliases || []).map((alias) => ({ value: String(alias), weight: 10000 }))
+    candidates.push({ value: shortcut.name || "", weight: 7000 })
+    if (query.length > 1) candidates.push({ value: shortcut.description || "", weight: 4000 })
+
+    return candidates.reduce((best, candidate) => {
+      const score = this.fieldScore(candidate.value, query, candidate.weight)
+      return score === null ? best : Math.max(best, score)
+    }, null)
+  }
+
+  fieldScore(value, query, weight) {
+    if (!value) return null
+    const foldedValue = value.toLowerCase()
+    const foldedQuery = query.toLowerCase()
+    if (value === query) return weight + 1000
+    if (foldedValue === foldedQuery) return weight + 900
+    if (value.startsWith(query)) return weight + 800 - value.length
+    if (foldedValue.startsWith(foldedQuery)) return weight + 700 - value.length
+    if (query.length < 2) return null
+
+    const exactCaseIndex = value.indexOf(query)
+    if (exactCaseIndex !== -1) return weight + 600 - exactCaseIndex
+    const foldedIndex = foldedValue.indexOf(foldedQuery)
+    if (foldedIndex !== -1) return weight + 500 - foldedIndex
+
+    let previous = -1
+    let gap = 0
+    for (const character of foldedQuery) {
+      const index = foldedValue.indexOf(character, previous + 1)
+      if (index === -1) return null
+      if (previous !== -1) gap += index - previous - 1
+      previous = index
+    }
+    return weight + 300 - gap - previous / 100
   }
 
   render() {
@@ -207,54 +222,20 @@ export default class extends Controller {
       option.dataset.shortcutId = shortcut.id
       option.setAttribute("aria-selected", String(index === this.selectedIndex))
 
-      const header = document.createElement("span")
-      header.className = "math-shortcut-option-header"
       const trigger = document.createElement("code")
       trigger.className = "math-shortcut-trigger"
       trigger.textContent = this.triggerFor(shortcut, this.query)
-      const triggerBlock = document.createElement("span")
-      triggerBlock.className = "math-shortcut-trigger-block"
-      const triggerLabel = document.createElement("span")
-      triggerLabel.className = "math-shortcut-example-label"
-      triggerLabel.textContent = "Shortcut"
-      triggerBlock.append(triggerLabel, trigger)
-      const title = document.createElement("span")
-      title.className = "math-shortcut-title"
       const name = document.createElement("strong")
+      name.className = "math-shortcut-name"
       name.textContent = shortcut.name
-      const description = document.createElement("span")
-      description.className = "math-shortcut-description"
-      description.textContent = shortcut.description || "Math shortcut"
-      title.append(name, description)
-      header.append(title)
-
-      const example = document.createElement("span")
-      example.className = "math-shortcut-example"
       const latex = this.previewExpansion(shortcut, this.query)
-      const source = document.createElement("span")
-      source.className = "math-shortcut-latex"
-      const sourceLabel = document.createElement("span")
-      sourceLabel.className = "math-shortcut-example-label"
-      sourceLabel.textContent = "LaTeX"
-      const sourceCode = document.createElement("code")
-      sourceCode.textContent = latex
-      source.append(sourceLabel, sourceCode)
-
-      const preview = document.createElement("span")
-      preview.className = "math-shortcut-preview"
-      const previewLabel = document.createElement("span")
-      previewLabel.className = "math-shortcut-example-label"
-      previewLabel.textContent = "Preview"
-      const rendered = document.createElement("span")
-      rendered.className = "math-shortcut-preview-render"
-      rendered.dataset.latex = latex
-      preview.append(previewLabel, rendered)
-      const firstArrow = this.exampleArrow()
-      const secondArrow = this.exampleArrow()
-      example.append(triggerBlock, firstArrow, source, secondArrow, preview)
+      const expansion = document.createElement("code")
+      expansion.className = "math-shortcut-expansion"
+      expansion.textContent = latex
 
       option.setAttribute("aria-label", `${trigger.textContent} inserts ${latex}, ${shortcut.name}`)
-      option.append(header, example)
+      option.title = shortcut.description || shortcut.name
+      option.append(trigger, name, expansion)
       option.addEventListener("mousedown", (event) => {
         event.preventDefault()
         this.selectedIndex = index
@@ -265,21 +246,12 @@ export default class extends Controller {
     this.paletteTarget.hidden = false
     this.updateAccessibility()
     this.positionPalette()
-    this.renderPreviews()
-  }
-
-  exampleArrow() {
-    const arrow = document.createElement("span")
-    arrow.className = "math-shortcut-example-arrow"
-    arrow.setAttribute("aria-hidden", "true")
-    arrow.textContent = "→"
-    return arrow
   }
 
   triggerFor(shortcut, query) {
     const aliases = shortcut.aliases || []
     const alias = aliases
-      .map((candidate) => ({ candidate, score: this.fuzzyScore({ name: "", aliases: [candidate] }, query.text) }))
+      .map((candidate) => ({ candidate, score: this.fieldScore(candidate, query.text, 10000) ?? -1 }))
       .sort((left, right) => right.score - left.score)[0]?.candidate || ""
 
     if (shortcut.prefix === "." && query.base) return `${query.base}.${alias}`
@@ -296,22 +268,6 @@ export default class extends Controller {
     })
   }
 
-  renderPreviews() {
-    this.katexPromise ||= loadKatex(this.katexUrlValue).catch(() => null)
-    this.katexPromise.then((katex) => {
-      if (!katex || !this.element.isConnected) return
-      this.paletteTarget.querySelectorAll(".math-shortcut-preview-render").forEach((container) => {
-        if (container.dataset.rendered === "true") return
-        try {
-          container.innerHTML = katex.renderToString(container.dataset.latex || "", { throwOnError: false })
-        } catch (_error) {
-          container.textContent = container.dataset.latex || ""
-        }
-        container.dataset.rendered = "true"
-      })
-    })
-  }
-
   positionPalette() {
     const editor = this.editorController
     if (!editor) return
@@ -319,7 +275,10 @@ export default class extends Controller {
     const marker = editor.view.coordsAtPos(editor.selectionStart) || editorRect
     const paletteRect = this.paletteTarget.getBoundingClientRect()
     this.paletteTarget.style.left = `${Math.max(8, Math.min(marker.left, window.innerWidth - paletteRect.width - 8))}px`
-    this.paletteTarget.style.top = `${Math.max(8, Math.min(marker.bottom + 4, window.innerHeight - paletteRect.height - 8))}px`
+    const maxTop = window.innerHeight - paletteRect.height - 8
+    const belowTop = marker.bottom + 4
+    const aboveTop = marker.top - paletteRect.height - 4
+    this.paletteTarget.style.top = `${belowTop <= maxTop ? belowTop : Math.max(8, Math.min(aboveTop, maxTop))}px`
   }
 
   move(amount) {
@@ -329,6 +288,7 @@ export default class extends Controller {
       option.setAttribute("aria-selected", String(index === this.selectedIndex))
       option.classList.toggle("is-selected", index === this.selectedIndex)
     })
+    this.paletteTarget.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: "nearest" })
     this.updateAccessibility()
   }
 

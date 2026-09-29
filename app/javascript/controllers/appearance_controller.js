@@ -3,7 +3,7 @@ import { Controller } from "@hotwired/stimulus"
 const normalizeSource = (source) => String(source ?? "").replace(/\r\n?/g, "\n")
 
 export default class extends Controller {
-  static targets = ["themeField", "theme", "typographyField", "typography", "hint"]
+  static targets = ["panelContainer", "themeField", "theme", "typographyField", "typography", "hint"]
 
   connect() {
     this.form = this.element.closest("form")
@@ -56,12 +56,18 @@ export default class extends Controller {
 
   sync() {
     const visual = this.mode === "visual"
-    this.themeFieldTarget.hidden = !visual
-    this.typographyFieldTarget.hidden = !visual
+    if (this.hasPanelContainerTarget) {
+      this.panelContainerTarget.hidden = !visual
+      if (!visual) this.panelContainerTarget.open = false
+    }
+    if (this.hasThemeFieldTarget) {
+      this.themeFieldTarget.hidden = !visual
+    }
+    if (this.hasTypographyFieldTarget) {
+      this.typographyFieldTarget.hidden = !visual
+    }
     if (this.hasHintTarget) {
-      this.hintTarget.textContent = visual
-        ? "Appearance overrides stay in the Markdown front matter."
-        : "Source mode keeps appearance in the Markdown front matter. Reveal source metadata to edit it."
+      this.hintTarget.hidden = !visual
     }
 
     const editable = visual && !this.sourceStyleStale

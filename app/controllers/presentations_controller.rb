@@ -2,13 +2,13 @@ class PresentationsController < ApplicationController
   include WorkPreview
   include WorkPersistence
 
-  before_action :set_presentation, only: %i[show edit update present print pptx pptx_asset publish destroy rename fork restore history export upload_asset media_asset]
+  before_action :set_presentation, only: %i[show edit update present print pptx pptx_asset publish destroy rename fork restore history export upload_asset media_asset],
+    unless: -> { action_name == "pptx" && params[:id].blank? }
   before_action :set_preview_presentation, only: :preview
 
   def index
     @filter = "presentations"
     @works = Presentation.includes(:presentation_detail).recent_first
-    @presentations = @works
     @lineage_presentations = @works.select(&:presentation?)
     render "library/index"
   end
@@ -105,7 +105,13 @@ class PresentationsController < ApplicationController
 
     presentation = @presentation
     release_id = nil
-    if version == "published"
+    if presentation.nil?
+      return head :not_found unless request.post? && version == "draft"
+
+      presentation = Presentation.new(pptx_params)
+      presentation.work_type = "presentation"
+      presentation.workspace = Workspace.default
+    elsif version == "published"
       release = @presentation.published_release
       return head :not_found unless release
       release_id = release.id
@@ -175,8 +181,7 @@ class PresentationsController < ApplicationController
     end
 
     blob = WorkAssets.attach_upload(@presentation, upload, content_type: content_type)
-    digest = Digest::SHA256.hexdigest(blob.download)
-    blob.update!(metadata: blob.metadata.merge("elef_sha256" => digest))
+    digest = WorkAssets.digest(blob)
     @presentation.reload
     Presentations::FolderSync.sync!(@presentation)
     render json: {

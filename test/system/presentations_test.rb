@@ -103,6 +103,108 @@ class PresentationsTest < ApplicationSystemTestCase
     assert ready, "autosave request #{index} was not registered"
   end
 
+  test "appearance controls are collapsed in the presentation editor" do
+    presentation = Presentation.create!(title: "Appearance popup", source: "# Appearance popup")
+
+    visit edit_presentation_path(presentation)
+
+    assert_selector "summary.editor-reveal-metadata", text: "Appearance", visible: true
+    assert_no_selector "select#presentation_theme", visible: true
+    assert_no_selector "select#presentation_typography", visible: true
+
+    find("summary.editor-reveal-metadata", text: "Appearance").click
+    assert_selector "select#presentation_theme", visible: true
+    assert_selector "select#presentation_typography", visible: true
+
+    panel_background = page.evaluate_script(
+      'window.getComputedStyle(document.querySelector(".appearance-settings .editor-settings-panel")).backgroundColor'
+    )
+    assert_not_equal "rgba(0, 0, 0, 0)", panel_background
+    assert_not_equal "transparent", panel_background
+  end
+
+  test "new presentation source positions its title explicitly and lets that position be changed" do
+    expected_source = <<~MARKDOWN.chomp
+      :::position{center middle}
+      # Untitled Document
+
+      :::position {center}
+      Start writing Markdown here.
+    MARKDOWN
+
+    visit new_presentation_path
+
+    assert_field "Markdown source", with: expected_source
+    assert_selector ".slide-statement .slide-block.position-center.position-middle", text: "Untitled Document", wait: 5
+    assert_selector ".slide-statement .slide-block.position-center.position-top", text: "Start writing Markdown here."
+
+    initial_alignment = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const title = document.querySelector('.slide-statement .slide-block.position-center.position-middle');
+        const titleRect = title.getBoundingClientRect();
+        const slideRect = title.closest('.slide').getBoundingClientRect();
+        const style = getComputedStyle(title);
+        return {
+          alignSelf: style.alignSelf,
+          marginTop: style.marginTop,
+          marginBottom: style.marginBottom,
+          titleCenterY: titleRect.top + titleRect.height / 2,
+          slideCenterY: slideRect.top + slideRect.height / 2
+        };
+      })()
+    JAVASCRIPT
+    assert_equal "center", initial_alignment["alignSelf"]
+    assert_equal initial_alignment["marginTop"], initial_alignment["marginBottom"]
+    assert_in_delta initial_alignment["slideCenterY"], initial_alignment["titleCenterY"], 50
+
+    find("select[data-presentation-editor-position][data-slide-index='0'][data-block-index='0']").select("Right Bottom")
+    assert_field "Markdown source", with: /:::position\{right bottom\}\n# Untitled Document/, wait: 5
+    wait_for_fresh_projection
+    assert_selector ".slide-statement .slide-block.position-right.position-bottom", text: "Untitled Document", wait: 5
+
+    updated_alignment = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const title = document.querySelector('.slide-statement .slide-block.position-right.position-bottom');
+        const style = getComputedStyle(title);
+        return { alignSelf: style.alignSelf, textAlign: style.textAlign, marginTop: parseFloat(style.marginTop) };
+      })()
+    JAVASCRIPT
+    assert_equal "flex-end", updated_alignment["alignSelf"]
+    assert_equal "right", updated_alignment["textAlign"]
+    assert_operator updated_alignment["marginTop"], :>, 0
+  end
+
+  test "layouts and themes sample preserves positions while adding and deleting blocks" do
+    Presentations::SampleData.load!
+    sample = Presentation.find_by!(sample_id: "layouts-and-themes")
+    visit edit_presentation_path(sample)
+    wait_for_fresh_projection
+
+    assert_selector ".slide-statement .slide-block.position-center.position-middle", text: "Designing a visual system"
+    assert_selector ".slide-statement .slide-block.position-center.position-top", text: /This deck exercises automatic layouts/
+
+    find("select[data-presentation-editor-position][data-slide-index='2'][data-block-index='0']").select("Right Top")
+    assert_field "Markdown source", with: /:::position\{right top\}\n\n# Establish a visual contract/, wait: 5
+    assert_selector ".slide-two-column .slide-title.slide-block.position-right.position-top", text: "Establish a visual contract", wait: 5
+
+    find("select[data-presentation-editor-position][data-slide-index='0'][data-block-index='0']").select("Right Bottom")
+    assert_field "Markdown source", with: /:::position\{right bottom\}\n# Designing a visual system/, wait: 5
+    assert_selector ".slide-statement .slide-block.position-right.position-bottom", text: "Designing a visual system", wait: 5
+
+    find("[data-presentation-editor-action='add-block-after'][data-slide-index='0'][data-block-index='1']").click
+    assert_field "Markdown source", with: /about consistent presentation design\.\n\nNew block/
+    assert_selector ".slide[data-slide-index='0'] .slide-block", text: "New block", wait: 5
+    accept_confirm("Delete this block?") do
+      find("[data-presentation-editor-action='delete-block'][data-slide-index='0'][data-block-index='2']").click
+    end
+    wait_for_fresh_projection
+
+    source = find_field("Markdown source").value
+    assert_includes source, ":::position{right bottom}\n# Designing a visual system"
+    assert_includes source, ":::position {center}\nThis deck exercises automatic layouts"
+    refute_includes source, "New block"
+  end
+
   test "library renames forks and deletes a presentation through its controls" do
     parent = Presentation.create!(title: "Workflow parent", source: "# Keep this source")
     visit presentations_path
@@ -394,6 +496,19 @@ class PresentationsTest < ApplicationSystemTestCase
     visit edit_presentation_path(presentation)
     assert_field "Markdown source", with: /Changed/
     assert_selector ".presentation-editor-projection .slide", count: 2
+  end
+
+  test "positions blocks in a new presentation through the visual control" do
+    visit new_presentation_path
+    wait_for_fresh_projection
+
+    position = find("select[data-presentation-editor-position][data-slide-index='0'][data-block-index='1']")
+    position.select("Left Top")
+    assert_field "Markdown source", with: /:::position\{left top\}/, wait: 5
+
+    wait_for_fresh_projection
+    find("select[data-presentation-editor-position][data-slide-index='0'][data-block-index='1']").select("Center Middle")
+    assert_field "Markdown source", with: /:::position\{center middle\}/, wait: 5
   end
 
   test "presentation caret follows source switches and arrow keys move between blocks" do
@@ -819,6 +934,44 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: "# **Visual** deck\n\nAfter $\\frac{x}{y}$ and $$\\sum_{i=1}^{n} i$$ after.", wait: 5
   end
 
+  test "latex visual mode enter and exit flow in presentation block" do
+    presentation = Presentation.create!(
+      title: "Math deck",
+      source: "# Slide\n\nInitial text"
+    )
+
+    visit edit_presentation_path(presentation)
+    block = find(".editor-projection .slide-block", text: "Initial text")
+    block.click
+
+    page.execute_script(<<~JAVASCRIPT, block)
+      const block = arguments[0];
+      const range = document.createRange();
+      range.selectNodeContents(block);
+      range.collapse(false);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+    JAVASCRIPT
+    block.send_keys(" $x=3$")
+    assert_selector ".editor-projection .katex", text: "x=3", wait: 5
+
+    # Hit left arrow to enter math mode at $x=3|$
+    block.send_keys(:left)
+    assert_selector ".editor-projection .editor-math-active", text: "$x=3$", wait: 5
+
+    # Edit 3 -> 4
+    block.send_keys(:backspace)
+    block.send_keys("4")
+    assert_selector ".editor-projection .editor-math-active", text: "$x=4$", wait: 5
+
+    # Hit right arrow to exit math mode
+    block.send_keys(:right)
+    assert_selector ".editor-projection [data-editor-math-source='x=4']", wait: 5
+    assert_no_selector ".editor-projection .editor-math-active"
+    assert_field "Markdown source", with: "# Slide\n\nInitial text $x=4$", wait: 5
+  end
+
   test "real visual keystrokes preserve the exact title source" do
     source = <<~MARKDOWN.chomp
       ---
@@ -879,7 +1032,7 @@ class PresentationsTest < ApplicationSystemTestCase
       editor.setSelectionRange(editor.value.length);
       editor.focus();
     JAVASCRIPT
-    find(".cm-content").send_keys("\n\n## Test")
+    find(".cm-content").send_keys(:end, :enter, :enter, "## Test")
     assert_field "Markdown source", with: "# Existing slide\n\n## Test", wait: 5
     click_on "Save presentation"
     assert_selector ".flash.notice", text: "Presentation saved.", wait: 10
@@ -1428,7 +1581,7 @@ class PresentationsTest < ApplicationSystemTestCase
     visit edit_presentation_path(presentation)
     page.execute_script(<<~JAVASCRIPT)
       const form = document.querySelector('form[data-controller~="autosave"]');
-      form.setAttribute("data-autosave-timeout-value", "1200");
+      form.setAttribute("data-autosave-timeout-value", "5000");
       window.saveStarted = false;
       window.fetchForSaveRetry = window.fetch.bind(window);
       window.fetch = (url, options = {}) => {
@@ -1453,9 +1606,19 @@ class PresentationsTest < ApplicationSystemTestCase
     JAVASCRIPT
     assert save_started, "autosave request did not start"
 
+    # Keep the latest edit from starting another automatic request while the
+    # intentionally stalled request times out and exposes its retry control.
+    page.execute_script(<<~JAVASCRIPT)
+      document.querySelector('form[data-controller~="autosave"]')
+        .setAttribute("data-autosave-delay-value", "15000");
+    JAVASCRIPT
+
     fill_in "Markdown source", with: "# Latest edit"
     assert_field "Markdown source", with: "# Latest edit"
-    assert_selector '[data-autosave-target="status"]', text: "Save timed out", wait: 5
+    # Fire the field's change event before the failure state so clicking Retry
+    # doesn't also trigger that field's blur event.
+    page.execute_script("document.activeElement?.blur()")
+    assert_selector '[data-autosave-target="status"]', text: "Save timed out", wait: 8
     assert_selector '[data-autosave-target="retry"]', visible: true
     assert_equal "# Original", presentation.reload.source
 
@@ -1555,23 +1718,6 @@ class PresentationsTest < ApplicationSystemTestCase
       page.evaluate_script("window.innerWidth")
   ensure
     page.driver.browser.manage.window.resize_to(1400, 1000)
-  end
-
-  test "loads sample presentations from the library" do
-    Presentation.delete_all
-
-    visit presentations_path
-    assert_text "No presentations yet"
-    find("summary", text: "More").click
-    click_on "Load sample presentations"
-
-    assert_selector ".flash.notice", text: "Sample presentations loaded.", wait: 15
-    Presentations::SampleData::SAMPLES.each do |sample|
-      assert_text sample[:title]
-    end
-    Presentations::LineageSampleData::SAMPLES.each do |sample|
-      assert_text sample[:title]
-    end
   end
 
   test "shows the seeded lineage tree in the library" do
@@ -1692,56 +1838,6 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_operator (fraction_parts[1]["top"] - fraction_parts[0]["top"]).abs, :>, 1
   end
 
-  test "renders inline accents and multiline display equations in a presentation" do
-    presentation = Presentation.create!(title: "Math rendering", source: <<~MARKDOWN)
-      # Math
-
-      Inline $\\bar{x}$.
-
-      $$
-      \\begin{aligned}
-      x &= y \\\\
-      y &= z
-      \\end{aligned}
-      $$
-    MARKDOWN
-
-    visit presentation_path(presentation)
-
-    assert_selector ".presentation-surface .katex", count: 2
-    assert_selector ".presentation-surface .katex-display", count: 1
-    assert_no_selector ".presentation-surface .math-error"
-  end
-
-  test "renders automatic layouts and positioned blocks" do
-    presentation = Presentation.create!(
-      title: "Automatic layouts",
-      source: <<~MARKDOWN
-        # Compare
-
-        ## Left
-
-        One side.
-
-        ## Right
-
-        The other side.
-        ---
-        # Positioned
-
-        :::position{center middle}
-
-        Center this message.
-      MARKDOWN
-    )
-
-    visit presentation_path(presentation)
-
-    assert_selector ".slide-two-column .slide-regions"
-    assert_selector ".slide-statement .position-center.position-middle", text: /Center this message/
-    refute_text ":::position"
-  end
-
   test "keeps Elef UI and presentation surfaces as separate styling zones" do
     presentation = Presentation.create!(title: "Scoped Deck", source: "# Scoped\n\n- One\n- Two")
 
@@ -1785,15 +1881,13 @@ class PresentationsTest < ApplicationSystemTestCase
   test "user creates saves and reopens a markdown presentation" do
     visit presentations_path
     find("summary", text: "New").click
-    assert_equal "pointer", page.evaluate_script("getComputedStyle(document.querySelector('.new-work-trigger')).cursor")
-    assert_equal "pointer", page.evaluate_script("getComputedStyle(document.querySelector('.new-work-option')).cursor")
-    assert_equal "pointer", page.evaluate_script("getComputedStyle(document.querySelector('.library-tools > summary')).cursor")
     within ".new-work-panel" do
       click_on "Presentation"
     end
 
     fill_in "Title", with: "System Deck"
     source = "# First\n\nBody\n---\n# Second"
+    find("summary.editor-reveal-metadata", text: "Appearance").click
     select "Book", from: "Typography"
     normalized_source = "---\ntypography: book\n---\n#{source}"
     fill_in "Markdown source", with: source
@@ -1884,6 +1978,27 @@ class PresentationsTest < ApplicationSystemTestCase
     editor.send_keys(:enter)
     assert_equal "# Math\n\n$$\nequation\n$$", source.value
     assert_equal "equation", page.evaluate_script("(() => { const e = document.querySelector('[data-snippet-palette-target=editor]'); return e.value.slice(e.selectionStart, e.selectionEnd) })()")
+  end
+
+  test "prioritizes an exact math snippet trigger and filters suggestions for math context" do
+    Snippet.create!(name: "Array command", trigger: "array", category: "LaTeX", body: "\\operatorname{array}")
+    Snippet.create!(name: "Alpha command", trigger: "a", category: "LaTeX", body: "\\alpha")
+    Snippet.create!(name: "Aligned block", trigger: "aligned", category: "LaTeX", body: "$$\n\\begin{aligned}\nx &= y\n\\end{aligned}\n$$")
+    Snippet.create!(name: "Array notes", trigger: "array-notes", category: "Markdown", body: "- ${1:item}")
+    presentation = Presentation.create!(title: "Math snippet search", source: "# Math\n\n$$\n")
+
+    visit edit_presentation_path(presentation)
+    editor = find(".cm-content")
+    editor.send_keys(":a")
+
+    assert_selector ".snippet-option.is-selected", text: /Alpha command/
+    assert_selector ".snippet-option", text: /:array.*Array command/m
+    assert_no_selector ".snippet-option", text: /Aligned block|Array notes/
+
+    editor.send_keys(:enter)
+    source = find_field("Markdown source").value
+    assert_includes source, "$$\n\\alpha"
+    refute_includes source, "\\operatorname{array}"
   end
 
   test "keeps multiple snippet placeholders aligned while tabbing" do

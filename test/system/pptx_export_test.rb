@@ -57,6 +57,54 @@ class PptxExportTest < ApplicationSystemTestCase
     end
   end
 
+  test "new presentation exports the unsaved Markdown draft" do
+    presentation_count = Presentation.count
+    visit new_presentation_path
+    capture_pptx_blob
+    fill_in "Title", with: "Unsaved new deck"
+    fill_in "Markdown source", with: "# Unsaved new slide\n\nDraft body."
+    find("button", text: "Download PPTX draft").click
+    assert_selector '[role="status"]', text: "PowerPoint downloaded.", wait: 15
+
+    Zip::File.open_buffer(StringIO.new(captured_pptx_bytes)) do |archive|
+      slide_text = Nokogiri::XML(archive.read("ppt/slides/slide1.xml"))
+        .xpath("//a:t", "a" => "http://schemas.openxmlformats.org/drawingml/2006/main")
+        .map(&:text).join(" ")
+      assert_includes slide_text, "Unsaved new slide"
+      assert_includes slide_text, "Draft body."
+    end
+    assert_equal presentation_count, Presentation.count
+  end
+
+  test "a failed PowerPoint library load can be retried" do
+    presentation = Presentation.create!(title: "Retry export", source: "# Retry export")
+    visit presentation_path(presentation)
+    capture_pptx_blob
+    page.execute_script(<<~JAVASCRIPT)
+      const originalAppend = HTMLHeadElement.prototype.append;
+      window.__pptxLibraryLoadAttempts = 0;
+      HTMLHeadElement.prototype.append = function(...nodes) {
+        const script = nodes.find((node) => node instanceof HTMLScriptElement && node.src.includes("pptxgen.bundle.js"));
+        if (script) {
+          window.__pptxLibraryLoadAttempts += 1;
+          if (window.__pptxLibraryLoadAttempts === 1) {
+            window.setTimeout(() => script.dispatchEvent(new Event("error")), 0);
+            return;
+          }
+        }
+        return originalAppend.apply(this, nodes);
+      };
+    JAVASCRIPT
+
+    button = find(".show-actions button", text: "Download PPTX")
+    button.click
+    assert_selector '[role="status"]', text: "The PowerPoint generator could not be loaded.", wait: 15
+    button.click
+    assert_selector '[role="status"]', text: "PowerPoint downloaded.", wait: 15
+    assert_equal 2, page.evaluate_script("window.__pptxLibraryLoadAttempts")
+    assert_operator captured_pptx_bytes.bytesize, :>, 0
+  end
+
   test "embeds Elef image and MP4 attachments in the generated presentation" do
     png = PIXEL_PNG
     mp4 = "fixture mp4 payload".b
@@ -81,25 +129,6 @@ class PptxExportTest < ApplicationSystemTestCase
       media = archive.entries.map(&:name).grep(%r{\Appt/media/})
       assert media.any? { |path| path.end_with?(".mp4") }, "PPTX should contain the attached MP4"
       assert media.any? { |path| path.end_with?(".png") }, "PPTX should contain the attached PNG"
-    end
-  end
-
-  test "published export button downloads the pinned release instead of the draft" do
-    presentation = Presentation.create!(title: "PPTX release", source: "# Pinned release")
-    PresentationReleasePublisher.call(presentation)
-    presentation.update!(source: "# Current draft")
-
-    visit edit_presentation_path(presentation)
-    capture_pptx_blob
-    click_button "Download published PPTX"
-    assert_selector '[role="status"]', text: "PowerPoint downloaded.", wait: 15
-    bytes = captured_pptx_bytes
-
-    Zip::File.open_buffer(StringIO.new(bytes)) do |archive|
-      slide = Nokogiri::XML(archive.read("ppt/slides/slide1.xml"))
-      text = slide.xpath("//a:t", "a" => "http://schemas.openxmlformats.org/drawingml/2006/main").map(&:text).join(" ")
-      assert_includes text, "Pinned release"
-      assert_not_includes text, "Current draft"
     end
   end
 

@@ -92,6 +92,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
 
   test "uses the math shortcut palette for aliases inside math" do
     document = Document.create!(title: "Math palette", source: "# Math palette")
+    MathShortcut.create!(name: "Array", aliases: ["array"], prefix: "@", expansion: "\\operatorname{array}")
 
     visit edit_document_path(document)
     page.execute_script("const editor = document.querySelector('.source-field').editorController; editor.setSelectionRange(editor.value.length, editor.value.length); editor.focus();")
@@ -102,14 +103,48 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
 
     editor.send_keys("\n@a")
     assert_selector ".math-shortcut-palette .snippet-option", text: /Alpha/, wait: 5
+    assert_selector ".math-shortcut-option.is-selected", text: /Alpha/
     editor.send_keys(:enter)
 
     source = find_field("Markdown source").value
     assert_includes source, "$\\mathbf{x}"
     assert_includes source, "\\alpha"
+    refute_includes source, "\\operatorname{array}"
+
+    editor.send_keys("\n@Q")
+    capital_theta = find(".math-shortcut-option", text: /Capital Theta/, wait: 5)
+    within(capital_theta) do
+      assert_selector ".math-shortcut-trigger", text: "@Q"
+      assert_selector ".math-shortcut-expansion", text: "\\Theta"
+    end
+    editor.send_keys(:enter)
+
+    editor.send_keys("\n@q")
+    theta = find(".math-shortcut-option", text: /^Theta/, wait: 5)
+    within(theta) do
+      assert_selector ".math-shortcut-trigger", text: "@q"
+      assert_selector ".math-shortcut-expansion", text: "\\theta"
+    end
+    editor.send_keys(:enter)
+
+    editor.send_keys("\n@w")
+    omega = find(".math-shortcut-option", text: /^Omega/, wait: 5)
+    within(omega) do
+      assert_selector ".math-shortcut-trigger", text: "@w"
+      assert_selector ".math-shortcut-expansion", text: "\\omega"
+    end
+    editor.send_keys(:enter)
+
+    source = find_field("Markdown source").value
+    assert_includes source, "\\Theta"
+    assert_includes source, "\\theta"
+    assert_includes source, "\\omega"
+
+    editor.send_keys("\n@A")
+    assert_no_selector ".math-shortcut-palette:not([hidden])", wait: 1
   end
 
-  test "shows dark math shortcut cards with rendered LaTeX examples" do
+  test "shows compact math shortcut suggestions with their LaTeX expansion" do
     document = Document.create!(title: "Math shortcut previews", source: "# Math shortcut previews")
 
     visit edit_document_path(document)
@@ -120,18 +155,11 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     gamma = find(".math-shortcut-option", text: /Gamma/, wait: 5)
     within(gamma) do
       assert_selector ".math-shortcut-trigger", text: "@g"
-      assert_selector ".math-shortcut-latex code", text: "\\gamma"
-      assert_selector ".math-shortcut-example-arrow", count: 2
-      assert_selector ".math-shortcut-preview-render .katex-html", text: "γ", wait: 5
+      assert_selector ".math-shortcut-expansion", text: "\\gamma"
+      assert_no_selector ".math-shortcut-preview-render"
     end
-    asset_response = page.evaluate_async_script(<<~JAVASCRIPT)
-      const done = arguments[arguments.length - 1]
-      const assetUrl = document.querySelector('.source-field').getAttribute('data-math-shortcut-palette-katex-url-value')
-      fetch(assetUrl).then((response) => done({ status: response.status, contentType: response.headers.get('content-type') }))
-        .catch(() => done({ status: 0, contentType: '' }))
-    JAVASCRIPT
-    assert_equal 200, asset_response["status"]
-    assert_match(/javascript/, asset_response["contentType"])
+    assert_operator page.all(".math-shortcut-option").length, :<=, 6
+    assert_operator page.evaluate_script("document.querySelector('.math-shortcut-palette').getBoundingClientRect().height"), :<, 300
     assert_equal "rgb(17, 22, 26)", page.evaluate_script("getComputedStyle(document.querySelector('.math-shortcut-palette')).backgroundColor")
     assert_equal "rgb(32, 44, 50)", page.evaluate_script("getComputedStyle(document.querySelector('.math-shortcut-option.is-selected')).backgroundColor")
 
@@ -140,8 +168,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     bar = find(".math-shortcut-option", text: /Bar/, wait: 5)
     within(bar) do
       assert_selector ".math-shortcut-trigger", text: "x.bar"
-      assert_selector ".math-shortcut-latex code", text: "\\bar{x}"
-      assert_selector ".math-shortcut-preview-render .katex-html", wait: 5
+      assert_selector ".math-shortcut-expansion", text: "\\bar{x}"
     end
 
     editor.send_keys(:enter)
@@ -149,8 +176,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     arrow = find(".math-shortcut-option", text: /Long right arrow/, wait: 5)
     within(arrow) do
       assert_selector ".math-shortcut-trigger", text: "@longright"
-      assert_selector ".math-shortcut-latex code", text: "\\longrightarrow"
-      assert_selector ".math-shortcut-preview-render .katex-html", wait: 5
+      assert_selector ".math-shortcut-expansion", text: "\\longrightarrow"
     end
   end
 
@@ -235,7 +261,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
 
     visit edit_document_path(document)
     assert_selector ".cm-foldPlaceholder", wait: 5
-    assert_no_selector ".editor-reveal-metadata", visible: true
+    assert_no_selector "button.editor-reveal-metadata", visible: true
     click_on "Source"
     assert_no_selector ".cm-foldPlaceholder"
     assert_selector ".editor-reveal-metadata", text: "Hide source metadata", visible: true
@@ -256,8 +282,11 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     )
 
     visit edit_document_path(document)
+    assert_selector "summary.editor-reveal-metadata", text: "Appearance", visible: true
+    assert_no_selector "button.editor-reveal-metadata", text: "Reveal source metadata", visible: true
+    assert_no_selector "select#document_theme", visible: true
+    find("summary.editor-reveal-metadata", text: "Appearance").click
     assert_selector "select#document_theme", visible: true
-    assert_no_selector ".editor-reveal-metadata", visible: true
     select "Dark", from: "Theme"
     select "Modern", from: "Typography"
 
@@ -278,14 +307,22 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     )
 
     visit edit_document_path(document)
+    assert_selector "summary.editor-reveal-metadata", text: "Appearance", visible: true
+    assert_no_selector "select#document_theme", visible: true
+    assert_no_selector "select#document_typography", visible: true
+    assert_no_selector "button.editor-reveal-metadata", text: "Reveal source metadata", visible: true
+
+    find("summary.editor-reveal-metadata", text: "Appearance").click
     assert_selector "select#document_theme", visible: true
     assert_selector "select#document_typography", visible: true
-    assert_no_selector ".editor-reveal-metadata", visible: true
+    assert_selector ".appearance-hint", visible: true
     assert_equal "rgb(17, 22, 26)", page.evaluate_script("getComputedStyle(document.querySelector('select#document_theme')).backgroundColor")
 
     click_on "Source"
+    assert_no_selector "summary.editor-reveal-metadata", text: "Appearance", visible: true
     assert_no_selector "select#document_theme", visible: true
     assert_no_selector "select#document_typography", visible: true
+    assert_no_selector ".appearance-hint", visible: true
     assert_selector ".editor-reveal-metadata", text: "Hide source metadata", visible: true
     assert_equal "true", page.evaluate_script("document.querySelector('#document_theme').disabled").to_s
 
@@ -293,9 +330,12 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     assert_selector ".document-reader.document-theme-dark", wait: 5
 
     click_on "Visual"
+    assert_selector "summary.editor-reveal-metadata", text: "Appearance", visible: true
+    find("summary.editor-reveal-metadata", text: "Appearance").click
     assert_selector "select#document_theme", visible: true
+    assert_selector ".appearance-hint", visible: true
     assert_equal "dark", page.evaluate_script("document.querySelector('#document_theme').value")
-    assert_no_selector ".editor-reveal-metadata", visible: true
+    assert_no_selector "button.editor-reveal-metadata", text: "Reveal source metadata", visible: true
   end
 
   test "saving a source mode metadata edit preserves the source mode" do
@@ -377,6 +417,25 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     click_on "Visual"
     assert_selector ".editor-mode-button[aria-pressed='true']", text: "Visual"
     assert_selector ".editor-projection[aria-label='Visual editing surface']", visible: true
+  ensure
+    page.driver.browser.manage.window.resize_to(1400, 1000)
+  end
+
+  test "source mode keeps the first document page within the side preview width" do
+    visit new_document_path
+    page.driver.browser.manage.window.resize_to(1400, 900)
+    click_on "Source"
+
+    geometry = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const preview = document.querySelector(".editor-projection").getBoundingClientRect();
+        const page = document.querySelector(".document-page").getBoundingClientRect();
+        return { previewLeft: preview.left, previewRight: preview.right, pageLeft: page.left, pageRight: page.right };
+      })()
+    JAVASCRIPT
+
+    assert_operator geometry["pageLeft"], :>=, geometry["previewLeft"]
+    assert_operator geometry["pageRight"], :<=, geometry["previewRight"]
   ensure
     page.driver.browser.manage.window.resize_to(1400, 1000)
   end

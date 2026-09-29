@@ -53,7 +53,7 @@ module Source
           if valid_mapping && %w[list quote].include?(mapped[:kind])
             rendered = editable_trailing_structured_line(rendered, mapped[:markdown], mapped[:kind], caret_token)
           end
-          html << %(<div#{attributes}>#{rendered}</div>)
+          html << %(<div class="document-editor-block-shell"><div#{attributes}>#{rendered}</div>#{position_control(mapped)}</div>)
         end
         while (placeholder = empty_blocks[empty_block_index])
           append_empty_block.call(placeholder)
@@ -125,6 +125,21 @@ module Source
       classes = ["position-#{position.horizontal}", "position-#{position.vertical}"]
       classes << "position-vertical" if position.vertical_explicit
       classes.join(" ")
+    end
+
+    def position_control(mapped)
+      return "" unless mapped
+
+      horizontal = mapped.dig(:position, :horizontal)
+      options = [["Automatic position", "", horizontal.nil?]] + %w[left center right].map do |value|
+        [value.titleize, value, value == horizontal]
+      end
+      options = options.map do |label, value, selected|
+        selected = selected ? " selected" : ""
+        %(<option value="#{value}"#{selected}>#{ERB::Util.html_escape(label)}</option>)
+      end.join
+
+      %(<label class="document-block-position-control">Align <select aria-label="Block alignment" data-visual-editor-block-id="#{ERB::Util.html_escape(mapped[:id].to_s)}" data-action="change->visual-editor#positionChanged">#{options}</select></label>)
     end
 
     def editable_media(rendered, markdown)
