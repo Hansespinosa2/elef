@@ -18,6 +18,9 @@ export default class extends Controller {
     this.reflowFrame = null
     this.reflowTimer = null
     this.boundResize = () => this.resizeFrames()
+    this.form = this.element.closest(".visual-editor-form")
+    this.modeChangedHandler = () => this.resizeFrames()
+    this.form?.addEventListener("elef:editor-mode-change", this.modeChangedHandler)
     this.boundFocusOut = () => queueMicrotask(() => {
       if (this.active && !this.focusedEditable()) this.schedulePagination()
     })
@@ -40,6 +43,7 @@ export default class extends Controller {
   disconnect() {
     this.active = false
     window.removeEventListener("resize", this.boundResize)
+    this.form?.removeEventListener("elef:editor-mode-change", this.modeChangedHandler)
     this.surfaceTarget.removeEventListener("focusout", this.boundFocusOut)
     this.resizeObserver?.disconnect()
     this.mutationObserver?.disconnect()
@@ -50,9 +54,26 @@ export default class extends Controller {
 
   resizeFrames() {
     if (!this.surfaceTarget) return
+    const preview = this.sourceModePreview()
+    const previewStyle = preview && getComputedStyle(preview)
+    const fittedWidth = previewStyle
+      ? Math.max(0, Math.min(
+        DESIGN_WIDTH,
+        preview.clientWidth - parseFloat(previewStyle.paddingLeft) - parseFloat(previewStyle.paddingRight),
+        (preview.clientHeight - parseFloat(previewStyle.paddingTop) - parseFloat(previewStyle.paddingBottom)) * 210 / 297
+      ))
+      : null
+
     this.surfaceTarget.querySelectorAll(".document-page-frame").forEach((frame) => {
+      if (fittedWidth === null) frame.style.removeProperty("width")
+      else frame.style.width = `${fittedWidth}px`
       frame.style.setProperty("--document-page-scale", frame.clientWidth / DESIGN_WIDTH)
     })
+  }
+
+  sourceModePreview() {
+    if (this.form?.dataset.editorMode !== "source") return null
+    return this.element.closest(".preview-pane")
   }
 
   schedulePagination() {
@@ -119,6 +140,8 @@ export default class extends Controller {
       page.querySelector(".document-page-number").textContent = `Page ${number} of ${pages.length}`
       if (this.resizeObserver) this.resizeObserver.observe(frame)
     })
+    const preview = this.element.closest(".preview-pane")
+    if (preview && this.resizeObserver) this.resizeObserver.observe(preview)
 
     this.resizeFrames()
     this.mutationObserver?.takeRecords()
