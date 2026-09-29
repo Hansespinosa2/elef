@@ -8,12 +8,13 @@ export default class extends Controller {
   connect() {
     this.connected = true
     this.composing = false
+    this.refreshScheduled = false
     this.editorController = editorFor(this.element)
     this.editorReady = () => {
       this.editorController = editorFor(this.element)
       this.setupEditor()
     }
-    this.editorSelectionChange = () => this.refresh()
+    this.editorSelectionChange = () => this.scheduleRefresh()
     this.element.addEventListener("elef:editor-ready", this.editorReady)
     this.element.addEventListener("elef:editor-selection-change", this.editorSelectionChange)
     this.positionPalette = this.positionPalette.bind(this)
@@ -58,7 +59,7 @@ export default class extends Controller {
       this.keydownBound = true
     }
     if (!this.focusBound) {
-      this.handleEditorFocusIn = () => queueMicrotask(() => this.refresh())
+      this.handleEditorFocusIn = () => this.scheduleRefresh()
       this.handleEditorFocusOut = () => this.close()
       this.handleCompositionStart = () => {
         this.composing = true
@@ -66,7 +67,7 @@ export default class extends Controller {
       }
       this.handleCompositionEnd = () => {
         this.composing = false
-        queueMicrotask(() => this.refresh())
+        this.scheduleRefresh()
       }
       editor.dom.addEventListener("focusin", this.handleEditorFocusIn)
       editor.dom.addEventListener("focusout", this.handleEditorFocusOut)
@@ -98,7 +99,16 @@ export default class extends Controller {
 
   input(event) {
     if (this.composing || event?.isComposing) return
-    queueMicrotask(() => this.refresh())
+    this.scheduleRefresh()
+  }
+
+  scheduleRefresh() {
+    if (this.refreshScheduled) return
+    this.refreshScheduled = true
+    queueMicrotask(() => {
+      this.refreshScheduled = false
+      this.refresh()
+    })
   }
 
   keydown(event) {
@@ -136,7 +146,7 @@ export default class extends Controller {
         event.stopPropagation()
         this.close()
       } else {
-        queueMicrotask(() => this.refresh())
+        this.scheduleRefresh()
       }
       return
     }
@@ -254,7 +264,7 @@ export default class extends Controller {
     if (model.kind === "diagram-command") {
       editor.replaceRange("/diagram", model.from, model.to)
       this.close()
-      queueMicrotask(() => this.refresh())
+      this.scheduleRefresh()
       return
     }
 

@@ -1,13 +1,14 @@
 import { Controller } from "@hotwired/stimulus"
 import { editorFor } from "controllers/editor_controller"
 import { application } from "controllers/application"
-import { insideMath, parseMathShorthand } from "controllers/math_shorthand_controller"
+import { editorInsideMath, mathShorthandAtEditor, parseMathShorthand } from "controllers/math_shorthand_controller"
+import { authoringRegistryFor } from "controllers/authoring_registry"
 
 export default class extends Controller {
   static targets = ["editor", "palette"]
-  static values = { shortcuts: Array }
 
   connect() {
+    this.registry = authoringRegistryFor(this.element)
     this.matches = []
     this.selectedIndex = 0
     this.stops = []
@@ -81,7 +82,10 @@ export default class extends Controller {
       return
     }
     const editor = this.editorController
-    if (!editor?.insertMode) return
+    if (!editor || editor.editingMode !== "source" || !editor.insertMode) {
+      this.close()
+      return
+    }
 
     if (!this.paletteTarget.hidden) {
       const currentQuery = this.queryAtCaret()
@@ -108,11 +112,16 @@ export default class extends Controller {
       this.insertSelected()
       return
     }
-    queueMicrotask(() => this.refresh())
+    this.schedule()
   }
 
   schedule() {
-    queueMicrotask(() => this.refresh())
+    if (this.refreshScheduled) return
+    this.refreshScheduled = true
+    queueMicrotask(() => {
+      this.refreshScheduled = false
+      this.refresh()
+    })
   }
 
   refresh() {
@@ -120,8 +129,9 @@ export default class extends Controller {
     if (!query) return this.close()
 
     const singleCharacterAlias = query.prefix === "@" && query.text.length === 1
-    const matches = this.shortcutsValue
-      .filter((shortcut) => shortcut.prefix === query.prefix)
+    const matches = this.registry
+      .filter((shortcut) => shortcut.namespace === query.prefix)
+      .filter((shortcut) => query.prefix !== "." || (shortcut.built_in && shortcut.behavior?.operator_class))
       .filter((shortcut) => !singleCharacterAlias || (shortcut.aliases || []).includes(query.text))
       .map((shortcut) => ({ shortcut, score: this.matchScore(shortcut, query.text) }))
       .filter(({ score }) => score !== null)
@@ -139,19 +149,20 @@ export default class extends Controller {
 
   queryAtCaret() {
     const editor = this.editorController
-    if (!editor || editor.selectionStart !== editor.selectionEnd) return null
+    if (!editor || editor.editingMode !== "source" || editor.selectionStart !== editor.selectionEnd) return null
     const caret = editor.selectionStart
-    if (!insideMath(editor.value, caret)) return null
-    const before = editor.value.slice(0, caret)
-    const match = before.match(/([A-Za-z][A-Za-z0-9]*)?([.@])([A-Za-z0-9_-]*|=)$/)
+    const line = editor.view.state.doc.lineAt(caret)
+    const before = line.text.slice(0, caret - line.from)
+    const match = before.match(/((?:@[A-Za-z][A-Za-z0-9]*|\\[A-Za-z][A-Za-z0-9]*|[A-Za-z][A-Za-z0-9]*)(?:\.[A-Za-z]+)*)?([.@])([A-Za-z0-9_-]*|=)$/)
     if (!match) return null
+    if (!editorInsideMath(editor, caret)) return null
 
     return {
       prefix: match[2],
       text: match[3],
-      start: match[2] === "." && match[1] ? match.index : match.index + (match[1]?.length || 0),
+      start: line.from + (match[2] === "." && match[1] ? match.index : match.index + (match[1]?.length || 0)),
       base: match[1] || "",
-      baseStart: match.index
+      baseStart: line.from + match.index
     }
   }
 
@@ -159,7 +170,8 @@ export default class extends Controller {
     const editor = this.editorController
     if (!editor) return false
 
-    const before = editor.value.slice(0, editor.selectionStart)
+    const line = editor.view.state.doc.lineAt(editor.selectionStart)
+    const before = line.text.slice(0, editor.selectionStart - line.from)
     const match = before.match(/([A-Za-z][A-Za-z0-9]*(?:\.[A-Za-z][A-Za-z0-9]*)+)$/)
     return !this.selectionMoved && Boolean(match && parseMathShorthand(match[1]))
   }
@@ -169,7 +181,7 @@ export default class extends Controller {
     if (!editor) return false
 
     const shorthand = application.getControllerForElementAndIdentifier(this.element, "math-shorthand")
-    return Boolean(shorthand?.hasRecognizedAppendedModifiers(editor, editor.selectionStart))
+    return Boolean(shorthand?.hasRecognizedAppendedModifiers(editor, editor.selectionStart) || mathShorthandAtEditor(editor, editor.selectionStart)?.status === "valid")
   }
 
   matchScore(shortcut, query) {
@@ -296,6 +308,16 @@ export default class extends Controller {
     const shortcut = this.matches?.[this.selectedIndex]
     const query = this.query
     if (!shortcut || !query || !this.editorController) return this.close()
+
+    if (shortcut.prefix === ".") {
+      const canonical = { "default-bold": "b", "default-blackboard": "bb", "default-vector": "vec", "default-transpose": "t", "default-inverse": "inv" }
+      const operation = canonical[shortcut.id] || shortcut.aliases?.[0]
+      const source = query.base ? `${query.base}.${operation}` : `.${operation}`
+      this.close()
+      this.editorController.replaceRange(source, query.start, this.editorController.selectionStart)
+      this.editorController.focus()
+      return
+    }
 
     const expansion = this.expandShortcut(shortcut, query)
     const base = query.start

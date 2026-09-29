@@ -305,10 +305,9 @@ class DocumentsTest < ApplicationSystemTestCase
     assert page.evaluate_script("Boolean(document.querySelector('.source-field').editorController)")
   end
 
-  test "Mermaid Enter does not take over an active snippet palette" do
-    Snippet.create!(name: "Two text fields", trigger: "pair", category: "Markdown", body: "${1:first} ${2:second}")
+  test "document command palettes stay inactive inside Mermaid code" do
     source = "```mermaid\nflowchart LR\n    A[]\n```"
-    document = Document.create!(title: "Mermaid palette coexistence", source: source)
+    document = Document.create!(title: "Mermaid palette context", source: source)
 
     visit edit_document_path(document)
     click_on "Source"
@@ -319,12 +318,9 @@ class DocumentsTest < ApplicationSystemTestCase
       editor.focus();
     JAVASCRIPT
     editor = find(".cm-content")
-    editor.send_keys(":pair")
-    assert_selector ".snippet-option", text: "Two text fields", wait: 5
-    editor.send_keys(:enter)
-
-    assert_includes find_field("Markdown source").value, "A[first second]"
-    refute_includes find_field("Markdown source").value, "--> B[]"
+    editor.send_keys("/image")
+    assert_no_selector ".snippet-option", text: /Image/
+    assert_includes find_field("Markdown source").value, "A[/image]"
   end
 
   test "Mermaid Enter does not continue a diagram during IME composition" do
@@ -445,7 +441,7 @@ class DocumentsTest < ApplicationSystemTestCase
       editor.setSelectionRange(editor.value.length);
       editor.focus();
     JAVASCRIPT
-    editor.send_keys(:enter, "Plain text", :enter, ":pair")
+    editor.send_keys(:enter, "Plain text", :enter, "/pair")
 
     assert_selector ".snippet-option", text: "Two text fields", wait: 5
     assert_selector '[data-mermaid-assist-target="palette"]', visible: false
@@ -1770,131 +1766,172 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_selector '.document-editor-block[aria-readonly="true"]', minimum: 8, visible: false
   end
 
-  test "expands math shorthand only when committed inside math" do
+  test "keeps an active math chain literal until commit and supports one-step undo" do
     document = Document.create!(title: "Math notes", source: "# Math")
     visit edit_document_path(document)
-    editor = find_field("Markdown source")
-    editor.click
+    click_on "Source"
+    source = find_field("Markdown source")
+    editor = find(".cm-content")
     editor.send_keys(:end)
-    editor.send_keys("\n$x.hat.b.T")
-    editor.send_keys(:enter)
+    editor.send_keys("\n$x.b.vec.t")
+    assert_includes source.value, "$x.b.vec.t$"
+    editor.send_keys(" ")
 
-    assert_includes editor.value, "$\\mathbf{\\hat{x}}^{\\mathsf{T}}"
-    assert_includes editor.value, "\n"
+    assert_includes source.value, "\\vec{\\mathbf{x}}^{\\mathsf{T}} $"
+    editor.send_keys([:control, "z"])
+    assert_includes source.value, "$x.b.vec.t$"
     assert_selector '[data-autosave-target="status"]', text: "Saved", wait: 5
   end
 
-  test "wraps TeX commands with math modifiers for Greek letters and operators" do
-    document = Document.create!(title: "TeX command modifiers", source: "# Math")
+  test "supports editing an active math chain before committing it" do
+    document = Document.create!(title: "Editable math chain", source: "# Math")
     visit edit_document_path(document)
-    editor = find_field("Markdown source")
-    editor.click
+    click_on "Source"
+    source_field = find_field("Markdown source")
+    editor = find(".cm-content")
     editor.send_keys(:end)
+    editor.send_keys("\n$x.vec.t")
 
-    editor.send_keys("\n$\\chi.bar")
-    editor.send_keys(:enter)
-    assert_includes editor.value, "$\\bar{\\chi}"
-
-    editor.send_keys("$\n$\\alpha.hat")
-    editor.send_keys(:tab)
-    assert_includes editor.value, "$\\hat{\\alpha}"
-
-    editor.send_keys("$\n$\\beta.tilde")
-    editor.send_keys(:enter)
-    assert_includes editor.value, "$\\tilde{\\beta}"
-
-    greek_commands = %w[
-      alpha beta gamma delta epsilon varepsilon zeta eta theta vartheta iota kappa lambda mu nu xi
-      pi varpi rho varrho sigma varsigma tau upsilon phi varphi chi psi omega
-      Gamma Delta Theta Lambda Xi Pi Sigma Upsilon Phi Psi Omega
-    ]
-    editor.send_keys("$\n$")
-    greek_commands.each do |command|
-      editor.send_keys(" \\#{command}.bar")
-      editor.send_keys(:enter)
-      editor.send_keys(" ")
-    end
-    editor.send_keys("$")
-
-    greek_commands.each do |command|
-      assert_includes editor.value, "\\bar{\\#{command}}", "\\#{command} should be wrapped as a TeX command"
-    end
-
-    editor.send_keys("\n$\\nabla.vec")
-    editor.send_keys(:enter)
-    assert_includes editor.value, "$\\vec{\\nabla}", "operators should also be wrapped as TeX commands"
-  end
-
-  test "chains supported math modifiers and leaves conflicting chains intact" do
-    document = Document.create!(title: "Math modifier chains", source: "# Math")
-    visit edit_document_path(document)
-    editor = find_field("Markdown source")
-    editor.click
-    editor.send_keys(:end)
-    expanded = ->(symbol) { "$\\mathbf{\\bar{#{symbol}}}$" }
-
-    editor.send_keys("\n$x.bar")
-    editor.send_keys(:enter)
-    editor.send_keys(".bb")
-    editor.send_keys(:enter)
-    editor.send_keys("$")
-    assert_includes editor.value, expanded.call("x"), "bar then bold should compose across commits: #{editor.value.inspect}"
-
-    editor.send_keys("\n$y.bar.bb")
-    editor.send_keys(:enter)
-    editor.send_keys("$")
-    assert_includes editor.value, expanded.call("y"), "bar then bold should compose in one token: #{editor.value.inspect}"
-
-    editor.send_keys("\n$z.bb.bar")
-    editor.send_keys(:enter)
-    editor.send_keys("$")
-    assert_includes editor.value, expanded.call("z"), "bold then bar should compose in one token: #{editor.value.inspect}"
-
-    editor.send_keys("\n$w.bb")
-    editor.send_keys(:enter)
-    editor.send_keys(".bar")
-    editor.send_keys(:enter)
-    editor.send_keys("$")
-    assert_includes editor.value, expanded.call("w"), "bold then bar should compose across commits: #{editor.value.inspect}"
-
-    assert_equal ["x", "y", "z", "w"].map { |symbol| expanded.call(symbol) }.length,
-      ["x", "y", "z", "w"].sum { |symbol| editor.value.scan(expanded.call(symbol)).length }
-
-    editor.send_keys("\n$v.bar")
-    editor.send_keys(:enter)
-    editor.send_keys(".hat")
-    editor.send_keys(:enter)
-    assert_includes editor.value, "$\\bar{v}.hat\n", "conflicting modifiers across commits should stay literal: #{editor.value.inspect}"
-    editor.send_keys("$")
-
-    ["x.bb.bb", "x.bar.bar", "x.bar.hat"].each do |token|
-      editor.send_keys("\n$#{token}")
-      editor.send_keys(:enter)
-      assert_includes editor.value, "$#{token}\n"
-      editor.send_keys("$")
-    end
-  end
-
-  test "canonicalizes modifier order and ignores code and unknown contexts" do
-    document = Document.create!(title: "Math contexts", source: "# Math")
-    visit edit_document_path(document)
-    editor = find_field("Markdown source")
-    source = "# Math\n\nOutside x.hat.b\n\n```\n$x.hat.b\n```\n\n$x.T.b.hat\n\n$x.unknown"
-    page.execute_script(<<~JAVASCRIPT, source)
-      const editor = document.querySelector('textarea[name="document[source]"]');
-      editor.value = arguments[0];
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector(".source-field").editorController;
+      const source = editor.value;
+      editor.setSelectionRange(source.indexOf("x.vec.t") + 1);
       editor.focus();
-      editor.setSelectionRange(editor.value.indexOf("\\n\\n$x.unknown"), editor.value.indexOf("\\n\\n$x.unknown"));
+    JAVASCRIPT
+    editor.send_keys(".b")
+    assert_includes source_field.value, "$x.b.vec.t$"
+
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector(".source-field").editorController;
+      editor.setSelectionRange(editor.value.indexOf("$", editor.value.indexOf("x.b.vec.t")));
+      editor.focus();
     JAVASCRIPT
     editor.send_keys(:tab)
 
-    assert_includes editor.value, "Outside x.hat.b"
-    assert_includes editor.value, "\n$x.hat.b\n```"
-    assert_includes editor.value, "$\\mathbf{\\hat{x}}^{\\mathsf{T}}"
+    assert_includes source_field.value, "\\vec{\\mathbf{x}}^{\\mathsf{T}}"
+    refute_includes source_field.value, "x.b.vec.t"
+  end
 
-    page.execute_script("const editor = document.querySelector('textarea[name=\"document[source]\"]'); editor.focus(); editor.setSelectionRange(editor.value.length, editor.value.length);")
+  test "canonicalizes an active math chain before autosave" do
+    document = Document.create!(title: "Autosaved math chain", source: "# Math")
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    source = find_field("Markdown source")
+    editor.send_keys(:end)
+    editor.send_keys("\n$x.b")
+    assert_includes source.value, "$x.b$"
+
+    assert_selector '[data-autosave-target="status"]', text: "Unsaved changes", wait: 3
+    assert_selector '[data-autosave-target="status"]', text: "Saved", wait: 10
+    assert_includes find_field("Markdown source").value, "$\\mathbf{x}$"
+    assert_includes document.reload.source, "$\\mathbf{x}$"
+    refute_includes document.reload.source, "x.b"
+  end
+
+  test "typing a colon directive inserts canonical source and guides align arguments" do
+    document = Document.create!(title: "Directive palette", source: "# Notes")
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    editor.send_keys(:end)
+    editor.send_keys("\n:align")
+
+    source = find_field("Markdown source")
+    assert_includes source.value, ":::align{}"
+    refute_includes source.value.lines, ":align"
+    assert_selector ".snippet-palette [role='option'] strong", text: "left"
+    assert_selector ".snippet-palette [role='option'] strong", text: "center"
+
+    editor.send_keys("center ")
+    assert_includes source.value, ":::align{center }"
+    assert_selector ".snippet-palette [role='option'] strong", text: "top"
+    assert_selector ".snippet-palette [role='option'] strong", text: "middle"
+    assert_selector ".snippet-palette [role='option'] strong", text: "bottom"
+    assert_no_selector ".snippet-palette [role='option'] strong", text: "left"
+  end
+
+  test "slash palette inserts canonical image source" do
+    document = Document.create!(title: "Source palette", source: "# Notes")
+    visit edit_document_path(document)
+    click_on "Source"
+    source = find_field("Markdown source")
+    editor = find(".cm-content")
+    editor.send_keys(:end)
+    editor.send_keys("\n/image")
+    assert_selector ".snippet-palette [role='option']", text: /Image/
     editor.send_keys(:enter)
-    assert_includes editor.value, "$x.unknown\n"
+
+    assert_includes source.value, "![description](image URL)"
+    refute_includes source.value, "/image"
+    selected_image_placeholder = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const editor = document.querySelector(".source-field").editorController;
+        return editor.value.slice(editor.selectionStart, editor.selectionEnd);
+      })()
+    JAVASCRIPT
+    assert_equal "description", selected_image_placeholder
+
+  end
+
+  test "supports only the v1 math transforms and preserves invalid chains" do
+    document = Document.create!(title: "Math transforms", source: "# Math")
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    source = find_field("Markdown source")
+    editor.send_keys(:end)
+
+    editor.send_keys("\n$\\alpha.b")
+    editor.send_keys(:enter)
+    assert_includes source.value, "\\boldsymbol{\\alpha}"
+
+    editor.send_keys(:right)
+    editor.send_keys("\n$R.bb")
+    editor.send_keys(:enter)
+    assert_includes source.value, "\\mathbb{R}"
+
+    editor.send_keys(:right)
+    editor.send_keys("\n$A.inv.t")
+    editor.send_keys(:enter)
+    assert_includes source.value, "\\left(A^{-1}\\right)^{\\mathsf{T}}"
+
+    editor.send_keys(:right)
+    editor.send_keys("\n$x.invalid")
+    editor.send_keys(:enter)
+    assert_includes source.value, "$x.invalid"
+  end
+
+  test "slash palette hides raw LaTeX outside math and keeps equation blocks available" do
+    document = Document.create!(title: "Slash context", source: "# Notes")
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    editor.send_keys(:end)
+    editor.send_keys("\n/frac")
+
+    assert_no_selector ".snippet-palette [role='option']", text: /Fraction/, wait: 1
+
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector(".source-field").editorController;
+      editor.replaceRange("/equation", editor.value.length - "/frac".length, editor.value.length);
+    JAVASCRIPT
+    assert_selector ".snippet-palette [role='option']", text: /Equation/, wait: 5
+  end
+
+  test "leaves dot syntax literal outside math and inside code" do
+    document = Document.create!(title: "Math contexts", source: "# Math")
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    editor.send_keys(:end)
+    editor.send_keys("\nOutside x.b\n\n```\n$x.b\n```")
+    editor.send_keys(:end)
+    editor.send_keys(:enter)
+
+    source = find_field("Markdown source").value
+    assert_includes source, "Outside x.b"
+    assert_includes source, "```\n$x.b\n```"
   end
 
   test "keeps the last good preview when a live preview fails" do

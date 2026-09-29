@@ -40,8 +40,8 @@ class StyleAndMathShortcutTest < ActiveSupport::TestCase
     assert_includes MathShortcuts::Catalog.for_editor, { id: shortcut.id, name: "Bold", aliases: %w[b bold], description: "", prefix: ".", expansion: "\\\\mathbf{${1}}", built_in: false }
     assert MathShortcuts::Catalog.for_editor.any? { |item| item[:aliases].include?("alpha") }
     assert_equal "\\mathbf{${1}}", MathShortcuts::Catalog::DEFAULTS.find { |item| item[:name] == "Bold" }[:expansion]
-    assert_includes MathShortcuts::Catalog::DEFAULTS.find { |item| item[:name] == "Bold" }[:aliases], "bb"
-    refute_includes MathShortcuts::Catalog::DEFAULTS.find { |item| item[:name] == "Blackboard bold" }[:aliases], "bb"
+    refute_includes MathShortcuts::Catalog::DEFAULTS.find { |item| item[:name] == "Bold" }[:aliases], "bb"
+    assert_includes MathShortcuts::Catalog::DEFAULTS.find { |item| item[:name] == "Blackboard bold" }[:aliases], "bb"
   end
 
   test "includes uppercase and lowercase Greek letter shortcuts" do

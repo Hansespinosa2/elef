@@ -98,10 +98,9 @@ export default class extends Controller {
   refresh() {
     const editor = this.editor()
     const beforeCaret = editor.value.slice(0, editor.selectionStart)
-    if (this.insideCode(beforeCaret)) return this.close()
-
     const match = beforeCaret.match(/\[\[([^\]\r\n]*)$/)
     if (!match) return this.close()
+    if (this.insideCode(beforeCaret)) return this.close()
 
     this.query = match[1].toLowerCase()
     this.queryStart = editor.selectionStart - this.query.length - 2

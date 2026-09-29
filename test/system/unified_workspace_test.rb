@@ -95,13 +95,14 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     MathShortcut.create!(name: "Array", aliases: ["array"], prefix: "@", expansion: "\\operatorname{array}")
 
     visit edit_document_path(document)
+    click_on "Source"
     page.execute_script("const editor = document.querySelector('.source-field').editorController; editor.setSelectionRange(editor.value.length, editor.value.length); editor.focus();")
     editor = find(".cm-content")
     editor.send_keys("\n$x.b")
     assert_selector ".math-shortcut-palette .snippet-option", text: /Bold/, wait: 5
     editor.send_keys(:enter)
 
-    editor.send_keys("\n@a")
+    editor.send_keys("\n$@a")
     assert_selector ".math-shortcut-palette .snippet-option", text: /Alpha/, wait: 5
     assert_selector ".math-shortcut-option.is-selected", text: /Alpha/
     editor.send_keys(:enter)
@@ -111,7 +112,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     assert_includes source, "\\alpha"
     refute_includes source, "\\operatorname{array}"
 
-    editor.send_keys("\n@Q")
+    editor.send_keys(" @Q")
     capital_theta = find(".math-shortcut-option", text: /Capital Theta/, wait: 5)
     within(capital_theta) do
       assert_selector ".math-shortcut-trigger", text: "@Q"
@@ -119,7 +120,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     end
     editor.send_keys(:enter)
 
-    editor.send_keys("\n@q")
+    editor.send_keys(" @q")
     theta = find(".math-shortcut-option", text: /^Theta/, wait: 5)
     within(theta) do
       assert_selector ".math-shortcut-trigger", text: "@q"
@@ -127,7 +128,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     end
     editor.send_keys(:enter)
 
-    editor.send_keys("\n@w")
+    editor.send_keys(" @w")
     omega = find(".math-shortcut-option", text: /^Omega/, wait: 5)
     within(omega) do
       assert_selector ".math-shortcut-trigger", text: "@w"
@@ -140,7 +141,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     assert_includes source, "\\theta"
     assert_includes source, "\\omega"
 
-    editor.send_keys("\n@A")
+    editor.send_keys(" @A")
     assert_no_selector ".math-shortcut-palette:not([hidden])", wait: 1
   end
 
@@ -148,6 +149,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     document = Document.create!(title: "Greek math palette", source: "# Greek math palette")
 
     visit edit_document_path(document)
+    click_on "Source"
     editor = find(".cm-content")
     editor.click
     editor.send_keys("\n$ @b")
@@ -185,6 +187,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     document = Document.create!(title: "Math shortcut previews", source: "# Math shortcut previews")
 
     visit edit_document_path(document)
+    click_on "Source"
     editor = find(".cm-content")
     editor.click
     editor.send_keys("\n$@g")
@@ -233,6 +236,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     document = Document.create!(title: "TeX operators", source: "# TeX operators")
 
     visit edit_document_path(document)
+    click_on "Source"
     editor = find(".cm-content")
     editor.click
     editor.send_keys("\n$@nabla")
@@ -261,33 +265,158 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     assert_no_selector ".math-error"
   end
 
+  test "inserts structured math entries with ordered placeholder stops" do
+    document = Document.create!(title: "Structured math", source: "# Math\n\n$$x$$")
+
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector(".source-field").editorController;
+      const opening = editor.value.indexOf("$$x") + 2;
+      editor.setSelectionRange(opening);
+      editor.focus();
+    JAVASCRIPT
+
+    editor.send_keys("@frac")
+    assert_selector ".math-shortcut-option", text: /Fraction/, wait: 5
+    editor.send_keys(:enter, "n", :tab, "d", :tab, " +@choose")
+    assert_selector ".math-shortcut-option", text: /Choose/, wait: 5
+    editor.send_keys(:enter, "n", :tab, "k", :tab, " +@cases")
+    assert_selector ".math-shortcut-option", text: /Cases/, wait: 5
+    editor.send_keys(:enter, "f(x)", :tab, "x>0", :tab, "0", :tab, "otherwise", :tab, " +@equation")
+    assert_selector ".math-shortcut-option", text: /Equation/, wait: 5
+    editor.send_keys(:enter, "lhs", :tab, "rhs", :tab, " +@gather")
+    assert_selector ".math-shortcut-option", text: /Gather/, wait: 5
+    editor.send_keys(:enter, "g_1", :tab, "g_2", :tab)
+
+    source = find_field("Markdown source").value
+    expected = [
+      "\\frac{n}{d}",
+      "\\binom{n}{k}",
+      "\\begin{cases}",
+      "f(x) & x>0",
+      "0 & otherwise",
+      "\\begin{aligned}",
+      "lhs &= rhs",
+      "\\begin{gathered}",
+      "g_1 \\\\",
+      "g_2"
+    ]
+    positions = expected.map { |fragment| source.index(fragment) }
+    assert positions.all?, "missing structured output in #{source.inspect}"
+    assert_equal positions.sort, positions, "math placeholders or commands were reordered"
+    %w[@frac @choose @cases @equation @gather].each { |command| refute_includes source, command }
+  end
+
   test "uses the selected math transform without duplicating its base" do
     document = Document.create!(title: "Selected math transform", source: "# Math")
 
     visit edit_document_path(document)
+    click_on "Source"
     editor = find(".cm-content")
     editor.click
     editor.send_keys("\n$x.bo")
     find(".math-shortcut-palette .snippet-option", text: /Bold/).click
+    editor.send_keys(:enter)
 
     source = find_field("Markdown source").value
     assert_includes source, "$\\mathbf{x}"
     refute_includes source, "$x\\mathbf{x}"
   end
 
-  test "ships the common block and list colon snippets" do
+  test "meets the synchronous math-assist latency gate across 1000 CodeMirror edits" do
+    document = Document.create!(title: "Math assist performance", source: "# Math assist performance")
+
+    visit edit_document_path(document)
+    page.driver.browser.manage.timeouts.script_timeout = 30
+    result = page.evaluate_async_script(<<~JAVASCRIPT)
+      const done = arguments[arguments.length - 1];
+      (async () => {
+        try {
+          const source = document.querySelector(".source-field");
+          const editor = source.editorController;
+          const shorthand = Stimulus.getControllerForElementAndIdentifier(source, "math-shorthand");
+          const palette = Stimulus.getControllerForElementAndIdentifier(source, "math-shortcut-palette");
+          const { ensureSyntaxTree } = await import("@codemirror/language");
+          editor.setEditingMode("source", { silent: true });
+          editor.vimEnabled = false;
+
+          const prefix = "$" + "x+".repeat(2496);
+          let state = editor.view.state.update({
+            changes: { from: 0, to: editor.view.state.doc.length, insert: prefix + "x.b.vec" },
+            selection: { anchor: prefix.length + "x.b.vec".length }
+          }).state;
+          const parsedTree = ensureSyntaxTree(state, state.doc.length, 1000);
+          if (!parsedTree || parsedTree.length < state.doc.length) {
+            throw new Error("CodeMirror did not parse the full 5,000-character math region");
+          }
+
+          const benchmarkEditor = {
+            editingMode: "source",
+            insertMode: true,
+            get selectionStart() { return state.selection.main.head; },
+            get selectionEnd() { return state.selection.main.head; },
+            get value() { return state.doc.toString(); },
+            view: { get state() { return state; } }
+          };
+          shorthand.editorController = benchmarkEditor;
+          palette.editorController = benchmarkEditor;
+
+          const timings = [];
+          let maximumRegionLength = 0;
+          for (let index = 0; index < 1010; index += 1) {
+            const suffix = index % 2 === 0 ? "x.b" : "x.b.vec";
+            const from = prefix.length;
+            state = state.update({
+              changes: { from, to: state.doc.length, insert: suffix },
+              selection: { anchor: from + suffix.length },
+              userEvent: "input"
+            }).state;
+            maximumRegionLength = Math.max(maximumRegionLength, state.doc.length);
+
+            const before = performance.now();
+            shorthand.keydown({ key: "x", defaultPrevented: false });
+            palette.queryAtCaret();
+            const elapsed = performance.now() - before;
+            if (index >= 10) timings.push(elapsed);
+          }
+
+          const sorted = timings.toSorted((left, right) => left - right);
+          done({
+            samples: timings.length,
+            maximumRegionLength,
+            p95: sorted[Math.floor(sorted.length * 0.95)],
+            p99: sorted[Math.floor(sorted.length * 0.99)],
+            maximum: sorted.at(-1)
+          });
+        } catch (error) {
+          done({ error: String(error?.stack || error) });
+        }
+      })();
+    JAVASCRIPT
+
+    assert_nil result["error"], "browser benchmark failed: #{result['error']}"
+    assert_equal 1000, result["samples"]
+    assert_equal 5000, result["maximumRegionLength"]
+    assert_operator result["p95"], :<, 5
+    assert_operator result["p99"], :<, 10
+    assert_operator result["maximum"], :<, 16
+  end
+
+  test "inserts an equation block from the source command palette" do
     document = Document.create!(title: "Authoring snippets", source: "# Authoring snippets")
 
     visit edit_document_path(document)
+    click_on "Source"
     editor = find(".cm-content")
     editor.click
-    editor.send_keys("\n:bga")
-    assert_selector ".snippet-palette .snippet-option", text: /Gathered equations/, wait: 5
+    editor.send_keys("\n/equation")
+    assert_selector ".snippet-palette .snippet-option", text: /Equation/, wait: 5
     editor.send_keys(:enter)
 
     source = find_field("Markdown source").value
-    assert_includes source, "\\begin{gathered}"
-    assert_includes source, "\\end{gathered}"
+    assert_includes source, "$$\nequation\n$$"
   end
 
   test "front matter can be revealed and hidden again on demand" do

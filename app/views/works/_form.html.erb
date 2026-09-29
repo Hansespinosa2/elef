@@ -80,7 +80,8 @@
 
     <div class="editor-layout">
       <div class="source-pane">
-    <div class="field source-field relative mb-4" data-controller="editor snippet-palette math-shorthand math-shortcut-palette mermaid-assist<%= " document-link-palette" if work.document? %>" data-editor-initial-source-value="<%= ERB::Util.html_escape(work.source.to_s.to_json) %>" data-snippet-palette-snippets-value="<%= json_escape(Snippets::Catalog.for_editor.to_json) %>" data-math-shortcut-palette-shortcuts-value="<%= json_escape(MathShortcuts::Catalog.for_editor(workspace: work.workspace || Workspace.default).to_json) %>"<% if work.document? %> data-document-link-palette-titles-value="<%= ERB::Util.html_escape(document_link_titles(workspace: work.workspace).to_json) %>"<% end %><% if work.presentation? %> data-presentation-editor-target="source"<% end %>>
+    <% authoring_registry_json = json_escape(AuthoringRegistry.for_editor(workspace: work.workspace || Workspace.default).to_json) %>
+    <div class="field source-field relative mb-4" data-controller="editor snippet-palette math-shorthand math-shortcut-palette mermaid-assist<%= " document-link-palette" if work.document? %>" data-editor-initial-source-value="<%= ERB::Util.html_escape(work.source.to_s.to_json) %>" data-authoring-registry="<%= authoring_registry_json %>"<% if work.document? %> data-document-link-palette-titles-value="<%= ERB::Util.html_escape(document_link_titles(workspace: work.workspace).to_json) %>"<% end %><% if work.presentation? %> data-presentation-editor-target="source"<% end %>>
       <% source_id = form.field_id(:source) %>
       <% editor_id = "#{source_id}_editor" %>
       <%= form.label :source, "Markdown source", for: source_id, id: "#{editor_id}_label", class: "sr-only" %>
@@ -133,7 +134,7 @@
       <div id="<%= editor_id %>_math_shortcut_palette" class="snippet-palette math-shortcut-palette" data-math-shortcut-palette-target="palette" hidden role="listbox" aria-label="Math shortcut suggestions"></div>
       <div id="<%= editor_id %>_mermaid_assist_palette" class="snippet-palette" data-mermaid-assist-target="palette" hidden role="listbox" aria-label="Mermaid suggestions"></div>
       <% if work.document? %><div id="<%= editor_id %>_document_link_palette" class="snippet-palette" data-document-link-palette-target="palette" hidden role="listbox" aria-label="Document link suggestions"></div><% end %>
-      <p class="field-hint editor-mode-hint">Visual mode keeps Markdown source canonical. Use Source mode for unsupported syntax, inline media, or to edit LaTeX expressions directly. Type <code>:trigger</code> for snippets<% if work.document? %>. Type <code>[[</code> to link another document.<% end %>. In math, type <code>@nabla</code>, <code>@frac</code>, or <code>@sum</code>; Tab walks multi-slot expressions. Type <code>/diagram</code> to insert a Mermaid starter. Exact transforms such as <code>$x.hat.b.T$</code> commit with Enter or Tab.</p>
+      <p class="field-hint editor-mode-hint">Visual mode keeps Markdown source canonical. Use Source mode for unsupported syntax, inline media, or to edit LaTeX expressions directly. Type <code>/trigger</code> for document structures and <code>:align</code> or <code>:footnote</code> for Elef directives<% if work.document? %>. Type <code>[[</code> to link another document.<% end %>. In math, type <code>@a</code>, <code>@frac</code>, or <code>@gather</code>; Tab walks multi-slot expressions. Type <code>/diagram</code> to open Mermaid Assist. Math transforms such as <code>$x.b.vec.t$</code> commit with Enter or Tab.</p>
     </div>
 
     <% if work.presentation? %>
