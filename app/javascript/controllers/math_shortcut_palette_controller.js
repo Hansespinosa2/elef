@@ -1,7 +1,7 @@
 import { Controller } from "@hotwired/stimulus"
 import { editorFor } from "controllers/editor_controller"
 import { application } from "controllers/application"
-import { editorInsideMath, mathShorthandAtEditor, parseMathShorthand } from "controllers/math_shorthand_controller"
+import { editorInsideMath, expandMathShorthand, mathShorthandAtEditor, parseMathShorthand } from "controllers/math_shorthand_controller"
 import { authoringRegistryFor } from "controllers/authoring_registry"
 
 export default class extends Controller {
@@ -153,17 +153,32 @@ export default class extends Controller {
     const caret = editor.selectionStart
     const line = editor.view.state.doc.lineAt(caret)
     const before = line.text.slice(0, caret - line.from)
-    const match = before.match(/((?:@[A-Za-z][A-Za-z0-9]*|\\[A-Za-z][A-Za-z0-9]*|[A-Za-z][A-Za-z0-9]*)(?:\.[A-Za-z]+)*)?([.@])([A-Za-z0-9_-]*|=)$/)
+    const match = before.match(/([.@])([A-Za-z0-9_-]*|=)$/)
     if (!match) return null
     if (!editorInsideMath(editor, caret)) return null
 
+    const prefix = match[1]
+    const separatorStart = match.index
+    let baseStart = separatorStart
+    const tokenCharacter = /[A-Za-z0-9.@\\{}()^-]/
+    while (baseStart > 0 && tokenCharacter.test(before[baseStart - 1])) baseStart -= 1
+    const candidateBase = before.slice(baseStart, separatorStart)
+    if (prefix === "." && !this.validModifierBase(candidateBase)) return null
+
     return {
-      prefix: match[2],
-      text: match[3],
-      start: line.from + (match[2] === "." && match[1] ? match.index : match.index + (match[1]?.length || 0)),
-      base: match[1] || "",
-      baseStart: line.from + match.index
+      prefix,
+      text: match[2],
+      start: line.from + (prefix === "." ? baseStart : separatorStart),
+      base: prefix === "." ? candidateBase : "",
+      baseStart: line.from + baseStart
     }
+  }
+
+  validModifierBase(candidate) {
+    if (!candidate) return false
+    const parsed = parseMathShorthand(candidate)
+    if (parsed) return parsed.status === "valid"
+    return parseMathShorthand(`${candidate}.t`)?.status === "valid"
   }
 
   validExactShorthandAtCaret() {
@@ -261,16 +276,25 @@ export default class extends Controller {
   }
 
   triggerFor(shortcut, query) {
-    const aliases = shortcut.aliases || []
-    const alias = aliases
-      .map((candidate) => ({ candidate, score: this.fieldScore(candidate, query.text, 10000) ?? -1 }))
-      .sort((left, right) => right.score - left.score)[0]?.candidate || ""
+    const alias = this.aliasFor(shortcut, query)
 
     if (shortcut.prefix === "." && query.base) return `${query.base}.${alias}`
     return `${shortcut.prefix}${alias}`
   }
 
+  aliasFor(shortcut, query) {
+    return (shortcut.aliases || [])
+      .map((candidate) => ({ candidate, score: this.fieldScore(candidate, query.text, 10000) ?? -1 }))
+      .sort((left, right) => right.score - left.score)[0]?.candidate || ""
+  }
+
   previewExpansion(shortcut, query) {
+    if (shortcut.prefix === "." && query.base) {
+      const alias = this.aliasFor(shortcut, query)
+      const expansion = alias && expandMathShorthand(`${query.base}.${alias}`)
+      if (expansion) return expansion
+    }
+
     const source = shortcut.expansion || ""
     const examples = ["x", "y", "z"]
     return source.replace(/\$\{(\d+)(?::([^}]*))?\}/g, (_placeholder, number, defaultValue) => {
