@@ -5,12 +5,12 @@
 
 export const ENABLED_STORAGE_KEY = "elef.editor.vim.enabled"
 export const ESCAPE_KEY_STORAGE_KEY = "elef.editor.vim.escapeKey"
-export const LEGACY_ESCAPE_ALIAS_STORAGE_KEY = "elef.editor.vim.escapeAlias"
+const LEGACY_ESCAPE_ALIAS_STORAGE_KEY = "elef.editor.vim.escapeAlias"
 export const LINE_NUMBERS_STORAGE_KEY = "elef.editor.lineNumbers"
 export const MODE_AWARE_CURSOR_STORAGE_KEY = "elef.editor.vim.modeAwareCursor"
-export const SHIFT_SPACE = "<S-Space>"
+const SHIFT_SPACE = "<S-Space>"
 
-export const VIM_KEY_NAMES = {
+const VIM_KEY_NAMES = {
   " ": "Space",
   ArrowDown: "Down",
   ArrowLeft: "Left",
@@ -25,9 +25,9 @@ export const VIM_KEY_NAMES = {
   PageUp: "PageUp"
 }
 
-export const VIM_MODIFIER_NAMES = { A: "Alt", C: "Ctrl", M: "Meta", S: "Shift" }
+const VIM_MODIFIER_NAMES = { A: "Alt", C: "Ctrl", M: "Meta", S: "Shift" }
 
-export function readValue(key) {
+function readValue(key) {
   try {
     return window.localStorage.getItem(key)
   } catch (_error) {
@@ -51,7 +51,7 @@ export function writeBoolean(key, value) {
   writeValue(key, String(value))
 }
 
-export function normalizeEscapeKey(value) {
+function normalizeEscapeKey(value) {
   if (typeof value !== "string" || value.length === 0) return ""
   if (value.startsWith("<")) return /^(?:<(?:[CSMA]-)*[A-Za-z0-9]+>)+$/.test(value) ? value : ""
   return Array.from(value).length === 1 ? value : ""
