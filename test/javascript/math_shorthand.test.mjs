@@ -36,6 +36,7 @@ const paletteSource = (await readFile(new URL("../../app/javascript/controllers/
   .replace('import { application } from "controllers/application"', "const application = { getControllerForElementAndIdentifier: () => null }")
   .replace('import { editorInsideMath, expandMathShorthand, mathShorthandAtEditor, parseMathShorthand } from "controllers/math_shorthand_controller"', "const { editorInsideMath, expandMathShorthand, mathShorthandAtEditor, parseMathShorthand } = globalThis.__mathTestHelpers")
   .replace('import { authoringRegistryFor } from "controllers/authoring_registry"', "const authoringRegistryFor = () => []")
+  .replace('import { snippetStopsEffect } from "controllers/snippet_stops"', "const snippetStopsEffect = { of: (value) => value }")
 const mathPalette = await import(`data:text/javascript;base64,${Buffer.from(paletteSource).toString("base64")}`)
 delete globalThis.__mathTestHelpers
 
