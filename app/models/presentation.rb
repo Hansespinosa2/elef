@@ -71,10 +71,6 @@ class Presentation < Work
     Presentations::FolderSync.presentation_dir(self)
   end
 
-  def presentation_detail_record
-    presentation_detail
-  end
-
   def last_published_at
     published_release&.published_at
   end

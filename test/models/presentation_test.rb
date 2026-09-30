@@ -80,6 +80,34 @@ class PresentationTest < ActiveSupport::TestCase
     assert_equal "book", Source::Document.parse("---\ntypography: unknown\n---\n# Title").typography
   end
 
+  test "normalizes quoted, commented, and invalid front matter style values" do
+    theme = ->(value) { Source::Document.parse("---\ntheme: #{value}\n---\n# Title").theme }
+    typography = ->(value) { Source::Document.parse("---\ntypography: #{value}\n---\n# Title").typography }
+
+    # Quotes and trailing "# ..." comments are stripped before matching.
+    assert_equal "dark", theme.call('"dark"')
+    assert_equal "light", theme.call("'light'")
+    assert_equal "dark", theme.call("dark # deck theme")
+    assert_equal 'dark', theme.call('"dark" # deck theme')
+    assert_equal "modern", typography.call("'modern'")
+    assert_equal "modern", typography.call("modern # body text")
+
+    # A "#" only counts as a comment when whitespace precedes it.
+    assert_equal "match", theme.call("light#x")
+
+    # Values outside each key's own vocabulary fall back to that key's default,
+    # so the two keys do not accept each other's values.
+    assert_equal "match", theme.call("book")
+    assert_equal "book", typography.call("light")
+    assert_equal "match", theme.call("unknown")
+    assert_equal "book", typography.call("unknown")
+  end
+
+  test "keeps the earliest style key when front matter repeats it" do
+    assert_equal "dark", Source::Document.parse("---\ntheme: dark\ntheme: light\n---\n# Title").theme
+    assert_equal "book", Source::Document.parse("---\ntypography: book\ntypography: modern\n---\n# Title").typography
+  end
+
   test "parses margin settings and slide context directives" do
     source = <<~MARKDOWN
       ---

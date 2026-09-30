@@ -57,6 +57,19 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "# Server", presentation.reload.source
   end
 
+  test "invalid HTML draft saves re-render the edit form instead of redirecting" do
+    presentation = presentations(:one)
+    source = presentation.source
+
+    patch presentation_path(presentation), params: {
+      presentation: { title: "x" * 121, source: "# Rejected" }
+    }
+
+    assert_response :unprocessable_content
+    assert_select "form[action='#{presentation_path(presentation)}']"
+    assert_equal source, presentation.reload.source
+  end
+
   test "forks both relationship types and rejects unsupported types" do
     parent = presentations(:one)
     Presentation::FORK_TYPES.each do |type|
@@ -689,6 +702,72 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert json["id"]
     assert_equal edit_presentation_path(json["id"]), json["edit_url"]
     assert_equal upload_asset_presentation_path(json["id"]), json["upload_url"]
+  end
+
+  test "rejects image and video uploads over the 50 MB media limit" do
+    presentation = Presentation.create!(title: "Oversized media", source: "# Media")
+
+    Tempfile.create(["huge", ".png"]) do |file|
+      file.truncate(50.megabytes + 1)
+      upload = Rack::Test::UploadedFile.new(file.path, "image/png")
+      post upload_asset_presentation_path(presentation), params: { file: upload }, headers: { "Accept" => "application/json" }
+    end
+    assert_response :unprocessable_content
+    assert_equal "Media files must be 50 MB or smaller.", response.parsed_body["error"]
+
+    Tempfile.create(["huge", ".mp4"]) do |file|
+      file.truncate(50.megabytes + 1)
+      upload = Rack::Test::UploadedFile.new(file.path, "video/mp4")
+      post upload_asset_presentation_path(presentation), params: { file: upload }, headers: { "Accept" => "application/json" }
+    end
+    assert_response :unprocessable_content
+    assert_equal "Media files must be 50 MB or smaller.", response.parsed_body["error"]
+
+    assert_empty presentation.assets.reload
+  end
+
+  test "history lists revisions newest first with their payload fields" do
+    presentation = Presentation.create!(title: "History deck", source: "# First")
+    later = presentation.work_revisions.create!(
+      workspace: presentation.workspace,
+      source: "# Second",
+      source_digest: WorkRevision.digest("# Second"),
+      reason: "checkpoint",
+      status: "checkpoint"
+    )
+
+    get history_presentation_path(presentation)
+
+    assert_response :success
+    json = response.parsed_body
+    assert_equal [later.id, presentation.work_revisions.order(:id).first.id], json.map { |entry| entry["id"] }
+    assert_equal %w[created_at id reason source source_digest status].sort, json.first.keys.sort
+    assert_equal "# Second", json.first["source"]
+    assert_equal WorkRevision.digest("# Second"), json.first["source_digest"]
+    assert_equal "checkpoint", json.first["reason"]
+    assert_equal "checkpoint", json.first["status"]
+    assert json.first["created_at"].present?
+  end
+
+  test "restore reinstates a chosen revision and reports the restored draft" do
+    presentation = Presentation.create!(title: "Restore deck", source: "# First")
+    presentation.update!(source: "# Second")
+    original = presentation.work_revisions.order(:id).first
+
+    post restore_presentation_path(presentation), params: { revision_id: original.id }
+
+    assert_redirected_to edit_presentation_path(presentation)
+    assert_equal "Revision restored.", flash[:notice]
+    assert_equal "# First", presentation.reload.source
+
+    presentation.update!(source: "# Third")
+    post restore_presentation_path(presentation), params: { revision_id: original.id }, as: :json
+
+    assert_response :ok
+    assert_equal "# First", response.parsed_body["source"]
+    assert_equal "saved", response.parsed_body["status"]
+    assert_equal "restore", response.parsed_body.dig("latest_checkpoint", "reason")
+    assert_equal "# First", presentation.reload.source
   end
 
   test "media_asset serves assets by filename and relative path as well as digest" do

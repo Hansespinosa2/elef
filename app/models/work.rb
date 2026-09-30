@@ -4,7 +4,6 @@ class Work < ApplicationRecord
   self.table_name = "works"
 
   WORK_TYPES = %w[document presentation].freeze
-  DEFAULT_SOURCE = "# Untitled work\n\nStart writing Markdown here.".freeze
   CHECKPOINT_INTERVAL = 30.seconds
 
   belongs_to :workspace
@@ -101,19 +100,19 @@ class Work < ApplicationRecord
   end
 
   def theme
-    Source::Document.style_overrides(source)[:theme] || workspace_style_defaults[:theme]
+    style_overrides[:theme] || workspace_style_defaults[:theme]
   end
 
   def typography
-    Source::Document.style_overrides(source)[:typography] || workspace_style_defaults[:typography]
+    style_overrides[:typography] || workspace_style_defaults[:typography]
   end
 
   def theme_override
-    Source::Document.style_overrides(source)[:theme]
+    style_overrides[:theme]
   end
 
   def typography_override
-    Source::Document.style_overrides(source)[:typography]
+    style_overrides[:typography]
   end
 
   def theme=(value)
@@ -197,11 +196,13 @@ class Work < ApplicationRecord
     @initial_revision_metadata || {}
   end
 
-  def source_digest
-    draft_digest
-  end
-
   private
+
+  # Not memoized: the front matter scan is cheap, and caching would need to be
+  # invalidated whenever source is reassigned.
+  def style_overrides
+    Source::Document.style_overrides(source)
+  end
 
   def workspace_style_defaults
     current_workspace = workspace || Workspace.default
