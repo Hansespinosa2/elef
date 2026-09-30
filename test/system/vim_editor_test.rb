@@ -422,4 +422,182 @@ class VimEditorTest < ApplicationSystemTestCase
   ensure
     page.execute_script("localStorage.clear()")
   end
+
+  test "Vim cursor is visible on empty lines in normal and visual mode" do
+    document = Document.create!(title: "Empty line cursor", source: "# First\n\n# Third\n")
+    visit settings_path
+    find("[data-vim-settings-target='vimToggle']").check
+
+    visit edit_document_path(document, editor_mode: "source")
+
+    editor = find(".cm-content")
+    editor.click
+    page.execute_script("document.querySelector('.source-field').editorController.setSelectionRange(0, 0)")
+    editor.send_keys(:escape)
+
+    # Move down to the middle empty line (line 2)
+    editor.send_keys("j")
+    page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(() => arguments[0]()))")
+
+    normal_cursor = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const fat = document.querySelector('.cm-vimCursorLayer .cm-fat-cursor');
+        if (!fat) return null;
+        const rect = fat.getBoundingClientRect();
+        return {
+          present: true,
+          width: rect.width,
+          height: rect.height,
+          bg: getComputedStyle(fat).backgroundColor
+        };
+      })()
+    JAVASCRIPT
+
+    assert normal_cursor["present"]
+    assert_operator normal_cursor["width"], :>, 0
+    assert_operator normal_cursor["height"], :>, 0
+    assert_equal "rgb(159, 197, 169)", normal_cursor["bg"]
+
+    # Enter visual mode on the empty line
+    editor.send_keys("v")
+    page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(() => arguments[0]()))")
+
+    visual_cursor = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const fat = document.querySelector('.cm-vimCursorLayer .cm-fat-cursor');
+        if (!fat) return null;
+        const rect = fat.getBoundingClientRect();
+        return {
+          present: true,
+          width: rect.width,
+          height: rect.height
+        };
+      })()
+    JAVASCRIPT
+
+    assert visual_cursor["present"]
+    assert_operator visual_cursor["width"], :>, 0
+    assert_operator visual_cursor["height"], :>, 0
+
+    # Return to normal mode and navigate to the trailing empty line
+    editor.send_keys(:escape, "G")
+    page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(() => arguments[0]()))")
+
+    trailing_cursor = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const fat = document.querySelector('.cm-vimCursorLayer .cm-fat-cursor');
+        if (!fat) return null;
+        const rect = fat.getBoundingClientRect();
+        return {
+          present: true,
+          width: rect.width,
+          height: rect.height
+        };
+      })()
+    JAVASCRIPT
+
+    assert trailing_cursor["present"]
+    assert_operator trailing_cursor["width"], :>, 0
+    assert_operator trailing_cursor["height"], :>, 0
+  ensure
+    page.execute_script("localStorage.clear()")
+  end
+
+  test "Vim selection highlight is visible on active lines for visual mode and mouse drag" do
+    document = Document.create!(title: "Visual selection visibility", source: "First line of text\nSecond line of text")
+    visit settings_path
+    find("[data-vim-settings-target='vimToggle']").check
+
+    visit edit_document_path(document, editor_mode: "source")
+
+    editor = find(".cm-content")
+    editor.click
+    page.execute_script("document.querySelector('.source-field').editorController.setSelectionRange(0, 0)")
+    editor.send_keys(:escape)
+
+    # 1. Visual mode selection with v + l movements
+    editor.send_keys("v", "l", "l", "l")
+    page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(() => arguments[0]()))")
+
+    visual_selection = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const selected = document.querySelector('.cm-selectionBackground');
+        const activeLine = document.querySelector('.cm-activeLine');
+        return {
+          present: Boolean(selected),
+          width: selected ? selected.getBoundingClientRect().width : 0,
+          selectionBg: selected ? getComputedStyle(selected).backgroundColor : null,
+          activeLineBg: activeLine ? getComputedStyle(activeLine).backgroundColor : null
+        };
+      })()
+    JAVASCRIPT
+
+    assert visual_selection["present"]
+    assert_operator visual_selection["width"], :>, 0
+    assert_equal "rgba(159, 197, 169, 0.42)", visual_selection["selectionBg"]
+    assert_equal "rgba(255, 255, 255, 0.035)", visual_selection["activeLineBg"]
+
+    # 2. Mouse-drag selection on the second line
+    editor.send_keys(:escape)
+    line2 = find(".cm-line", text: "Second line of text")
+    line2_rect = page.evaluate_script("arguments[0].getBoundingClientRect()", line2)
+
+    page.driver.browser.action
+      .move_to_location(line2_rect["left"].to_i + 20, line2_rect["top"].to_i + 10)
+      .click_and_hold
+      .move_by(70, 0)
+      .perform
+
+    page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(() => arguments[0]()))")
+
+    drag_selection = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const selected = document.querySelector('.cm-selectionBackground');
+        return {
+          present: Boolean(selected),
+          width: selected ? selected.getBoundingClientRect().width : 0,
+          selectionBg: selected ? getComputedStyle(selected).backgroundColor : null
+        };
+      })()
+    JAVASCRIPT
+
+    page.driver.browser.action.release.perform
+
+    assert drag_selection["present"]
+    assert_operator drag_selection["width"], :>, 0
+    assert_equal "rgba(159, 197, 169, 0.42)", drag_selection["selectionBg"]
+  ensure
+    page.execute_script("localStorage.clear()")
+  end
+
+  test "selection highlight is visible on active lines when Vim mode is off" do
+    document = Document.create!(title: "Standard selection visibility", source: "Standard active line selection text")
+    visit edit_document_path(document, editor_mode: "source")
+
+    editor = find(".cm-content")
+    editor.click
+
+    page.execute_script("document.querySelector('.source-field').editorController.setSelectionRange(0, 8)")
+    page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(() => arguments[0]()))")
+
+    selection_state = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const selected = document.querySelector('.cm-selectionBackground');
+        const activeLine = document.querySelector('.cm-activeLine');
+        return {
+          present: Boolean(selected),
+          width: selected ? selected.getBoundingClientRect().width : 0,
+          selectionBg: selected ? getComputedStyle(selected).backgroundColor : null,
+          activeLineBg: activeLine ? getComputedStyle(activeLine).backgroundColor : null
+        };
+      })()
+    JAVASCRIPT
+
+    assert selection_state["present"]
+    assert_operator selection_state["width"], :>, 0
+    assert_equal "rgb(34, 51, 51)", selection_state["selectionBg"]
+    assert_equal "rgba(255, 255, 255, 0.035)", selection_state["activeLineBg"]
+  ensure
+    page.execute_script("localStorage.clear()")
+  end
 end

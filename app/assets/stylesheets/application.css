@@ -360,10 +360,17 @@ body.elef-app {
 }
 
 .editor-surface[data-line-numbers="off"] .cm-lineNumbers { display: none !important; }
+.editor-surface .cm-fat-cursor { background-color: var(--oradia-vim-normal); min-width: 1ch; }
+.editor-surface .cm-editor:not(.cm-focused) .cm-fat-cursor { background: none; outline: solid 1px var(--oradia-vim-normal); }
 .editor-surface[data-mode-aware-cursor="true"][data-editor-mode="insert"] .cm-cursor { border-left-color: var(--oradia-vim-insert); }
 .editor-surface[data-mode-aware-cursor="true"][data-editor-mode="visual"] .cm-cursor { border-left-color: var(--oradia-vim-visual); }
+.editor-surface[data-mode-aware-cursor="true"][data-editor-mode="visual"] .cm-fat-cursor { background-color: var(--oradia-vim-visual); }
+.editor-surface[data-mode-aware-cursor="true"][data-editor-mode="visual"] .cm-editor:not(.cm-focused) .cm-fat-cursor { background: none; outline-color: var(--oradia-vim-visual); }
 .editor-surface[data-mode-aware-cursor="true"][data-editor-mode="normal"] .cm-cursor { border-left-color: var(--oradia-vim-normal); }
-.editor-surface[data-editor-mode="visual"] .cm-selectionBackground { background-color: var(--oradia-vim-selection) !important; }
+.editor-surface[data-mode-aware-cursor="true"][data-editor-mode="normal"] .cm-fat-cursor { background-color: var(--oradia-vim-normal); }
+.editor-surface[data-mode-aware-cursor="true"][data-editor-mode="normal"] .cm-editor:not(.cm-focused) .cm-fat-cursor { background: none; outline-color: var(--oradia-vim-normal); }
+.editor-surface[data-editor-mode="visual"] .cm-selectionBackground,
+.editor-surface[data-editor-vim-enabled="true"] .cm-selectionBackground { background-color: var(--oradia-vim-selection) !important; }
 .editor-layout { grid-template-columns: minmax(0, 1.2fr) minmax(22rem, 0.8fr); }
 
 .command-palette-root { position: relative; }
