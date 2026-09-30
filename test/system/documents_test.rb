@@ -102,6 +102,20 @@ class DocumentsTest < ApplicationSystemTestCase
     find(".document-editor-block[data-editor-block-id]:focus")
   end
 
+  def source_editor_state
+    page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const editor = document.querySelector('.source-field').editorController;
+        const doc = editor.view.state.doc;
+        return {
+          source: editor.value,
+          lines: Array.from({ length: doc.lines }, (_, index) => doc.line(index + 1).text),
+          lineSeparator: editor.lineSeparator
+        };
+      })()
+    JAVASCRIPT
+  end
+
   test "source mode inserts and continues Mermaid flowcharts with Enter and branching keys" do
     document = Document.create!(title: "Mermaid process", source: "# Existing text")
 
@@ -389,6 +403,85 @@ class DocumentsTest < ApplicationSystemTestCase
     JAVASCRIPT
     find(".cm-content").send_keys(:enter)
     assert_field "Markdown source", with: /A\[Research\] --> B\[\]/, wait: 5
+  end
+
+  test "multiline snippets create real source lines and keep placeholders and backslash content intact" do
+    source = "# Snippet line endings\r\n\r\nLiteral \\n and \\newline remain here.\r\n\r\n```tex\r\n\\begin{aligned}\r\nx &= y \\\\\r\n\\end{aligned}\r\n```\r\n\r\n"
+    document = Document.create!(title: "Snippet line endings", source: source)
+    expected = "#{source.gsub(/\r\n?/, "\n")}| Column 1 | Column 2 |\n| --- | --- |\n| Value 1 | Value 2 |"
+
+    visit edit_document_path(document)
+    click_on "Source"
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      editor.setSelectionRange(editor.value.length);
+      editor.focus();
+    JAVASCRIPT
+    find(".cm-content").send_keys("/table")
+    assert_selector ".snippet-option", text: "Table", wait: 5
+    find(".cm-content").send_keys(:enter)
+
+    assert_equal "\r\n", source_editor_state["lineSeparator"]
+    assert_equal expected, source_editor_state["source"]
+    assert_equal expected.split("\n"), source_editor_state["lines"]
+    assert_equal "Column 1", page.evaluate_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      editor.value.slice(editor.selectionStart, editor.selectionEnd);
+    JAVASCRIPT
+
+    find(".cm-content").send_keys(:tab)
+    assert_equal "Column 2", page.evaluate_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      editor.value.slice(editor.selectionStart, editor.selectionEnd);
+    JAVASCRIPT
+    assert_equal expected, source_editor_state["source"]
+    wait_for_fresh_projection
+    assert_selector ".document-editor-block table"
+    assert_selector ".document-editor-block pre code", text: /\\begin\{aligned\}/
+    assert_selector ".document-editor-block", text: /Literal \\n and \\newline remain here\./
+  end
+
+  test "visual source projection preserves real lines through mode switches, save, and reload" do
+    source = "# Visual line endings\r\n\r\nOriginal paragraph\r\n\r\nLiteral \\n and \\newline remain.\r\n\r\n```tex\r\n\\begin{aligned}\r\nx &= y \\\\\r\n\\end{aligned}\r\n```"
+    document = Document.create!(title: "Visual line endings", source: source)
+    expected = source.gsub(/\r\n?/, "\n").sub("Original paragraph", "First authored line\n\nSecond authored line")
+
+    visit edit_document_path(document, editor_mode: "source")
+    assert_equal "\r\n", source_editor_state["lineSeparator"]
+    assert_equal source.gsub(/\r\n?/, "\n"), source_editor_state["source"]
+
+    click_on "Visual"
+    block = find(".document-editor-block", text: "Original paragraph")
+    page.execute_script(<<~JAVASCRIPT, block)
+      const block = arguments[0];
+      block.innerHTML = '<p>First authored line</p><p>Second authored line</p>';
+      block.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertParagraph' }));
+    JAVASCRIPT
+
+    assert_field "Markdown source", with: expected, wait: 5
+    assert_equal expected, source_editor_state["source"]
+    assert_equal expected.split("\n"), source_editor_state["lines"]
+    assert_equal "\r\n", source_editor_state["lineSeparator"]
+    wait_for_fresh_projection
+    assert_selector ".document-editor-block", text: "First authored line"
+    assert_selector ".document-editor-block", text: "Second authored line"
+    assert_selector ".document-editor-block pre code", text: /\\begin\{aligned\}/
+    assert_selector ".document-editor-block", text: /Literal \\n and \\newline remain\./
+
+    click_on "Source"
+    assert_equal expected, source_editor_state["source"]
+    click_on "Visual"
+    click_on "Source"
+    assert_equal expected, source_editor_state["source"]
+    assert_equal expected.split("\n"), source_editor_state["lines"]
+
+    click_on "Save document"
+    assert_selector ".flash.notice", text: "Document saved.", wait: 10
+    assert_equal expected, document.reload.source.gsub(/\r\n?/, "\n")
+
+    visit edit_document_path(document, editor_mode: "source")
+    assert_equal expected, source_editor_state["source"]
+    assert_equal expected.split("\n"), source_editor_state["lines"]
   end
 
   test "mermaid continuation falls back safely when the caret is in the middle of a label" do
