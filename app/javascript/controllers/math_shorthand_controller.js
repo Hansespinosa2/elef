@@ -231,7 +231,8 @@ export function mathShorthandAtEditor(editor, caret) {
   while (end < line.text.length && tokenCharacter.test(line.text[end])) end += 1
   const source = line.text.slice(start, end)
   const parsed = parseMathShorthand(source)
-  return parsed ? { ...parsed, start: line.from + start, end: line.from + end, source } : null
+  if (!parsed || !/(?:\.[A-Za-z]+)+$/.test(source)) return null
+  return { ...parsed, start: line.from + start, end: line.from + end, source }
 }
 
 export function mathContextAt(text, caret) {

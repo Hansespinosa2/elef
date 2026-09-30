@@ -153,6 +153,25 @@ test("palette extracts and previews a full expanded math chain", () => {
     baseStart: 1
   })
   assert.equal(palette.previewExpansion({ prefix: ".", aliases: ["tilde"], expansion: "\\tilde{${1:x}}" }, query), "\\left(\\tilde{\\mathbf{x}}^{\\mathsf{T}}\\right)^{-1}")
+
+  const greekText = "$@b$"
+  const greekEditor = {
+    ...editor,
+    selectionStart: greekText.length - 1,
+    selectionEnd: greekText.length - 1,
+    view: {
+      state: {
+        doc: {
+          length: greekText.length,
+          lineAt: () => ({ from: 0, to: greekText.length, text: greekText }),
+          sliceString: (from, to, separator = "\n") => greekText.slice(from, to).replaceAll("\n", separator)
+        },
+        tree: { resolveInner: () => ({ name: "Text", parent: { name: "Paragraph", from: 0, parent: null } }) }
+      }
+    }
+  }
+  palette.editorController = greekEditor
+  assert.equal(palette.queryAtCaret().start, 1)
 })
 
 test("finds a complete active chain at a cursor inside its source", () => {
@@ -181,6 +200,18 @@ test("finds a complete active chain at a cursor inside its source", () => {
   const chain = math.mathShorthandAtEditor(editor, text.length - 1)
   assert.equal(chain.source, "\\vec{x}.inv")
   assert.equal(chain.expansion, "\\vec{x}^{-1}")
+
+  const expanded = "$\\hat{x}$"
+  const expandedDoc = {
+    length: expanded.length,
+    lineAt: () => ({ from: 0, to: expanded.length, text: expanded }),
+    sliceString: (from, to, separator = "\n") => expanded.slice(from, to).replaceAll("\n", separator)
+  }
+  const expandedEditor = {
+    view: { state: { doc: expandedDoc, tree: { resolveInner: () => ({ name: "Text", parent: { name: "Paragraph", from: 0, parent: null } }) } } }
+  }
+  assert.equal(math.parseMathShorthand("\\hat{x}")?.status, "valid")
+  assert.equal(math.mathShorthandAtEditor(expandedEditor, expanded.length - 1), null)
 })
 
 test("commits canonical atom chains on an explicit whole-editor commit", () => {

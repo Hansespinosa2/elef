@@ -168,7 +168,7 @@ export default class extends Controller {
     return {
       prefix,
       text: match[2],
-      start: line.from + (prefix === "." ? baseStart : separatorStart + 1),
+      start: line.from + (prefix === "." ? baseStart : separatorStart),
       base: prefix === "." ? candidateBase : "",
       baseStart: line.from + baseStart
     }
