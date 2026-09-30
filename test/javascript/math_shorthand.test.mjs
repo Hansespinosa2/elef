@@ -62,6 +62,17 @@ test("supports local hat and tilde decorations in valid postfix chains", () => {
   assert.equal(math.expandMathShorthand("x.hat.tilde"), null)
 })
 
+test("supports calligraphic and roman font modifiers in valid postfix chains", () => {
+  assert.equal(math.expandMathShorthand("x.cal"), "\\mathcal{x}")
+  assert.equal(math.expandMathShorthand("x.calligraphic"), "\\mathcal{x}")
+  assert.equal(math.expandMathShorthand("x.rm"), "\\mathrm{x}")
+  assert.equal(math.expandMathShorthand("x.roman"), "\\mathrm{x}")
+  assert.equal(math.expandMathShorthand("@q.rm"), "\\mathrm{\\theta}")
+  assert.equal(math.expandMathShorthand("x.cal.t"), "\\mathcal{x}^{\\mathsf{T}}")
+  assert.equal(math.expandMathShorthand("x.cal.bb"), null)
+  assert.equal(math.expandMathShorthand("x.b.cal"), null)
+})
+
 test("transforms supported existing canonical LaTeX atoms from their visible source", () => {
   assert.equal(math.expandMathShorthand("x.t"), "x^{\\mathsf{T}}")
   assert.equal(math.expandMathShorthand("\\mathbf{x}.t"), "\\mathbf{x}^{\\mathsf{T}}")

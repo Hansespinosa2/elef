@@ -41,4 +41,15 @@ class AuthoringRegistryTest < ActiveSupport::TestCase
     assert_equal "\\tilde{${1}}", tilde.dig(:behavior, :template)
     assert_equal "decoration", tilde.dig(:behavior, :operator_class)
   end
+
+  test "registers calligraphic and roman transforms as style" do
+    registry = AuthoringRegistry.for_editor(workspace: Workspace.default)
+    cal = registry.find { |entry| entry[:namespace] == "." && entry[:trigger] == "cal" }
+    rm = registry.find { |entry| entry[:namespace] == "." && entry[:trigger] == "rm" }
+
+    assert_equal "\\mathcal{${1}}", cal.dig(:behavior, :template)
+    assert_equal "style", cal.dig(:behavior, :operator_class)
+    assert_equal "\\mathrm{${1}}", rm.dig(:behavior, :template)
+    assert_equal "style", rm.dig(:behavior, :operator_class)
+  end
 end

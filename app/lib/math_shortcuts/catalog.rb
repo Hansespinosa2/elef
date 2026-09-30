@@ -3,6 +3,8 @@ module MathShortcuts
     PLACEHOLDER = /\$\{(\d+)(?::([^}]*))?\}/.freeze
     DEFAULTS = [
       { id: "default-bold", name: "Bold", aliases: %w[b], prefix: ".", description: "Bold mathematical symbols", expansion: "\\mathbf{${1}}", built_in: true },
+      { id: "default-calligraphic", name: "Calligraphic", aliases: %w[cal calligraphic], prefix: ".", description: "Calligraphic mathematical symbols", expansion: "\\mathcal{${1}}", built_in: true },
+      { id: "default-roman", name: "Roman", aliases: %w[rm roman], prefix: ".", description: "Upright roman type in math", expansion: "\\mathrm{${1}}", built_in: true },
       { id: "default-blackboard", name: "Blackboard bold", aliases: %w[bb], prefix: ".", description: "Use blackboard bold typography", expansion: "\\mathbb{${1}}", built_in: true },
       { id: "default-transpose", name: "Transpose", aliases: %w[t T transpose], prefix: ".", description: "Add a mathematical transpose", expansion: "${1}^{\\mathsf{T}}", built_in: true },
       { id: "default-vector", name: "Vector", aliases: %w[vec v vector], prefix: ".", description: "Put a vector arrow over a symbol", expansion: "\\vec{${1}}", built_in: true },
