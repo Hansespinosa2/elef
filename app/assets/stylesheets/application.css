@@ -323,6 +323,32 @@ body.elef-app {
 .snippet-option span { color: var(--oradia-muted); font-size: 0.68rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .snippet-option.is-selected { background: var(--oradia-slate-700); }
 
+.cm-snippet-stop {
+  background: rgba(159, 197, 169, 0.16);
+  border-radius: 0.2rem;
+  box-shadow: inset 0 0 0 1px rgba(159, 197, 169, 0.55);
+}
+
+.cm-snippet-stop-active {
+  background: rgba(159, 197, 169, 0.3);
+  box-shadow: inset 0 0 0 1px var(--oradia-green), 0 0 0 1px rgba(159, 197, 169, 0.4);
+}
+
+.cm-snippet-stop-empty {
+  background: rgba(159, 197, 169, 0.6);
+  border-radius: 1px;
+  box-shadow: none;
+  display: inline-block;
+  height: 1.1em;
+  vertical-align: text-bottom;
+  width: 2px;
+}
+
+.cm-snippet-stop-empty.cm-snippet-stop-active {
+  background: var(--oradia-green);
+  width: 3px;
+}
+
 .math-shortcut-palette {
   box-sizing: border-box;
   width: min(24rem, calc(100vw - 1rem));
