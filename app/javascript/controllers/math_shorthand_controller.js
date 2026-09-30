@@ -3,7 +3,7 @@ import { syntaxTree } from "@codemirror/language"
 import { editorFor } from "controllers/editor_controller"
 
 const GREEK_OPERAND = /^\\(?:alpha|beta|gamma|delta|epsilon|varepsilon|zeta|eta|theta|vartheta|iota|kappa|lambda|mu|nu|xi|pi|varpi|rho|varrho|sigma|varsigma|tau|upsilon|phi|varphi|chi|psi|omega|Gamma|Delta|Theta|Lambda|Xi|Pi|Sigma|Upsilon|Phi|Psi|Omega)$/
-const ATOMIC_MATH_SHORTCUTS = Object.freeze({ "@a": "\\alpha", "@b": "\\beta", "@g": "\\gamma", "@m": "\\mu", "@n": "\\nu", "@r": "\\rho", "@D": "\\Delta" })
+const ATOMIC_MATH_SHORTCUTS = Object.freeze({ "@a": "\\alpha", "@b": "\\beta", "@g": "\\gamma", "@m": "\\mu", "@n": "\\nu", "@q": "\\theta", "@r": "\\rho", "@D": "\\Delta" })
 const ATOMIC_LATEX_COMMANDS = new Set(["nabla", "partial", "infty", "ell", "hbar", "Re", "Im", "wp"])
 const ATOMIC_LATEX_WRAPPERS = new Set(["mathbf", "boldsymbol", "mathbb", "mathcal", "mathfrak", "mathit", "mathrm", "mathsf", "mathtt", "vec", "bar", "hat", "tilde", "overline", "underline"])
 
@@ -14,8 +14,8 @@ const MODIFIER_CLASSES = Object.freeze([
     modifiers: Object.freeze({
       bold: Object.freeze({ aliases: ["b"], wrappers: ["mathbf", "boldsymbol"], command: "mathbf" }),
       blackboard: Object.freeze({ aliases: ["bb"], wrappers: ["mathbb"], command: "mathbb" }),
-      calligraphic: Object.freeze({ aliases: [], wrappers: ["mathcal"], command: "mathcal" }),
-      roman: Object.freeze({ aliases: [], wrappers: ["mathrm"], command: "mathrm" })
+      calligraphic: Object.freeze({ aliases: ["cal", "calligraphic"], wrappers: ["mathcal"], command: "mathcal" }),
+      roman: Object.freeze({ aliases: ["rm", "roman"], wrappers: ["mathrm"], command: "mathrm" })
     })
   }),
   Object.freeze({

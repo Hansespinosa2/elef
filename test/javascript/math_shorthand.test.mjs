@@ -62,6 +62,17 @@ test("supports local hat and tilde decorations in valid postfix chains", () => {
   assert.equal(math.expandMathShorthand("x.hat.tilde"), null)
 })
 
+test("supports calligraphic and roman font modifiers in valid postfix chains", () => {
+  assert.equal(math.expandMathShorthand("x.cal"), "\\mathcal{x}")
+  assert.equal(math.expandMathShorthand("x.calligraphic"), "\\mathcal{x}")
+  assert.equal(math.expandMathShorthand("x.rm"), "\\mathrm{x}")
+  assert.equal(math.expandMathShorthand("x.roman"), "\\mathrm{x}")
+  assert.equal(math.expandMathShorthand("@q.rm"), "\\mathrm{\\theta}")
+  assert.equal(math.expandMathShorthand("x.cal.t"), "\\mathcal{x}^{\\mathsf{T}}")
+  assert.equal(math.expandMathShorthand("x.cal.bb"), null)
+  assert.equal(math.expandMathShorthand("x.b.cal"), null)
+})
+
 test("chains shorthand modifiers after an already-expanded head", () => {
   assert.equal(math.expandMathShorthand("\\mathbf{x}^{\\mathsf{T}}.tilde"), "\\tilde{\\mathbf{x}}^{\\mathsf{T}}")
   assert.equal(math.expandMathShorthand("\\boldsymbol{\\theta}^{\\mathsf{T}}.tilde"), "\\tilde{\\boldsymbol{\\theta}}^{\\mathsf{T}}")
