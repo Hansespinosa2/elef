@@ -857,6 +857,60 @@ body.elef-app {
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 }
 
+/* Mermaid diagrams. The fence keeps the code-block chrome while the runtime is
+   still drawing; once the SVG lands the container becomes a plain figure. */
+.mermaid {
+  display: block;
+  margin: 20px auto;
+  max-width: 100%;
+  overflow: auto;
+  text-align: center;
+}
+
+.mermaid[data-processed] {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  font-size: inherit;
+  line-height: normal;
+  padding: 0;
+}
+
+.mermaid svg {
+  height: auto;
+  margin: 0 auto;
+  max-width: 100%;
+}
+
+.mermaid.mermaid-error {
+  background: rgba(166, 58, 45, 0.08);
+  border: 1px dashed var(--presentation-danger);
+  border-radius: 0.75rem;
+  color: var(--presentation-danger);
+  padding: 1rem;
+  text-align: left;
+  white-space: pre-wrap;
+}
+
+.cm-live-widget-mermaid {
+  display: block;
+  margin: 0.6rem 0;
+  max-width: 100%;
+  text-align: center;
+}
+
+.cm-live-widget-mermaid svg {
+  height: auto;
+  max-width: 100%;
+}
+
+.cm-live-widget-mermaid.mermaid-error {
+  font-family: var(--oradia-mono);
+  font-size: 0.85em;
+  text-align: left;
+  white-space: pre-wrap;
+}
+
 /* Rouge token colors keep generated code readable without coupling it to a deck theme. */
 .presentation-surface .highlight .k,
 .presentation-surface .highlight .kd,

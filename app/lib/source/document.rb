@@ -627,6 +627,7 @@ module Source
     end
 
     def client_can_round_trip?(markdown, kind)
+      return false if kind == "code" && mermaid_fenced_code_block?(markdown)
       return supported_fenced_code_block?(markdown) if kind == "code" && fenced_code_source?(markdown)
       return false if kind == "code" || kind == "rule"
       return false if kind == "heading" && markdown.lines.length != 1
@@ -708,6 +709,13 @@ module Source
 
     def fenced_code_source?(markdown)
       fence_marker(markdown.lines.first.to_s.chomp).present?
+    end
+
+    # Mermaid fences render as a diagram the client draws over the block, so
+    # the visual editors read them as read-only instead of round-tripping a
+    # mutated element back into the Markdown source.
+    def mermaid_fenced_code_block?(markdown)
+      markdown.match?(/\A[ \t]{0,3}(?:`{3,}|~{3,})[ \t]*mermaid\b/i)
     end
 
     def indented_code_source?(markdown)

@@ -51,12 +51,28 @@ module Source
     end
 
     def block_code(code, language)
+      return mermaid_block(code) if mermaid_language?(language)
+
       lexer = Rouge::Lexer.find_fancy(language, code) || Rouge::Lexers::PlainText
       formatter = Rouge::Formatters::HTML.new
       %(<pre><code class="highlight #{ERB::Util.html_escape(lexer.tag)}">#{formatter.format(lexer.lex(code))}</code></pre>)
     end
 
     private
+
+    MERMAID_LANGUAGE = /\Amermaid\z/i
+
+    # Diagrams are drawn client side, so the server only emits the source in a
+    # container the Mermaid runtime claims. Escaping keeps the fence contents
+    # inert until then, and the `<pre>` element preserves the math-suppression
+    # depth tracking in Source::Renderer.render_protected_math.
+    def mermaid_block(code)
+      %(<pre class="mermaid">#{ERB::Util.html_escape(code)}</pre>)
+    end
+
+    def mermaid_language?(language)
+      language.to_s.strip.match?(MERMAID_LANGUAGE)
+    end
 
     def safe_media_resolve(identifier)
       @media_resolver&.call(identifier)
