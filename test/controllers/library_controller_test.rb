@@ -72,13 +72,14 @@ class LibraryControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
-  test "document cards preview, open Preview, and offer only Delete in the menu" do
+  test "document cards open Edit from the preview, open Preview, and offer only Delete in the menu" do
     document = Document.create!(title: "Quiet document", source: "# Quiet document")
 
     get documents_path
 
     assert_select "article#document_#{document.id}" do
-      assert_select "a.library-card-open", 0
+      assert_select "a.library-card-open[href=?][aria-label=?]", edit_document_path(document), "Edit Quiet document", 1
+      assert_select ".library-card-preview[aria-hidden='true'][inert]", 1
       assert_select "a.library-card-preview-button[href=?]", document_path(document)
       assert_select "summary.library-card-menu-trigger[aria-label=?]", "More actions for Quiet document"
       assert_select "form[action=?]", rename_document_path(document), 1
@@ -89,13 +90,14 @@ class LibraryControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
-  test "presentation cards open Edit from the card body and offer Delete, Fork, and Present" do
+  test "presentation cards open Edit from the preview and offer Delete, Fork, and Present" do
     presentation = Presentation.create!(title: "Loud deck", source: "# Loud deck")
 
     get presentations_path
 
     assert_select "article#presentation_#{presentation.id}" do
-      assert_select "a.library-card-open[href=?]", edit_presentation_path(presentation)
+      assert_select "a.library-card-open[href=?][aria-label=?]", edit_presentation_path(presentation), "Edit Loud deck", 1
+      assert_select ".library-card-preview[aria-hidden='true'][inert]", 1
       assert_select "a.library-card-preview-button[href=?]", presentation_path(presentation)
       assert_select "summary.library-card-menu-trigger[aria-label=?]", "More actions for Loud deck"
       assert_select "form[action=?]", rename_presentation_path(presentation), 1

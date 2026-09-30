@@ -269,7 +269,7 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_equal "# Keep this source", Presentation.find_by!(parent_id: nil, fork_type: "inspiration").source
   end
 
-  test "library cards keep previews undistorted and controls isolated from the edit link" do
+  test "library preview images open Edit while Preview and menu controls stay usable" do
     document = Document.create!(title: "Card document", source: "# Card document\n\nFirst page body.\n\n## Later heading")
     presentation = Presentation.create!(title: "Card deck", source: "# Card deck\n\n---\n\n## Later slide")
 
@@ -301,25 +301,33 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_operator geometry["slideScale"].to_f, :<, 1.0
     assert_operator geometry["pageScale"].to_f, :<, 1.0
 
-    within("#presentation_#{presentation.id}") do
-      find(".library-card-preview-button").click
-    end
+    within("#document_#{document.id}") { find(".library-card-preview-button").click }
+    assert_current_path document_path(document)
+    assert_selector ".document-surface h1", text: "Card document"
+
+    visit root_path
+    within("#presentation_#{presentation.id}") { find(".library-card-preview-button").click }
     assert_current_path presentation_path(presentation)
     assert_selector ".presentation-surface .slide", text: "Card deck"
 
     visit root_path
-    within("#presentation_#{presentation.id}") do
-      find(".library-card-menu-trigger").click
-      assert_selector "details.library-card-menu[open]"
+    [document, presentation].each do |work|
+      within("##{work.is_a?(Document) ? 'document' : 'presentation'}_#{work.id}") do
+        find(".library-card-menu-trigger").click
+        assert_selector "details.library-card-menu[open]"
+      end
+      assert_current_path root_path
     end
-    assert_current_path root_path
 
     visit root_path
-    find("#presentation_#{presentation.id} a.library-card-open").click
+    find("#document_#{document.id} .library-card-open").click
+    assert_current_path edit_document_path(document)
+
+    visit root_path
+    find("#presentation_#{presentation.id} .library-card-open").click
     assert_current_path edit_presentation_path(presentation)
 
     visit root_path
-    assert_no_link "Edit Card document"
     within("#document_#{document.id}") do
       find(".library-card-title a").click
     end

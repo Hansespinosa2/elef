@@ -3,9 +3,7 @@
     <div class="library-card-preview" aria-hidden="true" inert>
       <%= render "library/work_preview", work: work %>
     </div>
-    <% if work.presentation? %>
-      <a class="library-card-open" href="<%= work_edit_path(work) %>" aria-label="Edit <%= work.title %>"></a>
-    <% end %>
+    <a class="library-card-open" href="<%= work_edit_path(work) %>" aria-label="Edit <%= work.title %>"></a>
     <div class="library-card-controls">
       <%= link_to work_show_path(work), class: "library-card-preview-button", aria: { label: "Preview #{work.title}" } do %>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M10.2 8.9 15.6 12l-5.4 3.1V8.9Z"/></svg>
