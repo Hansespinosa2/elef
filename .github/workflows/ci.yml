@@ -69,7 +69,7 @@ jobs:
       - name: Run deterministic JavaScript unit tests
         run: |
           node test/javascript/bug_report_events.test.mjs
-          node --test test/javascript/math_shorthand.test.mjs test/javascript/editor_markdown_math.test.mjs test/javascript/mermaid_syntax.test.mjs test/javascript/media_transfer.test.mjs
+          node --test test/javascript/document_link_palette.test.mjs test/javascript/editor_markdown_math.test.mjs test/javascript/math_shorthand.test.mjs test/javascript/mermaid_syntax.test.mjs test/javascript/media_transfer.test.mjs test/javascript/pptx_export.test.mjs
       - name: Check repository launchers and deployment files
         run: |
           bash test/scripts/elef-agent_test.sh

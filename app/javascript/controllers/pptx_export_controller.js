@@ -58,7 +58,7 @@ export default class extends Controller {
   }
 }
 
-function loadPptxLibrary(url) {
+export function loadPptxLibrary(url) {
   if (window.PptxGenJS) return Promise.resolve()
   if (pptxLibraryPromise) return pptxLibraryPromise
 
@@ -87,7 +87,7 @@ function loadPptxLibrary(url) {
   return pptxLibraryPromise
 }
 
-function createPresentation(model) {
+export function createPresentation(model) {
   const pptx = new window.PptxGenJS()
   pptx.defineLayout({ name: "ELEF_16_9", width: 40 / 3, height: 7.5 })
   pptx.layout = "ELEF_16_9"
@@ -105,12 +105,12 @@ function createPresentation(model) {
   return pptx
 }
 
-function primaryFont(stack) {
+export function primaryFont(stack) {
   const first = String(stack || REMOTE_FONT_FALLBACK).split(",")[0].trim()
   return first.replace(/^['"]|['"]$/g, "") || REMOTE_FONT_FALLBACK
 }
 
-function createRenderStage(model) {
+export function createRenderStage(model) {
   const stage = document.createElement("div")
   stage.className = [
     "pptx-render-stage presentation-surface",
@@ -124,7 +124,7 @@ function createRenderStage(model) {
   return stage
 }
 
-function slideMarkup(slide, model) {
+export function slideMarkup(slide, model) {
   const margin = model.margin_settings
   const topMargin = margin.section || margin.subsection
     ? `<div class="slide-margin slide-margin-top" aria-hidden="true">${margin.subsection ? `<span class="slide-margin-subsection">${escapeHtml(slide.subsection || "")}</span>` : ""}${margin.section ? `<span class="slide-margin-section">${escapeHtml(slide.section || "")}</span>` : ""}</div>`
@@ -143,13 +143,13 @@ function slideMarkup(slide, model) {
   return `<div class="slide-frame" style="height:720px;width:1280px"><section class="slide slide-${escapeHtml(slide.layout)}" aria-label="Slide ${slide.index + 1}">${topMargin}${content}${bottomMargin}</section></div>`
 }
 
-function blockMarkup(block) {
+export function blockMarkup(block) {
   const position = block.position
   const classes = position ? `position-${position.horizontal} position-${position.vertical}` : ""
   return `<div class="slide-block ${classes}">${block.html}</div>`
 }
 
-function escapeHtml(value) {
+export function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (character) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
   })[character])
@@ -196,7 +196,7 @@ async function fetchAsDataUri(url) {
   })
 }
 
-function dataUriToBlob(dataUri) {
+export function dataUriToBlob(dataUri) {
   const [metadata, encoded] = dataUri.split(",", 2)
   const contentType = metadata.match(/^data:([^;]+)/)?.[1] || "application/octet-stream"
   const binary = metadata.includes(";base64") ? atob(encoded) : decodeURIComponent(encoded)
@@ -384,7 +384,7 @@ function textOptions(style, box) {
   return options
 }
 
-function cssLineSpacingMultiple(style) {
+export function cssLineSpacingMultiple(style) {
   const lineHeight = parseFloat(style.lineHeight)
   const fontSize = cssFontSize(style)
   return Number.isFinite(lineHeight) && fontSize > 0 ? (lineHeight * 0.75) / fontSize : 1.1
@@ -509,13 +509,13 @@ function addRule(slide, element, root, shapeTypes) {
   })
 }
 
-function relativeRect(element, root) {
+export function relativeRect(element, root) {
   const rect = element.getBoundingClientRect()
   const base = root.getBoundingClientRect()
   return { left: rect.left - base.left, top: rect.top - base.top, width: rect.width, height: rect.height }
 }
 
-function pixelRectToInches(rect) {
+export function pixelRectToInches(rect) {
   return {
     x: rect.left / PX_PER_INCH,
     y: rect.top / PX_PER_INCH,
@@ -528,27 +528,27 @@ function fontFace(style) {
   return primaryFont(style.fontFamily)
 }
 
-function cssFontSize(style) {
+export function cssFontSize(style) {
   return Math.max(1, (parseFloat(style.fontSize) || 16) * 0.75)
 }
 
-function cssCharSpacing(style) {
+export function cssCharSpacing(style) {
   const letterSpacing = parseFloat(style.letterSpacing)
   return Number.isFinite(letterSpacing) ? letterSpacing * 0.75 : 0
 }
 
-function colorHex(color, fallback = "252A27") {
+export function colorHex(color, fallback = "252A27") {
   if (!color || color === "transparent") return fallback
   const channels = color.match(/[\d.]+/g)?.slice(0, 3).map(Number)
   if (!channels || channels.length < 3) return fallback
   return channels.map((channel) => Math.round(channel).toString(16).padStart(2, "0")).join("").toUpperCase()
 }
 
-function safeHyperlink(url) {
+export function safeHyperlink(url) {
   return /^(https?:|mailto:|tel:)/i.test(url)
 }
 
-function gradientBackground(theme) {
+export function gradientBackground(theme) {
   const [start, end, border] = {
     dark: ["#202c32", "#11161a", "#304047"],
     light: ["#fffdf8", "#f5f0e7", "#d8d0c2"],
