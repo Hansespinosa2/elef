@@ -103,6 +103,15 @@ class SourceRendererTest < ActiveSupport::TestCase
     assert_includes display_html, 'data-editor-math-close="$$"'
   end
 
+  test "renders transpose and inverse commands on canonical styled atoms" do
+    ["\\mathbf{x}^{\\mathsf{T}}", "\\vec{x}^{\\mathsf{T}}", "\\mathbf{x}^{-1}", "\\vec{x}^{-1}"].each do |expression|
+      html = Source::Renderer.render("$#{expression}$")
+
+      assert_includes html, 'class="katex"', "#{expression} should render as math"
+      refute_includes html, 'class="math-error"', "#{expression} should not produce a math error"
+    end
+  end
+
   test "renders parenthesized inline and bracketed display math via KaTeX" do
     inline_html = Source::Renderer.render("Inline \\(\\bar{x}\\).")
     assert_includes inline_html, 'class="katex"'

@@ -2,27 +2,31 @@ import { Controller } from "@hotwired/stimulus"
 import { syntaxTree } from "@codemirror/language"
 import { editorFor } from "controllers/editor_controller"
 
-const MODIFIER_ALIASES = Object.freeze({ b: "bold", bb: "blackboard", bar: "bar", vec: "vector", v: "vector", t: "transpose", T: "transpose", inv: "inverse" })
+const MODIFIER_ALIASES = Object.freeze({ b: "bold", bb: "blackboard", bar: "bar", vec: "vector", v: "vector", hat: "hat", tilde: "tilde", t: "transpose", T: "transpose", inv: "inverse" })
 const GREEK_OPERAND = /^\\(?:alpha|beta|gamma|delta|epsilon|varepsilon|zeta|eta|theta|vartheta|iota|kappa|lambda|mu|nu|xi|pi|varpi|rho|varrho|sigma|varsigma|tau|upsilon|phi|varphi|chi|psi|omega|Gamma|Delta|Theta|Lambda|Xi|Pi|Sigma|Upsilon|Phi|Psi|Omega)$/
 const ATOMIC_MATH_SHORTCUTS = Object.freeze({ "@a": "\\alpha", "@b": "\\beta", "@g": "\\gamma", "@m": "\\mu", "@n": "\\nu", "@r": "\\rho", "@D": "\\Delta" })
+const ATOMIC_LATEX_COMMANDS = new Set(["nabla", "partial", "infty", "ell", "hbar", "Re", "Im", "wp"])
+const ATOMIC_LATEX_WRAPPERS = new Set(["mathbf", "boldsymbol", "mathbb", "mathcal", "mathfrak", "mathit", "mathrm", "mathsf", "mathtt", "vec", "bar", "hat", "tilde", "overline", "underline"])
 
 export function parseMathShorthand(token) {
-  const match = token.match(/^(@[A-Za-z][A-Za-z0-9]*|\\[A-Za-z][A-Za-z0-9]*|[A-Za-z][A-Za-z0-9]*)(?:\.[A-Za-z]+)+$/)
-  if (!match) return null
+  const operandNode = parseMathOperandAt(token, 0)
+  if (!operandNode) return null
+  const base = token.slice(0, operandNode.end)
+  const suffix = token.slice(operandNode.end)
+  if (!/^(?:\.[A-Za-z]+)+$/.test(suffix)) return null
 
-  const [base, ...names] = token.split(".")
+  const names = suffix.slice(1).split(".")
   const modifiers = names.map((name) => MODIFIER_ALIASES[name] || null)
   if (modifiers.some((modifier) => !modifier)) return null
-  if (modifiers.filter((modifier) => ["bold", "blackboard"].includes(modifier)).length > 1 || modifiers.filter((modifier) => ["bar", "vector"].includes(modifier)).length > 1 || modifiers.filter((modifier) => ["transpose", "inverse"].includes(modifier)).length > 2 || modifiers.filter((modifier) => modifier === "transpose").length > 1 || modifiers.filter((modifier) => modifier === "inverse").length > 1) {
+  if (modifiers.filter((modifier) => ["bold", "blackboard"].includes(modifier)).length > 1 || modifiers.filter((modifier) => ["bar", "vector", "hat", "tilde"].includes(modifier)).length > 1 || modifiers.filter((modifier) => ["transpose", "inverse"].includes(modifier)).length > 2 || modifiers.filter((modifier) => modifier === "transpose").length > 1 || modifiers.filter((modifier) => modifier === "inverse").length > 1) {
     return { status: "invalid", base, modifiers }
   }
 
-  const operand = ATOMIC_MATH_SHORTCUTS[base] || base
+  const operand = ATOMIC_MATH_SHORTCUTS[base] || operandNode.tex
   const style = modifiers.find((modifier) => ["bold", "blackboard"].includes(modifier))
-  const decoration = modifiers.find((modifier) => ["bar", "vector"].includes(modifier))
+  const decoration = modifiers.find((modifier) => ["bar", "vector", "hat", "tilde"].includes(modifier))
   let value = style === "bold" ? `${GREEK_OPERAND.test(operand) ? "\\boldsymbol" : "\\mathbf"}{${operand}}` : style === "blackboard" ? `\\mathbb{${operand}}` : operand
-  if (decoration === "bar") value = `\\bar{${value}}`
-  if (decoration === "vector") value = `\\vec{${value}}`
+  if (decoration) value = `\\${decoration === "vector" ? "vec" : decoration}{${value}}`
   let postfixCount = 0
   for (const modifier of modifiers) {
     if (modifier === "transpose" || modifier === "inverse") {
@@ -34,6 +38,34 @@ export function parseMathShorthand(token) {
   return { status: "valid", base, modifiers, expansion: value }
 }
 
+function parseMathOperandAt(source, start) {
+  const character = source[start]
+  if (character === "@") {
+    const match = source.slice(start).match(/^@[A-Za-z][A-Za-z0-9]*/)
+    if (!match) return null
+    return { end: start + match[0].length, tex: ATOMIC_MATH_SHORTCUTS[match[0]] || match[0] }
+  }
+
+  if (character === "\\") {
+    const match = source.slice(start).match(/^\\([A-Za-z]+)/)
+    if (!match) return null
+    const command = match[1]
+    const commandEnd = start + match[0].length
+    if (ATOMIC_LATEX_WRAPPERS.has(command)) {
+      if (source[commandEnd] !== "{") return null
+      const inner = parseMathOperandAt(source, commandEnd + 1)
+      if (!inner || source[inner.end] !== "}") return null
+      const end = inner.end + 1
+      return { end, tex: source.slice(start, end) }
+    }
+    if (!GREEK_OPERAND.test(match[0]) && !ATOMIC_LATEX_COMMANDS.has(command)) return null
+    return { end: commandEnd, tex: match[0] }
+  }
+
+  if (/[A-Za-z]/.test(character || "")) return { end: start + 1, tex: character }
+  return null
+}
+
 export function expandMathShorthand(token) {
   const parsed = parseMathShorthand(token)
   return parsed?.status === "valid" ? parsed.expansion : null
@@ -42,7 +74,7 @@ export function expandMathShorthand(token) {
 export function mathShorthandAt(text, caret) {
   if (caret < 0 || caret > text.length) return null
   if (!insideMath(text, caret)) return null
-  const tokenCharacter = /[A-Za-z0-9.@\\]/
+  const tokenCharacter = /[A-Za-z0-9.@\\{}]/
   let start = caret
   let end = caret
   while (start > 0 && tokenCharacter.test(text[start - 1])) start -= 1
@@ -57,7 +89,7 @@ export function mathShorthandAtEditor(editor, caret) {
   if (!doc || caret < 0 || caret > doc.length || !editorInsideMath(editor, caret)) return null
   const line = doc.lineAt(caret)
   const localCaret = caret - line.from
-  const tokenCharacter = /[A-Za-z0-9.@\\]/
+  const tokenCharacter = /[A-Za-z0-9.@\\{}]/
   let start = localCaret
   let end = localCaret
   while (start > 0 && tokenCharacter.test(line.text[start - 1])) start -= 1
@@ -249,9 +281,7 @@ export default class extends Controller {
     this.lastExpansion = null
     this.editorController = editorFor(this.element)
     this.editorReady = () => { this.editorController ||= editorFor(this.element); this.setupEditor() }
-    this.beforeSave = () => this.commitAll()
     this.element.addEventListener("elef:editor-ready", this.editorReady)
-    this.element.addEventListener("elef:before-save", this.beforeSave)
     this.setupEditor()
   }
 
@@ -265,7 +295,6 @@ export default class extends Controller {
       this.editorController.form?.removeEventListener("submit", this.handleFormSubmit, true)
     }
     this.element.removeEventListener("elef:editor-ready", this.editorReady)
-    this.element.removeEventListener("elef:before-save", this.beforeSave)
   }
 
   setupEditor() {
@@ -298,6 +327,17 @@ export default class extends Controller {
     const editor = this.editorController
     if (!editor || editor.editingMode !== "source" || !editor.insertMode) return
     const caret = editor.selectionStart
+    const plainEnter = event.key === "Enter" && !event.isComposing && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey
+    if (plainEnter && editor.selectionStart === editor.selectionEnd) {
+      const line = editor.view?.state?.doc.lineAt(caret)
+      if (line?.text === "$$$$" && caret - line.from === 2 && editorMathContextAt(editor, caret) === "display_math") {
+        event.preventDefault()
+        const separator = editor.lineSeparator || "\n"
+        editor.replaceRange(`${separator}${separator}`, caret, caret)
+        editor.setSelectionRange(caret + separator.length)
+        return
+      }
+    }
     if (event.key === "$" && editor.selectionStart === editor.selectionEnd) {
       const action = mathDollarActionAtEditor(editor, caret)
       if (action === "promote") {
@@ -352,7 +392,7 @@ export default class extends Controller {
     const editor = this.editorController
     if (!editor?.value) return
     const source = editor.value
-    const chainPattern = /(?:@[A-Za-z][A-Za-z0-9]*|\\[A-Za-z][A-Za-z0-9]*|[A-Za-z][A-Za-z0-9]*)(?:\.[A-Za-z]+)+/g
+    const chainPattern = /(?:@[A-Za-z][A-Za-z0-9]*|\\[A-Za-z]+|[A-Za-z])[A-Za-z0-9.@\\{}]*/g
     const changes = []
     for (const match of source.matchAll(chainPattern)) {
       const from = match.index

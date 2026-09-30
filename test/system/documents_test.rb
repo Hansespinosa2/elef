@@ -102,6 +102,20 @@ class DocumentsTest < ApplicationSystemTestCase
     find(".document-editor-block[data-editor-block-id]:focus")
   end
 
+  def source_editor_state
+    page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const editor = document.querySelector('.source-field').editorController;
+        const doc = editor.view.state.doc;
+        return {
+          source: editor.value,
+          lines: Array.from({ length: doc.lines }, (_, index) => doc.line(index + 1).text),
+          lineSeparator: editor.lineSeparator
+        };
+      })()
+    JAVASCRIPT
+  end
+
   test "source mode inserts and continues Mermaid flowcharts with Enter and branching keys" do
     document = Document.create!(title: "Mermaid process", source: "# Existing text")
 
@@ -389,6 +403,90 @@ class DocumentsTest < ApplicationSystemTestCase
     JAVASCRIPT
     find(".cm-content").send_keys(:enter)
     assert_field "Markdown source", with: /A\[Research\] --> B\[\]/, wait: 5
+  end
+
+  test "multiline snippets create real source lines and keep placeholders and backslash content intact" do
+    source = "# Snippet line endings\r\n\r\nLiteral \\n and \\newline remain here.\r\n\r\n```tex\r\n\\begin{aligned}\r\nx &= y \\\\\r\n\\end{aligned}\r\n```\r\n\r\n"
+    document = Document.create!(title: "Snippet line endings", source: source)
+    expected = "#{source.gsub(/\r\n?/, "\n")}| Column 1 | Column 2 |\n| --- | --- |\n| Value 1 | Value 2 |"
+
+    visit edit_document_path(document)
+    click_on "Source"
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      editor.setSelectionRange(editor.value.length);
+      editor.focus();
+    JAVASCRIPT
+    find(".cm-content").send_keys("/table")
+    assert_selector ".snippet-option", text: "Table", wait: 5
+    find(".cm-content").send_keys(:enter)
+
+    assert_equal "\r\n", source_editor_state["lineSeparator"]
+    assert_equal expected, source_editor_state["source"]
+    assert_equal expected.split("\n"), source_editor_state["lines"]
+    assert_equal "Column 1", page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const editor = document.querySelector('.source-field').editorController;
+        return editor.value.slice(editor.selectionStart, editor.selectionEnd);
+      })()
+    JAVASCRIPT
+
+    find(".cm-content").send_keys(:tab)
+    assert_equal "Column 2", page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const editor = document.querySelector('.source-field').editorController;
+        return editor.value.slice(editor.selectionStart, editor.selectionEnd);
+      })()
+    JAVASCRIPT
+    assert_equal expected, source_editor_state["source"]
+    wait_for_fresh_projection
+    assert_selector ".document-editor-block table"
+    assert_selector ".document-editor-block pre code", text: /\\begin\{aligned\}/
+    assert_selector ".document-editor-block", text: /Literal \\n and \\newline remain here\./
+  end
+
+  test "visual source projection preserves real lines through mode switches, save, and reload" do
+    source = "# Visual line endings\r\n\r\nOriginal paragraph\r\n\r\nLiteral \\n and \\newline remain.\r\n\r\n```tex\r\n\\begin{aligned}\r\nx &= y \\\\\r\n\\end{aligned}\r\n```"
+    document = Document.create!(title: "Visual line endings", source: source)
+    expected = source.gsub(/\r\n?/, "\n").sub("Original paragraph", "First authored line\n\nSecond authored line")
+
+    visit edit_document_path(document, editor_mode: "source")
+    assert_equal "\r\n", source_editor_state["lineSeparator"]
+    assert_equal source.gsub(/\r\n?/, "\n"), source_editor_state["source"]
+
+    click_on "Visual"
+    block = find(".document-editor-block", text: "Original paragraph")
+    page.execute_script(<<~JAVASCRIPT, block)
+      const block = arguments[0];
+      block.innerHTML = '<p>First authored line</p><p>Second authored line</p>';
+      block.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertParagraph' }));
+    JAVASCRIPT
+
+    assert_field "Markdown source", with: expected, wait: 5
+    assert_equal expected, source_editor_state["source"]
+    assert_equal expected.split("\n"), source_editor_state["lines"]
+    assert_equal "\r\n", source_editor_state["lineSeparator"]
+    page.execute_script("document.activeElement.blur()")
+    wait_for_fresh_projection
+    assert_selector ".document-editor-block", text: "First authored line"
+    assert_selector ".document-editor-block", text: "Second authored line"
+    assert_selector ".document-editor-block pre code", text: /\\begin\{aligned\}/
+    assert_selector ".document-editor-block", text: /Literal \\n and \\newline remain\./
+
+    click_on "Source"
+    assert_equal expected, source_editor_state["source"]
+    click_on "Visual"
+    click_on "Source"
+    assert_equal expected, source_editor_state["source"]
+    assert_equal expected.split("\n"), source_editor_state["lines"]
+
+    click_on "Save document"
+    assert_selector ".flash.notice", text: "Document saved.", wait: 10
+    assert_equal expected, document.reload.source.gsub(/\r\n?/, "\n")
+
+    visit edit_document_path(document, editor_mode: "source")
+    assert_equal expected, source_editor_state["source"]
+    assert_equal expected.split("\n"), source_editor_state["lines"]
   end
 
   test "mermaid continuation falls back safely when the caret is in the middle of a label" do
@@ -1961,7 +2059,7 @@ class DocumentsTest < ApplicationSystemTestCase
     refute_includes source_field.value, "x.b.vec.t"
   end
 
-  test "canonicalizes an active math chain before autosave" do
+  test "autosave preserves an active math chain verbatim" do
     document = Document.create!(title: "Autosaved math chain", source: "# Math")
     visit edit_document_path(document)
     click_on "Source"
@@ -1973,9 +2071,25 @@ class DocumentsTest < ApplicationSystemTestCase
 
     assert_selector '[data-autosave-target="status"]', text: "Unsaved changes", wait: 3
     assert_selector '[data-autosave-target="status"]', text: "Saved", wait: 10
-    assert_includes find_field("Markdown source").value, "$\\mathbf{x}$"
-    assert_includes document.reload.source, "$\\mathbf{x}$"
-    refute_includes document.reload.source, "x.b"
+    assert_equal "# Math\n$x.b$", source.value.gsub(/\r\n?/, "\n")
+    assert_equal "# Math\n$x.b$", document.reload.source.gsub(/\r\n?/, "\n")
+  end
+
+  test "explicitly saving commits an active math chain" do
+    document = Document.create!(title: "Explicitly saved math chain", source: "# Math")
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    source = find_field("Markdown source")
+    editor.send_keys(:end)
+    editor.send_keys("\n$x.b")
+    assert_includes source.value, "$x.b$"
+
+    click_on "Save document"
+    assert_text "Document saved."
+
+    assert_includes source.value, "$\\mathbf{x}$"
+    assert_equal source.value.gsub(/\r\n?/, "\n"), document.reload.source.gsub(/\r\n?/, "\n")
   end
 
   test "typing a colon directive inserts canonical source and guides align arguments" do
@@ -2049,6 +2163,102 @@ class DocumentsTest < ApplicationSystemTestCase
     editor.send_keys("\n$x.invalid")
     editor.send_keys(:enter)
     assert_includes source.value, "$x.invalid"
+  end
+
+  test "commits local hat and tilde transforms while keeping each active chain literal" do
+    document = Document.create!(title: "Math accents", source: "# Math")
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    source = find_field("Markdown source")
+    editor.send_keys(:end)
+
+    editor.send_keys("\n$x.hat")
+    assert_includes source.value, "$x.hat$"
+    editor.send_keys(:tab)
+    assert_includes source.value, "$\\hat{x}$"
+
+    editor.send_keys(:right)
+    editor.send_keys("\n$x.tilde.t")
+    assert_includes source.value, "$x.tilde.t$"
+    editor.send_keys(:tab)
+    assert_includes source.value, "\\tilde{x}^{\\mathsf{T}}"
+  end
+
+  test "applies transpose and inverse to existing canonical LaTeX atoms after reload" do
+    source_text = ["# Math", "", "$x$", "$\\mathbf{x}$", "$\\vec{x}$", "$y$", "$\\mathbf{y}$", "$\\vec{y}$", "$\\mathbf{z}$"].join("\n")
+    document = Document.create!(title: "Canonical math atoms", source: source_text)
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    source = find_field("Markdown source")
+
+    transforms = [
+      ["x", ".t", "x^{\\mathsf{T}}"],
+      ["\\mathbf{x}", ".t", "\\mathbf{x}^{\\mathsf{T}}"],
+      ["\\vec{x}", ".t", "\\vec{x}^{\\mathsf{T}}"],
+      ["y", ".inv", "y^{-1}"],
+      ["\\mathbf{y}", ".inv", "\\mathbf{y}^{-1}"],
+      ["\\vec{y}", ".inv", "\\vec{y}^{-1}"]
+    ]
+
+    transforms.each do |atom, operation, expansion|
+      page.execute_script(<<~JAVASCRIPT, atom)
+        const editor = document.querySelector(".source-field").editorController;
+        const atom = arguments[0];
+        const start = editor.value.indexOf(`$${atom}$`);
+        if (start < 0) throw new Error(`Missing math atom ${atom}`);
+        editor.setSelectionRange(start + atom.length + 1);
+        editor.focus();
+      JAVASCRIPT
+      editor.send_keys(operation)
+      assert_includes source.value, "$#{atom}#{operation}$"
+      editor.send_keys(:tab)
+      assert_includes source.value, "$#{expansion}$"
+    end
+
+    assert_selector '[data-autosave-target="status"]', exact_text: "Saved", wait: 10
+    persisted_source = source.value
+    assert_equal persisted_source.gsub(/\r\n?/, "\n"), document.reload.source.gsub(/\r\n?/, "\n")
+
+    visit edit_document_path(document.reload)
+    click_on "Source"
+    editor = find(".cm-content")
+    source = find_field("Markdown source")
+    page.execute_script(<<~JAVASCRIPT, "\\mathbf{z}")
+      const editor = document.querySelector(".source-field").editorController;
+      const atom = arguments[0];
+      const start = editor.value.indexOf(`$${atom}$`);
+      if (start < 0) throw new Error(`Missing math atom ${atom}`);
+      editor.setSelectionRange(start + atom.length + 1);
+      editor.focus();
+    JAVASCRIPT
+    editor.send_keys(".t")
+    assert_includes source.value, "$\\mathbf{z}.t$"
+    editor.send_keys(:tab)
+    assert_includes source.value, "$\\mathbf{z}^{\\mathsf{T}}$"
+    assert_selector '[data-autosave-target="status"]', exact_text: "Saved", wait: 10
+    assert_equal source.value.gsub(/\r\n?/, "\n"), document.reload.source.gsub(/\r\n?/, "\n")
+  end
+
+  test "Enter in an empty display-math pair creates a blank line between delimiters" do
+    document = Document.create!(title: "Empty display math", source: "# Math\n\n$$$$")
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    source = find_field("Markdown source")
+    prefix_length = "# Math\n\n".length
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector(".source-field").editorController;
+      editor.setSelectionRange(editor.value.length - 2);
+      editor.focus();
+    JAVASCRIPT
+
+    editor.send_keys(:enter)
+
+    assert_equal "# Math\n\n$$\n\n$$", source.value
+    caret = page.evaluate_script("document.querySelector('.source-field').editorController.selectionStart")
+    assert_equal prefix_length + 3, caret
   end
 
   test "slash palette hides raw LaTeX outside math and keeps equation blocks available" do

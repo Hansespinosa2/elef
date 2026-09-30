@@ -72,15 +72,20 @@ Required transforms:
 - `.b` semantic mathematical bold: `x.b → \\mathbf{x}`. Greek uses a valid bold form such as `\\boldsymbol{\\alpha}`.
 - `.bb` blackboard bold: `R.bb → \\mathbb{R}`; e.g. `E.bb[X \\mid Y] → \\mathbb{E}[X \\mid Y]`.
 - `.vec`: `x.vec → \\vec{x}`.
+- `.hat`: `x.hat → \\hat{x}` as a local decoration on an atomic operand.
+- `.tilde`: `x.tilde → \\tilde{x}` as a local decoration on an atomic operand.
 - `.t`: lowercase canonical transpose name and the repository's canonical transpose representation. `.T` may remain as a compatibility alias; docs/autocomplete show `.t`.
 - `.inv`: `A.inv → A^{-1}`.
+- Existing canonical one-symbol atoms such as `\\mathbf{x}` and `\\vec{x}` remain valid operands for `.t` and `.inv`, based only on the visible source.
 
 Styles/decorations may canonicalize to structurally correct LaTeX order (`x.b.vec` and `x.vec.b` may both become `\\vec{\\mathbf{x}}`). Mathematical transforms preserve semantic sequence: `A.inv.t` and `A.t.inv` remain structurally distinct. Never reorder mathematical operations using algebraic identities.
 
 ## 8. v1 exclusions
 
-No grouped postfix operations, arbitrary-expression postfix operations, structural infix chaining, `./`, `.choose`, `.hat`, `.abs`, `.sqrt`, `.sum`, algebraic simplification, or automatic distribution. Fractions are `@frac`; combinations are `@choose`; hats are ordinary LaTeX or an `@` insertion until separately designed.
+No grouped postfix operations, arbitrary-expression postfix operations, structural infix chaining, `./`, `.choose`, `.abs`, `.sqrt`, `.sum`, algebraic simplification, or automatic distribution. Fractions are `@frac`; combinations are `@choose`. `.hat` and `.tilde` stay local to atomic operands and do not add grouped or wide-accent behavior.
 
 ## 9. `$` math pairing
 
 Outside code contexts, `$` should create `$|$`. If the pair is empty and the author immediately types another `$`, promote it to `$$|$$`. Typing an expected closing `$` moves over the existing delimiter. Pairing does not activate inside fenced code, inline code, or for escaped `\\$`.
+
+When the caret is inside an empty standalone display pair, `$$|$$`, plain Enter creates `$$\n|\n$$` and leaves the caret on the empty line.

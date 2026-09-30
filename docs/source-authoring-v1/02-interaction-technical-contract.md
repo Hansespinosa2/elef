@@ -30,12 +30,12 @@ Distinguish Markdown/source, inline math, display math, code span, code fence, M
 
 An AST is an internal representation of mathematical structure rather than raw characters. `x.b.vec.t` represents `Transpose(Vector(Bold(x)))`; canonical `\\vec{\\mathbf{x}}^{\\mathsf{T}}` should be understood as an equivalent local structure where needed. AST is internal and never persisted.
 
-v1 needs no complete TeX parser. It supports atomic operands, supported `@` tokens, supported postfix transforms, and safely recognizable canonical LaTeX atoms. During ordinary typing, parse only the active math region, not the whole document.
+v1 needs no complete TeX parser. It supports atomic operands, supported `@` tokens, supported postfix transforms, and safely recognizable canonical LaTeX atoms. Existing one-symbol forms such as `\\mathbf{x}`, `\\boldsymbol{\\alpha}`, and `\\vec{x}` can be operands for postfix transforms, based only on visible source; grouped or binary expressions are not inferred. During ordinary typing, parse only the active math region, not the whole document.
 
 ## 8. Operator classes
 
 - **Style:** `.b`, `.bb`; may target the base and canonicalize independent of purely stylistic/decorative order.
-- **Decoration:** `.vec`; operates on the current object.
+- **Decoration:** `.vec`, `.bar`, `.hat`, `.tilde`; operates on the current atomic object.
 - **Mathematical postfix:** `.t`, `.inv`; preserve semantic order.
 
 Never simplify algebra or reorder mathematical operations because they may be equivalent under assumptions.
@@ -43,6 +43,8 @@ Never simplify algebra or reorder mathematical operations because they may be eq
 ## 9. Command palettes
 
 Palettes share one interaction model: typing filters; exact canonical matches rank first, exact aliases next, fuzzy semantic matches after; Up/Down navigate; Enter accepts; Escape closes without changing source; ordinary cursor/editing shortcuts work when navigation is inactive; palette focus does not make text navigation unreliable. Directive palettes are restricted to values valid at the current argument position.
+
+Plain Enter between the delimiters of an empty standalone display pair `$$|$$` inserts one blank math line and keeps the caret on that line. Enter behavior in inline math, code, and other source contexts remains unchanged.
 
 ## 10. Placeholders
 

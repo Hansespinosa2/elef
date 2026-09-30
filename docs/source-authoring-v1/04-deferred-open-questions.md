@@ -2,9 +2,9 @@
 
 ## Deferred grammar
 
-Do not implement grouped postfix operations; `{x+y}.operator`; automatic scope inference across binary operators; `.hat`, `.abs`, `.sqrt`, `.sum`; structural infix operators; `./`; `.choose`; chained fractions; arbitrary-expression postfix transforms; distribution across terms; or algebraic simplification.
+Do not implement grouped postfix operations; `{x+y}.operator`; automatic scope inference across binary operators; `.abs`, `.sqrt`, `.sum`; structural infix operators; `./`; `.choose`; chained fractions; arbitrary-expression postfix transforms; distribution across terms; or algebraic simplification.
 
-For v1, fractions are `@frac`, combinations are `@choose`, hats are ordinary LaTeX or an `@` insertion, and grouping semantics are undefined.
+For v1, fractions are `@frac`, combinations are `@choose`, `.hat` and `.tilde` apply only to atomic operands, and grouping semantics are undefined. Wide accents such as `\\widehat` and `\\widetilde` are not included.
 
 ## Deferred parser scope
 

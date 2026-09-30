@@ -498,6 +498,41 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_selector ".presentation-editor-projection .slide", count: 2
   end
 
+  test "visual presentation edits preserve source lines in a CRLF editor" do
+    source = "# CRLF presentation\r\n\r\nOriginal visual block"
+    expected = "# CRLF presentation\n\nFirst authored line\n\nSecond authored line"
+    presentation = Presentation.create!(title: "CRLF presentation", source: source)
+
+    visit edit_presentation_path(presentation, editor_mode: "source")
+    assert_equal "\r\n", page.evaluate_script("document.querySelector('.source-field').editorController.lineSeparator")
+
+    click_on "Visual"
+    block = find(".editor-projection .slide-block", text: "Original visual block")
+    page.execute_script(<<~JAVASCRIPT, block)
+      const block = arguments[0];
+      block.innerText = 'First authored line\\n\\nSecond authored line';
+      block.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertParagraph' }));
+    JAVASCRIPT
+
+    assert_field "Markdown source", with: expected, wait: 5
+    state = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const editor = document.querySelector('.source-field').editorController;
+        const doc = editor.view.state.doc;
+        return {
+          source: editor.value,
+          lines: Array.from({ length: doc.lines }, (_, index) => doc.line(index + 1).text)
+        };
+      })()
+    JAVASCRIPT
+    assert_equal expected, state["source"]
+    assert_equal expected.split("\n"), state["lines"]
+    page.execute_script("document.activeElement.blur()")
+    wait_for_fresh_projection
+    assert_selector ".editor-projection .slide-block", text: "First authored line"
+    assert_selector ".editor-projection .slide-block", text: "Second authored line"
+  end
+
   test "positions blocks in a new presentation through the visual control" do
     visit new_presentation_path
     wait_for_fresh_projection

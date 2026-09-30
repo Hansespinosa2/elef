@@ -401,9 +401,10 @@ export default class extends Controller {
 
   replaceRange(insert, from, to = from) {
     if (this.destroyed || !this.view) return
-    const end = from + insert.length
+    const editorInsert = typeof insert === "string" ? this.toEditorLineEndings(insert) : insert
+    const end = from + this.normalizeLineEndings(editorInsert).length
     this.view.dispatch({
-      changes: { from, to, insert },
+      changes: { from, to, insert: editorInsert },
       selection: { anchor: end },
       userEvent: "input"
     })
@@ -411,10 +412,11 @@ export default class extends Controller {
 
   replaceRangeWithSelection(insert, from, to, selection) {
     if (this.destroyed || !this.view) return
+    const editorInsert = typeof insert === "string" ? this.toEditorLineEndings(insert) : insert
     const anchor = from + selection.from
     const head = from + selection.to
     this.view.dispatch({
-      changes: { from, to, insert },
+      changes: { from, to, insert: editorInsert },
       selection: { anchor, head },
       userEvent: "input",
       scrollIntoView: true
@@ -423,7 +425,10 @@ export default class extends Controller {
 
   replaceRanges(changes) {
     if (this.destroyed || !this.view || !changes?.length) return
-    this.view.dispatch({ changes, userEvent: "input" })
+    const editorChanges = changes.map((change) => typeof change.insert === "string"
+      ? { ...change, insert: this.toEditorLineEndings(change.insert) }
+      : change)
+    this.view.dispatch({ changes: editorChanges, userEvent: "input" })
   }
 
   trackMediaRange(range) {
