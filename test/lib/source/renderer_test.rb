@@ -78,15 +78,24 @@ class SourceRendererTest < ActiveSupport::TestCase
     assert_includes html, "hello"
   end
 
-  test "preserves manually authored Mermaid as an ordinary fenced code block" do
+  test "renders a Mermaid fence as a diagram container" do
     source = "```mermaid\nflowchart LR\n    A[Research] --> B[Design]\n```"
     html = Source::Renderer.render(source)
 
-    assert_includes html, "<pre><code"
+    assert_includes html, '<pre class="mermaid">'
     assert_includes html, "flowchart LR"
     assert_includes html, "A[Research]"
     assert_includes html, "B[Design]"
+    assert_includes html, "--&gt;"
+    refute_includes html, '<pre><code'
     refute_includes html, "undefined"
+  end
+
+  test "keeps other fenced code blocks highlighted" do
+    html = Source::Renderer.render("```ruby\nputs 'hi'\n```")
+
+    assert_includes html, '<pre><code class="highlight ruby">'
+    refute_includes html, 'class="mermaid"'
   end
 
   test "renders inline and display math via KaTeX" do

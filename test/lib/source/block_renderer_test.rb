@@ -195,4 +195,28 @@ class SourceBlockRendererTest < ActiveSupport::TestCase
     assert_includes html, '<figure class="editor-media">'
     assert_includes html, '<figcaption class="editor-media-caption" aria-label="Editable image alt text" title="Edit image alt text">Alt text</figcaption>'
   end
+
+  test "keeps Mermaid fences read-only and other fenced code editable" do
+    source = "```mermaid\nflowchart LR\n  A[Research] --> B[Design]\n```\n\n```ruby\nputs 'hi'\n```"
+
+    %i[document presentation].each do |mode|
+      editor_map = Source::Document.editor_map(source, mode: mode)
+      html = Source::BlockRenderer.render(
+        source,
+        editable: true,
+        editor_map: editor_map,
+        documents: [],
+        workspace: Workspace.default
+      )
+      blocks = Nokogiri::HTML.fragment(html).css(".document-editor-block, .slide")
+      mermaid_block = blocks.find { |block| block.at_css("pre.mermaid") }
+      ruby_block = blocks.find { |block| block.at_css("code.highlight") }
+
+      assert mermaid_block, "expected a Mermaid block in #{mode} mode"
+      assert_equal "false", mermaid_block["contenteditable"]
+      assert_equal "true", mermaid_block["aria-readonly"]
+      assert ruby_block, "expected a Ruby code block in #{mode} mode"
+      assert_equal "true", ruby_block["contenteditable"]
+    end
+  end
 end
