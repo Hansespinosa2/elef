@@ -112,6 +112,24 @@ test("supports local hat and tilde decorations in valid postfix chains", () => {
   assert.equal(math.expandMathShorthand("x.hat.tilde"), null)
 })
 
+test("supports calligraphic and roman font modifiers in valid postfix chains", () => {
+  assert.equal(math.expandMathShorthand("x.cal"), "\\mathcal{x}")
+  assert.equal(math.expandMathShorthand("x.calligraphic"), "\\mathcal{x}")
+  assert.equal(math.expandMathShorthand("x.rm"), "\\mathrm{x}")
+  assert.equal(math.expandMathShorthand("x.roman"), "\\mathrm{x}")
+  assert.equal(math.expandMathShorthand("@q.rm"), "\\mathrm{\\theta}")
+  assert.equal(math.expandMathShorthand("x.cal.t"), "\\mathcal{x}^{\\mathsf{T}}")
+  assert.equal(math.expandMathShorthand("x.cal.bb"), null)
+  assert.equal(math.expandMathShorthand("x.b.cal"), null)
+})
+
+test("chains shorthand modifiers after an already-expanded head", () => {
+  assert.equal(math.expandMathShorthand("\\mathbf{x}^{\\mathsf{T}}.tilde"), "\\tilde{\\mathbf{x}}^{\\mathsf{T}}")
+  assert.equal(math.expandMathShorthand("\\boldsymbol{\\theta}^{\\mathsf{T}}.tilde"), "\\tilde{\\boldsymbol{\\theta}}^{\\mathsf{T}}")
+  assert.equal(math.expandMathShorthand("\\left(\\bar{\\mathbf{x}}^{\\mathsf{T}}\\right)^{-1}.hat"), null)
+  assert.equal(math.parseMathShorthand("\\left(\\bar{\\mathbf{x}}^{\\mathsf{T}}\\right)^{-1}.hat")?.status, "invalid")
+})
+
 test("transforms supported existing canonical LaTeX atoms from their visible source", () => {
   assert.equal(math.expandMathShorthand("x.t"), "x^{\\mathsf{T}}")
   assert.equal(math.expandMathShorthand("\\mathbf{x}.t"), "\\mathbf{x}^{\\mathsf{T}}")
@@ -182,6 +200,91 @@ test("labels short previews with the untruncated expansion", () => {
   assert.equal(option.getAttribute("aria-label"), "x.bar.b.t.inv inserts \\left(\\bar{\\mathbf{x}}^{\\mathsf{T}}\\right)^{-1}, Inverse")
 })
 
+test("validates merged modifier classes and expands in canonical order", () => {
+  assert.equal(math.expandMathShorthand("x.b.bb"), null)
+  assert.equal(math.expandMathShorthand("x.b.t.bb"), null)
+  assert.equal(math.expandMathShorthand("x.b.t.inv.hat"), "\\left(\\hat{\\mathbf{x}}^{\\mathsf{T}}\\right)^{-1}")
+  assert.equal(math.expandMathShorthand("x.b.t.tilde.inv"), "\\left(\\tilde{\\mathbf{x}}^{\\mathsf{T}}\\right)^{-1}")
+  assert.equal(math.expandMathShorthand("x.b.hat.t.inv.tilde"), null)
+})
+
+test("parses expanded font, accent, and postfix wrappers idempotently", () => {
+  const vectors = [
+    "x.b",
+    "x.b.t",
+    "x.b.t.inv",
+    "x.b.t.inv.hat",
+    "@a.b.tilde.t",
+    "\\mathbf{x}^{\\mathsf{T}}.tilde",
+    "\\left(\\tilde{\\mathbf{x}}^{\\mathsf{T}}\\right)^{-1}",
+    "\\mathcal{A}.t",
+    "\\mathrm{x}.t"
+  ]
+
+  for (const source of vectors) {
+    const expansion = math.expandMathShorthand(source)
+    assert.ok(expansion, `${source} should parse`)
+    assert.equal(math.parseMathShorthand(expansion)?.status, "valid", `${expansion} should parse as an expanded head`)
+    assert.equal(math.expandMathShorthand(expansion), expansion, `${source} should reach a stable expansion`)
+  }
+
+  const parsed = math.parseMathShorthand("\\mathbf{x}^{\\mathsf{T}}.tilde")
+  assert.equal(parsed.base, "x")
+  assert.deepEqual(parsed.modifiers, ["bold", "transpose", "tilde"])
+})
+
+test("unknown LaTeX wrappers are not treated as chainable atoms", () => {
+  assert.equal(math.parseMathShorthand("\\overline{x}.t"), null)
+  assert.equal(math.expandMathShorthand("\\overline{x}.t"), null)
+})
+
+test("palette extracts and previews a full expanded math chain", () => {
+  const text = "$\\left(\\mathbf{x}^{\\mathsf{T}}\\right)^{-1}.ti$"
+  const caret = text.length - 1
+  const doc = {
+    length: text.length,
+    lineAt: () => ({ from: 0, to: text.length, text }),
+    sliceString: (from, to, separator = "\n") => text.slice(from, to).replaceAll("\n", separator)
+  }
+  const editor = {
+    editingMode: "source",
+    selectionStart: caret,
+    selectionEnd: caret,
+    view: { state: { doc, tree: { resolveInner: () => ({ name: "Text", parent: { name: "Paragraph", from: 0, parent: null } }) } } }
+  }
+  const palette = new mathPalette.default()
+  palette.editorController = editor
+
+  const query = palette.queryAtCaret()
+  assert.deepEqual(query, {
+    prefix: ".",
+    text: "ti",
+    start: 1,
+    base: "\\left(\\mathbf{x}^{\\mathsf{T}}\\right)^{-1}",
+    baseStart: 1
+  })
+  assert.equal(palette.previewExpansion({ prefix: ".", aliases: ["tilde"], expansion: "\\tilde{${1:x}}" }, query), "\\left(\\tilde{\\mathbf{x}}^{\\mathsf{T}}\\right)^{-1}")
+
+  const greekText = "$@b$"
+  const greekEditor = {
+    ...editor,
+    selectionStart: greekText.length - 1,
+    selectionEnd: greekText.length - 1,
+    view: {
+      state: {
+        doc: {
+          length: greekText.length,
+          lineAt: () => ({ from: 0, to: greekText.length, text: greekText }),
+          sliceString: (from, to, separator = "\n") => greekText.slice(from, to).replaceAll("\n", separator)
+        },
+        tree: { resolveInner: () => ({ name: "Text", parent: { name: "Paragraph", from: 0, parent: null } }) }
+      }
+    }
+  }
+  palette.editorController = greekEditor
+  assert.equal(palette.queryAtCaret().start, 1)
+})
+
 test("finds a complete active chain at a cursor inside its source", () => {
   assert.deepEqual(
     (({ start, end, source, expansion }) => ({ start, end, source, expansion }))(math.mathShorthandAt("$x.b.vec.t$", 4)),
@@ -193,6 +296,10 @@ test("finds a complete active chain at a cursor inside its source", () => {
     (({ start, end, source, expansion }) => ({ start, end, source, expansion }))(math.mathShorthandAt("$\\mathbf{x}.t$", 13)),
     { start: 1, end: 13, source: "\\mathbf{x}.t", expansion: "\\mathbf{x}^{\\mathsf{T}}" }
   )
+  const expandedPostfixChain = "$\\left(\\mathbf{x}^{\\mathsf{T}}\\right)^{-1}.tilde$"
+  const expandedChain = math.mathShorthandAt(expandedPostfixChain, expandedPostfixChain.length - 1)
+  assert.equal(expandedChain.source, "\\left(\\mathbf{x}^{\\mathsf{T}}\\right)^{-1}.tilde")
+  assert.equal(expandedChain.expansion, "\\left(\\tilde{\\mathbf{x}}^{\\mathsf{T}}\\right)^{-1}")
 
   const text = "$\\vec{x}.inv$"
   const doc = {
@@ -204,6 +311,18 @@ test("finds a complete active chain at a cursor inside its source", () => {
   const chain = math.mathShorthandAtEditor(editor, text.length - 1)
   assert.equal(chain.source, "\\vec{x}.inv")
   assert.equal(chain.expansion, "\\vec{x}^{-1}")
+
+  const expanded = "$\\hat{x}$"
+  const expandedDoc = {
+    length: expanded.length,
+    lineAt: () => ({ from: 0, to: expanded.length, text: expanded }),
+    sliceString: (from, to, separator = "\n") => expanded.slice(from, to).replaceAll("\n", separator)
+  }
+  const expandedEditor = {
+    view: { state: { doc: expandedDoc, tree: { resolveInner: () => ({ name: "Text", parent: { name: "Paragraph", from: 0, parent: null } }) } } }
+  }
+  assert.equal(math.parseMathShorthand("\\hat{x}")?.status, "valid")
+  assert.equal(math.mathShorthandAtEditor(expandedEditor, expanded.length - 1), null)
 })
 
 test("commits canonical atom chains on an explicit whole-editor commit", () => {
@@ -220,6 +339,19 @@ test("commits canonical atom chains on an explicit whole-editor commit", () => {
   controller.commitAll()
 
   assert.equal(editor.value, "$\\mathbf{x}^{\\mathsf{T}}$ and $\\vec{y}^{-1}$")
+})
+
+test("commitAll leaves already-expanded chains unchanged", () => {
+  const committed = "$\\left(\\tilde{\\mathbf{x}}^{\\mathsf{T}}\\right)^{-1}$ and $\\boldsymbol{\\theta}^{\\mathsf{T}}$"
+  const editor = {
+    value: committed,
+    replaceRanges() { throw new Error("already-expanded chains should not be replaced") }
+  }
+  const controller = new math.default()
+  controller.editorController = editor
+  controller.commitAll()
+
+  assert.equal(editor.value, committed)
 })
 
 test("pairs, promotes, and skips math delimiters without touching code or escapes", () => {
@@ -304,9 +436,9 @@ test("Enter in an empty paired display-math delimiter creates a blank body line"
 test("keeps a chain active while the author inserts another operation", () => {
   const listeners = new Map()
   const editor = {
-    value: "$x.b$",
-    selectionStart: 4,
-    selectionEnd: 4,
+    value: "$x$",
+    selectionStart: 2,
+    selectionEnd: 2,
     editingMode: "source",
     insertMode: true,
     lineSeparator: "\n",
@@ -346,13 +478,21 @@ test("keeps a chain active while the author inserts another operation", () => {
     listeners.get("keyup")({ key: character })
   }
 
-  for (const character of ".vec.t") type(character)
-  assert.equal(editor.value, "$x.b.vec.t$")
+  for (const character of ".b.t") type(character)
+  assert.equal(editor.value, "$x.b.t$")
 
   const commit = { key: "Tab", defaultPrevented: false, preventDefault() { this.defaultPrevented = true } }
   listeners.get("keydown")(commit)
   assert.equal(commit.defaultPrevented, true)
-  assert.equal(editor.value, "$\\vec{\\mathbf{x}}^{\\mathsf{T}}$")
+  assert.equal(editor.value, "$\\mathbf{x}^{\\mathsf{T}}$")
+
+  for (const character of ".tilde") type(character)
+  assert.equal(editor.value, "$\\mathbf{x}^{\\mathsf{T}}.tilde$")
+
+  const expandedCommit = { key: "Tab", defaultPrevented: false, preventDefault() { this.defaultPrevented = true } }
+  listeners.get("keydown")(expandedCommit)
+  assert.equal(expandedCommit.defaultPrevented, true)
+  assert.equal(editor.value, "$\\tilde{\\mathbf{x}}^{\\mathsf{T}}$")
 })
 
 test("keeps a chain active while the caret moves inside it and commits after leaving", () => {

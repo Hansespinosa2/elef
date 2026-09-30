@@ -2,6 +2,7 @@ import { Controller } from "@hotwired/stimulus"
 import { editorFor } from "controllers/editor_controller"
 import { editorInsideCode, editorInsideMath } from "controllers/math_shorthand_controller"
 import { authoringRegistryFor } from "controllers/authoring_registry"
+import { snippetStopsEffect } from "controllers/snippet_stops"
 
 export default class extends Controller {
   static targets = ["editor", "palette"]
@@ -13,7 +14,12 @@ export default class extends Controller {
     this.stops = []
     this.editorController = editorFor(this.element)
     this.editorReady = () => this.setupEditor()
+    this.editorSelectionChange = () => this.scheduleStopPrune()
+    this.editorModeChange = () => this.endStops()
     this.element.addEventListener("elef:editor-ready", this.editorReady)
+    this.element.addEventListener("elef:editor-selection-change", this.editorSelectionChange)
+    this.editorForm = this.element.closest("form")
+    this.editorForm?.addEventListener("elef:editor-mode-change", this.editorModeChange)
     this.positionPalette = this.positionPalette.bind(this)
     this.paletteTarget.setAttribute("aria-live", "polite")
     this.setupEditor()
@@ -25,6 +31,9 @@ export default class extends Controller {
     if (this.scrollBound) this.editorController?.scrollElement.removeEventListener("scroll", this.positionPalette)
     if (this.keydownBound) this.editorController?.dom.removeEventListener("keydown", this.handleEditorKeydown, true)
     this.element.removeEventListener("elef:editor-ready", this.editorReady)
+    this.element.removeEventListener("elef:editor-selection-change", this.editorSelectionChange)
+    this.editorForm?.removeEventListener("elef:editor-mode-change", this.editorModeChange)
+    this.endStops()
   }
 
   setupEditor() {
@@ -69,7 +78,29 @@ export default class extends Controller {
       return
     }
     this.adjustStops()
+    this.scheduleStopPrune()
     this.refresh()
+  }
+
+  scheduleStopPrune() {
+    if (this.stopPruneScheduled) return
+    this.stopPruneScheduled = true
+    queueMicrotask(() => {
+      this.stopPruneScheduled = false
+      this.pruneStops()
+    })
+  }
+
+  pruneStops() {
+    if (!this.stops.length) return
+    const editor = this.editorController
+    if (!editor || editor.destroyed || editor.editingMode !== "source") return this.endStops()
+    const active = this.activeStop
+    if (!active) return this.endStops()
+    const from = editor.selectionStart
+    const to = editor.selectionEnd
+    if (from <= active.end && to >= active.start) return
+    this.endStops()
   }
 
   keydown(event) {
@@ -77,6 +108,7 @@ export default class extends Controller {
     const editor = this.editorController
     if (!editor || editor.editingMode !== "source") {
       this.close()
+      if (this.stops.length) this.endStops()
       return
     }
 
@@ -84,6 +116,9 @@ export default class extends Controller {
       if (event.key === "Tab" && this.stops.length > 0) {
         event.preventDefault()
         this.nextStop()
+      } else {
+        if (event.key === "Escape" && this.stops.length > 0) this.endStops()
+        this.scheduleStopPrune()
       }
       return
     }
@@ -108,6 +143,7 @@ export default class extends Controller {
     } else if (event.key === "Escape") {
       event.preventDefault()
       this.close()
+      if (this.stops.length) this.endStops()
     } else {
       queueMicrotask(() => this.refresh())
     }
@@ -305,13 +341,13 @@ export default class extends Controller {
     const editor = this.editorController
     if (!editor) return this.close()
     if (this.argumentQuery) {
+      this.endStops()
       editor.replaceRange(snippet.trigger, this.queryStart, editor.selectionStart)
       this.close()
       editor.focus()
       return
     }
     const before = editor.value.slice(0, this.queryStart)
-    const after = editor.value.slice(editor.selectionStart)
     const expansion = this.expand(snippet.body)
     const base = before.length
     this.stops = expansion.stops.map((stop) => ({
@@ -345,9 +381,28 @@ export default class extends Controller {
     if (next) return this.selectStop(next)
 
     const editor = this.editorController
-    if (!editor) return
+    if (!editor) return this.endStops()
     const exit = editor.value[current.end] === "}" ? current.end + 1 : current.end
     editor.setSelectionRange(exit, exit)
+    this.endStops()
+  }
+
+  endStops() {
+    this.stops = []
+    this.activeStop = null
+    this.updateStopDecorations()
+  }
+
+  updateStopDecorations() {
+    const editor = this.editorController
+    if (!editor || !editor.view || editor.destroyed || editor.view.destroyed) return
+    const length = editor.view.state.doc.length
+    const stops = this.stops.map((stop, index) => ({
+      from: Math.max(0, Math.min(stop.start, length)),
+      to: Math.max(0, Math.min(stop.end, length)),
+      active: index === 0
+    }))
+    editor.view.dispatch({ effects: snippetStopsEffect.of(stops) })
   }
 
   selectStop(stop) {
@@ -355,11 +410,13 @@ export default class extends Controller {
     if (!editor) return
     if (!stop) {
       this.activeStop = null
+      this.updateStopDecorations()
       editor.setSelectionRange(editor.selectionStart, editor.selectionStart)
       return
     }
     this.activeStop = stop
     editor.setSelectionRange(stop.start, stop.end)
+    this.updateStopDecorations()
   }
 
   adjustStops() {
@@ -368,14 +425,17 @@ export default class extends Controller {
 
     const editor = this.editorController
     if (!editor) return
-    const delta = editor.selectionStart - active.end
+    const caret = editor.selectionStart
+    if (caret < active.start) return this.endStops()
+    const delta = caret - active.end
     if (delta === 0) return
-    active.end = editor.selectionStart
+    active.end = caret
     const activeIndex = this.stops.indexOf(active)
     this.stops.slice(activeIndex + 1).forEach((stop) => {
       stop.start += delta
       stop.end += delta
     })
+    this.updateStopDecorations()
   }
 
   close() {
