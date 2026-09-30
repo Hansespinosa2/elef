@@ -2,9 +2,9 @@ import { Controller } from "@hotwired/stimulus"
 import { syntaxTree } from "@codemirror/language"
 import { editorFor } from "controllers/editor_controller"
 
-const MODIFIER_ALIASES = Object.freeze({ b: "bold", bb: "blackboard", bar: "bar", vec: "vector", v: "vector", hat: "hat", tilde: "tilde", t: "transpose", T: "transpose", inv: "inverse" })
+const MODIFIER_ALIASES = Object.freeze({ b: "bold", bb: "blackboard", cal: "calligraphic", calligraphic: "calligraphic", rm: "roman", roman: "roman", bar: "bar", vec: "vector", v: "vector", hat: "hat", tilde: "tilde", t: "transpose", T: "transpose", inv: "inverse" })
 const GREEK_OPERAND = /^\\(?:alpha|beta|gamma|delta|epsilon|varepsilon|zeta|eta|theta|vartheta|iota|kappa|lambda|mu|nu|xi|pi|varpi|rho|varrho|sigma|varsigma|tau|upsilon|phi|varphi|chi|psi|omega|Gamma|Delta|Theta|Lambda|Xi|Pi|Sigma|Upsilon|Phi|Psi|Omega)$/
-const ATOMIC_MATH_SHORTCUTS = Object.freeze({ "@a": "\\alpha", "@b": "\\beta", "@g": "\\gamma", "@m": "\\mu", "@n": "\\nu", "@r": "\\rho", "@D": "\\Delta" })
+const ATOMIC_MATH_SHORTCUTS = Object.freeze({ "@a": "\\alpha", "@b": "\\beta", "@g": "\\gamma", "@m": "\\mu", "@n": "\\nu", "@r": "\\rho", "@q": "\\theta", "@D": "\\Delta" })
 const ATOMIC_LATEX_COMMANDS = new Set(["nabla", "partial", "infty", "ell", "hbar", "Re", "Im", "wp"])
 const ATOMIC_LATEX_WRAPPERS = new Set(["mathbf", "boldsymbol", "mathbb", "mathcal", "mathfrak", "mathit", "mathrm", "mathsf", "mathtt", "vec", "bar", "hat", "tilde", "overline", "underline"])
 
@@ -18,14 +18,14 @@ export function parseMathShorthand(token) {
   const names = suffix.slice(1).split(".")
   const modifiers = names.map((name) => MODIFIER_ALIASES[name] || null)
   if (modifiers.some((modifier) => !modifier)) return null
-  if (modifiers.filter((modifier) => ["bold", "blackboard"].includes(modifier)).length > 1 || modifiers.filter((modifier) => ["bar", "vector", "hat", "tilde"].includes(modifier)).length > 1 || modifiers.filter((modifier) => ["transpose", "inverse"].includes(modifier)).length > 2 || modifiers.filter((modifier) => modifier === "transpose").length > 1 || modifiers.filter((modifier) => modifier === "inverse").length > 1) {
+  if (modifiers.filter((modifier) => ["bold", "blackboard", "calligraphic", "roman"].includes(modifier)).length > 1 || modifiers.filter((modifier) => ["bar", "vector", "hat", "tilde"].includes(modifier)).length > 1 || modifiers.filter((modifier) => ["transpose", "inverse"].includes(modifier)).length > 2 || modifiers.filter((modifier) => modifier === "transpose").length > 1 || modifiers.filter((modifier) => modifier === "inverse").length > 1) {
     return { status: "invalid", base, modifiers }
   }
 
   const operand = ATOMIC_MATH_SHORTCUTS[base] || operandNode.tex
-  const style = modifiers.find((modifier) => ["bold", "blackboard"].includes(modifier))
+  const style = modifiers.find((modifier) => ["bold", "blackboard", "calligraphic", "roman"].includes(modifier))
   const decoration = modifiers.find((modifier) => ["bar", "vector", "hat", "tilde"].includes(modifier))
-  let value = style === "bold" ? `${GREEK_OPERAND.test(operand) ? "\\boldsymbol" : "\\mathbf"}{${operand}}` : style === "blackboard" ? `\\mathbb{${operand}}` : operand
+  let value = style === "bold" ? `${GREEK_OPERAND.test(operand) ? "\\boldsymbol" : "\\mathbf"}{${operand}}` : style === "blackboard" ? `\\mathbb{${operand}}` : style === "calligraphic" ? `\\mathcal{${operand}}` : style === "roman" ? `\\mathrm{${operand}}` : operand
   if (decoration) value = `\\${decoration === "vector" ? "vec" : decoration}{${value}}`
   let postfixCount = 0
   for (const modifier of modifiers) {
