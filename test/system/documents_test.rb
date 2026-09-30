@@ -425,14 +425,18 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_equal expected, source_editor_state["source"]
     assert_equal expected.split("\n"), source_editor_state["lines"]
     assert_equal "Column 1", page.evaluate_script(<<~JAVASCRIPT)
-      const editor = document.querySelector('.source-field').editorController;
-      editor.value.slice(editor.selectionStart, editor.selectionEnd);
+      (() => {
+        const editor = document.querySelector('.source-field').editorController;
+        return editor.value.slice(editor.selectionStart, editor.selectionEnd);
+      })()
     JAVASCRIPT
 
     find(".cm-content").send_keys(:tab)
     assert_equal "Column 2", page.evaluate_script(<<~JAVASCRIPT)
-      const editor = document.querySelector('.source-field').editorController;
-      editor.value.slice(editor.selectionStart, editor.selectionEnd);
+      (() => {
+        const editor = document.querySelector('.source-field').editorController;
+        return editor.value.slice(editor.selectionStart, editor.selectionEnd);
+      })()
     JAVASCRIPT
     assert_equal expected, source_editor_state["source"]
     wait_for_fresh_projection
@@ -462,6 +466,7 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_equal expected, source_editor_state["source"]
     assert_equal expected.split("\n"), source_editor_state["lines"]
     assert_equal "\r\n", source_editor_state["lineSeparator"]
+    page.execute_script("document.activeElement.blur()")
     wait_for_fresh_projection
     assert_selector ".document-editor-block", text: "First authored line"
     assert_selector ".document-editor-block", text: "Second authored line"

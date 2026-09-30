@@ -527,6 +527,7 @@ class PresentationsTest < ApplicationSystemTestCase
     JAVASCRIPT
     assert_equal expected, state["source"]
     assert_equal expected.split("\n"), state["lines"]
+    page.execute_script("document.activeElement.blur()")
     wait_for_fresh_projection
     assert_selector ".editor-projection .slide-block", text: "First authored line"
     assert_selector ".editor-projection .slide-block", text: "Second authored line"
