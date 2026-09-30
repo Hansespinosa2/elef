@@ -18,6 +18,25 @@ class PresentationsTest < ApplicationSystemTestCase
     page.evaluate_script('document.querySelector(".cm-snippet-stop-active")?.textContent ?? null')
   end
 
+  def snippet_stop_positions
+    page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const editor = document.querySelector(".source-field").editorController;
+        return [...document.querySelectorAll(".cm-snippet-stop")].map((mark) => editor.view.posAtDOM(mark));
+      })()
+    JAVASCRIPT
+  end
+
+  def active_snippet_stop_position
+    page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const editor = document.querySelector(".source-field").editorController;
+        const mark = document.querySelector(".cm-snippet-stop-active");
+        return mark ? editor.view.posAtDOM(mark) : null;
+      })()
+    JAVASCRIPT
+  end
+
   def editor_selection
     <<~JAVASCRIPT
       (() => {
@@ -2384,6 +2403,68 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_equal ["Column 2", "Value 1", "Value 2"], snippet_stop_marks
     assert_equal "Column 2", active_snippet_stop
     assert_includes find_field("Markdown source").value, "| Header | Column 2 |"
+  end
+
+  test "marks math shortcut tab stops and clears them on Escape" do
+    document = Document.create!(title: "Fraction tab stops", source: "# Fraction tab stops")
+
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    editor.click
+    editor.send_keys("\n$x = @frac")
+    assert_selector ".math-shortcut-palette .snippet-option", text: /Fraction/, wait: 5
+    editor.send_keys(:enter)
+
+    assert_selector ".cm-snippet-stop-empty", count: 2, wait: 5
+    assert_selector ".cm-snippet-stop-active", count: 1
+    stop_positions = snippet_stop_positions
+    assert_equal 2, stop_positions.length
+    assert_equal stop_positions.first, active_snippet_stop_position
+
+    find(".cm-content").send_keys("n")
+    assert_selector ".cm-snippet-stop", count: 2
+    assert_equal "n", page.evaluate_script('document.querySelector(".cm-snippet-stop-active")?.textContent')
+    stop_positions = snippet_stop_positions
+    find(".cm-content").send_keys(:tab)
+    assert_equal stop_positions.last, active_snippet_stop_position
+
+    find(".cm-content").send_keys(:escape)
+    assert_no_selector ".cm-snippet-stop"
+    selection = page.evaluate_script(editor_selection)
+    source = find_field("Markdown source").value
+    find(".cm-content").send_keys(:tab)
+    assert_equal selection, page.evaluate_script(editor_selection)
+    assert_equal source, find_field("Markdown source").value
+    assert_no_selector ".cm-snippet-stop"
+  end
+
+  test "marks math shortcut tab stops across multiple lines" do
+    document = Document.create!(title: "Matrix tab stops", source: "# Matrix tab stops")
+
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    editor.click
+    editor.send_keys("\n$y = @matrix")
+    assert_selector ".math-shortcut-palette .snippet-option", text: /Matrix/, wait: 5
+    editor.send_keys(:enter)
+
+    assert_selector ".cm-snippet-stop", count: 4, wait: 5
+    stop_positions = snippet_stop_positions
+    editor_lines = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const editor = document.querySelector(".source-field").editorController;
+        return #{stop_positions.to_json}.map((position) => editor.view.state.doc.lineAt(position).number);
+      })()
+    JAVASCRIPT
+    assert_operator editor_lines.uniq.length, :>, 1
+    assert_equal stop_positions.first, active_snippet_stop_position
+
+    find(".cm-content").send_keys(:tab)
+    assert_equal stop_positions[1], active_snippet_stop_position
+    find(".cm-content").send_keys(:tab)
+    assert_equal stop_positions[2], active_snippet_stop_position
   end
 
   test "positions the palette when only the slash trigger is typed" do
