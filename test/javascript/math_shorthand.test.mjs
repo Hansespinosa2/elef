@@ -39,6 +39,56 @@ const paletteSource = (await readFile(new URL("../../app/javascript/controllers/
 const mathPalette = await import(`data:text/javascript;base64,${Buffer.from(paletteSource).toString("base64")}`)
 delete globalThis.__mathTestHelpers
 
+function palettePreview(shortcut, query) {
+  return new mathPalette.default().expansionPreview(shortcut, query)
+}
+
+function stubElement() {
+  return {
+    id: "",
+    title: "",
+    type: "",
+    role: "",
+    className: "",
+    textContent: "",
+    dataset: {},
+    attributes: {},
+    children: [],
+    hidden: true,
+    setAttribute(name, value) { this.attributes[name] = value },
+    getAttribute(name) { return this.attributes[name] ?? null },
+    addEventListener() {},
+    append(...nodes) { this.children.push(...nodes) },
+    replaceChildren() { this.children = [] },
+    querySelectorAll() { return [] },
+    querySelector() { return null },
+    getBoundingClientRect() { return { left: 0, top: 0, bottom: 0, width: 0, height: 0 } }
+  }
+}
+
+function renderPaletteOption(shortcut, query) {
+  const previousDocument = globalThis.document
+  globalThis.document = { createElement: () => stubElement() }
+  try {
+    const controller = new mathPalette.default()
+    controller.paletteTarget = stubElement()
+    controller.matches = [shortcut]
+    controller.query = query
+    controller.render()
+    return controller.paletteTarget.children.at(0)
+  } finally {
+    globalThis.document = previousDocument
+  }
+}
+
+const INVERSE_SHORTCUT = { id: "default-inverse", name: "Inverse", aliases: ["inv", "inverse"], prefix: ".", description: "Take the inverse of an object", expansion: "${1}^{-1}", built_in: true }
+const BOLD_SHORTCUT = { id: "default-bold", name: "Bold", aliases: ["b"], prefix: ".", description: "Bold mathematical symbols", expansion: "\\mathbf{${1}}", built_in: true }
+const FRACTION_SHORTCUT = { id: "default-frac", name: "Fraction", aliases: ["frac", "fraction"], prefix: "@", description: "Fraction with numerator and denominator", expansion: "\\frac{${1}}{${2}}", built_in: true }
+
+function transformQuery(text, base) {
+  return { prefix: ".", text, start: 0, base, baseStart: 0 }
+}
+
 test("serializes v1 math transforms and the existing bar decoration", () => {
   assert.equal(math.expandMathShorthand("x.b"), "\\mathbf{x}")
   assert.equal(math.expandMathShorthand("\\alpha.b"), "\\boldsymbol{\\alpha}")
@@ -98,6 +148,56 @@ test("preserves mathematical postfix sequence and rejects deferred grammar", () 
   for (const source of ["x.invalid", "x.abs", "x.sqrt", "x.b.bb", "x.vec.bar", "x.vec.vec"]) {
     assert.equal(math.expandMathShorthand(source), null)
   }
+})
+
+test("previews the full shorthand expansion the palette will commit", () => {
+  const controller = new mathPalette.default()
+  const query = transformQuery("inv", "x.bar.b.t")
+
+  assert.equal(controller.triggerFor(INVERSE_SHORTCUT, query), "x.bar.b.t.inv")
+  assert.deepEqual(
+    palettePreview(INVERSE_SHORTCUT, query),
+    { text: "\\left(\\bar{\\mathbf{x}}^{\\mathsf{T}}\\right)^{-1}", full: "\\left(\\bar{\\mathbf{x}}^{\\mathsf{T}}\\right)^{-1}" }
+  )
+  assert.equal(palettePreview(INVERSE_SHORTCUT, query).full, math.expandMathShorthand("x.bar.b.t.inv"))
+})
+
+test("keeps placeholder previews for empty, unparsable, and invalid operator chains", () => {
+  assert.deepEqual(palettePreview(INVERSE_SHORTCUT, transformQuery("inv", "")), { text: "x^{-1}", full: "x^{-1}" })
+  assert.deepEqual(palettePreview(INVERSE_SHORTCUT, transformQuery("inv", "foo.bar")), { text: "foo.bar^{-1}", full: "foo.bar^{-1}" })
+  assert.deepEqual(palettePreview(BOLD_SHORTCUT, transformQuery("b", "x.b")), { text: "\\mathbf{x.b}", full: "\\mathbf{x.b}" })
+  assert.deepEqual(
+    palettePreview(FRACTION_SHORTCUT, { prefix: "@", text: "frac", start: 0, base: "", baseStart: 0 }),
+    { text: "\\frac{x}{y}", full: "\\frac{x}{y}" }
+  )
+})
+
+test("middle-truncates over-budget previews while keeping the full expansion readable", () => {
+  const budget = mathPalette.MAX_PREVIEW_LENGTH
+  assert.equal(budget, 48)
+
+  const option = renderPaletteOption(INVERSE_SHORTCUT, transformQuery("inv", "\\varphi.b.vec.t"))
+  const full = math.expandMathShorthand("\\varphi.b.vec.t.inv")
+  const [trigger, name, expansion] = option.children
+
+  assert.equal(trigger.textContent, "\\varphi.b.vec.t.inv")
+  assert.equal(name.textContent, "Inverse")
+  assert.equal(expansion.textContent, "\\left(\\vec{\\boldsymbol{\\…\\mathsf{T}}\\right)^{-1}")
+  assert.equal(expansion.textContent.length, budget)
+  assert.equal(expansion.textContent.startsWith("\\left(\\vec{\\boldsymbol{\\"), true)
+  assert.equal(expansion.textContent.endsWith("\\mathsf{T}}\\right)^{-1}"), true)
+  assert.equal(option.title, `Take the inverse of an object: ${full}`)
+  assert.equal(option.getAttribute("aria-label"), `\\varphi.b.vec.t.inv inserts ${full}, Inverse`)
+})
+
+test("labels short previews with the untruncated expansion", () => {
+  const option = renderPaletteOption(INVERSE_SHORTCUT, transformQuery("inv", "x.bar.b.t"))
+  const [, , expansion] = option.children
+
+  assert.equal(expansion.textContent, "\\left(\\bar{\\mathbf{x}}^{\\mathsf{T}}\\right)^{-1}")
+  assert.equal(expansion.textContent.length < mathPalette.MAX_PREVIEW_LENGTH, true)
+  assert.equal(option.title, "Take the inverse of an object: \\left(\\bar{\\mathbf{x}}^{\\mathsf{T}}\\right)^{-1}")
+  assert.equal(option.getAttribute("aria-label"), "x.bar.b.t.inv inserts \\left(\\bar{\\mathbf{x}}^{\\mathsf{T}}\\right)^{-1}, Inverse")
 })
 
 test("validates merged modifier classes and expands in canonical order", () => {

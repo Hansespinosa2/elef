@@ -4,6 +4,8 @@ import { application } from "controllers/application"
 import { editorInsideMath, expandMathShorthand, mathShorthandAtEditor, parseMathShorthand } from "controllers/math_shorthand_controller"
 import { authoringRegistryFor } from "controllers/authoring_registry"
 
+export const MAX_PREVIEW_LENGTH = 48
+
 export default class extends Controller {
   static targets = ["editor", "palette"]
 
@@ -255,13 +257,13 @@ export default class extends Controller {
       const name = document.createElement("strong")
       name.className = "math-shortcut-name"
       name.textContent = shortcut.name
-      const latex = this.previewExpansion(shortcut, this.query)
+      const latex = this.expansionPreview(shortcut, this.query)
       const expansion = document.createElement("code")
       expansion.className = "math-shortcut-expansion"
-      expansion.textContent = latex
+      expansion.textContent = latex.text
 
-      option.setAttribute("aria-label", `${trigger.textContent} inserts ${latex}, ${shortcut.name}`)
-      option.title = shortcut.description || shortcut.name
+      option.setAttribute("aria-label", `${trigger.textContent} inserts ${latex.full}, ${shortcut.name}`)
+      option.title = `${shortcut.description || shortcut.name}: ${latex.full}`
       option.append(trigger, name, expansion)
       option.addEventListener("mousedown", (event) => {
         event.preventDefault()
@@ -286,6 +288,11 @@ export default class extends Controller {
     return (shortcut.aliases || [])
       .map((candidate) => ({ candidate, score: this.fieldScore(candidate, query.text, 10000) ?? -1 }))
       .sort((left, right) => right.score - left.score)[0]?.candidate || ""
+  }
+
+  expansionPreview(shortcut, query) {
+    const full = this.previewExpansion(shortcut, query)
+    return { text: shortenExpansion(full), full }
   }
 
   previewExpansion(shortcut, query) {
@@ -423,4 +430,13 @@ export default class extends Controller {
     this.query = null
     this.updateAccessibility()
   }
+}
+
+function shortenExpansion(expansion) {
+  if (expansion.length <= MAX_PREVIEW_LENGTH) return expansion
+
+  const kept = MAX_PREVIEW_LENGTH - 1
+  const head = Math.ceil(kept / 2)
+  const tail = kept - head
+  return `${expansion.slice(0, head)}…${expansion.slice(expansion.length - tail)}`
 }

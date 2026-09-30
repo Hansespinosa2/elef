@@ -220,6 +220,29 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     end
   end
 
+  test "previews the full chained math expansion that the shortcut commits" do
+    document = Document.create!(title: "Chained math previews", source: "# Chained math previews")
+
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    editor.click
+    editor.send_keys("\n$$x.bar.b.t.inv")
+
+    inverse = find(".math-shortcut-option", text: /Inverse/, wait: 5)
+    within(inverse) do
+      assert_selector ".math-shortcut-trigger", text: "x.bar.b.t.inv"
+      assert_selector ".math-shortcut-expansion", text: "\\left(\\bar{\\mathbf{x}}^{\\mathsf{T}}\\right)^{-1}"
+      assert_match "\\left(\\bar{\\mathbf{x}}^{\\mathsf{T}}\\right)^{-1}", inverse["title"]
+    end
+
+    editor.send_keys(:enter)
+
+    assert_includes find_field("Markdown source").value, "\\left(\\bar{\\mathbf{x}}^{\\mathsf{T}}\\right)^{-1}"
+    assert_selector ".document-surface .katex", minimum: 1, wait: 5
+    assert_no_selector ".math-error"
+  end
+
   test "uses dark Aradia surfaces for math shortcut settings" do
     visit math_shortcuts_path
 
