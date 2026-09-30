@@ -1,7 +1,8 @@
 module WorkPersistence
   extend ActiveSupport::Concern
 
-  MAX_UPLOAD_BYTES = 50.megabytes
+  MAX_UPLOAD_MEGABYTES = 50
+  MAX_UPLOAD_BYTES = MAX_UPLOAD_MEGABYTES.megabytes
 
   private
 
@@ -121,7 +122,7 @@ module WorkPersistence
       return render json: { error: error }, status: :unprocessable_content
     end
     if upload.size.to_i > MAX_UPLOAD_BYTES
-      return render json: { error: "Media files must be #{MAX_UPLOAD_BYTES / 1.megabyte} MB or smaller." }, status: :unprocessable_content
+      return render json: { error: "Media files must be #{MAX_UPLOAD_MEGABYTES} MB or smaller." }, status: :unprocessable_content
     end
 
     blob = WorkAssets.attach_upload(work, upload, content_type: content_type)
