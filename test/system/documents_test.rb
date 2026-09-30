@@ -1653,6 +1653,155 @@ class DocumentsTest < ApplicationSystemTestCase
     assert lifecycle_result["destroyed"]
   end
 
+  test "source mode drops web images at the drop position and preserves concurrent typing" do
+    document = Document.create!(title: "Web image drop", source: "# Web image drop\n\nLead text.\n\nTail text.")
+    visit edit_document_path(document, editor_mode: "source")
+    png_data_url = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+i9MwAAAAASUVORK5CYII="
+
+    drop_result = page.execute_script(<<~JAVASCRIPT, png_data_url)
+      const editor = document.querySelector('.source-field').editorController;
+      const insertion = editor.value.indexOf('Tail text.');
+      const coordinates = editor.view.coordsAtPos(insertion);
+      const resolvedPosition = editor.view.posAtCoords({ x: coordinates.left, y: (coordinates.top + coordinates.bottom) / 2 });
+      const transfer = new DataTransfer();
+      transfer.setData('text/uri-list', arguments[0]);
+      transfer.setData('text/html', '<img src="' + arguments[0] + '">');
+      const options = { bubbles: true, cancelable: true, dataTransfer: transfer, clientX: coordinates.left, clientY: (coordinates.top + coordinates.bottom) / 2 };
+      const dragover = new DragEvent('dragover', options);
+      const drop = new DragEvent('drop', options);
+      editor.view.contentDOM.dispatchEvent(dragover);
+      editor.view.contentDOM.dispatchEvent(drop);
+      const status = document.querySelector('.media-upload-status');
+      return {
+        intendedPosition: insertion,
+        resolvedPosition,
+        dragoverPrevented: dragover.defaultPrevented,
+        dropPrevented: drop.defaultPrevented,
+        progress: status.textContent,
+        busy: status.getAttribute('aria-busy')
+      };
+    JAVASCRIPT
+
+    assert drop_result["dragoverPrevented"], drop_result.inspect
+    assert drop_result["dropPrevented"], drop_result.inspect
+    assert_equal drop_result["intendedPosition"], drop_result["resolvedPosition"], drop_result.inspect
+    assert_equal "Preparing image…", drop_result["progress"]
+    assert_equal "true", drop_result["busy"]
+
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      const insertion = editor.value.indexOf('Tail text.');
+      editor.replaceRange('Typed while web image drops. ', insertion, insertion);
+    JAVASCRIPT
+
+    assert_selector ".media-upload-status", text: /dropped-image\.png added to the Markdown source/i, wait: 8
+
+    dropped_source = page.evaluate_script("document.querySelector('.source-field').editorController.value")
+    assert_includes dropped_source, "elef-asset:"
+    assert_operator dropped_source.index("Lead text."), :<, dropped_source.index("elef-asset:")
+    assert_operator dropped_source.index("elef-asset:"), :<, dropped_source.index("Typed while web image drops.")
+    assert_operator dropped_source.index("Typed while web image drops."), :<, dropped_source.index("Tail text.")
+    assert_selector ".preview-pane img.presentation-media", count: 1, wait: 8
+    assert_equal 1, document.reload.assets.count
+  end
+
+  test "source mode shows actionable status message when web drop cannot be imported as an image" do
+    document = Document.create!(title: "Web image failure", source: "# Web image failure\n\nKeep untouched.")
+    visit edit_document_path(document, editor_mode: "source")
+
+    before_drop = page.evaluate_script("document.querySelector('.source-field').editorController.value")
+
+    drop_result = page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      const transfer = new DataTransfer();
+      transfer.setData('text/uri-list', 'https://example.com/blocked-image.png');
+      const options = { bubbles: true, cancelable: true, dataTransfer: transfer, clientX: 100, clientY: 100 };
+      const dragover = new DragEvent('dragover', options);
+      const drop = new DragEvent('drop', options);
+      editor.view.contentDOM.dispatchEvent(dragover);
+      editor.view.contentDOM.dispatchEvent(drop);
+      return { dragoverPrevented: dragover.defaultPrevented, dropPrevented: drop.defaultPrevented };
+    JAVASCRIPT
+
+    assert drop_result["dragoverPrevented"]
+    assert drop_result["dropPrevented"]
+    assert_selector ".media-upload-status", text: "Only image files can be dropped here — to use an image from a web page, save it first.", wait: 8
+    assert_equal "false", page.find(".media-upload-status")["aria-busy"]
+    assert_equal before_drop, page.evaluate_script("document.querySelector('.source-field').editorController.value")
+  end
+
+  test "source dragover defensively supports DOMStringList types collections" do
+    document = Document.create!(title: "DOMStringList dragover", source: "# DOMStringList dragover")
+    visit edit_document_path(document, editor_mode: "source")
+
+    result = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.editor-surface');
+        const typesList = {
+          0: 'Files',
+          length: 1,
+          contains: (item) => item === 'Files',
+          item: (index) => index === 0 ? 'Files' : null
+        };
+        let prevented = false;
+        let dropEffect = null;
+        const mockEvent = {
+          currentTarget: surface,
+          dataTransfer: {
+            types: typesList,
+            dropEffect: 'none'
+          },
+          preventDefault: () => { prevented = true; }
+        };
+        Object.defineProperty(mockEvent.dataTransfer, 'dropEffect', {
+          set: (val) => { dropEffect = val; },
+          get: () => dropEffect
+        });
+        const media = window.Stimulus.getControllerForElementAndIdentifier(document.querySelector('.visual-editor-form'), 'media');
+        media.sourceDragOver(mockEvent);
+        return {
+          prevented,
+          dropEffect,
+          hasDropTargetClass: surface.classList.contains('is-media-drop-target')
+        };
+      })()
+    JAVASCRIPT
+
+    assert result["prevented"]
+    assert_equal "copy", result["dropEffect"]
+    assert result["hasDropTargetClass"]
+  end
+
+  test "source mode ignores plain text drops so CodeMirror retains native behavior" do
+    document = Document.create!(title: "Plain text drop", source: "# Plain text drop\n\nExisting text.")
+    visit edit_document_path(document, editor_mode: "source")
+
+    before_value = page.evaluate_script("document.querySelector('.source-field').editorController.value")
+
+    result = page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      const transfer = new DataTransfer();
+      transfer.setData('text/plain', 'ordinary words');
+      const options = { bubbles: true, cancelable: true, dataTransfer: transfer, clientX: 100, clientY: 100 };
+      const dragover = new DragEvent('dragover', options);
+      const drop = new DragEvent('drop', options);
+      editor.view.contentDOM.dispatchEvent(dragover);
+      editor.view.contentDOM.dispatchEvent(drop);
+      const status = document.querySelector('.media-upload-status');
+      return {
+        dragoverPrevented: dragover.defaultPrevented,
+        status: status?.textContent,
+        busy: status?.getAttribute('aria-busy'),
+        value: editor.value
+      };
+    JAVASCRIPT
+
+    refute result["dragoverPrevented"]
+    assert_equal "", result["status"].to_s
+    assert_equal "false", result["busy"]
+    assert_includes result["value"], "ordinary words"
+  end
+
   test "visual edits preserve nested task lists and untouched item formatting" do
     source = "- [ ] Keep **this**\n  - Nested [link](/path)\n- [x] Already done"
     document = Document.create!(title: "List preservation", source: source)

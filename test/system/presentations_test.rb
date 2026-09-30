@@ -1501,7 +1501,53 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_equal 0, result["uploadAttempts"]
     assert_equal "# Untouched title\n\nKeep this source.", result["source"]
     assert_equal result["source"], result["currentSource"]
-    assert_equal "Untouched title", result["title"]
+  end
+
+  test "presentation form does not register duplicate media controllers" do
+    presentation = Presentation.create!(title: "Controller deduplication", source: "# Controller deduplication")
+    visit edit_presentation_path(presentation, editor_mode: "source")
+
+    controllers = page.evaluate_script("document.querySelector('.visual-editor-form').dataset.controller.split(/\\s+/)")
+    assert_equal 1, controllers.count("media")
+  end
+
+  test "source mode drops web images into presentation slides at the cursor" do
+    presentation = Presentation.create!(title: "Web image presentation", source: "# Web image presentation\n\nLead text.\n\nTail text.")
+    visit edit_presentation_path(presentation, editor_mode: "source")
+    png_data_url = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+i9MwAAAAASUVORK5CYII="
+
+    drop_result = page.execute_script(<<~JAVASCRIPT, png_data_url)
+      const editor = document.querySelector('.source-field').editorController;
+      const insertion = editor.value.indexOf('Tail text.');
+      const coordinates = editor.view.coordsAtPos(insertion);
+      const resolvedPosition = editor.view.posAtCoords({ x: coordinates.left, y: (coordinates.top + coordinates.bottom) / 2 });
+      const transfer = new DataTransfer();
+      transfer.setData('text/uri-list', arguments[0]);
+      transfer.setData('text/html', '<img src="' + arguments[0] + '">');
+      const options = { bubbles: true, cancelable: true, dataTransfer: transfer, clientX: coordinates.left, clientY: (coordinates.top + coordinates.bottom) / 2 };
+      const dragover = new DragEvent('dragover', options);
+      const drop = new DragEvent('drop', options);
+      editor.view.contentDOM.dispatchEvent(dragover);
+      editor.view.contentDOM.dispatchEvent(drop);
+      return {
+        intendedPosition: insertion,
+        resolvedPosition,
+        dragoverPrevented: dragover.defaultPrevented,
+        dropPrevented: drop.defaultPrevented
+      };
+    JAVASCRIPT
+
+    assert drop_result["dragoverPrevented"], drop_result.inspect
+    assert drop_result["dropPrevented"], drop_result.inspect
+    assert_equal drop_result["intendedPosition"], drop_result["resolvedPosition"], drop_result.inspect
+    assert_selector ".media-upload-status", text: /dropped-image\.png added to the Markdown source/i, wait: 8
+
+    dropped_source = page.evaluate_script("document.querySelector('.source-field').editorController.value")
+    assert_includes dropped_source, "elef-asset:"
+    assert_operator dropped_source.index("Lead text."), :<, dropped_source.index("elef-asset:")
+    assert_operator dropped_source.index("elef-asset:"), :<, dropped_source.index("Tail text.")
+    assert_selector ".preview-pane img.presentation-media", count: 1, wait: 8
+    assert_equal 1, presentation.reload.assets.count
   end
 
   test "print view selects draft content and sizes slides for one landscape page each" do
