@@ -6,26 +6,23 @@ SCRIPT="$ROOT/scripts/development-instance"
 COMPOSE="$ROOT/compose.development.yml"
 DOCKERFILE="$ROOT/Dockerfile.development"
 
-assert_contains() {
-  local file="$1" needle="$2"
-  grep -F -e "$needle" "$file" >/dev/null || {
-    echo "expected $file to contain: $needle" >&2
-    exit 1
-  }
-}
+# shellcheck source=test/scripts/lib/config_assertions.sh
+source "$ROOT/test/scripts/lib/config_assertions.sh"
 
 bash -n "$SCRIPT"
 
-assert_contains "$COMPOSE" "image: postgres:17"
-assert_contains "$COMPOSE" "elef_development_postgres:/var/lib/postgresql/data"
-assert_contains "$COMPOSE" "elef_development_storage:/rails/storage"
-assert_contains "$COMPOSE" "Dockerfile.development"
-assert_contains "$COMPOSE" "APP_PORT:-3001"
-assert_contains "$DOCKERFILE" "RAILS_ENV=development"
-assert_contains "$COMPOSE" "bin/rails db:prepare"
-assert_contains "$COMPOSE" "RUBY_DEBUG_OPEN"
-assert_contains "$SCRIPT" "bin/rails db:migrate"
-assert_contains "$SCRIPT" "wrong Rails environment"
-assert_contains "$ROOT/bin/dev" "bundle exec foreman"
+assert_active_line "$COMPOSE" "image: postgres:17"
+assert_active_line "$COMPOSE" "elef_development_postgres:/var/lib/postgresql/data"
+assert_active_line "$COMPOSE" "elef_development_storage:/rails/storage"
+assert_active_line "$COMPOSE" "Dockerfile.development"
+assert_active_line "$COMPOSE" "APP_PORT:-3001"
+assert_active_line "$DOCKERFILE" "RAILS_ENV=development"
+assert_active_line "$COMPOSE" "bin/rails db:prepare"
+assert_active_line "$COMPOSE" "RUBY_DEBUG_OPEN"
+assert_active_line "$SCRIPT" "bin/rails db:migrate"
+assert_active_line "$SCRIPT" "wrong Rails environment"
+assert_active_line "$ROOT/bin/dev" "bundle exec foreman"
+
+assert_active_line_rejects_comments
 
 echo "development instance checks passed"
