@@ -20,6 +20,7 @@ import {
   writeBoolean,
   writeValue
 } from "controllers/vim_preferences"
+import { snippetStopsField } from "controllers/snippet_stops"
 
 const VIM_ESCAPE_MODES = ["normal", "insert", "visual", "operatorPending"]
 let activeEscapeKey = ""
@@ -103,6 +104,7 @@ export default class extends Controller {
           basicSetup,
           markdown({ extensions: elefMetadata }),
           livePreviewField,
+          snippetStopsField,
           theme,
           EditorView.updateListener.of((update) => this.handleUpdate(update))
         ]

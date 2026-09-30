@@ -8,6 +8,25 @@ class PresentationsTest < ApplicationSystemTestCase
     RUBY_PLATFORM.match?(/darwin/) ? :meta : :control
   end
 
+  def snippet_stop_marks
+    page.evaluate_script(<<~JAVASCRIPT)
+      [...document.querySelectorAll(".cm-snippet-stop")].map((mark) => mark.textContent)
+    JAVASCRIPT
+  end
+
+  def active_snippet_stop
+    page.evaluate_script('document.querySelector(".cm-snippet-stop-active")?.textContent ?? null')
+  end
+
+  def editor_selection
+    <<~JAVASCRIPT
+      (() => {
+        const editor = document.querySelector(".source-field").editorController;
+        return [editor.selectionStart, editor.selectionEnd];
+      })()
+    JAVASCRIPT
+  end
+
   def wait_for_fresh_projection
     assert_selector "form.visual-editor-form:not([data-preview-projection-stale='true'])", wait: 5
   end
@@ -2288,6 +2307,83 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_equal "first", page.evaluate_script(selected_text)
     find(".cm-content").send_keys(:tab)
     assert_equal "second", page.evaluate_script(selected_text)
+  end
+
+  test "marks every pending snippet tab stop and walks the active mark with Tab" do
+    document = Document.create!(title: "Tab stop marks", source: "# Tab stop marks")
+
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    editor.click
+    editor.send_keys("\n/table")
+    assert_selector ".snippet-palette .snippet-option", text: /Table/, wait: 5
+    editor.send_keys(:enter)
+
+    assert_selector ".cm-snippet-stop", count: 4, wait: 5
+    assert_selector ".cm-snippet-stop-active", count: 1
+    assert_equal ["Column 1", "Column 2", "Value 1", "Value 2"], snippet_stop_marks
+    assert_equal "Column 1", active_snippet_stop
+
+    find(".cm-content").send_keys(:tab)
+    assert_equal ["Column 2", "Value 1", "Value 2"], snippet_stop_marks
+    assert_equal "Column 2", active_snippet_stop
+
+    find(".cm-content").send_keys(:tab)
+    assert_equal "Value 1", active_snippet_stop
+    find(".cm-content").send_keys(:tab)
+    assert_equal "Value 2", active_snippet_stop
+
+    find(".cm-content").send_keys(:tab)
+    assert_no_selector ".cm-snippet-stop"
+    assert_equal "# Tab stop marks\n| Column 1 | Column 2 |\n| --- | --- |\n| Value 1 | Value 2 |",
+      find_field("Markdown source").value
+  end
+
+  test "escape clears the snippet tab stop marks and leaves Tab alone" do
+    document = Document.create!(title: "Escape tab stops", source: "# Escape tab stops")
+
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    editor.click
+    editor.send_keys("\n/table")
+    assert_selector ".snippet-palette .snippet-option", text: /Table/, wait: 5
+    editor.send_keys(:enter)
+    assert_selector ".cm-snippet-stop", count: 4, wait: 5
+
+    find(".cm-content").send_keys(:escape)
+    assert_no_selector ".cm-snippet-stop"
+
+    selection = page.evaluate_script(editor_selection)
+    source = find_field("Markdown source").value
+    find(".cm-content").send_keys(:tab)
+
+    assert_equal selection, page.evaluate_script(editor_selection)
+    assert_equal source, find_field("Markdown source").value
+    assert_no_selector ".cm-snippet-stop"
+  end
+
+  test "keeps the remaining snippet tab stop marks aligned while typing" do
+    document = Document.create!(title: "Typing tab stops", source: "# Typing tab stops")
+
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    editor.click
+    editor.send_keys("\n/table")
+    assert_selector ".snippet-palette .snippet-option", text: /Table/, wait: 5
+    editor.send_keys(:enter)
+    assert_selector ".cm-snippet-stop", count: 4, wait: 5
+
+    find(".cm-content").send_keys("Header")
+    assert_equal ["Header", "Column 2", "Value 1", "Value 2"], snippet_stop_marks
+    assert_equal "Header", active_snippet_stop
+
+    find(".cm-content").send_keys(:tab)
+    assert_equal ["Column 2", "Value 1", "Value 2"], snippet_stop_marks
+    assert_equal "Column 2", active_snippet_stop
+    assert_includes find_field("Markdown source").value, "| Header | Column 2 |"
   end
 
   test "positions the palette when only the slash trigger is typed" do
