@@ -2,40 +2,175 @@ import { Controller } from "@hotwired/stimulus"
 import { syntaxTree } from "@codemirror/language"
 import { editorFor } from "controllers/editor_controller"
 
-const MODIFIER_ALIASES = Object.freeze({ b: "bold", bb: "blackboard", bar: "bar", vec: "vector", v: "vector", hat: "hat", tilde: "tilde", t: "transpose", T: "transpose", inv: "inverse" })
 const GREEK_OPERAND = /^\\(?:alpha|beta|gamma|delta|epsilon|varepsilon|zeta|eta|theta|vartheta|iota|kappa|lambda|mu|nu|xi|pi|varpi|rho|varrho|sigma|varsigma|tau|upsilon|phi|varphi|chi|psi|omega|Gamma|Delta|Theta|Lambda|Xi|Pi|Sigma|Upsilon|Phi|Psi|Omega)$/
 const ATOMIC_MATH_SHORTCUTS = Object.freeze({ "@a": "\\alpha", "@b": "\\beta", "@g": "\\gamma", "@m": "\\mu", "@n": "\\nu", "@r": "\\rho", "@D": "\\Delta" })
 const ATOMIC_LATEX_COMMANDS = new Set(["nabla", "partial", "infty", "ell", "hbar", "Re", "Im", "wp"])
 const ATOMIC_LATEX_WRAPPERS = new Set(["mathbf", "boldsymbol", "mathbb", "mathcal", "mathfrak", "mathit", "mathrm", "mathsf", "mathtt", "vec", "bar", "hat", "tilde", "overline", "underline"])
 
-export function parseMathShorthand(token) {
-  const operandNode = parseMathOperandAt(token, 0)
-  if (!operandNode) return null
-  const base = token.slice(0, operandNode.end)
-  const suffix = token.slice(operandNode.end)
-  if (!/^(?:\.[A-Za-z]+)+$/.test(suffix)) return null
+const MODIFIER_CLASSES = Object.freeze([
+  Object.freeze({
+    name: "font",
+    max: 1,
+    modifiers: Object.freeze({
+      bold: Object.freeze({ aliases: ["b"], wrappers: ["mathbf", "boldsymbol"], command: "mathbf" }),
+      blackboard: Object.freeze({ aliases: ["bb"], wrappers: ["mathbb"], command: "mathbb" }),
+      calligraphic: Object.freeze({ aliases: [], wrappers: ["mathcal"], command: "mathcal" }),
+      roman: Object.freeze({ aliases: [], wrappers: ["mathrm"], command: "mathrm" })
+    })
+  }),
+  Object.freeze({
+    name: "accent",
+    max: 1,
+    modifiers: Object.freeze({
+      bar: Object.freeze({ aliases: ["bar"], wrappers: ["bar"], command: "bar" }),
+      vector: Object.freeze({ aliases: ["vec", "v"], wrappers: ["vec"], command: "vec" }),
+      hat: Object.freeze({ aliases: ["hat"], wrappers: ["hat"], command: "hat" }),
+      tilde: Object.freeze({ aliases: ["tilde"], wrappers: ["tilde"], command: "tilde" })
+    })
+  }),
+  Object.freeze({
+    name: "transpose",
+    max: 1,
+    modifiers: Object.freeze({ transpose: Object.freeze({ aliases: ["t", "T"], postfix: "^{\\mathsf{T}}" }) })
+  }),
+  Object.freeze({
+    name: "inverse",
+    max: 1,
+    modifiers: Object.freeze({ inverse: Object.freeze({ aliases: ["inv"], postfix: "^{-1}" }) })
+  })
+])
 
-  const names = suffix.slice(1).split(".")
-  const modifiers = names.map((name) => MODIFIER_ALIASES[name] || null)
-  if (modifiers.some((modifier) => !modifier)) return null
-  if (modifiers.filter((modifier) => ["bold", "blackboard"].includes(modifier)).length > 1 || modifiers.filter((modifier) => ["bar", "vector", "hat", "tilde"].includes(modifier)).length > 1 || modifiers.filter((modifier) => ["transpose", "inverse"].includes(modifier)).length > 2 || modifiers.filter((modifier) => modifier === "transpose").length > 1 || modifiers.filter((modifier) => modifier === "inverse").length > 1) {
-    return { status: "invalid", base, modifiers }
+const MODIFIER_DEFINITIONS = Object.freeze(Object.fromEntries(
+  MODIFIER_CLASSES.flatMap(({ name: className, modifiers }) => Object.entries(modifiers).map(([name, definition]) => [name, { ...definition, className }]))
+))
+const MODIFIER_ALIASES = Object.freeze(Object.fromEntries(
+  Object.entries(MODIFIER_DEFINITIONS).flatMap(([name, definition]) => definition.aliases.map((alias) => [alias, name]))
+))
+const MODIFIER_WRAPPERS = Object.freeze(Object.fromEntries(
+  Object.entries(MODIFIER_DEFINITIONS).flatMap(([name, definition]) => (definition.wrappers || []).map((wrapper) => [wrapper, name]))
+))
+
+/** `base` is the innermost atomic operand; recognized wrappers and postfixes are stored in `modifiers`. */
+export function parseMathShorthand(token) {
+  if (typeof token !== "string") return null
+
+  const suffix = token.match(/(?:\.[A-Za-z]+)*$/)?.[0] || ""
+  const head = token.slice(0, token.length - suffix.length)
+  const parsedHead = parseExpandedMathHead(head)
+  if (!parsedHead) return null
+
+  const names = suffix ? suffix.slice(1).split(".") : []
+  const appendedModifiers = names.map((name) => MODIFIER_ALIASES[name] || null)
+  if (appendedModifiers.some((modifier) => !modifier)) return null
+
+  const modifiers = [...parsedHead.modifiers, ...appendedModifiers]
+  if (modifiers.length === 0) return null
+  if (!modifiersWithinClassLimits(modifiers)) return { status: "invalid", base: parsedHead.base, modifiers }
+
+  return {
+    status: "valid",
+    base: parsedHead.base,
+    modifiers,
+    expansion: expandMathModifiers(parsedHead.operand, modifiers)
+  }
+}
+
+function parseExpandedMathHead(head) {
+  let source = head
+  let unwrappedGroup = false
+  const outerPostfixes = []
+
+  while (source) {
+    const postfix = trailingMathPostfix(source)
+    if (postfix) {
+      outerPostfixes.push(postfix)
+      source = source.slice(0, source.length - MODIFIER_DEFINITIONS[postfix].postfix.length)
+      continue
+    }
+
+    if (source.startsWith("\\left(") && source.endsWith("\\right)")) {
+      if (unwrappedGroup) return null
+      source = source.slice("\\left(".length, -"\\right)".length)
+      unwrappedGroup = true
+      continue
+    }
+    break
   }
 
+  const wrapperModifiers = []
+  while (source.startsWith("\\")) {
+    const wrapper = source.match(/^\\([A-Za-z]+)\{/)
+    if (!wrapper) break
+    const open = wrapper[0].length - 1
+    const close = matchingMathBrace(source, open)
+    if (close !== source.length - 1) return null
+
+    const modifier = MODIFIER_WRAPPERS[wrapper[1]]
+    if (!modifier) return null
+    wrapperModifiers.push(modifier)
+    source = source.slice(open + 1, close)
+  }
+
+  const operandNode = parseMathOperandAt(source, 0)
+  if (!operandNode || operandNode.end !== source.length) return null
+  const base = source.slice(0, operandNode.end)
   const operand = ATOMIC_MATH_SHORTCUTS[base] || operandNode.tex
-  const style = modifiers.find((modifier) => ["bold", "blackboard"].includes(modifier))
-  const decoration = modifiers.find((modifier) => ["bar", "vector", "hat", "tilde"].includes(modifier))
-  let value = style === "bold" ? `${GREEK_OPERAND.test(operand) ? "\\boldsymbol" : "\\mathbf"}{${operand}}` : style === "blackboard" ? `\\mathbb{${operand}}` : operand
-  if (decoration) value = `\\${decoration === "vector" ? "vec" : decoration}{${value}}`
-  let postfixCount = 0
-  for (const modifier of modifiers) {
-    if (modifier === "transpose" || modifier === "inverse") {
-      const operand = postfixCount === 0 ? value : `\\left(${value}\\right)`
-      value = modifier === "transpose" ? `${operand}^{\\mathsf{T}}` : `${operand}^{-1}`
-      postfixCount += 1
+  return { base, operand, modifiers: [...wrapperModifiers, ...outerPostfixes.reverse()] }
+}
+
+function trailingMathPostfix(source) {
+  return Object.entries(MODIFIER_DEFINITIONS).find(([, definition]) => definition.postfix && source.endsWith(definition.postfix))?.[0] || null
+}
+
+function matchingMathBrace(source, open) {
+  if (source[open] !== "{") return -1
+  let depth = 0
+  for (let index = open; index < source.length; index += 1) {
+    if (source[index] === "\\") {
+      if (/[A-Za-z]/.test(source[index + 1] || "")) {
+        index += 1
+        while (/[A-Za-z]/.test(source[index + 1] || "")) index += 1
+      } else {
+        index += 1
+      }
+      continue
+    }
+    if (source[index] === "{") depth += 1
+    else if (source[index] === "}") {
+      depth -= 1
+      if (depth === 0) return index
     }
   }
-  return { status: "valid", base, modifiers, expansion: value }
+  return -1
+}
+
+function modifiersWithinClassLimits(modifiers) {
+  return MODIFIER_CLASSES.every(({ max, modifiers: classModifiers }) => {
+    const members = new Set(Object.keys(classModifiers))
+    return modifiers.filter((modifier) => members.has(modifier)).length <= max
+  })
+}
+
+function expandMathModifiers(operand, modifiers) {
+  const font = modifiers.find((modifier) => MODIFIER_DEFINITIONS[modifier].className === "font")
+  const accent = modifiers.find((modifier) => MODIFIER_DEFINITIONS[modifier].className === "accent")
+  let value = operand
+
+  if (font) {
+    const fontCommand = font === "bold" && GREEK_OPERAND.test(operand) ? "boldsymbol" : MODIFIER_DEFINITIONS[font].command
+    value = `\\${fontCommand}{${value}}`
+  }
+  if (accent) value = `\\${MODIFIER_DEFINITIONS[accent].command}{${value}}`
+
+  let postfixCount = 0
+  for (const modifier of modifiers) {
+    const postfix = MODIFIER_DEFINITIONS[modifier].postfix
+    if (!postfix) continue
+    const wrapped = postfixCount === 0 ? value : `\\left(${value}\\right)`
+    value = `${wrapped}${postfix}`
+    postfixCount += 1
+  }
+  return value
 }
 
 function parseMathOperandAt(source, start) {
@@ -74,7 +209,7 @@ export function expandMathShorthand(token) {
 export function mathShorthandAt(text, caret) {
   if (caret < 0 || caret > text.length) return null
   if (!insideMath(text, caret)) return null
-  const tokenCharacter = /[A-Za-z0-9.@\\{}]/
+  const tokenCharacter = /[A-Za-z0-9.@\\{}()^-]/
   let start = caret
   let end = caret
   while (start > 0 && tokenCharacter.test(text[start - 1])) start -= 1
@@ -89,7 +224,7 @@ export function mathShorthandAtEditor(editor, caret) {
   if (!doc || caret < 0 || caret > doc.length || !editorInsideMath(editor, caret)) return null
   const line = doc.lineAt(caret)
   const localCaret = caret - line.from
-  const tokenCharacter = /[A-Za-z0-9.@\\{}]/
+  const tokenCharacter = /[A-Za-z0-9.@\\{}()^-]/
   let start = localCaret
   let end = localCaret
   while (start > 0 && tokenCharacter.test(line.text[start - 1])) start -= 1
@@ -392,13 +527,15 @@ export default class extends Controller {
     const editor = this.editorController
     if (!editor?.value) return
     const source = editor.value
-    const chainPattern = /(?:@[A-Za-z][A-Za-z0-9]*|\\[A-Za-z]+|[A-Za-z])[A-Za-z0-9.@\\{}]*/g
+    const chainPattern = /(?:@[A-Za-z][A-Za-z0-9]*|\\[A-Za-z]+|[A-Za-z])[A-Za-z0-9.@\\{}()^-]*/g
     const changes = []
     for (const match of source.matchAll(chainPattern)) {
       const from = match.index
       const to = from + match[0].length
       const chain = mathShorthandAt(source, to)
-      if (chain?.status === "valid" && chain.start === from) changes.push({ from, to, insert: chain.expansion })
+      if (chain?.status === "valid" && chain.start === from && chain.expansion !== match[0]) {
+        changes.push({ from, to, insert: chain.expansion })
+      }
     }
     if (changes.length) editor.replaceRanges(changes)
   }
