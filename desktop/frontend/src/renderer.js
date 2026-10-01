@@ -43,7 +43,8 @@ markdown.block.ruler.before("fence", "elef_display_math", (state, startLine, end
     const expression = state.getLines(startLine + 1, line, state.blkIndent, false)
     const token = state.push("html_block", "", 0)
     token.map = [startLine, line + 1]
-    token.content = `<p>${renderMath(expression.trim(), true, openDelimiter, closeDelimiter)}</p>\n`
+    const sourceExpression = state.src.slice(state.eMarks[startLine], state.bMarks[line])
+    token.content = `<p>${renderMath(expression.trim(), true, openDelimiter, closeDelimiter, sourceExpression)}</p>\n`
     state.line = line + 1
     return true
   }
@@ -464,14 +465,14 @@ function resolveAssetSource(source, env = {}) {
   return null
 }
 
-function renderMath(expression, display, openDelimiter, closeDelimiter) {
+function renderMath(expression, display, openDelimiter, closeDelimiter, sourceExpression = expression) {
   let rendered
   try {
     rendered = katex.renderToString(expression, { displayMode: display, throwOnError: true, trust: false, strict: "ignore" })
   } catch (_error) {
     rendered = `<span class="math-error" title="Invalid TeX">${escapeHtml(expression)}</span>`
   }
-  return rendered.replace(/^<span\b/, (opening) => `${opening} data-editor-math-source="${escapeAttribute(expression)}" data-editor-math-open="${escapeAttribute(openDelimiter)}" data-editor-math-close="${escapeAttribute(closeDelimiter)}" contenteditable="false"`)
+  return rendered.replace(/^<span\b/, (opening) => `${opening} data-editor-math-source="${escapeAttribute(sourceExpression)}" data-editor-math-open="${escapeAttribute(openDelimiter)}" data-editor-math-close="${escapeAttribute(closeDelimiter)}" contenteditable="false"`)
 }
 
 function stripUnsafeMarkdownLinks(text) {

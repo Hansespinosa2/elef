@@ -103,7 +103,7 @@ build_fixtures() {
   GH_PULL_REQUEST_JSON="$(jq -n --arg sha "$commit_sha" '{number: 52, merged_at: "2026-09-25T12:00:00Z", merge_commit_sha: $sha, base: {ref: "dev"}, head: {sha: $sha, ref: "feature/ci"}}')"
   GH_PR_CHECKS_JSON="$(jq -n '
     {statusCheckRollup: (
-      ["scan_ruby", "scan_js", "test", "sqlite-test", "system-test", "production-smoke", "development-smoke"]
+      ["scan_ruby", "scan_js", "test", "sqlite-test", "system-test", "desktop", "desktop-macos", "renderer-macos", "production-smoke", "development-smoke"]
       | to_entries
       | map({
           name: .value,
@@ -116,7 +116,7 @@ build_fixtures() {
     )}
   ')"
   GH_RUN_STATUS_JSON="$(jq -n --arg sha "$commit_sha" --arg conclusion "$run_conclusion" '{id: 900, run_attempt: 1, event: "pull_request", status: "completed", conclusion: $conclusion, head_sha: $sha, head_branch: "feature/ci", path: ".github/workflows/ci.yml", pull_requests: []}')"
-  GH_JOBS_JSON="$(jq -n --arg failed "$failed_job" '{jobs: (["scan_ruby", "scan_js", "test", "sqlite-test", "system-test", "production-smoke", "development-smoke", "record-ci-attestation"] | map({name: ., conclusion: (if . == $failed then "failure" else "success" end)}))}')"
+  GH_JOBS_JSON="$(jq -n --arg failed "$failed_job" '{jobs: (["scan_ruby", "scan_js", "test", "sqlite-test", "system-test", "desktop", "desktop-macos", "renderer-macos", "production-smoke", "development-smoke", "record-ci-attestation"] | map({name: ., conclusion: (if . == $failed then "failure" else "success" end)}))}')"
 
   if [[ "$include_artifact" == true ]]; then
     GH_ARTIFACTS_JSON="$(jq -n '{artifacts: [{id: 123, name: "ci-attestation-pr52-run900-attempt1", expired: false}]}')"
@@ -151,6 +151,9 @@ build_fixtures
 
 build_fixtures system-test
 assert_rejected "a PR run with a failed required job"
+
+build_fixtures renderer-macos
+assert_rejected "a PR run with a failed Apple Silicon renderer job"
 
 build_fixtures "" "$(printf '0%.0s' {1..40})"
 assert_rejected "a tested tree that differs from the merged tree"

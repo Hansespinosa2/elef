@@ -75,3 +75,8 @@ test("shared Markdown block renderer supports both KaTeX delimiter families and 
   assert.match(html, /data-editor-math-close="\\\]"/)
   assert.match(html, /href="https:\/\/example\.com"/)
 })
+
+test("empty display math retains its original source whitespace for visual editing", () => {
+  const html = renderMarkdownBlock("# Untitled document\n\n$$\n\n$$")
+  assert.ok(html.includes('data-editor-math-source="\n\n"'))
+})

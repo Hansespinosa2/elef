@@ -15,11 +15,12 @@ required_checks = %w[
   system-test
   desktop
   desktop-macos
+  renderer-macos
   production-smoke
   development-smoke
 ]
 
-branch_push_checks = %w[desktop desktop-macos]
+branch_push_checks = %w[desktop desktop-macos renderer-macos]
 (required_checks - branch_push_checks).each do |job_name|
   job = jobs.fetch(job_name)
   abort "#{job_name} must run for pull requests and dispatch, but not branch pushes" unless
@@ -51,4 +52,4 @@ abort "deployment authorization requires only scoped read access plus ref-write 
     "pull-requests" => "read"
   }
 
-puts "CI runs the nine required checks once per PR and verifies them before publishing"
+puts "CI runs all required checks once per PR and verifies them before publishing"
