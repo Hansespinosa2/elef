@@ -21,6 +21,8 @@ test("the host starts in source mode and gates visual editing until the local pr
   assert.match(sourceForm.dataset.controller, /preview/)
   assert.equal(sourceMode.getAttribute("aria-pressed"), "true")
   assert.equal(visualMode.disabled, true)
+  assert.equal(visualMode.getAttribute("data-action"), "click->editor#showVisual")
+  assert.equal(visualMode.getAttribute("data-editor-target"), "visualButton")
   assert.ok(document.querySelector("#desktop-preview[data-preview-target='container']"))
   assert.ok(document.querySelector("[data-editor-map-json]"))
 })
