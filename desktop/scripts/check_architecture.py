@@ -48,6 +48,14 @@ assert {permission for permission in permissions if permission.startswith("core:
     "core:window:allow-close",
 }, "grant only event subscriptions and programmatic close after a safe save"
 assert not any(permission.startswith(("fs:", "shell:", "dialog:")) for permission in permissions)
+assert {
+    permission
+    for permission in permissions
+    if ":" in permission and not permission.startswith("core:")
+} == {
+    "updater:default",
+    "process:allow-restart",
+}, "grant only update check/install and restart from Tauri plugins"
 
 csp = config["app"]["security"]["csp"]
 directives = {}
@@ -57,8 +65,29 @@ for part in csp.split(";"):
         directives[tokens[0]] = tokens[1:]
 assert directives.get("script-src") == ["'self'"], "script-src must stay self-only"
 assert "'unsafe-eval'" not in csp and "'unsafe-inline'" not in directives.get("script-src", [])
+assert directives.get("style-src") == ["'self'"]
+assert directives.get("style-src-attr") == ["'unsafe-inline'"], "allow only CodeMirror's runtime style attributes"
 assert directives.get("frame-src") == ["'none'"]
 assert "https:" not in directives.get("img-src", [])
 assert "*" not in directives.get("img-src", [])
+
+associations = config["bundle"].get("fileAssociations", [])
+assert any(
+    "elef" in association.get("ext", [])
+    and association.get("exportedType", {}).get("identifier") == "com.elef.deck"
+    for association in associations
+), "register the portable .elef archive with the operating system"
+
+for menu_action in (
+    "open-deck",
+    "refresh-library",
+    "save",
+    "export-elef",
+    "import-elef",
+    "print",
+    "settings",
+    "check-for-updates",
+):
+    assert menu_action in app_source, f"native menu action {menu_action!r} is not wired"
 
 print(f"Tauri command capability and CSP checks passed ({len(declared)} commands).")

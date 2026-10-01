@@ -34,6 +34,8 @@
     "@replit/codemirror-vim": "6.4.0",
     "@replit/codemirror-vim-core": "0.1.0",
     "@tauri-apps/api": "2.12.1",
+    "@tauri-apps/plugin-process": "2.3.1",
+    "@tauri-apps/plugin-updater": "2.13.1",
     "codemirror": "6.0.2",
     "crelt": "1.0.7",
     "katex": "0.17.0",

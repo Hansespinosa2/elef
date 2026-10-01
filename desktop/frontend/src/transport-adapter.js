@@ -8,6 +8,10 @@ export function createTransportAdapter({ invoke, onConflict = () => {} }) {
       return deck
     },
 
+    readSourceSnapshot(id) {
+      return invoke("read_source_snapshot", { id })
+    },
+
     async saveSource(id, source) {
       const baseHash = baseHashes.get(id)
       if (!baseHash) {

@@ -35,6 +35,8 @@
           <div class="breadcrumbs"><span>Library</span><span aria-hidden="true">/</span><strong id="breadcrumb-current">Decks</strong></div>
           <div class="topbar-actions">
             <button id="refresh-library" class="quiet-button" type="button">Refresh</button>
+            <button id="check-for-updates" class="quiet-button" type="button">Check for updates</button>
+            <button id="import-elef" class="quiet-button" type="button" disabled>Import .elef</button>
             <button id="new-deck" class="primary-button" type="button" disabled><span aria-hidden="true">＋</span> New deck</button>
           </div>
         </header>
@@ -85,13 +87,13 @@
               <p class="detail-label">Markdown source</p>
               <span id="save-state" class="save-state" role="status">Saved</span>
             </div>
-            <form id="desktop-editor-form" class="desktop-editor-form" data-editor-mode="visual">
+            <form id="desktop-editor-form" class="desktop-editor-form" data-editor-mode="source">
               <div id="desktop-editor-field" class="field source-field" data-controller="editor snippet-palette math-shorthand math-shortcut-palette mermaid-assist document-link-palette" data-editor-initial-source-value="&quot;&quot;" data-authoring-registry="[]" data-document-link-palette-titles-value="[]">
                 <div class="editor-toolbar" aria-label="Editor controls">
                   <div class="editor-mode-switch" role="group" aria-label="Editing mode">
-                    <button id="source-mode" class="editor-mode-button" type="button" data-editor-target="sourceButton" data-action="click->editor#showSource" aria-pressed="false">Source</button>
-                    <button id="visual-mode" class="editor-mode-button is-active" type="button" data-editor-target="visualButton" data-action="click->editor#showVisual" aria-pressed="true">Visual</button>
-                    <span class="editor-editing-mode" data-editor-target="editingMode" aria-live="polite">Visual</span>
+                    <button id="source-mode" class="editor-mode-button is-active" type="button" data-editor-target="sourceButton" data-action="click->editor#showSource" aria-pressed="true">Source</button>
+                    <button id="visual-mode" class="editor-mode-button" type="button" disabled aria-pressed="false" title="Visual editing is not available in this build">Visual</button>
+                    <span class="editor-editing-mode" data-editor-target="editingMode" aria-live="polite">Source</span>
                   </div>
                   <span class="editor-mode" data-editor-target="mode" data-mode="standard" aria-live="polite">Standard</span>
                   <span class="editor-command" data-editor-target="command" aria-live="polite"></span>
@@ -106,10 +108,12 @@
                 <div id="deck-source-document-link-palette" class="snippet-palette" data-document-link-palette-target="palette" hidden role="listbox" aria-label="Document link suggestions"></div>
               </div>
             </form>
-            <p class="editor-help">Changes save automatically. Undo is available while this deck stays open.</p>
+            <pre id="print-source" class="print-source" hidden></pre>
+            <p class="editor-help">Changes save automatically. Undo is available while this deck stays open. Keep sync version history enabled: an external write can still race the final file replacement.</p>
+            <button id="retry-save" class="quiet-button" type="button" hidden>Retry save</button>
             <button id="restore-local-draft" class="quiet-button restore-draft" type="button" hidden>Restore discarded local draft</button>
             <p id="deck-notice" class="deck-notice" hidden></p>
-            <div class="detail-footer"><span id="deck-id" class="deck-id"></span><span class="editing-placeholder">Visual editing and slide preview follow with the shared editor.</span></div>
+            <div class="detail-footer"><span id="deck-id" class="deck-id"></span><span class="editing-placeholder">Markdown source · stored as a plain file in this deck folder</span></div>
           </div>
         </section>
 
@@ -128,6 +132,41 @@
         <div class="dialog-actions"><button class="quiet-button" value="cancel">Cancel</button><button id="create-submit" class="primary-button" value="create">Create deck</button></div>
       </form>
     </dialog>
+    <dialog id="settings-dialog" class="app-dialog">
+      <form id="settings-form" method="dialog">
+        <p class="eyebrow">LIBRARY SETTINGS</p>
+        <h2>Appearance</h2>
+        <label for="library-theme">Theme</label>
+        <select id="library-theme" name="theme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select>
+        <div class="dialog-actions"><button class="quiet-button" value="cancel">Cancel</button><button class="primary-button" value="save">Save settings</button></div>
+      </form>
+    </dialog>
+    <dialog id="import-conflict-dialog" class="app-dialog">
+      <form method="dialog">
+        <p class="eyebrow">DUPLICATE DECK</p>
+        <h2>Deck already in this library</h2>
+        <p id="import-conflict-message" class="dialog-copy"></p>
+        <p class="dialog-copy">Replace moves the current folder to Trash. Keep both assigns the imported copy a new identity.</p>
+        <div class="dialog-actions">
+          <button id="import-conflict-cancel" class="quiet-button" type="button">Cancel</button>
+          <button id="import-conflict-keep-both" class="quiet-button" type="button">Keep both</button>
+          <button id="import-conflict-replace" class="primary-button" type="button">Replace</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="update-dialog" class="app-dialog">
+      <div>
+        <p class="eyebrow">SOFTWARE UPDATE</p>
+        <h2>A new Elef version is ready</h2>
+        <p id="update-version" class="dialog-copy"></p>
+        <pre id="update-notes" class="update-notes"></pre>
+        <p id="update-progress" class="dialog-copy" role="status" aria-live="polite"></p>
+        <div class="dialog-actions">
+          <button id="update-later" class="quiet-button" type="button">Later</button>
+          <button id="install-update" class="primary-button" type="button">Install and relaunch</button>
+        </div>
+      </div>
+    </dialog>
     <dialog id="about-dialog" class="app-dialog about-dialog">
       <form method="dialog">
         <p class="eyebrow">ABOUT ELEF</p>
@@ -143,7 +182,7 @@
         <p class="conflict-explanation">Compare the version on disk with your edits before choosing what to keep.</p>
         <div class="conflict-columns">
           <section><h3>Your edits</h3><pre id="conflict-local" class="conflict-source"></pre></section>
-          <section><h3>On disk</h3><pre id="conflict-disk" class="conflict-source"></pre></section>
+          <section><h3>On disk · <span id="conflict-source-name"></span></h3><pre id="conflict-disk" class="conflict-source"></pre></section>
         </div>
         <label class="merge-label" for="conflict-merge">Merged version</label>
         <textarea id="conflict-merge" class="conflict-merge" spellcheck="false" aria-label="Merged Markdown version"></textarea>

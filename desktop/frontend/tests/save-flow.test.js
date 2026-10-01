@@ -1,0 +1,257 @@
+import assert from "node:assert/strict"
+import test from "node:test"
+
+import { createSaveFlow } from "../src/save-flow.js"
+
+const hash = letter => letter.repeat(64)
+
+function deferred() {
+  let resolve
+  let reject
+  const promise = new Promise((yes, no) => { resolve = yes; reject = no })
+  return { promise, resolve, reject }
+}
+
+function fakeTimers() {
+  let nextId = 0
+  let now = 0
+  const jobs = new Map()
+  return {
+    setTimer(callback, delay) {
+      const id = ++nextId
+      jobs.set(id, { callback, at: now + delay })
+      return id
+    },
+    clearTimer(id) { jobs.delete(id) },
+    async advance(milliseconds) {
+      now += milliseconds
+      while (true) {
+        const due = [...jobs.entries()].filter(([, job]) => job.at <= now).sort((a, b) => a[1].at - b[1].at)[0]
+        if (!due) break
+        jobs.delete(due[0])
+        due[1].callback()
+        await Promise.resolve()
+        await Promise.resolve()
+      }
+    },
+    count() { return jobs.size }
+  }
+}
+
+function setup(overrides = {}) {
+  let source = "old"
+  const deck = { id: "deck-1", source, source_file: "talk.md", content_hash: hash("a") }
+  const calls = []
+  const accepted = []
+  const conflicts = []
+  const states = []
+  const errors = []
+  const flow = createSaveFlow({
+    saveSource: async (id, value) => {
+      calls.push([id, value])
+      return { content_hash: hash("b") }
+    },
+    acceptDiskVersion: (...args) => accepted.push(args),
+    getSource: () => source,
+    setSource: async value => { source = value },
+    onState: state => states.push(state),
+    onConflict: conflict => conflicts.push(conflict),
+    onError: error => errors.push(error),
+    ...overrides
+  })
+  flow.activate(deck)
+  return { deck, flow, calls, accepted, conflicts, states, errors, setSource: value => { source = value }, getSource: () => source }
+}
+
+test("save orchestration serializes writes and drains edits made during an in-flight save", async () => {
+  const firstSave = deferred()
+  const calls = []
+  const context = setup({
+    saveSource: async (_id, source) => {
+      calls.push(source)
+      if (calls.length === 1) return firstSave.promise
+      return { content_hash: hash("c") }
+    }
+  })
+
+  context.setSource("first edit")
+  context.flow.noteChange()
+  const saving = context.flow.flush({ force: true })
+  context.setSource("latest edit")
+  context.flow.noteChange()
+  firstSave.resolve({ content_hash: hash("b") })
+
+  assert.equal(await saving, true)
+  assert.deepEqual(calls, ["first edit", "latest edit"])
+  assert.equal(context.deck.source, "latest edit")
+  assert.equal(context.flow.dirty, false)
+})
+
+test("conflicts stop automatic writes until a deliberate choice updates the disk baseline", async () => {
+  const context = setup({
+    saveSource: async () => {
+      throw { code: "conflict", details: { disk_hash: hash("d"), current: { source: "outside" } } }
+    }
+  })
+  context.setSource("mine")
+  context.flow.noteChange()
+
+  assert.equal(await context.flow.flush(), false)
+  assert.equal(context.flow.dirty, true)
+  assert.equal(context.conflicts[0].diskSource, "outside")
+  assert.equal(await context.flow.flush(), false)
+  assert.equal(context.calls.length, 0)
+
+  await context.flow.useDiskVersion()
+  assert.deepEqual(context.accepted, [["deck-1", hash("d")]])
+  assert.equal(context.getSource(), "outside")
+  assert.equal(context.flow.dirty, false)
+  assert.equal(await context.flow.restoreDraft(), true)
+  assert.equal(context.getSource(), "mine")
+})
+
+test("external edits reload clean buffers and surface conflicts when local edits exist", async () => {
+  const context = setup()
+  const first = await context.flow.checkExternalChange("deck-1", {
+    content_hash: hash("d"),
+    source: "external clean edit"
+  })
+  assert.equal(first, "reloaded")
+  assert.equal(context.getSource(), "external clean edit")
+  assert.equal(context.deck.content_hash, hash("d"))
+  assert.deepEqual(context.accepted, [["deck-1", hash("d")]])
+
+  context.setSource("local unsaved edit")
+  context.flow.noteChange()
+  const second = await context.flow.checkExternalChange("deck-1", {
+    content_hash: hash("e"),
+    source: "external concurrent edit"
+  })
+  assert.equal(second, "conflict")
+  assert.equal(context.getSource(), "local unsaved edit")
+  assert.equal(context.conflicts.at(-1).diskSource, "external concurrent edit")
+})
+
+test("external snapshots for a closed or inactive deck are ignored", async () => {
+  const context = setup()
+  assert.equal(await context.flow.checkExternalChange("other-deck", {
+    content_hash: hash("d"), source: "other source"
+  }), "inactive")
+})
+
+test("an external snapshot matching the in-flight local bytes advances the save baseline", async () => {
+  const context = setup()
+  context.setSource("local edit")
+  context.flow.noteChange()
+  const result = await context.flow.checkExternalChange("deck-1", {
+    content_hash: hash("d"),
+    source: "local edit"
+  })
+  assert.equal(result, "matching-local")
+  assert.equal(context.conflicts.length, 0)
+  assert.equal(context.accepted.at(-1)[1], hash("d"))
+})
+
+test("external source-file selection changes update a clean deck and conflict with dirty edits", async () => {
+  const context = setup()
+  const sameBytes = await context.flow.checkExternalChange("deck-1", {
+    content_hash: hash("a"), source: "old", source_file: "presentation.md"
+  })
+  assert.equal(sameBytes, "source-file-changed")
+  assert.equal(context.deck.source_file, "presentation.md")
+
+  context.setSource("local unsaved edit")
+  context.flow.noteChange()
+  const result = await context.flow.checkExternalChange("deck-1", {
+    content_hash: hash("a"), source: "old", source_file: "document.md"
+  })
+  assert.equal(result, "conflict")
+  assert.equal(context.conflicts.at(-1).diskSourceFile, "document.md")
+  assert.equal(await context.flow.useDiskVersion(), true)
+  assert.equal(context.deck.source_file, "document.md")
+})
+
+test("keeping local content and a merged version both save against the accepted disk hash", async () => {
+  const saves = []
+  const context = setup({
+    saveSource: async (_id, source) => {
+      saves.push(source)
+      return { content_hash: hash("e") }
+    }
+  })
+  context.flow.handleConflict({ id: "deck-1", details: { disk_hash: hash("d"), current: { source: "disk" } } })
+  context.setSource("local")
+  context.flow.keepLocalVersion()
+  await context.flow.flush()
+  assert.deepEqual(context.accepted[0], ["deck-1", hash("d")])
+  assert.deepEqual(saves, ["local"])
+
+  context.flow.handleConflict({ id: "deck-1", details: { disk_hash: hash("f"), current: { source: "disk v2" } } })
+  await context.flow.saveMergedVersion("merged")
+  await context.flow.flush()
+  assert.deepEqual(context.accepted[1], ["deck-1", hash("f")])
+  assert.deepEqual(saves, ["local", "merged"])
+  assert.equal(context.deck.source, "merged")
+})
+
+test("discarded drafts are bounded", async () => {
+  const context = setup({ maxDiscardedDrafts: 2 })
+  for (let index = 0; index < 3; index += 1) {
+    context.setSource(`draft ${index}`)
+    context.flow.handleConflict({ id: "deck-1", details: { disk_hash: hash(String(index + 2)), current: { source: `disk ${index}` } } })
+    await context.flow.useDiskVersion()
+  }
+
+  assert.equal(context.flow.discardedDraftCount, 2)
+  await context.flow.restoreDraft()
+  assert.equal(context.getSource(), "draft 2")
+})
+
+test("transient save failures retry with bounded backoff instead of every keystroke", async () => {
+  const timers = fakeTimers()
+  let attempts = 0
+  const context = setup({
+    setTimer: timers.setTimer,
+    clearTimer: timers.clearTimer,
+    saveSource: async () => {
+      attempts += 1
+      throw Object.assign(new Error("temporary filesystem failure"), { code: "io_error", retryable: true })
+    }
+  })
+  context.setSource("local")
+  context.flow.noteChange()
+  await context.flow.flush({ force: true })
+  assert.equal(attempts, 1)
+  assert.equal(timers.count(), 1)
+
+  context.setSource("newer local")
+  context.flow.noteChange()
+  await context.flow.flush()
+  await timers.advance(999)
+  assert.equal(attempts, 1)
+  await timers.advance(1)
+  await Promise.resolve()
+  assert.equal(attempts, 2)
+  assert.equal(context.flow.dirty, true)
+})
+
+test("permanent save failures stop retrying until the user retries explicitly", async () => {
+  let attempts = 0
+  const context = setup({
+    saveSource: async () => {
+      attempts += 1
+      throw Object.assign(new Error("deck was removed"), { code: "not_found", retryable: false })
+    }
+  })
+  context.setSource("local")
+  context.flow.noteChange()
+  assert.equal(await context.flow.flush(), false)
+  assert.equal(context.flow.blocked, true)
+  context.setSource("newer local")
+  context.flow.noteChange()
+  assert.equal(await context.flow.flush(), false)
+  assert.equal(attempts, 1)
+
+  await context.flow.flush({ force: true })
+  assert.equal(attempts, 2)
+})

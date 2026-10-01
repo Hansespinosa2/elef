@@ -1,5 +1,5 @@
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
   --canvas: #f5f4f0;
   --panel: #fffefa;
   --ink: #20211f;
@@ -17,8 +17,25 @@
   text-rendering: optimizeLegibility;
 }
 
+:root[data-theme="dark"] {
+  color-scheme: dark;
+    --canvas: #181a18;
+    --panel: #202320;
+    --ink: #eef0e9;
+    --muted: #a4aaa1;
+    --faint: #737a71;
+    --line: #343934;
+    --sidebar: #202320;
+    --accent: #a8c7ad;
+    --accent-strong: #c2dec6;
+    --accent-wash: #2b3830;
+    --danger: #ef9b8b;
+    --shadow: 0 22px 60px rgb(0 0 0 / 22%);
+}
+
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root[data-theme="system"] {
+    color-scheme: dark;
     --canvas: #181a18;
     --panel: #202320;
     --ink: #eef0e9;
@@ -144,6 +161,34 @@ kbd { padding: 3px 5px; color: var(--faint); background: var(--canvas); border: 
 .merge-label { display: block; margin: 14px 0 6px; color: var(--muted); font-size: 11px; font-weight: 700; }
 .conflict-merge { width: 100%; min-height: 130px; resize: vertical; padding: 12px; border: 1px solid var(--line); border-radius: 8px; outline-color: var(--accent); background: var(--canvas); color: var(--ink); font: 11px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre; }
 .conflict-actions { justify-content: space-between; }
+
+.dialog-copy { color: var(--muted); font-size: 12px; line-height: 1.6; }
+.update-notes { max-height: 180px; overflow: auto; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--canvas); color: var(--ink); font: 11px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; }
+.print-source { display: none; }
+
+@media print {
+  @page { margin: 18mm; }
+  body.printing-source { min-width: 0; color: #000; background: #fff; }
+  .printing-source .app-frame { display: block; min-height: 0; }
+  .printing-source .sidebar,
+  .printing-source .topbar,
+  .printing-source .back-link,
+  .printing-source .editor-toolbar,
+  .printing-source .editor-heading,
+  .printing-source .editor-help,
+  .printing-source .restore-draft,
+  .printing-source #retry-save,
+  .printing-source .detail-divider,
+  .printing-source .deck-detail-icon,
+  .printing-source .detail-footer,
+  .printing-source .statusbar { display: none !important; }
+  .printing-source .main-area,
+  .printing-source .deck-view { display: block; min-height: 0; width: 100%; margin: 0; padding: 0; }
+  .printing-source .deck-detail-card { max-width: none; padding: 0; border: 0; box-shadow: none; }
+  .printing-source #print-source { display: block !important; padding: 0; margin: 0; color: #000; background: #fff; font: 10pt/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .printing-source #desktop-editor-form,
+  .printing-source .deck-notice { display: none !important; }
+}
 
 @media (max-width: 960px) {
   .app-frame { grid-template-columns: 200px minmax(0, 1fr); }

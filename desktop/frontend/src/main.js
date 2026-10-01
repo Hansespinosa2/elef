@@ -1,9 +1,14 @@
 import { invoke } from "@tauri-apps/api/core"
 import { listen } from "@tauri-apps/api/event"
 import { getCurrentWindow } from "@tauri-apps/api/window"
+import { relaunch } from "@tauri-apps/plugin-process"
+import { check as checkUpdater } from "@tauri-apps/plugin-updater"
 import { editorFor } from "controllers/editor_controller"
 import { createDeckCard } from "./deck-card.js"
 import { createTransportAdapter } from "./transport-adapter.js"
+import { waitForEditorController } from "./editor-ready.js"
+import { createSaveFlow } from "./save-flow.js"
+import { checkForDesktopUpdate, installDesktopUpdate } from "./update-flow.js"
 import "./editor-runtime.js"
 import "./editor.css"
 
@@ -19,6 +24,9 @@ const elements = {
   status: document.querySelector("#status-text"),
   notice: document.querySelector("#notice"),
   createDialog: document.querySelector("#create-dialog"),
+  settingsDialog: document.querySelector("#settings-dialog"),
+  settingsForm: document.querySelector("#settings-form"),
+  libraryTheme: document.querySelector("#library-theme"),
   createForm: document.querySelector("#create-form"),
   aboutDialog: document.querySelector("#about-dialog"),
   conflictDialog: document.querySelector("#conflict-dialog"),
@@ -27,20 +35,49 @@ const elements = {
   saveState: document.querySelector("#save-state"),
   conflictLocal: document.querySelector("#conflict-local"),
   conflictDisk: document.querySelector("#conflict-disk"),
+  conflictSourceName: document.querySelector("#conflict-source-name"),
   conflictMerge: document.querySelector("#conflict-merge"),
-  restoreDraft: document.querySelector("#restore-local-draft")
+  retrySave: document.querySelector("#retry-save"),
+  restoreDraft: document.querySelector("#restore-local-draft"),
+  importConflictDialog: document.querySelector("#import-conflict-dialog"),
+  importConflictMessage: document.querySelector("#import-conflict-message"),
+  updateDialog: document.querySelector("#update-dialog"),
+  updateVersion: document.querySelector("#update-version"),
+  updateNotes: document.querySelector("#update-notes"),
+  updateProgress: document.querySelector("#update-progress")
 }
 
 let library = null
+let libraryConfig = { schema_version: 1, theme: "system", hotkeys: {} }
 let decks = []
 let activeDeck = null
-let activeConflict = null
-let saveTimer = null
-let saveWorker = null
-let dirty = false
-const discardedDrafts = []
+let saveFlow = null
+let pendingUpdate = null
+let libraryStatusLoaded = false
+let processingOpenedFiles = false
+let openFilesRequested = false
+let openFilesWaitingForSave = false
+let sourcePollBusy = false
+let lastSourcePollError = null
 
-const transport = createTransportAdapter({ invoke, onConflict: showConflict })
+const transport = createTransportAdapter({ invoke, onConflict: event => saveFlow?.handleConflict(event) })
+saveFlow = createSaveFlow({
+  saveSource: (id, source) => transport.saveSource(id, source),
+  acceptDiskVersion: (id, contentHash) => transport.acceptDiskVersion(id, contentHash),
+  getSource: currentSource,
+  setSource: setEditorSource,
+  onState: (state, details) => {
+    setSaveState(state)
+    elements.restoreDraft.hidden = !details.discardedDrafts
+    elements.retrySave.hidden = !details.blocked
+    if (!details.dirty && openFilesWaitingForSave) {
+      openFilesWaitingForSave = false
+      queueMicrotask(() => void processOpenedFiles())
+    }
+  },
+  onConflict: showConflict,
+  onError: showError
+})
 
 function setStatus(message) {
   elements.status.textContent = message
@@ -57,6 +94,10 @@ function clearNotice() {
   elements.notice.textContent = ""
 }
 
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = ["system", "light", "dark"].includes(theme) ? theme : "system"
+}
+
 function showError(error) {
   const message = typeof error?.message === "string" ? error.message : "The operation could not be completed."
   setStatus(message)
@@ -69,6 +110,7 @@ function showLibrary() {
   elements.deckView.hidden = true
   elements.libraryName.textContent = library ? library.root.split(/[\\/]/).filter(Boolean).at(-1) || library.root : "No library selected"
   document.querySelector("#new-deck").disabled = !library
+  document.querySelector("#import-elef").disabled = !library
   document.querySelector("#breadcrumb-current").textContent = "Decks"
 }
 
@@ -105,6 +147,7 @@ async function refreshLibrary() {
 }
 
 async function chooseLibrary() {
+  if (saveFlow.dirty && !(await flushSave())) return
   clearNotice()
   setStatus("Choose a folder for your library…")
   try {
@@ -114,10 +157,14 @@ async function chooseLibrary() {
       return
     }
     library = selected
+    libraryConfig = selected.config || libraryConfig
     decks = selected.decks
+    applyTheme(libraryConfig.theme)
     showLibrary()
     renderDecks()
+    if (selected.config_notice) showNotice(selected.config_notice, "error")
     setStatus(`${decks.length} ${decks.length === 1 ? "deck" : "decks"}`)
+    if (await invoke("pending_open_elef_count")) void processOpenedFiles()
   } catch (error) {
     showError(error)
   }
@@ -147,10 +194,10 @@ async function createDeck(event) {
 
 async function openDeck(id) {
   try {
-    if (activeDeck && activeDeck.id !== id && dirty && !(await flushSave())) return
+    if (activeDeck && activeDeck.id !== id && saveFlow.dirty && !(await flushSave())) return
     const deck = await transport.openDeck(id)
     activeDeck = deck
-    dirty = false
+    saveFlow.activate(deck)
     document.querySelector("#deck-title").textContent = deck.name
     document.querySelector("#deck-kind").textContent = deck.source_file === "document.md" ? "DOCUMENT" : "PRESENTATION"
     document.querySelector("#deck-source-name").textContent = deck.source_file
@@ -186,6 +233,10 @@ async function deleteDeck(deck) {
   try {
     const result = await invoke("delete_deck", { id: deck.id })
     if (result.deleted) {
+      if (activeDeck?.id === deck.id) {
+        activeDeck = null
+        saveFlow.deactivate()
+      }
       await refreshLibrary()
       setStatus(`Moved “${deck.name}” to Trash`)
     }
@@ -194,71 +245,76 @@ async function deleteDeck(deck) {
   }
 }
 
+function showImportConflict(error) {
+  const incoming = error.details?.incoming_name || "This deck"
+  const existing = error.details?.existing_name || "an existing deck"
+  elements.importConflictMessage.textContent = `“${incoming}” has the same identity as “${existing}”.`
+  elements.importConflictDialog.showModal()
+}
+
+async function completeImport(imported) {
+  if (imported.replaced && activeDeck?.id === imported.deck.id) {
+    activeDeck = null
+    saveFlow.deactivate()
+    showLibrary()
+  }
+  await refreshLibrary()
+  setStatus((imported.replaced ? "Replaced" : "Imported") + ` “${imported.deck.name}”`)
+}
+
+async function processOpenedFiles() {
+  openFilesRequested = true
+  if (!libraryStatusLoaded) return
+  if (processingOpenedFiles) return
+  processingOpenedFiles = true
+  try {
+    while (openFilesRequested) {
+      openFilesRequested = false
+      if (saveFlow.dirty && !(await flushSave())) {
+        openFilesWaitingForSave = true
+        break
+      }
+      while (true) {
+        try {
+          const imported = await invoke("import_opened_elef")
+          if (!imported) break
+          await completeImport(imported)
+        } catch (error) {
+          if (error?.code === "invalid_library") {
+            await chooseLibrary()
+            if (library) continue
+          } else if (error?.code === "import_conflict") {
+            showImportConflict(error)
+          } else {
+            showError(error)
+          }
+          break
+        }
+      }
+    }
+  } finally {
+    processingOpenedFiles = false
+    if (openFilesRequested) void processOpenedFiles()
+  }
+}
+
 function setSaveState(state) {
   elements.saveState.textContent = state
   elements.saveState.dataset.state = state.toLowerCase().replaceAll(" ", "-")
 }
 
-function scheduleSave(delay = 650) {
-  if (!activeDeck || activeConflict) return
-  dirty = currentSource() !== activeDeck.source
-  if (!dirty) {
-    setSaveState("Saved")
-    return
-  }
-  setSaveState("Unsaved changes")
-  clearTimeout(saveTimer)
-  saveTimer = setTimeout(() => void flushSave(), delay)
+function scheduleSave() {
+  saveFlow.noteChange()
 }
 
-async function flushSave() {
-  clearTimeout(saveTimer)
-  if (!activeDeck || activeConflict) return !dirty
-  if (saveWorker) return saveWorker
-  if (!dirty) return true
-
-  saveWorker = (async () => {
-    while (activeDeck && dirty && !activeConflict) {
-      const deckId = activeDeck.id
-      const source = currentSource()
-      setSaveState("Saving…")
-      try {
-        const result = await transport.saveSource(deckId, source)
-        if (activeDeck?.id !== deckId) return false
-        activeDeck.content_hash = result.content_hash
-        activeDeck.source = source
-        dirty = currentSource() !== source
-        setSaveState(dirty ? "Unsaved changes" : "Saved")
-      } catch (error) {
-        dirty = true
-        if (error?.code === "conflict") {
-          setSaveState("Conflict needs review")
-        } else {
-          setSaveState("Save failed")
-          showError(error)
-        }
-        return false
-      }
-    }
-    return !dirty && !activeConflict
-  })()
-  try {
-    return await saveWorker
-  } finally {
-    saveWorker = null
-  }
+function flushSave(options) {
+  return saveFlow.flush(options)
 }
 
-function showConflict({ id, details }) {
-  if (activeDeck?.id !== id) return
-  const current = details.current || {}
-  activeConflict = {
-    id,
-    diskHash: details.disk_hash,
-    diskSource: typeof current.source === "string" ? current.source : ""
-  }
-  elements.conflictLocal.textContent = currentSource()
-  elements.conflictDisk.textContent = activeConflict.diskSource
+function showConflict(conflict) {
+  elements.conflictLocal.textContent = conflict.localSource
+  elements.conflictDisk.textContent = conflict.diskSource
+  elements.conflictSourceName.textContent = conflict.diskSourceFile
   elements.conflictMerge.value = currentSource()
   if (!elements.conflictDialog.open) elements.conflictDialog.showModal()
 }
@@ -268,69 +324,190 @@ function currentSource() {
 }
 
 async function setEditorSource(source) {
-  let controller = editorFor(elements.editorField)
-  if (!controller) {
-    await new Promise(resolve => elements.editorField.addEventListener("elef:editor-ready", resolve, { once: true }))
-    controller = editorFor(elements.editorField)
-  }
+  const controller = await waitForEditorController(elements.editorField, editorFor)
   if (controller) controller.setExternalValue(source)
   else elements.editorInput.value = source
 }
 
+async function showSettings() {
+  try {
+    libraryConfig = await invoke("read_library_config")
+    elements.libraryTheme.value = libraryConfig.theme
+    elements.settingsDialog.showModal()
+  } catch (error) {
+    showError(error)
+  }
+}
+
+async function saveSettings(event) {
+  if (event.submitter?.value !== "save") return
+  event.preventDefault()
+  const next = { ...libraryConfig, schema_version: 1, theme: elements.libraryTheme.value }
+  try {
+    await invoke("write_library_config", { config: next })
+    libraryConfig = next
+    applyTheme(next.theme)
+    elements.settingsDialog.close()
+    setStatus("Library settings saved")
+  } catch (error) {
+    showError(error)
+  }
+}
+
+async function exportCurrentDeck() {
+  if (!activeDeck) {
+    showNotice("Open a deck before exporting it.")
+    return
+  }
+  if (saveFlow.dirty && !(await flushSave({ force: true }))) return
+  try {
+    if (await invoke("export_elef", { id: activeDeck.id })) setStatus("Deck exported")
+  } catch (error) {
+    showError(error)
+  }
+}
+
+async function importDeck() {
+  if (!library) {
+    showNotice("Choose a library before importing a deck.")
+    return
+  }
+  if (saveFlow.dirty && !(await flushSave())) return
+  try {
+    const imported = await invoke("import_elef")
+    if (!imported) return
+    await completeImport(imported)
+  } catch (error) {
+    if (error?.code === "import_conflict") {
+      showImportConflict(error)
+      return
+    }
+    showError(error)
+  }
+}
+
+async function resolveImportConflict(resolution) {
+  elements.importConflictDialog.close()
+  try {
+    const imported = await invoke("resolve_import_conflict", { resolution })
+    if (imported) await completeImport(imported)
+    void processOpenedFiles()
+  } catch (error) {
+    showError(error)
+  }
+}
+
+async function checkForUpdates(showNoUpdate = true) {
+  try {
+    const update = await checkForDesktopUpdate(checkUpdater)
+    if (!update) {
+      if (showNoUpdate) setStatus("Elef is up to date")
+      return false
+    }
+    pendingUpdate = update
+    elements.updateVersion.textContent = "Version " + update.version + " is ready to install."
+    elements.updateNotes.textContent = update.notes
+    elements.updateProgress.textContent = "The update signature will be verified before installation."
+    elements.updateDialog.showModal()
+    return true
+  } catch (_error) {
+    if (showNoUpdate) showError({ message: "Could not check for updates. Try again while online." })
+    return false
+  }
+}
+
+async function installUpdate() {
+  if (!pendingUpdate) return
+  const button = document.querySelector("#install-update")
+  button.disabled = true
+  try {
+    await installDesktopUpdate(pendingUpdate, {
+      relaunch,
+      onProgress: event => {
+        if (event.event === "Started" || event.event === "Progress") {
+          elements.updateProgress.textContent = "Downloading update…"
+        }
+        if (event.event === "Finished") elements.updateProgress.textContent = "Installing update…"
+      }
+    })
+  } catch (_error) {
+    button.disabled = false
+    showError({ message: "The update could not be installed. Your current version is still available." })
+  }
+}
+
+async function printCurrentDeck() {
+  if (!activeDeck) {
+    showNotice("Open a deck before printing it.")
+    return
+  }
+  if (saveFlow.dirty && !(await flushSave())) return
+  const printSource = document.querySelector("#print-source")
+  printSource.textContent = currentSource()
+  printSource.hidden = false
+  document.body.classList.add("printing-source")
+  window.addEventListener("afterprint", () => {
+    document.body.classList.remove("printing-source")
+    printSource.hidden = true
+    printSource.textContent = ""
+  }, { once: true })
+  window.print()
+}
+
 async function resolveConflictWithDisk() {
-  if (!activeConflict || !activeDeck) return
-  discardedDrafts.push(currentSource())
-  elements.restoreDraft.hidden = false
-  transport.acceptDiskVersion(activeConflict.id, activeConflict.diskHash)
-  activeDeck.content_hash = activeConflict.diskHash
-  activeDeck.source = activeConflict.diskSource
-  await setEditorSource(activeConflict.diskSource)
-  activeConflict = null
-  dirty = false
+  if (!await saveFlow.useDiskVersion()) return
+  syncSourceLabel()
   elements.conflictDialog.close()
-  setSaveState("Saved external version")
 }
 
 function resolveConflictWithLocal() {
-  if (!activeConflict || !activeDeck) return
-  transport.acceptDiskVersion(activeConflict.id, activeConflict.diskHash)
-  activeDeck.content_hash = activeConflict.diskHash
-  activeDeck.source = activeConflict.diskSource
-  activeConflict = null
+  if (!saveFlow.keepLocalVersion()) return
+  syncSourceLabel()
   elements.conflictDialog.close()
-  dirty = true
-  setSaveState("Saving your chosen version…")
-  void flushSave()
 }
 
 async function resolveConflictWithMerge() {
-  if (!activeConflict || !activeDeck) return
   const mergedSource = elements.conflictMerge.value
-  transport.acceptDiskVersion(activeConflict.id, activeConflict.diskHash)
-  activeDeck.content_hash = activeConflict.diskHash
-  activeDeck.source = activeConflict.diskSource
-  await setEditorSource(mergedSource)
-  activeConflict = null
+  if (!await saveFlow.saveMergedVersion(mergedSource)) return
+  syncSourceLabel()
   elements.conflictDialog.close()
-  dirty = mergedSource !== activeDeck.source
-  if (dirty) void flushSave()
-  else setSaveState("Saved external version")
+}
+
+function syncSourceLabel() {
+  if (!activeDeck) return
+  document.querySelector("#deck-source-name").textContent = activeDeck.source_file
+  document.querySelector("#deck-kind").textContent = activeDeck.source_file === "document.md" ? "DOCUMENT" : "PRESENTATION"
 }
 
 async function handleMenuAction(action) {
   if (action === "choose-library") return chooseLibrary()
+  if (action === "refresh-library") return refreshLibrary()
+  if (action === "open-deck") {
+    if (!library) return chooseLibrary()
+    if (saveFlow.dirty && !(await flushSave())) return
+    showLibrary()
+    elements.search.focus()
+    return
+  }
   if (action === "new-presentation") return showCreateDialog("presentation")
   if (action === "new-document") return showCreateDialog("document")
+  if (action === "save") return flushSave({ force: true })
+  if (action === "export-elef") return exportCurrentDeck()
+  if (action === "import-elef") return importDeck()
+  if (action === "settings") return showSettings()
+  if (action === "check-for-updates") return checkForUpdates(true)
   if (action === "about") return elements.aboutDialog.showModal()
   if (action === "start-presentation") showNotice("Presentation mode is planned for a later milestone.")
+  if (action === "print") return printCurrentDeck()
 }
 
 document.querySelector("#choose-library").addEventListener("click", () => void chooseLibrary())
 document.querySelector("#change-library").addEventListener("click", () => void chooseLibrary())
 document.querySelector("#new-deck").addEventListener("click", () => showCreateDialog())
 document.querySelector("#refresh-library").addEventListener("click", () => void refreshLibrary())
+document.querySelector("#import-elef").addEventListener("click", () => void importDeck())
 document.querySelector("#back-to-library").addEventListener("click", () => {
-  if (dirty) {
+  if (saveFlow.dirty) {
     void flushSave().then(saved => {
       if (!saved) return
       showLibrary()
@@ -344,6 +521,13 @@ document.querySelector("#back-to-library").addEventListener("click", () => {
 document.querySelector("#create-form").addEventListener("submit", event => {
   if (event.submitter?.value === "create") void createDeck(event)
 })
+elements.settingsForm.addEventListener("submit", event => void saveSettings(event))
+document.querySelector("#check-for-updates").addEventListener("click", () => void checkForUpdates(true))
+document.querySelector("#install-update").addEventListener("click", () => void installUpdate())
+document.querySelector("#update-later").addEventListener("click", () => elements.updateDialog.close())
+document.querySelector("#import-conflict-replace").addEventListener("click", () => void resolveImportConflict("replace"))
+document.querySelector("#import-conflict-keep-both").addEventListener("click", () => void resolveImportConflict("keep_both"))
+document.querySelector("#import-conflict-cancel").addEventListener("click", () => void resolveImportConflict("cancel"))
 document.querySelector("#deck-search").addEventListener("input", renderDecks)
 document.querySelector("#empty-library [data-action='create-presentation']").addEventListener("click", () => showCreateDialog("presentation"))
 elements.editorField.addEventListener("input", () => scheduleSave())
@@ -351,19 +535,16 @@ document.querySelector("#use-disk-version").addEventListener("click", resolveCon
 document.querySelector("#keep-local-version").addEventListener("click", resolveConflictWithLocal)
 document.querySelector("#save-merged-version").addEventListener("click", resolveConflictWithMerge)
 elements.restoreDraft.addEventListener("click", () => {
-  const draft = discardedDrafts.pop()
-  if (draft === undefined) return
-  void setEditorSource(draft)
-  elements.restoreDraft.hidden = discardedDrafts.length === 0
-  scheduleSave(0)
+  void saveFlow.restoreDraft()
 })
+elements.retrySave.addEventListener("click", () => void flushSave({ force: true }))
 window.addEventListener("beforeunload", event => {
-  if (!dirty) return
+  if (!saveFlow.dirty) return
   event.preventDefault()
   event.returnValue = ""
 })
 void getCurrentWindow().onCloseRequested(event => {
-  if (!dirty) return
+  if (!saveFlow.dirty) return
   event.preventDefault()
   void flushSave().then(saved => {
     if (saved) void getCurrentWindow().close()
@@ -376,11 +557,38 @@ window.addEventListener("keydown", event => {
   }
 })
 
+window.setInterval(async () => {
+  if (!activeDeck || sourcePollBusy || document.hidden) return
+  sourcePollBusy = true
+  const id = activeDeck.id
+  try {
+    const snapshot = await transport.readSourceSnapshot(id)
+    lastSourcePollError = null
+    if (activeDeck?.id === id) {
+      const result = await saveFlow.checkExternalChange(id, snapshot)
+      if (result === "reloaded" || result === "source-file-changed") syncSourceLabel()
+    }
+  } catch (error) {
+    const key = error?.code || "unknown"
+    if (key !== lastSourcePollError) showError(error)
+    lastSourcePollError = key
+  } finally {
+    sourcePollBusy = false
+  }
+}, 2_000)
+
 void listen("desktop-menu-action", event => void handleMenuAction(event.payload))
-void invoke("get_library_status").then(status => {
+const openedFileListener = listen("desktop-open-elef", () => void processOpenedFiles())
+void Promise.all([invoke("get_library_status"), openedFileListener]).then(async ([status]) => {
   library = status
+  libraryConfig = status?.config || libraryConfig
   decks = status?.decks || []
+  applyTheme(libraryConfig.theme)
   showLibrary()
   if (library) renderDecks()
+  if (status?.config_notice) showNotice(status.config_notice, "error")
   setStatus(library ? `${decks.length} ${decks.length === 1 ? "deck" : "decks"}` : "Choose a library folder to begin")
+  libraryStatusLoaded = true
+  if (await invoke("pending_open_elef_count")) void processOpenedFiles()
 }).catch(showError)
+void checkForUpdates(false)

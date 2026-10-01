@@ -9,11 +9,21 @@
     "core:window:allow-close",
     "allow-choose-library-root",
     "allow-get-library-status",
+    "allow-read-library-config",
+    "allow-write-library-config",
     "allow-list-decks",
     "allow-create-deck",
     "allow-open-deck",
+    "allow-read-source-snapshot",
     "allow-rename-deck",
     "allow-delete-deck",
-    "allow-save-source"
+    "allow-save-source",
+    "allow-export-elef",
+    "allow-import-elef",
+    "allow-import-opened-elef",
+    "allow-pending-open-elef-count",
+    "allow-resolve-import-conflict",
+    "updater:default",
+    "process:allow-restart"
   ]
 }

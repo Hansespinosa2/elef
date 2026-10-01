@@ -20,15 +20,37 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; base-uri 'none'; object-src 'none'; frame-src 'none'; form-action 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: http://asset.localhost; media-src 'self' asset: http://asset.localhost; connect-src ipc: http://ipc.localhost"
+      "csp": "default-src 'self'; base-uri 'none'; object-src 'none'; frame-src 'none'; form-action 'none'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self' asset: http://asset.localhost; media-src 'self' asset: http://asset.localhost; connect-src ipc: http://ipc.localhost"
     }
   },
   "bundle": {
     "active": true,
     "targets": ["app", "dmg", "appimage"],
     "icon": ["icons/icon.png", "icons/icon.icns", "icons/icon.ico"],
+    "fileAssociations": [
+      {
+        "ext": ["elef"],
+        "name": "Elef deck",
+        "description": "Portable Elef deck archive",
+        "role": "Editor",
+        "rank": "Owner",
+        "mimeType": "application/vnd.elef.deck",
+        "exportedType": {
+          "identifier": "com.elef.deck",
+          "conformsTo": ["public.zip-archive"]
+        }
+      }
+    ],
     "category": "Productivity",
     "shortDescription": "Write notes and presentations in Elef",
     "longDescription": "An offline-first desktop editor for plain-folder Elef decks."
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "REPLACE_WITH_TAURI_UPDATER_PUBLIC_KEY",
+      "endpoints": [
+        "https://github.com/Hansespinosa2/elef/releases/latest/download/latest.json"
+      ]
+    }
   }
 }
