@@ -124,7 +124,7 @@ class WebEditorUi {
   }
 
   async useDiskVersion() {
-    await this.page.locator('[data-action="autosave#discardLocal"]').click()
+    await this.page.locator('[data-action="click->autosave#discardLocal"]').click()
     await expect(this.page.locator('[data-autosave-target="conflict"]')).toBeHidden()
     await expect(this.page.locator('[data-autosave-target="status"]')).toHaveText("Saved")
   }
