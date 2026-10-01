@@ -49,7 +49,7 @@ The editor table above omits the new library shell. These need the same capabili
 | `read_source_snapshot` | Read and hash the currently open source without creating or changing files | One deck, read-only |
 | `create_deck`, `rename_deck` | Folder create / rename | Library root, one level |
 | `delete_deck` | Move to OS trash (never unlink) — Q2 | One deck |
-| `import_elef`, `export_elef` | Archive import (hardened) / export | Staging dir, library root; user-chosen destination via native dialog |
+| `import_elef`, `export_elef` | Hardened archive import returns `{ deck, replaced, name_collision }`; normalized name collisions get a unique suffix and a visible notice. Export writes a deterministic archive | Staging dir, library root; user-chosen destination via native dialog |
 | `upload_asset` | Store selected media as an immutable content-addressed file | One deck's `images/`; never overwrites an existing digest |
 | `read_config`, `write_config` | `.elef/*.json` and app-data state | Those files only |
 
