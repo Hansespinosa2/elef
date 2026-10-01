@@ -93,6 +93,13 @@ class DesktopEditorUi {
     const visualButton = await $("#visual-mode")
     await visualButton.waitForEnabled()
     await visualButton.click()
+    await browser.waitUntil(async () => {
+      const mode = await $("#desktop-editor-form").getAttribute("data-editor-mode")
+      return mode === "visual"
+    }, {
+      timeout: 5_000,
+      timeoutMsg: "The visual-mode control did not activate the visual editor"
+    })
   }
 
   async waitForPreview(text) {
