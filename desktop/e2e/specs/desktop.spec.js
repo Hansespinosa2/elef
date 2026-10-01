@@ -47,6 +47,13 @@ class DesktopEditorUi {
     const editor = await $("#deck-source-editor .cm-content")
     await editor.waitForDisplayed()
     await editor.click()
+    const focused = await browser.execute(() => {
+      window.focus()
+      const controller = document.querySelector("#desktop-editor-field")?.editorController
+      controller?.focus()
+      return document.activeElement === controller?.view?.contentDOM
+    })
+    if (!focused) throw new Error("The native editor input target did not receive focus")
     sendNativeKeys(process.platform, "select-all")
     const lines = source.split("\n")
     for (const [index, line] of lines.entries()) {
