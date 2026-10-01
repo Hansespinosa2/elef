@@ -21,6 +21,8 @@ build_source = (TAURI_ROOT / "build.rs").read_text()
 app_source = (TAURI_ROOT / "src" / "lib.rs").read_text()
 capability = json.loads((TAURI_ROOT / "capabilities" / "main.json").read_text())
 config = json.loads((TAURI_ROOT / "tauri.conf.json").read_text())
+feature_flags_source = (REPO_ROOT / "desktop" / "frontend" / "src" / "feature-flags.js").read_text()
+delivery_plan = (REPO_ROOT / "docs" / "desktop" / "delivery-plan.md").read_text()
 
 declared = command_names(build_source, r"let app_commands = &\[(.*?)\];")
 handler_match = re.search(
@@ -48,6 +50,18 @@ assert {permission for permission in permissions if permission.startswith("core:
     "core:window:allow-close",
 }, "grant only event subscriptions and programmatic close after a safe save"
 assert not any(permission.startswith(("fs:", "shell:", "dialog:")) for permission in permissions)
+
+feature_flags = {
+    name: value == "true"
+    for name, value in re.findall(r"^\s*(ELEF_ENABLE_[A-Z_]+): (true|false)", feature_flags_source, re.MULTILINE)
+}
+assert feature_flags == {
+    "ELEF_ENABLE_REVISIONS": False,
+    "ELEF_ENABLE_LINEAGE": False,
+}, f"desktop deferred-feature defaults must stay explicitly off: {feature_flags}"
+for flag in feature_flags:
+    assert re.search(rf"\| `{flag}` \| off \| on \|", delivery_plan), f"{flag} is missing from the feature register"
+assert "applyDesktopFeatureFlags(document)" in (REPO_ROOT / "desktop" / "frontend" / "src" / "main.js").read_text(), "desktop must apply the feature flags at startup"
 assert {
     permission
     for permission in permissions

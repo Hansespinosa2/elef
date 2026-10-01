@@ -24,7 +24,7 @@ Status: draft v3 (2026-10-01). Replaces `v1-scope.md` and `spikes.md`. The miles
 
 ## 2. Feature flag register
 
-Flags are debt. Each has an owner (Andres), a default per product, and a removal condition; CI checks the live flags against this table.
+Flags are debt. Each has an owner (Andres), a default per product, and a removal condition. Desktop defaults are executable in `desktop/frontend/src/feature-flags.js`; the frontend applies them before mounting UI, marked controls fail closed, and CI checks the defaults against this table.
 
 | Flag | Desktop v1 | Web | Removal condition |
 |---|---|---|---|

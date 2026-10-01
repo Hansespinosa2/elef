@@ -15,9 +15,12 @@ import { installSanitizedPreview } from "./preview-sanitizer.js"
 import { checkForDesktopUpdate, installDesktopUpdate } from "./update-flow.js"
 import { loadDesktopAuthoringRegistry } from "./authoring-registry-loader.js"
 import { createPresentationNavigation } from "./presentation-flow.js"
+import { applyDesktopFeatureFlags } from "./feature-flags.js"
 import "./editor-runtime.js"
 import "./editor.css"
 import "./rendered-content.css"
+
+applyDesktopFeatureFlags(document)
 
 const networkFetch = globalThis.fetch.bind(globalThis)
 const renderer = createRendererClient()
