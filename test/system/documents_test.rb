@@ -2024,7 +2024,7 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_includes source.value, "$x.b.vec.t$"
     editor.send_keys(" ")
 
-    assert_includes source.value, "\\vec{\\mathbf{x}}^{\\mathsf{T}} $"
+    assert_includes source.value, "\\vec{\\mathbf{x}}^\\top $"
     editor.send_keys([:control, "z"])
     assert_includes source.value, "$x.b.vec.t$"
     assert_selector '[data-autosave-target="status"]', text: "Saved", wait: 5
@@ -2055,7 +2055,7 @@ class DocumentsTest < ApplicationSystemTestCase
     JAVASCRIPT
     editor.send_keys(:tab)
 
-    assert_includes source_field.value, "\\vec{\\mathbf{x}}^{\\mathsf{T}}"
+    assert_includes source_field.value, "\\vec{\\mathbf{x}}^\\top"
     refute_includes source_field.value, "x.b.vec.t"
   end
 
@@ -2157,7 +2157,7 @@ class DocumentsTest < ApplicationSystemTestCase
     editor.send_keys(:right)
     editor.send_keys("\n$A.inv.t")
     editor.send_keys(:enter)
-    assert_includes source.value, "\\left(A^{-1}\\right)^{\\mathsf{T}}"
+    assert_includes source.value, "\\left(A^{-1}\\right)^\\top"
 
     editor.send_keys(:right)
     editor.send_keys("\n$x.invalid")
@@ -2182,7 +2182,7 @@ class DocumentsTest < ApplicationSystemTestCase
     editor.send_keys("\n$x.tilde.t")
     assert_includes source.value, "$x.tilde.t$"
     editor.send_keys(:tab)
-    assert_includes source.value, "\\tilde{x}^{\\mathsf{T}}"
+    assert_includes source.value, "\\tilde{x}^\\top"
   end
 
   test "applies transpose and inverse to existing canonical LaTeX atoms after reload" do
@@ -2194,9 +2194,9 @@ class DocumentsTest < ApplicationSystemTestCase
     source = find_field("Markdown source")
 
     transforms = [
-      ["x", ".t", "x^{\\mathsf{T}}"],
-      ["\\mathbf{x}", ".t", "\\mathbf{x}^{\\mathsf{T}}"],
-      ["\\vec{x}", ".t", "\\vec{x}^{\\mathsf{T}}"],
+      ["x", ".t", "x^\\top"],
+      ["\\mathbf{x}", ".t", "\\mathbf{x}^\\top"],
+      ["\\vec{x}", ".t", "\\vec{x}^\\top"],
       ["y", ".inv", "y^{-1}"],
       ["\\mathbf{y}", ".inv", "\\mathbf{y}^{-1}"],
       ["\\vec{y}", ".inv", "\\vec{y}^{-1}"]
@@ -2236,7 +2236,7 @@ class DocumentsTest < ApplicationSystemTestCase
     editor.send_keys(".t")
     assert_includes source.value, "$\\mathbf{z}.t$"
     editor.send_keys(:tab)
-    assert_includes source.value, "$\\mathbf{z}^{\\mathsf{T}}$"
+    assert_includes source.value, "$\\mathbf{z}^\\top$"
     assert_selector '[data-autosave-target="status"]', exact_text: "Saved", wait: 10
     assert_equal source.value.gsub(/\r\n?/, "\n"), document.reload.source.gsub(/\r\n?/, "\n")
   end
