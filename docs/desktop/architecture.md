@@ -76,7 +76,7 @@ Dependency rule: webview → adapter → commands → core → OS. Core never ca
 1. **Launch.** Single-instance check → scan library root (dot-folders skipped, symlinks not followed) → library view.
 2. **Open deck.** Resolve the source file ([data-format.md](data-format.md)) → read source and record its fingerprint → create `elef.json` if absent (best effort; a read-only folder still opens) → render preview in the worker → editor.
 3. **Edit and auto-save.** Debounced autosave → atomic write guarded by a fingerprint check → conflict UI on mismatch. Full protocol and sequence in ADR-008. Undo/redo is session-only.
-4. **External change.** File watcher (hint) → fingerprint check (truth). No unsaved changes → silent reload; unsaved changes → conflict UI. Never silently clobbered.
+4. **External change.** While a deck is open, a periodic source snapshot check detects edits from other programs. No unsaved changes → silent reload; unsaved changes → conflict UI. Every save still verifies the current fingerprint immediately before writing.
 5. **Rename deck.** Folder rename; UUID in `elef.json` keeps identity; an open editor re-points.
 6. **Export.** Zip the deck folder deterministically → `name.elef`.
 7. **Import.** Extract to a staging dir under hardening limits ([security.md](security.md)) → UUID rule → move into library root. Collisions prompt: replace / keep both with new UUID / cancel.
@@ -101,7 +101,7 @@ Where state lives
 - **Identity.** UUID in `elef.json`; folder name is display-only. Rules in [data-format.md](data-format.md).
 - **Case and Unicode.** Folder names compared case-insensitively and after NFC normalization; import warns on collisions (macOS file systems may treat equivalent names as one; Linux does not).
 - **One renderer.** A single JS bundle consumed by Rails via mini_racer and by the desktop in a worker. The Ruby renderer is deleted at cutover. Owned by ADR-007; do not restate it elsewhere.
-- **Concurrency.** Saves are serialized per deck and coalesced (latest wins); the app never has two writers on one deck. Watcher events caused by our own writes are suppressed by comparing content hash to the last-written hash. Rendering runs in a worker with a time limit; a runaway render is terminated, not waited on.
+- **Concurrency.** Saves are serialized per deck and coalesced (latest wins); the app never has two writers on one deck. Periodic source checks compare the content hash to the last successful save and reload or raise a conflict. Rendering runs in a worker with a time limit; a runaway render is terminated, not waited on.
 - **Errors.** Commands return typed errors `{ code, message, retryable }`; the code set is in [transport-adapter.md](transport-adapter.md). The UI maps codes to messages; raw OS errors never reach the user.
 - **Diagnostics (proposed, Q6).** Structured local logs in the OS log/app-data directory, size-capped and rotated, never containing deck content. Help → "Copy diagnostics" produces a bundle for a bug report. No telemetry.
 - **Offline-first.** Nothing requires the network except the updater, which degrades silently.

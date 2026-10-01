@@ -14,8 +14,8 @@ Status: draft skeleton v3 (2026-10-01). The highest-leverage seam in the desktop
 
 1. **Controllers are untouched.** Only the transport changes (fetch → invoke or local handler).
 2. **Two handler kinds.** *Rust-backed* handlers call a Tauri command. *Webview-local* handlers never leave the webview: `render_preview` runs the renderer bundle in a worker, with no IPC round-trip. (v3 clarification — earlier drafts listed `render_preview` as a command. If the intent was a Rust-hosted JS engine, record it in S1: it changes the performance and security model.)
-3. **Typed errors.** Every Rust-backed failure returns `{ code, message, retryable, details? }`. Codes: `conflict`, `not_found`, `invalid_input`, `path_rejected`, `too_large`, `io_error`, `unsupported`, `internal`. **S1** documents how each Rails status/error shape maps to a code so controllers see the shape they expect.
-4. **Conflict handshake lives in the adapter, not the controllers.** The adapter remembers the content hash it last received for each open deck (from load or from the last successful save) and sends it as `base_hash` with every save. On `conflict` it dispatches an `elef:conflict` event that the host page's conflict UI handles. **S1** must confirm the autosave controller keeps its dirty state and does not retry destructively when a save returns an error.
+3. **Typed errors.** Every Rust-backed failure returns `{ code, message, retryable, details? }`. Codes: `conflict`, `not_found`, `invalid_library`, `invalid_input`, `path_rejected`, `too_large`, `io_error`, `unsupported`, `internal`. **S1** documents how each Rails status/error shape maps to a code so controllers see the shape they expect.
+4. **Conflict handshake lives in the adapter, not the controllers.** The adapter remembers the content hash it last received for each open deck (from load or from the last successful save) and sends it as `base_hash` with every save. On `conflict`, the desktop save flow retains the dirty buffer and opens the host page's conflict UI; the error includes `details.disk_hash` and `details.current.{source,source_file}`. **S1** must confirm the web autosave controller keeps its dirty state and does not retry destructively when a save returns an error.
 5. **Contract tests on both sides.** Same input → same output shape against the Rails endpoint and the desktop handler ([test-strategy.md](test-strategy.md)).
 6. **Images use the asset protocol**, never base64 over `invoke()`.
 7. **Capability review per command.** Each command lists what it can touch and why the webview needs it. There is no generic "write this path" command ([security.md](security.md)). The capability file must equal this table (CI fitness check).
@@ -26,15 +26,15 @@ Status: draft skeleton v3 (2026-10-01). The highest-leverage seam in the desktop
 | Web (Rails) | Desktop handler | Kind | Payload | Touches | v1 |
 |---|---|---|---|---|---|
 | `PATCH /presentations/:id`, `/documents/:id` (autosave, FormData) | `save_source` | Rust | `{ id, source, base_hash } → { ok, saved_at, content_hash }` (adapter adds `base_hash`) | That deck's source file only | yes |
-| `POST …/preview` | `render_preview` | local (worker) | `{ id, source } → { html, warnings, editor_map, style, revision }` | Nothing (pure function) | yes |
-| `POST …/assets` | `upload_asset` | Rust | file → `{ digest, url }` (asset-protocol URL) | That deck's `images/` only; size cap (proposed) | yes |
-| `GET …/assets/*digest` | asset protocol handler | protocol | binary | Read-only, canonicalized under the library root | yes |
-| `resources :snippets, :math_shortcuts` | `*_snippet`, `*_math_shortcut` CRUD | Rust | same JSON shapes as Rails | `.elef/snippets.json`, `.elef/math-shortcuts.json` | yes |
+| `POST …/preview` | `render_preview` | local (worker) | `{ id, source } → { html, warnings, editor_map, style, revision }` | Nothing (pure function) | planned M3; not shipped |
+| `POST …/assets` | `upload_asset` | Rust | file → `{ digest, url }` (asset-protocol URL) | That deck's `images/` only; size cap to be set | planned M2; not shipped |
+| `GET …/assets/*digest` | asset protocol handler | protocol | binary | Read-only, canonicalized under the library root | planned M2; not shipped |
+| `resources :snippets, :math_shortcuts` | `*_snippet`, `*_math_shortcut` CRUD | Rust | same JSON shapes as Rails | `.elef/snippets.json`, `.elef/math-shortcuts.json` | planned; not shipped |
 | `POST /bug_reports` | `submit_bug_report` | Rust | deferred — needs a network-policy decision (Q6) | — | stretch |
 | `…/history`, `…/restore`, `…/publish`, `…/fork`, server `…/export` | — | — | behind flags or replaced (export → `.elef`) | — | no |
-| `…/present`, `…/print`, `…/pptx` | `present` view / OS print / — | — | presentation mode is an M3 stretch; PPTX out of v1 | — | stretch / no |
+| `…/present`, `…/print`, `…/pptx` | `present` view / OS source print / — | — | presentation mode is an M3 stretch; PPTX out of v1; OS print currently prints Markdown source | — | stretch / partial / no |
 
-Payload schemas (field names, error shapes, status-to-code mapping) are S1's deliverable, verified against the Rails controllers and system tests.
+The shipped subset is library scan/open/create/rename/delete, source save, portable settings, and `.elef` import/export. The remaining rows are planned and are not desktop implementations. Full payload schemas and Rails parity for those rows remain S1/M2/M3 work.
 
 ## 4. Library-shell commands (new; no Rails equivalent, so no parity test)
 
@@ -44,6 +44,7 @@ The editor table above omits the new library shell. These need the same capabili
 |---|---|---|
 | `list_decks` | Scan library root → `[{ id, name, path, modified }]` | Read-only, library root |
 | `open_deck` | Resolve source file, read source, create `elef.json` if absent → `{ source, content_hash, manifest }` | One deck |
+| `read_source_snapshot` | Read and hash the currently open source without creating or changing files | One deck, read-only |
 | `create_deck`, `rename_deck` | Folder create / rename | Library root, one level |
 | `delete_deck` | Move to OS trash (never unlink) — Q2 | One deck |
 | `import_elef`, `export_elef` | Archive import (hardened) / export | Staging dir, library root; user-chosen destination via native dialog |

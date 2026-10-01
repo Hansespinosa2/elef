@@ -16,7 +16,7 @@ Status: draft v3 (2026-10-01). Implements the preference: one suite of user flow
 | T1 | Playwright: scenarios vs **web** (Rails dev server) | Every change (< ~5 min) | QS-1 (web leg) |
 | T1m | Playwright **mock tier**: desktop frontend served locally, Tauri IPC mocked. Fast desktop UI flows without the binary; honest about being UI-only, not backend truth | Every change | QS-1 (desktop UI) |
 | T2 | WebdriverIO: scenarios vs the **real Tauri binary** via `tauri-driver` (Linux CI) and `tauri-plugin-webdriver` (embedded driver, including macOS). Includes the perf leg and network-blocked run | PRs | QS-1, QS-3, QS-6, QS-9, QS-12 |
-| T3 | Native smoke: install, launch, menus, dialogs, updater dry-run, hostile fixtures, `kill -9` mid-save fault injection | PRs / release | QS-2, QS-4, QS-5, QS-8 |
+| T3 | Native smoke: install, launch, menus, dialogs, updater dry-run, hostile fixtures, and process-kill save fault injection (planned) | PRs / release | QS-2, QS-4, QS-5, QS-8 |
 | CI fitness | Architecture rules as automated checks (§6) | Every change | QS-7, T5/T8 controls |
 
 Fast feedback per change is T0 + T1 + T1m; the real-binary tier (T2 + T3) gates PRs. macOS desktop E2E is the weak spot (no official driver); T2 on macOS uses the embedded driver, supplemented by the manual first-device check in [delivery-plan.md](delivery-plan.md).
@@ -40,7 +40,7 @@ There is one renderer (ADR-007); the fixture suite tests the JS bundle directly 
 
 ## 5. Fault injection (QS-2, QS-3)
 
-Rust core exposes test hooks that pause or abort at named points in a save: (a) before temp write, (b) mid temp write, (c) after flush before rename, (d) after rename. T3 kills the process at each point, ≥50 runs per point, then asserts the source file is wholly old or wholly new and no temp file blocks the next open. The conflict interleaving test drives every ordering of external write, edit, and autosave against a real temp directory (T0 Rust) and once end to end (T2).
+**Current implementation status:** the core has atomic temp-write/flush/rename behavior and a test that measures the synchronous interval from the final matching fingerprint to rename over 50 saves (p95 below 250 ms). It does not yet expose process-kill hooks, and the four-point `kill -9` matrix is not implemented. QS-2 is therefore not claimed complete by this desktop foundation. Track the native process-kill matrix before calling the v1 acceptance bar met. The conflict interleaving test drives external writes against a real temp directory in T0; real-binary coverage remains part of T2. The measured interval narrows, but does not remove, the external-writer race.
 
 ## 6. Architecture fitness functions (CI)
 

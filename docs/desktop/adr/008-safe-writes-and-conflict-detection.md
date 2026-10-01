@@ -22,11 +22,11 @@ Auto-save is continuous, and other programs (editors, Dropbox, iCloud, Syncthing
 
 1. **Atomic save.** Write a temp file in the same directory (dot-prefixed, so discovery ignores it), flush it to disk (`sync_all`; verify latency in M2), rename over the target. A crash leaves the old or the new file, never a mix. Stale temp files from a crash are removed on the next open.
 2. **Fingerprint.** (mtime, size, content hash) of the *source file*, recorded at every load and successful save. Images are written once and are not part of the autosave path, so hashing the source (typically KBs to low MBs) before each save is cheap.
-3. **Check before write.** Before each save, re-read and hash the source file; if it differs from the recorded fingerprint, do not write — raise a `conflict`. The adapter supplies the last-known hash as `base_hash` ([transport-adapter.md](../transport-adapter.md)).
+3. **Check before write.** Before each save, re-evaluate the source-file rule and re-read/hash the selected source. If the selected filename or content differs from the recorded baseline, do not write — raise a `conflict` containing the current filename and source. Repeat this check immediately before replacement. The adapter supplies the last-known hash as `base_hash` ([transport-adapter.md](../transport-adapter.md)).
 4. **Conflict UI:** keep mine / keep theirs / merge view. The buffer stays dirty and in memory until resolved. "Keep theirs" reloads from disk and leaves the discarded text on the session undo stack so it is recoverable in-session.
-5. **Watcher is a hint, the fingerprint is the truth.** File-watcher events (debounced) trigger a fingerprint check; events caused by our own writes are suppressed by comparing hash to the last-written hash. No unsaved changes → silent reload; unsaved changes → conflict UI.
+5. **Periodic check, fingerprint is truth.** While a deck is open, the desktop periodically reads and hashes its source. No unsaved changes → silent reload; unsaved changes → conflict UI. Own writes are recognized by their resulting content hash.
 6. **One writer per deck.** Saves are serialized per deck and coalesced (latest wins).
-7. **Residual race:** the check and the rename are not one atomic step, so an external write in that millisecond window can still be lost. Narrow it by re-checking immediately before rename; document it; do not claim it is eliminated.
+7. **Accepted v1 residual race:** the check and rename are not one atomic step, so an external write in that final synchronous window can still be lost. Re-check immediately before rename, measure the check-to-rename window in CI (p95 below 250 ms), and show a note in the editor recommending sync-tool version history. Do not claim the race is eliminated.
 
 ```mermaid
 sequenceDiagram
@@ -42,14 +42,14 @@ sequenceDiagram
         C-->>A: ok {content_hash}
         A-->>E: ok (adapter records new base_hash)
     else disk hash != base_hash
-        C-->>A: error conflict {disk_hash}
+        C-->>A: error conflict {disk_hash, current: {source, source_file}}
         A-->>E: error + elef:conflict event
     end
 ```
 
 ## Consequences
 
-- QS-2 and QS-3 become testable: the Rust core exposes fault-injection hooks at four save points ([test-strategy.md](../test-strategy.md) §5).
+- QS-3 is exercised by core and save-orchestration tests. QS-2 remains a release gate; the four-point process-kill hooks and native fault-injection matrix are not implemented in this foundation ([test-strategy.md](../test-strategy.md) §5).
 - One more UI surface (conflict dialog) and one more adapter behavior (hash handshake). Both are new code, kept out of the reused controllers.
 - Extra read+hash per save: negligible for source files; measured against the autosave budget.
 - Safe on synced folders in the common cases; a sync tool producing a conflicted copy is handled by the source-file rule ([data-format.md](../data-format.md)).
