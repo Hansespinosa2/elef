@@ -28,11 +28,12 @@ class DesktopEditorUi {
     const editor = await $("#deck-source-editor .cm-content")
     await editor.waitForDisplayed()
     await editor.click()
-    await browser.keys(process.platform === "darwin" ? ["Meta", "a"] : ["Control", "a"])
+    const selectAll = process.platform === "darwin" ? "\uE03Da" : "\uE009a"
+    await editor.addValue(selectAll)
     const lines = source.split("\n")
     for (const [index, line] of lines.entries()) {
-      if (line) await browser.keys(line)
-      if (index < lines.length - 1) await browser.keys("Enter")
+      if (line) await editor.addValue(line)
+      if (index < lines.length - 1) await editor.addValue("\uE007")
     }
   }
 
