@@ -22,6 +22,9 @@ class DesktopEditorUi {
   }
 
   async replaceSource(source) {
+    const sourceMode = await $("#source-mode")
+    await sourceMode.waitForDisplayed()
+    if ((await sourceMode.getAttribute("aria-pressed")) !== "true") await sourceMode.click()
     const editor = await $("#deck-source-editor .cm-content")
     await editor.waitForDisplayed()
     await editor.click()
