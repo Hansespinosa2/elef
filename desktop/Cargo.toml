@@ -1,0 +1,3 @@
+[workspace]
+members = ["crates/elef-core"]
+resolver = "2"

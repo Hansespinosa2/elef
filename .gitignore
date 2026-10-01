@@ -18,6 +18,7 @@
 
 # Ignore old/local JavaScript dependency installs.
 /node_modules
+/desktop/target
 
 # Ignore all logfiles and tempfiles.
 /log/*
