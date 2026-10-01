@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { spawnSync } from "node:child_process"
+import { execFileSync, spawnSync } from "node:child_process"
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
@@ -12,6 +12,8 @@ const repoRoot = path.resolve(e2eRoot, "../..")
 const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "elef-desktop-e2e-"))
 const libraryRoot = path.join(temporaryRoot, "Elef")
 const seedDeck = path.join(libraryRoot, "E2E seed")
+const archiveFixture = path.join(temporaryRoot, "E2E archive seed")
+const importArchive = path.join(temporaryRoot, "E2E archive seed.elef")
 const expectedSource = `# Saved by shared scenario\n\nThe editor autosaved this text.\n\n${PIXEL_PNG_MARKDOWN}`
 
 function normalizeLineEndings(source) {
@@ -23,7 +25,8 @@ let documentIds = []
 const env = {
   ...process.env,
   ELEF_E2E_LIBRARY_ROOT: libraryRoot,
-  ELEF_E2E_APP_BINARY: path.join(repoRoot, "desktop", "target", "debug", "elef-desktop")
+  ELEF_E2E_APP_BINARY: path.join(repoRoot, "desktop", "target", "debug", "elef-desktop"),
+  ELEF_E2E_IMPORT_ARCHIVE: importArchive
 }
 
 function runRails(code) {
@@ -44,6 +47,10 @@ try {
     id: "a3d0f020-6605-4f9e-a96d-d825ee4b13f1",
     schema_version: 1
   }))
+  await mkdir(archiveFixture, { recursive: true })
+  await writeFile(path.join(archiveFixture, "presentation.md"), "# Imported from Elef\n\nPortable archive fixture.\n")
+  await writeFile(path.join(archiveFixture, "elef.json"), JSON.stringify({ id: randomUUID(), schema_version: 1 }))
+  execFileSync("zip", ["-q", "-r", importArchive, path.basename(archiveFixture)], { cwd: temporaryRoot })
   for (const [name, source] of [
     ["E2E document", "# E2E document\n\nSee [[E2E linked]].\n"],
     ["E2E linked", "# E2E linked\n\nTarget document.\n"]
@@ -95,6 +102,10 @@ try {
 
   const desktopSource = await readFile(path.join(seedDeck, "presentation.md"), "utf8")
   assert.equal(normalizeLineEndings(desktopSource), expectedSource)
+  assert.equal(
+    await readFile(path.join(libraryRoot, "E2E archive seed", "presentation.md"), "utf8"),
+    "# Imported from Elef\n\nPortable archive fixture.\n"
+  )
   if (presentationId) {
     const persisted = runRails(
       "presentation = Presentation.find(" + presentationId + "); puts \"ELEF_E2E_SOURCE=#{presentation.source.to_json}\"; presentation.destroy!; Document.where(id: [" + documentIds.map(Number).join(",") + "]).destroy_all"

@@ -180,10 +180,10 @@ class DesktopEditorUi {
 
 class DesktopLibraryUi {
   async openLibrary() {
-    await browser.waitUntil(async () => (await $("#library-view").isDisplayed()), {
-      timeout: 10_000,
-      timeoutMsg: "The desktop library did not open"
-    })
+    if (!(await $("#library-view").isDisplayed())) {
+      await $("#back-to-library").click()
+      await $("#library-view").waitForDisplayed()
+    }
   }
 
   async showDocuments() {
@@ -218,6 +218,21 @@ class DesktopLibraryUi {
       timeoutMsg: `The graph did not open ${title}`
     })
   }
+
+  async openElefArchive() {
+    await this.openLibrary()
+    await browser.execute(() => window.focus())
+    execFileSync(process.env.ELEF_E2E_APP_BINARY, [process.env.ELEF_E2E_IMPORT_ARCHIVE], { timeout: 15_000 })
+    const card = $('[aria-label="Open E2E archive seed"]')
+    await card.waitForDisplayed({ timeout: 20_000 })
+    await card.click()
+    await browser.waitUntil(async () => (await $("#deck-title").getText()) === "E2E archive seed", {
+      timeout: 10_000,
+      timeoutMsg: "The imported .elef deck did not open"
+    })
+    const source = await browser.execute(() => document.querySelector("#desktop-editor-field")?.editorController?.sourceValue || "")
+    if (!source.includes("Portable archive fixture.")) throw new Error("The imported .elef source was not loaded")
+  }
 }
 
 describe("shared authoring scenarios", () => {
@@ -238,6 +253,10 @@ describe("shared authoring scenarios", () => {
 
   it("runs the shared library and document graph flow", async () => {
     await libraryAndGraphWorkflow(new DesktopLibraryUi())
+  })
+
+  it("imports a portable .elef opened by the running application", async () => {
+    await new DesktopLibraryUi().openElefArchive()
   })
 
   it("edits, saves, and previews a deck in the desktop binary", async () => {

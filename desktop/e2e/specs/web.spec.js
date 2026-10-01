@@ -62,8 +62,8 @@ class WebEditorUi {
   }
 
   async waitForImage(digest) {
-    await expect.poll(() => this.page.locator('img[data-editor-image-source="true"]').evaluateAll(images =>
-      images.some(image => image.src.includes(digest) && image.complete && image.naturalWidth > 0)
+    await expect.poll(() => this.page.locator('img[data-editor-image-source="true"]').evaluateAll((images, expectedDigest) =>
+      images.some(image => image.src.includes(expectedDigest) && image.complete && image.naturalWidth > 0), digest
     )).toBe(true)
   }
 
