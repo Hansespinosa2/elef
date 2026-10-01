@@ -1,15 +1,20 @@
 import { expect, test } from "@playwright/test"
 import { editAndPreviewWorkflow, SAVED_SOURCE } from "../scenarios/edit-and-preview.js"
 import { libraryAndGraphWorkflow } from "../scenarios/library-and-graph.js"
+import { externalEditConflictWorkflow, CONFLICT_EXTERNAL_SOURCE } from "../scenarios/external-edit-conflict.js"
 import { PIXEL_PNG_MARKDOWN } from "../scenarios/media-fixture.js"
+import { execFileSync } from "node:child_process"
+import path from "node:path"
 
 class WebEditorUi {
   constructor(page) {
     this.page = page
   }
 
-  async openDeck() {
-    const id = process.env.ELEF_E2E_PRESENTATION_ID
+  async openDeck(title = "E2E seed") {
+    const id = title === "E2E conflict"
+      ? process.env.ELEF_E2E_CONFLICT_PRESENTATION_ID
+      : process.env.ELEF_E2E_PRESENTATION_ID
     if (!id) throw new Error("The shared web scenario requires an E2E presentation fixture")
     await this.page.goto(`/presentations/${id}/edit?editor_mode=source`)
     await expect(this.page.locator(".source-field .cm-content")).toBeVisible()
@@ -70,6 +75,69 @@ class WebEditorUi {
   async waitForPreview(text) {
     await expect(this.page.locator(".editor-projection.preview-pane")).toContainText(text)
   }
+
+  async writeExternalSource(source) {
+    const code = `Presentation.find(${Number(process.env.ELEF_E2E_CONFLICT_PRESENTATION_ID)}).update!(source: ${JSON.stringify(source)})`
+    execFileSync("bin/rails", ["runner", "-e", "test", code], {
+      cwd: path.resolve(process.cwd(), "../.."),
+      env: { ...process.env, RAILS_ENV: "test" },
+      stdio: "pipe"
+    })
+  }
+
+  async pauseAutosave() {
+    const paused = await this.page.evaluate(() => {
+      const form = document.querySelector('form[data-controller~="autosave"]')
+      const controller = form && Stimulus.getControllerForElementAndIdentifier(form, "autosave")
+      if (!controller) return false
+      controller.clearSaveTimer()
+      controller.delayValue = 60_000
+      controller.schedule()
+      return true
+    })
+    expect(paused).toBe(true)
+  }
+
+  async flushLocalSave() {
+    const started = await this.page.evaluate(async () => {
+      const form = document.querySelector('form[data-controller~="autosave"]')
+      const controller = form && Stimulus.getControllerForElementAndIdentifier(form, "autosave")
+      if (!controller) return false
+      await controller.save()
+      return true
+    })
+    expect(started).toBe(true)
+  }
+
+  async waitForConflict() {
+    await expect(this.page.locator('[data-autosave-target="conflict"]')).toBeVisible()
+  }
+
+  async assertConflict(localSource, externalSource) {
+    await expect.poll(() => this.readSource()).toBe(localSource)
+    await expect.poll(() => this.page.locator('[data-autosave-target="serverSource"]').evaluate(element => element.textContent))
+      .toBe(externalSource)
+  }
+
+  async useDiskVersion() {
+    await this.page.locator('[data-action="autosave#discardLocal"]').click()
+    await expect(this.page.locator('[data-autosave-target="conflict"]')).toBeHidden()
+    await expect(this.page.locator('[data-autosave-target="status"]')).toHaveText("Saved")
+  }
+
+  async assertDiskSource(source) {
+    await expect.poll(() => this.readSource()).toBe(source)
+    const current = execFileSync("bin/rails", [
+      "runner", "-e", "test",
+      `puts "ELEF_E2E_CONFLICT_SOURCE=#{Presentation.find(${Number(process.env.ELEF_E2E_CONFLICT_PRESENTATION_ID)}).source.to_json}"`
+    ], {
+      cwd: path.resolve(process.cwd(), "../.."),
+      env: { ...process.env, RAILS_ENV: "test" },
+      encoding: "utf8"
+    }).match(/^ELEF_E2E_CONFLICT_SOURCE=(.*)$/m)?.[1]
+    expect(current).toBeTruthy()
+    expect(JSON.parse(current)).toBe(source)
+  }
 }
 
 class WebLibraryUi {
@@ -113,4 +181,10 @@ test("shared editing flow works in the web app", async ({ page }) => {
 
 test("shared library and document graph flow works in the web app", async ({ page }) => {
   await libraryAndGraphWorkflow(new WebLibraryUi(page))
+})
+
+test("shared external-edit conflict flow preserves the disk version in the web app", async ({ page }) => {
+  const ui = new WebEditorUi(page)
+  await externalEditConflictWorkflow(ui)
+  expect(await ui.readSource()).toBe(CONFLICT_EXTERNAL_SOURCE)
 })

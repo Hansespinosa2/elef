@@ -1,9 +1,10 @@
 import { $, $$, browser } from "@wdio/globals"
 import { execFileSync, spawn } from "node:child_process"
-import { readFile } from "node:fs/promises"
+import { readFile, writeFile } from "node:fs/promises"
 import path from "node:path"
 import { editAndPreviewWorkflow } from "../scenarios/edit-and-preview.js"
 import { libraryAndGraphWorkflow } from "../scenarios/library-and-graph.js"
+import { externalEditConflictWorkflow, CONFLICT_EXTERNAL_SOURCE } from "../scenarios/external-edit-conflict.js"
 import { PIXEL_PNG_MARKDOWN } from "../scenarios/media-fixture.js"
 
 function normalizeLineEndings(source) {
@@ -11,18 +12,22 @@ function normalizeLineEndings(source) {
 }
 
 class DesktopEditorUi {
-  async openDeck() {
+  async pauseAutosave() {}
+
+  async flushLocalSave() {}
+
+  async openDeck(title = "E2E seed") {
     if (!(await $("#library-view").isDisplayed())) {
       await $("#back-to-library").click()
       await $("#library-view").waitForDisplayed()
     }
     await $("#show-deck-list").click()
-    const card = $('[aria-label="Open E2E seed"]')
+    const card = $(`[aria-label="Open ${title}"]`)
     await card.waitForDisplayed()
     await card.click()
-    await browser.waitUntil(async () => (await $("#deck-title").getText()) === "E2E seed", {
+    await browser.waitUntil(async () => (await $("#deck-title").getText()) === title, {
       timeout: 10_000,
-      timeoutMsg: "The E2E seed deck did not open"
+      timeoutMsg: `The ${title} deck did not open`
     })
   }
 
@@ -144,6 +149,39 @@ class DesktopEditorUi {
       })
       throw new Error(`${error.message}; desktop state: ${JSON.stringify(state)}`)
     }
+  }
+
+  async writeExternalSource(source) {
+    await writeFile(path.join(process.env.ELEF_E2E_LIBRARY_ROOT, "E2E conflict", "presentation.md"), source)
+  }
+
+  async waitForConflict() {
+    await $("#conflict-dialog").waitForDisplayed({ timeout: 10_000 })
+  }
+
+  async assertConflict(localSource, externalSource) {
+    const local = await $("#conflict-local").getText()
+    const disk = await $("#conflict-disk").getText()
+    if (!local.includes(localSource.trim()) || !disk.includes(externalSource.trim())) {
+      throw new Error(`Conflict dialog did not preserve both versions: ${JSON.stringify({ local, disk })}`)
+    }
+  }
+
+  async useDiskVersion() {
+    await $("#use-disk-version").click()
+    await $("#conflict-dialog").waitForDisplayed({ reverse: true })
+  }
+
+  async assertDiskSource(source) {
+    const diskPath = path.join(process.env.ELEF_E2E_LIBRARY_ROOT, "E2E conflict", "presentation.md")
+    await browser.waitUntil(async () => normalizeLineEndings(await readFile(diskPath, "utf8")) === source, {
+      timeout: 10_000,
+      timeoutMsg: "Using the disk version changed the external source bytes"
+    })
+    await browser.waitUntil(async () => await this.readSource() === source, {
+      timeout: 10_000,
+      timeoutMsg: "The editor did not load the external source after conflict resolution"
+    })
   }
 
   async insertImage({ bytes, filename, mimeType }) {
@@ -299,8 +337,8 @@ describe("shared authoring scenarios", () => {
       await browser.pause(500)
       execFileSync("osascript", ["-e", 'tell application "System Events" to key code 53'], { timeout: 5_000 })
     } else if (process.platform === "linux") {
-      // Address the native chooser by title because CI's Xvfb has no window
-      // manager and cannot answer _NET_ACTIVE_WINDOW queries.
+      // Address the native chooser by title because it is outside the webview
+      // and cannot be driven through the embedded WebDriver session.
       let dialogId
       await browser.waitUntil(async () => {
         try {
@@ -314,7 +352,8 @@ describe("shared authoring scenarios", () => {
         timeout: 5_000,
         timeoutMsg: "The native library folder picker did not open"
       })
-      execFileSync("xdotool", ["windowclose", dialogId], { timeout: 5_000 })
+      execFileSync("xdotool", ["windowactivate", "--sync", dialogId], { timeout: 5_000 })
+      execFileSync("xdotool", ["key", "--clearmodifiers", "Escape"], { timeout: 5_000 })
     } else {
       throw new Error(`Native folder picker smoke is unsupported on ${process.platform}`)
     }
@@ -326,6 +365,14 @@ describe("shared authoring scenarios", () => {
 
   it("runs the shared library and document graph flow", async () => {
     await libraryAndGraphWorkflow(new DesktopLibraryUi())
+  })
+
+  it("runs the shared external-edit conflict flow in the desktop binary", async () => {
+    const ui = new DesktopEditorUi()
+    await externalEditConflictWorkflow(ui)
+    if (await ui.readSource() !== CONFLICT_EXTERNAL_SOURCE) {
+      throw new Error("Resolving the conflict did not load the external source")
+    }
   })
 
   it("imports a portable .elef opened by the running application", async () => {
