@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test"
 import { editAndPreviewWorkflow, SAVED_SOURCE } from "../scenarios/edit-and-preview.js"
 import { libraryAndGraphWorkflow } from "../scenarios/library-and-graph.js"
+import { PIXEL_PNG_MARKDOWN } from "../scenarios/media-fixture.js"
 
 class WebEditorUi {
   constructor(page) {
@@ -46,6 +47,26 @@ class WebEditorUi {
     await this.page.locator('[data-editor-target="visualButton"]').click()
   }
 
+  async insertImage({ bytes, filename, mimeType }) {
+    await this.page.locator(".source-field").evaluate(field => {
+      const editor = field.editorController
+      editor.setSelectionRange(editor.sourceValue.length)
+    })
+    await this.page.locator('input[data-media-target="input"]').setInputFiles({
+      name: filename,
+      mimeType,
+      buffer: bytes
+    })
+    await expect.poll(() => this.readSource()).toContain(PIXEL_PNG_MARKDOWN)
+    return this.readSource()
+  }
+
+  async waitForImage(digest) {
+    await expect.poll(() => this.page.locator('img[data-editor-image-source="true"]').evaluateAll(images =>
+      images.some(image => image.src.includes(digest) && image.complete && image.naturalWidth > 0)
+    )).toBe(true)
+  }
+
   async waitForPreview(text) {
     await expect(this.page.locator(".editor-projection.preview-pane")).toContainText(text)
   }
@@ -86,6 +107,7 @@ class WebLibraryUi {
 test("shared editing flow works in the web app", async ({ page }) => {
   await editAndPreviewWorkflow(new WebEditorUi(page))
   await expect(page.locator(".source-field .cm-content")).toContainText("Saved by shared scenario")
+  await expect.poll(() => page.locator(".source-field").evaluate(field => field.editorController.sourceValue)).toContain(PIXEL_PNG_MARKDOWN)
   expect(await page.locator(".source-field .cm-content").innerText()).toContain(SAVED_SOURCE.split("\n")[0])
 })
 

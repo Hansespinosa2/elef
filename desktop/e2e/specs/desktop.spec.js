@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises"
 import path from "node:path"
 import { editAndPreviewWorkflow } from "../scenarios/edit-and-preview.js"
 import { libraryAndGraphWorkflow } from "../scenarios/library-and-graph.js"
+import { PIXEL_PNG_MARKDOWN } from "../scenarios/media-fixture.js"
 
 function normalizeLineEndings(source) {
   return source.replace(/\r\n/g, "\n")
@@ -146,6 +147,37 @@ class DesktopEditorUi {
       })
       throw new Error(`${error.message}; desktop state: ${JSON.stringify(state)}`)
     }
+  }
+
+  async insertImage({ bytes, filename, mimeType }) {
+    const inserted = await browser.execute(({ bytes, filename, mimeType }) => {
+      const field = document.querySelector("#desktop-editor-field")
+      const controller = field?.editorController
+      const input = document.querySelector('input[data-media-target="input"]')
+      if (!controller || !input || typeof DataTransfer !== "function") return false
+      controller.setSelectionRange(controller.sourceValue.length)
+      const transfer = new DataTransfer()
+      transfer.items.add(new File([new Uint8Array(bytes)], filename, { type: mimeType }))
+      input.files = transfer.files
+      input.dispatchEvent(new Event("change", { bubbles: true }))
+      return true
+    }, { bytes: [...bytes], filename, mimeType })
+    if (!inserted) throw new Error("The desktop media picker could not receive the image fixture")
+    await browser.waitUntil(async () => (await this.readSource()).includes(PIXEL_PNG_MARKDOWN), {
+      timeout: 10_000,
+      timeoutMsg: "The desktop media controller did not upload and insert the image"
+    })
+    return this.readSource()
+  }
+
+  async waitForImage(digest) {
+    await browser.waitUntil(async () => browser.execute(expectedDigest =>
+      [...document.querySelectorAll('img[data-editor-image-source="true"]')].some(image =>
+        image.src.includes(expectedDigest) && image.complete && image.naturalWidth > 0
+      ), digest), {
+      timeout: 10_000,
+      timeoutMsg: "The desktop asset protocol did not render the uploaded image"
+    })
   }
 }
 

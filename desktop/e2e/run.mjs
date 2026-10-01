@@ -5,13 +5,14 @@ import os from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { randomUUID } from "node:crypto"
+import { PIXEL_PNG_MARKDOWN } from "./scenarios/media-fixture.js"
 
 const e2eRoot = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(e2eRoot, "../..")
 const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "elef-desktop-e2e-"))
 const libraryRoot = path.join(temporaryRoot, "Elef")
 const seedDeck = path.join(libraryRoot, "E2E seed")
-const expectedSource = "# Saved by shared scenario\n\nThe editor autosaved this text.\n"
+const expectedSource = `# Saved by shared scenario\n\nThe editor autosaved this text.\n\n${PIXEL_PNG_MARKDOWN}`
 
 function normalizeLineEndings(source) {
   return source.replace(/\r\n/g, "\n")
