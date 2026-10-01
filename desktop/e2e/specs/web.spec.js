@@ -61,7 +61,8 @@ class WebLibraryUi {
   }
 
   async assertDocumentOpened(title) {
-    await expect(this.page.getByRole("heading", { name: title, exact: true })).toBeVisible()
+    const content = this.page.locator(".document-reader .document-surface")
+    await expect(content.getByRole("heading", { name: title, exact: true })).toBeVisible()
   }
 }
 
