@@ -21,7 +21,24 @@ class WebEditorUi {
     await this.page.keyboard.insertText(source)
   }
 
-  async waitForSaved() {
+  async readSource() {
+    return this.page.locator(".source-field").evaluate(field => field.editorController?.sourceValue ?? "")
+  }
+
+  async waitForSource(source) {
+    await expect.poll(() => this.readSource()).toBe(source)
+  }
+
+  async undo() {
+    await this.page.keyboard.press(process.platform === "darwin" ? "Meta+Z" : "Control+Z")
+  }
+
+  async redo() {
+    await this.page.keyboard.press(process.platform === "darwin" ? "Meta+Shift+Z" : "Control+Shift+Z")
+  }
+
+  async waitForSaved(source) {
+    if (source !== undefined) await this.waitForSource(source)
     await expect(this.page.locator('[data-autosave-target="status"]')).toHaveText("Saved")
   }
 

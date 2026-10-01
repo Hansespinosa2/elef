@@ -12,6 +12,10 @@ const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "elef-desktop-e2e-"))
 const libraryRoot = path.join(temporaryRoot, "Elef")
 const seedDeck = path.join(libraryRoot, "E2E seed")
 const expectedSource = "# Saved by shared scenario\n\nThe editor autosaved this text.\n"
+
+function normalizeLineEndings(source) {
+  return source.replace(/\r\n/g, "\n")
+}
 const webTitle = `Desktop E2E ${randomUUID()}`
 let presentationId = null
 let documentIds = []
@@ -88,7 +92,8 @@ try {
   if (desktopResult.error) throw desktopResult.error
   if (desktopResult.status !== 0) throw new Error("Shared desktop scenarios failed with status " + desktopResult.status)
 
-  assert.equal(await readFile(path.join(seedDeck, "presentation.md"), "utf8"), expectedSource)
+  const desktopSource = await readFile(path.join(seedDeck, "presentation.md"), "utf8")
+  assert.equal(normalizeLineEndings(desktopSource), expectedSource)
   if (presentationId) {
     const persisted = runRails(
       "presentation = Presentation.find(" + presentationId + "); puts \"ELEF_E2E_SOURCE=#{presentation.source.to_json}\"; presentation.destroy!; Document.where(id: [" + documentIds.map(Number).join(",") + "]).destroy_all"

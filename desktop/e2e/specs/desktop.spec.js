@@ -5,6 +5,10 @@ import path from "node:path"
 import { editAndPreviewWorkflow } from "../scenarios/edit-and-preview.js"
 import { libraryAndGraphWorkflow } from "../scenarios/library-and-graph.js"
 
+function normalizeLineEndings(source) {
+  return source.replace(/\r\n/g, "\n")
+}
+
 class DesktopEditorUi {
   async openDeck() {
     if (!(await $("#library-view").isDisplayed())) {
@@ -41,28 +45,47 @@ class DesktopEditorUi {
     if (!updated) throw new Error("The desktop editor did not accept the shared scenario source")
   }
 
+  async readSource() {
+    return browser.execute(() => document.querySelector("#desktop-editor-field")?.editorController?.sourceValue ?? "")
+  }
+
+  async waitForSource(source) {
+    await browser.waitUntil(async () => await this.readSource() === source, {
+      timeout: 10_000,
+      timeoutMsg: "The desktop editor buffer did not reach the expected source"
+    })
+  }
+
+  async undo() {
+    await this.dispatchHistoryShortcut("z", { shift: false })
+  }
+
+  async redo() {
+    await this.dispatchHistoryShortcut("z", { shift: true })
+  }
+
+  async dispatchHistoryShortcut(key, { shift }) {
+    const modifiers = process.platform === "darwin" ? { metaKey: true } : { ctrlKey: true }
+    await browser.execute(({ key, shift, modifiers }) => {
+      const proxy = document.querySelector("#deck-source")
+      proxy?.dispatchEvent(new KeyboardEvent("keydown", {
+        key,
+        code: "KeyZ",
+        ...modifiers,
+        shiftKey: shift,
+        bubbles: true,
+        cancelable: true
+      }))
+    }, { key, shift, modifiers })
+  }
+
   async waitForSaved(expectedSource) {
     if (expectedSource !== undefined) {
-      try {
-        await browser.waitUntil(async () => {
-          const editorSource = await browser.execute(() => document.querySelector("#desktop-editor-field")?.editorController?.sourceValue ?? null)
-          return editorSource === expectedSource
-        }, {
-          timeout: 10_000,
-          timeoutMsg: "The desktop editor buffer did not contain the text entered by the shared scenario"
-        })
-      } catch (error) {
-        const state = await browser.execute(() => ({
-          sourceValue: document.querySelector("#desktop-editor-field")?.editorController?.sourceValue ?? null,
-          textareaValue: document.querySelector("#deck-source")?.value ?? null,
-          editorText: document.querySelector("#deck-source-editor .cm-content")?.innerText ?? null
-        }))
-        throw new Error(`${error.message}; editor state: ${JSON.stringify(state)}`)
-      }
+      await this.waitForSource(expectedSource)
       const sourcePath = path.join(process.env.ELEF_E2E_LIBRARY_ROOT, "E2E seed", "presentation.md")
       await browser.waitUntil(async () => {
         try {
-          return await readFile(sourcePath, "utf8") === expectedSource
+          return normalizeLineEndings(await readFile(sourcePath, "utf8")) === expectedSource
         } catch (_error) {
           return false
         }
