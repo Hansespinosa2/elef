@@ -505,6 +505,9 @@ async function completeImport(imported) {
   }
   await refreshLibrary()
   setStatus((imported.replaced ? "Replaced" : "Imported") + ` “${imported.deck.name}”`)
+  if (imported.name_collision) {
+    showNotice(`A deck with an equivalent name already exists. Imported as “${imported.deck.name}”.`, "warning")
+  }
 }
 
 async function processOpenedFiles() {

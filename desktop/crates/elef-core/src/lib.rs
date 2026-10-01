@@ -169,6 +169,7 @@ impl Default for LibraryConfig {
 pub struct ImportResult {
     pub deck: DeckSummary,
     pub replaced: bool,
+    pub name_collision: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1030,6 +1031,7 @@ impl Library {
         validate_deck_name(&incoming_name)?;
 
         self.list_decks()?;
+        let name_collision = self.name_collision_exists(&incoming_name)?;
         let collision = manifest.as_ref().and_then(|manifest| {
             self.records
                 .read()
@@ -1091,7 +1093,11 @@ impl Library {
             .find(|record| record.path == canonical_path)
             .map(|record| self.summary(record))
             .ok_or(CoreError::InvalidInput)?;
-        Ok(ImportResult { deck, replaced })
+        Ok(ImportResult {
+            deck,
+            replaced,
+            name_collision: name_collision && !replaced,
+        })
     }
 
     fn available_deck_name(&self, requested: &str) -> Result<String, CoreError> {
@@ -2809,6 +2815,28 @@ mod tests {
         assert_ne!(kept.deck.id, imported.deck.id);
         assert_eq!(kept.deck.name, "same");
         assert_eq!(library.list_decks().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn archive_import_reports_case_normalized_name_collision() {
+        let (temp, library) = library();
+        let existing = write_deck(temp.path(), "Talk", &[("presentation.md", "# Existing")]);
+        library.list_decks().unwrap();
+
+        let options = SimpleFileOptions::default()
+            .compression_method(CompressionMethod::Deflated)
+            .last_modified_time(DateTime::default());
+        let mut zip = ZipWriter::new(Cursor::new(Vec::new()));
+        zip.start_file("talk/presentation.md", options).unwrap();
+        zip.write_all(b"# Imported").unwrap();
+        let archive_path = temp.path().join("talk.elef");
+        fs::write(&archive_path, zip.finish().unwrap().into_inner()).unwrap();
+
+        let imported = library.import_elef(&archive_path, None).unwrap();
+
+        assert!(imported.name_collision);
+        assert_eq!(imported.deck.name, "talk (2)");
+        assert!(existing.join("presentation.md").exists());
     }
 
     #[test]
