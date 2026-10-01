@@ -558,8 +558,8 @@ test("commits live chains at the curated token boundaries", () => {
   assert.equal(subscript.editor.value, "$\\mathbf{x}_2$")
 })
 
-test("commits on every decided chain-breaking key and keeps minus undecided", () => {
-  for (const key of ["_", "^", "[", "(", "\\", "!", "+"]) {
+test("commits on every decided chain-breaking key, including minus", () => {
+  for (const key of ["_", "^", "[", "(", "\\", "!", "+", "-"]) {
     const context = createMathEditor("$x.b$", 4)
     pressMathKey(context, key)
     assert.equal(context.editor.value, "$\\mathbf{x}" + key + "$", key)
@@ -568,7 +568,7 @@ test("commits on every decided chain-breaking key and keeps minus undecided", ()
   const minus = createMathEditor("$x.b$", 4)
   pressMathKey(minus, "-")
   pressMathKey(minus, "c")
-  assert.equal(minus.editor.value, "$x.b-c$")
+  assert.equal(minus.editor.value, "$\\mathbf{x}-c$")
 })
 
 test("eagerly expands each known atomic @ shortcut when its dot is typed", () => {

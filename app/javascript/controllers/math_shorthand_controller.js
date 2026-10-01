@@ -787,7 +787,7 @@ export default class extends Controller {
   }
 
   isChainContinuationKey(key) {
-    return typeof key === "string" && key.length === 1 && /[A-Za-z.-]/.test(key)
+    return typeof key === "string" && key.length === 1 && /[A-Za-z.]/.test(key)
   }
 
   expandAtomicShortcutBeforeDot(editor, caret) {
