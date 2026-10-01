@@ -76,7 +76,12 @@ test("shared Markdown block renderer supports both KaTeX delimiter families and 
   assert.match(html, /href="https:\/\/example\.com"/)
 })
 
-test("empty display math retains its original source whitespace for visual editing", () => {
-  const html = renderMarkdownBlock("# Untitled document\n\n$$\n\n$$")
-  assert.ok(html.includes('data-editor-math-source="\n\n"'))
+test("empty display math retains its exact inner source whitespace for visual editing", () => {
+  for (const [opening, closing] of [["$$", "$$"], ["\\[", "\\]"]]) {
+    const html = renderMarkdownBlock(`# Untitled document\n\n${opening}\n\n${closing}`)
+    assert.ok(html.includes('data-editor-math-source="\n\n"'))
+    assert.ok(html.includes(`data-editor-math-open="${opening}"`))
+    assert.ok(html.includes(`data-editor-math-close="${closing}"`))
+    assert.ok(!html.includes(`data-editor-math-source="${opening}`))
+  }
 })

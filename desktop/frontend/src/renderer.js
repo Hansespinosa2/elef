@@ -43,8 +43,8 @@ markdown.block.ruler.before("fence", "elef_display_math", (state, startLine, end
     const expression = state.getLines(startLine + 1, line, state.blkIndent, false)
     const token = state.push("html_block", "", 0)
     token.map = [startLine, line + 1]
-    const sourceExpression = state.src.slice(state.eMarks[startLine], state.bMarks[line])
-    token.content = `<p>${renderMath(expression.trim(), true, openDelimiter, closeDelimiter, sourceExpression)}</p>\n`
+    const sourceContent = state.src.slice(state.eMarks[startLine], state.bMarks[line])
+    token.content = `<p>${renderMath(expression.trim(), true, openDelimiter, closeDelimiter, sourceContent)}</p>\n`
     state.line = line + 1
     return true
   }
