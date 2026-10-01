@@ -38,8 +38,7 @@ class DesktopEditorUi {
       const field = document.querySelector("#desktop-editor-field")
       const controller = field?.editorController
       if (!controller) return false
-      controller.setExternalValue(nextSource)
-      field.dispatchEvent(new Event("input", { bubbles: true }))
+      controller.replaceRange(nextSource, 0, controller.value.length)
       return controller.sourceValue === nextSource
     }, source)
     if (!updated) throw new Error("The desktop editor did not accept the shared scenario source")
