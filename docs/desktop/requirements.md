@@ -29,7 +29,7 @@ Goals
 7. Opening an untrusted deck or `.elef` file is safe.
 
 Non-goals (v1)
-Cross-device sync, Windows, revisions UI, lineage graph, SQLite cache, PPTX export, a custom slide-to-PDF exporter (the OS print dialog prints Markdown source), deep OS integration beyond `.elef`, a network bug-report endpoint, new accessibility or i18n commitments beyond what the shared editor JS already provides.
+Cross-device sync, Windows, revisions UI, lineage graph, SQLite cache, PPTX export, a custom slide-to-PDF exporter (the File → Print action opens the OS print dialog for the rendered preview), deep OS integration beyond `.elef`, a network bug-report endpoint, new accessibility or i18n commitments beyond what the shared editor JS already provides.
 
 ## 4. Constraints
 
