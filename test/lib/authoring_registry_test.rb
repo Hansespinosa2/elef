@@ -1,6 +1,16 @@
 require "test_helper"
 
 class AuthoringRegistryTest < ActiveSupport::TestCase
+  test "desktop palette defaults stay in sync with the shared Rails registry" do
+    artifact = Rails.root.join("desktop/frontend/src/default-authoring-registry.json")
+    checked_in = JSON.parse(File.read(artifact))
+    generated = JSON.parse(AuthoringRegistry.defaults_for_desktop.to_json)
+
+    assert_equal generated, checked_in
+    assert checked_in.any? { |entry| entry["namespace"] == "/" && entry["trigger"] == "bold" }
+    assert checked_in.any? { |entry| entry["namespace"] == "@" && entry["aliases"].include?("alpha") }
+  end
+
   test "exposes canonical directive names with compatibility aliases and schemas" do
     registry = AuthoringRegistry.for_editor(workspace: Workspace.default)
 

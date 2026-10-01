@@ -31,7 +31,7 @@ Design principles
 - **Folders are truth; everything else is derived** and deletable.
 - **Fail safe.** When unsure whether a write would lose bytes, surface a conflict instead of choosing.
 - **Least privilege.** The webview can invoke a named command set; no generic filesystem or shell access.
-- **UI-independent core.** File logic lives in a Rust crate with no Tauri dependency (proposed, Q7), so it is unit-testable and fault-injectable without a GUI, and survives a shell change (ADR-002 consequence).
+- **UI-independent core.** File logic lives in a Rust crate with no Tauri dependency, so it is unit-testable and fault-injectable without a GUI, and survives a shell change (ADR-002 consequence).
 - **Deletion over duplication.** Temporary duplication must have an end date and a deletion step.
 
 ## 3. Building blocks
@@ -62,11 +62,11 @@ flowchart TB
 | Block | Responsibility | Notes |
 |---|---|---|
 | Shell (Tauri) | Window lifecycle, native menus (File / Edit / View / Presentation / Window / Help / About), single-instance, updater | ADR-002 |
-| Webview frontend | Editing experience: reused CodeMirror/Stimulus controllers; minimal new library shell (deck list, open/import/export chrome, conflict UI) | ADR-004 |
+| Webview frontend | Reused CodeMirror/Stimulus editor controllers; desktop library shell, document graph view, conflict UI, presentation mode | ADR-004 |
 | Transport adapter | Routes the controllers' existing JSON calls to Rust commands or to webview-local handlers; owns the hash handshake | [transport-adapter.md](transport-adapter.md) |
-| Renderer worker | Runs `renderer.bundle.js` (Markdown → slides → HTML) off the main thread. Emits Mermaid placeholders; Mermaid itself runs in the webview (needs a DOM) | ADR-007 |
+| Renderer worker | Runs the shared Markdown block renderer and desktop preview projection off the main thread. Emits Mermaid placeholders; Mermaid itself runs in the webview (needs a DOM). Desktop slide structure/editor maps are still a separate implementation from Rails | ADR-007 |
 | Commands | Thin, validated entry points; each is on the capability allowlist | [security.md](security.md) |
-| `elef-core` | Library scan, deck store, safe write, `.elef` archive, path guard, `elef.json`. No UI, no Tauri types | ADR-003, ADR-008 |
+| `elef-core` | Library scan, document graph, deck store, safe write, content-addressed media, `.elef` archive, path guard, `elef.json`. No UI, no Tauri types | ADR-003, ADR-008 |
 | SQLite cache | **Deferred to post-v1**: nothing in v1 consumes it (search is out of scope; folder scans handle hundreds of decks). The rebuildable-cache principle stands; the component waits for its first consumer | ADR-001 |
 
 Dependency rule: webview → adapter → commands → core → OS. Core never calls upward.
@@ -74,13 +74,17 @@ Dependency rule: webview → adapter → commands → core → OS. Core never ca
 ## 4. Runtime view
 
 1. **Launch.** Single-instance check → scan library root (dot-folders skipped, symlinks not followed) → library view.
-2. **Open deck.** Resolve the source file ([data-format.md](data-format.md)) → read source and record its fingerprint → create `elef.json` if absent (best effort; a read-only folder still opens) → render preview in the worker → editor.
+2. **Open deck.** Resolve the source file ([data-format.md](data-format.md)) → read source and record its fingerprint → create `elef.json` if absent (best effort; a read-only folder still opens) → load `.elef/` authoring entries → source editor and worker-rendered preview. Visual editing is enabled after a successful render.
 3. **Edit and auto-save.** Debounced autosave → atomic write guarded by a fingerprint check → conflict UI on mismatch. Full protocol and sequence in ADR-008. Undo/redo is session-only.
 4. **External change.** While a deck is open, a periodic source snapshot check detects edits from other programs. No unsaved changes → silent reload; unsaved changes → conflict UI. Every save still verifies the current fingerprint immediately before writing.
 5. **Rename deck.** Folder rename; UUID in `elef.json` keeps identity; an open editor re-points.
 6. **Export.** Zip the deck folder deterministically → `name.elef`.
 7. **Import.** Extract to a staging dir under hardening limits ([security.md](security.md)) → UUID rule → move into library root. Collisions prompt: replace / keep both with new UUID / cancel.
 8. **Update.** Check `latest.json` → download → verify Ed25519 signature against the baked-in public key → install → prompt relaunch. A failed update leaves the old version runnable (ADR-009).
+
+Media insertion uses the reused Rails `media_controller`: a file is sent as a raw binary IPC payload, validated and stored as a content-addressed file under the selected deck's `images/`, then referenced from Markdown by digest. The read-only `elefasset` protocol serves that digest from the same deck; it cannot address an arbitrary path.
+
+The document graph reuses the web `document-graph` Stimulus controller and derives its nodes and `[[title]]` edges from document deck files. It is an on-demand view; no graph cache or identity data is stored outside the source folders.
 
 ## 5. Deployment and distribution
 
@@ -100,7 +104,7 @@ Where state lives
 
 - **Identity.** UUID in `elef.json`; folder name is display-only. Rules in [data-format.md](data-format.md).
 - **Case and Unicode.** Folder names compared case-insensitively and after NFC normalization; import warns on collisions (macOS file systems may treat equivalent names as one; Linux does not).
-- **One renderer.** A single JS bundle consumed by Rails via mini_racer and by the desktop in a worker. The Ruby renderer is deleted at cutover. Owned by ADR-007; do not restate it elsewhere.
+- **Shared Markdown blocks.** Rails calls the JS Markdown block renderer through MiniRacer; desktop calls the same package from its worker. Rails document/slide parsing and desktop preview structure/editor maps are still distinct, and the Ruby block renderer remains as an explicit rollback. Full output parity and Ruby deletion are not complete. ADR-007 owns the transition.
 - **Concurrency.** Saves are serialized per deck and coalesced (latest wins); the app never has two writers on one deck. Periodic source checks compare the content hash to the last successful save and reload or raise a conflict. Rendering runs in a worker with a time limit; a runaway render is terminated, not waited on.
 - **Errors.** Commands return typed errors `{ code, message, retryable }`; the code set is in [transport-adapter.md](transport-adapter.md). The UI maps codes to messages; raw OS errors never reach the user.
 - **Diagnostics (proposed, Q6).** Structured local logs in the OS log/app-data directory, size-capped and rotated, never containing deck content. Help → "Copy diagnostics" produces a bundle for a bug report. No telemetry.

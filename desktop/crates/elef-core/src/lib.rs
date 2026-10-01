@@ -20,8 +20,10 @@ use std::os::unix::fs::OpenOptionsExt;
 pub const MANIFEST_FILE: &str = "elef.json";
 pub const MANIFEST_SCHEMA_VERSION: u32 = 1;
 pub const MAX_SOURCE_BYTES: usize = 50 * 1024 * 1024;
+pub const MAX_ASSET_BYTES: usize = 50 * 1024 * 1024;
 pub const MAX_ARCHIVE_UNCOMPRESSED_BYTES: u64 = 500 * 1024 * 1024;
 pub const MAX_ARCHIVE_ENTRIES: usize = 10_000;
+const MAX_DECK_MEDIA_BYTES: u64 = 400 * 1024 * 1024;
 const MAX_ARCHIVE_FILE_BYTES: u64 = 600 * 1024 * 1024;
 const STALE_TEMP_AGE_SECONDS: u64 = 24 * 60 * 60;
 const MAX_ARCHIVE_COMPRESSION_RATIO: u64 = 1_000;
@@ -29,6 +31,20 @@ const MAX_ARCHIVE_RATIO_CHECK_BYTES: u64 = 1024 * 1024;
 const LIBRARY_CONFIG_DIR: &str = ".elef";
 const LIBRARY_CONFIG_FILE: &str = "config.json";
 const LIBRARY_CONFIG_SCHEMA_VERSION: u32 = 1;
+const AUTHORING_REGISTRY_SCHEMA_VERSION: u32 = 1;
+const AUTHORING_REGISTRY_MAX_BYTES: u64 = 4 * 1024 * 1024;
+const AUTHORING_REGISTRY_MAX_ENTRIES: usize = 1_000;
+const ASSET_TYPES: [(&str, &str); 9] = [
+    ("png", "image/png"),
+    ("jpg", "image/jpeg"),
+    ("gif", "image/gif"),
+    ("bmp", "image/bmp"),
+    ("tif", "image/tiff"),
+    ("webp", "image/webp"),
+    ("avif", "image/avif"),
+    ("heic", "image/heic"),
+    ("mp4", "video/mp4"),
+];
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct DeckManifest {
@@ -52,6 +68,27 @@ pub struct DeckSummary {
     pub source_file: String,
     pub kind: String,
     pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct DocumentGraph {
+    pub nodes: Vec<DocumentGraphNode>,
+    pub edges: Vec<DocumentGraphEdge>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct DocumentGraphNode {
+    pub id: String,
+    pub title: String,
+    pub url: String,
+    pub x: usize,
+    pub y: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct DocumentGraphEdge {
+    pub source: String,
+    pub target: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -84,11 +121,31 @@ pub struct SaveResult {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct UploadedAsset {
+    pub digest: String,
+    pub content_type: String,
+    pub source: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct LibraryConfig {
     pub schema_version: u32,
     pub theme: String,
     #[serde(default)]
     pub hotkeys: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct AuthoringRegistries {
+    pub snippets: Vec<serde_json::Value>,
+    pub math_shortcuts: Vec<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+struct AuthoringRegistryFile {
+    schema_version: u32,
+    #[serde(default)]
+    entries: Vec<serde_json::Value>,
 }
 
 impl Default for LibraryConfig {
@@ -213,6 +270,67 @@ impl Library {
         Ok(summaries)
     }
 
+    pub fn document_graph(&self) -> Result<DocumentGraph, CoreError> {
+        let summaries = self
+            .list_decks()?
+            .into_iter()
+            .filter(|deck| deck.kind == "document")
+            .collect::<Vec<_>>();
+        let mut documents = Vec::with_capacity(summaries.len());
+        for summary in summaries {
+            let record = self.record(&summary.id)?;
+            self.validate_deck_path(&record.path)?;
+            let bytes = read_regular_file(&record.source_path)?;
+            let source = String::from_utf8(bytes).map_err(|_| CoreError::InvalidInput)?;
+            let title = markdown_document_title(&source, &summary.name);
+            documents.push((summary.id, title, source));
+        }
+
+        let mut title_to_id = HashMap::new();
+        let id_set = documents
+            .iter()
+            .map(|(id, _, _)| id.clone())
+            .collect::<HashSet<_>>();
+        for (id, title, _) in &documents {
+            title_to_id
+                .entry(title.clone())
+                .or_insert_with(|| id.clone());
+        }
+
+        let nodes = documents
+            .iter()
+            .enumerate()
+            .map(|(index, (id, title, _))| DocumentGraphNode {
+                id: id.clone(),
+                title: title.clone(),
+                url: format!("#deck/{}", id),
+                x: 120 + (index % 4) * 220,
+                y: 100 + (index / 4) * 150,
+            })
+            .collect();
+        let mut seen = HashSet::new();
+        let mut edges = Vec::new();
+        for (source_id, _, source) in &documents {
+            for link_title in markdown_document_links(source) {
+                let key = link_title.split('|').next().unwrap_or_default();
+                let target = key
+                    .strip_prefix("document:")
+                    .or_else(|| key.strip_prefix("id:"))
+                    .filter(|id| id_set.contains(*id))
+                    .map(str::to_owned)
+                    .or_else(|| title_to_id.get(key).cloned());
+                let Some(target) = target else { continue };
+                if seen.insert((source_id.clone(), target.clone())) {
+                    edges.push(DocumentGraphEdge {
+                        source: source_id.clone(),
+                        target,
+                    });
+                }
+            }
+        }
+        Ok(DocumentGraph { nodes, edges })
+    }
+
     pub fn deck_summary(&self, id: &str) -> Result<DeckSummary, CoreError> {
         let record = self.record(id)?;
         self.validate_deck_path(&record.path)?;
@@ -277,10 +395,93 @@ impl Library {
         )
     }
 
+    pub fn read_authoring_registries(&self) -> Result<AuthoringRegistries, CoreError> {
+        Ok(AuthoringRegistries {
+            snippets: self.read_authoring_entries("snippets.json", false)?,
+            math_shortcuts: self.read_authoring_entries("math-shortcuts.json", true)?,
+        })
+    }
+
+    pub fn write_authoring_registry(
+        &self,
+        registry: &str,
+        entries: &[serde_json::Value],
+    ) -> Result<(), CoreError> {
+        let (file_name, is_math) = match registry {
+            "snippets" => ("snippets.json", false),
+            "math_shortcuts" => ("math-shortcuts.json", true),
+            _ => return Err(CoreError::InvalidInput),
+        };
+        validate_authoring_entries(entries, is_math)?;
+
+        let directory = self.root.join(LIBRARY_CONFIG_DIR);
+        match fs::symlink_metadata(&directory) {
+            Ok(metadata) if !metadata.is_dir() || metadata.file_type().is_symlink() => {
+                return Err(CoreError::PathRejected);
+            }
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                fs::create_dir(&directory)?;
+            }
+            Err(error) => return Err(CoreError::Io(error)),
+        }
+        let canonical_directory = fs::canonicalize(&directory)?;
+        if canonical_directory.parent() != Some(self.root.as_path()) {
+            return Err(CoreError::PathRejected);
+        }
+        let path = canonical_directory.join(file_name);
+        let document = AuthoringRegistryFile {
+            schema_version: AUTHORING_REGISTRY_SCHEMA_VERSION,
+            entries: entries.to_vec(),
+        };
+        write_file_atomic(
+            &path,
+            &serde_json::to_vec_pretty(&document).map_err(|_| CoreError::InvalidInput)?,
+        )
+    }
+
+    fn read_authoring_entries(
+        &self,
+        file_name: &str,
+        is_math: bool,
+    ) -> Result<Vec<serde_json::Value>, CoreError> {
+        let directory = self.root.join(LIBRARY_CONFIG_DIR);
+        let metadata = match fs::symlink_metadata(&directory) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(error) => return Err(CoreError::Io(error)),
+        };
+        if !metadata.is_dir() || metadata.file_type().is_symlink() {
+            return Err(CoreError::PathRejected);
+        }
+        let canonical_directory = fs::canonicalize(&directory)?;
+        if canonical_directory.parent() != Some(self.root.as_path()) {
+            return Err(CoreError::PathRejected);
+        }
+        let path = canonical_directory.join(file_name);
+        let metadata = match fs::symlink_metadata(&path) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(error) => return Err(CoreError::Io(error)),
+        };
+        if metadata.file_type().is_symlink() || !metadata.is_file() {
+            return Err(CoreError::PathRejected);
+        }
+        let bytes = read_regular_file_limited(&path, AUTHORING_REGISTRY_MAX_BYTES)?;
+        let file: AuthoringRegistryFile =
+            serde_json::from_slice(&bytes).map_err(|_| CoreError::InvalidInput)?;
+        if file.schema_version == 0 {
+            return Err(CoreError::InvalidInput);
+        }
+        validate_authoring_entries(&file.entries, is_math)?;
+        Ok(file.entries)
+    }
+
     pub fn open_deck(&self, id: &str) -> Result<OpenDeck, CoreError> {
         let mut record = self.record(id)?;
         self.validate_deck_path(&record.path)?;
         remove_stale_temps(&record.path)?;
+        remove_stale_asset_temps(&record.path.join("images"))?;
 
         if record.identity_repair {
             let manifest = DeckManifest {
@@ -540,6 +741,195 @@ impl Library {
             fingerprint,
             check_to_rename_us,
         })
+    }
+
+    pub fn upload_asset(
+        &self,
+        id: &str,
+        filename: &str,
+        declared_type: &str,
+        bytes: &[u8],
+        fit: &str,
+    ) -> Result<UploadedAsset, CoreError> {
+        if bytes.is_empty() || bytes.len() > MAX_ASSET_BYTES {
+            return Err(CoreError::TooLarge);
+        }
+        if filename.len() > 255 || !matches!(fit, "contain" | "cover") {
+            return Err(CoreError::InvalidInput);
+        }
+
+        let lock = self.write_lock(id);
+        let _guard = lock.lock().expect("deck write lock poisoned");
+        let record = self.record(id)?;
+        self.validate_deck_path(&record.path)?;
+        let (extension, content_type) = detect_asset_type(bytes)?;
+        let declared_type = declared_type.split(';').next().unwrap_or("").trim();
+        if !declared_type.is_empty() && declared_type != content_type {
+            return Err(CoreError::InvalidInput);
+        }
+        if content_type == "video/mp4" && record.source_file == "document.md" {
+            return Err(CoreError::InvalidInput);
+        }
+
+        let images = record.path.join("images");
+        match fs::symlink_metadata(&images) {
+            Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_dir() => {
+                return Err(CoreError::PathRejected);
+            }
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => fs::create_dir(&images)?,
+            Err(error) => return Err(CoreError::Io(error)),
+        }
+        let canonical_images = fs::canonicalize(&images).map_err(|_| CoreError::PathRejected)?;
+        if canonical_images.parent() != Some(record.path.as_path()) {
+            return Err(CoreError::PathRejected);
+        }
+        remove_stale_asset_temps(&canonical_images)?;
+
+        let digest = sha256(bytes);
+        let stored_path = canonical_images.join(format!("{digest}.{extension}"));
+        match fs::symlink_metadata(&stored_path) {
+            Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_file() => {
+                return Err(CoreError::PathRejected);
+            }
+            Ok(_) => {
+                let existing = read_regular_file_limited(&stored_path, MAX_ASSET_BYTES as u64)?;
+                if sha256(&existing) != digest {
+                    return Err(CoreError::PathRejected);
+                }
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                check_asset_quota(&canonical_images, bytes.len() as u64)?;
+                let mut temp = TempFileBuilder::new()
+                    .prefix(".elef-asset-")
+                    .suffix(".tmp")
+                    .tempfile_in(&canonical_images)?;
+                temp.write_all(bytes)?;
+                temp.as_file().sync_all()?;
+                match temp.persist_noclobber(&stored_path) {
+                    Ok(_) => sync_directory(&canonical_images)?,
+                    Err(error) if error.error.kind() == std::io::ErrorKind::AlreadyExists => {
+                        let existing =
+                            read_regular_file_limited(&stored_path, MAX_ASSET_BYTES as u64)?;
+                        if sha256(&existing) != digest {
+                            return Err(CoreError::PathRejected);
+                        }
+                    }
+                    Err(error) => return Err(CoreError::Io(error.error)),
+                }
+            }
+            Err(error) => return Err(CoreError::Io(error)),
+        }
+
+        let alt = markdown_alt_text(filename);
+        Ok(UploadedAsset {
+            digest: digest.clone(),
+            content_type: content_type.into(),
+            source: format!("![{alt}](elef-asset:{digest} \"fit:{fit}\")"),
+        })
+    }
+
+    pub fn read_asset(&self, id: &str, digest: &str) -> Result<(Vec<u8>, &'static str), CoreError> {
+        if !is_sha256(digest) {
+            return Err(CoreError::NotFound);
+        }
+        let record = self.record(id)?;
+        self.validate_deck_path(&record.path)?;
+        let images = record.path.join("images");
+        let metadata = fs::symlink_metadata(&images).map_err(|error| {
+            if error.kind() == std::io::ErrorKind::NotFound {
+                CoreError::NotFound
+            } else {
+                CoreError::Io(error)
+            }
+        })?;
+        if metadata.file_type().is_symlink() || !metadata.is_dir() {
+            return Err(CoreError::PathRejected);
+        }
+        let canonical_images = fs::canonicalize(&images).map_err(|_| CoreError::PathRejected)?;
+        if canonical_images.parent() != Some(record.path.as_path()) {
+            return Err(CoreError::PathRejected);
+        }
+
+        for (extension, content_type) in ASSET_TYPES {
+            let path = canonical_images.join(format!("{digest}.{extension}"));
+            match fs::symlink_metadata(&path) {
+                Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_file() => {
+                    return Err(CoreError::PathRejected);
+                }
+                Ok(_) => {
+                    let bytes = read_regular_file_limited(&path, MAX_ASSET_BYTES as u64)?;
+                    if sha256(&bytes) != digest {
+                        return Err(CoreError::NotFound);
+                    }
+                    return Ok((bytes, content_type));
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(CoreError::Io(error)),
+            }
+        }
+        Err(CoreError::NotFound)
+    }
+
+    pub fn read_asset_path(
+        &self,
+        id: &str,
+        relative_path: &Path,
+    ) -> Result<(Vec<u8>, &'static str), CoreError> {
+        let components = relative_path.components().collect::<Vec<_>>();
+        if components.len() < 2
+            || components[0].as_os_str() != "images"
+            || components
+                .iter()
+                .any(|component| !matches!(component, Component::Normal(_)))
+        {
+            return Err(CoreError::PathRejected);
+        }
+
+        let record = self.record(id)?;
+        self.validate_deck_path(&record.path)?;
+        let images = record.path.join("images");
+        let images_metadata = fs::symlink_metadata(&images).map_err(|error| {
+            if error.kind() == std::io::ErrorKind::NotFound {
+                CoreError::NotFound
+            } else {
+                CoreError::Io(error)
+            }
+        })?;
+        if images_metadata.file_type().is_symlink() || !images_metadata.is_dir() {
+            return Err(CoreError::PathRejected);
+        }
+        let canonical_images = fs::canonicalize(&images).map_err(|_| CoreError::PathRejected)?;
+        if canonical_images.parent() != Some(record.path.as_path()) {
+            return Err(CoreError::PathRejected);
+        }
+
+        let mut path = canonical_images.clone();
+        for (index, component) in components.iter().skip(1).enumerate() {
+            path.push(component.as_os_str());
+            let metadata = fs::symlink_metadata(&path).map_err(|error| {
+                if error.kind() == std::io::ErrorKind::NotFound {
+                    CoreError::NotFound
+                } else {
+                    CoreError::Io(error)
+                }
+            })?;
+            if metadata.file_type().is_symlink() {
+                return Err(CoreError::PathRejected);
+            }
+            let final_component = index + 2 == components.len();
+            if (final_component && !metadata.is_file()) || (!final_component && !metadata.is_dir())
+            {
+                return Err(CoreError::PathRejected);
+            }
+        }
+        let canonical_path = fs::canonicalize(&path).map_err(|_| CoreError::PathRejected)?;
+        if !canonical_path.starts_with(&canonical_images) {
+            return Err(CoreError::PathRejected);
+        }
+        let bytes = read_regular_file_limited(&canonical_path, MAX_ASSET_BYTES as u64)?;
+        let (_, content_type) = detect_asset_type(&bytes)?;
+        Ok((bytes, content_type))
     }
 
     pub fn export_elef<W: Write + Seek>(&self, id: &str, destination: W) -> Result<(), CoreError> {
@@ -1090,6 +1480,88 @@ fn validate_library_config(config: &LibraryConfig) -> Result<(), CoreError> {
     Ok(())
 }
 
+fn validate_authoring_entries(
+    entries: &[serde_json::Value],
+    is_math: bool,
+) -> Result<(), CoreError> {
+    if entries.len() > AUTHORING_REGISTRY_MAX_ENTRIES {
+        return Err(CoreError::TooLarge);
+    }
+    let serialized = serde_json::to_vec(entries).map_err(|_| CoreError::InvalidInput)?;
+    if serialized.len() as u64 > AUTHORING_REGISTRY_MAX_BYTES {
+        return Err(CoreError::TooLarge);
+    }
+    for entry in entries {
+        let Some(object) = entry.as_object() else {
+            return Err(CoreError::InvalidInput);
+        };
+        let identifier = object.get("id").ok_or(CoreError::InvalidInput)?;
+        let valid_id = identifier.as_str().is_some_and(|value| {
+            !value.is_empty() && value.len() <= 200 && !value.chars().any(char::is_control)
+        }) || identifier.as_u64().is_some();
+        if !valid_id || object.get("built_in").and_then(|value| value.as_bool()) == Some(true) {
+            return Err(CoreError::InvalidInput);
+        }
+        for field in ["name", "description"] {
+            validate_authoring_text(object.get(field), 500)?;
+        }
+        if is_math {
+            validate_authoring_text(object.get("prefix"), 8)?;
+            validate_authoring_text(object.get("expansion"), 20_000)?;
+            validate_authoring_string_array(object.get("aliases"), 100, 120)?;
+        } else {
+            validate_authoring_text(object.get("trigger"), 120)?;
+            validate_authoring_text(object.get("category"), 80)?;
+            validate_authoring_text(object.get("body"), 20_000)?;
+        }
+        if object
+            .get("behavior")
+            .is_some_and(|value| !value.is_object())
+            || object
+                .get("contexts")
+                .is_some_and(|value| validate_authoring_string_array(Some(value), 20, 80).is_err())
+            || object.get("search_terms").is_some_and(|value| {
+                validate_authoring_string_array(Some(value), 100, 500).is_err()
+            })
+        {
+            return Err(CoreError::InvalidInput);
+        }
+    }
+    Ok(())
+}
+
+fn validate_authoring_text(
+    value: Option<&serde_json::Value>,
+    max_bytes: usize,
+) -> Result<(), CoreError> {
+    let Some(text) = value.and_then(|value| value.as_str()) else {
+        return Err(CoreError::InvalidInput);
+    };
+    if text.is_empty() || text.len() > max_bytes || text.chars().any(char::is_control) {
+        return Err(CoreError::InvalidInput);
+    }
+    Ok(())
+}
+
+fn validate_authoring_string_array(
+    value: Option<&serde_json::Value>,
+    max_items: usize,
+    max_bytes: usize,
+) -> Result<(), CoreError> {
+    let Some(items) = value.and_then(|value| value.as_array()) else {
+        return Err(CoreError::InvalidInput);
+    };
+    if items.len() > max_items
+        || items.iter().any(|item| {
+            item.as_str()
+                .is_none_or(|text| text.len() > max_bytes || text.chars().any(char::is_control))
+        })
+    {
+        return Err(CoreError::InvalidInput);
+    }
+    Ok(())
+}
+
 fn write_file_atomic(path: &Path, bytes: &[u8]) -> Result<(), CoreError> {
     let parent = path.parent().ok_or(CoreError::PathRejected)?;
     if let Ok(metadata) = fs::symlink_metadata(path)
@@ -1184,6 +1656,174 @@ fn source_file_key(name: &str) -> (u8, usize, String, String) {
         name.to_lowercase(),
         name.to_owned(),
     )
+}
+
+fn markdown_document_title(source: &str, fallback: &str) -> String {
+    let lines = source.lines().collect::<Vec<_>>();
+    let mut first_body_line = 0;
+    if let Some(first) = lines.first()
+        && first.trim_start_matches('\u{feff}').trim() == "---"
+        && let Some(closing) = lines
+            .iter()
+            .enumerate()
+            .skip(1)
+            .find(|(_, line)| line.trim() == "---")
+        && lines[1..closing.0]
+            .iter()
+            .any(|line| is_front_matter_key(line))
+    {
+        first_body_line = closing.0 + 1;
+    }
+
+    let mut fence = None;
+    for line in lines.into_iter().skip(first_body_line) {
+        if let Some(marker) = markdown_fence_marker(line) {
+            if let Some((character, length)) = fence {
+                if marker.0 == character && marker.1 >= length && marker.2.trim().is_empty() {
+                    fence = None;
+                }
+            } else {
+                fence = Some((marker.0, marker.1));
+            }
+            continue;
+        }
+        if fence.is_some() {
+            continue;
+        }
+        let heading = line.trim_start_matches(' ');
+        let hashes = heading.bytes().take_while(|byte| *byte == b'#').count();
+        if hashes != 1 || !heading.is_char_boundary(hashes) {
+            continue;
+        }
+        let remainder = &heading[hashes..];
+        if !remainder.chars().next().is_some_and(char::is_whitespace) {
+            continue;
+        }
+        let title = remainder.trim().trim_end_matches('#').trim();
+        if !title.is_empty() {
+            return title.to_owned();
+        }
+    }
+    fallback.to_owned()
+}
+
+fn is_front_matter_key(line: &str) -> bool {
+    let Some((key, _)) = line.split_once(':') else {
+        return false;
+    };
+    let mut characters = key.chars();
+    characters
+        .next()
+        .is_some_and(|character| character.is_ascii_alphabetic() || character == '_')
+        && characters.all(|character| {
+            character.is_ascii_alphanumeric() || character == '_' || character == '-'
+        })
+}
+
+fn markdown_document_links(source: &str) -> Vec<String> {
+    let mut links = Vec::new();
+    let mut fence: Option<(u8, usize)> = None;
+    for line in source.lines() {
+        if let Some((character, length, remainder)) = markdown_fence_marker(line) {
+            if let Some((active_character, active_length)) = fence {
+                if character == active_character
+                    && length >= active_length
+                    && remainder.trim().is_empty()
+                {
+                    fence = None;
+                }
+            } else {
+                fence = Some((character, length));
+            }
+            continue;
+        }
+        if fence.is_some() || line.starts_with("    ") || line.starts_with('\t') {
+            continue;
+        }
+
+        let bytes = line.as_bytes();
+        let mut cursor = 0;
+        while cursor + 1 < bytes.len() {
+            if bytes[cursor] != b'[' || bytes[cursor + 1] != b'[' || is_escaped(bytes, cursor) {
+                cursor += 1;
+                continue;
+            }
+            let Some(close_relative) = line[cursor + 2..].find("]]") else {
+                break;
+            };
+            let end = cursor + 2 + close_relative;
+            if inline_code_contains(line, cursor, end + 2) {
+                cursor = end + 2;
+                continue;
+            }
+            let title = &line[cursor + 2..end];
+            if !title.is_empty() && !title.contains(']') && !title.contains('`') {
+                links.push(title.to_owned());
+            }
+            cursor = end + 2;
+        }
+    }
+    links
+}
+
+fn markdown_fence_marker(line: &str) -> Option<(u8, usize, &str)> {
+    let leading_spaces = line.bytes().take_while(|byte| *byte == b' ').count();
+    if leading_spaces > 3 {
+        return None;
+    }
+    let rest = &line[leading_spaces..];
+    let character = *rest.as_bytes().first()?;
+    if character != b'`' && character != b'~' {
+        return None;
+    }
+    let length = rest.bytes().take_while(|byte| *byte == character).count();
+    (length >= 3).then_some((character, length, &rest[length..]))
+}
+
+fn inline_code_contains(line: &str, start: usize, end: usize) -> bool {
+    let bytes = line.as_bytes();
+    let mut cursor = 0;
+    while cursor < bytes.len() {
+        if bytes[cursor] != b'`' {
+            cursor += 1;
+            continue;
+        }
+        let run_start = cursor;
+        while cursor < bytes.len() && bytes[cursor] == b'`' {
+            cursor += 1;
+        }
+        let run_length = cursor - run_start;
+        let mut search = cursor;
+        while search < bytes.len() {
+            let Some(relative) = bytes[search..].iter().position(|byte| *byte == b'`') else {
+                break;
+            };
+            let closing_start = search + relative;
+            let closing_length = bytes[closing_start..]
+                .iter()
+                .take_while(|byte| **byte == b'`')
+                .count();
+            if closing_length == run_length {
+                if start < closing_start + closing_length && end > run_start {
+                    return true;
+                }
+                cursor = closing_start + closing_length;
+                break;
+            }
+            search = closing_start + closing_length;
+        }
+    }
+    false
+}
+
+fn is_escaped(bytes: &[u8], position: usize) -> bool {
+    let mut backslashes = 0;
+    let mut cursor = position;
+    while cursor > 0 && bytes[cursor - 1] == b'\\' {
+        backslashes += 1;
+        cursor -= 1;
+    }
+    backslashes % 2 == 1
 }
 
 fn read_manifest(deck_path: &Path) -> Result<Option<DeckManifest>, ()> {
@@ -1322,6 +1962,92 @@ fn remove_stale_temps(deck_path: &Path) -> Result<(), CoreError> {
     Ok(())
 }
 
+fn remove_stale_asset_temps(images_dir: &Path) -> Result<(), CoreError> {
+    match fs::symlink_metadata(images_dir) {
+        Ok(metadata) if metadata.is_dir() && !metadata.file_type().is_symlink() => {}
+        Ok(_) => return Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(CoreError::Io(error)),
+    }
+    let now = SystemTime::now();
+    for entry in fs::read_dir(images_dir)? {
+        let entry = entry?;
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if !name.starts_with(".elef-asset-") || !name.ends_with(".tmp") {
+            continue;
+        }
+        let file_type = entry.file_type()?;
+        if !file_type.is_file() || file_type.is_symlink() {
+            continue;
+        }
+        let old_enough = entry
+            .metadata()
+            .and_then(|metadata| metadata.modified())
+            .ok()
+            .and_then(|modified| now.duration_since(modified).ok())
+            .is_some_and(|age| age.as_secs() >= STALE_TEMP_AGE_SECONDS);
+        if old_enough {
+            fs::remove_file(entry.path())?;
+        }
+    }
+    Ok(())
+}
+
+fn check_asset_quota(images_dir: &Path, additional_bytes: u64) -> Result<(), CoreError> {
+    check_asset_quota_with_limit(
+        images_dir,
+        additional_bytes,
+        MAX_DECK_MEDIA_BYTES,
+        MAX_ARCHIVE_ENTRIES,
+    )
+}
+
+fn check_asset_quota_with_limit(
+    images_dir: &Path,
+    additional_bytes: u64,
+    max_bytes: u64,
+    max_entries: usize,
+) -> Result<(), CoreError> {
+    let mut pending = vec![images_dir.to_path_buf()];
+    let mut bytes = additional_bytes;
+    let mut entries = 0usize;
+
+    while let Some(directory) = pending.pop() {
+        for entry in fs::read_dir(directory)? {
+            let entry = entry?;
+            let metadata = fs::symlink_metadata(entry.path())?;
+            let file_type = metadata.file_type();
+            if file_type.is_symlink() {
+                return Err(CoreError::PathRejected);
+            }
+            if file_type.is_dir() {
+                entries = entries.checked_add(1).ok_or(CoreError::TooLarge)?;
+                pending.push(entry.path());
+                continue;
+            }
+            if !file_type.is_file() {
+                return Err(CoreError::PathRejected);
+            }
+
+            entries = entries.checked_add(1).ok_or(CoreError::TooLarge)?;
+            if entries > max_entries {
+                return Err(CoreError::TooLarge);
+            }
+            bytes = bytes
+                .checked_add(metadata.len())
+                .ok_or(CoreError::TooLarge)?;
+            if bytes > max_bytes {
+                return Err(CoreError::TooLarge);
+            }
+        }
+    }
+
+    if bytes > max_bytes || entries > max_entries {
+        return Err(CoreError::TooLarge);
+    }
+    Ok(())
+}
+
 fn sync_directory(path: &Path) -> Result<(), CoreError> {
     File::open(path)?.sync_all()?;
     Ok(())
@@ -1333,6 +2059,73 @@ fn path_id(path: &Path) -> String {
 
 fn sha256(bytes: &[u8]) -> String {
     hex::encode(Sha256::digest(bytes))
+}
+
+fn detect_asset_type(bytes: &[u8]) -> Result<(&'static str, &'static str), CoreError> {
+    let starts_with = |signature: &[u8]| bytes.starts_with(signature);
+    if starts_with(b"\x89PNG\r\n\x1a\n") {
+        return Ok(("png", "image/png"));
+    }
+    if starts_with(b"\xff\xd8\xff") {
+        return Ok(("jpg", "image/jpeg"));
+    }
+    if starts_with(b"GIF87a") || starts_with(b"GIF89a") {
+        return Ok(("gif", "image/gif"));
+    }
+    if starts_with(b"BM") {
+        return Ok(("bmp", "image/bmp"));
+    }
+    if starts_with(b"II*\0") || starts_with(b"MM\0*") {
+        return Ok(("tif", "image/tiff"));
+    }
+    if bytes.len() >= 12 && &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WEBP" {
+        return Ok(("webp", "image/webp"));
+    }
+    if bytes.len() >= 12 && &bytes[4..8] == b"ftyp" {
+        let brand = String::from_utf8_lossy(&bytes[8..bytes.len().min(32)]).to_ascii_lowercase();
+        if brand.contains("avif") || brand.contains("avis") {
+            return Ok(("avif", "image/avif"));
+        }
+        if [
+            "heic", "heix", "hevc", "hevx", "heim", "heis", "mif1", "msf1",
+        ]
+        .iter()
+        .any(|value| brand.contains(value))
+        {
+            return Ok(("heic", "image/heic"));
+        }
+        if brand.contains("isom") || brand.contains("mp41") || brand.contains("mp42") {
+            return Ok(("mp4", "video/mp4"));
+        }
+    }
+    Err(CoreError::InvalidInput)
+}
+
+fn markdown_alt_text(filename: &str) -> String {
+    let filename = filename
+        .rsplit(['/', '\\'])
+        .next()
+        .unwrap_or("image")
+        .to_owned();
+    let basename = filename
+        .rsplit_once('.')
+        .filter(|(stem, extension)| !stem.is_empty() && !extension.is_empty())
+        .map(|(stem, _extension)| stem)
+        .unwrap_or(&filename)
+        .chars()
+        .filter(|character| !character.is_control())
+        .take(255)
+        .collect::<String>();
+    let basename = basename.trim();
+    let basename = if basename.is_empty() {
+        "image"
+    } else {
+        basename
+    };
+    basename
+        .replace('\\', "\\\\")
+        .replace('[', "\\[")
+        .replace(']', "\\]")
 }
 
 fn is_sha256(value: &str) -> bool {
@@ -1454,6 +2247,157 @@ mod tests {
         );
         fs::remove_file(path.join("document.md")).unwrap();
         assert_eq!(choose_source_file(&path).unwrap().as_deref(), Some("a.md"));
+    }
+
+    #[test]
+    fn asset_upload_is_content_addressed_and_read_only_lookup_verifies_the_digest() {
+        let (temp, library) = library();
+        let deck_path = write_deck(temp.path(), "Asset deck", &[("presentation.md", "# Talk")]);
+        let id = library.list_decks().unwrap()[0].id.clone();
+        let png = b"\x89PNG\r\n\x1a\nvalid test bytes";
+
+        let uploaded = library
+            .upload_asset(&id, "photo[1].png", "image/png", png, "cover")
+            .unwrap();
+        assert_eq!(uploaded.content_type, "image/png");
+        assert!(uploaded.source.starts_with("![photo\\[1\\]](elef-asset:"));
+        assert!(uploaded.source.ends_with(" \"fit:cover\")"));
+        assert_eq!(
+            fs::read(
+                deck_path
+                    .join("images")
+                    .join(format!("{}.png", uploaded.digest))
+            )
+            .unwrap(),
+            png
+        );
+        assert_eq!(
+            library.read_asset(&id, &uploaded.digest).unwrap(),
+            (png.to_vec(), "image/png")
+        );
+    }
+
+    #[test]
+    fn existing_relative_image_assets_are_scoped_to_the_deck_images_tree() {
+        let (temp, library) = library();
+        let deck_path = write_deck(
+            temp.path(),
+            "Existing assets",
+            &[("presentation.md", "# Talk")],
+        );
+        let id = library.list_decks().unwrap()[0].id.clone();
+        let png = b"\x89PNG\r\n\x1a\nexisting image";
+        fs::create_dir_all(deck_path.join("images/nested")).unwrap();
+        fs::write(deck_path.join("images/nested/diagram.png"), png).unwrap();
+
+        assert_eq!(
+            library
+                .read_asset_path(&id, Path::new("images/nested/diagram.png"))
+                .unwrap(),
+            (png.to_vec(), "image/png")
+        );
+        assert!(matches!(
+            library.read_asset_path(&id, Path::new("images/../presentation.md")),
+            Err(CoreError::PathRejected)
+        ));
+    }
+
+    #[test]
+    fn asset_upload_rejects_mismatched_media_types_and_document_video() {
+        let (temp, library) = library();
+        let raster_path = write_deck(temp.path(), "Raster", &[("presentation.md", "# Talk")]);
+        let document_path = write_deck(temp.path(), "Document", &[("document.md", "# Notes")]);
+        let raster_id = library.list_decks().unwrap()[1].id.clone();
+        let document_id = library
+            .deck_summary(&library.list_decks().unwrap()[0].id)
+            .unwrap()
+            .id;
+        let png = b"\x89PNG\r\n\x1a\nvalid test bytes";
+        assert!(matches!(
+            library.upload_asset(&raster_id, "photo.png", "image/jpeg", png, "contain"),
+            Err(CoreError::InvalidInput)
+        ));
+
+        let mp4 = b"\0\0\0\x18ftypisom0000test";
+        assert!(matches!(
+            library.upload_asset(&document_id, "clip.mp4", "video/mp4", mp4, "contain"),
+            Err(CoreError::InvalidInput)
+        ));
+        assert!(!raster_path.join("images").exists());
+        assert!(!document_path.join("images").exists());
+    }
+
+    #[test]
+    fn asset_quota_counts_existing_files_and_fails_closed_on_symlinks() {
+        let (temp, _library) = library();
+        let images = temp.path().join("images");
+        fs::create_dir(&images).unwrap();
+        fs::write(images.join("existing.png"), b"1234").unwrap();
+        fs::create_dir(images.join("nested")).unwrap();
+        fs::write(images.join("nested").join("other.png"), b"12").unwrap();
+
+        assert!(check_asset_quota_with_limit(&images, 1, 7, 4).is_ok());
+        assert!(matches!(
+            check_asset_quota_with_limit(&images, 2, 7, 4),
+            Err(CoreError::TooLarge)
+        ));
+        assert!(matches!(
+            check_asset_quota_with_limit(&images, 0, 20, 2),
+            Err(CoreError::TooLarge)
+        ));
+
+        #[cfg(unix)]
+        {
+            symlink(temp.path().join("outside"), images.join("escape")).unwrap();
+            assert!(matches!(
+                check_asset_quota_with_limit(&images, 0, 20, 10),
+                Err(CoreError::PathRejected)
+            ));
+        }
+    }
+
+    #[test]
+    fn document_graph_uses_document_titles_and_ignores_code_links() {
+        let (temp, library) = library();
+        write_deck(
+            temp.path(),
+            "A",
+            &[(
+                "document.md",
+                "---\ntheme: light\n---\n# First Document\n\n[[Second Document|next]] [[Second Document]] `[[Inline Code]]` \\[[Escaped]]\n\n```md\n[[Fenced Code]]\n```\n    [[Indented Code]]\n",
+            )],
+        );
+        write_deck(temp.path(), "B", &[("document.md", "# Second Document\n")]);
+        write_deck(
+            temp.path(),
+            "Slides",
+            &[("presentation.md", "# Slides\n\n[[Second Document]]")],
+        );
+
+        let summaries = library.list_decks().unwrap();
+        let graph = library.document_graph().unwrap();
+        let first_id = summaries
+            .iter()
+            .find(|deck| deck.name == "A")
+            .unwrap()
+            .id
+            .clone();
+        let second_id = summaries
+            .iter()
+            .find(|deck| deck.name == "B")
+            .unwrap()
+            .id
+            .clone();
+        assert_eq!(graph.nodes.len(), 2);
+        assert!(
+            graph
+                .nodes
+                .iter()
+                .any(|node| node.title == "First Document")
+        );
+        assert_eq!(graph.edges.len(), 1);
+        assert_eq!(graph.edges[0].source, first_id);
+        assert_eq!(graph.edges[0].target, second_id);
     }
 
     #[cfg(unix)]
@@ -1619,6 +2563,88 @@ mod tests {
                 ..LibraryConfig::default()
             }),
             Err(CoreError::InvalidInput)
+        ));
+    }
+
+    #[test]
+    fn authoring_registries_are_portable_versioned_and_validated() {
+        let (temp, library) = library();
+        assert_eq!(
+            library.read_authoring_registries().unwrap(),
+            AuthoringRegistries::default()
+        );
+        let snippets = vec![serde_json::json!({
+            "id": "personal-bold",
+            "name": "Bold note",
+            "description": "Emphasize text",
+            "trigger": "bold-note",
+            "category": "Markdown",
+            "body": "**${1:text}**",
+            "built_in": false
+        })];
+        let math_shortcuts = vec![serde_json::json!({
+            "id": 42,
+            "name": "Alpha",
+            "description": "Greek alpha",
+            "prefix": "@",
+            "aliases": ["alpha"],
+            "expansion": "\\alpha"
+        })];
+        library
+            .write_authoring_registry("snippets", &snippets)
+            .unwrap();
+        library
+            .write_authoring_registry("math_shortcuts", &math_shortcuts)
+            .unwrap();
+        assert_eq!(
+            library.read_authoring_registries().unwrap(),
+            AuthoringRegistries {
+                snippets,
+                math_shortcuts
+            }
+        );
+        assert!(temp.path().join(".elef/snippets.json").is_file());
+        assert!(temp.path().join(".elef/math-shortcuts.json").is_file());
+        assert!(matches!(
+            library.write_authoring_registry("unknown", &[]),
+            Err(CoreError::InvalidInput)
+        ));
+        assert!(matches!(
+            library.write_authoring_registry(
+                "snippets",
+                &[serde_json::json!({
+                    "id": "fake-default",
+                    "name": "Fake default",
+                    "description": "Cannot shadow built-ins",
+                    "trigger": "x",
+                    "category": "Markdown",
+                    "body": "x",
+                    "built_in": true
+                })]
+            ),
+            Err(CoreError::InvalidInput)
+        ));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn authoring_registries_reject_symlinked_files() {
+        let (temp, library) = library();
+        let outside = temp.path().join("outside.json");
+        fs::write(&outside, r#"{"schema_version":1,"entries":[]}"#).unwrap();
+        fs::create_dir(temp.path().join(LIBRARY_CONFIG_DIR)).unwrap();
+        symlink(
+            &outside,
+            temp.path().join(LIBRARY_CONFIG_DIR).join("snippets.json"),
+        )
+        .unwrap();
+        assert!(matches!(
+            library.read_authoring_registries(),
+            Err(CoreError::PathRejected)
+        ));
+        assert!(matches!(
+            library.write_authoring_registry("snippets", &[]),
+            Err(CoreError::PathRejected)
         ));
     }
 

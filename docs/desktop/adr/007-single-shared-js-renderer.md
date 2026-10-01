@@ -19,7 +19,7 @@ The earlier plan ported the Markdown → HTML pipeline from Ruby to JS and kept 
 
 ## Decision (proposed)
 
-**Author the renderer once as a standalone JS/TS package.** A pure function — Markdown string in, HTML string out — with no DOM or browser dependencies. It covers what `Source::HtmlRenderer` covers today: slide splitting, Markdown → HTML, code highlighting (Shiki), math (KaTeX npm, version-pinned to match the katex gem), link/URL safety (`filter_html` + `SAFE_URL` semantics).
+**Author the Markdown block renderer once as a standalone JS package.** A pure function — Markdown string in, HTML string out — with no DOM or browser dependencies. The shared block renderer handles Markdown → HTML, code highlighting (Highlight.js), math (KaTeX npm), link safety and media references. Rails still uses `Source::Document` and related Ruby code for document and slide structure; desktop has its own preview structure and editor map. Full structural parity and the exact fixture gate are still open work, so this ADR remains proposed.
 
 **Mermaid:** the renderer emits placeholders only and sets strict mode in the markup; diagrams render in the browser/webview, which has the DOM Mermaid needs. Rails therefore never renders diagrams server-side.
 
@@ -39,7 +39,7 @@ Positive
 - A CI fitness check asserts Ruby `Source::HtmlRenderer` is gone and Rails and desktop load a bundle with the same hash ([requirements.md](../requirements.md) QS-7).
 
 Negative (honest costs)
-1. **A new gem in Rails** (mini_racer, which needs a V8 build). S1 verifies a clean install on macOS arm64, Linux CI and Omarchy, render latency no worse than Ruby for a 100-slide deck, behavior under threads and fork, and that Shiki's default regex engine (WebAssembly) works under mini_racer — otherwise use Shiki's JS regex engine. Fallback if libv8 is painful: a persistent Node sidecar; S1 records the decision.
+1. **A new gem in Rails** (mini_racer, which needs a V8 build). The bundle loads and the targeted Rails tests pass on Omarchy; macOS arm64, full consumer coverage, production latency, memory behavior and Puma cluster behavior remain unverified. Highlight.js is used instead of Shiki, so there is no Shiki WebAssembly engine dependency. A persistent Node sidecar remains a fallback if MiniRacer proves unacceptable on a supported target.
 2. **A build step** for the bundle (checked-in vs CI-built — S1 decides); small, but new in the Rails dev loop.
 3. **The web app's rendering path changes.** A subtle bug would affect the existing product. Mitigations: the 100% fixture gate, the `ELEF_RENDERER` flag for instant rollback, and a soak period before deletion ([delivery-plan.md](../delivery-plan.md) M3w).
 

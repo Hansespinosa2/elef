@@ -2,28 +2,29 @@
 
 Status: draft v3 (2026-10-01). Implements the preference: one suite of user flows verified on web and desktop, tiered for speed, no divergent suites. Every quality scenario in [requirements.md](requirements.md) maps to a tier here.
 
-## 1. Structure: one suite, two runner dialects
+## 1. Structure: shared scenarios, two runner dialects
 
-- **Scenarios** are the "one suite": named user flows defined once against page objects (LibraryPage, EditorPage, …). Initial set: open-deck, type-and-autosave, undo-redo-session, insert-image, source-visual-toggle, snippet-insert, math-input, elef-export-import, external-edit-conflict, hostile-deck-neutralized, update-cycle.
-- **Runners** (two dialects): Playwright for web; WebdriverIO for the Tauri binary. Playwright is CDP-first and cannot drive `tauri-driver` (W3C WebDriver), so the same spec files cannot run on both. Page objects have one implementation per runner; scenarios are shared.
+- **Scenarios** are the intended shared suite: named user flows defined once against page objects (LibraryPage, EditorPage, …). Initial set: open-deck, type-and-autosave, undo-redo-session, insert-image, source-visual-toggle, snippet-insert, math-input, elef-export-import, external-edit-conflict, hostile-deck-neutralized, update-cycle.
+- **Runner constraint:** the current shell is Tauri. [Playwright's CDP attachment supports Chromium only](https://playwright.dev/docs/api/class-browsertype#browser-type-connect-over-cdp); [Tauri recommends its WebdriverIO service for desktop binaries](https://v2.tauri.app/develop/tests/webdriver/), including WKWebView and WebKitGTK. Therefore a literal Playwright runner cannot drive the supported desktop binaries through a documented protocol. The planned implementation shares scenario definitions and page-object behavior across Playwright web and WebdriverIO Tauri adapters; it does not meet the narrower preference that the Playwright runner itself execute against the binary. Do not claim that narrower preference as satisfied without changing the shell or proving a supported adapter.
+- **Current evidence:** this branch has Node component/adapter tests, Rails tests, Rust core tests, architecture checks, and Linux/macOS package builds. It does not yet have shared browser scenario definitions, Playwright web flows, WebdriverIO real-binary flows, or native-dialog/menu smoke coverage.
 - **Divergence guard:** a scenario that exists in only one runner without a documented reason fails review.
 
 ## 2. Tiers
 
 | Tier | What | When | Verifies |
 |---|---|---|---|
-| T0 | Unit and component: Rust core tests (safe write, path guard, archive, source-file rule); JS unit tests; **renderer fixture suite** (Node, against the bundle); thin Ruby test that the mini_racer wrapper returns the same HTML as the bundle; transport contract tests | Every change, fast path | QS-3 (Rust), QS-4, QS-5, QS-10, QS-11 |
+| T0 | Unit and component: Rust core tests (safe write, path guard, archive, source-file rule, document graph, asset validation); JS unit tests including raw-byte media transport; **renderer fixture suite** (Node, against the bundle); thin Ruby test that the mini_racer wrapper returns the same HTML as the bundle; transport contract tests | Every change, fast path | QS-3 (Rust), QS-4, QS-5, QS-10, QS-11 |
 | T1 | Playwright: scenarios vs **web** (Rails dev server) | Every change (< ~5 min) | QS-1 (web leg) |
 | T1m | Playwright **mock tier**: desktop frontend served locally, Tauri IPC mocked. Fast desktop UI flows without the binary; honest about being UI-only, not backend truth | Every change | QS-1 (desktop UI) |
 | T2 | WebdriverIO: scenarios vs the **real Tauri binary** via `tauri-driver` (Linux CI) and `tauri-plugin-webdriver` (embedded driver, including macOS). Includes the perf leg and network-blocked run | PRs | QS-1, QS-3, QS-6, QS-9, QS-12 |
 | T3 | Native smoke: install, launch, menus, dialogs, updater dry-run, hostile fixtures, and process-kill save fault injection (planned) | PRs / release | QS-2, QS-4, QS-5, QS-8 |
 | CI fitness | Architecture rules as automated checks (§6) | Every change | QS-7, T5/T8 controls |
 
-Fast feedback per change is T0 + T1 + T1m; the real-binary tier (T2 + T3) gates PRs. macOS desktop E2E is the weak spot (no official driver); T2 on macOS uses the embedded driver, supplemented by the manual first-device check in [delivery-plan.md](delivery-plan.md).
+Fast feedback per change is T0 + T1 + T1m; the real-binary tier (T2 + T3) is intended to gate PRs. Those browser/system tiers are not implemented on this branch yet. Tauri's embedded WebDriver path supports macOS; the binary build job alone does not prove launch or native behavior.
 
 ## 3. Renderer fixtures: one renderer, two phases
 
-There is one renderer (ADR-007); the fixture suite tests the JS bundle directly in Node, with no bridge between implementations. Fixture *expected outputs* initially come from the Ruby suite. Rouge (Ruby) and Shiki (JS) emit different token HTML, so byte comparison would fail forever during cutover.
+The JS Markdown block renderer is shared (ADR-007); the desktop slide/document structure and editor map are not yet the same implementation as Rails. Node tests exercise the JS bundle and targeted Rails tests exercise MiniRacer, but no normalized Rails-to-desktop structure fixture gate exists yet. The Ruby fallback uses Rouge while JS uses Highlight.js, so initial block output comparison must normalize only the documented highlighter markup differences.
 
 - **Phase 1 — cutover gate.** Comparison is **normalized**: strip highlighter spans and classes and compare text plus document structure, or compare a canonical token stream. Allowed diffs are enumerated (highlighter markup only); anything else fails. 100% normalized pass is required before the Ruby renderer is deleted.
 - **Phase 2 — after cutover.** Expected outputs are regenerated from the JS renderer and comparison becomes **exact**. The normalization machinery is retired, not maintained.

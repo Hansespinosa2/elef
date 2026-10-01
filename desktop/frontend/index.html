@@ -53,6 +53,11 @@
         </section>
 
         <section id="library-view" class="library-view" aria-labelledby="library-title" hidden>
+          <nav class="library-view-tabs" aria-label="Library views">
+            <button id="show-deck-list" class="library-view-tab is-active" type="button" aria-pressed="true">Decks</button>
+            <button id="show-document-graph" class="library-view-tab" type="button" aria-pressed="false">Document graph</button>
+          </nav>
+          <div id="deck-browser-view">
           <div class="page-heading">
             <div>
               <p class="eyebrow">WORKSPACE</p>
@@ -73,6 +78,27 @@
             <p>Create a presentation or a document in this library.</p>
             <button class="primary-button" type="button" data-action="create-presentation">Create a presentation</button>
           </div>
+          </div>
+          <section id="document-graph-view" class="document-graph-panel" hidden aria-labelledby="document-graph-heading">
+            <div class="document-graph-heading">
+              <div>
+                <p class="eyebrow">DOCUMENT RELATIONSHIPS</p>
+                <h2 id="document-graph-heading">Document network</h2>
+                <p>Explore links authored in your Markdown. Select a document to open it.</p>
+              </div>
+              <div class="document-graph-controls">
+                <label class="sr-only" for="document-graph-search">Find a document</label>
+                <input id="document-graph-search" type="search" placeholder="Find a document…" data-document-graph-target="search" data-action="input->document-graph#search keydown.down->document-graph#focusResult">
+                <div class="document-graph-results" data-document-graph-target="results" data-action="keydown.esc->document-graph#closeSearch" hidden></div>
+                <button type="button" data-action="document-graph#zoomOut" aria-label="Zoom out">−</button>
+                <button type="button" data-document-graph-target="scaleLabel" data-action="document-graph#reset" aria-label="Reset graph view" title="Reset to 100%">100%</button>
+                <button type="button" data-action="document-graph#zoomIn" aria-label="Zoom in">+</button>
+              </div>
+            </div>
+            <span class="sr-only" aria-live="polite" data-document-graph-target="status"></span>
+            <div id="document-graph-mount"></div>
+            <p class="document-graph-help">Drag the canvas to pan. Use the controls or your trackpad to zoom.</p>
+          </section>
         </section>
 
         <section id="deck-view" class="deck-view" hidden aria-labelledby="deck-title">
@@ -87,12 +113,20 @@
               <p class="detail-label">Markdown source</p>
               <span id="save-state" class="save-state" role="status">Saved</span>
             </div>
-            <form id="desktop-editor-form" class="desktop-editor-form" data-editor-mode="source">
-              <div id="desktop-editor-field" class="field source-field" data-controller="editor snippet-palette math-shorthand math-shortcut-palette mermaid-assist document-link-palette" data-editor-initial-source-value="&quot;&quot;" data-authoring-registry="[]" data-document-link-palette-titles-value="[]">
+            <form id="desktop-editor-form" class="visual-editor-form desktop-editor-form" data-controller="preview visual-editor presentation-editor slide-overview media" data-action="input->preview#schedule change->preview#schedule input->slide-overview#sourceChanged change->slide-overview#sourceChanged preview:updated->slide-overview#previewUpdated" data-preview-url-value="elef-preview://localhost/" data-preview-timeout-value="4000" data-media-enabled-value="false" data-media-work-kind-value="presentation" data-editor-mode="source">
+              <div class="media-editor-controls" aria-label="Media controls">
+                <button id="add-media" class="quiet-button" type="button" data-action="click->media#choose">Add image or video</button>
+                <label class="media-fit-control">Fit
+                  <select data-media-target="fit"><option value="contain">Contain</option><option value="cover">Cover</option></select>
+                </label>
+                <input type="file" accept="image/*,video/mp4" hidden data-media-target="input" data-action="change->media#selected">
+                <span class="media-upload-status" data-media-target="status" role="status" aria-live="polite" aria-busy="false"></span>
+              </div>
+              <div id="desktop-editor-field" class="field source-field" data-controller="editor snippet-palette math-shorthand math-shortcut-palette mermaid-assist document-link-palette" data-action="paste->media#paste:capture dragover->media#sourceDragOver:capture dragleave->media#sourceDragLeave drop->media#sourceDrop:capture" data-editor-initial-source-value="&quot;&quot;" data-authoring-registry="[]" data-document-link-palette-titles-value="[]" data-presentation-editor-target="source">
                 <div class="editor-toolbar" aria-label="Editor controls">
                   <div class="editor-mode-switch" role="group" aria-label="Editing mode">
                     <button id="source-mode" class="editor-mode-button is-active" type="button" data-editor-target="sourceButton" data-action="click->editor#showSource" aria-pressed="true">Source</button>
-                    <button id="visual-mode" class="editor-mode-button" type="button" disabled aria-pressed="false" title="Visual editing is not available in this build">Visual</button>
+                    <button id="visual-mode" class="editor-mode-button" type="button" disabled aria-pressed="false" title="Loading visual editor">Visual</button>
                     <span class="editor-editing-mode" data-editor-target="editingMode" aria-live="polite">Source</span>
                   </div>
                   <span class="editor-mode" data-editor-target="mode" data-mode="standard" aria-live="polite">Standard</span>
@@ -107,8 +141,27 @@
                 <div id="deck-source-mermaid-palette" class="snippet-palette" data-mermaid-assist-target="palette" hidden role="listbox" aria-label="Mermaid suggestions"></div>
                 <div id="deck-source-document-link-palette" class="snippet-palette" data-document-link-palette-target="palette" hidden role="listbox" aria-label="Document link suggestions"></div>
               </div>
+              <section class="slide-overview" aria-labelledby="slide-overview-heading" hidden>
+                <div class="slide-overview-heading-row">
+                  <div><h3 id="slide-overview-heading">Slide overview</h3><p data-slide-overview-target="count" aria-live="polite">0 slides</p></div>
+                  <div class="slide-overview-actions" aria-label="Slide actions">
+                    <button type="button" data-action="slide-overview#add">Add</button>
+                    <button type="button" data-action="slide-overview#duplicate">Duplicate</button>
+                    <button type="button" data-action="slide-overview#delete">Delete</button>
+                    <button type="button" data-action="slide-overview#moveUp">↑</button>
+                    <button type="button" data-action="slide-overview#moveDown">↓</button>
+                  </div>
+                </div>
+                <div class="slide-overview-grid" data-slide-overview-target="grid" role="group" aria-label="Slides"></div>
+                <section class="slide-overflow-warnings" data-slide-overview-target="warnings" aria-label="Slide overflow warnings" role="status" hidden><h4>Overflow warnings</h4><ul></ul></section>
+              </section>
+              <script type="application/json" data-editor-map-json>{}</script>
+              <div id="desktop-preview" class="editor-projection preview-pane" data-visual-editor-target="projection" data-preview-target="container" aria-label="Rendered preview" data-action="dragover->media#dragOver dragleave->media#dragLeave drop->media#drop"></div>
+              <button id="exit-presentation" class="presentation-mode-exit" type="button" hidden>Exit presentation <kbd>Esc</kbd></button>
+              <section id="preview-warnings" class="slide-overflow-warnings" data-preview-target="warnings" role="status" aria-live="polite" hidden><h4>Preview warnings</h4><ul></ul></section>
+              <p data-preview-target="status" class="editor-mode-hint" role="status" aria-live="polite"></p>
+              <button type="button" data-preview-target="retry" class="quiet-button" data-action="preview#retry" hidden>Retry preview</button>
             </form>
-            <pre id="print-source" class="print-source" hidden></pre>
             <p class="editor-help">Changes save automatically. Undo is available while this deck stays open. Keep sync version history enabled: an external write can still race the final file replacement.</p>
             <button id="retry-save" class="quiet-button" type="button" hidden>Retry save</button>
             <button id="restore-local-draft" class="quiet-button restore-draft" type="button" hidden>Restore discarded local draft</button>

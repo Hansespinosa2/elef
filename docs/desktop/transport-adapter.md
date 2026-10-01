@@ -1,18 +1,18 @@
 # Transport Adapter — Seam Spec (IPC)
 
-Status: draft skeleton v3 (2026-10-01). The highest-leverage seam in the desktop app. The current Rails inventory and partial MiniRacer feasibility evidence are recorded in [spike-results/S1-rails-inventory.md](spike-results/S1-rails-inventory.md). S1 is still open: the shared renderer bundle, 10-fixture wrapper probe, Shiki engine probe, and macOS install evidence remain to be completed. Sections marked **S1** are known gaps S1 must close.
+Status: draft v3 (2026-10-01). The highest-leverage seam in the desktop app. Implementation and remaining Rails inventory evidence are recorded in [spike-results/S1-rails-inventory.md](spike-results/S1-rails-inventory.md). The shared Markdown block renderer now ships to the desktop worker and Rails MiniRacer wrapper. S1 remains open for structure/editor-map parity, full fixture and consumer coverage, macOS-arm64 MiniRacer evidence, and production thread/fork/latency results.
 
 ## 1. What the codebase does today (verified 2026-09-30 at `2b668f0`)
 
 - The editor's `fetch()`-based controllers (autosave, preview, media/upload, pptx-export, command-palette, bug-report) request `Accept: application/json` and parse JSON. The adapter does **not** reproduce Turbo Stream responses: same JSON shape in, same JSON shape out, whichever backend answered.
-- The preview endpoint returns JSON containing rendered HTML (`{ html, warnings, editor_map, ... }`). The HTML comes from the shared renderer bundle (ADR-007); Rails loads the same bundle via mini_racer, so the same input yields the same HTML on both sides.
-- The editor boots inside a server-rendered ERB host page (`app/views/works/_form.html.erb`): `data-controller` attributes, `data-editor-initial-source-value`, `data-authoring-registry` JSON, document-link titles. Desktop reproduces this as a **static host-page template** (no ERB at runtime) — **S1**.
+- The preview endpoint returns JSON containing rendered HTML (`{ html, warnings, editor_map, ... }`). Rails and desktop use the same JS Markdown block renderer. Rails document/slide structure and desktop preview structure/editor maps are still separate, so full preview parity is not established.
+- The editor boots inside a server-rendered ERB host page (`app/views/works/_form.html.erb`): `data-controller` attributes, `data-editor-initial-source-value`, `data-authoring-registry` JSON, document-link titles. Desktop reproduces the editor contract in a **static host-page template** (no ERB at runtime); the Rails library views are not reused.
 - JS is bundled via importmap (CodeMirror 6.x, katex pinned by the gem). Desktop bundles the same pinned set with esbuild/vite. After cutover the npm KaTeX inside the renderer bundle is the only KaTeX in the rendering path.
 - Turbo Drive handles web navigation. Desktop uses shell view-switching (library ⇄ editor); Turbo does not ship. **S1** confirms no controller depends on Turbo events.
 
 ## 2. Rules
 
-1. **Controllers are untouched.** Only the transport changes (fetch → invoke or local handler).
+1. Existing editor controllers are reused. Desktop routes their JSON fetches through the transport and preview adapters; desktop-specific save/conflict orchestration remains outside the Rails controllers.
 2. **Two handler kinds.** *Rust-backed* handlers call a Tauri command. *Webview-local* handlers never leave the webview: `render_preview` runs the renderer bundle in a worker, with no IPC round-trip. (v3 clarification — earlier drafts listed `render_preview` as a command. If the intent was a Rust-hosted JS engine, record it in S1: it changes the performance and security model.)
 3. **Typed errors.** Every Rust-backed failure returns `{ code, message, retryable, details? }`. Codes: `conflict`, `not_found`, `invalid_library`, `invalid_input`, `path_rejected`, `too_large`, `io_error`, `unsupported`, `internal`. **S1** documents how each Rails status/error shape maps to a code so controllers see the shape they expect.
 4. **Conflict handshake lives in the adapter, not the controllers.** The adapter remembers the content hash it last received for each open deck (from load or from the last successful save) and sends it as `base_hash` with every save. On `conflict`, the desktop save flow retains the dirty buffer and opens the host page's conflict UI; the error includes `details.disk_hash` and `details.current.{source,source_file}`. **S1** must confirm the web autosave controller keeps its dirty state and does not retry destructively when a save returns an error.
@@ -26,15 +26,15 @@ Status: draft skeleton v3 (2026-10-01). The highest-leverage seam in the desktop
 | Web (Rails) | Desktop handler | Kind | Payload | Touches | v1 |
 |---|---|---|---|---|---|
 | `PATCH /presentations/:id`, `/documents/:id` (autosave, FormData) | `save_source` | Rust | `{ id, source, base_hash } → { ok, saved_at, content_hash }` (adapter adds `base_hash`) | That deck's source file only | yes |
-| `POST …/preview` | `render_preview` | local (worker) | `{ id, source } → { html, warnings, editor_map, style, revision }` | Nothing (pure function) | planned M3; not shipped |
-| `POST …/assets` | `upload_asset` | Rust | file → `{ digest, url }` (asset-protocol URL) | That deck's `images/` only; size cap to be set | planned M2; not shipped |
-| `GET …/assets/*digest` | asset protocol handler | protocol | binary | Read-only, canonicalized under the library root | planned M2; not shipped |
-| `resources :snippets, :math_shortcuts` | `*_snippet`, `*_math_shortcut` CRUD | Rust | same JSON shapes as Rails | `.elef/snippets.json`, `.elef/math-shortcuts.json` | planned; not shipped |
+| `POST …/preview` | `render_preview` | local (worker) | `{ id, source } → { html, warnings, editor_map, style }` | Nothing (pure function) | shipped; structure parity partial |
+| `POST …/assets` | `upload_asset` | Rust | raw file bytes + filename/type/fit headers → `{ digest, content_type, source }` | That deck's `images/` only; content-addressed; 50 MB per file and 400 MB/10,000 entries per deck; file type detected from bytes | shipped |
+| `GET …/assets/*digest` | `elefasset://localhost/{deck_id}/{digest}` or `/path/images/...` protocol handler | protocol | binary | Read-only under that deck's `images/`; digest rechecked for content-addressed files; relative components decoded and traversal/symlinks rejected | shipped |
+| `resources :snippets, :math_shortcuts` editor registry data | `read_authoring_registries`, `write_authoring_registry` | Rust | default Rails-generated entries plus validated custom entries | `.elef/snippets.json`, `.elef/math-shortcuts.json` | shipped for editor suggestions; Rails management screens not implemented |
 | `POST /bug_reports` | `submit_bug_report` | Rust | deferred — needs a network-policy decision (Q6) | — | stretch |
 | `…/history`, `…/restore`, `…/publish`, `…/fork`, server `…/export` | — | — | behind flags or replaced (export → `.elef`) | — | no |
-| `…/present`, `…/print`, `…/pptx` | `present` view / OS source print / — | — | presentation mode is an M3 stretch; PPTX out of v1; OS print currently prints Markdown source | — | stretch / partial / no |
+| `…/present`, `…/print`, `…/pptx` | desktop presentation view / OS print dialog / — | — | presentation mode navigates the rendered slides; print uses the rendered preview and native dialog; PPTX remains out of v1 | — | shipped / shipped / no |
 
-The shipped subset is library scan/open/create/rename/delete, source save, portable settings, and `.elef` import/export. The remaining rows are planned and are not desktop implementations. Full payload schemas and Rails parity for those rows remain S1/M2/M3 work.
+The implemented subset is library scan/open/create/rename/delete, source save, portable settings and authoring registries, content-addressed media upload/read, worker preview, rendered print/presentation flows, and `.elef` import/export. The desktop library shell is custom rather than the Rails library views. Remaining web-only endpoints and full rendered/document-graph parity are not implemented.
 
 ## 4. Library-shell commands (new; no Rails equivalent, so no parity test)
 
@@ -43,13 +43,15 @@ The editor table above omits the new library shell. These need the same capabili
 | Command | Purpose | Touches |
 |---|---|---|
 | `list_decks` | Scan library root → `[{ id, name, path, modified }]` | Read-only, library root |
+| `document_graph` | Read document Markdown files and build the graph from `[[title]]` links → `{ nodes, edges }` | Read-only, document source files only; code spans and fenced/indented code do not create edges |
 | `open_deck` | Resolve source file, read source, create `elef.json` if absent → `{ source, content_hash, manifest }` | One deck |
 | `read_source_snapshot` | Read and hash the currently open source without creating or changing files | One deck, read-only |
 | `create_deck`, `rename_deck` | Folder create / rename | Library root, one level |
 | `delete_deck` | Move to OS trash (never unlink) — Q2 | One deck |
 | `import_elef`, `export_elef` | Archive import (hardened) / export | Staging dir, library root; user-chosen destination via native dialog |
+| `upload_asset` | Store selected media as an immutable content-addressed file | One deck's `images/`; never overwrites an existing digest |
 | `read_config`, `write_config` | `.elef/*.json` and app-data state | Those files only |
 
 ## 5. Open items (all S1)
 
-Complete payload schemas; error mapping; host-page template contents; bundling plan; confirmation that preview HTML reaches the DOM through a single audited insertion point (see [security.md](security.md)); the asset URL scheme; where snippets and math shortcuts are keyed.
+Remaining S1 work: prove full structure and editor-map parity; broaden fixtures to all Rails renderer consumers and presentation constructs; measure renderer limits/latency; run MiniRacer on macOS arm64 and under production Puma thread/fork configurations; and complete real-webview sanitizer/CSP checks. The static host page, asset URL scheme, custom registry storage and the preview DOM sink are implemented and documented above.

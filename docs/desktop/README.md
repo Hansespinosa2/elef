@@ -13,7 +13,7 @@ The elicited preferences list (batch-elicit-me, 4 batches) is the brief; these d
 | 3 | Seam specs: [data-format.md](data-format.md) · [transport-adapter.md](transport-adapter.md) · [security.md](security.md) · [test-strategy.md](test-strategy.md) | The only places web/desktop divergence or user data loss can enter. Seams get specs; internals don't |
 | 4 | [adr/](adr/README.md) | Why each load-bearing decision was made. Read before re-litigating |
 | 5 | [delivery-plan.md](delivery-plan.md) | Scope, flag register, milestones, spikes, human gates |
-| 6 | [risks-and-open-questions.md](risks-and-open-questions.md) | Risk register, accepted debt, and ten questions waiting on a human |
+| 6 | [risks-and-open-questions.md](risks-and-open-questions.md) | Risk register, accepted debt, and the remaining human decisions |
 
 ## Decision status
 
@@ -75,4 +75,4 @@ Review criteria: ISO/IEC 25010:2023 quality characteristics (as a completeness c
 10. M3 tied desktop schedule to a production web cutover → split into M3 and M3w (Q9).
 
 **Gaps filled**
-Requirements and quality scenarios with measures; ISO 25010 coverage table; risk register; ADR-008 (safe writes) and ADR-009 (distribution and key custody) for decisions that had no record; spike S5 (hostile-deck IPC probe); security threats T6–T9 (DoS, update channel, supply chain, tampering); storage for snippets and math shortcuts; library-shell commands; per-command capability review; device-local vs portable state; Unicode normalization; unwritable-folder handling; `.elef` layout and determinism; diagnostics; flag register with removal conditions; architecture fitness checks in CI; mini_racer threading, fork and limit considerations; Shiki WebAssembly check.
+Requirements and quality scenarios with measures; ISO 25010 coverage table; risk register; ADR-008 (safe writes) and ADR-009 (distribution and key custody) for decisions that had no record; spike S5 (hostile-deck IPC probe); security threats T6–T9 (DoS, update channel, supply chain, tampering); storage for snippets and math shortcuts; library-shell commands; per-command capability review; device-local vs portable state; Unicode normalization; unwritable-folder handling; `.elef` layout and determinism; diagnostics; flag register with removal conditions; architecture fitness checks in CI; MiniRacer threading, fork, memory, and platform feasibility.

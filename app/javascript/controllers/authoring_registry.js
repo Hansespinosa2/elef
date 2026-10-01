@@ -10,3 +10,9 @@ export function authoringRegistryFor(element) {
   }
   return registries.get(element)
 }
+
+export function setAuthoringRegistryFor(element, entries) {
+  const registry = Array.isArray(entries) ? entries : []
+  registries.set(element, registry)
+  return registry
+}

@@ -17,7 +17,8 @@ My Deck/
 - A deck is **any immediate child folder of the library root** containing at least one top-level `.md` file. No manifest is needed to recognize or open it.
 - **Source-file rule** (deterministic, never interactive): among top-level `.md` files prefer `presentation.md`, then `document.md`, then the **shortest** filename, then alphabetical. Shortest-before-alphabetical stops `talk (conflicted copy).md` from shadowing `talk.md` (a real Dropbox/iCloud/Syncthing failure). One source file per deck.
 - **Not decks:** dot-folders (except `.elef/` at the library root, which is config), folders nested inside a deck (they are deck content), symlinks (never followed during discovery). A notes folder with `.md` files two levels down does not become decks.
-- `images/` holds referenced assets. References are relative (`images/foo.png`); absolute paths are rewritten on import.
+- `images/` holds referenced assets. Ordinary references are relative (`images/foo.png`); desktop serves them through a read-only, deck-scoped asset protocol after rejecting traversal and symlink components. Absolute paths are rewritten on import.
+- Media inserted through Elef may use `elef-asset:<sha256>` references. Those point to a content-addressed file named `<sha256>.<extension>` under the deck's `images/` directory. Desktop resolves the reference through its read-only asset protocol; the Rails app resolves the same digest through its media store. The asset bytes travel with the deck folder and `.elef` archive.
 - Deck folders contain **no version files, ever** (ADR-005).
 - Transient exception: the atomic-write temp file (dot-prefixed, same directory) exists for milliseconds during a save and is removed on the next open if a crash left one behind (ADR-008). Discovery ignores dot-files.
 
@@ -34,8 +35,7 @@ My Deck/
 - `schema_version`: integer, bumped only when the folder contract changes. Readers tolerate newer versions: read what they understand, show a non-blocking "newer format" notice.
 - Never required: a folder without one is still a deck. The user never creates it by hand.
 - Folder name is display-only; renames never change identity.
-- **UUID collisions.** Copying a deck folder copies its `elef.json`, so two folders share one UUID. Identity follows the path, not the file: when a folder is added (scan or import) and its UUID already belongs to a *different path*, the newcomer gets a fresh UUID.
-  - **(proposed, Q3)** "Newcomer" must be decidable on a cold scan with no memory. Rule: keep a rebuildable last-known `uuid → path` map in the OS app-data directory; if the map cannot decide (first scan, or the map was deleted), the lexicographically first path keeps the UUID and the others are reassigned. Deterministic, and deleting the map never loses data.
+- **UUID collisions.** Copying a deck folder copies its `elef.json`, so two folders can share one UUID. On a cold scan, normalized path order decides deterministically: the first path retains the UUID; other copies use their path-derived identity in the in-memory index. Opening a duplicate best-effort writes it a fresh UUID v4 manifest. If that folder is read-only, its path remains the identity and the app shows a notice. No persistent UUID map is required.
 
 ## `.elef` single-file format
 
@@ -54,15 +54,15 @@ Mirrors Obsidian's `.obsidian/`.
 ~/Elef/                  # library root (user-chosen)
   .elef/
     config.json          # portable library preferences (theme, hotkeys)
-    snippets.json        # (proposed) user snippets; same JSON shape as the web resource
-    math-shortcuts.json  # (proposed) user math shortcuts; same JSON shape as the web resource
+    snippets.json        # optional custom user snippets; same JSON shape as the web resource
+    math-shortcuts.json  # optional custom user math shortcuts; same JSON shape as the web resource
   My Deck/
   Another Deck/
 ```
 
 - Each file carries its own `schema_version`.
 - **(proposed, Q4)** Device-specific state (window geometry, last-open deck, recents) lives in the OS app-data directory, not in the library root. Otherwise a library synced between the MacBook and Omarchy ping-pongs window geometry between two machines.
-- **(proposed)** Snippets and math shortcuts are per-user rows in Rails today; the editor needs them on desktop, and no storage location existed in v2. S1 confirms the shapes ([transport-adapter.md](transport-adapter.md)).
+- Desktop reads the shared built-in authoring registry and overlays optional custom snippet/math-shortcut entries from these files. Missing files mean no custom entries. Writes validate the registry type, entry count, and JSON size, then atomically replace only the selected `.elef` file.
 
 ## Cross-platform rules
 

@@ -1,4 +1,8 @@
 .desktop-editor-form { margin: 0; }
+.desktop-editor-form .media-editor-controls { display: flex; min-height: 38px; align-items: center; flex-wrap: wrap; gap: 9px; margin-bottom: 8px; }
+.desktop-editor-form .media-fit-control { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 11px; }
+.desktop-editor-form .media-fit-control select { padding: 4px 7px; border: 1px solid var(--line); border-radius: 6px; background: var(--canvas); color: var(--ink); }
+.desktop-editor-form .media-upload-status { color: var(--muted); font-size: 11px; }
 .desktop-editor-form .source-field { position: relative; min-height: 350px; }
 .desktop-editor-form .editor-toolbar { display: flex; min-height: 39px; align-items: center; flex-wrap: wrap; gap: 9px; padding: 5px 7px; border: 1px solid var(--line); border-bottom: 0; border-radius: 9px 9px 0 0; background: var(--canvas); }
 .desktop-editor-form .editor-mode-switch { display: inline-flex; align-items: center; gap: 3px; padding: 2px; border: 1px solid var(--line); border-radius: 7px; }

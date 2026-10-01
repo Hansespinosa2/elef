@@ -21,7 +21,7 @@ The web app is Rails 8 + Hotwire: server-rendered ERB, Turbo, Stimulus, CodeMirr
 
 ## Decision (proposed)
 
-A. File-backed Rust backend, with file logic in a UI-independent `elef-core` crate (proposed, Q7) that the Tauri commands call.
+A. File-backed Rust backend, with file logic in the UI-independent `elef-core` crate that the Tauri commands call. The crate split is implemented; ADR acceptance still awaits the S1 endpoint inventory and bounded-adapter evidence.
 
 ## Consequences
 

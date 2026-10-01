@@ -13,15 +13,25 @@ test("desktop host page provides every element referenced by the app shell", () 
   assert.deepEqual(missing, [])
 })
 
-test("the host starts in source mode and keeps the unfinished visual mode disabled", () => {
+test("the host starts in source mode and gates visual editing until the local preview renders", () => {
   const sourceForm = document.querySelector("#desktop-editor-form")
   const sourceMode = document.querySelector("#source-mode")
   const visualMode = document.querySelector("#visual-mode")
   assert.equal(sourceForm.dataset.editorMode, "source")
+  assert.match(sourceForm.dataset.controller, /preview/)
   assert.equal(sourceMode.getAttribute("aria-pressed"), "true")
   assert.equal(visualMode.disabled, true)
+  assert.ok(document.querySelector("#desktop-preview[data-preview-target='container']"))
+  assert.ok(document.querySelector("[data-editor-map-json]"))
 })
 
 test("the host uses no inline event handlers under the strict script policy", () => {
   assert.equal(document.querySelector("[onclick], [onerror], [onload]"), null)
+})
+
+test("the library provides the local document graph view and deck navigation", () => {
+  assert.ok(document.querySelector("#show-document-graph"))
+  assert.ok(document.querySelector("#document-graph-view[hidden]"))
+  assert.ok(document.querySelector("#document-graph-search[data-document-graph-target='search']"))
+  assert.ok(document.querySelector("#document-graph-mount"))
 })

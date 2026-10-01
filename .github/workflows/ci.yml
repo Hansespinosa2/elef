@@ -176,6 +176,8 @@ jobs:
         run: |
           npm test --prefix desktop/frontend
           npm run build --prefix desktop/frontend
+      - name: Verify the Rails renderer bundle is current
+        run: git diff --exit-code -- vendor/javascript/elef-renderer.bundle.js
       - name: Check command allowlist and CSP
         run: python3 desktop/scripts/check_architecture.py
       - name: Check Rust formatting
@@ -215,6 +217,8 @@ jobs:
         run: |
           npm test --prefix desktop/frontend
           npm run build --prefix desktop/frontend
+      - name: Verify the Rails renderer bundle is current
+        run: git diff --exit-code -- vendor/javascript/elef-renderer.bundle.js
       - name: Check command allowlist and CSP
         run: python3 desktop/scripts/check_architecture.py
       - name: Check Rust formatting
@@ -225,6 +229,37 @@ jobs:
         run: cargo test --manifest-path desktop/Cargo.toml --workspace
       - name: Build Apple Silicon desktop package
         run: npm run tauri:build --prefix desktop/frontend -- --bundles app,dmg
+
+  renderer-macos:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+      - name: Set up Ruby and install the locked bundle
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: .ruby-version
+          bundler-cache: true
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/frontend/package-lock.json
+      - name: Build the shared renderer bundle
+        run: |
+          npm ci --prefix desktop/frontend
+          npm run build --prefix desktop/frontend
+      - name: Verify the Rails renderer bundle is current
+        run: git diff --exit-code -- vendor/javascript/elef-renderer.bundle.js
+      - name: Exercise Rails rendering on Apple Silicon macOS
+        env:
+          RAILS_ENV: test
+          ELEF_USE_SQLITE: "1"
+        run: |
+          bin/rails db:test:prepare
+          bin/rails test test/lib/source/renderer_test.rb test/lib/authoring_registry_test.rb test/models/presentation_test.rb test/services/presentations/pptx_export_test.rb
 
   production-smoke:
     if: github.event_name != 'push'
@@ -284,7 +319,7 @@ jobs:
 
   record-ci-attestation:
     if: github.event_name == 'pull_request'
-    needs: [ scan_ruby, scan_js, test, sqlite-test, system-test, desktop, desktop-macos, production-smoke, development-smoke ]
+    needs: [ scan_ruby, scan_js, test, sqlite-test, system-test, desktop, desktop-macos, renderer-macos, production-smoke, development-smoke ]
     runs-on: ubuntu-latest
     steps:
       - name: Check out the exact pull request test candidate
