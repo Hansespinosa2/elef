@@ -486,6 +486,8 @@ impl Library {
     }
 
     pub fn open_deck(&self, id: &str) -> Result<OpenDeck, CoreError> {
+        let lock = self.write_lock(id);
+        let _guard = lock.lock().expect("deck write lock poisoned");
         let mut record = self.record(id)?;
         self.validate_deck_path(&record.path)?;
         remove_stale_temps(&record.path)?;
@@ -723,6 +725,14 @@ impl Library {
             .tempfile_in(&record.path)?;
         let original_permissions = fs::metadata(&record.source_path)?.permissions();
         temp.as_file().set_permissions(original_permissions)?;
+        pause_for_save_fault("before_temp_write");
+        if save_fault_enabled("mid_temp_write") {
+            let bytes = source.as_bytes();
+            let split = (bytes.len() / 2).max(1).min(bytes.len());
+            temp.write_all(&bytes[..split])?;
+            temp.as_file().sync_all()?;
+            pause_for_save_fault("mid_temp_write");
+        }
         temp.write_all(source.as_bytes())?;
         temp.as_file().sync_all()?;
 
@@ -748,9 +758,11 @@ impl Library {
             ));
         }
 
+        pause_for_save_fault("after_flush_before_rename");
         let verified_at = Instant::now();
         temp.persist(&record.source_path)
             .map_err(|error| CoreError::Io(error.error))?;
+        pause_for_save_fault("after_rename");
         let check_to_rename_us = verified_at.elapsed().as_micros();
         sync_directory(&record.path)?;
 
@@ -1964,7 +1976,6 @@ fn conflict_error(disk_hash: String, disk_bytes: Vec<u8>, disk_source_file: Stri
 }
 
 fn remove_stale_temps(deck_path: &Path) -> Result<(), CoreError> {
-    let now = SystemTime::now();
     for entry in fs::read_dir(deck_path)? {
         let entry = entry?;
         let name = entry.file_name().to_string_lossy().into_owned();
@@ -1975,19 +1986,35 @@ fn remove_stale_temps(deck_path: &Path) -> Result<(), CoreError> {
         if !metadata.is_file() || metadata.is_symlink() {
             continue;
         }
-        let old_enough = entry
-            .metadata()
-            .and_then(|metadata| metadata.modified())
-            .ok()
-            .and_then(|modified| now.duration_since(modified).ok())
-            .map(|age| age.as_secs() >= STALE_TEMP_AGE_SECONDS)
-            .unwrap_or(false);
-        if old_enough {
-            fs::remove_file(entry.path())?;
-        }
+        let _ = fs::remove_file(entry.path());
     }
     Ok(())
 }
+
+#[cfg(test)]
+fn save_fault_enabled(point: &str) -> bool {
+    std::env::var("ELEF_CORE_TEST_SAVE_PAUSE").as_deref() == Ok(point)
+}
+
+#[cfg(not(test))]
+fn save_fault_enabled(_point: &str) -> bool {
+    false
+}
+
+#[cfg(test)]
+fn pause_for_save_fault(point: &str) {
+    if save_fault_enabled(point) {
+        let marker = std::env::var_os("ELEF_CORE_TEST_SAVE_MARKER")
+            .expect("the save fault test must provide a pause marker");
+        fs::write(marker, b"paused").expect("the save fault marker must be writable");
+        loop {
+            std::thread::park_timeout(std::time::Duration::from_secs(1));
+        }
+    }
+}
+
+#[cfg(not(test))]
+fn pause_for_save_fault(_point: &str) {}
 
 fn remove_stale_asset_temps(images_dir: &Path) -> Result<(), CoreError> {
     match fs::symlink_metadata(images_dir) {
@@ -2232,6 +2259,7 @@ mod tests {
     use std::io::Cursor;
     #[cfg(unix)]
     use std::os::unix::fs::symlink;
+    use std::process::{Command, Stdio};
     use tempfile::TempDir;
 
     fn library() -> (TempDir, Library) {
@@ -2917,6 +2945,95 @@ mod tests {
             fs::read_to_string(deck.join("presentation.md")).unwrap(),
             "external"
         );
+    }
+
+    #[test]
+    fn save_crash_worker() {
+        let Ok(root) = std::env::var("ELEF_CORE_TEST_SAVE_ROOT") else {
+            return;
+        };
+        let library = Library::open(root).unwrap();
+        let deck = library.list_decks().unwrap().into_iter().next().unwrap();
+        let opened = library.open_deck(&deck.id).unwrap();
+        let new_source = "# New source\n".repeat(4096);
+        library
+            .save_source(&opened.id, &new_source, &opened.content_hash)
+            .unwrap();
+    }
+
+    #[test]
+    fn killing_a_process_at_each_save_point_preserves_complete_bytes_and_cleans_temp_files() {
+        const POINTS: [&str; 4] = [
+            "before_temp_write",
+            "mid_temp_write",
+            "after_flush_before_rename",
+            "after_rename",
+        ];
+        const RUNS_PER_POINT: usize = 50;
+        let executable = std::env::current_exe().unwrap();
+        let new_source = "# New source\n".repeat(4096);
+
+        for point in POINTS {
+            for _ in 0..RUNS_PER_POINT {
+                let temp = TempDir::new().unwrap();
+                let deck_path = write_deck(
+                    temp.path(),
+                    "Crash fixture",
+                    &[("presentation.md", "# Old source\n")],
+                );
+                let marker = temp.path().join("save-paused");
+                let mut child = Command::new(&executable)
+                    .args(["--exact", "tests::save_crash_worker", "--nocapture"])
+                    .env("ELEF_CORE_TEST_SAVE_ROOT", temp.path())
+                    .env("ELEF_CORE_TEST_SAVE_PAUSE", point)
+                    .env("ELEF_CORE_TEST_SAVE_MARKER", &marker)
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .spawn()
+                    .unwrap();
+
+                let mut reached_save_point = false;
+                for _ in 0..500 {
+                    if marker.exists() {
+                        reached_save_point = true;
+                        break;
+                    }
+                    if let Some(status) = child.try_wait().unwrap() {
+                        panic!("save worker exited before {point}: {status}");
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                }
+                assert!(reached_save_point, "save worker did not reach {point}");
+                child.kill().unwrap();
+                assert!(!child.wait().unwrap().success());
+
+                let expected = if point == "after_rename" {
+                    new_source.as_str()
+                } else {
+                    "# Old source\n"
+                };
+                assert_eq!(
+                    fs::read_to_string(deck_path.join("presentation.md")).unwrap(),
+                    expected
+                );
+
+                let library = Library::open(temp.path()).unwrap();
+                let deck = library
+                    .list_decks()
+                    .unwrap()
+                    .into_iter()
+                    .find(|summary| summary.name == "Crash fixture")
+                    .unwrap();
+                library.open_deck(&deck.id).unwrap();
+                assert!(fs::read_dir(&deck_path).unwrap().all(|entry| {
+                    !entry
+                        .unwrap()
+                        .file_name()
+                        .to_string_lossy()
+                        .starts_with(".elef-save-")
+                }));
+            }
+        }
     }
 
     #[test]
