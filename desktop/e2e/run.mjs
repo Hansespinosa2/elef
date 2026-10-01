@@ -112,7 +112,7 @@ try {
     )
     const savedSource = persisted.match(/^ELEF_E2E_SOURCE=(.*)$/m)?.[1]
     assert.ok(savedSource, "Rails fixture command should return the persisted source")
-    assert.equal(JSON.parse(savedSource), expectedSource)
+    assert.equal(normalizeLineEndings(JSON.parse(savedSource)), expectedSource)
   }
 } finally {
   if (presentationId) {
