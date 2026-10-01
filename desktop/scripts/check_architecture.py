@@ -20,7 +20,9 @@ def command_names(source: str, pattern: str) -> set[str]:
 build_source = (TAURI_ROOT / "build.rs").read_text()
 app_source = (TAURI_ROOT / "src" / "lib.rs").read_text()
 capability = json.loads((TAURI_ROOT / "capabilities" / "main.json").read_text())
+e2e_capability = json.loads((TAURI_ROOT / "capabilities" / "e2e.json").read_text())
 config = json.loads((TAURI_ROOT / "tauri.conf.json").read_text())
+e2e_config = json.loads((TAURI_ROOT / "tauri.e2e.conf.json").read_text())
 feature_flags_source = (REPO_ROOT / "desktop" / "frontend" / "src" / "feature-flags.js").read_text()
 delivery_plan = (REPO_ROOT / "docs" / "desktop" / "delivery-plan.md").read_text()
 
@@ -50,6 +52,13 @@ assert {permission for permission in permissions if permission.startswith("core:
     "core:window:allow-close",
 }, "grant only event subscriptions and programmatic close after a safe save"
 assert not any(permission.startswith(("fs:", "shell:", "dialog:")) for permission in permissions)
+assert config["app"]["security"]["capabilities"] == ["main-capability"], "production must not attach the E2E WebDriver capability"
+assert e2e_config["app"]["security"]["capabilities"] == ["main-capability", "e2e-webdriver"], "the test build must attach only the production and E2E capabilities"
+assert e2e_capability["permissions"] == ["wdio-webdriver:default"], "the E2E capability must grant only its local WebDriver plugin"
+tauri_manifest = (TAURI_ROOT / "Cargo.toml").read_text()
+assert 'webdriver = ["dep:tauri-plugin-wdio-webdriver"]' in tauri_manifest, "the WebDriver plugin must remain opt-in"
+assert not re.search(r'^default\s*=.*\bwebdriver\b', tauri_manifest, re.MULTILINE), "production's default Cargo features must exclude WebDriver"
+assert '#[cfg(feature = "webdriver")]\n    let builder = builder.plugin(tauri_plugin_wdio_webdriver::init());' in app_source, "production builds must not register the WebDriver plugin"
 
 feature_flags = {
     name: value == "true"

@@ -833,7 +833,7 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
 }
 
 pub fn run() {
-    let app = tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
@@ -846,7 +846,12 @@ pub fn run() {
                 let _ = app.emit("desktop-open-elef", ());
             }
         }))
-        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_updater::Builder::new().build());
+
+    #[cfg(feature = "webdriver")]
+    let builder = builder.plugin(tauri_plugin_wdio_webdriver::init());
+
+    let app = builder
         .register_asynchronous_uri_scheme_protocol("elefasset", |context, request, responder| {
             responder.respond(asset_protocol_response(context.app_handle(), &request));
         })
@@ -861,6 +866,15 @@ pub fn run() {
                     .unwrap_or_default()
                     .to_string_lossy(),
             );
+            #[cfg(feature = "webdriver")]
+            if let Some(root) = std::env::var_os("ELEF_E2E_LIBRARY_ROOT") {
+                app.state::<DesktopState>()
+                    .use_library(PathBuf::from(root))
+                    .expect("the dedicated E2E library must open");
+            } else {
+                restore_library_root(app.handle(), &app.state::<DesktopState>());
+            }
+            #[cfg(not(feature = "webdriver"))]
             restore_library_root(app.handle(), &app.state::<DesktopState>());
             app.set_menu(build_menu(app.handle())?)?;
             Ok(())

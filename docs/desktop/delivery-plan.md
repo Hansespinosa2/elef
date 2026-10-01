@@ -68,8 +68,9 @@ Each is a day or less with a checkable exit. ADRs 002, 003, 006 and 007 are acce
 - **Exit:** command table + payload schemas + host-page contract + full renderer consumer inventory + normalized parity corpus + MiniRacer target/thread/fork/performance evidence + bundle freshness check, reviewed against Rails controllers and system tests.
 
 **S2 — Testing feasibility** (feeds [test-strategy.md](test-strategy.md))
-- Hello-world WebdriverIO run drives the real Tauri binary on Linux CI (launches, one scenario clicks through). Also try `tauri-plugin-webdriver` on macOS.
-- **Exit:** green on Linux CI. If it fails, the test strategy is reworked before M1.
+- The shared Playwright Test scenario runs against Rails in Chromium and the real Tauri binary through its embedded WebDriver plugin. Linux CI uses a headless display; macOS CI builds and launches the arm64 app.
+- WebDriver is compiled only into the E2E binary, with a dedicated localhost-only capability. Production config and default Cargo features exclude it; CI checks that separation.
+- **Exit:** the shared web and native scenarios pass on Linux and macOS CI. If either platform fails, revise the test strategy before M1.
 
 **S3 — macOS unsigned install and updater UX**
 - First-install Gatekeeper UX for the unsigned build on current macOS (verify the override path on macOS 15+), and the full updater cycle: install N-1 → update → N → relaunch, with Ed25519 verification.

@@ -28,3 +28,5 @@ npm audit --audit-level=high
 ```
 
 The command list in `src-tauri/build.rs`, the runtime handler, and `capabilities/main.json` must remain identical. The capability grants only event listening, safe window close, and named app commands; no webview filesystem, shell, or dialog plugin command is exposed.
+
+The shared authoring scenario runs as Playwright Test against Rails and the real desktop binary in CI. The desktop test build opts into the embedded localhost WebDriver plugin with a separate Tauri capability; normal builds exclude both. Linux CI uses a headless display, while the Apple Silicon macOS leg also launches the binary.

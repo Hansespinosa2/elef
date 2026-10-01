@@ -2,11 +2,12 @@
 
 Status: draft v3 (2026-10-01). Implements the preference: one suite of user flows verified on web and desktop, tiered for speed, no divergent suites. Every quality scenario in [requirements.md](requirements.md) maps to a tier here.
 
-## 1. Structure: shared scenarios, two runner dialects
+## 1. Structure: shared Playwright scenarios, two adapters
 
-- **Scenarios** are the intended shared suite: named user flows defined once against page objects (LibraryPage, EditorPage, …). Initial set: open-deck, type-and-autosave, undo-redo-session, insert-image, source-visual-toggle, snippet-insert, math-input, elef-export-import, external-edit-conflict, hostile-deck-neutralized, update-cycle.
-- **Runner constraint:** the current shell is Tauri. [Playwright's CDP attachment supports Chromium only](https://playwright.dev/docs/api/class-browsertype#browser-type-connect-over-cdp); [Tauri recommends its WebdriverIO service for desktop binaries](https://v2.tauri.app/develop/tests/webdriver/), including WKWebView and WebKitGTK. Therefore a literal Playwright runner cannot drive the supported desktop binaries through a documented protocol. The planned implementation shares scenario definitions and page-object behavior across Playwright web and WebdriverIO Tauri adapters; it does not meet the narrower preference that the Playwright runner itself execute against the binary. Do not claim that narrower preference as satisfied without changing the shell or proving a supported adapter.
-- **Current evidence:** this branch has Node component/adapter tests, Rails tests, Rust core tests, architecture checks, and Linux/macOS package builds. It does not yet have shared browser scenario definitions, Playwright web flows, WebdriverIO real-binary flows, or native-dialog/menu smoke coverage.
+- **Scenarios** are shared functions defined once against a small UI adapter. The current `edit-and-preview` flow opens a deck, edits source, waits for auto-save, switches to visual mode, and verifies the preview. The remaining planned flows are open-deck, undo-redo-session, insert-image, snippet-insert, math-input, elef-export-import, external-edit-conflict, hostile-deck-neutralized, and update-cycle. Each shared function must be selected in both projects unless its browser-only or shell-only scope is documented.
+- **Web adapter:** Playwright Test drives the Rails app in Chromium. **Desktop adapter:** the same Playwright Test suite drives the real Tauri binary through the Tauri embedded WebDriver plugin; its WebDriver client is an adapter, while scenario definitions and test lifecycle stay in Playwright. The app enables the plugin only with the explicit `webdriver` Cargo feature and test-only Tauri capability. Production configuration grants neither.
+- **Platform constraint:** [Tauri's documented desktop automation path is WebDriver](https://v2.tauri.app/develop/tests/webdriver/); Playwright's CDP attachment is Chromium-specific. The desktop adapter therefore uses the app's real WKWebView/WebKitGTK and native command backend, while Playwright's Page API remains for the Rails web project. This implements the shared-scenario preference without claiming that Playwright's browser engine attaches to a system webview.
+- **Current evidence:** Linux and macOS CI build and launch the test-only binary and run shared Playwright scenarios against both Rails and the native desktop. Dedicated native menu, dialog, launch/quit, and update-install smoke cases, save-process crash injection, and the full perf matrix remain separate release gates.
 - **Divergence guard:** a scenario that exists in only one runner without a documented reason fails review.
 
 ## 2. Tiers
@@ -14,13 +15,12 @@ Status: draft v3 (2026-10-01). Implements the preference: one suite of user flow
 | Tier | What | When | Verifies |
 |---|---|---|---|
 | T0 | Unit and component: Rust core tests (safe write, path guard, archive, source-file rule, document graph, asset validation); JS unit tests including raw-byte media transport; **renderer fixture suite** (Node, against the bundle); thin Ruby test that the mini_racer wrapper returns the same HTML as the bundle; transport contract tests | Every change, fast path | QS-3 (Rust), QS-4, QS-5, QS-10, QS-11 |
-| T1 | Playwright: scenarios vs **web** (Rails dev server) | Every change (< ~5 min) | QS-1 (web leg) |
-| T1m | Playwright **mock tier**: desktop frontend served locally, Tauri IPC mocked. Fast desktop UI flows without the binary; honest about being UI-only, not backend truth | Every change | QS-1 (desktop UI) |
-| T2 | WebdriverIO: scenarios vs the **real Tauri binary** via `tauri-driver` (Linux CI) and `tauri-plugin-webdriver` (embedded driver, including macOS). Includes the perf leg and network-blocked run | PRs | QS-1, QS-3, QS-6, QS-9, QS-12 |
-| T3 | Native smoke: install, launch, menus, dialogs, updater dry-run, hostile fixtures, and process-kill save fault injection (planned) | PRs / release | QS-2, QS-4, QS-5, QS-8 |
+| T1 | Playwright: shared scenarios vs **web** (Rails test server) | PRs | QS-1 (web leg) |
+| T2 | Playwright Test: the same scenario functions vs the **real Tauri binary**, through its test-only embedded WebDriver plugin on Linux and macOS | PRs | QS-1 (shared edit/save/preview flow) |
+| T3 | Native smoke: install, launch, menus, dialogs, updater dry-run, hostile fixtures, and process-kill save fault injection | PRs / release | QS-2, QS-4, QS-5, QS-8 |
 | CI fitness | Architecture rules as automated checks (§6) | Every change | QS-7, T5/T8 controls |
 
-Fast feedback per change is T0 + T1 + T1m; the real-binary tier (T2 + T3) is intended to gate PRs. Those browser/system tiers are not implemented on this branch yet. Tauri's embedded WebDriver path supports macOS; the binary build job alone does not prove launch or native behavior.
+T0 and frontend component tests provide fast feedback; T1 and T2 gate PRs on both target OSes. The current shared browser flow verifies opening a deck, editing source, auto-save, and rendered preview. The remaining listed flows are planned coverage, not implied by that one scenario. Native menu/dialog behavior and release/update operations require their dedicated T3 checks.
 
 ## 3. Renderer fixtures: one renderer, two phases
 
@@ -60,5 +60,5 @@ Protocol per [requirements.md](requirements.md) §8: release build, fresh proces
 ## 8. Policies
 
 - **Flakes:** quarantine on the second flake; fix or delete within the PR; no permanently quarantined tests.
-- **Affected-first:** T0/T1/T1m select by changed packages on PRs; T2/T3 always run in full on the PR gate.
+- **Affected-first:** T0 selects by changed packages; shared T1/T2 scenarios and native T3 checks run on the PR gate.
 - **Coverage is not a goal;** scenarios and quality-scenario measures are.
