@@ -18,14 +18,17 @@ export function nextMermaidRenderId(prefix = "elef-mermaid") {
   return `${prefix}-${renderSequence}`
 }
 
-function mermaidAssetUrl() {
+export function mermaidAssetUrl() {
   const importmap = document.querySelector('script[type="importmap"]')
-  if (!importmap) return null
-  try {
-    return JSON.parse(importmap.textContent).imports.mermaid || null
-  } catch {
-    return null
+  if (importmap) {
+    try {
+      const mappedUrl = JSON.parse(importmap.textContent).imports.mermaid
+      if (mappedUrl) return mappedUrl
+    } catch {
+      // The static desktop host supplies its packaged asset through metadata.
+    }
   }
+  return document.querySelector('meta[name="elef-mermaid-url"]')?.content || null
 }
 
 export function loadMermaid() {

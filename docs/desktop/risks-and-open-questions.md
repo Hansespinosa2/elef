@@ -20,6 +20,7 @@ L = likelihood, I = impact (H / M / L).
 | R10 | Solo maintainer: scope creep or a stalled spike delays v1 | M | M | Scope contract in delivery-plan; stretch items have explicit cut points; spikes are time-boxed | delivery-plan |
 | R11 | Tauri 2 plugin churn or a security advisory forces an upgrade mid-milestone | M | M | Pin versions; audit in CI; upgrade is a scheduled task, not an emergency | security.md C12 |
 | R12 | Feature flags outlive their purpose and become permanent divergence | M | M | Flag register with removal conditions; CI checks live flags | delivery-plan |
+| R13 | The pinned Tauri Linux stack pulls transitive crates with current RustSec advisories | M | M | Dated exception (2026-10-01) for RUSTSEC-2025-0057 (`fxhash`), RUSTSEC-2024-0370 (`proc-macro-error`), RUSTSEC-2024-0429 (`glib`), and RUSTSEC-2026-0097 (`rand`). The first and last arrive through Tauri's HTML selector stack; the middle two arrive through GTK 0.18 used by WebKitGTK. Cargo audit fails on any other warning. Revisit at the next Tauri/GTK dependency upgrade | security.md C12 |
 
 ## Technical debt (known, accepted)
 

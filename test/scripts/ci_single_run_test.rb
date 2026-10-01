@@ -13,6 +13,7 @@ required_checks = %w[
   test
   sqlite-test
   system-test
+  desktop
   production-smoke
   development-smoke
 ]
@@ -44,4 +45,4 @@ abort "deployment authorization requires only scoped read access plus ref-write 
     "pull-requests" => "read"
   }
 
-puts "CI runs the seven required checks once per PR and verifies them before publishing"
+puts "CI runs the eight required checks once per PR and verifies them before publishing"

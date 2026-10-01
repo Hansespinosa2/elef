@@ -69,7 +69,7 @@ jobs:
       - name: Run deterministic JavaScript unit tests
         run: |
           node test/javascript/bug_report_events.test.mjs
-          node --test test/javascript/document_link_palette.test.mjs test/javascript/editor_markdown_math.test.mjs test/javascript/math_shorthand.test.mjs test/javascript/mermaid_syntax.test.mjs test/javascript/media_transfer.test.mjs test/javascript/pptx_export.test.mjs
+          node --test test/javascript/document_link_palette.test.mjs test/javascript/editor_markdown_math.test.mjs test/javascript/math_shorthand.test.mjs test/javascript/mermaid_syntax.test.mjs test/javascript/mermaid_runtime.test.mjs test/javascript/media_transfer.test.mjs test/javascript/pptx_export.test.mjs
       - name: Check repository launchers and deployment files
         run: |
           bash test/scripts/elef-agent_test.sh
@@ -137,6 +137,54 @@ jobs:
           path: ${{ github.workspace }}/tmp/screenshots
           if-no-files-found: ignore
 
+  desktop:
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/frontend/package-lock.json
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop -> target
+      - name: Install Linux desktop build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes build-essential curl file libayatana-appindicator3-dev libdbus-1-dev libgtk-3-dev librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev patchelf wget
+      - name: Install frontend dependencies
+        run: npm ci --prefix desktop/frontend
+      - name: Audit desktop JavaScript dependencies
+        run: npm audit --prefix desktop/frontend --audit-level=high
+      - name: Install pinned Cargo audit tool
+        run: cargo install cargo-audit --version 0.22.2 --locked
+      - name: Audit desktop Rust dependencies
+        run: cargo audit --file desktop/Cargo.lock --deny warnings --ignore RUSTSEC-2025-0057 --ignore RUSTSEC-2024-0370 --ignore RUSTSEC-2024-0429 --ignore RUSTSEC-2026-0097
+      - name: Test and bundle desktop frontend
+        run: |
+          npm test --prefix desktop/frontend
+          npm run build --prefix desktop/frontend
+      - name: Check command allowlist and CSP
+        run: python3 desktop/scripts/check_architecture.py
+      - name: Check Rust formatting
+        run: cargo fmt --manifest-path desktop/Cargo.toml --all -- --check
+      - name: Lint desktop Rust workspace
+        run: cargo clippy --manifest-path desktop/Cargo.toml --workspace --all-targets -- -D warnings
+      - name: Test desktop Rust workspace
+        run: cargo test --manifest-path desktop/Cargo.toml --workspace
+      - name: Build Linux desktop package
+        run: npm run tauri:build --prefix desktop/frontend
+
   production-smoke:
     if: github.event_name != 'push'
     runs-on: ubuntu-latest
@@ -195,7 +243,7 @@ jobs:
 
   record-ci-attestation:
     if: github.event_name == 'pull_request'
-    needs: [ scan_ruby, scan_js, test, sqlite-test, system-test, production-smoke, development-smoke ]
+    needs: [ scan_ruby, scan_js, test, sqlite-test, system-test, desktop, production-smoke, development-smoke ]
     runs-on: ubuntu-latest
     steps:
       - name: Check out the exact pull request test candidate

@@ -47,7 +47,7 @@ Assets: the user's deck files; the library root; the update-signing key; the IPC
 - **C9 Render limits.** The renderer worker has a wall-clock limit and is terminated on overrun. On the Rails side, mini_racer contexts support a timeout and a memory limit; set both (ADR-007).
 - **C10 Updates.** Ed25519 signature verified against the baked-in public key before install; HTTPS only; no downgrade by default (ADR-009).
 - **C11 Single DOM insertion point.** Preview HTML reaches the DOM through exactly one audited function. S1 records the current sink (innerHTML vs iframe `srcdoc`). A second-pass sanitizer at the sink (for example DOMPurify) is a cheap redundancy worth benchmarking in S5.
-- **C12 Supply chain.** Committed lockfiles, exact versions for the renderer bundle and Tauri, `cargo audit` and `npm audit` in CI, and tracking of Tauri security advisories.
+- **C12 Supply chain.** Committed lockfiles, exact versions for the renderer bundle and Tauri, `cargo audit` and `npm audit` in CI, and tracking of Tauri security advisories. Cargo audit denies new warnings; the four exact Tauri/GTK transitive advisories recorded in [R13](risks-and-open-questions.md#risk-register) are temporarily ignored and must be revisited at the next Tauri stack upgrade.
 
 ## 5. Known platform caveat: iframes and IPC
 
