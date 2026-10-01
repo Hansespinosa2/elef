@@ -40,6 +40,22 @@ const paletteSource = (await readFile(new URL("../../app/javascript/controllers/
 const mathPalette = await import(`data:text/javascript;base64,${Buffer.from(paletteSource).toString("base64")}`)
 delete globalThis.__mathTestHelpers
 
+test("rejects unknown @ shortcuts instead of wrapping their source text", () => {
+  assert.equal(math.expandMathShorthand("@alpha.b"), null)
+})
+
+test("rejects lowercase operands for the blackboard font", () => {
+  assert.equal(math.expandMathShorthand("x.bb"), null)
+})
+
+test("refuses fonts on atomic LaTeX commands instead of emitting silent wrappers", async (t) => {
+  for (const command of ["Im", "Re", "wp", "ell", "hbar", "nabla", "partial", "infty"]) {
+    await t.test(`\\${command}`, () => {
+      assert.equal(math.expandMathShorthand(`\\${command}.b`), null)
+    })
+  }
+})
+
 function palettePreview(shortcut, query) {
   return new mathPalette.default().expansionPreview(shortcut, query)
 }
