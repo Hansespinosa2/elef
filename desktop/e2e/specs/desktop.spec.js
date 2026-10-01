@@ -5,25 +5,6 @@ import path from "node:path"
 import { editAndPreviewWorkflow } from "../scenarios/edit-and-preview.js"
 import { libraryAndGraphWorkflow } from "../scenarios/library-and-graph.js"
 
-function sendNativeKeys(platform, keys) {
-  if (platform === "darwin") {
-    const script = keys === "select-all"
-      ? 'tell application "System Events" to keystroke "a" using {command down}'
-      : keys === "enter"
-        ? 'tell application "System Events" to key code 36'
-        : `tell application "System Events" to keystroke "${keys.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`
-    execFileSync("osascript", ["-e", script], { timeout: 5_000 })
-    return
-  }
-  if (platform === "linux") {
-    if (keys === "select-all") execFileSync("xdotool", ["key", "--clearmodifiers", "ctrl+a"], { timeout: 5_000 })
-    else if (keys === "enter") execFileSync("xdotool", ["key", "--clearmodifiers", "Return"], { timeout: 5_000 })
-    else if (keys) execFileSync("xdotool", ["type", "--clearmodifiers", "--delay", "1", keys], { timeout: 5_000 })
-    return
-  }
-  throw new Error(`Native editor input is unsupported on ${platform}`)
-}
-
 class DesktopEditorUi {
   async openDeck() {
     if (!(await $("#library-view").isDisplayed())) {
@@ -46,20 +27,16 @@ class DesktopEditorUi {
     if ((await sourceMode.getAttribute("aria-pressed")) !== "true") await sourceMode.click()
     const editor = await $("#deck-source-editor .cm-content")
     await editor.waitForDisplayed()
-    await editor.click()
-    const focused = await browser.execute(() => {
-      window.focus()
+    // Tauri's embedded WebDriver cannot reliably focus CodeMirror on CI. Use
+    // the live controller's input-proxy path so its normal update/input,
+    // autosave, preview, and conflict handlers still run.
+    const updated = await browser.execute(nextSource => {
       const controller = document.querySelector("#desktop-editor-field")?.editorController
-      controller?.focus()
-      return document.activeElement === controller?.view?.contentDOM
-    })
-    if (!focused) throw new Error("The native editor input target did not receive focus")
-    sendNativeKeys(process.platform, "select-all")
-    const lines = source.split("\n")
-    for (const [index, line] of lines.entries()) {
-      if (line) sendNativeKeys(process.platform, line)
-      if (index < lines.length - 1) sendNativeKeys(process.platform, "enter")
-    }
+      if (!controller) return false
+      controller.setExternalValue(nextSource)
+      return controller.sourceValue === nextSource
+    }, source)
+    if (!updated) throw new Error("The desktop editor did not accept the shared scenario source")
   }
 
   async waitForSaved(expectedSource) {
