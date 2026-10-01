@@ -4,6 +4,11 @@ import { libraryAndGraphWorkflow } from "../scenarios/library-and-graph.js"
 
 class DesktopEditorUi {
   async openDeck() {
+    if (!(await $("#library-view").isDisplayed())) {
+      await $("#back-to-library").click()
+      await $("#library-view").waitForDisplayed()
+    }
+    await $("#show-deck-list").click()
     const card = $('[aria-label="Open E2E seed"]')
     await card.waitForDisplayed()
     await card.click()
@@ -86,6 +91,7 @@ class DesktopLibraryUi {
 
 describe("shared authoring scenarios", () => {
   it("opens the new-deck dialog from the native menu accelerator", async () => {
+    await $("#library-view").waitForDisplayed()
     await browser.keys(process.platform === "darwin" ? ["Meta", "n"] : ["Control", "n"])
     const dialog = await $("#create-dialog")
     await dialog.waitForDisplayed()
