@@ -12,7 +12,7 @@ npm run build
 npm run tauri:dev
 ```
 
-`tauri:dev` loads the built static frontend and does not start a development server. Re-run `npm run build` after frontend edits. The first launch asks for an existing library folder. The current shell supports folder discovery, create/open/rename, move-to-Trash, and the Rails CodeMirror editor with debounced, conflict-aware source saves. Its visual mode currently provides the editor's inline Markdown projection; full slide preview/editing, media transport, archive transfer, and updater remain later milestones.
+`tauri:dev` loads the built static frontend and does not start a development server. Re-run `npm run build` after frontend edits. The shell supports folder discovery, create/open/rename, move-to-Trash, the Rails CodeMirror source and visual editors, worker-rendered preview and slide editing, local media, portable `.elef` import/export, portable authoring settings, and updater integration. The renderer's slide/document structure is not yet at full web parity, and the signed release cycle still needs its key ceremony and device verification; see [the desktop acceptance plan](../docs/desktop/delivery-plan.md).
 
 ## Checks
 
