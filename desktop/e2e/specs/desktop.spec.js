@@ -1,5 +1,5 @@
 import { $, $$, browser } from "@wdio/globals"
-import { execFileSync } from "node:child_process"
+import { execFileSync, spawnSync } from "node:child_process"
 import { readFile } from "node:fs/promises"
 import path from "node:path"
 import { editAndPreviewWorkflow } from "../scenarios/edit-and-preview.js"
@@ -147,23 +147,44 @@ class DesktopEditorUi {
   }
 
   async insertImage({ bytes, filename, mimeType }) {
-    const inserted = await browser.execute(({ bytes, filename, mimeType }) => {
+    const setup = await browser.execute(({ bytes, filename, mimeType }) => {
       const field = document.querySelector("#desktop-editor-field")
       const controller = field?.editorController
+      const form = document.querySelector("#desktop-editor-form")
       const input = document.querySelector('input[data-media-target="input"]')
-      if (!controller || !input || typeof DataTransfer !== "function") return false
+      const media = form && globalThis.Stimulus?.getControllerForElementAndIdentifier(form, "media")
+      if (!controller || !media || !input || typeof DataTransfer !== "function") return { error: "media controls were not ready" }
       controller.setSelectionRange(controller.sourceValue.length)
       const transfer = new DataTransfer()
       transfer.items.add(new File([new Uint8Array(bytes)], filename, { type: mimeType }))
       input.files = transfer.files
-      input.dispatchEvent(new Event("change", { bubbles: true }))
-      return true
+      if (input.files.length !== 1) return { error: "WebKit did not accept the image fixture" }
+      void media.selected()
+      return { started: true }
     }, { bytes: [...bytes], filename, mimeType })
-    if (!inserted) throw new Error("The desktop media picker could not receive the image fixture")
-    await browser.waitUntil(async () => (await this.readSource()).includes(PIXEL_PNG_MARKDOWN), {
-      timeout: 10_000,
-      timeoutMsg: "The desktop media controller did not upload and insert the image"
-    })
+    if (setup.error) throw new Error(`The desktop media controller did not accept the image fixture: ${setup.error}`)
+    if (!setup.started) throw new Error("The desktop media controller did not start the image upload")
+    try {
+      await browser.waitUntil(async () => (await this.readSource()).includes(PIXEL_PNG_MARKDOWN), {
+        timeout: 10_000,
+        timeoutMsg: "The desktop media controller did not upload and insert the image"
+      })
+    } catch (error) {
+      const state = await browser.execute(() => ({
+        status: document.querySelector("#desktop-editor-form [data-media-target='status']")?.textContent || "",
+        busy: document.querySelector("#desktop-editor-form [data-media-target='status']")?.getAttribute("aria-busy"),
+        source: document.querySelector("#desktop-editor-field")?.editorController?.sourceValue || "",
+        uploadUrl: document.querySelector("#desktop-editor-form")?.dataset.mediaUploadUrlValue || "",
+        fileCount: document.querySelector('input[data-media-target="input"]')?.files?.length || 0
+      }))
+      throw new Error(`${error.message}; desktop media state: ${JSON.stringify(state)}`)
+    }
+    const status = await browser.execute(() =>
+      document.querySelector("#desktop-editor-form [data-media-target='status']")?.textContent || ""
+    )
+    if (!status.includes("added to the Markdown source")) {
+      throw new Error(`The desktop media controller did not finish the upload: ${status}`)
+    }
     return this.readSource()
   }
 
@@ -222,7 +243,13 @@ class DesktopLibraryUi {
   async openElefArchive() {
     await this.openLibrary()
     await browser.execute(() => window.focus())
-    execFileSync(process.env.ELEF_E2E_APP_BINARY, [process.env.ELEF_E2E_IMPORT_ARCHIVE], { timeout: 15_000 })
+    const launched = spawnSync(process.env.ELEF_E2E_APP_BINARY, [process.env.ELEF_E2E_IMPORT_ARCHIVE], {
+      timeout: 15_000,
+      encoding: "utf8"
+    })
+    if (launched.error || launched.status !== 0) {
+      throw new Error(`Opening the .elef file failed: ${launched.error?.message || launched.stderr || launched.stdout || launched.status}`)
+    }
     const card = $('[aria-label="Open E2E archive seed"]')
     await card.waitForDisplayed({ timeout: 20_000 })
     await card.click()
@@ -249,6 +276,33 @@ describe("shared authoring scenarios", () => {
     const dialog = await $("#create-dialog")
     await dialog.waitForDisplayed()
     await $("#create-form button[value='cancel']").click()
+  })
+
+  it("opens and cancels the native library folder picker", async () => {
+    await $("#change-library").click()
+    if (process.platform === "darwin") {
+      await browser.pause(500)
+      execFileSync("osascript", ["-e", 'tell application "System Events" to key code 53'], { timeout: 5_000 })
+    } else if (process.platform === "linux") {
+      await browser.waitUntil(async () => {
+        try {
+          return execFileSync("xdotool", ["getactivewindow", "getwindowname"], { encoding: "utf8" })
+            .includes("Choose your Elef library folder")
+        } catch (_error) {
+          return false
+        }
+      }, {
+        timeout: 5_000,
+        timeoutMsg: "The native library folder picker did not open"
+      })
+      execFileSync("xdotool", ["key", "Escape"], { timeout: 5_000 })
+    } else {
+      throw new Error(`Native folder picker smoke is unsupported on ${process.platform}`)
+    }
+    await browser.waitUntil(async () => (await $("#status-text").getText()) === "Library selection cancelled", {
+      timeout: 10_000,
+      timeoutMsg: "The native library folder picker did not cancel cleanly"
+    })
   })
 
   it("runs the shared library and document graph flow", async () => {
