@@ -11,6 +11,15 @@ export function createDeckCard(document, deck, actions) {
   card.className = "deck-card"
   card.setAttribute("role", "listitem")
 
+  const preview = document.createElement("div")
+  preview.className = "deck-card-preview"
+  preview.dataset.deckId = deck.id
+  preview.dataset.previewState = ""
+  preview.setAttribute("aria-hidden", "true")
+  preview.setAttribute("inert", "")
+  preview.textContent = "Loading preview…"
+  card.append(preview)
+
   const open = document.createElement("button")
   open.className = "deck-open"
   open.type = "button"

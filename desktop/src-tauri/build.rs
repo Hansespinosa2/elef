@@ -10,6 +10,7 @@ fn main() {
         "document_graph",
         "create_deck",
         "open_deck",
+        "read_deck_preview",
         "read_source_snapshot",
         "rename_deck",
         "delete_deck",

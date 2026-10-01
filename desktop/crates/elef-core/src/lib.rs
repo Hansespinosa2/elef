@@ -20,6 +20,7 @@ use std::os::unix::fs::OpenOptionsExt;
 pub const MANIFEST_FILE: &str = "elef.json";
 pub const MANIFEST_SCHEMA_VERSION: u32 = 1;
 pub const MAX_SOURCE_BYTES: usize = 50 * 1024 * 1024;
+pub const MAX_LIBRARY_PREVIEW_SOURCE_BYTES: u64 = 256 * 1024;
 pub const MAX_ASSET_BYTES: usize = 50 * 1024 * 1024;
 pub const MAX_ARCHIVE_UNCOMPRESSED_BYTES: u64 = 500 * 1024 * 1024;
 pub const MAX_ARCHIVE_ENTRIES: usize = 10_000;
@@ -108,6 +109,12 @@ pub struct SourceSnapshot {
     pub source: String,
     pub source_file: String,
     pub content_hash: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct DeckPreview {
+    pub source: String,
+    pub source_file: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -560,6 +567,20 @@ impl Library {
             source,
             source_file: record.source_file,
             content_hash,
+        })
+    }
+
+    /// Read a bounded, read-only source sample for the library card preview.
+    /// This deliberately does not create or repair `elef.json` during listing.
+    pub fn read_deck_preview(&self, id: &str) -> Result<DeckPreview, CoreError> {
+        let record = self.record(id)?;
+        self.validate_deck_path(&record.path)?;
+        let bytes =
+            read_regular_file_limited(&record.source_path, MAX_LIBRARY_PREVIEW_SOURCE_BYTES)?;
+        let source = String::from_utf8(bytes).map_err(|_| CoreError::InvalidInput)?;
+        Ok(DeckPreview {
+            source,
+            source_file: record.source_file,
         })
     }
 
@@ -2450,6 +2471,29 @@ mod tests {
         assert_eq!(changed.source_file, "presentation.md");
         assert_ne!(changed.content_hash, first.content_hash);
         assert!(!deck.join(MANIFEST_FILE).exists());
+    }
+
+    #[test]
+    fn library_preview_is_bounded_read_only_and_uses_the_selected_source() {
+        let (temp, library) = library();
+        let deck = write_deck(temp.path(), "Preview", &[("talk.md", "# A preview")]);
+        let id = path_id(&deck.canonicalize().unwrap());
+        library.list_decks().unwrap();
+
+        let preview = library.read_deck_preview(&id).unwrap();
+        assert_eq!(preview.source, "# A preview");
+        assert_eq!(preview.source_file, "talk.md");
+        assert!(!deck.join(MANIFEST_FILE).exists());
+
+        fs::write(
+            deck.join("talk.md"),
+            vec![b'x'; MAX_LIBRARY_PREVIEW_SOURCE_BYTES as usize + 1],
+        )
+        .unwrap();
+        assert!(matches!(
+            library.read_deck_preview(&id),
+            Err(CoreError::TooLarge)
+        ));
     }
 
     #[test]

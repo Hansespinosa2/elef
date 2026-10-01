@@ -26,3 +26,17 @@ test("preview sink strips executable markup and remote image sources while prese
   assert.equal(container.querySelector("img[src^='elefasset:']").getAttribute("src"), "elefasset://localhost/id/sha")
   assert.equal(container.querySelector("a").getAttribute("href"), null)
 })
+
+test("non-interactive library previews remove controller and editing hooks", () => {
+  const { document } = parseHTML("<main id='preview'></main>")
+  const container = document.querySelector("#preview")
+  installSanitizedPreview(container, `
+    <section data-controller="mermaid-diagrams">
+      <div contenteditable="true" data-action="input->visual-editor#projectionInput">safe text</div>
+    </section>`, { interactive: false })
+
+  assert.equal(container.querySelector("section").getAttribute("data-controller"), null)
+  assert.equal(container.querySelector("[contenteditable]"), null)
+  assert.equal(container.querySelector("[data-action]"), null)
+  assert.equal(container.textContent.trim(), "safe text")
+})

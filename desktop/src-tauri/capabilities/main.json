@@ -17,6 +17,7 @@
     "allow-document-graph",
     "allow-create-deck",
     "allow-open-deck",
+    "allow-read-deck-preview",
     "allow-read-source-snapshot",
     "allow-rename-deck",
     "allow-delete-deck",

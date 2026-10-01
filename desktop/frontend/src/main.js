@@ -16,6 +16,8 @@ import { checkForDesktopUpdate, installDesktopUpdate } from "./update-flow.js"
 import { loadDesktopAuthoringRegistry } from "./authoring-registry-loader.js"
 import { createPresentationNavigation } from "./presentation-flow.js"
 import { applyDesktopFeatureFlags } from "./feature-flags.js"
+import { filterDecks } from "./library-filter.js"
+import { createLibraryPreviewLoader } from "./library-preview.js"
 import "./editor-runtime.js"
 import "./editor.css"
 import "./rendered-content.css"
@@ -83,7 +85,8 @@ let decks = []
 let activeDeck = null
 let saveFlow = null
 let documentGraphCache = null
-let libraryTab = "decks"
+let libraryTab = "all"
+let cardPreviewObserver = null
 let documentGraphRequest = null
 let pendingUpdate = null
 let libraryStatusLoaded = false
@@ -96,6 +99,11 @@ let presentationFrames = []
 let presentationNavigation = null
 
 const transport = createTransportAdapter({ invoke, onConflict: event => saveFlow?.handleConflict(event) })
+const loadLibraryPreview = createLibraryPreviewLoader({
+  readPreview: id => invoke("read_deck_preview", { id }),
+  render: input => renderer.render(input),
+  install: installSanitizedPreview
+})
 saveFlow = createSaveFlow({
   saveSource: async (id, source) => {
     const result = await transport.saveSource(id, source)
@@ -151,18 +159,24 @@ function showLibrary() {
   document.querySelector("#new-deck").disabled = !library
   document.querySelector("#import-elef").disabled = !library
   document.querySelector("#breadcrumb-current").textContent = "Decks"
-  showLibraryTab("decks")
+  showLibraryTab("all")
 }
 
 function showLibraryTab(tab) {
-  libraryTab = tab === "graph" ? "graph" : "decks"
+  libraryTab = ["documents", "presentations", "graph"].includes(tab) ? tab : "all"
   const graphSelected = tab === "graph"
   elements.deckBrowser.hidden = graphSelected
   elements.graphView.hidden = !graphSelected
-  document.querySelector("#show-deck-list").classList.toggle("is-active", !graphSelected)
-  document.querySelector("#show-deck-list").setAttribute("aria-pressed", String(!graphSelected))
+  for (const button of document.querySelectorAll("[data-library-tab]")) {
+    const selected = button.dataset.libraryTab === libraryTab
+    button.classList.toggle("is-active", selected)
+    button.setAttribute("aria-pressed", String(selected))
+  }
+  document.querySelector("#show-deck-list").classList.toggle("is-active", tab === "all")
+  document.querySelector("#show-deck-list").setAttribute("aria-pressed", String(tab === "all"))
   document.querySelector("#show-document-graph").classList.toggle("is-active", graphSelected)
   document.querySelector("#show-document-graph").setAttribute("aria-pressed", String(graphSelected))
+  if (!graphSelected) renderDecks()
 }
 
 async function documentGraphData() {
@@ -282,17 +296,51 @@ async function showDocumentGraph() {
 }
 
 function renderDecks() {
-  const query = elements.search.value.trim().toLocaleLowerCase()
-  const filtered = decks.filter(deck => deck.name.toLocaleLowerCase().includes(query))
+  const query = elements.search.value.trim()
+  const filtered = filterDecks(decks, libraryTab, query)
+  const totalForFilter = filterDecks(decks, libraryTab).length
+  cardPreviewObserver?.disconnect()
   elements.list.replaceChildren(...filtered.map(deck => createDeckCard(document, deck, {
     open: id => void openDeck(id),
     rename: item => void renameDeck(item),
     delete: item => void deleteDeck(item)
   })))
-  elements.count.textContent = `${decks.length} ${decks.length === 1 ? "deck" : "decks"}${query ? ` · ${filtered.length} shown` : ""}`
-  elements.empty.hidden = decks.length !== 0
-  elements.list.hidden = filtered.length === 0
-  if (decks.length && filtered.length === 0) {
+  const previewTargets = elements.list.querySelectorAll(".deck-card-preview[data-deck-id]")
+  const startPreview = target => {
+    const deck = decks.find(item => item.id === target.dataset.deckId)
+    if (deck) void loadLibraryPreview(target, deck)
+  }
+  if (typeof IntersectionObserver === "function") {
+    cardPreviewObserver = new IntersectionObserver(entries => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue
+        cardPreviewObserver.unobserve(entry.target)
+        startPreview(entry.target)
+      }
+    }, { rootMargin: "180px" })
+    previewTargets.forEach(target => cardPreviewObserver.observe(target))
+  } else {
+    previewTargets.forEach(startPreview)
+  }
+  const kindLabel = libraryTab === "all" ? "deck" : libraryTab === "documents" ? "document" : "presentation"
+  elements.count.textContent = `${totalForFilter} ${totalForFilter === 1 ? kindLabel : `${kindLabel}s`}${query ? ` · ${filtered.length} shown` : ""}`
+  const isEmptyState = filtered.length === 0 && !query
+  elements.empty.hidden = !isEmptyState
+  elements.list.hidden = filtered.length === 0 && !isEmptyState
+  const emptyTitle = elements.empty.querySelector("h2")
+  const emptyCopy = elements.empty.querySelector("p")
+  const emptyAction = elements.empty.querySelector("[data-action='create-presentation']")
+  emptyTitle.textContent = decks.length === 0 && libraryTab === "all"
+    ? "Your first deck starts here."
+    : `No ${kindLabel}${filtered.length === 1 ? "" : "s"} yet.`
+  emptyCopy.textContent = libraryTab === "documents"
+    ? "Start with plain Markdown. Your document stays in its folder."
+    : libraryTab === "presentations"
+      ? "Create a presentation and shape it slide by slide."
+      : "Create a presentation or a document in this library."
+  emptyAction.textContent = libraryTab === "documents" ? "Create a document" : "Create a presentation"
+  emptyAction.dataset.kind = libraryTab === "documents" ? "document" : "presentation"
+  if (filtered.length === 0 && query) {
     const noResults = document.createElement("p")
     noResults.className = "no-results"
     noResults.textContent = "No decks match this search."
@@ -773,7 +821,9 @@ async function handleMenuAction(action) {
 
 document.querySelector("#choose-library").addEventListener("click", () => void chooseLibrary())
 document.querySelector("#change-library").addEventListener("click", () => void chooseLibrary())
-document.querySelector("#new-deck").addEventListener("click", () => showCreateDialog())
+document.querySelector("#new-deck").addEventListener("click", () => {
+  showCreateDialog(libraryTab === "documents" ? "document" : "presentation")
+})
 document.querySelector("#refresh-library").addEventListener("click", () => void refreshLibrary())
 document.querySelector("#import-elef").addEventListener("click", () => void importDeck())
 document.querySelector("#back-to-library").addEventListener("click", () => {
@@ -800,9 +850,13 @@ document.querySelector("#import-conflict-replace").addEventListener("click", () 
 document.querySelector("#import-conflict-keep-both").addEventListener("click", () => void resolveImportConflict("keep_both"))
 document.querySelector("#import-conflict-cancel").addEventListener("click", () => void resolveImportConflict("cancel"))
 document.querySelector("#deck-search").addEventListener("input", renderDecks)
-document.querySelector("#show-deck-list").addEventListener("click", () => showLibraryTab("decks"))
+document.querySelectorAll("[data-library-tab]").forEach(button => {
+  button.addEventListener("click", () => showLibraryTab(button.dataset.libraryTab))
+})
 document.querySelector("#show-document-graph").addEventListener("click", () => void showDocumentGraph())
-document.querySelector("#empty-library [data-action='create-presentation']").addEventListener("click", () => showCreateDialog("presentation"))
+document.querySelector("#empty-library [data-action='create-presentation']").addEventListener("click", event => {
+  showCreateDialog(event.currentTarget.dataset.kind || "presentation")
+})
 elements.editorField.addEventListener("input", () => scheduleSave())
 document.querySelector("#use-disk-version").addEventListener("click", resolveConflictWithDisk)
 document.querySelector("#keep-local-version").addEventListener("click", resolveConflictWithLocal)

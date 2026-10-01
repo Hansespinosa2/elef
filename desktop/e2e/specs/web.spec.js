@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test"
 import { editAndPreviewWorkflow, SAVED_SOURCE } from "../scenarios/edit-and-preview.js"
+import { libraryAndGraphWorkflow } from "../scenarios/library-and-graph.js"
 
 class WebEditorUi {
   constructor(page) {
@@ -33,8 +34,43 @@ class WebEditorUi {
   }
 }
 
+class WebLibraryUi {
+  constructor(page) {
+    this.page = page
+  }
+
+  async openLibrary() {
+    await this.page.goto("/")
+  }
+
+  async showDocuments() {
+    await this.page.goto("/documents")
+  }
+
+  async assertDocumentsOnly(documentTitle) {
+    await expect(this.page.getByRole("heading", { name: documentTitle, exact: true })).toBeVisible()
+    await expect(this.page.locator("article.library-card")).toHaveCount(2)
+  }
+
+  async showDocumentGraph() {
+    await expect(this.page.locator("#document-graph-heading")).toBeVisible()
+  }
+
+  async openGraphDocument(title) {
+    await this.page.getByRole("link", { name: `Open ${title} preview` }).click()
+  }
+
+  async assertDocumentOpened(title) {
+    await expect(this.page.getByRole("heading", { name: title, exact: true })).toBeVisible()
+  }
+}
+
 test("shared editing flow works in the web app", async ({ page }) => {
   await editAndPreviewWorkflow(new WebEditorUi(page))
   await expect(page.locator(".source-field .cm-content")).toContainText("Saved by shared scenario")
   expect(await page.locator(".source-field .cm-content").innerText()).toContain(SAVED_SOURCE.split("\n")[0])
+})
+
+test("shared library and document graph flow works in the web app", async ({ page }) => {
+  await libraryAndGraphWorkflow(new WebLibraryUi(page))
 })

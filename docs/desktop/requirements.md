@@ -21,7 +21,7 @@ A bundled, offline-first desktop app for macOS (Apple Silicon) and Linux (Arch/O
 
 Goals
 1. Folders on disk are the source of truth; no database server; any cache is rebuildable.
-2. The editing experience (visual editor, source editor, flow) is identical to web; window chrome may differ.
+2. The editing experience (visual editor, source editor, flow) and core workspace views (all work, documents, presentations, document graph) behave the same as web; window chrome and file-backed actions may differ.
 3. One shared JS renderer, written once, used by Rails and desktop (ADR-007).
 4. Offline-first; auto-update from day one.
 5. Usable soon: revisions and lineage graph are deferred behind flags (ADR-005).

@@ -30,6 +30,9 @@ test("the host uses no inline event handlers under the strict script policy", ()
 })
 
 test("the library provides the local document graph view and deck navigation", () => {
+  assert.ok(document.querySelector("#show-deck-list[data-library-tab='all']"))
+  assert.ok(document.querySelector("#show-documents[data-library-tab='documents']"))
+  assert.ok(document.querySelector("#show-presentations[data-library-tab='presentations']"))
   assert.ok(document.querySelector("#show-document-graph"))
   assert.ok(document.querySelector("#document-graph-view[hidden]"))
   assert.ok(document.querySelector("#document-graph-search[data-document-graph-target='search']"))

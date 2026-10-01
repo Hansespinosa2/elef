@@ -5,7 +5,8 @@ import { build } from "esbuild"
 
 const frontendRoot = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(frontendRoot, "../..")
-const output = path.join(frontendRoot, "dist")
+const e2eBuild = process.env.ELEF_E2E_BUILD === "1"
+const output = path.join(frontendRoot, e2eBuild ? "dist-e2e" : "dist")
 const assets = path.join(output, "assets")
 
 await mkdir(assets, { recursive: true })
@@ -58,7 +59,26 @@ const occurrences = rendererBundle.split(rawWhitespace).length - 1
 if (occurrences !== 1) throw new Error(`Expected one Highlight.js whitespace template, found ${occurrences}.`)
 await writeFile(railsRendererBundle, rendererBundle.replace(rawWhitespace, "[ \\t\n"))
 
-await copyFile(path.join(frontendRoot, "index.html"), path.join(output, "index.html"))
+const indexHtml = await readFile(path.join(frontendRoot, "index.html"), "utf8")
+if (e2eBuild) {
+  await build({
+    entryPoints: [path.join(frontendRoot, "../e2e/wdio-init.js")],
+    nodePaths: [path.join(frontendRoot, "../e2e/node_modules")],
+    bundle: true,
+    format: "esm",
+    target: "es2022",
+    outfile: path.join(assets, "wdio-init.js"),
+    minify: true
+  })
+  const appModule = '<script type="module" src="./assets/app.js"></script>'
+  if (!indexHtml.includes(appModule)) throw new Error("Could not find the desktop app module tag in index.html.")
+  await writeFile(
+    path.join(output, "index.html"),
+    indexHtml.replace(appModule, '<script type="module" src="./assets/wdio-init.js"></script>\n    ' + appModule)
+  )
+} else {
+  await writeFile(path.join(output, "index.html"), indexHtml)
+}
 await copyFile(path.join(frontendRoot, "theme.css"), path.join(assets, "theme.css"))
 await copyFile(path.join(frontendRoot, "styles.css"), path.join(assets, "styles.css"))
 await copyFile(path.join(frontendRoot, "node_modules/katex/dist/katex.min.css"), path.join(assets, "katex.min.css"))

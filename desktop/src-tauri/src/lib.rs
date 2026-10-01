@@ -4,8 +4,8 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
 use elef_core::{
-    AuthoringRegistries, CoreError, DeckSummary, DocumentGraph, ImportResolution, ImportResult,
-    Library, LibraryConfig, OpenDeck, SaveResult, SourceSnapshot, UploadedAsset,
+    AuthoringRegistries, CoreError, DeckPreview, DeckSummary, DocumentGraph, ImportResolution,
+    ImportResult, Library, LibraryConfig, OpenDeck, SaveResult, SourceSnapshot, UploadedAsset,
 };
 use serde::Serialize;
 #[cfg(target_os = "macos")]
@@ -200,6 +200,14 @@ fn create_deck(
 #[tauri::command]
 fn open_deck(state: State<'_, DesktopState>, id: String) -> Result<OpenDeck, CommandError> {
     Ok(state.current_library()?.open_deck(&id)?)
+}
+
+#[tauri::command]
+fn read_deck_preview(
+    state: State<'_, DesktopState>,
+    id: String,
+) -> Result<DeckPreview, CommandError> {
+    Ok(state.current_library()?.read_deck_preview(&id)?)
 }
 
 #[tauri::command]
@@ -850,6 +858,8 @@ pub fn run() {
 
     #[cfg(feature = "webdriver")]
     let builder = builder.plugin(tauri_plugin_wdio_webdriver::init());
+    #[cfg(feature = "webdriver")]
+    let builder = builder.plugin(tauri_plugin_wdio::init());
 
     let app = builder
         .register_asynchronous_uri_scheme_protocol("elefasset", |context, request, responder| {
@@ -915,6 +925,7 @@ pub fn run() {
             document_graph,
             create_deck,
             open_deck,
+            read_deck_preview,
             read_source_snapshot,
             rename_deck,
             delete_deck,

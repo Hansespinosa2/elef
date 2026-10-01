@@ -54,7 +54,9 @@
 
         <section id="library-view" class="library-view" aria-labelledby="library-title" hidden>
           <nav class="library-view-tabs" aria-label="Library views">
-            <button id="show-deck-list" class="library-view-tab is-active" type="button" aria-pressed="true">Decks</button>
+            <button id="show-deck-list" class="library-view-tab is-active" type="button" data-library-tab="all" aria-pressed="true">All</button>
+            <button id="show-documents" class="library-view-tab" type="button" data-library-tab="documents" aria-pressed="false">Documents</button>
+            <button id="show-presentations" class="library-view-tab" type="button" data-library-tab="presentations" aria-pressed="false">Presentations</button>
             <button id="show-document-graph" class="library-view-tab" type="button" aria-pressed="false">Document graph</button>
           </nav>
           <div id="deck-browser-view">

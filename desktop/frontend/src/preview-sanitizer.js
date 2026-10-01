@@ -14,7 +14,7 @@ const ALLOWED_PRESENTATION_ACTIONS = new Set([
   "add-slide-after", "delete-slide", "move-slide-up", "move-slide-down", "add-block-after", "delete-block", "move-block-up", "move-block-down"
 ])
 
-export function installSanitizedPreview(container, html) {
+export function installSanitizedPreview(container, html, { interactive = true } = {}) {
   const template = container.ownerDocument.createElement("template")
   template.innerHTML = typeof html === "string" ? html : ""
   const walker = container.ownerDocument.createTreeWalker(template.content, container.ownerDocument.defaultView?.NodeFilter?.SHOW_ELEMENT || 1)
@@ -27,23 +27,23 @@ export function installSanitizedPreview(container, html) {
       continue
     }
     for (const attribute of [...element.attributes]) {
-      if (!safeAttribute(element, attribute.name, attribute.value)) element.removeAttribute(attribute.name)
+      if (!safeAttribute(element, attribute.name, attribute.value, interactive)) element.removeAttribute(attribute.name)
     }
   }
   container.replaceChildren(template.content)
 }
 
-function safeAttribute(element, name, value) {
+function safeAttribute(element, name, value, interactive) {
   const lower = name.toLowerCase()
   if (lower.startsWith("on") || lower === "srcdoc" || lower === "formaction") return false
   if (["class", "role", "alt", "title", "aria-label", "aria-multiline", "aria-readonly", "aria-hidden", "spellcheck", "controls", "playsinline", "preload", "colspan", "rowspan"].includes(lower)) return true
-  if (lower === "contenteditable") return value === "true" || value === "false"
+  if (lower === "contenteditable") return interactive && (value === "true" || value === "false")
   if (["xmlns", "display", "encoding"].includes(lower) && ["MATH", "ANNOTATION"].includes(element.tagName)) return true
   if (lower === "style") return isSafeKatexStyle(element, value)
   if (lower.startsWith("aria-") && /^[a-z-]+$/.test(lower)) return true
-  if (lower === "data-action") return ALLOWED_ACTIONS.has(value)
-  if (lower === "data-controller") return value.split(/\s+/).every((controller) => ["mermaid-diagrams", "presentation-canvas", "document-pages"].includes(controller))
-  if (lower === "data-presentation-editor-action") return ALLOWED_PRESENTATION_ACTIONS.has(value)
+  if (lower === "data-action") return interactive && ALLOWED_ACTIONS.has(value)
+  if (lower === "data-controller") return interactive && value.split(/\s+/).every((controller) => ["mermaid-diagrams", "presentation-canvas", "document-pages"].includes(controller))
+  if (lower === "data-presentation-editor-action") return interactive && ALLOWED_PRESENTATION_ACTIONS.has(value)
   if (/^data-(?:editor|presentation-canvas|slide-index)/.test(lower)) return true
   if (lower === "href" && element.tagName === "A") return safeUrl(value)
   if (lower === "src" && ["IMG", "VIDEO"].includes(element.tagName)) return safeUrl(value) && !/^(?:https?:|data:|javascript:)/i.test(value)

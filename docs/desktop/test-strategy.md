@@ -2,12 +2,13 @@
 
 Status: draft v3 (2026-10-01). Implements the preference: one suite of user flows verified on web and desktop, tiered for speed, no divergent suites. Every quality scenario in [requirements.md](requirements.md) maps to a tier here.
 
-## 1. Structure: shared Playwright scenarios, two adapters
+## 1. Structure: shared scenarios, two runner dialects
 
-- **Scenarios** are shared functions defined once against a small UI adapter. The current `edit-and-preview` flow opens a deck, edits source, waits for auto-save, switches to visual mode, and verifies the preview. The remaining planned flows are open-deck, undo-redo-session, insert-image, snippet-insert, math-input, elef-export-import, external-edit-conflict, hostile-deck-neutralized, and update-cycle. Each shared function must be selected in both projects unless its browser-only or shell-only scope is documented.
-- **Web adapter:** Playwright Test drives the Rails app in Chromium. **Desktop adapter:** the same Playwright Test suite drives the real Tauri binary through the Tauri embedded WebDriver plugin; its WebDriver client is an adapter, while scenario definitions and test lifecycle stay in Playwright. The app enables the plugin only with the explicit `webdriver` Cargo feature and test-only Tauri capability. Production configuration grants neither.
-- **Platform constraint:** [Tauri's documented desktop automation path is WebDriver](https://v2.tauri.app/develop/tests/webdriver/); Playwright's CDP attachment is Chromium-specific. The desktop adapter therefore uses the app's real WKWebView/WebKitGTK and native command backend, while Playwright's Page API remains for the Rails web project. This implements the shared-scenario preference without claiming that Playwright's browser engine attaches to a system webview.
-- **Current evidence:** Linux and macOS CI build and launch the test-only binary and run shared Playwright scenarios against both Rails and the native desktop. Dedicated native menu, dialog, launch/quit, and update-install smoke cases, save-process crash injection, and the full perf matrix remain separate release gates.
+- **Scenarios** are shared functions defined once against a small UI adapter. The current `edit-and-preview` flow opens a deck, edits source, waits for auto-save, switches to visual mode, and verifies the preview; `library-and-graph` checks document filtering and opening a linked document from the graph. The remaining flows are open-deck, undo-redo-session, insert-image, snippet-insert, math-input, elef-export-import, external-edit-conflict, hostile-deck-neutralized, and update-cycle. Each shared function must run through both adapters unless its browser-only or shell-only scope is documented.
+- **Web adapter:** Playwright Test drives the Rails app in Chromium. **Desktop adapter:** WebdriverIO drives the real Tauri binary through its embedded WebDriver provider. Both adapters call the same scenario definitions; their page-object operations use their runner's normal APIs.
+- **Platform constraint:** [Tauri documents WebDriver for desktop automation](https://v2.tauri.app/develop/tests/webdriver/), while Playwright's CDP attachment is Chromium-specific. The desktop runner exercises the actual WKWebView/WebKitGTK and native command backend; the web runner exercises Rails in Chromium. This is the user's selected WebdriverIO trade-off for retaining Tauri.
+- **Isolation:** the app enables the WebdriverIO command plugin and embedded server only with the explicit `webdriver` Cargo feature, a separate E2E Tauri config, an E2E-only frontend directory, and a test-only capability. The production config, default Cargo features, and production frontend do not include those hooks.
+- **Current evidence:** Linux and macOS CI run the shared web and desktop editing and library/graph scenarios. The desktop suite also opens and closes the new-deck dialog through the native menu accelerator. The WDIO service starts and closes the test binary. Update-install fault injection, save-process crash injection, and the full performance matrix remain release gates.
 - **Divergence guard:** a scenario that exists in only one runner without a documented reason fails review.
 
 ## 2. Tiers
@@ -16,11 +17,11 @@ Status: draft v3 (2026-10-01). Implements the preference: one suite of user flow
 |---|---|---|---|
 | T0 | Unit and component: Rust core tests (safe write, path guard, archive, source-file rule, document graph, asset validation); JS unit tests including raw-byte media transport; **renderer fixture suite** (Node, against the bundle); thin Ruby test that the mini_racer wrapper returns the same HTML as the bundle; transport contract tests | Every change, fast path | QS-3 (Rust), QS-4, QS-5, QS-10, QS-11 |
 | T1 | Playwright: shared scenarios vs **web** (Rails test server) | PRs | QS-1 (web leg) |
-| T2 | Playwright Test: the same scenario functions vs the **real Tauri binary**, through its test-only embedded WebDriver plugin on Linux and macOS | PRs | QS-1 (shared edit/save/preview flow) |
+| T2 | WebdriverIO: the same scenario functions vs the **real Tauri binary**, through its test-only embedded WebDriver provider on Linux and macOS; native menu/dialog smoke | PRs | QS-1 (shared edit/save/preview and library/graph flows) |
 | T3 | Native smoke: install, launch, menus, dialogs, updater dry-run, hostile fixtures, and process-kill save fault injection | PRs / release | QS-2, QS-4, QS-5, QS-8 |
 | CI fitness | Architecture rules as automated checks (§6) | Every change | QS-7, T5/T8 controls |
 
-T0 and frontend component tests provide fast feedback; T1 and T2 gate PRs on both target OSes. The current shared browser flow verifies opening a deck, editing source, auto-save, and rendered preview. The remaining listed flows are planned coverage, not implied by that one scenario. Native menu/dialog behavior and release/update operations require their dedicated T3 checks.
+T0 and frontend component tests provide fast feedback; T1 and T2 gate PRs on both target OSes. The current shared scenarios verify opening a deck, editing source, auto-save, rendered preview, document filtering, and graph navigation. The remaining listed flows are planned coverage, not implied by those scenarios. Release/update operations and process-kill save fault injection require their dedicated T3 checks.
 
 ## 3. Renderer fixtures: one renderer, two phases
 
@@ -49,6 +50,7 @@ Automated checks that keep the architecture from drifting:
 - Ruby `Source::HtmlRenderer` is absent after cutover; Rails and desktop load a renderer bundle with the same hash (QS-7).
 - Tauri capability file equals the command table in [transport-adapter.md](transport-adapter.md); no wildcard fs or shell permission.
 - Shipped CSP equals the policy recorded in [security.md](security.md); `script-src` has no `unsafe-inline` / `unsafe-eval`.
+- The test-only WebdriverIO plugins, global Tauri API, and frontend initializer do not enter the default production build or capability.
 - `elef-core` has no dependency on Tauri crates.
 - Live feature flags match the register in [delivery-plan.md](delivery-plan.md); each has a removal condition.
 - `cargo audit` and `npm audit` pass or have a dated, recorded exception.

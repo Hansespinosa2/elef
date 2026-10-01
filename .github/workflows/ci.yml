@@ -204,9 +204,9 @@ jobs:
         run: bin/rails db:test:prepare
       - name: Install headless browser and system dependencies
         run: npx --prefix desktop/e2e playwright install --with-deps chromium
-      - name: Build test-only desktop binary with WebDriver capability
-        run: npm run tauri:build --prefix desktop/frontend -- --debug --no-bundle --features webdriver --config src-tauri/tauri.e2e.conf.json
-      - name: Run shared web and desktop Playwright scenarios
+      - name: Build test-only desktop binary with WebdriverIO capability
+        run: ELEF_E2E_BUILD=1 npm run tauri:build --prefix desktop/frontend -- --debug --no-bundle --features webdriver --config src-tauri/tauri.e2e.conf.json
+      - name: Run shared web and desktop scenarios
         env:
           CI: "true"
           RAILS_ENV: test
@@ -269,12 +269,13 @@ jobs:
           RAILS_ENV: test
           ELEF_USE_SQLITE: "1"
         run: bin/rails db:test:prepare
-      - name: Install headless browser
+      - name: Install headless web browser
         run: npx --prefix desktop/e2e playwright install chromium
-      - name: Build test-only desktop binary with WebDriver capability
-        run: npm run tauri:build --prefix desktop/frontend -- --debug --no-bundle --features webdriver --config src-tauri/tauri.e2e.conf.json
-      - name: Run shared desktop Playwright scenarios
+      - name: Build test-only desktop binary with WebdriverIO capability
+        run: ELEF_E2E_BUILD=1 npm run tauri:build --prefix desktop/frontend -- --debug --no-bundle --features webdriver --config src-tauri/tauri.e2e.conf.json
+      - name: Run shared web and desktop scenarios
         env:
+          CI: "true"
           RAILS_ENV: test
           ELEF_USE_SQLITE: "1"
         run: npm test --prefix desktop/e2e

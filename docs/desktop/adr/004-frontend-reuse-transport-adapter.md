@@ -8,7 +8,7 @@
 
 ## Context
 
-Preference: the editing experience — visual editor, source editor, the editing flow — must be identical between web and desktop; no native rewrite unless a concrete feel gap is named. The editor is already JavaScript (Stimulus + CodeMirror); the surrounding views are server-rendered Rails.
+Preference: the editing experience — visual editor, source editor, and editing flow — plus the core library views and document graph must behave identically between web and desktop; no native rewrite unless a concrete feel gap is named. The editor is already JavaScript (Stimulus + CodeMirror); the web host and library are server-rendered Rails.
 
 ## Options considered
 
@@ -21,11 +21,11 @@ Preference: the editing experience — visual editor, source editor, the editing
 - **Reuse verbatim:** the CodeMirror/Stimulus controllers and the editing flow. They run in the Tauri webview unchanged.
 - **Transport adapter:** the one seam. The editor's server calls already speak JSON, so the adapter routes the same calls to Rust commands or to webview-local handlers (the renderer worker) with the same payloads. The controllers don't know which backend answered. The adapter also owns the conflict hash handshake so controllers stay unchanged. Spec: [transport-adapter.md](../transport-adapter.md).
 - **Host page:** the editor boots inside a server-rendered ERB view (`works/_form.html.erb`). Desktop reproduces it as a **static host-page template** (part of S1): no ERB at runtime, no Rails.
-- **Minimal new for v1:** the library shell (deck list, open/import/export chrome) and the conflict UI are new and minimal. Turbo Drive does not ship; navigation becomes shell view-switching (S1 confirms no controller depends on Turbo events).
+- **Desktop library parity:** the offline library shell exposes the same core browsing views as web: all work, documents, presentations, rendered card previews, and document graph. Its deck actions operate on folders and `.elef` archives. Shared browser scenarios verify the same library and graph flow against Rails and the desktop binary. Turbo Drive does not ship; navigation becomes shell view-switching (S1 confirms no controller depends on Turbo events).
 
-## An honest note on "identical library"
+## Library implementation boundary
 
-The preference said library and graph should ideally be identical too. Full view reuse would require bundled Rails (rejected in ADR-003). Resolution: the **editing experience** — ranked most important — is literally the same code; library chrome converges after v1. Recorded here so no agent "discovers" the tension mid-implementation.
+Rails keeps its server-rendered host and the desktop uses a local file-backed host. They share the library's core behavior through the scenario suite: all/document/presentation browsing, rendered work previews, and opening linked documents from the graph. Revisions, lineage, and server-only actions remain behind their existing flags or outside desktop v1; they do not change the core library flow.
 
 ## Consequences
 

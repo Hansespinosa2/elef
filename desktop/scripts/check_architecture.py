@@ -54,11 +54,18 @@ assert {permission for permission in permissions if permission.startswith("core:
 assert not any(permission.startswith(("fs:", "shell:", "dialog:")) for permission in permissions)
 assert config["app"]["security"]["capabilities"] == ["main-capability"], "production must not attach the E2E WebDriver capability"
 assert e2e_config["app"]["security"]["capabilities"] == ["main-capability", "e2e-webdriver"], "the test build must attach only the production and E2E capabilities"
-assert e2e_capability["permissions"] == ["wdio-webdriver:default"], "the E2E capability must grant only its local WebDriver plugin"
+assert set(e2e_capability["permissions"]) == {
+    "wdio:default",
+    "wdio-webdriver:default",
+}, "only the test-only capability may expose WebdriverIO and its embedded server"
+assert e2e_config["app"].get("withGlobalTauri") is True, "global Tauri access is enabled only for the test-only WebdriverIO build"
+assert config["app"].get("withGlobalTauri") is not True, "production must not expose the global Tauri API"
 tauri_manifest = (TAURI_ROOT / "Cargo.toml").read_text()
-assert 'webdriver = ["dep:tauri-plugin-wdio-webdriver"]' in tauri_manifest, "the WebDriver plugin must remain opt-in"
+assert 'webdriver = ["dep:tauri-plugin-wdio", "dep:tauri-plugin-wdio-webdriver"]' in tauri_manifest, "WebdriverIO plugins must remain opt-in"
 assert not re.search(r'^default\s*=.*\bwebdriver\b', tauri_manifest, re.MULTILINE), "production's default Cargo features must exclude WebDriver"
 assert '#[cfg(feature = "webdriver")]\n    let builder = builder.plugin(tauri_plugin_wdio_webdriver::init());' in app_source, "production builds must not register the WebDriver plugin"
+assert '#[cfg(feature = "webdriver")]\n    let builder = builder.plugin(tauri_plugin_wdio::init());' in app_source, "the WebdriverIO command plugin must be test-only"
+assert 'frontendDist": "../frontend/dist-e2e"' in (TAURI_ROOT / "tauri.e2e.conf.json").read_text(), "WebdriverIO code must load from the isolated E2E frontend build"
 
 feature_flags = {
     name: value == "true"
