@@ -96,7 +96,7 @@ for part in csp.split(";"):
 assert directives.get("script-src") == ["'self'"], "script-src must stay self-only"
 assert "'unsafe-eval'" not in csp and "'unsafe-inline'" not in directives.get("script-src", [])
 assert directives.get("style-src") == ["'self'"]
-assert directives.get("style-src-attr") == ["'unsafe-inline'"], "allow only CodeMirror's runtime style attributes"
+assert directives.get("style-src-attr") == ["'unsafe-inline'"], "allow only runtime style attributes required by CodeMirror and KaTeX"
 assert directives.get("frame-src") == ["'none'"]
 assert "https:" not in directives.get("img-src", [])
 assert "*" not in directives.get("img-src", [])
