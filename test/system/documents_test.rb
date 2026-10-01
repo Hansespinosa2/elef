@@ -1939,6 +1939,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
       expected = Regexp.new(Regexp.escape("#{opening}\n\n#{closing}"))
       assert_field "Markdown source", with: expected, wait: 5
+      assert_selector ".document-editor-block .editor-math-active", wait: 5
 
       active_document_block.send_keys("x=1")
       completed = Regexp.new(Regexp.escape("#{opening}\nx=1\n#{closing}"))

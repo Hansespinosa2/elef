@@ -9,18 +9,8 @@ export function deRenderMath(mathElement, { caret = "end", clickEvent = null } =
   const close = mathElement.dataset.editorMathClose || open
   const fullText = `${open}${source}${close}`
 
-  const activeSpan = document.createElement("span")
-  activeSpan.className = "editor-math-active"
-  activeSpan.dataset.editorMathActive = "true"
-  activeSpan.dataset.editorMathOpen = open
-  activeSpan.dataset.editorMathClose = close
-  activeSpan.dataset.editorMathSource = source
-  if (isDisplay) activeSpan.classList.add("editor-live-math-display")
-  activeSpan.contentEditable = "true"
-  activeSpan.spellcheck = false
-
-  const textNode = document.createTextNode(fullText)
-  activeSpan.appendChild(textNode)
+  const activeSpan = createActiveMathSpan(fullText, { source, open, close, display: isDisplay })
+  const textNode = activeSpan.firstChild
 
   mathElement.parentNode.replaceChild(activeSpan, mathElement)
 
@@ -52,6 +42,20 @@ export function deRenderMath(mathElement, { caret = "end", clickEvent = null } =
     selection?.setBaseAndExtent(textNode, offset, textNode, offset)
   }
 
+  return activeSpan
+}
+
+export function createActiveMathSpan(fullText, { source = "", open = "$", close = open, display = false } = {}) {
+  const activeSpan = document.createElement("span")
+  activeSpan.className = "editor-math-active"
+  activeSpan.dataset.editorMathActive = "true"
+  activeSpan.dataset.editorMathOpen = open
+  activeSpan.dataset.editorMathClose = close
+  activeSpan.dataset.editorMathSource = source
+  if (display) activeSpan.classList.add("editor-live-math-display")
+  activeSpan.contentEditable = "true"
+  activeSpan.spellcheck = false
+  activeSpan.appendChild(document.createTextNode(fullText))
   return activeSpan
 }
 
