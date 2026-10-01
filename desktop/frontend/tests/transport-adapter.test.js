@@ -20,7 +20,8 @@ test("save sends the last loaded hash and advances it after success", async () =
   await adapter.saveSource("deck-1", "# edited")
   await adapter.saveSource("deck-1", "# edited again")
 
-  assert.deepEqual(calls.map(([, payload]) => payload.base_hash), [undefined, hashA, hashB])
+  assert.deepEqual(calls.map(([, payload]) => payload.baseHash), [undefined, hashA, hashB])
+  assert.equal("base_hash" in calls[1][1], false)
   assert.equal(calls[1][1].source, "# edited")
 })
 
@@ -46,10 +47,10 @@ test("conflicts preserve the base hash until the user accepts the disk version",
   await adapter.openDeck("deck-1")
   await assert.rejects(adapter.saveSource("deck-1", "# local"), error => error.code === "conflict")
   assert.equal(conflicts[0].source, "# local")
-  assert.equal(saves[0].base_hash, hashA)
+  assert.equal(saves[0].baseHash, hashA)
 
   conflict = false
   adapter.acceptDiskVersion("deck-1", hashB)
   await adapter.saveSource("deck-1", "# keep local")
-  assert.equal(saves[1].base_hash, hashB)
+  assert.equal(saves[1].baseHash, hashB)
 })

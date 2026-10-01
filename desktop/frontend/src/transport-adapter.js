@@ -23,7 +23,7 @@ export function createTransportAdapter({ invoke, onConflict = () => {} }) {
       }
 
       try {
-        const result = await invoke("save_source", { id, source, base_hash: baseHash })
+        const result = await invoke("save_source", { id, source, baseHash })
         baseHashes.set(id, result.content_hash)
         return result
       } catch (error) {
