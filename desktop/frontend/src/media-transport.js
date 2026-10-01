@@ -33,7 +33,9 @@ export function createMediaFetch({ invoke, fetchImpl = globalThis.fetch.bind(glo
       const rawBytes = new Uint8Array(await file.arrayBuffer())
       const result = await invoke("upload_asset", rawBytes, {
         headers: {
-          "content-type": file.type || "application/octet-stream",
+          // Tauri assigns content-type to raw IPC bodies. Carry the browser's
+          // hint separately and let Rust verify it against the file signature.
+          "x-elef-declared-media-type": file.type || "application/octet-stream",
           "x-elef-deck-id": deckId,
           "x-elef-filename": file.name || "image",
           "x-elef-fit": init.body.get("fit") || "contain"

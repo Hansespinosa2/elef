@@ -666,7 +666,7 @@ fn upload_asset(
         CommandError::new("invalid_input", "Choose a deck before adding media.", false)
     })?;
     let filename = header_value("x-elef-filename").unwrap_or("image");
-    let media_type = header_value("content-type").unwrap_or("");
+    let media_type = header_value("x-elef-declared-media-type").unwrap_or("");
     let fit = header_value("x-elef-fit").unwrap_or("contain");
     let InvokeBody::Raw(bytes) = request.body() else {
         return Err(CommandError::new(

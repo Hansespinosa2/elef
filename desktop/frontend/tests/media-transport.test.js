@@ -29,6 +29,7 @@ test("media fetch sends file bytes as a raw IPC body and preserves the Rails JSO
   assert.ok(calls[0][1] instanceof Uint8Array)
   assert.deepEqual([...calls[0][1]], [...pngHeader])
   assert.equal(calls[0][2].headers["x-elef-deck-id"], deckId)
+  assert.equal(calls[0][2].headers["x-elef-declared-media-type"], "image/png")
   assert.equal(calls[0][2].headers["x-elef-filename"], "diagram.png")
   assert.equal(calls[0][2].headers["x-elef-fit"], "cover")
 })

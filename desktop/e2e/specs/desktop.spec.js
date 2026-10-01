@@ -1,5 +1,5 @@
 import { $, $$, browser } from "@wdio/globals"
-import { execFileSync, spawnSync } from "node:child_process"
+import { execFileSync, spawn } from "node:child_process"
 import { readFile } from "node:fs/promises"
 import path from "node:path"
 import { editAndPreviewWorkflow } from "../scenarios/edit-and-preview.js"
@@ -243,22 +243,37 @@ class DesktopLibraryUi {
   async openElefArchive() {
     await this.openLibrary()
     await browser.execute(() => window.focus())
-    const launched = spawnSync(process.env.ELEF_E2E_APP_BINARY, [process.env.ELEF_E2E_IMPORT_ARCHIVE], {
-      timeout: 15_000,
-      encoding: "utf8"
+    const launched = spawn(process.env.ELEF_E2E_APP_BINARY, [process.env.ELEF_E2E_IMPORT_ARCHIVE], {
+      stdio: "ignore"
     })
-    if (launched.error || launched.status !== 0) {
-      throw new Error(`Opening the .elef file failed: ${launched.error?.message || launched.stderr || launched.stdout || launched.status}`)
+    let launchError = null
+    launched.once("error", error => { launchError = error })
+    try {
+      const card = $('[aria-label="Open E2E archive seed"]')
+      await browser.waitUntil(async () => {
+        if (launchError) throw new Error(`Opening the .elef file failed: ${launchError.message}`)
+        return card.isDisplayed()
+      }, {
+        timeout: 20_000,
+        timeoutMsg: "The running desktop app did not import the opened .elef file"
+      })
+      await card.click()
+      await browser.waitUntil(async () => (await $("#deck-title").getText()) === "E2E archive seed", {
+        timeout: 10_000,
+        timeoutMsg: "The imported .elef deck did not open"
+      })
+      const source = await browser.execute(() => document.querySelector("#desktop-editor-field")?.editorController?.sourceValue || "")
+      if (!source.includes("Portable archive fixture.")) throw new Error("The imported .elef source was not loaded")
+    } finally {
+      if (launched.exitCode === null && launched.signalCode === null) {
+        launched.kill("SIGTERM")
+        await Promise.race([
+          new Promise(resolve => launched.once("exit", resolve)),
+          new Promise(resolve => setTimeout(resolve, 1_000))
+        ])
+        if (launched.exitCode === null && launched.signalCode === null) launched.kill("SIGKILL")
+      }
     }
-    const card = $('[aria-label="Open E2E archive seed"]')
-    await card.waitForDisplayed({ timeout: 20_000 })
-    await card.click()
-    await browser.waitUntil(async () => (await $("#deck-title").getText()) === "E2E archive seed", {
-      timeout: 10_000,
-      timeoutMsg: "The imported .elef deck did not open"
-    })
-    const source = await browser.execute(() => document.querySelector("#desktop-editor-field")?.editorController?.sourceValue || "")
-    if (!source.includes("Portable archive fixture.")) throw new Error("The imported .elef source was not loaded")
   }
 }
 
@@ -284,10 +299,14 @@ describe("shared authoring scenarios", () => {
       await browser.pause(500)
       execFileSync("osascript", ["-e", 'tell application "System Events" to key code 53'], { timeout: 5_000 })
     } else if (process.platform === "linux") {
+      // Address the native chooser by title because CI's Xvfb has no window
+      // manager and cannot answer _NET_ACTIVE_WINDOW queries.
+      let dialogId
       await browser.waitUntil(async () => {
         try {
-          return execFileSync("xdotool", ["getactivewindow", "getwindowname"], { encoding: "utf8" })
-            .includes("Choose your Elef library folder")
+          dialogId = execFileSync("xdotool", ["search", "--onlyvisible", "--name", "Choose your Elef library folder"], { encoding: "utf8" })
+            .trim().split(/\s+/).at(-1)
+          return Boolean(dialogId)
         } catch (_error) {
           return false
         }
@@ -295,7 +314,7 @@ describe("shared authoring scenarios", () => {
         timeout: 5_000,
         timeoutMsg: "The native library folder picker did not open"
       })
-      execFileSync("xdotool", ["key", "Escape"], { timeout: 5_000 })
+      execFileSync("xdotool", ["key", "--window", dialogId, "Escape"], { timeout: 5_000 })
     } else {
       throw new Error(`Native folder picker smoke is unsupported on ${process.platform}`)
     }
