@@ -57,26 +57,23 @@ class DesktopEditorUi {
   }
 
   async undo() {
-    await this.dispatchHistoryShortcut("z", { shift: false })
+    await this.dispatchHistoryInput("historyUndo")
   }
 
   async redo() {
-    await this.dispatchHistoryShortcut("z", { shift: true })
+    await this.dispatchHistoryInput("historyRedo")
   }
 
-  async dispatchHistoryShortcut(key, { shift }) {
-    const modifiers = process.platform === "darwin" ? { metaKey: true } : { ctrlKey: true }
-    await browser.execute(({ key, shift, modifiers }) => {
-      const proxy = document.querySelector("#deck-source")
-      proxy?.dispatchEvent(new KeyboardEvent("keydown", {
-        key,
-        code: "KeyZ",
-        ...modifiers,
-        shiftKey: shift,
+  async dispatchHistoryInput(inputType) {
+    await browser.execute(type => {
+      const view = document.querySelector("#desktop-editor-field")?.editorController?.view
+      if (!view) return false
+      return view.contentDOM.dispatchEvent(new InputEvent("beforeinput", {
+        inputType: type,
         bubbles: true,
         cancelable: true
       }))
-    }, { key, shift, modifiers })
+    }, inputType)
   }
 
   async waitForSaved(expectedSource) {
