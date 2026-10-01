@@ -1,4 +1,5 @@
 import { $, $$, browser } from "@wdio/globals"
+import { execFileSync } from "node:child_process"
 import { editAndPreviewWorkflow } from "../scenarios/edit-and-preview.js"
 import { libraryAndGraphWorkflow } from "../scenarios/library-and-graph.js"
 
@@ -23,7 +24,11 @@ class DesktopEditorUi {
     await editor.waitForDisplayed()
     await editor.click()
     await browser.keys(process.platform === "darwin" ? ["Meta", "a"] : ["Control", "a"])
-    await browser.keys(source)
+    const lines = source.split("\n")
+    for (const [index, line] of lines.entries()) {
+      if (line) await browser.keys(line)
+      if (index < lines.length - 1) await browser.keys("Enter")
+    }
   }
 
   async waitForSaved() {
@@ -92,7 +97,14 @@ class DesktopLibraryUi {
 describe("shared authoring scenarios", () => {
   it("opens the new-deck dialog from the native menu accelerator", async () => {
     await $("#library-view").waitForDisplayed()
-    await browser.keys(process.platform === "darwin" ? ["Meta", "n"] : ["Control", "n"])
+    await browser.execute(() => window.focus())
+    if (process.platform === "darwin") {
+      execFileSync("osascript", ["-e", 'tell application "System Events" to keystroke "n" using {command down}'], { timeout: 5_000 })
+    } else if (process.platform === "linux") {
+      execFileSync("xdotool", ["key", "--clearmodifiers", "ctrl+n"], { timeout: 5_000 })
+    } else {
+      throw new Error(`Native menu smoke is unsupported on ${process.platform}`)
+    }
     const dialog = await $("#create-dialog")
     await dialog.waitForDisplayed()
     await $("#create-form button[value='cancel']").click()
