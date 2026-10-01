@@ -20,6 +20,10 @@ class WebEditorUi {
     await expect(this.page.locator(".source-field .cm-content")).toBeVisible()
   }
 
+  async reopenDeck() {
+    await this.openDeck()
+  }
+
   async replaceSource(source) {
     const editor = this.page.locator(".source-field .cm-content")
     await editor.click()

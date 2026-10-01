@@ -187,8 +187,8 @@
               <summary>Compare with the active version</summary>
               <pre data-autosave-target="serverSource"></pre>
             </details>
-            <button type="button" data-action="autosave#keepLocal">Keep local draft</button>
-            <button type="button" data-action="autosave#discardLocal">Discard local draft</button>
+            <button type="button" data-action="click->autosave#keepLocal">Keep local draft</button>
+            <button type="button" data-action="click->autosave#discardLocal">Discard local draft</button>
           </div>
           <% if work.presentation? %>
             <span class="release-state" data-release-status="<%= work.published_release_status %>">

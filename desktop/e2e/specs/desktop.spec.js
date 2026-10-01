@@ -31,6 +31,10 @@ class DesktopEditorUi {
     })
   }
 
+  async reopenDeck() {
+    await this.openDeck()
+  }
+
   async replaceSource(source) {
     const sourceMode = await $("#source-mode")
     await sourceMode.waitForDisplayed()
@@ -285,16 +289,27 @@ class DesktopLibraryUi {
       stdio: "ignore"
     })
     let launchError = null
+    let launchExit = null
     launched.once("error", error => { launchError = error })
+    launched.once("exit", (code, signal) => { launchExit = { code, signal } })
     try {
       const card = $('[aria-label="Open E2E archive seed"]')
-      await browser.waitUntil(async () => {
-        if (launchError) throw new Error(`Opening the .elef file failed: ${launchError.message}`)
-        return card.isDisplayed()
-      }, {
-        timeout: 20_000,
-        timeoutMsg: "The running desktop app did not import the opened .elef file"
-      })
+      try {
+        await browser.waitUntil(async () => {
+          if (launchError) throw new Error(`Opening the .elef file failed: ${launchError.message}`)
+          return card.isDisplayed()
+        }, {
+          timeout: 20_000,
+          timeoutMsg: "The running desktop app did not import the opened .elef file"
+        })
+      } catch (error) {
+        const state = await browser.execute(() => ({
+          status: document.querySelector("#status-text")?.textContent || "",
+          notice: document.querySelector("#notice")?.textContent || "",
+          cards: [...document.querySelectorAll(".deck-card")].map(card => card.getAttribute("aria-label"))
+        })).catch(() => ({ unavailable: true }))
+        throw new Error(`${error.message}; launch exit: ${JSON.stringify(launchExit)}; library state: ${JSON.stringify(state)}`)
+      }
       await card.click()
       await browser.waitUntil(async () => (await $("#deck-title").getText()) === "E2E archive seed", {
         timeout: 10_000,
