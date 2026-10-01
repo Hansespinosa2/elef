@@ -70,11 +70,17 @@ class DesktopEditorUi {
         timeout: 10_000,
         timeoutMsg: "The desktop editor reported Saved before the source file held the expected text"
       }).catch(async error => {
-        const [diskSource, saveState] = await Promise.all([
+        const [diskSource, state] = await Promise.all([
           readFile(sourcePath, "utf8").catch(readError => `<${readError.code || "read_error"}>`),
-          browser.execute(() => document.querySelector("#save-state")?.textContent || "<missing>")
+          browser.execute(() => ({
+            saveState: document.querySelector("#save-state")?.textContent || "<missing>",
+            status: document.querySelector("#status-text")?.textContent || "<missing>",
+            notice: document.querySelector("#notice")?.textContent || "",
+            deckId: document.querySelector("#deck-id")?.textContent || "",
+            deckTitle: document.querySelector("#deck-title")?.textContent || ""
+          }))
         ])
-        throw new Error(`${error.message}; save state: ${saveState}; disk source: ${JSON.stringify(diskSource)}`)
+        throw new Error(`${error.message}; desktop state: ${JSON.stringify(state)}; disk source: ${JSON.stringify(diskSource)}`)
       })
     }
     await browser.waitUntil(async () => (await $("#save-state").getText()) === "Saved", {
