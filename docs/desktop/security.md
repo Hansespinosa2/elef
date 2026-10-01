@@ -1,0 +1,60 @@
+# Elef Desktop — Security Model (seam spec)
+
+Status: draft v3 (2026-10-01). The living threat model and control list. The decision to adopt this approach is [ADR-006](adr/006-security-model.md); this file holds the details so the ADR stays short. Verification is mapped to tests in [test-strategy.md](test-strategy.md).
+
+## 1. Why the web threat model does not transfer
+
+On desktop the webview has IPC to a backend that reads and writes files. A deck folder or `.elef` file is **untrusted input**: someone else's deck, a downloaded sample, a synced folder another program writes into. The web renderer's `filter_html: true` plus URL allowlist is a start, not a model.
+
+Principle: **assume breach at every layer.** The renderer sanitizer will eventually have a bug; the design must still hold when hostile script runs in the webview.
+
+## 2. Assets and trust boundaries
+
+Assets: the user's deck files; the library root; the update-signing key; the IPC command surface.
+
+| Boundary | Untrusted side | Trusted side |
+|---|---|---|
+| B1 | Deck Markdown / HTML-ish content | Renderer, DOM |
+| B2 | Webview JS (including anything injected via B1) | Rust commands |
+| B3 | Archive entries and folder contents | Filesystem under the library root |
+| B4 | Update server response | Installer |
+| B5 | Other programs writing the folder | The app's in-memory state |
+
+## 3. Threats and controls
+
+| ID | Threat | Controls | Verified by |
+|---|---|---|---|
+| T1 | Hostile deck content yields script that reaches IPC | C1 sanitization, C2 CSP, C3 Mermaid strict, C8 commands safe when hostile, C11 single DOM insertion point | Hostile-deck fixtures (T0, T3); spike S5 probe |
+| T2 | Hostile URLs: `javascript:` links, `data:` documents, exfiltrating remote images | C1 `SAFE_URL` allowlist, C2 CSP `img-src`, remote images blocked in v1 (Q5) | T0 fixtures; CSP asserted in CI |
+| T3 | Path traversal, symlink escape, absolute paths | C5 path discipline, C4 scoped commands | T0 traversal fixtures |
+| T4 | Hostile archives: zip-slip, symlink entries, zip-bomb | C6 import hardening | T0 + T3 archive fixtures |
+| T5 | Renderer JS can invoke more than it needs | C4 least-privilege capabilities, C8 | Capability file equals command table (CI fitness) |
+| T6 | Denial of service: pathological Markdown, regex blow-up, huge diagrams or images | C9 render time and memory limits | T0 stress fixtures |
+| T7 | Malicious or compromised update | C10 signature verification, HTTPS only, key custody (ADR-009) | T3 update failure injection |
+| T8 | Supply chain: npm and cargo dependencies | C12 lockfiles, pinned versions, audit in CI, minimal renderer-bundle dependencies | CI audit step |
+| T9 | Another program tampers with folder content while the app runs | Treat all reads as untrusted input (same controls as T1, T3); fingerprint check (ADR-008) | T0, T2 |
+
+## 4. Controls
+
+- **C1 Renderer sanitization.** The shared JS renderer replicates the Ruby semantics: raw HTML filtered (`filter_html: true` equivalent); links and images restricted to the `SAFE_URL` allowlist (http, https, mailto, tel, fragment, relative). No `javascript:`.
+- **C2 Strict CSP** on the webview: our bundle only, no inline scripts, no remote origins. `script-src` is never relaxed. CodeMirror injects styles, so `style-src` may need an allowance; S5 finds the tightest working policy and records it here. The CSP is a release-gate test (CI fetches the shipped config and asserts it).
+- **C3 Mermaid `securityLevel: 'strict'`.** The renderer emits placeholders only; Mermaid runs in the webview.
+- **C4 Tauri capabilities, least privilege.** The frontend may invoke a named command set only ([transport-adapter.md](transport-adapter.md)). File commands are scoped to the library root; there is no generic "write this path" command; no shell; no raw fs access from the renderer. A webview or window matching no capability has no IPC access at all.
+- **C5 Backend path discipline.** Every path is canonicalized (symlinks resolved) and verified to be contained in the library root before any read or write. `..` escapes rejected. Symlinks are not followed during deck discovery. Commands take deck IDs, not paths, wherever possible.
+- **C6 Import hardening.** Reject absolute paths, `..`, and symlink or special-file entries in zip entries. Cap total uncompressed size (500 MB), entry count (10k), and flag absurd compression ratios. Extract to a staging dir; nothing touches the library root until validation passes.
+- **C7 Write safety.** Fingerprint check before every save; real conflict surfaced instead of overwriting (ADR-008).
+- **C8 Commands safe when hostile.** Treat every command as callable by hostile script: validate all arguments, operate only on decks inside the library root, no destructive command without an explicit user-initiated path (native dialog or UI confirmation owned by the shell).
+- **C9 Render limits.** The renderer worker has a wall-clock limit and is terminated on overrun. On the Rails side, mini_racer contexts support a timeout and a memory limit; set both (ADR-007).
+- **C10 Updates.** Ed25519 signature verified against the baked-in public key before install; HTTPS only; no downgrade by default (ADR-009).
+- **C11 Single DOM insertion point.** Preview HTML reaches the DOM through exactly one audited function. S1 records the current sink (innerHTML vs iframe `srcdoc`). A second-pass sanitizer at the sink (for example DOMPurify) is a cheap redundancy worth benchmarking in S5.
+- **C12 Supply chain.** Committed lockfiles, exact versions for the renderer bundle and Tauri, `cargo audit` and `npm audit` in CI, and tracking of Tauri security advisories.
+
+## 5. Known platform caveat: iframes and IPC
+
+Do not rely on an iframe, sandboxed or not, as the boundary between untrusted content and IPC. A published advisory for Tauri (CVE-2024-35222) describes iframes in a Tauri app reaching Tauri IPC, including with isolation mode on, and notes that on Linux a dedicated window or webview is needed to get iframe-like separation. Treat the current status on the **pinned Tauri version** as unverified until S5 runs the probe on macOS and Linux. Consequence for the design: C1, C2, C8 must hold on their own; a separate webview with no capability is an optional extra layer, not a replacement.
+
+## 6. Residual risks
+
+- A sanitizer bypass plus a permissive CSP would let hostile script call commands. C8 bounds the damage to the library root; it does not make it zero (a hostile script could still save over a deck inside the root). This is why S5 exists and why C2's `script-src` never relaxes.
+- Unsigned macOS builds: a user can be tricked into installing a fake build. Accepted for v1 (owner's two devices); revisit before wider distribution (ADR-009).
+- Remote images: blocked in v1. A static CSP cannot express a per-deck opt-in. Options if wanted later: a Rust-side fetch proxy with SSRF checks and size caps, or a deliberately loosened `img-src` (Q5).
