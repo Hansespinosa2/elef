@@ -1,6 +1,6 @@
 # Transport Adapter — Seam Spec (IPC)
 
-Status: draft skeleton v3 (2026-10-01). The highest-leverage seam in the desktop app. Spike S1 turns the first-pass table into a full spec; nothing here may be guessed by an implementing agent. Sections marked **S1** are known gaps S1 must close.
+Status: draft skeleton v3 (2026-10-01). The highest-leverage seam in the desktop app. The current Rails inventory and partial MiniRacer feasibility evidence are recorded in [spike-results/S1-rails-inventory.md](spike-results/S1-rails-inventory.md). S1 is still open: the shared renderer bundle, 10-fixture wrapper probe, Shiki engine probe, and macOS install evidence remain to be completed. Sections marked **S1** are known gaps S1 must close.
 
 ## 1. What the codebase does today (verified 2026-09-30 at `2b668f0`)
 
@@ -26,7 +26,7 @@ Status: draft skeleton v3 (2026-10-01). The highest-leverage seam in the desktop
 | Web (Rails) | Desktop handler | Kind | Payload | Touches | v1 |
 |---|---|---|---|---|---|
 | `PATCH /presentations/:id`, `/documents/:id` (autosave, FormData) | `save_source` | Rust | `{ id, source, base_hash } → { ok, saved_at, content_hash }` (adapter adds `base_hash`) | That deck's source file only | yes |
-| `POST …/preview` | `render_preview` | local (worker) | `{ id, source } → { html, warnings, editor_map }` | Nothing (pure function) | yes |
+| `POST …/preview` | `render_preview` | local (worker) | `{ id, source } → { html, warnings, editor_map, style, revision }` | Nothing (pure function) | yes |
 | `POST …/assets` | `upload_asset` | Rust | file → `{ digest, url }` (asset-protocol URL) | That deck's `images/` only; size cap (proposed) | yes |
 | `GET …/assets/*digest` | asset protocol handler | protocol | binary | Read-only, canonicalized under the library root | yes |
 | `resources :snippets, :math_shortcuts` | `*_snippet`, `*_math_shortcut` CRUD | Rust | same JSON shapes as Rails | `.elef/snippets.json`, `.elef/math-shortcuts.json` | yes |
