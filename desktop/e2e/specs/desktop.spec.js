@@ -31,9 +31,11 @@ class DesktopEditorUi {
     // the live controller's input-proxy path so its normal update/input,
     // autosave, preview, and conflict handlers still run.
     const updated = await browser.execute(nextSource => {
-      const controller = document.querySelector("#desktop-editor-field")?.editorController
+      const field = document.querySelector("#desktop-editor-field")
+      const controller = field?.editorController
       if (!controller) return false
       controller.setExternalValue(nextSource)
+      field.dispatchEvent(new Event("input", { bubbles: true }))
       return controller.sourceValue === nextSource
     }, source)
     if (!updated) throw new Error("The desktop editor did not accept the shared scenario source")
@@ -67,6 +69,12 @@ class DesktopEditorUi {
       }, {
         timeout: 10_000,
         timeoutMsg: "The desktop editor reported Saved before the source file held the expected text"
+      }).catch(async error => {
+        const [diskSource, saveState] = await Promise.all([
+          readFile(sourcePath, "utf8").catch(readError => `<${readError.code || "read_error"}>`),
+          browser.execute(() => document.querySelector("#save-state")?.textContent || "<missing>")
+        ])
+        throw new Error(`${error.message}; save state: ${saveState}; disk source: ${JSON.stringify(diskSource)}`)
       })
     }
     await browser.waitUntil(async () => (await $("#save-state").getText()) === "Saved", {
