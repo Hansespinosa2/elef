@@ -35,13 +35,22 @@ class DesktopEditorUi {
 
   async waitForSaved(expectedSource) {
     if (expectedSource !== undefined) {
-      await browser.waitUntil(async () => {
-        const editorSource = await browser.execute(() => document.querySelector("#desktop-editor-field")?.editorController?.sourceValue ?? null)
-        return editorSource === expectedSource
-      }, {
-        timeout: 10_000,
-        timeoutMsg: "The desktop editor buffer did not contain the text entered by the shared scenario"
-      })
+      try {
+        await browser.waitUntil(async () => {
+          const editorSource = await browser.execute(() => document.querySelector("#desktop-editor-field")?.editorController?.sourceValue ?? null)
+          return editorSource === expectedSource
+        }, {
+          timeout: 10_000,
+          timeoutMsg: "The desktop editor buffer did not contain the text entered by the shared scenario"
+        })
+      } catch (error) {
+        const state = await browser.execute(() => ({
+          sourceValue: document.querySelector("#desktop-editor-field")?.editorController?.sourceValue ?? null,
+          textareaValue: document.querySelector("#deck-source")?.value ?? null,
+          editorText: document.querySelector("#deck-source-editor .cm-content")?.innerText ?? null
+        }))
+        throw new Error(`${error.message}; editor state: ${JSON.stringify(state)}`)
+      }
       const sourcePath = path.join(process.env.ELEF_E2E_LIBRARY_ROOT, "E2E seed", "presentation.md")
       await browser.waitUntil(async () => {
         try {
