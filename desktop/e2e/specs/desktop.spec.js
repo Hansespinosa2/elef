@@ -314,7 +314,7 @@ describe("shared authoring scenarios", () => {
         timeout: 5_000,
         timeoutMsg: "The native library folder picker did not open"
       })
-      execFileSync("xdotool", ["key", "--window", dialogId, "Escape"], { timeout: 5_000 })
+      execFileSync("xdotool", ["windowclose", dialogId], { timeout: 5_000 })
     } else {
       throw new Error(`Native folder picker smoke is unsupported on ${process.platform}`)
     }
