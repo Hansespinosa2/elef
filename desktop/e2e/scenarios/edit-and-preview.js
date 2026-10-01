@@ -3,7 +3,7 @@ export const SAVED_SOURCE = "# Saved by shared scenario\n\nThe editor autosaved 
 export async function editAndPreviewWorkflow(ui) {
   await ui.openDeck()
   await ui.replaceSource(SAVED_SOURCE)
-  await ui.waitForSaved()
+  await ui.waitForSaved(SAVED_SOURCE)
   await ui.showVisualMode()
   await ui.waitForPreview("The editor autosaved this text.")
 }

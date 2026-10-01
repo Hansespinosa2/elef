@@ -1,5 +1,7 @@
 import { $, $$, browser } from "@wdio/globals"
 import { execFileSync } from "node:child_process"
+import { readFile } from "node:fs/promises"
+import path from "node:path"
 import { editAndPreviewWorkflow } from "../scenarios/edit-and-preview.js"
 import { libraryAndGraphWorkflow } from "../scenarios/library-and-graph.js"
 
@@ -31,7 +33,27 @@ class DesktopEditorUi {
     }
   }
 
-  async waitForSaved() {
+  async waitForSaved(expectedSource) {
+    if (expectedSource !== undefined) {
+      await browser.waitUntil(async () => {
+        const editorSource = await browser.execute(() => document.querySelector("#desktop-editor-field")?.editorController?.sourceValue ?? null)
+        return editorSource === expectedSource
+      }, {
+        timeout: 10_000,
+        timeoutMsg: "The desktop editor buffer did not contain the text entered by the shared scenario"
+      })
+      const sourcePath = path.join(process.env.ELEF_E2E_LIBRARY_ROOT, "E2E seed", "presentation.md")
+      await browser.waitUntil(async () => {
+        try {
+          return await readFile(sourcePath, "utf8") === expectedSource
+        } catch (_error) {
+          return false
+        }
+      }, {
+        timeout: 10_000,
+        timeoutMsg: "The desktop editor reported Saved before the source file held the expected text"
+      })
+    }
     await browser.waitUntil(async () => (await $("#save-state").getText()) === "Saved", {
       timeout: 10_000,
       timeoutMsg: "The desktop editor did not finish saving"
@@ -45,10 +67,27 @@ class DesktopEditorUi {
   }
 
   async waitForPreview(text) {
-    await browser.waitUntil(async () => (await $("#desktop-preview").getText()).includes(text), {
-      timeout: 10_000,
-      timeoutMsg: "The desktop preview did not render the saved text"
-    })
+    try {
+      await browser.waitUntil(async () => (await $("#desktop-preview").getText()).includes(text), {
+        timeout: 10_000,
+        timeoutMsg: "The desktop preview did not render the saved text"
+      })
+    } catch (error) {
+      const state = await browser.execute(() => {
+        const form = document.querySelector("#desktop-editor-form")
+        const field = document.querySelector("#desktop-editor-field")
+        return {
+          mode: form?.dataset.editorMode,
+          source: field?.editorController?.sourceValue,
+          saveState: document.querySelector("#save-state")?.textContent,
+          previewStatus: document.querySelector("[data-preview-target='status']")?.textContent,
+          preview: document.querySelector("#desktop-preview")?.innerText,
+          warnings: document.querySelector("[data-preview-target='warnings']")?.innerText,
+          stale: form?.dataset.previewProjectionStale || null
+        }
+      })
+      throw new Error(`${error.message}; desktop state: ${JSON.stringify(state)}`)
+    }
   }
 }
 
