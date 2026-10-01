@@ -50,6 +50,7 @@ class WebEditorUi {
   async waitForSaved(source) {
     if (source !== undefined) await this.waitForSource(source)
     await expect(this.page.locator('[data-autosave-target="status"]')).toHaveText("Saved")
+    if (source !== undefined) await this.assertPersistedSource(source)
   }
 
   async showVisualMode() {
@@ -131,16 +132,21 @@ class WebEditorUi {
 
   async assertDiskSource(source) {
     await expect.poll(() => this.readSource()).toBe(source)
-    const current = execFileSync("bin/rails", [
+    await this.assertPersistedSource(source, process.env.ELEF_E2E_CONFLICT_PRESENTATION_ID)
+  }
+
+  async assertPersistedSource(source, presentationId = process.env.ELEF_E2E_PRESENTATION_ID) {
+    const id = Number(presentationId)
+    const serialized = execFileSync("bin/rails", [
       "runner", "-e", "test",
-      `puts "ELEF_E2E_CONFLICT_SOURCE=#{Presentation.find(${Number(process.env.ELEF_E2E_CONFLICT_PRESENTATION_ID)}).source.to_json}"`
+      `puts "ELEF_E2E_PERSISTED_SOURCE=#{Presentation.find(${id}).source.to_json}"`
     ], {
       cwd: path.resolve(process.cwd(), "../.."),
       env: { ...process.env, RAILS_ENV: "test" },
       encoding: "utf8"
-    }).match(/^ELEF_E2E_CONFLICT_SOURCE=(.*)$/m)?.[1]
-    expect(current).toBeTruthy()
-    expect(JSON.parse(current)).toBe(source)
+    }).match(/^ELEF_E2E_PERSISTED_SOURCE=(.*)$/m)?.[1]
+    expect(serialized).toBeTruthy()
+    expect(JSON.parse(serialized)).toBe(source)
   }
 }
 
