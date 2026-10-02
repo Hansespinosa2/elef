@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test"
 import { editAndPreviewWorkflow, SAVED_SOURCE } from "../scenarios/edit-and-preview.js"
 import { libraryAndGraphWorkflow } from "../scenarios/library-and-graph.js"
 import { externalEditConflictWorkflow, CONFLICT_EXTERNAL_SOURCE } from "../scenarios/external-edit-conflict.js"
+import { hostileDeckNeutralizedWorkflow } from "../scenarios/hostile-deck.js"
 import { mathInputWorkflow, snippetInsertWorkflow } from "../scenarios/authoring-palettes.js"
 import { PIXEL_PNG_MARKDOWN } from "../scenarios/media-fixture.js"
 import { execFileSync } from "node:child_process"
@@ -14,12 +15,18 @@ function normalizeLineEndings(source) {
 class WebEditorUi {
   constructor(page) {
     this.page = page
+    this.rejectExternalMedia = false
   }
 
   async openDeck(title = "E2E seed") {
+    if (title === "E2E hostile") {
+      await this.page.route("https://example.invalid/**", route => route.abort())
+    }
     const id = title === "E2E conflict"
       ? process.env.ELEF_E2E_CONFLICT_PRESENTATION_ID
-      : process.env.ELEF_E2E_PRESENTATION_ID
+      : title === "E2E hostile"
+        ? process.env.ELEF_E2E_HOSTILE_PRESENTATION_ID
+        : process.env.ELEF_E2E_PRESENTATION_ID
     if (!id) throw new Error("The shared web scenario requires an E2E presentation fixture")
     await this.page.goto(`/presentations/${id}/edit?editor_mode=source`)
     await expect(this.page.locator(".source-field .cm-content")).toBeVisible()
@@ -113,6 +120,24 @@ class WebEditorUi {
 
   async waitForPreview(text) {
     await expect(this.page.locator(".editor-projection.preview-pane")).toContainText(text)
+  }
+
+  async inspectHostilePreview() {
+    return this.page.locator(".editor-projection.preview-pane").evaluate(preview => {
+      const elements = [...preview.querySelectorAll("*")]
+      const links = [...preview.querySelectorAll("a[href]")]
+      const media = [...preview.querySelectorAll("img[src], video[src]")]
+      return {
+        scriptRan: window.__elefHostileScriptRan === true,
+        eventRan: window.__elefHostileEventRan === true,
+        inlineHandlers: elements.flatMap(element => [...element.attributes]).filter(attribute => /^on/i.test(attribute.name)).map(attribute => attribute.name),
+        executableElements: elements.filter(element => ["SCRIPT", "IFRAME", "OBJECT", "EMBED", "SVG"].includes(element.tagName)).map(element => element.tagName),
+        unsafeLinks: links.map(link => link.getAttribute("href")).filter(href => /^(?:javascript|data|vbscript):/i.test(href || "")),
+        unsafeMedia: media.map(element => element.getAttribute("src")).filter(src => /^(?:data:|javascript:)/i.test(src || "")),
+        externalMedia: media.map(element => element.getAttribute("src")).filter(src => /^https?:/i.test(src || "")),
+        remoteRequests: performance.getEntriesByType("resource").filter(entry => entry.name.startsWith("https://example.invalid/")).map(entry => entry.name)
+      }
+    })
   }
 
   async writeExternalSource(source) {
@@ -277,4 +302,8 @@ test("shared snippet insertion flow works in the web app", async ({ page }) => {
 
 test("shared math input flow works in the web app", async ({ page }) => {
   await mathInputWorkflow(new WebEditorUi(page))
+})
+
+test("shared hostile-deck security flow works in the web app", async ({ page }) => {
+  await hostileDeckNeutralizedWorkflow(new WebEditorUi(page))
 })

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { execFileSync, spawnSync } from "node:child_process"
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises"
+import { access, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
@@ -13,17 +13,34 @@ const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "elef-desktop-e2e-"))
 const libraryRoot = path.join(temporaryRoot, "Elef")
 const seedDeck = path.join(libraryRoot, "E2E seed")
 const conflictDeck = path.join(libraryRoot, "E2E conflict")
+const hostileDeck = path.join(libraryRoot, "E2E hostile")
 const archiveFixture = path.join(temporaryRoot, "E2E archive seed")
 const importArchive = path.join(temporaryRoot, "E2E archive seed.elef")
 const expectedDesktopSource = `# Saved by shared scenario\n\nThe visual editor changed this text.\n\n${PIXEL_PNG_MARKDOWN}`
 // Web scenarios append the shared snippet and math inputs after edit/media.
 const expectedWebSource = `${expectedDesktopSource}\n**text**\n\n$$\n\\alpha\n$$\n`
+const hostileSource = [
+  "# Hostile deck",
+  "",
+  "Safe preview text remains visible.",
+  "",
+  '<script>window.__elefHostileScriptRan = true; window.parent.postMessage("hostile", "*"); window.__TAURI__?.core?.invoke?.("create_deck", { name: "Hostile IPC side effect", kind: "presentation" })</script>',
+  "",
+  '<img src="x" onerror="window.__elefHostileEventRan = true">',
+  "",
+  '[unsafe link](javascript:window.__elefHostileLinkRan=true)',
+  "",
+  "![remote image](https://example.invalid/tracker.png)",
+  "![data image](data:image/svg+xml,%3Csvg%20onload%3Dalert(1)%3E)",
+  ""
+].join("\n")
 
 function normalizeLineEndings(source) {
   return source.replace(/\r\n/g, "\n")
 }
 const webTitle = `Desktop E2E ${randomUUID()}`
 let presentationId = null
+let hostilePresentationId = null
 let documentIds = []
 const env = {
   ...process.env,
@@ -53,6 +70,9 @@ try {
   await mkdir(conflictDeck, { recursive: true })
   await writeFile(path.join(conflictDeck, "presentation.md"), "# Before conflict test\n\nSeed paragraph.\n")
   await writeFile(path.join(conflictDeck, "elef.json"), JSON.stringify({ id: randomUUID(), schema_version: 1 }))
+  await mkdir(hostileDeck, { recursive: true })
+  await writeFile(path.join(hostileDeck, "presentation.md"), hostileSource)
+  await writeFile(path.join(hostileDeck, "elef.json"), JSON.stringify({ id: randomUUID(), schema_version: 1 }))
   await mkdir(archiveFixture, { recursive: true })
   await writeFile(path.join(archiveFixture, "presentation.md"), "# Imported from Elef\n\nPortable archive fixture.\n")
   await writeFile(path.join(archiveFixture, "elef.json"), JSON.stringify({ id: randomUUID(), schema_version: 1 }))
@@ -69,7 +89,7 @@ try {
 
   if (process.env.CI) {
     const seeded = runRails(
-      `presentation = Presentation.create!(title: ${JSON.stringify(webTitle)}, source: "# Before E2E\\n\\nSeed paragraph.\\n"); conflict = Presentation.create!(title: "E2E conflict", source: "# Before conflict test\\n\\nSeed paragraph.\\n"); document = Document.create!(source: "# E2E document\\n\\nSee [[E2E linked]].\\n"); linked = Document.create!(source: "# E2E linked\\n\\nTarget document.\\n"); puts "ELEF_E2E_PRESENTATION_ID=#{presentation.id}"; puts "ELEF_E2E_CONFLICT_PRESENTATION_ID=#{conflict.id}"; puts "ELEF_E2E_DOCUMENT_IDS=#{[document.id, linked.id].join(',')}"`
+      `presentation = Presentation.create!(title: ${JSON.stringify(webTitle)}, source: "# Before E2E\\n\\nSeed paragraph.\\n"); conflict = Presentation.create!(title: "E2E conflict", source: "# Before conflict test\\n\\nSeed paragraph.\\n"); hostile = Presentation.create!(title: "E2E hostile", source: ${JSON.stringify(hostileSource)}); document = Document.create!(source: "# E2E document\\n\\nSee [[E2E linked]].\\n"); linked = Document.create!(source: "# E2E linked\\n\\nTarget document.\\n"); puts "ELEF_E2E_PRESENTATION_ID=#{presentation.id}"; puts "ELEF_E2E_CONFLICT_PRESENTATION_ID=#{conflict.id}"; puts "ELEF_E2E_HOSTILE_PRESENTATION_ID=#{hostile.id}"; puts "ELEF_E2E_DOCUMENT_IDS=#{[document.id, linked.id].join(',')}"`
     )
     const id = seeded.match(/^ELEF_E2E_PRESENTATION_ID=(\d+)$/m)?.[1]
     assert.match(id, /^\d+$/, "Rails fixture command should return the presentation id")
@@ -77,6 +97,9 @@ try {
     const conflictId = seeded.match(/^ELEF_E2E_CONFLICT_PRESENTATION_ID=(\d+)$/m)?.[1]
     assert.match(conflictId, /^\d+$/, "Rails fixture command should return the conflict presentation id")
     env.ELEF_E2E_CONFLICT_PRESENTATION_ID = conflictId
+    hostilePresentationId = seeded.match(/^ELEF_E2E_HOSTILE_PRESENTATION_ID=(\d+)$/m)?.[1]
+    assert.match(hostilePresentationId, /^\d+$/, "Rails fixture command should return the hostile presentation id")
+    env.ELEF_E2E_HOSTILE_PRESENTATION_ID = hostilePresentationId
     const docs = seeded.match(/^ELEF_E2E_DOCUMENT_IDS=(\d+,\d+)$/m)?.[1]
     assert.ok(docs, "Rails fixture command should return document IDs")
     documentIds = docs.split(",")
@@ -111,13 +134,19 @@ try {
 
   const desktopSource = await readFile(path.join(seedDeck, "presentation.md"), "utf8")
   assert.equal(normalizeLineEndings(desktopSource), expectedDesktopSource)
+  try {
+    await access(path.join(libraryRoot, "Hostile IPC side effect"))
+    throw new Error("Hostile deck content reached the create_deck IPC command")
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error
+  }
   assert.equal(
     await readFile(path.join(libraryRoot, "E2E archive seed", "presentation.md"), "utf8"),
     "# Imported from Elef\n\nPortable archive fixture.\n"
   )
   if (presentationId) {
     const persisted = runRails(
-      "presentation = Presentation.find(" + presentationId + "); puts \"ELEF_E2E_SOURCE=#{presentation.source.to_json}\"; presentation.destroy!; Presentation.where(id: " + Number(env.ELEF_E2E_CONFLICT_PRESENTATION_ID) + ").destroy_all; Document.where(id: [" + documentIds.map(Number).join(",") + "]).destroy_all"
+      "presentation = Presentation.find(" + presentationId + "); puts \"ELEF_E2E_SOURCE=#{presentation.source.to_json}\"; presentation.destroy!; Presentation.where(id: [" + [Number(env.ELEF_E2E_CONFLICT_PRESENTATION_ID), Number(hostilePresentationId)].join(",") + "]).destroy_all; Document.where(id: [" + documentIds.map(Number).join(",") + "]).destroy_all"
     )
     const savedSource = persisted.match(/^ELEF_E2E_SOURCE=(.*)$/m)?.[1]
     assert.ok(savedSource, "Rails fixture command should return the persisted source")
@@ -127,6 +156,7 @@ try {
   if (presentationId) {
     try {
       runRails(`Presentation.find_by(id: ${presentationId})&.destroy!`)
+      runRails(`Presentation.find_by(id: ${Number(hostilePresentationId)})&.destroy!`)
       if (env.ELEF_E2E_CONFLICT_PRESENTATION_ID) {
         runRails(`Presentation.find_by(id: ${Number(env.ELEF_E2E_CONFLICT_PRESENTATION_ID)})&.destroy!`)
       }

@@ -5,6 +5,7 @@ import path from "node:path"
 import { editAndPreviewWorkflow } from "../scenarios/edit-and-preview.js"
 import { libraryAndGraphWorkflow } from "../scenarios/library-and-graph.js"
 import { externalEditConflictWorkflow, CONFLICT_EXTERNAL_SOURCE } from "../scenarios/external-edit-conflict.js"
+import { hostileDeckNeutralizedWorkflow } from "../scenarios/hostile-deck.js"
 import { mathInputWorkflow, snippetInsertWorkflow } from "../scenarios/authoring-palettes.js"
 import { PIXEL_PNG_MARKDOWN } from "../scenarios/media-fixture.js"
 
@@ -13,6 +14,10 @@ function normalizeLineEndings(source) {
 }
 
 class DesktopEditorUi {
+  constructor() {
+    this.rejectExternalMedia = true
+  }
+
   async pauseAutosave() {}
 
   async flushLocalSave() {}
@@ -154,6 +159,25 @@ class DesktopEditorUi {
       })
       throw new Error(`${error.message}; desktop state: ${JSON.stringify(state)}`)
     }
+  }
+
+  async inspectHostilePreview() {
+    return browser.execute(() => {
+      const preview = document.querySelector("#desktop-preview")
+      const elements = [...(preview?.querySelectorAll("*") || [])]
+      const links = [...(preview?.querySelectorAll("a[href]") || [])]
+      const media = [...(preview?.querySelectorAll("img[src], video[src]") || [])]
+      return {
+        scriptRan: window.__elefHostileScriptRan === true,
+        eventRan: window.__elefHostileEventRan === true,
+        inlineHandlers: elements.flatMap(element => [...element.attributes]).filter(attribute => /^on/i.test(attribute.name)).map(attribute => attribute.name),
+        executableElements: elements.filter(element => ["SCRIPT", "IFRAME", "OBJECT", "EMBED", "SVG"].includes(element.tagName)).map(element => element.tagName),
+        unsafeLinks: links.map(link => link.getAttribute("href")).filter(href => /^(?:javascript|data|vbscript):/i.test(href || "")),
+        unsafeMedia: media.map(element => element.getAttribute("src")).filter(src => /^(?:data:|javascript:)/i.test(src || "")),
+        externalMedia: media.map(element => element.getAttribute("src")).filter(src => /^https?:/i.test(src || "")),
+        remoteRequests: performance.getEntriesByType("resource").filter(entry => entry.name.startsWith("https://example.invalid/")).map(entry => entry.name)
+      }
+    })
   }
 
   async waitForAuthoringOption(palette, name) {
@@ -461,6 +485,10 @@ describe("shared authoring scenarios", () => {
       timeout: 10_000,
       timeoutMsg: "The native library folder picker did not cancel cleanly"
     })
+  })
+
+  it("neutralizes hostile Markdown before it reaches the Tauri preview DOM", async () => {
+    await hostileDeckNeutralizedWorkflow(new DesktopEditorUi())
   })
 
   it("runs the shared library and document graph flow", async () => {
