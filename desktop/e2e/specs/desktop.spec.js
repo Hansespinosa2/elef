@@ -159,10 +159,32 @@ class DesktopEditorUi {
   async waitForAuthoringOption(palette, name) {
     const label = palette === "snippet" ? "Snippet suggestions" : "Math shortcut suggestions"
     const option = $(`.source-field [role="listbox"][aria-label="${label}"] [role="option"]`)
-    await browser.waitUntil(async () => (await option.getText()).includes(name), {
-      timeout: 5_000,
-      timeoutMsg: `The ${palette} palette did not show ${name}`
-    })
+    try {
+      await browser.waitUntil(async () => (await option.getText()).includes(name), {
+        timeout: 5_000,
+        timeoutMsg: `The ${palette} palette did not show ${name}`
+      })
+    } catch (error) {
+      const state = await browser.execute(({ label }) => {
+        const field = document.querySelector("#desktop-editor-field")
+        const controller = globalThis.Stimulus?.getControllerForElementAndIdentifier(field, "snippet-palette")
+        const editor = field?.editorController
+        const palette = [...(field?.querySelectorAll('[role="listbox"]') || [])]
+          .find(element => element.getAttribute("aria-label") === label)
+        return {
+          source: editor?.sourceValue,
+          selection: [editor?.selectionStart, editor?.selectionEnd],
+          editingMode: editor?.editingMode,
+          query: controller?.queryAtCaret?.(),
+          registry: controller?.registry?.filter(entry => entry.namespace === "/").map(entry => entry.trigger),
+          matches: controller?.matches?.map(entry => entry.name || entry.snippet?.name),
+          paletteHidden: palette?.hidden,
+          paletteText: palette?.innerText,
+          inputActions: document.querySelector("#deck-source")?.dataset.action
+        }
+      }, { label }).catch(diagnosticError => ({ diagnosticError: diagnosticError.message }))
+      throw new Error(`${error.message}; desktop palette state: ${JSON.stringify(state)}`)
+    }
   }
 
   async selectAuthoringOption(palette, name) {
