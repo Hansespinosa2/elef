@@ -593,4 +593,44 @@ describe("shared authoring scenarios", () => {
     process.env.ELEF_E2E_SEED_DECK_ID)
     if (exported !== true) throw new Error("The desktop export command did not write the .elef archive")
   })
+
+  it("opens and cancels the native .elef export dialog", async () => {
+    await new DesktopEditorUi().openDeck()
+    await browser.execute(() => window.focus())
+    const started = await browser.execute(id => {
+      if (!window.__TAURI__?.core?.invoke) return false
+      window.__elefExportDialog = window.__TAURI__.core.invoke("export_elef", {
+        id,
+        useNativeDialog: true
+      })
+      return true
+    }, process.env.ELEF_E2E_SEED_DECK_ID)
+    if (!started) throw new Error("The native export command could not be started")
+
+    if (process.platform === "darwin") {
+      await browser.pause(500)
+      execFileSync("osascript", ["-e", 'tell application "System Events" to key code 53'], { timeout: 5_000 })
+    } else if (process.platform === "linux") {
+      let dialogId
+      await browser.waitUntil(async () => {
+        try {
+          dialogId = execFileSync("xdotool", ["search", "--onlyvisible", "--name", "Export Elef deck"], { encoding: "utf8" })
+            .trim().split(/\s+/).at(-1)
+          return Boolean(dialogId)
+        } catch (_error) {
+          return false
+        }
+      }, {
+        timeout: 5_000,
+        timeoutMsg: "The native .elef export dialog did not open"
+      })
+      execFileSync("xdotool", ["windowactivate", "--sync", dialogId], { timeout: 5_000 })
+      execFileSync("xdotool", ["key", "--clearmodifiers", "Escape"], { timeout: 5_000 })
+    } else {
+      throw new Error(`Native export dialog smoke is unsupported on ${process.platform}`)
+    }
+
+    const cancelled = await browser.execute(async () => await window.__elefExportDialog)
+    if (cancelled !== false) throw new Error("Cancelling the native export dialog should leave the archive unwritten")
+  })
 })

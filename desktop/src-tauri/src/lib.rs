@@ -281,19 +281,23 @@ fn write_authoring_registry(
     Ok(())
 }
 
-#[tauri::command]
-async fn export_elef(
+async fn export_elef_impl(
     app: AppHandle,
     state: State<'_, DesktopState>,
     id: String,
+    use_native_dialog: bool,
 ) -> Result<bool, CommandError> {
     let library = state.current_library()?;
     let deck = library.deck_summary(&id)?;
     #[cfg(feature = "webdriver")]
-    if let Some(destination) = std::env::var_os("ELEF_E2E_EXPORT_PATH") {
-        export_elef_to_path(&library, &id, PathBuf::from(destination))?;
-        return Ok(true);
+    if !use_native_dialog {
+        if let Some(destination) = std::env::var_os("ELEF_E2E_EXPORT_PATH") {
+            export_elef_to_path(&library, &id, PathBuf::from(destination))?;
+            return Ok(true);
+        }
     }
+    #[cfg(not(feature = "webdriver"))]
+    let _ = use_native_dialog;
     let Some(selection) = app
         .dialog()
         .file()
@@ -309,6 +313,27 @@ async fn export_elef(
         .map_err(|_| CommandError::new("invalid_input", "Choose a local file.", false))?;
     export_elef_to_path(&library, &id, destination)?;
     Ok(true)
+}
+
+#[cfg(feature = "webdriver")]
+#[tauri::command]
+async fn export_elef(
+    app: AppHandle,
+    state: State<'_, DesktopState>,
+    id: String,
+    use_native_dialog: Option<bool>,
+) -> Result<bool, CommandError> {
+    export_elef_impl(app, state, id, use_native_dialog.unwrap_or(false)).await
+}
+
+#[cfg(not(feature = "webdriver"))]
+#[tauri::command]
+async fn export_elef(
+    app: AppHandle,
+    state: State<'_, DesktopState>,
+    id: String,
+) -> Result<bool, CommandError> {
+    export_elef_impl(app, state, id, false).await
 }
 
 fn export_elef_to_path(
