@@ -172,7 +172,16 @@ class DesktopEditorUi {
       timeout: 5_000,
       timeoutMsg: `The ${palette} palette did not show ${name}`
     })
-    await option.click()
+    const selected = await browser.execute(({ label, name }) => {
+      const listbox = [...document.querySelectorAll('.source-field [role="listbox"]')]
+        .find(element => element.getAttribute("aria-label") === label)
+      const item = [...(listbox?.querySelectorAll('[role="option"]') || [])]
+        .find(element => element.textContent.includes(name))
+      if (!item) return false
+      item.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true, view: window }))
+      return true
+    }, { label, name })
+    if (!selected) throw new Error(`The ${palette} palette option ${name} disappeared before selection`)
   }
 
   async editVisualText(currentText, replacementText) {

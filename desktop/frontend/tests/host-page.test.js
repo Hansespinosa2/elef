@@ -36,7 +36,7 @@ test("the host uses no inline event handlers under the strict script policy", ()
 })
 
 test("the source editor forwards input and keyboard events to authoring palettes", () => {
-  const actions = document.querySelector("#desktop-editor-field").dataset.action.split(/\s+/)
+  const actions = document.querySelector("#deck-source").dataset.action.split(/\s+/)
   for (const action of [
     "input->snippet-palette#input",
     "keydown->snippet-palette#keydown",
