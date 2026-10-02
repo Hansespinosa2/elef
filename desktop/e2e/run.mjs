@@ -18,9 +18,11 @@ const archiveFixture = path.join(temporaryRoot, "E2E archive seed")
 const importArchive = path.join(temporaryRoot, "E2E archive seed.elef")
 const exportArchive = path.join(temporaryRoot, "E2E seed exported.elef")
 const exportContents = path.join(temporaryRoot, "E2E seed exported")
-const expectedDesktopSource = `# Saved by shared scenario\n\nThe visual editor changed this text.\n\n${PIXEL_PNG_MARKDOWN}`
-// Web scenarios append the shared snippet and math inputs after edit/media.
-const expectedWebSource = `${expectedDesktopSource}\n**text**\n\n$$\n\\alpha\n$$\n`
+// Both runners complete the same editing, media, snippet, and math scenarios
+// against the same deck, so the final source assertion is identical.
+const expectedSharedSource = `# Saved by shared scenario\n\nThe visual editor changed this text.\n\n${PIXEL_PNG_MARKDOWN}\n**text**\n\n$$\n\\alpha\n$$\n`
+const expectedDesktopSource = expectedSharedSource
+const expectedWebSource = expectedSharedSource
 const hostileSource = [
   "# Hostile deck",
   "",
