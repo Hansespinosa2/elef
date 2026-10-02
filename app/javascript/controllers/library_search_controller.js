@@ -1,5 +1,5 @@
 import { Controller } from "@hotwired/stimulus"
-import { filterLibraryCards } from "./library_search.js"
+import { filterLibraryCards } from "controllers/library_search"
 
 export default class extends Controller {
   filter() {
