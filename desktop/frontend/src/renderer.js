@@ -1,10 +1,9 @@
 import MarkdownIt from "markdown-it"
 import hljs from "highlight.js/lib/common"
 import katex from "katex"
+import { buildEditorStructure } from "./document-map.js"
 
 const SAFE_LINK = /^(?:https?:|mailto:|tel:|#|\/|\.\.?\/|[^:]*$)/i
-const themeNames = new Set(["light", "dark", "match"])
-const typographyNames = new Set(["book", "modern", "technical"])
 
 const markdown = new MarkdownIt({
   html: false,
@@ -178,270 +177,122 @@ export function renderPreview({
   if (typeof source !== "string") throw typedError("invalid_input", "Markdown source must be text.")
   if (source.length > 50 * 1024 * 1024) throw typedError("too_large", "This deck is too large to preview.")
   const mode = kind === "document" ? "document" : "presentation"
-  const frontMatter = readFrontMatter(source)
-  const style = readStyle(frontMatter.text)
   const sourceName = String(title || "Untitled")
-  const bodyStart = frontMatter.bodyStart
-  const slideRanges = mode === "document"
-    ? [{ start: bodyStart, end: source.length, delimiterRange: null }]
-    : splitSlideRanges(source, bodyStart)
-  const map = {
-    version: 1,
-    source_name: sourceName,
-    mode,
-    source_length: source.length,
-    front_matter: frontMatter.bodyStart > 0 ? { range: { start: 0, end: bodyStart }, body_start: bodyStart } : null,
-    slides: [],
-    directives: [],
-    editable_regions: []
-  }
-  const warnings = []
+  const structure = buildEditorStructure(source, { sourceName, mode })
+  const map = structure.editorMap
+  const slides = structure.slides.map(({ map: slideMap, ...metadata }) => ({
+    ...slideMap,
+    ...metadata,
+    parsed_blocks: metadata.blocks,
+    blocks: slideMap.blocks,
+    editable_regions: slideMap.editable_regions
+  }))
+  const { style, warnings, marginSettings } = structure
   const mediaUrl = mediaBaseUrl || `elefasset://localhost/${encodeURIComponent(deckId)}`
   const env = { mediaBaseUrl: mediaUrl, documentNodes }
 
-  for (const [slideIndex, range] of slideRanges.entries()) {
-    const parsed = splitBlocks(source, range.start, range.end, mode, slideIndex)
-    warnings.push(...parsed.warnings)
-    const blocks = parsed.blocks.map((block, blockIndex) => {
-      const blockId = `slide-${slideIndex + 1}-block-${blockIndex + 1}`
-      const regionId = `slide-${slideIndex + 1}-region-${blockIndex + 1}`
-      const kindName = blockKind(block.markdown)
-      const heading = headingContentRange(block.markdown)
-      const contentRange = heading
-        ? { start: block.start + heading.start, end: block.start + heading.end }
-        : { start: block.start, end: block.start + block.markdown.length }
-      const region = {
-        id: regionId,
-        block_id: blockId,
-        role: heading && slideIndex === 0 && blockIndex === 0 ? "title" : heading ? "heading" : "block",
-        kind: kindName,
-        text: heading ? heading.text : block.markdown,
-        range: { start: block.start, end: block.start + block.markdown.length },
-        source_range: { start: block.start, end: block.start + block.markdown.length },
-        content_range: contentRange,
-        editable: true
-      }
-      const mapped = {
-        id: blockId,
-        index: blockIndex,
-        kind: kindName,
-        markdown: block.markdown,
-        position: block.position,
-        position_directive_id: block.positionDirectiveId,
-        position_scope: block.positionDirectiveId ? "block" : null,
-        range: { start: block.start, end: block.end },
-        source_range: { start: block.start, end: block.end },
-        content_range: contentRange,
-        editable_region_id: regionId
-      }
-      parsed.regions.push(region)
-      return mapped
-    })
-    const slideMap = {
-      id: `slide-${slideIndex + 1}`,
-      index: slideIndex,
-      layout: "body",
-      range: { start: range.start, end: range.end },
-      source_range: { start: range.start, end: range.end },
-      delimiter_range: range.delimiterRange,
-      blocks,
-      directives: parsed.directives,
-      editable_regions: parsed.regions
-    }
-    map.slides.push(slideMap)
-    map.directives.push(...parsed.directives)
-    map.editable_regions.push(...parsed.regions)
-  }
-
   const html = mode === "document"
-    ? renderDocument(source, map.slides[0], style, env)
-    : renderPresentation(source, map.slides, style, env)
+    ? renderDocument(source, slides[0], style, env)
+    : renderPresentation(source, slides, style, marginSettings, env)
   return { html, warnings, editor_map: map, style }
 }
 
 function renderDocument(source, slide, style, env) {
-  const blocks = slide.blocks.map((block) => {
-    const region = slide.editable_regions.find((candidate) => candidate.block_id === block.id)
-    const markdownSource = block.markdown
-    const rendered = renderMarkdownBlock(markdownSource, env)
-    const classes = block.position ? positionClasses(block.position) : ""
-    return `<div class="document-editor-block${classes ? ` ${classes}` : ""}" data-editor-region-id="${region.id}" data-editor-block-id="${block.id}" contenteditable="true" role="textbox" aria-label="Editable Markdown block" aria-multiline="true" spellcheck="true" data-action="input-&gt;visual-editor#projectionInput focus-&gt;visual-editor#blockFocus blur-&gt;visual-editor#blockBlur">${rendered}</div>`
-  }).join("")
+  if (!slide) return ""
+  const mappedBlocks = slide.blocks.filter(block => !block.empty_placeholder)
+  const emptyBlocks = slide.blocks.filter(block => block.empty_placeholder)
+  const regions = new Map(slide.editable_regions.map(region => [region.block_id, region]))
+  const blocks = []
+  let emptyIndex = 0
+  const appendEmpty = mapped => {
+    const region = regions.get(mapped.id)
+    if (!region?.editable) return
+    blocks.push(`<div class="document-editor-block-shell"><div class="document-editor-block" data-editor-region-id="${mapped.editable_region_id}" data-editor-block-id="${mapped.id}" data-editor-empty-block="true" contenteditable="true" role="textbox" aria-label="Editable Markdown block" aria-multiline="true" spellcheck="true" data-action="input-&gt;visual-editor#projectionInput focus-&gt;visual-editor#blockFocus blur-&gt;visual-editor#blockBlur"><p><br></p></div></div>`)
+  }
+  for (const block of slide.parsed_blocks) {
+    const mapped = mappedBlocks.shift()
+    while (emptyBlocks[emptyIndex] && emptyBlocks[emptyIndex].range.start <= (mapped?.range.start ?? Number.POSITIVE_INFINITY)) {
+      appendEmpty(emptyBlocks[emptyIndex])
+      emptyIndex += 1
+    }
+    const region = mapped && regions.get(mapped.id)
+    const valid = Boolean(mapped && region?.editable && mapped.markdown === block.markdown && mapped.editable_region_id === region.id && region.block_id === mapped.id)
+    const classes = ["document-editor-block", positionClasses(block.position)].filter(Boolean).join(" ")
+    const attributes = valid
+      ? `class="${classes}" data-editor-region-id="${mapped.editable_region_id}" data-editor-block-id="${mapped.id}" contenteditable="true" role="textbox" aria-label="Editable Markdown block" aria-multiline="true" spellcheck="true" data-action="input-&gt;visual-editor#projectionInput focus-&gt;visual-editor#blockFocus blur-&gt;visual-editor#blockBlur"`
+      : `class="${classes}" contenteditable="false" aria-readonly="true"`
+    let rendered = region?.empty_heading ? "<h1><br></h1>" : renderMarkdownBlock(block.markdown, env)
+    if (valid && mapped.kind === "image") {
+      const alt = /^\s*!\[([^\]]*)\]/.exec(block.markdown)?.[1] || ""
+      rendered = `<figure class="editor-media">${rendered}<figcaption class="editor-media-caption" aria-label="Editable image alt text" title="Edit image alt text">${escapeHtml(alt)}</figcaption></figure>`
+    }
+    const positionControl = mapped ? renderPositionControl(mapped, "visual-editor") : ""
+    blocks.push(`<div class="document-editor-block-shell"><div ${attributes}>${rendered}</div>${positionControl}</div>`)
+  }
+  while (emptyBlocks[emptyIndex]) {
+    appendEmpty(emptyBlocks[emptyIndex])
+    emptyIndex += 1
+  }
   return `<div class="document-reader document-theme-${style.theme} document-typography-${style.typography} work-theme-${style.theme} work-typography-${style.typography} document-editor-projection" data-controller="document-pages mermaid-diagrams"><div class="document-surface" data-document-pages-target="surface">${blocks}</div></div>`
 }
 
-function renderPresentation(source, slides, style, env) {
+function renderPresentation(source, slides, style, margin, env) {
   const frames = slides.map((slide, index) => {
-    const slideBlocks = slide.blocks.map((block) => {
-      const region = slide.editable_regions.find((candidate) => candidate.block_id === block.id)
-      const heading = /^\s{0,3}#\s+/.test(block.markdown)
+    const mappedBlocks = slide.blocks
+    const regions = new Map(slide.editable_regions.map(region => [region.block_id, region]))
+    const blocks = slide.parsed_blocks
+    const renderBlock = (block, blockIndex, title = false) => {
+      const mapped = mappedBlocks[blockIndex]
+      const region = mapped && regions.get(mapped.id)
+      const valid = Boolean(mapped && region && mapped.markdown === block.markdown && mapped.editable_region_id === region.id && region.block_id === mapped.id)
+      const className = [title ? "slide-title" : "", "slide-block", positionClasses(block.position)].filter(Boolean).join(" ")
+      const label = title ? "Editable slide title" : "Editable slide block"
+      const attributes = valid
+        ? `data-editor-block-id="${mapped.id}" data-editor-region-id="${region.id}" data-editor-source-editable="${region.editable}"${region.editable ? ` contenteditable="true" role="textbox" aria-label="${label}" aria-multiline="true" spellcheck="true" data-action="input-&gt;presentation-editor#blockInput focus-&gt;presentation-editor#blockFocus blur-&gt;presentation-editor#blockBlur"` : " contenteditable=\"false\" aria-readonly=\"true\""}`
+        : "contenteditable=\"false\" aria-readonly=\"true\""
       const content = renderMarkdownBlock(block.markdown, env)
-      const className = heading ? "slide-title slide-block" : "slide-block"
-      return `<div class="${className}" data-editor-block-id="${block.id}" data-editor-region-id="${region.id}" data-editor-source-editable="true" contenteditable="true" role="textbox" aria-label="${heading ? "Editable slide title" : "Editable slide block"}" aria-multiline="true" spellcheck="true" data-action="input-&gt;presentation-editor#blockInput focus-&gt;presentation-editor#blockFocus blur-&gt;presentation-editor#blockBlur">${content}</div><div class="presentation-editor-block-controls" aria-label="Block controls"><button type="button" data-presentation-editor-action="add-block-after" data-slide-index="${index}" data-block-index="${block.index}">Add block</button><button type="button" data-presentation-editor-action="delete-block" data-slide-index="${index}" data-block-index="${block.index}"${slide.blocks.length < 2 ? " disabled" : ""}>Delete</button></div>`
-    }).join("") || `<div class="empty-slide"><p>Empty slide</p><button type="button" class="empty-slide-add-image" data-action="click-&gt;media#chooseForSlide" data-slide-index="${index}">Add image</button></div>`
-    const toolbar = `<div class="presentation-editor-slide-toolbar" aria-label="Slide ${index + 1} controls"><span class="presentation-editor-slide-label">Slide ${index + 1}</span><button type="button" data-presentation-editor-action="add-slide-after" data-slide-index="${index}">Add slide</button><button type="button" data-presentation-editor-action="delete-slide" data-slide-index="${index}"${slides.length < 2 ? " disabled" : ""}>Delete slide</button><button type="button" data-presentation-editor-action="move-slide-up" data-slide-index="${index}"${index === 0 ? " disabled" : ""}>Move up</button><button type="button" data-presentation-editor-action="move-slide-down" data-slide-index="${index}"${index === slides.length - 1 ? " disabled" : ""}>Move down</button></div>`
-    const title = headingForSlide(slide)
-    return `<div class="slide-frame" data-controller="presentation-canvas"><section class="slide slide-body" data-presentation-canvas-target="canvas" aria-label="Slide ${index + 1}" data-editor-slide-id="slide-${index + 1}" data-slide-index="${index}">${toolbar}<div class="slide-content">${title}${slideBlocks}</div></section></div>`
+      const controls = valid ? renderPresentationBlockControls(index, blockIndex, blocks.length, block.position) : ""
+      return `<div class="${className}" ${attributes}>${content}</div>${controls}`
+    }
+    const titleMarkup = slide.title ? renderBlock(blocks[0], 0, true) : ""
+    const contentBlocks = slide.title ? blocks.slice(1) : blocks
+    const contentOffset = slide.title ? 1 : 0
+    const slideContent = slide.title
+      ? `<div class="slide-regions">${slide.regions.map(region => `<div class="slide-region">${region.map(block => renderBlock(block, blocks.indexOf(block))).join("")}</div>`).join("")}</div>`
+      : contentBlocks.map((block, blockIndex) => renderBlock(block, blockIndex + contentOffset)).join("")
+    const empty = blocks.length === 0
+      ? `<div class="empty-slide"><p>Empty slide</p><button type="button" class="button secondary empty-slide-add-image" data-action="click-&gt;media#chooseForSlide" data-slide-index="${index}">Add image</button></div>`
+      : ""
+    const toolbar = `<div class="presentation-editor-slide-toolbar" aria-label="Slide ${index + 1} controls"><span class="presentation-editor-slide-label">Slide ${index + 1}</span><button type="button" data-presentation-editor-action="add-slide-after" data-slide-index="${index}">Add slide</button><button type="button" class="presentation-editor-add-image" data-action="click-&gt;media#chooseForSlide" data-slide-index="${index}">Add image</button><button type="button" data-presentation-editor-action="delete-slide" data-slide-index="${index}"${slides.length === 1 ? " disabled" : ""}>Delete</button><button type="button" data-presentation-editor-action="move-slide-up" data-slide-index="${index}"${index === 0 ? " disabled" : ""}>Move up</button><button type="button" data-presentation-editor-action="move-slide-down" data-slide-index="${index}"${index === slides.length - 1 ? " disabled" : ""}>Move down</button></div>`
+    const topMargin = margin.section || margin.subsection
+      ? `<div class="slide-margin slide-margin-top" aria-hidden="true">${margin.subsection ? `<span class="slide-margin-subsection">${escapeHtml(slide.subsection || "")}</span>` : ""}${margin.section ? `<span class="slide-margin-section">${escapeHtml(slide.section || "")}</span>` : ""}</div>`
+      : ""
+    const bottomMargin = margin.slide_count || margin.footnote
+      ? `<div class="slide-margin slide-margin-bottom" aria-hidden="true">${margin.slide_count ? `<span class="slide-margin-count">${index + 1} / ${slides.length}</span>` : ""}${margin.footnote && slide.footnote ? `<span class="slide-margin-footnote" aria-label="Footnote"><span class="slide-margin-footnote-marker">*</span><span class="slide-margin-footnote-text">${renderMarkdownBlock(slide.footnote, env)}</span></span>` : ""}</div>`
+      : ""
+    return `<div class="slide-frame" data-controller="presentation-canvas"><section class="slide slide-${slide.layout}" data-presentation-canvas-target="canvas" aria-label="Slide ${index + 1}" data-editor-slide-id="slide-${index + 1}" data-slide-index="${index}">${toolbar}${topMargin}<div class="slide-content">${titleMarkup}${slideContent}${empty}</div>${bottomMargin}</section></div>`
   }).join("")
   return `<div class="presentation-surface work-surface slides slides-theme-${style.theme} slides-typography-${style.typography} work-theme-${style.theme} work-typography-${style.typography} presentation-editor-projection" data-controller="mermaid-diagrams">${frames}</div>`
 }
 
-function headingForSlide(slide) {
-  const first = slide.blocks[0]
-  if (!first || !/^\s{0,3}#\s+/.test(first.markdown)) return ""
-  return ""
+function renderPresentationBlockControls(slideIndex, blockIndex, blockCount, position) {
+  const alignment = position ? (position.vertical === "top" ? position.horizontal : `${position.vertical === "middle" ? "center" : position.vertical} ${position.horizontal}`) : "left"
+  const options = ["top", "middle", "bottom"].flatMap(vertical => ["left", "center", "right"].map(horizontal => {
+    const value = vertical === "top" ? horizontal : `${vertical === "middle" ? "center" : vertical} ${horizontal}`
+    return `<option value="${value}"${value === alignment ? " selected" : ""}>${value.split(" ").map(part => part[0].toUpperCase() + part.slice(1)).join(" ")}</option>`
+  })).join("")
+  return `<div class="presentation-editor-block-controls" aria-label="Block controls"><button type="button" data-presentation-editor-action="add-block-after" data-slide-index="${slideIndex}" data-block-index="${blockIndex}">Add block</button><button type="button" data-presentation-editor-action="delete-block" data-slide-index="${slideIndex}" data-block-index="${blockIndex}"${blockCount === 1 ? " disabled" : ""}>Delete</button><button type="button" aria-label="Move block up" data-presentation-editor-action="move-block-up" data-slide-index="${slideIndex}" data-block-index="${blockIndex}"${blockIndex === 0 ? " disabled" : ""}>↑</button><button type="button" aria-label="Move block down" data-presentation-editor-action="move-block-down" data-slide-index="${slideIndex}" data-block-index="${blockIndex}"${blockIndex === blockCount - 1 ? " disabled" : ""}>↓</button><label>Align <select aria-label="Block alignment" data-presentation-editor-align data-slide-index="${slideIndex}" data-block-index="${blockIndex}" data-action="change-&gt;presentation-editor#alignmentChanged">${options}</select></label></div>`
 }
 
-function splitSlideRanges(source, bodyStart) {
-  const ranges = []
-  let start = bodyStart
-  let fence = null
-  for (const line of sourceLines(source, bodyStart, source.length)) {
-    const marker = fenceMarker(line.text)
-    if (fence) {
-      if (marker && marker.character === fence.character && marker.length >= fence.length && marker.closing) fence = null
-      continue
-    }
-    if (marker) {
-      fence = marker
-      continue
-    }
-    if (/^[ \t]*---[ \t]*$/.test(line.text)) {
-      ranges.push({ start, end: line.start, delimiterRange: { start: line.start, end: line.end } })
-      start = line.end
-    }
-  }
-  ranges.push({ start, end: source.length, delimiterRange: null })
-  return ranges
-}
-
-function splitBlocks(source, start, end, mode, slideIndex) {
-  const blocks = []
-  const directives = []
-  const regions = []
-  let current = []
-  let fence = null
-  let pendingPosition = null
-  let directiveCount = 0
-  const flush = () => {
-    if (!current.length) return
-    const first = current[0]
-    const last = current.at(-1)
-    const raw = source.slice(first.start, last.end)
-    const text = raw.replace(/(?:\r\n|\r|\n)$/, "")
-    if (text.trim()) blocks.push({ start: first.start, end: last.end, markdown: text, position: pendingPosition?.value || null, positionDirectiveId: pendingPosition?.id || null })
-    current = []
-    pendingPosition = null
-  }
-
-  for (const line of sourceLines(source, start, end)) {
-    const marker = fenceMarker(line.text)
-    if (fence) {
-      current.push(line)
-      if (marker && marker.character === fence.character && marker.length >= fence.length && marker.closing) fence = null
-      continue
-    }
-    if (marker) {
-      current.push(line)
-      fence = marker
-      continue
-    }
-    if (!line.text.trim()) {
-      flush()
-      continue
-    }
-    if (/^\s*:::\w/.test(line.text)) {
-      flush()
-      const directive = line.text.trim()
-      const id = `slide-${slideIndex + 1}-directive-${++directiveCount}`
-      const position = /^:::(?:align|position)\s*\{([^}]*)\}/.exec(directive)
-      directives.push({ id, type: position ? "position" : "unknown", value: position?.[1]?.trim() || null, text: directive, range: { start: line.start, end: line.end }, source_range: { start: line.start, end: line.end }, editable: Boolean(position), scope: mode === "document" ? "document" : "slide" })
-      if (position) pendingPosition = { id, value: parsePosition(position[1]) }
-      else if (directive !== ":::") pendingPosition = null
-      continue
-    }
-    if (line.text.trim() === ":::") {
-      flush()
-      directives.push({ id: `slide-${slideIndex + 1}-directive-${++directiveCount}`, type: "position_close", value: null, text: ":::" , range: { start: line.start, end: line.end }, source_range: { start: line.start, end: line.end }, editable: false })
-      pendingPosition = null
-      continue
-    }
-    current.push(line)
-  }
-  flush()
-  return { blocks, directives, regions, warnings: [] }
-}
-
-function sourceLines(source, start, end) {
-  const lines = []
-  let cursor = start
-  while (cursor < end) {
-    const newline = source.indexOf("\n", cursor)
-    const lineEnd = newline < 0 || newline >= end ? end : newline + 1
-    let textEnd = lineEnd
-    if (source[textEnd - 1] === "\n") textEnd -= 1
-    if (source[textEnd - 1] === "\r") textEnd -= 1
-    lines.push({ start: cursor, end: lineEnd, text: source.slice(cursor, textEnd) })
-    cursor = lineEnd
-  }
-  return lines
-}
-
-function readFrontMatter(source) {
-  const bom = source.startsWith("\uFEFF") ? 1 : 0
-  const firstEnd = source.indexOf("\n")
-  if (firstEnd < 0 || !/^\uFEFF?---[ \t]*\r?$/.test(source.slice(0, firstEnd))) return { text: "", bodyStart: 0 }
-  let cursor = firstEnd + 1
-  while (cursor <= source.length) {
-    const newline = source.indexOf("\n", cursor)
-    const end = newline < 0 ? source.length : newline
-    const line = source.slice(cursor, end).replace(/\r$/, "")
-    if (/^---[ \t]*$/.test(line)) return { text: source.slice(firstEnd + 1, cursor), bodyStart: newline < 0 ? end : newline + 1 }
-    if (newline < 0) break
-    cursor = newline + 1
-  }
-  return { text: "", bodyStart: 0 }
-}
-
-function readStyle(frontMatter) {
-  const value = (key, fallback, choices) => {
-    const match = new RegExp(`^${key}:[ \\t]*["']?([^\\s"'#]+)`, "m").exec(frontMatter)
-    return match && choices.has(match[1]) ? match[1] : fallback
-  }
-  return { theme: value("theme", "match", themeNames), typography: value("typography", "book", typographyNames) }
-}
-
-function blockKind(source) {
-  if (/^\s{0,3}#{1,6}\s+/.test(source)) return "heading"
-  if (/^\s*(`{3,}|~{3,})/.test(source) || /^ {4}/.test(source)) return "code"
-  if (/^\s*(?:[-*+] |\d+[.)] )/.test(source)) return "list"
-  if (/^\s*>/.test(source)) return "quote"
-  if (/^\s*\|?.+\|[ \t]*\n\s*\|?[\s:|-]+\|/.test(source)) return "table"
-  if (/^\s*!\[[^\]]*\]\([^)]+\)\s*$/.test(source)) return "image"
-  return "paragraph"
-}
-
-function headingContentRange(source) {
-  const match = /^([ \t]{0,3}#{1,6})[ \t]+(.+?)(?:[ \t]+#+[ \t]*)?$/.exec(source)
-  if (!match) return null
-  const leading = match[1].length + (match[0].slice(match[1].length).match(/^[ \t]+/)?.[0].length || 0)
-  return { start: leading, end: leading + match[2].length, text: match[2] }
+function renderPositionControl(block, controller) {
+  const horizontal = block.position?.horizontal || "left"
+  const options = ["left", "center", "right"].map(value => `<option value="${value}"${value === horizontal ? " selected" : ""}>${value[0].toUpperCase()}${value.slice(1)}</option>`).join("")
+  return `<label class="document-block-position-control" data-action="pointerdown-&gt;visual-editor#positionControlOpened">Align <select aria-label="Block alignment" data-visual-editor-block-id="${block.id}" data-action="focus-&gt;${controller}#positionControlOpened keydown-&gt;${controller}#positionControlKeydown change-&gt;${controller}#alignmentChanged">${options}</select></label>`
 }
 
 function positionClasses(position) {
   if (!position) return ""
-  return [`position-${position.horizontal}`, `position-${position.vertical}`].join(" ")
-}
-
-function parsePosition(value) {
-  const values = value.toLowerCase().trim().split(/\s+/)
-  let horizontal = values.find((item) => ["left", "center", "right"].includes(item)) || "left"
-  let vertical = values.find((item) => ["top", "middle", "bottom"].includes(item)) || "top"
-  if (values.length === 2 && ["top", "center", "middle", "bottom"].includes(values[0]) && ["left", "center", "right"].includes(values[1])) {
-    vertical = values[0] === "center" ? "middle" : values[0]
-    horizontal = values[1]
-  }
-  return { horizontal, vertical, vertical_explicit: values.some((item) => ["top", "middle", "bottom"].includes(item)) }
+  return [`position-${position.horizontal}`, `position-${position.vertical}`, position.vertical_explicit ? "position-vertical" : ""].filter(Boolean).join(" ")
 }
 
 function resolveAssetSource(source, env = {}) {
@@ -515,11 +366,6 @@ function isEscaped(source, index) {
   let slashes = 0
   for (let cursor = index - 1; cursor >= 0 && source[cursor] === "\\"; cursor -= 1) slashes += 1
   return slashes % 2 === 1
-}
-
-function fenceMarker(line) {
-  const match = /^\s{0,3}(`{3,}|~{3,})(.*)$/.exec(line)
-  return match ? { character: match[1][0], length: match[1].length, closing: match[2].trim() === "" } : null
 }
 
 function escapeHtml(value) {

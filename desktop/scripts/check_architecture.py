@@ -25,6 +25,9 @@ config = json.loads((TAURI_ROOT / "tauri.conf.json").read_text())
 e2e_config = json.loads((TAURI_ROOT / "tauri.e2e.conf.json").read_text())
 feature_flags_source = (REPO_ROOT / "desktop" / "frontend" / "src" / "feature-flags.js").read_text()
 delivery_plan = (REPO_ROOT / "docs" / "desktop" / "delivery-plan.md").read_text()
+document_model = (REPO_ROOT / "app" / "lib" / "source" / "document.rb").read_text()
+javascript_renderer = (REPO_ROOT / "app" / "lib" / "source" / "javascript_renderer.rb").read_text()
+renderer_global = (REPO_ROOT / "desktop" / "frontend" / "src" / "renderer-global.js").read_text()
 
 declared = command_names(build_source, r"let app_commands = &\[(.*?)\];")
 handler_match = re.search(
@@ -78,6 +81,10 @@ assert feature_flags == {
 for flag in feature_flags:
     assert re.search(rf"\| `{flag}` \| off \| on \|", delivery_plan), f"{flag} is missing from the feature register"
 assert "applyDesktopFeatureFlags(document)" in (REPO_ROOT / "desktop" / "frontend" / "src" / "main.js").read_text(), "desktop must apply the feature flags at startup"
+assert re.search(r"def editor_map\([^)]*\).*?Source::JavascriptRenderer\.editor_map", document_model, re.DOTALL), "Rails editor maps must delegate to the shared JavaScript implementation"
+assert '"ElefRenderer.buildEditorMap"' in javascript_renderer, "the Rails wrapper must call the shared map exported by the renderer bundle"
+assert "buildEditorMap" in renderer_global and "buildEditorStructure" in renderer_global, "the renderer bundle must expose the shared editor map and structure"
+assert not re.search(r"def (?:editor_blocks|editable_region_for_block|utf16_range)\b", document_model), "Rails must not retain a second editor-map implementation"
 assert {
     permission
     for permission in permissions

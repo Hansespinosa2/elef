@@ -1,6 +1,7 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 import { collectMediaReferences, renderMarkdownBlock, renderPreview } from "../src/renderer.js"
+import { buildEditorMap } from "../src/document-map.js"
 
 test("presentation preview builds editable source ranges and ignores slide delimiters in code fences", () => {
   const source = "---\ntheme: dark\n---\n# One\n\nText 😀\n\n```md\n---\n```\n---\n# Two"
@@ -14,6 +15,46 @@ test("presentation preview builds editable source ranges and ignores slide delim
   assert.match(preview.html, /data-editor-block-id="slide-1-block-1"/)
   assert.match(preview.html, /<code[^>]*>---/)
   assert.equal(preview.editor_map.slides[1].blocks[0].markdown, "# Two")
+})
+
+test("desktop presentation structure comes from the same source map exported to Rails", () => {
+  const source = [
+    "---",
+    "theme: dark",
+    "show-in-margin:",
+    "  section: true",
+    "---",
+    ":::section{Planning}",
+    "# Roadmap 😀",
+    "",
+    "## First",
+    "",
+    "First column.",
+    "",
+    "## Second",
+    "",
+    "Second column.",
+    "---",
+    "# Code sample",
+    "",
+    "```md",
+    "---",
+    "```"
+  ].join("\n")
+  const preview = renderPreview({ source, title: "Quarterly plan" })
+
+  assert.deepEqual(preview.editor_map, buildEditorMap(source, {
+    sourceName: "Quarterly plan",
+    mode: "presentation"
+  }))
+  assert.equal(preview.editor_map.source_length, source.length)
+  assert.equal(preview.editor_map.slides[0].layout, "two-column")
+  assert.equal(preview.editor_map.slides[0].directives[0].type, "section")
+  assert.equal(preview.editor_map.slides[1].blocks.length, 2)
+  assert.match(preview.html, /class="slide slide-two-column"/)
+  assert.match(preview.html, /class="slide-regions"/)
+  assert.match(preview.html, /data-presentation-editor-action="add-block-after"/)
+  assert.match(preview.html, /class="slide-margin-section"/)
 })
 
 test("document preview renders basic Markdown with safe content-addressed local assets", () => {

@@ -25,6 +25,19 @@ module Source
       )
     end
 
+    def editor_map(source, source_name:, mode:)
+      raise ArgumentError, "The selected file did not contain readable text." unless source.is_a?(String)
+
+      normalized_mode = mode.to_sym
+      raise ArgumentError, "Unsupported document mode" unless %i[presentation document].include?(normalized_mode)
+
+      context.call(
+        "ElefRenderer.buildEditorMap",
+        source,
+        { sourceName: source_name.to_s, mode: normalized_mode.to_s }
+      ).deep_symbolize_keys
+    end
+
     def resolved_media(renderer, source, media_resolver)
       return {} unless media_resolver && source.include?("!")
 

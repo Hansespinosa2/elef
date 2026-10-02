@@ -19,7 +19,7 @@ The earlier plan ported the Markdown → HTML pipeline from Ruby to JS and kept 
 
 ## Decision (proposed)
 
-**Author the Markdown block renderer once as a standalone JS package.** A pure function — Markdown string in, HTML string out — with no DOM or browser dependencies. The shared block renderer handles Markdown → HTML, code highlighting (Highlight.js), math (KaTeX npm), link safety and media references. Rails still uses `Source::Document` and related Ruby code for document and slide structure; desktop has its own preview structure and editor map. Full structural parity and the exact fixture gate are still open work, so this ADR remains proposed.
+**Author the Markdown and editor-map logic once as a standalone JS package.** Markdown blocks render to HTML without DOM or browser dependencies; `buildEditorStructure` also derives slide/document metadata and `buildEditorMap` maps editable regions to UTF-16 source ranges. Rails calls both through MiniRacer and desktop calls them in the worker. Rails still uses Ruby models and view templates to build the final editor projection markup, while desktop assembles that markup in JavaScript. Full projection parity, the complete fixture gate and removal of the Ruby rollback are still open, so this ADR remains proposed.
 
 **Mermaid:** the renderer emits placeholders only and sets strict mode in the markup; diagrams render in the browser/webview, which has the DOM Mermaid needs. Rails therefore never renders diagrams server-side.
 
