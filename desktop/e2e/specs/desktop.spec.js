@@ -354,6 +354,11 @@ class DesktopLibraryUi {
   }
 
   async assertCardPreview(title, text) {
+    await browser.execute(deckTitle => {
+      const button = [...document.querySelectorAll(".deck-open")]
+        .find(element => element.getAttribute("aria-label") === `Open ${deckTitle}`)
+      button?.scrollIntoView({ block: "center", inline: "nearest" })
+    }, title)
     const findPreview = (deckTitle, previewText) => {
       const button = [...document.querySelectorAll(".deck-open")]
         .find(element => element.getAttribute("aria-label") === `Open ${deckTitle}`)
@@ -373,14 +378,15 @@ class DesktopLibraryUi {
         try {
           const deck = await window.__TAURI__.core.invoke("read_deck_preview", { id: preview?.dataset.deckId })
           return {
-            previewState: preview?.dataset.previewState || "missing",
+            previewState: preview?.dataset.previewState ?? null,
+            previewMissing: !preview,
             previewText: preview?.textContent?.slice(0, 240) || "",
             sourceHasExpectedText: deck.source.includes(previewText),
             sourceHasLocalImage: deck.source.includes("elef-asset:"),
             sourceFile: deck.source_file
           }
         } catch (readError) {
-          return { previewState: preview?.dataset.previewState || "missing", readError: readError?.code || "unknown" }
+          return { previewState: preview?.dataset.previewState ?? null, previewMissing: !preview, readError: readError?.code || "unknown" }
         }
       }, title, text)
       throw new Error(`${error.message}; desktop preview diagnostic: ${JSON.stringify(diagnostic)}`)
