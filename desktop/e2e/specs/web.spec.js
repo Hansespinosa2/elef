@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test"
 import { editAndPreviewWorkflow, SAVED_SOURCE } from "../scenarios/edit-and-preview.js"
 import { libraryAndGraphWorkflow } from "../scenarios/library-and-graph.js"
 import { externalEditConflictWorkflow, CONFLICT_EXTERNAL_SOURCE } from "../scenarios/external-edit-conflict.js"
+import { mathInputWorkflow, snippetInsertWorkflow } from "../scenarios/authoring-palettes.js"
 import { PIXEL_PNG_MARKDOWN } from "../scenarios/media-fixture.js"
 import { execFileSync } from "node:child_process"
 import path from "node:path"
@@ -60,6 +61,16 @@ class WebEditorUi {
 
   async showVisualMode() {
     await this.page.locator('[data-editor-target="visualButton"]').click()
+  }
+
+  async waitForAuthoringOption(palette, name) {
+    const option = this.page.locator(`#deck-source-${palette}-palette [role="option"]`).filter({ hasText: name }).first()
+    await expect(option).toBeVisible()
+  }
+
+  async selectAuthoringOption(palette, name) {
+    const option = this.page.locator(`#deck-source-${palette}-palette [role="option"]`).filter({ hasText: name }).first()
+    await option.click()
   }
 
   async editVisualText(currentText, replacementText) {
@@ -256,4 +267,12 @@ test("shared external-edit conflict flow preserves the disk version in the web a
   const ui = new WebEditorUi(page)
   await externalEditConflictWorkflow(ui)
   expect(await ui.readSource()).toBe(CONFLICT_EXTERNAL_SOURCE)
+})
+
+test("shared snippet insertion flow works in the web app", async ({ page }) => {
+  await snippetInsertWorkflow(new WebEditorUi(page))
+})
+
+test("shared math input flow works in the web app", async ({ page }) => {
+  await mathInputWorkflow(new WebEditorUi(page))
 })

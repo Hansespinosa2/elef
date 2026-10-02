@@ -35,6 +35,22 @@ test("the host uses no inline event handlers under the strict script policy", ()
   assert.equal(document.querySelector("[onclick], [onerror], [onload]"), null)
 })
 
+test("the source editor forwards input and keyboard events to authoring palettes", () => {
+  const actions = document.querySelector("#desktop-editor-field").dataset.action.split(/\s+/)
+  for (const action of [
+    "input->snippet-palette#input",
+    "keydown->snippet-palette#keydown",
+    "keydown->math-shorthand#keydown",
+    "input->math-shortcut-palette#input",
+    "keydown->math-shortcut-palette#keydown",
+    "input->mermaid-assist#input",
+    "input->document-link-palette#input",
+    "keydown->document-link-palette#keydown"
+  ]) {
+    assert.ok(actions.includes(action), `missing host action ${action}`)
+  }
+})
+
 test("the library provides the local document graph view and deck navigation", () => {
   assert.ok(document.querySelector("#show-deck-list[data-library-tab='all']"))
   assert.ok(document.querySelector("#show-documents[data-library-tab='documents']"))

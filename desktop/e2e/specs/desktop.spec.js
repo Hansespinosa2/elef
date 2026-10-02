@@ -5,6 +5,7 @@ import path from "node:path"
 import { editAndPreviewWorkflow } from "../scenarios/edit-and-preview.js"
 import { libraryAndGraphWorkflow } from "../scenarios/library-and-graph.js"
 import { externalEditConflictWorkflow, CONFLICT_EXTERNAL_SOURCE } from "../scenarios/external-edit-conflict.js"
+import { mathInputWorkflow, snippetInsertWorkflow } from "../scenarios/authoring-palettes.js"
 import { PIXEL_PNG_MARKDOWN } from "../scenarios/media-fixture.js"
 
 function normalizeLineEndings(source) {
@@ -153,6 +154,23 @@ class DesktopEditorUi {
       })
       throw new Error(`${error.message}; desktop state: ${JSON.stringify(state)}`)
     }
+  }
+
+  async waitForAuthoringOption(palette, name) {
+    const option = $(`#deck-source-${palette}-palette [role="option"]`)
+    await browser.waitUntil(async () => (await option.getText()).includes(name), {
+      timeout: 5_000,
+      timeoutMsg: `The ${palette} palette did not show ${name}`
+    })
+  }
+
+  async selectAuthoringOption(palette, name) {
+    const option = $(`#deck-source-${palette}-palette [role="option"]`)
+    await browser.waitUntil(async () => (await option.getText()).includes(name), {
+      timeout: 5_000,
+      timeoutMsg: `The ${palette} palette did not show ${name}`
+    })
+    await option.click()
   }
 
   async editVisualText(currentText, replacementText) {
@@ -422,6 +440,14 @@ describe("shared authoring scenarios", () => {
     if (await ui.readSource() !== CONFLICT_EXTERNAL_SOURCE) {
       throw new Error("Resolving the conflict did not load the external source")
     }
+  })
+
+  it("runs the shared snippet insertion flow in the desktop binary", async () => {
+    await snippetInsertWorkflow(new DesktopEditorUi())
+  })
+
+  it("runs the shared math input flow in the desktop binary", async () => {
+    await mathInputWorkflow(new DesktopEditorUi())
   })
 
   it("imports a portable .elef opened by the running application", async () => {
