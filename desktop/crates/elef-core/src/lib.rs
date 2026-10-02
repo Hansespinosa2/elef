@@ -737,7 +737,10 @@ impl Library {
         temp.write_all(source.as_bytes())?;
         temp.as_file().sync_all()?;
 
-        // Narrow the check/rename race immediately before replacing the target.
+        // Measure the full final validation-to-rename window. This cannot make
+        // external writers atomic with our replacement, but keeps the accepted
+        // race window bounded and observable in CI.
+        let verified_at = Instant::now();
         let selected_source_file = source_file_for_write(&record.path, &record.source_path)?;
         if selected_source_file != record.source_file {
             self.list_decks()?;
@@ -760,7 +763,6 @@ impl Library {
         }
 
         pause_for_save_fault("after_flush_before_rename");
-        let verified_at = Instant::now();
         temp.persist(&record.source_path)
             .map_err(|error| CoreError::Io(error.error))?;
         pause_for_save_fault("after_rename");
