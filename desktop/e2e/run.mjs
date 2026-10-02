@@ -15,7 +15,8 @@ const seedDeck = path.join(libraryRoot, "E2E seed")
 const conflictDeck = path.join(libraryRoot, "E2E conflict")
 const archiveFixture = path.join(temporaryRoot, "E2E archive seed")
 const importArchive = path.join(temporaryRoot, "E2E archive seed.elef")
-const expectedSource = `# Saved by shared scenario\n\nThe visual editor changed this text.\n\n${PIXEL_PNG_MARKDOWN}`
+// Web scenarios append the shared snippet and math inputs after edit/media.
+const expectedSource = `# Saved by shared scenario\n\nThe visual editor changed this text.\n\n${PIXEL_PNG_MARKDOWN}\n**text**\n\n$$\n\\alpha\n$$\n`
 
 function normalizeLineEndings(source) {
   return source.replace(/\r\n/g, "\n")
