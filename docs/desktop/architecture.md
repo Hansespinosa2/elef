@@ -103,7 +103,7 @@ Where state lives
 ## 6. Cross-cutting concepts
 
 - **Identity.** UUID in `elef.json`; folder name is display-only. Rules in [data-format.md](data-format.md).
-- **Case and Unicode.** Folder names compared case-insensitively and after NFC normalization; import warns on collisions (macOS file systems may treat equivalent names as one; Linux does not).
+- **Case and Unicode.** Folder-name collision semantics are defined in [data-format.md](data-format.md); import warns while preserving the original name.
 - **Shared renderer structure.** Rails calls the shared JS Markdown block renderer and `buildEditorMap` through MiniRacer; desktop calls them from its worker. Rails view templates still construct the rendered editor projection through Ruby models and partials, while desktop constructs that projection in JavaScript. The Ruby block renderer remains as an explicit rollback. Full HTML output parity and Ruby deletion are not complete. ADR-007 owns the transition.
 - **Concurrency.** Saves are serialized per deck and coalesced (latest wins); the app never has two writers on one deck. Periodic source checks compare the content hash to the last successful save and reload or raise a conflict. Rendering runs in a worker with a time limit; a runaway render is terminated, not waited on.
 - **Errors.** Commands return typed errors `{ code, message, retryable }`; the code set is in [transport-adapter.md](transport-adapter.md). The UI maps codes to messages; raw OS errors never reach the user.

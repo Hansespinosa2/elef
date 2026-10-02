@@ -26,7 +26,7 @@ The elicited preferences list (batch-elicit-me, 4 batches) is the brief; these d
 | 005 | Defer revisions and lineage behind flags | Accepted | — |
 | 006 | Layered, assume-breach security model | Proposed | S5 passes; hostile fixtures green in CI |
 | 007 | One shared JS renderer | Proposed | S1 renderer items pass |
-| 008 | Atomic writes, fingerprint checks, conflict UI | Proposed | M2 fault-injection and conflict tests pass |
+| 008 | Atomic writes, fingerprint checks, conflict UI | Accepted | — |
 | 009 | Distribution, signed updates, key custody | Proposed | S3 + S4 pass; key custody performed |
 
 Proposed ADRs are accepted on spike results, not on a nod (see Q10 if you want an additional sign-off).

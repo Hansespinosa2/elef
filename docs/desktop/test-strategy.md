@@ -36,7 +36,7 @@ The JS Markdown block renderer and slide/document structure/editor-map builder a
 
 ## 4. Fixtures
 
-- **Temp-dir libraries:** every E2E test builds a fresh library (decks, images, `elef.json` variants, and the nasty cases: missing manifest, multiple `.md`, case-only and Unicode-equivalent collisions, duplicate UUIDs, `talk (conflicted copy).md`, read-only folder).
+- **Temp-dir libraries:** every E2E test builds a fresh library (decks, images, `elef.json` variants, and the nasty cases: missing manifest, multiple `.md`, case-only, canonical-normalization, and full-casefold collisions, duplicate UUIDs, `talk (conflicted copy).md`, read-only folder).
 - **Scale:** generated library of 1,000 decks plus a 50 MB deck. Budgets are measured against these.
 - **Hostile:** script-payload Markdown, `javascript:` links, traversal paths, zip-slip archives, symlink-entry archives, zip-bombs, pathological Markdown for render limits.
 - **Transport contract tests:** same input → same output shape against the Rails endpoint and the desktop handler.

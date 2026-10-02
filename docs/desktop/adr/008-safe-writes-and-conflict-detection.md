@@ -1,10 +1,9 @@
 # ADR-008: Atomic writes, fingerprint checks, and a conflict UI
 
-- Status: **Proposed**
+- Status: **Accepted**
 - Date: 2026-10-01
 - Decider: Andres
-- Confidence: high on the approach; medium on exact durability and latency costs (measured in M2)
-- Accepted when: the fault-injection matrix (QS-2) and conflict interleaving tests (QS-3) pass in M2
+- Confidence: high on the approach; medium on physical power-loss evidence and the residual external-writer race
 - Amends: the "last-write-wins in v1" line in [ADR-001](001-folders-as-source-of-truth.md)
 
 ## Context
@@ -18,7 +17,7 @@ Auto-save is continuous, and other programs (editors, Dropbox, iCloud, Syncthing
 - **Optimistic concurrency with a fingerprint + conflict UI** (chosen).
 - **CRDT/merge on every save.** Heavy and unnecessary for single-user, single-source-file decks.
 
-## Decision (proposed)
+## Decision
 
 1. **Atomic save.** Write a temp file in the same directory (dot-prefixed, so discovery ignores it), flush it to disk (`sync_all`; verify latency in M2), rename over the target. A crash leaves the old or the new file, never a mix. Stale temp files from a crash are removed on the next open.
 2. **Fingerprint.** (mtime, size, content hash) of the *source file*, recorded at every load and successful save. Images are written once and are not part of the autosave path, so hashing the source (typically KBs to low MBs) before each save is cheap.
@@ -49,7 +48,8 @@ sequenceDiagram
 
 ## Consequences
 
-- QS-3 is exercised by core and save-orchestration tests. QS-2 remains a release gate; the four-point process-kill hooks and native fault-injection matrix are not implemented in this foundation ([test-strategy.md](../test-strategy.md) §5).
+- The four-point child-process kill matrix runs 50 times per point in Linux and macOS CI. It confirms complete old-or-new source bytes and stale-temp cleanup after process termination. The matrix does not simulate physical power loss; temporary-file `sync_all` and parent-directory sync after rename provide the durability path, but device-level power-loss behavior is not directly verified.
+- QS-3 is exercised by core save checks, save-flow unit tests, and the shared webview conflict scenario. CI also measures the final fingerprint-check-to-rename interval against the 250 ms p95 budget. This narrows the accepted race; it does not eliminate an external write in that final interval.
 - One more UI surface (conflict dialog) and one more adapter behavior (hash handshake). Both are new code, kept out of the reused controllers.
 - Extra read+hash per save: negligible for source files; measured against the autosave budget.
 - Safe on synced folders in the common cases; a sync tool producing a conflicted copy is handled by the source-file rule ([data-format.md](../data-format.md)).

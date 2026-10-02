@@ -16,7 +16,7 @@ L = likelihood, I = impact (H / M / L).
 | R6 | Hostile content reaches IPC (iframe/IPC class of Tauri issues, sanitizer bypass) | L | H | C1 + C2 + C8 layered; S5 probe on both OSes; pinned Tauri with advisory tracking | security.md |
 | R7 | macOS desktop E2E coverage is thin (no official driver) | H | M | Embedded driver, mock tier, manual MacBook check; recorded as an accepted limitation | test-strategy |
 | R8 | Unsigned macOS install friction or an OS change blocks first-run or updates | M | M | S3 documents the flow on current macOS; v1 audience is the owner's own devices; revisit before wider distribution | ADR-009 |
-| R9 | Cross-platform filesystem semantics (case, Unicode, sync-tool partial writes) corrupt identity or lose edits | M | H | Normalized comparison, source-file rule, atomic writes, fingerprint check, fixtures | data-format, ADR-008 |
+| R9 | Cross-platform filesystem semantics (Unicode name equivalence, sync-tool partial writes) corrupt identity or lose edits | M | H | NFC + full Unicode case-fold collision keys, source-file rule, atomic writes, fingerprint check, fixtures | data-format, ADR-008 |
 | R10 | Solo maintainer: scope creep or a stalled spike delays v1 | M | M | Scope contract in delivery-plan; stretch items have explicit cut points; spikes are time-boxed | delivery-plan |
 | R11 | Tauri 2 plugin churn or a security advisory forces an upgrade mid-milestone | M | M | Pin versions; audit in CI; upgrade is a scheduled task, not an emergency | security.md C12 |
 | R12 | Feature flags outlive their purpose and become permanent divergence | M | M | Flag register with removal conditions; CI checks live flags | delivery-plan |

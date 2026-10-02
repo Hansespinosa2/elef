@@ -13,7 +13,7 @@ One decision per record. Read the relevant ADR before re-litigating anything.
 | [005](005-defer-revisions-lineage.md) | Defer revisions and lineage behind flags | Accepted | high | — |
 | [006](006-security-model.md) | Layered, assume-breach security model | Proposed | medium | S5 passes; hostile fixtures green |
 | [007](007-single-shared-js-renderer.md) | One shared JS renderer for Rails and desktop | Proposed | medium | S1 renderer items pass |
-| [008](008-safe-writes-and-conflict-detection.md) | Atomic writes, fingerprint checks, conflict UI | Proposed | high | M2 fault-injection and conflict tests pass |
+| [008](008-safe-writes-and-conflict-detection.md) | Atomic writes, fingerprint checks, conflict UI | Accepted | high | — |
 | [009](009-distribution-and-update-channel.md) | GitHub Releases, signed updater artifacts, key custody | Proposed | medium | S3 + S4 pass; key custody performed |
 
 "Accepted when" points at checkable evidence (spikes in [../delivery-plan.md](../delivery-plan.md)). Q10 in [../risks-and-open-questions.md](../risks-and-open-questions.md) asks whether an explicit owner sign-off is also required.
