@@ -11,6 +11,35 @@ permissions:
   contents: read
 
 jobs:
+  desktop-fast:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/frontend/package-lock.json
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop -> target
+      - name: Install frontend dependencies
+        run: npm ci --prefix desktop/frontend
+      - name: Run the fast desktop unit tier
+        run: |
+          started=$SECONDS
+          npm test --prefix desktop/frontend
+          cargo test --manifest-path desktop/Cargo.toml -p elef-core --locked
+          elapsed=$((SECONDS - started))
+          echo "Fast desktop test tier: ${elapsed}s (budget: 300s)"
+          test "$elapsed" -lt 300
+
   scan_ruby:
     if: github.event_name != 'push'
     runs-on: ubuntu-latest
@@ -376,7 +405,7 @@ jobs:
 
   record-ci-attestation:
     if: github.event_name == 'pull_request'
-    needs: [ scan_ruby, scan_js, test, sqlite-test, system-test, desktop, desktop-macos, renderer-macos, production-smoke, development-smoke ]
+    needs: [ desktop-fast, scan_ruby, scan_js, test, sqlite-test, system-test, desktop, desktop-macos, renderer-macos, production-smoke, development-smoke ]
     runs-on: ubuntu-latest
     steps:
       - name: Check out the exact pull request test candidate

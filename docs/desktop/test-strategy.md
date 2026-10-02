@@ -17,13 +17,14 @@ Status: draft v3 (revised 2026-10-02). Implements the preference: one suite of u
 
 | Tier | What | When | Verifies |
 |---|---|---|---|
-| T0 | Unit and component: Rust core tests (safe write, path guard, archive, source-file rule, document graph, asset validation, four-point child-process save-kill matrix); JS unit tests including raw-byte media transport; **renderer fixture suite** (Node, against the bundle); thin Ruby test that the mini_racer wrapper returns the same HTML as the bundle; transport contract tests | Every change, fast path | QS-2, QS-3 (Rust), QS-4, QS-5, QS-10, QS-11 |
+| T0-fast | Frontend unit tests and Rust `elef-core` tests | Every configured CI event; `desktop-fast` job has a 5-minute timeout and asserts test-command runtime below 300 seconds | Core save, archive, path, renderer, transport, and UI unit coverage |
+| T0 | Full unit and component suite: Rust core tests (safe write, path guard, archive, source-file rule, document graph, asset validation, four-point child-process save-kill matrix); JS unit tests including raw-byte media transport; **renderer fixture suite** (Node, against the bundle); thin Ruby test that the mini_racer wrapper returns the same HTML as the bundle; transport contract tests | PRs | QS-2, QS-3 (Rust), QS-4, QS-5, QS-10, QS-11 |
 | T1 | Playwright: shared scenarios vs **web** (Rails test server) | PRs | QS-1 (web leg) |
 | T2 | WebdriverIO: the same scenario functions vs the **real Tauri binary**, through its test-only embedded WebDriver provider on Linux and macOS; native menu/dialog smoke | PRs | QS-1 (shared edit/save/undo/redo/preview and library/graph flows), QS-4 hostile-deck probe |
 | T3 | Native smoke: install, launch, menus, dialogs, updater dry-run, and hostile fixtures | PRs / release | QS-4, QS-5, QS-8 |
 | CI fitness | Architecture rules as automated checks (§6) | Every change | QS-7, T5/T8 controls |
 
-T0 and frontend component tests provide fast feedback; T1 and T2 gate PRs on both target OSes. The current shared scenarios verify opening a deck, editing source, auto-save, session undo/redo, media upload and preview, document filtering, graph navigation, an external-edit conflict, snippet insertion, math input, and hostile-deck neutralization. `.elef` export and update-cycle flows remain planned coverage. Process-kill save fault injection runs in T0; update-install fault injection remains a T3 release gate.
+The `desktop-fast` job runs frontend and Rust-core unit tests for every configured CI event (pull-request updates and pushes to `dev` or `main`) and fails if the test commands exceed five minutes. T0's full suite and the T1/T2 shared scenario matrix gate PRs; T1/T2 run on both target OSes. The current shared scenarios verify opening a deck, editing source, auto-save, session undo/redo, media upload and preview, document filtering, graph navigation, an external-edit conflict, snippet insertion, math input, and hostile-deck neutralization. `.elef` export and update-cycle flows remain planned coverage. Process-kill save fault injection runs in T0; update-install fault injection remains a T3 release gate.
 
 ## 3. Renderer fixtures: one renderer, two phases
 
