@@ -71,10 +71,12 @@ async function hashTree(root, relative = "") {
   return result
 }
 
-async function makeDirectoriesWritable(root) {
+async function makeTreeAccessible(root) {
   await chmod(root, 0o700)
   for (const entry of await readdir(root, { withFileTypes: true })) {
-    if (entry.isDirectory()) await makeDirectoriesWritable(path.join(root, entry.name))
+    const entryPath = path.join(root, entry.name)
+    if (entry.isDirectory()) await makeTreeAccessible(entryPath)
+    else if (entry.isFile()) await chmod(entryPath, 0o600)
   }
 }
 
@@ -175,6 +177,7 @@ try {
   )
   await access(exportArchive)
   execFileSync("unzip", ["-q", "-o", exportArchive, "-d", exportContents])
+  await makeTreeAccessible(exportContents)
   assert.deepEqual(await hashTree(exportContents), await hashTree(seedDeck),
     "Exporting a deck must preserve every file byte, including its manifest and uploaded image")
   if (presentationId) {
@@ -198,6 +201,6 @@ try {
       // Preserve the browser/test failure while making fixture cleanup best-effort.
     }
   }
-  await makeDirectoriesWritable(temporaryRoot)
+  await makeTreeAccessible(temporaryRoot)
   await rm(temporaryRoot, { recursive: true, force: true })
 }
