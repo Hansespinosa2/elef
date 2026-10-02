@@ -308,7 +308,9 @@ class DesktopLibraryUi {
           notice: document.querySelector("#notice")?.textContent || "",
           cards: [...document.querySelectorAll(".deck-card")].map(card => card.getAttribute("aria-label"))
         })).catch(() => ({ unavailable: true }))
-        throw new Error(`${error.message}; launch exit: ${JSON.stringify(launchExit)}; library state: ${JSON.stringify(state)}`)
+        const pending = await browser.execute(async () => window.__TAURI__?.core?.invoke("pending_open_elef_count"))
+          .catch(() => "unavailable")
+        throw new Error(`${error.message}; launch exit: ${JSON.stringify(launchExit)}; pending .elef files: ${pending}; library state: ${JSON.stringify(state)}`)
       }
       await card.click()
       await browser.waitUntil(async () => (await $("#deck-title").getText()) === "E2E archive seed", {

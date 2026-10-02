@@ -131,7 +131,26 @@ class WebEditorUi {
 
   async useDiskVersion() {
     await this.page.locator('[data-action="click->autosave#discardLocal"]').click()
-    await expect(this.page.locator('[data-autosave-target="conflict"]')).toBeHidden()
+    try {
+      await expect(this.page.locator('[data-autosave-target="conflict"]')).toBeHidden()
+    } catch (error) {
+      const state = await this.page.evaluate(() => {
+        const form = document.querySelector('form[data-controller~="autosave"]')
+        const controller = form && Stimulus.getControllerForElementAndIdentifier(form, "autosave")
+        const conflict = form?.querySelector('[data-autosave-target="conflict"]')
+        return {
+          hidden: conflict?.hidden,
+          status: form?.querySelector('[data-autosave-target="status"]')?.textContent,
+          action: form?.querySelector('[data-action*="discardLocal"]')?.getAttribute("data-action"),
+          controllerConnected: Boolean(controller),
+          conflictPayload: controller?.conflictPayload ? {
+            currentPresent: Boolean(controller.conflictPayload.current),
+            currentSource: controller.conflictPayload.current?.source
+          } : null
+        }
+      })
+      throw new Error(`${error.message}; discard state: ${JSON.stringify(state)}`)
+    }
     await expect(this.page.locator('[data-autosave-target="status"]')).toHaveText("Saved")
   }
 
