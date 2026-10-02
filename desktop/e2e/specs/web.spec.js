@@ -64,12 +64,14 @@ class WebEditorUi {
   }
 
   async waitForAuthoringOption(palette, name) {
-    const option = this.page.locator(`#deck-source-${palette}-palette [role="option"]`).filter({ hasText: name }).first()
+    const label = palette === "snippet" ? "Snippet suggestions" : "Math shortcut suggestions"
+    const option = this.page.locator(`.source-field [role="listbox"][aria-label="${label}"] [role="option"]`).filter({ hasText: name }).first()
     await expect(option).toBeVisible()
   }
 
   async selectAuthoringOption(palette, name) {
-    const option = this.page.locator(`#deck-source-${palette}-palette [role="option"]`).filter({ hasText: name }).first()
+    const label = palette === "snippet" ? "Snippet suggestions" : "Math shortcut suggestions"
+    const option = this.page.locator(`.source-field [role="listbox"][aria-label="${label}"] [role="option"]`).filter({ hasText: name }).first()
     await option.click()
   }
 

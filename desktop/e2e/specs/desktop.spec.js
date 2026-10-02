@@ -157,7 +157,8 @@ class DesktopEditorUi {
   }
 
   async waitForAuthoringOption(palette, name) {
-    const option = $(`#deck-source-${palette}-palette [role="option"]`)
+    const label = palette === "snippet" ? "Snippet suggestions" : "Math shortcut suggestions"
+    const option = $(`.source-field [role="listbox"][aria-label="${label}"] [role="option"]`)
     await browser.waitUntil(async () => (await option.getText()).includes(name), {
       timeout: 5_000,
       timeoutMsg: `The ${palette} palette did not show ${name}`
@@ -165,7 +166,8 @@ class DesktopEditorUi {
   }
 
   async selectAuthoringOption(palette, name) {
-    const option = $(`#deck-source-${palette}-palette [role="option"]`)
+    const label = palette === "snippet" ? "Snippet suggestions" : "Math shortcut suggestions"
+    const option = $(`.source-field [role="listbox"][aria-label="${label}"] [role="option"]`)
     await browser.waitUntil(async () => (await option.getText()).includes(name), {
       timeout: 5_000,
       timeoutMsg: `The ${palette} palette did not show ${name}`
