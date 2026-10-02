@@ -15,8 +15,9 @@ const seedDeck = path.join(libraryRoot, "E2E seed")
 const conflictDeck = path.join(libraryRoot, "E2E conflict")
 const archiveFixture = path.join(temporaryRoot, "E2E archive seed")
 const importArchive = path.join(temporaryRoot, "E2E archive seed.elef")
+const expectedDesktopSource = `# Saved by shared scenario\n\nThe visual editor changed this text.\n\n${PIXEL_PNG_MARKDOWN}`
 // Web scenarios append the shared snippet and math inputs after edit/media.
-const expectedSource = `# Saved by shared scenario\n\nThe visual editor changed this text.\n\n${PIXEL_PNG_MARKDOWN}\n**text**\n\n$$\n\\alpha\n$$\n`
+const expectedWebSource = `${expectedDesktopSource}\n**text**\n\n$$\n\\alpha\n$$\n`
 
 function normalizeLineEndings(source) {
   return source.replace(/\r\n/g, "\n")
@@ -109,7 +110,7 @@ try {
   if (desktopResult.status !== 0) throw new Error("Shared desktop scenarios failed with status " + desktopResult.status)
 
   const desktopSource = await readFile(path.join(seedDeck, "presentation.md"), "utf8")
-  assert.equal(normalizeLineEndings(desktopSource), expectedSource)
+  assert.equal(normalizeLineEndings(desktopSource), expectedDesktopSource)
   assert.equal(
     await readFile(path.join(libraryRoot, "E2E archive seed", "presentation.md"), "utf8"),
     "# Imported from Elef\n\nPortable archive fixture.\n"
@@ -120,7 +121,7 @@ try {
     )
     const savedSource = persisted.match(/^ELEF_E2E_SOURCE=(.*)$/m)?.[1]
     assert.ok(savedSource, "Rails fixture command should return the persisted source")
-    assert.equal(normalizeLineEndings(JSON.parse(savedSource)), expectedSource)
+    assert.equal(normalizeLineEndings(JSON.parse(savedSource)), expectedWebSource)
   }
 } finally {
   if (presentationId) {
