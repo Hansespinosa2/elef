@@ -1796,6 +1796,7 @@ class PresentationsTest < ApplicationSystemTestCase
     page.refresh
 
     assert_field "Markdown source", with: "# Offline edit", wait: 5
+    assert_selector '[data-autosave-target="status"]', exact_text: "Recovered unsent changes", wait: 5
     assert_selector '[data-autosave-target="status"]', exact_text: "Saved", wait: 5
     assert_includes presentation.reload.source, "# Offline edit"
   end
