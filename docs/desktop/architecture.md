@@ -62,7 +62,7 @@ flowchart TB
 | Block | Responsibility | Notes |
 |---|---|---|
 | Shell (Tauri) | Window lifecycle, native menus (File / Edit / View / Presentation / Window / Help / About), single-instance, updater | ADR-002 |
-| Webview frontend | Reused CodeMirror/Stimulus editor controllers; library shell with all/document/presentation views, rendered card previews, document graph, local file actions, and conflict UI | ADR-004 |
+| Webview frontend | Reused CodeMirror/Stimulus editor controllers; desktop library views with all/document/presentation browsing, rendered card previews, document graph, local file actions, and conflict UI. Library and final-preview parity with Rails remain open in issue #126 | ADR-004 |
 | Transport adapter | Routes the controllers' existing JSON calls to Rust commands or to webview-local handlers; owns the hash handshake | [transport-adapter.md](transport-adapter.md) |
 | Renderer worker | Runs the shared Markdown block renderer and desktop preview projection off the main thread. The editor map and parsed slide structure come from shared JS exported to Rails through MiniRacer. Mermaid itself runs in the webview (needs a DOM). Final Rails and desktop projection markup still use separate paths | ADR-007 |
 | Commands | Thin, validated entry points; each is on the capability allowlist | [security.md](security.md) |

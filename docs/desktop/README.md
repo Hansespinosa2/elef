@@ -22,7 +22,7 @@ The elicited preferences list (batch-elicit-me, 4 batches) is the brief; these d
 | 001 | Folders on disk are the source of truth | Accepted | — |
 | 002 | Tauri shell | Proposed | S2 + S3 + S4 pass |
 | 003 | File-backed Rust backend, no bundled Rails | Proposed | S1 passes |
-| 004 | Editor JS reuse via transport adapter | Proposed | 002 + 003 accepted; S1 completes the adapter spec |
+| 004 | Editor JS reuse via transport adapter | Proposed | 002 + 003 accepted; S1 and issue #126 parity gate pass |
 | 005 | Defer revisions and lineage behind flags | Accepted | — |
 | 006 | Layered, assume-breach security model | Accepted | S5 hostile corpus passes on macOS + Linux; hostile fixtures green in CI |
 | 007 | One shared JS renderer | Proposed | S1 renderer items pass |

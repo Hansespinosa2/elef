@@ -9,7 +9,7 @@ One decision per record. Read the relevant ADR before re-litigating anything.
 | [001](001-folders-as-source-of-truth.md) | Folders on disk are the source of truth | Accepted | high | — |
 | [002](002-tauri-shell.md) | Tauri as the desktop shell | Proposed | medium | S2 + S3 + S4 pass |
 | [003](003-file-backend-no-bundled-rails.md) | File-backed Rust backend; no bundled Rails | Proposed | high | S1 passes |
-| [004](004-frontend-reuse-transport-adapter.md) | Reuse editor JS via a transport adapter | Proposed | medium-high | 002 + 003 accepted; S1 completes the adapter spec |
+| [004](004-frontend-reuse-transport-adapter.md) | Reuse editor JS via a transport adapter | Proposed | medium-high | 002 + 003 accepted; S1 and issue #126 parity gate pass |
 | [005](005-defer-revisions-lineage.md) | Defer revisions and lineage behind flags | Accepted | high | — |
 | [006](006-security-model.md) | Layered, assume-breach security model | Accepted | medium | S5 hostile corpus passes on macOS + Linux; hostile fixtures green |
 | [007](007-single-shared-js-renderer.md) | One shared JS renderer for Rails and desktop | Proposed | medium | S1 renderer items pass |
