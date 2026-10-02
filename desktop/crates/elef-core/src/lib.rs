@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tempfile::Builder as TempFileBuilder;
 use thiserror::Error;
+use unicode_casefold::UnicodeCaseFold;
 use unicode_normalization::UnicodeNormalization;
 use uuid::Uuid;
 use zip::write::SimpleFileOptions;
@@ -2225,7 +2226,12 @@ fn validate_deck_name(name: &str) -> Result<(), CoreError> {
 }
 
 fn normalized_name(name: &str) -> String {
-    name.nfc().collect::<String>().to_lowercase()
+    name.nfc()
+        .collect::<String>()
+        .case_fold()
+        .collect::<String>()
+        .nfc()
+        .collect()
 }
 
 fn name_warnings(name: &str) -> Vec<String> {
@@ -2846,24 +2852,24 @@ mod tests {
     }
 
     #[test]
-    fn archive_import_reports_case_normalized_name_collision() {
+    fn archive_import_reports_unicode_casefold_name_collision() {
         let (temp, library) = library();
-        let existing = write_deck(temp.path(), "Talk", &[("presentation.md", "# Existing")]);
+        let existing = write_deck(temp.path(), "Straße", &[("presentation.md", "# Existing")]);
         library.list_decks().unwrap();
 
         let options = SimpleFileOptions::default()
             .compression_method(CompressionMethod::Deflated)
             .last_modified_time(DateTime::default());
         let mut zip = ZipWriter::new(Cursor::new(Vec::new()));
-        zip.start_file("talk/presentation.md", options).unwrap();
+        zip.start_file("STRASSE/presentation.md", options).unwrap();
         zip.write_all(b"# Imported").unwrap();
-        let archive_path = temp.path().join("talk.elef");
+        let archive_path = temp.path().join("strasse.elef");
         fs::write(&archive_path, zip.finish().unwrap().into_inner()).unwrap();
 
         let imported = library.import_elef(&archive_path, None).unwrap();
 
         assert!(imported.name_collision);
-        assert_eq!(imported.deck.name, "talk (2)");
+        assert_eq!(imported.deck.name, "STRASSE (2)");
         assert!(existing.join("presentation.md").exists());
     }
 
@@ -3089,6 +3095,8 @@ mod tests {
         assert!(validate_deck_name("with/slash").is_err());
         assert_eq!(normalized_name("Cafe\u{301}"), normalized_name("Café"));
         assert_eq!(normalized_name("My Deck"), normalized_name("my deck"));
+        assert_eq!(normalized_name("Straße"), normalized_name("STRASSE"));
+        assert_eq!(normalized_name("ΟΣ"), normalized_name("ος"));
     }
 
     #[test]
