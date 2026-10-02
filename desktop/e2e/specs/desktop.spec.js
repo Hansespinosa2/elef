@@ -170,6 +170,7 @@ class DesktopEditorUi {
       return {
         scriptRan: window.__elefHostileScriptRan === true,
         eventRan: window.__elefHostileEventRan === true,
+        frameRan: window.__elefHostileFrameRan === true,
         inlineHandlers: elements.flatMap(element => [...element.attributes]).filter(attribute => /^on/i.test(attribute.name)).map(attribute => attribute.name),
         executableElements: elements.filter(element => ["SCRIPT", "IFRAME", "OBJECT", "EMBED", "SVG"].includes(element.tagName)).map(element => element.tagName),
         unsafeLinks: links.map(link => link.getAttribute("href")).filter(href => /^(?:javascript|data|vbscript):/i.test(href || "")),
