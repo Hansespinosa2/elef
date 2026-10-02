@@ -354,15 +354,37 @@ class DesktopLibraryUi {
   }
 
   async assertCardPreview(title, text) {
-    await browser.waitUntil(async () => browser.execute((deckTitle, previewText) => {
+    const findPreview = (deckTitle, previewText) => {
       const button = [...document.querySelectorAll(".deck-open")]
         .find(element => element.getAttribute("aria-label") === `Open ${deckTitle}`)
       const preview = button?.closest(".deck-card")?.querySelector(".deck-card-preview")
       return preview?.dataset.previewState === "ready" && preview.textContent.includes(previewText)
-    }, title, text), {
-      timeout: 10_000,
-      timeoutMsg: `The ${title} library preview did not render its Markdown`
-    })
+    }
+    try {
+      await browser.waitUntil(async () => browser.execute(findPreview, title, text), {
+        timeout: 10_000,
+        timeoutMsg: `The ${title} library preview did not render its Markdown`
+      })
+    } catch (error) {
+      const diagnostic = await browser.execute(async (deckTitle, previewText) => {
+        const button = [...document.querySelectorAll(".deck-open")]
+          .find(element => element.getAttribute("aria-label") === `Open ${deckTitle}`)
+        const preview = button?.closest(".deck-card")?.querySelector(".deck-card-preview")
+        try {
+          const deck = await window.__TAURI__.core.invoke("read_deck_preview", { id: preview?.dataset.deckId })
+          return {
+            previewState: preview?.dataset.previewState || "missing",
+            previewText: preview?.textContent?.slice(0, 240) || "",
+            sourceHasExpectedText: deck.source.includes(previewText),
+            sourceHasLocalImage: deck.source.includes("elef-asset:"),
+            sourceFile: deck.source_file
+          }
+        } catch (readError) {
+          return { previewState: preview?.dataset.previewState || "missing", readError: readError?.code || "unknown" }
+        }
+      }, title, text)
+      throw new Error(`${error.message}; desktop preview diagnostic: ${JSON.stringify(diagnostic)}`)
+    }
   }
 
   async searchFor(query) {
