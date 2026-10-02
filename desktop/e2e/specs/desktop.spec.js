@@ -353,6 +353,40 @@ class DesktopLibraryUi {
     }
   }
 
+  async assertCardPreview(title, text) {
+    await browser.waitUntil(async () => browser.execute((deckTitle, previewText) => {
+      const button = [...document.querySelectorAll(".deck-open")]
+        .find(element => element.getAttribute("aria-label") === `Open ${deckTitle}`)
+      const preview = button?.closest(".deck-card")?.querySelector(".deck-card-preview")
+      return preview?.dataset.previewState === "ready" && preview.textContent.includes(previewText)
+    }, title, text), {
+      timeout: 10_000,
+      timeoutMsg: `The ${title} library preview did not render its Markdown`
+    })
+  }
+
+  async searchFor(query) {
+    await $("#deck-search").setValue(query)
+  }
+
+  async assertSearchResults(title) {
+    await browser.waitUntil(async () => (await $$(".deck-card")).length === 1, {
+      timeout: 10_000,
+      timeoutMsg: "The library search did not narrow to one deck"
+    })
+    if (!(await $(`[aria-label='Open ${title}']`).isDisplayed())) {
+      throw new Error(`The library search did not show ${title}`)
+    }
+  }
+
+  async assertNoSearchResults() {
+    await browser.waitUntil(async () => (await $(".no-results").getText()) === "No decks match this search.", {
+      timeout: 10_000,
+      timeoutMsg: "The library did not show its empty search result"
+    })
+    if ((await $$(".deck-card")).length !== 0) throw new Error("The empty search still shows deck cards")
+  }
+
   async showPresentations() {
     await $("#show-presentations").click()
   }

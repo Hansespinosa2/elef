@@ -263,6 +263,27 @@ class WebLibraryUi {
     await expect(this.page.locator("article.library-card")).toHaveCount(5)
   }
 
+  async assertCardPreview(title, text) {
+    const card = this.page.locator("article.library-card").filter({
+      has: this.page.getByRole("heading", { name: title, exact: true })
+    })
+    await expect(card.locator(".library-card-preview")).toContainText(text)
+  }
+
+  async searchFor(query) {
+    await this.page.locator("#library-search").fill(query)
+  }
+
+  async assertSearchResults(title) {
+    await expect(this.page.locator("article.library-card:visible")).toHaveCount(1)
+    await expect(this.page.getByRole("heading", { name: title, exact: true })).toBeVisible()
+  }
+
+  async assertNoSearchResults() {
+    await expect(this.page.locator("article.library-card:visible")).toHaveCount(0)
+    await expect(this.page.getByRole("status").filter({ hasText: "No decks match this search." })).toBeVisible()
+  }
+
   async showPresentations() {
     await this.page.getByRole("link", { name: "Presentations", exact: true }).click()
   }

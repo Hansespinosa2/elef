@@ -1,6 +1,13 @@
 export async function libraryAndGraphWorkflow(ui) {
   await ui.openLibrary()
   await ui.assertAllWorkKindsVisible("E2E seed", "E2E document")
+  await ui.assertCardPreview("E2E seed", "Before E2E")
+  await ui.searchFor("e2e SEED")
+  await ui.assertSearchResults("E2E seed")
+  await ui.searchFor("no matching deck")
+  await ui.assertNoSearchResults()
+  await ui.searchFor("")
+  await ui.assertAllWorkKindsVisible("E2E seed", "E2E document")
   await ui.showPresentations()
   await ui.assertPresentationsOnly("E2E seed", "E2E document")
   await ui.showDocuments()

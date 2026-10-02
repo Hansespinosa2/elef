@@ -1173,6 +1173,13 @@ body.elef-app {
 
 .library-list { grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr)); }
 .library-card { display: flex; flex-direction: column; gap: 0.75rem; padding: 0.75rem; }
+.library-card[hidden] { display: none; }
+.library-browser-toolbar { display: flex; justify-content: flex-end; margin: 0 0 1rem; }
+.library-search-input {
+  background: var(--oradia-slate-950); border: 1px solid var(--oradia-slate-700); border-radius: 0.6rem;
+  color: var(--oradia-ink); min-height: 2.5rem; padding: 0.45rem 0.7rem; width: min(100%, 22rem);
+}
+.library-no-results { background: var(--oradia-slate-900); border: 1px solid var(--oradia-slate-700); border-radius: 0.75rem; color: var(--oradia-muted); padding: 1rem; }
 .library-card-media { position: relative; }
 .library-card-preview { display: block; }
 .library-preview { aspect-ratio: 16 / 9; background: var(--oradia-slate-950); border-radius: 0.55rem; overflow: hidden; position: relative; width: 100%; }

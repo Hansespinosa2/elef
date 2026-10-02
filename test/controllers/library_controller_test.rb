@@ -19,6 +19,17 @@ class LibraryControllerTest < ActionDispatch::IntegrationTest
     assert_select "a[href*='type=']", count: 0
   end
 
+  test "library search is available on every collection view" do
+    [root_path, documents_path, presentations_path].each do |path|
+      get path
+
+      assert_response :success
+      assert_select 'section.library-browser[data-controller="library-search"]', 1
+      assert_select 'input#library-search[type="search"][data-action="input->library-search#filter"]', 1
+      assert_select 'p[data-library-search-target="noResults"][hidden]', text: "No decks match this search.", count: 1
+    end
+  end
+
   test "canonical library tabs link to all, documents, and presentations collection paths" do
     get root_path
     assert_response :success

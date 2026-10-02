@@ -28,6 +28,12 @@
   <% end %>
 </section>
 
+<section class="library-browser" data-controller="library-search" aria-label="Browse your library">
+  <div class="library-browser-toolbar">
+    <label class="sr-only" for="library-search">Search decks</label>
+    <input id="library-search" class="library-search-input" type="search" placeholder="Search decks" autocomplete="off" data-action="input->library-search#filter">
+  </div>
+
 <nav class="library-tabs mb-6 flex flex-wrap gap-2" aria-label="Library views">
   <%= link_to "All", root_path, class: "library-tab #{current_filter == 'all' ? 'is-active' : ''}", aria: { current: current_filter == "all" ? "page" : nil } %>
   <%= link_to "Documents", documents_path, class: "library-tab #{current_filter == 'documents' ? 'is-active' : ''}", aria: { current: current_filter == "documents" ? "page" : nil } %>
@@ -51,4 +57,6 @@
       <%= button_to "Create your first #{current_filter == "documents" ? "document" : "presentation"}", work_start_path(current_filter == "documents" ? "document" : "presentation"), method: :post, class: "button primary inline-flex min-h-10 cursor-pointer items-center gap-1 rounded-full border border-[#6d4aff] bg-[#6d4aff] px-4 py-2 font-bold text-white no-underline hover:brightness-95" %>
     </div>
   <% end %>
+</section>
+<p class="library-no-results" data-library-search-target="noResults" role="status" hidden>No decks match this search.</p>
 </section>
