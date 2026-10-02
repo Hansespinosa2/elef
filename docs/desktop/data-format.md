@@ -66,7 +66,7 @@ Mirrors Obsidian's `.obsidian/`.
 
 ## Cross-platform rules
 
-- **Case and Unicode:** collision keys apply NFC normalization, full default Unicode case folding (non-Turkic), then NFC normalization again. Import warns on equivalent names, including case-only (`My Deck` vs `my deck`), canonically equivalent spellings (decomposed `Cafe` + U+0301 vs precomposed `Café`), and full-fold equivalents (`Straße` vs `STRASSE`).
+- **Case and Unicode:** collision keys apply NFC normalization, full default Unicode 16.0 case folding (non-Turkic), then NFC normalization again. Import warns on equivalent names, including case-only (`My Deck` vs `my deck`), canonically equivalent spellings (decomposed `Cafe` + U+0301 vs precomposed `Café`), and full-fold equivalents (`Straße` vs `STRASSE`).
 - **Names:** warn on characters and patterns that break elsewhere (`/ \ : * ? " < > |`, trailing dot or space, reserved device names). Warn, don't rename.
 - **Paths:** `/` separators in stored references; no drive letters; UTF-8.
 - **Atomicity:** every source write is temp file + flush + rename in the same directory, so a crash never leaves a half-written source file (ADR-008).

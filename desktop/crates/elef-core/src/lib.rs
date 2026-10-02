@@ -5,11 +5,11 @@ use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
+use caseless::default_case_fold_str;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tempfile::Builder as TempFileBuilder;
 use thiserror::Error;
-use unicode_casefold::UnicodeCaseFold;
 use unicode_normalization::UnicodeNormalization;
 use uuid::Uuid;
 use zip::write::SimpleFileOptions;
@@ -2226,10 +2226,7 @@ fn validate_deck_name(name: &str) -> Result<(), CoreError> {
 }
 
 fn normalized_name(name: &str) -> String {
-    name.nfc()
-        .collect::<String>()
-        .case_fold()
-        .collect::<String>()
+    default_case_fold_str(&name.nfc().collect::<String>())
         .nfc()
         .collect()
 }
