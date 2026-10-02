@@ -1,6 +1,6 @@
 import { $, $$, browser } from "@wdio/globals"
 import { execFileSync, spawn } from "node:child_process"
-import { readFile, readdir, writeFile } from "node:fs/promises"
+import { readFile, writeFile } from "node:fs/promises"
 import path from "node:path"
 import { editAndPreviewWorkflow } from "../scenarios/edit-and-preview.js"
 import { libraryAndGraphWorkflow } from "../scenarios/library-and-graph.js"
@@ -301,9 +301,16 @@ class DesktopLibraryUi {
   async openElefArchive() {
     await this.openLibrary()
     await browser.execute(() => window.focus())
-    const socketsBeforeLaunch = await readdir("/tmp")
-      .then(names => names.filter(name => name.endsWith("_si.sock")))
-      .catch(() => [])
+    let singleInstanceOwner = "platform transport not inspected"
+    if (process.platform === "linux") {
+      const busNames = execFileSync("busctl", ["--user", "list", "--no-legend"], { encoding: "utf8" })
+      singleInstanceOwner = busNames
+        .split("\n")
+        .find(line => line.startsWith("org.com_elef_desktop.SingleInstance ")) || "not registered"
+      if (singleInstanceOwner === "not registered") {
+        throw new Error("The running desktop app did not register its Linux single-instance D-Bus name")
+      }
+    }
     const launched = spawn(process.env.ELEF_E2E_APP_BINARY, [process.env.ELEF_E2E_IMPORT_ARCHIVE], {
       stdio: ["ignore", "pipe", "pipe"]
     })
@@ -335,10 +342,7 @@ class DesktopLibraryUi {
         })).catch(() => ({ unavailable: true }))
         const pending = await browser.execute(async () => window.__TAURI__?.core?.invoke("pending_open_elef_count"))
           .catch(() => "unavailable")
-        const socketsAfterLaunch = await readdir("/tmp")
-          .then(names => names.filter(name => name.endsWith("_si.sock")))
-          .catch(() => [])
-        throw new Error(`${error.message}; launch exit: ${JSON.stringify(launchExit)}; pending .elef files: ${pending}; library state: ${JSON.stringify(state)}; single-instance sockets before/after: ${JSON.stringify([socketsBeforeLaunch, socketsAfterLaunch])}; second-process output: ${JSON.stringify(launchOutput)}`)
+        throw new Error(`${error.message}; launch exit: ${JSON.stringify(launchExit)}; pending .elef files: ${pending}; library state: ${JSON.stringify(state)}; single-instance owner before launch: ${singleInstanceOwner}; second-process output: ${JSON.stringify(launchOutput)}`)
       }
       await card.click()
       await browser.waitUntil(async () => (await $("#deck-title").getText()) === "E2E archive seed", {

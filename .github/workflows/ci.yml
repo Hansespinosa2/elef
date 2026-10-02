@@ -167,7 +167,7 @@ jobs:
       - name: Install Linux desktop build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --yes build-essential curl file libayatana-appindicator3-dev libdbus-1-dev libgtk-3-dev librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev openbox patchelf wget xdotool xvfb zip
+          sudo apt-get install --yes build-essential curl dbus-daemon file libayatana-appindicator3-dev libdbus-1-dev libgtk-3-dev librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev openbox patchelf wget xdotool xvfb zip
       - name: Install frontend dependencies
         run: npm ci --prefix desktop/frontend
       - name: Install shared scenario dependencies
@@ -213,7 +213,8 @@ jobs:
           CI: "true"
           RAILS_ENV: test
           ELEF_USE_SQLITE: "1"
-        run: xvfb-run --auto-servernum bash -c 'openbox --sm-disable >/tmp/elef-e2e-openbox.log 2>&1 & sleep 1; npm test --prefix desktop/e2e'
+        # Tauri's Linux single-instance plugin uses a user D-Bus name.
+        run: dbus-run-session -- xvfb-run --auto-servernum bash -c 'openbox --sm-disable >/tmp/elef-e2e-openbox.log 2>&1 & sleep 1; npm test --prefix desktop/e2e'
       - name: Build Linux desktop package
         run: npm run tauri:build --prefix desktop/frontend
 
