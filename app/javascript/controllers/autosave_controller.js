@@ -60,6 +60,11 @@ export default class extends Controller {
 
     this.clearSaveTimer()
     const snapshot = this.snapshot()
+    if (this.conflictPayload) {
+      this.setStatus("Resolve the external edit before saving", "conflict")
+      this.persistLocalDraft(snapshot)
+      return
+    }
     if (!this.saving && !this.saveFailed && this.savedSnapshot === snapshot) {
       this.setStatus("Saved")
       this.clearLocalDraft()
@@ -115,7 +120,7 @@ export default class extends Controller {
     this.clearSaveTimer()
     this.clearLocalDraft()
     this.conflictPayload = null
-    this.savedSnapshot = null
+    this.savedSnapshot = this.snapshot()
     this.saveFailed = false
     if (this.hasConflictTarget) this.conflictTarget.hidden = true
     this.element.dispatchEvent(new CustomEvent("autosave:saved", { detail: { snapshot: this.snapshot(), payload: current } }))

@@ -130,6 +130,24 @@ class WebEditorUi {
   }
 
   async useDiskVersion() {
+    await this.page.evaluate(() => {
+      const form = document.querySelector('form[data-controller~="autosave"]')
+      const controller = form && Stimulus.getControllerForElementAndIdentifier(form, "autosave")
+      if (!controller) return
+      const discardLocal = controller.discardLocal.bind(controller)
+      window.__elefDiscardTrace = []
+      controller.discardLocal = (...args) => {
+        window.__elefDiscardTrace.push({ phase: "entered", hidden: form.querySelector('[data-autosave-target="conflict"]')?.hidden })
+        const result = discardLocal(...args)
+        window.__elefDiscardTrace.push({
+          phase: "returned",
+          hidden: form.querySelector('[data-autosave-target="conflict"]')?.hidden,
+          hasConflict: Boolean(controller.conflictPayload),
+          status: form.querySelector('[data-autosave-target="status"]')?.textContent
+        })
+        return result
+      }
+    })
     await this.page.locator('[data-action="click->autosave#discardLocal"]').click()
     try {
       await expect(this.page.locator('[data-autosave-target="conflict"]')).toBeHidden()
@@ -143,6 +161,7 @@ class WebEditorUi {
           status: form?.querySelector('[data-autosave-target="status"]')?.textContent,
           action: form?.querySelector('[data-action*="discardLocal"]')?.getAttribute("data-action"),
           controllerConnected: Boolean(controller),
+          discardTrace: window.__elefDiscardTrace,
           conflictPayload: controller?.conflictPayload ? {
             currentPresent: Boolean(controller.conflictPayload.current),
             currentSource: controller.conflictPayload.current?.source

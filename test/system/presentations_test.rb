@@ -397,6 +397,28 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_includes presentation.revisions.recoveries.order(:id).last.source, "# Local tab"
   end
 
+  test "discarding a conflicted draft accepts the disk baseline without another save" do
+    presentation = Presentation.create!(title: "Discard conflict", source: "# Initial")
+    external_source = "# External version\n\nKeep the disk bytes.\n"
+
+    visit edit_presentation_path(presentation)
+    hold_autosaves
+    fill_in "Markdown source", with: "# Local draft"
+    wait_for_autosave_request(0)
+    presentation.update!(source: external_source)
+    page.execute_script("window.autosaveRequests[0].release()")
+
+    assert_selector "[data-autosave-target='conflict']", visible: true
+    click_button "Discard local draft"
+    assert_no_selector "[data-autosave-target='conflict']", visible: true
+    assert_field "Markdown source", with: external_source
+    assert_selector "[data-autosave-target='status']", exact_text: "Saved"
+
+    page.evaluate_async_script("window.setTimeout(() => arguments[0](), 1200)")
+    assert_equal 1, page.evaluate_script("window.autosaveRequests.length")
+    assert_equal external_source, presentation.reload.source
+  end
+
   test "refresh recovers an unsent draft from browser persistence" do
     presentation = Presentation.create!(title: "Refresh recovery", source: "# Initial")
     visit edit_presentation_path(presentation)
