@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { execFileSync, spawnSync } from "node:child_process"
-import { access, mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises"
+import { access, chmod, mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
@@ -69,6 +69,13 @@ async function hashTree(root, relative = "") {
     }
   }
   return result
+}
+
+async function makeDirectoriesWritable(root) {
+  await chmod(root, 0o700)
+  for (const entry of await readdir(root, { withFileTypes: true })) {
+    if (entry.isDirectory()) await makeDirectoriesWritable(path.join(root, entry.name))
+  }
 }
 
 function runRails(code) {
@@ -191,5 +198,6 @@ try {
       // Preserve the browser/test failure while making fixture cleanup best-effort.
     }
   }
+  await makeDirectoriesWritable(temporaryRoot)
   await rm(temporaryRoot, { recursive: true, force: true })
 }
