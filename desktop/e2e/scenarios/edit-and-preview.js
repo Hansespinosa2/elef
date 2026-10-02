@@ -10,7 +10,12 @@ export async function editAndPreviewWorkflow(ui) {
   await ui.waitForSource(SAVED_SOURCE)
   await ui.waitForSaved(SAVED_SOURCE)
   await undoRedoSessionWorkflow(ui, originalSource, SAVED_SOURCE)
-  await insertImageWorkflow(ui)
+  const sourceWithImage = await insertImageWorkflow(ui)
   await ui.showVisualMode()
   await ui.waitForPreview("The editor autosaved this text.")
+  const visualSource = sourceWithImage.replace("The editor autosaved this text.", "The visual editor changed this text.")
+  await ui.editVisualText("The editor autosaved this text.", "The visual editor changed this text.")
+  await ui.waitForSource(visualSource)
+  await ui.waitForSaved(visualSource)
+  await ui.waitForPreview("The visual editor changed this text.")
 }

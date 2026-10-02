@@ -155,6 +155,22 @@ class DesktopEditorUi {
     }
   }
 
+  async editVisualText(currentText, replacementText) {
+    const edited = await browser.execute(({ currentText, replacementText }) => {
+      const block = [...document.querySelectorAll("#desktop-preview .slide-block")]
+        .find(candidate => candidate.textContent.trim() === currentText)
+      if (!block || block.getAttribute("contenteditable") !== "true") return false
+      block.focus()
+      block.textContent = replacementText
+      return block.dispatchEvent(new InputEvent("input", {
+        bubbles: true,
+        inputType: "insertText",
+        data: replacementText
+      }))
+    }, { currentText, replacementText })
+    if (!edited) throw new Error(`The desktop visual editor did not accept the text ${JSON.stringify(currentText)}`)
+  }
+
   async writeExternalSource(source) {
     await writeFile(path.join(process.env.ELEF_E2E_LIBRARY_ROOT, "E2E conflict", "presentation.md"), source)
   }

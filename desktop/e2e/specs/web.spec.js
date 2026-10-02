@@ -62,6 +62,22 @@ class WebEditorUi {
     await this.page.locator('[data-editor-target="visualButton"]').click()
   }
 
+  async editVisualText(currentText, replacementText) {
+    const edited = await this.page.evaluate(({ currentText, replacementText }) => {
+      const block = [...document.querySelectorAll(".editor-projection .slide-block")]
+        .find(candidate => candidate.textContent.trim() === currentText)
+      if (!block || block.getAttribute("contenteditable") !== "true") return false
+      block.focus()
+      block.textContent = replacementText
+      return block.dispatchEvent(new InputEvent("input", {
+        bubbles: true,
+        inputType: "insertText",
+        data: replacementText
+      }))
+    }, { currentText, replacementText })
+    expect(edited).toBe(true)
+  }
+
   async insertImage({ bytes, filename, mimeType }) {
     await this.page.locator(".source-field").evaluate(field => {
       const editor = field.editorController

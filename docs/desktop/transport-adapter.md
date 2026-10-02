@@ -5,7 +5,7 @@ Status: draft v3 (2026-10-01). The highest-leverage seam in the desktop app. Imp
 ## 1. What the codebase does today (verified 2026-09-30 at `2b668f0`)
 
 - The editor's `fetch()`-based controllers (autosave, preview, media/upload, pptx-export, command-palette, bug-report) request `Accept: application/json` and parse JSON. The adapter does **not** reproduce Turbo Stream responses: same JSON shape in, same JSON shape out, whichever backend answered.
-- The preview endpoint returns JSON containing rendered HTML (`{ html, warnings, editor_map, ... }`). Rails and desktop use the same JS Markdown block renderer. Rails document/slide structure and desktop preview structure/editor maps are still separate, so full preview parity is not established.
+- The preview endpoint returns JSON containing rendered HTML (`{ html, warnings, editor_map, ... }`). Rails and desktop use the same JS Markdown block renderer, slide/document structure and editor-map builder. Rails partials/models and the desktop worker still assemble final projection markup separately, so full rendered preview parity is not established.
 - The editor boots inside a server-rendered ERB host page (`app/views/works/_form.html.erb`): `data-controller` attributes, `data-editor-initial-source-value`, `data-authoring-registry` JSON, document-link titles. Desktop reproduces the editor contract in a **static host-page template** (no ERB at runtime); the Rails library views are not reused.
 - JS is bundled via importmap (CodeMirror 6.x, katex pinned by the gem). Desktop bundles the same pinned set with esbuild/vite. After cutover the npm KaTeX inside the renderer bundle is the only KaTeX in the rendering path.
 - Turbo Drive handles web navigation. Desktop uses shell view-switching (library ⇄ editor); Turbo does not ship. **S1** confirms no controller depends on Turbo events.
@@ -35,7 +35,7 @@ Status: draft v3 (2026-10-01). The highest-leverage seam in the desktop app. Imp
 | `…/history`, `…/restore`, `…/publish`, `…/fork`, server `…/export` | — | — | behind flags or replaced (export → `.elef`) | — | no |
 | `…/present`, `…/print`, `…/pptx` | desktop presentation view / OS print dialog / — | — | presentation mode navigates the rendered slides; print uses the rendered preview and native dialog; PPTX remains out of v1 | — | shipped / shipped / no |
 
-The implemented subset is library scan/open/create/rename/delete, source save, portable settings and authoring registries, content-addressed media upload/read, worker preview, rendered print/presentation flows, and `.elef` import/export. The desktop library shell is custom rather than the Rails library views. Remaining web-only endpoints and full rendered/document-graph parity are not implemented.
+The implemented subset is library scan/open/create/rename/delete, source save, portable settings and authoring registries, content-addressed media upload/read, worker preview, rendered print/presentation flows, and `.elef` import/export. The desktop library shell is custom rather than the Rails library views; the shared graph flow is covered by the cross-runner scenario. Remaining web-only endpoints and final preview-markup parity are not implemented.
 
 ## 4. Library-shell commands (new; no Rails equivalent, so no parity test)
 
@@ -56,4 +56,4 @@ The editor table above omits the new library shell. These need the same capabili
 
 ## 5. Open items (all S1)
 
-Remaining S1 work: prove full structure and editor-map parity; broaden fixtures to all Rails renderer consumers and presentation constructs; measure renderer limits/latency; run MiniRacer on macOS arm64 and under production Puma thread/fork configurations; and complete real-webview sanitizer/CSP checks. The static host page, asset URL scheme, custom registry storage and the preview DOM sink are implemented and documented above.
+Remaining S1 work: build a normalized final-projection fixture gate across Rails renderer consumers and desktop presentation constructs; measure renderer limits/latency; run MiniRacer on macOS arm64 and under production Puma thread/fork configurations; and complete real-webview sanitizer/CSP checks. Rails and desktop now call the same structure/editor-map functions, and Rails contract tests exercise them through MiniRacer. The static host page, asset URL scheme, custom registry storage and the preview DOM sink are implemented and documented above.

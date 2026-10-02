@@ -11,4 +11,5 @@ export async function insertImageWorkflow(ui) {
   await ui.waitForSource(source)
   await ui.showVisualMode()
   await ui.waitForImage(PIXEL_PNG_DIGEST)
+  return source
 }
