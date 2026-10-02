@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core"
 import builtInRegistry from "./default-authoring-registry.json"
+import { mergeAuthoringRegistryEntries } from "./registry-merge.js"
 import { setAuthoringRegistryFor } from "controllers/authoring_registry"
 
 const field = document.querySelector("#desktop-editor-field")
@@ -21,12 +22,11 @@ export async function loadDesktopAuthoringRegistry() {
   } catch (_error) {
     // The editor can start before a library is selected; built-ins still work.
   }
-  const byId = new Map(builtInRegistry.map((entry) => [String(entry.id), entry]))
-  for (const entry of [...(custom.snippets || []), ...(custom.math_shortcuts || [])]) {
-    if (!entry || entry.built_in === true || (typeof entry.id !== "string" && typeof entry.id !== "number")) continue
-    byId.set(String(entry.id), entry)
-  }
-  const registry = [...byId.values()]
+  const registry = mergeAuthoringRegistryEntries(
+    builtInRegistry,
+    custom.snippets || [],
+    custom.math_shortcuts || []
+  )
   apply(registry)
   return registry
 }
