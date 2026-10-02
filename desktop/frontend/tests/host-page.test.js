@@ -13,6 +13,10 @@ test("desktop host page provides every element referenced by the app shell", () 
   assert.deepEqual(missing, [])
 })
 
+test("the shell presents itself as Elef Desktop rather than a preview build", () => {
+  assert.match(document.querySelector(".app-version").textContent, /^Elef Desktop · v\d/)
+})
+
 test("the host starts in source mode and gates visual editing until the local preview renders", () => {
   const sourceForm = document.querySelector("#desktop-editor-form")
   const sourceMode = document.querySelector("#source-mode")
