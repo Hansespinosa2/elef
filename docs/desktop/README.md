@@ -24,7 +24,7 @@ The elicited preferences list (batch-elicit-me, 4 batches) is the brief; these d
 | 003 | File-backed Rust backend, no bundled Rails | Proposed | S1 passes |
 | 004 | Editor JS reuse via transport adapter | Proposed | 002 + 003 accepted; S1 completes the adapter spec |
 | 005 | Defer revisions and lineage behind flags | Accepted | — |
-| 006 | Layered, assume-breach security model | Proposed | S5 passes; hostile fixtures green in CI |
+| 006 | Layered, assume-breach security model | Accepted | S5 hostile corpus passes on macOS + Linux; hostile fixtures green in CI |
 | 007 | One shared JS renderer | Proposed | S1 renderer items pass |
 | 008 | Atomic writes, fingerprint checks, conflict UI | Accepted | — |
 | 009 | Distribution, signed updates, key custody | Proposed | S3 + S4 pass; key custody performed |

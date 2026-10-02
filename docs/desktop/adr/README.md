@@ -11,7 +11,7 @@ One decision per record. Read the relevant ADR before re-litigating anything.
 | [003](003-file-backend-no-bundled-rails.md) | File-backed Rust backend; no bundled Rails | Proposed | high | S1 passes |
 | [004](004-frontend-reuse-transport-adapter.md) | Reuse editor JS via a transport adapter | Proposed | medium-high | 002 + 003 accepted; S1 completes the adapter spec |
 | [005](005-defer-revisions-lineage.md) | Defer revisions and lineage behind flags | Accepted | high | — |
-| [006](006-security-model.md) | Layered, assume-breach security model | Proposed | medium | S5 passes; hostile fixtures green |
+| [006](006-security-model.md) | Layered, assume-breach security model | Accepted | medium | S5 hostile corpus passes on macOS + Linux; hostile fixtures green |
 | [007](007-single-shared-js-renderer.md) | One shared JS renderer for Rails and desktop | Proposed | medium | S1 renderer items pass |
 | [008](008-safe-writes-and-conflict-detection.md) | Atomic writes, fingerprint checks, conflict UI | Accepted | high | — |
 | [009](009-distribution-and-update-channel.md) | GitHub Releases, signed updater artifacts, key custody | Proposed | medium | S3 + S4 pass; key custody performed |

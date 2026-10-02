@@ -1,10 +1,9 @@
 # ADR-006: Defense-in-depth security model that assumes breach
 
-- Status: **Proposed**
-- Date: 2026-09-30 (revised 2026-10-01: detail moved to [security.md](../security.md))
+- Status: **Accepted**
+- Date: 2026-09-30 (accepted 2026-10-02; detail moved to [security.md](../security.md))
 - Decider: Andres
-- Confidence: medium (the central claim — hostile content cannot reach IPC — is unverified until S5)
-- Accepted when: spike S5 passes on macOS and Linux and the hostile fixtures run green in CI
+- Confidence: medium (the enumerated hostile corpus passed on macOS and Linux; this does not prove arbitrary hostile content cannot reach IPC)
 
 ## Context
 
@@ -16,7 +15,7 @@ The web app's threat model doesn't transfer. On desktop the webview has IPC to a
 - **Sandboxed iframe as the IPC boundary.** Rejected as a *sole* defense: Tauri advisories describe iframes reaching IPC, and on Linux iframes cannot be told apart from windows ([security.md](../security.md) §5).
 - **Layered controls where each layer assumes the previous one failed** (chosen).
 
-## Decision (proposed)
+## Decision
 
 Adopt the layered model in [security.md](../security.md):
 1. Renderer sanitization with the `SAFE_URL` allowlist (the Ruby semantics, replicated).
@@ -41,3 +40,7 @@ No new Tauri command ships without a capability review (what it can touch, why t
 ## Revisit when
 
 S5 finds hostile content reaching IPC on a supported OS, the pinned Tauri version changes major/minor, or distribution widens beyond the owner's devices.
+
+## Dated amendment — 2026-10-02
+
+Accepted after the shared hostile-deck workflow passed against the real Tauri WebView on Linux and macOS in [CI run 37061835922](https://github.com/Hansespinosa2/elef/actions/runs/37061835922). The tested corpus and its limits are recorded in [S5 results](../spike-results/S5-hostile-deck-probe.md). This acceptance applies to the layered security decision and the planned probe corpus; it is not a claim that arbitrary hostile decks are harmless. Sanitizer timing characterization and broader adversarial coverage remain follow-up work.

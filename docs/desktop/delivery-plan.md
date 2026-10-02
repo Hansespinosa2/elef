@@ -80,10 +80,11 @@ Each is a day or less with a checkable exit. ADRs 002, 003, 006 and 007 are acce
 - AppImage builds, runs on Omarchy/Arch, and the update cycle works.
 - **Exit:** install → update → relaunch green on Arch.
 
-**S5 — Hostile-deck IPC probe (new)** (feeds ADR-006, [security.md](security.md))
+**S5 — Hostile-deck IPC probe** (feeds ADR-006, [security.md](security.md))
 - In a real Tauri build on macOS and Linux with the pinned Tauri version, open a deck engineered to attempt: invoking commands from rendered content, `fetch` to remote hosts, posting to the parent frame, loading remote and `data:` resources, and inline script. Confirm none succeed.
 - Find the tightest CSP that still works with CodeMirror and KaTeX; record it in security.md. Benchmark a second-pass sanitizer at the DOM sink.
-- **Exit:** every attempt neutralized on both OSes, or the failures become ADR-006 changes before M1.
+- **Runtime probe result:** the shared hostile-deck workflow exercises script, event-handler, frame, parent-message, remote-fetch, unsafe-link, and remote/data-media payloads in the real Tauri WebView on both CI operating systems. It also verifies the attempted `create_deck` IPC side effect is absent. The exact-SHA run and scope are recorded in [spike-results/S5-hostile-deck-probe.md](spike-results/S5-hostile-deck-probe.md).
+- **Exit:** every attack in the probe is neutralized on both OSes, or the failures become ADR-006 changes before M1. That runtime criterion passed; sanitizer timing characterization remains a follow-up measurement and is not represented as a security proof.
 
 ## 5. Human gates
 
