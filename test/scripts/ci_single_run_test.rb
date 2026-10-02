@@ -8,6 +8,7 @@ events = workflow["on"] || workflow[true]
 jobs = workflow.fetch("jobs")
 
 required_checks = %w[
+  desktop-fast
   scan_ruby
   scan_js
   test
@@ -20,7 +21,7 @@ required_checks = %w[
   development-smoke
 ]
 
-branch_push_checks = %w[desktop desktop-macos renderer-macos]
+branch_push_checks = %w[desktop-fast desktop desktop-macos renderer-macos]
 (required_checks - branch_push_checks).each do |job_name|
   job = jobs.fetch(job_name)
   abort "#{job_name} must run for pull requests and dispatch, but not branch pushes" unless
