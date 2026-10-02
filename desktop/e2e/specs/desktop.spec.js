@@ -555,6 +555,14 @@ describe("shared authoring scenarios", () => {
     await hostileDeckNeutralizedWorkflow(new DesktopEditorUi())
   })
 
+  it("edits, saves, and previews a deck in the desktop binary", async () => {
+    await editAndPreviewWorkflow(new DesktopEditorUi())
+    const form = await $("#desktop-editor-form")
+    if (await form.getAttribute("data-editor-mode") !== "visual") {
+      throw new Error("The editor did not switch into visual mode")
+    }
+  })
+
   it("runs the shared library and document graph flow", async () => {
     await libraryAndGraphWorkflow(new DesktopLibraryUi())
   })
@@ -577,14 +585,6 @@ describe("shared authoring scenarios", () => {
 
   it("imports a portable .elef opened by the running application", async () => {
     await new DesktopLibraryUi().openElefArchive()
-  })
-
-  it("edits, saves, and previews a deck in the desktop binary", async () => {
-    await editAndPreviewWorkflow(new DesktopEditorUi())
-    const form = await $("#desktop-editor-form")
-    if (await form.getAttribute("data-editor-mode") !== "visual") {
-      throw new Error("The editor did not switch into visual mode")
-    }
   })
 
   it("exports a portable .elef archive from the desktop command", async () => {
