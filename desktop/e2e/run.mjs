@@ -1,10 +1,10 @@
 import assert from "node:assert/strict"
 import { execFileSync, spawnSync } from "node:child_process"
-import { access, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises"
+import { access, mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
-import { randomUUID } from "node:crypto"
+import { createHash, randomUUID } from "node:crypto"
 import { PIXEL_PNG_MARKDOWN } from "./scenarios/media-fixture.js"
 
 const e2eRoot = path.dirname(fileURLToPath(import.meta.url))
@@ -16,6 +16,8 @@ const conflictDeck = path.join(libraryRoot, "E2E conflict")
 const hostileDeck = path.join(libraryRoot, "E2E hostile")
 const archiveFixture = path.join(temporaryRoot, "E2E archive seed")
 const importArchive = path.join(temporaryRoot, "E2E archive seed.elef")
+const exportArchive = path.join(temporaryRoot, "E2E seed exported.elef")
+const exportContents = path.join(temporaryRoot, "E2E seed exported")
 const expectedDesktopSource = `# Saved by shared scenario\n\nThe visual editor changed this text.\n\n${PIXEL_PNG_MARKDOWN}`
 // Web scenarios append the shared snippet and math inputs after edit/media.
 const expectedWebSource = `${expectedDesktopSource}\n**text**\n\n$$\n\\alpha\n$$\n`
@@ -47,7 +49,26 @@ const env = {
   ...process.env,
   ELEF_E2E_LIBRARY_ROOT: libraryRoot,
   ELEF_E2E_APP_BINARY: path.join(repoRoot, "desktop", "target", "debug", "elef-desktop"),
-  ELEF_E2E_IMPORT_ARCHIVE: importArchive
+  ELEF_E2E_IMPORT_ARCHIVE: importArchive,
+  ELEF_E2E_EXPORT_PATH: exportArchive,
+  ELEF_E2E_SEED_DECK_ID: "a3d0f020-6605-4f9e-a96d-d825ee4b13f1"
+}
+
+async function hashTree(root, relative = "") {
+  const entries = await readdir(path.join(root, relative), { withFileTypes: true })
+  const result = {}
+  for (const entry of entries) {
+    const entryPath = path.posix.join(relative, entry.name)
+    if (entry.isSymbolicLink()) throw new Error(`Unexpected symlink in .elef fixture: ${entryPath}`)
+    if (entry.isDirectory()) Object.assign(result, await hashTree(root, entryPath))
+    else if (entry.isFile()) {
+      const bytes = await readFile(path.join(root, entryPath))
+      result[entryPath] = createHash("sha256").update(bytes).digest("hex")
+    } else {
+      throw new Error(`Unexpected special file in .elef fixture: ${entryPath}`)
+    }
+  }
+  return result
 }
 
 function runRails(code) {
@@ -145,6 +166,10 @@ try {
     await readFile(path.join(libraryRoot, "E2E archive seed", "presentation.md"), "utf8"),
     "# Imported from Elef\n\nPortable archive fixture.\n"
   )
+  await access(exportArchive)
+  execFileSync("unzip", ["-q", "-o", exportArchive, "-d", exportContents])
+  assert.deepEqual(await hashTree(exportContents), await hashTree(seedDeck),
+    "Exporting a deck must preserve every file byte, including its manifest and uploaded image")
   if (presentationId) {
     const persisted = runRails(
       "presentation = Presentation.find(" + presentationId + "); puts \"ELEF_E2E_SOURCE=#{presentation.source.to_json}\"; presentation.destroy!; Presentation.where(id: [" + [Number(env.ELEF_E2E_CONFLICT_PRESENTATION_ID), Number(hostilePresentationId)].join(",") + "]).destroy_all; Document.where(id: [" + documentIds.map(Number).join(",") + "]).destroy_all"

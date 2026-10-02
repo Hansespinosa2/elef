@@ -196,7 +196,7 @@ jobs:
       - name: Install Linux desktop build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --yes build-essential curl dbus-daemon file libayatana-appindicator3-dev libdbus-1-dev libgtk-3-dev librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev openbox patchelf wget xdotool xvfb zip
+          sudo apt-get install --yes build-essential curl dbus-daemon file iptables libayatana-appindicator3-dev libdbus-1-dev libgtk-3-dev librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev openbox patchelf unzip wget xdotool xvfb zip
       - name: Install frontend dependencies
         run: npm ci --prefix desktop/frontend
       - name: Install shared scenario dependencies
@@ -237,13 +237,29 @@ jobs:
         run: npx --prefix desktop/e2e playwright install --with-deps chromium
       - name: Build test-only desktop binary with WebdriverIO capability
         run: ELEF_E2E_BUILD=1 npm run tauri:build --prefix desktop/frontend -- --debug --no-bundle --features webdriver --config src-tauri/tauri.e2e.conf.json
-      - name: Run shared web and desktop scenarios
+      - name: Run shared scenarios with external network blocked
         env:
           CI: "true"
           RAILS_ENV: test
           ELEF_USE_SQLITE: "1"
         # Tauri's Linux single-instance plugin uses a user D-Bus name.
-        run: dbus-run-session -- xvfb-run --auto-servernum bash -c 'openbox --sm-disable >/tmp/elef-e2e-openbox.log 2>&1 & sleep 1; npm test --prefix desktop/e2e'
+        run: |
+          restore_firewall() {
+            sudo iptables -D OUTPUT -o lo -j ACCEPT 2>/dev/null || true
+            sudo iptables -D OUTPUT ! -o lo -j REJECT 2>/dev/null || true
+            sudo ip6tables -D OUTPUT -o lo -j ACCEPT 2>/dev/null || true
+            sudo ip6tables -D OUTPUT ! -o lo -j REJECT 2>/dev/null || true
+          }
+          trap restore_firewall EXIT
+          sudo iptables -I OUTPUT 1 -o lo -j ACCEPT
+          sudo iptables -I OUTPUT 2 ! -o lo -j REJECT
+          sudo ip6tables -I OUTPUT 1 -o lo -j ACCEPT
+          sudo ip6tables -I OUTPUT 2 ! -o lo -j REJECT
+          if curl --silent --fail --max-time 3 https://example.com >/dev/null; then
+            echo "External network remained reachable during the offline desktop scenario run"
+            exit 1
+          fi
+          dbus-run-session -- xvfb-run --auto-servernum bash -c 'openbox --sm-disable >/tmp/elef-e2e-openbox.log 2>&1 & sleep 1; npm test --prefix desktop/e2e'
       - name: Build Linux desktop package
         run: npm run tauri:build --prefix desktop/frontend
 

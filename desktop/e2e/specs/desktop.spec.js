@@ -341,6 +341,35 @@ class DesktopLibraryUi {
     }
   }
 
+  async assertAllWorkKindsVisible(presentationTitle, documentTitle) {
+    await browser.waitUntil(async () =>
+      (await $(`[aria-label='Open ${presentationTitle}']`).isDisplayed()) &&
+      (await $(`[aria-label='Open ${documentTitle}']`).isDisplayed()), {
+      timeout: 10_000,
+      timeoutMsg: "The All library view did not show both presentations and documents"
+    })
+    if ((await $$(".deck-card")).length !== 5) {
+      throw new Error("The All library view did not show all five fixture decks")
+    }
+  }
+
+  async showPresentations() {
+    await $("#show-presentations").click()
+  }
+
+  async assertPresentationsOnly(presentationTitle, documentTitle) {
+    await browser.waitUntil(async () => (await $(`[aria-label='Open ${presentationTitle}']`).isDisplayed()), {
+      timeout: 10_000,
+      timeoutMsg: "The presentation filter did not show its presentation"
+    })
+    if ((await $$(".deck-card")).length !== 3) {
+      throw new Error("The presentation filter did not show the three fixture presentations")
+    }
+    if (await $(`[aria-label='Open ${documentTitle}']`).isExisting()) {
+      throw new Error("The presentation filter still shows a document")
+    }
+  }
+
   async showDocuments() {
     await $("#show-documents").click()
   }
@@ -522,5 +551,12 @@ describe("shared authoring scenarios", () => {
     if (await form.getAttribute("data-editor-mode") !== "visual") {
       throw new Error("The editor did not switch into visual mode")
     }
+  })
+
+  it("exports a portable .elef archive from the desktop command", async () => {
+    const exported = await browser.execute(async id =>
+      window.__TAURI__?.core?.invoke("export_elef", { id }),
+    process.env.ELEF_E2E_SEED_DECK_ID)
+    if (exported !== true) throw new Error("The desktop export command did not write the .elef archive")
   })
 })

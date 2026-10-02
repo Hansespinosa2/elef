@@ -289,6 +289,11 @@ async fn export_elef(
 ) -> Result<bool, CommandError> {
     let library = state.current_library()?;
     let deck = library.deck_summary(&id)?;
+    #[cfg(feature = "webdriver")]
+    if let Some(destination) = std::env::var_os("ELEF_E2E_EXPORT_PATH") {
+        export_elef_to_path(&library, &id, PathBuf::from(destination))?;
+        return Ok(true);
+    }
     let Some(selection) = app
         .dialog()
         .file()
@@ -299,9 +304,18 @@ async fn export_elef(
     else {
         return Ok(false);
     };
-    let mut destination = selection
+    let destination = selection
         .into_path()
         .map_err(|_| CommandError::new("invalid_input", "Choose a local file.", false))?;
+    export_elef_to_path(&library, &id, destination)?;
+    Ok(true)
+}
+
+fn export_elef_to_path(
+    library: &Library,
+    id: &str,
+    mut destination: PathBuf,
+) -> Result<(), CommandError> {
     match destination.extension().and_then(|value| value.to_str()) {
         None => {
             destination.set_extension("elef");
@@ -315,8 +329,8 @@ async fn export_elef(
             ));
         }
     }
-    write_elef_archive(&library, &id, &destination)?;
-    Ok(true)
+    write_elef_archive(library, id, &destination)?;
+    Ok(())
 }
 
 #[tauri::command]

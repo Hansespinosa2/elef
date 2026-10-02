@@ -257,6 +257,22 @@ class WebLibraryUi {
     await this.page.goto("/")
   }
 
+  async assertAllWorkKindsVisible(presentationTitle, documentTitle) {
+    await expect(this.page.getByRole("heading", { name: presentationTitle, exact: true })).toBeVisible()
+    await expect(this.page.getByRole("heading", { name: documentTitle, exact: true })).toBeVisible()
+    await expect(this.page.locator("article.library-card")).toHaveCount(5)
+  }
+
+  async showPresentations() {
+    await this.page.getByRole("link", { name: "Presentations", exact: true }).click()
+  }
+
+  async assertPresentationsOnly(presentationTitle, documentTitle) {
+    await expect(this.page.getByRole("heading", { name: presentationTitle, exact: true })).toBeVisible()
+    await expect(this.page.getByRole("heading", { name: documentTitle, exact: true })).toHaveCount(0)
+    await expect(this.page.locator("article.library-card")).toHaveCount(3)
+  }
+
   async showDocuments() {
     await this.page.goto("/documents")
   }
