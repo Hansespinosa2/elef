@@ -6,6 +6,10 @@ import { PIXEL_PNG_MARKDOWN } from "../scenarios/media-fixture.js"
 import { execFileSync } from "node:child_process"
 import path from "node:path"
 
+function normalizeLineEndings(source) {
+  return source.replace(/\r\n|\r/g, "\n")
+}
+
 class WebEditorUi {
   constructor(page) {
     this.page = page
@@ -36,7 +40,8 @@ class WebEditorUi {
   }
 
   async waitForSource(source) {
-    await expect.poll(() => this.readSource()).toBe(source)
+    await expect.poll(async () => normalizeLineEndings(await this.readSource()))
+      .toBe(normalizeLineEndings(source))
   }
 
   async undo() {
@@ -146,7 +151,7 @@ class WebEditorUi {
       encoding: "utf8"
     }).match(/^ELEF_E2E_PERSISTED_SOURCE=(.*)$/m)?.[1]
     expect(serialized).toBeTruthy()
-    expect(JSON.parse(serialized)).toBe(source)
+    expect(normalizeLineEndings(JSON.parse(serialized))).toBe(normalizeLineEndings(source))
   }
 }
 
