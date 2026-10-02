@@ -286,10 +286,16 @@ class DesktopLibraryUi {
     await this.openLibrary()
     await browser.execute(() => window.focus())
     const launched = spawn(process.env.ELEF_E2E_APP_BINARY, [process.env.ELEF_E2E_IMPORT_ARCHIVE], {
-      stdio: "ignore"
+      stdio: ["ignore", "pipe", "pipe"]
     })
     let launchError = null
     let launchExit = null
+    let launchOutput = ""
+    const recordLaunchOutput = chunk => {
+      launchOutput = (launchOutput + chunk.toString()).slice(-4000)
+    }
+    launched.stdout.on("data", recordLaunchOutput)
+    launched.stderr.on("data", recordLaunchOutput)
     launched.once("error", error => { launchError = error })
     launched.once("exit", (code, signal) => { launchExit = { code, signal } })
     try {
@@ -310,7 +316,7 @@ class DesktopLibraryUi {
         })).catch(() => ({ unavailable: true }))
         const pending = await browser.execute(async () => window.__TAURI__?.core?.invoke("pending_open_elef_count"))
           .catch(() => "unavailable")
-        throw new Error(`${error.message}; launch exit: ${JSON.stringify(launchExit)}; pending .elef files: ${pending}; library state: ${JSON.stringify(state)}`)
+        throw new Error(`${error.message}; launch exit: ${JSON.stringify(launchExit)}; pending .elef files: ${pending}; library state: ${JSON.stringify(state)}; second-process output: ${JSON.stringify(launchOutput)}`)
       }
       await card.click()
       await browser.waitUntil(async () => (await $("#deck-title").getText()) === "E2E archive seed", {

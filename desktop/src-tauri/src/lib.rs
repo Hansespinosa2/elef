@@ -958,7 +958,10 @@ fn queue_cli_files(state: &DesktopState, args: Vec<String>, cwd: &str) -> usize 
     let cwd = PathBuf::from(cwd);
     queue_open_files(
         state,
-        args.into_iter().skip(1).map(|argument| {
+        // The initial process receives argv[0], while single-instance
+        // callbacks vary by platform/plugin version in whether they include
+        // it. Extension filtering below safely ignores the executable path.
+        args.into_iter().map(|argument| {
             let path = PathBuf::from(argument);
             if path.is_absolute() {
                 path
@@ -990,6 +993,34 @@ fn queue_open_files(state: &DesktopState, paths: impl IntoIterator<Item = PathBu
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cli_open_file_queue_accepts_arguments_with_or_without_argv_zero() {
+        let state = DesktopState::default();
+        let count = queue_cli_files(
+            &state,
+            vec![
+                "/usr/bin/elef-desktop".into(),
+                "/tmp/first.elef".into(),
+                "second.ELEF".into(),
+                "notes.md".into(),
+            ],
+            "/home/user",
+        );
+        assert_eq!(count, 2);
+        assert_eq!(
+            state
+                .open_files
+                .lock()
+                .expect("opened file queue poisoned")
+                .len(),
+            2
+        );
+        assert_eq!(
+            queue_cli_files(&state, vec!["third.elef".into()], "/tmp"),
+            1
+        );
+    }
 
     #[test]
     fn asset_protocol_accepts_digest_and_scoped_relative_asset_paths() {
