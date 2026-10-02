@@ -41,7 +41,7 @@ const hostileSource = [
 function normalizeLineEndings(source) {
   return source.replace(/\r\n/g, "\n")
 }
-const webTitle = `Desktop E2E ${randomUUID()}`
+const webTitle = "E2E seed"
 let presentationId = null
 let hostilePresentationId = null
 let documentIds = []
