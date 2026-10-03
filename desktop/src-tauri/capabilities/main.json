@@ -2,7 +2,9 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main-capability",
   "description": "Named library and deck operations used by the Elef desktop shell.",
-  "windows": ["main"],
+  "windows": [
+    "main"
+  ],
   "permissions": [
     "core:event:allow-listen",
     "core:event:allow-unlisten",
@@ -31,6 +33,7 @@
     "allow-resolve-import-conflict",
     "allow-install-update",
     "updater:allow-check",
-    "process:allow-restart"
+    "process:allow-restart",
+    "allow-confirm-app-ready"
   ]
 }

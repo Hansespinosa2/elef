@@ -1,3 +1,4 @@
+import { completeBootstrap } from "./bootstrap-flow.js"
 import { createCloseFlow } from "./close-flow.js"
 import { Channel, invoke } from "@tauri-apps/api/core"
 import { listen } from "@tauri-apps/api/event"
@@ -1217,16 +1218,22 @@ window.setInterval(async () => {
 
 void listen("desktop-menu-action", event => void handleMenuAction(event.payload))
 const openedFileListener = listen("desktop-open-elef", () => void processOpenedFiles())
-void Promise.all([invoke("get_library_status"), openedFileListener]).then(async ([status]) => {
-  library = status
-  libraryConfig = status?.config || libraryConfig
-  decks = status?.decks || []
-  applyTheme(libraryConfig.theme)
-  showLibrary()
-  if (library) renderDecks()
-  if (status?.config_notice) showNotice(status.config_notice, "error")
-  setStatus(library ? `${decks.length} ${decks.length === 1 ? "deck" : "decks"}` : "Choose a library folder to begin")
-  libraryStatusLoaded = true
-  if (await invoke("pending_open_elef_count")) void processOpenedFiles()
+void completeBootstrap({
+  initialize: async () => {
+    const [status] = await Promise.all([invoke("get_library_status"), openedFileListener])
+    library = status
+    libraryConfig = status?.config || libraryConfig
+    decks = status?.decks || []
+    applyTheme(libraryConfig.theme)
+    showLibrary()
+    if (library) renderDecks()
+    if (status?.config_notice) showNotice(status.config_notice, "error")
+    setStatus(library ? `${decks.length} ${decks.length === 1 ? "deck" : "decks"}` : "Choose a library folder to begin")
+    libraryStatusLoaded = true
+    if (await invoke("pending_open_elef_count")) void processOpenedFiles()
+  },
+  waitForEditor: () => waitForEditorController(elements.editorField, editorFor),
+  waitForPaint: () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+  confirmReady: () => invoke("confirm_app_ready")
 }).catch(showError)
 void checkForUpdates(false)

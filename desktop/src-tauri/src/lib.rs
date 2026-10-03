@@ -23,6 +23,7 @@ struct DesktopState {
     pending_import: std::sync::Mutex<Option<PathBuf>>,
     open_files: std::sync::Mutex<VecDeque<PathBuf>>,
     update_installing: std::sync::atomic::AtomicBool,
+    app_ready: std::sync::atomic::AtomicBool,
 }
 
 impl DesktopState {
@@ -120,6 +121,39 @@ impl From<CoreError> for CommandError {
             },
         }
     }
+}
+
+#[tauri::command]
+async fn confirm_app_ready(
+    app: AppHandle,
+    window: tauri::WebviewWindow,
+    state: State<'_, DesktopState>,
+) -> Result<(), CommandError> {
+    let url = window.url().map_err(|_| update_install_error())?;
+    let local_origin = url.scheme() == "tauri" && url.host_str() == Some("localhost")
+        || matches!(url.scheme(), "http" | "https") && url.host_str() == Some("tauri.localhost");
+    if window.label() != "main" || !local_origin {
+        return Err(CommandError::new(
+            "unsupported",
+            "Application readiness was rejected.",
+            false,
+        ));
+    }
+    if state
+        .app_ready
+        .swap(true, std::sync::atomic::Ordering::AcqRel)
+    {
+        return Ok(());
+    }
+    if let Ok((live, _)) = installed_application(&app) {
+        // Readiness is acknowledged only after successful frontend/editor boot.
+        // Failure leaves the previous complete installation available.
+        let _ = tauri::async_runtime::spawn_blocking(move || {
+            elef_core::update_install::cleanup_previous_installation(&live)
+        })
+        .await;
+    }
+    Ok(())
 }
 
 struct UpdateLease<'a>(&'a std::sync::atomic::AtomicBool);
@@ -1116,11 +1150,6 @@ pub fn run() {
             #[cfg(not(feature = "webdriver"))]
             restore_library_root(app.handle(), &app.state::<DesktopState>());
             app.set_menu(build_menu(app.handle())?)?;
-            if let Ok((live, _)) = installed_application(app.handle()) {
-                tauri::async_runtime::spawn_blocking(move || {
-                    let _ = elef_core::update_install::cleanup_previous_installation(&live);
-                });
-            }
             Ok(())
         })
         .on_menu_event(|app, event| {
@@ -1174,6 +1203,7 @@ pub fn run() {
             pending_open_elef_count,
             resolve_import_conflict,
             install_update,
+            confirm_app_ready,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Elef Desktop");

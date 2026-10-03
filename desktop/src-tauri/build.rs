@@ -22,6 +22,7 @@ fn main() {
         "pending_open_elef_count",
         "resolve_import_conflict",
         "install_update",
+        "confirm_app_ready",
     ];
     let attributes = tauri_build::Attributes::new()
         .app_manifest(tauri_build::AppManifest::new().commands(app_commands));

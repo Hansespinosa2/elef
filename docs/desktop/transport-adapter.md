@@ -53,6 +53,7 @@ The editor table above omits the new library shell. These need the same capabili
 | `read_source_snapshot` | Read and hash the currently open source without creating or changing files | One deck, read-only |
 | `create_deck`, `rename_deck` | Folder create / rename | Library root, one level |
 | `delete_deck` | Move to OS trash (never unlink) — Q2 | One deck |
+| `confirm_app_ready` | No payload; acknowledge successful frontend/editor bootstrap and first paint | Native shell validates the main local webview, then cleans only the identity-matched previous updater installation; no caller-supplied paths |
 | `install_update` | `{ version, on_progress } → bool`; native confirmation, recheck configured release, verify signed download, install into a private copy and atomically exchange it with the live application; false means cancelled | Native application/AppImage and a staging/previous-installation directory alongside it; no caller-supplied paths, bytes, URLs or keys |
 | `import_elef`, `export_elef` | Hardened archive import returns `{ deck, replaced, name_collision }`; normalized name collisions get a unique suffix and a visible notice. Export writes a deterministic archive | Staging dir, library root; user-chosen destination via native dialog |
 | `upload_asset` | Store selected media as an immutable content-addressed file | One deck's `images/`; never overwrites an existing digest |
