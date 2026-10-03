@@ -1105,7 +1105,7 @@ describe("desktop binary workflows and native boundaries", () => {
 describe("native updater verification", () => {
   for (const mode of ["none", "older", "valid", "bad-signature", "truncated", "version-mismatch"]) {
     it(`handles ${mode} updates without changing the installed binary or deck source`, async () => {
-      const binaryPath = process.env.ELEF_E2E_REAL_APP_BINARY || process.env.ELEF_E2E_APP_BINARY
+      const binaryPath = process.env.ELEF_E2E_INSTALLED_ARTIFACT || process.env.ELEF_E2E_REAL_APP_BINARY || process.env.ELEF_E2E_APP_BINARY
       const hash = async filename => createHash("sha256").update(await readFile(filename)).digest("hex")
       const sourcePath = path.join(process.env.ELEF_E2E_LIBRARY_ROOT, "E2E seed", "presentation.md")
       const original = { binary: await hash(binaryPath), source: await hash(sourcePath) }
@@ -1155,7 +1155,7 @@ describe("native updater verification", () => {
   if (process.env.ELEF_E2E_PACKAGED_UPDATES === "1") {
     it("requires native confirmation and installs signed version N without changing deck bytes", async function () {
       this.timeout(180_000)
-      const binaryPath = process.env.ELEF_E2E_REAL_APP_BINARY || process.env.ELEF_E2E_APP_BINARY
+      const binaryPath = process.env.ELEF_E2E_INSTALLED_ARTIFACT || process.env.ELEF_E2E_REAL_APP_BINARY || process.env.ELEF_E2E_APP_BINARY
       const sourcePath = path.join(process.env.ELEF_E2E_LIBRARY_ROOT, "E2E seed", "presentation.md")
       const hash = async filename => createHash("sha256").update(await readFile(filename)).digest("hex")
       const original = { binary: await hash(binaryPath), source: await hash(sourcePath) }

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { execFileSync, spawn, spawnSync } from "node:child_process"
-import { access, chmod, cp, mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises"
+import { access, chmod, cp, mkdtemp, mkdir, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
@@ -10,7 +10,7 @@ import { desktopAppEnvironment, desktopCommand, verifyOfflineSandbox } from "./o
 
 const e2eRoot = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(e2eRoot, "../..")
-const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "elef-desktop-e2e-"))
+const temporaryRoot = await realpath(await mkdtemp(path.join(os.tmpdir(), "elef-desktop-e2e-")))
 const libraryRoot = path.join(temporaryRoot, "Elef")
 const seedDeck = path.join(libraryRoot, "E2E seed")
 const conflictDeck = path.join(libraryRoot, "E2E conflict")
@@ -65,10 +65,24 @@ if (process.env.ELEF_E2E_PACKAGED_UPDATES === "1") {
   env.ELEF_E2E_PACKAGED_UPDATES = "1"
   env.ELEF_E2E_APP_BINARY = process.platform === "darwin"
     ? path.join(installed, "Elef.app/Contents/MacOS/elef-desktop") : path.join(installed, "Elef.AppImage")
+  env.ELEF_E2E_INSTALLED_ARTIFACT = env.ELEF_E2E_APP_BINARY
   env.ELEF_E2E_UPDATE_PACKAGE = path.join(packages, process.platform === "darwin" ? "update.tar.gz" : "update.AppImage")
-  env.APPIMAGE_EXTRACT_AND_RUN = "1"
+  if (process.platform === "linux") await prepareInstalledAppImage()
 } else if (process.env.CI) {
   throw new Error("CI must exercise the installed N-1 and N updater packages")
+}
+
+async function prepareInstalledAppImage() {
+  const image = env.ELEF_E2E_INSTALLED_ARTIFACT
+  const extraction = path.join(temporaryRoot, "installed-extraction")
+  await rm(extraction, { recursive: true, force: true })
+  await mkdir(extraction)
+  // CI has no FUSE mount. Use the AppImage runtime's own extraction operation,
+  // then start its packaged binary directly so WebDriver owns the actual PID.
+  execFileSync(image, ["--appimage-extract"], { cwd: extraction, stdio: "ignore", timeout: 60_000 })
+  env.ELEF_E2E_APP_BINARY = path.join(extraction, "squashfs-root/AppRun")
+  env.APPDIR = path.join(extraction, "squashfs-root")
+  env.APPIMAGE = image
 }
 
 async function hashTree(root, relative = "") {
@@ -289,6 +303,7 @@ try {
   if (desktopResult.error) throw desktopResult.error
   if (desktopResult.status !== 0) throw new Error("Shared desktop scenarios failed with status " + desktopResult.status)
   if (env.ELEF_E2E_PACKAGED_UPDATES === "1") {
+    if (process.platform === "linux") await prepareInstalledAppImage()
     const upgradedResult = spawnSync(webdriverio, ["run", "wdio.conf.js"], {
       cwd: e2eRoot, env: { ...desktopAppEnvironment(env), ELEF_E2E_VERIFY_UPGRADED: "1" }, stdio: "inherit"
     })
