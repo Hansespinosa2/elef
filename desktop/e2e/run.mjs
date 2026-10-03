@@ -6,6 +6,7 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { createHash, randomUUID } from "node:crypto"
 import { PIXEL_PNG_MARKDOWN } from "./scenarios/media-fixture.js"
+import { desktopCommand, verifyOfflineSandbox } from "./offline-macos.js"
 
 const e2eRoot = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(e2eRoot, "../..")
@@ -104,7 +105,8 @@ function withTimeout(promise, timeoutMs, message) {
 }
 
 async function runUserInitiatedQuitSmoke() {
-  const application = spawn(env.ELEF_E2E_APP_BINARY, [], {
+  const restricted = desktopCommand(env.ELEF_E2E_APP_BINARY)
+  const application = spawn(restricted.command, restricted.args, {
     env,
     stdio: ["ignore", "pipe", "pipe"]
   })
@@ -252,7 +254,9 @@ try {
   }
 
   const webdriverio = path.join(e2eRoot, "node_modules", ".bin", "wdio")
-  const desktopResult = spawnSync(webdriverio, ["run", "wdio.conf.js"], {
+  await verifyOfflineSandbox()
+  const restricted = desktopCommand(webdriverio, ["run", "wdio.conf.js"])
+  const desktopResult = spawnSync(restricted.command, restricted.args, {
     cwd: e2eRoot,
     env: {
       ...env,

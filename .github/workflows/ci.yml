@@ -328,6 +328,7 @@ jobs:
           CI: "true"
           RAILS_ENV: test
           ELEF_USE_SQLITE: "1"
+          ELEF_E2E_OFFLINE: "1"
         run: npm test --prefix desktop/e2e
       - name: Build Apple Silicon desktop package
         run: npm run tauri:build --prefix desktop/frontend -- --bundles app,dmg
