@@ -32,3 +32,17 @@ test("conflicts and failed saves keep the window open; a clean close proceeds", 
   const clean = createCloseFlow({ isDirty: () => false, flushSave: () => assert.fail("clean save"), close: () => assert.fail("recursive close") })
   clean({ preventDefault: () => assert.fail("clean close prevented") })
 })
+
+test("a failed visual-buffer flush prevents closing instead of losing pending input", () => {
+  let prevented = false
+  let reported = false
+  const request = createCloseFlow({
+    isDirty: () => { throw new Error("pending visual edit failed") },
+    flushSave: () => assert.fail("save proceeded"),
+    close: () => assert.fail("close proceeded"),
+    onError: () => { reported = true }
+  })
+  request({ preventDefault: () => { prevented = true } })
+  assert.equal(prevented, true)
+  assert.equal(reported, true)
+})

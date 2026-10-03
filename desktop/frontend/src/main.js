@@ -1,3 +1,4 @@
+import { createDeckOpenFlow } from "./deck-open-flow.js"
 import { completeBootstrap } from "./bootstrap-flow.js"
 import { createCloseFlow } from "./close-flow.js"
 import { Channel, invoke } from "@tauri-apps/api/core"
@@ -413,7 +414,7 @@ async function refreshLibrary() {
 }
 
 async function chooseLibrary() {
-  if (saveFlow.dirty && !(await flushSave())) return
+  if (hasUnsavedChanges() && !(await flushSave())) return
   clearNotice()
   setStatus("Choose a folder for your library…")
   try {
@@ -460,12 +461,20 @@ async function createDeck(event) {
   }
 }
 
-async function openDeck(id) {
+const openDeck = createDeckOpenFlow(openDeckNow)
+
+async function openDeckNow(id) {
   try {
     if (document.body.classList.contains("presenting-deck")) await exitPresentation()
-    if (activeDeck && saveFlow.dirty && !(await flushSave())) return
+    if (activeDeck && hasUnsavedChanges() && !(await flushSave())) return
     delete elements.editorForm.dataset.loadedDeckId
     const deck = await transport.openDeck(id)
+    // Edits made while the folder read was in flight still belong to the old
+    // deck and must persist before its editor state is replaced.
+    if (activeDeck && hasUnsavedChanges() && !(await flushSave())) {
+      elements.editorForm.dataset.loadedDeckId = activeDeck.id
+      return
+    }
     const isDocument = deck.source_file === "document.md"
     if (deck.id !== id) {
       decks = decks.map(item => item.id === id ? { ...item, id: deck.id } : item)
@@ -578,7 +587,7 @@ async function processOpenedFiles() {
   try {
     while (openFilesRequested) {
       openFilesRequested = false
-      if (saveFlow.dirty && !(await flushSave())) {
+      if (hasUnsavedChanges() && !(await flushSave())) {
         openFilesWaitingForSave = true
         break
       }
@@ -615,7 +624,14 @@ function scheduleSave() {
   saveFlow.noteChange()
 }
 
+function hasUnsavedChanges() {
+  const editor = editorFor(elements.editorField)
+  if (editor?.editorReady) editor.projectionController()?.flushPendingProjectionEdits?.()
+  return saveFlow?.dirty || false
+}
+
 function flushSave(options) {
+  hasUnsavedChanges()
   return saveFlow.flush(options)
 }
 
@@ -865,7 +881,7 @@ async function exportCurrentDeck() {
     showNotice("Open a deck before exporting it.")
     return
   }
-  if (saveFlow.dirty && !(await flushSave({ force: true }))) return
+  if (hasUnsavedChanges() && !(await flushSave({ force: true }))) return
   try {
     if (await invoke("export_elef", { id: activeDeck.id })) setStatus("Deck exported")
   } catch (error) {
@@ -878,7 +894,7 @@ async function importDeck() {
     showNotice("Choose a library before importing a deck.")
     return
   }
-  if (saveFlow.dirty && !(await flushSave())) return
+  if (hasUnsavedChanges() && !(await flushSave())) return
   try {
     const imported = await invoke("import_elef")
     if (!imported) return
@@ -934,7 +950,7 @@ async function installUpdate() {
   later.disabled = true
   try {
     const installed = await installDesktopUpdate(pendingUpdate, {
-      prepare: async () => !saveFlow.dirty || await flushSave({ force: true }),
+      prepare: async () => !hasUnsavedChanges() || await flushSave({ force: true }),
       relaunch,
       onProgress: event => {
         if (event.event === "Started" || event.event === "Progress") {
@@ -958,7 +974,7 @@ async function printCurrentDeck() {
     showNotice("Open a deck before printing it.")
     return
   }
-  if (saveFlow.dirty && !(await flushSave())) return
+  if (hasUnsavedChanges() && !(await flushSave())) return
   const preview = document.querySelector("#desktop-preview")
   if (!preview.childElementCount && !(await elements.editorForm.previewController?.refresh())) {
     showNotice("Render the deck before printing it.", "error")
@@ -1075,7 +1091,7 @@ async function handleMenuAction(action) {
   if (action === "refresh-library") return refreshLibrary()
   if (action === "open-deck") {
     if (!library) return chooseLibrary()
-    if (saveFlow.dirty && !(await flushSave())) return
+    if (hasUnsavedChanges() && !(await flushSave())) return
     showLibrary()
     elements.search.focus()
     return
@@ -1100,7 +1116,7 @@ document.querySelector("#new-deck").addEventListener("click", () => {
 document.querySelector("#refresh-library").addEventListener("click", () => void refreshLibrary())
 document.querySelector("#import-elef").addEventListener("click", () => void importDeck())
 document.querySelector("#back-to-library").addEventListener("click", () => {
-  if (saveFlow.dirty) {
+  if (hasUnsavedChanges()) {
     void flushSave().then(saved => {
       if (!saved) return
       showLibrary()
@@ -1176,12 +1192,12 @@ elements.restoreDraft.addEventListener("click", () => {
 })
 elements.retrySave.addEventListener("click", () => void flushSave({ force: true }))
 window.addEventListener("beforeunload", event => {
-  if (!saveFlow.dirty) return
+  if (!hasUnsavedChanges()) return
   event.preventDefault()
   event.returnValue = ""
 })
 void getCurrentWindow().onCloseRequested(createCloseFlow({
-  isDirty: () => saveFlow.dirty,
+  isDirty: () => hasUnsavedChanges(),
   flushSave,
   close: () => getCurrentWindow().close(),
   onError: showError
