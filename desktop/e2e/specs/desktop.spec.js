@@ -23,21 +23,12 @@ async function openDesktopAuthoringSettings() {
   await $("#authoring-settings-dialog").waitForDisplayed()
 }
 
-async function acceptBrowserConfirmation(expectedText) {
-  let text = ""
-  await browser.waitUntil(async () => {
-    try {
-      text = await browser.getAlertText()
-      return text.length > 0
-    } catch (_error) {
-      return false
-    }
-  }, {
-    timeout: 5_000,
-    timeoutMsg: "The expected confirmation dialog did not appear"
-  })
-  if (!text.includes(expectedText)) throw new Error(`Unexpected confirmation text: ${text}`)
-  await browser.acceptAlert()
+async function confirmAuthoringDeletion(expectedName) {
+  const dialog = $("#delete-authoring-dialog")
+  await dialog.waitForDisplayed()
+  const message = await $("#delete-authoring-message").getText()
+  if (!message.includes(expectedName)) throw new Error(`Unexpected deletion prompt: ${message}`)
+  await $("#confirm-authoring-delete").click()
 }
 
 function normalizeLineEndings(source) {
@@ -840,7 +831,7 @@ describe("desktop binary workflows and native boundaries", () => {
     }
     if (!targetCard) throw new Error("The saved personal snippet was not listed for management")
     await targetCard.$(".authoring-delete").click()
-    await acceptBrowserConfirmation("Delete")
+    await confirmAuthoringDeletion("Managed E2E snippet edited")
     await browser.waitUntil(async () => (await $("#authoring-settings-status").getText()).includes("saved to this library"), {
       timeout: 10_000,
       timeoutMsg: "Deleting the personal snippet did not finish"
@@ -859,7 +850,6 @@ describe("desktop binary workflows and native boundaries", () => {
     await $("#authoring-math-name").setValue("E2E math shortcut")
     await $("#authoring-prefix").selectByAttribute("value", "@")
     await $("#authoring-aliases").setValue(alias)
-    await $("#authoring-math-description").setValue("Temporary desktop test shortcut")
     await $("#authoring-expansion").setValue("\\mathbb{${1}}")
     await $("#save-authoring-entry").click()
     await browser.waitUntil(async () => (await $("#authoring-settings-status").getText()).includes("saved to this library"), {
@@ -869,7 +859,7 @@ describe("desktop binary workflows and native boundaries", () => {
 
     const persisted = await browser.execute(async () => await window.__TAURI__.core.invoke("read_authoring_registries"))
     const entry = persisted.math_shortcuts.find(shortcut => shortcut.aliases.includes(alias))
-    if (entry?.prefix !== "@" || entry.expansion !== "\\mathbb{${1}}") {
+    if (entry?.prefix !== "@" || entry.expansion !== "\\mathbb{${1}}" || entry.description !== "") {
       throw new Error("The personal math shortcut was not written to the library registry file")
     }
 
@@ -879,7 +869,7 @@ describe("desktop binary workflows and native boundaries", () => {
     }
     if (!targetCard) throw new Error("The saved math shortcut was not listed for management")
     await targetCard.$(".authoring-delete").click()
-    await acceptBrowserConfirmation("Delete")
+    await confirmAuthoringDeletion("E2E math shortcut")
     await browser.waitUntil(async () => (await $("#authoring-settings-status").getText()).includes("saved to this library"), {
       timeout: 10_000,
       timeoutMsg: "Deleting the personal math shortcut did not finish"

@@ -1590,9 +1590,8 @@ fn validate_authoring_entries(
         if !valid_id || object.get("built_in").and_then(|value| value.as_bool()) == Some(true) {
             return Err(CoreError::InvalidInput);
         }
-        for field in ["name", "description"] {
-            validate_authoring_text(object.get(field), 500)?;
-        }
+        validate_authoring_text(object.get("name"), 500)?;
+        validate_authoring_optional_text(object.get("description"), 500)?;
         if is_math {
             validate_authoring_text(object.get("prefix"), 8)?;
             validate_authoring_text(object.get("expansion"), 20_000)?;
@@ -1626,6 +1625,19 @@ fn validate_authoring_text(
         return Err(CoreError::InvalidInput);
     };
     if text.is_empty() || text.len() > max_bytes || text.chars().any(char::is_control) {
+        return Err(CoreError::InvalidInput);
+    }
+    Ok(())
+}
+
+fn validate_authoring_optional_text(
+    value: Option<&serde_json::Value>,
+    max_bytes: usize,
+) -> Result<(), CoreError> {
+    let Some(text) = value.and_then(|value| value.as_str()) else {
+        return Err(CoreError::InvalidInput);
+    };
+    if text.len() > max_bytes || text.chars().any(char::is_control) {
         return Err(CoreError::InvalidInput);
     }
     Ok(())
@@ -2738,7 +2750,7 @@ mod tests {
         let snippets = vec![serde_json::json!({
             "id": "personal-bold",
             "name": "Bold note",
-            "description": "Emphasize text",
+            "description": "",
             "trigger": "bold-note",
             "category": "Markdown",
             "body": "**${1:text}**",
@@ -2747,7 +2759,7 @@ mod tests {
         let math_shortcuts = vec![serde_json::json!({
             "id": 42,
             "name": "Alpha",
-            "description": "Greek alpha",
+            "description": "",
             "prefix": "@",
             "aliases": ["alpha"],
             "expansion": "\\alpha"

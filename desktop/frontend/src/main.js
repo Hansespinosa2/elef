@@ -15,6 +15,7 @@ import { installSanitizedPreview } from "./preview-sanitizer.js"
 import { checkForDesktopUpdate, installDesktopUpdate } from "./update-flow.js"
 import { loadDesktopAuthoringRegistry } from "./authoring-registry-loader.js"
 import { buildAuthoringEntry, removeAuthoringEntry, upsertAuthoringEntry } from "./authoring-settings.js"
+import { writeAuthoringRegistry } from "./authoring-registry-write.js"
 import { createPresentationNavigation } from "./presentation-flow.js"
 import { applyDesktopFeatureFlags } from "./feature-flags.js"
 import { filterDecks } from "./library-filter.js"
@@ -71,6 +72,10 @@ const elements = {
   authoringSnippetFields: document.querySelector(".authoring-snippet-fields"),
   authoringMathFields: document.querySelector(".authoring-math-fields"),
   authoringSave: document.querySelector("#save-authoring-entry"),
+  deleteAuthoringDialog: document.querySelector("#delete-authoring-dialog"),
+  deleteAuthoringMessage: document.querySelector("#delete-authoring-message"),
+  confirmAuthoringDelete: document.querySelector("#confirm-authoring-delete"),
+  cancelAuthoringDelete: document.querySelector("#cancel-authoring-delete"),
   createForm: document.querySelector("#create-form"),
   aboutDialog: document.querySelector("#about-dialog"),
   conflictDialog: document.querySelector("#conflict-dialog"),
@@ -98,6 +103,7 @@ let libraryConfig = { schema_version: 1, theme: "system", hotkeys: {} }
 let authoringRegistries = { snippets: [], math_shortcuts: [] }
 let authoringRegistryHashes = { snippets: null, math_shortcuts: null }
 let activeAuthoringRegistry = "snippets"
+let pendingAuthoringDeletion = null
 let decks = []
 let activeDeck = null
 let saveFlow = null
@@ -671,7 +677,7 @@ function renderAuthoringEntries() {
     remove.className = "quiet-button authoring-delete"
     remove.type = "button"
     remove.textContent = "Delete"
-    remove.addEventListener("click", () => void deleteAuthoringEntry(entry))
+    remove.addEventListener("click", () => requestAuthoringEntryDeletion(entry, activeAuthoringRegistry))
     actions.append(edit, remove)
     heading.append(title, actions)
     const description = document.createElement("p")
@@ -757,35 +763,45 @@ function editAuthoringEntry(entry) {
   beginAuthoringEntryForm(entry)
 }
 
-async function persistAuthoringRegistries(nextEntries, action) {
-  try {
-    const result = await invoke("write_authoring_registry", {
-      registry: activeAuthoringRegistry,
-      entries: nextEntries,
-      baseHash: authoringRegistryHashes[activeAuthoringRegistry]
-    })
-    authoringRegistries[activeAuthoringRegistry] = nextEntries
-    authoringRegistryHashes[activeAuthoringRegistry] = result.content_hash
-    await loadDesktopAuthoringRegistry()
-    elements.authoringStatus.textContent = `${action} saved to this library.`
-    setStatus(`${action} saved`)
-    closeAuthoringEntryForm()
-    renderAuthoringEntries()
-  } catch (error) {
-    if (error?.code === "conflict") {
-      elements.authoringStatus.textContent = "These settings changed outside Elef. Close and reopen settings to load the latest entries before saving."
-    } else if (error?.code === "invalid_input") {
-      elements.authoringStatus.textContent = "These settings are invalid. Check the name, trigger, category, aliases, and template."
-    } else {
-      elements.authoringStatus.textContent = "Could not save authoring settings. Check that the library folder is writable."
+async function persistAuthoringRegistries(nextEntries, action, registry) {
+  await writeAuthoringRegistry({
+    registry,
+    entries: nextEntries,
+    baseHash: authoringRegistryHashes[registry],
+    invoke,
+    updateLocal: ({ registry: savedRegistry, entries, contentHash }) => {
+      authoringRegistries[savedRegistry] = entries
+      authoringRegistryHashes[savedRegistry] = contentHash
+    },
+    reloadEditorRegistry: loadDesktopAuthoringRegistry,
+    isSelected: savedRegistry => activeAuthoringRegistry === savedRegistry,
+    onSuccess: ({ registry: savedRegistry, isSelected }) => {
+      const label = savedRegistry === "snippets" ? "Snippet" : "Math shortcut"
+      elements.authoringStatus.textContent = `${action} saved to this library (${label.toLowerCase()}).`
+      setStatus(`${action} saved`)
+      if (isSelected) {
+        closeAuthoringEntryForm()
+        renderAuthoringEntries()
+      }
+    },
+    onFailure: (error, { registry: failedRegistry }) => {
+      const label = failedRegistry === "snippets" ? "Snippet" : "Math shortcut"
+      if (error?.code === "conflict") {
+        elements.authoringStatus.textContent = `${label} settings changed outside Elef. Close and reopen settings to load the latest entries before saving.`
+      } else if (error?.code === "invalid_input") {
+        elements.authoringStatus.textContent = "These settings are invalid. Check the name, trigger, category, aliases, and template."
+      } else {
+        elements.authoringStatus.textContent = "Could not save authoring settings. Check that the library folder is writable."
+      }
     }
-  }
+  })
 }
 
 async function saveAuthoringEntry(event) {
   event.preventDefault()
   const formData = new FormData(elements.authoringForm)
-  const isSnippet = activeAuthoringRegistry === "snippets"
+  const registry = activeAuthoringRegistry
+  const isSnippet = registry === "snippets"
   const fields = isSnippet
     ? Object.fromEntries(formData.entries())
     : {
@@ -798,19 +814,32 @@ async function saveAuthoringEntry(event) {
   const existingId = formData.get("id")
   const id = existingId || `personal-${crypto.randomUUID()}`
   try {
-    const entry = buildAuthoringEntry(activeAuthoringRegistry, fields, id)
-    const entries = upsertAuthoringEntry(authoringRegistries[activeAuthoringRegistry], entry)
-    await persistAuthoringRegistries(entries, existingId ? "Changes" : "New entry")
+    const entry = buildAuthoringEntry(registry, fields, id)
+    const entries = upsertAuthoringEntry(authoringRegistries[registry], entry)
+    await persistAuthoringRegistries(entries, existingId ? "Changes" : "New entry", registry)
   } catch (error) {
     elements.authoringStatus.textContent = error.message
   }
 }
 
-async function deleteAuthoringEntry(entry) {
-  const name = String(entry.name || "this entry")
-  if (!window.confirm(`Delete “${name}” from this library?`)) return
-  const entries = removeAuthoringEntry(authoringRegistries[activeAuthoringRegistry], entry.id)
-  await persistAuthoringRegistries(entries, "Entry deletion")
+function requestAuthoringEntryDeletion(entry, registry) {
+  pendingAuthoringDeletion = { entry, registry }
+  elements.deleteAuthoringMessage.textContent = `Delete “${String(entry.name || "this entry")}” from this library?`
+  elements.deleteAuthoringDialog.showModal()
+}
+
+async function confirmAuthoringEntryDeletion() {
+  const pending = pendingAuthoringDeletion
+  if (!pending) return
+  pendingAuthoringDeletion = null
+  elements.deleteAuthoringDialog.close()
+  const entries = removeAuthoringEntry(authoringRegistries[pending.registry], pending.entry.id)
+  await persistAuthoringRegistries(entries, "Entry deletion", pending.registry)
+}
+
+function cancelAuthoringEntryDeletion() {
+  pendingAuthoringDeletion = null
+  elements.deleteAuthoringDialog.close()
 }
 
 async function exportCurrentDeck() {
@@ -1065,6 +1094,9 @@ elements.authoringNew.addEventListener("click", () => beginAuthoringEntryForm())
 elements.authoringForm.addEventListener("submit", event => void saveAuthoringEntry(event))
 document.querySelector("#cancel-authoring-entry").addEventListener("click", closeAuthoringEntryForm)
 document.querySelector("#close-authoring-settings").addEventListener("click", () => elements.authoringDialog.close())
+elements.deleteAuthoringDialog.addEventListener("close", () => { pendingAuthoringDeletion = null })
+elements.confirmAuthoringDelete.addEventListener("click", () => void confirmAuthoringEntryDeletion())
+elements.cancelAuthoringDelete.addEventListener("click", cancelAuthoringEntryDeletion)
 document.querySelector("#check-for-updates").addEventListener("click", () => void checkForUpdates(true))
 document.querySelector("#install-update").addEventListener("click", () => void installUpdate())
 elements.presentationExit.addEventListener("click", () => void exitPresentation())
