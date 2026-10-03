@@ -6,7 +6,8 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { createHash, randomUUID } from "node:crypto"
 import { PIXEL_PNG_MARKDOWN } from "./scenarios/media-fixture.js"
-import { desktopAppEnvironment, desktopCommand, verifyOfflineSandbox } from "./offline-macos.js"
+import { runNativeQuitSmokes } from "./native-quit-smoke.js"
+import { desktopAppEnvironment, verifyOfflineSandbox } from "./offline-macos.js"
 
 const e2eRoot = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(e2eRoot, "../..")
@@ -132,63 +133,6 @@ function withTimeout(promise, timeoutMs, message) {
   ]).finally(() => clearTimeout(timer))
 }
 
-async function runUserInitiatedQuitSmoke() {
-  const restricted = desktopCommand(env.ELEF_E2E_APP_BINARY)
-  const application = spawn(restricted.command, restricted.args, {
-    env,
-    stdio: ["ignore", "pipe", "pipe"]
-  })
-  let output = ""
-  const recordOutput = chunk => { output = (output + chunk.toString()).slice(-4_000) }
-  application.stdout.on("data", recordOutput)
-  application.stderr.on("data", recordOutput)
-  const exited = new Promise(resolve => {
-    application.once("error", error => resolve({ error }))
-    application.once("exit", (code, signal) => resolve({ code, signal }))
-  })
-
-  try {
-    if (!application.pid) throw new Error("The desktop binary did not start")
-    if (process.platform === "linux") {
-      const windowIds = execFileSync("xdotool", [
-        "search", "--sync", "--onlyvisible", "--pid", String(application.pid)
-      ], { encoding: "utf8", timeout: 20_000 }).trim()
-      const windowId = windowIds.split(/\s+/)[0]
-      if (!windowId) throw new Error("The launched desktop process did not show a window")
-      execFileSync("xdotool", ["windowactivate", "--sync", windowId], { timeout: 5_000 })
-      execFileSync("xdotool", ["key", "--clearmodifiers", "ctrl+q"], { timeout: 5_000 })
-    } else if (process.platform === "darwin") {
-      const script = `tell application "System Events"
-        set targetProcess to first process whose unix id is ${application.pid}
-        repeat 80 times
-          if exists (window 1 of targetProcess) then exit repeat
-          delay 0.25
-        end repeat
-        if not (exists (window 1 of targetProcess)) then error "Elef did not open a window"
-        tell targetProcess
-          set frontmost to true
-          keystroke "q" using {command down}
-        end tell
-      end tell`
-      execFileSync("osascript", ["-e", script], { timeout: 25_000 })
-    } else {
-      throw new Error(`Native quit smoke is unsupported on ${process.platform}`)
-    }
-
-    const result = await withTimeout(exited, 10_000, "Elef did not exit after the native Quit shortcut")
-    if (result.error) throw result.error
-    assert.deepEqual({ code: result.code, signal: result.signal }, { code: 0, signal: null }, "Elef should exit cleanly after a user-initiated quit")
-    process.stdout.write("Native user-initiated quit smoke passed.\n")
-  } catch (error) {
-    throw new Error(`${error.message}; desktop output: ${output}`)
-  } finally {
-    if (application.exitCode === null && application.signalCode === null) {
-      application.kill("SIGTERM")
-      await Promise.race([exited, new Promise(resolve => setTimeout(resolve, 1_000))])
-      if (application.exitCode === null && application.signalCode === null) application.kill("SIGKILL")
-    }
-  }
-}
 
 try {
   await mkdir(seedDeck, { recursive: true })
@@ -310,7 +254,7 @@ try {
     if (upgradedResult.error) throw upgradedResult.error
     if (upgradedResult.status !== 0) throw new Error("The installed update did not launch and preserve the deck")
   }
-  if (process.env.CI) await runUserInitiatedQuitSmoke()
+  if (process.env.CI) await runNativeQuitSmokes(env)
 
   const desktopSource = await readFile(path.join(seedDeck, "presentation.md"), "utf8")
   assert.equal(normalizeLineEndings(desktopSource), expectedDesktopSource)
