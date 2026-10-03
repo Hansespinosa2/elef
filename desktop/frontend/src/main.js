@@ -352,7 +352,11 @@ function renderDecks() {
 async function refreshLibrary() {
   if (!library) return
   try {
-    decks = await invoke("list_decks")
+    const [listedDecks] = await Promise.all([
+      invoke("list_decks"),
+      loadDesktopAuthoringRegistry()
+    ])
+    decks = listedDecks
     documentGraphCache = null
     renderDecks()
     if (libraryTab === "graph") await showDocumentGraph()

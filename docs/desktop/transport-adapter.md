@@ -35,6 +35,8 @@ Status: draft v3 (2026-10-01). The highest-leverage seam in the desktop app. Imp
 | `…/history`, `…/restore`, `…/publish`, `…/fork`, server `…/export` | — | — | behind flags or replaced (export → `.elef`) | — | no |
 | `…/present`, `…/print`, `…/pptx` | desktop presentation view / OS print dialog / — | — | presentation mode navigates the rendered slides; print uses the rendered preview and native dialog; PPTX remains out of v1 | — | shipped / shipped / no |
 
+Selecting or refreshing a library reloads its custom authoring registries from `.elef/`; refreshed snippet and math entries are available the next time an editor is opened.
+
 The implemented subset is library scan/open/create/rename/delete, source save, portable settings and authoring registries, content-addressed media upload/read, worker preview, rendered print/presentation flows, and `.elef` import/export. The desktop library shell is custom rather than the Rails library views; the shared graph flow is covered by the cross-runner scenario. Remaining web-only endpoints and final preview-markup parity are not implemented.
 
 ## 4. Library-shell commands (new; no Rails equivalent, so no parity test)

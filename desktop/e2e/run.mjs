@@ -95,6 +95,34 @@ function runRails(code) {
 
 try {
   await mkdir(seedDeck, { recursive: true })
+  const libraryConfig = path.join(libraryRoot, ".elef")
+  await mkdir(libraryConfig, { recursive: true })
+  await writeFile(path.join(libraryConfig, "snippets.json"), JSON.stringify({
+    schema_version: 1,
+    entries: [{
+      id: "personal-note",
+      name: "Personal note",
+      description: "A custom personal note",
+      trigger: "note",
+      category: "Markdown",
+      body: "**${1:note}**",
+      namespace: "/",
+      built_in: false
+    }]
+  }))
+  await writeFile(path.join(libraryConfig, "math-shortcuts.json"), JSON.stringify({
+    schema_version: 1,
+    entries: [{
+      id: "personal-lambda",
+      name: "Lambda",
+      description: "The Greek letter lambda",
+      prefix: "@",
+      aliases: ["lambda"],
+      expansion: "\\lambda",
+      namespace: "@",
+      built_in: false
+    }]
+  }))
   await writeFile(path.join(seedDeck, "presentation.md"), "# Before E2E\n\nSeed paragraph.\n")
   await writeFile(path.join(seedDeck, "elef.json"), JSON.stringify({
     id: "a3d0f020-6605-4f9e-a96d-d825ee4b13f1",

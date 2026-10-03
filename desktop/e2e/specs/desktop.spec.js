@@ -1,6 +1,6 @@
 import { $, $$, browser } from "@wdio/globals"
 import { execFileSync, spawn } from "node:child_process"
-import { readFile, writeFile } from "node:fs/promises"
+import { readFile, readdir, writeFile } from "node:fs/promises"
 import path from "node:path"
 import { editAndPreviewWorkflow } from "../scenarios/edit-and-preview.js"
 import { libraryAndGraphWorkflow } from "../scenarios/library-and-graph.js"
@@ -322,6 +322,41 @@ class DesktopEditorUi {
     return this.readSource()
   }
 
+  async rejectMediaFile({ filename, mimeType, contents, size }) {
+    const result = await browser.execute(async ({ filename, mimeType, contents, size }) => {
+      const field = document.querySelector("#desktop-editor-field")
+      const controller = field?.editorController
+      const form = document.querySelector("#desktop-editor-form")
+      const input = document.querySelector('input[data-media-target="input"]')
+      const media = form && globalThis.Stimulus?.getControllerForElementAndIdentifier(form, "media")
+      if (!controller || !media || !input || typeof DataTransfer !== "function") {
+        return { error: "media controls were not ready" }
+      }
+
+      const sourceBefore = controller.sourceValue
+      const bytes = size === undefined
+        ? new TextEncoder().encode(contents)
+        : new Uint8Array(size)
+      const transfer = new DataTransfer()
+      transfer.items.add(new File([bytes], filename, { type: mimeType }))
+      input.files = transfer.files
+      if (input.files.length !== 1) return { error: "WebKit did not accept the media fixture" }
+
+      await media.selected()
+      return {
+        sourceBefore,
+        sourceAfter: controller.sourceValue,
+        status: form.querySelector('[data-media-target="status"]')?.textContent || ""
+      }
+    }, { filename, mimeType, contents, size })
+
+    if (result.error) throw new Error(`The desktop media controller could not run the rejection case: ${result.error}`)
+    if (result.sourceAfter !== result.sourceBefore) {
+      throw new Error(`Rejected media changed the Markdown source: ${JSON.stringify(result)}`)
+    }
+    return result.status
+  }
+
   async waitForImage(digest) {
     await browser.waitUntil(async () => browser.execute(expectedDigest =>
       [...document.querySelectorAll('img[data-editor-image-source="true"]')].some(image =>
@@ -609,6 +644,112 @@ describe("shared authoring scenarios", () => {
 
   it("runs the shared math input flow in the desktop binary", async () => {
     await mathInputWorkflow(new DesktopEditorUi())
+  })
+
+  it("loads custom snippets and math shortcuts from the selected library .elef settings", async () => {
+    const ui = new DesktopEditorUi()
+    await ui.openDeck()
+    const originalSource = await ui.readSource()
+
+    const snippetPrefix = `${originalSource.trimEnd()}\n`
+    await ui.replaceSource(`${snippetPrefix}/note`)
+    await ui.waitForAuthoringOption("snippet", "Personal note")
+    await ui.selectAuthoringOption("snippet", "Personal note")
+    const withSnippet = `${snippetPrefix}**note**`
+    await ui.waitForSource(withSnippet)
+
+    const mathPrefix = `${withSnippet}\n\n$$\n`
+    await ui.replaceSource(`${mathPrefix}@lambda`)
+    await ui.waitForAuthoringOption("math", "Lambda")
+    await ui.selectAuthoringOption("math", "Lambda")
+    const withMath = `${mathPrefix}\\lambda`
+    await ui.waitForSource(withMath)
+    await ui.waitForSaved(withMath)
+
+    await browser.execute(async entries => {
+      await window.__TAURI__.core.invoke("write_authoring_registry", {
+        registry: "snippets",
+        entries
+      })
+    }, [{
+      id: "personal-emphasis",
+      name: "Personal emphasis",
+      description: "Emphasize a phrase",
+      trigger: "emphasis",
+      category: "Markdown",
+      body: "*${1:phrase}*",
+      namespace: "/",
+      built_in: false
+    }])
+    await browser.execute(async entries => {
+      await window.__TAURI__.core.invoke("write_authoring_registry", {
+        registry: "math_shortcuts",
+        entries
+      })
+    }, [{
+      id: "personal-theta",
+      name: "Theta",
+      description: "The Greek letter theta",
+      prefix: "@",
+      aliases: ["theta"],
+      expansion: "\\theta",
+      namespace: "@",
+      built_in: false
+    }])
+
+    const library = new DesktopLibraryUi()
+    await library.openLibrary()
+    await $("#refresh-library").click()
+    await browser.waitUntil(async () => (await $("#status-text").getText()).includes("decks"), {
+      timeout: 10_000,
+      timeoutMsg: "Refreshing the library did not finish loading its authoring settings"
+    })
+    await ui.openDeck()
+
+    const refreshedSnippetPrefix = `${withMath}\n`
+    await ui.replaceSource(`${refreshedSnippetPrefix}/emphasis`)
+    await ui.waitForAuthoringOption("snippet", "Personal emphasis")
+    await ui.selectAuthoringOption("snippet", "Personal emphasis")
+    const withRefreshedSnippet = `${refreshedSnippetPrefix}*phrase*`
+    await ui.waitForSource(withRefreshedSnippet)
+
+    await ui.replaceSource(`${withRefreshedSnippet}\n\n$$\n@theta`)
+    await ui.waitForAuthoringOption("math", "Theta")
+    await ui.selectAuthoringOption("math", "Theta")
+    const refreshedSource = `${withRefreshedSnippet}\n\n$$\n\\theta`
+    await ui.waitForSource(refreshedSource)
+    await ui.waitForSaved(refreshedSource)
+
+    await ui.replaceSource(originalSource)
+    await ui.waitForSaved(originalSource)
+  })
+
+  it("rejects unsupported and oversized media without changing the source", async () => {
+    const ui = new DesktopEditorUi()
+    await ui.openDeck()
+    const imagesPath = path.join(process.env.ELEF_E2E_LIBRARY_ROOT, "E2E seed", "images")
+    const filesBefore = (await readdir(imagesPath)).sort()
+    const unsupportedStatus = await ui.rejectMediaFile({
+      filename: "unsupported.svg",
+      mimeType: "image/svg+xml",
+      contents: "<svg xmlns=\"http://www.w3.org/2000/svg\"><script>alert(1)</script></svg>"
+    })
+    if (!unsupportedStatus.includes("requested name or source is invalid")) {
+      throw new Error(`The desktop did not surface the typed unsupported-media error: ${unsupportedStatus}`)
+    }
+
+    const oversizedStatus = await ui.rejectMediaFile({
+      filename: "oversized.png",
+      mimeType: "image/png",
+      size: 50 * 1024 * 1024 + 1
+    })
+    if (oversizedStatus !== "Media files must be between 1 byte and 50 MB.") {
+      throw new Error(`The desktop did not surface the media size limit: ${oversizedStatus}`)
+    }
+    const filesAfter = (await readdir(imagesPath)).sort()
+    if (JSON.stringify(filesAfter) !== JSON.stringify(filesBefore)) {
+      throw new Error(`Rejected media changed the deck's images directory: ${JSON.stringify({ filesBefore, filesAfter })}`)
+    }
   })
 
   it("imports a portable .elef opened by the running application", async () => {
