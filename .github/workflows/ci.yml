@@ -343,8 +343,8 @@ jobs:
           trap restore_firewall EXIT
           cat >"$rules" <<'EOF'
           pass out quick on lo0 all
-          block drop out quick inet all
-          block drop out quick inet6 all
+          block return out quick inet all
+          block return out quick inet6 all
           EOF
           sudo pfctl -a "$anchor" -f "$rules"
           if [ "$pf_was_enabled" -eq 0 ]; then sudo pfctl -E; fi
