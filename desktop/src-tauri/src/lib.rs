@@ -1117,6 +1117,11 @@ pub fn run() {
             #[cfg(not(feature = "webdriver"))]
             restore_library_root(app.handle(), &app.state::<DesktopState>());
             app.set_menu(build_menu(app.handle())?)?;
+            if let Ok((live, _)) = installed_application(app.handle()) {
+                tauri::async_runtime::spawn_blocking(move || {
+                    let _ = elef_core::update_install::cleanup_previous_installation(&live);
+                });
+            }
             Ok(())
         })
         .on_menu_event(|app, event| {

@@ -28,9 +28,14 @@ impl UpdateStage {
         let live = parent.join(live.file_name().ok_or_else(|| {
             io::Error::new(io::ErrorKind::InvalidInput, "Missing installation name")
         })?);
-        let directory = tempfile::Builder::new()
-            .prefix(".elef-update-")
-            .tempdir_in(&parent)?;
+        let mut builder = tempfile::Builder::new();
+        builder.prefix(".elef-update-");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            builder.permissions(fs::Permissions::from_mode(0o700));
+        }
+        let directory = builder.tempdir_in(&parent)?;
         let staged = directory.path().join(live.file_name().unwrap());
         copy_tree(&live, &staged)?;
         Ok(Self {
@@ -64,6 +69,7 @@ impl UpdateStage {
         File::open(self.directory.path())?.sync_all()?;
         let parent = File::open(self.live.parent().unwrap())?;
         parent.sync_all()?;
+        write_receipt(self.directory.path(), &self.live, &self.staged)?;
         hook("before_exchange");
         exchange(&self.live, &self.staged)?;
         // After exchange, TempDir must never remove the old app. A process kill
@@ -76,6 +82,127 @@ impl UpdateStage {
         let _ = parent.sync_all();
         Ok(previous)
     }
+}
+
+// An update backup is removed only by a launch from the exact replacement
+// inode. A receipt is written and flushed before exchange, so a kill cannot
+// make an unactivated staging copy look like a successful update.
+#[cfg(unix)]
+#[derive(serde::Serialize, serde::Deserialize)]
+struct Receipt {
+    live: PathBuf,
+    old_device: u64,
+    old_inode: u64,
+    new_device: u64,
+    new_inode: u64,
+}
+
+#[cfg(unix)]
+fn write_receipt(directory: &Path, live: &Path, staged: &Path) -> io::Result<()> {
+    use std::io::Write;
+    use std::os::unix::fs::MetadataExt;
+    let old = fs::symlink_metadata(live)?;
+    let new = fs::symlink_metadata(staged)?;
+    let receipt = Receipt {
+        live: live.to_owned(),
+        old_device: old.dev(),
+        old_inode: old.ino(),
+        new_device: new.dev(),
+        new_inode: new.ino(),
+    };
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(directory.join("activation.json"))?;
+    file.write_all(&serde_json::to_vec(&receipt)?)?;
+    file.sync_all()?;
+    File::open(directory)?.sync_all()
+}
+
+#[cfg(not(unix))]
+fn write_receipt(_: &Path, _: &Path, _: &Path) -> io::Result<()> {
+    Err(io::Error::new(
+        io::ErrorKind::Unsupported,
+        "Update receipts unavailable",
+    ))
+}
+
+/// Best effort housekeeping after a packaged replacement starts successfully.
+/// Ignores unmarked, malformed, linked, or identity-mismatched directories.
+#[cfg(unix)]
+pub fn cleanup_previous_installation(live: &Path) -> io::Result<usize> {
+    use std::os::unix::fs::MetadataExt;
+    let live_metadata = fs::symlink_metadata(live)?;
+    if live_metadata.file_type().is_symlink() {
+        return Ok(0);
+    }
+    let parent = fs::canonicalize(live.parent().ok_or_else(|| {
+        io::Error::new(io::ErrorKind::InvalidInput, "Missing installation parent")
+    })?)?;
+    let live =
+        parent.join(live.file_name().ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidInput, "Missing installation name")
+        })?);
+    let mut removed = 0;
+    for entry in fs::read_dir(&parent)? {
+        let entry = entry?;
+        if !entry
+            .file_name()
+            .to_string_lossy()
+            .starts_with(".elef-update-")
+        {
+            continue;
+        }
+        let directory = entry.path();
+        let metadata = fs::symlink_metadata(&directory)?;
+        if !metadata.is_dir()
+            || metadata.file_type().is_symlink()
+            || metadata.uid() != live_metadata.uid()
+            || metadata.mode() & 0o077 != 0
+        {
+            continue;
+        }
+        let receipt_path = directory.join("activation.json");
+        let Ok(receipt_metadata) = fs::symlink_metadata(&receipt_path) else {
+            continue;
+        };
+        if !receipt_metadata.is_file()
+            || receipt_metadata.file_type().is_symlink()
+            || receipt_metadata.len() > 4096
+        {
+            continue;
+        }
+        let Ok(bytes) = fs::read(&receipt_path) else {
+            continue;
+        };
+        let Ok(receipt) = serde_json::from_slice::<Receipt>(&bytes) else {
+            continue;
+        };
+        if receipt.live != live
+            || receipt.new_device != live_metadata.dev()
+            || receipt.new_inode != live_metadata.ino()
+        {
+            continue;
+        }
+        let previous = directory.join(live.file_name().unwrap());
+        let Ok(previous_metadata) = fs::symlink_metadata(&previous) else {
+            continue;
+        };
+        if previous_metadata.file_type().is_symlink()
+            || previous_metadata.dev() != receipt.old_device
+            || previous_metadata.ino() != receipt.old_inode
+        {
+            continue;
+        }
+        fs::remove_dir_all(directory)?;
+        removed += 1;
+    }
+    Ok(removed)
+}
+
+#[cfg(not(unix))]
+pub fn cleanup_previous_installation(_: &Path) -> io::Result<usize> {
+    Ok(0)
 }
 
 fn copy_tree(source: &Path, destination: &Path) -> io::Result<()> {
@@ -211,6 +338,50 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn successful_launch_removes_only_its_identified_backup() {
+        for directory in [false, true] {
+            let root = tempfile::tempdir().unwrap();
+            let live = installation(root.path(), directory);
+            let stage = UpdateStage::new(&live).unwrap();
+            fs::write(binary(stage.path()), "new complete app").unwrap();
+            write_receipt(stage.directory.path(), &stage.live, stage.path()).unwrap();
+            assert_eq!(cleanup_previous_installation(&live).unwrap(), 0);
+            fs::remove_file(stage.directory.path().join("activation.json")).unwrap();
+            let previous = stage.activate().unwrap();
+            let unrelated = root.path().join(".elef-update-user-files");
+            fs::create_dir(&unrelated).unwrap();
+            fs::write(unrelated.join("notes.md"), "user bytes").unwrap();
+            let linked = root.path().join(".elef-update-link");
+            std::os::unix::fs::symlink(&unrelated, &linked).unwrap();
+            assert_eq!(cleanup_previous_installation(&live).unwrap(), 1);
+            assert!(!previous.exists());
+            assert_eq!(
+                fs::read_to_string(binary(&live)).unwrap(),
+                "new complete app"
+            );
+            assert_eq!(
+                fs::read_to_string(unrelated.join("notes.md")).unwrap(),
+                "user bytes"
+            );
+            assert!(linked.is_symlink());
+            assert_eq!(cleanup_previous_installation(&live).unwrap(), 0);
+        }
+    }
+
+    #[test]
+    fn cleanup_keeps_a_backup_when_the_replacement_identity_changed() {
+        let root = tempfile::tempdir().unwrap();
+        let live = installation(root.path(), false);
+        let stage = UpdateStage::new(&live).unwrap();
+        let previous = stage.activate().unwrap();
+        let manual = root.path().join("manual-new-version");
+        fs::write(&manual, "manual installation").unwrap();
+        fs::rename(manual, &live).unwrap();
+        assert_eq!(cleanup_previous_installation(&live).unwrap(), 0);
+        assert!(previous.exists());
     }
 
     #[test]
