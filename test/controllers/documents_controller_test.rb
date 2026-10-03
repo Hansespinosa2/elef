@@ -52,7 +52,7 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
   test "editor projections resolve document links through the shared renderer" do
     source = Document.create!(source: "# Source notes\n\n[[Target notes]]")
     target = Document.create!(title: "Target notes", source: "# Target notes")
-    draft = "# Draft notes\n\n[[Target notes|Open target]]"
+    draft = "# Draft notes\n\n[[Target notes|Open target]]\n\n![Diagram](/diagram.svg)"
 
     post preview_document_path(source), params: {
       document: { source: draft }, projection: "editor", revision: "shared-projection-1"
@@ -64,6 +64,9 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "document", payload.dig("editor_map", "mode")
     assert_includes payload["html"], %(href="#{document_path(target)}")
     assert_includes payload["html"], %(data-document-link-title="Target notes")
+    assert_includes payload["html"], %(src="/diagram.svg")
+    assert_includes payload["html"], %(data-editor-image-source="true" contenteditable="false")
+    assert_includes payload["html"], %(class="editor-media-caption")
     assert_includes payload["html"], %(contenteditable="true")
     assert_equal "# Source notes\n\n[[Target notes]]", source.reload.source
 

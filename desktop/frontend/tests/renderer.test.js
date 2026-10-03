@@ -147,6 +147,29 @@ test("shared Markdown block renderer keeps media resolution explicit and support
   assert.match(web, /src="https:\/\/example\.com\/a\.png"/)
 })
 
+test("editable web projections preserve safe relative image paths and editable captions", () => {
+  for (const kind of ["document", "presentation"]) {
+    const preview = renderPreview({
+      source: "![Diagram](/diagram.svg)",
+      kind,
+      title: "Diagram",
+      deckId: "deck-id",
+      allowRemoteMedia: true
+    })
+
+    assert.match(preview.html, /<img[^>]+src="\/diagram\.svg"[^>]+data-editor-image-source="true" contenteditable="false">/)
+    assert.match(preview.html, /<figcaption class="editor-media-caption"[^>]*>Diagram<\/figcaption>/)
+  }
+
+  const desktop = renderPreview({
+    source: "![Remote diagram](/diagram.svg)",
+    kind: "document",
+    title: "Diagram",
+    deckId: "deck-id"
+  })
+  assert.doesNotMatch(desktop.html, /src="\/diagram\.svg"/)
+})
+
 test("shared Markdown block renderer supports both KaTeX delimiter families and autolinks", () => {
   const html = renderMarkdownBlock("Inline \\(\\bar{x}\\), display \\[x^2\\], and https://example.com")
   assert.match(html, /data-editor-math-open="\\\("/)

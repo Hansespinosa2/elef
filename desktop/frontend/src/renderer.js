@@ -321,7 +321,10 @@ function renderPresentation(source, slides, style, margin, env) {
       const attributes = valid
         ? `data-editor-block-id="${mapped.id}" data-editor-region-id="${region.id}" data-editor-source-editable="${region.editable}"${region.editable ? ` contenteditable="true" role="textbox" aria-label="${label}" aria-multiline="true" spellcheck="true" data-action="input-&gt;presentation-editor#blockInput focus-&gt;presentation-editor#blockFocus blur-&gt;presentation-editor#blockBlur"` : " contenteditable=\"false\" aria-readonly=\"true\""}`
         : "contenteditable=\"false\" aria-readonly=\"true\""
-      const content = renderMarkdownBlock(block.markdown, env)
+      const rendered = renderMarkdownBlock(block.markdown, env)
+      const content = valid && mapped.kind === "image"
+        ? editableMedia(rendered, block.markdown)
+        : rendered
       const controls = valid ? renderPresentationBlockControls(index, blockIndex, blocks.length, block.position) : ""
       return `<div class="${className}" ${attributes}>${content}</div>${controls}`
     }
@@ -344,6 +347,11 @@ function renderPresentation(source, slides, style, margin, env) {
     return `<div class="slide-frame" data-controller="presentation-canvas"><section class="slide slide-${slide.layout}" data-presentation-canvas-target="canvas" aria-label="Slide ${index + 1}" data-editor-slide-id="slide-${index + 1}" data-slide-index="${index}">${toolbar}${topMargin}<div class="slide-content">${titleMarkup}${slideContent}${empty}</div>${bottomMargin}</section></div>`
   }).join("")
   return `<div class="presentation-surface work-surface slides slides-theme-${style.theme} slides-typography-${style.typography} work-theme-${style.theme} work-typography-${style.typography} presentation-editor-projection" data-controller="mermaid-diagrams" data-presentation-editor-target="canvas">${frames}</div>`
+}
+
+function editableMedia(rendered, markdown) {
+  const alt = /^\s*!\[([^\]]*)\]/.exec(markdown)?.[1] || ""
+  return `<figure class="editor-media">${rendered}<figcaption class="editor-media-caption" aria-label="Editable image alt text" title="Edit image alt text">${escapeHtml(alt)}</figcaption></figure>`
 }
 
 function renderPresentationBlockControls(slideIndex, blockIndex, blockCount, position) {
@@ -383,6 +391,7 @@ function resolveAssetSource(source, env = {}) {
       : env.allowRemoteMedia ? { src: source } : null
   }
   if (env.allowRemoteMedia && /^https?:\/\//i.test(source)) return { src: source }
+  if (env.allowRemoteMedia && SAFE_LINK.test(source)) return { src: source }
   if (!base && SAFE_LINK.test(source) && !/^[a-z][a-z0-9+.-]*:/i.test(source)) return { src: source }
   return null
 }
