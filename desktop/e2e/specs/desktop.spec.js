@@ -57,11 +57,11 @@ class DesktopEditorUi {
     await browser.waitUntil(async () => new RegExp(`^${key}: ${value}$`, "m").test(await this.readSource()), {
       timeout: 10_000, timeoutMsg: "The appearance choice did not update the source"
     })
-    await $(`[class*='slides-${key}-${value}']`).waitForDisplayed()
+    await $(`#desktop-editor-form [class*='slides-${key}-${value}']`).waitForDisplayed()
   }
 
   async assertAppearance(theme, typography) {
-    await $(`.slides-theme-${theme}.slides-typography-${typography}`).waitForDisplayed()
+    await $(`#desktop-editor-form .slides-theme-${theme}.slides-typography-${typography}`).waitForDisplayed()
   }
 
   constructor() {

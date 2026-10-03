@@ -2,6 +2,15 @@ export function createTransportAdapter({ invoke, onConflict = () => {} }) {
   const baseHashes = new Map()
 
   return {
+    readDeck(id) {
+      return invoke("open_deck", { id })
+    },
+
+    activateDeck(deck, requestedId = deck.id) {
+      if (deck.id !== requestedId) baseHashes.delete(requestedId)
+      baseHashes.set(deck.id, deck.content_hash)
+    },
+
     async openDeck(id) {
       const deck = await invoke("open_deck", { id })
       if (deck.id !== id) baseHashes.delete(id)

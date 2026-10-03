@@ -56,4 +56,8 @@ sequenceDiagram
 
 ## Revisit when
 
+### Amendment 2026-10-03: navigation ownership
+
+Pending deck reads do not advance the active save fingerprint. Graph and editor preparation finish while the old deck retains save ownership. If edits arrive during preparation, they save against that old fingerprint and the target is reread before activation. Installing the editor buffer and activating the target's fingerprint/save ownership occur synchronously, without an intervening await. A failed buffer installation deactivates saves and returns to the library. Deferred-read and deferred-graph unit tests cover same-deck stale snapshots, external-change conflicts, and typing into the prior deck during preparation.
+
 Saves are shown to miss the autosave budget, or the residual race is observed in practice.

@@ -1,4 +1,4 @@
-import { createDeckOpenFlow } from "./deck-open-flow.js"
+import { createDeckOpenFlow, prepareDeckOpen } from "./deck-open-flow.js"
 import { completeBootstrap } from "./bootstrap-flow.js"
 import { createCloseFlow } from "./close-flow.js"
 import { Channel, invoke } from "@tauri-apps/api/core"
@@ -468,19 +468,52 @@ async function openDeckNow(id) {
     if (document.body.classList.contains("presenting-deck")) await exitPresentation()
     if (activeDeck && hasUnsavedChanges() && !(await flushSave())) return
     delete elements.editorForm.dataset.loadedDeckId
-    const deck = await transport.openDeck(id)
-    // Edits made while the folder read was in flight still belong to the old
-    // deck and must persist before its editor state is replaced.
-    if (activeDeck && hasUnsavedChanges() && !(await flushSave())) {
+    let transition
+    do {
+      transition = await prepareDeckOpen(id, {
+        read: target => transport.readDeck(target),
+        isDirty: hasUnsavedChanges,
+        flushSave,
+        prepare: async deck => {
+          const editor = await waitForEditorController(elements.editorField, editorFor)
+          let documentTitles = []
+          if (deck.source_file === "document.md" || deck.source.includes("[[")) {
+            try {
+              const graph = await documentGraphData()
+              documentTitles = deck.source_file === "document.md" ? graph.nodes.map(node => node.title) : []
+            } catch (_error) {
+              documentTitles = deck.source_file === "document.md"
+                ? decks.filter(item => item.kind === "document").map(item => item.name) : []
+            }
+          }
+          return { editor, documentTitles }
+        }
+      })
+    } while (transition && hasUnsavedChanges())
+    if (!transition) {
       elements.editorForm.dataset.loadedDeckId = activeDeck.id
       return
     }
+    const { deck, prepared: { editor, documentTitles } } = transition
     const isDocument = deck.source_file === "document.md"
     if (deck.id !== id) {
       decks = decks.map(item => item.id === id ? { ...item, id: deck.id } : item)
       documentGraphCache.invalidate()
       renderDecks()
     }
+    // All asynchronous work is finished. Installing the buffer and changing
+    // save ownership occur in one synchronous turn, with no stale A buffer
+    // able to schedule a write for B during graph/controller preparation.
+    saveFlow.deactivate()
+    activeDeck = null
+    try {
+      editor.loadDocument(deck.source)
+    } catch (error) {
+      elements.editorInput.disabled = true
+      showLibrary()
+      throw error
+    }
+    transport.activateDeck(deck, id)
     activeDeck = deck
     saveFlow.activate(deck)
     document.querySelector("#deck-title").textContent = deck.name
@@ -492,22 +525,7 @@ async function openDeckNow(id) {
     elements.editorForm.dataset.mediaWorkKindValue = deck.source_file === "document.md" ? "document" : "presentation"
     elements.editorForm.dataset.mediaUploadUrlValue = `elef-upload://localhost/${encodeURIComponent(deck.id)}`
     elements.editorForm.dataset.mediaAssetBaseUrlValue = `elefasset://localhost/${encodeURIComponent(deck.id)}`
-    if (isDocument || deck.source.includes("[[")) {
-      try {
-        const graph = await documentGraphData()
-        elements.editorField.dataset.documentLinkPaletteTitlesValue = JSON.stringify(
-          isDocument ? graph.nodes.map(node => node.title) : []
-        )
-      } catch (_error) {
-        elements.editorField.dataset.documentLinkPaletteTitlesValue = JSON.stringify(
-          isDocument ? decks.filter(item => item.kind === "document").map(item => item.name) : []
-        )
-      }
-    } else {
-      elements.editorField.dataset.documentLinkPaletteTitlesValue = "[]"
-    }
-    const editor = await waitForEditorController(elements.editorField, editorFor)
-    editor.loadDocument(deck.source)
+    elements.editorField.dataset.documentLinkPaletteTitlesValue = JSON.stringify(documentTitles)
     elements.editorForm.querySelector(".slide-overview").hidden = isDocument
     const visualButton = document.querySelector("#visual-mode")
     visualButton.disabled = true
