@@ -94,6 +94,11 @@ impl From<CoreError> for CommandError {
                     "current": { "source": disk_source, "source_file": disk_source_file }
                 })),
             },
+            CoreError::AuthoringConflict => Self::new(
+                "conflict",
+                "Authoring settings changed outside Elef. Close and reopen settings before saving.",
+                false,
+            ),
             CoreError::ImportConflict {
                 incoming_name,
                 existing_name,
@@ -143,6 +148,11 @@ fn library_status(library: &Library, root: &Path) -> Result<LibraryStatus, Comma
 #[derive(Debug, Serialize)]
 struct DeleteResult {
     deleted: bool,
+}
+
+#[derive(Debug, Serialize)]
+struct AuthoringRegistryWriteResult {
+    content_hash: String,
 }
 
 #[tauri::command]
@@ -274,11 +284,12 @@ fn write_authoring_registry(
     state: State<'_, DesktopState>,
     registry: String,
     entries: Vec<serde_json::Value>,
-) -> Result<(), CommandError> {
-    state
+    base_hash: String,
+) -> Result<AuthoringRegistryWriteResult, CommandError> {
+    let content_hash = state
         .current_library()?
-        .write_authoring_registry(&registry, &entries)?;
-    Ok(())
+        .write_authoring_registry(&registry, &entries, &base_hash)?;
+    Ok(AuthoringRegistryWriteResult { content_hash })
 }
 
 async fn export_elef_impl(

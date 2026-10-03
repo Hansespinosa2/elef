@@ -143,10 +143,30 @@ pub struct LibraryConfig {
     pub hotkeys: BTreeMap<String, String>,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AuthoringRegistries {
     pub snippets: Vec<serde_json::Value>,
     pub math_shortcuts: Vec<serde_json::Value>,
+    pub hashes: AuthoringRegistryHashes,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct AuthoringRegistryHashes {
+    pub snippets: String,
+    pub math_shortcuts: String,
+}
+
+impl Default for AuthoringRegistries {
+    fn default() -> Self {
+        Self {
+            snippets: Vec::new(),
+            math_shortcuts: Vec::new(),
+            hashes: AuthoringRegistryHashes {
+                snippets: sha256(&[]),
+                math_shortcuts: sha256(&[]),
+            },
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -197,6 +217,8 @@ pub enum CoreError {
         disk_source: String,
         disk_source_file: String,
     },
+    #[error("Authoring settings changed outside Elef. Reload them before saving.")]
+    AuthoringConflict,
     #[error("A deck with this identity already exists in the library.")]
     ImportConflict {
         incoming_name: String,
@@ -215,6 +237,7 @@ impl CoreError {
             Self::PathRejected => "path_rejected",
             Self::TooLarge => "too_large",
             Self::Conflict { .. } => "conflict",
+            Self::AuthoringConflict => "conflict",
             Self::ImportConflict { .. } => "import_conflict",
             Self::Io(_) => "io_error",
         }
@@ -405,9 +428,16 @@ impl Library {
     }
 
     pub fn read_authoring_registries(&self) -> Result<AuthoringRegistries, CoreError> {
+        let (snippets, snippets_hash) = self.read_authoring_entries("snippets.json", false)?;
+        let (math_shortcuts, math_shortcuts_hash) =
+            self.read_authoring_entries("math-shortcuts.json", true)?;
         Ok(AuthoringRegistries {
-            snippets: self.read_authoring_entries("snippets.json", false)?,
-            math_shortcuts: self.read_authoring_entries("math-shortcuts.json", true)?,
+            snippets,
+            math_shortcuts,
+            hashes: AuthoringRegistryHashes {
+                snippets: snippets_hash,
+                math_shortcuts: math_shortcuts_hash,
+            },
         })
     }
 
@@ -415,12 +445,16 @@ impl Library {
         &self,
         registry: &str,
         entries: &[serde_json::Value],
-    ) -> Result<(), CoreError> {
+        base_hash: &str,
+    ) -> Result<String, CoreError> {
         let (file_name, is_math) = match registry {
             "snippets" => ("snippets.json", false),
             "math_shortcuts" => ("math-shortcuts.json", true),
             _ => return Err(CoreError::InvalidInput),
         };
+        if !is_sha256(base_hash) {
+            return Err(CoreError::InvalidInput);
+        }
         validate_authoring_entries(entries, is_math)?;
 
         let directory = self.root.join(LIBRARY_CONFIG_DIR);
@@ -443,21 +477,25 @@ impl Library {
             schema_version: AUTHORING_REGISTRY_SCHEMA_VERSION,
             entries: entries.to_vec(),
         };
-        write_file_atomic(
-            &path,
-            &serde_json::to_vec_pretty(&document).map_err(|_| CoreError::InvalidInput)?,
-        )
+        let bytes = serde_json::to_vec_pretty(&document).map_err(|_| CoreError::InvalidInput)?;
+        // Recheck immediately before the atomic replacement so an edit made
+        // while the settings UI is open is surfaced instead of discarded.
+        self.read_authoring_entries(file_name, is_math)?;
+        write_file_atomic_if_unchanged(&path, &bytes, base_hash)?;
+        Ok(sha256(&bytes))
     }
 
     fn read_authoring_entries(
         &self,
         file_name: &str,
         is_math: bool,
-    ) -> Result<Vec<serde_json::Value>, CoreError> {
+    ) -> Result<(Vec<serde_json::Value>, String), CoreError> {
         let directory = self.root.join(LIBRARY_CONFIG_DIR);
         let metadata = match fs::symlink_metadata(&directory) {
             Ok(metadata) => metadata,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return Ok((Vec::new(), sha256(&[])));
+            }
             Err(error) => return Err(CoreError::Io(error)),
         };
         if !metadata.is_dir() || metadata.file_type().is_symlink() {
@@ -470,7 +508,9 @@ impl Library {
         let path = canonical_directory.join(file_name);
         let metadata = match fs::symlink_metadata(&path) {
             Ok(metadata) => metadata,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return Ok((Vec::new(), sha256(&[])));
+            }
             Err(error) => return Err(CoreError::Io(error)),
         };
         if metadata.file_type().is_symlink() || !metadata.is_file() {
@@ -483,7 +523,7 @@ impl Library {
             return Err(CoreError::InvalidInput);
         }
         validate_authoring_entries(&file.entries, is_math)?;
-        Ok(file.entries)
+        Ok((file.entries, sha256(&bytes)))
     }
 
     pub fn open_deck(&self, id: &str) -> Result<OpenDeck, CoreError> {
@@ -1623,6 +1663,41 @@ fn write_file_atomic(path: &Path, bytes: &[u8]) -> Result<(), CoreError> {
     Ok(())
 }
 
+fn write_file_atomic_if_unchanged(
+    path: &Path,
+    bytes: &[u8],
+    expected_hash: &str,
+) -> Result<(), CoreError> {
+    let parent = path.parent().ok_or(CoreError::PathRejected)?;
+    if let Ok(metadata) = fs::symlink_metadata(path)
+        && (metadata.file_type().is_symlink() || !metadata.is_file())
+    {
+        return Err(CoreError::PathRejected);
+    }
+    let mut temp = TempFileBuilder::new()
+        .prefix(".elef-config-")
+        .suffix(".tmp")
+        .tempfile_in(parent)?;
+    temp.write_all(bytes)?;
+    temp.as_file().sync_all()?;
+
+    let current_bytes = match fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_file() => {
+            return Err(CoreError::PathRejected);
+        }
+        Ok(_) => read_regular_file_limited(path, AUTHORING_REGISTRY_MAX_BYTES)?,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+        Err(error) => return Err(CoreError::Io(error)),
+    };
+    if sha256(&current_bytes) != expected_hash {
+        return Err(CoreError::AuthoringConflict);
+    }
+
+    temp.persist(path)
+        .map_err(|error| CoreError::Io(error.error))?;
+    sync_directory(parent)
+}
+
 fn read_regular_file_handle(path: &Path) -> Result<File, CoreError> {
     open_regular_file(path)
 }
@@ -2652,10 +2727,8 @@ mod tests {
     #[test]
     fn authoring_registries_are_portable_versioned_and_validated() {
         let (temp, library) = library();
-        assert_eq!(
-            library.read_authoring_registries().unwrap(),
-            AuthoringRegistries::default()
-        );
+        let initial = library.read_authoring_registries().unwrap();
+        assert_eq!(initial, AuthoringRegistries::default());
         let snippets = vec![serde_json::json!({
             "id": "personal-bold",
             "name": "Bold note",
@@ -2673,23 +2746,26 @@ mod tests {
             "aliases": ["alpha"],
             "expansion": "\\alpha"
         })];
-        library
-            .write_authoring_registry("snippets", &snippets)
+        let snippets_hash = library
+            .write_authoring_registry("snippets", &snippets, &initial.hashes.snippets)
             .unwrap();
-        library
-            .write_authoring_registry("math_shortcuts", &math_shortcuts)
+        let after_snippets = library.read_authoring_registries().unwrap();
+        let math_hash = library
+            .write_authoring_registry(
+                "math_shortcuts",
+                &math_shortcuts,
+                &after_snippets.hashes.math_shortcuts,
+            )
             .unwrap();
-        assert_eq!(
-            library.read_authoring_registries().unwrap(),
-            AuthoringRegistries {
-                snippets,
-                math_shortcuts
-            }
-        );
+        let persisted = library.read_authoring_registries().unwrap();
+        assert_eq!(persisted.snippets, snippets);
+        assert_eq!(persisted.math_shortcuts, math_shortcuts);
+        assert_eq!(persisted.hashes.snippets, snippets_hash);
+        assert_eq!(persisted.hashes.math_shortcuts, math_hash);
         assert!(temp.path().join(".elef/snippets.json").is_file());
         assert!(temp.path().join(".elef/math-shortcuts.json").is_file());
         assert!(matches!(
-            library.write_authoring_registry("unknown", &[]),
+            library.write_authoring_registry("unknown", &[], &sha256(&[])),
             Err(CoreError::InvalidInput)
         ));
         assert!(matches!(
@@ -2703,10 +2779,38 @@ mod tests {
                     "category": "Markdown",
                     "body": "x",
                     "built_in": true
-                })]
+                })],
+                &persisted.hashes.snippets
             ),
             Err(CoreError::InvalidInput)
         ));
+    }
+
+    #[test]
+    fn authoring_registry_write_does_not_overwrite_external_changes() {
+        let (temp, library) = library();
+        let initial = library.read_authoring_registries().unwrap();
+        let edited = vec![serde_json::json!({
+            "id": "personal-note",
+            "name": "Personal note",
+            "description": "Local edit",
+            "trigger": "note",
+            "category": "Markdown",
+            "body": "# ${1:Note}",
+            "built_in": false
+        })];
+        let settings_path = temp.path().join(".elef/snippets.json");
+        fs::create_dir(temp.path().join(LIBRARY_CONFIG_DIR)).unwrap();
+        fs::write(&settings_path, br#"{"schema_version":1,"entries":[]}"#).unwrap();
+
+        assert!(matches!(
+            library.write_authoring_registry("snippets", &edited, &initial.hashes.snippets),
+            Err(CoreError::AuthoringConflict)
+        ));
+        assert_eq!(
+            fs::read(&settings_path).unwrap(),
+            br#"{"schema_version":1,"entries":[]}"#
+        );
     }
 
     #[cfg(unix)]
@@ -2726,7 +2830,7 @@ mod tests {
             Err(CoreError::PathRejected)
         ));
         assert!(matches!(
-            library.write_authoring_registry("snippets", &[]),
+            library.write_authoring_registry("snippets", &[], &sha256(&[])),
             Err(CoreError::PathRejected)
         ));
     }

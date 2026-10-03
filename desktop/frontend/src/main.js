@@ -96,6 +96,7 @@ const elements = {
 let library = null
 let libraryConfig = { schema_version: 1, theme: "system", hotkeys: {} }
 let authoringRegistries = { snippets: [], math_shortcuts: [] }
+let authoringRegistryHashes = { snippets: null, math_shortcuts: null }
 let activeAuthoringRegistry = "snippets"
 let decks = []
 let activeDeck = null
@@ -708,10 +709,12 @@ async function showAuthoringSettings() {
     authoringRegistries = await invoke("read_authoring_registries")
     authoringRegistries.snippets ||= []
     authoringRegistries.math_shortcuts ||= []
+    authoringRegistryHashes = authoringRegistries.hashes || { snippets: null, math_shortcuts: null }
     setAuthoringRegistry(activeAuthoringRegistry)
     elements.authoringDialog.showModal()
   } catch (_error) {
     authoringRegistries = { snippets: [], math_shortcuts: [] }
+    authoringRegistryHashes = { snippets: null, math_shortcuts: null }
     setAuthoringRegistry(activeAuthoringRegistry)
     elements.authoringStatus.textContent = "Could not read authoring settings. Check that the library folder is available."
     elements.settingsDialog.close()
@@ -756,20 +759,26 @@ function editAuthoringEntry(entry) {
 
 async function persistAuthoringRegistries(nextEntries, action) {
   try {
-    await invoke("write_authoring_registry", {
+    const result = await invoke("write_authoring_registry", {
       registry: activeAuthoringRegistry,
-      entries: nextEntries
+      entries: nextEntries,
+      baseHash: authoringRegistryHashes[activeAuthoringRegistry]
     })
     authoringRegistries[activeAuthoringRegistry] = nextEntries
+    authoringRegistryHashes[activeAuthoringRegistry] = result.content_hash
     await loadDesktopAuthoringRegistry()
     elements.authoringStatus.textContent = `${action} saved to this library.`
     setStatus(`${action} saved`)
     closeAuthoringEntryForm()
     renderAuthoringEntries()
   } catch (error) {
-    elements.authoringStatus.textContent = error?.code === "invalid_input"
-      ? "These settings are invalid. Check the name, trigger, category, aliases, and template."
-      : "Could not save authoring settings. Check that the library folder is writable."
+    if (error?.code === "conflict") {
+      elements.authoringStatus.textContent = "These settings changed outside Elef. Close and reopen settings to load the latest entries before saving."
+    } else if (error?.code === "invalid_input") {
+      elements.authoringStatus.textContent = "These settings are invalid. Check the name, trigger, category, aliases, and template."
+    } else {
+      elements.authoringStatus.textContent = "Could not save authoring settings. Check that the library folder is writable."
+    }
   }
 }
 
