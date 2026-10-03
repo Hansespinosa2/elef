@@ -16,7 +16,7 @@ L = likelihood, I = impact (H / M / L).
 | R6 | Hostile content reaches IPC (iframe/IPC class of Tauri issues, sanitizer bypass) | L | H | C1 + C2 + C8 layered; the enumerated S5 hostile corpus passed on macOS/Linux; arbitrary-payload risk remains and requires re-probe on Tauri/security-boundary changes | security.md, S5 results |
 | R7 | macOS desktop E2E coverage is thin (no official driver) | H | M | Embedded driver, mock tier, manual MacBook check; recorded as an accepted limitation | test-strategy |
 | R8 | Unsigned macOS install friction or an OS change blocks first-run or updates | M | M | S3 documents the flow on current macOS; v1 audience is the owner's own devices; revisit before wider distribution | ADR-009 |
-| R9 | Cross-platform filesystem semantics (Unicode name equivalence, sync-tool partial writes) corrupt identity or lose edits | M | H | NFC + pinned Unicode 16.0 full case-fold collision keys, source-file rule, atomic writes, fingerprint check, fixtures | data-format, ADR-008 |
+| R9 | Cross-platform filesystem and sync semantics can corrupt identity or lose edits; an external writer can still race between the final source hash check and atomic replacement | M | H | NFC + pinned Unicode 16.0 full case-fold collision keys, source-file rule, atomic writes, conflict on changes detected before replacement, and a CI-measured check-to-replacement interval (<250 ms p95). That interval is not cross-process compare-and-swap; lock files cannot constrain arbitrary editors or sync tools | data-format, ADR-008, QS-3 |
 | R10 | Solo maintainer: scope creep or a stalled spike delays v1 | M | M | Scope contract in delivery-plan; stretch items have explicit cut points; spikes are time-boxed | delivery-plan |
 | R11 | Tauri 2 plugin churn or a security advisory forces an upgrade mid-milestone | M | M | Pin versions; audit in CI; upgrade is a scheduled task, not an emergency | security.md C12 |
 | R12 | Feature flags outlive their purpose and become permanent divergence | M | M | Flag register with removal conditions; CI checks live flags | delivery-plan |
@@ -24,7 +24,7 @@ L = likelihood, I = impact (H / M / L).
 
 ## Technical debt (known, accepted)
 
-- Library chrome (deck list, open/import/export) is new and minimal; it converges with the web library after v1 (ADR-004).
+- The desktop library shell is custom. It supports deck discovery, search and filters, previews, graph navigation, authoring settings, and deck operations; shared scenarios verify key flows on both runners. Full implementation and rendered-projection parity with the Rails library remains open in [issue #126](https://github.com/Hansespinosa2/elef/issues/126).
 - The SQLite cache is deferred; direct folder scans are the v1 strategy (re-evaluate at ~1,000 decks if budgets slip).
 - Normalized fixture comparison is temporary scaffolding retired at cutover (test-strategy §3).
 - Revisions and lineage are flagged off; the web app keeps them, so a second code path exists until the flags are removed.
