@@ -48,6 +48,26 @@ test("custom Rails-shaped snippet rows are enriched for the source palette", () 
   assert.deepEqual(note.behavior.placeholders, [{ position: 1, label: "note" }])
 })
 
+test("custom Elef directives retain the web registry argument schema", () => {
+  const registry = mergeAuthoringRegistryEntries(builtIns, [{
+    id: "personal-align",
+    name: "Align",
+    description: "Choose a block alignment",
+    trigger: "align",
+    category: "Elef DSL",
+    body: ":::align{${1}}",
+    built_in: false
+  }])
+  const align = registry.find(entry => entry.id === "personal-align")
+
+  assert.equal(align.namespace, ":")
+  assert.deepEqual(align.argument_schema.values, [
+    ["left", "center", "right", "top", "middle", "bottom"],
+    ["top", "middle", "bottom"]
+  ])
+  assert.deepEqual(align.argument_schema.argument_count, { minimum: 1, maximum: 2 })
+})
+
 test("custom Rails-shaped math rows are enriched for the math palette", () => {
   const registry = mergeAuthoringRegistryEntries(builtIns, [], [{
     id: "personal-lambda",

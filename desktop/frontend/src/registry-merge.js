@@ -8,6 +8,20 @@ const LEGACY_DIRECTIVE_TRIGGERS = new Map([
   ["foot", "footnote"]
 ])
 
+const DIRECTIVE_SCHEMAS = new Map([
+  ["align", {
+    grammar: ["alignment_or_position", "vertical_position?"],
+    argument_count: { minimum: 1, maximum: 2 },
+    values: [
+      ["left", "center", "right", "top", "middle", "bottom"],
+      ["top", "middle", "bottom"]
+    ]
+  }],
+  ["section", { grammar: ["text"], argument_count: 1, values: [] }],
+  ["subsection", { grammar: ["text"], argument_count: 1, values: [] }],
+  ["footnote", { grammar: ["text"], argument_count: 1, values: [] }]
+])
+
 function placeholders(template) {
   return [...String(template || "").matchAll(/\$\{(\d+)(?::([^}]*))?\}/g)]
     .map(([, position, label = ""]) => ({ position: Number(position), label }))
@@ -43,7 +57,9 @@ function editorSnippet(entry) {
     },
     commit_behavior: "accept_palette_selection",
     documentation_example: `${namespace}${trigger} → ${template}`,
-    argument_schema: entry.argument_schema ?? null
+    argument_schema: namespace === ":"
+      ? (DIRECTIVE_SCHEMAS.get(trigger) || { grammar: ["free_text"] })
+      : null
   }
 }
 
