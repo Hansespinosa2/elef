@@ -2,7 +2,7 @@ const ALLOWED_ELEMENTS = new Set([
   "A", "ANNOTATION", "BLOCKQUOTE", "BR", "CODE", "DEL", "DIV", "EM", "H1", "H2", "H3", "H4", "H5", "H6",
   "HR", "IMG", "LI", "MATH", "MFRAC", "MI", "MN", "MO", "MROW", "MSUB", "MSUP", "MTEXT", "MTABLE", "MTD",
   "MTR", "MOVER", "MUNDER", "MUNDEROVER", "MSQRT", "MROOT", "MSTYLE", "MSPACE", "OL", "P", "PRE", "SECTION",
-  "SEMANTICS", "SPAN", "STRONG", "SUB", "SUP", "TABLE", "TBODY", "TD", "TH", "THEAD", "TR", "UL", "VIDEO", "WBR"
+  "FIGCAPTION", "FIGURE", "SEMANTICS", "SPAN", "STRONG", "SUB", "SUP", "TABLE", "TBODY", "TD", "TH", "THEAD", "TR", "UL", "VIDEO", "WBR"
 ])
 const SAFE_PROTOCOLS = /^(?:https?:|mailto:|tel:|elefasset:|#|\/|\.\.?\/|[^:]*$)/i
 const ALLOWED_ACTIONS = new Set([

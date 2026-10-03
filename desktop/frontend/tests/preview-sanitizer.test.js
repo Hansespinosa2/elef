@@ -27,6 +27,25 @@ test("preview sink strips executable markup and remote image sources while prese
   assert.equal(container.querySelector("a").getAttribute("href"), null)
 })
 
+test("preview sink keeps sanitized deck media inside editable figure captions", () => {
+  const { document } = parseHTML("<main id='preview'></main>")
+  const container = document.querySelector("#preview")
+  installSanitizedPreview(container, `
+    <figure class="editor-media" onclick="invoke('delete_deck')">
+      <img src="elefasset://localhost/id/sha" data-editor-image-source="true" onerror="invoke('delete_deck')">
+      <figcaption class="editor-media-caption" aria-label="Editable image alt text">Diagram</figcaption>
+    </figure>`)
+
+  const figure = container.querySelector("figure")
+  const image = figure?.querySelector("img")
+  const caption = figure?.querySelector("figcaption")
+  assert.equal(figure?.getAttribute("onclick"), null)
+  assert.equal(image?.getAttribute("src"), "elefasset://localhost/id/sha")
+  assert.equal(image?.getAttribute("onerror"), null)
+  assert.equal(caption?.textContent, "Diagram")
+  assert.equal(caption?.getAttribute("aria-label"), "Editable image alt text")
+})
+
 test("non-interactive library previews remove controller and editing hooks", () => {
   const { document } = parseHTML("<main id='preview'></main>")
   const container = document.querySelector("#preview")
