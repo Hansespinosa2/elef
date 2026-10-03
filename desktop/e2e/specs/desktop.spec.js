@@ -7,7 +7,7 @@ import { libraryAndGraphWorkflow } from "../scenarios/library-and-graph.js"
 import { externalEditConflictWorkflow, CONFLICT_EXTERNAL_SOURCE } from "../scenarios/external-edit-conflict.js"
 import { hostileDeckNeutralizedWorkflow } from "../scenarios/hostile-deck.js"
 import { mathInputWorkflow, snippetInsertWorkflow } from "../scenarios/authoring-palettes.js"
-import { PIXEL_PNG_MARKDOWN } from "../scenarios/media-fixture.js"
+import { PIXEL_PNG_DIGEST, PIXEL_PNG_MARKDOWN } from "../scenarios/media-fixture.js"
 
 function normalizeLineEndings(source) {
   return source.replace(/\r\n/g, "\n")
@@ -665,37 +665,8 @@ describe("shared authoring scenarios", () => {
     const withMath = `${mathPrefix}\\lambda`
     await ui.waitForSource(withMath)
     await ui.waitForSaved(withMath)
-
-    await browser.execute(async entries => {
-      await window.__TAURI__.core.invoke("write_authoring_registry", {
-        registry: "snippets",
-        entries
-      })
-    }, [{
-      id: "personal-emphasis",
-      name: "Personal emphasis",
-      description: "Emphasize a phrase",
-      trigger: "emphasis",
-      category: "Markdown",
-      body: "*${1:phrase}*",
-      namespace: "/",
-      built_in: false
-    }])
-    await browser.execute(async entries => {
-      await window.__TAURI__.core.invoke("write_authoring_registry", {
-        registry: "math_shortcuts",
-        entries
-      })
-    }, [{
-      id: "personal-theta",
-      name: "Theta",
-      description: "The Greek letter theta",
-      prefix: "@",
-      aliases: ["theta"],
-      expansion: "\\theta",
-      namespace: "@",
-      built_in: false
-    }])
+    await ui.replaceSource(originalSource)
+    await ui.waitForSaved(originalSource)
 
     const library = new DesktopLibraryUi()
     await library.openLibrary()
@@ -705,18 +676,20 @@ describe("shared authoring scenarios", () => {
       timeoutMsg: "Refreshing the library did not finish loading its authoring settings"
     })
     await ui.openDeck()
+    await ui.showVisualMode()
+    await ui.waitForImage(PIXEL_PNG_DIGEST)
 
-    const refreshedSnippetPrefix = `${withMath}\n`
-    await ui.replaceSource(`${refreshedSnippetPrefix}/emphasis`)
-    await ui.waitForAuthoringOption("snippet", "Personal emphasis")
-    await ui.selectAuthoringOption("snippet", "Personal emphasis")
-    const withRefreshedSnippet = `${refreshedSnippetPrefix}*phrase*`
+    const refreshedSnippetPrefix = `${originalSource.trimEnd()}\n`
+    await ui.replaceSource(`${refreshedSnippetPrefix}/note`)
+    await ui.waitForAuthoringOption("snippet", "Personal note")
+    await ui.selectAuthoringOption("snippet", "Personal note")
+    const withRefreshedSnippet = `${refreshedSnippetPrefix}**note**`
     await ui.waitForSource(withRefreshedSnippet)
 
-    await ui.replaceSource(`${withRefreshedSnippet}\n\n$$\n@theta`)
-    await ui.waitForAuthoringOption("math", "Theta")
-    await ui.selectAuthoringOption("math", "Theta")
-    const refreshedSource = `${withRefreshedSnippet}\n\n$$\n\\theta`
+    await ui.replaceSource(`${withRefreshedSnippet}\n\n$$\n@lambda`)
+    await ui.waitForAuthoringOption("math", "Lambda")
+    await ui.selectAuthoringOption("math", "Lambda")
+    const refreshedSource = `${withRefreshedSnippet}\n\n$$\n\\lambda`
     await ui.waitForSource(refreshedSource)
     await ui.waitForSaved(refreshedSource)
 
