@@ -155,6 +155,7 @@ saveFlow = createSaveFlow({
     }
   },
   onConflict: showConflict,
+  materializeEdits: materializePendingVisualEdits,
   onError: showError
 })
 
@@ -510,6 +511,7 @@ async function openDeckNow(id) {
       transition = await prepareDeckOpen(id, {
         read: target => transport.readDeck(target),
         isDirty: hasUnsavedChanges,
+        getRevision: () => saveFlow.revision,
         flushSave,
         prepare: async deck => {
           const editor = await waitForEditorController(elements.editorField, editorFor)
@@ -526,7 +528,7 @@ async function openDeckNow(id) {
           return { editor, documentTitles }
         }
       })
-    } while (transition && hasUnsavedChanges())
+    } while (transition && (hasUnsavedChanges() || saveFlow.revision !== transition.revision))
     if (!transition) {
       elements.editorForm.dataset.loadedDeckId = activeDeck.id
       return
@@ -679,9 +681,13 @@ function scheduleSave() {
   saveFlow.noteChange()
 }
 
-function hasUnsavedChanges() {
+function materializePendingVisualEdits() {
   const editor = editorFor(elements.editorField)
   if (editor?.editorReady) editor.projectionController()?.flushPendingProjectionEdits?.()
+}
+
+function hasUnsavedChanges() {
+  materializePendingVisualEdits()
   return saveFlow?.dirty || false
 }
 
@@ -706,6 +712,7 @@ async function setEditorSource(source, { id = activeDeck?.id, expectedSource = c
   return applyEditorSource(source, {
     id, expectedSource, getDeckId: () => activeDeck?.id, getSource: currentSource,
     waitForEditor: () => waitForEditorController(elements.editorField, editorFor),
+    materializeEdits: materializePendingVisualEdits,
     setFallback: value => { elements.editorInput.value = value }
   })
 }

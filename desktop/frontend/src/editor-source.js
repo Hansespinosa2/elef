@@ -1,7 +1,8 @@
 export async function applyEditorSource(source, {
-  id, expectedSource, getDeckId, getSource, waitForEditor, setFallback
+  id, expectedSource, getDeckId, getSource, waitForEditor, setFallback, materializeEdits = () => {}
 }) {
   const controller = await waitForEditor()
+  materializeEdits()
   // Readiness may wait while navigation or typing changes the target buffer.
   // A delayed reload/recovery must not replace another deck or newer edits.
   if (getDeckId() !== id || getSource() !== expectedSource) return false

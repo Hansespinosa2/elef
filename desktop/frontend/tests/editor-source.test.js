@@ -32,3 +32,15 @@ test("matching editor ownership applies the source through the existing controll
   }), true)
   assert.equal(source, "new")
 })
+
+test("pending visual input is materialized before delayed replacement's final source check", async () => {
+  let source = "old"
+  const applied = await applyEditorSource("external", {
+    id: "A", expectedSource: source, getDeckId: () => "A", getSource: () => source,
+    waitForEditor: async () => ({ setExternalValue: () => assert.fail("pending visual input was discarded") }),
+    materializeEdits: () => { source = "pending visual edit" },
+    setFallback: () => assert.fail("fallback")
+  })
+  assert.equal(applied, false)
+  assert.equal(source, "pending visual edit")
+})

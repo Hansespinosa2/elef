@@ -9,6 +9,7 @@ export function createSaveFlow({
   onState = () => {},
   onConflict = () => {},
   onError = () => {},
+  materializeEdits = () => {},
   setTimer = setTimeout,
   clearTimer = clearTimeout,
   maxDiscardedDrafts = MAX_DISCARDED_DRAFTS
@@ -20,6 +21,7 @@ export function createSaveFlow({
   let paused = false
   let saveWorker = null
   let sourceMutation = null
+  let revision = 0
   let saveTimer = null
   let retryTimer = null
   let retryAttempt = 0
@@ -88,6 +90,7 @@ export function createSaveFlow({
 
   async function checkExternalChange(id, snapshot) {
     if (!activeDeck || activeDeck.id !== id) return "inactive"
+    materializeEdits()
     if (sourceMutation) return "busy"
     if (!snapshot || !/^[a-f\d]{64}$/i.test(snapshot.content_hash || "")) {
       const error = Object.assign(new Error("Elef received an invalid file fingerprint."), {
@@ -104,6 +107,7 @@ export function createSaveFlow({
     }
 
     if (!activeConflict && snapshot.source === getSource()) {
+      revision += 1
       acceptDiskVersion(id, snapshot.content_hash)
       activeDeck.content_hash = snapshot.content_hash
       activeDeck.source = snapshot.source
@@ -135,6 +139,7 @@ export function createSaveFlow({
       return "conflict"
     }
     acceptDiskVersion(id, snapshot.content_hash)
+    revision += 1
     deck.content_hash = snapshot.content_hash
     deck.source = snapshot.source
     deck.source_file = snapshot.source_file || deck.source_file
@@ -171,6 +176,7 @@ export function createSaveFlow({
         try {
           const result = await saveSource(deck.id, source)
           if (activeDeck !== deck) return false
+          revision += 1
           deck.content_hash = result.content_hash
           deck.source = source
           retryAttempt = 0
@@ -213,6 +219,7 @@ export function createSaveFlow({
   }
 
   function activate(deck) {
+    revision += 1
     clearTimer(saveTimer)
     clearTimer(retryTimer)
     saveTimer = null
@@ -227,6 +234,7 @@ export function createSaveFlow({
   }
 
   function noteChange() {
+    revision += 1
     schedule()
   }
 
@@ -259,11 +267,13 @@ export function createSaveFlow({
 
   async function useDiskVersion() {
     if (!activeConflict || !activeDeck || sourceMutation) return false
+    materializeEdits()
     const conflict = activeConflict
     const deck = activeDeck
     rememberDraft(getSource())
     if (!(await applySource(conflict.diskSource, deck)) || activeConflict !== conflict) return false
     acceptDiskVersion(conflict.id, conflict.diskHash)
+    revision += 1
     deck.content_hash = conflict.diskHash
     deck.source = conflict.diskSource
     deck.source_file = conflict.diskSourceFile
@@ -276,8 +286,10 @@ export function createSaveFlow({
 
   function keepLocalVersion() {
     if (!activeConflict || !activeDeck || sourceMutation) return false
+    materializeEdits()
     const conflict = activeConflict
     acceptDiskVersion(conflict.id, conflict.diskHash)
+    revision += 1
     activeDeck.content_hash = conflict.diskHash
     activeDeck.source = conflict.diskSource
     activeDeck.source_file = conflict.diskSourceFile
@@ -290,10 +302,12 @@ export function createSaveFlow({
 
   async function saveMergedVersion(mergedSource) {
     if (!activeConflict || !activeDeck || sourceMutation) return false
+    materializeEdits()
     const conflict = activeConflict
     const deck = activeDeck
     if (!(await applySource(mergedSource, deck)) || activeConflict !== conflict) return false
     acceptDiskVersion(conflict.id, conflict.diskHash)
+    revision += 1
     deck.content_hash = conflict.diskHash
     deck.source = conflict.diskSource
     deck.source_file = conflict.diskSourceFile
@@ -306,17 +320,22 @@ export function createSaveFlow({
 
   async function restoreDraft() {
     if (!activeDeck || sourceMutation || activeConflict) return false
+    materializeEdits()
     const deck = activeDeck
     const index = discardedDrafts.findLastIndex(draft => draft.id === activeDeck.id)
     if (index < 0) return false
     const draft = discardedDrafts[index]
-    if (!(await applySource(draft.source, deck))) return false
+    if (!(await applySource(draft.source, deck))) {
+      if (activeDeck === deck && !activeConflict && (dirty || getSource() !== deck.source)) schedule(0)
+      return false
+    }
     discardedDrafts.splice(discardedDrafts.indexOf(draft), 1)
     schedule(0)
     return true
   }
 
   function deactivate() {
+    revision += 1
     clearTimer(saveTimer)
     clearTimer(retryTimer)
     saveTimer = null
@@ -343,6 +362,7 @@ export function createSaveFlow({
     saveMergedVersion,
     restoreDraft,
     get dirty() { return dirty || Boolean(saveWorker) || Boolean(sourceMutation) },
+    get revision() { return revision },
     get blocked() { return blocked },
     get conflict() { return activeConflict },
     get discardedDraftCount() { return discardedDrafts.length },

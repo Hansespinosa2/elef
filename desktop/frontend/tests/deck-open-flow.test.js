@@ -138,3 +138,25 @@ test("typing during a new document's graph preparation saves to the old deck bef
   assert.equal(owner, "B")
   assert.equal(local, "B original")
 })
+
+test("same-deck autosave completing during preparation invalidates an earlier clean snapshot", async () => {
+  const graph = deferred()
+  let disk = { id: "A", source: "old", content_hash: hashA }
+  let revision = 0
+  let reads = 0
+  const opening = prepareDeckOpen("A", {
+    read: async () => { reads += 1; return { ...disk } },
+    prepare: async () => { await graph.promise; return {} },
+    isDirty: () => false, getRevision: () => revision,
+    flushSave: () => assert.fail("Autosave already completed")
+  })
+  await Promise.resolve()
+  disk = { id: "A", source: "already autosaved", content_hash: hashB }
+  revision += 1
+  graph.resolve()
+  const transition = await opening
+  assert.equal(reads, 2)
+  assert.equal(transition.deck.source, "already autosaved")
+  assert.equal(transition.deck.content_hash, hashB)
+  assert.equal(transition.revision, revision)
+})

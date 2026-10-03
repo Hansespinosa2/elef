@@ -62,6 +62,8 @@ Pending deck reads do not advance the active save fingerprint. Graph and editor 
 
 External reload, disk/merge resolution and draft recovery retain their originating deck and expected buffer through editor readiness. A delayed replacement refuses to change another deck or newer local edits. The old save fingerprint and active conflict remain until replacement succeeds; pending replacements count as unsaved and block saves, navigation and Quit. Failed recovery retains the original draft. Deferred readiness tests cover stale replacements and conflicting choices.
 
+Polling and the replacement's final buffer check materialize pending visual edits before inspecting canonical source. Preparation captures a save-state revision, so an autosave that finishes during an awaited read/graph request invalidates the old snapshot even when dirty is already false. Refused recovery reschedules surviving edits for autosave while keeping the recovery draft. Regression tests reproduce each timing case with deferred operations and frame-pending visual input.
+
 ## Revisit when
 
 Saves are shown to miss the autosave budget, or the residual race is observed in practice.

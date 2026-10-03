@@ -407,3 +407,51 @@ test("recovery remains owned and blocks leaving until its source has applied", a
   assert.equal(context.getSource(), "draft A")
   assert.equal(context.flow.discardedDraftCount, 0)
 })
+
+test("external snapshot arrival before a visual frame flush preserves the visual edit in a conflict", async () => {
+  let pending = "visual edit waiting for its frame"
+  const context = setup({ materializeEdits: () => {
+    if (!pending) return
+    context.setSource(pending)
+    pending = null
+    context.flow.noteChange()
+  } })
+  assert.equal(context.flow.dirty, false)
+  assert.equal(await context.flow.checkExternalChange(context.deck.id, {
+    source: "external", content_hash: hash("b"), source_file: "talk.md"
+  }), "conflict")
+  assert.equal(context.getSource(), "visual edit waiting for its frame")
+  assert.equal(context.flow.conflict.localSource, "visual edit waiting for its frame")
+  assert.equal(context.deck.content_hash, hash("a"))
+  assert.deepEqual(context.accepted, [])
+})
+
+test("typing during refused recovery resumes autosave while retaining the recoverable draft", async () => {
+  const timers = fakeTimers()
+  let pending = null
+  const context = setup({ setTimer: timers.setTimer, clearTimer: timers.clearTimer,
+    setSource: async source => {
+      if (pending && !(await pending.promise)) return false
+      context.setSource(source)
+      return true
+    }
+  })
+  context.setSource("recoverable draft")
+  context.flow.noteChange()
+  context.flow.handleConflict({ id: context.deck.id, details: { disk_hash: hash("b"), current: { source: "external" } } })
+  await context.flow.useDiskVersion()
+  pending = deferred()
+  const recovering = context.flow.restoreDraft()
+  context.setSource("newer typing")
+  context.flow.noteChange()
+  assert.equal(timers.count(), 0)
+  pending.resolve(false)
+  assert.equal(await recovering, false)
+  assert.equal(context.flow.discardedDraftCount, 1)
+  assert.equal(timers.count(), 1)
+  await timers.advance(0)
+  assert.deepEqual(context.calls, [[context.deck.id, "newer typing"]])
+  assert.equal(context.getSource(), "newer typing")
+  assert.equal(context.flow.dirty, false)
+  assert.equal(context.flow.discardedDraftCount, 1)
+})
