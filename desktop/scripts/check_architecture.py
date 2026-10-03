@@ -64,6 +64,7 @@ assert set(e2e_capability["permissions"]) == {
     "wdio:default",
     "wdio-webdriver:default",
     "updater:allow-download",
+    "core:app:allow-version",
 }, "only the test-only capability may expose WebdriverIO and fixture downloads"
 assert e2e_config["app"].get("withGlobalTauri") is True, "global Tauri access is enabled only for the test-only WebdriverIO build"
 assert config["app"].get("withGlobalTauri") is not True, "production must not expose the global Tauri API"

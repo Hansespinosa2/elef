@@ -1151,4 +1151,59 @@ describe("native updater verification", () => {
       }
     })
   }
+
+  if (process.env.ELEF_E2E_PACKAGED_UPDATES === "1") {
+    it("requires native confirmation and installs signed version N without changing deck bytes", async function () {
+      this.timeout(180_000)
+      const binaryPath = process.env.ELEF_E2E_REAL_APP_BINARY || process.env.ELEF_E2E_APP_BINARY
+      const sourcePath = path.join(process.env.ELEF_E2E_LIBRARY_ROOT, "E2E seed", "presentation.md")
+      const hash = async filename => createHash("sha256").update(await readFile(filename)).digest("hex")
+      const original = { binary: await hash(binaryPath), source: await hash(sourcePath) }
+      const response = await fetch("http://127.0.0.1:8888/mode?value=package")
+      if (!response.ok) throw new Error("The packaged update fixture is missing")
+      const begin = async () => {
+        await browser.execute(() => {
+          window.focus()
+          window.__elefUpdateInstallation = window.__TAURI__.core.invoke("install_update", {
+            version: "0.2.0", onProgress: new window.__TAURI__.core.Channel()
+          }).then(installed => ({ installed })).catch(error => ({ rejection: error.message || String(error) }))
+        })
+      }
+      const answer = async accept => {
+        if (process.platform === "darwin") {
+          execFileSync("osascript", ["-e", `tell application "System Events"
+            set targetProcess to first application process whose frontmost is true
+            repeat 100 times
+              if exists (button "OK" of window 1 of targetProcess) then exit repeat
+              delay 0.1
+            end repeat
+            if not (exists (button "OK" of window 1 of targetProcess)) then error "The native update confirmation did not open"
+            click button "${accept ? "OK" : "Cancel"}" of window 1 of targetProcess
+          end tell`], { timeout: 15_000 })
+        } else if (process.platform === "linux") {
+          const dialogId = execFileSync("xdotool", ["search", "--sync", "--onlyvisible", "--name", "^Install Elef update$"], {
+            encoding: "utf8", timeout: 15_000
+          }).trim().split(/\s+/).at(-1)
+          execFileSync("xdotool", ["windowactivate", "--sync", dialogId], { timeout: 5_000 })
+          execFileSync("xdotool", ["key", "--clearmodifiers", accept ? "alt+o" : "Escape"], { timeout: 5_000 })
+        } else throw new Error("Unsupported native updater confirmation platform")
+      }
+      try {
+        await begin()
+        await answer(false)
+        const cancelled = await browser.execute(async () => await window.__elefUpdateInstallation)
+        if (cancelled.installed !== false) throw new Error(`Native cancellation did not cancel: ${JSON.stringify(cancelled)}`)
+        if (await hash(binaryPath) !== original.binary) throw new Error("Cancelling the update changed the installed application")
+        await begin()
+        await answer(true)
+        const installed = await browser.execute(async () => await window.__elefUpdateInstallation)
+        if (installed.installed !== true) throw new Error(`The signed package did not install: ${JSON.stringify(installed)}`)
+        if (await hash(binaryPath) === original.binary) throw new Error("The signed update did not replace the installed application")
+        if (await hash(sourcePath) !== original.source) throw new Error("Installation changed the user's deck bytes")
+        if (!(await $("#back-to-library").isExisting())) throw new Error("The application stopped responding after installation")
+      } finally {
+        await fetch("http://127.0.0.1:8888/mode?value=none")
+      }
+    })
+  }
 })

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { execFileSync, spawn, spawnSync } from "node:child_process"
-import { access, chmod, mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises"
+import { access, chmod, cp, mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
@@ -56,6 +56,19 @@ const env = {
   ELEF_E2E_IMPORT_ARCHIVE: importArchive,
   ELEF_E2E_EXPORT_PATH: exportArchive,
   ELEF_E2E_SEED_DECK_ID: "a3d0f020-6605-4f9e-a96d-d825ee4b13f1"
+}
+
+if (process.env.ELEF_E2E_PACKAGED_UPDATES === "1") {
+  const packages = path.join(repoRoot, "desktop/target/e2e-packages")
+  const installed = path.join(temporaryRoot, "installed")
+  await cp(path.join(packages, "n-1"), installed, { recursive: true, verbatimSymlinks: true })
+  env.ELEF_E2E_PACKAGED_UPDATES = "1"
+  env.ELEF_E2E_APP_BINARY = process.platform === "darwin"
+    ? path.join(installed, "Elef.app/Contents/MacOS/elef-desktop") : path.join(installed, "Elef.AppImage")
+  env.ELEF_E2E_UPDATE_PACKAGE = path.join(packages, process.platform === "darwin" ? "update.tar.gz" : "update.AppImage")
+  env.APPIMAGE_EXTRACT_AND_RUN = "1"
+} else if (process.env.CI) {
+  throw new Error("CI must exercise the installed N-1 and N updater packages")
 }
 
 async function hashTree(root, relative = "") {
@@ -257,6 +270,7 @@ try {
   const webdriverio = path.join(e2eRoot, "node_modules", ".bin", "wdio")
   await verifyOfflineSandbox()
   updaterServer = spawn(process.execPath, [path.join(e2eRoot, "updater-fixture-server.mjs")], {
+    env,
     stdio: ["ignore", "inherit", "inherit", "ipc"]
   })
   env.ELEF_E2E_UPDATER_PUBLIC_KEY = await withTimeout(new Promise((resolve, reject) => {
@@ -274,6 +288,13 @@ try {
   })
   if (desktopResult.error) throw desktopResult.error
   if (desktopResult.status !== 0) throw new Error("Shared desktop scenarios failed with status " + desktopResult.status)
+  if (env.ELEF_E2E_PACKAGED_UPDATES === "1") {
+    const upgradedResult = spawnSync(webdriverio, ["run", "wdio.conf.js"], {
+      cwd: e2eRoot, env: { ...desktopAppEnvironment(env), ELEF_E2E_VERIFY_UPGRADED: "1" }, stdio: "inherit"
+    })
+    if (upgradedResult.error) throw upgradedResult.error
+    if (upgradedResult.status !== 0) throw new Error("The installed update did not launch and preserve the deck")
+  }
   if (process.env.CI) await runUserInitiatedQuitSmoke()
 
   const desktopSource = await readFile(path.join(seedDeck, "presentation.md"), "utf8")

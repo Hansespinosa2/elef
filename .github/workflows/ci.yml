@@ -235,10 +235,11 @@ jobs:
         run: bin/rails db:test:prepare
       - name: Install headless browser and system dependencies
         run: npx --prefix desktop/e2e playwright install --with-deps chromium
-      - name: Build test-only desktop binary with WebdriverIO capability
-        run: ELEF_E2E_BUILD=1 npm run tauri:build --prefix desktop/frontend -- --debug --no-bundle --features webdriver --config src-tauri/tauri.e2e.conf.json
+      - name: Build test-only N-1 and N desktop updater packages
+        run: node desktop/e2e/build-update-fixtures.mjs
       - name: Run shared scenarios with external network blocked
         env:
+          ELEF_E2E_PACKAGED_UPDATES: "1"
           CI: "true"
           RAILS_ENV: test
           ELEF_USE_SQLITE: "1"
@@ -321,10 +322,11 @@ jobs:
         run: bin/rails db:test:prepare
       - name: Install headless web browser
         run: npx --prefix desktop/e2e playwright install chromium
-      - name: Build test-only desktop binary with WebdriverIO capability
-        run: ELEF_E2E_BUILD=1 npm run tauri:build --prefix desktop/frontend -- --debug --no-bundle --features webdriver --config src-tauri/tauri.e2e.conf.json
+      - name: Build test-only N-1 and N desktop updater packages
+        run: node desktop/e2e/build-update-fixtures.mjs
       - name: Run shared web and desktop scenarios
         env:
+          ELEF_E2E_PACKAGED_UPDATES: "1"
           CI: "true"
           RAILS_ENV: test
           ELEF_USE_SQLITE: "1"
