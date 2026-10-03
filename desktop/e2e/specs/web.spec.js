@@ -94,7 +94,7 @@ class WebEditorUi {
   }
 
   async assertDocumentLinkPreview(title) {
-    const link = this.page.locator(".editor-projection a.document-link").filter({ hasText: title })
+    const link = this.page.locator(".editor-projection a.document-link").filter({ hasText: title }).last()
     await expect(link).toBeVisible()
     await expect(link).toHaveAttribute("href", new RegExp(`/documents/${process.env.ELEF_E2E_LINKED_DOCUMENT_ID}$`))
   }
