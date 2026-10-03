@@ -17,6 +17,7 @@ export function createSaveFlow({
   let activeConflict = null
   let dirty = false
   let blocked = false
+  let paused = false
   let saveWorker = null
   let saveTimer = null
   let retryTimer = null
@@ -41,6 +42,7 @@ export function createSaveFlow({
       return
     }
     setStatus("Unsaved changes")
+    if (paused) return
     clearTimer(saveTimer)
     if (retryTimer) return
     saveTimer = setTimer(() => {
@@ -209,12 +211,25 @@ export function createSaveFlow({
     activeConflict = null
     dirty = false
     blocked = false
+    paused = false
     retryAttempt = 0
     setStatus("Saved")
   }
 
   function noteChange() {
     schedule()
+  }
+
+  function pause() {
+    paused = true
+    clearTimer(saveTimer)
+    saveTimer = null
+  }
+
+  function resume() {
+    if (!paused) return
+    paused = false
+    if (dirty && !activeConflict) schedule(0)
   }
 
   async function useDiskVersion() {
@@ -278,6 +293,7 @@ export function createSaveFlow({
     activeConflict = null
     dirty = false
     blocked = false
+    paused = false
     setStatus("Saved")
   }
 
@@ -285,6 +301,8 @@ export function createSaveFlow({
     activate,
     deactivate,
     noteChange,
+    pause,
+    resume,
     flush,
     handleConflict,
     checkExternalChange,

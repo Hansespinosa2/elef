@@ -87,6 +87,26 @@ test("save orchestration serializes writes and drains edits made during an in-fl
   assert.equal(context.flow.dirty, false)
 })
 
+test("paused autosave holds edits until an explicit flush", async () => {
+  const timers = fakeTimers()
+  const context = setup({ setTimer: timers.setTimer, clearTimer: timers.clearTimer })
+
+  context.flow.pause()
+  context.setSource("local edit")
+  context.flow.noteChange()
+
+  assert.equal(context.flow.dirty, true)
+  assert.equal(timers.count(), 0)
+  await timers.advance(10_000)
+  assert.equal(context.calls.length, 0)
+
+  assert.equal(await context.flow.flush({ force: true }), true)
+  assert.deepEqual(context.calls, [["deck-1", "local edit"]])
+  assert.equal(context.flow.dirty, false)
+  context.flow.resume()
+  assert.equal(timers.count(), 0)
+})
+
 test("conflicts stop automatic writes until a deliberate choice updates the disk baseline", async () => {
   const context = setup({
     saveSource: async () => {

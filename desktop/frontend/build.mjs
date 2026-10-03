@@ -19,6 +19,7 @@ await build({
   outdir: assets,
   entryNames: "app",
   minify: true,
+  define: { __ELEF_E2E__: JSON.stringify(e2eBuild) },
   plugins: [{
     name: "rails-controller-alias",
     setup(context) {

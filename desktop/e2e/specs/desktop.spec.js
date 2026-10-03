@@ -18,9 +18,24 @@ class DesktopEditorUi {
     this.rejectExternalMedia = true
   }
 
-  async pauseAutosave() {}
+  async pauseAutosave() {
+    const paused = await browser.execute(() => {
+      const hooks = window.__elefSaveTestHooks
+      if (!hooks) return false
+      hooks.pause()
+      return true
+    })
+    if (!paused) throw new Error("The E2E desktop build did not expose the autosave test hook")
+  }
 
-  async flushLocalSave() {}
+  async flushLocalSave() {
+    const result = await browser.executeAsync(done => {
+      const hooks = window.__elefSaveTestHooks
+      if (!hooks) return done({ error: "The E2E desktop build did not expose the autosave test hook" })
+      hooks.flush().then(value => done({ value }), error => done({ error: error.message }))
+    })
+    if (result?.error) throw new Error(result.error)
+  }
 
   async openDeck(title = "E2E seed") {
     if (!(await $("#library-view").isDisplayed())) {

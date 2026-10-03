@@ -126,6 +126,21 @@ saveFlow = createSaveFlow({
   onError: showError
 })
 
+if (__ELEF_E2E__) {
+  Object.defineProperty(window, "__elefSaveTestHooks", {
+    value: Object.freeze({
+      pause: () => saveFlow.pause(),
+      async flush() {
+        try {
+          return await saveFlow.flush({ force: true })
+        } finally {
+          saveFlow.resume()
+        }
+      }
+    })
+  })
+}
+
 function setStatus(message) {
   elements.status.textContent = message
 }

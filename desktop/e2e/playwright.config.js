@@ -16,16 +16,13 @@ const webServer = process.env.ELEF_E2E_START_WEB_SERVER === "1"
 
 export default {
   testDir: "./specs",
-  testMatch: "*.spec.js",
+  testMatch: "web.spec.js",
   fullyParallel: false,
   workers: 1,
   timeout: 60_000,
   expect: { timeout: 10_000 },
   reporter: "list",
   use: { headless: true, baseURL },
-  projects: [
-    { name: "web", testMatch: "web.spec.js", use: { browserName: "chromium" } },
-    { name: "desktop", testMatch: "desktop.spec.js" }
-  ],
+  projects: [{ name: "web", use: { browserName: "chromium" } }],
   webServer
 }
