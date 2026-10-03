@@ -78,3 +78,5 @@ Protocol per [requirements.md](requirements.md) §8: release build, fresh proces
 - **Flakes:** quarantine on the second flake; fix or delete within the PR; no permanently quarantined tests.
 - **Affected-first:** T0 selects by changed packages; shared T1/T2 scenarios and native T3 checks run on the PR gate.
 - **Coverage is not a goal;** scenarios and quality-scenario measures are.
+
+The pinned embedded driver implements element click as `el.click()`, including option elements. Native Appearance scenarios therefore set the validated select value and dispatch its ordinary input/change events, then verify the real controller, source save, reopen, and rendered classes. This proves the UI event contract; physical select/keyboard behavior remains a real-device check. macOS smoke targets direct native window/sheet buttons with AXPress; webview descendants cannot satisfy that action.

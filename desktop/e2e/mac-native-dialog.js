@@ -11,18 +11,22 @@ export function answerMacNativeDialog(button) {
   if (pids.length !== 1 || !/^\d+$/.test(pids[0])) throw new Error("Expected exactly one installed test application process")
   // Panels may appear as a window or a sheet and can load asynchronously.
   // Target the test app's PID and the actual native button, not a timed keypress
-  // to whichever process happens to be frontmost.
+  // to whichever process happens to be frontmost. Only direct window/sheet
+  // buttons qualify; descendant webview buttons cannot answer a native panel.
   execFileSync("osascript", ["-e", `tell application "System Events"
     set targetProcess to first application process whose unix id is ${Number(pids[0])}
     repeat 200 times
       set frontmost of targetProcess to true
       repeat with targetWindow in every window of targetProcess
         try
-          set uiItems to entire contents of targetWindow
+          set uiItems to every button of targetWindow
+          repeat with targetSheet in every sheet of targetWindow
+            set uiItems to uiItems & every button of targetSheet
+          end repeat
           repeat with uiItem in uiItems
             try
-              if role of uiItem is "AXButton" and name of uiItem is "${button}" then
-                click uiItem
+              if enabled of uiItem and name of uiItem is "${button}" then
+                perform action "AXPress" of uiItem
                 return "answered"
               end if
             end try

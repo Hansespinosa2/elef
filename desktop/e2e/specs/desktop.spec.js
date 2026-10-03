@@ -42,7 +42,18 @@ class DesktopEditorUi {
   async setAppearance(key, value) {
     const panel = await $(".appearance-settings")
     if (await panel.getAttribute("open") === null) await panel.$("summary").click()
-    await panel.$(`[data-appearance-target='${key}']`).selectByAttribute("value", value)
+    // The pinned embedded driver's click_element calls option.click(), which
+    // does not select an option. Drive the normal DOM value/input/change seam;
+    // retain all real Appearance/controller/save/render behavior after it.
+    await browser.execute((styleKey, selectedValue) => {
+      const select = document.querySelector(`.appearance-settings [data-appearance-target='${styleKey}']`)
+      if (!select || select.disabled || ![...select.options].some(option => option.value === selectedValue)) {
+        throw new Error("The requested Appearance option is unavailable")
+      }
+      select.value = selectedValue
+      select.dispatchEvent(new Event("input", { bubbles: true }))
+      select.dispatchEvent(new Event("change", { bubbles: true }))
+    }, key, value)
     await browser.waitUntil(async () => new RegExp(`^${key}: ${value}$`, "m").test(await this.readSource()), {
       timeout: 10_000, timeoutMsg: "The appearance choice did not update the source"
     })
