@@ -38,6 +38,7 @@ function normalizeLineEndings(source) {
 class DesktopEditorUi {
   constructor() {
     this.rejectExternalMedia = true
+    this.activeDeckTitle = null
   }
 
   async pauseAutosave() {
@@ -72,6 +73,7 @@ class DesktopEditorUi {
       timeout: 10_000,
       timeoutMsg: `The ${title} deck did not open`
     })
+    this.activeDeckTitle = title
   }
 
   async reopenDeck() {
@@ -200,7 +202,9 @@ class DesktopEditorUi {
   async waitForSaved(expectedSource) {
     if (expectedSource !== undefined) {
       await this.waitForSource(expectedSource)
-      const sourcePath = path.join(process.env.ELEF_E2E_LIBRARY_ROOT, "E2E seed", "presentation.md")
+      const deckTitle = this.activeDeckTitle || "E2E seed"
+      const sourceFile = deckTitle === "E2E document" ? "document.md" : "presentation.md"
+      const sourcePath = path.join(process.env.ELEF_E2E_LIBRARY_ROOT, deckTitle, sourceFile)
       await browser.waitUntil(async () => {
         try {
           return normalizeLineEndings(await readFile(sourcePath, "utf8")) === expectedSource
