@@ -217,7 +217,7 @@ class DesktopEditorUi {
   async assertDocumentLinkPreview(title) {
     const link = await $("#desktop-preview a.document-link")
     await link.waitForDisplayed({ timeout: 5_000 })
-    if (await link.getAttribute("data-document-link-title") !== title) {
+    if ((await link.getText()).trim() !== title) {
       throw new Error(`The desktop preview did not resolve the document link to ${title}`)
     }
     if (!(await link.getAttribute("href"))?.startsWith("#deck/")) {
