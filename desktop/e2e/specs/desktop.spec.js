@@ -98,7 +98,17 @@ class DesktopEditorUi {
       const field = document.querySelector("#desktop-editor-field")
       const controller = field?.editorController
       if (!controller) return false
+      const snippetPalette = globalThis.Stimulus?.getControllerForElementAndIdentifier(field, "snippet-palette")
+      const mathPalette = globalThis.Stimulus?.getControllerForElementAndIdentifier(field, "math-shortcut-palette")
+      // A full-buffer test edit replaces the current authoring context too.
+      // End any tab-stop session left by a previous snippet before placing the
+      // caret at the new buffer end and refreshing the palettes.
+      snippetPalette?.endStops()
+      mathPalette?.endStops()
       controller.replaceRange(nextSource, 0, controller.value.length)
+      controller.setSelectionRange(nextSource.length)
+      snippetPalette?.refresh()
+      mathPalette?.refresh()
       return {
         source: controller.sourceValue,
         selectionStart: controller.selectionStart,
@@ -201,6 +211,26 @@ class DesktopEditorUi {
     }, {
       timeout: 5_000,
       timeoutMsg: "The visual-mode control did not activate the visual editor"
+    })
+  }
+
+  async assertDocumentLinkPreview(title) {
+    const link = await $("#desktop-preview a.document-link")
+    await link.waitForDisplayed({ timeout: 5_000 })
+    if (await link.getAttribute("data-document-link-title") !== title) {
+      throw new Error(`The desktop preview did not resolve the document link to ${title}`)
+    }
+    if (!(await link.getAttribute("href"))?.startsWith("#deck/")) {
+      throw new Error(`The desktop preview used an invalid local document link for ${title}`)
+    }
+  }
+
+  async showSourceMode() {
+    const sourceMode = await $("#source-mode")
+    if ((await sourceMode.getAttribute("aria-pressed")) !== "true") await sourceMode.click()
+    await browser.waitUntil(async () => (await $("#desktop-editor-form").getAttribute("data-editor-mode")) === "source", {
+      timeout: 5_000,
+      timeoutMsg: "The source editor did not activate after checking the rendered document link"
     })
   }
 

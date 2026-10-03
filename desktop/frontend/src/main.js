@@ -458,6 +458,7 @@ async function openDeck(id) {
     if (document.body.classList.contains("presenting-deck")) await exitPresentation()
     if (activeDeck && activeDeck.id !== id && saveFlow.dirty && !(await flushSave())) return
     const deck = await transport.openDeck(id)
+    const isDocument = deck.source_file === "document.md"
     activeDeck = deck
     saveFlow.activate(deck)
     document.querySelector("#deck-title").textContent = deck.name
@@ -469,18 +470,21 @@ async function openDeck(id) {
     elements.editorForm.dataset.mediaWorkKindValue = deck.source_file === "document.md" ? "document" : "presentation"
     elements.editorForm.dataset.mediaUploadUrlValue = `elef-upload://localhost/${encodeURIComponent(deck.id)}`
     elements.editorForm.dataset.mediaAssetBaseUrlValue = `elefasset://localhost/${encodeURIComponent(deck.id)}`
-    if (deck.source_file === "document.md") {
+    if (isDocument || deck.source.includes("[[")) {
       try {
         const graph = await documentGraphData()
-        elements.editorField.dataset.documentLinkPaletteTitlesValue = JSON.stringify(graph.nodes.map(node => node.title))
+        elements.editorField.dataset.documentLinkPaletteTitlesValue = JSON.stringify(
+          isDocument ? graph.nodes.map(node => node.title) : []
+        )
       } catch (_error) {
-        elements.editorField.dataset.documentLinkPaletteTitlesValue = JSON.stringify(decks.filter(item => item.kind === "document").map(item => item.name))
+        elements.editorField.dataset.documentLinkPaletteTitlesValue = JSON.stringify(
+          isDocument ? decks.filter(item => item.kind === "document").map(item => item.name) : []
+        )
       }
     } else {
       elements.editorField.dataset.documentLinkPaletteTitlesValue = "[]"
     }
     await setEditorSource(deck.source)
-    const isDocument = deck.source_file === "document.md"
     elements.editorForm.querySelector(".slide-overview").hidden = isDocument
     const visualButton = document.querySelector("#visual-mode")
     visualButton.disabled = true

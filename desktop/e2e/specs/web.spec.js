@@ -70,6 +70,17 @@ class WebEditorUi {
     await this.page.locator('[data-editor-target="visualButton"]').click()
   }
 
+  async assertDocumentLinkPreview(title) {
+    const link = this.page.locator(`.editor-projection a.document-link[data-document-link-title="${title}"]`)
+    await expect(link).toBeVisible()
+    await expect(link).toHaveAttribute("href", new RegExp(`/documents/${process.env.ELEF_E2E_LINKED_DOCUMENT_ID}$`))
+  }
+
+  async showSourceMode() {
+    await this.page.locator('[data-editor-target="sourceButton"]').click()
+    await expect(this.page.locator(".visual-editor-form")).toHaveAttribute("data-editor-mode", "source")
+  }
+
   async waitForAuthoringOption(palette, name) {
     const label = palette === "snippet" ? "Snippet suggestions" : "Math shortcut suggestions"
     const option = this.page.locator(`.source-field [role="listbox"][aria-label="${label}"] [role="option"]`).filter({ hasText: name }).first()

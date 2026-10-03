@@ -5,6 +5,9 @@ export const SAVED_SOURCE = "# Saved by shared scenario\n\nThe editor autosaved 
 
 export async function editAndPreviewWorkflow(ui) {
   await ui.openDeck()
+  await ui.showVisualMode()
+  await ui.assertDocumentLinkPreview("E2E linked")
+  await ui.showSourceMode()
   const originalSource = await ui.readSource()
   await ui.replaceSource(SAVED_SOURCE)
   await ui.waitForSource(SAVED_SOURCE)
