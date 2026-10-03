@@ -250,42 +250,52 @@ class DesktopEditorUi {
 
   async waitForAuthoringOption(palette, name) {
     const label = palette === "snippet" ? "Snippet suggestions" : "Math shortcut suggestions"
-    const option = $(`.source-field [role="listbox"][aria-label="${label}"] [role="option"]`)
+    const controllerId = palette === "snippet" ? "snippet-palette" : "math-shortcut-palette"
+    const inspect = async () => browser.execute(({ label, name, palette, controllerId }) => {
+      const field = document.querySelector("#desktop-editor-field")
+      const editor = field?.editorController
+      const controller = globalThis.Stimulus?.getControllerForElementAndIdentifier(field, controllerId)
+      const listbox = [...(field?.querySelectorAll('[role="listbox"]') || [])]
+        .find(element => element.getAttribute("aria-label") === label)
+      const option = [...(listbox?.querySelectorAll('[role="option"]') || [])]
+        .find(element => element.textContent.includes(name))
+      const currentQuery = controller?.queryAtCaret?.()
+      const paletteQuery = palette === "snippet"
+        ? { prefix: controller?.queryPrefix, text: controller?.query, start: controller?.queryStart }
+        : controller?.query
+      const sourceLength = editor?.sourceValue.length ?? -1
+      const ready = Boolean(
+        editor && listbox && !listbox.hidden && option && currentQuery && paletteQuery
+          && currentQuery.prefix === paletteQuery.prefix
+          && currentQuery.text === paletteQuery.text
+          && currentQuery.start === paletteQuery.start
+          && editor.selectionStart === sourceLength
+          && editor.selectionEnd === sourceLength
+      )
+      return {
+        ready,
+        visible: listbox ? !listbox.hidden : false,
+        option: option?.textContent || null,
+        currentQuery,
+        paletteQuery,
+        selection: [editor?.selectionStart, editor?.selectionEnd],
+        sourceLength
+      }
+    }, { label, name, palette, controllerId })
     try {
-      await browser.waitUntil(async () => (await option.getText()).includes(name), {
+      await browser.waitUntil(async () => (await inspect()).ready, {
         timeout: 5_000,
         timeoutMsg: `The ${palette} palette did not show ${name}`
       })
     } catch (error) {
-      const state = await browser.execute(({ label }) => {
-        const field = document.querySelector("#desktop-editor-field")
-        const controller = globalThis.Stimulus?.getControllerForElementAndIdentifier(field, "snippet-palette")
-        const editor = field?.editorController
-        const palette = [...(field?.querySelectorAll('[role="listbox"]') || [])]
-          .find(element => element.getAttribute("aria-label") === label)
-        return {
-          source: editor?.sourceValue,
-          selection: [editor?.selectionStart, editor?.selectionEnd],
-          editingMode: editor?.editingMode,
-          query: controller?.queryAtCaret?.(),
-          registry: controller?.registry?.filter(entry => entry.namespace === "/").map(entry => entry.trigger),
-          matches: controller?.matches?.map(entry => entry.name || entry.snippet?.name),
-          paletteHidden: palette?.hidden,
-          paletteText: palette?.innerText,
-          inputActions: document.querySelector("#deck-source")?.dataset.action
-        }
-      }, { label }).catch(diagnosticError => ({ diagnosticError: diagnosticError.message }))
+      const state = await inspect().catch(diagnosticError => ({ diagnosticError: diagnosticError.message }))
       throw new Error(`${error.message}; desktop palette state: ${JSON.stringify(state)}`)
     }
   }
 
   async selectAuthoringOption(palette, name) {
     const label = palette === "snippet" ? "Snippet suggestions" : "Math shortcut suggestions"
-    const option = $(`.source-field [role="listbox"][aria-label="${label}"] [role="option"]`)
-    await browser.waitUntil(async () => (await option.getText()).includes(name), {
-      timeout: 5_000,
-      timeoutMsg: `The ${palette} palette did not show ${name}`
-    })
+    await this.waitForAuthoringOption(palette, name)
     const selected = await browser.execute(({ label, name }) => {
       const field = document.querySelector("#desktop-editor-field")
       const editor = field?.editorController
@@ -293,8 +303,9 @@ class DesktopEditorUi {
         .find(element => element.getAttribute("aria-label") === label)
       const item = [...(listbox?.querySelectorAll('[role="option"]') || [])]
         .find(element => element.textContent.includes(name))
-      if (!editor || !item) return false
+      if (!editor || !listbox || listbox.hidden || !item) return false
       const sourceBefore = editor.sourceValue
+      editor.setSelectionRange(sourceBefore.length)
       item.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true, view: window }))
       return editor.sourceValue !== sourceBefore && listbox.hidden
     }, { label, name })
