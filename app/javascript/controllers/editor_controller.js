@@ -1,4 +1,5 @@
 import { Controller } from "@hotwired/stimulus"
+import { createDocumentState } from "lib/editor_document_state"
 import { Compartment, EditorState } from "@codemirror/state"
 import { EditorView } from "@codemirror/view"
 import { foldEffect, foldedRanges, unfoldEffect } from "@codemirror/language"
@@ -95,20 +96,17 @@ export default class extends Controller {
     this.inputTarget.addEventListener("click", this.handleProxyClick = () => this.focus())
     this.surfaceTarget.addEventListener("click", this.handleSurfaceClick = (event) => this.focusFromSurface(event))
 
+    this.documentExtensions = [
+      this.vimCompartment.of(this.vimEnabled ? vim() : []),
+      basicSetup,
+      markdown({ extensions: elefMetadata }),
+      livePreviewField,
+      snippetStopsField,
+      theme,
+      EditorView.updateListener.of((update) => this.handleUpdate(update))
+    ]
     this.view = new EditorView({
-      state: EditorState.create({
-        doc: this.initialSource,
-        extensions: [
-          EditorState.lineSeparator.of(this.lineSeparator),
-          this.vimCompartment.of(this.vimEnabled ? vim() : []),
-          basicSetup,
-          markdown({ extensions: elefMetadata }),
-          livePreviewField,
-          snippetStopsField,
-          theme,
-          EditorView.updateListener.of((update) => this.handleUpdate(update))
-        ]
-      }),
+      state: createDocumentState(EditorState, this.initialSource, this.documentExtensions).state,
       parent: this.surfaceTarget
     })
     this.view.dom.setAttribute("aria-label", "Markdown source")
@@ -510,6 +508,15 @@ export default class extends Controller {
       changes: { from: 0, to: this.view.state.doc.length, insert: this.toEditorLineEndings(source) },
       selection
     })
+  }
+
+  loadDocument(source) {
+    const document = createDocumentState(EditorState, source, this.documentExtensions)
+    this.lineSeparator = document.lineSeparator
+    this.view.setState(document.state)
+    this.pendingMediaRanges.clear()
+    this.inputTarget.value = source
+    this.syncInput()
   }
 
   setExternalValue(value) {

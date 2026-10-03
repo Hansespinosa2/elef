@@ -33,3 +33,5 @@ pin "style-mod" # @4.1.4
 pin "w3c-keyname" # @2.2.8
 pin "katex", to: "katex.js" # Provided by the katex gem for consistent client-side live math
 pin "mermaid", to: "mermaid.min.js" # @11.17.2 Vendored self-contained build; exposes globalThis.mermaid like katex
+
+pin "lib/editor_document_state", to: "lib/editor_document_state.js"

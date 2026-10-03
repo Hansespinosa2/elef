@@ -23,7 +23,7 @@ await build({
   plugins: [{
     name: "rails-controller-alias",
     setup(context) {
-      context.onResolve({ filter: /^controllers\// }, ({ path: importPath }) => ({
+      context.onResolve({ filter: /^(?:controllers|lib)\// }, ({ path: importPath }) => ({
         path: path.join(repoRoot, "app/javascript", `${importPath}.js`)
       }))
     }

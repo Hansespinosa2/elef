@@ -464,6 +464,11 @@ async function openDeck(id) {
     if (activeDeck && activeDeck.id !== id && saveFlow.dirty && !(await flushSave())) return
     const deck = await transport.openDeck(id)
     const isDocument = deck.source_file === "document.md"
+    if (deck.id !== id) {
+      decks = decks.map(item => item.id === id ? { ...item, id: deck.id } : item)
+      documentGraphCache.invalidate()
+      renderDecks()
+    }
     activeDeck = deck
     saveFlow.activate(deck)
     document.querySelector("#deck-title").textContent = deck.name
@@ -489,7 +494,8 @@ async function openDeck(id) {
     } else {
       elements.editorField.dataset.documentLinkPaletteTitlesValue = "[]"
     }
-    await setEditorSource(deck.source)
+    const editor = await waitForEditorController(elements.editorField, editorFor)
+    editor.loadDocument(deck.source)
     elements.editorForm.querySelector(".slide-overview").hidden = isDocument
     const visualButton = document.querySelector("#visual-mode")
     visualButton.disabled = true
