@@ -60,6 +60,13 @@ class DesktopEditorUi {
     const sourceMode = await $("#source-mode")
     await sourceMode.waitForDisplayed()
     if ((await sourceMode.getAttribute("aria-pressed")) !== "true") await sourceMode.click()
+    await browser.waitUntil(async () => {
+      const mode = await $("#desktop-editor-form").getAttribute("data-editor-mode")
+      return mode === "source" && (await sourceMode.getAttribute("aria-pressed")) === "true"
+    }, {
+      timeout: 5_000,
+      timeoutMsg: "The source editor did not finish restoring after the mode switch"
+    })
     const editor = await $("#deck-source-editor .cm-content")
     await editor.waitForDisplayed()
     // Tauri's embedded WebDriver cannot reliably focus CodeMirror on CI. Use
@@ -70,9 +77,15 @@ class DesktopEditorUi {
       const controller = field?.editorController
       if (!controller) return false
       controller.replaceRange(nextSource, 0, controller.value.length)
-      return controller.sourceValue === nextSource
+      return {
+        source: controller.sourceValue,
+        selectionStart: controller.selectionStart,
+        selectionEnd: controller.selectionEnd
+      }
     }, source)
-    if (!updated) throw new Error("The desktop editor did not accept the shared scenario source")
+    if (updated?.source !== source || updated.selectionStart !== source.length || updated.selectionEnd !== source.length) {
+      throw new Error(`The desktop editor did not accept the shared scenario source at the end of the buffer: ${JSON.stringify(updated)}`)
+    }
   }
 
   async readSource() {
@@ -251,16 +264,7 @@ class DesktopEditorUi {
       timeout: 5_000,
       timeoutMsg: `The ${palette} palette did not show ${name}`
     })
-    const selected = await browser.execute(({ label, name }) => {
-      const listbox = [...document.querySelectorAll('.source-field [role="listbox"]')]
-        .find(element => element.getAttribute("aria-label") === label)
-      const item = [...(listbox?.querySelectorAll('[role="option"]') || [])]
-        .find(element => element.textContent.includes(name))
-      if (!item) return false
-      item.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true, view: window }))
-      return true
-    }, { label, name })
-    if (!selected) throw new Error(`The ${palette} palette option ${name} disappeared before selection`)
+    await option.click()
   }
 
   async editVisualText(currentText, replacementText) {
