@@ -74,9 +74,9 @@ class DocumentsController < ApplicationController
     title = params.require(:document).permit(:title)[:title]
     source = Source::Document.replace_first_h1(@document.source, title)
     if @document.update(source: source)
-      redirect_to documents_path, notice: "Document renamed."
+      redirect_to(params[:library_view] == "all" ? root_path : documents_path, notice: "Document renamed.")
     else
-      redirect_to documents_path, alert: @document.errors.full_messages.to_sentence
+      redirect_to(params[:library_view] == "all" ? root_path : documents_path, alert: @document.errors.full_messages.to_sentence)
     end
   end
 

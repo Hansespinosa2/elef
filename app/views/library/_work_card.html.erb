@@ -9,6 +9,7 @@
           <details class="library-card-submenu rename-menu">
             <summary>Rename</summary>
             <%= form_with scope: work_param_key(work), url: work_rename_path(work), method: :patch, class: "library-rename" do |form| %>
+              <%= hidden_field_tag :library_view, @filter %>
               <%= form.text_field :title, id: "#{work_dom_id(work)}_rename_title", value: work.title, aria: { label: "Rename #{work.title}" } %>
               <%= form.submit "Save title" %>
             <% end %>

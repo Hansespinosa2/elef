@@ -2,6 +2,16 @@ require "test_helper"
 require "tempfile"
 
 class PresentationsControllerTest < ActionDispatch::IntegrationTest
+  test "rename preserves the all-library view and rejects arbitrary destinations" do
+    work = presentations(:one)
+    get root_path
+    assert_select "form[action='#{rename_presentation_path(work)}'] input[name='library_view'][value='all']"
+    patch rename_presentation_path(work), params: { library_view: "all", presentation: { title: "Renamed" } }
+    assert_redirected_to root_path
+    patch rename_presentation_path(work), params: { library_view: "https://example.invalid/", presentation: { title: "Again" } }
+    assert_redirected_to presentations_path
+  end
+
   test "library rename form submits scoped parameters" do
     get presentations_path
     assert_select "form[action='#{rename_presentation_path(presentations(:one))}']" do

@@ -61,9 +61,9 @@ class PresentationsController < ApplicationController
 
   def rename
     if @presentation.update(title: params.require(:presentation).permit(:title)[:title])
-      redirect_to presentations_path, notice: "Presentation renamed."
+      redirect_to(params[:library_view] == "all" ? root_path : presentations_path, notice: "Presentation renamed.")
     else
-      redirect_to presentations_path, alert: @presentation.errors.full_messages.to_sentence
+      redirect_to(params[:library_view] == "all" ? root_path : presentations_path, alert: @presentation.errors.full_messages.to_sentence)
     end
   end
 
