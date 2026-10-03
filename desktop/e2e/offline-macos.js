@@ -13,6 +13,17 @@ export function desktopCommand(command, args = []) {
   return { command: "/usr/bin/sandbox-exec", args: ["-f", profile, command, ...args] }
 }
 
+export function desktopAppEnvironment(env) {
+  if (process.env.ELEF_E2E_OFFLINE !== "1") return env
+  assert.equal(process.platform, "darwin", "Seatbelt offline mode requires macOS")
+  return {
+    ...env,
+    ELEF_E2E_REAL_APP_BINARY: env.ELEF_E2E_APP_BINARY,
+    ELEF_E2E_APP_BINARY: path.join(directory, "offline-macos-app.sh"),
+    ELEF_E2E_OFFLINE_PROFILE: profile
+  }
+}
+
 export async function verifyOfflineSandbox() {
   if (process.env.ELEF_E2E_OFFLINE !== "1") return
   const listeners = []

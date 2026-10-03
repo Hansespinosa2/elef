@@ -6,7 +6,7 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { createHash, randomUUID } from "node:crypto"
 import { PIXEL_PNG_MARKDOWN } from "./scenarios/media-fixture.js"
-import { desktopCommand, verifyOfflineSandbox } from "./offline-macos.js"
+import { desktopAppEnvironment, desktopCommand, verifyOfflineSandbox } from "./offline-macos.js"
 
 const e2eRoot = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(e2eRoot, "../..")
@@ -255,11 +255,10 @@ try {
 
   const webdriverio = path.join(e2eRoot, "node_modules", ".bin", "wdio")
   await verifyOfflineSandbox()
-  const restricted = desktopCommand(webdriverio, ["run", "wdio.conf.js"])
-  const desktopResult = spawnSync(restricted.command, restricted.args, {
+  const desktopResult = spawnSync(webdriverio, ["run", "wdio.conf.js"], {
     cwd: e2eRoot,
     env: {
-      ...env,
+      ...desktopAppEnvironment(env),
       TAURI_WEBDRIVER_PORT: process.env.TAURI_WEBDRIVER_PORT || "4445"
     },
     stdio: "inherit"
