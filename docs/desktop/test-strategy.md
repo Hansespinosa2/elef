@@ -1,6 +1,6 @@
 # Elef Desktop — Test Strategy (testing seam)
 
-Status: draft v3 (revised 2026-10-02). Implements the preference: one suite of user flows verified on web and desktop, tiered for speed, no divergent suites. Every quality scenario in [requirements.md](requirements.md) maps to a tier here.
+Status: draft v3 (revised 2026-10-03). Implements the preference: one suite of user flows verified on web and desktop, tiered for speed, no divergent suites. Every quality scenario in [requirements.md](requirements.md) maps to a tier here.
 
 ## 1. Structure: shared scenarios, two runner dialects
 
