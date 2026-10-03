@@ -773,7 +773,21 @@ fn restore_library_root(app: &AppHandle, state: &DesktopState) {
 fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let about = MenuItem::with_id(app, "about", "About Elef", true, None::<&str>)?;
     let settings = MenuItem::with_id(app, "settings", "Settings…", true, Some("CmdOrCtrl+,"))?;
-    let application_menu = Submenu::with_items(app, "Elef", true, &[&about, &settings])?;
+    let application_menu_separator = PredefinedMenuItem::separator(app)?;
+    let application_menu_quit_separator = PredefinedMenuItem::separator(app)?;
+    let quit = MenuItem::with_id(app, "quit", "Quit Elef", true, Some("CmdOrCtrl+Q"))?;
+    let application_menu = Submenu::with_items(
+        app,
+        "Elef",
+        true,
+        &[
+            &about,
+            &application_menu_separator,
+            &settings,
+            &application_menu_quit_separator,
+            &quit,
+        ],
+    )?;
 
     let open_deck = MenuItem::with_id(app, "open-deck", "Open Deck…", true, Some("CmdOrCtrl+O"))?;
     let open_library =
@@ -791,24 +805,41 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let import = MenuItem::with_id(app, "import-elef", "Import .elef…", true, None::<&str>)?;
     let print = MenuItem::with_id(app, "print", "Print…", true, Some("CmdOrCtrl+P"))?;
     let file_separator = PredefinedMenuItem::separator(app)?;
-    let quit = PredefinedMenuItem::quit(app, Some("CmdOrCtrl+Q"))?;
-    let file = Submenu::with_items(
-        app,
-        "File",
-        true,
-        &[
-            &open_deck,
-            &open_library,
-            &new_presentation,
-            &new_document,
-            &save,
-            &export,
-            &import,
-            &print,
-            &file_separator,
-            &quit,
-        ],
-    )?;
+    let file = if cfg!(target_os = "macos") {
+        Submenu::with_items(
+            app,
+            "File",
+            true,
+            &[
+                &open_deck,
+                &open_library,
+                &new_presentation,
+                &new_document,
+                &save,
+                &export,
+                &import,
+                &print,
+            ],
+        )?
+    } else {
+        Submenu::with_items(
+            app,
+            "File",
+            true,
+            &[
+                &open_deck,
+                &open_library,
+                &new_presentation,
+                &new_document,
+                &save,
+                &export,
+                &import,
+                &print,
+                &file_separator,
+                &quit,
+            ],
+        )?
+    };
 
     let undo = PredefinedMenuItem::undo(app, None)?;
     let redo = PredefinedMenuItem::redo(app, None)?;
@@ -946,6 +977,7 @@ pub fn run() {
                 | "print" | "settings" | "check-for-updates" => {
                     let _ = app.emit("desktop-menu-action", id);
                 }
+                "quit" => app.exit(0),
                 "choose-library" => {
                     let _ = app.emit("desktop-menu-action", "choose-library");
                 }
