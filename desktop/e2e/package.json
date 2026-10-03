@@ -20,6 +20,9 @@
     "@puppeteer/browsers": "3.2.3",
     "basic-ftp": "6.2.1",
     "deepmerge-ts": "8.0.2",
+    "mocha": {
+      "chokidar": "4.0.3"
+    },
     "serialize-javascript": "7.1.2"
   }
 }
