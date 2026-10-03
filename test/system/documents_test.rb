@@ -2559,6 +2559,7 @@ class DocumentsTest < ApplicationSystemTestCase
     # focus the current fragment together; focused editable content suppresses
     # subsequent reflow while the user is typing.
     focused_text = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
       const block = [...document.querySelectorAll('.document-editor-block[data-editor-block-id]')].at(-1);
       const paragraph = block.querySelector('p') || block;
       const range = document.createRange();
@@ -2569,6 +2570,7 @@ class DocumentsTest < ApplicationSystemTestCase
       selection.removeAllRanges();
       selection.addRange(range);
       return block.textContent;
+      })()
     JAVASCRIPT
     assert_includes focused_text, "next A4 page."
     active_document_block.send_keys(" Continued")
