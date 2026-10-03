@@ -3,6 +3,28 @@ import test from "node:test"
 import { parseHTML } from "linkedom"
 
 import { createLibraryPreviewLoader } from "../src/library-preview.js"
+import { installSanitizedPreview } from "../src/preview-sanitizer.js"
+
+test("library canvases reuse web sizing while retaining only the trusted read-only controller", async () => {
+  for (const kind of ["document", "presentation"]) {
+    const { document } = parseHTML("<div id='preview'></div>")
+    const container = document.querySelector("#preview")
+    const html = kind === "document"
+      ? '<div class="document-reader document-editor-projection" data-controller="visual-editor"><div class="document-surface" contenteditable="true">Notes</div></div>'
+      : '<div class="presentation-surface presentation-editor-projection" data-controller="presentation-editor"><div class="slide" contenteditable="true">Slides</div></div>'
+    const load = createLibraryPreviewLoader({ readPreview: async () => ({ source: "# Notes" }), render: async () => ({ html }), install: installSanitizedPreview })
+    assert.equal(await load(container, { id: "fixture", name: "Notes", kind }), true)
+    assert.equal(container.dataset.controller, "presentation-canvas")
+    assert.equal(container.querySelector("[data-controller], [contenteditable], [data-action]"), null)
+    const canvas = container.querySelector('[data-presentation-canvas-target="canvas"]')
+    assert.ok(canvas)
+    if (kind === "document") {
+      assert.equal(container.dataset.presentationCanvasDesignWidthValue, "794")
+      assert.equal(container.dataset.presentationCanvasDesignHeightValue, "1123")
+      assert.ok(canvas.classList.contains("library-preview-page"))
+    }
+  }
+})
 
 test("library previews use the shared renderer and the non-interactive sanitizer", async () => {
   const { document } = parseHTML("<div id='preview'></div>")

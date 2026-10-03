@@ -27,14 +27,15 @@ test("deck actions carry the selected deck identity", () => {
   const calls = []
   const card = createDeckCard(document, deck, {
     open: id => calls.push(["open", id]),
-    rename: item => calls.push(["rename", item.id]),
+    rename: (item, name) => calls.push(["rename", item.id, name]),
     delete: item => calls.push(["delete", item.id])
   })
   const click = () => new Event("click", { bubbles: true })
 
   card.querySelector(".deck-open").dispatchEvent(click())
-  card.querySelector(".deck-action").dispatchEvent(click())
+  card.querySelector(".library-rename input").value = "New notes"
+  card.querySelector(".library-rename").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }))
   card.querySelector(".danger").dispatchEvent(click())
 
-  assert.deepEqual(calls, [["open", "deck-42"], ["rename", "deck-42"], ["delete", "deck-42"]])
+  assert.deepEqual(calls, [["open", "deck-42"], ["rename", "deck-42", "New notes"], ["delete", "deck-42"]])
 })

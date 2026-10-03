@@ -331,6 +331,17 @@ class WebLibraryUi {
     await expect(this.page.locator("article.library-card")).toHaveCount(5)
   }
 
+  async renameWork(title, newTitle) {
+    const card = this.page.locator("article.library-card").filter({
+      has: this.page.getByRole("heading", { name: title, exact: true })
+    })
+    await card.locator(".library-card-menu-trigger").click()
+    await card.locator(".rename-menu > summary").click()
+    await card.locator(".library-rename input[type='text']").fill(newTitle)
+    await card.getByRole("button", { name: "Save title", exact: true }).click()
+    await expect(this.page.getByRole("heading", { name: newTitle, exact: true })).toBeVisible()
+  }
+
   async assertCardPreview(title, text) {
     const card = this.page.locator("article.library-card").filter({
       has: this.page.getByRole("heading", { name: title, exact: true })

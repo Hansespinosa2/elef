@@ -10,6 +10,10 @@ module Source
 
     module_function
 
+    def library_card(properties)
+      context.call("ElefRenderer.renderLibraryCard", properties)
+    end
+
     def render(markdown, media_resolver: nil, allow_remote_media: true)
       source = markdown.to_s
       raise ArgumentError, "Markdown source exceeds the renderer limit" if source.bytesize > MAX_RENDER_BYTES

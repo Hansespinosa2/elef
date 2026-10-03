@@ -3,6 +3,18 @@ require "open3"
 require "timeout"
 
 class SourceJavascriptRendererTest < ActiveSupport::TestCase
+  test "library cards escape metadata and preserve trusted view slots" do
+    title = '<img src=x onerror="run()">'
+    html = Source::JavascriptRenderer.library_card({
+      id: "document-42", title: title, kind: "document", metadata: "Continuous Markdown",
+      editUrl: "/documents/42/edit", previewHtml: "<p>Safe preview</p>", controlsHtml: "<button>Action</button>"
+    })
+    fragment = Nokogiri::HTML5.fragment(html)
+    assert_empty fragment.css("img, script, [onclick], [onerror]")
+    assert_equal title, fragment.at_css(".library-card-title").text
+    assert_equal "Safe preview", fragment.at_css(".library-card-preview p").text
+    assert_equal "Action", fragment.at_css(".library-card-controls button").text
+  end
   INPUTS = JSON.parse(Rails.root.join("desktop/frontend/fixtures/renderer-inputs.json").read).freeze
   OUTPUTS = JSON.parse(Rails.root.join("desktop/frontend/fixtures/renderer-outputs.json").read).freeze
 

@@ -43,7 +43,7 @@
 <%= render "presentations/document_graph", graph: @document_graph if current_filter == "documents" && @document_graph %>
 <%= render "presentations/lineage_graph", presentations: @lineage_presentations if @lineage_presentations.any? %>
 
-<section class="library-list mt-8 grid gap-4" aria-label="Saved <%= current_filter %>">
+<section class="library-list mt-8 grid gap-4" role="list" aria-label="Saved <%= current_filter %>">
   <% if @works.any? %>
     <% @works.each do |work| %>
       <%= render "library/work_card", work: work %>

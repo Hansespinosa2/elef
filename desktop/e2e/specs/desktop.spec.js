@@ -570,6 +570,22 @@ class DesktopEditorUi {
 }
 
 class DesktopLibraryUi {
+  async renameWork(title, newTitle) {
+    let card
+    for (const candidate of await $$(".deck-card")) {
+      if (await candidate.$(".deck-name").getText() === title) card = candidate
+    }
+    if (!card) throw new Error(`The ${title} library card was missing`)
+    await card.$(".library-card-menu-trigger").click()
+    await card.$(".rename-menu > summary").click()
+    await card.$(".library-rename input[type='text']").setValue(newTitle)
+    await card.$(".library-rename button").click()
+    await browser.waitUntil(async () => (await $(`[aria-label='Open ${newTitle}']`).isDisplayed()), {
+      timeout: 10_000, timeoutMsg: `The library did not show the renamed ${newTitle} deck`
+    })
+    if (await $(`[aria-label='Open ${title}']`).isExisting()) throw new Error("The old deck name remained after rename")
+  }
+
   async openLibrary() {
     if (!(await $("#library-view").isDisplayed())) {
       await $("#back-to-library").click()

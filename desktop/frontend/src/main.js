@@ -344,7 +344,7 @@ function renderDecks() {
   cardPreviewObserver?.disconnect()
   elements.list.replaceChildren(...filtered.map(deck => createDeckCard(document, deck, {
     open: id => void openDeck(id),
-    rename: item => void renameDeck(item),
+    rename: (item, name) => void renameDeck(item, name),
     delete: item => void deleteDeck(item)
   })))
   const previewTargets = elements.list.querySelectorAll(".deck-card-preview[data-deck-id]")
@@ -513,9 +513,8 @@ async function openDeck(id) {
   }
 }
 
-async function renameDeck(deck) {
-  const name = window.prompt("Rename deck", deck.name)
-  if (name === null || name.trim() === deck.name) return
+async function renameDeck(deck, name) {
+  if (typeof name !== "string" || name.trim() === deck.name) return
   try {
     await invoke("rename_deck", { id: deck.id, name: name.trim() })
     await refreshLibrary()

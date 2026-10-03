@@ -1,10 +1,4 @@
-<article id="<%= work_dom_id(work) %>" class="library-card rounded-2xl border border-[#ddd5c8] bg-[#fffdf8]">
-  <div class="library-card-media">
-    <div class="library-card-preview" aria-hidden="true" inert>
-      <%= render "library/work_preview", work: work %>
-    </div>
-    <a class="library-card-open" href="<%= work_edit_path(work) %>" aria-label="Edit <%= work.title %>"></a>
-    <div class="library-card-controls">
+<% controls = capture do %>
       <%= link_to work_show_path(work), class: "library-card-preview-button", aria: { label: "Preview #{work.title}" } do %>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M10.2 8.9 15.6 12l-5.4 3.1V8.9Z"/></svg>
         <span class="sr-only">Preview</span>
@@ -32,15 +26,20 @@
           <%= button_to "Delete", work_delete_path(work), method: :delete, form: { data: { turbo_confirm: "Delete #{work.title}?" } }, class: "is-danger" %>
         </div>
       </details>
-    </div>
-  </div>
-  <div class="library-card-body">
-    <p class="library-card-eyebrow eyebrow mb-1 text-xs font-extrabold uppercase tracking-[0.12em] text-[#6d4aff]"><%= work_type_label(work) %></p>
-    <h2 class="library-card-title mb-2 text-2xl font-bold"><%= link_to work.title, work_edit_path(work), class: "hover:underline" %></h2>
-    <p class="library-card-meta text-[#6f675c]">
-      <% if work.presentation? %><%= pluralize(work.slides.length, "slide") %> · <% else %>Continuous Markdown · <% end %>
-      Updated <%= time_ago_in_words(work.updated_at) %> ago
-    </p>
-    <% if work.presentation? && work.parent %><p class="library-card-note text-sm text-[#6f675c]">Forked from <%= work.parent.title %> · <%= work.fork_type %></p><% elsif work.presentation? && work.fork_parent_title.present? %><p class="library-card-note text-sm text-[#a63a2d]">Parent no longer available · <%= work.fork_type %></p><% end %>
-  </div>
-</article>
+<% end %>
+<% metadata = "#{work.presentation? ? pluralize(work.slides.length, 'slide') : 'Continuous Markdown'} · Updated #{time_ago_in_words(work.updated_at)} ago" %>
+<% note = if work.presentation? && work.parent
+  "Forked from #{work.parent.title} · #{work.fork_type}"
+elsif work.presentation? && work.fork_parent_title.present?
+  "Parent no longer available · #{work.fork_type}"
+end %>
+<%= Source::JavascriptRenderer.library_card({
+  id: work_dom_id(work),
+  title: work.title,
+  kind: work.document? ? "document" : "presentation",
+  metadata: metadata,
+  editUrl: work_edit_path(work),
+  previewHtml: render("library/work_preview", work: work),
+  controlsHtml: controls.to_s,
+  note: note
+}).html_safe %>
