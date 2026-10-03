@@ -2884,6 +2884,7 @@ class DocumentsTest < ApplicationSystemTestCase
     alignment.select("Center")
 
     assert_field "Markdown source", with: /\A:::align\{center\}\n\nTest\z/, wait: 5
+    wait_for_fresh_projection
 
     find(".document-editor-block[data-editor-block-id='#{block_id}']").find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
     find("[data-visual-editor-block-id='#{block_id}']").select("Right")
