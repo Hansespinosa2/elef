@@ -9,6 +9,7 @@ import { hostileDeckNeutralizedWorkflow } from "../scenarios/hostile-deck.js"
 import { mathInputWorkflow, snippetInsertWorkflow } from "../scenarios/authoring-palettes.js"
 import { PIXEL_PNG_DIGEST, PIXEL_PNG_MARKDOWN } from "../scenarios/media-fixture.js"
 import { createHash } from "node:crypto"
+import { answerMacNativeDialog } from "../mac-native-dialog.js"
 
 async function openDesktopAuthoringSettings() {
   await browser.execute(() => window.focus())
@@ -785,8 +786,7 @@ describe("desktop binary workflows and native boundaries", () => {
   it("opens and cancels the native library folder picker", async () => {
     await $("#change-library").click()
     if (process.platform === "darwin") {
-      await browser.pause(500)
-      execFileSync("osascript", ["-e", 'tell application "System Events" to key code 53'], { timeout: 5_000 })
+      answerMacNativeDialog("Cancel")
     } else if (process.platform === "linux") {
       // Address the native chooser by title because it is outside the webview
       // and cannot be driven through the embedded WebDriver session.
@@ -1075,8 +1075,7 @@ describe("desktop binary workflows and native boundaries", () => {
     if (!started) throw new Error("The native export command could not be started")
 
     if (process.platform === "darwin") {
-      await browser.pause(500)
-      execFileSync("osascript", ["-e", 'tell application "System Events" to key code 53'], { timeout: 5_000 })
+      answerMacNativeDialog("Cancel")
     } else if (process.platform === "linux") {
       let dialogId
       await browser.waitUntil(async () => {
@@ -1171,15 +1170,7 @@ describe("native updater verification", () => {
       }
       const answer = async accept => {
         if (process.platform === "darwin") {
-          execFileSync("osascript", ["-e", `tell application "System Events"
-            set targetProcess to first application process whose frontmost is true
-            repeat 100 times
-              if exists (button "OK" of window 1 of targetProcess) then exit repeat
-              delay 0.1
-            end repeat
-            if not (exists (button "OK" of window 1 of targetProcess)) then error "The native update confirmation did not open"
-            click button "${accept ? "OK" : "Cancel"}" of window 1 of targetProcess
-          end tell`], { timeout: 15_000 })
+          answerMacNativeDialog(accept ? "OK" : "Cancel")
         } else if (process.platform === "linux") {
           const dialogId = execFileSync("xdotool", ["search", "--sync", "--onlyvisible", "--name", "^Install Elef update$"], {
             encoding: "utf8", timeout: 15_000
