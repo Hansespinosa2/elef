@@ -255,7 +255,7 @@ jobs:
           sudo iptables -I OUTPUT 2 ! -o lo -j REJECT
           sudo ip6tables -I OUTPUT 1 -o lo -j ACCEPT
           sudo ip6tables -I OUTPUT 2 ! -o lo -j REJECT
-          if curl --silent --fail --max-time 3 https://example.com >/dev/null; then
+          if curl --noproxy '*' --silent --fail --max-time 3 https://example.com >/dev/null; then
             echo "External network remained reachable during the offline desktop scenario run"
             exit 1
           fi
@@ -323,12 +323,40 @@ jobs:
         run: npx --prefix desktop/e2e playwright install chromium
       - name: Build test-only desktop binary with WebdriverIO capability
         run: ELEF_E2E_BUILD=1 npm run tauri:build --prefix desktop/frontend -- --debug --no-bundle --features webdriver --config src-tauri/tauri.e2e.conf.json
-      - name: Run shared web and desktop scenarios
+      - name: Run shared web and desktop scenarios with external network blocked
         env:
           CI: "true"
           RAILS_ENV: test
           ELEF_USE_SQLITE: "1"
-        run: npm test --prefix desktop/e2e
+        run: |
+          anchor="com.apple/elef-offline"
+          rules="$(mktemp)"
+          pf_was_enabled=0
+          if sudo pfctl -s info | grep -q '^Status: Enabled'; then
+            pf_was_enabled=1
+          fi
+          restore_firewall() {
+            sudo pfctl -a "$anchor" -F all >/dev/null 2>&1 || true
+            rm -f "$rules"
+            if [ "$pf_was_enabled" -eq 0 ]; then sudo pfctl -d >/dev/null 2>&1 || true; fi
+          }
+          trap restore_firewall EXIT
+          cat >"$rules" <<'EOF'
+          pass out quick on lo0 all
+          block drop out quick inet all
+          block drop out quick inet6 all
+          EOF
+          sudo pfctl -a "$anchor" -f "$rules"
+          if [ "$pf_was_enabled" -eq 0 ]; then sudo pfctl -E; fi
+          if ! sudo pfctl -sr | grep -Fq 'anchor "com.apple/*"'; then
+            echo "macOS pf does not include the com.apple anchor required by the offline test"
+            exit 1
+          fi
+          if curl --noproxy '*' --silent --fail --max-time 3 https://example.com >/dev/null; then
+            echo "External network remained reachable during the offline desktop scenario run"
+            exit 1
+          fi
+          npm test --prefix desktop/e2e
       - name: Build Apple Silicon desktop package
         run: npm run tauri:build --prefix desktop/frontend -- --bundles app,dmg
 
