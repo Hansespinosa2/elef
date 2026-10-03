@@ -54,3 +54,18 @@ test("conflicts preserve the base hash until the user accepts the disk version",
   await adapter.saveSource("deck-1", "# keep local")
   assert.equal(saves[1].baseHash, hashB)
 })
+
+test("first-open manifest creation and UUID repair save with the returned identity", async () => {
+  for (const requested of ["path:manifestless", "duplicate-old-uuid"]) {
+    const calls = []
+    const adapter = createTransportAdapter({ invoke: async (command, payload) => {
+      calls.push([command, payload])
+      if (command === "open_deck") return { id: "new-uuid", source: "old", content_hash: hashA }
+      return { content_hash: hashB }
+    } })
+    const deck = await adapter.openDeck(requested)
+    await adapter.saveSource(deck.id, "edited")
+    assert.deepEqual(calls[1], ["save_source", { id: "new-uuid", source: "edited", baseHash: hashA }])
+    await assert.rejects(adapter.saveSource(requested, "stale"), error => error.code === "not_found")
+  }
+})
