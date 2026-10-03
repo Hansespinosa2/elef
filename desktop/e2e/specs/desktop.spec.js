@@ -1191,9 +1191,16 @@ describe("native updater verification", () => {
           throw new Error("Update verification changed the installed binary or deck source")
         }
         if (!(await $("#back-to-library").isExisting())) throw new Error("The application stopped responding after update verification")
-      } finally {
-        await fetch("http://127.0.0.1:8888/mode?value=none")
+      } catch (error) {
+        try {
+          await fetch("http://127.0.0.1:8888/mode?value=none")
+        } catch (resetError) {
+          console.error("Updater fixture reset also failed:", resetError.cause?.code || resetError.message)
+        }
+        throw error
       }
+      const reset = await fetch("http://127.0.0.1:8888/mode?value=none")
+      if (!reset.ok) throw new Error("The updater fixture did not reset")
     })
   }
 
@@ -1238,9 +1245,16 @@ describe("native updater verification", () => {
         if (await hash(binaryPath) === original.binary) throw new Error("The signed update did not replace the installed application")
         if (await hash(sourcePath) !== original.source) throw new Error("Installation changed the user's deck bytes")
         if (!(await $("#back-to-library").isExisting())) throw new Error("The application stopped responding after installation")
-      } finally {
-        await fetch("http://127.0.0.1:8888/mode?value=none")
+      } catch (error) {
+        try {
+          await fetch("http://127.0.0.1:8888/mode?value=none")
+        } catch (resetError) {
+          console.error("Updater fixture reset also failed:", resetError.cause?.code || resetError.message)
+        }
+        throw error
       }
+      const reset = await fetch("http://127.0.0.1:8888/mode?value=none")
+      if (!reset.ok) throw new Error("The updater fixture did not reset")
     })
   }
 })
