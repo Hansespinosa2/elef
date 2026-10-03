@@ -850,6 +850,7 @@ describe("desktop binary workflows and native boundaries", () => {
     await $("#authoring-math-name").setValue("E2E math shortcut")
     const prefix = $("#authoring-prefix")
     await prefix.click()
+    // WebDriver W3C key codes: ArrowDown (U+E015), then Enter (U+E007).
     await prefix.keys("\uE015")
     await prefix.keys("\uE007")
     if (await prefix.getValue() !== "@") {
