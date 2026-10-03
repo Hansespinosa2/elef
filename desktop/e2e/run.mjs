@@ -20,7 +20,7 @@ const exportArchive = path.join(temporaryRoot, "E2E seed exported.elef")
 const exportContents = path.join(temporaryRoot, "E2E seed exported")
 // Both runners complete the same editing, media, snippet, and math scenarios
 // against the same deck, so the final source assertion is identical.
-const expectedSharedSource = `# Saved by shared scenario\n\nThe visual editor changed this text.\n\n${PIXEL_PNG_MARKDOWN}\n**text**\n\n$$\n\\alpha\n$$\n\nSee [[E2E linked]].\n`
+const expectedSharedSource = `# Saved by shared scenario\n\nThe visual editor changed this text.\n\nSee [[E2E linked]].\n\n${PIXEL_PNG_MARKDOWN}\n**text**\n\n$$\n\\alpha\n$$\n`
 const expectedDesktopSource = expectedSharedSource
 const expectedWebSource = expectedSharedSource
 const hostileSource = [
