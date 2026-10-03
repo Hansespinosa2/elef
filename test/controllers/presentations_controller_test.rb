@@ -125,6 +125,8 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
 
   test "editor wires autosave and keeps new presentations client-only until creation" do
     get edit_presentation_path(presentations(:one))
+    assert_select '.presentation-editor-projection[data-presentation-editor-target="canvas"]'
+    assert_select '.presentation-editor-slide-toolbar button[data-presentation-editor-action="add-slide-after"]'
     assert_select 'form[data-controller~="autosave"]'
     assert_select "form[action='#{publish_presentation_path(presentations(:one))}'] button.button", text: "Present"
     assert_select 'form[data-controller~="autosave"] form', count: 0
@@ -408,6 +410,8 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :success
     assert_includes response.parsed_body["html"], 'contenteditable="true"'
+    assert_includes response.parsed_body["html"], 'data-presentation-editor-target="canvas"'
+    assert_includes response.parsed_body["html"], 'data-presentation-editor-action="add-slide-after"'
     assert_equal "editor-1", response.parsed_body["revision"]
     assert_equal "# First\n\nBody", presentation.reload.source
 

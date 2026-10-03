@@ -1,5 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
+import { parseHTML } from "linkedom"
 import { collectMediaReferences, renderMarkdownBlock, renderPreview } from "../src/renderer.js"
 import { buildEditorMap } from "../src/document-map.js"
 
@@ -73,6 +74,35 @@ test("document preview renders basic Markdown with safe content-addressed local 
   assert.match(preview.html, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/)
 })
 
+test("Rails preview does not invent Elef asset-protocol URLs for unresolved attachments", () => {
+  const digest = "b".repeat(64)
+  const preview = renderPreview({
+    kind: "document",
+    deckId: "rails-record-id",
+    source: `![Missing](elef-asset:${digest})`,
+    allowRemoteMedia: true
+  })
+
+  assert.doesNotMatch(preview.html, /elefasset:/)
+  assert.doesNotMatch(preview.html, new RegExp(digest))
+})
+
+test("document projection keeps empty trailing list and quote lines as editable caret targets", () => {
+  const listPreview = renderPreview({ kind: "document", source: "# Heading\n\n- First item\n- " })
+  const quotePreview = renderPreview({ kind: "document", source: "# Heading\n\n> First line\n> " })
+  const { document } = parseHTML("<main></main>")
+  const listContainer = document.querySelector("main")
+  listContainer.innerHTML = listPreview.html
+  const listItems = [...listContainer.querySelectorAll(".document-editor-block ul > li")]
+  assert.equal(listItems.length, 2)
+  assert.equal(listItems.at(-1).innerHTML, "<br>")
+
+  listContainer.innerHTML = quotePreview.html
+  const quoteLines = [...listContainer.querySelectorAll(".document-editor-block blockquote > p")]
+  assert.equal(quoteLines.length, 2)
+  assert.equal(quoteLines.at(-1).innerHTML, "<br>")
+})
+
 test("wiki links resolve through local document IDs and math stays inert", () => {
   const preview = renderPreview({
     kind: "document",
@@ -85,6 +115,39 @@ test("wiki links resolve through local document IDs and math stays inert", () =>
   assert.match(preview.html, />open target<\/a>/)
   assert.match(preview.html, /data-editor-math-source="x\^2"/)
   assert.doesNotMatch(preview.html, /javascript:/i)
+})
+
+test("editor projection supports Rails document keys, aliases, and safe route URLs", () => {
+  const preview = renderPreview({
+    kind: "document",
+    source: "[[Target|open]] [[document:target-key]] [[target-alias]] [[missing]]",
+    documentNodes: [{
+      id: "42",
+      title: "Target",
+      document_key: "target-key",
+      aliases: ["target-alias"],
+      href: "/documents/42"
+    }]
+  })
+
+  assert.equal((preview.html.match(/href="\/documents\/42"/g) || []).length, 3)
+  assert.match(preview.html, /data-document-link-title="Target"/)
+  assert.match(preview.html, /<span class="document-link unresolved"[^>]*>\[\[missing\]\]<\/span>/)
+  assert.doesNotMatch(preview.html, /is-missing/)
+})
+
+test("editor projection accepts explicit workspace appearance and server media mappings", () => {
+  const preview = renderPreview({
+    kind: "presentation",
+    source: "# Plan\n\n![Diagram](images/diagram.png)",
+    style: { theme: "dark", typography: "technical" },
+    mediaMap: { "images/diagram.png": { src: "/presentations/7/media/abc", contentType: "image/png" } },
+    allowRemoteMedia: true
+  })
+
+  assert.match(preview.html, /slides-theme-dark/)
+  assert.match(preview.html, /slides-typography-technical/)
+  assert.match(preview.html, /src="\/presentations\/7\/media\/abc"/)
 })
 
 test("preview rejects non-text and oversized source with typed errors", () => {

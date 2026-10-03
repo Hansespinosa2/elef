@@ -10,7 +10,7 @@ Status: draft v3 (2026-10-01). Replaces `v1-scope.md` and `spikes.md`. The miles
 - Editors: source editor + visual editor, the real editing flow (reused JS).
 - Auto-save (debounced), session-only undo/redo, conflict UI ([ADR-008](adr/008-safe-writes-and-conflict-detection.md)).
 - Images: insert, display, stored under `images/`, served via the asset protocol.
-- Rendering: shared JS Markdown blocks plus shared slide/document structure and editor maps ([ADR-007](adr/007-single-shared-js-renderer.md)) — Markdown → HTML, KaTeX, Highlight.js, local media and Mermaid placeholders. Rails and desktop still assemble the final editable projection markup through separate paths; normalized fixture parity remains in M3/M3w.
+- Rendering: shared JS Markdown blocks, slide/document structure, editor maps, and complete editable preview markup ([ADR-007](adr/007-single-shared-js-renderer.md)) — Markdown → HTML, KaTeX, Highlight.js, local media and Mermaid placeholders. Both editor forms and live preview now use `ElefRenderer.renderPreview`; full fixture coverage, the Rails read-only consumer cutover, and normalized comparison remain in M3/M3w.
 - `.elef` export/import with import hardening; `elef.json` auto-create; `.elef/` library config.
 - Security model ([security.md](security.md)).
 - Auto-update from day one (Tauri updater + GitHub Releases, [ADR-009](adr/009-distribution-and-update-channel.md)).
@@ -41,12 +41,12 @@ Each ends with a usable app, not a branch. Critical path: M0 → M1 → M2 → (
 | M0 | Spikes | S1–S5 exit criteria met; ADR-002/003/006/007 accepted on results |
 | M1 | Shell + library | App opens < 1.5 s cold; lists the 1,000-deck fixture < 500 ms warm; menus work; `.elef/` config persists; hostile-deck fixtures neutralized (QS-4) |
 | M2 | Editor + files | Reused editor JS edits and auto-saves; fault-injection matrix passes (QS-2); external edit never silently clobbered (QS-3); `elef.json` auto-created; images work |
-| M3 | Desktop rendering | Shared Markdown blocks render through the worker; desktop presentation and document projections match the Rails fixture suite after normalization; open 100-slide deck < 300 ms; presentation and print flows pass real-binary scenarios |
+| M3 | Desktop rendering | Shared renderer creates the complete editable projection on desktop and Rails; desktop presentation and document fixtures match after normalization; open 100-slide deck < 300 ms; presentation and print flows pass real-binary scenarios |
 | M3w | Rails cutover (parallel track) | `ELEF_RENDERER=js` on Rails passes the full web suite; soak period with no renderer regressions (length: Q9); Ruby renderer deleted; fixtures regenerated, comparison exact; QS-7 fitness checks green |
 | M4 | Portability + updates | `.elef` round-trip passes the per-file hash check; N-1 → N update works; failure injections leave the old version runnable (QS-8) |
 | M5 | Test matrix + release | Tiered suite green on macOS + Linux; budgets met; Andres completes a week of real work on both devices with no data loss |
 
-M3 and M3w are split in v3 because the cutover changes the production web app, while M3 only changes the new desktop app. They share the bundle and the fixtures but have different risk and rollback. Desktop presentation mode and shared slide/document structure/editor maps are implemented, but M3 is not complete: final projection markup parity, broader fixture coverage, performance evidence and real-binary scenario tests are still outstanding. Whether the desktop *release* waits for M3w is Q9.
+M3 and M3w are split in v3 because the cutover changes the production web app, while M3 also changes the new desktop app. They share the bundle and fixtures but have different risk and rollback. The full editable projection now comes from the same JS function on both apps. M3 is still open for broader fixture coverage, target-device performance evidence, and real-binary editing checks; M3w remains open for read-only consumer cutover, the soak, and Ruby renderer deletion. Whether the desktop *release* waits for M3w is Q9.
 
 Definition of done for every milestone: scenarios green; the affected docs and ADR statuses updated in the same PR; fitness checks green.
 
@@ -64,8 +64,8 @@ Each is a day or less with a checkable exit. ADRs 002, 003, 006 and 007 are acce
 - **Renderer consumers:** every server-side call site of `Source::HtmlRenderer` (preview endpoint, exports, cached-HTML paths). The mini_racer wrapper must cover all of them.
 - **mini_racer feasibility:** local Omarchy install, timeout, memory limit, basic multithread context isolation, and a post-fork probe passed. Still measure 100-slide latency, exercise the Rails production Puma thread/fork configuration, and run install/render tests on macOS arm64. Highlight.js is used (no Shiki WebAssembly engine).
 - **Bundle build:** implemented: `npm run build --prefix desktop/frontend` creates the checked-in Rails bundle and the desktop worker/app bundles from pinned lockfiles. CI asserts the generated bundle is fresh.
-- **Half-day probe:** shared Markdown blocks and editor maps run through MiniRacer and targeted Rails tests pass. Still compare a representative fixture corpus through all Rails render consumers and both final projection markup paths.
-- **Exit:** command table + payload schemas + host-page contract + full renderer consumer inventory + normalized parity corpus + MiniRacer target/thread/fork/performance evidence + bundle freshness check, reviewed against Rails controllers and system tests.
+- **Half-day probe:** shared Markdown blocks, slide/document structure, editor maps, and editable projection run through MiniRacer and targeted Rails tests pass. Still compare a representative fixture corpus across MiniRacer and the desktop worker with web and desktop media/document options; inventory and migrate the remaining read-only, print, and PPTX consumers before deleting the Ruby fallback.
+- **Exit:** command table + payload schemas + host-page contract + full renderer consumer inventory + normalized parity corpus including editable projection output + MiniRacer target/thread/fork/performance evidence + bundle freshness check, reviewed against Rails controllers and system tests.
 
 **S2 — Testing feasibility** (feeds [test-strategy.md](test-strategy.md))
 - The shared Playwright Test scenario runs against Rails in Chromium and the real Tauri binary through its embedded WebDriver plugin. Linux CI uses a headless display; macOS CI builds and launches the arm64 app.

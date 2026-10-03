@@ -1,10 +1,7 @@
 <% persisted = work.persisted? %>
 <% type_label = work_type_label(work) %>
-<% editor_map = Source::Document.editor_map(
-  work.source.to_s.gsub(/\r\n?/, "\n"),
-  source_name: work.title.presence || work.default_title,
-  mode: work.work_type.to_sym
-) %>
+<% editor_preview = Source::EditorPreview.render(work) %>
+<% editor_map = editor_preview.fetch(:editor_map) %>
 <% visual_mode = params[:editor_mode] != "source" %>
 <% controllers = %w[dirty preview autosave visual-editor media] %>
 <% controllers << "presentation-editor" if work.presentation? %>
@@ -169,7 +166,7 @@
       </div>
     <script type="application/json" data-editor-map-json><%= raw json_escape(editor_map.to_json) %></script>
     <div class="editor-projection preview-pane" data-visual-editor-target="projection" data-preview-target="container" aria-label="Visual editing surface" data-action="dragover->media#dragOver dragleave->media#dragLeave drop->media#drop">
-      <%= render "works/preview", work: work, editable: true, editor_map: editor_map %>
+      <%= editor_preview.fetch(:html).html_safe %>
     </div>
     </div>
 

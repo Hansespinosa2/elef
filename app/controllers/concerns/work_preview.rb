@@ -40,31 +40,28 @@ module WorkPreview
     preview_work.theme = attributes[:theme] if attributes.key?(:theme)
     preview_work.typography = attributes[:typography] if attributes.key?(:typography)
 
-    editor_map = Source::Document.editor_map(
-      source.gsub(/\r\n?/, "\n"),
-      source_name: title.presence || preview_work.default_title,
-      mode: preview_work.work_type.to_sym
-    )
-
-    html = if preview_work.presentation?
-      margin = preview_work.document.margin_settings
-      settings = {
-        "theme" => preview_work.theme,
-        "typography" => preview_work.typography,
-        "margin" => {
-          "section" => margin.section,
-          "subsection" => margin.subsection,
-          "footnote" => margin.footnote,
-          "slide_count" => margin.slide_count
+    html = if params[:projection].to_s == "editor"
+      shared_preview = Source::EditorPreview.render(preview_work, source: source, title: title)
+      editor_map = shared_preview.fetch(:editor_map)
+      shared_preview.fetch(:html).html_safe
+    else
+      editor_map = Source::Document.editor_map(
+        source.gsub(/\r\n?/, "\n"),
+        source_name: title.presence || preview_work.default_title,
+        mode: preview_work.work_type.to_sym
+      )
+      if preview_work.presentation?
+        margin = preview_work.document.margin_settings
+        settings = {
+          "theme" => preview_work.theme,
+          "typography" => preview_work.typography,
+          "margin" => {
+            "section" => margin.section,
+            "subsection" => margin.subsection,
+            "footnote" => margin.footnote,
+            "slide_count" => margin.slide_count
+          }
         }
-      }
-      if params[:projection].to_s == "editor"
-        render_to_string(
-          partial: "works/preview",
-          formats: [:html],
-          locals: { work: preview_work, editable: true, editor_map: editor_map }
-        )
-      else
         settings["asset_owner_id"] = work.id if work.persisted?
         asset_manifest = work.persisted? ? PresentationRelease.asset_manifest_for(work) : []
         Presentations::RenderCache.fetch(source: source, settings: settings, asset_manifest: asset_manifest) do
@@ -74,13 +71,13 @@ module WorkPreview
             locals: { work: preview_work, editable: false, editor_map: editor_map }
           )
         end
+      else
+        render_to_string(
+          partial: "works/preview",
+          formats: [:html],
+          locals: { work: preview_work, editable: false, editor_map: editor_map }
+        )
       end
-    else
-      render_to_string(
-        partial: "works/preview",
-        formats: [:html],
-        locals: { work: preview_work, editable: params[:projection].to_s == "editor", editor_map: editor_map }
-      )
     end
 
     {
