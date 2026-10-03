@@ -6,6 +6,7 @@ module Source
     CONTEXT_TIMEOUT_MS = 4_000
     CONTEXT_MAX_MEMORY = 256_000_000
     CONTEXT_KEY = :elef_javascript_renderer_context
+    CONTEXT_PID_KEY = :elef_javascript_renderer_context_pid
 
     module_function
 
@@ -27,6 +28,7 @@ module Source
 
     def editor_map(source, source_name:, mode:)
       raise ArgumentError, "The selected file did not contain readable text." unless source.is_a?(String)
+      raise ArgumentError, "Markdown source exceeds the renderer limit" if source.bytesize > MAX_RENDER_BYTES
 
       normalized_mode = mode.to_sym
       raise ArgumentError, "Unsupported document mode" unless %i[presentation document].include?(normalized_mode)
@@ -91,6 +93,11 @@ module Source
     end
 
     def context
+      owner = Thread.current.thread_variable_get(CONTEXT_PID_KEY)
+      if owner && owner != Process.pid
+        raise "Inherited renderer context; dispose contexts before forking"
+      end
+
       Thread.current.thread_variable_get(CONTEXT_KEY) || begin
         raise LoadError, "shared Elef renderer bundle is missing; run npm run build --prefix desktop/frontend" unless BUNDLE_PATH.file?
 
@@ -102,7 +109,23 @@ module Source
           renderer.eval(BUNDLE_PATH.read, filename: "elef-renderer.bundle.js")
         end
         Thread.current.thread_variable_set(CONTEXT_KEY, renderer)
+        Thread.current.thread_variable_set(CONTEXT_PID_KEY, Process.pid)
         renderer
+      end
+    end
+
+    # Puma calls this in its quiescent master before starting worker processes.
+    # Never call while another thread is evaluating JavaScript. MiniRacer's
+    # single-threaded V8 platform requires both evaluation and disposal to be
+    # finished before fork; a PID check alone cannot make an inherited V8 safe.
+    def dispose_contexts_before_fork
+      Thread.list.each do |thread|
+        renderer = thread.thread_variable_get(CONTEXT_KEY)
+        next unless renderer
+
+        renderer.dispose
+        thread.thread_variable_set(CONTEXT_KEY, nil)
+        thread.thread_variable_set(CONTEXT_PID_KEY, nil)
       end
     end
   end

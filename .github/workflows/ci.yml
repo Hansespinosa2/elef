@@ -362,7 +362,8 @@ jobs:
           ELEF_USE_SQLITE: "1"
         run: |
           bin/rails db:test:prepare
-          bin/rails test test/lib/source/renderer_test.rb test/lib/authoring_registry_test.rb test/models/presentation_test.rb test/services/presentations/pptx_export_test.rb
+          bin/rails test test/lib/source/renderer_test.rb test/lib/source/javascript_renderer_test.rb test/lib/authoring_registry_test.rb test/models/presentation_test.rb test/services/presentations/pptx_export_test.rb
+          bin/rails runner -e test script/benchmark_shared_renderer.rb
 
   production-smoke:
     if: github.event_name != 'push'

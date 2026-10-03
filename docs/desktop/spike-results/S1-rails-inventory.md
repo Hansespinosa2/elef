@@ -2,7 +2,7 @@
 
 Status: **partial** · inspected on the desktop implementation branch 2026-10-01 · owner: Andres
 
-This report records the Rails contracts and implementation evidence. The shared JS renderer supplies Markdown blocks, document structure, editor maps, and the editable projection to Rails and desktop. Rails provides its document routes and Active Storage URLs; desktop provides library IDs and deck-scoped asset URLs. S1 remains partial: normalized fixture comparison and the full consumer inventory are incomplete, MiniRacer has not been verified on macOS arm64 or under production Puma topology, and the macOS application has not been run on a real device.
+This report records the Rails contracts and implementation evidence. The shared JS renderer supplies Markdown blocks, document structure, editor maps, and the editable projection to Rails and desktop. Rails provides its document routes and Active Storage URLs; desktop provides library IDs and deck-scoped asset URLs. S1 remains partial: Ruby rollback comparison, full consumer parity, supported-device performance, and physical-device acceptance remain open. MiniRacer installation and representative Rails rendering pass on macOS arm64 CI; the expanded exact corpus and worker-fork probe await their macOS CI result.
 
 ## Editor endpoint inventory
 
@@ -46,11 +46,25 @@ The rollback renderer is Redcarpet + Rouge + the KaTeX JavaScript included by th
 
 The current build uses the pinned desktop frontend npm package and esbuild. `npm run build --prefix desktop/frontend` emits the checked-in `vendor/javascript/elef-renderer.bundle.js` Rails bundle plus the desktop app and a thin worker entry. Both Rails and desktop load the exact same renderer bundle bytes; the desktop build copies the generated Rails bundle, and the architecture fitness check compares their SHA-256 hashes. CI rebuilds it from the lockfile and verifies that the checked-in Rails bundle is unchanged.
 
+The call-site inventory (2026-10-03 source search) is:
+
+| Consumer | Rendering entry point | Existing verification |
+|---|---|---|
+| Edit host `works/_form.html.erb` and `WorkPreview` editor response | `ApplicationHelper#shared_editor_projection` → JS `renderPreview` | Shared browser scenarios; controller tests; exact projection corpus |
+| Presentation read-only, presentation and print pages | `PresentationsHelper#render_markdown` → `Source::Renderer.render` | Presentation model and controller/system tests |
+| Document read-only view and `Work#rendered_html` | `Source::BlockRenderer.render` → `DocumentLinks::Renderer.render` → `Source::Renderer.render` | Block-renderer, document-link and work/controller tests |
+| Legacy editable `Source::BlockRenderer` helper callers | Ruby shell around shared block renderer and editor map | Block-renderer tests; this shell is not the current editor-preview endpoint |
+| PPTX export model | `Presentations::PptxExport` → `Source::Renderer.render` | PPTX service tests |
+
+The inventory covers application call sites found by `rg`; it does not establish visual parity of every read-only/export path. The exact Node/MiniRacer corpus and thread/fork protocol are specified in [test-strategy.md §3](../test-strategy.md#3-renderer-fixtures-one-renderer-two-phases).
+
 ## Feasibility evidence
 
 - Host: Omarchy Linux x86_64, Ruby 4.0.6, GCC toolchain, Node 26.10.0. PostgreSQL is unavailable in the local session; Rails CI passed in the repository's documented SQLite mode.
 - In an isolated `/tmp` bundle, current MiniRacer `0.22.1` plus `libv8-node 24.12.0.1` installed successfully on this host.
 - `MiniRacer::Context` passed a JavaScript evaluation, a 1-second timeout probe, four independent contexts on four Ruby threads, and a post-fork context with `MiniRacer::Platform.set_flags!(:single_threaded)`.
+- On 2026-10-03, the expanded Rails wrapper suite passed locally (17 tests, 63 assertions), including exact output for all 14 fixtures, 80 concurrent renders on four threads, and the preloaded-master/two-worker/three-thread fork probe. The full Rails suite passed: 329 tests, 2,636 assertions. `config/puma.rb` now disposes cached contexts in its quiescent `before_fork` hook; the wrapper rejects use of a context inherited from another PID.
+- `script/benchmark_shared_renderer.rb` measured a 7,277-byte, 100-slide source with math and highlighted code on this Omarchy host (Ruby 4.0.6): cold JS projection 149.82 ms; over 20 warm runs, JS block p95 16.57 ms, JS full projection p95 88.44 ms, Ruby rollback block p95 36.16 ms. These are renderer-only timings, excluding file reads, worker bridge, and DOM insertion. macOS CI runs the same benchmark; application budgets still require release-build device measurements.
 - The local host has WebKitGTK 4.1 development files and Chromium. macOS arm64 was not available. The probe did not exercise the production bundle, memory exhaustion, or Puma itself.
 - The production bundle renders in MiniRacer, targeted Rails tests pass, and frontend renderer tests cover Markdown, math, links, wiki-links, media, and input limits. The run did expose and fix a fail-closed contract for missing PPTX Elef attachments.
 - S1's exit is therefore **not met yet**. Remaining evidence includes broader normalized renderer fixtures and comparison, all consumer parity, macOS-arm64 MiniRacer installation/rendering, measured 100-slide latency, Puma thread/fork behavior, and a release-process feasibility review. ADR-007 must remain proposed until its accepted-when checks are actually met.

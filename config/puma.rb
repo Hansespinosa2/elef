@@ -28,6 +28,12 @@
 threads_count = ENV.fetch("RAILS_MAX_THREADS", 3)
 threads threads_count, threads_count
 
+before_fork do
+  # Rails can be preloaded by a deployment's Puma options. Drop any contexts
+  # created during boot before workers inherit the master's address space.
+  Source::JavascriptRenderer.dispose_contexts_before_fork if defined?(Source::JavascriptRenderer)
+end
+
 # Specifies the `port` that Puma will listen on to receive requests; default is 3000.
 port ENV.fetch("PORT", 3000)
 
