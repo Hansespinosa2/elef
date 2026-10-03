@@ -249,8 +249,10 @@ class DesktopEditorUi {
     if ((await link.getText()).trim() !== title) {
       throw new Error(`The desktop preview did not resolve the document link to ${title}`)
     }
-    if (!(await link.getAttribute("href"))?.startsWith("#deck/")) {
-      throw new Error(`The desktop preview used an invalid local document link for ${title}`)
+    const expectedDocumentId = process.env.ELEF_E2E_DESKTOP_LINKED_DOCUMENT_ID
+    if (!expectedDocumentId) throw new Error("The desktop linked-document fixture ID is unavailable")
+    if ((await link.getAttribute("href")) !== `#deck/${expectedDocumentId}`) {
+      throw new Error(`The desktop preview did not link ${title} to the expected document ID`)
     }
   }
 

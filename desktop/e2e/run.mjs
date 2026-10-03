@@ -205,15 +205,18 @@ try {
   await writeFile(path.join(archiveFixture, "presentation.md"), "# Imported from Elef\n\nPortable archive fixture.\n")
   await writeFile(path.join(archiveFixture, "elef.json"), JSON.stringify({ id: randomUUID(), schema_version: 1 }))
   execFileSync("zip", ["-q", "-r", importArchive, path.basename(archiveFixture)], { cwd: temporaryRoot })
+  const desktopLinkedDocumentId = randomUUID()
   for (const [name, source] of [
     ["E2E document", "# E2E document\n\nSee [[E2E linked]].\n"],
     ["E2E linked", "# E2E linked\n\nTarget document.\n"]
   ]) {
     const folder = path.join(libraryRoot, name)
+    const id = name === "E2E linked" ? desktopLinkedDocumentId : randomUUID()
     await mkdir(folder, { recursive: true })
     await writeFile(path.join(folder, "document.md"), source)
-    await writeFile(path.join(folder, "elef.json"), JSON.stringify({ id: randomUUID(), schema_version: 1 }))
+    await writeFile(path.join(folder, "elef.json"), JSON.stringify({ id, schema_version: 1 }))
   }
+  env.ELEF_E2E_DESKTOP_LINKED_DOCUMENT_ID = desktopLinkedDocumentId
 
   if (process.env.CI) {
     const seeded = runRails(

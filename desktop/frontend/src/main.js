@@ -5,6 +5,7 @@ import { relaunch } from "@tauri-apps/plugin-process"
 import { check as checkUpdater } from "@tauri-apps/plugin-updater"
 import { editorFor } from "controllers/editor_controller"
 import { createDeckCard } from "./deck-card.js"
+import { createDocumentGraphCache } from "./document-graph-cache.js"
 import { createTransportAdapter } from "./transport-adapter.js"
 import { waitForEditorController } from "./editor-ready.js"
 import { createSaveFlow } from "./save-flow.js"
@@ -107,10 +108,9 @@ let pendingAuthoringDeletion = null
 let decks = []
 let activeDeck = null
 let saveFlow = null
-let documentGraphCache = null
+const documentGraphCache = createDocumentGraphCache(() => invoke("document_graph"))
 let libraryTab = "all"
 let cardPreviewObserver = null
-let documentGraphRequest = null
 let pendingUpdate = null
 let libraryStatusLoaded = false
 let processingOpenedFiles = false
@@ -129,8 +129,9 @@ const loadLibraryPreview = createLibraryPreviewLoader({
 })
 saveFlow = createSaveFlow({
   saveSource: async (id, source) => {
+    const isDocument = decks.find(deck => deck.id === id)?.source_file === "document.md"
     const result = await transport.saveSource(id, source)
-    if (activeDeck?.id === id && activeDeck.source_file === "document.md") documentGraphCache = null
+    if (isDocument) documentGraphCache.invalidate()
     return result
   },
   acceptDiskVersion: (id, contentHash) => transport.acceptDiskVersion(id, contentHash),
@@ -218,15 +219,7 @@ function showLibraryTab(tab) {
 }
 
 async function documentGraphData() {
-  if (documentGraphCache) return documentGraphCache
-  if (documentGraphRequest) return documentGraphRequest
-  documentGraphRequest = invoke("document_graph").then(graph => {
-    documentGraphCache = graph
-    return graph
-  }).finally(() => {
-    documentGraphRequest = null
-  })
-  return documentGraphRequest
+  return documentGraphCache.get()
 }
 
 async function previewDocumentNodes(source) {
@@ -404,7 +397,7 @@ async function refreshLibrary() {
       loadDesktopAuthoringRegistry()
     ])
     decks = listedDecks
-    documentGraphCache = null
+    documentGraphCache.invalidate()
     renderDecks()
     if (libraryTab === "graph") await showDocumentGraph()
     setStatus(`${decks.length} ${decks.length === 1 ? "deck" : "decks"}`)
@@ -426,7 +419,7 @@ async function chooseLibrary() {
     }
     library = selected
     await loadDesktopAuthoringRegistry()
-    documentGraphCache = null
+    documentGraphCache.invalidate()
     libraryConfig = selected.config || libraryConfig
     decks = selected.decks
     applyTheme(libraryConfig.theme)
@@ -1162,7 +1155,7 @@ window.setInterval(async () => {
     if (activeDeck?.id === id) {
       if (activeDeck.source_file === "document.md" &&
           (snapshot.content_hash !== activeDeck.content_hash || snapshot.source_file !== activeDeck.source_file)) {
-        documentGraphCache = null
+        documentGraphCache.invalidate()
       }
       const result = await saveFlow.checkExternalChange(id, snapshot)
       if (result === "reloaded" || result === "source-file-changed") syncSourceLabel()
