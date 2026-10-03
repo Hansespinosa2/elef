@@ -14,6 +14,7 @@ import { createRendererClient } from "./renderer-client.js"
 import { installSanitizedPreview } from "./preview-sanitizer.js"
 import { checkForDesktopUpdate, installDesktopUpdate } from "./update-flow.js"
 import { loadDesktopAuthoringRegistry } from "./authoring-registry-loader.js"
+import { buildAuthoringEntry, removeAuthoringEntry, upsertAuthoringEntry } from "./authoring-settings.js"
 import { createPresentationNavigation } from "./presentation-flow.js"
 import { applyDesktopFeatureFlags } from "./feature-flags.js"
 import { filterDecks } from "./library-filter.js"
@@ -57,6 +58,19 @@ const elements = {
   settingsDialog: document.querySelector("#settings-dialog"),
   settingsForm: document.querySelector("#settings-form"),
   libraryTheme: document.querySelector("#library-theme"),
+  authoringDialog: document.querySelector("#authoring-settings-dialog"),
+  authoringTitle: document.querySelector("#authoring-settings-title"),
+  authoringTabs: document.querySelectorAll("[data-authoring-tab]"),
+  authoringStatus: document.querySelector("#authoring-settings-status"),
+  authoringCount: document.querySelector("#authoring-settings-count"),
+  authoringList: document.querySelector("#authoring-settings-list"),
+  authoringEmpty: document.querySelector("#authoring-settings-empty"),
+  authoringNew: document.querySelector("#new-authoring-entry"),
+  authoringForm: document.querySelector("#authoring-entry-form"),
+  authoringFormHeading: document.querySelector("#authoring-entry-heading"),
+  authoringSnippetFields: document.querySelector(".authoring-snippet-fields"),
+  authoringMathFields: document.querySelector(".authoring-math-fields"),
+  authoringSave: document.querySelector("#save-authoring-entry"),
   createForm: document.querySelector("#create-form"),
   aboutDialog: document.querySelector("#about-dialog"),
   conflictDialog: document.querySelector("#conflict-dialog"),
@@ -81,6 +95,8 @@ const elements = {
 
 let library = null
 let libraryConfig = { schema_version: 1, theme: "system", hotkeys: {} }
+let authoringRegistries = { snippets: [], math_shortcuts: [] }
+let activeAuthoringRegistry = "snippets"
 let decks = []
 let activeDeck = null
 let saveFlow = null
@@ -621,6 +637,173 @@ async function saveSettings(event) {
   }
 }
 
+function authoringEntryLabel(entry, registry) {
+  if (registry === "math_shortcuts") return `${entry.prefix || "@"}${(entry.aliases || []).join(", ")}`
+  return `${entry.category === "Elef DSL" ? ":" : "/"}${entry.trigger || ""}`
+}
+
+function renderAuthoringEntries() {
+  const entries = authoringRegistries[activeAuthoringRegistry] || []
+  elements.authoringList.replaceChildren()
+  elements.authoringCount.textContent = `${entries.length} personal ${activeAuthoringRegistry === "snippets" ? "snippet" : "shortcut"}${entries.length === 1 ? "" : "s"}`
+  elements.authoringEmpty.hidden = entries.length > 0
+
+  for (const entry of entries) {
+    const card = document.createElement("article")
+    card.className = "authoring-entry-card"
+    const heading = document.createElement("div")
+    heading.className = "authoring-entry-card-heading"
+    const title = document.createElement("div")
+    const trigger = document.createElement("code")
+    trigger.textContent = authoringEntryLabel(entry, activeAuthoringRegistry)
+    const name = document.createElement("h3")
+    name.textContent = String(entry.name || "Untitled")
+    title.append(trigger, name)
+    const actions = document.createElement("div")
+    actions.className = "authoring-entry-actions"
+    const edit = document.createElement("button")
+    edit.className = "quiet-button"
+    edit.type = "button"
+    edit.textContent = "Edit"
+    edit.addEventListener("click", () => editAuthoringEntry(entry))
+    const remove = document.createElement("button")
+    remove.className = "quiet-button authoring-delete"
+    remove.type = "button"
+    remove.textContent = "Delete"
+    remove.addEventListener("click", () => void deleteAuthoringEntry(entry))
+    actions.append(edit, remove)
+    heading.append(title, actions)
+    const description = document.createElement("p")
+    description.textContent = String(entry.description || "")
+    const body = document.createElement("pre")
+    body.textContent = String(activeAuthoringRegistry === "snippets" ? entry.body || "" : entry.expansion || "")
+    card.append(heading, description, body)
+    elements.authoringList.append(card)
+  }
+}
+
+function setAuthoringRegistry(registry) {
+  activeAuthoringRegistry = registry === "math_shortcuts" ? "math_shortcuts" : "snippets"
+  const isSnippet = activeAuthoringRegistry === "snippets"
+  elements.authoringTitle.textContent = isSnippet ? "Snippets" : "Math shortcuts"
+  elements.authoringNew.textContent = isSnippet ? "New snippet" : "New shortcut"
+  elements.authoringFormHeading.textContent = isSnippet ? "New snippet" : "New shortcut"
+  elements.authoringSave.textContent = isSnippet ? "Save snippet" : "Save shortcut"
+  elements.authoringSnippetFields.hidden = !isSnippet
+  elements.authoringSnippetFields.disabled = !isSnippet
+  elements.authoringMathFields.hidden = isSnippet
+  elements.authoringMathFields.disabled = isSnippet
+  for (const tab of elements.authoringTabs) {
+    const selected = tab.dataset.authoringTab === activeAuthoringRegistry
+    tab.classList.toggle("is-active", selected)
+    tab.setAttribute("aria-pressed", String(selected))
+  }
+  elements.authoringStatus.textContent = ""
+  closeAuthoringEntryForm()
+  renderAuthoringEntries()
+}
+
+async function showAuthoringSettings() {
+  try {
+    authoringRegistries = await invoke("read_authoring_registries")
+    authoringRegistries.snippets ||= []
+    authoringRegistries.math_shortcuts ||= []
+    setAuthoringRegistry(activeAuthoringRegistry)
+    elements.authoringDialog.showModal()
+  } catch (_error) {
+    authoringRegistries = { snippets: [], math_shortcuts: [] }
+    setAuthoringRegistry(activeAuthoringRegistry)
+    elements.authoringStatus.textContent = "Could not read authoring settings. Check that the library folder is available."
+    elements.settingsDialog.close()
+    elements.authoringDialog.showModal()
+  }
+}
+
+function closeAuthoringEntryForm() {
+  elements.authoringForm.reset()
+  elements.authoringForm.hidden = true
+  elements.authoringFormHeading.textContent = activeAuthoringRegistry === "snippets" ? "New snippet" : "New shortcut"
+  elements.authoringSave.textContent = activeAuthoringRegistry === "snippets" ? "Save snippet" : "Save shortcut"
+}
+
+function beginAuthoringEntryForm(entry = null) {
+  closeAuthoringEntryForm()
+  elements.authoringForm.hidden = false
+  elements.authoringForm.elements.namedItem("id").value = entry ? String(entry.id) : ""
+  const isSnippet = activeAuthoringRegistry === "snippets"
+  const fields = isSnippet ? elements.authoringSnippetFields : elements.authoringMathFields
+  fields.querySelector(`[name="${isSnippet ? "name" : "math-name"}"]`).value = String(entry?.name || "")
+  fields.querySelector(`[name="${isSnippet ? "description" : "math-description"}"]`).value = String(entry?.description || "")
+  if (isSnippet) {
+    fields.querySelector('[name="trigger"]').value = String(entry?.trigger || "")
+    fields.querySelector('[name="category"]').value = String(entry?.category || "Markdown")
+    fields.querySelector('[name="body"]').value = String(entry?.body || "")
+  } else {
+    fields.querySelector('[name="prefix"]').value = String(entry?.prefix || ".")
+    fields.querySelector('[name="aliases"]').value = (entry?.aliases || []).join(", ")
+    fields.querySelector('[name="expansion"]').value = String(entry?.expansion || "")
+  }
+  elements.authoringFormHeading.textContent = entry
+    ? `Edit ${isSnippet ? "snippet" : "shortcut"}`
+    : `New ${isSnippet ? "snippet" : "shortcut"}`
+  elements.authoringSave.textContent = `Save ${isSnippet ? "snippet" : "shortcut"}`
+  fields.querySelector("input:not([type=hidden])")?.focus()
+}
+
+function editAuthoringEntry(entry) {
+  beginAuthoringEntryForm(entry)
+}
+
+async function persistAuthoringRegistries(nextEntries, action) {
+  try {
+    await invoke("write_authoring_registry", {
+      registry: activeAuthoringRegistry,
+      entries: nextEntries
+    })
+    authoringRegistries[activeAuthoringRegistry] = nextEntries
+    await loadDesktopAuthoringRegistry()
+    elements.authoringStatus.textContent = `${action} saved to this library.`
+    setStatus(`${action} saved`)
+    closeAuthoringEntryForm()
+    renderAuthoringEntries()
+  } catch (error) {
+    elements.authoringStatus.textContent = error?.code === "invalid_input"
+      ? "These settings are invalid. Check the name, trigger, category, aliases, and template."
+      : "Could not save authoring settings. Check that the library folder is writable."
+  }
+}
+
+async function saveAuthoringEntry(event) {
+  event.preventDefault()
+  const formData = new FormData(elements.authoringForm)
+  const isSnippet = activeAuthoringRegistry === "snippets"
+  const fields = isSnippet
+    ? Object.fromEntries(formData.entries())
+    : {
+        name: formData.get("math-name"),
+        description: formData.get("math-description"),
+        prefix: formData.get("prefix"),
+        aliases: formData.get("aliases"),
+        expansion: formData.get("expansion")
+      }
+  const existingId = formData.get("id")
+  const id = existingId || `personal-${crypto.randomUUID()}`
+  try {
+    const entry = buildAuthoringEntry(activeAuthoringRegistry, fields, id)
+    const entries = upsertAuthoringEntry(authoringRegistries[activeAuthoringRegistry], entry)
+    await persistAuthoringRegistries(entries, existingId ? "Changes" : "New entry")
+  } catch (error) {
+    elements.authoringStatus.textContent = error.message
+  }
+}
+
+async function deleteAuthoringEntry(entry) {
+  const name = String(entry.name || "this entry")
+  if (!window.confirm(`Delete “${name}” from this library?`)) return
+  const entries = removeAuthoringEntry(authoringRegistries[activeAuthoringRegistry], entry.id)
+  await persistAuthoringRegistries(entries, "Entry deletion")
+}
+
 async function exportCurrentDeck() {
   if (!activeDeck) {
     showNotice("Open a deck before exporting it.")
@@ -864,6 +1047,15 @@ document.querySelector("#create-form").addEventListener("submit", event => {
   if (event.submitter?.value === "create") void createDeck(event)
 })
 elements.settingsForm.addEventListener("submit", event => void saveSettings(event))
+document.querySelector("#manage-authoring").addEventListener("click", () => {
+  elements.settingsDialog.close()
+  void showAuthoringSettings()
+})
+elements.authoringTabs.forEach(tab => tab.addEventListener("click", () => setAuthoringRegistry(tab.dataset.authoringTab)))
+elements.authoringNew.addEventListener("click", () => beginAuthoringEntryForm())
+elements.authoringForm.addEventListener("submit", event => void saveAuthoringEntry(event))
+document.querySelector("#cancel-authoring-entry").addEventListener("click", closeAuthoringEntryForm)
+document.querySelector("#close-authoring-settings").addEventListener("click", () => elements.authoringDialog.close())
 document.querySelector("#check-for-updates").addEventListener("click", () => void checkForUpdates(true))
 document.querySelector("#install-update").addEventListener("click", () => void installUpdate())
 elements.presentationExit.addEventListener("click", () => void exitPresentation())

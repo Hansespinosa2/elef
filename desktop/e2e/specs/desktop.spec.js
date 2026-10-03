@@ -9,6 +9,20 @@ import { hostileDeckNeutralizedWorkflow } from "../scenarios/hostile-deck.js"
 import { mathInputWorkflow, snippetInsertWorkflow } from "../scenarios/authoring-palettes.js"
 import { PIXEL_PNG_DIGEST, PIXEL_PNG_MARKDOWN } from "../scenarios/media-fixture.js"
 
+async function openDesktopAuthoringSettings() {
+  await browser.execute(() => window.focus())
+  if (process.platform === "darwin") {
+    execFileSync("osascript", ["-e", 'tell application "System Events" to keystroke "," using {command down}'], { timeout: 5_000 })
+  } else if (process.platform === "linux") {
+    execFileSync("xdotool", ["key", "--clearmodifiers", "ctrl+comma"], { timeout: 5_000 })
+  } else {
+    throw new Error(`Settings menu smoke is unsupported on ${process.platform}`)
+  }
+  await $("#settings-dialog").waitForDisplayed()
+  await $("#manage-authoring").click()
+  await $("#authoring-settings-dialog").waitForDisplayed()
+}
+
 function normalizeLineEndings(source) {
   return source.replace(/\r\n/g, "\n")
 }
@@ -743,6 +757,128 @@ describe("desktop binary workflows and native boundaries", () => {
 
     await ui.replaceSource(originalSource)
     await ui.waitForSaved(originalSource)
+  })
+
+  it("manages personal snippets through the desktop authoring settings", async () => {
+    await openDesktopAuthoringSettings()
+    await $("#new-authoring-entry").click()
+
+    const trigger = `managed${Date.now()}`
+    await $("#authoring-name").setValue("Managed E2E snippet")
+    await $("#authoring-trigger").setValue(trigger)
+    await $("#authoring-description").setValue("Created through desktop settings")
+    await $("#authoring-category").selectByVisibleText("Markdown")
+    await $("#authoring-body").setValue("**${1:managed}**")
+    await $("#save-authoring-entry").click()
+    await browser.waitUntil(async () => (await $("#authoring-settings-status").getText()).includes("saved to this library"), {
+      timeout: 10_000,
+      timeoutMsg: "Saving the personal snippet did not finish"
+    })
+
+    const persisted = await browser.execute(async () => await window.__TAURI__.core.invoke("read_authoring_registries"))
+    const savedEntry = persisted.snippets.find(entry => entry.trigger === trigger)
+    if (!savedEntry || savedEntry.body !== "**${1:managed}**") {
+      throw new Error("The personal snippet was not written to the library registry file")
+    }
+    let createdCard
+    for (const card of await $$(".authoring-entry-card")) {
+      if ((await card.getText()).includes(trigger)) createdCard = card
+    }
+    if (!createdCard) throw new Error("The saved personal snippet was not listed for editing")
+    const cardActions = await createdCard.$$(".authoring-entry-actions button")
+    await cardActions[0].click()
+    await $("#authoring-name").setValue("Managed E2E snippet edited")
+    await $("#authoring-description").setValue("Updated through desktop settings")
+    await $("#save-authoring-entry").click()
+    await browser.waitUntil(async () => (await $("#authoring-settings-status").getText()).includes("Changes saved to this library"), {
+      timeout: 10_000,
+      timeoutMsg: "Editing the personal snippet did not finish"
+    })
+    const updatedRegistries = await browser.execute(async () => await window.__TAURI__.core.invoke("read_authoring_registries"))
+    const updatedEntry = updatedRegistries.snippets.find(entry => entry.trigger === trigger)
+    if (updatedEntry?.name !== "Managed E2E snippet edited" || updatedEntry.description !== "Updated through desktop settings") {
+      throw new Error("Editing the personal snippet did not update the library registry file")
+    }
+
+    await $("#close-authoring-settings").click()
+    const ui = new DesktopEditorUi()
+    await ui.openDeck()
+    const originalSource = await ui.readSource()
+    const prefix = `${originalSource.trimEnd()}\n`
+    await ui.replaceSource(`${prefix}/${trigger}`)
+    await ui.waitForAuthoringOption("snippet", "Managed E2E snippet edited")
+    await ui.selectAuthoringOption("snippet", "Managed E2E snippet edited")
+    const expandedSource = `${prefix}**managed**`
+    await ui.waitForSource(expandedSource)
+    await ui.waitForSaved(expandedSource)
+    await ui.replaceSource(originalSource)
+    await ui.waitForSaved(originalSource)
+
+    const library = new DesktopLibraryUi()
+    await library.openLibrary()
+    await openDesktopAuthoringSettings()
+    let targetCard
+    for (const card of await $$(".authoring-entry-card")) {
+      if ((await card.getText()).includes(trigger)) targetCard = card
+    }
+    if (!targetCard) throw new Error("The saved personal snippet was not listed for management")
+    await targetCard.$(".authoring-delete").click()
+    await browser.waitUntil(() => browser.isAlertOpen(), {
+      timeout: 5_000,
+      timeoutMsg: "Deleting a personal snippet did not ask for confirmation"
+    })
+    await browser.acceptAlert()
+    await browser.waitUntil(async () => (await $("#authoring-settings-status").getText()).includes("saved to this library"), {
+      timeout: 10_000,
+      timeoutMsg: "Deleting the personal snippet did not finish"
+    })
+    const afterDelete = await browser.execute(async () => await window.__TAURI__.core.invoke("read_authoring_registries"))
+    if (afterDelete.snippets.some(entry => entry.trigger === trigger)) {
+      throw new Error("Deleting the personal snippet left it in the library registry file")
+    }
+  })
+
+  it("creates and deletes a personal math shortcut through desktop settings", async () => {
+    await openDesktopAuthoringSettings()
+    await $('[data-authoring-tab="math_shortcuts"]').click()
+    await $("#new-authoring-entry").click()
+    const alias = `elefe2e${Date.now()}`
+    await $("#authoring-math-name").setValue("E2E math shortcut")
+    await $("#authoring-prefix").selectByAttribute("value", "@")
+    await $("#authoring-aliases").setValue(alias)
+    await $("#authoring-math-description").setValue("Temporary desktop test shortcut")
+    await $("#authoring-expansion").setValue("\\mathbb{${1}}")
+    await $("#save-authoring-entry").click()
+    await browser.waitUntil(async () => (await $("#authoring-settings-status").getText()).includes("saved to this library"), {
+      timeout: 10_000,
+      timeoutMsg: "Saving the personal math shortcut did not finish"
+    })
+
+    const persisted = await browser.execute(async () => await window.__TAURI__.core.invoke("read_authoring_registries"))
+    const entry = persisted.math_shortcuts.find(shortcut => shortcut.aliases.includes(alias))
+    if (entry?.prefix !== "@" || entry.expansion !== "\\mathbb{${1}}") {
+      throw new Error("The personal math shortcut was not written to the library registry file")
+    }
+
+    let targetCard
+    for (const candidate of await $$(".authoring-entry-card")) {
+      if ((await candidate.getText()).includes(alias)) targetCard = candidate
+    }
+    if (!targetCard) throw new Error("The saved math shortcut was not listed for management")
+    await targetCard.$(".authoring-delete").click()
+    await browser.waitUntil(() => browser.isAlertOpen(), {
+      timeout: 5_000,
+      timeoutMsg: "Deleting a personal math shortcut did not ask for confirmation"
+    })
+    await browser.acceptAlert()
+    await browser.waitUntil(async () => (await $("#authoring-settings-status").getText()).includes("saved to this library"), {
+      timeout: 10_000,
+      timeoutMsg: "Deleting the personal math shortcut did not finish"
+    })
+    const afterDelete = await browser.execute(async () => await window.__TAURI__.core.invoke("read_authoring_registries"))
+    if (afterDelete.math_shortcuts.some(shortcut => shortcut.aliases.includes(alias))) {
+      throw new Error("Deleting the personal math shortcut left it in the library registry file")
+    }
   })
 
   it("rejects unsupported and oversized media without changing the source", async () => {

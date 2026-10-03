@@ -166,7 +166,31 @@ kbd { padding: 3px 5px; color: var(--faint); background: var(--canvas); border: 
 .app-dialog h2 { margin: 0 0 23px; font-size: 22px; letter-spacing: -.04em; }
 .app-dialog label { display: block; margin: 15px 0 7px; color: var(--muted); font-size: 11px; }
 .app-dialog input, .app-dialog select { width: 100%; height: 39px; padding: 0 11px; border: 1px solid var(--line); border-radius: 8px; outline-color: var(--accent); background: var(--canvas); color: var(--ink); font-size: 12px; }
+.app-dialog textarea { width: 100%; resize: vertical; padding: 10px 11px; border: 1px solid var(--line); border-radius: 8px; outline-color: var(--accent); background: var(--canvas); color: var(--ink); font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 25px; }
+.authoring-settings-link { width: 100%; margin-top: 18px; }
+.authoring-dialog { width: min(760px, calc(100vw - 36px)); max-height: min(90vh, 900px); overflow: auto; }
+.authoring-settings-copy, .authoring-settings-status { color: var(--muted); font-size: 12px; line-height: 1.5; }
+.authoring-settings-status { min-height: 18px; color: var(--accent); }
+.authoring-settings-tabs, .authoring-settings-heading, .authoring-entry-card-heading, .authoring-entry-actions { display: flex; align-items: center; gap: 9px; }
+.authoring-settings-tabs { margin: 18px 0; }
+.authoring-settings-tabs .is-active { border-color: var(--accent); color: var(--accent); }
+.authoring-settings-heading { justify-content: space-between; margin: 14px 0; }
+.authoring-settings-heading p { margin: 0; }
+.authoring-settings-list { display: grid; max-height: 38vh; gap: 9px; overflow: auto; }
+.authoring-entry-card { padding: 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--canvas); }
+.authoring-entry-card-heading { justify-content: space-between; align-items: flex-start; }
+.authoring-entry-card code { color: var(--accent); font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.authoring-entry-card h3 { margin: 4px 0 0; font-size: 14px; }
+.authoring-entry-card p { margin: 7px 0; color: var(--muted); font-size: 11px; }
+.authoring-entry-card pre { max-height: 90px; overflow: auto; margin: 0; padding: 8px; border-radius: 6px; background: var(--panel); color: var(--ink); font: 10px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.authoring-delete { color: var(--danger); }
+.authoring-entry-form { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
+.authoring-entry-form[hidden], .authoring-snippet-fields[hidden], .authoring-math-fields[hidden] { display: none; }
+.authoring-entry-form h3 { margin: 0; font-size: 16px; }
+.authoring-entry-form fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+.authoring-entry-form .dialog-actions { margin-top: 16px; }
+.authoring-dialog > div > .dialog-actions { position: sticky; bottom: -28px; padding: 12px 0 2px; background: var(--panel); }
 .about-dialog p:not(.eyebrow) { color: var(--muted); font-size: 12px; line-height: 1.6; }
 .conflict-dialog { width: min(980px, calc(100vw - 36px)); max-height: 90vh; overflow: auto; }
 .conflict-explanation { color: var(--muted); font-size: 12px; }
