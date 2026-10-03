@@ -20,8 +20,9 @@
 ## Decision (proposed)
 
 - **Channel:** one stable channel. Updates come from GitHub Releases (`latest.json` plus signed artifacts), over HTTPS only. No downgrade by default.
+- **Release version:** `desktop-vMAJOR.MINOR.PATCH` is validated before building. The generated Tauri release config takes its version from that tag, so later releases cannot accidentally publish the development config's `0.1.0` under a newer release name. Placeholder or malformed public keys fail before packaging.
 - **Artifacts:** macOS (Apple Silicon) `.app`/`.dmg` plus the updater archive, unsigned and not notarized; Linux AppImage (Tauri's Linux updater target).
-- **Signing:** the updater verifies the Ed25519 signature against the public key baked into the app before installing. The macOS Gatekeeper warning on first install is accepted and documented (S3).
+- **Signing:** the updater verifies the Ed25519 signature against the public key baked into the app before installing and requires its authenticated version to match the manifest (`requireSignedVersion`). The pinned Tauri CLI automatically signs the version during `tauri build`; manual artifact signing must supply `--app-version`. The macOS Gatekeeper warning on first install is accepted and documented (S3).
 - **Releases come from CI only,** from tags; the private key is a repo secret and never on a developer machine except in backups.
 - **Key custody:** keep two offline encrypted backups of the private key in separate places (human gate in [delivery-plan.md](../delivery-plan.md)). Use a passphrase.
 - **Failed update:** a corrupt, badly signed or interrupted update leaves the previous version runnable (QS-8).

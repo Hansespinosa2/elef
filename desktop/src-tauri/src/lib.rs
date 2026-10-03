@@ -301,11 +301,9 @@ async fn export_elef_impl(
     let library = state.current_library()?;
     let deck = library.deck_summary(&id)?;
     #[cfg(feature = "webdriver")]
-    if !use_native_dialog {
-        if let Some(destination) = std::env::var_os("ELEF_E2E_EXPORT_PATH") {
-            export_elef_to_path(&library, &id, PathBuf::from(destination))?;
-            return Ok(true);
-        }
+    if !use_native_dialog && let Some(destination) = std::env::var_os("ELEF_E2E_EXPORT_PATH") {
+        export_elef_to_path(&library, &id, PathBuf::from(destination))?;
+        return Ok(true);
     }
     #[cfg(not(feature = "webdriver"))]
     let _ = use_native_dialog;
@@ -922,6 +920,12 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
 }
 
 pub fn run() {
+    let updater = tauri_plugin_updater::Builder::new();
+    #[cfg(feature = "webdriver")]
+    let updater = match std::env::var("ELEF_E2E_UPDATER_PUBLIC_KEY") {
+        Ok(public_key) => updater.pubkey(public_key),
+        Err(_) => updater,
+    };
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
@@ -935,7 +939,7 @@ pub fn run() {
                 let _ = app.emit("desktop-open-elef", ());
             }
         }))
-        .plugin(tauri_plugin_updater::Builder::new().build());
+        .plugin(updater.build());
 
     #[cfg(feature = "webdriver")]
     let builder = builder.plugin(tauri_plugin_wdio_webdriver::init());

@@ -8,6 +8,7 @@ import { externalEditConflictWorkflow, CONFLICT_EXTERNAL_SOURCE } from "../scena
 import { hostileDeckNeutralizedWorkflow } from "../scenarios/hostile-deck.js"
 import { mathInputWorkflow, snippetInsertWorkflow } from "../scenarios/authoring-palettes.js"
 import { PIXEL_PNG_DIGEST, PIXEL_PNG_MARKDOWN } from "../scenarios/media-fixture.js"
+import { createHash } from "node:crypto"
 
 async function openDesktopAuthoringSettings() {
   await browser.execute(() => window.focus())
@@ -1099,4 +1100,52 @@ describe("desktop binary workflows and native boundaries", () => {
     const cancelled = await browser.execute(async () => await window.__elefExportDialog)
     if (cancelled !== false) throw new Error("Cancelling the native export dialog should leave the archive unwritten")
   })
+})
+
+describe("native updater verification", () => {
+  for (const mode of ["none", "older", "valid", "bad-signature", "truncated", "version-mismatch"]) {
+    it(`handles ${mode} updates without changing the installed binary or deck source`, async () => {
+      const binaryPath = process.env.ELEF_E2E_REAL_APP_BINARY || process.env.ELEF_E2E_APP_BINARY
+      const hash = async filename => createHash("sha256").update(await readFile(filename)).digest("hex")
+      const sourcePath = path.join(process.env.ELEF_E2E_LIBRARY_ROOT, "E2E seed", "presentation.md")
+      const original = { binary: await hash(binaryPath), source: await hash(sourcePath) }
+      const response = await fetch(`http://127.0.0.1:8888/mode?value=${mode}`)
+      if (!response.ok) throw new Error("Could not select the updater fixture")
+      try {
+        const result = await browser.execute(async () => {
+          const { invoke, Channel } = window.__TAURI__.core
+          const metadata = await invoke("plugin:updater|check", { timeout: 5_000 })
+          if (!metadata) return { outcome: "no-update" }
+          let bytesRid
+          try {
+            const onEvent = new Channel()
+            bytesRid = await invoke("plugin:updater|download", { rid: metadata.rid, onEvent, timeout: 5_000 })
+            return { outcome: "verified-download", version: metadata.version }
+          } catch (error) {
+            return { outcome: "rejected", error: String(error) }
+          } finally {
+            if (bytesRid !== undefined) await invoke("plugin:resources|close", { rid: bytesRid })
+            await invoke("plugin:resources|close", { rid: metadata.rid })
+          }
+        })
+        if (["none", "older"].includes(mode)) {
+          if (result.outcome !== "no-update") throw new Error(`Expected no update: ${JSON.stringify(result)}`)
+        } else if (mode === "valid") {
+          if (result.outcome !== "verified-download" || result.version !== "0.2.0") {
+            throw new Error(`Signed download did not verify: ${JSON.stringify(result)}`)
+          }
+        } else {
+          if (result.outcome !== "rejected") throw new Error(`Unsafe update was accepted: ${JSON.stringify(result)}`)
+          if (mode === "bad-signature" && !/signature/i.test(result.error)) throw new Error(`Wrong signature rejection: ${result.error}`)
+          if (mode === "version-mismatch" && !/version/i.test(result.error)) throw new Error(`Wrong version rejection: ${result.error}`)
+        }
+        if (await hash(binaryPath) !== original.binary || await hash(sourcePath) !== original.source) {
+          throw new Error("Update verification changed the installed binary or deck source")
+        }
+        if (!(await $("#back-to-library").isExisting())) throw new Error("The application stopped responding after update verification")
+      } finally {
+        await fetch("http://127.0.0.1:8888/mode?value=none")
+      }
+    })
+  }
 })

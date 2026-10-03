@@ -8,5 +8,11 @@
   },
   "build": {
     "frontendDist": "../frontend/dist-e2e"
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": ["http://127.0.0.1:8888/manifest"],
+      "requireSignedVersion": true
+    }
   }
 }

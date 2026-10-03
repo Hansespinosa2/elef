@@ -22,6 +22,7 @@ jobs:
       - name: Prepare signed updater configuration
         env:
           TAURI_UPDATER_PUBKEY: ${{ vars.TAURI_UPDATER_PUBKEY }}
+          DESKTOP_RELEASE_TAG: ${{ github.ref_name }}
         run: node desktop/scripts/prepare-updater-config.mjs
       - name: Check signing credentials are configured
         env:
@@ -64,6 +65,7 @@ jobs:
       - name: Prepare signed updater configuration
         env:
           TAURI_UPDATER_PUBKEY: ${{ vars.TAURI_UPDATER_PUBKEY }}
+          DESKTOP_RELEASE_TAG: ${{ github.ref_name }}
         run: node desktop/scripts/prepare-updater-config.mjs
       - name: Check signing credentials are configured
         env:

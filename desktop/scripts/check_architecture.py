@@ -55,7 +55,8 @@ assert {permission for permission in permissions if permission.startswith("core:
     "core:event:allow-listen",
     "core:event:allow-unlisten",
     "core:window:allow-close",
-}, "grant only event subscriptions and programmatic close after a safe save"
+    "core:resources:allow-close",
+}, "grant only events, safe window close, and releasing updater resources"
 assert not any(permission.startswith(("fs:", "shell:", "dialog:")) for permission in permissions)
 assert config["app"]["security"]["capabilities"] == ["main-capability"], "production must not attach the E2E WebDriver capability"
 assert e2e_config["app"]["security"]["capabilities"] == ["main-capability", "e2e-webdriver"], "the test build must attach only the production and E2E capabilities"
@@ -65,6 +66,9 @@ assert set(e2e_capability["permissions"]) == {
 }, "only the test-only capability may expose WebdriverIO and its embedded server"
 assert e2e_config["app"].get("withGlobalTauri") is True, "global Tauri access is enabled only for the test-only WebdriverIO build"
 assert config["app"].get("withGlobalTauri") is not True, "production must not expose the global Tauri API"
+assert config["plugins"]["updater"].get("requireSignedVersion") is True, "bind update versions to signed artifacts"
+assert all(url.startswith("https://") for url in config["plugins"]["updater"]["endpoints"]), "production updater transport must use HTTPS"
+assert not config["plugins"]["updater"].get("dangerousInsecureTransportProtocol"), "production must reject HTTP updater endpoints"
 tauri_manifest = (TAURI_ROOT / "Cargo.toml").read_text()
 assert 'webdriver = ["dep:tauri-plugin-wdio", "dep:tauri-plugin-wdio-webdriver"]' in tauri_manifest, "WebdriverIO plugins must remain opt-in"
 assert not re.search(r'^default\s*=.*\bwebdriver\b', tauri_manifest, re.MULTILINE), "production's default Cargo features must exclude WebDriver"

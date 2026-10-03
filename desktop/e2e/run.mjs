@@ -48,6 +48,7 @@ const webTitle = "E2E seed"
 let presentationId = null
 let hostilePresentationId = null
 let documentIds = []
+let updaterServer = null
 const env = {
   ...process.env,
   ELEF_E2E_LIBRARY_ROOT: libraryRoot,
@@ -255,6 +256,14 @@ try {
 
   const webdriverio = path.join(e2eRoot, "node_modules", ".bin", "wdio")
   await verifyOfflineSandbox()
+  updaterServer = spawn(process.execPath, [path.join(e2eRoot, "updater-fixture-server.mjs")], {
+    stdio: ["ignore", "inherit", "inherit", "ipc"]
+  })
+  env.ELEF_E2E_UPDATER_PUBLIC_KEY = await withTimeout(new Promise((resolve, reject) => {
+    updaterServer.once("message", message => resolve(message.publicKey))
+    updaterServer.once("error", reject)
+    updaterServer.once("exit", code => reject(new Error(`Updater fixture server exited before readiness (${code})`)))
+  }), 10_000, "Updater fixture server did not start")
   const desktopResult = spawnSync(webdriverio, ["run", "wdio.conf.js"], {
     cwd: e2eRoot,
     env: {
@@ -293,6 +302,14 @@ try {
     assert.equal(normalizeLineEndings(JSON.parse(savedSource)), expectedWebSource)
   }
 } finally {
+  if (updaterServer) {
+    const exited = new Promise(resolve => updaterServer.once("exit", resolve))
+    if (updaterServer.exitCode === null && updaterServer.signalCode === null) {
+      updaterServer.kill("SIGTERM")
+      await Promise.race([exited, new Promise(resolve => setTimeout(resolve, 1_000))])
+      if (updaterServer.exitCode === null && updaterServer.signalCode === null) updaterServer.kill("SIGKILL")
+    }
+  }
   if (presentationId) {
     try {
       runRails(`Presentation.find_by(id: ${presentationId})&.destroy!`)

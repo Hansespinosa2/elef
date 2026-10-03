@@ -4,8 +4,9 @@ export async function checkForDesktopUpdate(check) {
   return {
     version: update.version,
     notes: typeof update.body === "string" ? update.body : "",
+    dispose: () => update.close(),
     install: async onProgress => {
-      await update.downloadAndInstall(event => onProgress?.(event))
+      await update.downloadAndInstall(event => onProgress?.(event), { timeout: 120_000 })
     }
   }
 }

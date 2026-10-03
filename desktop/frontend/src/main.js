@@ -112,6 +112,7 @@ const documentGraphCache = createDocumentGraphCache(() => invoke("document_graph
 let libraryTab = "all"
 let cardPreviewObserver = null
 let pendingUpdate = null
+let updateInstalling = false
 let libraryStatusLoaded = false
 let processingOpenedFiles = false
 let openFilesRequested = false
@@ -892,12 +893,14 @@ async function resolveImportConflict(resolution) {
 }
 
 async function checkForUpdates(showNoUpdate = true) {
+  if (updateInstalling) return false
   try {
-    const update = await checkForDesktopUpdate(checkUpdater)
+    const update = await checkForDesktopUpdate(() => checkUpdater({ timeout: 10_000 }))
     if (!update) {
       if (showNoUpdate) setStatus("Elef is up to date")
       return false
     }
+    await pendingUpdate?.dispose().catch(() => {})
     pendingUpdate = update
     elements.updateVersion.textContent = "Version " + update.version + " is ready to install."
     elements.updateNotes.textContent = update.notes
@@ -911,9 +914,12 @@ async function checkForUpdates(showNoUpdate = true) {
 }
 
 async function installUpdate() {
-  if (!pendingUpdate) return
+  if (!pendingUpdate || updateInstalling) return
+  updateInstalling = true
   const button = document.querySelector("#install-update")
+  const later = document.querySelector("#update-later")
   button.disabled = true
+  later.disabled = true
   try {
     await installDesktopUpdate(pendingUpdate, {
       relaunch,
@@ -925,8 +931,11 @@ async function installUpdate() {
       }
     })
   } catch (_error) {
-    button.disabled = false
     showError({ message: "The update could not be installed. Your current version is still available." })
+  } finally {
+    updateInstalling = false
+    button.disabled = false
+    later.disabled = false
   }
 }
 
@@ -1107,6 +1116,14 @@ document.querySelector("#check-for-updates").addEventListener("click", () => voi
 document.querySelector("#install-update").addEventListener("click", () => void installUpdate())
 elements.presentationExit.addEventListener("click", () => void exitPresentation())
 document.querySelector("#update-later").addEventListener("click", () => elements.updateDialog.close())
+elements.updateDialog.addEventListener("cancel", event => {
+  if (updateInstalling) event.preventDefault()
+})
+elements.updateDialog.addEventListener("close", () => {
+  const update = pendingUpdate
+  pendingUpdate = null
+  void update?.dispose().catch(() => {})
+})
 document.querySelector("#import-conflict-replace").addEventListener("click", () => void resolveImportConflict("replace"))
 document.querySelector("#import-conflict-keep-both").addEventListener("click", () => void resolveImportConflict("keep_both"))
 document.querySelector("#import-conflict-cancel").addEventListener("click", () => void resolveImportConflict("cancel"))
