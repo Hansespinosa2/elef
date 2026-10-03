@@ -16,7 +16,7 @@ async function waitFor(check, message, timeoutMs = 20_000) {
   throw new Error(message)
 }
 
-function nativeQuit(pid) {
+export function nativeQuit(pid) {
   if (process.platform === "linux") {
     const windowId = execFileSync("xdotool", ["search", "--sync", "--onlyvisible", "--pid", String(pid)], {
       encoding: "utf8", timeout: 5_000

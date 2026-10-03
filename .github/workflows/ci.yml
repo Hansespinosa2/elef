@@ -261,6 +261,19 @@ jobs:
             exit 1
           fi
           dbus-run-session -- xvfb-run --auto-servernum bash -c 'openbox --sm-disable >/tmp/elef-e2e-openbox.log 2>&1 & sleep 1; npm test --prefix desktop/e2e'
+      - name: Build the release binary for native performance measurements
+        env:
+          ELEF_E2E_BUILD: "1"
+        run: npm run tauri:build --prefix desktop/frontend -- --features webdriver --no-bundle --config src-tauri/tauri.e2e.conf.json
+      - name: Measure native release application budgets over 20 fresh processes
+        run: dbus-run-session -- xvfb-run --auto-servernum bash -c 'openbox --sm-disable >/tmp/elef-performance-openbox.log 2>&1 & sleep 1; node desktop/e2e/benchmark-native.mjs --binary "$PWD/desktop/target/release/elef-desktop"'
+      - name: Preserve native Linux performance samples
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: native-performance-linux
+          path: desktop/target/native-performance-linux.json
+          if-no-files-found: warn
       - name: Build Linux desktop package
         run: npm run tauri:build --prefix desktop/frontend
 
@@ -332,6 +345,21 @@ jobs:
           ELEF_USE_SQLITE: "1"
           ELEF_E2E_OFFLINE: "1"
         run: npm test --prefix desktop/e2e
+      - name: Build the release binary for native performance measurements
+        env:
+          ELEF_E2E_BUILD: "1"
+        run: npm run tauri:build --prefix desktop/frontend -- --features webdriver --no-bundle --config src-tauri/tauri.e2e.conf.json
+      - name: Measure native release application budgets over 20 fresh processes
+        env:
+          ELEF_E2E_OFFLINE: "1"
+        run: node desktop/e2e/benchmark-native.mjs --binary "$PWD/desktop/target/release/elef-desktop"
+      - name: Preserve native macOS performance samples
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: native-performance-darwin
+          path: desktop/target/native-performance-darwin.json
+          if-no-files-found: warn
       - name: Build Apple Silicon desktop package
         run: npm run tauri:build --prefix desktop/frontend -- --bundles app,dmg
 

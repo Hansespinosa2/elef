@@ -73,6 +73,8 @@ The headless browser style comparison renders identical presentation/document fi
 
 Protocol per [requirements.md](requirements.md) §8: release build, fresh process, p95 over ≥20 runs, scale fixtures. Linux perf truth is WebKitGTK, notably slower than Chromium for scrolling and large CodeMirror documents; T1's Chromium does not cover it, so the T2 desktop leg runs on real Linux hardware. Images go through the asset protocol and rendering runs in a worker — both are tested, not assumed.
 
+`desktop/e2e/benchmark-native.mjs` implements the application protocol on both CI OSes with a release-optimized binary and test-only embedded driver. It creates 1,000 deck folders and a 100-slide deck containing a 50 MiB unreferenced local asset, then launches 20 fresh processes. Startup is process launch to frontend/editor readiness after paint; open includes read, editor initialization, worker rendering, DOM insertion and paint; warm list includes scan, card construction and paint. The harness checks every byte from an input burst during actual saving and every native process exit. Nearest-rank p95 includes all samples and a budget miss fails CI. Sample JSON is retained even on failure. These measurements establish CI-host behavior, not MacBook Air/Omarchy hardware acceptance or physical keystroke fidelity.
+
 ## 8. Policies
 
 - **Flakes:** quarantine on the second flake; fix or delete within the PR; no permanently quarantined tests.

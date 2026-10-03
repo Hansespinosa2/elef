@@ -79,6 +79,8 @@ assert set(e2e_capability["permissions"]) == {
 }, "only the test-only capability may expose WebdriverIO and fixture downloads"
 assert e2e_config["app"].get("withGlobalTauri") is True, "global Tauri access is enabled only for the test-only WebdriverIO build"
 assert config["app"].get("withGlobalTauri") is not True, "production must not expose the global Tauri API"
+production_frontend = (REPO_ROOT / "desktop/frontend/dist/assets/app.js").read_text()
+assert "__elefPerformanceTestHooks" not in production_frontend, "native measurement hooks must be absent from the production frontend"
 assert config["plugins"]["updater"].get("requireSignedVersion") is True, "bind update versions to signed artifacts"
 assert all(url.startswith("https://") for url in config["plugins"]["updater"]["endpoints"]), "production updater transport must use HTTPS"
 assert not config["plugins"]["updater"].get("dangerousInsecureTransportProtocol"), "production must reject HTTP updater endpoints"

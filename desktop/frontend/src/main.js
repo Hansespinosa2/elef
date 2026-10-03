@@ -1,5 +1,6 @@
 import { createDeckOpenFlow, prepareDeckOpen } from "./deck-open-flow.js"
 import { completeBootstrap } from "./bootstrap-flow.js"
+import { measurePaintedAction } from "./performance-measurement.js"
 import { createCloseFlow } from "./close-flow.js"
 import { Channel, invoke } from "@tauri-apps/api/core"
 import { listen } from "@tauri-apps/api/event"
@@ -157,6 +158,41 @@ saveFlow = createSaveFlow({
 })
 
 if (__ELEF_E2E__) {
+  let interactiveAt = null
+  Object.defineProperty(window, "__elefPerformanceTestHooks", {
+    value: Object.freeze({
+      get interactiveAt() { return interactiveAt },
+      ready: () => { interactiveAt = performance.timeOrigin + performance.now() },
+      async open(id) {
+        return measurePaintedAction(async () => {
+          await openDeck(id)
+          if (activeDeck?.id !== id || elements.editorForm.dataset.loadedDeckId !== id ||
+              document.querySelector("#visual-mode").disabled) throw new Error("The measured deck did not finish rendering.")
+          return { id, slides: elements.editorForm.querySelectorAll(".slide").length }
+        })
+      },
+      async list() {
+        return measurePaintedAction(async () => {
+          await refreshLibrary()
+          if (!elements.notice.hidden && elements.notice.dataset.tone === "error") throw new Error("The measured library refresh failed.")
+          return decks.length
+        })
+      },
+      async typeDuringSave(text) {
+        const editor = editorFor(elements.editorField)
+        const original = currentSource()
+        editor.replaceRange("\n", editor.value.length)
+        const saving = flushSave()
+        for (const character of text) {
+          editor.replaceRange(character, editor.value.length)
+          await new Promise(resolve => requestAnimationFrame(resolve))
+        }
+        await saving
+        if (!(await flushSave()) || currentSource() !== original + "\n" + text) throw new Error("Input changed during autosave.")
+        return currentSource()
+      }
+    })
+  })
   Object.defineProperty(window, "__elefSaveTestHooks", {
     value: Object.freeze({
       pause: () => saveFlow.pause(),
@@ -1270,6 +1306,9 @@ void completeBootstrap({
   },
   waitForEditor: () => waitForEditorController(elements.editorField, editorFor),
   waitForPaint: () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))),
-  confirmReady: () => invoke("confirm_app_ready")
+  confirmReady: async () => {
+    await invoke("confirm_app_ready")
+    if (__ELEF_E2E__) window.__elefPerformanceTestHooks.ready()
+  }
 }).catch(showError)
 void checkForUpdates(false)
