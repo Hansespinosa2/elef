@@ -89,6 +89,7 @@ class DesktopEditorUi {
       timeout: 5_000,
       timeoutMsg: "The source editor did not finish restoring after the mode switch"
     })
+    await this.waitForEditorModeTransition()
     const editor = await $("#deck-source-editor .cm-content")
     await editor.waitForDisplayed()
     // Tauri's embedded WebDriver cannot reliably focus CodeMirror on CI. Use
@@ -118,6 +119,12 @@ class DesktopEditorUi {
     if (updated?.source !== source || updated.selectionStart !== source.length || updated.selectionEnd !== source.length) {
       throw new Error(`The desktop editor did not accept the shared scenario source at the end of the buffer: ${JSON.stringify(updated)}`)
     }
+  }
+
+  async waitForEditorModeTransition() {
+    await browser.executeAsync(done => {
+      requestAnimationFrame(() => requestAnimationFrame(() => done(true)))
+    })
   }
 
   async readSource() {
@@ -232,6 +239,7 @@ class DesktopEditorUi {
       timeout: 5_000,
       timeoutMsg: "The source editor did not activate after checking the rendered document link"
     })
+    await this.waitForEditorModeTransition()
   }
 
   async waitForPreview(text) {
