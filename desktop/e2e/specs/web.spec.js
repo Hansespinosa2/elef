@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test"
 import { editAndPreviewWorkflow, SAVED_SOURCE } from "../scenarios/edit-and-preview.js"
+import { appearanceWorkflow } from "../scenarios/appearance.js"
 import { libraryAndGraphWorkflow } from "../scenarios/library-and-graph.js"
 import { externalEditConflictWorkflow, CONFLICT_EXTERNAL_SOURCE } from "../scenarios/external-edit-conflict.js"
 import { hostileDeckNeutralizedWorkflow } from "../scenarios/hostile-deck.js"
@@ -24,6 +25,18 @@ async function renderedTextWithoutEditorControls(locator) {
 }
 
 class WebEditorUi {
+  async setAppearance(key, value) {
+    const panel = this.page.locator(".appearance-settings")
+    if (!await panel.evaluate(element => element.open)) await panel.locator("summary").click()
+    await panel.locator(`[data-appearance-target='${key}']`).selectOption(value)
+    await expect.poll(() => this.readSource()).toMatch(new RegExp(`^${key}: ${value}$`, "m"))
+    await expect(this.page.locator(`[class*='slides-${key}-${value}']`)).toBeVisible()
+  }
+
+  async assertAppearance(theme, typography) {
+    await expect(this.page.locator(`.slides-theme-${theme}.slides-typography-${typography}`)).toBeVisible()
+  }
+
   constructor(page) {
     this.page = page
     this.rejectExternalMedia = false
@@ -425,6 +438,10 @@ test("shared math input flow works in the web app", async ({ page }) => {
 
 test("shared hostile-deck security flow works in the web app", async ({ page }) => {
   await hostileDeckNeutralizedWorkflow(new WebEditorUi(page))
+})
+
+test("appearance persists through the shared editing flow", async ({ page }) => {
+  await appearanceWorkflow(new WebEditorUi(page))
 })
 
 test("shared rendering styles preserve slide layouts and document typography", async ({ page }) => {

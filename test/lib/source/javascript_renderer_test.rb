@@ -3,6 +3,21 @@ require "open3"
 require "timeout"
 
 class SourceJavascriptRendererTest < ActiveSupport::TestCase
+  test "native appearance mutations match Rails front matter byte for byte" do
+    ["\n", "\r\n", "\r"].each do |eol|
+      body = ["# Café 😀", "", "Unchanged body", ""].join(eol)
+      [body, ["---", "author: Andres", "theme: light", "---", body].join(eol)].each do |source|
+        %w[theme typography].each do |key|
+          [key == "theme" ? "dark" : "technical", ""].each do |value|
+            expected = Source::Document.with_front_matter_value(source, key, value.presence)
+            actual = Source::JavascriptRenderer.context.call("ElefRenderer.withAppearanceValue", source, key, value)
+            assert_equal expected, actual, "#{key} must preserve source bytes and #{eol.inspect} endings"
+          end
+        end
+      end
+    end
+  end
+
   test "library cards escape metadata and preserve trusted view slots" do
     title = '<img src=x onerror="run()">'
     html = Source::JavascriptRenderer.library_card({

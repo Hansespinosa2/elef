@@ -133,6 +133,24 @@
                   </div>
                   <span class="editor-mode" data-editor-target="mode" data-mode="standard" aria-live="polite">Standard</span>
                   <span class="editor-command" data-editor-target="command" aria-live="polite"></span>
+                  <details class="editor-settings appearance-settings" data-controller="appearance" data-appearance-target="panelContainer" hidden>
+                    <summary class="editor-reveal-metadata">Appearance</summary>
+                    <div class="editor-settings-panel appearance-fields" aria-label="Visual appearance controls">
+                      <div data-appearance-target="themeField">
+                        <label for="deck-theme" class="appearance-label">Theme</label>
+                        <select id="deck-theme" name="work[theme]" class="appearance-select" data-appearance-target="theme">
+                          <option value="">Workspace default</option><option value="light">Light</option><option value="dark">Dark</option><option value="match">Match</option>
+                        </select>
+                      </div>
+                      <div data-appearance-target="typographyField">
+                        <label for="deck-typography" class="appearance-label">Typography</label>
+                        <select id="deck-typography" name="work[typography]" class="appearance-select" data-appearance-target="typography">
+                          <option value="">Workspace default</option><option value="book">Book</option><option value="modern">Modern</option><option value="technical">Technical</option>
+                        </select>
+                      </div>
+                      <p class="field-hint appearance-hint" data-appearance-target="hint">Appearance overrides stay in the Markdown front matter.</p>
+                    </div>
+                  </details>
                   <button type="button" class="editor-reveal-metadata" data-editor-target="metadataToggle" data-action="click->editor#toggleMetadataVisibility">Reveal source metadata</button>
                 </div>
                 <div id="deck-source-editor" class="editor-surface" aria-labelledby="deck-source-label" data-editor-target="surface" data-snippet-palette-target="editor" data-math-shortcut-palette-target="editor" data-document-link-palette-target="editor"></div>

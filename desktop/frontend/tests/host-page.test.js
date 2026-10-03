@@ -41,6 +41,17 @@ test("the host uses no inline event handlers under the strict script policy", ()
   assert.equal(document.querySelector("[onclick], [onerror], [onload]"), null)
 })
 
+test("the editor reuses the web Appearance controller and front matter fields", () => {
+  const appearance = document.querySelector(".appearance-settings[data-controller='appearance']")
+  assert.ok(appearance)
+  assert.equal(appearance.hidden, true)
+  for (const key of ["theme", "typography"]) {
+    const field = appearance.querySelector(`[data-appearance-target='${key}']`)
+    assert.equal(field.getAttribute("name"), `work[${key}]`)
+    assert.equal(field.querySelector("option").value, "")
+  }
+})
+
 test("the source editor forwards input and keyboard events to authoring palettes", () => {
   const actions = document.querySelector("#deck-source").dataset.action.split(/\s+/)
   for (const action of [

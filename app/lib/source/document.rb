@@ -290,7 +290,7 @@ module Source
       metadata_lines = lines[1...closing_line]
       return nil unless metadata_lines.any? { |line| line.text.match?(/\A[A-Za-z_][\w-]*\s*:/) }
 
-      eol = lines.find { |line| line.ending.present? }&.ending || "\n"
+      eol = lines.find { |line| !line.ending.empty? }&.ending || "\n"
       FrontMatter.new(lines: lines, closing_line: closing_line, body_start: lines[closing_line].end_pos, eol: eol)
     end
 

@@ -68,3 +68,7 @@ The inventory covers application call sites found by `rg`; it does not establish
 - The local host has WebKitGTK 4.1 development files and Chromium. macOS arm64 was not available. The probe did not exercise the production bundle, memory exhaustion, or Puma itself.
 - The production bundle renders in MiniRacer, targeted Rails tests pass, and frontend renderer tests cover Markdown, math, links, wiki-links, media, and input limits. The run did expose and fix a fail-closed contract for missing PPTX Elef attachments.
 - S1's exit is therefore **not met yet**. Remaining evidence includes broader normalized renderer fixtures and comparison, all consumer parity, macOS-arm64 MiniRacer installation/rendering, measured 100-slide latency, Puma thread/fork behavior, and a release-process feasibility review. ADR-007 must remain proposed until its accepted-when checks are actually met.
+
+### Appearance controls
+
+Desktop registers the shared Rails `appearance` controller and uses its theme and typography selectors. Native changes persist those fields in source front matter; exact mutation contract tests compare Node/MiniRacer and Rails across LF, CRLF, and CR inputs. A shared scenario changes both fields, saves, reopens, and verifies the rendered classes. Application CI is the evidence for that scenario; unit tests alone do not establish device appearance.

@@ -3,6 +3,7 @@ import { execFileSync, spawn } from "node:child_process"
 import { readFile, readdir, writeFile } from "node:fs/promises"
 import path from "node:path"
 import { editAndPreviewWorkflow } from "../scenarios/edit-and-preview.js"
+import { appearanceWorkflow } from "../scenarios/appearance.js"
 import { libraryAndGraphWorkflow } from "../scenarios/library-and-graph.js"
 import { externalEditConflictWorkflow, CONFLICT_EXTERNAL_SOURCE } from "../scenarios/external-edit-conflict.js"
 import { hostileDeckNeutralizedWorkflow } from "../scenarios/hostile-deck.js"
@@ -38,6 +39,20 @@ function normalizeLineEndings(source) {
 }
 
 class DesktopEditorUi {
+  async setAppearance(key, value) {
+    const panel = await $(".appearance-settings")
+    if (await panel.getAttribute("open") === null) await panel.$("summary").click()
+    await panel.$(`[data-appearance-target='${key}']`).selectByAttribute("value", value)
+    await browser.waitUntil(async () => new RegExp(`^${key}: ${value}$`, "m").test(await this.readSource()), {
+      timeout: 10_000, timeoutMsg: "The appearance choice did not update the source"
+    })
+    await $(`[class*='slides-${key}-${value}']`).waitForDisplayed()
+  }
+
+  async assertAppearance(theme, typography) {
+    await $(`.slides-theme-${theme}.slides-typography-${typography}`).waitForDisplayed()
+  }
+
   constructor() {
     this.rejectExternalMedia = true
     this.activeDeckTitle = null
@@ -844,6 +859,10 @@ describe("desktop binary workflows and native boundaries", () => {
 
   it("runs the shared library and document graph flow", async () => {
     await libraryAndGraphWorkflow(new DesktopLibraryUi())
+  })
+
+  it("persists appearance through the shared editing flow", async () => {
+    await appearanceWorkflow(new DesktopEditorUi())
   })
 
   it("runs the shared external-edit conflict flow in the desktop binary", async () => {

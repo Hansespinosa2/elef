@@ -16,6 +16,7 @@ import { installSanitizedPreview } from "./preview-sanitizer.js"
 import { checkForDesktopUpdate, installDesktopUpdate } from "./update-flow.js"
 import { loadDesktopAuthoringRegistry } from "./authoring-registry-loader.js"
 import { buildAuthoringEntry, removeAuthoringEntry, upsertAuthoringEntry } from "./authoring-settings.js"
+import { withAppearanceValue } from "./document-map.js"
 import { writeAuthoringRegistry } from "./authoring-registry-write.js"
 import { createPresentationNavigation } from "./presentation-flow.js"
 import { applyDesktopFeatureFlags } from "./feature-flags.js"
@@ -1139,6 +1140,23 @@ document.querySelector("#empty-library [data-action='create-presentation']").add
   showCreateDialog(event.currentTarget.dataset.kind || "presentation")
 })
 elements.editorField.addEventListener("input", () => scheduleSave())
+elements.editorForm.addEventListener("change", event => {
+  const key = event.target.id === "deck-theme" ? "theme" : event.target.id === "deck-typography" ? "typography" : null
+  if (!key || !activeDeck) return
+  try {
+    const editor = editorFor(elements.editorField)
+    if (!editor) throw Object.assign(new Error("The editor is still loading."), { code: "editor_unavailable" })
+    let source = currentSource()
+    for (const styleKey of ["theme", "typography"]) {
+      source = withAppearanceValue(source, styleKey, elements.editorForm.querySelector(`#deck-${styleKey}`).value)
+    }
+    editor.setExternalValue(source)
+    scheduleSave()
+    void elements.editorForm.previewController?.refresh()
+  } catch (error) {
+    showError(error)
+  }
+})
 document.querySelector("#use-disk-version").addEventListener("click", resolveConflictWithDisk)
 document.querySelector("#keep-local-version").addEventListener("click", resolveConflictWithLocal)
 document.querySelector("#save-merged-version").addEventListener("click", resolveConflictWithMerge)

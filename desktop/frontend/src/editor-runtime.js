@@ -2,6 +2,7 @@ import { loadDesktopAuthoringRegistry } from "./authoring-registry-loader.js"
 import { application } from "controllers/application"
 import katex from "katex"
 import EditorController from "controllers/editor_controller"
+import AppearanceController from "controllers/appearance_controller"
 import DocumentLinkPaletteController from "controllers/document_link_palette_controller"
 import DocumentGraphController from "controllers/document_graph_controller"
 import MathShortcutPaletteController from "controllers/math_shortcut_palette_controller"
@@ -20,6 +21,7 @@ import SnippetPaletteController from "controllers/snippet_palette_controller"
 globalThis.katex = katex
 
 application.register("editor", EditorController)
+application.register("appearance", AppearanceController)
 application.register("document-link-palette", DocumentLinkPaletteController)
 application.register("document-graph", DocumentGraphController)
 application.register("math-shortcut-palette", MathShortcutPaletteController)

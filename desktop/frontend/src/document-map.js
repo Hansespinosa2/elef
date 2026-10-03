@@ -104,6 +104,31 @@ export function readStyle(source) {
   }
 }
 
+// The native appearance adapter persists the same flat metadata fields as
+// Rails. Retain unrelated metadata, body bytes, and the file's line endings.
+export function withAppearanceValue(source, key, value) {
+  const vocabulary = key === "theme" ? THEMES : key === "typography" ? TYPOGRAPHIES : null
+  if (typeof source !== "string" || !vocabulary || (value !== "" && !vocabulary.has(value))) {
+    throw new TypeError("Unsupported appearance value")
+  }
+  const front = initialFrontMatter(source)
+  const ending = line => source.slice(line.start + line.text.length, line.end)
+  const eol = front?.lines.map(ending).find(Boolean) || (source.includes("\r\n") ? "\r\n" : "\n")
+  if (!front) return value === "" ? source : `---${eol}${key}: ${value}${eol}---${eol}${source}`
+  const matching = front.lines.slice(1, front.closingLine).find(line => new RegExp(`^\\s*${key}\\s*:`).test(line.text))
+  if (matching) {
+    const replacement = value === "" ? "" : `${key}: ${value}${ending(matching)}`
+    const updated = source.slice(0, matching.start) + replacement + source.slice(matching.end)
+    if (value === "" && front.closingLine === 2) {
+      return source.slice(front.bodyStart).replace(/^\r?\n/, "")
+    }
+    return updated
+  }
+  if (value === "") return source
+  const closing = front.lines[front.closingLine]
+  return source.slice(0, closing.start) + `${key}: ${value}${eol}` + source.slice(closing.start)
+}
+
 function marginSettings(source) {
   const settings = { section: true, subsection: true, footnote: true, slide_count: true }
   const frontMatter = initialFrontMatter(source)
