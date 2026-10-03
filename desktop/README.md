@@ -12,7 +12,7 @@ npm run build
 npm run tauri:dev
 ```
 
-`tauri:dev` loads the built static frontend and does not start a development server. Re-run `npm run build` after frontend edits. The shell supports folder discovery, create/open/rename, move-to-Trash, the Rails CodeMirror source and visual editors, worker-rendered preview and slide editing, local media, portable `.elef` import/export, portable authoring settings, and updater integration. Rails and desktop share the renderer's slide/document structure and editor maps; final projection markup parity, the signed release key ceremony and device verification remain open. See [the desktop acceptance plan](../docs/desktop/delivery-plan.md).
+`tauri:dev` loads the built static frontend and does not start a development server. Re-run `npm run build` after frontend edits. The shell supports folder discovery, create/open/rename, move-to-Trash, the Rails CodeMirror source and visual editors, worker-rendered preview and slide editing, local media, portable `.elef` import/export, portable authoring settings, and updater integration. Rails and desktop use the same JS editable-projection renderer with platform-specific links and media URLs. Full consumer-fixture parity, the signed release key ceremony, and owner-device verification remain open. See [the desktop acceptance plan](../docs/desktop/delivery-plan.md).
 
 ## Checks
 
