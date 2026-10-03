@@ -158,7 +158,8 @@ class WebEditorUi {
   }
 
   async waitForPreview(text) {
-    await expect(this.page.locator(".editor-projection.preview-pane")).toContainText(text)
+    const block = this.page.locator(".editor-projection.preview-pane .slide-block").filter({ hasText: text }).first()
+    await expect(block).toBeVisible()
   }
 
   async inspectHostilePreview() {
@@ -307,7 +308,7 @@ class WebLibraryUi {
     const card = this.page.locator("article.library-card").filter({
       has: this.page.getByRole("heading", { name: title, exact: true })
     })
-    await expect(card.locator(".library-card-preview")).toContainText(text)
+    await expect(card.locator(".library-card-preview .slide-block").filter({ hasText: text }).first()).toBeVisible()
   }
 
   async searchFor(query) {
