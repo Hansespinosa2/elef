@@ -65,10 +65,27 @@ class DesktopEditorUi {
   }
 
   async waitForSource(source) {
-    await browser.waitUntil(async () => await this.readSource() === source, {
-      timeout: 10_000,
-      timeoutMsg: "The desktop editor buffer did not reach the expected source"
-    })
+    try {
+      await browser.waitUntil(async () => await this.readSource() === source, {
+        timeout: 10_000,
+        timeoutMsg: "The desktop editor buffer did not reach the expected source"
+      })
+    } catch (error) {
+      const state = await browser.execute(() => {
+        const field = document.querySelector("#desktop-editor-field")
+        const editor = field?.editorController
+        const palette = globalThis.Stimulus?.getControllerForElementAndIdentifier(field, "snippet-palette")
+        return {
+          source: editor?.sourceValue,
+          selection: [editor?.selectionStart, editor?.selectionEnd],
+          mode: editor?.editingMode,
+          paletteQuery: palette?.query,
+          paletteMatches: palette?.matches?.map(entry => entry.name || entry.snippet?.name),
+          paletteHidden: document.querySelector('[aria-label="Snippet suggestions"]')?.hidden
+        }
+      }).catch(diagnosticError => ({ diagnosticError: diagnosticError.message }))
+      throw new Error(`${error.message}; desktop editor state: ${JSON.stringify(state)}`)
+    }
   }
 
   async undo() {
