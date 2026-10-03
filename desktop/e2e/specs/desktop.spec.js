@@ -848,7 +848,13 @@ describe("desktop binary workflows and native boundaries", () => {
     await $("#new-authoring-entry").click()
     const alias = `elefe2e${Date.now()}`
     await $("#authoring-math-name").setValue("E2E math shortcut")
-    await $("#authoring-prefix").selectByAttribute("value", "@")
+    const prefix = $("#authoring-prefix")
+    await prefix.click()
+    await prefix.keys("\uE015")
+    await prefix.keys("\uE007")
+    if (await prefix.getValue() !== "@") {
+      throw new Error("Selecting the @ math shortcut prefix did not update the form")
+    }
     await $("#authoring-aliases").setValue(alias)
     await $("#authoring-expansion").setValue("\\mathbb{${1}}")
     await $("#save-authoring-entry").click()
