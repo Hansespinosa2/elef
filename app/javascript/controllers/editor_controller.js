@@ -288,6 +288,7 @@ export default class extends Controller {
     this.syncFrontmatterVisibility()
     this.syncMetadataToggle()
     if (!silent) {
+      const selectionAtModeChange = this.view.state.selection
       this.form?.dispatchEvent(new CustomEvent("elef:editor-mode-change", {
         bubbles: true,
         detail: { mode: this.editingMode, editor: this }
@@ -297,6 +298,9 @@ export default class extends Controller {
         if (this.destroyed || this.editingMode !== nextMode) return
         if (nextMode === "source") {
           if (this.view.dom.contains(document.activeElement)) return
+          // A toolbar action or file picker may set a new insertion range
+          // before this frame runs. Preserve that deliberate selection.
+          if (!this.view.state.selection.eq(selectionAtModeChange)) return
           if (this.vimEnabled && this.vimMode.startsWith("visual")) Vim.handleKey(this.vim, "<Esc>", "user")
           this.view.dispatch({ selection: { anchor: sourceOffset } })
           this.view.focus()

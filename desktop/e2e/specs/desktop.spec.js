@@ -155,6 +155,21 @@ class DesktopEditorUi {
     })
   }
 
+  async assertModeSwitchRespectsNewCaret() {
+    const result = await browser.execute(async () => {
+      const editor = document.querySelector("#desktop-editor-field").editorController
+      editor.setEditingMode("visual")
+      await new Promise(resolve => requestAnimationFrame(resolve))
+      editor.sourceButtonTarget.focus()
+      editor.setEditingMode("source")
+      const intended = editor.sourceValue.length
+      editor.setSelectionRange(intended)
+      await new Promise(resolve => requestAnimationFrame(resolve))
+      return { intended, actual: editor.selectionStart }
+    })
+    if (result.actual !== result.intended) throw new Error(`The mode-switch callback overwrote the new caret: ${JSON.stringify(result)}`)
+  }
+
   async waitForSource(source) {
     try {
       await browser.waitUntil(async () => await this.readSource() === source, {

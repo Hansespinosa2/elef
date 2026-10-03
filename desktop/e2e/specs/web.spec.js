@@ -79,6 +79,21 @@ class WebEditorUi {
     ])).toEqual([position, position])
   }
 
+  async assertModeSwitchRespectsNewCaret() {
+    const result = await this.page.locator(".source-field").evaluate(async field => {
+      const editor = field.editorController
+      editor.setEditingMode("visual")
+      await new Promise(resolve => requestAnimationFrame(resolve))
+      editor.sourceButtonTarget.focus()
+      editor.setEditingMode("source")
+      const intended = editor.sourceValue.length
+      editor.setSelectionRange(intended)
+      await new Promise(resolve => requestAnimationFrame(resolve))
+      return { intended, actual: editor.selectionStart }
+    })
+    expect(result.actual).toBe(result.intended)
+  }
+
   async waitForSource(source) {
     await expect.poll(async () => normalizeLineEndings(await this.readSource()))
       .toBe(normalizeLineEndings(source))

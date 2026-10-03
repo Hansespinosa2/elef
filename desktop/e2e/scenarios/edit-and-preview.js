@@ -12,6 +12,7 @@ export async function editAndPreviewWorkflow(ui) {
   await ui.assertDocumentLinkPreview("E2E linked")
   await ui.showSourceMode()
   await ui.assertCaretPosition(caretPosition)
+  await ui.assertModeSwitchRespectsNewCaret()
   await ui.replaceSource(SAVED_SOURCE)
   await ui.waitForSource(SAVED_SOURCE)
   await ui.waitForSaved(SAVED_SOURCE)
