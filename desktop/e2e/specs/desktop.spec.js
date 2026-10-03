@@ -860,7 +860,7 @@ describe("desktop binary workflows and native boundaries", () => {
     const persisted = await browser.execute(async () => await window.__TAURI__.core.invoke("read_authoring_registries"))
     const entry = persisted.math_shortcuts.find(shortcut => shortcut.aliases.includes(alias))
     if (entry?.prefix !== "@" || entry.expansion !== "\\mathbb{${1}}" || entry.description !== "") {
-      throw new Error("The personal math shortcut was not written to the library registry file")
+      throw new Error(`The personal math shortcut was not persisted as entered: ${JSON.stringify(entry)}`)
     }
 
     let targetCard

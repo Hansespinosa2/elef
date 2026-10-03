@@ -73,6 +73,43 @@ test("document preview renders basic Markdown with safe content-addressed local 
   assert.match(preview.html, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/)
 })
 
+test("full editor projection accepts platform document links, settings, and assets", () => {
+  const preview = renderPreview({
+    source: "# Notes\n\n[[Target alias|Open target]] and [[document:target-key]] and [[Missing|Missing target]]\n\n![diagram](elef-asset:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)",
+    kind: "document",
+    title: "Notes",
+    documentNodes: [{ id: "target-id", title: "Target", documentKey: "target-key", aliases: ["Target alias"], href: "/documents/target-id" }],
+    mediaMap: { "elef-asset:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": { src: "/media/asset.png", contentType: "image/png" } },
+    style: { theme: "dark", typography: "technical" }
+  })
+
+  assert.equal(preview.editor_map.mode, "document")
+  assert.deepEqual(preview.warnings, [])
+  assert.match(preview.html, /document-theme-dark document-typography-technical/)
+  assert.match(preview.html, /href="\/documents\/target-id"/)
+  assert.match(preview.html, /data-document-link-title="Target"/)
+  assert.match(preview.html, />Open target<\/a>/)
+  assert.match(preview.html, />Target<\/a>/)
+  assert.match(preview.html, /class="document-link unresolved" aria-label="Unresolved document link">\[\[Missing target\]\]<\/span>/)
+  assert.match(preview.html, /src="\/media\/asset\.png"/)
+  assert.match(preview.html, /data-editor-region-id=/)
+})
+
+test("presentation editor projection exposes Stimulus canvas targets to host controllers", () => {
+  const preview = renderPreview({ source: "# One\\n\\nBody", kind: "presentation" })
+
+  assert.match(preview.html, /data-presentation-editor-target="canvas"/)
+  assert.match(preview.html, /data-presentation-canvas-target="canvas"/)
+})
+
+test("document projection keeps trailing list and quote lines editable", () => {
+  const list = renderPreview({ kind: "document", source: "# Notes\n\n- First item\n- " }).html
+  const quote = renderPreview({ kind: "document", source: "# Notes\n\n> First line\n> " }).html
+
+  assert.match(list, /<li>First item<\/li>\s*<li><br><\/li>/)
+  assert.match(quote, /<blockquote>\s*<p>First line<\/p>\s*<p><br><\/p>/)
+})
+
 test("wiki links resolve through local document IDs and math stays inert", () => {
   const preview = renderPreview({
     kind: "document",

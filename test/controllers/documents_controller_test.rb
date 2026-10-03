@@ -49,6 +49,30 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
     assert_response :created
   end
 
+  test "editor projections resolve document links through the shared renderer" do
+    source = Document.create!(source: "# Source notes\n\n[[Target notes]]")
+    target = Document.create!(title: "Target notes", source: "# Target notes")
+    draft = "# Draft notes\n\n[[Target notes|Open target]]"
+
+    post preview_document_path(source), params: {
+      document: { source: draft }, projection: "editor", revision: "shared-projection-1"
+    }, as: :json
+
+    assert_response :success
+    payload = response.parsed_body
+    assert_equal "shared-projection-1", payload["revision"]
+    assert_equal "document", payload.dig("editor_map", "mode")
+    assert_includes payload["html"], %(href="#{document_path(target)}")
+    assert_includes payload["html"], %(data-document-link-title="Target notes")
+    assert_includes payload["html"], %(contenteditable="true")
+    assert_equal "# Source notes\n\n[[Target notes]]", source.reload.source
+
+    get edit_document_path(source)
+
+    assert_response :success
+    assert_select ".editor-projection a.document-link[href=?]", document_path(target)
+  end
+
   test "uploads and serves image assets for documents" do
     document = Document.create!(title: "Document media", source: "# Media")
     bytes = Base64.decode64("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+i9MwAAAAASUVORK5CYII=")

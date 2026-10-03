@@ -38,6 +38,40 @@ module Source
       ).deep_symbolize_keys
     end
 
+    def editor_preview(
+      source,
+      kind:,
+      title:,
+      deck_id: "",
+      media_resolver: nil,
+      document_nodes: [],
+      style: {},
+      margin_settings: {},
+      allow_remote_media: true
+    )
+      raise ArgumentError, "The selected file did not contain readable text." unless source.is_a?(String)
+      raise ArgumentError, "Markdown source exceeds the renderer limit" if source.bytesize > MAX_RENDER_BYTES
+      raise ArgumentError, "Unsupported document mode" unless %w[presentation document].include?(kind.to_s)
+      raise ArgumentError, "Document links must be a list." unless document_nodes.is_a?(Array)
+
+      renderer = context
+      media_map = resolved_media(renderer, source, media_resolver)
+      renderer.call(
+        "ElefRenderer.renderPreview",
+        {
+          source: source,
+          kind: kind.to_s,
+          title: title.to_s,
+          deckId: deck_id.to_s,
+          documentNodes: document_nodes,
+          mediaMap: media_map,
+          allowRemoteMedia: allow_remote_media == true,
+          style: style,
+          marginSettings: margin_settings
+        }
+      ).deep_symbolize_keys
+    end
+
     def resolved_media(renderer, source, media_resolver)
       return {} unless media_resolver && source.include?("!")
 

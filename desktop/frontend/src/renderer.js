@@ -102,16 +102,35 @@ markdown.inline.ruler.after("backticks", "elef_wiki_link", (state, silent) => {
   const raw = state.src.slice(start + 2, close).trim()
   const [targetText, displayText] = raw.split("|", 2)
   const target = targetText.trim()
+  const normalizedTarget = target.replace(/^(?:document|id):/, "")
   if (!target || target.length > 200 || /[<>\u0000-\u001f]/.test(target)) return false
   if (silent) return true
 
-  const node = (state.env?.documentNodes || []).find((entry) => entry.title === target || entry.id === target)
-  const href = node ? `#deck/${encodeURIComponent(node.id)}` : "#"
+  const node = (state.env?.documentNodes || []).find((entry) =>
+    entry.title === target
+      || entry.id === target
+      || entry.id === normalizedTarget
+      || entry.documentKey === target
+      || entry.documentKey === normalizedTarget
+      || entry.document_key === target
+      || entry.document_key === normalizedTarget
+      || entry.aliases?.includes?.(target)
+  )
+  const label = (displayText || node?.title || target).trim()
+  if (!node) {
+    const unresolved = state.push("html_inline", "", 0)
+    unresolved.content = `<span class="document-link unresolved" aria-label="Unresolved document link">${escapeHtml(`[[${(displayText || target).trim()}]]`)}</span>`
+    state.pos = close + 2
+    return true
+  }
+  const href = node.href || `#deck/${encodeURIComponent(node.id)}`
   const open = state.push("link_open", "a", 1)
   open.attrSet("href", href)
-  open.attrSet("class", node ? "document-link" : "document-link is-missing")
+  open.attrSet("class", "document-link")
+  if (node.title) open.attrSet("data-document-link-title", node.title)
+  if (node.title) open.attrSet("aria-label", `Open document preview: ${node.title}`)
   const text = state.push("text", "", 0)
-  text.content = (displayText || target).trim()
+  text.content = label
   state.push("link_close", "a", -1)
   state.pos = close + 2
   return true
@@ -172,7 +191,11 @@ export function renderPreview({
   title = "Untitled",
   deckId = "",
   mediaBaseUrl = "",
-  documentNodes = []
+  documentNodes = [],
+  mediaMap = {},
+  allowRemoteMedia = false,
+  style: styleOverrides = {},
+  marginSettings: marginOverrides = {}
 } = {}) {
   if (typeof source !== "string") throw typedError("invalid_input", "Markdown source must be text.")
   if (source.length > 50 * 1024 * 1024) throw typedError("too_large", "This deck is too large to preview.")
@@ -187,9 +210,15 @@ export function renderPreview({
     blocks: slideMap.blocks,
     editable_regions: slideMap.editable_regions
   }))
-  const { style, warnings, marginSettings } = structure
+  const { warnings } = structure
+  const style = {
+    ...structure.style,
+    ...(styleOverrides.theme ? { theme: styleOverrides.theme } : {}),
+    ...(styleOverrides.typography ? { typography: styleOverrides.typography } : {})
+  }
+  const marginSettings = { ...structure.marginSettings, ...marginOverrides }
   const mediaUrl = mediaBaseUrl || `elefasset://localhost/${encodeURIComponent(deckId)}`
-  const env = { mediaBaseUrl: mediaUrl, documentNodes }
+  const env = { mediaBaseUrl: mediaUrl, mediaMap, allowRemoteMedia, documentNodes }
 
   const html = mode === "document"
     ? renderDocument(source, slides[0], style, env)
@@ -221,7 +250,13 @@ function renderDocument(source, slide, style, env) {
     const attributes = valid
       ? `class="${classes}" data-editor-region-id="${mapped.editable_region_id}" data-editor-block-id="${mapped.id}" contenteditable="true" role="textbox" aria-label="Editable Markdown block" aria-multiline="true" spellcheck="true" data-action="input-&gt;visual-editor#projectionInput focus-&gt;visual-editor#blockFocus blur-&gt;visual-editor#blockBlur"`
       : `class="${classes}" contenteditable="false" aria-readonly="true"`
-    let rendered = region?.empty_heading ? "<h1><br></h1>" : renderMarkdownBlock(block.markdown, env)
+    const structured = valid && ["list", "quote"].includes(mapped.kind)
+      ? editableStructuredSource(block.markdown, mapped.kind)
+      : { source: block.markdown, caretToken: null }
+    let rendered = region?.empty_heading ? "<h1><br></h1>" : renderMarkdownBlock(structured.source, env)
+    if (valid && structured.caretToken) {
+      rendered = emptyStructuredLine(rendered, structured.caretToken, mapped.kind)
+    }
     if (valid && mapped.kind === "image") {
       const alt = /^\s*!\[([^\]]*)\]/.exec(block.markdown)?.[1] || ""
       rendered = `<figure class="editor-media">${rendered}<figcaption class="editor-media-caption" aria-label="Editable image alt text" title="Edit image alt text">${escapeHtml(alt)}</figcaption></figure>`
@@ -234,6 +269,42 @@ function renderDocument(source, slide, style, env) {
     emptyIndex += 1
   }
   return `<div class="document-reader document-theme-${style.theme} document-typography-${style.typography} work-theme-${style.theme} work-typography-${style.typography} document-editor-projection" data-controller="document-pages mermaid-diagrams"><div class="document-surface" data-document-pages-target="surface">${blocks}</div></div>`
+}
+
+function editableStructuredSource(markdown, kind) {
+  const lines = markdown.split("\n")
+  const lastLine = lines.at(-1) || ""
+  const marker = kind === "list"
+    ? /^[ \t]*(?:[-*+]|\d+[.)])[ \t]*$/.exec(lastLine)?.[0]
+    : /^[ \t]*>[ \t]*$/.exec(lastLine)?.[0]
+  if (!marker) return { source: markdown, caretToken: null }
+
+  let caretToken = "ELEFCARETPLACEHOLDER"
+  while (markdown.includes(caretToken)) caretToken += "_"
+  const separator = /[ \t]$/.test(marker) ? "" : " "
+  const formattedMarker = `${marker}${separator}`
+  if (kind === "quote" && lines.length > 1) lines.splice(-1, 0, formattedMarker.trimEnd())
+  lines[lines.length - 1] = `${formattedMarker}${caretToken}`
+  return { source: lines.join("\n"), caretToken }
+}
+
+function emptyStructuredLine(rendered, caretToken, kind) {
+  const tokenIndex = rendered.lastIndexOf(caretToken)
+  if (tokenIndex < 0) return rendered
+
+  const listStart = kind === "list" ? rendered.lastIndexOf("<li", tokenIndex) : -1
+  const quoteStart = kind === "quote"
+    ? Math.max(rendered.lastIndexOf("<p", tokenIndex), rendered.lastIndexOf("<div", tokenIndex))
+    : -1
+  const startTag = kind === "list" ? listStart : quoteStart
+  const tagEnd = rendered.indexOf(">", startTag)
+  if (startTag < 0 || tagEnd < 0) return rendered.replace(caretToken, "<br>")
+
+  const tagName = kind === "list" ? "li" : rendered.startsWith("<p", startTag) ? "p" : "div"
+  const endTag = rendered.indexOf(`</${tagName}>`, tokenIndex)
+  if (endTag < 0) return rendered.replace(caretToken, "<br>")
+
+  return `${rendered.slice(0, tagEnd + 1)}<br>${rendered.slice(endTag)}`
 }
 
 function renderPresentation(source, slides, style, margin, env) {
@@ -272,7 +343,7 @@ function renderPresentation(source, slides, style, margin, env) {
       : ""
     return `<div class="slide-frame" data-controller="presentation-canvas"><section class="slide slide-${slide.layout}" data-presentation-canvas-target="canvas" aria-label="Slide ${index + 1}" data-editor-slide-id="slide-${index + 1}" data-slide-index="${index}">${toolbar}${topMargin}<div class="slide-content">${titleMarkup}${slideContent}${empty}</div>${bottomMargin}</section></div>`
   }).join("")
-  return `<div class="presentation-surface work-surface slides slides-theme-${style.theme} slides-typography-${style.typography} work-theme-${style.theme} work-typography-${style.typography} presentation-editor-projection" data-controller="mermaid-diagrams">${frames}</div>`
+  return `<div class="presentation-surface work-surface slides slides-theme-${style.theme} slides-typography-${style.typography} work-theme-${style.theme} work-typography-${style.typography} presentation-editor-projection" data-controller="mermaid-diagrams" data-presentation-editor-target="canvas">${frames}</div>`
 }
 
 function renderPresentationBlockControls(slideIndex, blockIndex, blockCount, position) {
