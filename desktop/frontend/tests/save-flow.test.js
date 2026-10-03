@@ -275,3 +275,44 @@ test("permanent save failures stop retrying until the user retries explicitly", 
   await context.flow.flush({ force: true })
   assert.equal(attempts, 2)
 })
+
+test("undo to the old baseline waits for the outstanding write and persists the final buffer", async () => {
+  const pending = deferred()
+  const calls = []
+  const context = setup({ saveSource: async (_id, source) => {
+    calls.push(source)
+    return calls.length === 1 ? pending.promise : { content_hash: hash("c") }
+  } })
+  context.setSource("new")
+  context.flow.noteChange()
+  const first = context.flow.flush()
+  context.setSource("old")
+  context.flow.noteChange()
+  assert.equal(context.flow.dirty, true)
+  let navigationAllowed = false
+  const leaving = context.flow.flush().then(saved => { navigationAllowed = saved })
+  await Promise.resolve()
+  assert.equal(navigationAllowed, false)
+  pending.resolve({ content_hash: hash("b") })
+  await Promise.all([first, leaving])
+  assert.equal(navigationAllowed, true)
+  assert.deepEqual(calls, ["new", "old"])
+  assert.equal(context.deck.source, "old")
+})
+
+test("discarded recovery drafts belong to their deck across switching and reopening", async () => {
+  const context = setup()
+  context.setSource("deck A draft")
+  context.flow.handleConflict({ id: context.deck.id, details: { disk_hash: hash("b"), current: { source: "external" } } })
+  await context.flow.useDiskVersion()
+  context.setSource("deck B")
+  context.flow.activate({ id: "deck-2", source: "deck B", content_hash: hash("c") })
+  assert.equal(context.flow.canRestoreDraft, false)
+  assert.equal(await context.flow.restoreDraft(), false)
+  assert.equal(context.getSource(), "deck B")
+  context.flow.activate(context.deck)
+  assert.equal(context.flow.canRestoreDraft, true)
+  await context.flow.restoreDraft()
+  assert.equal(context.getSource(), "deck A draft")
+  await context.flow.flush()
+})

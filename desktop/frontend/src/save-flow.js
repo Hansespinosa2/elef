@@ -30,7 +30,7 @@ export function createSaveFlow({
 
   function schedule(delay = 650) {
     if (!activeDeck || activeConflict) return
-    if (getSource() === activeDeck.source) {
+    if (!saveWorker && getSource() === activeDeck.source) {
       dirty = false
       blocked = false
       setStatus("Saved")
@@ -52,7 +52,7 @@ export function createSaveFlow({
   }
 
   function rememberDraft(source) {
-    discardedDrafts.push(source)
+    discardedDrafts.push({ id: activeDeck.id, source })
     while (discardedDrafts.length > Math.max(0, maxDiscardedDrafts)) discardedDrafts.shift()
     setStatus("Saved external version")
   }
@@ -142,6 +142,7 @@ export function createSaveFlow({
     clearTimer(saveTimer)
     saveTimer = null
     if (!activeDeck || activeConflict) return !dirty
+    if (saveWorker) return saveWorker
     if (!dirty && getSource() === activeDeck.source) return true
     dirty = true
     if (blocked && !force) return false
@@ -151,7 +152,6 @@ export function createSaveFlow({
       clearTimer(retryTimer)
       retryTimer = null
     }
-    if (saveWorker) return saveWorker
 
     saveWorker = (async () => {
       while (activeDeck && dirty && !activeConflict) {
@@ -277,9 +277,11 @@ export function createSaveFlow({
   }
 
   async function restoreDraft() {
-    const draft = discardedDrafts.pop()
-    if (draft === undefined) return false
-    await setSource(draft)
+    if (!activeDeck) return false
+    const index = discardedDrafts.findLastIndex(draft => draft.id === activeDeck.id)
+    if (index < 0) return false
+    const [draft] = discardedDrafts.splice(index, 1)
+    await setSource(draft.source)
     schedule(0)
     return true
   }
@@ -310,10 +312,10 @@ export function createSaveFlow({
     keepLocalVersion,
     saveMergedVersion,
     restoreDraft,
-    get dirty() { return dirty },
+    get dirty() { return dirty || Boolean(saveWorker) },
     get blocked() { return blocked },
     get conflict() { return activeConflict },
     get discardedDraftCount() { return discardedDrafts.length },
-    get canRestoreDraft() { return discardedDrafts.length > 0 }
+    get canRestoreDraft() { return Boolean(activeDeck && discardedDrafts.some(draft => draft.id === activeDeck.id)) }
   }
 }
