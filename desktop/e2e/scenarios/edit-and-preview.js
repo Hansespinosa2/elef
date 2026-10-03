@@ -33,6 +33,7 @@ export async function editAndPreviewWorkflow(ui) {
   const originalDocument = await ui.readSource()
   const updatedDocument = `${originalDocument.trimEnd()}\n\nAfter saving, see [[E2E linked]].\n`
   await ui.replaceSource(updatedDocument)
+  await ui.waitForSource(updatedDocument)
   await ui.waitForSaved(updatedDocument)
   await ui.refreshPreview()
   await ui.showVisualMode()
