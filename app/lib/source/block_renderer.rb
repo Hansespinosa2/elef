@@ -156,6 +156,7 @@ module Source
         last_line.match(/\A([ \t]*>[ \t]*)\z/)&.[](1)
       end
       return [markdown, nil] unless marker
+      marker = "#{marker} " unless marker.match?(/[ \t]\z/)
 
       token = "ELEFCARETPLACEHOLDER"
       token += "_" while markdown.include?(token)

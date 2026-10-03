@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "e2e-webdriver",
+  "description": "Local WebDriver server for the dedicated automated desktop test build.",
+  "windows": ["main"],
+  "permissions": ["wdio:default", "wdio-webdriver:default", "updater:allow-download", "core:app:allow-version"]
+}

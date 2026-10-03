@@ -100,6 +100,25 @@ class SourceBlockRendererTest < ActiveSupport::TestCase
     assert_equal ["br"], quote_lines.last.element_children.map(&:name)
   end
 
+  test "keeps a trailing list or quote marker editable when its source has no following space" do
+    [
+      ["# Heading\n\n- First item\n-", ".document-editor-block ul > li"],
+      ["# Heading\n\n> First line\n>", ".document-editor-block blockquote > p"]
+    ].each do |source, selector|
+      editor_map = Source::Document.editor_map(source, mode: :document)
+      html = Source::BlockRenderer.render(
+        source,
+        editable: true,
+        editor_map: editor_map,
+        documents: [],
+        workspace: Workspace.default
+      )
+      last_line = Nokogiri::HTML.fragment(html).css(selector).last
+
+      assert_equal ["br"], last_line.element_children.map(&:name), html
+    end
+  end
+
   test "annotates non-editable document blocks with source line anchors" do
     source = "---\ntheme: dark\n---\n# Title\n\nParagraph content.\n\n- List item"
     html = Source::BlockRenderer.render(

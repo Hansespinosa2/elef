@@ -54,6 +54,48 @@ module ApplicationHelper
     end
   end
 
+  def shared_editor_projection(
+    work,
+    source: work.source.to_s,
+    title: work.title
+  )
+    workspace = work.workspace || Workspace.default
+    document_nodes = Document.where(workspace: workspace)
+      .includes(:document_detail, :document_aliases)
+      .order(:title)
+      .map do |document|
+        {
+          id: document.id.to_s,
+          title: document.title,
+          documentKey: document.document_key,
+          aliases: document.document_aliases
+            .map(&:alias_name)
+            .select { |name| DocumentLinks::Parser.linkable_title?(name) },
+          href: document_path(document)
+        }
+      end
+      .select { |node| DocumentLinks::Parser.linkable_title?(node[:title]) }
+
+    margin_settings = if work.presentation?
+      margin = work.document.margin_settings
+      { section: margin.section, subsection: margin.subsection, footnote: margin.footnote, slide_count: margin.slide_count }
+    else
+      {}
+    end
+
+    Source::JavascriptRenderer.editor_preview(
+      source,
+      kind: work.document? ? "document" : "presentation",
+      title: title,
+      deck_id: work.id,
+      media_resolver: WorkAssets.resolver_for(work),
+      document_nodes: document_nodes,
+      style: { theme: work.theme, typography: work.typography },
+      margin_settings: margin_settings,
+      allow_remote_media: true
+    )
+  end
+
   def snippet_category_label(category)
     category == "Elef DSL" ? "Elef directives" : category
   end

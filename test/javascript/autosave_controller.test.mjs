@@ -58,3 +58,72 @@ test("autosave persists active math shorthand without requesting a source commit
   assert.equal(controller.savedSnapshot, "$x.b$")
   assert.equal(dispatchedEvents.includes("elef:before-save"), false)
 })
+
+function draftRecoveryFixture() {
+  const sourceField = {
+    name: "presentation[source]",
+    value: "# Original",
+    dispatched: [],
+    dispatchEvent(event) { this.dispatched.push(event.type) }
+  }
+  const listeners = new Map()
+  const editorHost = {
+    editorController: null,
+    addEventListener(type, listener) { listeners.set(type, listener) },
+    removeEventListener(type, listener) {
+      if (listeners.get(type) === listener) listeners.delete(type)
+    }
+  }
+  const status = []
+  const controller = new autosave.default()
+  Object.assign(controller, {
+    active: true,
+    localDraftKey: "presentation:1:identity",
+    freshNewWorkNavigation: false,
+    fieldTargets: [sourceField],
+    element: { querySelector: selector => selector === ".source-field" ? editorHost : null },
+    readDraft: async () => ({
+      key: "presentation:1:identity",
+      snapshot: "# Offline edit",
+      values: ["# Offline edit"],
+      updatedAt: 1
+    }),
+    clearSaveTimer() {},
+    scheduleSave() {},
+    setStatus: text => status.push(text)
+  })
+
+  return { controller, editorHost, listeners, sourceField, status }
+}
+
+test("draft recovery waits for the live editor before restoring source input", async () => {
+  const { controller, editorHost, listeners, sourceField, status } = draftRecoveryFixture()
+  const restoring = controller.restoreLocalDraft()
+  await Promise.resolve()
+  assert.equal(controller.editorReadyCleanup instanceof Function, true)
+  assert.equal(sourceField.value, "# Original")
+
+  editorHost.editorController = {}
+  listeners.get("elef:editor-ready")()
+  await restoring
+
+  assert.equal(sourceField.value, "# Offline edit")
+  assert.deepEqual(sourceField.dispatched, ["input"])
+  assert.deepEqual(status, ["Recovered unsent changes"])
+  assert.equal(controller.editorReadyCleanup, null)
+})
+
+test("draft recovery leaves edits made while the editor connects untouched", async () => {
+  const { controller, editorHost, listeners, sourceField, status } = draftRecoveryFixture()
+  const restoring = controller.restoreLocalDraft()
+  await Promise.resolve()
+
+  sourceField.value = "# New user edit"
+  editorHost.editorController = {}
+  listeners.get("elef:editor-ready")()
+  await restoring
+
+  assert.equal(sourceField.value, "# New user edit")
+  assert.deepEqual(sourceField.dispatched, [])
+  assert.deepEqual(status, [])
+})

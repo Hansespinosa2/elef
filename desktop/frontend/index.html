@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <title>Elef</title>
+    <link rel="stylesheet" href="./assets/styles.css">
+    <link rel="stylesheet" href="./assets/app.css">
+    <link rel="stylesheet" href="./assets/katex.min.css">
+    <meta name="elef-mermaid-url" content="./assets/mermaid.min.js">
+    <script type="module" src="./assets/app.js"></script>
+  </head>
+  <body>
+    <div class="app-frame">
+      <aside class="sidebar" aria-label="Library navigation">
+        <a class="brand" href="#library" aria-label="Elef Library">
+          <span class="brand-mark" aria-hidden="true">e</span>
+          <span>elef</span>
+        </a>
+        <div class="sidebar-section-label">YOUR LIBRARY</div>
+        <div class="library-switcher">
+          <span class="library-icon" aria-hidden="true">▧</span>
+          <span id="library-name">No library selected</span>
+          <button id="change-library" class="icon-button" type="button" aria-label="Choose library folder" title="Choose library folder">⌄</button>
+        </div>
+        <div class="sidebar-bottom">
+          <span class="offline-indicator"><span></span> Available offline</span>
+          <span class="app-version">Elef Desktop · v0.1.0</span>
+        </div>
+      </aside>
+
+      <main class="main-area">
+        <header class="topbar">
+          <div class="breadcrumbs"><span>Library</span><span aria-hidden="true">/</span><strong id="breadcrumb-current">Decks</strong></div>
+          <div class="topbar-actions">
+            <button id="refresh-library" class="quiet-button" type="button">Refresh</button>
+            <button id="check-for-updates" class="quiet-button" type="button">Check for updates</button>
+            <button id="import-elef" class="quiet-button" type="button" disabled>Import .elef</button>
+            <button id="new-deck" class="primary-button" type="button" disabled><span aria-hidden="true">＋</span> New deck</button>
+          </div>
+        </header>
+
+        <section id="welcome-view" class="welcome-view" aria-labelledby="welcome-title" hidden>
+          <div class="welcome-card">
+            <div class="welcome-art" aria-hidden="true"><span class="art-page art-page-back"></span><span class="art-page art-page-front"><i></i><i></i><i></i></span></div>
+            <p class="eyebrow">YOUR WORK, IN PLAIN FILES</p>
+            <h1 id="welcome-title">A quiet place for your ideas.</h1>
+            <p class="welcome-copy">Choose a folder for your Elef library. Your decks stay on disk and work offline.</p>
+            <button id="choose-library" class="primary-button large-button" type="button">Choose a library folder <span aria-hidden="true">→</span></button>
+            <p class="welcome-footnote">No account. No server. Just your folders.</p>
+          </div>
+        </section>
+
+        <section id="library-view" class="library-view" aria-labelledby="library-title" hidden>
+          <nav class="library-view-tabs" aria-label="Library views">
+            <button id="show-deck-list" class="library-view-tab is-active" type="button" data-library-tab="all" aria-pressed="true">All</button>
+            <button id="show-documents" class="library-view-tab" type="button" data-library-tab="documents" aria-pressed="false">Documents</button>
+            <button id="show-presentations" class="library-view-tab" type="button" data-library-tab="presentations" aria-pressed="false">Presentations</button>
+            <button id="show-document-graph" class="library-view-tab" type="button" aria-pressed="false">Document graph</button>
+          </nav>
+          <div id="deck-browser-view">
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow">WORKSPACE</p>
+              <h1 id="library-title">Your decks</h1>
+              <p id="deck-count" class="subheading">Choose a deck to open it.</p>
+            </div>
+            <label class="search-box">
+              <span aria-hidden="true">⌕</span>
+              <input id="deck-search" type="search" placeholder="Search decks" autocomplete="off" aria-label="Search decks">
+              <kbd>⌘ K</kbd>
+            </label>
+          </div>
+          <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+          <div id="deck-list" class="deck-list" role="list"></div>
+          <div id="empty-library" class="empty-state" hidden>
+            <span class="empty-glyph" aria-hidden="true">✳</span>
+            <h2>Your first deck starts here.</h2>
+            <p>Create a presentation or a document in this library.</p>
+            <button class="primary-button" type="button" data-action="create-presentation">Create a presentation</button>
+          </div>
+          </div>
+          <section id="document-graph-view" class="document-graph-panel" hidden aria-labelledby="document-graph-heading">
+            <div class="document-graph-heading">
+              <div>
+                <p class="eyebrow">DOCUMENT RELATIONSHIPS</p>
+                <h2 id="document-graph-heading">Document network</h2>
+                <p>Explore links authored in your Markdown. Select a document to open it.</p>
+              </div>
+              <div class="document-graph-controls">
+                <label class="sr-only" for="document-graph-search">Find a document</label>
+                <input id="document-graph-search" type="search" placeholder="Find a document…" data-document-graph-target="search" data-action="input->document-graph#search keydown.down->document-graph#focusResult">
+                <div class="document-graph-results" data-document-graph-target="results" data-action="keydown.esc->document-graph#closeSearch" hidden></div>
+                <button type="button" data-action="document-graph#zoomOut" aria-label="Zoom out">−</button>
+                <button type="button" data-document-graph-target="scaleLabel" data-action="document-graph#reset" aria-label="Reset graph view" title="Reset to 100%">100%</button>
+                <button type="button" data-action="document-graph#zoomIn" aria-label="Zoom in">+</button>
+              </div>
+            </div>
+            <span class="sr-only" aria-live="polite" data-document-graph-target="status"></span>
+            <div id="document-graph-mount"></div>
+            <p class="document-graph-help">Drag the canvas to pan. Use the controls or your trackpad to zoom.</p>
+          </section>
+        </section>
+
+        <section id="deck-view" class="deck-view" hidden aria-labelledby="deck-title">
+          <button id="back-to-library" class="back-link" type="button"><span aria-hidden="true">←</span> All decks</button>
+          <div class="deck-detail-card">
+            <div class="deck-detail-icon" aria-hidden="true">▤</div>
+            <p id="deck-kind" class="eyebrow">PRESENTATION</p>
+            <h1 id="deck-title">Deck</h1>
+            <p id="deck-source-name" class="subheading"></p>
+            <div class="detail-divider"></div>
+            <div class="editor-heading">
+              <p class="detail-label">Markdown source</p>
+              <span id="save-state" class="save-state" role="status">Saved</span>
+            </div>
+            <form id="desktop-editor-form" class="visual-editor-form desktop-editor-form" data-controller="preview visual-editor presentation-editor slide-overview media" data-action="input->preview#schedule change->preview#schedule input->slide-overview#sourceChanged change->slide-overview#sourceChanged preview:updated->slide-overview#previewUpdated" data-preview-url-value="elef-preview://localhost/" data-preview-timeout-value="4000" data-media-enabled-value="false" data-media-work-kind-value="presentation" data-editor-mode="source">
+              <div class="media-editor-controls" aria-label="Media controls">
+                <button id="add-media" class="quiet-button" type="button" data-action="click->media#choose">Add image or video</button>
+                <label class="media-fit-control">Fit
+                  <select data-media-target="fit"><option value="contain">Contain</option><option value="cover">Cover</option></select>
+                </label>
+                <input type="file" accept="image/*,video/mp4" hidden data-media-target="input" data-action="change->media#selected">
+                <span class="media-upload-status" data-media-target="status" role="status" aria-live="polite" aria-busy="false"></span>
+              </div>
+              <div id="desktop-editor-field" class="field source-field" data-controller="editor snippet-palette math-shorthand math-shortcut-palette mermaid-assist document-link-palette" data-action="paste->media#paste:capture dragover->media#sourceDragOver:capture dragleave->media#sourceDragLeave:capture drop->media#sourceDrop:capture" data-editor-initial-source-value="&quot;&quot;" data-authoring-registry="[]" data-document-link-palette-titles-value="[]" data-presentation-editor-target="source">
+                <div class="editor-toolbar" aria-label="Editor controls">
+                  <div class="editor-mode-switch" role="group" aria-label="Editing mode">
+                    <button id="source-mode" class="editor-mode-button is-active" type="button" data-editor-target="sourceButton" data-action="click->editor#showSource" aria-pressed="true">Source</button>
+                    <button id="visual-mode" class="editor-mode-button" type="button" data-editor-target="visualButton" data-action="click->editor#showVisual" disabled aria-pressed="false" title="Loading visual editor">Visual</button>
+                    <span class="editor-editing-mode" data-editor-target="editingMode" aria-live="polite">Source</span>
+                  </div>
+                  <span class="editor-mode" data-editor-target="mode" data-mode="standard" aria-live="polite">Standard</span>
+                  <span class="editor-command" data-editor-target="command" aria-live="polite"></span>
+                  <details class="editor-settings appearance-settings" data-controller="appearance" data-appearance-target="panelContainer" hidden>
+                    <summary class="editor-reveal-metadata">Appearance</summary>
+                    <div class="editor-settings-panel appearance-fields" aria-label="Visual appearance controls">
+                      <div data-appearance-target="themeField">
+                        <label for="deck-theme" class="appearance-label">Theme</label>
+                        <select id="deck-theme" name="work[theme]" class="appearance-select" data-appearance-target="theme">
+                          <option value="">Workspace default</option><option value="light">Light</option><option value="dark">Dark</option><option value="match">Match</option>
+                        </select>
+                      </div>
+                      <div data-appearance-target="typographyField">
+                        <label for="deck-typography" class="appearance-label">Typography</label>
+                        <select id="deck-typography" name="work[typography]" class="appearance-select" data-appearance-target="typography">
+                          <option value="">Workspace default</option><option value="book">Book</option><option value="modern">Modern</option><option value="technical">Technical</option>
+                        </select>
+                      </div>
+                      <p class="field-hint appearance-hint" data-appearance-target="hint">Appearance overrides stay in the Markdown front matter.</p>
+                    </div>
+                  </details>
+                  <button type="button" class="editor-reveal-metadata" data-editor-target="metadataToggle" data-action="click->editor#toggleMetadataVisibility">Reveal source metadata</button>
+                </div>
+                <div id="deck-source-editor" class="editor-surface" aria-labelledby="deck-source-label" data-editor-target="surface" data-snippet-palette-target="editor" data-math-shortcut-palette-target="editor" data-document-link-palette-target="editor"></div>
+                <label id="deck-source-label" class="sr-only" for="deck-source">Markdown source</label>
+                <textarea id="deck-source" name="work[source]" class="editor-input-proxy" rows="24" spellcheck="false" tabindex="-1" data-editor-target="input" data-action="input->snippet-palette#input keydown->snippet-palette#keydown keydown->math-shorthand#keydown input->math-shortcut-palette#input keydown->math-shortcut-palette#keydown input->mermaid-assist#input input->document-link-palette#input keydown->document-link-palette#keydown" aria-label="Markdown source"></textarea>
+                <div id="deck-source-snippet-palette" class="snippet-palette" data-snippet-palette-target="palette" hidden role="listbox" aria-label="Snippet suggestions"></div>
+                <div id="deck-source-math-palette" class="snippet-palette math-shortcut-palette" data-math-shortcut-palette-target="palette" hidden role="listbox" aria-label="Math shortcut suggestions"></div>
+                <div id="deck-source-mermaid-palette" class="snippet-palette" data-mermaid-assist-target="palette" hidden role="listbox" aria-label="Mermaid suggestions"></div>
+                <div id="deck-source-document-link-palette" class="snippet-palette" data-document-link-palette-target="palette" hidden role="listbox" aria-label="Document link suggestions"></div>
+              </div>
+              <section class="slide-overview" aria-labelledby="slide-overview-heading" hidden>
+                <div class="slide-overview-heading-row">
+                  <div><h3 id="slide-overview-heading">Slide overview</h3><p data-slide-overview-target="count" aria-live="polite">0 slides</p></div>
+                  <div class="slide-overview-actions" aria-label="Slide actions">
+                    <button type="button" data-action="slide-overview#add">Add</button>
+                    <button type="button" data-action="slide-overview#duplicate">Duplicate</button>
+                    <button type="button" data-action="slide-overview#delete">Delete</button>
+                    <button type="button" data-action="slide-overview#moveUp">↑</button>
+                    <button type="button" data-action="slide-overview#moveDown">↓</button>
+                  </div>
+                </div>
+                <div class="slide-overview-grid" data-slide-overview-target="grid" role="group" aria-label="Slides"></div>
+                <section class="slide-overflow-warnings" data-slide-overview-target="warnings" aria-label="Slide overflow warnings" role="status" hidden><h4>Overflow warnings</h4><ul></ul></section>
+              </section>
+              <script type="application/json" data-editor-map-json>{}</script>
+              <div id="desktop-preview" class="editor-projection preview-pane" data-visual-editor-target="projection" data-preview-target="container" aria-label="Rendered preview" data-action="dragover->media#dragOver dragleave->media#dragLeave drop->media#drop"></div>
+              <button id="exit-presentation" class="presentation-mode-exit" type="button" hidden>Exit presentation <kbd>Esc</kbd></button>
+              <section id="preview-warnings" class="slide-overflow-warnings" data-preview-target="warnings" role="status" aria-live="polite" hidden><h4>Preview warnings</h4><ul></ul></section>
+              <p data-preview-target="status" class="editor-mode-hint" role="status" aria-live="polite"></p>
+              <button type="button" data-preview-target="retry" class="quiet-button" data-action="preview#retry" hidden>Retry preview</button>
+            </form>
+            <p class="editor-help">Changes save automatically. Undo is available while this deck stays open. Keep sync version history enabled: an external write can still race the final file replacement.</p>
+            <button id="retry-save" class="quiet-button" type="button" hidden>Retry save</button>
+            <button id="restore-local-draft" class="quiet-button restore-draft" type="button" hidden>Restore discarded local draft</button>
+            <p id="deck-notice" class="deck-notice" hidden></p>
+            <div class="detail-footer"><span id="deck-id" class="deck-id"></span><span class="editing-placeholder">Markdown source · stored as a plain file in this deck folder</span></div>
+          </div>
+        </section>
+
+        <footer class="statusbar"><span id="status-text">Ready</span><span class="status-right">Folders are the source of truth</span></footer>
+      </main>
+    </div>
+
+    <dialog id="create-dialog" class="app-dialog">
+      <form id="create-form" method="dialog">
+        <p class="eyebrow">NEW DECK</p>
+        <h2>Create a deck</h2>
+        <label for="new-deck-name">Name</label>
+        <input id="new-deck-name" name="name" required maxlength="120" autocomplete="off" placeholder="A clear, memorable title">
+        <label for="new-deck-kind">Format</label>
+        <select id="new-deck-kind" name="kind"><option value="presentation">Presentation</option><option value="document">Document</option></select>
+        <div class="dialog-actions"><button class="quiet-button" value="cancel">Cancel</button><button id="create-submit" class="primary-button" value="create">Create deck</button></div>
+      </form>
+    </dialog>
+    <dialog id="settings-dialog" class="app-dialog">
+      <form id="settings-form" method="dialog">
+        <p class="eyebrow">LIBRARY SETTINGS</p>
+        <h2>Appearance</h2>
+        <label for="library-theme">Theme</label>
+        <select id="library-theme" name="theme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select>
+        <button id="manage-authoring" class="quiet-button authoring-settings-link" type="button">Manage snippets and math shortcuts</button>
+        <div class="dialog-actions"><button class="quiet-button" value="cancel">Cancel</button><button class="primary-button" value="save">Save settings</button></div>
+      </form>
+    </dialog>
+    <dialog id="authoring-settings-dialog" class="app-dialog authoring-dialog" aria-labelledby="authoring-settings-title">
+      <div>
+        <p class="eyebrow">AUTHORING SETTINGS</p>
+        <h2 id="authoring-settings-title">Snippets</h2>
+        <p class="authoring-settings-copy">Personal entries are saved in this library’s <code>.elef/</code> folder and are available in the editor palettes. Built-in entries remain available and read-only.</p>
+        <div class="authoring-settings-tabs" role="group" aria-label="Authoring settings">
+          <button class="quiet-button is-active" type="button" data-authoring-tab="snippets" aria-pressed="true">Snippets</button>
+          <button class="quiet-button" type="button" data-authoring-tab="math_shortcuts" aria-pressed="false">Math shortcuts</button>
+        </div>
+        <p id="authoring-settings-status" class="authoring-settings-status" role="status" aria-live="polite"></p>
+        <div class="authoring-settings-heading">
+          <p id="authoring-settings-count" class="dialog-copy"></p>
+          <button id="new-authoring-entry" class="primary-button" type="button">New snippet</button>
+        </div>
+        <div id="authoring-settings-list" class="authoring-settings-list"></div>
+        <p id="authoring-settings-empty" class="dialog-copy" hidden>No personal entries yet. Built-in entries remain available in the editor.</p>
+        <form id="authoring-entry-form" class="authoring-entry-form" hidden>
+          <h3 id="authoring-entry-heading">New snippet</h3>
+          <input name="id" type="hidden">
+          <fieldset class="authoring-snippet-fields" disabled>
+            <label for="authoring-name">Name</label>
+            <input id="authoring-name" name="name" maxlength="120" required>
+            <label for="authoring-trigger">Trigger</label>
+            <input id="authoring-trigger" name="trigger" maxlength="120" pattern="[a-z0-9][a-z0-9-]*" required>
+            <label for="authoring-description">Description</label>
+            <input id="authoring-description" name="description" maxlength="500">
+            <label for="authoring-category">Category</label>
+            <select id="authoring-category" name="category"><option>Markdown</option><option>LaTeX</option><option>Mermaid</option><option>Elef DSL</option></select>
+            <label for="authoring-body">Body</label>
+            <textarea id="authoring-body" name="body" maxlength="20000" rows="6" required></textarea>
+          </fieldset>
+          <fieldset class="authoring-math-fields" hidden disabled>
+            <label for="authoring-math-name">Name</label>
+            <input id="authoring-math-name" name="math-name" maxlength="120" required>
+            <label for="authoring-prefix">Prefix</label>
+            <select id="authoring-prefix" name="prefix"><option value=".">. transformation</option><option value="@">@ alias</option></select>
+            <label for="authoring-aliases">Aliases</label>
+            <input id="authoring-aliases" name="aliases" maxlength="1200" placeholder="lambda, l" required>
+            <label for="authoring-math-description">Description</label>
+            <input id="authoring-math-description" name="math-description" maxlength="500">
+            <label for="authoring-expansion">Expansion template</label>
+            <textarea id="authoring-expansion" name="expansion" maxlength="20000" rows="4" required></textarea>
+          </fieldset>
+          <div class="dialog-actions">
+            <button id="cancel-authoring-entry" class="quiet-button" type="button">Cancel</button>
+            <button id="save-authoring-entry" class="primary-button" type="submit">Save snippet</button>
+          </div>
+        </form>
+        <div class="dialog-actions"><button id="close-authoring-settings" class="quiet-button" type="button">Close</button></div>
+      </div>
+    </dialog>
+    <dialog id="delete-authoring-dialog" class="app-dialog" aria-labelledby="delete-authoring-title">
+      <div>
+        <p class="eyebrow">AUTHORING SETTINGS</p>
+        <h2 id="delete-authoring-title">Delete personal entry?</h2>
+        <p id="delete-authoring-message" class="dialog-copy"></p>
+        <div class="dialog-actions">
+          <button id="cancel-authoring-delete" class="quiet-button" type="button">Cancel</button>
+          <button id="confirm-authoring-delete" class="primary-button" type="button">Delete entry</button>
+        </div>
+      </div>
+    </dialog>
+    <dialog id="import-conflict-dialog" class="app-dialog">
+      <form method="dialog">
+        <p class="eyebrow">DUPLICATE DECK</p>
+        <h2>Deck already in this library</h2>
+        <p id="import-conflict-message" class="dialog-copy"></p>
+        <p class="dialog-copy">Replace moves the current folder to Trash. Keep both assigns the imported copy a new identity.</p>
+        <div class="dialog-actions">
+          <button id="import-conflict-cancel" class="quiet-button" type="button">Cancel</button>
+          <button id="import-conflict-keep-both" class="quiet-button" type="button">Keep both</button>
+          <button id="import-conflict-replace" class="primary-button" type="button">Replace</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="update-dialog" class="app-dialog">
+      <div>
+        <p class="eyebrow">SOFTWARE UPDATE</p>
+        <h2>A new Elef version is ready</h2>
+        <p id="update-version" class="dialog-copy"></p>
+        <pre id="update-notes" class="update-notes"></pre>
+        <p id="update-progress" class="dialog-copy" role="status" aria-live="polite"></p>
+        <div class="dialog-actions">
+          <button id="update-later" class="quiet-button" type="button">Later</button>
+          <button id="install-update" class="primary-button" type="button">Install and relaunch</button>
+        </div>
+      </div>
+    </dialog>
+    <dialog id="about-dialog" class="app-dialog about-dialog">
+      <form method="dialog">
+        <p class="eyebrow">ABOUT ELEF</p>
+        <h2>Elef Desktop</h2>
+        <p>Offline-first notes and presentations, stored as folders you own.</p>
+        <div class="dialog-actions"><button class="primary-button" value="close">Close</button></div>
+      </form>
+    </dialog>
+    <dialog id="conflict-dialog" class="app-dialog conflict-dialog" aria-labelledby="conflict-title">
+      <div class="conflict-content">
+        <p class="eyebrow">EXTERNAL CHANGE</p>
+        <h2 id="conflict-title">This file changed outside Elef</h2>
+        <p class="conflict-explanation">Compare the version on disk with your edits before choosing what to keep.</p>
+        <div class="conflict-columns">
+          <section><h3>Your edits</h3><pre id="conflict-local" class="conflict-source"></pre></section>
+          <section><h3>On disk · <span id="conflict-source-name"></span></h3><pre id="conflict-disk" class="conflict-source"></pre></section>
+        </div>
+        <label class="merge-label" for="conflict-merge">Merged version</label>
+        <textarea id="conflict-merge" class="conflict-merge" spellcheck="false" aria-label="Merged Markdown version"></textarea>
+        <div class="dialog-actions conflict-actions">
+          <button id="use-disk-version" class="quiet-button" type="button">Use disk version</button>
+          <button id="save-merged-version" class="quiet-button" type="button">Save merged version</button>
+          <button id="keep-local-version" class="primary-button" type="button">Keep my edits</button>
+        </div>
+      </div>
+    </dialog>
+  </body>
+</html>

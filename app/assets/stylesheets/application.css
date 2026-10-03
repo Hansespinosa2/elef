@@ -1173,6 +1173,13 @@ body.elef-app {
 
 .library-list { grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr)); }
 .library-card { display: flex; flex-direction: column; gap: 0.75rem; padding: 0.75rem; }
+.library-card[hidden] { display: none; }
+.library-browser-toolbar { display: flex; justify-content: flex-end; margin: 0 0 1rem; }
+.library-search-input {
+  background: var(--oradia-slate-950); border: 1px solid var(--oradia-slate-700); border-radius: 0.6rem;
+  color: var(--oradia-ink); min-height: 2.5rem; padding: 0.45rem 0.7rem; width: min(100%, 22rem);
+}
+.library-no-results { background: var(--oradia-slate-900); border: 1px solid var(--oradia-slate-700); border-radius: 0.75rem; color: var(--oradia-muted); padding: 1rem; }
 .library-card-media { position: relative; }
 .library-card-preview { display: block; }
 .library-preview { aspect-ratio: 16 / 9; background: var(--oradia-slate-950); border-radius: 0.55rem; overflow: hidden; position: relative; width: 100%; }
@@ -1197,7 +1204,7 @@ body.elef-app {
 .library-card-preview-button svg { height: 1.05rem; width: 1.05rem; }
 .library-card-menu-trigger::-webkit-details-marker { display: none; }
 .library-card-menu-trigger span { font-size: 0.95rem; font-weight: 800; letter-spacing: 0.1em; line-height: 1; }
-.library-card-menu { position: relative; }
+.library-card-menu { margin-left: auto; position: relative; }
 .library-card-menu-options {
   background: var(--oradia-slate-900); border: 1px solid var(--oradia-slate-700);
   border-radius: 0.65rem; box-shadow: 0 18px 45px #0006; color: var(--oradia-ink);
@@ -1223,7 +1230,7 @@ body.elef-app {
 .library-card-body { display: grid; gap: 0.15rem; min-width: 0; padding: 0 0.15rem 0.3rem; }
 .elef-app .library-card .library-card-preview :is(a, p) { color: inherit !important; }
 .library-card-eyebrow { margin-bottom: 0; }
-.library-card-title { overflow-wrap: anywhere; }
+.library-card-title { font-size: 1.5rem; font-weight: 700; margin: 0 0 0.5rem; overflow-wrap: anywhere; }
 .library-card-meta, .library-card-note { overflow-wrap: anywhere; }
 .library-kicker { align-items: center; display: flex; gap: 0.7rem; }
 .library-kicker .eyebrow { margin-bottom: 0; }

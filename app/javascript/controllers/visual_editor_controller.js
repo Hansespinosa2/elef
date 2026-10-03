@@ -9,7 +9,7 @@ import {
   visibleOffsetAtPoint,
   visibleOffsetForSourceOffset
 } from "controllers/editor_caret"
-import { deRenderMath, finishMathBeforeEnter, handleMathClick, handleMathKeydown, syncActiveMath } from "controllers/editor_math"
+import { createActiveMathSpan, deRenderMath, finishMathBeforeEnter, handleMathClick, handleMathKeydown, syncActiveMath } from "controllers/editor_math"
 
 export default class extends Controller {
   static targets = ["projection"]
@@ -370,10 +370,14 @@ export default class extends Controller {
         : marker === "$$" ? "$$" : "\\]"
       const lineEnding = source.match(/\r\n|\r|\n/)?.[0] || "\n"
       const replacement = markdown + lineEnding + lineEnding + indentation + closingMarker
-      this.replaceAndFocus(blockElement, start, end, replacement, {
-        sourceOffset: start + markdown.length + lineEnding.length,
-        location: openingMathFence ? "math_expression_start" : "block_end"
-      })
+      if (openingMathFence) {
+        const [, indentation] = openingMathFence
+        const open = openingMathFence[2]
+        const close = open === "$$" ? "$$" : "\\]"
+        this.replaceAndEnterDisplayMath(blockElement, start, end, replacement, indentation, open, close, lineEnding)
+      } else {
+        this.replaceAndFocus(blockElement, start, end, replacement, { sourceOffset: start + markdown.length + lineEnding.length, location: "block_end" })
+      }
       return
     }
 
@@ -740,6 +744,35 @@ export default class extends Controller {
     this.shiftMapAfterEdit(from, to, replacement.length, blockElement.dataset.editorBlockId)
     this.editorController.replaceRange(replacement, from, to)
     blockElement.blur()
+  }
+
+  replaceAndEnterDisplayMath(blockElement, from, to, replacement, indentation, open, close, lineEnding) {
+    this.pendingCaret = null
+    this.shiftMapAfterEdit(from, to, replacement.length, blockElement.dataset.editorBlockId)
+
+    const content = blockElement.matches("[data-document-page-flow-content]")
+      ? blockElement
+      : blockElement.querySelector("[data-document-page-flow-content]") || blockElement
+    let paragraph = content.querySelector(":scope > p")
+    if (!paragraph) {
+      paragraph = document.createElement("p")
+      content.replaceChildren(paragraph)
+    }
+
+    const openingLength = indentation.length + open.length
+    const source = replacement.slice(openingLength, replacement.length - indentation.length - close.length)
+    const activeMath = createActiveMathSpan(replacement, { source, open, close, display: true })
+    paragraph.replaceChildren(activeMath)
+    blockElement.focus({ preventScroll: true })
+    const textNode = activeMath.firstChild
+    const offset = Math.min(openingLength + lineEnding.length, textNode.textContent.length)
+    window.getSelection()?.setBaseAndExtent(textNode, offset, textNode, offset)
+    this.lastProjectionCaret = { blockId: blockElement.dataset.editorBlockId, visibleOffset: 0 }
+
+    // Install the source after the active DOM and selection are ready. The
+    // preview's stale-projection handler then preserves this focused block,
+    // while the shifted map lets the first typed character round-trip safely.
+    this.editorController.replaceRange(replacement, from, to)
   }
 
   continueStructuredBlock(blockElement, region, kind, markdown, source, emptyMarker) {

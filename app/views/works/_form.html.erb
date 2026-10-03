@@ -1,10 +1,11 @@
 <% persisted = work.persisted? %>
 <% type_label = work_type_label(work) %>
-<% editor_map = Source::Document.editor_map(
-  work.source.to_s.gsub(/\r\n?/, "\n"),
-  source_name: work.title.presence || work.default_title,
-  mode: work.work_type.to_sym
+<% editor_projection = shared_editor_projection(
+  work,
+  source: work.source.to_s.gsub(/\r\n?/, "\n"),
+  title: work.title.presence || work.default_title
 ) %>
+<% editor_map = editor_projection[:editor_map] %>
 <% visual_mode = params[:editor_mode] != "source" %>
 <% controllers = %w[dirty preview autosave visual-editor media] %>
 <% controllers << "presentation-editor" if work.presentation? %>
@@ -169,11 +170,11 @@
       </div>
     <script type="application/json" data-editor-map-json><%= raw json_escape(editor_map.to_json) %></script>
     <div class="editor-projection preview-pane" data-visual-editor-target="projection" data-preview-target="container" aria-label="Visual editing surface" data-action="dragover->media#dragOver dragleave->media#dragLeave drop->media#drop">
-      <%= render "works/preview", work: work, editable: true, editor_map: editor_map %>
+      <%= raw editor_projection[:html] %>
     </div>
     </div>
 
-    <%= render "works/warnings", warnings: work.preview_warnings %>
+    <%= render "works/warnings", warnings: editor_projection[:warnings] %>
     <div class="editor-footer">
       <div class="editor-actions">
         <%= form.submit "Save #{type_label.downcase}", class: "button primary", data: { dirty_target: "saveButton" } %>
@@ -187,8 +188,8 @@
               <summary>Compare with the active version</summary>
               <pre data-autosave-target="serverSource"></pre>
             </details>
-            <button type="button" data-action="autosave#keepLocal">Keep local draft</button>
-            <button type="button" data-action="autosave#discardLocal">Discard local draft</button>
+            <button type="button" data-action="click->autosave#keepLocal">Keep local draft</button>
+            <button type="button" data-action="click->autosave#discardLocal">Discard local draft</button>
           </div>
           <% if work.presentation? %>
             <span class="release-state" data-release-status="<%= work.published_release_status %>">

@@ -1,4 +1,5 @@
 import { Controller } from "@hotwired/stimulus"
+import { createDocumentState } from "lib/editor_document_state"
 import { Compartment, EditorState } from "@codemirror/state"
 import { EditorView } from "@codemirror/view"
 import { foldEffect, foldedRanges, unfoldEffect } from "@codemirror/language"
@@ -73,6 +74,7 @@ export default class extends Controller {
   connect() {
     this.editorController = this
     this.element.editorController = this
+    this.editorReady = false
     this.destroyed = false
     this.pendingMediaRanges = new Map()
     this.nextMediaRangeId = 0
@@ -95,20 +97,17 @@ export default class extends Controller {
     this.inputTarget.addEventListener("click", this.handleProxyClick = () => this.focus())
     this.surfaceTarget.addEventListener("click", this.handleSurfaceClick = (event) => this.focusFromSurface(event))
 
+    this.documentExtensions = [
+      this.vimCompartment.of(this.vimEnabled ? vim() : []),
+      basicSetup,
+      markdown({ extensions: elefMetadata }),
+      livePreviewField,
+      snippetStopsField,
+      theme,
+      EditorView.updateListener.of((update) => this.handleUpdate(update))
+    ]
     this.view = new EditorView({
-      state: EditorState.create({
-        doc: this.initialSource,
-        extensions: [
-          EditorState.lineSeparator.of(this.lineSeparator),
-          this.vimCompartment.of(this.vimEnabled ? vim() : []),
-          basicSetup,
-          markdown({ extensions: elefMetadata }),
-          livePreviewField,
-          snippetStopsField,
-          theme,
-          EditorView.updateListener.of((update) => this.handleUpdate(update))
-        ]
-      }),
+      state: createDocumentState(EditorState, this.initialSource, this.documentExtensions).state,
       parent: this.surfaceTarget
     })
     this.view.dom.setAttribute("aria-label", "Markdown source")
@@ -157,10 +156,12 @@ export default class extends Controller {
     this.setEditingMode(this.form?.dataset.editorMode || "visual", { silent: true })
     this.updateMode()
     this.collapseFrontmatter()
+    this.editorReady = true
     this.element.dispatchEvent(new CustomEvent("elef:editor-ready", { detail: { editor: this }, bubbles: true }))
   }
 
   disconnect() {
+    this.editorReady = false
     this.destroyed = true
     this.pendingMediaRanges?.clear()
     if (this.lineNumberFrame) cancelAnimationFrame(this.lineNumberFrame)
@@ -288,6 +289,7 @@ export default class extends Controller {
     this.syncFrontmatterVisibility()
     this.syncMetadataToggle()
     if (!silent) {
+      const selectionAtModeChange = this.view.state.selection
       this.form?.dispatchEvent(new CustomEvent("elef:editor-mode-change", {
         bubbles: true,
         detail: { mode: this.editingMode, editor: this }
@@ -297,6 +299,9 @@ export default class extends Controller {
         if (this.destroyed || this.editingMode !== nextMode) return
         if (nextMode === "source") {
           if (this.view.dom.contains(document.activeElement)) return
+          // A toolbar action or file picker may set a new insertion range
+          // before this frame runs. Preserve that deliberate selection.
+          if (!this.view.state.selection.eq(selectionAtModeChange)) return
           if (this.vimEnabled && this.vimMode.startsWith("visual")) Vim.handleKey(this.vim, "<Esc>", "user")
           this.view.dispatch({ selection: { anchor: sourceOffset } })
           this.view.focus()
@@ -506,6 +511,24 @@ export default class extends Controller {
       changes: { from: 0, to: this.view.state.doc.length, insert: this.toEditorLineEndings(source) },
       selection
     })
+  }
+
+  loadDocument(source) {
+    const document = createDocumentState(EditorState, source, this.documentExtensions)
+    this.lineSeparator = document.lineSeparator
+    this.view.setState(document.state)
+    this.pendingMediaRanges.clear()
+    this.inputTarget.value = source
+    this.syncInput()
+    this.view.dispatch({ effects: this.vimCompartment.reconfigure(this.vimEnabled ? vim() : []) })
+    this.applyMapping()
+    this.applyLineNumbers()
+    this.applyCursorStyle()
+    this.bindVimEvents()
+    this.refreshFrontmatterRange()
+    this.setEditingMode(this.editingMode || this.form?.dataset.editorMode || "visual", { silent: true })
+    this.updateMode()
+    this.syncMetadataToggle()
   }
 
   setExternalValue(value) {

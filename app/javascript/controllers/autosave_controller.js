@@ -35,6 +35,7 @@ export default class extends Controller {
 
   disconnect() {
     this.active = false
+    this.editorReadyCleanup?.()
     this.clearSaveTimer()
     clearTimeout(this.requestTimeout)
     this.requestTimeout = null
@@ -60,6 +61,11 @@ export default class extends Controller {
 
     this.clearSaveTimer()
     const snapshot = this.snapshot()
+    if (this.conflictPayload) {
+      this.setStatus("Resolve the external edit before saving", "conflict")
+      this.persistLocalDraft(snapshot)
+      return
+    }
     if (!this.saving && !this.saveFailed && this.savedSnapshot === snapshot) {
       this.setStatus("Saved")
       this.clearLocalDraft()
@@ -115,7 +121,7 @@ export default class extends Controller {
     this.clearSaveTimer()
     this.clearLocalDraft()
     this.conflictPayload = null
-    this.savedSnapshot = null
+    this.savedSnapshot = this.snapshot()
     this.saveFailed = false
     if (this.hasConflictTarget) this.conflictTarget.hidden = true
     this.element.dispatchEvent(new CustomEvent("autosave:saved", { detail: { snapshot: this.snapshot(), payload: current } }))
@@ -313,12 +319,24 @@ export default class extends Controller {
       this.clearLocalDraft()
       return
     }
+    const initialSnapshot = this.snapshot()
     const record = await this.readDraft(this.localDraftKey)
-    if (!this.active || !record || record.snapshot === this.snapshot()) return
+    if (!this.active || !record || typeof record.snapshot !== "string" || !Array.isArray(record.values) || record.snapshot === this.snapshot()) return
+
+    const editorHost = this.element.querySelector(".source-field")
+    await this.waitForEditorReady(editorHost)
+    if (!this.active || this.snapshot() !== initialSnapshot || record.snapshot === this.snapshot()) return
+
+    const sourceField = this.fieldTargets.find(field => field.name?.endsWith("[source]"))
+    const sourceIndex = sourceField ? this.fieldTargets.indexOf(sourceField) : -1
+    if (sourceField && typeof record.values[sourceIndex] !== "string") return
+    if (sourceField && !editorHost?.editorController && editorHost) {
+      editorHost.dataset.editorInitialSourceValue = JSON.stringify(record.values[sourceIndex])
+    }
 
     record.values.forEach((value, index) => {
       const field = this.fieldTargets[index]
-      if (!field || field.value === value) return
+      if (typeof value !== "string" || !field || field.value === value) return
       field.value = value
       field.dispatchEvent(new Event("input", { bubbles: true }))
     })
@@ -327,6 +345,24 @@ export default class extends Controller {
     this.setStatus("Recovered unsent changes", "recovered")
     this.clearSaveTimer()
     this.scheduleSave(this.delayValue)
+  }
+
+  waitForEditorReady(editorHost) {
+    if (!editorHost || editorHost.editorController) return Promise.resolve()
+
+    return new Promise((resolve) => {
+      let timeout
+      const finish = () => {
+        editorHost.removeEventListener("elef:editor-ready", finish)
+        clearTimeout(timeout)
+        if (this.editorReadyCleanup === finish) this.editorReadyCleanup = null
+        resolve()
+      }
+      this.editorReadyCleanup = finish
+      editorHost.addEventListener("elef:editor-ready", finish, { once: true })
+      timeout = setTimeout(finish, 5_000)
+      if (editorHost.editorController) finish()
+    })
   }
 
   openDatabase() {

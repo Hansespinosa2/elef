@@ -5,6 +5,16 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
     Document.delete_all
   end
 
+  test "rename preserves the all-library view and rejects arbitrary destinations" do
+    work = Document.create!(source: "# Before")
+    get root_path
+    assert_select "form[action='#{rename_document_path(work)}'] input[name='library_view'][value='all']"
+    patch rename_document_path(work), params: { library_view: "all", document: { title: "Renamed" } }
+    assert_redirected_to root_path
+    patch rename_document_path(work), params: { library_view: "https://example.invalid/", document: { title: "Again" } }
+    assert_redirected_to documents_path
+  end
+
   test "creates, edits, previews, renames, and deletes a document" do
     assert_difference("Document.count") do
       post documents_path, params: { document: { title: "Separate document title", source: "# Notes" } }
@@ -47,6 +57,33 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
       post documents_path, params: { document: { source: Document.available_default_source } }, as: :json
     end
     assert_response :created
+  end
+
+  test "editor projections resolve document links through the shared renderer" do
+    source = Document.create!(source: "# Source notes\n\n[[Target notes]]")
+    target = Document.create!(title: "Target notes", source: "# Target notes")
+    draft = "# Draft notes\n\n[[Target notes|Open target]]\n\n![Diagram](/diagram.svg)"
+
+    post preview_document_path(source), params: {
+      document: { source: draft }, projection: "editor", revision: "shared-projection-1"
+    }, as: :json
+
+    assert_response :success
+    payload = response.parsed_body
+    assert_equal "shared-projection-1", payload["revision"]
+    assert_equal "document", payload.dig("editor_map", "mode")
+    assert_includes payload["html"], %(href="#{document_path(target)}")
+    assert_includes payload["html"], %(data-document-link-title="Target notes")
+    assert_includes payload["html"], %(src="/diagram.svg")
+    assert_includes payload["html"], %(data-editor-image-source="true" contenteditable="false")
+    assert_includes payload["html"], %(class="editor-media-caption")
+    assert_includes payload["html"], %(contenteditable="true")
+    assert_equal "# Source notes\n\n[[Target notes]]", source.reload.source
+
+    get edit_document_path(source)
+
+    assert_response :success
+    assert_select ".editor-projection a.document-link[href=?]", document_path(target)
   end
 
   test "uploads and serves image assets for documents" do

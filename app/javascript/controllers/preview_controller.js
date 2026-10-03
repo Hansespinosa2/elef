@@ -102,7 +102,7 @@ export default class extends Controller {
       })
       const response = await Promise.race([request, timeoutFailure])
       const payload = await response.json()
-      if (!this.active || requestId !== this.requestId) return
+      if (!this.active || requestId !== this.requestId) return false
 
       this.renderWarnings(payload.warnings || [])
       if (!response.ok || payload.html === null || payload.html === undefined) {
@@ -113,7 +113,7 @@ export default class extends Controller {
         this.element.dispatchEvent(new CustomEvent("elef:preview-updated", { bubbles: true, detail: { payload: unavailablePayload, response } }))
         this.showRetry()
         this.setStatus("Preview unavailable")
-        return
+        return false
       }
 
       if (!this.sameSource(this.currentSource(), requestedSource)) {
@@ -129,6 +129,7 @@ export default class extends Controller {
       }
 
       this.installProjection(payload, response, requestedSource)
+      return response.ok && payload.html !== null && payload.html !== undefined
     } catch (error) {
       if (error.name === "AbortError" && !timedOut) return
       if (!this.active || requestId !== this.requestId) return
@@ -140,6 +141,7 @@ export default class extends Controller {
       this.element.dispatchEvent(new CustomEvent("elef:preview-updated", { bubbles: true, detail: { payload: null, response: null, error } }))
       this.showRetry()
       this.setStatus("Preview unavailable")
+      return false
     } finally {
       clearTimeout(timeout)
       if (this.requestController === requestController) this.requestController = null
@@ -172,7 +174,11 @@ export default class extends Controller {
 
     const scrollLeft = this.containerTarget.scrollLeft
     const scrollTop = this.containerTarget.scrollTop
-    this.containerTarget.innerHTML = payload.html
+    if (typeof globalThis.elefInstallDesktopPreview === "function") {
+      globalThis.elefInstallDesktopPreview(this.containerTarget, payload.html)
+    } else {
+      this.containerTarget.innerHTML = payload.html
+    }
     this.containerTarget.scrollLeft = scrollLeft
     this.containerTarget.scrollTop = scrollTop
     this.projectionFresh = true

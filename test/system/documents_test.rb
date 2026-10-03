@@ -1939,6 +1939,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
       expected = Regexp.new(Regexp.escape("#{opening}\n\n#{closing}"))
       assert_field "Markdown source", with: expected, wait: 5
+      assert_selector ".document-editor-block .editor-math-active", wait: 5
 
       active_document_block.send_keys("x=1")
       completed = Regexp.new(Regexp.escape("#{opening}\nx=1\n#{closing}"))
@@ -2554,10 +2555,12 @@ class DocumentsTest < ApplicationSystemTestCase
         .join('')
     JAVASCRIPT
 
-    last_fragment = all(".document-editor-block[data-editor-block-id]").last
-    assert_includes last_fragment.text, "next A4 page."
-    page.execute_script(<<~JAVASCRIPT, last_fragment)
-      const block = arguments[0];
+    # Font completion can repaginate between WebDriver commands. Resolve and
+    # focus the current fragment together; focused editable content suppresses
+    # subsequent reflow while the user is typing.
+    focused_text = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+      const block = [...document.querySelectorAll('.document-editor-block[data-editor-block-id]')].at(-1);
       const paragraph = block.querySelector('p') || block;
       const range = document.createRange();
       range.selectNodeContents(paragraph);
@@ -2566,8 +2569,11 @@ class DocumentsTest < ApplicationSystemTestCase
       const selection = window.getSelection();
       selection.removeAllRanges();
       selection.addRange(range);
+      return block.textContent;
+      })()
     JAVASCRIPT
-    last_fragment.send_keys(" Continued")
+    assert_includes focused_text, "next A4 page."
+    active_document_block.send_keys(" Continued")
     assert_field "Markdown source", with: source.sub(paragraph, "#{paragraph} Continued"), wait: 5
 
     focused_fragment = active_document_block
@@ -2883,6 +2889,7 @@ class DocumentsTest < ApplicationSystemTestCase
     alignment.select("Center")
 
     assert_field "Markdown source", with: /\A:::align\{center\}\n\nTest\z/, wait: 5
+    wait_for_fresh_projection
 
     find(".document-editor-block[data-editor-block-id='#{block_id}']").find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
     find("[data-visual-editor-block-id='#{block_id}']").select("Right")

@@ -71,6 +71,17 @@ class SourceRendererTest < ActiveSupport::TestCase
     refute_includes html, "<video"
   end
 
+  test "propagates a missing Elef asset resolver error" do
+    resolver_error = IOError.new("missing Elef attachment")
+    media_resolver = ->(_key) { raise resolver_error }
+
+    error = assert_raises(IOError) do
+      Source::Renderer.render("![Missing](elef-asset:#{'d' * 64})", media_resolver: media_resolver)
+    end
+
+    assert_same resolver_error, error
+  end
+
   test "renders code blocks with syntax highlighting classes" do
     ruby_code = "```ruby\ndef hello\n  puts 'world'\nend\n```"
     html = Source::Renderer.render(ruby_code)
