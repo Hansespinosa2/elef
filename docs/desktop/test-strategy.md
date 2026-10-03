@@ -30,7 +30,7 @@ The `desktop-fast` job runs frontend and Rust-core unit tests for every configur
 
 ## 3. Renderer fixtures: one renderer, two phases
 
-The JS Markdown block renderer and slide/document structure/editor-map builder are shared (ADR-007); Rails calls them through MiniRacer and desktop calls them from its worker. Node tests exercise the desktop output, and Rails model/controller tests exercise the map through MiniRacer. A normalized final projection markup fixture gate across Rails partials and desktop HTML is still open. The Ruby fallback uses Rouge while JS uses Highlight.js, so initial block output comparison must normalize only the documented highlighter markup differences.
+The JS Markdown block renderer and slide/document structure/editor-map/editable-projection functions are shared (ADR-007); Rails calls them through MiniRacer and desktop calls them from its worker. Node tests exercise the desktop output, and Rails model/controller tests exercise the map and projection through MiniRacer. A complete fixture gate for all renderer consumers and platform-specific link/media inputs is still open. The Ruby fallback uses Rouge while JS uses Highlight.js, so initial block output comparison must normalize only the documented highlighter markup differences.
 
 - **Phase 1 — cutover gate.** Comparison is **normalized**: strip highlighter spans and classes and compare text plus document structure, or compare a canonical token stream. Allowed diffs are enumerated (highlighter markup only); anything else fails. 100% normalized pass is required before the Ruby renderer is deleted.
 - **Phase 2 — after cutover.** Expected outputs are regenerated from the JS renderer and comparison becomes **exact**. The normalization machinery is retired, not maintained.
