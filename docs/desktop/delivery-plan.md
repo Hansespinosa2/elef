@@ -68,7 +68,7 @@ Each is a day or less with a checkable exit. ADRs 002, 003, 006 and 007 are acce
 - **Exit:** command table + payload schemas + host-page contract + full renderer consumer inventory + normalized parity corpus + MiniRacer target/thread/fork/performance evidence + bundle freshness check, reviewed against Rails controllers and system tests.
 
 **S2 — Testing feasibility** (feeds [test-strategy.md](test-strategy.md))
-- The shared Playwright Test scenario runs against Rails in Chromium and the real Tauri binary through its embedded WebDriver plugin. Linux CI uses a headless display; macOS CI builds and launches the arm64 app.
+- Shared scenario functions run against Rails in Chromium through Playwright and the real Tauri binary through WebdriverIO and its embedded WebDriver plugin. Linux CI uses a headless display; macOS CI builds and launches the arm64 app.
 - WebDriver is compiled only into the E2E binary, with a dedicated localhost-only capability. Production config and default Cargo features exclude it; CI checks that separation.
 - **Exit:** the shared web and native scenarios pass on Linux and macOS CI. If either platform fails, revise the test strategy before M1.
 
