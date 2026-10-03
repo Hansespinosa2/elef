@@ -62,7 +62,7 @@ Mirrors Obsidian's `.obsidian/`.
 
 - Each file carries its own `schema_version`.
 - **(proposed, Q4)** Device-specific state (window geometry, last-open deck, recents) lives in the OS app-data directory, not in the library root. Otherwise a library synced between the MacBook and Omarchy ping-pongs window geometry between two machines.
-- Desktop reads the shared built-in authoring registry and overlays optional custom snippet/math-shortcut entries from these files. Missing files mean no custom entries. The settings UI writes validate the registry type, entry count, and JSON size, then atomically replace only the selected `.elef` file after a content-hash check; an external change since load returns a conflict instead of replacing it.
+- Desktop reads the shared built-in authoring registry and overlays optional custom snippet/math-shortcut entries from these files. Missing files mean no custom entries. The settings UI writes validate the registry type, entry count, and JSON size, serialize writes per registry, then atomically replace only the selected `.elef` file after a content-hash check; an external or stale concurrent change returns a conflict instead of replacing it.
 
 ## Cross-platform rules
 

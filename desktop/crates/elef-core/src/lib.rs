@@ -457,6 +457,12 @@ impl Library {
         }
         validate_authoring_entries(entries, is_math)?;
 
+        // Keep concurrent in-app edits to one registry from both passing the
+        // same hash check. External writers do not honor this lock, so the
+        // on-disk hash check remains necessary as well.
+        let lock = self.write_lock(&format!("authoring:{registry}"));
+        let _guard = lock.lock().expect("authoring registry write lock poisoned");
+
         let directory = self.root.join(LIBRARY_CONFIG_DIR);
         match fs::symlink_metadata(&directory) {
             Ok(metadata) if !metadata.is_dir() || metadata.file_type().is_symlink() => {
@@ -2811,6 +2817,62 @@ mod tests {
             fs::read(&settings_path).unwrap(),
             br#"{"schema_version":1,"entries":[]}"#
         );
+    }
+
+    #[test]
+    fn concurrent_authoring_registry_writes_serialize_and_reject_the_stale_one() {
+        let (temp, library) = library();
+        let library = Arc::new(library);
+        let initial = library.read_authoring_registries().unwrap();
+        let start = Arc::new(std::sync::Barrier::new(3));
+        let entries = [
+            vec![serde_json::json!({
+                "id": "personal-first",
+                "name": "First",
+                "description": "First concurrent edit",
+                "trigger": "first",
+                "category": "Markdown",
+                "body": "First"
+            })],
+            vec![serde_json::json!({
+                "id": "personal-second",
+                "name": "Second",
+                "description": "Second concurrent edit",
+                "trigger": "second",
+                "category": "Markdown",
+                "body": "Second"
+            })],
+        ];
+
+        let writers = entries
+            .into_iter()
+            .map(|entry| {
+                let library = Arc::clone(&library);
+                let start = Arc::clone(&start);
+                let base_hash = initial.hashes.snippets.clone();
+                std::thread::spawn(move || {
+                    start.wait();
+                    library.write_authoring_registry("snippets", &entry, &base_hash)
+                })
+            })
+            .collect::<Vec<_>>();
+        start.wait();
+        let results = writers
+            .into_iter()
+            .map(|writer| writer.join().unwrap())
+            .collect::<Vec<_>>();
+
+        assert_eq!(results.iter().filter(|result| result.is_ok()).count(), 1);
+        assert_eq!(
+            results
+                .iter()
+                .filter(|result| matches!(result, Err(CoreError::AuthoringConflict)))
+                .count(),
+            1
+        );
+        let persisted = library.read_authoring_registries().unwrap();
+        assert_eq!(persisted.snippets.len(), 1);
+        assert!(temp.path().join(".elef/snippets.json").is_file());
     }
 
     #[cfg(unix)]
