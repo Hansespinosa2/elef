@@ -12,6 +12,15 @@ function normalizeLineEndings(source) {
   return source.replace(/\r\n|\r/g, "\n")
 }
 
+async function renderedTextWithoutEditorControls(locator) {
+  return locator.evaluate(container => {
+    const preview = container.cloneNode(true)
+    preview.querySelectorAll(".presentation-editor-slide-toolbar, .presentation-editor-block-controls, button, select")
+      .forEach(control => control.remove())
+    return preview.textContent.replace(/\s+/g, " ").trim()
+  })
+}
+
 class WebEditorUi {
   constructor(page) {
     this.page = page
@@ -158,8 +167,9 @@ class WebEditorUi {
   }
 
   async waitForPreview(text) {
-    const block = this.page.locator(".editor-projection.preview-pane .slide-block").filter({ hasText: text }).first()
-    await expect(block).toBeVisible()
+    await expect.poll(() => renderedTextWithoutEditorControls(
+      this.page.locator(".editor-projection.preview-pane")
+    )).toContain(text)
   }
 
   async inspectHostilePreview() {
@@ -308,7 +318,9 @@ class WebLibraryUi {
     const card = this.page.locator("article.library-card").filter({
       has: this.page.getByRole("heading", { name: title, exact: true })
     })
-    await expect(card.locator(".library-card-preview .slide-block").filter({ hasText: text }).first()).toBeVisible()
+    await expect.poll(() => renderedTextWithoutEditorControls(
+      card.locator(".library-card-preview")
+    )).toContain(text)
   }
 
   async searchFor(query) {
