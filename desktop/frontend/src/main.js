@@ -1,3 +1,4 @@
+import { createCloseFlow } from "./close-flow.js"
 import { Channel, invoke } from "@tauri-apps/api/core"
 import { listen } from "@tauri-apps/api/event"
 import { getCurrentWindow } from "@tauri-apps/api/window"
@@ -461,7 +462,7 @@ async function createDeck(event) {
 async function openDeck(id) {
   try {
     if (document.body.classList.contains("presenting-deck")) await exitPresentation()
-    if (activeDeck && activeDeck.id !== id && saveFlow.dirty && !(await flushSave())) return
+    if (activeDeck && saveFlow.dirty && !(await flushSave())) return
     const deck = await transport.openDeck(id)
     const isDocument = deck.source_file === "document.md"
     if (deck.id !== id) {
@@ -1066,6 +1067,7 @@ function syncSourceLabel() {
 }
 
 async function handleMenuAction(action) {
+  if (action === "quit") return getCurrentWindow().close()
   if (action === "choose-library") return chooseLibrary()
   if (action === "refresh-library") return refreshLibrary()
   if (action === "open-deck") {
@@ -1175,13 +1177,13 @@ window.addEventListener("beforeunload", event => {
   event.preventDefault()
   event.returnValue = ""
 })
-void getCurrentWindow().onCloseRequested(event => {
-  if (!saveFlow.dirty) return
-  event.preventDefault()
-  void flushSave().then(saved => {
-    if (saved) void getCurrentWindow().close()
-  })
-})
+void getCurrentWindow().onCloseRequested(createCloseFlow({
+  isDirty: () => saveFlow.dirty,
+  flushSave,
+  close: () => getCurrentWindow().close(),
+  onError: showError
+}))
+
 window.addEventListener("keydown", event => {
   if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
     event.preventDefault()

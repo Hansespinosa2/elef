@@ -8,7 +8,6 @@ use elef_core::{
     ImportResult, Library, LibraryConfig, OpenDeck, SaveResult, SourceSnapshot, UploadedAsset,
 };
 use serde::Serialize;
-#[cfg(target_os = "macos")]
 use tauri::RunEvent;
 use tauri::http::{Request as ProtocolRequest, Response as ProtocolResponse, StatusCode, header};
 use tauri::ipc::{InvokeBody, Request as IpcRequest};
@@ -1131,7 +1130,9 @@ pub fn run() {
                 | "print" | "settings" | "check-for-updates" => {
                     let _ = app.emit("desktop-menu-action", id);
                 }
-                "quit" => app.exit(0),
+                "quit" => {
+                    let _ = app.emit("desktop-menu-action", "quit");
+                }
                 "choose-library" => {
                     let _ = app.emit("desktop-menu-action", "choose-library");
                 }
@@ -1178,6 +1179,17 @@ pub fn run() {
         .expect("error while building Elef Desktop");
 
     app.run(|app, event| {
+        if let RunEvent::ExitRequested {
+            code: None, api, ..
+        } = &event
+            && app.get_webview_window("main").is_some()
+        {
+            // OS Quit must take the same save/conflict path as a window close.
+            // Restart requests have an explicit exit code and are already
+            // guarded by save-before-install in the frontend update flow.
+            api.prevent_exit();
+            let _ = app.emit("desktop-menu-action", "quit");
+        }
         #[cfg(target_os = "macos")]
         if let RunEvent::Opened { urls } = event {
             let paths = urls.into_iter().filter_map(|url| url.to_file_path().ok());
