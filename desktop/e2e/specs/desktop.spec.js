@@ -7,7 +7,6 @@ import { libraryAndGraphWorkflow } from "../scenarios/library-and-graph.js"
 import { externalEditConflictWorkflow, CONFLICT_EXTERNAL_SOURCE } from "../scenarios/external-edit-conflict.js"
 import { hostileDeckNeutralizedWorkflow } from "../scenarios/hostile-deck.js"
 import { mathInputWorkflow, snippetInsertWorkflow } from "../scenarios/authoring-palettes.js"
-import { slideStructureWorkflow } from "../scenarios/slide-structure.js"
 import { PIXEL_PNG_MARKDOWN } from "../scenarios/media-fixture.js"
 
 function normalizeLineEndings(source) {
@@ -135,43 +134,6 @@ class DesktopEditorUi {
     }, {
       timeout: 5_000,
       timeoutMsg: "The visual-mode control did not activate the visual editor"
-    })
-  }
-
-  async showSourceMode() {
-    const sourceButton = await $("#source-mode")
-    await sourceButton.waitForEnabled()
-    await sourceButton.click()
-    await browser.waitUntil(async () => {
-      const mode = await $("#desktop-editor-form").getAttribute("data-editor-mode")
-      return mode === "source"
-    }, {
-      timeout: 5_000,
-      timeoutMsg: "The source-mode control did not activate the source editor"
-    })
-  }
-
-  async addSlideAfterLast() {
-    await browser.waitUntil(async () => {
-      const buttons = await $$('#desktop-preview [data-presentation-editor-action="add-slide-after"]')
-      if (buttons.length === 0) return false
-      return await buttons.at(-1).isEnabled()
-    }, {
-      timeout: 10_000,
-      timeoutMsg: "The desktop preview did not enable slide editing controls"
-    })
-    const buttons = await $$('#desktop-preview [data-presentation-editor-action="add-slide-after"]')
-    await buttons.at(-1).click()
-  }
-
-  async slideCount() {
-    return (await $$("#desktop-preview .slide-frame")).length
-  }
-
-  async waitForSlideCount(count) {
-    await browser.waitUntil(async () => await this.slideCount() === count, {
-      timeout: 10_000,
-      timeoutMsg: `The desktop preview did not show ${count} slides`
     })
   }
 
@@ -627,10 +589,6 @@ describe("shared authoring scenarios", () => {
     if (await form.getAttribute("data-editor-mode") !== "visual") {
       throw new Error("The editor did not switch into visual mode")
     }
-  })
-
-  it("runs the shared visual slide structure flow with session undo/redo in the desktop binary", async () => {
-    await slideStructureWorkflow(new DesktopEditorUi())
   })
 
   it("runs the shared library and document graph flow", async () => {

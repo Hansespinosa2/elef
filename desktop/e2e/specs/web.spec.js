@@ -4,7 +4,6 @@ import { libraryAndGraphWorkflow } from "../scenarios/library-and-graph.js"
 import { externalEditConflictWorkflow, CONFLICT_EXTERNAL_SOURCE } from "../scenarios/external-edit-conflict.js"
 import { hostileDeckNeutralizedWorkflow } from "../scenarios/hostile-deck.js"
 import { mathInputWorkflow, snippetInsertWorkflow } from "../scenarios/authoring-palettes.js"
-import { slideStructureWorkflow } from "../scenarios/slide-structure.js"
 import { PIXEL_PNG_MARKDOWN } from "../scenarios/media-fixture.js"
 import { execFileSync } from "node:child_process"
 import path from "node:path"
@@ -69,22 +68,6 @@ class WebEditorUi {
 
   async showVisualMode() {
     await this.page.locator('[data-editor-target="visualButton"]').click()
-  }
-
-  async showSourceMode() {
-    await this.page.locator('[data-editor-target="sourceButton"]').click()
-  }
-
-  async addSlideAfterLast() {
-    await this.page.locator('.editor-projection.preview-pane [data-presentation-editor-action="add-slide-after"]').last().click()
-  }
-
-  async slideCount() {
-    return this.page.locator(".editor-projection.preview-pane .slide-frame").count()
-  }
-
-  async waitForSlideCount(count) {
-    await expect(this.page.locator(".editor-projection.preview-pane .slide-frame")).toHaveCount(count)
   }
 
   async waitForAuthoringOption(palette, name) {
@@ -339,10 +322,6 @@ test("shared editing flow works in the web app", async ({ page }) => {
   await expect(page.locator(".source-field .cm-content")).toContainText("Saved by shared scenario")
   await expect.poll(() => page.locator(".source-field").evaluate(field => field.editorController.sourceValue)).toContain(PIXEL_PNG_MARKDOWN)
   expect(await page.locator(".source-field .cm-content").innerText()).toContain(SAVED_SOURCE.split("\n")[0])
-})
-
-test("shared visual slide structure flow supports add and session undo/redo in the web app", async ({ page }) => {
-  await slideStructureWorkflow(new WebEditorUi(page))
 })
 
 test("shared library and document graph flow works in the web app", async ({ page }) => {

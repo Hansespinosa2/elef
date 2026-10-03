@@ -1,11 +1,11 @@
 # Transport Adapter — Seam Spec (IPC)
 
-Status: draft v3 (2026-10-01). The highest-leverage seam in the desktop app. Implementation and remaining Rails inventory evidence are recorded in [spike-results/S1-rails-inventory.md](spike-results/S1-rails-inventory.md). The shared JS bundle now produces the complete editable preview projection for both the desktop worker and the Rails editor form/preview endpoint. S1 remains open for full fixture coverage, migration of read-only/print/PPTX consumers, macOS-arm64 MiniRacer evidence, and production thread/fork/latency results.
+Status: draft v3 (2026-10-01). The highest-leverage seam in the desktop app. Implementation and remaining Rails inventory evidence are recorded in [spike-results/S1-rails-inventory.md](spike-results/S1-rails-inventory.md). The shared Markdown block renderer now ships to the desktop worker and Rails MiniRacer wrapper. S1 remains open for structure/editor-map parity, full fixture and consumer coverage, macOS-arm64 MiniRacer evidence, and production thread/fork/latency results.
 
 ## 1. What the codebase does today (verified 2026-09-30 at `2b668f0`)
 
 - The editor's `fetch()`-based controllers (autosave, preview, media/upload, pptx-export, command-palette, bug-report) request `Accept: application/json` and parse JSON. The adapter does **not** reproduce Turbo Stream responses: same JSON shape in, same JSON shape out, whichever backend answered.
-- The preview endpoint returns JSON containing rendered HTML (`{ html, warnings, editor_map, ... }`). Rails and desktop call the same `ElefRenderer.renderPreview` implementation for final editable projection markup, using the same Markdown blocks, slide/document structure and editor map. Rails passes its local media map, document routes and effective workspace style; desktop passes the library asset protocol and document graph nodes.
+- The preview endpoint returns JSON containing rendered HTML (`{ html, warnings, editor_map, ... }`). Rails and desktop use the same JS Markdown block renderer, slide/document structure and editor-map builder. Rails partials/models and the desktop worker still assemble final projection markup separately, so full rendered preview parity is not established.
 - The editor boots inside a server-rendered ERB host page (`app/views/works/_form.html.erb`): `data-controller` attributes, `data-editor-initial-source-value`, `data-authoring-registry` JSON, document-link titles. Desktop reproduces the editor contract in a **static host-page template** (no ERB at runtime); the Rails library views are not reused.
 - JS is bundled via importmap (CodeMirror 6.x, katex pinned by the gem). Desktop bundles the same pinned set with esbuild/vite. After cutover the npm KaTeX inside the renderer bundle is the only KaTeX in the rendering path.
 - Turbo Drive handles web navigation. Desktop uses shell view-switching (library ⇄ editor); Turbo does not ship. **S1** confirms no controller depends on Turbo events.
@@ -27,7 +27,7 @@ Status: draft v3 (2026-10-01). The highest-leverage seam in the desktop app. Imp
 | Web (Rails) | Desktop handler | Kind | Payload | Touches | v1 |
 |---|---|---|---|---|---|
 | `PATCH /presentations/:id`, `/documents/:id` (autosave, FormData) | `save_source` | Rust | `{ id, source, base_hash } → { ok, saved_at, content_hash }` (adapter adds `base_hash`) | That deck's source file only | yes |
-| `POST …/preview` | `render_preview` | local (worker) | `{ id, source } → { html, warnings, editor_map, style }` | Nothing (pure function) | shipped; complete editor projection comes from shared JS |
+| `POST …/preview` | `render_preview` | local (worker) | `{ id, source } → { html, warnings, editor_map, style }` | Nothing (pure function) | shipped; structure parity partial |
 | `POST …/assets` | `upload_asset` | Rust | raw file bytes + `x-elef-filename`, `x-elef-declared-media-type`, and `x-elef-fit` headers → `{ digest, content_type, source }` | That deck's `images/` only; content-addressed; 50 MB per file and 400 MB/10,000 entries per deck; file type detected from bytes and checked against the declared type | shipped |
 | `GET …/assets/*digest` | `elefasset://localhost/{deck_id}/{digest}` or `/path/images/...` protocol handler | protocol | binary | Read-only under that deck's `images/`; digest rechecked for content-addressed files; relative components decoded and traversal/symlinks rejected | shipped |
 | `resources :snippets, :math_shortcuts` editor registry data | `read_authoring_registries`, `write_authoring_registry` | Rust | default Rails-generated entries plus validated custom entries | `.elef/snippets.json`, `.elef/math-shortcuts.json` | shipped for editor suggestions; Rails management screens not implemented |
@@ -35,7 +35,7 @@ Status: draft v3 (2026-10-01). The highest-leverage seam in the desktop app. Imp
 | `…/history`, `…/restore`, `…/publish`, `…/fork`, server `…/export` | — | — | behind flags or replaced (export → `.elef`) | — | no |
 | `…/present`, `…/print`, `…/pptx` | desktop presentation view / OS print dialog / — | — | presentation mode navigates the rendered slides; print uses the rendered preview and native dialog; PPTX remains out of v1 | — | shipped / shipped / no |
 
-The implemented subset is library scan/open/create/rename/delete, source save, portable settings and authoring registries, content-addressed media upload/read, worker preview, rendered print/presentation flows, and `.elef` import/export. The desktop library shell remains custom rather than reusing Rails library views; the shared graph flow is covered by the cross-runner scenario. Rails read-only/show/print rendering and other server-side consumers still use their existing paths while the renderer cutover proceeds.
+The implemented subset is library scan/open/create/rename/delete, source save, portable settings and authoring registries, content-addressed media upload/read, worker preview, rendered print/presentation flows, and `.elef` import/export. The desktop library shell is custom rather than the Rails library views; the shared graph flow is covered by the cross-runner scenario. Remaining web-only endpoints and final preview-markup parity are not implemented.
 
 ## 4. Library-shell commands (new; no Rails equivalent, so no parity test)
 

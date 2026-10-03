@@ -298,23 +298,6 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
     assert response.parsed_body.dig("editor_map", "editable_regions").any?
   end
 
-  test "editor preview resolves document aliases through the shared renderer" do
-    target = Document.create!(title: "Shared renderer target", source: "# Shared renderer target")
-    target.document_aliases.create!(workspace: target.workspace, alias_name: "shared-target")
-    source = Document.create!(title: "Shared renderer source", source: "# Source\n\n[[shared-target|Open target]]")
-
-    post preview_document_path(source), params: {
-      document: { source: source.source }, projection: "editor"
-    }, as: :json
-
-    assert_response :success
-    projection = Nokogiri::HTML.fragment(response.parsed_body.fetch("html"))
-    link = projection.at_css("a.document-link")
-    assert_equal document_path(target), link["href"]
-    assert_equal "Open target", link.text
-    assert_equal target.title, link["data-document-link-title"]
-  end
-
   test "previews an unsaved document when no revision token is supplied" do
     assert_no_difference("Document.count") do
       post preview_documents_path, params: {

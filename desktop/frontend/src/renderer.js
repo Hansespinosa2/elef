@@ -105,33 +105,13 @@ markdown.inline.ruler.after("backticks", "elef_wiki_link", (state, silent) => {
   if (!target || target.length > 200 || /[<>\u0000-\u001f]/.test(target)) return false
   if (silent) return true
 
-  const lookupKey = target.replace(/^(?:document|id):/, "")
-  const node = (state.env?.documentNodes || []).find((entry) =>
-    entry.title === target || entry.id === lookupKey || entry.documentKey === lookupKey ||
-    entry.document_key === lookupKey || entry.aliases?.includes(target) || entry.aliases?.includes(lookupKey)
-  )
-  const display = (displayText || target).trim()
-  if (!node) {
-    const unresolved = state.push("html_inline", "", 0)
-    unresolved.content = `<span class="document-link unresolved" aria-label="Unresolved document link">${escapeHtml(`[[${display}]]`)}</span>`
-    state.pos = close + 2
-    return true
-  }
-  const candidateHref = node?.href
-  const href = node
-    ? typeof candidateHref === "string" && SAFE_LINK.test(candidateHref) && !/^[a-z][a-z0-9+.-]*:/i.test(candidateHref)
-      ? candidateHref
-      : `#deck/${encodeURIComponent(node.id)}`
-    : "#"
+  const node = (state.env?.documentNodes || []).find((entry) => entry.title === target || entry.id === target)
+  const href = node ? `#deck/${encodeURIComponent(node.id)}` : "#"
   const open = state.push("link_open", "a", 1)
   open.attrSet("href", href)
-  open.attrSet("class", "document-link")
-  if (typeof node.href === "string") {
-    open.attrSet("data-document-link-title", node.title)
-    open.attrSet("aria-label", `Open document preview: ${node.title}`)
-  }
+  open.attrSet("class", node ? "document-link" : "document-link is-missing")
   const text = state.push("text", "", 0)
-  text.content = display
+  text.content = (displayText || target).trim()
   state.push("link_close", "a", -1)
   state.pos = close + 2
   return true
@@ -192,10 +172,7 @@ export function renderPreview({
   title = "Untitled",
   deckId = "",
   mediaBaseUrl = "",
-  mediaMap = {},
-  allowRemoteMedia = false,
-  documentNodes = [],
-  style: styleOverrides = null
+  documentNodes = []
 } = {}) {
   if (typeof source !== "string") throw typedError("invalid_input", "Markdown source must be text.")
   if (source.length > 50 * 1024 * 1024) throw typedError("too_large", "This deck is too large to preview.")
@@ -210,13 +187,9 @@ export function renderPreview({
     blocks: slideMap.blocks,
     editable_regions: slideMap.editable_regions
   }))
-  const { warnings, marginSettings } = structure
-  const style = {
-    theme: styleOverrides?.theme || structure.style.theme,
-    typography: styleOverrides?.typography || structure.style.typography
-  }
-  const mediaUrl = mediaBaseUrl || (!allowRemoteMedia && deckId ? `elefasset://localhost/${encodeURIComponent(deckId)}` : "")
-  const env = { mediaBaseUrl: mediaUrl, mediaMap, allowRemoteMedia, documentNodes }
+  const { style, warnings, marginSettings } = structure
+  const mediaUrl = mediaBaseUrl || `elefasset://localhost/${encodeURIComponent(deckId)}`
+  const env = { mediaBaseUrl: mediaUrl, documentNodes }
 
   const html = mode === "document"
     ? renderDocument(source, slides[0], style, env)
@@ -248,9 +221,7 @@ function renderDocument(source, slide, style, env) {
     const attributes = valid
       ? `class="${classes}" data-editor-region-id="${mapped.editable_region_id}" data-editor-block-id="${mapped.id}" contenteditable="true" role="textbox" aria-label="Editable Markdown block" aria-multiline="true" spellcheck="true" data-action="input-&gt;visual-editor#projectionInput focus-&gt;visual-editor#blockFocus blur-&gt;visual-editor#blockBlur"`
       : `class="${classes}" contenteditable="false" aria-readonly="true"`
-    let rendered = region?.empty_heading
-      ? "<h1><br></h1>"
-      : renderEditableDocumentBlock(block.markdown, mapped?.kind, env)
+    let rendered = region?.empty_heading ? "<h1><br></h1>" : renderMarkdownBlock(block.markdown, env)
     if (valid && mapped.kind === "image") {
       const alt = /^\s*!\[([^\]]*)\]/.exec(block.markdown)?.[1] || ""
       rendered = `<figure class="editor-media">${rendered}<figcaption class="editor-media-caption" aria-label="Editable image alt text" title="Edit image alt text">${escapeHtml(alt)}</figcaption></figure>`
@@ -263,24 +234,6 @@ function renderDocument(source, slide, style, env) {
     emptyIndex += 1
   }
   return `<div class="document-reader document-theme-${style.theme} document-typography-${style.typography} work-theme-${style.theme} work-typography-${style.typography} document-editor-projection" data-controller="document-pages mermaid-diagrams"><div class="document-surface" data-document-pages-target="surface">${blocks}</div></div>`
-}
-
-function renderEditableDocumentBlock(markdown, kind, env) {
-  const lines = markdown.split("\n")
-  const lastLine = lines.at(-1) || ""
-  let marker = null
-  if (kind === "list") marker = lastLine.match(/^([ \t]*(?:[-*+]|\d+[.)])[ \t]*)$/)?.[1]
-  if (kind === "quote") marker = lastLine.match(/^([ \t]*>[ \t]*)$/)?.[1]
-  if (!marker) return renderMarkdownBlock(markdown, env)
-
-  let caretToken = "ELEFCARETPLACEHOLDER"
-  while (markdown.includes(caretToken)) caretToken += "_"
-  if (kind === "quote" && lines.length > 1) lines.splice(lines.length - 1, 0, marker.trimEnd())
-  lines[lines.length - 1] = `${marker}${caretToken}`
-  let rendered = renderMarkdownBlock(lines.join("\n"), env)
-  rendered = rendered.replace(`<li>${caretToken}</li>`, "<li><br></li>")
-  rendered = rendered.replace(`<p>${caretToken}</p>`, "<p><br></p>")
-  return rendered
 }
 
 function renderPresentation(source, slides, style, margin, env) {
@@ -319,7 +272,7 @@ function renderPresentation(source, slides, style, margin, env) {
       : ""
     return `<div class="slide-frame" data-controller="presentation-canvas"><section class="slide slide-${slide.layout}" data-presentation-canvas-target="canvas" aria-label="Slide ${index + 1}" data-editor-slide-id="slide-${index + 1}" data-slide-index="${index}">${toolbar}${topMargin}<div class="slide-content">${titleMarkup}${slideContent}${empty}</div>${bottomMargin}</section></div>`
   }).join("")
-  return `<div class="presentation-surface work-surface slides slides-theme-${style.theme} slides-typography-${style.typography} work-theme-${style.theme} work-typography-${style.typography} presentation-editor-projection" data-controller="mermaid-diagrams" data-presentation-editor-target="canvas">${frames}</div>`
+  return `<div class="presentation-surface work-surface slides slides-theme-${style.theme} slides-typography-${style.typography} work-theme-${style.theme} work-typography-${style.typography} presentation-editor-projection" data-controller="mermaid-diagrams">${frames}</div>`
 }
 
 function renderPresentationBlockControls(slideIndex, blockIndex, blockCount, position) {

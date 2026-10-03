@@ -38,30 +38,6 @@ module Source
       ).deep_symbolize_keys
     end
 
-    def render_preview(source, kind:, title:, deck_id: nil, media_resolver: nil, document_nodes: [], style: {}, allow_remote_media: false)
-      raise ArgumentError, "Markdown source must be plain text" unless source.is_a?(String)
-      raise ArgumentError, "Markdown source exceeds the renderer limit" if source.bytesize > MAX_RENDER_BYTES
-
-      normalized_kind = kind.to_s
-      raise ArgumentError, "Unsupported document mode" unless %w[presentation document].include?(normalized_kind)
-      raise ArgumentError, "Document links must be an array" unless document_nodes.is_a?(Array)
-
-      renderer = context
-      renderer.call(
-        "ElefRenderer.renderPreview",
-        {
-          source: source,
-          kind: normalized_kind,
-          title: title.to_s,
-          deckId: deck_id.to_s,
-          mediaMap: resolved_media(renderer, source, media_resolver),
-          allowRemoteMedia: allow_remote_media == true,
-          documentNodes: document_nodes,
-          style: style
-        }
-      ).deep_symbolize_keys
-    end
-
     def resolved_media(renderer, source, media_resolver)
       return {} unless media_resolver && source.include?("!")
 

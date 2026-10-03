@@ -19,14 +19,14 @@ The earlier plan ported the Markdown → HTML pipeline from Ruby to JS and kept 
 
 ## Decision (proposed)
 
-**Author Markdown rendering and the editable projection once as a standalone JS package.** `renderMarkdownBlock` renders blocks without DOM or browser dependencies; `buildEditorStructure` derives slide/document metadata; `buildEditorMap` maps editable regions to UTF-16 source ranges; and `renderPreview` builds the complete editor projection. Rails forms and `projection=editor` preview requests call `renderPreview` through MiniRacer; desktop calls the same function in its worker. Host inputs such as media URLs, document routes, and effective appearance are passed as data. The broader consumer/fixture gate and removal of the Ruby rollback remain open, so this ADR remains proposed.
+**Author the Markdown and editor-map logic once as a standalone JS package.** Markdown blocks render to HTML without DOM or browser dependencies; `buildEditorStructure` also derives slide/document metadata and `buildEditorMap` maps editable regions to UTF-16 source ranges. Rails calls both through MiniRacer and desktop calls them in the worker. Rails still uses Ruby models and view templates to build the final editor projection markup, while desktop assembles that markup in JavaScript. Full projection parity, the complete fixture gate and removal of the Ruby rollback are still open, so this ADR remains proposed.
 
 **Mermaid:** the renderer emits placeholders only and sets strict mode in the markup; diagrams render in the browser/webview, which has the DOM Mermaid needs. Rails therefore never renders diagrams server-side.
 
 **One bundle, two consumers:**
 - `bin/build-renderer` (esbuild) produces a single `renderer.bundle.js`.
 - **Desktop:** the adapter runs the bundle in a Web Worker (`render_preview` is webview-local — [transport-adapter.md](../transport-adapter.md)), with a wall-clock limit.
-- **Rails:** loads the same bundle through **mini_racer** (V8 embedded in the Ruby process). `Source::JavascriptRenderer` exposes block rendering and editor maps; `Source::EditorPreview` supplies Rails assets, document routes and appearance to `ElefRenderer.renderPreview` for both initial editor forms and live preview responses. Other Rails consumers move through the bundle as the M3w cutover proceeds. Set a timeout and a memory limit on the context; budget contexts for Puma threads and for fork (cluster mode).
+- **Rails:** loads the same bundle through **mini_racer** (V8 embedded in the Ruby process). A thin wrapper, `Source::Renderer`, loads the bundle once and exposes `render(source) → html`. Every existing call site (preview endpoint, exports, anything S1's inventory finds) calls the wrapper. Set a timeout and a memory limit on the context; budget contexts for Puma threads and for fork (cluster mode).
 
 **The Ruby renderer is strangled, then deleted.** `Source::HtmlRenderer` stays behind `ELEF_RENDERER=ruby` only until the JS renderer passes 100% of the fixture suite (normalized comparison — [test-strategy.md](../test-strategy.md) §3). Then it is deleted. Dual existence is measured in weeks and ends in deletion.
 

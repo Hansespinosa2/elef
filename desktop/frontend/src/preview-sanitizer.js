@@ -1,18 +1,14 @@
 const ALLOWED_ELEMENTS = new Set([
-  "A", "ANNOTATION", "BLOCKQUOTE", "BR", "BUTTON", "CODE", "DEL", "DIV", "EM", "FIGCAPTION", "FIGURE",
-  "H1", "H2", "H3", "H4", "H5", "H6", "HR", "IMG", "LABEL", "LI", "MATH", "MFRAC", "MI", "MN", "MO",
-  "MROW", "MSUB", "MSUP", "MTEXT", "MTABLE", "MTD", "MTR", "MOVER", "MUNDER", "MUNDEROVER", "MSQRT",
-  "MROOT", "MSTYLE", "MSPACE", "OL", "OPTION", "P", "PRE", "SECTION", "SELECT", "SEMANTICS", "SPAN",
-  "STRONG", "SUB", "SUP", "TABLE", "TBODY", "TD", "TH", "THEAD", "TR", "UL", "VIDEO", "WBR"
+  "A", "ANNOTATION", "BLOCKQUOTE", "BR", "CODE", "DEL", "DIV", "EM", "H1", "H2", "H3", "H4", "H5", "H6",
+  "HR", "IMG", "LI", "MATH", "MFRAC", "MI", "MN", "MO", "MROW", "MSUB", "MSUP", "MTEXT", "MTABLE", "MTD",
+  "MTR", "MOVER", "MUNDER", "MUNDEROVER", "MSQRT", "MROOT", "MSTYLE", "MSPACE", "OL", "P", "PRE", "SECTION",
+  "SEMANTICS", "SPAN", "STRONG", "SUB", "SUP", "TABLE", "TBODY", "TD", "TH", "THEAD", "TR", "UL", "VIDEO", "WBR"
 ])
 const SAFE_PROTOCOLS = /^(?:https?:|mailto:|tel:|elefasset:|#|\/|\.\.?\/|[^:]*$)/i
 const ALLOWED_ACTIONS = new Set([
   "input->visual-editor#projectionInput focus->visual-editor#blockFocus blur->visual-editor#blockBlur",
   "input->presentation-editor#blockInput focus->presentation-editor#blockFocus blur->presentation-editor#blockBlur",
-  "click->media#chooseForSlide",
-  "change->presentation-editor#alignmentChanged",
-  "pointerdown->visual-editor#positionControlOpened",
-  "focus->visual-editor#positionControlOpened keydown->visual-editor#positionControlKeydown change->visual-editor#alignmentChanged"
+  "click->media#chooseForSlide"
 ])
 const ALLOWED_PRESENTATION_ACTIONS = new Set([
   "add-slide-after", "delete-slide", "move-slide-up", "move-slide-down", "add-block-after", "delete-block", "move-block-up", "move-block-down"
@@ -41,10 +37,6 @@ function safeAttribute(element, name, value, interactive) {
   const lower = name.toLowerCase()
   if (lower.startsWith("on") || lower === "srcdoc" || lower === "formaction") return false
   if (["class", "role", "alt", "title", "aria-label", "aria-multiline", "aria-readonly", "aria-hidden", "spellcheck", "controls", "playsinline", "preload", "colspan", "rowspan"].includes(lower)) return true
-  if (lower === "type") return element.tagName === "BUTTON" && value === "button"
-  if (lower === "disabled") return element.tagName === "BUTTON" && value === ""
-  if (lower === "selected") return element.tagName === "OPTION" && value === ""
-  if (lower === "value") return element.tagName === "OPTION" && /^(?:left|center|right|center left|center center|center right|bottom left|bottom center|bottom right)$/.test(value)
   if (lower === "contenteditable") return interactive && (value === "true" || value === "false")
   if (["xmlns", "display", "encoding"].includes(lower) && ["MATH", "ANNOTATION"].includes(element.tagName)) return true
   if (lower === "style") return isSafeKatexStyle(element, value)
@@ -52,10 +44,7 @@ function safeAttribute(element, name, value, interactive) {
   if (lower === "data-action") return interactive && ALLOWED_ACTIONS.has(value)
   if (lower === "data-controller") return interactive && value.split(/\s+/).every((controller) => ["mermaid-diagrams", "presentation-canvas", "document-pages"].includes(controller))
   if (lower === "data-presentation-editor-action") return interactive && ALLOWED_PRESENTATION_ACTIONS.has(value)
-  if (lower === "data-presentation-editor-align") return interactive && element.tagName === "SELECT"
-  if (lower === "data-presentation-editor-target") return interactive && value === "canvas"
-  if (/^data-(?:editor|presentation-canvas|slide-index|block-index)/.test(lower)) return true
-  if (lower === "data-document-link-title") return typeof value === "string" && value.length <= 200
+  if (/^data-(?:editor|presentation-canvas|slide-index)/.test(lower)) return true
   if (lower === "href" && element.tagName === "A") return safeUrl(value)
   if (lower === "src" && ["IMG", "VIDEO"].includes(element.tagName)) return safeUrl(value) && !/^(?:https?:|data:|javascript:)/i.test(value)
   if (lower === "data-editor-image-source") return value === "true"
