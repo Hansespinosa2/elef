@@ -23,6 +23,23 @@ async function openDesktopAuthoringSettings() {
   await $("#authoring-settings-dialog").waitForDisplayed()
 }
 
+async function acceptBrowserConfirmation(expectedText) {
+  let text = ""
+  await browser.waitUntil(async () => {
+    try {
+      text = await browser.getAlertText()
+      return text.length > 0
+    } catch (_error) {
+      return false
+    }
+  }, {
+    timeout: 5_000,
+    timeoutMsg: "The expected confirmation dialog did not appear"
+  })
+  if (!text.includes(expectedText)) throw new Error(`Unexpected confirmation text: ${text}`)
+  await browser.acceptAlert()
+}
+
 function normalizeLineEndings(source) {
   return source.replace(/\r\n/g, "\n")
 }
@@ -823,11 +840,7 @@ describe("desktop binary workflows and native boundaries", () => {
     }
     if (!targetCard) throw new Error("The saved personal snippet was not listed for management")
     await targetCard.$(".authoring-delete").click()
-    await browser.waitUntil(() => browser.isAlertOpen(), {
-      timeout: 5_000,
-      timeoutMsg: "Deleting a personal snippet did not ask for confirmation"
-    })
-    await browser.acceptAlert()
+    await acceptBrowserConfirmation("Delete")
     await browser.waitUntil(async () => (await $("#authoring-settings-status").getText()).includes("saved to this library"), {
       timeout: 10_000,
       timeoutMsg: "Deleting the personal snippet did not finish"
@@ -866,11 +879,7 @@ describe("desktop binary workflows and native boundaries", () => {
     }
     if (!targetCard) throw new Error("The saved math shortcut was not listed for management")
     await targetCard.$(".authoring-delete").click()
-    await browser.waitUntil(() => browser.isAlertOpen(), {
-      timeout: 5_000,
-      timeoutMsg: "Deleting a personal math shortcut did not ask for confirmation"
-    })
-    await browser.acceptAlert()
+    await acceptBrowserConfirmation("Delete")
     await browser.waitUntil(async () => (await $("#authoring-settings-status").getText()).includes("saved to this library"), {
       timeout: 10_000,
       timeoutMsg: "Deleting the personal math shortcut did not finish"
