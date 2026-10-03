@@ -54,10 +54,14 @@ sequenceDiagram
 - Extra read+hash per save: negligible for source files; measured against the autosave budget.
 - Safe on synced folders in the common cases; a sync tool producing a conflicted copy is handled by the source-file rule ([data-format.md](../data-format.md)).
 
-## Revisit when
-
 ### Amendment 2026-10-03: navigation ownership
 
 Pending deck reads do not advance the active save fingerprint. Graph and editor preparation finish while the old deck retains save ownership. If edits arrive during preparation, they save against that old fingerprint and the target is reread before activation. Installing the editor buffer and activating the target's fingerprint/save ownership occur synchronously, without an intervening await. A failed buffer installation deactivates saves and returns to the library. Deferred-read and deferred-graph unit tests cover same-deck stale snapshots, external-change conflicts, and typing into the prior deck during preparation.
+
+### Amendment 2026-10-03: delayed source replacement
+
+External reload, disk/merge resolution and draft recovery retain their originating deck and expected buffer through editor readiness. A delayed replacement refuses to change another deck or newer local edits. The old save fingerprint and active conflict remain until replacement succeeds; pending replacements count as unsaved and block saves, navigation and Quit. Failed recovery retains the original draft. Deferred readiness tests cover stale replacements and conflicting choices.
+
+## Revisit when
 
 Saves are shown to miss the autosave budget, or the residual race is observed in practice.

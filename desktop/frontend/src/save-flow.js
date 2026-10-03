@@ -19,13 +19,14 @@ export function createSaveFlow({
   let blocked = false
   let paused = false
   let saveWorker = null
+  let sourceMutation = null
   let saveTimer = null
   let retryTimer = null
   let retryAttempt = 0
   const discardedDrafts = []
 
   function setStatus(value) {
-    onState(value, { dirty, blocked, conflict: activeConflict, discardedDrafts: discardedDrafts.length, canRestoreDraft: discardedDrafts.some(draft => draft.id === activeDeck?.id) })
+    onState(value, { dirty: dirty || Boolean(sourceMutation), blocked, conflict: activeConflict, discardedDrafts: discardedDrafts.length, canRestoreDraft: discardedDrafts.some(draft => draft.id === activeDeck?.id) })
   }
 
   function schedule(delay = 650) {
@@ -42,7 +43,7 @@ export function createSaveFlow({
       return
     }
     setStatus("Unsaved changes")
-    if (paused) return
+    if (paused || sourceMutation) return
     clearTimer(saveTimer)
     if (retryTimer) return
     saveTimer = setTimer(() => {
@@ -87,6 +88,7 @@ export function createSaveFlow({
 
   async function checkExternalChange(id, snapshot) {
     if (!activeDeck || activeDeck.id !== id) return "inactive"
+    if (sourceMutation) return "busy"
     if (!snapshot || !/^[a-f\d]{64}$/i.test(snapshot.content_hash || "")) {
       const error = Object.assign(new Error("Elef received an invalid file fingerprint."), {
         code: "invalid_response",
@@ -125,20 +127,28 @@ export function createSaveFlow({
     clearTimer(retryTimer)
     saveTimer = null
     retryTimer = null
+    const deck = activeDeck
+    const applied = await applySource(snapshot.source, deck)
+    if (activeDeck !== deck) return "inactive"
+    if (!applied) {
+      handleConflict({ id, details: { disk_hash: snapshot.content_hash, current: snapshot } })
+      return "conflict"
+    }
     acceptDiskVersion(id, snapshot.content_hash)
-    activeDeck.content_hash = snapshot.content_hash
-    activeDeck.source = snapshot.source
-    activeDeck.source_file = snapshot.source_file || activeDeck.source_file
-    await setSource(snapshot.source)
+    deck.content_hash = snapshot.content_hash
+    deck.source = snapshot.source
+    deck.source_file = snapshot.source_file || deck.source_file
     activeConflict = null
-    dirty = false
+    dirty = getSource() !== snapshot.source
     blocked = false
     retryAttempt = 0
-    setStatus("External changes loaded")
+    if (dirty) schedule()
+    else setStatus("External changes loaded")
     return "reloaded"
   }
 
   async function flush({ force = false } = {}) {
+    if (sourceMutation) return false
     clearTimer(saveTimer)
     saveTimer = null
     if (!activeDeck || activeConflict) return !dirty
@@ -154,7 +164,7 @@ export function createSaveFlow({
     }
 
     saveWorker = (async () => {
-      while (activeDeck && dirty && !activeConflict) {
+      while (activeDeck && dirty && !activeConflict && !sourceMutation) {
         const deck = activeDeck
         const source = getSource()
         setStatus("Saving…")
@@ -232,23 +242,40 @@ export function createSaveFlow({
     if (dirty && !activeConflict) schedule(0)
   }
 
+  async function applySource(source, deck) {
+    if (sourceMutation) return false
+    const token = {}
+    sourceMutation = token
+    try {
+      const applied = await setSource(source, { id: deck.id, expectedSource: getSource() })
+      return applied !== false && activeDeck === deck
+    } catch (error) {
+      onError(error)
+      return false
+    } finally {
+      if (sourceMutation === token) sourceMutation = null
+    }
+  }
+
   async function useDiskVersion() {
-    if (!activeConflict || !activeDeck) return false
+    if (!activeConflict || !activeDeck || sourceMutation) return false
     const conflict = activeConflict
+    const deck = activeDeck
     rememberDraft(getSource())
+    if (!(await applySource(conflict.diskSource, deck)) || activeConflict !== conflict) return false
     acceptDiskVersion(conflict.id, conflict.diskHash)
-    activeDeck.content_hash = conflict.diskHash
-    activeDeck.source = conflict.diskSource
-    activeDeck.source_file = conflict.diskSourceFile
-    await setSource(conflict.diskSource)
+    deck.content_hash = conflict.diskHash
+    deck.source = conflict.diskSource
+    deck.source_file = conflict.diskSourceFile
     activeConflict = null
-    dirty = false
-    setStatus("Saved external version")
+    dirty = getSource() !== conflict.diskSource
+    if (dirty) schedule()
+    else setStatus("Saved external version")
     return true
   }
 
   function keepLocalVersion() {
-    if (!activeConflict || !activeDeck) return false
+    if (!activeConflict || !activeDeck || sourceMutation) return false
     const conflict = activeConflict
     acceptDiskVersion(conflict.id, conflict.diskHash)
     activeDeck.content_hash = conflict.diskHash
@@ -262,26 +289,29 @@ export function createSaveFlow({
   }
 
   async function saveMergedVersion(mergedSource) {
-    if (!activeConflict || !activeDeck) return false
+    if (!activeConflict || !activeDeck || sourceMutation) return false
     const conflict = activeConflict
+    const deck = activeDeck
+    if (!(await applySource(mergedSource, deck)) || activeConflict !== conflict) return false
     acceptDiskVersion(conflict.id, conflict.diskHash)
-    activeDeck.content_hash = conflict.diskHash
-    activeDeck.source = conflict.diskSource
-    activeDeck.source_file = conflict.diskSourceFile
-    await setSource(mergedSource)
+    deck.content_hash = conflict.diskHash
+    deck.source = conflict.diskSource
+    deck.source_file = conflict.diskSourceFile
     activeConflict = null
-    dirty = mergedSource !== activeDeck.source
+    dirty = getSource() !== deck.source
     if (dirty) void flush({ force: true })
     else setStatus("Saved external version")
     return true
   }
 
   async function restoreDraft() {
-    if (!activeDeck) return false
+    if (!activeDeck || sourceMutation || activeConflict) return false
+    const deck = activeDeck
     const index = discardedDrafts.findLastIndex(draft => draft.id === activeDeck.id)
     if (index < 0) return false
-    const [draft] = discardedDrafts.splice(index, 1)
-    await setSource(draft.source)
+    const draft = discardedDrafts[index]
+    if (!(await applySource(draft.source, deck))) return false
+    discardedDrafts.splice(discardedDrafts.indexOf(draft), 1)
     schedule(0)
     return true
   }
@@ -312,7 +342,7 @@ export function createSaveFlow({
     keepLocalVersion,
     saveMergedVersion,
     restoreDraft,
-    get dirty() { return dirty || Boolean(saveWorker) },
+    get dirty() { return dirty || Boolean(saveWorker) || Boolean(sourceMutation) },
     get blocked() { return blocked },
     get conflict() { return activeConflict },
     get discardedDraftCount() { return discardedDrafts.length },

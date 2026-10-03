@@ -1,5 +1,6 @@
 import { createDeckOpenFlow, prepareDeckOpen } from "./deck-open-flow.js"
 import { completeBootstrap } from "./bootstrap-flow.js"
+import { applyEditorSource } from "./editor-source.js"
 import { measurePaintedAction } from "./performance-measurement.js"
 import { createCloseFlow } from "./close-flow.js"
 import { Channel, invoke } from "@tauri-apps/api/core"
@@ -701,10 +702,12 @@ function currentSource() {
   return editorFor(elements.editorField)?.sourceValue ?? elements.editorInput.value
 }
 
-async function setEditorSource(source) {
-  const controller = await waitForEditorController(elements.editorField, editorFor)
-  if (controller) controller.setExternalValue(source)
-  else elements.editorInput.value = source
+async function setEditorSource(source, { id = activeDeck?.id, expectedSource = currentSource() } = {}) {
+  return applyEditorSource(source, {
+    id, expectedSource, getDeckId: () => activeDeck?.id, getSource: currentSource,
+    waitForEditor: () => waitForEditorController(elements.editorField, editorFor),
+    setFallback: value => { elements.editorInput.value = value }
+  })
 }
 
 async function showSettings() {
