@@ -566,7 +566,7 @@ class DesktopLibraryUi {
   }
 }
 
-describe("shared authoring scenarios", () => {
+describe("desktop binary workflows and native boundaries", () => {
   it("opens the new-deck dialog from the native menu accelerator", async () => {
     await $("#library-view").waitForDisplayed()
     await browser.execute(() => window.focus())
