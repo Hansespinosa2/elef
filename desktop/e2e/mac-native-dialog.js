@@ -18,11 +18,11 @@ export function answerMacNativeDialog(button) {
       set frontmost of targetProcess to true
       repeat with targetWindow in every window of targetProcess
         try
-          set controls to entire contents of targetWindow
-          repeat with control in controls
+          set uiItems to entire contents of targetWindow
+          repeat with uiItem in uiItems
             try
-              if role of control is "AXButton" and name of control is "${button}" then
-                click control
+              if role of uiItem is "AXButton" and name of uiItem is "${button}" then
+                click uiItem
                 return "answered"
               end if
             end try
