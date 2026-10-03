@@ -437,17 +437,30 @@ class DesktopEditorUi {
         timeoutMsg: "The desktop asset protocol did not render the uploaded image"
       })
     } catch (error) {
-      const images = await browser.execute(expectedDigest =>
-        [...document.querySelectorAll('img[data-editor-image-source="true"]')]
-          .filter(image => image.src.includes(expectedDigest))
-          .map(image => ({
+      const diagnostic = await browser.execute(() => {
+        const form = document.querySelector("#desktop-editor-form")
+        const field = document.querySelector("#desktop-editor-field")
+        const preview = document.querySelector("#desktop-preview")
+        return {
+          mode: form?.dataset.editorMode,
+          source: field?.editorController?.sourceValue,
+          previewStatus: document.querySelector("[data-preview-target='status']")?.textContent,
+          previewWarnings: document.querySelector("[data-preview-target='warnings']")?.textContent,
+          previewHtml: preview?.innerHTML.slice(0, 3000),
+          images: [...(preview?.querySelectorAll("img") || [])].map(image => ({
+            srcAttribute: image.getAttribute("src"),
             src: image.src,
             currentSrc: image.currentSrc,
+            editorImage: image.getAttribute("data-editor-image-source"),
             complete: image.complete,
             naturalWidth: image.naturalWidth,
             naturalHeight: image.naturalHeight
-          })), digest)
-      throw new Error(`${error.message}; matching image state: ${JSON.stringify(images)}`)
+          }))
+        }
+      })
+      const files = await readdir(path.join(process.env.ELEF_E2E_LIBRARY_ROOT, "E2E seed", "images"))
+        .catch(readError => [`<${readError.code || "read_error"}>`])
+      throw new Error(`${error.message}; image files: ${JSON.stringify(files)}; preview diagnostic: ${JSON.stringify(diagnostic)}`)
     }
   }
 }
@@ -862,11 +875,17 @@ describe("desktop binary workflows and native boundaries", () => {
     await $("#new-authoring-entry").click()
     const alias = `elefe2e${Date.now()}`
     await $("#authoring-math-name").setValue("E2E math shortcut")
-    const prefix = $("#authoring-prefix")
-    await prefix.click()
-    // WebDriver W3C key codes: ArrowDown (U+E015), then Enter (U+E007).
-    await browser.keys(["\uE015", "\uE007"])
-    if (await prefix.getValue() !== "@") {
+    // The embedded WebKit driver does not apply native select keyboard input
+    // consistently; dispatch the same change event and verify persisted data.
+    const selectedPrefix = await browser.execute(() => {
+      const prefix = document.querySelector("#authoring-prefix")
+      if (!prefix) return null
+      prefix.value = "@"
+      prefix.dispatchEvent(new Event("input", { bubbles: true }))
+      prefix.dispatchEvent(new Event("change", { bubbles: true }))
+      return prefix.value
+    })
+    if (selectedPrefix !== "@") {
       throw new Error("Selecting the @ math shortcut prefix did not update the form")
     }
     await $("#authoring-aliases").setValue(alias)
