@@ -30,16 +30,6 @@ await build({
   }]
 })
 
-await build({
-  entryPoints: [path.join(frontendRoot, "src/renderer-worker.js")],
-  nodePaths: [path.join(frontendRoot, "node_modules")],
-  bundle: true,
-  format: "esm",
-  target: "es2022",
-  outfile: path.join(assets, "renderer-worker.js"),
-  minify: true
-})
-
 const railsRendererBundle = path.join(repoRoot, "vendor/javascript/elef-renderer.bundle.js")
 await build({
   entryPoints: [path.join(frontendRoot, "src/renderer-global.js")],
@@ -59,6 +49,11 @@ const rawWhitespace = "[ \t\n"
 const occurrences = rendererBundle.split(rawWhitespace).length - 1
 if (occurrences !== 1) throw new Error(`Expected one Highlight.js whitespace template, found ${occurrences}.`)
 await writeFile(railsRendererBundle, rendererBundle.replace(rawWhitespace, "[ \\t\n"))
+
+// Rails and desktop execute the same generated renderer bytes. Keep the worker
+// entry thin so the renderer implementation is loaded only from this bundle.
+await copyFile(railsRendererBundle, path.join(assets, "renderer.bundle.js"))
+await copyFile(path.join(frontendRoot, "src/renderer-worker.js"), path.join(assets, "renderer-worker.js"))
 
 const indexHtml = await readFile(path.join(frontendRoot, "index.html"), "utf8")
 if (e2eBuild) {

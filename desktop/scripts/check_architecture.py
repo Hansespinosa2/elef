@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Keep the Tauri invoke surface aligned with its declared capability."""
 
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -28,6 +29,7 @@ delivery_plan = (REPO_ROOT / "docs" / "desktop" / "delivery-plan.md").read_text(
 document_model = (REPO_ROOT / "app" / "lib" / "source" / "document.rb").read_text()
 javascript_renderer = (REPO_ROOT / "app" / "lib" / "source" / "javascript_renderer.rb").read_text()
 renderer_global = (REPO_ROOT / "desktop" / "frontend" / "src" / "renderer-global.js").read_text()
+renderer_worker = (REPO_ROOT / "desktop" / "frontend" / "src" / "renderer-worker.js").read_text()
 
 declared = command_names(build_source, r"let app_commands = &\[(.*?)\];")
 handler_match = re.search(
@@ -84,6 +86,13 @@ assert "applyDesktopFeatureFlags(document)" in (REPO_ROOT / "desktop" / "fronten
 assert re.search(r"def editor_map\([^)]*\).*?Source::JavascriptRenderer\.editor_map", document_model, re.DOTALL), "Rails editor maps must delegate to the shared JavaScript implementation"
 assert '"ElefRenderer.buildEditorMap"' in javascript_renderer, "the Rails wrapper must call the shared map exported by the renderer bundle"
 assert "buildEditorMap" in renderer_global and "buildEditorStructure" in renderer_global, "the renderer bundle must expose the shared editor map and structure"
+assert 'import "./renderer.bundle.js"' in renderer_worker, "the desktop worker must load the same renderer bundle as Rails"
+rails_bundle = REPO_ROOT / "vendor" / "javascript" / "elef-renderer.bundle.js"
+desktop_bundle = REPO_ROOT / "desktop" / "frontend" / "dist" / "assets" / "renderer.bundle.js"
+assert desktop_bundle.is_file(), "build the desktop frontend before checking the shared renderer bundle"
+rails_hash = hashlib.sha256(rails_bundle.read_bytes()).hexdigest()
+desktop_hash = hashlib.sha256(desktop_bundle.read_bytes()).hexdigest()
+assert rails_hash == desktop_hash, "Rails and desktop renderer bundle hashes differ; run npm run build --prefix desktop/frontend"
 assert not re.search(r"def (?:editor_blocks|editable_region_for_block|utf16_range)\b", document_model), "Rails must not retain a second editor-map implementation"
 assert {
     permission

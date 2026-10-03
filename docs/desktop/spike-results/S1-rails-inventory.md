@@ -44,7 +44,7 @@ The Ruby implementation is `Source::HtmlRenderer`, wrapped by `Source::Renderer`
 
 The rollback renderer is Redcarpet + Rouge + the KaTeX JavaScript included by the `katex` Ruby gem. The shared JS renderer uses Markdown-it `14.3.2`, Highlight.js `11.11.1` and KaTeX `0.17.0`, with locked npm dependencies. The shared `document-map.js` supplies slide/document structure and editor maps to the desktop worker and MiniRacer wrapper. The vendored Mermaid runtime is `11.17.2` and runs in the webview after the renderer emits a placeholder.
 
-The current build uses the pinned desktop frontend npm package and esbuild. `npm run build --prefix desktop/frontend` emits the checked-in `vendor/javascript/elef-renderer.bundle.js` Rails bundle plus worker and desktop app bundles. CI rebuilds it from the lockfile. Rails loads the checked-in bundle; desktop's worker imports the same renderer source. CI checks that rebuilding leaves the generated Rails bundle unchanged.
+The current build uses the pinned desktop frontend npm package and esbuild. `npm run build --prefix desktop/frontend` emits the checked-in `vendor/javascript/elef-renderer.bundle.js` Rails bundle plus the desktop app and a thin worker entry. Both Rails and desktop load the exact same renderer bundle bytes; the desktop build copies the generated Rails bundle, and the architecture fitness check compares their SHA-256 hashes. CI rebuilds it from the lockfile and verifies that the checked-in Rails bundle is unchanged.
 
 ## Feasibility evidence
 

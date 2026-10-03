@@ -1,4 +1,6 @@
-import { renderPreview } from "./renderer.js"
+import "./renderer.bundle.js"
+
+const { renderPreview } = self.ElefRenderer
 
 self.addEventListener("message", (event) => {
   const { id, input } = event.data || {}
