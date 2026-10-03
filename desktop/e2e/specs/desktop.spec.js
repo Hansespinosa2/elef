@@ -97,7 +97,12 @@ class DesktopEditorUi {
     const card = $(`[aria-label="Open ${title}"]`)
     await card.waitForDisplayed()
     await card.click()
-    await browser.waitUntil(async () => (await $("#deck-title").getText()) === title, {
+    await browser.waitUntil(async () => browser.execute(expected => {
+      const form = document.querySelector("#desktop-editor-form")
+      return document.querySelector("#deck-title")?.textContent === expected
+        && form?.dataset.loadedDeckId === document.querySelector("#deck-id")?.textContent
+        && !document.querySelector("#deck-view")?.hidden
+    }, title), {
       timeout: 10_000,
       timeoutMsg: `The ${title} deck did not open`
     })
@@ -1242,7 +1247,7 @@ describe("native updater verification", () => {
         } catch (resetError) {
           console.error("Updater fixture reset also failed:", resetError.cause?.code || resetError.message)
         }
-        throw error
+        throw new Error(error.message || String(error))
       }
       const reset = await fetch("http://127.0.0.1:8888/mode?value=none")
       if (!reset.ok) throw new Error("The updater fixture did not reset")
@@ -1296,7 +1301,7 @@ describe("native updater verification", () => {
         } catch (resetError) {
           console.error("Updater fixture reset also failed:", resetError.cause?.code || resetError.message)
         }
-        throw error
+        throw new Error(error.message || String(error))
       }
       const reset = await fetch("http://127.0.0.1:8888/mode?value=none")
       if (!reset.ok) throw new Error("The updater fixture did not reset")

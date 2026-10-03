@@ -144,7 +144,7 @@ saveFlow = createSaveFlow({
   setSource: setEditorSource,
   onState: (state, details) => {
     setSaveState(state)
-    elements.restoreDraft.hidden = !details.discardedDrafts
+    elements.restoreDraft.hidden = !details.canRestoreDraft
     elements.retrySave.hidden = !details.blocked
     if (!details.dirty && openFilesWaitingForSave) {
       openFilesWaitingForSave = false
@@ -464,6 +464,7 @@ async function openDeck(id) {
   try {
     if (document.body.classList.contains("presenting-deck")) await exitPresentation()
     if (activeDeck && saveFlow.dirty && !(await flushSave())) return
+    delete elements.editorForm.dataset.loadedDeckId
     const deck = await transport.openDeck(id)
     const isDocument = deck.source_file === "document.md"
     if (deck.id !== id) {
@@ -505,6 +506,7 @@ async function openDeck(id) {
     elements.editorInput.disabled = false
     setSaveState("Saved")
     document.querySelector("#deck-id").textContent = deck.id
+    elements.editorForm.dataset.loadedDeckId = deck.id
     const notice = document.querySelector("#deck-notice")
     notice.textContent = deck.notices.join(" ")
     notice.hidden = deck.notices.length === 0

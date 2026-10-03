@@ -21,3 +21,7 @@ The auditor judged canonical folders, archive implementation, portable preferenc
 - Fixture-channel signing is independent of the owner production signing ceremony. Gatekeeper, target-device release performance, keyboard/native interaction feel, and a week of real work remain human/device gates.
 
 See [test-strategy.md](../test-strategy.md), [S1 evidence](../spike-results/S1-rails-inventory.md), and [delivery-plan.md](../delivery-plan.md) for their verification contracts.
+
+## Auditor follow-up
+
+The source follow-up confirmed the six original fixes but found three lifecycle details requiring correction: readiness accepted a controller published before connection finished; fresh state did not reapply current Vim/editing-mode/frontmatter settings; recovery-button visibility used the global draft count. The editor now advertises readiness only after initialization, its wait rejects partially connected controllers, deck loads reapply current preferences, and recovery visibility uses active-deck availability. Unit readiness and document-state tests and static wiring assertions cover these contracts; native lifecycle evidence remains separate.

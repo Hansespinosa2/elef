@@ -25,7 +25,7 @@ export function createSaveFlow({
   const discardedDrafts = []
 
   function setStatus(value) {
-    onState(value, { dirty, blocked, conflict: activeConflict, discardedDrafts: discardedDrafts.length })
+    onState(value, { dirty, blocked, conflict: activeConflict, discardedDrafts: discardedDrafts.length, canRestoreDraft: discardedDrafts.some(draft => draft.id === activeDeck?.id) })
   }
 
   function schedule(delay = 650) {

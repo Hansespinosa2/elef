@@ -74,6 +74,7 @@ export default class extends Controller {
   connect() {
     this.editorController = this
     this.element.editorController = this
+    this.editorReady = false
     this.destroyed = false
     this.pendingMediaRanges = new Map()
     this.nextMediaRangeId = 0
@@ -155,10 +156,12 @@ export default class extends Controller {
     this.setEditingMode(this.form?.dataset.editorMode || "visual", { silent: true })
     this.updateMode()
     this.collapseFrontmatter()
+    this.editorReady = true
     this.element.dispatchEvent(new CustomEvent("elef:editor-ready", { detail: { editor: this }, bubbles: true }))
   }
 
   disconnect() {
+    this.editorReady = false
     this.destroyed = true
     this.pendingMediaRanges?.clear()
     if (this.lineNumberFrame) cancelAnimationFrame(this.lineNumberFrame)
@@ -517,6 +520,15 @@ export default class extends Controller {
     this.pendingMediaRanges.clear()
     this.inputTarget.value = source
     this.syncInput()
+    this.view.dispatch({ effects: this.vimCompartment.reconfigure(this.vimEnabled ? vim() : []) })
+    this.applyMapping()
+    this.applyLineNumbers()
+    this.applyCursorStyle()
+    this.bindVimEvents()
+    this.refreshFrontmatterRange()
+    this.setEditingMode(this.editingMode || this.form?.dataset.editorMode || "visual", { silent: true })
+    this.updateMode()
+    this.syncMetadataToggle()
   }
 
   setExternalValue(value) {

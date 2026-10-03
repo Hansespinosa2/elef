@@ -1,6 +1,6 @@
 export function waitForEditorController(field, findController, { timeoutMs = 5_000 } = {}) {
   const available = findController(field)
-  if (available) return Promise.resolve(available)
+  if (available?.editorReady === true) return Promise.resolve(available)
 
   return new Promise((resolve, reject) => {
     let timer
@@ -11,7 +11,7 @@ export function waitForEditorController(field, findController, { timeoutMs = 5_0
     const onReady = () => {
       cleanup()
       const controller = findController(field)
-      if (controller) resolve(controller)
+      if (controller?.editorReady === true) resolve(controller)
       else reject(editorUnavailable())
     }
     field.addEventListener("elef:editor-ready", onReady, { once: true })

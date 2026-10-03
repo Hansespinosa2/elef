@@ -77,3 +77,14 @@ test("the library provides the local document graph view and deck navigation", (
   assert.ok(document.querySelector("#document-graph-search[data-document-graph-target='search']"))
   assert.ok(document.querySelector("#document-graph-mount"))
 })
+
+test("document reload reapplies editor preferences and readiness follows successful connection", async () => {
+  const controller = await readFile(new URL("../../../app/javascript/controllers/editor_controller.js", import.meta.url), "utf8")
+  const load = controller.slice(controller.indexOf("  loadDocument(source)"), controller.indexOf("  setExternalValue(value)"))
+  for (const method of ["vimCompartment.reconfigure", "applyLineNumbers", "applyCursorStyle", "refreshFrontmatterRange", "setEditingMode", "syncMetadataToggle"]) {
+    assert.ok(load.includes(method), `New documents must reapply ${method}`)
+  }
+  const ready = controller.indexOf("this.editorReady = true")
+  assert.ok(ready > controller.indexOf("this.collapseFrontmatter()"))
+  assert.ok(ready < controller.indexOf('new CustomEvent("elef:editor-ready"'))
+})
