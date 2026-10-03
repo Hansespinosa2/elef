@@ -24,6 +24,8 @@ capability = json.loads((TAURI_ROOT / "capabilities" / "main.json").read_text())
 e2e_capability = json.loads((TAURI_ROOT / "capabilities" / "e2e.json").read_text())
 config = json.loads((TAURI_ROOT / "tauri.conf.json").read_text())
 e2e_config = json.loads((TAURI_ROOT / "tauri.e2e.conf.json").read_text())
+performance_config = json.loads((TAURI_ROOT / "tauri.performance.conf.json").read_text())
+assert performance_config == {"plugins": {"updater": {"endpoints": ["https://127.0.0.1:8888/manifest"]}}}, "release measurement must keep secure transport and a loopback-only offline check"
 feature_flags_source = (REPO_ROOT / "desktop" / "frontend" / "src" / "feature-flags.js").read_text()
 delivery_plan = (REPO_ROOT / "docs" / "desktop" / "delivery-plan.md").read_text()
 document_model = (REPO_ROOT / "app" / "lib" / "source" / "document.rb").read_text()

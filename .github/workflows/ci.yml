@@ -264,7 +264,7 @@ jobs:
       - name: Build the release binary for native performance measurements
         env:
           ELEF_E2E_BUILD: "1"
-        run: npm run tauri:build --prefix desktop/frontend -- --features webdriver --no-bundle --config src-tauri/tauri.e2e.conf.json
+        run: npm run tauri:build --prefix desktop/frontend -- --features webdriver --no-bundle --config src-tauri/tauri.e2e.conf.json --config src-tauri/tauri.performance.conf.json
       - name: Measure native release application budgets over 20 fresh processes
         run: dbus-run-session -- xvfb-run --auto-servernum bash -c 'openbox --sm-disable >/tmp/elef-performance-openbox.log 2>&1 & sleep 1; node desktop/e2e/benchmark-native.mjs --binary "$PWD/desktop/target/release/elef-desktop"'
       - name: Preserve native Linux performance samples
@@ -348,7 +348,7 @@ jobs:
       - name: Build the release binary for native performance measurements
         env:
           ELEF_E2E_BUILD: "1"
-        run: npm run tauri:build --prefix desktop/frontend -- --features webdriver --no-bundle --config src-tauri/tauri.e2e.conf.json
+        run: npm run tauri:build --prefix desktop/frontend -- --features webdriver --no-bundle --config src-tauri/tauri.e2e.conf.json --config src-tauri/tauri.performance.conf.json
       - name: Measure native release application budgets over 20 fresh processes
         env:
           ELEF_E2E_OFFLINE: "1"
