@@ -37,4 +37,5 @@ export async function editAndPreviewWorkflow(ui) {
   await ui.refreshPreview()
   await ui.showVisualMode()
   await ui.assertDocumentLinkPreview("E2E linked")
+  await ui.openDeck()
 }
