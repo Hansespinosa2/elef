@@ -32,12 +32,12 @@ const mediaFetch = createMediaFetch({ invoke, fetchImpl: networkFetch })
 globalThis.fetch = createPreviewFetch({
   renderer,
   fetchImpl: mediaFetch,
-  getContext: () => ({
+  getContext: async source => ({
     kind: activeDeck?.source_file === "document.md" ? "document" : "presentation",
     title: activeDeck?.name || "Untitled",
     deckId: activeDeck?.id || "",
     mediaBaseUrl: activeDeck ? `elefasset://localhost/${encodeURIComponent(activeDeck.id)}` : "",
-    documentNodes: documentGraphCache?.nodes || []
+    documentNodes: await previewDocumentNodes(source)
   })
 })
 globalThis.elefInstallDesktopPreview = installSanitizedPreview
@@ -130,7 +130,7 @@ const loadLibraryPreview = createLibraryPreviewLoader({
 saveFlow = createSaveFlow({
   saveSource: async (id, source) => {
     const result = await transport.saveSource(id, source)
-    documentGraphCache = null
+    if (activeDeck?.id === id && activeDeck.source_file === "document.md") documentGraphCache = null
     return result
   },
   acceptDiskVersion: (id, contentHash) => transport.acceptDiskVersion(id, contentHash),
@@ -227,6 +227,15 @@ async function documentGraphData() {
     documentGraphRequest = null
   })
   return documentGraphRequest
+}
+
+async function previewDocumentNodes(source) {
+  if (!source.includes("[[")) return []
+  try {
+    return (await documentGraphData()).nodes
+  } catch (_error) {
+    return []
+  }
 }
 
 async function showDocumentGraph() {

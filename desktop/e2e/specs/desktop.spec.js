@@ -131,6 +131,28 @@ class DesktopEditorUi {
     return browser.execute(() => document.querySelector("#desktop-editor-field")?.editorController?.sourceValue ?? "")
   }
 
+  async setCaretPosition(position) {
+    const selection = await browser.execute(offset => {
+      const controller = document.querySelector("#desktop-editor-field")?.editorController
+      if (!controller) return null
+      controller.setSelectionRange(offset)
+      return [controller.selectionStart, controller.selectionEnd]
+    }, position)
+    if (selection?.[0] !== position || selection?.[1] !== position) {
+      throw new Error(`The desktop editor could not place its caret at ${position}: ${JSON.stringify(selection)}`)
+    }
+  }
+
+  async assertCaretPosition(position) {
+    await browser.waitUntil(async () => browser.execute(offset => {
+      const controller = document.querySelector("#desktop-editor-field")?.editorController
+      return controller?.selectionStart === offset && controller?.selectionEnd === offset
+    }, position), {
+      timeout: 5_000,
+      timeoutMsg: `The desktop editor did not restore its caret to source offset ${position}`
+    })
+  }
+
   async waitForSource(source) {
     try {
       await browser.waitUntil(async () => await this.readSource() === source, {
@@ -230,6 +252,16 @@ class DesktopEditorUi {
     if (!(await link.getAttribute("href"))?.startsWith("#deck/")) {
       throw new Error(`The desktop preview used an invalid local document link for ${title}`)
     }
+  }
+
+  async refreshPreview() {
+    const result = await browser.executeAsync(done => {
+      const controller = document.querySelector("#desktop-editor-form")?.previewController
+      if (!controller) return done({ error: "The desktop preview controller is unavailable" })
+      controller.refresh().then(rendered => done({ rendered }), error => done({ error: error.message }))
+    })
+    if (result?.error) throw new Error(result.error)
+    if (!result?.rendered) throw new Error("The desktop preview did not render the latest saved source")
   }
 
   async showSourceMode() {

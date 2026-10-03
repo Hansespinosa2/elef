@@ -16,19 +16,25 @@ class WebEditorUi {
   constructor(page) {
     this.page = page
     this.rejectExternalMedia = false
+    this.activeWorkId = null
   }
 
   async openDeck(title = "E2E seed") {
     if (title === "E2E hostile") {
       await this.page.route("https://example.invalid/**", route => route.abort())
     }
-    const id = title === "E2E conflict"
+    const isDocument = title === "E2E document"
+    const id = isDocument
+      ? process.env.ELEF_E2E_DOCUMENT_ID
+      : title === "E2E conflict"
       ? process.env.ELEF_E2E_CONFLICT_PRESENTATION_ID
       : title === "E2E hostile"
         ? process.env.ELEF_E2E_HOSTILE_PRESENTATION_ID
         : process.env.ELEF_E2E_PRESENTATION_ID
-    if (!id) throw new Error("The shared web scenario requires an E2E presentation fixture")
-    await this.page.goto(`/presentations/${id}/edit?editor_mode=source`)
+    if (!id) throw new Error(`The shared web scenario requires an E2E ${isDocument ? "document" : "presentation"} fixture`)
+    this.activeWorkId = id
+    const path = isDocument ? "documents" : "presentations"
+    await this.page.goto(`/${path}/${id}/edit?editor_mode=source`)
     await expect(this.page.locator(".source-field .cm-content")).toBeVisible()
   }
 
@@ -45,6 +51,23 @@ class WebEditorUi {
 
   async readSource() {
     return this.page.locator(".source-field").evaluate(field => field.editorController?.sourceValue ?? "")
+  }
+
+  async setCaretPosition(position) {
+    const selection = await this.page.locator(".source-field").evaluate((field, offset) => {
+      const controller = field.editorController
+      if (!controller) return null
+      controller.setSelectionRange(offset)
+      return [controller.selectionStart, controller.selectionEnd]
+    }, position)
+    expect(selection).toEqual([position, position])
+  }
+
+  async assertCaretPosition(position) {
+    await expect.poll(() => this.page.locator(".source-field").evaluate(field => [
+      field.editorController?.selectionStart,
+      field.editorController?.selectionEnd
+    ])).toEqual([position, position])
   }
 
   async waitForSource(source) {
@@ -74,6 +97,11 @@ class WebEditorUi {
     const link = this.page.locator(".editor-projection a.document-link").filter({ hasText: title })
     await expect(link).toBeVisible()
     await expect(link).toHaveAttribute("href", new RegExp(`/documents/${process.env.ELEF_E2E_LINKED_DOCUMENT_ID}$`))
+  }
+
+  async refreshPreview() {
+    const rendered = await this.page.locator(".visual-editor-form").evaluate(form => form.previewController?.refresh())
+    expect(rendered).toBe(true)
   }
 
   async showSourceMode() {
@@ -244,11 +272,12 @@ class WebEditorUi {
     await this.assertPersistedSource(source, process.env.ELEF_E2E_CONFLICT_PRESENTATION_ID)
   }
 
-  async assertPersistedSource(source, presentationId = process.env.ELEF_E2E_PRESENTATION_ID) {
-    const id = Number(presentationId)
+  async assertPersistedSource(source, workId = this.activeWorkId || process.env.ELEF_E2E_PRESENTATION_ID) {
+    const id = Number(workId)
+    const model = String(workId) === String(process.env.ELEF_E2E_DOCUMENT_ID) ? "Document" : "Presentation"
     const serialized = execFileSync("bin/rails", [
       "runner", "-e", "test",
-      `puts "ELEF_E2E_PERSISTED_SOURCE=#{Presentation.find(${id}).source.to_json}"`
+      `puts "ELEF_E2E_PERSISTED_SOURCE=#{${model}.find(${id}).source.to_json}"`
     ], {
       cwd: path.resolve(process.cwd(), "../.."),
       env: { ...process.env, RAILS_ENV: "test" },

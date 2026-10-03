@@ -8,7 +8,7 @@ export function createPreviewFetch({ renderer, getContext = () => ({}), fetchImp
       if (!(body instanceof FormData)) throw Object.assign(new Error("Preview request was invalid."), { code: "invalid_input" })
       const fieldName = [...body.keys()].find((key) => key.endsWith("[source]"))
       const source = fieldName ? String(body.get(fieldName) || "") : ""
-      const context = getContext()
+      const context = await getContext(source)
       const result = await renderer.render({
         source,
         kind: context.kind || "presentation",

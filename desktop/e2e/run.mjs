@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { execFileSync, spawnSync } from "node:child_process"
+import { execFileSync, spawn, spawnSync } from "node:child_process"
 import { access, chmod, mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
@@ -20,7 +20,7 @@ const exportArchive = path.join(temporaryRoot, "E2E seed exported.elef")
 const exportContents = path.join(temporaryRoot, "E2E seed exported")
 // Both runners complete the same editing, media, snippet, and math scenarios
 // against the same deck, so the final source assertion is identical.
-const expectedSharedSource = `# Saved by shared scenario\n\nThe visual editor changed this text.\n\n${PIXEL_PNG_MARKDOWN}\n**text**\n\n$$\n\\alpha\n$$\n`
+const expectedSharedSource = `# Saved by shared scenario\n\nThe visual editor changed this text.\n\n${PIXEL_PNG_MARKDOWN}\n**text**\n\n$$\n\\alpha\n$$\n\nSee [[E2E linked]].\n`
 const expectedDesktopSource = expectedSharedSource
 const expectedWebSource = expectedSharedSource
 const hostileSource = [
@@ -91,6 +91,73 @@ function runRails(code) {
   if (result.error) throw result.error
   if (result.status !== 0) throw new Error(result.stderr || result.stdout || "Rails E2E fixture command failed")
   return result.stdout.trim()
+}
+
+function withTimeout(promise, timeoutMs, message) {
+  let timer
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(message)), timeoutMs)
+    })
+  ]).finally(() => clearTimeout(timer))
+}
+
+async function runUserInitiatedQuitSmoke() {
+  const application = spawn(env.ELEF_E2E_APP_BINARY, [], {
+    env,
+    stdio: ["ignore", "pipe", "pipe"]
+  })
+  let output = ""
+  const recordOutput = chunk => { output = (output + chunk.toString()).slice(-4_000) }
+  application.stdout.on("data", recordOutput)
+  application.stderr.on("data", recordOutput)
+  const exited = new Promise(resolve => {
+    application.once("error", error => resolve({ error }))
+    application.once("exit", (code, signal) => resolve({ code, signal }))
+  })
+
+  try {
+    if (!application.pid) throw new Error("The desktop binary did not start")
+    if (process.platform === "linux") {
+      const windowIds = execFileSync("xdotool", [
+        "search", "--sync", "--onlyvisible", "--pid", String(application.pid)
+      ], { encoding: "utf8", timeout: 20_000 }).trim()
+      const windowId = windowIds.split(/\s+/)[0]
+      if (!windowId) throw new Error("The launched desktop process did not show a window")
+      execFileSync("xdotool", ["windowactivate", "--sync", windowId], { timeout: 5_000 })
+      execFileSync("xdotool", ["key", "--clearmodifiers", "ctrl+q"], { timeout: 5_000 })
+    } else if (process.platform === "darwin") {
+      const script = `tell application "System Events"
+        set targetProcess to first process whose unix id is ${application.pid}
+        repeat 80 times
+          if exists (window 1 of targetProcess) then exit repeat
+          delay 0.25
+        end repeat
+        if not (exists (window 1 of targetProcess)) then error "Elef did not open a window"
+        tell targetProcess
+          set frontmost to true
+          keystroke "q" using {command down}
+        end tell
+      end tell`
+      execFileSync("osascript", ["-e", script], { timeout: 25_000 })
+    } else {
+      throw new Error(`Native quit smoke is unsupported on ${process.platform}`)
+    }
+
+    const result = await withTimeout(exited, 10_000, "Elef did not exit after the native Quit shortcut")
+    if (result.error) throw result.error
+    assert.deepEqual({ code: result.code, signal: result.signal }, { code: 0, signal: null }, "Elef should exit cleanly after a user-initiated quit")
+    process.stdout.write("Native user-initiated quit smoke passed.\n")
+  } catch (error) {
+    throw new Error(`${error.message}; desktop output: ${output}`)
+  } finally {
+    if (application.exitCode === null && application.signalCode === null) {
+      application.kill("SIGTERM")
+      await Promise.race([exited, new Promise(resolve => setTimeout(resolve, 1_000))])
+      if (application.exitCode === null && application.signalCode === null) application.kill("SIGKILL")
+    }
+  }
 }
 
 try {
@@ -192,6 +259,7 @@ try {
   })
   if (desktopResult.error) throw desktopResult.error
   if (desktopResult.status !== 0) throw new Error("Shared desktop scenarios failed with status " + desktopResult.status)
+  if (process.env.CI) await runUserInitiatedQuitSmoke()
 
   const desktopSource = await readFile(path.join(seedDeck, "presentation.md"), "utf8")
   assert.equal(normalizeLineEndings(desktopSource), expectedDesktopSource)

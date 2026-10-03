@@ -791,7 +791,7 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let import = MenuItem::with_id(app, "import-elef", "Import .elef…", true, None::<&str>)?;
     let print = MenuItem::with_id(app, "print", "Print…", true, Some("CmdOrCtrl+P"))?;
     let file_separator = PredefinedMenuItem::separator(app)?;
-    let quit = PredefinedMenuItem::quit(app, None)?;
+    let quit = PredefinedMenuItem::quit(app, Some("CmdOrCtrl+Q"))?;
     let file = Submenu::with_items(
         app,
         "File",
