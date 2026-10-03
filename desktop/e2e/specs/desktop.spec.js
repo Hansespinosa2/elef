@@ -1,6 +1,6 @@
 import { $, $$, browser } from "@wdio/globals"
 import { execFileSync, spawn } from "node:child_process"
-import { readFile, readdir, writeFile } from "node:fs/promises"
+import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises"
 import path from "node:path"
 import { editAndPreviewWorkflow } from "../scenarios/edit-and-preview.js"
 import { appearanceWorkflow } from "../scenarios/appearance.js"
@@ -890,6 +890,51 @@ describe("desktop binary workflows and native boundaries", () => {
 
   it("runs the shared math input flow in the desktop binary", async () => {
     await mathInputWorkflow(new DesktopEditorUi())
+  })
+
+  it("saves a manifestless deck with its new identity, original line endings, and isolated undo", async () => {
+    const root = process.env.ELEF_E2E_LIBRARY_ROOT
+    const title = "E2E manifestless lifecycle"
+    const folder = path.join(root, title)
+    const sourcePath = path.join(folder, "presentation.md")
+    const original = "# Deck\r\n\r\nBody bytes stay unchanged.\r\n"
+    const edited = original.replace("Deck", "Edited")
+    const ui = new DesktopEditorUi()
+    await $("#back-to-library").click()
+    await $("#library-view").waitForDisplayed()
+    await mkdir(folder)
+    try {
+      await writeFile(sourcePath, original)
+      await $("#refresh-library").click()
+      await ui.openDeck(title)
+      await browser.waitUntil(async () => await ui.readSource() === original, {
+        timeoutMsg: "Opening the manifestless deck changed its source bytes"
+      })
+      const manifest = JSON.parse(await readFile(path.join(folder, "elef.json"), "utf8"))
+      if (await $("#deck-id").getText() !== manifest.id) throw new Error("The new manifest identity was not activated")
+      await ui.showSourceMode()
+      await browser.execute(() => {
+        const editor = document.querySelector("#desktop-editor-field").editorController
+        editor.replaceRange("Edited", 2, 6)
+      })
+      await browser.waitUntil(async () => await readFile(sourcePath, "utf8") === edited, {
+        timeoutMsg: "The first save lost the UUID handshake or source line endings"
+      })
+      await ui.openDeck("E2E seed")
+      const seed = await ui.readSource()
+      await ui.showSourceMode()
+      await ui.undo()
+      if (await ui.readSource() !== seed) throw new Error("Undo copied the previous deck into the seed deck")
+      await ui.openDeck(title)
+      if (await ui.readSource() !== edited) throw new Error("Reopening did not retain the first saved source")
+      await ui.undo()
+      if (await ui.readSource() !== edited) throw new Error("Reopening inherited another deck's undo history")
+      await $("#back-to-library").click()
+      await $("#library-view").waitForDisplayed()
+    } finally {
+      await rm(folder, { recursive: true, force: true })
+      await $("#refresh-library").click()
+    }
   })
 
   it("loads custom snippets and math shortcuts from the selected library .elef settings", async () => {
