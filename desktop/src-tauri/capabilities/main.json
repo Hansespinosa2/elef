@@ -29,7 +29,8 @@
     "allow-import-opened-elef",
     "allow-pending-open-elef-count",
     "allow-resolve-import-conflict",
-    "updater:default",
+    "allow-install-update",
+    "updater:allow-check",
     "process:allow-restart"
   ]
 }

@@ -56,6 +56,8 @@ Do not rely on an iframe, sandboxed or not, as the boundary between untrusted co
 
 ## 6. Residual risks
 
+- Updates use a native-confirmed staging command rather than the plugin's direct installer. The caller can specify only the announced version and a progress channel. The backend rechecks its configured endpoint and signature, installs into a private copy, then atomically exchanges the application paths. The webview cannot supply an installation path or package bytes. The download permission used by verification fixtures belongs only to the E2E capability.
+
 - A sanitizer bypass plus a permissive CSP would let hostile script call commands. C8 bounds the damage to the library root; it does not make it zero (a hostile script could still save over a deck inside the root). The S5 fixture provides evidence against its enumerated attacks; it does not eliminate this residual risk, which is why C2's `script-src` never relaxes.
 - Unsigned macOS builds: a user can be tricked into installing a fake build. Accepted for v1 (owner's two devices); revisit before wider distribution (ADR-009).
 - Remote images: blocked in v1. A static CSP cannot express a per-deck opt-in. Options if wanted later: a Rust-side fetch proxy with SSRF checks and size caps, or a deliberately loosened `img-src` (Q5).

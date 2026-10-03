@@ -63,7 +63,8 @@ assert e2e_config["app"]["security"]["capabilities"] == ["main-capability", "e2e
 assert set(e2e_capability["permissions"]) == {
     "wdio:default",
     "wdio-webdriver:default",
-}, "only the test-only capability may expose WebdriverIO and its embedded server"
+    "updater:allow-download",
+}, "only the test-only capability may expose WebdriverIO and fixture downloads"
 assert e2e_config["app"].get("withGlobalTauri") is True, "global Tauri access is enabled only for the test-only WebdriverIO build"
 assert config["app"].get("withGlobalTauri") is not True, "production must not expose the global Tauri API"
 assert config["plugins"]["updater"].get("requireSignedVersion") is True, "bind update versions to signed artifacts"
@@ -103,9 +104,9 @@ assert {
     for permission in permissions
     if ":" in permission and not permission.startswith("core:")
 } == {
-    "updater:default",
+    "updater:allow-check",
     "process:allow-restart",
-}, "grant only update check/install and restart from Tauri plugins"
+}, "grant only update checks and restart; installation must use the native confirmed staging command"
 
 csp = config["app"]["security"]["csp"]
 directives = {}

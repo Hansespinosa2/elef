@@ -1,4 +1,4 @@
-export async function checkForDesktopUpdate(check) {
+export async function checkForDesktopUpdate(check, install) {
   const update = await check()
   if (!update) return null
   return {
@@ -6,18 +6,20 @@ export async function checkForDesktopUpdate(check) {
     notes: typeof update.body === "string" ? update.body : "",
     dispose: () => update.close(),
     install: async onProgress => {
-      await update.downloadAndInstall(event => onProgress?.(event), { timeout: 120_000 })
+      return await install(update.version, onProgress)
     }
   }
 }
 
-export async function installDesktopUpdate(update, { onProgress, relaunch }) {
+export async function installDesktopUpdate(update, { onProgress, relaunch, prepare = async () => true }) {
   if (!update || typeof update.install !== "function") {
     throw Object.assign(new TypeError("There is no verified update to install."), {
       code: "invalid_input",
       retryable: false
     })
   }
-  await update.install(onProgress)
+  if (!await prepare()) return false
+  if (await update.install(onProgress) === false) return false
   await relaunch()
+  return true
 }

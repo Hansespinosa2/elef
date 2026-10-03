@@ -15,6 +15,8 @@ use uuid::Uuid;
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, DateTime, ZipArchive, ZipWriter};
 
+pub mod update_install;
+
 #[cfg(unix)]
 use std::os::unix::fs::OpenOptionsExt;
 

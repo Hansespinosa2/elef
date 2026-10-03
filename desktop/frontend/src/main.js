@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core"
+import { Channel, invoke } from "@tauri-apps/api/core"
 import { listen } from "@tauri-apps/api/event"
 import { getCurrentWindow } from "@tauri-apps/api/window"
 import { relaunch } from "@tauri-apps/plugin-process"
@@ -895,7 +895,8 @@ async function resolveImportConflict(resolution) {
 async function checkForUpdates(showNoUpdate = true) {
   if (updateInstalling) return false
   try {
-    const update = await checkForDesktopUpdate(() => checkUpdater({ timeout: 10_000 }))
+    const update = await checkForDesktopUpdate(() => checkUpdater({ timeout: 10_000 }),
+      (version, onProgress) => invoke("install_update", { version, onProgress: new Channel(onProgress) }))
     if (!update) {
       if (showNoUpdate) setStatus("Elef is up to date")
       return false
@@ -921,7 +922,8 @@ async function installUpdate() {
   button.disabled = true
   later.disabled = true
   try {
-    await installDesktopUpdate(pendingUpdate, {
+    const installed = await installDesktopUpdate(pendingUpdate, {
+      prepare: async () => !saveFlow.dirty || await flushSave({ force: true }),
       relaunch,
       onProgress: event => {
         if (event.event === "Started" || event.event === "Progress") {
@@ -930,6 +932,7 @@ async function installUpdate() {
         if (event.event === "Finished") elements.updateProgress.textContent = "Installing update…"
       }
     })
+    if (!installed) elements.updateProgress.textContent = "Installation paused. Save your changes and choose Install to try again."
   } catch (_error) {
     showError({ message: "The update could not be installed. Your current version is still available." })
   } finally {

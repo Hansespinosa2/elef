@@ -26,6 +26,7 @@
 - **Releases come from CI only,** from tags; the private key is a repo secret and never on a developer machine except in backups.
 - **Key custody:** keep two offline encrypted backups of the private key in separate places (human gate in [delivery-plan.md](../delivery-plan.md)). Use a passphrase.
 - **Failed update:** a corrupt, badly signed or interrupted update leaves the previous version runnable (QS-8).
+- **Installation:** Tauri verifies the download and installs into a private copy on the installation volume. A native-confirmed `install_update` command activates that copy with `renameat2(RENAME_EXCHANGE)` on Linux or `renamex_np(RENAME_SWAP)` on macOS. The live launch path never disappears. Unsupported filesystems or unwritable installation directories fail safely; there is no remove-then-copy fallback or privilege escalation. The previous complete installation remains in the staging directory after exchange. Production capabilities expose updater checks and this command, not the plugin's direct install command. Unsaved edits must save successfully before installation and relaunch.
 - **Rotation procedure (if the key is suspected compromised, but still available):** ship an update, signed with the old key, that embeds a new public key; subsequent releases use the new key. **If the key is lost,** installed copies cannot be updated and need a manual reinstall of a build with a new public key. Write down which of these applies before the first release.
 
 ## Consequences

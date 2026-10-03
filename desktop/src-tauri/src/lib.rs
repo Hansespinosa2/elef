@@ -15,6 +15,7 @@ use tauri::ipc::{InvokeBody, Request as IpcRequest};
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+use tauri_plugin_updater::UpdaterExt;
 
 #[derive(Default)]
 struct DesktopState {
@@ -22,6 +23,7 @@ struct DesktopState {
     root: RwLock<Option<PathBuf>>,
     pending_import: std::sync::Mutex<Option<PathBuf>>,
     open_files: std::sync::Mutex<VecDeque<PathBuf>>,
+    update_installing: std::sync::atomic::AtomicBool,
 }
 
 impl DesktopState {
@@ -119,6 +121,149 @@ impl From<CoreError> for CommandError {
             },
         }
     }
+}
+
+struct UpdateLease<'a>(&'a std::sync::atomic::AtomicBool);
+
+impl Drop for UpdateLease<'_> {
+    fn drop(&mut self) {
+        self.0.store(false, std::sync::atomic::Ordering::Release);
+    }
+}
+
+fn installed_application(app: &AppHandle) -> Result<(PathBuf, PathBuf), CommandError> {
+    #[cfg(target_os = "linux")]
+    if let Some(path) = app.env().appimage {
+        return Ok((path.into(), PathBuf::new()));
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let _ = app;
+        let executable = std::env::current_exe().map_err(|_| update_install_error())?;
+        if let Some(bundle) = executable
+            .ancestors()
+            .find(|path| path.extension().is_some_and(|ext| ext == "app"))
+        {
+            let relative = executable
+                .strip_prefix(bundle)
+                .map_err(|_| update_install_error())?
+                .to_path_buf();
+            if relative.parent() == Some(Path::new("Contents/MacOS")) {
+                return Ok((bundle.to_path_buf(), relative));
+            }
+        }
+    }
+    Err(CommandError::new(
+        "unsupported",
+        "Install the packaged application before using automatic updates.",
+        false,
+    ))
+}
+
+fn update_install_error() -> CommandError {
+    CommandError::new(
+        "io_error",
+        "The update could not be installed. The existing installation was kept.",
+        true,
+    )
+}
+
+#[tauri::command]
+async fn install_update(
+    app: AppHandle,
+    state: State<'_, DesktopState>,
+    version: String,
+    on_progress: tauri::ipc::Channel<serde_json::Value>,
+) -> Result<bool, CommandError> {
+    if version.len() > 64
+        || version.is_empty()
+        || !version
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || b".+-".contains(&byte))
+    {
+        return Err(CommandError::new(
+            "invalid_input",
+            "Choose a valid update version.",
+            false,
+        ));
+    }
+    if state
+        .update_installing
+        .compare_exchange(
+            false,
+            true,
+            std::sync::atomic::Ordering::Acquire,
+            std::sync::atomic::Ordering::Relaxed,
+        )
+        .is_err()
+    {
+        return Err(CommandError::new(
+            "invalid_input",
+            "An update is already being installed.",
+            false,
+        ));
+    }
+    let _lease = UpdateLease(&state.update_installing);
+    let (live, relative_executable) = installed_application(&app)?;
+    let confirmed = app
+        .dialog()
+        .message(format!(
+            "Install Elef {version}? Elef will restart after installation."
+        ))
+        .title("Install Elef update")
+        .buttons(MessageDialogButtons::OkCancel)
+        .blocking_show();
+    if !confirmed {
+        return Ok(false);
+    }
+    let stage = tauri::async_runtime::spawn_blocking(move || {
+        elef_core::update_install::UpdateStage::new(&live)
+    })
+    .await
+    .map_err(|_| update_install_error())?
+    .map_err(|_| update_install_error())?;
+    let staged_executable = if relative_executable.as_os_str().is_empty() {
+        stage.path().to_path_buf()
+    } else {
+        stage.path().join(relative_executable)
+    };
+    let updater = app
+        .updater_builder()
+        .executable_path(staged_executable)
+        .timeout(std::time::Duration::from_secs(120))
+        .build()
+        .map_err(|_| update_install_error())?;
+    // Re-read the configured release endpoint. IPC cannot supply a URL, key,
+    // destination, signature or arbitrary package bytes.
+    let update = updater
+        .check()
+        .await
+        .map_err(|_| update_install_error())?
+        .ok_or_else(|| {
+            CommandError::new("not_found", "This update is no longer available.", false)
+        })?;
+    if update.version != version {
+        return Err(CommandError::new(
+            "conflict",
+            "The available update changed. Check for updates again.",
+            false,
+        ));
+    }
+    let _ = on_progress.send(serde_json::json!({"event": "Started"}));
+    let progress = on_progress.clone();
+    let bytes = update.download(move |chunk_length, content_length| {
+        let _ = progress.send(serde_json::json!({"event": "Progress", "data": {"chunkLength": chunk_length, "contentLength": content_length}}));
+    }, || {}).await.map_err(|_| update_install_error())?;
+    let _ = on_progress.send(serde_json::json!({"event": "Finished"}));
+    tauri::async_runtime::spawn_blocking(move || {
+        // Tauri installs only into the private copy. It never touches the live app.
+        update.install(bytes).map_err(|_| update_install_error())?;
+        stage.activate().map_err(|_| update_install_error())?;
+        Ok::<_, CommandError>(())
+    })
+    .await
+    .map_err(|_| update_install_error())??;
+    Ok(true)
 }
 
 #[derive(Debug, Serialize)]
@@ -1022,6 +1167,7 @@ pub fn run() {
             import_opened_elef,
             pending_open_elef_count,
             resolve_import_conflict,
+            install_update,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Elef Desktop");
