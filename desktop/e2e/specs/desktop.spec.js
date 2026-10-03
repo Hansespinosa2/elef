@@ -1122,7 +1122,10 @@ describe("native updater verification", () => {
             bytesRid = await invoke("plugin:updater|download", { rid: metadata.rid, onEvent, timeout: 5_000 })
             return { outcome: "verified-download", version: metadata.version }
           } catch (error) {
-            return { outcome: "rejected", error: String(error) }
+            // The embedded driver reserves a top-level `error` field for its
+            // own execution failures. Keep expected plugin rejection data
+            // under a distinct name so it reaches the scenario assertion.
+            return { outcome: "rejected", rejectionReason: String(error) }
           } finally {
             if (bytesRid !== undefined) await invoke("plugin:resources|close", { rid: bytesRid })
             await invoke("plugin:resources|close", { rid: metadata.rid })
@@ -1136,8 +1139,8 @@ describe("native updater verification", () => {
           }
         } else {
           if (result.outcome !== "rejected") throw new Error(`Unsafe update was accepted: ${JSON.stringify(result)}`)
-          if (mode === "bad-signature" && !/signature/i.test(result.error)) throw new Error(`Wrong signature rejection: ${result.error}`)
-          if (mode === "version-mismatch" && !/version/i.test(result.error)) throw new Error(`Wrong version rejection: ${result.error}`)
+          if (mode === "bad-signature" && !/signature/i.test(result.rejectionReason)) throw new Error(`Wrong signature rejection: ${result.rejectionReason}`)
+          if (mode === "version-mismatch" && !/version/i.test(result.rejectionReason)) throw new Error(`Wrong version rejection: ${result.rejectionReason}`)
         }
         if (await hash(binaryPath) !== original.binary || await hash(sourcePath) !== original.source) {
           throw new Error("Update verification changed the installed binary or deck source")
