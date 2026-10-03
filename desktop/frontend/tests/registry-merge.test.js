@@ -29,3 +29,39 @@ test("custom entries replace only a matching namespace and identity", () => {
   assert.equal(registry.find(entry => entry.namespace === "/" && entry.trigger === "bold")?.name, "Custom bold")
   assert.equal(registry.find(entry => entry.namespace === "." && entry.trigger === "b")?.name, "Bold")
 })
+
+test("custom Rails-shaped snippet rows are enriched for the source palette", () => {
+  const registry = mergeAuthoringRegistryEntries(builtIns, [{
+    id: "personal-note",
+    name: "Personal note",
+    description: "A custom personal note",
+    trigger: "note",
+    category: "Markdown",
+    body: "**${1:note}**",
+    built_in: false
+  }])
+  const note = registry.find(entry => entry.id === "personal-note")
+
+  assert.equal(note.namespace, "/")
+  assert.deepEqual(note.contexts, ["source"])
+  assert.equal(note.behavior.type, "insert")
+  assert.deepEqual(note.behavior.placeholders, [{ position: 1, label: "note" }])
+})
+
+test("custom Rails-shaped math rows are enriched for the math palette", () => {
+  const registry = mergeAuthoringRegistryEntries(builtIns, [], [{
+    id: "personal-lambda",
+    name: "Lambda",
+    description: "The Greek letter lambda",
+    prefix: "@",
+    aliases: ["lambda"],
+    expansion: "\\lambda",
+    built_in: false
+  }])
+  const lambda = registry.find(entry => entry.id === "personal-lambda")
+
+  assert.equal(lambda.namespace, "@")
+  assert.equal(lambda.trigger, "lambda")
+  assert.deepEqual(lambda.contexts, ["math"])
+  assert.equal(lambda.behavior.template, "\\lambda")
+})
