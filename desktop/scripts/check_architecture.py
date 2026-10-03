@@ -30,6 +30,10 @@ document_model = (REPO_ROOT / "app" / "lib" / "source" / "document.rb").read_tex
 javascript_renderer = (REPO_ROOT / "app" / "lib" / "source" / "javascript_renderer.rb").read_text()
 renderer_global = (REPO_ROOT / "desktop" / "frontend" / "src" / "renderer-global.js").read_text()
 renderer_worker = (REPO_ROOT / "desktop" / "frontend" / "src" / "renderer-worker.js").read_text()
+desktop_main = (REPO_ROOT / "desktop" / "frontend" / "src" / "main.js").read_text()
+native_render_styles = (REPO_ROOT / "desktop" / "frontend" / "src" / "rendered-content.css").read_text()
+assert 'import "../../../app/assets/stylesheets/application.css"' in desktop_main, "desktop must reuse Rails rendering and authoring styles"
+assert not re.search(r"^\.(?:slide|document|presentation|katex)[\w.-]*(?:\s|\{|:)", native_render_styles, re.MULTILINE), "native viewport CSS must not contain another rendering stylesheet"
 
 declared = command_names(build_source, r"let app_commands = &\[(.*?)\];")
 handler_match = re.search(

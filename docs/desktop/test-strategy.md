@@ -68,6 +68,8 @@ Automated checks that keep the architecture from drifting:
 
 ## 7. Performance measurement
 
+The headless browser style comparison renders identical presentation/document fixtures with the Rails stylesheet and the desktop bundle plus native theme. It compares computed fonts, sizes, line heights, colors, layouts and widths, including an explicit two-column layout assertion. This is a DOM/style assertion in Chromium; it does not constitute inspected screenshots or full application-state reproduction. The real-binary shared flows additionally exercise the stylesheet in each system webview.
+
 Protocol per [requirements.md](requirements.md) §8: release build, fresh process, p95 over ≥20 runs, scale fixtures. Linux perf truth is WebKitGTK, notably slower than Chromium for scrolling and large CodeMirror documents; T1's Chromium does not cover it, so the T2 desktop leg runs on real Linux hardware. Images go through the asset protocol and rendering runs in a worker — both are tested, not assumed.
 
 ## 8. Policies

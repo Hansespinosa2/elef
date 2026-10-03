@@ -7,6 +7,8 @@ import { mathInputWorkflow, snippetInsertWorkflow } from "../scenarios/authoring
 import { PIXEL_PNG_MARKDOWN } from "../scenarios/media-fixture.js"
 import { execFileSync } from "node:child_process"
 import path from "node:path"
+import { readFile } from "node:fs/promises"
+import { renderPreview } from "../../frontend/src/renderer.js"
 
 function normalizeLineEndings(source) {
   return source.replace(/\r\n|\r/g, "\n")
@@ -412,4 +414,41 @@ test("shared math input flow works in the web app", async ({ page }) => {
 
 test("shared hostile-deck security flow works in the web app", async ({ page }) => {
   await hostileDeckNeutralizedWorkflow(new WebEditorUi(page))
+})
+
+test("shared rendering styles preserve slide layouts and document typography", async ({ page }) => {
+  const styles = {
+    web: await readFile(new URL("../../../app/assets/stylesheets/application.css", import.meta.url), "utf8"),
+    desktop: (await readFile(new URL("../../frontend/theme.css", import.meta.url), "utf8")) +
+      (await readFile(new URL("../../frontend/dist/assets/app.css", import.meta.url), "utf8"))
+  }
+  const fixtures = [
+    { kind: "presentation", source: "# Roadmap\n\n## First\n\nFirst column.\n\n## Second\n\nSecond column.\n", style: { theme: "light", typography: "book" } },
+    { kind: "presentation", source: "# Theme\n\nDark presentation text.\n", style: { theme: "dark", typography: "technical" } },
+    { kind: "document", source: "# Document\n\nBody text with **emphasis**.\n", style: { theme: "light", typography: "book" } },
+    { kind: "document", source: "# Technical\n\nBody text with `code`.\n", style: { theme: "dark", typography: "technical" } }
+  ]
+  for (const fixture of fixtures) {
+    const html = renderPreview({ ...fixture, title: "Style fixture", allowRemoteMedia: false }).html
+    const measured = {}
+    for (const [target, css] of Object.entries(styles)) {
+      await page.setContent(`<style>${css}\n*{box-sizing:border-box}body{margin:0}.fixture-root{width:1280px}</style><div class="fixture-root">${html}</div>`)
+      measured[target] = await page.evaluate(() => {
+        const selectors = [".slide", ".slide h1", ".slide p", ".slide-regions", ".document-surface", ".document-surface h1", ".document-surface p"]
+        return Object.fromEntries(selectors.flatMap(selector => {
+          const node = document.querySelector(selector)
+          if (!node) return []
+          const style = getComputedStyle(node)
+          return [[selector, { font: style.fontFamily, size: style.fontSize, lineHeight: style.lineHeight,
+            color: style.color, background: style.backgroundImage, display: style.display,
+            columns: style.gridTemplateColumns, width: style.width }]]
+        }))
+      })
+    }
+    expect(measured.desktop).toEqual(measured.web)
+    if (fixture.source.includes("## Second")) {
+      expect(measured.desktop[".slide-regions"].display).toBe("grid")
+      expect(measured.desktop[".slide-regions"].columns.split(" ")).toHaveLength(2)
+    }
+  }
 })

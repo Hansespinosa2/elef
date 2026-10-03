@@ -5,7 +5,13 @@ import { parseHTML } from "linkedom"
 
 const page = await readFile(new URL("../index.html", import.meta.url), "utf8")
 const main = await readFile(new URL("../src/main.js", import.meta.url), "utf8")
+const viewportStyles = await readFile(new URL("../src/rendered-content.css", import.meta.url), "utf8")
 const { document } = parseHTML(page)
+
+test("rendered decks reuse Rails styles with only native viewport chrome", () => {
+  assert.ok(main.includes('import "../../../app/assets/stylesheets/application.css"'))
+  assert.doesNotMatch(viewportStyles, /^\.(?:slide|document|presentation|katex)[\w.-]*(?:\s|\{|:)/m)
+})
 
 test("desktop host page provides every element referenced by the app shell", () => {
   const ids = new Set([...main.matchAll(/document\.querySelector\(["']#([\w-]+)/g)].map(match => match[1]))
