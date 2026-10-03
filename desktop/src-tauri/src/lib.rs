@@ -201,6 +201,33 @@ fn update_install_error() -> CommandError {
     )
 }
 
+async fn confirm_native_action(
+    app: &AppHandle,
+    message: String,
+    title: &str,
+    kind: MessageDialogKind,
+) -> Result<bool, CommandError> {
+    let parent = app.get_webview_window("main").ok_or_else(|| {
+        CommandError::new(
+            "not_found",
+            "Open the application before confirming this action.",
+            false,
+        )
+    })?;
+    // A parent keeps macOS confirmations in Elef's own window rather than a
+    // global CFUserNotification. Never block the UI or async executor thread.
+    let dialog = app
+        .dialog()
+        .message(message)
+        .title(title)
+        .kind(kind)
+        .parent(&parent)
+        .buttons(MessageDialogButtons::OkCancel);
+    tauri::async_runtime::spawn_blocking(move || dialog.blocking_show())
+        .await
+        .map_err(|_| CommandError::new("internal", "The confirmation could not be opened.", true))
+}
+
 #[tauri::command]
 async fn install_update(
     app: AppHandle,
@@ -238,14 +265,13 @@ async fn install_update(
     }
     let _lease = UpdateLease(&state.update_installing);
     let (live, relative_executable) = installed_application(&app)?;
-    let confirmed = app
-        .dialog()
-        .message(format!(
-            "Install Elef {version}? Elef will restart after installation."
-        ))
-        .title("Install Elef update")
-        .buttons(MessageDialogButtons::OkCancel)
-        .blocking_show();
+    let confirmed = confirm_native_action(
+        &app,
+        format!("Install Elef {version}? Elef will restart after installation."),
+        "Install Elef update",
+        MessageDialogKind::Info,
+    )
+    .await?;
     if !confirmed {
         return Ok(false);
     }
@@ -423,12 +449,13 @@ async fn delete_deck(
 ) -> Result<DeleteResult, CommandError> {
     let library = state.current_library()?;
     let deck_name = library.deck_summary(&id)?.name;
-    let confirmed = app
-        .dialog()
-        .message(format!("Move ‘{deck_name}’ to the system Trash?"))
-        .title("Move deck to Trash")
-        .buttons(MessageDialogButtons::OkCancel)
-        .blocking_show();
+    let confirmed = confirm_native_action(
+        &app,
+        format!("Move ‘{deck_name}’ to the system Trash?"),
+        "Move deck to Trash",
+        MessageDialogKind::Warning,
+    )
+    .await?;
     if !confirmed {
         return Ok(DeleteResult { deleted: false });
     }
@@ -680,15 +707,13 @@ async fn resolve_import_conflict(
             }
             Err(error) => return Err(error.into()),
         };
-        let confirmed = app
-            .dialog()
-            .message(format!(
-                "Move “{preview}” to the system Trash and replace it with the imported deck?"
-            ))
-            .title("Replace existing deck")
-            .kind(MessageDialogKind::Warning)
-            .buttons(MessageDialogButtons::OkCancel)
-            .blocking_show();
+        let confirmed = confirm_native_action(
+            &app,
+            format!("Move “{preview}” to the system Trash and replace it with the imported deck?"),
+            "Replace existing deck",
+            MessageDialogKind::Warning,
+        )
+        .await?;
         if !confirmed {
             return Ok(None);
         }

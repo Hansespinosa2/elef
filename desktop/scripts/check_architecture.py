@@ -64,8 +64,10 @@ assert {permission for permission in permissions if permission.startswith("core:
     "core:event:allow-listen",
     "core:event:allow-unlisten",
     "core:window:allow-close",
+    "core:window:allow-destroy",
     "core:resources:allow-close",
-}, "grant only events, safe window close, and releasing updater resources"
+}, "grant only events, window close completion, and releasing updater resources"
+assert "await this.destroy();" in (REPO_ROOT / "desktop/frontend/node_modules/@tauri-apps/api/window.js").read_text(), "recheck window permissions when the close-listener implementation changes"
 assert not any(permission.startswith(("fs:", "shell:", "dialog:")) for permission in permissions)
 assert config["app"]["security"]["capabilities"] == ["main-capability"], "production must not attach the E2E WebDriver capability"
 assert e2e_config["app"]["security"]["capabilities"] == ["main-capability", "e2e-webdriver"], "the test build must attach only the production and E2E capabilities"
