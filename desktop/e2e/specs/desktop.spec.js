@@ -428,13 +428,27 @@ class DesktopEditorUi {
   }
 
   async waitForImage(digest) {
-    await browser.waitUntil(async () => browser.execute(expectedDigest =>
-      [...document.querySelectorAll('img[data-editor-image-source="true"]')].some(image =>
-        image.src.includes(expectedDigest) && image.complete && image.naturalWidth > 0
-      ), digest), {
-      timeout: 10_000,
-      timeoutMsg: "The desktop asset protocol did not render the uploaded image"
-    })
+    try {
+      await browser.waitUntil(async () => browser.execute(expectedDigest =>
+        [...document.querySelectorAll('img[data-editor-image-source="true"]')].some(image =>
+          image.src.includes(expectedDigest) && image.complete && image.naturalWidth > 0
+        ), digest), {
+        timeout: 10_000,
+        timeoutMsg: "The desktop asset protocol did not render the uploaded image"
+      })
+    } catch (error) {
+      const images = await browser.execute(expectedDigest =>
+        [...document.querySelectorAll('img[data-editor-image-source="true"]')]
+          .filter(image => image.src.includes(expectedDigest))
+          .map(image => ({
+            src: image.src,
+            currentSrc: image.currentSrc,
+            complete: image.complete,
+            naturalWidth: image.naturalWidth,
+            naturalHeight: image.naturalHeight
+          })), digest)
+      throw new Error(`${error.message}; matching image state: ${JSON.stringify(images)}`)
+    }
   }
 }
 
@@ -851,8 +865,7 @@ describe("desktop binary workflows and native boundaries", () => {
     const prefix = $("#authoring-prefix")
     await prefix.click()
     // WebDriver W3C key codes: ArrowDown (U+E015), then Enter (U+E007).
-    await prefix.keys("\uE015")
-    await prefix.keys("\uE007")
+    await browser.keys(["\uE015", "\uE007"])
     if (await prefix.getValue() !== "@") {
       throw new Error("Selecting the @ math shortcut prefix did not update the form")
     }
