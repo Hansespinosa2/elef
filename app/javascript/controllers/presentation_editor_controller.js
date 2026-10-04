@@ -386,7 +386,12 @@ export default class extends Controller {
       blockElement.classList.add(`position-${horizontal}`, `position-${vertical}`)
     }
 
-    this.replaceSource(updated)
+    this.updatingSource = true
+    this.editorController.replaceRange(updated, 0, this.editorController.value.length)
+    this.updatingSource = false
+    this.operationPending = false
+    this.setControlsDisabled(false)
+    this.setStatus("Updating visual preview…")
   }
 
   handleAction(event) {
@@ -583,13 +588,25 @@ export default class extends Controller {
   }
 
   previewStale(detail = {}) {
-    this.operationPending = true
-    this.setControlsDisabled(true)
+    if (!this.isMapSynchronized()) {
+      this.operationPending = true
+      this.setControlsDisabled(true)
+    }
     this.syncProjectionEditability({ preserveActive: detail.preserveActive })
   }
 
+  isMapSynchronized() {
+    return Boolean(
+      this.map &&
+      this.editorController &&
+      Number(this.map.source_length || 0) === this.editorController.value.length
+    )
+  }
+
   canOperateOnProjection() {
-    return this.element.dataset.editorMode !== "source" && this.element.previewController?.projectionFresh !== false
+    if (this.element.dataset.editorMode === "source") return false
+    if (this.operationPending) return false
+    return this.isMapSynchronized() || this.element.previewController?.projectionFresh !== false
   }
 
   canEditBlock(blockElement) {
