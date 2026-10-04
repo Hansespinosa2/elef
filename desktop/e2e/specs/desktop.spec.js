@@ -384,7 +384,31 @@ class DesktopEditorUi {
 
   async showVisualMode() {
     const visualButton = await $("#visual-mode")
-    await visualButton.waitForEnabled()
+    try {
+      await visualButton.waitForEnabled()
+    } catch (error) {
+      const diagnostic = await browser.execute(() => {
+        const form = document.querySelector("#desktop-editor-form")
+        const field = document.querySelector("#desktop-editor-field")
+        const preview = document.querySelector("#desktop-preview")
+        const application = window.Stimulus
+        return {
+          buttonTitle: document.querySelector("#visual-mode")?.title || "",
+          status: document.querySelector("#status-text")?.textContent || "",
+          saveState: document.querySelector("#save-state")?.textContent || "",
+          previewStatus: form?.querySelector("[data-preview-target='status']")?.textContent || "",
+          previewWarnings: [...(form?.querySelectorAll(".preview-warnings li") || [])].map((item) => item.textContent),
+          previewText: preview?.textContent || "",
+          previewControllerConnected: Boolean(form && application?.getControllerForElementAndIdentifier?.(form, "preview")),
+          editorControllerConnected: Boolean(field && application?.getControllerForElementAndIdentifier?.(field, "editor")),
+          editorControllerReady: field?.editorController?.editorReady ?? null,
+          editorControllerRegistered: Boolean(application?.router?.modulesByIdentifier?.has("editor")),
+          mountedEditor: Boolean(field?.querySelector(".cm-editor")),
+          controllerErrors: window.__elefE2EControllerErrors?.slice(-8) || []
+        }
+      })
+      throw new Error(`${error.message}; visual preview diagnostic: ${JSON.stringify(diagnostic)}`)
+    }
     await visualButton.click()
     await browser.waitUntil(async () => {
       const mode = await $("#desktop-editor-form").getAttribute("data-editor-mode")
