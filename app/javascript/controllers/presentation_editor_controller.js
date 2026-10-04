@@ -249,32 +249,143 @@ export default class extends Controller {
   }
 
   alignmentChanged(event) {
-    if (!this.canOperateOnProjection()) return
+    if (this.element.dataset.editorMode === "source") return
     const select = event.target
+    if (!this.editorController || !this.map) return
+
+    syncActiveMath(this.canvasTarget, () => this.flushPendingProjectionEdits())
+    this.flushPendingProjectionEdits()
+
     const source = this.sourceValue()
     const slideIndex = Number(select.dataset.slideIndex)
-    const blockIndex = Number(select.dataset.blockIndex)
-    const block = this.map?.slides?.[slideIndex]?.blocks?.[blockIndex]
+    const blockId = select.dataset.presentationEditorBlockId || select.dataset.editorBlockId
+    const block = (blockId && this.findBlock(blockId)) || this.map?.slides?.[slideIndex]?.blocks?.[blockIndex]
     if (!block) return
 
-    const directive = this.map.slides[slideIndex].directives.find((candidate) => candidate.id === block.position_directive_id)
+    const slide = this.map.slides.find((candidate) => candidate.blocks?.some((item) => item.id === block.id)) || this.map.slides[slideIndex]
+    if (!slide) return
+
+    const directive = slide.directives?.find((candidate) => candidate.id === block.position_directive_id)
     const alignment = select.value
     let updated
+
+    const parseAlignment = (value) => {
+      if (!value) return { horizontal: "left", vertical: "top", verticalExplicit: false }
+      const parts = value.trim().split(/\s+/)
+      let vertical = "top"
+      let horizontal = "left"
+      if (parts.length === 1) {
+        if (["left", "center", "right"].includes(parts[0])) horizontal = parts[0]
+        else if (["top", "middle", "bottom"].includes(parts[0])) vertical = parts[0]
+      } else if (parts.length >= 2) {
+        vertical = parts[0] === "center" ? "middle" : parts[0]
+        horizontal = parts[1]
+      }
+      return { horizontal, vertical, verticalExplicit: vertical !== "top" }
+    }
+
+    const { horizontal, vertical, verticalExplicit } = parseAlignment(alignment)
+
+    const caret = this.captureCaret()
+    const region = this.regionForBlock(block.id)
+    const sourceOffset = caret?.blockId === block.id
+      ? caret.sourceOffset
+      : (region?.content_range.start ?? block.range.start)
+
+    let from
+    let to
+    let replacement = ""
+
     if (directive) {
-      const from = directive.range.start
-      const to = directive.range.end
+      from = directive.range.start
+      to = directive.range.end
       if (alignment) {
-        const lineEnding = source.slice(from, to).match(/\r\n|\n|\r$/)?.[0] || ""
-        updated = `${source.slice(0, from)}:::align{${alignment}}${lineEnding}${source.slice(to)}`
+        let lineEnding = source.slice(from, to).match(/(?:\r\n|\r|\n)$/)?.[0]
+        if (!lineEnding) {
+          const restMatch = source.slice(to).match(/^(?:\r\n|\r|\n)/)?.[0]
+          if (restMatch) {
+            to += restMatch.length
+            lineEnding = restMatch
+          } else {
+            lineEnding = "\n"
+          }
+        }
+        replacement = `:::align{${alignment}}${lineEnding}`
+        updated = `${source.slice(0, from)}${replacement}${source.slice(to)}`
+        const delta = replacement.length - (to - from)
+        this.shiftMapAfterEdit(from, to, replacement.length)
+        directive.range.end = from + replacement.length
+        directive.source_range.end = directive.range.end
+        block.position = { horizontal, vertical, vertical_explicit: verticalExplicit }
+        this.pendingCaretRestore = {
+          sourceOffset: sourceOffset >= to ? sourceOffset + delta : sourceOffset,
+          preferredBlockId: block.id
+        }
       } else {
-        updated = this.removePositionDirectives(source, this.map.slides[slideIndex], directive)
+        const directiveIndex = slide.directives.findIndex((candidate) => candidate.id === directive.id)
+        const closing = slide.directives[directiveIndex + 1]
+        const ranges = [directive]
+        if (closing?.type === "position_close") ranges.push(closing)
+        ranges.sort((left, right) => right.range.start - left.range.start).forEach((candidate) => {
+          let rangeEnd = candidate.range.end
+          const lineEnding = source.slice(candidate.range.start, rangeEnd).match(/(?:\r\n|\r|\n)$/)?.[0]
+          if (!lineEnding) {
+            const restMatch = source.slice(rangeEnd).match(/^(?:\r\n|\r|\n)/)?.[0]
+            if (restMatch) rangeEnd += restMatch.length
+          }
+          this.shiftMapAfterEdit(candidate.range.start, rangeEnd, 0)
+        })
+        delete block.position_directive_id
+        delete block.position
+        slide.directives = slide.directives.filter((candidate) => !ranges.includes(candidate))
+        updated = this.removePositionDirectives(source, slide, directive)
       }
     } else if (alignment) {
-      const from = block.range.start
-      updated = `${source.slice(0, from)}:::align{${alignment}}\n\n${source.slice(from)}`
+      from = block.range.start
+      to = from
+      const lineEnding = source.match(/\r\n|\r|\n/)?.[0] || "\n"
+      replacement = `:::align{${alignment}}${lineEnding}${lineEnding}`
+      updated = `${source.slice(0, from)}${replacement}${source.slice(from)}`
+      this.shiftMapAfterEdit(from, to, replacement.length)
+      const affected = [block, region].filter(Boolean)
+      affected.forEach((object) => {
+        ["range", "source_range", "content_range", "delimiter_range"].forEach((name) => {
+          if (object[name]?.start === from) object[name].start += replacement.length
+        })
+      })
+      const directiveId = `directive-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+      const directiveLength = `:::align{${alignment}}${lineEnding}`.length
+      const newDirective = {
+        id: directiveId,
+        type: "position",
+        range: { start: from, end: from + directiveLength },
+        source_range: { start: from, end: from + directiveLength }
+      }
+      slide.directives ||= []
+      slide.directives.push(newDirective)
+      this.map.directives ||= []
+      this.map.directives.push(newDirective)
+      block.position_directive_id = directiveId
+      block.position = { horizontal, vertical, vertical_explicit: verticalExplicit }
+      const delta = replacement.length
+      this.pendingCaretRestore = {
+        sourceOffset: sourceOffset >= to ? sourceOffset + delta : sourceOffset,
+        preferredBlockId: block.id
+      }
     } else {
       return
     }
+
+    // Immediately update visual block in presentation DOM
+    const blockElement = this.canvasTarget?.querySelector(`[data-editor-block-id="${block.id}"]`)
+    if (blockElement) {
+      blockElement.classList.remove(
+        "position-left", "position-center", "position-right",
+        "position-top", "position-middle", "position-bottom"
+      )
+      blockElement.classList.add(`position-${horizontal}`, `position-${vertical}`)
+    }
+
     this.replaceSource(updated)
   }
 
@@ -511,6 +622,9 @@ export default class extends Controller {
         block.setAttribute("aria-readonly", "true")
       }
     })
+    this.element.querySelectorAll("[data-presentation-editor-align]").forEach((control) => {
+      control.disabled = !visual || !this.map
+    })
   }
 
   sourceInput(event) {
@@ -634,8 +748,14 @@ export default class extends Controller {
     return ranges
       .sort((left, right) => right.range.start - left.range.start)
       .reduce((updated, candidate) => {
+        let rangeEnd = candidate.range.end
         const before = updated.slice(0, candidate.range.start)
-        let after = updated.slice(candidate.range.end)
+        const lineEnding = updated.slice(candidate.range.start, rangeEnd).match(/(?:\r\n|\r|\n)$/)?.[0]
+        if (!lineEnding) {
+          const restMatch = updated.slice(rangeEnd).match(/^(?:\r\n|\r|\n)/)?.[0]
+          if (restMatch) rangeEnd += restMatch.length
+        }
+        let after = updated.slice(rangeEnd)
         if (before.endsWith("\n\n") && after.startsWith("\n")) after = after.slice(1)
         return `${before}${after}`
       }, source)
@@ -660,7 +780,7 @@ export default class extends Controller {
   }
 
   setControlsDisabled(disabled) {
-    this.element.querySelectorAll("[data-presentation-editor-action], [data-presentation-editor-align]").forEach((control) => {
+    this.element.querySelectorAll("[data-presentation-editor-action]").forEach((control) => {
       if (disabled) {
         if (control.dataset.editorOperationPending !== "true") {
           control.dataset.editorOriginalDisabled = String(control.disabled)

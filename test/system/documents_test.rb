@@ -3108,4 +3108,30 @@ class DocumentsTest < ApplicationSystemTestCase
     click_on "Print / Save PDF"
     assert_equal true, page.evaluate_script("window.printWasRequested")
   end
+
+  test "changes alignment immediately after visual edits and reflects it visually in the block" do
+    document = Document.create!(title: "Visual edit alignment", source: "Initial block")
+    visit edit_document_path(document)
+    wait_for_fresh_projection
+
+    block = find(".document-editor-block", text: "Initial block")
+    block_id = block["data-editor-block-id"]
+    block.click
+    block.send_keys(" with extra text")
+
+    block.find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
+    alignment = find("[data-visual-editor-block-id='#{block_id}']")
+    alignment.select("Center")
+
+    assert_selector ".document-editor-block.position-center[data-editor-block-id='#{block_id}']", wait: 5
+    assert_field "Markdown source", with: /\A:::align\{center\}\n\nInitial block with extra text\z/, wait: 5
+
+    alignment.select("Right")
+    assert_selector ".document-editor-block.position-right[data-editor-block-id='#{block_id}']", wait: 5
+    assert_field "Markdown source", with: /\A:::align\{right\}\n\nInitial block with extra text\z/, wait: 5
+
+    alignment.select("Left")
+    assert_selector ".document-editor-block.position-left[data-editor-block-id='#{block_id}']", wait: 5
+    assert_field "Markdown source", with: /\A:::align\{left\}\n\nInitial block with extra text\z/, wait: 5
+  end
 end
