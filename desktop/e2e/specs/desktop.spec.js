@@ -695,6 +695,11 @@ class DesktopEditorUi {
     await $("#conflict-dialog").waitForDisplayed({ reverse: true })
   }
 
+  async keepLocalVersion() {
+    await $("#keep-local-version").click()
+    await $("#conflict-dialog").waitForDisplayed({ reverse: true })
+  }
+
   async assertDiskSource(source) {
     const diskPath = path.join(process.env.ELEF_E2E_LIBRARY_ROOT, "E2E conflict", "presentation.md")
     await browser.waitUntil(async () => normalizeLineEndings(await readFile(diskPath, "utf8")) === source, {
@@ -1200,6 +1205,10 @@ describe("desktop binary workflows and native boundaries", () => {
     if (await ui.readSource() !== CONFLICT_EXTERNAL_SOURCE) {
       throw new Error("Resolving the conflict did not load the external source")
     }
+  })
+
+  it("keeps the local version through the shared external-edit conflict flow", async () => {
+    await externalEditConflictWorkflow(new DesktopEditorUi(), "local")
   })
 
   it("runs the shared snippet insertion flow in the desktop binary", async () => {

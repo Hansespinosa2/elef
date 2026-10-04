@@ -356,6 +356,12 @@ class WebEditorUi {
     await expect(this.page.locator('[data-autosave-target="status"]')).toHaveText("Saved")
   }
 
+  async keepLocalVersion() {
+    await this.page.locator('[data-action="click->autosave#keepLocal"]').click()
+    await expect(this.page.locator('[data-autosave-target="conflict"]')).toBeHidden()
+    await this.flushLocalSave()
+  }
+
   async assertDiskSource(source) {
     await expect.poll(() => this.readSource()).toBe(source)
     await this.assertPersistedSource(source, process.env.ELEF_E2E_CONFLICT_PRESENTATION_ID)
@@ -483,6 +489,10 @@ test("shared external-edit conflict flow preserves the disk version in the web a
   const ui = new WebEditorUi(page)
   await externalEditConflictWorkflow(ui)
   expect(await ui.readSource()).toBe(CONFLICT_EXTERNAL_SOURCE)
+})
+
+test("shared external-edit conflict flow keeps the local version in the web app", async ({ page }) => {
+  await externalEditConflictWorkflow(new WebEditorUi(page), "local")
 })
 
 test("shared snippet insertion flow works in the web app", async ({ page }) => {
