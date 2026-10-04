@@ -24,7 +24,7 @@ L = likelihood, I = impact (H / M / L).
 
 ## Technical debt (known, accepted)
 
-- The desktop library shell is custom. It supports deck discovery, search and filters, previews, graph navigation, authoring settings, and deck operations; shared scenarios verify key flows on both runners. Full implementation and rendered-projection parity with the Rails library remains open in [issue #126](https://github.com/Hansespinosa2/elef/issues/126).
+- The library view, card, filter, graph, and canvas components are shared. Rails routes and database actions differ from desktop folder and archive actions; shared scenarios exercise the common flows. Renderer-consumer parity and the Rails cutover remain open in [issue #126](https://github.com/Hansespinosa2/elef/issues/126).
 - The SQLite cache is deferred; direct folder scans are the v1 strategy (re-evaluate at ~1,000 decks if budgets slip).
 - Normalized fixture comparison is temporary scaffolding retired at cutover (test-strategy §3).
 - Revisions and lineage are flagged off; the web app keeps them, so a second code path exists until the flags are removed.

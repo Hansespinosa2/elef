@@ -38,7 +38,7 @@ Status: draft v3 (2026-10-01). The highest-leverage seam in the desktop app. Imp
 Selecting or refreshing a library reloads its custom authoring registries from `.elef/`; refreshed snippet and math entries are available the next time an editor is opened.
 Custom rows use the Rails resource JSON shape on disk and are enriched into the editor-facing registry schema at the frontend boundary, including canonical legacy directive aliases and argument schemas.
 
-The implemented subset is library scan/open/create/rename/delete, source save, portable settings and authoring registries, content-addressed media upload/read, worker preview, rendered print/presentation flows, and `.elef` import/export. The desktop library shell is custom rather than the Rails library views; selected library and graph flows are covered by shared scenarios. The complete projection/consumer fixture gate and full library parity remain open.
+The implemented subset is library scan/open/create/rename/delete, source save, portable settings and authoring registries, content-addressed media upload/read, worker preview, rendered print/presentation flows, and `.elef` import/export. Both hosts use the shared library view, card, filter, graph, and canvas components; host-specific data and persistence actions enter through slots and the transport adapter. Shared scenarios cover the common library flows. The complete renderer projection/consumer fixture gate and Rails cutover evidence remain open in [issue #126](https://github.com/Hansespinosa2/elef/issues/126).
 
 ## 4. Library-shell commands (new; no Rails equivalent, so no parity test)
 

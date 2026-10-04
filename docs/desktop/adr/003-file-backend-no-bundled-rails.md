@@ -28,8 +28,7 @@ A. File-backed Rust backend, with file logic in the UI-independent `elef-core` c
 - A's costs are bounded and testable. The **transport adapter** is the one seam, specified and contract-tested on both sides. Verified 2026-09-30: the editor's fetch controllers already speak JSON (`Accept: application/json`), so the adapter maps JSON to JSON, not HTML ([transport-adapter.md](../transport-adapter.md)).
 - The Ruby test suite keeps running for web unchanged.
 - `.elef` and folder formats are shared and shell-independent; a future bundled-Rails variant, or the web app itself, could read the same folders. This decision does not burn that bridge.
-- The library shell is file-backed and needs native folder/archive actions, but its core views and behavior are expected to match web. The current custom desktop views and final preview assembly leave parity work tracked in [issue #126](https://github.com/Hansespinosa2/elef/issues/126); this ADR's proposed status does not waive that preference.
-- A fully shared *library* UI is not achieved in v1 (see ADR-004's honest note).
+- The library shell is file-backed and uses the shared library view, card, filter, graph, and canvas components; native folder/archive actions stay in the desktop host. Remaining renderer-consumer parity and Rails cutover evidence are tracked in [issue #126](https://github.com/Hansespinosa2/elef/issues/126).
 
 ## Revisit when
 
