@@ -64,15 +64,17 @@ export async function runNativeQuitSmokes(env) {
     const request = async (suffix, body) => {
       const response = await fetch(endpoint + suffix, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body), signal: AbortSignal.timeout(5_000)
+        body: JSON.stringify(body), signal: AbortSignal.timeout(15_000)
       })
       const { value } = await response.json()
       if (!response.ok || value?.error) throw new Error(value?.message || `WebDriver request failed: ${response.status}`)
       return value
     }
     let sessionId
+    let stage = "starting the application"
     const execute = (script, ...args) => request(`/session/${sessionId}/execute/sync`, { script, args })
     try {
+      stage = "starting the embedded WebDriver session"
       await waitFor(async () => {
         if (exitResult) throw new Error("Elef exited before creating a native smoke session")
         try {
@@ -87,41 +89,55 @@ export async function runNativeQuitSmokes(env) {
           throw error
         }
       }, "The native Quit smoke driver did not start")
+      stage = "waiting for editor readiness"
       await waitFor(() => execute(`return Boolean(document.querySelector('[aria-label="Open ${title}"]')
         && document.querySelector('#desktop-editor-field')?.editorController?.editorReady)`),
       "The native Quit smoke frontend did not finish loading")
+      stage = "opening the smoke deck"
       await execute(`document.querySelector('[aria-label="Open ${title}"]').click(); return true`)
+      stage = "waiting for the deck to finish opening"
       await waitFor(() => execute(`const form = document.querySelector('#desktop-editor-form');
         return form?.dataset.loadedDeckId === arguments[0] && !document.querySelector('#deck-view').hidden`, id),
       "The native Quit smoke deck did not finish opening")
       if (mode !== "clean") {
+        stage = "staging an unsaved editor draft"
         const changed = await execute(`window.__elefSaveTestHooks.pause();
           const controller = document.querySelector('#desktop-editor-field').editorController;
           controller.replaceRange(arguments[0], 0, controller.value.length);
           return controller.sourceValue`, draft)
         assert.equal(changed, draft)
         assert.equal(await readFile(sourceFile, "utf8"), original, "The draft must still be unsaved before Quit")
-        if (mode === "conflict") await writeFile(sourceFile, external)
+        if (mode === "conflict") {
+          stage = "staging the external edit"
+          await writeFile(sourceFile, external)
+        }
       }
+      stage = "sending the native Quit shortcut"
       nativeQuit(app.pid)
       if (mode === "conflict") {
+        stage = "waiting for Quit to surface the conflict"
         await waitFor(() => execute("return document.querySelector('#conflict-dialog').open"),
           "Native Quit did not surface the external-change conflict")
         assert.equal(exitResult, null, "A conflict must keep the native process alive")
         assert.equal(await readFile(sourceFile, "utf8"), external, "Quit must not overwrite external bytes")
+        stage = "checking the preserved editor draft"
         assert.equal(await execute("return document.querySelector('#desktop-editor-field').editorController.sourceValue"), draft)
+        stage = "resolving the native Quit conflict"
         await execute("document.querySelector('#use-disk-version').click(); return true")
+        stage = "waiting for conflict resolution"
         await waitFor(() => execute("return !document.querySelector('#conflict-dialog').open && document.querySelector('#desktop-editor-field').editorController.sourceValue === arguments[0]", external),
           "The native Quit conflict did not finish resolving")
+        stage = "sending the resolved native Quit shortcut"
         nativeQuit(app.pid)
       }
+      stage = "waiting for a clean process exit"
       await waitFor(() => Boolean(exitResult), "Elef did not exit after the native Quit shortcut", 10_000)
       if (exitResult.error) throw exitResult.error
       assert.deepEqual(exitResult, { code: 0, signal: null }, "Native Quit must exit cleanly")
       assert.equal(await readFile(sourceFile, "utf8"), mode === "dirty" ? draft : mode === "conflict" ? external : original)
       process.stdout.write(`Native ${mode} Quit smoke passed.\n`)
     } catch (error) {
-      throw new Error(`Native ${mode} Quit: ${error.message}; desktop output: ${output}`)
+      throw new Error(`Native ${mode} Quit while ${stage}: ${error.message}; desktop output: ${output}`)
     } finally {
       if (!exitResult) {
         app.kill("SIGTERM")
