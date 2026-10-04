@@ -258,6 +258,7 @@ export default class extends Controller {
 
     const source = this.sourceValue()
     const slideIndex = Number(select.dataset.slideIndex)
+    const blockIndex = Number(select.dataset.blockIndex)
     const blockId = select.dataset.presentationEditorBlockId || select.dataset.editorBlockId
     const block = (blockId && this.findBlock(blockId)) || this.map?.slides?.[slideIndex]?.blocks?.[blockIndex]
     if (!block) return
