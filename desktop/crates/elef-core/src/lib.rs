@@ -1267,7 +1267,9 @@ impl Library {
     }
 
     fn summary(&self, record: &DeckRecord) -> DeckSummary {
-        let metadata = fs::metadata(&record.path).ok();
+        let metadata = fs::symlink_metadata(&record.source_path)
+            .ok()
+            .or_else(|| fs::metadata(&record.path).ok());
         let modified_ms = metadata
             .and_then(|metadata| metadata.modified().ok())
             .and_then(system_time_ms)
@@ -2584,6 +2586,25 @@ mod tests {
         assert_eq!(opened.fingerprint.content_hash, sha256(b"# Notes\n"));
         assert!(opened.manifest.is_some());
         assert!(deck.join(MANIFEST_FILE).is_file());
+    }
+
+    #[test]
+    fn deck_summary_uses_the_source_file_modification_time() {
+        let (temp, library) = library();
+        let deck_path = write_deck(
+            temp.path(),
+            "Source timestamp",
+            &[("presentation.md", "# Talk")],
+        );
+        let source_path = deck_path.join("presentation.md");
+        let expected = SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_600_000_000);
+        File::open(source_path)
+            .unwrap()
+            .set_times(fs::FileTimes::new().set_modified(expected))
+            .unwrap();
+
+        let summary = library.list_decks().unwrap().remove(0);
+        assert_eq!(summary.modified_ms, system_time_ms(expected).unwrap());
     }
 
     #[test]
