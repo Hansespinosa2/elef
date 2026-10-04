@@ -260,7 +260,9 @@ if (__ELEF_E2E__) {
           await openDeck(id)
           if (activeDeck?.id !== id || elements.editorForm.dataset.loadedDeckId !== id ||
               document.querySelector("#visual-mode").disabled) throw new Error("The measured deck did not finish rendering.")
-          return { id, slides: elements.editorForm.querySelectorAll(".slide").length }
+          const projection = elements.editorForm.querySelector(".presentation-editor-projection")
+          if (!projection) throw new Error("The measured presentation projection did not render.")
+          return { id, slides: projection.querySelectorAll(".slide-frame > .slide").length }
         })
       },
       async list() {
