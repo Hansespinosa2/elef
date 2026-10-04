@@ -36,3 +36,6 @@ pin "mermaid", to: "mermaid.min.js" # @11.17.2 Vendored self-contained build; ex
 
 pin "lib/editor_document_state", to: "lib/editor_document_state.js"
 pin "lib/document_graph_view", to: "lib/document_graph_view.js"
+pin "lib/editor_view", to: "lib/editor_view.js"
+pin "lib/library_view", to: "lib/library_view.js"
+pin "lib/library_filter", to: "lib/library_filter.js"

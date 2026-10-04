@@ -19,12 +19,14 @@ import { createPreviewFetch } from "./preview-transport.js"
 import { createRendererClient } from "./renderer-client.js"
 import { installSanitizedPreview } from "./preview-sanitizer.js"
 import { checkForDesktopUpdate, installDesktopUpdate } from "./update-flow.js"
-import { loadDesktopAuthoringRegistry } from "./authoring-registry-loader.js"
+import { desktopAuthoringRegistry, loadDesktopAuthoringRegistry } from "./authoring-registry-loader.js"
 import { buildAuthoringEntry, removeAuthoringEntry, upsertAuthoringEntry } from "./authoring-settings.js"
 import { withAppearanceValue } from "./document-map.js"
 import { writeAuthoringRegistry } from "./authoring-registry-write.js"
 import { createPresentationNavigation } from "./presentation-flow.js"
 import { applyDesktopFeatureFlags } from "./feature-flags.js"
+import { renderEditorView } from "../../../app/javascript/lib/editor_view.js"
+import { renderLibraryView } from "../../../app/javascript/lib/library_view.js"
 import { filterDecks } from "./library-filter.js"
 import { createLibraryPreviewLoader } from "./library-preview.js"
 import "./editor-runtime.js"
@@ -50,17 +52,49 @@ globalThis.fetch = createPreviewFetch({
 })
 globalThis.elefInstallDesktopPreview = installSanitizedPreview
 
+renderEditorView(document.querySelector("#desktop-editor-mount"), {
+  kind: "presentation",
+  source: "",
+  mode: "source",
+  visualDisabled: true,
+  visualDisabledMessage: "Open a deck to render its preview",
+  showTitle: false,
+  showSubmit: false,
+  persisted: false,
+  authoringRegistry: desktopAuthoringRegistry(),
+  documentTitles: [],
+  ids: {
+    field: "desktop-editor-field",
+    source: "deck-source",
+    surface: "deck-source-editor",
+    label: "deck-source-label",
+    visualMode: "visual-mode",
+    sourceMode: "source-mode",
+    theme: "deck-theme",
+    typography: "deck-typography",
+    preview: "desktop-preview"
+  }
+})
+document.querySelector("#desktop-editor-form").dataset.controller = "preview visual-editor presentation-editor slide-overview media"
+
+renderLibraryView(document.querySelector("#library-view-mount"), {
+  filter: "all",
+  countLabel: "0 works",
+  description: "One home for your documents, presentations, and source."
+})
+
 const elements = {
   libraryName: document.querySelector("#library-name"),
   welcome: document.querySelector("#welcome-view"),
   library: document.querySelector("#library-view"),
   deckView: document.querySelector("#deck-view"),
   list: document.querySelector("#deck-list"),
-  deckBrowser: document.querySelector("#deck-browser-view"),
   graphView: document.querySelector("#document-graph-view"),
-  count: document.querySelector("#deck-count"),
+  count: document.querySelector("#library-count"),
+  description: document.querySelector("#library-description"),
   empty: document.querySelector("#empty-library"),
-  search: document.querySelector("#deck-search"),
+  noResults: document.querySelector("#library-no-results"),
+  search: document.querySelector("#library-search"),
   status: document.querySelector("#status-text"),
   notice: document.querySelector("#notice"),
   createDialog: document.querySelector("#create-dialog"),
@@ -246,20 +280,22 @@ function showLibrary() {
 }
 
 function showLibraryTab(tab) {
-  libraryTab = ["documents", "presentations", "graph"].includes(tab) ? tab : "all"
-  const graphSelected = tab === "graph"
-  elements.deckBrowser.hidden = graphSelected
-  elements.graphView.hidden = !graphSelected
-  for (const button of document.querySelectorAll("[data-library-tab]")) {
-    const selected = button.dataset.libraryTab === libraryTab
-    button.classList.toggle("is-active", selected)
-    button.setAttribute("aria-pressed", String(selected))
+  libraryTab = ["documents", "presentations"].includes(tab) ? tab : "all"
+  const descriptions = {
+    all: "One home for your documents, presentations, and source.",
+    documents: "Long-form Markdown, gathered in one calm place.",
+    presentations: "Slide-based Markdown, ready to shape into a story."
   }
-  document.querySelector("#show-deck-list").classList.toggle("is-active", tab === "all")
-  document.querySelector("#show-deck-list").setAttribute("aria-pressed", String(tab === "all"))
-  document.querySelector("#show-document-graph").classList.toggle("is-active", graphSelected)
-  document.querySelector("#show-document-graph").setAttribute("aria-pressed", String(graphSelected))
-  if (!graphSelected) renderDecks()
+  elements.description.textContent = descriptions[libraryTab]
+  elements.graphView.hidden = libraryTab !== "documents" || elements.graphView.dataset.controller !== "document-graph"
+  for (const link of document.querySelectorAll("[data-library-tab]")) {
+    const selected = link.dataset.libraryTab === libraryTab
+    link.classList.toggle("is-active", selected)
+    if (selected) link.setAttribute("aria-current", "page")
+    else link.removeAttribute("aria-current")
+  }
+  renderDecks()
+  if (libraryTab === "documents") void showDocumentGraph()
 }
 
 async function documentGraphData() {
@@ -280,8 +316,8 @@ async function showDocumentGraph() {
   try {
     const graph = await documentGraphData()
     const previous = elements.graphView
-    const graphView = previous.cloneNode(true)
-    graphView.hidden = false
+    const graphView = previous.cloneNode(false)
+    graphView.hidden = libraryTab !== "documents"
     graphView.dataset.documentGraphDataValue = JSON.stringify(graph)
     graphView.setAttribute("data-controller", "document-graph")
     graphView.addEventListener("click", event => {
@@ -292,7 +328,6 @@ async function showDocumentGraph() {
     })
     previous.replaceWith(graphView)
     elements.graphView = graphView
-    showLibraryTab("graph")
   } catch (error) {
     showError(error)
   }
@@ -325,11 +360,12 @@ function renderDecks() {
   } else {
     previewTargets.forEach(startPreview)
   }
-  const kindLabel = libraryTab === "all" ? "deck" : libraryTab === "documents" ? "document" : "presentation"
+  const kindLabel = libraryTab === "all" ? "work" : libraryTab === "documents" ? "document" : "presentation"
   elements.count.textContent = `${totalForFilter} ${totalForFilter === 1 ? kindLabel : `${kindLabel}s`}${query ? ` · ${filtered.length} shown` : ""}`
   const isEmptyState = filtered.length === 0 && !query
   elements.empty.hidden = !isEmptyState
   elements.list.hidden = filtered.length === 0 && !isEmptyState
+  elements.noResults.hidden = !query || filtered.length > 0
   const emptyTitle = elements.empty.querySelector("h2")
   const emptyCopy = elements.empty.querySelector("p")
   const emptyAction = elements.empty.querySelector("[data-action='create-presentation']")
@@ -344,10 +380,6 @@ function renderDecks() {
   emptyAction.textContent = libraryTab === "documents" ? "Create a document" : "Create a presentation"
   emptyAction.dataset.kind = libraryTab === "documents" ? "document" : "presentation"
   if (filtered.length === 0 && query) {
-    const noResults = document.createElement("p")
-    noResults.className = "no-results"
-    noResults.textContent = "No decks match this search."
-    elements.list.append(noResults)
     elements.list.hidden = false
   }
 }
@@ -362,7 +394,7 @@ async function refreshLibrary() {
     decks = listedDecks
     documentGraphCache.invalidate()
     renderDecks()
-    if (libraryTab === "graph") await showDocumentGraph()
+    if (libraryTab === "documents") await showDocumentGraph()
     setStatus(`${decks.length} ${decks.length === 1 ? "deck" : "decks"}`)
     clearNotice()
   } catch (error) {
@@ -465,6 +497,7 @@ async function openDeckNow(id) {
     saveFlow.deactivate()
     activeDeck = null
     try {
+      configureEditorKind(isDocument, documentTitles)
       editor.loadDocument(deck.source)
     } catch (error) {
       elements.editorInput.disabled = true
@@ -506,6 +539,28 @@ async function openDeckNow(id) {
     }
   } catch (error) {
     showError(error)
+  }
+}
+
+function configureEditorKind(isDocument, documentTitles) {
+  const controllerNames = ["editor", "snippet-palette", "math-shorthand", "math-shortcut-palette", "mermaid-assist"]
+  if (isDocument) controllerNames.push("document-link-palette")
+  elements.editorField.dataset.controller = controllerNames.join(" ")
+  elements.editorField.dataset.documentLinkPaletteTitlesValue = JSON.stringify(documentTitles)
+  const surface = elements.editorField.querySelector("[data-editor-target='surface']")
+  const input = elements.editorInput
+  if (isDocument) {
+    surface.dataset.documentLinkPaletteTarget = "editor"
+    input.dataset.documentLinkPaletteTarget = "editor"
+    if (!input.dataset.action.includes("input->document-link-palette#input")) {
+      input.dataset.action += " input->document-link-palette#input keydown->document-link-palette#keydown"
+    }
+    elements.editorField.dataset.presentationEditorTarget && delete elements.editorField.dataset.presentationEditorTarget
+  } else {
+    delete surface.dataset.documentLinkPaletteTarget
+    delete input.dataset.documentLinkPaletteTarget
+    input.dataset.action = input.dataset.action.replace(" input->document-link-palette#input keydown->document-link-palette#keydown", "")
+    elements.editorField.dataset.presentationEditorTarget = "source"
   }
 }
 
@@ -1141,11 +1196,13 @@ elements.updateDialog.addEventListener("close", () => {
 document.querySelector("#import-conflict-replace").addEventListener("click", () => void resolveImportConflict("replace"))
 document.querySelector("#import-conflict-keep-both").addEventListener("click", () => void resolveImportConflict("keep_both"))
 document.querySelector("#import-conflict-cancel").addEventListener("click", () => void resolveImportConflict("cancel"))
-document.querySelector("#deck-search").addEventListener("input", renderDecks)
-document.querySelectorAll("[data-library-tab]").forEach(button => {
-  button.addEventListener("click", () => showLibraryTab(button.dataset.libraryTab))
+document.querySelector("#library-search").addEventListener("input", renderDecks)
+document.querySelectorAll("[data-library-tab]").forEach(link => {
+  link.addEventListener("click", event => {
+    event.preventDefault()
+    showLibraryTab(link.dataset.libraryTab)
+  })
 })
-document.querySelector("#show-document-graph").addEventListener("click", () => void showDocumentGraph())
 document.querySelector("#empty-library [data-action='create-presentation']").addEventListener("click", event => {
   showCreateDialog(event.currentTarget.dataset.kind || "presentation")
 })

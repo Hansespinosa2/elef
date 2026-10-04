@@ -3,9 +3,11 @@ import builtInRegistry from "./default-authoring-registry.json"
 import { mergeAuthoringRegistryEntries } from "./registry-merge.js"
 import { setAuthoringRegistryFor } from "controllers/authoring_registry"
 
-const field = document.querySelector("#desktop-editor-field")
+let currentRegistry = builtInRegistry
 
 function apply(entries) {
+  currentRegistry = entries
+  const field = document.querySelector("#desktop-editor-field")
   if (!field) return
   const registry = setAuthoringRegistryFor(field, entries)
   field.dataset.authoringRegistry = JSON.stringify(registry)
@@ -13,6 +15,10 @@ function apply(entries) {
     const controller = globalThis.Stimulus?.getControllerForElementAndIdentifier(field, identifier)
     if (controller) controller.registry = registry
   }
+}
+
+export function desktopAuthoringRegistry() {
+  return currentRegistry
 }
 
 export async function loadDesktopAuthoringRegistry() {

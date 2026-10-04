@@ -1,4 +1,5 @@
 import { Controller } from "@hotwired/stimulus"
+import { installPreviewHtml } from "lib/editor_view"
 
 export default class extends Controller {
   static targets = ["container", "warnings", "status", "retry"]
@@ -174,11 +175,7 @@ export default class extends Controller {
 
     const scrollLeft = this.containerTarget.scrollLeft
     const scrollTop = this.containerTarget.scrollTop
-    if (typeof globalThis.elefInstallDesktopPreview === "function") {
-      globalThis.elefInstallDesktopPreview(this.containerTarget, payload.html)
-    } else {
-      this.containerTarget.innerHTML = payload.html
-    }
+    installPreviewHtml(this.containerTarget, payload.html)
     this.containerTarget.scrollLeft = scrollLeft
     this.containerTarget.scrollTop = scrollTop
     this.projectionFresh = true

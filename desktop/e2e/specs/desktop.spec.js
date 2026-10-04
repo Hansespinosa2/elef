@@ -677,7 +677,7 @@ class DesktopLibraryUi {
   }
 
   async searchFor(query) {
-    await $("#deck-search").setValue(query)
+    await $("#library-search").setValue(query)
   }
 
   async assertSearchResults(title) {
@@ -691,7 +691,8 @@ class DesktopLibraryUi {
   }
 
   async assertNoSearchResults() {
-    await browser.waitUntil(async () => (await $(".no-results").getText()) === "No decks match this search.", {
+    await $("#library-no-results").waitForDisplayed()
+    await browser.waitUntil(async () => (await $("#library-no-results").getText()) === "No decks match this search.", {
       timeout: 10_000,
       timeoutMsg: "The library did not show its empty search result"
     })
@@ -733,7 +734,6 @@ class DesktopLibraryUi {
   }
 
   async showDocumentGraph() {
-    await $("#show-document-graph").click()
     await $("#document-graph-heading").waitForDisplayed()
   }
 

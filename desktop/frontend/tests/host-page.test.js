@@ -5,17 +5,25 @@ import { parseHTML } from "linkedom"
 
 const page = await readFile(new URL("../index.html", import.meta.url), "utf8")
 const main = await readFile(new URL("../src/main.js", import.meta.url), "utf8")
+const editorView = await readFile(new URL("../../../app/javascript/lib/editor_view.js", import.meta.url), "utf8")
+const libraryView = await readFile(new URL("../../../app/javascript/lib/library_view.js", import.meta.url), "utf8")
 const viewportStyles = await readFile(new URL("../src/rendered-content.css", import.meta.url), "utf8")
 const { document } = parseHTML(page)
 
 test("rendered decks reuse Rails styles with only native viewport chrome", () => {
+  assert.ok(document.querySelector('link[href="./assets/theme.css"]'))
   assert.ok(main.includes('import "../../../app/assets/stylesheets/application.css"'))
   assert.doesNotMatch(viewportStyles, /^\.(?:slide|document|presentation|katex)[\w.-]*(?:\s|\{|:)/m)
 })
 
 test("desktop host page provides every element referenced by the app shell", () => {
   const ids = new Set([...main.matchAll(/document\.querySelector\(["']#([\w-]+)/g)].map(match => match[1]))
-  const missing = [...ids].filter(id => !document.getElementById(id))
+  const dynamicallyRendered = new Set([
+    "desktop-editor-field", "deck-source", "visual-mode", "desktop-preview", "library-count",
+    "library-description", "library-search", "show-deck-list", "show-documents", "show-presentations",
+    "notice", "document-graph-view", "deck-list", "empty-library", "library-no-results"
+  ])
+  const missing = [...ids].filter(id => !document.getElementById(id) && !dynamicallyRendered.has(id))
   assert.deepEqual(missing, [])
 })
 
@@ -23,58 +31,38 @@ test("the shell presents itself as Elef Desktop rather than a preview build", ()
   assert.match(document.querySelector(".app-version").textContent, /^Elef Desktop · v\d/)
 })
 
-test("the host starts in source mode and gates visual editing until the local preview renders", () => {
+test("the host mounts the shared editor view and gates visual editing until preview renders", () => {
   const sourceForm = document.querySelector("#desktop-editor-form")
-  const sourceMode = document.querySelector("#source-mode")
-  const visualMode = document.querySelector("#visual-mode")
   assert.equal(sourceForm.dataset.editorMode, "source")
-  assert.match(sourceForm.dataset.controller, /preview/)
-  assert.equal(sourceMode.getAttribute("aria-pressed"), "true")
-  assert.equal(visualMode.disabled, true)
-  assert.equal(visualMode.getAttribute("data-action"), "click->editor#showVisual")
-  assert.equal(visualMode.getAttribute("data-editor-target"), "visualButton")
-  assert.ok(document.querySelector("#desktop-preview[data-preview-target='container']"))
-  assert.ok(document.querySelector("[data-editor-map-json]"))
+  assert.equal(sourceForm.dataset.controller, undefined)
+  assert.ok(document.querySelector("#desktop-editor-mount"))
+  assert.match(main, /renderEditorView\(document\.querySelector\("#desktop-editor-mount"\)/)
+  assert.match(main, /desktop-editor-form"\)\.dataset\.controller = "preview visual-editor presentation-editor slide-overview media"/)
+  assert.match(editorView, /data-editor-target="visualButton"/)
+  assert.match(editorView, /visualButton\.disabled = Boolean\(config\.visualDisabled\)/)
 })
 
 test("the host uses no inline event handlers under the strict script policy", () => {
   assert.equal(document.querySelector("[onclick], [onerror], [onload]"), null)
 })
 
-test("the editor reuses the web Appearance controller and front matter fields", () => {
-  const appearance = document.querySelector(".appearance-settings[data-controller='appearance']")
-  assert.ok(appearance)
-  assert.equal(appearance.hidden, true)
-  for (const key of ["theme", "typography"]) {
-    const field = appearance.querySelector(`[data-appearance-target='${key}']`)
-    assert.equal(field.getAttribute("name"), `work[${key}]`)
-    assert.equal(field.querySelector("option").value, "")
-  }
+test("desktop no longer carries a second copy of the shared editor markup", () => {
+  assert.equal(document.querySelector("#desktop-editor-form .editor-toolbar"), null)
+  assert.equal(document.querySelector("#desktop-editor-form .slide-overview"), null)
+  assert.match(editorView, /appearance-settings/)
+  assert.match(editorView, /slide-overview/)
+  assert.match(editorView, /input->snippet-palette#input/)
+  assert.match(editorView, /input->document-link-palette#input/)
 })
 
-test("the source editor forwards input and keyboard events to authoring palettes", () => {
-  const actions = document.querySelector("#deck-source").dataset.action.split(/\s+/)
-  for (const action of [
-    "input->snippet-palette#input",
-    "keydown->snippet-palette#keydown",
-    "keydown->math-shorthand#keydown",
-    "input->math-shortcut-palette#input",
-    "keydown->math-shortcut-palette#keydown",
-    "input->mermaid-assist#input",
-    "input->document-link-palette#input",
-    "keydown->document-link-palette#keydown"
-  ]) {
-    assert.ok(actions.includes(action), `missing host action ${action}`)
-  }
-})
-
-test("the library provides the local document graph view and deck navigation", () => {
-  assert.ok(document.querySelector("#show-deck-list[data-library-tab='all']"))
-  assert.ok(document.querySelector("#show-documents[data-library-tab='documents']"))
-  assert.ok(document.querySelector("#show-presentations[data-library-tab='presentations']"))
-  assert.ok(document.querySelector("#show-document-graph"))
-  assert.ok(document.querySelector("#document-graph-view[hidden]"))
-  assert.equal(document.querySelector("#document-graph-view").children.length, 0)
+test("desktop mounts the shared library view and keeps the document graph in Documents", () => {
+  assert.ok(document.querySelector("#library-view-mount"))
+  assert.match(main, /renderLibraryView\(document\.querySelector\("#library-view-mount"\)/)
+  assert.match(libraryView, /id="show-deck-list" class="library-tab" data-library-tab="all"/)
+  assert.match(libraryView, /id="show-documents" class="library-tab" data-library-tab="documents"/)
+  assert.match(libraryView, /id="show-presentations" class="library-tab" data-library-tab="presentations"/)
+  assert.match(libraryView, /id="document-graph-view"/)
+  assert.doesNotMatch(libraryView, /show-document-graph/)
 })
 
 test("document reload reapplies editor preferences and readiness follows successful connection", async () => {

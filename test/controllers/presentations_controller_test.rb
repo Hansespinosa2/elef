@@ -135,26 +135,28 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
 
   test "editor wires autosave and keeps new presentations client-only until creation" do
     get edit_presentation_path(presentations(:one))
-    assert_select 'form[data-controller~="autosave"]'
+    assert_select "form.visual-editor-form"
     assert_select "form[action='#{publish_presentation_path(presentations(:one))}'] button.button", text: "Present"
-    assert_select 'form[data-controller~="autosave"] form', count: 0
-    assert_select '[data-autosave-target="retry"]'
-    assert_select '[data-preview-target="retry"]'
-    assert_select '[data-controller~="editor"]'
-    assert_select '[data-editor-target="surface"][aria-labelledby]'
-    assert_select 'textarea[name="presentation[source]"][data-editor-target="input"]'
-    assert_select '[data-editor-target="mode"]', text: "Standard"
+    assert_select 'form.visual-editor-form form', count: 0
+    assert_select '[data-editor-view-config]'
+    assert_select '[data-editor-form-controllers*="autosave"][data-editor-form-controllers*="preview"]'
+    config = editor_host_config
+    assert_equal "presentation", config.fetch("kind")
+    assert_equal "presentation[source]", config.fetch("sourceName")
+    assert_equal "presentation[theme]", config.fetch("themeName")
+    assert_equal "presentation[typography]", config.fetch("typographyName")
+    assert config.fetch("persisted")
     assert_select 'button[data-dirty-navigation]', text: "Present"
     assert_select "a[href='#{print_presentation_path(presentations(:one))}']", text: "Print draft / save PDF"
     get new_presentation_path
-    assert_select 'form[data-controller~="autosave"][data-autosave-save-enabled-value="false"]'
-    assert_select "textarea[name='presentation[source]']", text: Presentation::DEFAULT_SOURCE
-    assert_select 'form[data-controller~="preview"]'
+    assert_select 'form.visual-editor-form[data-autosave-save-enabled-value="false"]'
+    config = editor_host_config
+    assert_equal Presentation::DEFAULT_SOURCE, config.fetch("source")
+    refute config.fetch("persisted")
     assert_select 'form[data-preview-url-value="/presentations/preview"]'
-    assert_select 'form[data-controller~="slide-overview"][data-controller~="media"]'
-    assert_select '[data-slide-overview-target="grid"][role="group"]'
-    assert_select '.preview-pane[data-action="dragover->media#dragOver dragleave->media#dragLeave drop->media#drop"]'
-    assert_select 'button[data-action="media#choose"]', text: "Add image or MP4"
+    assert_select '[data-editor-form-controllers*="slide-overview"][data-editor-form-controllers*="media"]'
+    assert_equal "presentation", config.fetch("kind")
+    assert_equal 1, config.fetch("slideCount")
   end
 
   test "uploads image assets with content digest references and rejects other files" do
@@ -688,11 +690,16 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     get edit_presentation_path(presentations(:one))
 
     assert_response :success
-    assert_select "select[name='presentation[typography]']" do
-      assert_select "option[value='book']", text: "Book"
-      assert_select "option[value='modern']", text: "Modern"
-      assert_select "option[value='technical']", text: "Technical"
-    end
+    assert_equal "presentation[typography]", editor_host_config.fetch("typographyName")
+    assert_equal "presentation", editor_host_config.fetch("kind")
+  end
+
+  private
+
+  def editor_host_config
+    host = css_select("[data-editor-view-config]").first
+    assert host, "expected the shared editor host"
+    JSON.parse(host["data-editor-view-config"])
   end
 
   test "renders positioning warnings without leaking directives" do

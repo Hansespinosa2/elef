@@ -2,19 +2,19 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import { parseHTML } from "linkedom"
 
-import { filterLibraryCards } from "../../../app/javascript/controllers/library_search.js"
+import { filterLibraryCards } from "../../../app/javascript/lib/library_filter.js"
 
 test("library search matches titles without case or canonical Unicode differences", () => {
   const { document } = parseHTML(`
     <section>
       <article class="library-card"><h2 class="library-card-title">Café Deck</h2></article>
       <article class="library-card"><h2 class="library-card-title">Meeting Notes</h2></article>
-      <p data-library-search-target="noResults" hidden>No decks match this search.</p>
+      <p id="library-no-results" hidden>No decks match this search.</p>
     </section>
   `)
   const root = document.querySelector("section")
   const cards = [...root.querySelectorAll(".library-card")]
-  const noResults = root.querySelector("[data-library-search-target='noResults']")
+  const noResults = root.querySelector("#library-no-results")
 
   assert.equal(filterLibraryCards(root, "CAFE\u0301"), 1)
   assert.equal(cards[0].hidden, false)

@@ -7,15 +7,15 @@ class LibraryControllerTest < ActionDispatch::IntegrationTest
     get root_path
 
     assert_response :success
-    assert_select "h1", "Library"
-    assert_select "#document_#{document.id}"
-    assert_select "#presentation_#{presentations(:one).id}"
-    assert_select ".document-graph", count: 0
-    assert_select ".lineage-panel", count: 0
+    config = library_view_config
+    assert_equal "Library", config.fetch("title")
+    assert_equal "all", config.fetch("filter")
+    assert_select "template[data-library-view-slot='cards'] #document_#{document.id}"
+    assert_select "template[data-library-view-slot='cards'] #presentation_#{presentations(:one).id}"
+    assert_select "template[data-library-view-slot='graph'] .document-graph-panel", count: 0
+    assert_select "template[data-library-view-slot='lineage'] .lineage-panel", count: 0
     assert_select "a.app-nav-link[href='#{root_path}']", text: "Library"
-    assert_select "a.library-tab[href='#{root_path}']", text: "All"
-    assert_select "a.library-tab[href='#{documents_path}']", text: "Documents"
-    assert_select "a.library-tab[href='#{presentations_path}']", text: "Presentations"
+    assert_equal({ "all" => root_path, "documents" => documents_path, "presentations" => presentations_path }, config.fetch("routes"))
     assert_select "a[href*='type=']", count: 0
   end
 
@@ -24,28 +24,20 @@ class LibraryControllerTest < ActionDispatch::IntegrationTest
       get path
 
       assert_response :success
-      assert_select 'section.library-browser[data-controller="library-search"]', 1
-      assert_select 'input#library-search[type="search"][data-action="input->library-search#filter"]', 1
-      assert_select 'p[data-library-search-target="noResults"][hidden]', text: "No decks match this search.", count: 1
+      assert_equal true, library_view_config.fetch("searchController")
+      assert_select "#library-view-mount[data-library-view-config]", 1
+      assert_select "template[data-library-view-slot='cards'] section.library-list", 1
     end
   end
 
   test "canonical library tabs link to all, documents, and presentations collection paths" do
-    get root_path
-    assert_response :success
-    assert_select "nav.library-tabs" do
-      assert_select "a[href='#{root_path}']", text: "All"
-      assert_select "a[href='#{documents_path}']", text: "Documents"
-      assert_select "a[href='#{presentations_path}']", text: "Presentations"
+    [[root_path, "all"], [documents_path, "documents"], [presentations_path, "presentations"]].each do |path, filter|
+      get path
+      assert_response :success
+      config = library_view_config
+      assert_equal filter, config.fetch("filter")
+      assert_equal({ "all" => root_path, "documents" => documents_path, "presentations" => presentations_path }, config.fetch("routes"))
     end
-
-    get documents_path
-    assert_response :success
-    assert_select "nav.library-tabs a[href='#{documents_path}'].is-active", text: "Documents"
-
-    get presentations_path
-    assert_response :success
-    assert_select "nav.library-tabs a[href='#{presentations_path}'].is-active", text: "Presentations"
   end
 
   test "every library view renders work as a preview card" do
@@ -158,5 +150,11 @@ class LibraryControllerTest < ActionDispatch::IntegrationTest
     get search_path, params: { q: "" }
     assert_response :success
     assert_empty response.parsed_body["results"]
+  end
+
+  private
+
+  def library_view_config
+    JSON.parse(css_select("#library-view-mount").first["data-library-view-config"])
   end
 end

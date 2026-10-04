@@ -1,62 +1,46 @@
 <% current_filter = @filter || "all" %>
-<% title = "Library" %>
 <% description = current_filter == "documents" ? "Long-form Markdown, gathered in one calm place." : current_filter == "presentations" ? "Slide-based Markdown, ready to shape into a story." : "One home for your documents, presentations, and source." %>
 <% content_for :title, "Elef library" %>
-<section class="library-hero mb-8 flex items-end justify-between gap-4 max-[920px]:flex-col max-[920px]:items-stretch">
-  <div>
-    <div class="library-kicker flex items-center gap-3">
-      <p class="eyebrow mb-1 text-xs font-extrabold uppercase tracking-[0.12em] text-[#6d4aff]">Your workspace</p>
-      <span class="library-count rounded-full border border-[#304047] bg-[#202c32] px-2 py-1 text-xs font-bold text-[#aab7b1]"><%= pluralize(@works.size, "work") %></span>
-    </div>
-    <h1 class="mb-0 text-4xl font-bold"><%= title %></h1>
-    <p class="mt-2 text-[#6f675c]"><%= description %></p>
-  </div>
-  <% if current_filter == "documents" %>
-    <details class="library-tools">
-      <summary class="inline-flex cursor-pointer items-center rounded-lg border border-[#304047] px-3 py-2 text-sm font-bold text-[#aab7b1]">More</summary>
-      <div class="library-tools-panel absolute right-0 top-full z-10 mt-2 w-56 rounded-lg border border-[#304047] bg-[#182126] p-1 shadow-xl">
+<% library_view_config = {
+  filter: current_filter,
+  title: "Library",
+  countLabel: pluralize(@works.size, "work"),
+  description: description,
+  routes: { all: root_path, documents: documents_path, presentations: presentations_path },
+  searchController: true,
+  empty: @works.empty?
+} %>
+<% actions = capture do %>
+  <details class="library-tools">
+    <summary class="inline-flex cursor-pointer items-center rounded-lg border border-[#304047] px-3 py-2 text-sm font-bold text-[#aab7b1]">More</summary>
+    <div class="library-tools-panel absolute right-0 top-full z-10 mt-2 w-56 rounded-lg border border-[#304047] bg-[#182126] p-1 shadow-xl">
+      <% if current_filter == "documents" %>
         <%= button_to "Load sample documents", load_samples_documents_path, method: :post, class: "library-tool-action block w-full rounded-lg px-3 py-2 text-left text-sm font-bold text-[#e9eee9]" %>
-      </div>
-    </details>
-  <% else %>
-    <details class="library-tools">
-      <summary class="inline-flex cursor-pointer items-center rounded-lg border border-[#304047] px-3 py-2 text-sm font-bold text-[#aab7b1]">More</summary>
-      <div class="library-tools-panel absolute right-0 top-full z-10 mt-2 w-56 rounded-lg border border-[#304047] bg-[#182126] p-1 shadow-xl">
+      <% else %>
         <%= button_to "Load sample presentations", load_samples_presentations_path, method: :post, class: "library-tool-action block w-full rounded-lg px-3 py-2 text-left text-sm font-bold text-[#e9eee9]" %>
-      </div>
-    </details>
-  <% end %>
-</section>
-
-<section class="library-browser" data-controller="library-search" aria-label="Browse your library">
-  <div class="library-browser-toolbar">
-    <label class="sr-only" for="library-search">Search decks</label>
-    <input id="library-search" class="library-search-input" type="search" placeholder="Search decks" autocomplete="off" data-action="input->library-search#filter">
-  </div>
-
-<nav class="library-tabs mb-6 flex flex-wrap gap-2" aria-label="Library views">
-  <%= link_to "All", root_path, class: "library-tab #{current_filter == 'all' ? 'is-active' : ''}", aria: { current: current_filter == "all" ? "page" : nil } %>
-  <%= link_to "Documents", documents_path, class: "library-tab #{current_filter == 'documents' ? 'is-active' : ''}", aria: { current: current_filter == "documents" ? "page" : nil } %>
-  <%= link_to "Presentations", presentations_path, class: "library-tab #{current_filter == 'presentations' ? 'is-active' : ''}", aria: { current: current_filter == "presentations" ? "page" : nil } %>
-</nav>
-
-<%= render "presentations/document_graph", graph: @document_graph if current_filter == "documents" && @document_graph %>
-<%= render "presentations/lineage_graph", presentations: @lineage_presentations if @lineage_presentations.any? %>
-
-<section class="library-list mt-8 grid gap-4" role="list" aria-label="Saved <%= current_filter %>">
-  <% if @works.any? %>
-    <% @works.each do |work| %>
-      <%= render "library/work_card", work: work %>
-    <% end %>
-  <% else %>
-    <div class="empty-state flex items-center justify-between rounded-2xl border border-[#ddd5c8] bg-[#fffdf8] p-5 max-[920px]:flex-col max-[920px]:items-stretch">
-      <div>
-        <h2 class="mb-2 text-2xl font-bold">No <%= current_filter == "all" ? "work" : current_filter %> yet</h2>
-        <p class="text-[#6f675c]">Start with Markdown. Elef stores the source and derives the rendered result.</p>
-      </div>
-      <%= button_to "Create your first #{current_filter == "documents" ? "document" : "presentation"}", work_start_path(current_filter == "documents" ? "document" : "presentation"), method: :post, class: "button primary inline-flex min-h-10 cursor-pointer items-center gap-1 rounded-full border border-[#6d4aff] bg-[#6d4aff] px-4 py-2 font-bold text-white no-underline hover:brightness-95" %>
+      <% end %>
     </div>
-  <% end %>
-</section>
-<p class="library-no-results" data-library-search-target="noResults" role="status" hidden>No decks match this search.</p>
-</section>
+  </details>
+<% end %>
+<div id="library-view-mount" data-library-view-config="<%= ERB::Util.html_escape(library_view_config.to_json) %>">
+  <h1 id="library-title" class="mb-0 text-4xl font-bold">Library</h1>
+  <template data-library-view-slot="actions"><%= actions %></template>
+  <template data-library-view-slot="graph"><%= render "presentations/document_graph", graph: @document_graph if current_filter == "documents" && @document_graph %></template>
+  <template data-library-view-slot="lineage"><%= render "presentations/lineage_graph", presentations: @lineage_presentations if @lineage_presentations.any? %></template>
+  <template data-library-view-slot="cards">
+    <section class="library-list" role="list" aria-label="Saved <%= current_filter %>">
+      <% @works.each do |work| %><%= render "library/work_card", work: work %><% end %>
+    </section>
+  </template>
+  <template data-library-view-slot="empty">
+    <% if @works.empty? %>
+      <div class="empty-state flex items-center justify-between rounded-2xl border border-[#ddd5c8] bg-[#fffdf8] p-5 max-[920px]:flex-col max-[920px]:items-stretch">
+        <div>
+          <h2 class="mb-2 text-2xl font-bold">No <%= current_filter == "all" ? "work" : current_filter %> yet</h2>
+          <p class="text-[#6f675c]">Start with Markdown. Elef stores the source and derives the rendered result.</p>
+        </div>
+        <%= button_to "Create your first #{current_filter == "documents" ? "document" : "presentation"}", work_start_path(current_filter == "documents" ? "document" : "presentation"), method: :post, class: "button primary inline-flex min-h-10 cursor-pointer items-center gap-1 rounded-full border border-[#6d4aff] bg-[#6d4aff] px-4 py-2 font-bold text-white no-underline hover:brightness-95" %>
+      </div>
+    <% end %>
+  </template>
+</div>

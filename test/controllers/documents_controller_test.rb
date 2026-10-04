@@ -51,7 +51,9 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
 
     get new_document_path
     assert_response :success
-    assert_select ".document-editor-block h1", "Untitled document 2"
+    config = editor_host_config
+    assert_equal "# Untitled document 2", config.fetch("source")
+    assert_includes config.fetch("previewHtml"), "Untitled document 2"
 
     assert_difference("Document.count") do
       post documents_path, params: { document: { source: Document.available_default_source } }, as: :json
@@ -83,7 +85,7 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
     get edit_document_path(source)
 
     assert_response :success
-    assert_select ".editor-projection a.document-link[href=?]", document_path(target)
+    assert_includes editor_host_config.fetch("previewHtml"), %(href="#{document_path(target)}")
   end
 
   test "uploads and serves image assets for documents" do
@@ -387,5 +389,13 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
     assert_select ".document-print-toolbar", text: /Printable Document/
     assert_select ".document-print-toolbar button", text: "Print / Save PDF"
     assert_select ".document-surface"
+  end
+
+  private
+
+  def editor_host_config
+    host = css_select("[data-editor-view-config]").first
+    assert host, "expected the shared editor host"
+    JSON.parse(host["data-editor-view-config"])
   end
 end
