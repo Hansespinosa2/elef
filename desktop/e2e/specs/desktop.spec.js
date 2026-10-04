@@ -9,6 +9,7 @@ import { externalEditConflictWorkflow, CONFLICT_EXTERNAL_SOURCE } from "../scena
 import { hostileDeckNeutralizedWorkflow } from "../scenarios/hostile-deck.js"
 import { mathInputWorkflow, snippetInsertWorkflow } from "../scenarios/authoring-palettes.js"
 import { PIXEL_PNG_DIGEST, PIXEL_PNG_MARKDOWN } from "../scenarios/media-fixture.js"
+import { presentationModeWorkflow } from "../scenarios/presentation-mode.js"
 import { createHash } from "node:crypto"
 import { answerMacNativeDialog } from "../mac-native-dialog.js"
 
@@ -124,6 +125,7 @@ class DesktopEditorUi {
           editorControllerReady: editorField?.editorController?.editorReady ?? null,
           editorControllerRegistered: Boolean(stimulus?.router?.modulesByIdentifier?.has("editor")),
           editorControllerConnected: Boolean(editorField && stimulus?.getControllerForElementAndIdentifier?.(editorField, "editor")),
+          controllerErrors: window.__elefE2EControllerErrors?.slice(-5) || [],
           codeMirrorMounted: Boolean(editorField?.querySelector(".cm-editor")),
           libraryHidden: document.querySelector("#library-view")?.hidden,
           deckViewHidden: document.querySelector("#deck-view")?.hidden,
@@ -137,6 +139,52 @@ class DesktopEditorUi {
 
   async reopenDeck() {
     await this.openDeck(this.activeDeckTitle || "E2E seed")
+  }
+
+  async enterPresentationMode() {
+    const started = await browser.executeAsync(done => {
+      const start = window.__elefPresentationTestHooks?.start
+      if (!start) return done({ error: "The presentation shell is unavailable" })
+      start().then(() => done({ started: document.body.classList.contains("presenting-deck") }))
+        .catch(error => done({ error: error.message || String(error) }))
+    })
+    if (started.error || !started.started) throw new Error(started.error || "Desktop presentation mode did not start")
+    await browser.waitUntil(async () => (await $$("#desktop-preview .slide-frame")).length === 2, {
+      timeout: 5_000,
+      timeoutMsg: "Desktop presentation mode did not find both rendered slides"
+    })
+  }
+
+  async assertPresentationSlide(index, title) {
+    const states = await browser.execute(() => [...document.querySelectorAll("#desktop-preview .slide-frame")].map(frame => ({
+      text: frame.textContent,
+      hidden: frame.hidden,
+      active: frame.classList.contains("is-active-presentation-slide")
+    })))
+    if (states.length !== 2 || !states[index].text.includes(title) || states[index].hidden || !states[index].active) {
+      throw new Error(`Unexpected active desktop presentation slide: ${JSON.stringify(states)}`)
+    }
+    const other = states[1 - index]
+    if (!other.hidden || other.active) throw new Error(`Another desktop slide remained visible: ${JSON.stringify(states)}`)
+  }
+
+  async movePresentation(key) {
+    await browser.keys(key)
+  }
+
+  async exitPresentationMode() {
+    await browser.keys("ESC")
+    await browser.waitUntil(async () => !(await browser.execute(() => document.body.classList.contains("presenting-deck"))), {
+      timeout: 5_000,
+      timeoutMsg: "Escape did not exit desktop presentation mode"
+    })
+  }
+
+  async returnToEditor() {
+    if (await browser.execute(() => document.body.classList.contains("presenting-deck"))) {
+      await this.exitPresentationMode()
+    }
+    if (!(await $("#deck-view").isDisplayed())) await this.openDeck()
   }
 
   async renameEditorTitle(title) {
@@ -931,6 +979,10 @@ describe("desktop binary workflows and native boundaries", () => {
     if (await form.getAttribute("data-editor-mode") !== "visual") {
       throw new Error("The editor did not switch into visual mode")
     }
+  })
+
+  it("runs the shared presentation navigation flow in the desktop binary", async () => {
+    await presentationModeWorkflow(new DesktopEditorUi())
   })
 
   it("accepts trusted keyboard input in CodeMirror and persists it", async () => {

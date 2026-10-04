@@ -79,7 +79,7 @@ const EDITOR_VIEW = `
       </div>
 
       <script type="application/json" data-editor-map-json></script>
-      <div class="editor-projection preview-pane" data-visual-editor-target="projection" data-preview-target="container" aria-label="Visual editing surface" data-action="dragover->media#dragOver dragleave->media#dragLeave drop->media#drop"></div>
+      <div class="editor-projection preview-pane" data-visual-editor-target="projection" data-preview-target="container" data-presentation-target="stage" aria-label="Visual editing surface" data-action="dragover->media#dragOver dragleave->media#dragLeave drop->media#drop" tabindex="-1"></div>
     </div>
 
     <section class="preview-warnings rounded-xl border border-[#e7c56d] bg-[#fff8df] p-3 text-[#765700]" data-preview-target="warnings" aria-label="Preview warnings" hidden><h3 class="mb-1 text-sm font-bold">Preview warnings</h3><ul class="list-disc pl-5 text-sm"></ul></section>

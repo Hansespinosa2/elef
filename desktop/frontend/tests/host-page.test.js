@@ -48,8 +48,9 @@ test("the host mounts the shared editor view and gates visual editing until prev
   assert.equal(sourceForm.dataset.controller, undefined)
   assert.ok(document.querySelector("#desktop-editor-mount"))
   assert.match(main, /renderEditorView\(document\.querySelector\("#desktop-editor-mount"\)/)
-  assert.match(main, /desktop-editor-form"\)\.dataset\.controller = "preview visual-editor presentation-editor slide-overview media"/)
+  assert.match(main, /desktop-editor-form"\)\.dataset\.controller = "preview visual-editor presentation-editor slide-overview media presentation"/)
   assert.match(editorView, /data-editor-target="visualButton"/)
+  assert.match(editorView, /data-presentation-target="stage"/)
   assert.match(editorView, /visualButton\.disabled = Boolean\(config\.visualDisabled\)/)
 })
 

@@ -9,7 +9,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window"
 import { relaunch } from "@tauri-apps/plugin-process"
 import { check as checkUpdater } from "@tauri-apps/plugin-updater"
 import { editorFor } from "controllers/editor_controller"
-import { createDeckCard } from "./deck-card.js"
+import { createLibraryCard } from "lib/library_card"
 import { createDocumentGraphCache } from "lib/document_graph_cache"
 import { createTransportAdapter } from "./transport-adapter.js"
 import { waitForEditorController } from "lib/editor_ready"
@@ -23,7 +23,6 @@ import { checkForDesktopUpdate, installDesktopUpdate } from "./update-flow.js"
 import { desktopAuthoringRegistry, loadDesktopAuthoringRegistry } from "./authoring-registry-loader.js"
 import { createAuthoringSettingsDialog } from "lib/authoring_settings_dialog"
 import { withAppearanceValue } from "lib/document_map"
-import { createPresentationNavigation, presentationActionForKey } from "lib/presentation_navigation"
 import { applyDesktopFeatureFlags } from "lib/feature_flags"
 import { renderEditorView } from "lib/editor_view"
 import { renderLibraryView, updateLibraryEmptyState } from "lib/library_view"
@@ -75,7 +74,8 @@ renderEditorView(document.querySelector("#desktop-editor-mount"), {
     preview: "desktop-preview"
   }
 })
-document.querySelector("#desktop-editor-form").dataset.controller = "preview visual-editor presentation-editor slide-overview media"
+document.querySelector("#desktop-editor-form").dataset.controller = "preview visual-editor presentation-editor slide-overview media presentation"
+document.querySelector("#desktop-editor-form").dataset.presentationActiveValue = "false"
 
 renderLibraryView(document.querySelector("#library-view-mount"), {
   filter: "all",
@@ -158,8 +158,6 @@ let openFilesRequested = false
 let openFilesWaitingForSave = false
 let sourcePollBusy = false
 let lastSourcePollError = null
-let presentationFrames = []
-let presentationNavigation = null
 let titleFlow = null
 
 const authoringSettings = createAuthoringSettingsDialog({
@@ -389,7 +387,7 @@ function renderDecks() {
   const filtered = filterDecks(decks, libraryTab, query)
   const totalForFilter = filterDecks(decks, libraryTab).length
   cardPreviewObserver?.disconnect()
-  elements.list.replaceChildren(...filtered.map(deck => createDeckCard(document, deck, {
+  elements.list.replaceChildren(...filtered.map(deck => createLibraryCard(document, deck, {
     open: id => void openDeck(id),
     rename: (item, name) => void renameDeck(item, name).catch(showError),
     delete: item => void deleteDeck(item)
@@ -879,15 +877,13 @@ async function startPresentation() {
     showNotice("Render the presentation before starting presentation mode.", "error")
     return
   }
-  presentationFrames = [...document.querySelectorAll("#desktop-preview .slide-frame")]
-  if (!presentationFrames.length) {
+  const presentation = window.Stimulus?.getControllerForElementAndIdentifier(elements.editorForm, "presentation")
+  if (!presentation?.start()) {
     showNotice("This presentation has no slides to show.", "error")
     return
   }
-  presentationNavigation = createPresentationNavigation(presentationFrames.length)
   document.body.classList.add("presenting-deck")
   elements.presentationExit.hidden = false
-  setPresentationSlide(presentationNavigation.currentIndex)
   document.addEventListener("keydown", presentationKeydown, true)
   try {
     await getCurrentWindow().setFullscreen(true)
@@ -896,30 +892,11 @@ async function startPresentation() {
   }
 }
 
-function setPresentationSlide(index) {
-  if (!presentationNavigation) return
-  const currentIndex = Math.max(0, Math.min(index, presentationFrames.length - 1))
-  presentationFrames.forEach((frame, frameIndex) => {
-    const active = frameIndex === currentIndex
-    frame.classList.toggle("is-active-presentation-slide", active)
-    frame.setAttribute("aria-hidden", String(!active))
-  })
-}
-
 function presentationKeydown(event) {
   if (!document.body.classList.contains("presenting-deck")) return
-  if (event.key === "Escape") {
-    event.preventDefault()
-    void exitPresentation()
-    return
-  }
-  const action = presentationActionForKey(event.key)
-  if (!action) return
+  if (event.key !== "Escape") return
   event.preventDefault()
-  if (action === "next") setPresentationSlide(presentationNavigation.next())
-  else if (action === "previous") setPresentationSlide(presentationNavigation.previous())
-  else if (action === "first") setPresentationSlide(presentationNavigation.first())
-  else if (action === "last") setPresentationSlide(presentationNavigation.last())
+  void exitPresentation()
 }
 
 async function exitPresentation() {
@@ -927,15 +904,14 @@ async function exitPresentation() {
   document.body.classList.remove("presenting-deck")
   elements.presentationExit.hidden = true
   document.removeEventListener("keydown", presentationKeydown, true)
-  for (const frame of presentationFrames) {
-    frame.classList.remove("is-active-presentation-slide")
-    frame.removeAttribute("aria-hidden")
-  }
-  presentationFrames = []
-  presentationNavigation = null
+  window.Stimulus?.getControllerForElementAndIdentifier(elements.editorForm, "presentation")?.stop()
   try {
     await getCurrentWindow().setFullscreen(false)
   } catch (_error) {}
+}
+
+if (__ELEF_E2E__) {
+  globalThis.__elefPresentationTestHooks = { start: startPresentation }
 }
 
 async function resolveConflictWithDisk() {

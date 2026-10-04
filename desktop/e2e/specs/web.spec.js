@@ -6,6 +6,7 @@ import { externalEditConflictWorkflow, CONFLICT_EXTERNAL_SOURCE } from "../scena
 import { hostileDeckNeutralizedWorkflow } from "../scenarios/hostile-deck.js"
 import { mathInputWorkflow, snippetInsertWorkflow } from "../scenarios/authoring-palettes.js"
 import { PIXEL_PNG_MARKDOWN } from "../scenarios/media-fixture.js"
+import { presentationModeWorkflow } from "../scenarios/presentation-mode.js"
 import { execFileSync } from "node:child_process"
 import path from "node:path"
 import { readFile } from "node:fs/promises"
@@ -60,6 +61,35 @@ class WebEditorUi {
     const path = isDocument ? "documents" : "presentations"
     await this.page.goto(`/${path}/${id}/edit?editor_mode=source`)
     await expect(this.page.locator(".source-field .cm-content")).toBeVisible()
+  }
+
+  async enterPresentationMode() {
+    if (!this.activeWorkId) throw new Error("Open a presentation deck before entering presentation mode")
+    await this.page.goto(`/presentations/${this.activeWorkId}/present`)
+    await expect(this.page.locator(".presentation-stage .slide-frame")).toHaveCount(2)
+  }
+
+  async assertPresentationSlide(index, title) {
+    const slides = this.page.locator(".presentation-stage > .slide-frame")
+    await expect(slides).toHaveCount(2)
+    await expect(slides.nth(index)).toBeVisible()
+    await expect(slides.nth(index)).toContainText(title)
+    await expect(slides.nth(1 - index)).toBeHidden()
+  }
+
+  async movePresentation(key) {
+    await this.page.keyboard.press(key)
+  }
+
+  async exitPresentationMode() {
+    await this.returnToEditor()
+  }
+
+  async returnToEditor() {
+    if (this.activeWorkId && !this.page.url().includes(`/presentations/${this.activeWorkId}/edit`)) {
+      await this.page.goto(`/presentations/${this.activeWorkId}/edit?editor_mode=source`)
+      await expect(this.page.locator(".source-field .cm-content")).toBeVisible()
+    }
   }
 
   async reopenDeck() {
@@ -439,6 +469,10 @@ test("shared editing flow works in the web app", async ({ page }) => {
   await expect(page.locator(".source-field .cm-content")).toContainText("Saved by shared scenario")
   await expect.poll(() => page.locator(".source-field").evaluate(field => field.editorController.sourceValue)).toContain(PIXEL_PNG_MARKDOWN)
   expect(await page.locator(".source-field .cm-content").innerText()).toContain(SAVED_SOURCE.split("\n")[0])
+})
+
+test("shared presentation navigation works in the web app", async ({ page }) => {
+  await presentationModeWorkflow(new WebEditorUi(page))
 })
 
 test("shared library and document graph flow works in the web app", async ({ page }) => {

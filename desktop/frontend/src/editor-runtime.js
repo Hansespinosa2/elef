@@ -11,12 +11,25 @@ import MermaidAssistController from "controllers/mermaid_assist_controller"
 import MediaController from "controllers/media_controller"
 import PreviewController from "controllers/preview_controller"
 import PresentationCanvasController from "controllers/presentation_canvas_controller"
+import PresentationController from "controllers/presentation_controller"
 import VisualEditorController from "controllers/visual_editor_controller"
 import PresentationEditorController from "controllers/presentation_editor_controller"
 import SlideOverviewController from "controllers/slide_overview_controller"
 import DocumentPagesController from "controllers/document_pages_controller"
 import MermaidDiagramsController from "controllers/mermaid_diagrams_controller"
 import SnippetPaletteController from "controllers/snippet_palette_controller"
+
+if (__ELEF_E2E__) {
+  const handleError = application.handleError.bind(application)
+  application.handleError = (error, message, detail) => {
+    globalThis.__elefE2EControllerErrors ||= []
+    globalThis.__elefE2EControllerErrors.push({
+      message: String(message),
+      error: error?.stack || String(error)
+    })
+    handleError(error, message, detail)
+  }
+}
 
 globalThis.katex = katex
 
@@ -30,6 +43,7 @@ application.register("mermaid-assist", MermaidAssistController)
 application.register("media", MediaController)
 application.register("preview", PreviewController)
 application.register("presentation-canvas", PresentationCanvasController)
+application.register("presentation", PresentationController)
 application.register("visual-editor", VisualEditorController)
 application.register("presentation-editor", PresentationEditorController)
 application.register("slide-overview", SlideOverviewController)

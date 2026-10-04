@@ -5,7 +5,7 @@
 <% editor_slide_map = editor_map&.dig(:slides, slide.index) %>
 <% editor_blocks = editor_slide_map&.fetch(:blocks, []) || [] %>
 <% editor_regions = editor_slide_map&.fetch(:editable_regions, []) || [] %>
-<section class="slide <%= 'presentation-slide ' if presentation_slide %>slide-<%= slide.layout %>" <%= 'data-presentation-target="slide"' if presentation_slide %> data-presentation-canvas-target="canvas" aria-label="Slide <%= slide.index + 1 %>"<% if editable %> data-editor-slide-id="slide-<%= slide.index + 1 %>" data-slide-index="<%= slide.index %>"<% end %>>
+<section class="slide <%= 'presentation-slide ' if presentation_slide %>slide-<%= slide.layout %>" data-presentation-canvas-target="canvas" aria-label="Slide <%= slide.index + 1 %>"<% if editable %> data-editor-slide-id="slide-<%= slide.index + 1 %>" data-slide-index="<%= slide.index %>"<% end %>>
   <% if editable %>
     <div class="presentation-editor-slide-toolbar" aria-label="Slide <%= slide.index + 1 %> controls">
       <span class="presentation-editor-slide-label">Slide <%= slide.index + 1 %></span>
