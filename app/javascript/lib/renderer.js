@@ -2,6 +2,7 @@ import MarkdownIt from "markdown-it"
 import hljs from "highlight.js/lib/common"
 import katex from "katex"
 import { buildEditorStructure } from "./document_map.js"
+import { createDocumentLinkResolver, parseDocumentLinkAt } from "./document_links.js"
 
 const SAFE_LINK = /^(?:https?:|mailto:|tel:|#|\/|\.\.?\/|[^:]*$)/i
 
@@ -96,26 +97,16 @@ markdown.inline.ruler.after("backticks", "elef_math", (state, silent) => {
 
 markdown.inline.ruler.after("backticks", "elef_wiki_link", (state, silent) => {
   const start = state.pos
-  if (!state.src.startsWith("[[", start) || state.src.startsWith("[[[", start)) return false
-  const close = state.src.indexOf("]]", start + 2)
-  if (close < 0 || state.src.slice(start + 2, close).includes("\n")) return false
-  const raw = state.src.slice(start + 2, close).trim()
+  const token = parseDocumentLinkAt(state.src, start)
+  if (!token) return false
+  const close = token.end - 2
+  const raw = token.title.trim()
   const [targetText, displayText] = raw.split("|", 2)
   const target = targetText.trim()
-  const normalizedTarget = target.replace(/^(?:document|id):/, "")
   if (!target || target.length > 200 || /[<>\u0000-\u001f]/.test(target)) return false
   if (silent) return true
 
-  const node = (state.env?.documentNodes || []).find((entry) =>
-    entry.title === target
-      || entry.id === target
-      || entry.id === normalizedTarget
-      || entry.documentKey === target
-      || entry.documentKey === normalizedTarget
-      || entry.document_key === target
-      || entry.document_key === normalizedTarget
-      || entry.aliases?.includes?.(target)
-  )
+  const node = state.env?.resolveDocumentLink?.(target) || null
   const label = (displayText || node?.title || target).trim()
   if (!node) {
     const unresolved = state.push("html_inline", "", 0)
@@ -181,7 +172,8 @@ export function renderMarkdownBlock(source = "", options = {}) {
     mediaBaseUrl: options.mediaBaseUrl || "",
     mediaMap: options.mediaMap || {},
     allowRemoteMedia: options.allowRemoteMedia === true,
-    documentNodes: options.documentNodes || []
+    documentNodes: options.documentNodes || [],
+    resolveDocumentLink: options.resolveDocumentLink || createDocumentLinkResolver(options.documentNodes || [])
   })
 }
 
@@ -218,7 +210,13 @@ export function renderPreview({
   }
   const marginSettings = { ...structure.marginSettings, ...marginOverrides }
   const mediaUrl = mediaBaseUrl || `elefasset://localhost/${encodeURIComponent(deckId)}`
-  const env = { mediaBaseUrl: mediaUrl, mediaMap, allowRemoteMedia, documentNodes }
+  const env = {
+    mediaBaseUrl: mediaUrl,
+    mediaMap,
+    allowRemoteMedia,
+    documentNodes,
+    resolveDocumentLink: createDocumentLinkResolver(documentNodes)
+  }
 
   const html = mode === "document"
     ? renderDocument(source, slides[0], style, env)

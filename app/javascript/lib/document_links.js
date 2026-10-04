@@ -1,0 +1,127 @@
+export function parseDocumentLinkAt(source, start = 0) {
+  if (typeof source !== "string" || !source.startsWith("[[", start) || source.startsWith("[[[", start) ||
+      (start > 0 && source[start - 1] === "[")) return null
+  const close = source.indexOf("]]", start + 2)
+  if (close < 0 || source.slice(start + 2, close).includes("\n")) return null
+  return { title: source.slice(start + 2, close), start, end: close + 2 }
+}
+
+export function extractDocumentLinkTitles(source = "") {
+  if (typeof source !== "string") return []
+  const links = []
+  let fence = null
+
+  for (const line of source.split(/\r?\n/)) {
+    const marker = line.match(/^ {0,3}(`{3,}|~{3,})(.*)$/)
+    if (marker) {
+      if (!fence) fence = { character: marker[1][0], length: marker[1].length }
+      else if (marker[1][0] === fence.character && marker[1].length >= fence.length && !marker[2].trim()) fence = null
+      continue
+    }
+    if (fence || line.startsWith("    ") || line.startsWith("\t")) continue
+
+    let cursor = 0
+    while (cursor + 1 < line.length) {
+      const start = line.indexOf("[[", cursor)
+      if (start < 0) break
+      const token = parseDocumentLinkAt(line, start)
+      if (!token) {
+        cursor = start + 2
+        continue
+      }
+      const end = token.end
+      if (!isEscaped(line, start) && !inlineCodeContains(line, start, end) &&
+          token.title.length > 0 && !/[\]`]/.test(token.title)) {
+        links.push(token.title)
+      }
+      cursor = end
+    }
+  }
+  return links
+}
+
+export function createDocumentLinkResolver(documents = []) {
+  const byTitle = new Map()
+  const byAlias = new Map()
+  const byKey = new Map()
+  const byId = new Map()
+
+  for (const document of documents) {
+    if (document?.title != null) byTitle.set(String(document.title), document)
+    if (document?.id != null) byId.set(String(document.id), document)
+    const key = document?.documentKey ?? document?.document_key ?? document?.id
+    if (key != null) byKey.set(String(key), document)
+    for (const alias of Array.isArray(document?.aliases) ? document.aliases : []) {
+      if (typeof alias === "string") byAlias.set(alias, document)
+    }
+  }
+
+  return value => {
+    const tokenKey = String(value ?? "").split("|", 2)[0]
+    const explicitKey = tokenKey.match(/^(?:document|id):(.*)$/)
+    if (explicitKey) return byKey.get(explicitKey[1]) || byId.get(explicitKey[1]) || null
+    return byAlias.get(tokenKey) || byTitle.get(tokenKey) || byKey.get(tokenKey) || byId.get(tokenKey) || null
+  }
+}
+
+export function buildDocumentGraph(documents = []) {
+  if (!Array.isArray(documents)) throw new TypeError("Document graph input must be a list.")
+  const entries = documents.filter(document => document && document.id != null && typeof document.title === "string")
+  const resolve = createDocumentLinkResolver(entries)
+  const nodes = entries.map((document, index) => ({
+    id: document.id,
+    title: document.title,
+    url: document.url || document.href || `#deck/${encodeURIComponent(String(document.id))}`,
+    documentKey: document.documentKey ?? document.document_key ?? String(document.id),
+    aliases: Array.isArray(document.aliases) ? document.aliases : [],
+    x: 120 + (index % 4) * 220,
+    y: 100 + Math.floor(index / 4) * 150
+  }))
+  const edges = []
+  const seen = new Set()
+
+  for (const document of entries) {
+    for (const title of extractDocumentLinkTitles(document.source || "")) {
+      const target = resolve(title)
+      if (!target) continue
+      const key = JSON.stringify([String(document.id), String(target.id)])
+      if (seen.has(key)) continue
+      seen.add(key)
+      edges.push({ source: document.id, target: target.id })
+    }
+  }
+  return { nodes, edges }
+}
+
+function inlineCodeContains(line, start, end) {
+  let cursor = 0
+  while (cursor < line.length) {
+    if (line[cursor] !== "`") {
+      cursor += 1
+      continue
+    }
+    const runStart = cursor
+    while (line[cursor] === "`") cursor += 1
+    const runLength = cursor - runStart
+    let search = cursor
+    while (search < line.length) {
+      const closingStart = line.indexOf("`", search)
+      if (closingStart < 0) break
+      let closingEnd = closingStart
+      while (line[closingEnd] === "`") closingEnd += 1
+      if (closingEnd - closingStart === runLength) {
+        if (start < closingEnd && end > runStart) return true
+        cursor = closingEnd
+        break
+      }
+      search = closingEnd
+    }
+  }
+  return false
+}
+
+function isEscaped(line, position) {
+  let backslashes = 0
+  for (let cursor = position - 1; cursor >= 0 && line[cursor] === "\\"; cursor -= 1) backslashes += 1
+  return backslashes % 2 === 1
+}

@@ -14,7 +14,11 @@ module Source
       context.call("ElefRenderer.renderLibraryCard", properties)
     end
 
-    def render(markdown, media_resolver: nil, allow_remote_media: true)
+    def document_graph(documents)
+      context.call("ElefRenderer.buildDocumentGraph", documents).deep_symbolize_keys
+    end
+
+    def render(markdown, media_resolver: nil, document_nodes: [], allow_remote_media: true)
       source = markdown.to_s
       raise ArgumentError, "Markdown source exceeds the renderer limit" if source.bytesize > MAX_RENDER_BYTES
 
@@ -25,7 +29,8 @@ module Source
         source,
         {
           mediaMap: media_map,
-          allowRemoteMedia: allow_remote_media
+          allowRemoteMedia: allow_remote_media,
+          documentNodes: document_nodes
         }
       )
     end

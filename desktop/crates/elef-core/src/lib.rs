@@ -75,24 +75,10 @@ pub struct DeckSummary {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct DocumentGraph {
-    pub nodes: Vec<DocumentGraphNode>,
-    pub edges: Vec<DocumentGraphEdge>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct DocumentGraphNode {
+pub struct DocumentGraphDocument {
     pub id: String,
     pub title: String,
-    pub url: String,
-    pub x: usize,
-    pub y: usize,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct DocumentGraphEdge {
     pub source: String,
-    pub target: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -304,7 +290,7 @@ impl Library {
         Ok(summaries)
     }
 
-    pub fn document_graph(&self) -> Result<DocumentGraph, CoreError> {
+    pub fn document_graph(&self) -> Result<Vec<DocumentGraphDocument>, CoreError> {
         let summaries = self
             .list_decks()?
             .into_iter()
@@ -317,52 +303,13 @@ impl Library {
             let bytes = read_regular_file(&record.source_path)?;
             let source = String::from_utf8(bytes).map_err(|_| CoreError::InvalidInput)?;
             let title = markdown_document_title(&source, &summary.name);
-            documents.push((summary.id, title, source));
+            documents.push(DocumentGraphDocument {
+                id: summary.id,
+                title,
+                source,
+            });
         }
-
-        let mut title_to_id = HashMap::new();
-        let id_set = documents
-            .iter()
-            .map(|(id, _, _)| id.clone())
-            .collect::<HashSet<_>>();
-        for (id, title, _) in &documents {
-            title_to_id
-                .entry(title.clone())
-                .or_insert_with(|| id.clone());
-        }
-
-        let nodes = documents
-            .iter()
-            .enumerate()
-            .map(|(index, (id, title, _))| DocumentGraphNode {
-                id: id.clone(),
-                title: title.clone(),
-                url: format!("#deck/{}", id),
-                x: 120 + (index % 4) * 220,
-                y: 100 + (index / 4) * 150,
-            })
-            .collect();
-        let mut seen = HashSet::new();
-        let mut edges = Vec::new();
-        for (source_id, _, source) in &documents {
-            for link_title in markdown_document_links(source) {
-                let key = link_title.split('|').next().unwrap_or_default();
-                let target = key
-                    .strip_prefix("document:")
-                    .or_else(|| key.strip_prefix("id:"))
-                    .filter(|id| id_set.contains(*id))
-                    .map(str::to_owned)
-                    .or_else(|| title_to_id.get(key).cloned());
-                let Some(target) = target else { continue };
-                if seen.insert((source_id.clone(), target.clone())) {
-                    edges.push(DocumentGraphEdge {
-                        source: source_id.clone(),
-                        target,
-                    });
-                }
-            }
-        }
-        Ok(DocumentGraph { nodes, edges })
+        Ok(documents)
     }
 
     pub fn deck_summary(&self, id: &str) -> Result<DeckSummary, CoreError> {
@@ -1859,52 +1806,6 @@ fn is_front_matter_key(line: &str) -> bool {
         })
 }
 
-fn markdown_document_links(source: &str) -> Vec<String> {
-    let mut links = Vec::new();
-    let mut fence: Option<(u8, usize)> = None;
-    for line in source.lines() {
-        if let Some((character, length, remainder)) = markdown_fence_marker(line) {
-            if let Some((active_character, active_length)) = fence {
-                if character == active_character
-                    && length >= active_length
-                    && remainder.trim().is_empty()
-                {
-                    fence = None;
-                }
-            } else {
-                fence = Some((character, length));
-            }
-            continue;
-        }
-        if fence.is_some() || line.starts_with("    ") || line.starts_with('\t') {
-            continue;
-        }
-
-        let bytes = line.as_bytes();
-        let mut cursor = 0;
-        while cursor + 1 < bytes.len() {
-            if bytes[cursor] != b'[' || bytes[cursor + 1] != b'[' || is_escaped(bytes, cursor) {
-                cursor += 1;
-                continue;
-            }
-            let Some(close_relative) = line[cursor + 2..].find("]]") else {
-                break;
-            };
-            let end = cursor + 2 + close_relative;
-            if inline_code_contains(line, cursor, end + 2) {
-                cursor = end + 2;
-                continue;
-            }
-            let title = &line[cursor + 2..end];
-            if !title.is_empty() && !title.contains(']') && !title.contains('`') {
-                links.push(title.to_owned());
-            }
-            cursor = end + 2;
-        }
-    }
-    links
-}
-
 fn markdown_fence_marker(line: &str) -> Option<(u8, usize, &str)> {
     let leading_spaces = line.bytes().take_while(|byte| *byte == b' ').count();
     if leading_spaces > 3 {
@@ -1917,52 +1818,6 @@ fn markdown_fence_marker(line: &str) -> Option<(u8, usize, &str)> {
     }
     let length = rest.bytes().take_while(|byte| *byte == character).count();
     (length >= 3).then_some((character, length, &rest[length..]))
-}
-
-fn inline_code_contains(line: &str, start: usize, end: usize) -> bool {
-    let bytes = line.as_bytes();
-    let mut cursor = 0;
-    while cursor < bytes.len() {
-        if bytes[cursor] != b'`' {
-            cursor += 1;
-            continue;
-        }
-        let run_start = cursor;
-        while cursor < bytes.len() && bytes[cursor] == b'`' {
-            cursor += 1;
-        }
-        let run_length = cursor - run_start;
-        let mut search = cursor;
-        while search < bytes.len() {
-            let Some(relative) = bytes[search..].iter().position(|byte| *byte == b'`') else {
-                break;
-            };
-            let closing_start = search + relative;
-            let closing_length = bytes[closing_start..]
-                .iter()
-                .take_while(|byte| **byte == b'`')
-                .count();
-            if closing_length == run_length {
-                if start < closing_start + closing_length && end > run_start {
-                    return true;
-                }
-                cursor = closing_start + closing_length;
-                break;
-            }
-            search = closing_start + closing_length;
-        }
-    }
-    false
-}
-
-fn is_escaped(bytes: &[u8], position: usize) -> bool {
-    let mut backslashes = 0;
-    let mut cursor = position;
-    while cursor > 0 && bytes[cursor - 1] == b'\\' {
-        backslashes += 1;
-        cursor -= 1;
-    }
-    backslashes % 2 == 1
 }
 
 fn read_manifest(deck_path: &Path) -> Result<Option<DeckManifest>, ()> {
@@ -2514,7 +2369,7 @@ mod tests {
     }
 
     #[test]
-    fn document_graph_uses_document_titles_and_ignores_code_links() {
+    fn document_graph_command_returns_documents_for_shared_frontend_resolution() {
         let (temp, library) = library();
         write_deck(
             temp.path(),
@@ -2532,7 +2387,7 @@ mod tests {
         );
 
         let summaries = library.list_decks().unwrap();
-        let graph = library.document_graph().unwrap();
+        let graph_documents = library.document_graph().unwrap();
         let first_id = summaries
             .iter()
             .find(|deck| deck.name == "A")
@@ -2545,16 +2400,21 @@ mod tests {
             .unwrap()
             .id
             .clone();
-        assert_eq!(graph.nodes.len(), 2);
-        assert!(
-            graph
-                .nodes
+        assert_eq!(graph_documents.len(), 2);
+        let first = graph_documents
+            .iter()
+            .find(|document| document.id == first_id)
+            .unwrap();
+        assert_eq!(first.title, "First Document");
+        assert!(first.source.contains("[[Second Document|next]]"));
+        assert_eq!(
+            graph_documents
                 .iter()
-                .any(|node| node.title == "First Document")
+                .find(|document| document.id == second_id)
+                .unwrap()
+                .title,
+            "Second Document"
         );
-        assert_eq!(graph.edges.len(), 1);
-        assert_eq!(graph.edges[0].source, first_id);
-        assert_eq!(graph.edges[0].target, second_id);
     }
 
     #[cfg(unix)]

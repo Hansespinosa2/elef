@@ -55,6 +55,7 @@ importmap = (ROOT / "config/importmap.rb").read_text()
 renderer_build = (ROOT / "script/build_renderer.mjs").read_text()
 renderer_sources = (
     ROOT / "app/javascript/lib/renderer.js",
+    ROOT / "app/javascript/lib/document_links.js",
     ROOT / "app/javascript/lib/document_map.js",
     ROOT / "app/javascript/lib/renderer_global.js",
 )
@@ -75,6 +76,15 @@ assert '"lib/library_view"' in desktop_main and '"lib/library_filter"' in deskto
 )
 assert '"lib/authoring_settings_dialog"' in desktop_main, "desktop authoring settings UI must consume the Rails-owned dialog"
 assert '"lib/library_card"' in desktop_main, "desktop library cards must be owned by app/javascript"
+assert '"lib/document_links"' in desktop_main and "buildDocumentGraph" in desktop_main, (
+    "desktop graph construction must consume the Rails-owned resolver"
+)
+assert '"ElefRenderer.buildDocumentGraph"' in (ROOT / "app/lib/source/javascript_renderer.rb").read_text(), (
+    "Rails graph construction must use the same app-owned resolver"
+)
+assert "markdown_document_links" not in (ROOT / "desktop/crates/elef-core/src/lib.rs").read_text(), (
+    "desktop core must not keep a parallel document-link parser"
+)
 authoring_settings_dialog = (ROOT / "app/javascript/lib/authoring_settings_dialog.js").read_text()
 assert '"./authoring_registry_write.js"' in authoring_settings_dialog, "authoring UI must use the app-owned persistence flow"
 assert '"controllers/presentation_controller"' in (ROOT / "desktop/frontend/src/editor-runtime.js").read_text(), (

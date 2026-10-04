@@ -11,6 +11,7 @@ import { check as checkUpdater } from "@tauri-apps/plugin-updater"
 import { editorFor } from "controllers/editor_controller"
 import { createLibraryCard } from "lib/library_card"
 import { createDocumentGraphCache } from "lib/document_graph_cache"
+import { buildDocumentGraph } from "lib/document_links"
 import { createTransportAdapter } from "./transport-adapter.js"
 import { waitForEditorController } from "lib/editor_ready"
 import { createSaveFlow } from "lib/save_flow"
@@ -153,7 +154,7 @@ let libraryConfig = { schema_version: 1, theme: "system", hotkeys: {} }
 let decks = []
 let activeDeck = null
 let saveFlow = null
-const documentGraphCache = createDocumentGraphCache(() => invoke("document_graph"))
+const documentGraphCache = createDocumentGraphCache(async () => buildDocumentGraph(await invoke("document_graph")))
 let libraryTab = "all"
 let cardPreviewObserver = null
 let pendingUpdate = null

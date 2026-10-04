@@ -4,8 +4,9 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
 use elef_core::{
-    AuthoringRegistries, CoreError, DeckPreview, DeckSummary, DocumentGraph, ImportResolution,
-    ImportResult, Library, LibraryConfig, OpenDeck, SaveResult, SourceSnapshot, UploadedAsset,
+    AuthoringRegistries, CoreError, DeckPreview, DeckSummary, DocumentGraphDocument,
+    ImportResolution, ImportResult, Library, LibraryConfig, OpenDeck, SaveResult, SourceSnapshot,
+    UploadedAsset,
 };
 use serde::Serialize;
 use tauri::RunEvent;
@@ -398,7 +399,9 @@ fn list_decks(state: State<'_, DesktopState>) -> Result<Vec<DeckSummary>, Comman
 }
 
 #[tauri::command]
-fn document_graph(state: State<'_, DesktopState>) -> Result<DocumentGraph, CommandError> {
+fn document_graph(
+    state: State<'_, DesktopState>,
+) -> Result<Vec<DocumentGraphDocument>, CommandError> {
     Ok(state.current_library()?.document_graph()?)
 }
 

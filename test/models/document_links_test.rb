@@ -78,6 +78,23 @@ class DocumentLinksTest < ActiveSupport::TestCase
     assert_equal [{ source: source.id, target: target.id }], graph[:edges]
   end
 
+  test "the shared graph resolver handles aliases, stable keys, and code consistently" do
+    target = Document.create!(title: "Target", source: "# Target")
+    target.document_aliases.create!(workspace: target.workspace, alias_name: "theorem")
+    source = Document.create!(
+      title: "Source",
+      source: "[[theorem]] [[document:#{target.document_key}|key]] [[Target]] `[[Inline]]`\n\n```md\n[[Fenced]]\n```"
+    )
+
+    graph = DocumentLinks::Graph.new([source, target]).as_json
+    html = DocumentLinks::Renderer.render(source.source, documents: [source, target])
+
+    assert_equal [{ source: source.id, target: target.id }], graph[:edges]
+    assert_equal target.document_key, graph[:nodes].last[:document_key] || graph[:nodes].last[:documentKey]
+    assert_equal 3, html.scan(%(href="/documents/#{target.id}")).length
+    assert_equal 3, html.scan('class="document-link"').length
+  end
+
   test "document titles are unique without constraining presentation titles" do
     Document.create!(title: "Shared title", source: "# Notes")
     duplicate = Document.new(title: "Shared title", source: "# Other")

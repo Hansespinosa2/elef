@@ -47,7 +47,7 @@ The editor table above omits the new library shell. These need the same capabili
 | Command | Purpose | Touches |
 |---|---|---|
 | `list_decks` | Scan library root → `[{ id, name, path, modified }]` | Read-only, library root |
-| `document_graph` | Read document Markdown files and build the graph from `[[title]]` links → `{ nodes, edges }` | Read-only, document source files only; code spans and fenced/indented code do not create edges |
+| `document_graph` | Read document titles and source; the Rails-owned frontend builds `{ nodes, edges }` through the shared link resolver | Read-only, document source files only; code spans and fenced/indented code do not create edges |
 | `open_deck` | Resolve source file, read source, create `elef.json` if absent → `{ source, content_hash, manifest }` | One deck |
 | `read_deck_preview` | Read a bounded source sample for the library card preview; does not create or repair a manifest | One deck, source read capped at 256 KiB |
 | `read_source_snapshot` | Read and hash the currently open source without creating or changing files | One deck, read-only |
