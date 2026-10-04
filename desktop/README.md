@@ -4,6 +4,8 @@ The desktop app lives in this workspace. `crates/elef-core` owns file and folder
 
 ## Local development
 
+For first install and everyday use, see [Install and use Elef Desktop](../docs/desktop/install-and-use.md).
+
 ```sh
 cd desktop/frontend
 npm ci

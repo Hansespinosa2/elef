@@ -41,7 +41,10 @@ jobs:
           args: --config src-tauri/tauri.release.generated.conf.json --bundles app,dmg
           tagName: ${{ github.ref_name }}
           releaseName: Elef Desktop ${{ github.ref_name }}
-          releaseBody: Signed macOS and Linux builds. See the assets for installation instructions.
+          releaseBody: |
+            Updater downloads are signed and verified by Elef before installation.
+
+            [Install and use Elef Desktop](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/docs/desktop/install-and-use.md)
           releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true
@@ -84,7 +87,10 @@ jobs:
           args: --config src-tauri/tauri.release.generated.conf.json --bundles appimage
           tagName: ${{ github.ref_name }}
           releaseName: Elef Desktop ${{ github.ref_name }}
-          releaseBody: Signed macOS and Linux builds. See the assets for installation instructions.
+          releaseBody: |
+            Updater downloads are signed and verified by Elef before installation.
+
+            [Install and use Elef Desktop](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/docs/desktop/install-and-use.md)
           releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true
