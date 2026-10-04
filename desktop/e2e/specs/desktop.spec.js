@@ -68,13 +68,13 @@ function focusDesktopWindow() {
   throw new Error(`Native window activation is unsupported on ${process.platform}`)
 }
 
-function sendNativeKey(key) {
+function sendNativeKey(key, { activate = true } = {}) {
   const linuxKeys = {
     Escape: "Escape", Enter: "Return", ArrowRight: "Right", ArrowLeft: "Left", Home: "Home", End: "End"
   }
   const macKeyCodes = { Escape: 53, Enter: 36, ArrowRight: 124, ArrowLeft: 123, Home: 115, End: 119 }
   if (process.platform === "linux") {
-    focusDesktopWindow()
+    if (activate) focusDesktopWindow()
     const nativeKey = linuxKeys[key]
     if (!nativeKey) throw new Error(`Unsupported native key ${key}`)
     execFileSync("xdotool", ["key", "--clearmodifiers", nativeKey], { timeout: 5_000 })
@@ -89,9 +89,9 @@ function sendNativeKey(key) {
   throw new Error(`Native keyboard input is unsupported on ${process.platform}`)
 }
 
-function typeNativeText(value) {
+function typeNativeText(value, { activate = true } = {}) {
   if (process.platform === "linux") {
-    focusDesktopWindow()
+    if (activate) focusDesktopWindow()
     execFileSync("xdotool", ["type", "--clearmodifiers", "--delay", "10", value], { timeout: 10_000 })
     return
   }
@@ -968,12 +968,15 @@ class DesktopLibraryUi {
   }
 
   async openGraphDocument(title) {
-    const node = await $(`[aria-label='Open ${title}']`)
-    await browser.action("pointer", { parameters: { pointerType: "mouse" } })
-      .move({ origin: node })
-      .down()
-      .up()
-      .perform()
+    const opened = await browser.execute(expectedTitle => {
+      const node = [...document.querySelectorAll(".document-graph-node")]
+        .find(candidate => candidate.getAttribute("aria-label") === `Open ${expectedTitle}`)
+      if (!node) throw new Error(`The graph node for ${expectedTitle} is unavailable`)
+      // The embedded WebDriver's native click path does not support SVGAnchorElement.
+      const event = new MouseEvent("click", { bubbles: true, cancelable: true, view: window })
+      return !node.dispatchEvent(event)
+    }, title)
+    if (!opened) throw new Error(`The graph did not handle the ${title} activation`)
   }
 
   async assertDocumentOpened(title) {
@@ -1121,6 +1124,8 @@ describe("desktop binary workflows and native boundaries", () => {
     const needsLineBreak = !original.endsWith("\n")
     const expected = `${original}${needsLineBreak ? "\n" : ""}${inserted}`
     try {
+      await browser.execute(() => window.focus())
+      focusDesktopWindow()
       await browser.execute(() => {
         const field = document.querySelector("#desktop-editor-field")
         const editor = field?.editorController
@@ -1131,10 +1136,16 @@ describe("desktop binary workflows and native boundaries", () => {
         window.__elefTrustedEditorKeys = { target: editor.view.contentDOM, handler, events }
         editor.setSelectionRange(editor.sourceValue.length)
         editor.view.focus()
+        if (!editor.view.hasFocus || document.activeElement !== editor.view.contentDOM) {
+          throw new Error(`CodeMirror did not receive focus: ${JSON.stringify({
+            editorHasFocus: editor.view.hasFocus,
+            activeElement: document.activeElement?.outerHTML?.slice(0, 240) || null,
+            dialogs: [...document.querySelectorAll("dialog[open]")].map(dialog => dialog.id)
+          })}`)
+        }
       })
-      await browser.execute(() => window.focus())
-      if (needsLineBreak) sendNativeKey("Enter")
-      typeNativeText(inserted)
+      if (needsLineBreak) sendNativeKey("Enter", { activate: false })
+      typeNativeText(inserted, { activate: false })
 
       const focus = await browser.execute(() => {
         const editor = document.querySelector("#desktop-editor-field")?.editorController

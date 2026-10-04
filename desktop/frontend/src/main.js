@@ -896,6 +896,10 @@ async function startPresentation() {
     await getCurrentWindow().setFullscreen(true)
   } catch (_error) {
     showNotice("Presentation mode is open. Use Esc to return to editing.")
+  } finally {
+    // Native fullscreen can move focus to the exit button. Put keyboard
+    // navigation back on the shared presentation stage after the transition.
+    presentation.stageTarget?.focus({ preventScroll: true })
   }
 }
 
