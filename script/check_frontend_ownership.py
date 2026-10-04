@@ -8,6 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SHARED_RAILS_PATHS = ("app", "bin", "config", "lib", "script", "test")
 DESKTOP_SOURCE_REFERENCE = re.compile(r"desktop/")
+MODULE_SPECIFIER = re.compile(r"(?:\bfrom\s*|\bimport\s*(?:\(\s*)?)[\"']([^\"']+)[\"']")
 checker = Path(__file__).resolve()
 
 violations = []
@@ -27,8 +28,30 @@ assert not violations, (
     + ", ".join(violations)
 )
 
+app_frontend = ROOT / "app" / "javascript"
+desktop_root = (ROOT / "desktop").resolve()
+frontend_import_violations = []
+for path in app_frontend.rglob("*.js"):
+    source = path.read_text()
+    if "@tauri-apps/" in source or "__TAURI__" in source:
+        frontend_import_violations.append(f"{path.relative_to(ROOT)} directly uses Tauri APIs")
+    for specifier in MODULE_SPECIFIER.findall(source):
+        if specifier.startswith(("@tauri-apps/", "desktop/", "/desktop/")):
+            frontend_import_violations.append(f"{path.relative_to(ROOT)} imports {specifier}")
+        elif specifier.startswith(("./", "../")):
+            target = (path.parent / specifier).resolve()
+            if target == desktop_root or desktop_root in target.parents:
+                frontend_import_violations.append(f"{path.relative_to(ROOT)} imports {specifier}")
+
+assert not frontend_import_violations, (
+    "Rails frontend modules must not depend on Tauri or desktop source: "
+    + ", ".join(frontend_import_violations)
+)
+
 build = (ROOT / "desktop/frontend/build.mjs").read_text()
 desktop_main = (ROOT / "desktop/frontend/src/main.js").read_text()
+presentation_controller = (ROOT / "app/javascript/controllers/presentation_controller.js").read_text()
+importmap = (ROOT / "config/importmap.rb").read_text()
 renderer_build = (ROOT / "script/build_renderer.mjs").read_text()
 renderer_sources = (
     ROOT / "app/javascript/lib/renderer.js",
@@ -50,17 +73,29 @@ assert '"lib/save_flow"' in desktop_main and '"lib/preview_sanitizer"' in deskto
 assert '"lib/library_view"' in desktop_main and '"lib/library_filter"' in desktop_main, (
     "desktop library behavior must import Rails-owned components"
 )
+assert '"lib/authoring_settings_dialog"' in desktop_main, "desktop authoring settings UI must consume the Rails-owned dialog"
+authoring_settings_dialog = (ROOT / "app/javascript/lib/authoring_settings_dialog.js").read_text()
+assert '"./authoring_registry_write.js"' in authoring_settings_dialog, "authoring UI must use the app-owned persistence flow"
+assert "presentationActionForKey" in presentation_controller and "presentationActionForKey" in desktop_main, (
+    "Rails and desktop presentation controls must use the same keyboard mapping"
+)
+assert 'pin "lib/presentation_navigation", to: "lib/presentation_navigation.js"' in importmap, (
+    "Rails must resolve the shared presentation navigation module"
+)
+assert "write_authoring_registry" not in (ROOT / "app/javascript/lib/authoring_registry_write.js").read_text(), (
+    "Rails-owned authoring flow must receive persistence through a host transport callback"
+)
 for shared_module in (
     "deck_open_flow", "document_graph_cache", "editor_ready", "editor_source",
     "feature_flags", "library_preview", "performance_measurement", "presentation_navigation", "renderer_worker_client",
-    "authoring_registry_write", "save_flow", "title_save_flow",
+    "authoring_settings_dialog", "save_flow", "title_save_flow",
 ):
     assert f'"lib/{shared_module}"' in desktop_main, f"desktop must consume app/javascript/lib/{shared_module}.js"
 assert all(path.is_file() for path in renderer_sources), "renderer source must stay under app/javascript"
 assert "desktop/" not in renderer_build, "Rails renderer generation must not reference desktop files"
 desktop_sources = ROOT / "desktop/frontend/src"
 for shared_source in (
-    "authoring-registry-write.js", "authoring-settings.js", "deck-open-flow.js",
+    "authoring-registry-write.js", "authoring-settings.js", "authoring_settings_dialog.js", "deck-open-flow.js",
     "document-graph-cache.js", "document-map.js", "editor-ready.js", "editor-source.js",
     "feature-flags.js", "library-preview.js", "performance-measurement.js", "presentation-flow.js", "preview-sanitizer.js",
     "registry-merge.js", "renderer-client.js", "renderer-global.js", "renderer.js",

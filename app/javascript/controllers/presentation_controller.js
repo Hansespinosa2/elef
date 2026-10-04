@@ -1,10 +1,13 @@
 import { Controller } from "@hotwired/stimulus"
+import { createPresentationNavigation, presentationActionForKey } from "lib/presentation_navigation"
 
 export default class extends Controller {
   static targets = ["slide", "counter", "stage"]
   static values = { index: Number }
 
   connect() {
+    this.navigation = createPresentationNavigation(this.slideTargets.length)
+    this.indexValue = this.navigation?.currentIndex ?? 0
     this.keyHandler = (event) => this.handleKey(event)
     document.addEventListener("keydown", this.keyHandler)
     this.showCurrentSlide()
@@ -16,12 +19,14 @@ export default class extends Controller {
   }
 
   next() {
-    this.indexValue = Math.min(this.indexValue + 1, this.slideTargets.length - 1)
+    if (!this.navigation) return
+    this.indexValue = this.navigation.next()
     this.showCurrentSlide()
   }
 
   previous() {
-    this.indexValue = Math.max(this.indexValue - 1, 0)
+    if (!this.navigation) return
+    this.indexValue = this.navigation.previous()
     this.showCurrentSlide()
   }
 
@@ -32,20 +37,18 @@ export default class extends Controller {
 
   handleKey(event) {
     if (event.target.closest?.("a, button, input, select, textarea, summary, [contenteditable='true']")) return
-
-    if (["ArrowRight", " ", "PageDown", "Enter"].includes(event.key)) {
-      event.preventDefault()
-      this.next()
-    } else if (["ArrowLeft", "PageUp", "Backspace"].includes(event.key)) {
-      event.preventDefault()
-      this.previous()
-    } else if (event.key === "Home") {
-      event.preventDefault()
-      this.indexValue = 0
+    const action = presentationActionForKey(event.key)
+    if (!action) return
+    event.preventDefault()
+    if (action === "next") this.next()
+    else if (action === "previous") this.previous()
+    else if (action === "first") {
+      if (!this.navigation) return
+      this.indexValue = this.navigation.first()
       this.showCurrentSlide()
-    } else if (event.key === "End") {
-      event.preventDefault()
-      this.indexValue = this.slideTargets.length - 1
+    } else if (action === "last") {
+      if (!this.navigation) return
+      this.indexValue = this.navigation.last()
       this.showCurrentSlide()
     }
   }

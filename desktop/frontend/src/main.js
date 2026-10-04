@@ -21,10 +21,9 @@ import { createRendererClient } from "lib/renderer_worker_client"
 import { installSanitizedPreview } from "lib/preview_sanitizer"
 import { checkForDesktopUpdate, installDesktopUpdate } from "./update-flow.js"
 import { desktopAuthoringRegistry, loadDesktopAuthoringRegistry } from "./authoring-registry-loader.js"
-import { buildAuthoringEntry, removeAuthoringEntry, upsertAuthoringEntry } from "lib/authoring_settings"
+import { createAuthoringSettingsDialog } from "lib/authoring_settings_dialog"
 import { withAppearanceValue } from "lib/document_map"
-import { writeAuthoringRegistry } from "lib/authoring_registry_write"
-import { createPresentationNavigation } from "lib/presentation_navigation"
+import { createPresentationNavigation, presentationActionForKey } from "lib/presentation_navigation"
 import { applyDesktopFeatureFlags } from "lib/feature_flags"
 import { renderEditorView } from "lib/editor_view"
 import { renderLibraryView, updateLibraryEmptyState } from "lib/library_view"
@@ -145,10 +144,6 @@ const elements = {
 
 let library = null
 let libraryConfig = { schema_version: 1, theme: "system", hotkeys: {} }
-let authoringRegistries = { snippets: [], math_shortcuts: [] }
-let authoringRegistryHashes = { snippets: null, math_shortcuts: null }
-let activeAuthoringRegistry = "snippets"
-let pendingAuthoringDeletion = null
 let decks = []
 let activeDeck = null
 let saveFlow = null
@@ -166,6 +161,44 @@ let lastSourcePollError = null
 let presentationFrames = []
 let presentationNavigation = null
 let titleFlow = null
+
+const authoringSettings = createAuthoringSettingsDialog({
+  elements: {
+    dialog: elements.authoringDialog,
+    title: elements.authoringTitle,
+    tabs: elements.authoringTabs,
+    status: elements.authoringStatus,
+    count: elements.authoringCount,
+    list: elements.authoringList,
+    empty: elements.authoringEmpty,
+    newButton: elements.authoringNew,
+    form: elements.authoringForm,
+    formHeading: elements.authoringFormHeading,
+    snippetFields: elements.authoringSnippetFields,
+    mathFields: elements.authoringMathFields,
+    saveButton: elements.authoringSave,
+    deleteDialog: elements.deleteAuthoringDialog,
+    deleteMessage: elements.deleteAuthoringMessage,
+    confirmDelete: elements.confirmAuthoringDelete,
+    cancelDelete: elements.cancelAuthoringDelete,
+    cancelEntryButton: document.querySelector("#cancel-authoring-entry"),
+    closeButton: document.querySelector("#close-authoring-settings")
+  },
+  readRegistries: async () => {
+    const result = await invoke("read_authoring_registries")
+    return {
+      snippets: result.snippets,
+      math_shortcuts: result.math_shortcuts,
+      hashes: result.hashes
+    }
+  },
+  writeRegistry: async payload => {
+    const result = await invoke("write_authoring_registry", payload)
+    return { contentHash: result.content_hash }
+  },
+  reloadEditorRegistry: loadDesktopAuthoringRegistry,
+  onSaved: setStatus
+})
 
 const transport = createTransportAdapter({ invoke, onConflict: event => saveFlow?.handleConflict(event) })
 const loadLibraryPreview = createLibraryPreviewLoader({
@@ -725,204 +758,6 @@ async function saveSettings(event) {
   }
 }
 
-function authoringEntryLabel(entry, registry) {
-  if (registry === "math_shortcuts") return `${entry.prefix || "@"}${(entry.aliases || []).join(", ")}`
-  return `${entry.category === "Elef DSL" ? ":" : "/"}${entry.trigger || ""}`
-}
-
-function renderAuthoringEntries() {
-  const entries = authoringRegistries[activeAuthoringRegistry] || []
-  elements.authoringList.replaceChildren()
-  elements.authoringCount.textContent = `${entries.length} personal ${activeAuthoringRegistry === "snippets" ? "snippet" : "shortcut"}${entries.length === 1 ? "" : "s"}`
-  elements.authoringEmpty.hidden = entries.length > 0
-
-  for (const entry of entries) {
-    const card = document.createElement("article")
-    card.className = "authoring-entry-card"
-    const heading = document.createElement("div")
-    heading.className = "authoring-entry-card-heading"
-    const title = document.createElement("div")
-    const trigger = document.createElement("code")
-    trigger.textContent = authoringEntryLabel(entry, activeAuthoringRegistry)
-    const name = document.createElement("h3")
-    name.textContent = String(entry.name || "Untitled")
-    title.append(trigger, name)
-    const actions = document.createElement("div")
-    actions.className = "authoring-entry-actions"
-    const edit = document.createElement("button")
-    edit.className = "quiet-button"
-    edit.type = "button"
-    edit.textContent = "Edit"
-    edit.addEventListener("click", () => editAuthoringEntry(entry))
-    const remove = document.createElement("button")
-    remove.className = "quiet-button authoring-delete"
-    remove.type = "button"
-    remove.textContent = "Delete"
-    remove.addEventListener("click", () => requestAuthoringEntryDeletion(entry, activeAuthoringRegistry))
-    actions.append(edit, remove)
-    heading.append(title, actions)
-    const description = document.createElement("p")
-    description.textContent = String(entry.description || "")
-    const body = document.createElement("pre")
-    body.textContent = String(activeAuthoringRegistry === "snippets" ? entry.body || "" : entry.expansion || "")
-    card.append(heading, description, body)
-    elements.authoringList.append(card)
-  }
-}
-
-function setAuthoringRegistry(registry) {
-  activeAuthoringRegistry = registry === "math_shortcuts" ? "math_shortcuts" : "snippets"
-  const isSnippet = activeAuthoringRegistry === "snippets"
-  elements.authoringTitle.textContent = isSnippet ? "Snippets" : "Math shortcuts"
-  elements.authoringNew.textContent = isSnippet ? "New snippet" : "New shortcut"
-  elements.authoringFormHeading.textContent = isSnippet ? "New snippet" : "New shortcut"
-  elements.authoringSave.textContent = isSnippet ? "Save snippet" : "Save shortcut"
-  elements.authoringSnippetFields.hidden = !isSnippet
-  elements.authoringSnippetFields.disabled = !isSnippet
-  elements.authoringMathFields.hidden = isSnippet
-  elements.authoringMathFields.disabled = isSnippet
-  for (const tab of elements.authoringTabs) {
-    const selected = tab.dataset.authoringTab === activeAuthoringRegistry
-    tab.classList.toggle("is-active", selected)
-    tab.setAttribute("aria-pressed", String(selected))
-  }
-  elements.authoringStatus.textContent = ""
-  closeAuthoringEntryForm()
-  renderAuthoringEntries()
-}
-
-async function showAuthoringSettings() {
-  try {
-    authoringRegistries = await invoke("read_authoring_registries")
-    authoringRegistries.snippets ||= []
-    authoringRegistries.math_shortcuts ||= []
-    authoringRegistryHashes = authoringRegistries.hashes || { snippets: null, math_shortcuts: null }
-    setAuthoringRegistry(activeAuthoringRegistry)
-    elements.authoringDialog.showModal()
-  } catch (_error) {
-    authoringRegistries = { snippets: [], math_shortcuts: [] }
-    authoringRegistryHashes = { snippets: null, math_shortcuts: null }
-    setAuthoringRegistry(activeAuthoringRegistry)
-    elements.authoringStatus.textContent = "Could not read authoring settings. Check that the library folder is available."
-    elements.settingsDialog.close()
-    elements.authoringDialog.showModal()
-  }
-}
-
-function closeAuthoringEntryForm() {
-  elements.authoringForm.reset()
-  elements.authoringForm.hidden = true
-  elements.authoringFormHeading.textContent = activeAuthoringRegistry === "snippets" ? "New snippet" : "New shortcut"
-  elements.authoringSave.textContent = activeAuthoringRegistry === "snippets" ? "Save snippet" : "Save shortcut"
-}
-
-function beginAuthoringEntryForm(entry = null) {
-  closeAuthoringEntryForm()
-  elements.authoringForm.hidden = false
-  elements.authoringForm.elements.namedItem("id").value = entry ? String(entry.id) : ""
-  const isSnippet = activeAuthoringRegistry === "snippets"
-  const fields = isSnippet ? elements.authoringSnippetFields : elements.authoringMathFields
-  fields.querySelector(`[name="${isSnippet ? "name" : "math-name"}"]`).value = String(entry?.name || "")
-  fields.querySelector(`[name="${isSnippet ? "description" : "math-description"}"]`).value = String(entry?.description || "")
-  if (isSnippet) {
-    fields.querySelector('[name="trigger"]').value = String(entry?.trigger || "")
-    fields.querySelector('[name="category"]').value = String(entry?.category || "Markdown")
-    fields.querySelector('[name="body"]').value = String(entry?.body || "")
-  } else {
-    fields.querySelector('[name="prefix"]').value = String(entry?.prefix || ".")
-    fields.querySelector('[name="aliases"]').value = (entry?.aliases || []).join(", ")
-    fields.querySelector('[name="expansion"]').value = String(entry?.expansion || "")
-  }
-  elements.authoringFormHeading.textContent = entry
-    ? `Edit ${isSnippet ? "snippet" : "shortcut"}`
-    : `New ${isSnippet ? "snippet" : "shortcut"}`
-  elements.authoringSave.textContent = `Save ${isSnippet ? "snippet" : "shortcut"}`
-  fields.querySelector("input:not([type=hidden])")?.focus()
-}
-
-function editAuthoringEntry(entry) {
-  beginAuthoringEntryForm(entry)
-}
-
-async function persistAuthoringRegistries(nextEntries, action, registry) {
-  await writeAuthoringRegistry({
-    registry,
-    entries: nextEntries,
-    baseHash: authoringRegistryHashes[registry],
-    invoke,
-    updateLocal: ({ registry: savedRegistry, entries, contentHash }) => {
-      authoringRegistries[savedRegistry] = entries
-      authoringRegistryHashes[savedRegistry] = contentHash
-    },
-    reloadEditorRegistry: loadDesktopAuthoringRegistry,
-    isSelected: savedRegistry => activeAuthoringRegistry === savedRegistry,
-    onSuccess: ({ registry: savedRegistry, isSelected }) => {
-      const label = savedRegistry === "snippets" ? "Snippet" : "Math shortcut"
-      elements.authoringStatus.textContent = `${action} saved to this library (${label.toLowerCase()}).`
-      setStatus(`${action} saved`)
-      if (isSelected) {
-        closeAuthoringEntryForm()
-        renderAuthoringEntries()
-      }
-    },
-    onFailure: (error, { registry: failedRegistry }) => {
-      const label = failedRegistry === "snippets" ? "Snippet" : "Math shortcut"
-      if (error?.code === "conflict") {
-        elements.authoringStatus.textContent = `${label} settings changed outside Elef. Close and reopen settings to load the latest entries before saving.`
-      } else if (error?.code === "invalid_input") {
-        elements.authoringStatus.textContent = "These settings are invalid. Check the name, trigger, category, aliases, and template."
-      } else {
-        elements.authoringStatus.textContent = "Could not save authoring settings. Check that the library folder is writable."
-      }
-    }
-  })
-}
-
-async function saveAuthoringEntry(event) {
-  event.preventDefault()
-  const formData = new FormData(elements.authoringForm)
-  const registry = activeAuthoringRegistry
-  const isSnippet = registry === "snippets"
-  const fields = isSnippet
-    ? Object.fromEntries(formData.entries())
-    : {
-        name: formData.get("math-name"),
-        description: formData.get("math-description"),
-        prefix: formData.get("prefix"),
-        aliases: formData.get("aliases"),
-        expansion: formData.get("expansion")
-      }
-  const existingId = formData.get("id")
-  const id = existingId || `personal-${crypto.randomUUID()}`
-  try {
-    const entry = buildAuthoringEntry(registry, fields, id)
-    const entries = upsertAuthoringEntry(authoringRegistries[registry], entry)
-    await persistAuthoringRegistries(entries, existingId ? "Changes" : "New entry", registry)
-  } catch (error) {
-    elements.authoringStatus.textContent = error.message
-  }
-}
-
-function requestAuthoringEntryDeletion(entry, registry) {
-  pendingAuthoringDeletion = { entry, registry }
-  elements.deleteAuthoringMessage.textContent = `Delete “${String(entry.name || "this entry")}” from this library?`
-  elements.deleteAuthoringDialog.showModal()
-}
-
-async function confirmAuthoringEntryDeletion() {
-  const pending = pendingAuthoringDeletion
-  if (!pending) return
-  pendingAuthoringDeletion = null
-  elements.deleteAuthoringDialog.close()
-  const entries = removeAuthoringEntry(authoringRegistries[pending.registry], pending.entry.id)
-  await persistAuthoringRegistries(entries, "Entry deletion", pending.registry)
-}
-
-function cancelAuthoringEntryDeletion() {
-  pendingAuthoringDeletion = null
-  elements.deleteAuthoringDialog.close()
-}
-
 async function exportCurrentDeck() {
   if (!activeDeck) {
     showNotice("Open a deck before exporting it.")
@@ -1076,19 +911,15 @@ function presentationKeydown(event) {
   if (event.key === "Escape") {
     event.preventDefault()
     void exitPresentation()
-  } else if (["ArrowRight", "ArrowDown", "PageDown", " "].includes(event.key)) {
-    event.preventDefault()
-    setPresentationSlide(presentationNavigation.next())
-  } else if (["ArrowLeft", "ArrowUp", "PageUp"].includes(event.key)) {
-    event.preventDefault()
-    setPresentationSlide(presentationNavigation.previous())
-  } else if (event.key === "Home") {
-    event.preventDefault()
-    setPresentationSlide(presentationNavigation.first())
-  } else if (event.key === "End") {
-    event.preventDefault()
-    setPresentationSlide(presentationNavigation.last())
+    return
   }
+  const action = presentationActionForKey(event.key)
+  if (!action) return
+  event.preventDefault()
+  if (action === "next") setPresentationSlide(presentationNavigation.next())
+  else if (action === "previous") setPresentationSlide(presentationNavigation.previous())
+  else if (action === "first") setPresentationSlide(presentationNavigation.first())
+  else if (action === "last") setPresentationSlide(presentationNavigation.last())
 }
 
 async function exitPresentation() {
@@ -1180,16 +1011,8 @@ document.querySelector("#create-form").addEventListener("submit", event => {
 elements.settingsForm.addEventListener("submit", event => void saveSettings(event))
 document.querySelector("#manage-authoring").addEventListener("click", () => {
   elements.settingsDialog.close()
-  void showAuthoringSettings()
+  void authoringSettings.open()
 })
-elements.authoringTabs.forEach(tab => tab.addEventListener("click", () => setAuthoringRegistry(tab.dataset.authoringTab)))
-elements.authoringNew.addEventListener("click", () => beginAuthoringEntryForm())
-elements.authoringForm.addEventListener("submit", event => void saveAuthoringEntry(event))
-document.querySelector("#cancel-authoring-entry").addEventListener("click", closeAuthoringEntryForm)
-document.querySelector("#close-authoring-settings").addEventListener("click", () => elements.authoringDialog.close())
-elements.deleteAuthoringDialog.addEventListener("close", () => { pendingAuthoringDeletion = null })
-elements.confirmAuthoringDelete.addEventListener("click", () => void confirmAuthoringEntryDeletion())
-elements.cancelAuthoringDelete.addEventListener("click", cancelAuthoringEntryDeletion)
 document.querySelector("#check-for-updates").addEventListener("click", () => void checkForUpdates(true))
 document.querySelector("#install-update").addEventListener("click", () => void installUpdate())
 elements.presentationExit.addEventListener("click", () => void exitPresentation())

@@ -59,14 +59,14 @@ test("an in-flight registry write updates the registry it started with after a t
     registry: selectedRegistry,
     entries: nextEntries,
     baseHash: hashes[selectedRegistry],
-    invoke: async (command, payload) => {
-      assert.equal(command, "write_authoring_registry")
+    writeRegistry: async payload => {
       assert.deepEqual(payload, {
         registry: "snippets",
         entries: nextEntries,
         baseHash: "snippet-base"
       })
-      return await new Promise(resolve => { resolveWrite = resolve })
+      const response = await new Promise(resolve => { resolveWrite = resolve })
+      return { contentHash: response.contentHash }
     },
     updateLocal: ({ registry, entries, contentHash }) => {
       registries[registry] = entries
@@ -79,7 +79,7 @@ test("an in-flight registry write updates the registry it started with after a t
   })
 
   selectedRegistry = "math_shortcuts"
-  resolveWrite({ content_hash: "snippet-next" })
+  resolveWrite({ contentHash: "snippet-next" })
   assert.equal(await pending, true)
 
   assert.deepEqual(registries, { snippets: nextEntries, math_shortcuts: [{ id: "math-existing" }] })

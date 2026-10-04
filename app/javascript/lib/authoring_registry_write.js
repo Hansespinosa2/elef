@@ -2,7 +2,7 @@ export async function writeAuthoringRegistry({
   registry,
   entries,
   baseHash,
-  invoke,
+  writeRegistry,
   updateLocal,
   reloadEditorRegistry,
   isSelected,
@@ -10,12 +10,12 @@ export async function writeAuthoringRegistry({
   onFailure
 }) {
   try {
-    const result = await invoke("write_authoring_registry", {
+    const result = await writeRegistry({
       registry,
       entries,
       baseHash
     })
-    updateLocal({ registry, entries, contentHash: result.content_hash })
+    updateLocal({ registry, entries, contentHash: result.contentHash })
     await reloadEditorRegistry()
     onSuccess({ registry, isSelected: isSelected(registry) })
     return true

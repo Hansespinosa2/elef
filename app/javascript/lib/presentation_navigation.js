@@ -1,3 +1,14 @@
+const PRESENTATION_KEY_ACTIONS = new Map([
+  ...["ArrowRight", "ArrowDown", "PageDown", " ", "Enter"].map(key => [key, "next"]),
+  ...["ArrowLeft", "ArrowUp", "PageUp", "Backspace"].map(key => [key, "previous"]),
+  ["Home", "first"],
+  ["End", "last"]
+])
+
+export function presentationActionForKey(key) {
+  return PRESENTATION_KEY_ACTIONS.get(key) || null
+}
+
 export function createPresentationNavigation(slideCount) {
   if (!Number.isInteger(slideCount) || slideCount < 1) return null
   let currentIndex = 0

@@ -1,6 +1,18 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { createPresentationNavigation } from "../../../app/javascript/lib/presentation_navigation.js"
+import { createPresentationNavigation, presentationActionForKey } from "../../../app/javascript/lib/presentation_navigation.js"
+
+test("presentation hosts share the same next, previous, home, and end keys", () => {
+  for (const key of ["ArrowRight", "ArrowDown", "PageDown", " ", "Enter"]) {
+    assert.equal(presentationActionForKey(key), "next", `${key} advances`)
+  }
+  for (const key of ["ArrowLeft", "ArrowUp", "PageUp", "Backspace"]) {
+    assert.equal(presentationActionForKey(key), "previous", `${key} goes back`)
+  }
+  assert.equal(presentationActionForKey("Home"), "first")
+  assert.equal(presentationActionForKey("End"), "last")
+  assert.equal(presentationActionForKey("Escape"), null)
+})
 
 test("presentation navigation clamps at each end and supports home/end", () => {
   const navigation = createPresentationNavigation(3)
