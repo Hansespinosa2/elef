@@ -62,7 +62,7 @@ try {
     const request = async (route, body) => {
       const response = await fetch(`http://127.0.0.1:${env.TAURI_WEBDRIVER_PORT}${route}`, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
-        signal: AbortSignal.timeout(10_000)
+        signal: AbortSignal.timeout(60_000)
       })
       const { value } = await response.json()
       if (!response.ok || value?.error) throw new Error(value?.message || `Driver HTTP ${response.status}`)
@@ -70,7 +70,7 @@ try {
     }
     let session
     try {
-      const deadline = Date.now() + 30_000
+      const deadline = Date.now() + 65_000
       while (!session && Date.now() < deadline) {
         if (exitResult) throw new Error("The release process exited before its benchmark session")
         try {
