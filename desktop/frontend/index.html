@@ -81,26 +81,7 @@
             <button class="primary-button" type="button" data-action="create-presentation">Create a presentation</button>
           </div>
           </div>
-          <section id="document-graph-view" class="document-graph-panel" hidden aria-labelledby="document-graph-heading">
-            <div class="document-graph-heading">
-              <div>
-                <p class="eyebrow">DOCUMENT RELATIONSHIPS</p>
-                <h2 id="document-graph-heading">Document network</h2>
-                <p>Explore links authored in your Markdown. Select a document to open it.</p>
-              </div>
-              <div class="document-graph-controls">
-                <label class="sr-only" for="document-graph-search">Find a document</label>
-                <input id="document-graph-search" type="search" placeholder="Find a document…" data-document-graph-target="search" data-action="input->document-graph#search keydown.down->document-graph#focusResult">
-                <div class="document-graph-results" data-document-graph-target="results" data-action="keydown.esc->document-graph#closeSearch" hidden></div>
-                <button type="button" data-action="document-graph#zoomOut" aria-label="Zoom out">−</button>
-                <button type="button" data-document-graph-target="scaleLabel" data-action="document-graph#reset" aria-label="Reset graph view" title="Reset to 100%">100%</button>
-                <button type="button" data-action="document-graph#zoomIn" aria-label="Zoom in">+</button>
-              </div>
-            </div>
-            <span class="sr-only" aria-live="polite" data-document-graph-target="status"></span>
-            <div id="document-graph-mount"></div>
-            <p class="document-graph-help">Drag the canvas to pan. Use the controls or your trackpad to zoom.</p>
-          </section>
+          <section id="document-graph-view" class="document-graph-panel mt-8 rounded-2xl border border-[#ddd5c8] bg-[#fffdf8] p-5" hidden aria-labelledby="document-graph-heading"></section>
         </section>
 
         <section id="deck-view" class="deck-view" hidden aria-labelledby="deck-title">

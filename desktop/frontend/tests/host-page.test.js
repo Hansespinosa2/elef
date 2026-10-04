@@ -74,8 +74,7 @@ test("the library provides the local document graph view and deck navigation", (
   assert.ok(document.querySelector("#show-presentations[data-library-tab='presentations']"))
   assert.ok(document.querySelector("#show-document-graph"))
   assert.ok(document.querySelector("#document-graph-view[hidden]"))
-  assert.ok(document.querySelector("#document-graph-search[data-document-graph-target='search']"))
-  assert.ok(document.querySelector("#document-graph-mount"))
+  assert.equal(document.querySelector("#document-graph-view").children.length, 0)
 })
 
 test("document reload reapplies editor preferences and readiness follows successful connection", async () => {

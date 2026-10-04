@@ -17,6 +17,7 @@ export async function libraryAndGraphWorkflow(ui) {
   await ui.showDocuments()
   await ui.assertDocumentsOnly("E2E document", "E2E seed")
   await ui.showDocumentGraph()
+  await ui.assertGraphDocumentsVisible(2, "E2E linked")
   await ui.openGraphDocument("E2E linked")
   await ui.assertDocumentOpened("E2E linked")
 }

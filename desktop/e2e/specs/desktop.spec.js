@@ -734,7 +734,15 @@ class DesktopLibraryUi {
 
   async showDocumentGraph() {
     await $("#show-document-graph").click()
-    await $("#document-graph-mount").waitForDisplayed()
+    await $("#document-graph-heading").waitForDisplayed()
+  }
+
+  async assertGraphDocumentsVisible(count, linkedTitle) {
+    await browser.waitUntil(async () => (await $$(".document-graph-node")).length === count, {
+      timeout: 10_000,
+      timeoutMsg: "The shared graph component did not render its document nodes"
+    })
+    await $(`[aria-label='Open ${linkedTitle}']`).waitForDisplayed()
   }
 
   async openGraphDocument(title) {

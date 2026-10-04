@@ -401,8 +401,13 @@ class WebLibraryUi {
     await expect(this.page.locator("#document-graph-heading")).toBeVisible()
   }
 
+  async assertGraphDocumentsVisible(count, linkedTitle) {
+    await expect(this.page.locator(".document-graph-node")).toHaveCount(count)
+    await expect(this.page.getByRole("link", { name: `Open ${linkedTitle}` })).toBeVisible()
+  }
+
   async openGraphDocument(title) {
-    await this.page.getByRole("link", { name: `Open ${title} preview` }).click()
+    await this.page.getByRole("link", { name: `Open ${title}` }).click()
   }
 
   async assertDocumentOpened(title) {

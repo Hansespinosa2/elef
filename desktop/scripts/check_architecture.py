@@ -38,9 +38,15 @@ assert 'import "../../../app/assets/stylesheets/application.css"' in desktop_mai
 assert not re.search(r"^\.(?:slide|document|presentation|katex)[\w.-]*(?:\s|\{|:)", native_render_styles, re.MULTILINE), "native viewport CSS must not contain another rendering stylesheet"
 web_card = (REPO_ROOT / "app" / "views" / "library" / "_work_card.html.erb").read_text()
 desktop_card = (REPO_ROOT / "desktop" / "frontend" / "src" / "deck-card.js").read_text()
+graph_view = (REPO_ROOT / "app" / "javascript" / "lib" / "document_graph_view.js").read_text()
+graph_controller = (REPO_ROOT / "app" / "javascript" / "controllers" / "document_graph_controller.js").read_text()
+graph_partial = (REPO_ROOT / "app" / "views" / "presentations" / "_document_graph.html.erb").read_text()
 assert "Source::JavascriptRenderer.library_card" in web_card, "Rails library cards must use the shared HTML producer"
 assert "ElefRenderer.renderLibraryCard" in javascript_renderer and "renderLibraryCard" in renderer_global
 assert 'app/javascript/lib/library_card.js"' in desktop_card, "desktop cards must import the shared HTML producer"
+assert "renderDocumentGraphView" in graph_controller and "renderDocumentGraphView" in graph_view, "both hosts must use the shared document graph view"
+assert "document-graph-node" not in graph_partial, "Rails must not keep a second document graph node template"
+assert "createElementNS" not in desktop_main and "document-graph-node" not in desktop_main, "desktop must not keep a second document graph node template"
 
 declared = command_names(build_source, r"let app_commands = &\[(.*?)\];")
 handler_match = re.search(
