@@ -1,7 +1,4 @@
 /* Native viewport chrome. Rendered decks and authoring controls use the same
    application.css as Rails; do not restyle slides, pages, math or layouts here. */
+.desktop-editor-form { margin: 0; }
 .desktop-editor-form .editor-projection { margin-top: 16px; max-height: min(68vh, 56rem); overflow: auto; padding: 20px; }
-.desktop-editor-form[data-editor-mode="visual"] .source-field .editor-surface { display: none; }
-.desktop-editor-form[data-editor-mode="visual"] #desktop-preview { display: block; }
-.desktop-editor-form[data-editor-mode="visual"] .source-field { min-height: 0; }
-.editor-projection { background: var(--oradia-paper-bright); border: 1px solid var(--line); border-radius: 9px; min-height: 20rem; }
