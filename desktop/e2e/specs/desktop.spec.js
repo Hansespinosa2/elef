@@ -83,13 +83,7 @@ function sendNativeKey(key) {
   if (process.platform === "darwin") {
     const keyCode = macKeyCodes[key]
     if (keyCode === undefined) throw new Error(`Unsupported native key ${key}`)
-    const pid = desktopProcessId()
-    execFileSync("osascript", ["-e", `tell application "System Events"
-      tell (first application process whose unix id is ${pid})
-        set frontmost to true
-        key code ${keyCode}
-      end tell
-    end tell`], { timeout: 5_000 })
+    execFileSync("osascript", ["-e", `tell application "System Events" to key code ${keyCode}`], { timeout: 5_000 })
     return
   }
   throw new Error(`Native keyboard input is unsupported on ${process.platform}`)
@@ -103,13 +97,7 @@ function typeNativeText(value) {
   }
   if (process.platform === "darwin") {
     const escaped = value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')
-    const pid = desktopProcessId()
-    execFileSync("osascript", ["-e", `tell application "System Events"
-      tell (first application process whose unix id is ${pid})
-        set frontmost to true
-        keystroke "${escaped}"
-      end tell
-    end tell`], { timeout: 10_000 })
+    execFileSync("osascript", ["-e", `tell application "System Events" to keystroke "${escaped}"`], { timeout: 10_000 })
     return
   }
   throw new Error(`Native keyboard input is unsupported on ${process.platform}`)
@@ -225,6 +213,14 @@ class DesktopEditorUi {
         .catch(error => done({ error: error.message || String(error) }))
     })
     if (started.error || !started.started) throw new Error(started.error || "Desktop presentation mode did not start")
+    await browser.execute(() => {
+      const capture = event => {
+        const events = globalThis.__elefPresentationKeyEvents ||= []
+        events.push({ key: event.key, trusted: event.isTrusted })
+      }
+      globalThis.__elefPresentationKeyCapture = capture
+      document.addEventListener("keydown", capture, true)
+    })
     await browser.waitUntil(async () => (await $$("#desktop-preview .slide-frame")).length === 2, {
       timeout: 5_000,
       timeoutMsg: "Desktop presentation mode did not find both rendered slides"
@@ -232,19 +228,30 @@ class DesktopEditorUi {
   }
 
   async assertPresentationSlide(index, title) {
-    const states = await browser.execute(() => [...document.querySelectorAll("#desktop-preview .slide-frame")].map(frame => ({
-      text: frame.textContent,
-      hidden: frame.hidden,
-      active: frame.classList.contains("is-active-presentation-slide")
-    })))
+    const state = await browser.execute(() => ({
+      slides: [...document.querySelectorAll("#desktop-preview .slide-frame")].map(frame => ({
+        text: frame.textContent,
+        hidden: frame.hidden,
+        active: frame.classList.contains("is-active-presentation-slide")
+      })),
+      hasFocus: document.hasFocus(),
+      activeElement: document.activeElement && {
+        tag: document.activeElement.tagName,
+        id: document.activeElement.id,
+        className: String(document.activeElement.className || "")
+      },
+      keys: globalThis.__elefPresentationKeyEvents || []
+    }))
+    const states = state.slides
     if (states.length !== 2 || !states[index].text.includes(title) || states[index].hidden || !states[index].active) {
-      throw new Error(`Unexpected active desktop presentation slide: ${JSON.stringify(states)}`)
+      throw new Error(`Unexpected active desktop presentation slide: ${JSON.stringify(state)}`)
     }
     const other = states[1 - index]
     if (!other.hidden || other.active) throw new Error(`Another desktop slide remained visible: ${JSON.stringify(states)}`)
   }
 
   async movePresentation(key) {
+    await browser.execute(() => window.focus())
     sendNativeKey(key)
   }
 
@@ -267,6 +274,12 @@ class DesktopEditorUi {
         timeoutMsg: "The native presentation exit control did not return to editing"
       })
     }
+    await browser.execute(() => {
+      if (!globalThis.__elefPresentationKeyCapture) return
+      document.removeEventListener("keydown", globalThis.__elefPresentationKeyCapture, true)
+      delete globalThis.__elefPresentationKeyCapture
+      delete globalThis.__elefPresentationKeyEvents
+    })
     if (!(await $("#deck-view").isDisplayed())) await this.openDeck()
   }
 
@@ -955,7 +968,12 @@ class DesktopLibraryUi {
   }
 
   async openGraphDocument(title) {
-    await $(`[aria-label='Open ${title}']`).click()
+    const node = await $(`[aria-label='Open ${title}']`)
+    await browser.action("pointer", { parameters: { pointerType: "mouse" } })
+      .move({ origin: node })
+      .down()
+      .up()
+      .perform()
   }
 
   async assertDocumentOpened(title) {
@@ -1118,6 +1136,18 @@ describe("desktop binary workflows and native boundaries", () => {
       if (needsLineBreak) sendNativeKey("Enter")
       typeNativeText(inserted)
 
+      const focus = await browser.execute(() => {
+        const editor = document.querySelector("#desktop-editor-field")?.editorController
+        return {
+          hasFocus: document.hasFocus(),
+          editorHasFocus: editor?.view.hasFocus ?? false,
+          activeElement: document.activeElement && {
+            tag: document.activeElement.tagName,
+            id: document.activeElement.id,
+            className: String(document.activeElement.className || "")
+          }
+        }
+      })
       const trustedKeys = await browser.execute(() => {
         const tracker = window.__elefTrustedEditorKeys
         tracker?.target.removeEventListener("keydown", tracker.handler)
@@ -1125,7 +1155,7 @@ describe("desktop binary workflows and native boundaries", () => {
         return tracker?.events || []
       })
       if (!trustedKeys.some(event => event.trusted && event.key.toLowerCase() === "n")) {
-        throw new Error(`WebDriver input did not deliver a trusted key event to CodeMirror: ${JSON.stringify(trustedKeys)}`)
+        throw new Error(`Native input did not reach CodeMirror: ${JSON.stringify({ focus, trustedKeys })}`)
       }
       await ui.waitForSaved(expected)
     } finally {
