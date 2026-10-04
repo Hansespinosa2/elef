@@ -25,7 +25,14 @@ if (__ELEF_E2E__) {
     globalThis.__elefE2EControllerErrors ||= []
     globalThis.__elefE2EControllerErrors.push({
       message: String(message),
-      error: error?.stack || String(error)
+      identifier: detail?.identifier || "",
+      elementId: detail?.element?.id || "",
+      errorName: error?.name || "",
+      errorMessage: error?.message || String(error),
+      causeName: error?.cause?.name || "",
+      causeMessage: error?.cause?.message || "",
+      errorStack: error?.stack || "",
+      causeStack: error?.cause?.stack || ""
     })
     handleError(error, message, detail)
   }
