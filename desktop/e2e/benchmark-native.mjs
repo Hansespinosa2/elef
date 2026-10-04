@@ -97,8 +97,8 @@ try {
       }
       assert.ok(interactiveAt, "The release frontend must acknowledge completed startup")
       samples.coldStart.push(interactiveAt - launchedAt)
-      const startupStages = await execute("return JSON.stringify(window.__elefPerformanceTestHooks.bootstrapStages())")
-      report.bootstrapStageRuns.push(JSON.parse(startupStages.result))
+      const startupStagesJson = await execute("return JSON.stringify(window.__elefPerformanceTestHooks.bootstrapStages())")
+      report.bootstrapStageRuns.push(JSON.parse(startupStagesJson))
       operation = "1,000-deck library refresh"
       const listed = await execute("return await window.__elefPerformanceTestHooks.list()")
       assert.equal(listed.result.total, 1000)

@@ -148,6 +148,8 @@ export async function runNativeQuitSmokes(env) {
         await Promise.race([exited, pause(1_000)])
         if (!exitResult) { app.kill("SIGKILL"); await exited }
       }
+      // Let the native webview and driver release resources before the next fresh launch.
+      await pause(1_000)
       await rm(deck, { recursive: true, force: true })
     }
   }
