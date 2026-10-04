@@ -117,7 +117,8 @@ class WebEditorUi {
       editor.setEditingMode("source")
       await new Promise(resolve => requestAnimationFrame(resolve))
       const current = editor.selectionStart
-      const length = editor.sourceValue.length
+      // CodeMirror offsets count CRLF as one line break, like `value` does.
+      const length = editor.value.length
       const intended = current === length ? Math.max(0, length - 1) : length
       editor.setSelectionRange(intended)
       await new Promise(resolve => requestAnimationFrame(resolve))
