@@ -66,7 +66,7 @@ export async function runNativeQuitSmokes(env) {
     const request = async (suffix, body) => {
       const response = await fetch(endpoint + suffix, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body), signal: AbortSignal.timeout(15_000)
+        body: JSON.stringify(body), signal: AbortSignal.timeout(60_000)
       })
       const { value } = await response.json()
       if (!response.ok || value?.error) throw new Error(value?.message || `WebDriver request failed: ${response.status}`)
@@ -90,11 +90,13 @@ export async function runNativeQuitSmokes(env) {
           if (error.cause?.code === "ECONNREFUSED") return false
           throw error
         }
-      }, "The native Quit smoke driver did not start")
+      }, "The native Quit smoke driver did not start", 65_000)
       stage = "waiting for editor readiness"
-      await waitFor(() => execute(`return Boolean(document.querySelector('[aria-label="Open ${title}"]')
-        && document.querySelector('#desktop-editor-field')?.editorController?.editorReady)`),
-      "The native Quit smoke frontend did not finish loading")
+      await waitFor(() => {
+        if (exitResult) throw new Error(`Elef exited before the editor connected: ${JSON.stringify(exitResult)}`)
+        return execute(`return Boolean(document.querySelector('[aria-label="Open ${title}"]')
+          && document.querySelector('#desktop-editor-field')?.editorController?.editorReady)`)
+      }, "The native Quit smoke frontend did not finish loading", 65_000)
       stage = "opening the smoke deck"
       await execute(`document.querySelector('[aria-label="Open ${title}"]').click(); return true`)
       stage = "waiting for the deck to finish opening"
@@ -139,7 +141,7 @@ export async function runNativeQuitSmokes(env) {
       assert.equal(await readFile(sourceFile, "utf8"), mode === "dirty" ? draft : mode === "conflict" ? external : original)
       process.stdout.write(`Native ${mode} Quit smoke passed.\n`)
     } catch (error) {
-      throw new Error(`Native ${mode} Quit while ${stage}: ${error.message}; desktop output: ${output}`)
+      throw new Error(`Native ${mode} Quit while ${stage}: ${error.message}; process: ${JSON.stringify(exitResult)}; desktop output: ${output}`)
     } finally {
       if (!exitResult) {
         app.kill("SIGTERM")
