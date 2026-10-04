@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { buildDocumentGraph, extractDocumentLinkTitles } from "../../../app/javascript/lib/document_links.js"
+import { buildDocumentGraph, extractDocumentLinkTitles, extractFirstMarkdownHeading } from "../../../app/javascript/lib/document_links.js"
 
 test("document link extraction ignores escaped, inline, fenced, and indented code", () => {
   const source = [
@@ -44,6 +44,19 @@ test("web and desktop graph inputs use one resolver for titles, aliases, and sta
   assert.deepEqual(graph.edges, [{ source: "source", target: "target-id" }])
   assert.equal(graph.nodes[1].documentKey, "target-key")
   assert.deepEqual(graph.nodes[1].aliases, ["Alias"])
+})
+
+test("graph labels come from shared Markdown heading rules with folder-name fallback", () => {
+  const source = "\uFEFF---\r\ntheme: dark\r\n---\r\n\r\n```md\r\n# Fenced heading\r\n```\r\n\t# Actual title ##\r\n    # Indented code"
+  assert.equal(extractFirstMarkdownHeading(source), "Actual title")
+  assert.equal(extractFirstMarkdownHeading("    # Code block heading\n## Not a title"), null)
+  assert.equal(extractFirstMarkdownHeading("---\ntheme: dark\n---\n# Source title"), "Source title")
+
+  const graph = buildDocumentGraph([
+    { id: "portable-id", name: "Folder name", source },
+    { id: "fallback-id", name: "Fallback folder", source: "## Section" }
+  ])
+  assert.deepEqual(graph.nodes.map(({ title }) => title), ["Actual title", "Fallback folder"])
 })
 
 test("aliases resolve before titles consistently and graph nodes retain stable positions", () => {

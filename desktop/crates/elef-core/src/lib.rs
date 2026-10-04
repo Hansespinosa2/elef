@@ -77,7 +77,7 @@ pub struct DeckSummary {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct DocumentGraphDocument {
     pub id: String,
-    pub title: String,
+    pub name: String,
     pub source: String,
 }
 
@@ -302,10 +302,9 @@ impl Library {
             self.validate_deck_path(&record.path)?;
             let bytes = read_regular_file(&record.source_path)?;
             let source = String::from_utf8(bytes).map_err(|_| CoreError::InvalidInput)?;
-            let title = markdown_document_title(&source, &summary.name);
             documents.push(DocumentGraphDocument {
                 id: summary.id,
-                title,
+                name: summary.name,
                 source,
             });
         }
@@ -1744,82 +1743,6 @@ fn source_file_key(name: &str) -> (u8, usize, String, String) {
     )
 }
 
-fn markdown_document_title(source: &str, fallback: &str) -> String {
-    let lines = source.lines().collect::<Vec<_>>();
-    let mut first_body_line = 0;
-    if let Some(first) = lines.first()
-        && first.trim_start_matches('\u{feff}').trim() == "---"
-        && let Some(closing) = lines
-            .iter()
-            .enumerate()
-            .skip(1)
-            .find(|(_, line)| line.trim() == "---")
-        && lines[1..closing.0]
-            .iter()
-            .any(|line| is_front_matter_key(line))
-    {
-        first_body_line = closing.0 + 1;
-    }
-
-    let mut fence = None;
-    for line in lines.into_iter().skip(first_body_line) {
-        if let Some(marker) = markdown_fence_marker(line) {
-            if let Some((character, length)) = fence {
-                if marker.0 == character && marker.1 >= length && marker.2.trim().is_empty() {
-                    fence = None;
-                }
-            } else {
-                fence = Some((marker.0, marker.1));
-            }
-            continue;
-        }
-        if fence.is_some() {
-            continue;
-        }
-        let heading = line.trim_start_matches(' ');
-        let hashes = heading.bytes().take_while(|byte| *byte == b'#').count();
-        if hashes != 1 || !heading.is_char_boundary(hashes) {
-            continue;
-        }
-        let remainder = &heading[hashes..];
-        if !remainder.chars().next().is_some_and(char::is_whitespace) {
-            continue;
-        }
-        let title = remainder.trim().trim_end_matches('#').trim();
-        if !title.is_empty() {
-            return title.to_owned();
-        }
-    }
-    fallback.to_owned()
-}
-
-fn is_front_matter_key(line: &str) -> bool {
-    let Some((key, _)) = line.split_once(':') else {
-        return false;
-    };
-    let mut characters = key.chars();
-    characters
-        .next()
-        .is_some_and(|character| character.is_ascii_alphabetic() || character == '_')
-        && characters.all(|character| {
-            character.is_ascii_alphanumeric() || character == '_' || character == '-'
-        })
-}
-
-fn markdown_fence_marker(line: &str) -> Option<(u8, usize, &str)> {
-    let leading_spaces = line.bytes().take_while(|byte| *byte == b' ').count();
-    if leading_spaces > 3 {
-        return None;
-    }
-    let rest = &line[leading_spaces..];
-    let character = *rest.as_bytes().first()?;
-    if character != b'`' && character != b'~' {
-        return None;
-    }
-    let length = rest.bytes().take_while(|byte| *byte == character).count();
-    (length >= 3).then_some((character, length, &rest[length..]))
-}
-
 fn read_manifest(deck_path: &Path) -> Result<Option<DeckManifest>, ()> {
     let path = deck_path.join(MANIFEST_FILE);
     let metadata = match fs::symlink_metadata(&path) {
@@ -2405,15 +2328,15 @@ mod tests {
             .iter()
             .find(|document| document.id == first_id)
             .unwrap();
-        assert_eq!(first.title, "First Document");
+        assert_eq!(first.name, "A");
         assert!(first.source.contains("[[Second Document|next]]"));
         assert_eq!(
             graph_documents
                 .iter()
                 .find(|document| document.id == second_id)
                 .unwrap()
-                .title,
-            "Second Document"
+                .name,
+            "B"
         );
     }
 

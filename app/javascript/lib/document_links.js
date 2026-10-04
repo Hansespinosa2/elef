@@ -40,6 +40,34 @@ export function extractDocumentLinkTitles(source = "") {
   return links
 }
 
+export function extractFirstMarkdownHeading(source = "") {
+  if (typeof source !== "string") return null
+  const lines = source.split(/\r\n?|\n/)
+  let firstBodyLine = 0
+
+  if (lines[0]?.replace(/^\uFEFF/, "").trimEnd() === "---") {
+    const closingLine = lines.findIndex((line, index) => index > 0 && line.trimEnd() === "---")
+    if (closingLine > 0 && lines.slice(1, closingLine).some(line => /^[A-Za-z_][\w-]*\s*:/.test(line))) {
+      firstBodyLine = closingLine + 1
+    }
+  }
+
+  let fence = null
+  for (const line of lines.slice(firstBodyLine)) {
+    const marker = line.match(/^\s{0,3}(`{3,}|~{3,})(.*)$/)
+    if (marker) {
+      if (!fence) fence = { character: marker[1][0], length: marker[1].length }
+      else if (marker[1][0] === fence.character && marker[1].length >= fence.length && !marker[2].trim()) fence = null
+      continue
+    }
+    if (fence) continue
+
+    const heading = line.match(/^\s{0,3}#(?!#)\s+(.+?)\s*#*\s*$/)
+    if (heading) return heading[1].trim()
+  }
+  return null
+}
+
 export function createDocumentLinkResolver(documents = []) {
   const byTitle = new Map()
   const byAlias = new Map()
@@ -66,7 +94,12 @@ export function createDocumentLinkResolver(documents = []) {
 
 export function buildDocumentGraph(documents = []) {
   if (!Array.isArray(documents)) throw new TypeError("Document graph input must be a list.")
-  const entries = documents.filter(document => document && document.id != null && typeof document.title === "string")
+  const entries = documents
+    .filter(document => document && document.id != null && (typeof document.title === "string" || typeof document.name === "string"))
+    .map(document => ({
+      ...document,
+      title: extractFirstMarkdownHeading(document.source || "") || document.title || document.name
+    }))
   const resolve = createDocumentLinkResolver(entries)
   const nodes = entries.map((document, index) => ({
     id: document.id,

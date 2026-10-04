@@ -85,6 +85,12 @@ assert '"ElefRenderer.buildDocumentGraph"' in (ROOT / "app/lib/source/javascript
 assert "markdown_document_links" not in (ROOT / "desktop/crates/elef-core/src/lib.rs").read_text(), (
     "desktop core must not keep a parallel document-link parser"
 )
+assert "markdown_document_title" not in (ROOT / "desktop/crates/elef-core/src/lib.rs").read_text(), (
+    "desktop core must return source and folder name; Rails-owned JavaScript derives Markdown graph labels"
+)
+assert "extractFirstMarkdownHeading" in (ROOT / "app/javascript/lib/document_links.js").read_text(), (
+    "document graph labels must use the Rails-owned Markdown rules"
+)
 authoring_settings_dialog = (ROOT / "app/javascript/lib/authoring_settings_dialog.js").read_text()
 assert '"./authoring_registry_write.js"' in authoring_settings_dialog, "authoring UI must use the app-owned persistence flow"
 assert '"controllers/presentation_controller"' in (ROOT / "desktop/frontend/src/editor-runtime.js").read_text(), (
