@@ -14,7 +14,8 @@ test("slide overview thumbnails clone only inert slide content", () => {
   const previous = {
     document: globalThis.document,
     requestAnimationFrame: globalThis.requestAnimationFrame,
-    htmlVideoElement: globalThis.HTMLVideoElement
+    htmlVideoElement: globalThis.HTMLVideoElement,
+    intersectionObserver: globalThis.IntersectionObserver
   }
   const { document } = parseHTML(`
     <html><body>
@@ -73,5 +74,75 @@ test("slide overview thumbnails clone only inert slide content", () => {
     globalThis.document = previous.document
     globalThis.requestAnimationFrame = previous.requestAnimationFrame
     globalThis.HTMLVideoElement = previous.htmlVideoElement
+    globalThis.IntersectionObserver = previous.intersectionObserver
+  }
+})
+
+test("large slide overviews clone thumbnails only near the visible scroll area", () => {
+  const previous = {
+    document: globalThis.document,
+    requestAnimationFrame: globalThis.requestAnimationFrame,
+    htmlVideoElement: globalThis.HTMLVideoElement,
+    intersectionObserver: globalThis.IntersectionObserver
+  }
+  const { document } = parseHTML(`
+    <html><body><form>
+      <div class="presentation-editor-projection">
+        <div class="slide-frame"><section class="slide"><h1>One</h1></section></div>
+        <div class="slide-frame"><section class="slide"><h1>Two</h1></section></div>
+        <div class="slide-frame"><section class="slide"><h1>Three</h1></section></div>
+      </div>
+      <div class="slide-overview-grid"></div><output></output>
+    </form></body></html>
+  `)
+  let observer
+  globalThis.document = document
+  globalThis.requestAnimationFrame = () => 1
+  globalThis.HTMLVideoElement = class HTMLVideoElement {}
+  globalThis.IntersectionObserver = class {
+    constructor(callback, options) {
+      this.callback = callback
+      this.options = options
+      this.observed = []
+      observer = this
+    }
+    observe(target) { this.observed.push(target) }
+    unobserve(target) { this.observed = this.observed.filter(card => card !== target) }
+    disconnect() { this.observed = [] }
+  }
+
+  try {
+    const form = document.querySelector("form")
+    const grid = document.querySelector(".slide-overview-grid")
+    const controller = new slideOverview.default()
+    Object.assign(controller, {
+      element: form,
+      gridTarget: grid,
+      hasGridTarget: true,
+      countTarget: document.querySelector("output"),
+      preview: document.querySelector(".presentation-editor-projection"),
+      selectedIndex: 0,
+      projectionPending: false,
+      sourceRanges: () => [{}, {}, {}],
+      updateActionAvailability: () => {}
+    })
+
+    controller.renderOverview()
+
+    const cards = [...grid.querySelectorAll(".slide-overview-card")]
+    assert.equal(cards.length, 3)
+    assert.equal(observer.options.root, grid)
+    assert.equal(observer.options.rootMargin, "80px")
+    assert.equal(cards.filter(card => card.querySelector(".slide-frame")).length, 0)
+    observer.callback([{ target: cards[0], isIntersecting: true }])
+    assert.equal(cards[0].querySelector(".slide-overview-thumbnail > .slide-frame > .slide h1").textContent, "One")
+    assert.equal(cards[1].querySelector(".slide-frame"), null)
+    assert.equal(observer.observed.includes(cards[0]), false)
+    assert.equal(observer.observed.includes(cards[1]), true)
+  } finally {
+    globalThis.document = previous.document
+    globalThis.requestAnimationFrame = previous.requestAnimationFrame
+    globalThis.HTMLVideoElement = previous.htmlVideoElement
+    globalThis.IntersectionObserver = previous.intersectionObserver
   }
 })

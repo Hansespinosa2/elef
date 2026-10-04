@@ -284,6 +284,7 @@ if (__ELEF_E2E__) {
         const traceStart = globalThis.__elefPreviewTrace?.length || 0
         return measurePaintedAction(async () => {
           await openDeck(id)
+          await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
           if (activeDeck?.id !== id || elements.editorForm.dataset.loadedDeckId !== id ||
               document.querySelector("#visual-mode").disabled) throw new Error("The measured deck did not finish rendering.")
           const projection = elements.editorForm.querySelector(".presentation-editor-projection")

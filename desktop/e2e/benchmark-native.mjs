@@ -88,14 +88,20 @@ try {
         }
       }
       assert.ok(session?.sessionId, "Release benchmark session must start")
+      await request(`/session/${session.sessionId}/timeouts`, { script: 2_000 })
       const execute = (script, ...args) => request(`/session/${session.sessionId}/execute/sync`, { script, args })
       let interactiveAt
       operation = "frontend startup acknowledgement"
       while (!interactiveAt && Date.now() < deadline) {
-        interactiveAt = await execute("return window.__elefPerformanceTestHooks?.interactiveAt || null")
+        try {
+          interactiveAt = await execute("return window.__elefPerformanceTestHooks?.interactiveAt || null")
+        } catch (error) {
+          if (!/script execution timed out/i.test(error.message)) throw error
+        }
         if (!interactiveAt) await pause(50)
       }
       assert.ok(interactiveAt, "The release frontend must acknowledge completed startup")
+      await request(`/session/${session.sessionId}/timeouts`, { script: 60_000 })
       samples.coldStart.push(interactiveAt - launchedAt)
       const startupStagesJson = await execute("return JSON.stringify(window.__elefPerformanceTestHooks.bootstrapStages())")
       report.bootstrapStageRuns.push(JSON.parse(startupStagesJson))
@@ -129,6 +135,7 @@ try {
         await Promise.race([exited, pause(1_000)])
         if (!exitResult) { app.kill("SIGKILL"); await exited }
       }
+      await pause(1_000)
     }
   }
   report.p95Milliseconds = Object.fromEntries(Object.entries(samples).map(([name, values]) => [name, percentile95(values)]))
