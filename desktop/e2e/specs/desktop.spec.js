@@ -394,6 +394,7 @@ class DesktopEditorUi {
         const application = window.Stimulus
         return {
           buttonTitle: document.querySelector("#visual-mode")?.title || "",
+          previewUrl: form?.previewController?.urlValue || form?.dataset.previewUrlValue || "",
           status: document.querySelector("#status-text")?.textContent || "",
           saveState: document.querySelector("#save-state")?.textContent || "",
           previewStatus: form?.querySelector("[data-preview-target='status']")?.textContent || "",
@@ -404,6 +405,7 @@ class DesktopEditorUi {
           editorControllerReady: field?.editorController?.editorReady ?? null,
           editorControllerRegistered: Boolean(application?.router?.modulesByIdentifier?.has("editor")),
           mountedEditor: Boolean(field?.querySelector(".cm-editor")),
+          previewTrace: window.__elefPreviewTrace?.slice(-12) || [],
           controllerErrors: window.__elefE2EControllerErrors?.slice(-8) || []
         }
       })

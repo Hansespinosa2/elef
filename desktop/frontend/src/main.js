@@ -40,6 +40,11 @@ const mediaFetch = createMediaFetch({ invoke, fetchImpl: networkFetch })
 globalThis.fetch = createPreviewFetch({
   renderer,
   fetchImpl: mediaFetch,
+  onEvent: __ELEF_E2E__ ? event => {
+    const trace = globalThis.__elefPreviewTrace ||= []
+    trace.push(event)
+    if (trace.length > 40) trace.shift()
+  } : undefined,
   getContext: async source => ({
     kind: activeDeck?.source_file === "document.md" ? "document" : "presentation",
     title: document.querySelector("#desktop-editor-title")?.value.trim() || activeDeck?.name || "Untitled",
