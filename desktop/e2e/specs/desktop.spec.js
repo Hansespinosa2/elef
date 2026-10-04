@@ -1,4 +1,5 @@
 import { $, $$, browser } from "@wdio/globals"
+import { Key } from "webdriverio"
 import { execFileSync, spawn } from "node:child_process"
 import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises"
 import path from "node:path"
@@ -37,6 +38,79 @@ async function confirmAuthoringDeletion(expectedName) {
 
 function normalizeLineEndings(source) {
   return source.replace(/\r\n/g, "\n")
+}
+
+function desktopProcessId() {
+  const executable = process.env.ELEF_E2E_APP_BINARY
+  if (!executable) throw new Error("The desktop application binary is missing")
+  const pattern = "^" + executable.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "( |$)"
+  const pids = execFileSync("pgrep", ["-f", pattern], { encoding: "utf8", timeout: 5_000 })
+    .trim().split(/\s+/).filter(Boolean)
+  if (pids.length !== 1 || !/^\d+$/.test(pids[0])) {
+    throw new Error(`Expected one desktop application process, found ${pids.length}`)
+  }
+  return Number(pids[0])
+}
+
+function focusDesktopWindow() {
+  const pid = desktopProcessId()
+  if (process.platform === "linux") {
+    const windowIds = execFileSync("xdotool", ["search", "--sync", "--onlyvisible", "--pid", String(pid)], {
+      encoding: "utf8", timeout: 5_000
+    }).trim().split(/\s+/).filter(Boolean)
+    if (!windowIds.length) throw new Error("The desktop application has no visible window")
+    execFileSync("xdotool", ["windowactivate", "--sync", windowIds[0]], { timeout: 5_000 })
+    return
+  }
+  if (process.platform === "darwin") {
+    execFileSync("osascript", ["-e", `tell application "System Events"
+      set frontmost of (first application process whose unix id is ${pid}) to true
+    end tell`], { timeout: 5_000 })
+    return
+  }
+  throw new Error(`Native window activation is unsupported on ${process.platform}`)
+}
+
+function sendNativeKey(key) {
+  if (process.platform === "linux") {
+    focusDesktopWindow()
+    const nativeKey = key === "Escape" ? "Escape" : key === "Enter" ? "Return" : key
+    execFileSync("xdotool", ["key", "--clearmodifiers", nativeKey], { timeout: 5_000 })
+    return
+  }
+  if (process.platform === "darwin") {
+    const keyCode = key === "Escape" ? 53 : key === "Enter" ? 36 : null
+    if (keyCode === null) throw new Error(`Unsupported native key ${key}`)
+    const pid = desktopProcessId()
+    execFileSync("osascript", ["-e", `tell application "System Events"
+      tell (first application process whose unix id is ${pid})
+        set frontmost to true
+        key code ${keyCode}
+      end tell
+    end tell`], { timeout: 5_000 })
+    return
+  }
+  throw new Error(`Native keyboard input is unsupported on ${process.platform}`)
+}
+
+function typeNativeText(value) {
+  if (process.platform === "linux") {
+    focusDesktopWindow()
+    execFileSync("xdotool", ["type", "--clearmodifiers", "--delay", "10", value], { timeout: 10_000 })
+    return
+  }
+  if (process.platform === "darwin") {
+    const escaped = value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')
+    const pid = desktopProcessId()
+    execFileSync("osascript", ["-e", `tell application "System Events"
+      tell (first application process whose unix id is ${pid})
+        set frontmost to true
+        keystroke "${escaped}"
+      end tell
+    end tell`], { timeout: 10_000 })
+    return
+  }
+  throw new Error(`Native keyboard input is unsupported on ${process.platform}`)
 }
 
 class DesktopEditorUi {
@@ -169,11 +243,15 @@ class DesktopEditorUi {
   }
 
   async movePresentation(key) {
-    await browser.keys(key)
+    const webdriverKey = Key[key]
+    if (!webdriverKey) throw new Error(`Unsupported presentation key ${key}`)
+    await browser.keys(webdriverKey)
   }
 
   async exitPresentationMode() {
-    await browser.keys("ESC")
+    await browser.execute(() => window.focus())
+    focusDesktopWindow()
+    await browser.keys(Key.Escape)
     await browser.waitUntil(async () => !(await browser.execute(() => document.body.classList.contains("presenting-deck"))), {
       timeout: 5_000,
       timeoutMsg: "Escape did not exit desktop presentation mode"
@@ -182,14 +260,20 @@ class DesktopEditorUi {
 
   async returnToEditor() {
     if (await browser.execute(() => document.body.classList.contains("presenting-deck"))) {
-      await this.exitPresentationMode()
+      // Keep a failed Escape assertion from leaving this shared fixture deck in
+      // presentation-test content and cascading into unrelated scenarios.
+      await $("#exit-presentation").click()
+      await browser.waitUntil(async () => !(await browser.execute(() => document.body.classList.contains("presenting-deck"))), {
+        timeout: 5_000,
+        timeoutMsg: "The native presentation exit control did not return to editing"
+      })
     }
     if (!(await $("#deck-view").isDisplayed())) await this.openDeck()
   }
 
   async renameEditorTitle(title) {
     await $("#desktop-editor-title").setValue(title)
-    await browser.keys("TAB")
+    await browser.keys(Key.Tab)
     this.activeDeckTitle = title
   }
 
@@ -1031,8 +1115,9 @@ describe("desktop binary workflows and native boundaries", () => {
         editor.setSelectionRange(editor.sourceValue.length)
         editor.view.focus()
       })
-      if (needsLineBreak) await browser.keys("ENTER")
-      await browser.keys(inserted)
+      await browser.execute(() => window.focus())
+      if (needsLineBreak) sendNativeKey("Enter")
+      typeNativeText(inserted)
 
       const trustedKeys = await browser.execute(() => {
         const tracker = window.__elefTrustedEditorKeys
