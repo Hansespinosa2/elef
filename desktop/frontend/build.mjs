@@ -1,4 +1,5 @@
 import { copyFile, cp, mkdir, readFile, writeFile } from "node:fs/promises"
+import { execFileSync } from "node:child_process"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { build } from "esbuild"
@@ -8,6 +9,10 @@ const repoRoot = path.resolve(frontendRoot, "../..")
 const e2eBuild = process.env.ELEF_E2E_BUILD === "1"
 const output = path.join(frontendRoot, e2eBuild ? "dist-e2e" : "dist")
 const assets = path.join(output, "assets")
+
+// Desktop and Rails use the same generated utility CSS. Build it here so a
+// Tauri package cannot silently ship without the shared view styles.
+execFileSync(path.join(repoRoot, "bin/rails"), ["tailwindcss:build"], { cwd: repoRoot, stdio: "inherit" })
 
 await mkdir(assets, { recursive: true })
 await build({
@@ -77,6 +82,7 @@ if (e2eBuild) {
 }
 await copyFile(path.join(frontendRoot, "theme.css"), path.join(assets, "theme.css"))
 await copyFile(path.join(frontendRoot, "styles.css"), path.join(assets, "styles.css"))
+await copyFile(path.join(repoRoot, "app/assets/builds/tailwind.css"), path.join(assets, "tailwind.css"))
 await copyFile(path.join(frontendRoot, "node_modules/katex/dist/katex.min.css"), path.join(assets, "katex.min.css"))
 await cp(path.join(frontendRoot, "node_modules/katex/dist/fonts"), path.join(assets, "fonts"), { recursive: true })
 await copyFile(path.join(repoRoot, "vendor/javascript/mermaid.min.js"), path.join(assets, "mermaid.min.js"))

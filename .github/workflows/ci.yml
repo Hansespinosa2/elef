@@ -226,8 +226,6 @@ jobs:
         run: cargo clippy --manifest-path desktop/Cargo.toml --workspace --all-targets -- -D warnings
       - name: Test desktop Rust workspace
         run: cargo test --manifest-path desktop/Cargo.toml --workspace
-      - name: Build Rails styles for shared browser scenarios
-        run: bin/rails tailwindcss:build
       - name: Prepare the isolated Rails E2E database
         env:
           RAILS_ENV: test
@@ -326,8 +324,6 @@ jobs:
         run: cargo clippy --manifest-path desktop/Cargo.toml --workspace --all-targets -- -D warnings
       - name: Test desktop Rust workspace
         run: cargo test --manifest-path desktop/Cargo.toml --workspace
-      - name: Build Rails styles for shared browser scenarios
-        run: bin/rails tailwindcss:build
       - name: Prepare the isolated Rails E2E database
         env:
           RAILS_ENV: test

@@ -13,6 +13,14 @@ const { document } = parseHTML(page)
 
 test("rendered decks reuse Rails styles with only native viewport chrome", () => {
   assert.ok(document.querySelector('link[href="./assets/styles.css"]'))
+  assert.ok(document.querySelector('link[href="./assets/tailwind.css"]'))
+  assert.ok(document.querySelector('link[href="./assets/katex.min.css"]'))
+  assert.ok(document.querySelector('link[href="./assets/app.css"]'))
+  assert.deepEqual(
+    Array.from(document.querySelectorAll("link[rel=stylesheet]"), link => link.getAttribute("href")).slice(-3),
+    ["./assets/tailwind.css", "./assets/katex.min.css", "./assets/app.css"],
+    "desktop loads shared stylesheets in the Rails layout order",
+  )
   assert.match(shellStyles, /@import\s+url\(["']?\.\/theme\.css["']?\)/)
   assert.ok(main.includes('import "../../../app/assets/stylesheets/application.css"'))
   assert.doesNotMatch(viewportStyles, /^\.(?:editor|slide|document|presentation|katex)[\w.-]*(?:\s|\{|:)/m)
