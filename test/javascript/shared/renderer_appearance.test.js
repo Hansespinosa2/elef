@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { readStyle, withAppearanceValue } from "../src/document-map.js"
+import { readStyle, withAppearanceValue } from "../../../app/javascript/lib/document_map.js"
 
 test("appearance writes preserve unrelated metadata, body bytes, Unicode, and line endings", () => {
   for (const eol of ["\n", "\r\n", "\r"]) {

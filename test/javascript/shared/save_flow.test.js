@@ -1,8 +1,8 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { createSaveFlow } from "../src/save-flow.js"
-import { applyEditorSource } from "../src/editor-source.js"
+import { createSaveFlow } from "../../../app/javascript/lib/save_flow.js"
+import { applyEditorSource } from "../../../app/javascript/lib/editor_source.js"
 
 const hash = letter => letter.repeat(64)
 

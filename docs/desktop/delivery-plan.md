@@ -56,14 +56,14 @@ Each is a day or less with a checkable exit. ADRs 002, 003, 006 and 007 are acce
 
 **S1 — Rails-side inventory** (feeds ADR-003, 004, 007; [transport-adapter.md](transport-adapter.md))
 - Every endpoint the editor/library JS calls: method, path, request/response JSON, error shapes → complete the command table.
-- Host page: everything `works/_form.html.erb` injects that JS depends on (`data-*`, registry JSON, CSRF meta) → static template.
+- Host page: everything `works/_form.html.erb` injects that JS depends on (`data-*`, registry JSON, CSRF meta) → desktop static shell at `app/views/desktop_shell/index.html`; both hosts mount app-owned components.
 - Asset pipeline: importmap pins and npm lockfile; esbuild builds the checked-in renderer bundle; npm KaTeX is version-pinned to the gem's vendored runtime.
 - Turbo: confirm no controller depends on Turbo events or navigation.
 - Autosave controller: confirm it keeps dirty state and does not retry destructively on an error response.
 - Preview DOM sink: record how preview HTML reaches the DOM (security C11).
 - **Renderer consumers:** every server-side call site of `Source::HtmlRenderer` (preview endpoint, exports, cached-HTML paths). The mini_racer wrapper must cover all of them.
 - **mini_racer feasibility:** local Omarchy install, timeout, memory limit, basic multithread context isolation, and a post-fork probe passed. Still measure 100-slide latency, exercise the Rails production Puma thread/fork configuration, and run install/render tests on macOS arm64. Highlight.js is used (no Shiki WebAssembly engine).
-- **Bundle build:** implemented: `npm run build --prefix desktop/frontend` creates the checked-in Rails bundle and the desktop worker/app bundles from pinned lockfiles. CI asserts the generated bundle is fresh.
+- **Bundle build:** implemented: root `npm run renderer:build` creates the Rails-owned bundle from `app/javascript`; the Node-only Tauri frontend build copies it, the checked-in `app/assets/builds/tailwind.css`, and the shell assets into the thin host. Separate root and desktop lockfiles pin shared renderer and Tauri dependencies; CI asserts the generated renderer and Tailwind assets are fresh and checks dependency direction.
 - **Half-day probe:** shared Markdown blocks, editor maps and editable projections run through MiniRacer and targeted Rails tests pass. Still compare a representative fixture corpus through all Rails render consumers and both platform URL/media inputs.
 - **Exit:** command table + payload schemas + host-page contract + full renderer consumer inventory + normalized parity corpus + MiniRacer target/thread/fork/performance evidence + bundle freshness check, reviewed against Rails controllers and system tests.
 

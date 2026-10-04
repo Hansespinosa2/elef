@@ -1,5 +1,4 @@
 import { copyFile, cp, mkdir, readFile, writeFile } from "node:fs/promises"
-import { execFileSync } from "node:child_process"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { build } from "esbuild"
@@ -9,10 +8,6 @@ const repoRoot = path.resolve(frontendRoot, "../..")
 const e2eBuild = process.env.ELEF_E2E_BUILD === "1"
 const output = path.join(frontendRoot, e2eBuild ? "dist-e2e" : "dist")
 const assets = path.join(output, "assets")
-
-// Desktop and Rails use the same generated utility CSS. Build it here so a
-// Tauri package cannot silently ship without the shared view styles.
-execFileSync(path.join(repoRoot, "bin/rails"), ["tailwindcss:build"], { cwd: repoRoot, stdio: "inherit" })
 
 await mkdir(assets, { recursive: true })
 await build({
@@ -26,7 +21,7 @@ await build({
   minify: true,
   define: { __ELEF_E2E__: JSON.stringify(e2eBuild) },
   plugins: [{
-    name: "rails-controller-alias",
+    name: "app-source-alias",
     setup(context) {
       context.onResolve({ filter: /^(?:controllers|lib)\// }, ({ path: importPath }) => ({
         path: path.join(repoRoot, "app/javascript", `${importPath}.js`)
@@ -35,32 +30,12 @@ await build({
   }]
 })
 
-const railsRendererBundle = path.join(repoRoot, "vendor/javascript/elef-renderer.bundle.js")
-await build({
-  entryPoints: [path.join(frontendRoot, "src/renderer-global.js")],
-  nodePaths: [path.join(frontendRoot, "node_modules")],
-  bundle: true,
-  format: "iife",
-  target: "es2022",
-  outfile: railsRendererBundle,
-  minify: true,
-  legalComments: "none"
-})
-
-// Keep Highlight.js's PHP whitespace template semantically intact without
-// emitting a physical tab at end-of-line in the checked-in bundle.
-const rendererBundle = await readFile(railsRendererBundle, "utf8")
-const rawWhitespace = "[ \t\n"
-const occurrences = rendererBundle.split(rawWhitespace).length - 1
-if (occurrences !== 1) throw new Error(`Expected one Highlight.js whitespace template, found ${occurrences}.`)
-await writeFile(railsRendererBundle, rendererBundle.replace(rawWhitespace, "[ \\t\n"))
-
-// Rails and desktop execute the same generated renderer bytes. Keep the worker
-// entry thin so the renderer implementation is loaded only from this bundle.
-await copyFile(railsRendererBundle, path.join(assets, "renderer.bundle.js"))
+// Rails owns and builds the renderer. Desktop packages the exact same artifact.
+const rendererBundle = path.join(repoRoot, "vendor/javascript/elef-renderer.bundle.js")
+await copyFile(rendererBundle, path.join(assets, "renderer.bundle.js"))
 await copyFile(path.join(frontendRoot, "src/renderer-worker.js"), path.join(assets, "renderer-worker.js"))
 
-const indexHtml = await readFile(path.join(frontendRoot, "index.html"), "utf8")
+const indexHtml = await readFile(path.join(repoRoot, "app/views/desktop_shell/index.html"), "utf8")
 if (e2eBuild) {
   await build({
     entryPoints: [path.join(frontendRoot, "../e2e/wdio-init.js")],
@@ -80,8 +55,7 @@ if (e2eBuild) {
 } else {
   await writeFile(path.join(output, "index.html"), indexHtml)
 }
-await copyFile(path.join(frontendRoot, "theme.css"), path.join(assets, "theme.css"))
-await copyFile(path.join(frontendRoot, "styles.css"), path.join(assets, "styles.css"))
+await copyFile(path.join(repoRoot, "app/assets/stylesheets/desktop_shell.css"), path.join(assets, "desktop_shell.css"))
 await copyFile(path.join(repoRoot, "app/assets/builds/tailwind.css"), path.join(assets, "tailwind.css"))
 await copyFile(path.join(frontendRoot, "node_modules/katex/dist/katex.min.css"), path.join(assets, "katex.min.css"))
 await cp(path.join(frontendRoot, "node_modules/katex/dist/fonts"), path.join(assets, "fonts"), { recursive: true })

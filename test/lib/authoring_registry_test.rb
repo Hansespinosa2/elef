@@ -1,10 +1,10 @@
 require "test_helper"
 
 class AuthoringRegistryTest < ActiveSupport::TestCase
-  test "desktop palette defaults stay in sync with the shared Rails registry" do
-    artifact = Rails.root.join("desktop/frontend/src/default-authoring-registry.json")
+  test "the checked-in editor registry matches the canonical built-in entries" do
+    artifact = Rails.root.join("app/javascript/data/default_authoring_registry.json")
     checked_in = JSON.parse(File.read(artifact))
-    generated = JSON.parse(AuthoringRegistry.defaults_for_desktop.to_json)
+    generated = JSON.parse(AuthoringRegistry.built_in_entries.to_json)
 
     assert_equal generated, checked_in
     assert checked_in.any? { |entry| entry["namespace"] == "/" && entry["trigger"] == "bold" }

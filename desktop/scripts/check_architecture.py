@@ -30,10 +30,10 @@ feature_flags_source = (REPO_ROOT / "desktop" / "frontend" / "src" / "feature-fl
 delivery_plan = (REPO_ROOT / "docs" / "desktop" / "delivery-plan.md").read_text()
 document_model = (REPO_ROOT / "app" / "lib" / "source" / "document.rb").read_text()
 javascript_renderer = (REPO_ROOT / "app" / "lib" / "source" / "javascript_renderer.rb").read_text()
-renderer_global = (REPO_ROOT / "desktop" / "frontend" / "src" / "renderer-global.js").read_text()
+renderer_global = (REPO_ROOT / "app" / "javascript" / "lib" / "renderer_global.js").read_text()
 renderer_worker = (REPO_ROOT / "desktop" / "frontend" / "src" / "renderer-worker.js").read_text()
 desktop_main = (REPO_ROOT / "desktop" / "frontend" / "src" / "main.js").read_text()
-native_render_styles = (REPO_ROOT / "desktop" / "frontend" / "src" / "rendered-content.css").read_text()
+native_render_styles = (REPO_ROOT / "app" / "assets" / "stylesheets" / "desktop_rendered_content.css").read_text()
 assert 'import "../../../app/assets/stylesheets/application.css"' in desktop_main, "desktop must reuse Rails rendering and authoring styles"
 assert not re.search(r"^\.(?:slide|document|presentation|katex)[\w.-]*(?:\s|\{|:)", native_render_styles, re.MULTILINE), "native viewport CSS must not contain another rendering stylesheet"
 web_card = (REPO_ROOT / "app" / "views" / "library" / "_work_card.html.erb").read_text()
@@ -119,7 +119,7 @@ desktop_bundle = REPO_ROOT / "desktop" / "frontend" / "dist" / "assets" / "rende
 assert desktop_bundle.is_file(), "build the desktop frontend before checking the shared renderer bundle"
 rails_hash = hashlib.sha256(rails_bundle.read_bytes()).hexdigest()
 desktop_hash = hashlib.sha256(desktop_bundle.read_bytes()).hexdigest()
-assert rails_hash == desktop_hash, "Rails and desktop renderer bundle hashes differ; run npm run build --prefix desktop/frontend"
+assert rails_hash == desktop_hash, "Rails and desktop renderer bundle hashes differ; run npm run renderer:build"
 assert not re.search(r"def (?:editor_blocks|editable_region_for_block|utf16_range)\b", document_model), "Rails must not retain a second editor-map implementation"
 assert {
     permission

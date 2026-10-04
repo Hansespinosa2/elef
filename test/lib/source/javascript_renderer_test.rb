@@ -30,8 +30,8 @@ class SourceJavascriptRendererTest < ActiveSupport::TestCase
     assert_equal "Safe preview", fragment.at_css(".library-card-preview p").text
     assert_equal "Action", fragment.at_css(".library-card-controls button").text
   end
-  INPUTS = JSON.parse(Rails.root.join("desktop/frontend/fixtures/renderer-inputs.json").read).freeze
-  OUTPUTS = JSON.parse(Rails.root.join("desktop/frontend/fixtures/renderer-outputs.json").read).freeze
+  INPUTS = JSON.parse(Rails.root.join("test/javascript/fixtures/renderer-inputs.json").read).freeze
+  OUTPUTS = JSON.parse(Rails.root.join("test/javascript/fixtures/renderer-outputs.json").read).freeze
 
   INPUTS.each_with_index do |fixture, index|
     test "MiniRacer exact fixture #{fixture.fetch('name')}" do

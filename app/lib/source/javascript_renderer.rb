@@ -103,7 +103,7 @@ module Source
       end
 
       Thread.current.thread_variable_get(CONTEXT_KEY) || begin
-        raise LoadError, "shared Elef renderer bundle is missing; run npm run build --prefix desktop/frontend" unless BUNDLE_PATH.file?
+        raise LoadError, "shared Elef renderer bundle is missing; run npm run renderer:build" unless BUNDLE_PATH.file?
 
         renderer = MiniRacer::Context.new(
           timeout: CONTEXT_TIMEOUT_MS,

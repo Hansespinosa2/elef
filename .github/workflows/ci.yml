@@ -22,7 +22,9 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: desktop/frontend/package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            desktop/frontend/package-lock.json
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Cache Rust build artifacts
@@ -31,10 +33,14 @@ jobs:
           workspaces: desktop -> target
       - name: Install frontend dependencies
         run: npm ci --prefix desktop/frontend
+      - name: Install Rails-owned frontend dependencies
+        run: npm ci
       - name: Run the fast desktop unit tier
         run: |
           started=$SECONDS
+          npm run test:javascript
           npm test --prefix desktop/frontend
+          python3 script/check_frontend_ownership.py
           cargo test --manifest-path desktop/Cargo.toml -p elef-core --locked
           elapsed=$((SECONDS - started))
           echo "Fast desktop test tier: ${elapsed}s (budget: 300s)"
@@ -87,6 +93,8 @@ jobs:
           bundler-cache: true
       - name: Build Tailwind CSS
         run: bin/rails tailwindcss:build
+      - name: Verify the shared Tailwind artifact is current
+        run: git diff --exit-code -- app/assets/builds/tailwind.css
       - name: Run tests
         env:
           RAILS_ENV: test
@@ -178,6 +186,7 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: |
+            package-lock.json
             desktop/frontend/package-lock.json
             desktop/e2e/package-lock.json
       - name: Set up Rust
@@ -199,10 +208,13 @@ jobs:
           sudo apt-get install --yes build-essential curl dbus-daemon file iptables libayatana-appindicator3-dev libdbus-1-dev libgtk-3-dev librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev openbox patchelf unzip wget xdotool xvfb zip
       - name: Install frontend dependencies
         run: npm ci --prefix desktop/frontend
+      - name: Install Rails-owned frontend dependencies
+        run: npm ci
       - name: Install shared scenario dependencies
         run: npm ci --prefix desktop/e2e
       - name: Audit desktop JavaScript dependencies
         run: |
+          npm audit --audit-level=high
           npm audit --prefix desktop/frontend --audit-level=high
           npm audit --prefix desktop/e2e --audit-level=high
       - name: Install pinned Cargo audit tool
@@ -214,12 +226,18 @@ jobs:
         run: cargo audit --file desktop/Cargo.lock --deny warnings --ignore RUSTSEC-2025-0057 --ignore RUSTSEC-2024-0370 --ignore RUSTSEC-2024-0429 --ignore RUSTSEC-2026-0097
       - name: Test and bundle desktop frontend
         run: |
+          bin/rails tailwindcss:build
+          git diff --exit-code -- app/assets/builds/tailwind.css
+          npm run renderer:build
+          npm run test:javascript
           npm test --prefix desktop/frontend
           npm run build --prefix desktop/frontend
       - name: Verify the Rails renderer bundle is current
         run: git diff --exit-code -- vendor/javascript/elef-renderer.bundle.js
       - name: Check command allowlist and CSP
-        run: python3 desktop/scripts/check_architecture.py
+        run: |
+          python3 desktop/scripts/check_architecture.py
+          python3 script/check_frontend_ownership.py
       - name: Check Rust formatting
         run: cargo fmt --manifest-path desktop/Cargo.toml --all -- --check
       - name: Lint desktop Rust workspace
@@ -287,6 +305,7 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: |
+            package-lock.json
             desktop/frontend/package-lock.json
             desktop/e2e/package-lock.json
       - name: Set up Rust
@@ -304,20 +323,29 @@ jobs:
           workspaces: desktop -> target
       - name: Install frontend dependencies
         run: npm ci --prefix desktop/frontend
+      - name: Install Rails-owned frontend dependencies
+        run: npm ci
       - name: Install shared scenario dependencies
         run: npm ci --prefix desktop/e2e
       - name: Audit desktop JavaScript dependencies
         run: |
+          npm audit --audit-level=high
           npm audit --prefix desktop/frontend --audit-level=high
           npm audit --prefix desktop/e2e --audit-level=high
       - name: Test and bundle desktop frontend
         run: |
+          bin/rails tailwindcss:build
+          git diff --exit-code -- app/assets/builds/tailwind.css
+          npm run renderer:build
+          npm run test:javascript
           npm test --prefix desktop/frontend
           npm run build --prefix desktop/frontend
       - name: Verify the Rails renderer bundle is current
         run: git diff --exit-code -- vendor/javascript/elef-renderer.bundle.js
       - name: Check command allowlist and CSP
-        run: python3 desktop/scripts/check_architecture.py
+        run: |
+          python3 desktop/scripts/check_architecture.py
+          python3 script/check_frontend_ownership.py
       - name: Check Rust formatting
         run: cargo fmt --manifest-path desktop/Cargo.toml --all -- --check
       - name: Lint desktop Rust workspace
@@ -375,11 +403,12 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: desktop/frontend/package-lock.json
+          cache-dependency-path: package-lock.json
+      - name: Install Rails-owned frontend dependencies
+        run: npm ci
       - name: Build the shared renderer bundle
         run: |
-          npm ci --prefix desktop/frontend
-          npm run build --prefix desktop/frontend
+          npm run renderer:build
       - name: Verify the Rails renderer bundle is current
         run: git diff --exit-code -- vendor/javascript/elef-renderer.bundle.js
       - name: Exercise Rails rendering on Apple Silicon macOS

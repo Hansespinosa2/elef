@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { parseHTML } from "linkedom"
-import { installSanitizedPreview } from "../src/preview-sanitizer.js"
+import { installSanitizedPreview } from "../../../app/javascript/lib/preview_sanitizer.js"
 
 test("preview sink strips executable markup and remote image sources while preserving editor controls", () => {
   const { document } = parseHTML("<main id='preview'></main>")

@@ -3,9 +3,9 @@ import { fileURLToPath } from "node:url"
 import vm from "node:vm"
 
 // Explicit maintenance command. Tests never regenerate their expectations.
-const inputsPath = new URL("../frontend/fixtures/renderer-inputs.json", import.meta.url)
-const outputsPath = new URL("../frontend/fixtures/renderer-outputs.json", import.meta.url)
-const bundlePath = new URL("../../vendor/javascript/elef-renderer.bundle.js", import.meta.url)
+const inputsPath = new URL("../test/javascript/fixtures/renderer-inputs.json", import.meta.url)
+const outputsPath = new URL("../test/javascript/fixtures/renderer-outputs.json", import.meta.url)
+const bundlePath = new URL("../vendor/javascript/elef-renderer.bundle.js", import.meta.url)
 const sandbox = vm.createContext({})
 vm.runInContext(await readFile(bundlePath, "utf8"), sandbox, { filename: fileURLToPath(bundlePath) })
 const renderer = sandbox.ElefRenderer

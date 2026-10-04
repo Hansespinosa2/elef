@@ -1,9 +1,9 @@
 import assert from "node:assert/strict"
 import { readFile } from "node:fs/promises"
 import test from "node:test"
-import { mergeAuthoringRegistryEntries } from "../src/registry-merge.js"
+import { mergeAuthoringRegistryEntries } from "../../../app/javascript/lib/authoring_registry_merge.js"
 
-const builtIns = JSON.parse(await readFile(new URL("../src/default-authoring-registry.json", import.meta.url), "utf8"))
+const builtIns = JSON.parse(await readFile(new URL("../../../app/javascript/data/default_authoring_registry.json", import.meta.url), "utf8"))
 
 test("default authoring entries with the same ID in different namespaces both survive", () => {
   const registry = mergeAuthoringRegistryEntries(builtIns)

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { buildAuthoringEntry, removeAuthoringEntry, upsertAuthoringEntry } from "../src/authoring-settings.js"
+import { buildAuthoringEntry, removeAuthoringEntry, upsertAuthoringEntry } from "../../../app/javascript/lib/authoring_settings.js"
 import { writeAuthoringRegistry } from "../src/authoring-registry-write.js"
 
 test("snippet settings preserve Markdown content and produce the Rails row shape", () => {

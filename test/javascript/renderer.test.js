@@ -1,7 +1,7 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { collectMediaReferences, renderMarkdownBlock, renderPreview } from "../src/renderer.js"
-import { buildEditorMap } from "../src/document-map.js"
+import { collectMediaReferences, renderMarkdownBlock, renderPreview } from "../../app/javascript/lib/renderer.js"
+import { buildEditorMap } from "../../app/javascript/lib/document_map.js"
 
 test("presentation preview builds editable source ranges and ignores slide delimiters in code fences", () => {
   const source = "---\ntheme: dark\n---\n# One\n\nText 😀\n\n```md\n---\n```\n---\n# Two"

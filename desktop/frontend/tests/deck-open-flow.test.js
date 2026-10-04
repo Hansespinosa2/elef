@@ -1,6 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { createDeckOpenFlow, prepareDeckOpen } from "../src/deck-open-flow.js"
+import { createDeckOpenFlow, prepareDeckOpen } from "../../../app/javascript/lib/deck_open_flow.js"
 import { createTransportAdapter } from "../src/transport-adapter.js"
 
 test("concurrent deck opens cannot replace editor state in reverse read order", async () => {

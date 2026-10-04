@@ -2,8 +2,8 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import { parseHTML } from "linkedom"
 
-import { createLibraryPreviewLoader } from "../src/library-preview.js"
-import { installSanitizedPreview } from "../src/preview-sanitizer.js"
+import { createLibraryPreviewLoader } from "../../../app/javascript/lib/library_preview.js"
+import { installSanitizedPreview } from "../../../app/javascript/lib/preview_sanitizer.js"
 
 test("library canvases reuse web sizing while retaining only the trusted read-only controller", async () => {
   for (const kind of ["document", "presentation"]) {

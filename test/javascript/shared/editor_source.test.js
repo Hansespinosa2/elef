@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { parseHTML } from "linkedom"
-import { applyEditorSource } from "../src/editor-source.js"
+import { applyEditorSource } from "../../../app/javascript/lib/editor_source.js"
 
 test("delayed editor readiness preserves a different deck or newer local edits", async () => {
   for (const change of ["deck", "edit"]) {

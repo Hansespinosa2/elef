@@ -71,6 +71,8 @@ flowchart TB
 
 Dependency rule: webview → adapter → commands → core → OS. Core never calls upward.
 
+**Frontend ownership.** Rails `app/` owns platform-neutral product UI, components, styles, renderer code, and behavior. Desktop imports the same `app/javascript` modules and packages the same generated assets; Rails code, tests, and build scripts never read from `desktop/`. The Rails-generated utility stylesheet is checked in at `app/assets/builds/tailwind.css`, so clean desktop packaging does not need Rails. The desktop package contains only its shell bootstrap, Tauri transport and filesystem adapters, lifecycle/updater integration, and platform-specific shell UI. The static desktop host source lives in `app/views/desktop_shell/`; desktop builds it into its self-contained package without starting Rails.
+
 ## 4. Runtime view
 
 1. **Launch.** Single-instance check → scan library root (dot-folders skipped, symlinks not followed) → library view.
@@ -104,7 +106,7 @@ Where state lives
 
 - **Identity.** UUID in `elef.json`; folder name is display-only. Rules in [data-format.md](data-format.md).
 - **Case and Unicode.** Folder-name collision semantics are defined in [data-format.md](data-format.md); import warns while preserving the original name.
-- **Shared renderer.** Rails and desktop load the same generated `renderer.bundle.js`; CI checks the SHA-256 hashes match. Rails calls `ElefRenderer.renderPreview` through MiniRacer for its edit host and editor-preview endpoint; desktop calls it in a worker. Rails supplies web routes and Active Storage URLs, while desktop supplies local document IDs and deck-scoped asset URLs. Read-only Rails views retain their server-side wrappers. The Ruby renderer remains an explicit rollback until the full consumer fixture gate and soak pass. ADR-007 owns the cutover.
+- **Shared renderer.** Source lives in `app/javascript/lib/`; root `npm run renderer:build` creates the checked-in bundle in `vendor/javascript/`. Rails calls `ElefRenderer.renderPreview` through MiniRacer for its edit host and editor-preview endpoint; desktop packages those exact bytes and calls them in a worker. Rails supplies web routes and Active Storage URLs, while desktop supplies local document IDs and deck-scoped asset URLs. Read-only Rails views retain their server-side wrappers. The Ruby renderer remains an explicit rollback until the full consumer fixture gate and soak pass. ADR-007 owns the cutover.
 - **Concurrency.** Saves are serialized per deck and coalesced (latest wins); the app never has two writers on one deck. Periodic source checks compare the content hash to the last successful save and reload or raise a conflict. Rendering runs in a worker with a time limit; a runaway render is terminated, not waited on.
 - **Shared rendering styles.** Desktop imports Rails `app/assets/stylesheets/application.css` for rendered slides, documents, authoring controls and graph styles. Its rendering stylesheet contains only native viewport chrome. A browser comparison checks slide layouts, themes, fonts and document typography against both built stylesheets; CI rejects a second native rendering stylesheet.
 - **Errors.** Commands return typed errors `{ code, message, retryable }`; the code set is in [transport-adapter.md](transport-adapter.md). The UI maps codes to messages; raw OS errors never reach the user.

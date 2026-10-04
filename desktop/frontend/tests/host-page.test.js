@@ -3,16 +3,16 @@ import { readFile } from "node:fs/promises"
 import test from "node:test"
 import { parseHTML } from "linkedom"
 
-const page = await readFile(new URL("../index.html", import.meta.url), "utf8")
-const shellStyles = await readFile(new URL("../styles.css", import.meta.url), "utf8")
+const page = await readFile(new URL("../../../app/views/desktop_shell/index.html", import.meta.url), "utf8")
+const shellStyles = await readFile(new URL("../../../app/assets/stylesheets/desktop_shell.css", import.meta.url), "utf8")
 const main = await readFile(new URL("../src/main.js", import.meta.url), "utf8")
 const editorView = await readFile(new URL("../../../app/javascript/lib/editor_view.js", import.meta.url), "utf8")
 const libraryView = await readFile(new URL("../../../app/javascript/lib/library_view.js", import.meta.url), "utf8")
-const viewportStyles = await readFile(new URL("../src/rendered-content.css", import.meta.url), "utf8")
+const viewportStyles = await readFile(new URL("../../../app/assets/stylesheets/desktop_rendered_content.css", import.meta.url), "utf8")
 const { document } = parseHTML(page)
 
 test("rendered decks reuse Rails styles with only native viewport chrome", () => {
-  assert.ok(document.querySelector('link[href="./assets/styles.css"]'))
+  assert.ok(document.querySelector('link[href="./assets/desktop_shell.css"]'))
   assert.ok(document.querySelector('link[href="./assets/tailwind.css"]'))
   assert.ok(document.querySelector('link[href="./assets/katex.min.css"]'))
   assert.ok(document.querySelector('link[href="./assets/app.css"]'))
@@ -21,7 +21,7 @@ test("rendered decks reuse Rails styles with only native viewport chrome", () =>
     ["./assets/tailwind.css", "./assets/katex.min.css", "./assets/app.css"],
     "desktop loads shared stylesheets in the Rails layout order",
   )
-  assert.match(shellStyles, /@import\s+url\(["']?\.\/theme\.css["']?\)/)
+  assert.match(shellStyles, /\.app-frame\s*\{/)
   assert.ok(main.includes('import "../../../app/assets/stylesheets/application.css"'))
   assert.doesNotMatch(viewportStyles, /^\.(?:editor|slide|document|presentation|katex)[\w.-]*(?:\s|\{|:)/m)
   assert.doesNotMatch(main, /import ["']\.\/editor\.css["']/)

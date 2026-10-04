@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { filterDecks } from "../src/library-filter.js"
+import { filterDecks } from "../../../app/javascript/lib/library_filter.js"
 
 const decks = [
   { id: "doc-1", name: "Notes", kind: "document" },

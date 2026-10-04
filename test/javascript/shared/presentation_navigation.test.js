@@ -1,6 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { createPresentationNavigation } from "../src/presentation-flow.js"
+import { createPresentationNavigation } from "../../../app/javascript/lib/presentation_navigation.js"
 
 test("presentation navigation clamps at each end and supports home/end", () => {
   const navigation = createPresentationNavigation(3)

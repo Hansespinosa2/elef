@@ -22,7 +22,7 @@ module AuthoringRegistry
     )
   end
 
-  def defaults_for_desktop
+  def built_in_entries
     build_entries(Snippets::Catalog::DEFAULTS, MathShortcuts::Catalog::DEFAULTS)
   end
 

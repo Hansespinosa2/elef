@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import { parseHTML } from "linkedom"
 
-import { waitForEditorController } from "../src/editor-ready.js"
+import { waitForEditorController } from "../../../app/javascript/lib/editor_ready.js"
 
 test("editor readiness resolves after the controller connects", async () => {
   const { document, CustomEvent } = parseHTML("<html><body><div></div></body></html>")
