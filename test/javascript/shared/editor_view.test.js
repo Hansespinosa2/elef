@@ -52,6 +52,7 @@ test("shared editor view configures document-only links and media controls", () 
     kind: "document",
     mode: "source",
     source: "# Notes",
+    sourceName: "document[source]",
     documentTitles: ["A note"],
     showSubmit: true,
     warnings: ["A <script> payload is displayed as text"]
@@ -63,6 +64,7 @@ test("shared editor view configures document-only links and media controls", () 
   assert.equal(root.querySelector(".slide-overview").hidden, true)
   assert.equal(root.querySelector(".presentation-editor-tools").hidden, true)
   assert.equal(root.querySelector("[data-editor-view-target='kindBadge']").textContent, "Document")
+  assert.equal(root.querySelector("#elef-source").name, "document[source]")
   assert.equal(root.querySelector("[data-preview-target='warnings'] li").textContent, "A <script> payload is displayed as text")
   assert.equal(root.querySelector("[data-editor-target='sourceButton']").getAttribute("aria-pressed"), "true")
 })

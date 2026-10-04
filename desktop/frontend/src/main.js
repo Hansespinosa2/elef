@@ -58,6 +58,7 @@ globalThis.elefInstallDesktopPreview = installSanitizedPreview
 renderEditorView(document.querySelector("#desktop-editor-mount"), {
   kind: "presentation",
   source: "",
+  sourceName: "presentation[source]",
   mode: "source",
   visualDisabled: true,
   visualDisabledMessage: "Open a deck to render its preview",
@@ -589,6 +590,7 @@ async function openDeckNow(id) {
 
 function configureEditorKind(isDocument, documentTitles) {
   const controllerNames = ["editor", "snippet-palette", "math-shorthand", "math-shortcut-palette", "mermaid-assist"]
+  elements.editorInput.name = isDocument ? "document[source]" : "presentation[source]"
   if (isDocument) controllerNames.push("document-link-palette")
   elements.editorField.dataset.controller = controllerNames.join(" ")
   elements.editorField.dataset.documentLinkPaletteTitlesValue = JSON.stringify(documentTitles)
