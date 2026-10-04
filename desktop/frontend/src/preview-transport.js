@@ -1,7 +1,7 @@
 export function createPreviewFetch({ renderer, getContext = () => ({}), fetchImpl = globalThis.fetch.bind(globalThis), onEvent = () => {} }) {
   const trace = (event) => {
     try {
-      onEvent({ time: Date.now(), ...event })
+      onEvent({ time: performance.now(), ...event })
     } catch (_error) {
       // Diagnostics must never change preview behavior.
     }

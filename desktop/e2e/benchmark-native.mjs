@@ -30,6 +30,8 @@ const report = { platform: process.platform, architecture: process.arch, release
   protocol: `20 fresh release processes; 1000 deck index; first ${LIBRARY_RENDER_BATCH_SIZE} cards; one 50 MiB deck; painted operation timings`,
   samples, inputPreservedRuns: 0 }
 report.renderedLibraryCards = []
+report.bootstrapStageRuns = []
+report.previewTraceRuns = []
 
 try {
   await mkdir(library)
@@ -95,6 +97,8 @@ try {
       }
       assert.ok(interactiveAt, "The release frontend must acknowledge completed startup")
       samples.coldStart.push(interactiveAt - launchedAt)
+      const startupStages = await execute("return window.__elefPerformanceTestHooks.bootstrapStages")
+      report.bootstrapStageRuns.push(startupStages.result)
       operation = "1,000-deck library refresh"
       const listed = await execute("return await window.__elefPerformanceTestHooks.list()")
       assert.equal(listed.result.total, 1000)
@@ -106,6 +110,7 @@ try {
       assert.equal(opened.result.id, deckId)
       assert.equal(opened.result.slides, 100)
       samples.open100Slides.push(opened.milliseconds)
+      report.previewTraceRuns.push(opened.result.previewTrace)
       operation = "autosave while typing"
       const typed = await execute("return await window.__elefPerformanceTestHooks.typeDuringSave(arguments[0])", "Input preserved 😀 日本語")
       assert.equal(typed, source + "\nInput preserved 😀 日本語")
@@ -127,9 +132,39 @@ try {
     }
   }
   report.p95Milliseconds = Object.fromEntries(Object.entries(samples).map(([name, values]) => [name, percentile95(values)]))
+  const bootstrapStageSamples = new Map()
+  for (const runStages of report.bootstrapStageRuns) {
+    for (const stage of runStages) {
+      const values = bootstrapStageSamples.get(stage.name) || []
+      values.push(stage.milliseconds)
+      bootstrapStageSamples.set(stage.name, values)
+    }
+  }
+  report.p95BootstrapStageMilliseconds = Object.fromEntries([...bootstrapStageSamples]
+    .filter(([, values]) => values.length >= 20)
+    .map(([name, values]) => [name, percentile95(values)]))
+  const previewStagePairs = [
+    ["render", "render-start", "render-ready"],
+    ["previewInstall", "preview-install-start", "preview-install-ready"],
+    ["previewEvents", "preview-install-start", "preview-events-ready"],
+    ["slideOverview", "slide-overview-render-start", "slide-overview-render-ready"],
+    ["slideOverviewScale", "slide-overview-scale-start", "slide-overview-scale-ready"],
+    ["slideOverflow", "slide-overflow-start", "slide-overflow-ready"]
+  ]
+  const previewStageSamples = new Map(previewStagePairs.map(([name]) => [name, []]))
+  for (const trace of report.previewTraceRuns) {
+    for (const [name, started, finished] of previewStagePairs) {
+      const start = trace.find(event => event.stage === started)?.time
+      const end = trace.find(event => event.stage === finished && event.time >= start)?.time
+      if (Number.isFinite(start) && Number.isFinite(end)) previewStageSamples.get(name).push(end - start)
+    }
+  }
+  report.p95PreviewStageMilliseconds = Object.fromEntries([...previewStageSamples]
+    .filter(([, values]) => values.length >= 20)
+    .map(([name, values]) => [name, percentile95(values)]))
   report.budgetsMilliseconds = { coldStart: 1500, open100Slides: 300, warmLibrary: 500 }
   report.misses = Object.entries(report.budgetsMilliseconds).filter(([name, budget]) => report.p95Milliseconds[name] >= budget).map(([name]) => name)
-  process.stdout.write(JSON.stringify({ p95Milliseconds: report.p95Milliseconds, inputPreservedRuns: report.inputPreservedRuns, renderedLibraryCards: [...new Set(report.renderedLibraryCards)], misses: report.misses }) + "\n")
+  process.stdout.write(JSON.stringify({ p95Milliseconds: report.p95Milliseconds, p95BootstrapStageMilliseconds: report.p95BootstrapStageMilliseconds, p95PreviewStageMilliseconds: report.p95PreviewStageMilliseconds, inputPreservedRuns: report.inputPreservedRuns, renderedLibraryCards: [...new Set(report.renderedLibraryCards)], misses: report.misses }) + "\n")
   assert.deepEqual(report.misses, [], "Native release application performance exceeded its budgets")
 } finally {
   await mkdir(path.dirname(output), { recursive: true })

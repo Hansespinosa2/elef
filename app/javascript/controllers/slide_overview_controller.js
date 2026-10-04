@@ -114,6 +114,7 @@ export default class extends Controller {
 
   renderOverview() {
     if (!this.hasGridTarget) return
+    recordPreviewTrace("slide-overview-render-start")
     const count = this.sourceRanges().length
     const frames = [...(this.preview?.querySelectorAll(".slide-frame") || [])]
     const focusedIndex = this.gridTarget.contains(document.activeElement)
@@ -137,8 +138,10 @@ export default class extends Controller {
       thumbnail.className = "slide-overview-thumbnail"
       thumbnail.setAttribute("aria-hidden", "true")
       if (frame) {
-        const clone = frame.cloneNode(true)
-        clone.removeAttribute("data-controller")
+        const clone = document.createElement("div")
+        clone.className = "slide-frame"
+        const slide = frame.querySelector(":scope > .slide")
+        if (slide) clone.append(slide.cloneNode(true))
         clone.querySelectorAll(".presentation-editor-slide-toolbar, .presentation-editor-block-controls").forEach((element) => element.remove())
         clone.querySelectorAll("[data-controller]").forEach((element) => element.removeAttribute("data-controller"))
         clone.querySelectorAll("[contenteditable], [data-action], [data-editor-block-id], [data-editor-region-id]").forEach((element) => {
@@ -164,10 +167,13 @@ export default class extends Controller {
     }
     this.countTarget.textContent = `${count} ${count === 1 ? "slide" : "slides"}`
     this.updateActionAvailability(count)
+    recordPreviewTrace("slide-overview-render-ready")
     requestAnimationFrame(() => {
-      this.gridTarget.querySelectorAll(".slide-overview-thumbnail > .slide-frame").forEach((frame) => {
-        frame.style.setProperty("--slide-scale", frame.clientWidth / 1280)
-      })
+      recordPreviewTrace("slide-overview-scale-start")
+      const frames = [...this.gridTarget.querySelectorAll(".slide-overview-thumbnail > .slide-frame")]
+      const scales = frames.map(frame => frame.clientWidth / 1280)
+      frames.forEach((frame, index) => frame.style.setProperty("--slide-scale", scales[index]))
+      recordPreviewTrace("slide-overview-scale-ready")
       if (Number.isInteger(focusedIndex)) {
         this.gridTarget.querySelector(`[data-slide-index="${focusedIndex}"]`)?.focus()
       }
@@ -180,12 +186,22 @@ export default class extends Controller {
   }
 
   measureOverflow() {
+    recordPreviewTrace("slide-overflow-start")
     const frames = [...(this.preview?.querySelectorAll(".slide-frame") || [])]
-    const messages = []
-    frames.forEach((frame, index) => {
+    const measurements = frames.map((frame, index) => {
       const slide = frame.querySelector(":scope > .slide")
-      if (!slide) return
-      const overflowing = slide.scrollHeight > slide.clientHeight + 4 || slide.scrollWidth > slide.clientWidth + 4
+      if (!slide) return null
+      return {
+        frame,
+        slide,
+        index,
+        overflowing: slide.scrollHeight > slide.clientHeight + 4 || slide.scrollWidth > slide.clientWidth + 4
+      }
+    })
+    const messages = []
+    measurements.forEach(measurement => {
+      if (!measurement) return
+      const { frame, slide, index, overflowing } = measurement
       frame.classList.toggle("is-overflowing", overflowing)
       slide.classList.toggle("is-overflowing", overflowing)
       if (overflowing) messages.push(`Slide ${index + 1} extends beyond its 16:9 frame. Shorten, reflow, or split its content.`)
@@ -199,6 +215,7 @@ export default class extends Controller {
     })
     this.warningsTarget.hidden = messages.length === 0
     this.renderOverview()
+    recordPreviewTrace("slide-overflow-ready")
   }
 
   get warningListTarget() {
@@ -278,4 +295,12 @@ export default class extends Controller {
   get source() {
     return this.editor?.value ?? this.element.querySelector('[name$="[source]"]')?.value ?? ""
   }
+}
+
+function recordPreviewTrace(stage) {
+  if (!globalThis.__ELEF_E2E__) return
+  const trace = globalThis.__elefPreviewTrace
+  if (!Array.isArray(trace)) return
+  trace.push({ time: performance.now(), stage })
+  if (trace.length > 40) trace.shift()
 }

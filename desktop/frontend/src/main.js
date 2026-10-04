@@ -253,20 +253,46 @@ titleFlow = createTitleSaveFlow({
   onError: showError
 })
 
+const bootstrapStages = []
+
+function measureBootstrapStage(name, action) {
+  if (!__ELEF_E2E__) return action()
+
+  const startedAt = performance.now()
+  const record = () => bootstrapStages.push({ name, milliseconds: performance.now() - startedAt })
+  try {
+    const result = action()
+    if (result && typeof result.then === "function") {
+      return result.then(value => { record(); return value }, error => { record(); throw error })
+    }
+    record()
+    return result
+  } catch (error) {
+    record()
+    throw error
+  }
+}
+
 if (__ELEF_E2E__) {
   let interactiveAt = null
   Object.defineProperty(window, "__elefPerformanceTestHooks", {
     value: Object.freeze({
       get interactiveAt() { return interactiveAt },
+      get bootstrapStages() { return bootstrapStages.map(stage => ({ ...stage })) },
       ready: () => { interactiveAt = performance.timeOrigin + performance.now() },
       async open(id) {
+        const traceStart = globalThis.__elefPreviewTrace?.length || 0
         return measurePaintedAction(async () => {
           await openDeck(id)
           if (activeDeck?.id !== id || elements.editorForm.dataset.loadedDeckId !== id ||
               document.querySelector("#visual-mode").disabled) throw new Error("The measured deck did not finish rendering.")
           const projection = elements.editorForm.querySelector(".presentation-editor-projection")
           if (!projection) throw new Error("The measured presentation projection did not render.")
-          return { id, slides: projection.querySelectorAll(".slide-frame > .slide").length }
+          return {
+            id,
+            slides: projection.querySelectorAll(".slide-frame > .slide").length,
+            previewTrace: globalThis.__elefPreviewTrace?.slice(traceStart) || []
+          }
         })
       },
       async list() {
@@ -484,7 +510,6 @@ async function chooseLibrary() {
     decks = selected.decks
     applyTheme(libraryConfig.theme)
     showLibrary()
-    renderDecks()
     if (selected.config_notice) showNotice(selected.config_notice, "error")
     setStatus(`${decks.length} ${decks.length === 1 ? "deck" : "decks"}`)
     if (await invoke("pending_open_elef_count")) void processOpenedFiles()
@@ -1121,22 +1146,21 @@ void listen("desktop-menu-action", event => void handleMenuAction(event.payload)
 const openedFileListener = listen("desktop-open-elef", () => void processOpenedFiles())
 void completeBootstrap({
   initialize: async () => {
-    const [status] = await Promise.all([invoke("get_library_status"), openedFileListener])
+    const [status] = await measureBootstrapStage("library-status", () => Promise.all([invoke("get_library_status"), openedFileListener]))
     library = status
     libraryConfig = status?.config || libraryConfig
     decks = status?.decks || []
     applyTheme(libraryConfig.theme)
-    showLibrary()
-    if (library) renderDecks()
+    measureBootstrapStage("initial-library-render", showLibrary)
     if (status?.config_notice) showNotice(status.config_notice, "error")
     setStatus(library ? `${decks.length} ${decks.length === 1 ? "deck" : "decks"}` : "Choose a library folder to begin")
     libraryStatusLoaded = true
-    if (await invoke("pending_open_elef_count")) void processOpenedFiles()
+    if (await measureBootstrapStage("pending-open-check", () => invoke("pending_open_elef_count"))) void processOpenedFiles()
   },
-  waitForEditor: () => waitForEditorController(elements.editorField, editorFor),
-  waitForPaint: () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+  waitForEditor: () => measureBootstrapStage("editor-ready", () => waitForEditorController(elements.editorField, editorFor)),
+  waitForPaint: () => measureBootstrapStage("initial-paint", () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))),
   confirmReady: async () => {
-    await invoke("confirm_app_ready")
+    await measureBootstrapStage("native-ready-ack", () => invoke("confirm_app_ready"))
     if (__ELEF_E2E__) window.__elefPerformanceTestHooks.ready()
   }
 }).catch(showError)

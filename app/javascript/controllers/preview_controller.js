@@ -175,13 +175,16 @@ export default class extends Controller {
 
     const scrollLeft = this.containerTarget.scrollLeft
     const scrollTop = this.containerTarget.scrollTop
+    recordPreviewTrace("preview-install-start")
     installPreviewHtml(this.containerTarget, payload.html)
+    recordPreviewTrace("preview-install-ready")
     this.containerTarget.scrollLeft = scrollLeft
     this.containerTarget.scrollTop = scrollTop
     this.projectionFresh = true
     delete this.element.dataset.previewProjectionStale
     this.containerTarget.removeAttribute("aria-busy")
     this.element.dispatchEvent(new CustomEvent("elef:preview-updated", { bubbles: true, detail: { payload, response, source } }))
+    recordPreviewTrace("preview-events-ready")
     this.containerTarget.dispatchEvent(new CustomEvent("preview:updated", { bubbles: true }))
     this.hideRetry()
     this.setStatus("")
@@ -242,4 +245,12 @@ export default class extends Controller {
   hideRetry() {
     if (this.hasRetryTarget) this.retryTarget.hidden = true
   }
+}
+
+function recordPreviewTrace(stage) {
+  if (!globalThis.__ELEF_E2E__) return
+  const trace = globalThis.__elefPreviewTrace
+  if (!Array.isArray(trace)) return
+  trace.push({ time: performance.now(), stage })
+  if (trace.length > 40) trace.shift()
 }
