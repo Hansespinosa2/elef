@@ -909,7 +909,8 @@ describe("desktop binary workflows and native boundaries", () => {
     await ui.showSourceMode()
     const original = await ui.readSource()
     const inserted = "Native keyboard input reaches CodeMirror."
-    const expected = `${original.trimEnd()}\n\n${inserted}`
+    const needsLineBreak = !original.endsWith("\n")
+    const expected = `${original}${needsLineBreak ? "\n" : ""}${inserted}`
     try {
       await browser.execute(() => {
         const field = document.querySelector("#desktop-editor-field")
@@ -922,7 +923,7 @@ describe("desktop binary workflows and native boundaries", () => {
         editor.setSelectionRange(editor.sourceValue.length)
         editor.view.focus()
       })
-      await browser.keys(["ENTER", "ENTER"])
+      if (needsLineBreak) await browser.keys("ENTER")
       await browser.keys(inserted)
 
       const trustedKeys = await browser.execute(() => {
