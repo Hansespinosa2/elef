@@ -31,7 +31,7 @@ import { filterDecks } from "lib/library_filter"
 import { createLibraryPreviewLoader } from "lib/library_preview"
 import "./editor-runtime.js"
 import "../../../app/assets/stylesheets/application.css"
-import "../../../app/assets/stylesheets/desktop_rendered_content.css"
+import "./desktop-rendered-content.css"
 
 applyDesktopFeatureFlags(document)
 

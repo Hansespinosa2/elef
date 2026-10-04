@@ -60,13 +60,14 @@ renderer_sources = (
     ROOT / "app/javascript/lib/renderer_global.js",
 )
 
-assert '"app/views/desktop_shell/index.html"' in build, "desktop must consume the Rails-owned host template"
-assert '"app/assets/stylesheets/desktop_shell.css"' in build, "desktop shell styles must be sourced from app/"
+assert 'path.join(frontendRoot, "index.html")' in build, "the native host template must stay with the desktop shell"
+assert 'path.join(frontendRoot, "src/desktop-shell.css")' in build, "native shell styling must stay with the desktop shell"
 assert '"app/assets/builds/tailwind.css"' in build, "desktop must package the checked-in Rails-generated utility stylesheet"
 assert (ROOT / "app/assets/builds/tailwind.css").is_file(), "shared utility CSS must be present in a clean checkout"
 assert '"vendor/javascript/elef-renderer.bundle.js"' in build, "desktop must package the Rails-owned renderer artifact"
 assert "bin/rails" not in build and "execFileSync" not in build, "desktop packaging must not boot Rails"
 assert "app/javascript" in build, "desktop bundling must resolve frontend code from app/javascript"
+assert 'import "./desktop-rendered-content.css"' in desktop_main, "native viewport styles must stay with the desktop shell"
 assert "script/build_renderer.mjs" not in build, "desktop must consume the renderer build, not own it"
 assert '"lib/save_flow"' in desktop_main and '"lib/preview_sanitizer"' in desktop_main, (
     "desktop save and preview behavior must import Rails-owned modules"
@@ -133,7 +134,7 @@ desktop_source_reasons = {
 actual_desktop_sources = {
     path.relative_to(desktop_sources).as_posix()
     for path in desktop_sources.rglob("*")
-    if path.is_file()
+    if path.is_file() and path.suffix == ".js"
 }
 assert actual_desktop_sources == set(desktop_source_reasons), (
     "Every desktop frontend source needs a reviewed shell-specific reason; "
@@ -143,9 +144,13 @@ assert actual_desktop_sources == set(desktop_source_reasons), (
 )
 assert all(desktop_source_reasons.values()), "Every desktop frontend source classification needs a reason"
 
-for host_asset in ("index.html", "theme.css", "styles.css"):
-    assert not (ROOT / "desktop/frontend" / host_asset).exists(), f"shared shell source must stay under app/: {host_asset}"
-for shared_test in ("authoring-settings.test.js", "feature-flags.test.js", "renderer-client.test.js", "renderer.test.js", "renderer-fixtures.test.js"):
+assert not (ROOT / "app/views/desktop_shell").exists(), "platform-specific desktop host markup must stay under desktop/"
+assert not (ROOT / "app/assets/stylesheets/desktop_shell.css").exists(), "platform-specific desktop chrome must stay under desktop/"
+assert not (ROOT / "app/assets/stylesheets/desktop_rendered_content.css").exists(), "native viewport styles must stay under desktop/"
+assert (ROOT / "desktop/frontend/index.html").is_file(), "desktop package must contain its standalone host template"
+assert (ROOT / "desktop/frontend/src/desktop-shell.css").is_file(), "desktop package must contain its native shell styles"
+assert (ROOT / "desktop/frontend/src/desktop-rendered-content.css").is_file(), "native editor viewport styles must stay with the desktop shell"
+for shared_test in ("authoring-settings.test.js", "deck-open-flow.test.js", "feature-flags.test.js", "renderer-client.test.js", "renderer.test.js", "renderer-fixtures.test.js"):
     assert not (ROOT / "desktop/frontend/tests" / shared_test).exists(), f"shared behavior tests must stay under test/javascript: {shared_test}"
 
 print("Frontend ownership checks passed: Rails owns shared source; desktop consumes it one-way.")

@@ -71,7 +71,7 @@ flowchart TB
 
 Dependency rule: webview → adapter → commands → core → OS. Core never calls upward.
 
-**Frontend ownership.** Rails `app/` owns platform-neutral product UI, components, styles, renderer code, and behavior. Desktop imports the same `app/javascript` modules and packages the same generated assets; Rails code, tests, and build scripts never read from `desktop/`. The Rails-generated utility stylesheet is checked in at `app/assets/builds/tailwind.css`, so clean desktop packaging does not need Rails. The desktop package contains only its shell bootstrap, Tauri transport and filesystem adapters, lifecycle/updater integration, and platform-specific shell UI. The static desktop host source lives in `app/views/desktop_shell/`; desktop builds it into its self-contained package without starting Rails.
+**Frontend ownership.** Rails `app/` owns platform-neutral product UI, components, behavior, styles, and the shared renderer. Desktop imports the same `app/javascript` modules and packages the same generated assets; Rails code, tests, and build scripts never read from `desktop/`. The Rails-generated utility stylesheet is checked in at `app/assets/builds/tailwind.css`, so clean desktop packaging does not need Rails. `desktop/` owns the Tauri bootstrap, transport and filesystem adapters, lifecycle/updater integration, and unavoidable native shell UI and styling (`desktop/frontend/index.html` and `desktop/frontend/src/`). The desktop build packages those with the Rails-owned frontend and shared assets without starting Rails.
 
 ## 4. Runtime view
 

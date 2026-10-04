@@ -62,7 +62,7 @@ The JS Markdown block renderer and slide/document structure/editor-map/editable-
 
 Automated checks that keep the architecture from drifting:
 - Ruby `Source::HtmlRenderer` is absent after cutover; Rails and desktop load a renderer bundle with the same hash (QS-7).
-- Rails-owned source, tests, and build scripts contain no dependency on `desktop/`; desktop imports shared modules from `app/javascript` and copies shared shell, style, and renderer assets from `app/`.
+- Rails-owned source, tests, and build scripts contain no dependency on `desktop/`; desktop imports shared modules and product styles from `app/`, while its host markup and native shell styling stay in `desktop/`.
 - The tracked `app/assets/builds/tailwind.css` matches a fresh Rails Tailwind build; desktop packages that checked-in output without booting Rails.
 - Tauri capability file equals the command table in [transport-adapter.md](transport-adapter.md); no wildcard fs or shell permission.
 - Shipped CSP equals the policy recorded in [security.md](security.md); `script-src` has no `unsafe-inline` / `unsafe-eval`.

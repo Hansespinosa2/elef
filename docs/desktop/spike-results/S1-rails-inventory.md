@@ -26,7 +26,7 @@ The adapter maps known Rails outcomes as follows: `409 → conflict`, `404 → n
 
 ## Static editor host page contract
 
-`app/views/works/_form.html.erb` is the web host-page contract; desktop's static shell source is `app/views/desktop_shell/index.html`. Both mount shared components from `app/javascript`; desktop packaging copies the static template and does not boot Rails. The desktop shell needs:
+`app/views/works/_form.html.erb` is the web host-page contract; desktop's static shell source is `desktop/frontend/index.html`. Both mount shared components from `app/javascript`; desktop packaging copies the static template and does not boot Rails. The desktop shell needs:
 
 - A work form with the editor's Rails-compatible field names (`presentation[source]` or `document[source]`), title for presentations, theme, typography, save status, retry button, and conflict controls.
 - Root controllers: `dirty`, `preview`, `autosave`, `visual-editor`, and `media`; presentations also use `presentation-editor` and `slide-overview`.
@@ -44,7 +44,7 @@ The Ruby implementation is `Source::HtmlRenderer`, wrapped by `Source::Renderer`
 
 The rollback renderer is Redcarpet + Rouge + the KaTeX JavaScript included by the `katex` Ruby gem. The shared JS renderer uses Markdown-it `14.3.2`, Highlight.js `11.11.1` and KaTeX `0.17.0`, with locked npm dependencies. The Rails-owned `app/javascript/lib/document_map.js` supplies slide/document structure and editor maps to the desktop worker and MiniRacer wrapper. The vendored Mermaid runtime is `11.17.2` and runs in the webview after the renderer emits a placeholder.
 
-Renderer ownership now resides under Rails `app/`: `app/javascript/lib/renderer.js`, `document_map.js`, and `renderer_global.js` are the implementation, and fixtures live in `test/javascript/fixtures/`. Root `npm run renderer:build` uses the pinned root package and lockfile to emit `vendor/javascript/elef-renderer.bundle.js`; desktop's Node-only build copies those exact bytes to its worker assets. The desktop host template and shell styles also come from `app/views/desktop_shell/` and `app/assets/stylesheets/`; the Rails-generated Tailwind output is tracked at `app/assets/builds/tailwind.css`. Desktop packaging no longer invokes Rails, and the architecture fitness check compares bundle hashes and rejects Rails-to-desktop path references. CI rebuilds both generated assets and verifies that the checked-in files are current.
+Renderer ownership now resides under Rails `app/`: `app/javascript/lib/renderer.js`, `document_map.js`, and `renderer_global.js` are the implementation, and fixtures live in `test/javascript/fixtures/`. Root `npm run renderer:build` uses the pinned root package and lockfile to emit `vendor/javascript/elef-renderer.bundle.js`; desktop's Node-only build copies those exact bytes to its worker assets. The platform-specific desktop host template and shell styles live under `desktop/frontend/`; the Rails-generated Tailwind output is tracked at `app/assets/builds/tailwind.css`. Desktop packaging no longer invokes Rails, and the architecture fitness check compares bundle hashes and rejects Rails-to-desktop path references. CI rebuilds both generated assets and verifies that the checked-in files are current.
 
 The call-site inventory (2026-10-03 source search) is:
 

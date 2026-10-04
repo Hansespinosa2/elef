@@ -33,7 +33,7 @@ javascript_renderer = (REPO_ROOT / "app" / "lib" / "source" / "javascript_render
 renderer_global = (REPO_ROOT / "app" / "javascript" / "lib" / "renderer_global.js").read_text()
 renderer_worker = (REPO_ROOT / "desktop" / "frontend" / "src" / "renderer-worker.js").read_text()
 desktop_main = (REPO_ROOT / "desktop" / "frontend" / "src" / "main.js").read_text()
-native_render_styles = (REPO_ROOT / "app" / "assets" / "stylesheets" / "desktop_rendered_content.css").read_text()
+native_render_styles = (REPO_ROOT / "desktop" / "frontend" / "src" / "desktop-rendered-content.css").read_text()
 assert 'import "../../../app/assets/stylesheets/application.css"' in desktop_main, "desktop must reuse Rails rendering and authoring styles"
 assert 'lib/performance_measurement' in desktop_main, "desktop performance UI must reuse the Rails-owned browser measurement helper"
 assert (REPO_ROOT / "desktop" / "frontend" / "src" / "performance-measurement.js").exists() is False, "desktop must not own a second performance measurement helper"

@@ -1,13 +1,45 @@
 import assert from "node:assert/strict"
-import { readFile } from "node:fs/promises"
 import test from "node:test"
 import { parseHTML } from "linkedom"
 import { createAuthoringSettingsDialog } from "../../../app/javascript/lib/authoring_settings_dialog.js"
 
-const shell = await readFile(new URL("../../../app/views/desktop_shell/index.html", import.meta.url), "utf8")
+const fixture = `
+  <dialog id="authoring-settings-dialog">
+    <h2 id="authoring-settings-title"></h2>
+    <button data-authoring-tab="snippets"></button>
+    <button data-authoring-tab="math_shortcuts"></button>
+    <p id="authoring-settings-status"></p>
+    <p id="authoring-settings-count"></p>
+    <div id="authoring-settings-list"></div>
+    <p id="authoring-settings-empty"></p>
+    <button id="new-authoring-entry"></button>
+    <form id="authoring-entry-form">
+      <h3 id="authoring-entry-heading"></h3>
+      <input name="id" type="hidden">
+      <fieldset class="authoring-snippet-fields">
+        <input name="name"><input name="description"><input name="trigger">
+        <select name="category"><option value="Markdown">Markdown</option></select>
+        <textarea name="body"></textarea>
+      </fieldset>
+      <fieldset class="authoring-math-fields">
+        <input name="math-name"><input name="math-description">
+        <select name="prefix"><option value=".">.</option><option value="@">@</option></select>
+        <input name="aliases"><textarea name="expansion"></textarea>
+      </fieldset>
+      <button id="save-authoring-entry"></button>
+      <button id="cancel-authoring-entry" type="button"></button>
+    </form>
+    <button id="close-authoring-settings" type="button"></button>
+  </dialog>
+  <dialog id="delete-authoring-dialog">
+    <p id="delete-authoring-message"></p>
+    <button id="confirm-authoring-delete" type="button"></button>
+    <button id="cancel-authoring-delete" type="button"></button>
+  </dialog>
+`
 
 function createDialog({ readRegistries, writeRegistry, reloadEditorRegistry, onSaved }) {
-  const { document, Event } = parseHTML(shell)
+  const { document, Event } = parseHTML(fixture)
   const elements = {
     dialog: document.querySelector("#authoring-settings-dialog"),
     title: document.querySelector("#authoring-settings-title"),
