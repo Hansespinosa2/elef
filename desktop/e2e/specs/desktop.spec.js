@@ -110,6 +110,8 @@ class DesktopEditorUi {
     } catch (error) {
       const diagnostic = await browser.execute(expected => {
         const form = document.querySelector("#desktop-editor-form")
+        const editorField = document.querySelector("#desktop-editor-field")
+        const stimulus = window.Stimulus
         return {
           expected,
           status: document.querySelector("#status-text")?.textContent || "",
@@ -117,6 +119,12 @@ class DesktopEditorUi {
           deckTitle: document.querySelector("#deck-title")?.textContent || "",
           deckId: document.querySelector("#deck-id")?.textContent || "",
           loadedDeckId: form?.dataset.loadedDeckId || "",
+          editorControllers: editorField?.dataset.controller || "",
+          editorFieldConnected: Boolean(editorField?.isConnected),
+          editorControllerReady: editorField?.editorController?.editorReady ?? null,
+          editorControllerRegistered: Boolean(stimulus?.router?.modulesByIdentifier?.has("editor")),
+          editorControllerConnected: Boolean(editorField && stimulus?.getControllerForElementAndIdentifier?.(editorField, "editor")),
+          codeMirrorMounted: Boolean(editorField?.querySelector(".cm-editor")),
           libraryHidden: document.querySelector("#library-view")?.hidden,
           deckViewHidden: document.querySelector("#deck-view")?.hidden,
           cardVisible: [...document.querySelectorAll(".deck-open")].some(button => button.getAttribute("aria-label") === `Open ${expected}`)
