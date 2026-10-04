@@ -1,5 +1,9 @@
+require "json"
+
 module Source
   module Document
+    PORTABLE_DOCUMENT_KEY = "elef_document_key".freeze
+    PORTABLE_DOCUMENT_ALIASES = "elef_aliases".freeze
     Position = Data.define(:horizontal, :vertical, :vertical_explicit)
     Block = Data.define(:markdown, :position)
     Region = Data.define(:blocks)
@@ -146,6 +150,30 @@ module Source
           updated.insert(closing.start, "#{replacement}#{eol}")
         end
       end
+    end
+
+    def portable_document_link_metadata(source)
+      key = parse_front_matter_json(source, PORTABLE_DOCUMENT_KEY)
+      aliases = parse_front_matter_json(source, PORTABLE_DOCUMENT_ALIASES)
+      {
+        document_key: key.is_a?(String) && key.present? ? key : nil,
+        aliases: aliases.is_a?(Array) ? aliases.select { |value| value.is_a?(String) && value.present? }.map(&:strip).uniq : []
+      }
+    end
+
+    def with_portable_document_link_metadata(source, document_key:, aliases:)
+      normalized_key = document_key.to_s.presence
+      normalized_aliases = Array(aliases).filter_map { |value| value.to_s.strip.presence }.uniq
+      updated = with_front_matter_value(
+        source.to_s,
+        PORTABLE_DOCUMENT_KEY,
+        normalized_key && JSON.generate(normalized_key)
+      )
+      with_front_matter_value(
+        updated,
+        PORTABLE_DOCUMENT_ALIASES,
+        normalized_aliases.empty? ? nil : JSON.generate(normalized_aliases)
+      )
     end
 
     def remove_front_matter_value(source, key)
@@ -341,6 +369,13 @@ module Source
         return yield(match[1]) if match
       end
       default
+    end
+
+    def parse_front_matter_json(source, key)
+      raw = front_matter_value(source, key, default: nil) { |value| value }
+      JSON.parse(raw) if raw.present?
+    rescue JSON::ParserError
+      nil
     end
 
     def front_matter_has_key?(source, key)

@@ -2753,7 +2753,10 @@ mod tests {
         let deck = write_deck(
             temp.path(),
             "Source Deck",
-            &[("presentation.md", "# Notes")],
+            &[(
+                "document.md",
+                "---\nelef_document_key: \"portable-key\"\nelef_aliases: [\"Earlier title\"]\n---\n# Notes",
+            )],
         );
         fs::create_dir(deck.join("images")).unwrap();
         fs::write(deck.join("images/map.svg"), "<svg/>").unwrap();

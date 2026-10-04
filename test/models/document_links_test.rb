@@ -67,6 +67,20 @@ class DocumentLinksTest < ActiveSupport::TestCase
     assert_includes target.incoming_backlinks, source
   end
 
+  test "document keys and title aliases remain stable without rewriting canonical source" do
+    document = Document.create!(title: "Original title", source: "# Notes\n")
+    original_key = document.document_key
+
+    assert_equal "# Notes\n", document.source
+    document.update!(title: "Renamed title")
+    document.reload
+
+    assert_equal "# Notes\n", document.source
+    assert_equal original_key, document.document_key
+    assert_equal ["Original title", "Renamed title"], document.aliases.map(&:alias_name)
+    assert_equal "Renamed title", document.title
+  end
+
   test "builds directed edges while retaining isolated documents" do
     source = Document.create!(title: "Source", source: "# Source\n\n[[Target]] [[Missing]]")
     target = Document.create!(title: "Target", source: "# Target")

@@ -95,6 +95,22 @@ test("full editor projection accepts platform document links, settings, and asse
   assert.match(preview.html, /data-editor-region-id=/)
 })
 
+test("renderer links resolve portable document keys and aliases from Markdown", () => {
+  const preview = renderPreview({
+    kind: "document",
+    source: "# Source\n\n[[document:portable-key|by key]] [[Earlier title|by alias]]",
+    documentNodes: [{
+      id: "manifest-id",
+      title: "Current title",
+      source: `---\nelef_document_key: "portable-key"\nelef_aliases: ["Earlier title"]\n---\n# Current title`
+    }]
+  })
+
+  assert.equal((preview.html.match(/href="#deck\/manifest-id"/g) || []).length, 2)
+  assert.match(preview.html, />by key<\/a>/)
+  assert.match(preview.html, />by alias<\/a>/)
+})
+
 test("presentation editor projection exposes Stimulus canvas targets to host controllers", () => {
   const preview = renderPreview({ source: "# One\\n\\nBody", kind: "presentation" })
 

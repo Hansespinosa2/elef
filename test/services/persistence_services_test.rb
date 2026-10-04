@@ -211,6 +211,8 @@ class PersistenceServicesTest < ActiveSupport::TestCase
 
     assert_equal document_key, imported.document_key
     assert_equal ["Original title", "Renamed title"], imported.aliases.map(&:alias_name)
+    assert_equal({ document_key: document_key, aliases: ["Original title", "Renamed title"] },
+      Source::Document.portable_document_link_metadata(imported.source))
     assert_equal imported, Document.resolve_link("Original title", workspace: target_workspace)
   end
 

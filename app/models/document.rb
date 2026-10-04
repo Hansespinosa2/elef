@@ -17,9 +17,11 @@ class Document < Work
   default_scope { where(kind: WORK_TYPE) }
 
   validates :title, uniqueness: { scope: [:workspace_id, :kind] }
+  validate :portable_document_key_is_unique
+  after_update :sync_document_detail_key, if: :saved_change_to_source?
 
   def document_key
-    document_detail&.document_key
+    Source::Document.portable_document_link_metadata(source)[:document_key].presence || document_detail&.document_key
   end
 
   def canonical_link
@@ -69,5 +71,18 @@ class Document < Work
 
   def resolve_link_token(token)
     self.class.resolve_link(token.title.split("|", 2).first, workspace: workspace || Workspace.default)
+  end
+
+  def portable_document_key_is_unique
+    key = Source::Document.portable_document_link_metadata(source)[:document_key]
+    return if key.blank? || !DocumentDetail.where(document_key: key).where.not(work_id: id).exists?
+
+    errors.add(:source, "contains a document key that is already in use")
+  end
+
+  def sync_document_detail_key
+    key = Source::Document.portable_document_link_metadata(source)[:document_key]
+    detail = document_detail
+    detail.update!(document_key: key) if key.present? && detail&.document_key != key
   end
 end

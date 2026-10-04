@@ -107,4 +107,25 @@ class SourceDocumentTest < ActiveSupport::TestCase
     assert_equal "dark", Source::Document.theme_from_source("\uFEFF---\ntheme: dark\n---\n# Title")
     assert_equal "modern", Source::Document.typography_from_source("\uFEFF---\ntypography: modern\n---\n# Title")
   end
+
+  test "portable document keys and aliases round-trip in front matter without changing the body" do
+    source = "---\r\ntheme: dark\r\n---\r\n# Title\r\n\r\nNotes stay byte-identical.\r\n"
+    updated = Source::Document.with_portable_document_link_metadata(
+      source,
+      document_key: "portable-key",
+      aliases: ["Old title", "Café", "Old title"]
+    )
+
+    assert_equal({ document_key: "portable-key", aliases: ["Old title", "Café"] },
+      Source::Document.portable_document_link_metadata(updated))
+    assert_includes updated, "elef_document_key: \"portable-key\"\r\n"
+    assert_includes updated, "elef_aliases: [\"Old title\",\"Café\"]\r\n"
+    assert updated.end_with?("# Title\r\n\r\nNotes stay byte-identical.\r\n")
+  end
+
+  test "malformed portable document metadata is ignored safely" do
+    source = "---\nelef_document_key: [invalid\nelef_aliases: nope\n---\n# Notes"
+
+    assert_equal({ document_key: nil, aliases: [] }, Source::Document.portable_document_link_metadata(source))
+  end
 end

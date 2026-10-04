@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { buildDocumentGraph, extractDocumentLinkTitles, extractFirstMarkdownHeading } from "../../../app/javascript/lib/document_links.js"
+import { buildDocumentGraph, createDocumentLinkResolver, extractDocumentLinkTitles, extractFirstMarkdownHeading, parsePortableDocumentLinks } from "../../../app/javascript/lib/document_links.js"
 
 test("document link extraction ignores escaped, inline, fenced, and indented code", () => {
   const source = [
@@ -75,4 +75,31 @@ test("aliases resolve before titles consistently and graph nodes retain stable p
 
   assert.deepEqual(graph.edges, [{ source: "source", target: "alias-owner" }])
   assert.deepEqual(graph.nodes.map(({ x, y }) => [x, y]), [[120, 100], [340, 100], [560, 100]])
+})
+
+test("portable Markdown front matter resolves stable keys and aliases in the shared graph", () => {
+  const targetSource = `---\nelef_document_key: "portable-key"\nelef_aliases: ["Old title", "Earlier name"]\n---\n# Current title`
+  assert.deepEqual(parsePortableDocumentLinks(targetSource), {
+    documentKey: "portable-key",
+    aliases: ["Old title", "Earlier name"]
+  })
+  assert.equal(createDocumentLinkResolver([{ id: "manifest-uuid", title: "Current title", source: targetSource }])("Earlier name")?.id,
+    "manifest-uuid")
+  const graph = buildDocumentGraph([
+    { id: "source", title: "Source", source: "[[document:portable-key|by key]] [[Earlier name|by alias]]" },
+    { id: "manifest-uuid", name: "Target folder", source: targetSource }
+  ])
+
+  assert.equal(graph.nodes[1].documentKey, "portable-key")
+  assert.deepEqual(graph.nodes[1].aliases, ["Old title", "Earlier name"])
+  assert.deepEqual(graph.edges, [{ source: "source", target: "manifest-uuid" }])
+})
+
+test("malformed portable Markdown metadata safely falls back to the deck identity", () => {
+  assert.deepEqual(parsePortableDocumentLinks("---\nelef_document_key: [bad\nelef_aliases: nope\n---\n# Notes"), {
+    documentKey: null,
+    aliases: []
+  })
+  const graph = buildDocumentGraph([{ id: "manifest-uuid", name: "Notes", source: "---\nelef_document_key: [bad\n---\n# Notes" }])
+  assert.equal(graph.nodes[0].documentKey, "manifest-uuid")
 })

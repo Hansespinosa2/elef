@@ -37,6 +37,21 @@ My Deck/
 - Folder name is display-only; renames never change identity.
 - **UUID collisions.** Copying a deck folder copies its `elef.json`, so two folders can share one UUID. On a cold scan, normalized path order decides deterministically: the first path retains the UUID; other copies use their path-derived identity in the in-memory index. Opening a duplicate best-effort writes it a fresh UUID v4 manifest. If that folder is read-only, its path remains the identity and the app shows a notice. No persistent UUID map is required.
 
+## Portable document links
+
+Document Markdown may carry stable graph keys and historical titles in its front matter:
+
+```yaml
+---
+elef_document_key: "550e8400-e29b-41d1-a716-446655440000"
+elef_aliases: ["Earlier title", "Short name"]
+---
+```
+
+- Both values use JSON string/array syntax, which is valid YAML. `elef_document_key` is optional; desktop falls back to the deck UUID in `elef.json`. `elef_aliases` is optional and contains previous or alternate document titles.
+- The Rails JavaScript reads these fields for the shared web and desktop graph. Rails database key/alias rows mirror the source metadata for indexed lookups.
+- Writers preserve unrelated front matter and body bytes. Readers ignore malformed optional metadata and continue with the normal identity fallback. `elef.json` remains exactly `{ id, schema_version }`; the additive source fields do not change the folder schema version. See [ADR-010](adr/010-portable-document-links.md).
+
 ## `.elef` single-file format
 
 - A zip whose root is the deck folder's contents: source `.md`, `images/`, `elef.json` when present. Import tolerates exactly one wrapping top-level folder (Finder's "Compress" adds one).

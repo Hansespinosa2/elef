@@ -29,7 +29,10 @@ module DocumentLinks
 
       documents_by_title = documents.index_by(&:title)
       documents_by_key = documents.index_by(&:document_key)
-      documents_by_alias = documents.flat_map { |document| document.document_aliases.map { |alias_record| [alias_record.alias_name, document] } }.to_h
+      documents_by_alias = documents.flat_map do |document|
+        aliases = document.document_aliases.map(&:alias_name) + Source::Document.portable_document_link_metadata(document.source)[:aliases]
+        aliases.uniq.map { |alias_name| [alias_name, document] }
+      end.to_h
       replacements = {}
 
       annotated = DocumentLinks::Parser.replace(markdown) do |token|

@@ -68,13 +68,49 @@ export function extractFirstMarkdownHeading(source = "") {
   return null
 }
 
+export function parsePortableDocumentLinks(source = "") {
+  if (typeof source !== "string") return { documentKey: null, aliases: [] }
+  const lines = source.split(/\r\n?|\n/)
+  if (lines[0]?.replace(/^\uFEFF/, "").trimEnd() !== "---") return { documentKey: null, aliases: [] }
+
+  const closingLine = lines.findIndex((line, index) => index > 0 && line.trimEnd() === "---")
+  if (closingLine < 0) return { documentKey: null, aliases: [] }
+  const values = new Map()
+  for (const line of lines.slice(1, closingLine)) {
+    const match = line.match(/^(elef_document_key|elef_aliases)\s*:\s*(.*)$/)
+    if (match && !values.has(match[1])) values.set(match[1], match[2].trim())
+  }
+
+  let documentKey = null
+  try {
+    const value = values.get("elef_document_key")
+    if (value) {
+      const parsed = JSON.parse(value)
+      if (typeof parsed === "string" && parsed.trim()) documentKey = parsed.trim()
+    }
+  } catch (_error) {
+    // Invalid optional portable metadata behaves like an absent value.
+  }
+
+  let aliases = []
+  try {
+    const parsed = JSON.parse(values.get("elef_aliases") || "null")
+    if (Array.isArray(parsed)) aliases = [...new Set(parsed.filter(value => typeof value === "string" && value.trim()).map(value => value.trim()))]
+  } catch (_error) {
+    // Invalid optional portable metadata behaves like an absent value.
+  }
+
+  return { documentKey, aliases }
+}
+
 export function createDocumentLinkResolver(documents = []) {
   const byTitle = new Map()
   const byAlias = new Map()
   const byKey = new Map()
   const byId = new Map()
 
-  for (const document of documents) {
+  for (const input of documents) {
+    const document = withPortableDocumentLinks(input)
     if (document?.title != null) byTitle.set(String(document.title), document)
     if (document?.id != null) byId.set(String(document.id), document)
     const key = document?.documentKey ?? document?.document_key ?? document?.id
@@ -96,7 +132,7 @@ export function buildDocumentGraph(documents = []) {
   if (!Array.isArray(documents)) throw new TypeError("Document graph input must be a list.")
   const entries = documents
     .filter(document => document && document.id != null && (typeof document.title === "string" || typeof document.name === "string"))
-    .map(document => ({
+    .map(document => withPortableDocumentLinks({
       ...document,
       title: document.title || extractFirstMarkdownHeading(document.source || "") || document.name
     }))
@@ -105,8 +141,8 @@ export function buildDocumentGraph(documents = []) {
     id: document.id,
     title: document.title,
     url: document.url || document.href || `#deck/${encodeURIComponent(String(document.id))}`,
-    documentKey: document.documentKey ?? document.document_key ?? String(document.id),
-    aliases: Array.isArray(document.aliases) ? document.aliases : [],
+    documentKey: document.documentKey,
+    aliases: document.aliases,
     x: 120 + (index % 4) * 220,
     y: 100 + Math.floor(index / 4) * 150
   }))
@@ -124,6 +160,17 @@ export function buildDocumentGraph(documents = []) {
     }
   }
   return { nodes, edges }
+}
+
+function withPortableDocumentLinks(document) {
+  if (!document || typeof document !== "object") return document
+  const portable = parsePortableDocumentLinks(document.source || "")
+  const aliases = Array.isArray(document.aliases) ? document.aliases : []
+  return {
+    ...document,
+    documentKey: portable.documentKey || document.documentKey || document.document_key || String(document.id ?? ""),
+    aliases: [...new Set([...aliases, ...portable.aliases])]
+  }
 }
 
 function inlineCodeContains(line, start, end) {
