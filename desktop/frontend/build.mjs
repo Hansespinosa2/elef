@@ -5,12 +5,13 @@ import { build } from "esbuild"
 
 const frontendRoot = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(frontendRoot, "../..")
+const sharedFrontendRoot = path.join(repoRoot, "app/javascript")
 const e2eBuild = process.env.ELEF_E2E_BUILD === "1"
 const output = path.join(frontendRoot, e2eBuild ? "dist-e2e" : "dist")
 const assets = path.join(output, "assets")
 
 await mkdir(assets, { recursive: true })
-await build({
+const frontendResult = await build({
   entryPoints: [path.join(frontendRoot, "src/main.js")],
   nodePaths: [path.join(frontendRoot, "node_modules")],
   bundle: true,
@@ -19,17 +20,74 @@ await build({
   outdir: assets,
   entryNames: "app",
   minify: true,
+  metafile: true,
   define: { __ELEF_E2E__: JSON.stringify(e2eBuild) },
   plugins: [{
     name: "app-source-alias",
     setup(context) {
       context.onResolve({ filter: /^(?:controllers|lib)\// }, ({ path: importPath }) => ({
-        path: path.join(repoRoot, "app/javascript", `${importPath}.js`)
+        path: path.join(sharedFrontendRoot, `${importPath}.js`)
       }))
+      context.onResolve({ filter: /^[^./]/ }, async (args) => {
+        if (args.pluginData?.desktopSharedDependencyResolution) return
+        const relativeImporter = path.relative(sharedFrontendRoot, args.importer)
+        if (relativeImporter.startsWith("..") || path.isAbsolute(relativeImporter)) return
+        if (args.path.startsWith("controllers/") || args.path.startsWith("lib/")) return
+
+        const result = await context.resolve(args.path, {
+          resolveDir: frontendRoot,
+          kind: args.kind,
+          pluginData: { desktopSharedDependencyResolution: true }
+        })
+        if (result.errors.length) {
+          const details = result.errors.map((error) => error.text).join("\n")
+          throw new Error(`Rails-owned frontend dependency ${args.path} is unavailable to the desktop build:\n${details}`)
+        }
+        const resolved = result.path
+        const relativeDependency = path.relative(path.join(frontendRoot, "node_modules"), resolved)
+        if (relativeDependency.startsWith("..") || path.isAbsolute(relativeDependency)) {
+          throw new Error(`Rails-owned frontend dependency ${args.path} must be declared by desktop/frontend/package.json.`)
+        }
+        return { path: resolved }
+      })
     }
   }]
 })
 
+// CodeMirror extensions use instanceof checks across package boundaries. A second
+// copy of one of these packages makes extensions created by the Rails-owned
+// controllers incompatible with the editor instance created by the desktop.
+const runtimeIdentityPackages = new Set([
+  ...Object.keys(frontendResult.metafile.inputs)
+    .flatMap((input) => [...input.matchAll(/node_modules\/(?:(@[^/]+\/[^/]+)|([^/]+))\//g)])
+    .map((match) => match[1] || match[2])
+    .filter((name) => name.startsWith("@codemirror/") || name.startsWith("@lezer/")),
+  "@hotwired/stimulus",
+  "@marijn/find-cluster-break",
+  "@replit/codemirror-vim",
+  "@replit/codemirror-vim-core",
+  "codemirror",
+  "crelt",
+  "style-mod",
+  "w3c-keyname"
+])
+const packageInstallations = new Map()
+for (const input of Object.keys(frontendResult.metafile.inputs)) {
+  for (const packageName of runtimeIdentityPackages) {
+    const marker = `node_modules/${packageName}/`
+    const packageIndex = input.lastIndexOf(marker)
+    if (packageIndex < 0) continue
+    const installation = input.slice(0, packageIndex + marker.length - 1)
+    if (!packageInstallations.has(packageName)) packageInstallations.set(packageName, new Set())
+    packageInstallations.get(packageName).add(installation)
+  }
+}
+const duplicates = [...packageInstallations]
+  .filter(([, installations]) => installations.size > 1)
+  .map(([packageName, installations]) => `${packageName}: ${[...installations].join(", ")}`)
+if (duplicates.length) {
+  throw new Error(`Desktop bundle contains duplicate runtime identity packages:\n${duplicates.join("\n")}`)
+}
 // Rails owns and builds the renderer. Desktop packages the exact same artifact.
 const rendererBundle = path.join(repoRoot, "vendor/javascript/elef-renderer.bundle.js")
 await copyFile(rendererBundle, path.join(assets, "renderer.bundle.js"))
