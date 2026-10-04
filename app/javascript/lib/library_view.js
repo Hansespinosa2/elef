@@ -27,6 +27,7 @@ const LIBRARY_VIEW = `
     <section id="document-graph-view" class="document-graph-panel mt-8 rounded-2xl border border-[#ddd5c8] bg-[#fffdf8] p-5" hidden aria-labelledby="document-graph-heading"></section>
     <div data-library-view-slot="lineage"></div>
     <section id="deck-list" class="library-list deck-list mt-8 grid gap-4" role="list" aria-label="Saved work"></section>
+    <button id="library-load-more" class="button secondary library-load-more mt-6" type="button" aria-controls="deck-list" hidden>Load more decks</button>
     <div id="empty-library" class="empty-state flex items-center justify-between rounded-2xl border border-[#ddd5c8] bg-[#fffdf8] p-5 max-[920px]:flex-col max-[920px]:items-stretch" hidden>
       <div>
         <h2 class="mb-2 text-2xl font-bold" data-library-empty-title></h2>

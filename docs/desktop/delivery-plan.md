@@ -39,7 +39,7 @@ Each ends with a usable app, not a branch. Critical path: M0 → M1 → M2 → (
 | # | Milestone | Done when (measurable) |
 |---|---|---|
 | M0 | Spikes | S1–S5 exit criteria met; ADR-002/003/006/007 accepted on results |
-| M1 | Shell + library | App opens < 1.5 s cold; lists the 1,000-deck fixture < 500 ms warm; menus work; `.elef/` config persists; hostile-deck fixtures neutralized (QS-4) |
+| M1 | Shell + library | App opens < 1.5 s cold; loads the full 1,000-deck index and renders the first 48 cards < 500 ms warm, with later cards reachable by scrolling or “Load more decks”; menus work; `.elef/` config persists; hostile-deck fixtures neutralized (QS-4) |
 | M2 | Editor + files | Reused editor JS edits and auto-saves; fault-injection matrix passes (QS-2); external edit never silently clobbered (QS-3); `elef.json` auto-created; images work |
 | M3 | Desktop rendering | Shared Markdown blocks render through the worker; desktop presentation and document projections match the Rails fixture suite after normalization; open 100-slide deck < 300 ms; presentation and print flows pass real-binary scenarios |
 | M3w | Rails cutover (parallel track) | `ELEF_RENDERER=js` on Rails passes the full web suite; soak period with no renderer regressions (length: Q9); Ruby renderer deleted; fixtures regenerated, comparison exact; QS-7 fitness checks green |

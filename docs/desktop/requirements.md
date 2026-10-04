@@ -94,7 +94,7 @@ Measured on the MacBook Air unless noted. Protocol: release build, fresh process
 |---|---|
 | Cold start → interactive | < 1.5 s |
 | Open a 100-slide deck (includes first render) | < 300 ms |
-| Warm library list, 1,000 decks | < 500 ms |
+| Warm library, 1,000 decks | < 500 ms to load the complete deck index and render the first 48 cards; remaining cards are available by scrolling or activating “Load more decks” |
 | Autosave | No dropped keystrokes or input, ever (automated typing burst during save) |
 
 Linux (WebKitGTK) is measured separately in M5 against the same numbers. A miss is recorded as a named gap (ADR-004 trigger), never silently waived.

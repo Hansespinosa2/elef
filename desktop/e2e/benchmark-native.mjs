@@ -8,6 +8,7 @@ import { desktopCommand } from "./offline-macos.js"
 import { nativeQuit } from "./native-quit-smoke.js"
 import { reserveWebdriverPort } from "./webdriver-port.js"
 import { percentile95 } from "../../app/javascript/lib/performance_measurement.js"
+import { LIBRARY_RENDER_BATCH_SIZE } from "../../app/javascript/lib/incremental_list.js"
 
 const binary = process.argv[process.argv.indexOf("--binary") + 1]
 if (!process.argv.includes("--binary") || !binary || !path.isAbsolute(binary)) {
@@ -26,8 +27,9 @@ const source = Array.from({ length: 100 }, (_, index) =>
 const samples = { coldStart: [], open100Slides: [], warmLibrary: [] }
 const pause = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds))
 const report = { platform: process.platform, architecture: process.arch, release: os.release(),
-  protocol: "20 fresh release processes; 1000 decks; one 50 MiB deck; painted operation timings",
+  protocol: `20 fresh release processes; 1000 deck index; first ${LIBRARY_RENDER_BATCH_SIZE} cards; one 50 MiB deck; painted operation timings`,
   samples, inputPreservedRuns: 0 }
+report.renderedLibraryCards = []
 
 try {
   await mkdir(library)
@@ -69,6 +71,7 @@ try {
       return value
     }
     let session
+    let operation = "WebDriver session startup"
     try {
       const deadline = Date.now() + 65_000
       while (!session && Date.now() < deadline) {
@@ -85,19 +88,25 @@ try {
       assert.ok(session?.sessionId, "Release benchmark session must start")
       const execute = (script, ...args) => request(`/session/${session.sessionId}/execute/sync`, { script, args })
       let interactiveAt
+      operation = "frontend startup acknowledgement"
       while (!interactiveAt && Date.now() < deadline) {
         interactiveAt = await execute("return window.__elefPerformanceTestHooks?.interactiveAt || null")
         if (!interactiveAt) await pause(50)
       }
       assert.ok(interactiveAt, "The release frontend must acknowledge completed startup")
       samples.coldStart.push(interactiveAt - launchedAt)
+      operation = "1,000-deck library refresh"
       const listed = await execute("return await window.__elefPerformanceTestHooks.list()")
-      assert.equal(listed.result, 1000)
+      assert.equal(listed.result.total, 1000)
+      assert.equal(listed.result.rendered, Math.min(LIBRARY_RENDER_BATCH_SIZE, listed.result.total))
+      report.renderedLibraryCards.push(listed.result.rendered)
       samples.warmLibrary.push(listed.milliseconds)
+      operation = "100-slide deck open and render"
       const opened = await execute("return await window.__elefPerformanceTestHooks.open(arguments[0])", deckId)
       assert.equal(opened.result.id, deckId)
       assert.equal(opened.result.slides, 100)
       samples.open100Slides.push(opened.milliseconds)
+      operation = "autosave while typing"
       const typed = await execute("return await window.__elefPerformanceTestHooks.typeDuringSave(arguments[0])", "Input preserved 😀 日本語")
       assert.equal(typed, source + "\nInput preserved 😀 日本語")
       assert.equal(await readFile(path.join(folder, "presentation.md"), "utf8"), typed)
@@ -108,7 +117,7 @@ try {
       assert.deepEqual(exitResult, { code: 0, signal: null }, "The measured process must exit through its native Quit guard")
       process.stdout.write(`Native release performance run ${run + 1}/20 completed.\n`)
     } catch (error) {
-      throw new Error(`Native release performance run ${run + 1}: ${error.message}; backend: ${backendOutput}`)
+      throw new Error(`Native release performance run ${run + 1} during ${operation}: ${error.message}; backend: ${backendOutput}`)
     } finally {
       if (!exitResult) {
         app.kill("SIGTERM")
@@ -120,7 +129,7 @@ try {
   report.p95Milliseconds = Object.fromEntries(Object.entries(samples).map(([name, values]) => [name, percentile95(values)]))
   report.budgetsMilliseconds = { coldStart: 1500, open100Slides: 300, warmLibrary: 500 }
   report.misses = Object.entries(report.budgetsMilliseconds).filter(([name, budget]) => report.p95Milliseconds[name] >= budget).map(([name]) => name)
-  process.stdout.write(JSON.stringify({ p95Milliseconds: report.p95Milliseconds, inputPreservedRuns: report.inputPreservedRuns, misses: report.misses }) + "\n")
+  process.stdout.write(JSON.stringify({ p95Milliseconds: report.p95Milliseconds, inputPreservedRuns: report.inputPreservedRuns, renderedLibraryCards: [...new Set(report.renderedLibraryCards)], misses: report.misses }) + "\n")
   assert.deepEqual(report.misses, [], "Native release application performance exceeded its budgets")
 } finally {
   await mkdir(path.dirname(output), { recursive: true })

@@ -32,7 +32,7 @@ test("desktop host page provides every element referenced by the app shell", () 
   const dynamicallyRendered = new Set([
     "desktop-editor-field", "desktop-editor-title", "deck-source", "visual-mode", "desktop-preview", "library-count",
     "library-description", "library-search", "show-deck-list", "show-documents", "show-presentations",
-    "notice", "document-graph-view", "deck-list", "empty-library", "library-no-results"
+    "notice", "document-graph-view", "deck-list", "library-load-more", "empty-library", "library-no-results"
   ])
   const missing = [...ids].filter(id => !document.getElementById(id) && !dynamicallyRendered.has(id))
   assert.deepEqual(missing, [])

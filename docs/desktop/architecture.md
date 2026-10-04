@@ -23,7 +23,7 @@ No server, no account. The only network traffic by default is the update check. 
 | 2 Data safety | Folders canonical; atomic writes; fingerprint check before every write; conflict UI, never silent overwrite | ADR-001, ADR-008 |
 | 3 Security | Defense in depth that assumes any single layer can fail | ADR-006, [security.md](security.md) |
 | 4 No divergence | One shared JS renderer; flags not branches; seams specified and contract-tested | ADR-007, ADR-005 |
-| 5 Performance | Asset protocol for images; rendering in a worker; no cache in v1 | §6 |
+| 5 Performance | Asset protocol for images; rendering in a worker; large library cards rendered in batches | §6 |
 | Delivery | Tauri updater + GitHub Releases, Ed25519-signed | ADR-002, ADR-009 |
 
 Design principles

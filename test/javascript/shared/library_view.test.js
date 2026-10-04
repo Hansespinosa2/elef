@@ -25,6 +25,8 @@ test("both hosts receive one library header, search field, and three shared view
   assert.equal(view.browser.querySelector("#show-documents").getAttribute("aria-current"), "page")
   assert.equal(view.browser.querySelector("#show-documents").getAttribute("href"), "/documents")
   assert.equal(view.browser.querySelectorAll("[data-library-tab]").length, 3)
+  assert.equal(view.browser.querySelector("#library-load-more").textContent, "Load more decks")
+  assert.equal(view.browser.querySelector("#library-load-more").hidden, true)
   assert.equal(view.graph.hidden, true)
 })
 

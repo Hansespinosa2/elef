@@ -35,7 +35,6 @@ export default class extends Controller {
     this.installedSource = this.source
     this.projectionPending = false
     this.selectedIndex = Math.min(this.selectedIndex, Math.max(0, this.sourceRanges().length - 1))
-    this.renderOverview()
     this.scheduleMeasurement()
   }
 

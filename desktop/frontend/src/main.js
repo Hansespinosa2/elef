@@ -10,6 +10,7 @@ import { relaunch } from "@tauri-apps/plugin-process"
 import { check as checkUpdater } from "@tauri-apps/plugin-updater"
 import { editorFor } from "controllers/editor_controller"
 import { createLibraryCard } from "lib/library_card"
+import { createIncrementalList } from "lib/incremental_list"
 import { createDocumentGraphCache } from "lib/document_graph_cache"
 import { buildDocumentGraph } from "lib/document_links"
 import { createTransportAdapter } from "./transport-adapter.js"
@@ -97,6 +98,7 @@ const elements = {
   deckView: document.querySelector("#deck-view"),
   deckTitle: document.querySelector("#deck-title"),
   list: document.querySelector("#deck-list"),
+  loadMore: document.querySelector("#library-load-more"),
   graphView: document.querySelector("#document-graph-view"),
   count: document.querySelector("#library-count"),
   description: document.querySelector("#library-description"),
@@ -157,6 +159,8 @@ let saveFlow = null
 const documentGraphCache = createDocumentGraphCache(async () => buildDocumentGraph(await invoke("document_graph")))
 let libraryTab = "all"
 let cardPreviewObserver = null
+let libraryMoreObserver = null
+const libraryListRenderer = createIncrementalList(elements.list)
 let pendingUpdate = null
 let updateInstalling = false
 let libraryStatusLoaded = false
@@ -269,7 +273,7 @@ if (__ELEF_E2E__) {
         return measurePaintedAction(async () => {
           await refreshLibrary()
           if (!elements.notice.hidden && elements.notice.dataset.tone === "error") throw new Error("The measured library refresh failed.")
-          return decks.length
+          return { total: decks.length, rendered: libraryListRenderer.renderedCount }
         })
       },
       async typeDuringSave(text) {
@@ -396,14 +400,10 @@ function renderDecks() {
   const filtered = filterDecks(decks, libraryTab, query)
   const totalForFilter = filterDecks(decks, libraryTab).length
   cardPreviewObserver?.disconnect()
-  elements.list.replaceChildren(...filtered.map(deck => createLibraryCard(document, deck, {
-    open: id => void openDeck(id),
-    rename: (item, name) => void renameDeck(item, name).catch(showError),
-    delete: item => void deleteDeck(item)
-  })))
-  const previewTargets = elements.list.querySelectorAll(".deck-card-preview[data-deck-id]")
+  libraryMoreObserver?.disconnect()
+  const decksById = new Map(filtered.map(deck => [deck.id, deck]))
   const startPreview = target => {
-    const deck = decks.find(item => item.id === target.dataset.deckId)
+    const deck = decksById.get(target.dataset.deckId)
     if (deck) void loadLibraryPreview(target, deck)
   }
   if (typeof IntersectionObserver === "function") {
@@ -414,9 +414,24 @@ function renderDecks() {
         startPreview(entry.target)
       }
     }, { rootMargin: "180px" })
-    previewTargets.forEach(target => cardPreviewObserver.observe(target))
   } else {
-    previewTargets.forEach(startPreview)
+    cardPreviewObserver = null
+  }
+  libraryListRenderer.render(filtered, deck => createLibraryCard(document, deck, {
+    open: id => void openDeck(id),
+    rename: (item, name) => void renameDeck(item, name).catch(showError),
+    delete: item => void deleteDeck(item)
+  }), { onAppend: cards => {
+    const previewTargets = cards.flatMap(card => [...card.querySelectorAll(".deck-card-preview[data-deck-id]")])
+    if (cardPreviewObserver) previewTargets.forEach(target => cardPreviewObserver.observe(target))
+    else previewTargets.forEach(startPreview)
+  } })
+  elements.loadMore.hidden = !libraryListRenderer.hasMore
+  if (libraryListRenderer.hasMore && typeof IntersectionObserver === "function") {
+    libraryMoreObserver = new IntersectionObserver(entries => {
+      if (entries.some(entry => entry.target === elements.loadMore && entry.isIntersecting)) appendLibraryDeckBatch()
+    }, { rootMargin: "300px" })
+    libraryMoreObserver.observe(elements.loadMore)
   }
   const kindLabel = libraryTab === "all" ? "work" : libraryTab === "documents" ? "document" : "presentation"
   elements.count.textContent = `${totalForFilter} ${totalForFilter === 1 ? kindLabel : `${kindLabel}s`}${query ? ` · ${filtered.length} shown` : ""}`
@@ -428,6 +443,10 @@ function renderDecks() {
   if (filtered.length === 0 && query) {
     elements.list.hidden = false
   }
+}
+
+function appendLibraryDeckBatch() {
+  elements.loadMore.hidden = !libraryListRenderer.appendNext()
 }
 
 async function refreshLibrary() {
@@ -982,6 +1001,7 @@ document.querySelector("#new-deck").addEventListener("click", () => {
   showCreateDialog(libraryTab === "documents" ? "document" : "presentation")
 })
 document.querySelector("#refresh-library").addEventListener("click", () => void refreshLibrary())
+elements.loadMore.addEventListener("click", appendLibraryDeckBatch)
 document.querySelector("#import-elef").addEventListener("click", () => void importDeck())
 document.querySelector("#back-to-library").addEventListener("click", () => {
   if (hasUnsavedChanges()) {
