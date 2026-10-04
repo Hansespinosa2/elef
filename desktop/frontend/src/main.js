@@ -184,7 +184,7 @@ saveFlow = createSaveFlow({
   getSource: currentSource,
   setSource: setEditorSource,
   onState: (state, details) => {
-    setSaveState(state)
+    if (state !== "Saved" || !titleFlow?.isDirty()) setSaveState(state)
     elements.restoreDraft.hidden = !details.canRestoreDraft
     elements.retrySave.hidden = !details.blocked && !titleFlow?.isBlocked()
     if (!details.dirty && openFilesWaitingForSave) {
@@ -358,7 +358,7 @@ function renderDecks() {
   cardPreviewObserver?.disconnect()
   elements.list.replaceChildren(...filtered.map(deck => createDeckCard(document, deck, {
     open: id => void openDeck(id),
-    rename: (item, name) => void renameDeck(item, name),
+    rename: (item, name) => void renameDeck(item, name).catch(showError),
     delete: item => void deleteDeck(item)
   })))
   const previewTargets = elements.list.querySelectorAll(".deck-card-preview[data-deck-id]")
@@ -575,16 +575,11 @@ function configureEditorKind(isDocument, documentTitles) {
 
 async function renameDeck(deck, name) {
   if (typeof name !== "string" || name.trim() === deck.name) return
-  try {
-    const renamed = await invoke("rename_deck", { id: deck.id, name: name.trim() })
-    if (activeDeck?.id === deck.id) Object.assign(activeDeck, renamed)
-    decks = decks.map(item => item.id === deck.id ? { ...item, ...renamed } : item)
-    renderDecks()
-    return renamed
-  } catch (error) {
-    showError(error)
-    throw error
-  }
+  const renamed = await invoke("rename_deck", { id: deck.id, name: name.trim() })
+  if (activeDeck?.id === deck.id) Object.assign(activeDeck, renamed)
+  decks = decks.map(item => item.id === deck.id ? { ...item, ...renamed } : item)
+  renderDecks()
+  return renamed
 }
 
 async function deleteDeck(deck) {
