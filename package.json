@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "renderer:build": "node script/build_renderer.mjs",
-    "test:javascript": "node --test test/javascript"
+    "test:javascript": "node --test test/javascript/*.test.js test/javascript/*.test.mjs test/javascript/shared/*.test.js"
   },
   "devDependencies": {
     "@codemirror/commands": "6.11.1",

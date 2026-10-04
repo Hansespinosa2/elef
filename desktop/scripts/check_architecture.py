@@ -26,7 +26,7 @@ config = json.loads((TAURI_ROOT / "tauri.conf.json").read_text())
 e2e_config = json.loads((TAURI_ROOT / "tauri.e2e.conf.json").read_text())
 performance_config = json.loads((TAURI_ROOT / "tauri.performance.conf.json").read_text())
 assert performance_config == {"plugins": {"updater": {"endpoints": ["https://127.0.0.1:8888/manifest"]}}}, "release measurement must keep secure transport and a loopback-only offline check"
-feature_flags_source = (REPO_ROOT / "desktop" / "frontend" / "src" / "feature-flags.js").read_text()
+feature_flags_source = (REPO_ROOT / "app" / "javascript" / "lib" / "feature_flags.js").read_text()
 delivery_plan = (REPO_ROOT / "docs" / "desktop" / "delivery-plan.md").read_text()
 document_model = (REPO_ROOT / "app" / "lib" / "source" / "document.rb").read_text()
 javascript_renderer = (REPO_ROOT / "app" / "lib" / "source" / "javascript_renderer.rb").read_text()
@@ -35,6 +35,8 @@ renderer_worker = (REPO_ROOT / "desktop" / "frontend" / "src" / "renderer-worker
 desktop_main = (REPO_ROOT / "desktop" / "frontend" / "src" / "main.js").read_text()
 native_render_styles = (REPO_ROOT / "app" / "assets" / "stylesheets" / "desktop_rendered_content.css").read_text()
 assert 'import "../../../app/assets/stylesheets/application.css"' in desktop_main, "desktop must reuse Rails rendering and authoring styles"
+assert 'lib/performance_measurement' in desktop_main, "desktop performance UI must reuse the Rails-owned browser measurement helper"
+assert (REPO_ROOT / "desktop" / "frontend" / "src" / "performance-measurement.js").exists() is False, "desktop must not own a second performance measurement helper"
 assert not re.search(r"^\.(?:slide|document|presentation|katex)[\w.-]*(?:\s|\{|:)", native_render_styles, re.MULTILINE), "native viewport CSS must not contain another rendering stylesheet"
 web_card = (REPO_ROOT / "app" / "views" / "library" / "_work_card.html.erb").read_text()
 desktop_card = (REPO_ROOT / "desktop" / "frontend" / "src" / "deck-card.js").read_text()

@@ -7,7 +7,7 @@ import { randomUUID } from "node:crypto"
 import { desktopCommand } from "./offline-macos.js"
 import { nativeQuit } from "./native-quit-smoke.js"
 import { reserveWebdriverPort } from "./webdriver-port.js"
-import { percentile95 } from "../frontend/src/performance-measurement.js"
+import { percentile95 } from "../../app/javascript/lib/performance_measurement.js"
 
 const binary = process.argv[process.argv.indexOf("--binary") + 1]
 if (!process.argv.includes("--binary") || !binary || !path.isAbsolute(binary)) {

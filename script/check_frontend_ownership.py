@@ -52,13 +52,25 @@ assert '"lib/library_view"' in desktop_main and '"lib/library_filter"' in deskto
 )
 for shared_module in (
     "deck_open_flow", "document_graph_cache", "editor_ready", "editor_source",
-    "library_preview", "presentation_navigation", "save_flow", "title_save_flow",
+    "feature_flags", "library_preview", "performance_measurement", "presentation_navigation", "renderer_worker_client",
+    "authoring_registry_write", "save_flow", "title_save_flow",
 ):
     assert f'"lib/{shared_module}"' in desktop_main, f"desktop must consume app/javascript/lib/{shared_module}.js"
 assert all(path.is_file() for path in renderer_sources), "renderer source must stay under app/javascript"
 assert "desktop/" not in renderer_build, "Rails renderer generation must not reference desktop files"
-assert not any((ROOT / "desktop/frontend/src" / name).exists() for name in (
-    "renderer.js", "document-map.js", "save-flow.js", "preview-sanitizer.js", "library-preview.js", "editor-ready.js"
-)), "shared behavior must not be copied under desktop/frontend"
+desktop_sources = ROOT / "desktop/frontend/src"
+for shared_source in (
+    "authoring-registry-write.js", "authoring-settings.js", "deck-open-flow.js",
+    "document-graph-cache.js", "document-map.js", "editor-ready.js", "editor-source.js",
+    "feature-flags.js", "library-preview.js", "performance-measurement.js", "presentation-flow.js", "preview-sanitizer.js",
+    "registry-merge.js", "renderer-client.js", "renderer-global.js", "renderer.js",
+    "save-flow.js", "title-save-flow.js", "default-authoring-registry.json",
+):
+    assert not (desktop_sources / shared_source).exists(), f"shared source must not be copied under desktop/frontend/src: {shared_source}"
+
+for host_asset in ("index.html", "theme.css", "styles.css"):
+    assert not (ROOT / "desktop/frontend" / host_asset).exists(), f"shared shell source must stay under app/: {host_asset}"
+for shared_test in ("authoring-settings.test.js", "feature-flags.test.js", "renderer-client.test.js", "renderer.test.js", "renderer-fixtures.test.js"):
+    assert not (ROOT / "desktop/frontend/tests" / shared_test).exists(), f"shared behavior tests must stay under test/javascript: {shared_test}"
 
 print("Frontend ownership checks passed: Rails owns shared source; desktop consumes it one-way.")

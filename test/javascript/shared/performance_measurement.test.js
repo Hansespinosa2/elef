@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { measurePaintedAction, percentile95 } from "../src/performance-measurement.js"
+import { measurePaintedAction, percentile95 } from "../../../app/javascript/lib/performance_measurement.js"
 
 test("application timing includes the actual operation and painted result", async () => {
   const order = []

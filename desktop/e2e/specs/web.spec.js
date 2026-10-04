@@ -9,7 +9,7 @@ import { PIXEL_PNG_MARKDOWN } from "../scenarios/media-fixture.js"
 import { execFileSync } from "node:child_process"
 import path from "node:path"
 import { readFile } from "node:fs/promises"
-import { renderPreview } from "../../frontend/src/renderer.js"
+import { renderPreview } from "../../../app/javascript/lib/renderer.js"
 
 function normalizeLineEndings(source) {
   return source.replace(/\r\n|\r/g, "\n")

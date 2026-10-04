@@ -1,7 +1,8 @@
-@import "tailwindcss";
+@import "tailwindcss" source(none);
 
 @source "../../../app/views";
 @source "../../../app/helpers";
+@source "../../../app/javascript/controllers";
 @source "../../../app/javascript/lib";
 
 @theme {

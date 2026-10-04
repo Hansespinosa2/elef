@@ -5,7 +5,7 @@ import {
   applyDesktopFeatureFlags,
   desktopFeatureEnabled,
   DESKTOP_FEATURE_FLAGS
-} from "../src/feature-flags.js"
+} from "../../../app/javascript/lib/feature_flags.js"
 
 test("revision and lineage features default off for desktop", () => {
   assert.deepEqual(DESKTOP_FEATURE_FLAGS, {
