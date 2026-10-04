@@ -7,12 +7,15 @@ export default class extends Controller {
 
   connect() {
     this.keyHandler = (event) => this.handleKey(event)
+    this.previewUpdatedHandler = () => this.refreshSlides()
     this.slides = []
+    this.element.addEventListener("elef:preview-updated", this.previewUpdatedHandler)
     if (this.activeValue) this.start()
   }
 
   disconnect() {
     this.stop()
+    this.element.removeEventListener("elef:preview-updated", this.previewUpdatedHandler)
   }
 
   start() {
@@ -46,6 +49,17 @@ export default class extends Controller {
   next() {
     if (!this.navigation) return
     this.indexValue = this.navigation.next()
+    this.showCurrentSlide()
+  }
+
+  refreshSlides() {
+    if (!this.activeValue || !this.hasStageTarget) return
+    const slides = [...this.stageTarget.querySelectorAll(".slide-frame")]
+    if (!slides.length) return
+
+    this.slides = slides
+    this.navigation = createPresentationNavigation(slides.length, this.indexValue)
+    this.indexValue = this.navigation.currentIndex
     this.showCurrentSlide()
   }
 

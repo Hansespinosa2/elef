@@ -26,6 +26,13 @@ test("presentation navigation clamps at each end and supports home/end", () => {
   assert.equal(navigation.last(), 2)
 })
 
+test("presentation navigation can restore its current index after a preview refresh", () => {
+  assert.equal(createPresentationNavigation(3, 1).currentIndex, 1)
+  assert.equal(createPresentationNavigation(3, 8).currentIndex, 2)
+  assert.equal(createPresentationNavigation(3, -2).currentIndex, 0)
+  assert.equal(createPresentationNavigation(3, 1.5).currentIndex, 0)
+})
+
 test("presentation navigation refuses empty or invalid slide counts", () => {
   assert.equal(createPresentationNavigation(0), null)
   assert.equal(createPresentationNavigation(1.5), null)

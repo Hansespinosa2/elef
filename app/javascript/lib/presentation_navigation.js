@@ -9,9 +9,11 @@ export function presentationActionForKey(key) {
   return PRESENTATION_KEY_ACTIONS.get(key) || null
 }
 
-export function createPresentationNavigation(slideCount) {
+export function createPresentationNavigation(slideCount, initialIndex = 0) {
   if (!Number.isInteger(slideCount) || slideCount < 1) return null
-  let currentIndex = 0
+  let currentIndex = Number.isInteger(initialIndex)
+    ? Math.max(0, Math.min(initialIndex, slideCount - 1))
+    : 0
   return {
     get currentIndex() { return currentIndex },
     next() { currentIndex = Math.min(currentIndex + 1, slideCount - 1); return currentIndex },
