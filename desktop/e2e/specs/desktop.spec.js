@@ -217,6 +217,7 @@ class DesktopEditorUi {
       await new Promise(resolve => requestAnimationFrame(resolve))
       editor.sourceButtonTarget.focus()
       editor.setEditingMode("source")
+      await new Promise(resolve => requestAnimationFrame(resolve))
       const current = editor.selectionStart
       const length = editor.sourceValue.length
       const intended = current === length ? Math.max(0, length - 1) : length
