@@ -97,15 +97,33 @@ class DesktopEditorUi {
     const card = $(`[aria-label="Open ${title}"]`)
     await card.waitForDisplayed()
     await card.click()
-    await browser.waitUntil(async () => browser.execute(expected => {
-      const form = document.querySelector("#desktop-editor-form")
-      return document.querySelector("#deck-title")?.textContent === expected
-        && form?.dataset.loadedDeckId === document.querySelector("#deck-id")?.textContent
-        && !document.querySelector("#deck-view")?.hidden
-    }, title), {
-      timeout: 10_000,
-      timeoutMsg: `The ${title} deck did not open`
-    })
+    try {
+      await browser.waitUntil(async () => browser.execute(expected => {
+        const form = document.querySelector("#desktop-editor-form")
+        return document.querySelector("#deck-title")?.textContent === expected
+          && form?.dataset.loadedDeckId === document.querySelector("#deck-id")?.textContent
+          && !document.querySelector("#deck-view")?.hidden
+      }, title), {
+        timeout: 10_000,
+        timeoutMsg: `The ${title} deck did not open`
+      })
+    } catch (error) {
+      const diagnostic = await browser.execute(expected => {
+        const form = document.querySelector("#desktop-editor-form")
+        return {
+          expected,
+          status: document.querySelector("#status-text")?.textContent || "",
+          notice: document.querySelector("#notice")?.textContent || "",
+          deckTitle: document.querySelector("#deck-title")?.textContent || "",
+          deckId: document.querySelector("#deck-id")?.textContent || "",
+          loadedDeckId: form?.dataset.loadedDeckId || "",
+          libraryHidden: document.querySelector("#library-view")?.hidden,
+          deckViewHidden: document.querySelector("#deck-view")?.hidden,
+          cardVisible: [...document.querySelectorAll(".deck-open")].some(button => button.getAttribute("aria-label") === `Open ${expected}`)
+        }
+      }, title)
+      throw new Error(`${error.message}; desktop open diagnostic: ${JSON.stringify(diagnostic)}`)
+    }
     this.activeDeckTitle = title
   }
 
