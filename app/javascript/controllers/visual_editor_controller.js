@@ -408,8 +408,7 @@ export default class extends Controller {
     const control = event.target.closest?.("[data-visual-editor-block-id]")
     if (!control) return
     control.closest(".document-block-position-control")?.classList.remove("is-open")
-    if (!this.editorController || this.element.dataset.editorMode !== "visual" ||
-      this.element.previewController?.projectionFresh === false) return
+    if (!this.editorController || this.element.dataset.editorMode !== "visual" || !this.map) return
 
     this.flushPendingProjectionEdits()
     const blockId = control.dataset.visualEditorBlockId
@@ -418,8 +417,8 @@ export default class extends Controller {
 
     const source = this.editorController.value
     const slide = this.map.slides.find((candidate) => candidate.blocks?.some((item) => item.id === block.id))
-    const directive = slide?.directives?.find((candidate) => candidate.id === block.position_directive_id)
     if (!slide) return
+    const directive = slide?.directives?.find((candidate) => candidate.id === block.position_directive_id)
 
     const horizontal = control.value
     if (!horizontal) {
@@ -439,14 +438,24 @@ export default class extends Controller {
         : (region?.content_range.start ?? block.range.start)
       let updated = source
       ranges.sort((left, right) => right.start - left.start).forEach((range) => {
+        let rangeEnd = range.end
         const before = updated.slice(0, range.start)
-        let after = updated.slice(range.end)
+        const lineEnding = updated.slice(range.start, rangeEnd).match(/(?:\r\n|\r|\n)$/)?.[0]
+        if (!lineEnding) {
+          const restMatch = updated.slice(rangeEnd).match(/^(?:\r\n|\r|\n)/)?.[0]
+          if (restMatch) rangeEnd += restMatch.length
+        }
+        let after = updated.slice(rangeEnd)
         if (before.endsWith("\n\n") && after.startsWith("\n")) after = after.slice(1)
         const next = `${before}${after}`
         if (range.start < sourceOffset) sourceOffset += next.length - updated.length
-        this.shiftMapAfterEdit(range.start, range.end, 0)
+        this.shiftMapAfterEdit(range.start, rangeEnd, 0)
         updated = next
       })
+
+      delete block.position_directive_id
+      delete block.position
+      slide.directives = slide.directives.filter((candidate) => !ranges.includes(candidate.range))
 
       if (updated === source) return
       this.pendingCaretRestore = { sourceOffset, preferredBlockId: block.id }
@@ -468,7 +477,16 @@ export default class extends Controller {
     if (directive) {
       from = directive.range.start
       to = directive.range.end
-      const lineEnding = source.slice(from, to).match(/(?:\r\n|\r|\n)$/)?.[0] || ""
+      let lineEnding = source.slice(from, to).match(/(?:\r\n|\r|\n)$/)?.[0]
+      if (!lineEnding) {
+        const restMatch = source.slice(to).match(/^(?:\r\n|\r|\n)/)?.[0]
+        if (restMatch) {
+          to += restMatch.length
+          lineEnding = restMatch
+        } else {
+          lineEnding = "\n"
+        }
+      }
       const vertical = block.position?.vertical_explicit ? block.position.vertical : null
       const verticalAlignment = vertical === "middle" ? "center" : vertical
       replacement = `:::align{${verticalAlignment ? `${verticalAlignment} ` : ""}${horizontal}}${lineEnding}`
@@ -493,7 +511,30 @@ export default class extends Controller {
           if (object[name]?.start === from) object[name].start += replacement.length
         })
       })
+      const lineEnding = source.match(/\r\n|\r|\n/)?.[0] || "\n"
+      const directiveLength = `:::align{${horizontal}}${lineEnding}`.length
+      const directiveId = `directive-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+      const newDirective = {
+        id: directiveId,
+        type: "position",
+        range: { start: from, end: from + directiveLength },
+        source_range: { start: from, end: from + directiveLength }
+      }
+      slide.directives ||= []
+      slide.directives.push(newDirective)
+      this.map.directives ||= []
+      this.map.directives.push(newDirective)
+      block.position_directive_id = directiveId
+      block.position = { horizontal, vertical: "top", vertical_explicit: false }
+    } else {
+      directive.range.end = from + replacement.length
+      directive.source_range.end = directive.range.end
+      block.position = {
+        ...(block.position || {}),
+        horizontal
+      }
     }
+
     const updated = `${source.slice(0, from)}${replacement}${source.slice(to)}`
     this.editorController.replaceRange(updated, 0, source.length)
   }
@@ -557,7 +598,7 @@ export default class extends Controller {
       }
     })
     this.projectionTarget.querySelectorAll("[data-visual-editor-block-id]").forEach((control) => {
-      control.disabled = !visual || !fresh
+      control.disabled = !visual || !this.map
     })
   }
 

@@ -2670,4 +2670,29 @@ class PresentationsTest < ApplicationSystemTestCase
     image_one_file&.close!
     image_two_file&.close!
   end
+
+  test "changes alignment immediately after visual edits and reflects it visually in the slide block" do
+    presentation = Presentation.create!(title: "Visual edit alignment", source: "# Slide\n\nInitial block")
+    visit edit_presentation_path(presentation)
+    wait_for_fresh_projection
+
+    block = find(".slide-block", text: "Initial block")
+    block_id = block["data-editor-block-id"]
+    block.click
+    block.send_keys(" with extra text")
+
+    alignment = find("select[data-presentation-editor-align][data-slide-index='0'][data-block-index='1']")
+    alignment.select("Center Center")
+
+    assert_includes find(".slide-block[data-editor-block-id='#{block_id}']")["class"], "position-center"
+    assert_field "Markdown source", with: /:::align\{center center\}\n\nInitial.*block/, wait: 5
+
+    alignment.select("Bottom Right")
+    assert_includes find(".slide-block[data-editor-block-id='#{block_id}']")["class"], "position-right"
+    assert_field "Markdown source", with: /:::align\{bottom right\}\n\nInitial.*block/, wait: 5
+
+    alignment.select("Left")
+    assert_includes find(".slide-block[data-editor-block-id='#{block_id}']")["class"], "position-left"
+    assert_field "Markdown source", with: /:::align\{left\}\n\nInitial.*block/, wait: 5
+  end
 end
