@@ -1065,7 +1065,12 @@ describe("desktop binary workflows and native boundaries", () => {
     }
     const dialog = await $("#create-dialog")
     await dialog.waitForDisplayed()
-    await $("#create-form button[value='cancel']").click()
+    focusDesktopWindow()
+    sendNativeKey("Escape", { activate: false })
+    await browser.waitUntil(async () => browser.execute(() => !document.querySelector("#create-dialog")?.open), {
+      timeout: 5_000,
+      timeoutMsg: "Escape did not close the new-deck dialog"
+    })
   })
 
   it("opens and cancels the native library folder picker", async () => {
