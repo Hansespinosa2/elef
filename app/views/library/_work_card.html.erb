@@ -28,7 +28,6 @@
         </div>
       </details>
 <% end %>
-<% metadata = "#{work.presentation? ? pluralize(work.slides.length, 'slide') : 'Continuous Markdown'} · Updated #{time_ago_in_words(work.updated_at)} ago" %>
 <% note = if work.presentation? && work.parent
   "Forked from #{work.parent.title} · #{work.fork_type}"
 elsif work.presentation? && work.fork_parent_title.present?
@@ -38,7 +37,7 @@ end %>
   id: work_dom_id(work),
   title: work.title,
   kind: work.document? ? "document" : "presentation",
-  metadata: metadata,
+  updatedAt: work.updated_at.iso8601(3),
   editUrl: work_edit_path(work),
   previewHtml: render("library/work_preview", work: work),
   controlsHtml: controls.to_s,

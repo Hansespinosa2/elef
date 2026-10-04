@@ -5,6 +5,13 @@ export const SAVED_SOURCE = "# Saved by shared scenario\n\nThe editor autosaved 
 
 export async function editAndPreviewWorkflow(ui) {
   await ui.openDeck()
+  await ui.renameEditorTitle("E2E shared title")
+  await ui.waitForEditorTitle("E2E shared title")
+  await ui.reopenDeck()
+  await ui.assertEditorTitle("E2E shared title")
+  await ui.renameEditorTitle("E2E seed")
+  await ui.waitForEditorTitle("E2E seed")
+
   const originalSource = await ui.readSource()
   const caretPosition = originalSource.indexOf("Seed paragraph.") + 5
   await ui.setCaretPosition(caretPosition)

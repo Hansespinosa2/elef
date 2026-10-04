@@ -27,7 +27,13 @@ const LIBRARY_VIEW = `
     <section id="document-graph-view" class="document-graph-panel mt-8 rounded-2xl border border-[#ddd5c8] bg-[#fffdf8] p-5" hidden aria-labelledby="document-graph-heading"></section>
     <div data-library-view-slot="lineage"></div>
     <section id="deck-list" class="library-list deck-list mt-8 grid gap-4" role="list" aria-label="Saved work"></section>
-    <div id="empty-library" class="empty-state flex items-center justify-between rounded-2xl border border-[#ddd5c8] bg-[#fffdf8] p-5 max-[920px]:flex-col max-[920px]:items-stretch" hidden></div>
+    <div id="empty-library" class="empty-state flex items-center justify-between rounded-2xl border border-[#ddd5c8] bg-[#fffdf8] p-5 max-[920px]:flex-col max-[920px]:items-stretch" hidden>
+      <div>
+        <h2 class="mb-2 text-2xl font-bold" data-library-empty-title></h2>
+        <p class="text-[#6f675c]" data-library-empty-copy></p>
+      </div>
+      <div data-library-view-slot="empty-action"></div>
+    </div>
     <p id="library-no-results" class="library-no-results no-results" data-library-search-target="noResults" role="status" hidden>No decks match this search.</p>
   </section>
   </div>
@@ -81,7 +87,8 @@ export function renderLibraryView(container, config = {}) {
   graph.hidden = filter !== "documents" || !hasGraph
   moveSlot(container, "lineage", root.querySelector('[data-library-view-slot="lineage"]'))
   moveSlot(container, "cards", root.querySelector("#deck-list"))
-  moveSlot(container, "empty", empty)
+  moveSlot(container, "empty-action", empty.querySelector('[data-library-view-slot="empty-action"]'))
+  updateLibraryEmptyState(empty, filter)
 
   container.replaceChildren(template.content)
   return {
@@ -96,10 +103,24 @@ export function renderLibraryView(container, config = {}) {
   }
 }
 
+export function updateLibraryEmptyState(container, filter = "all") {
+  const selected = VALID_FILTERS.has(filter) ? filter : "all"
+  const kindLabel = selected === "all" ? "work" : selected === "documents" ? "document" : "presentation"
+  const title = container.querySelector("[data-library-empty-title]")
+  const copy = container.querySelector("[data-library-empty-copy]")
+  const action = container.querySelector("[data-library-empty-action]")
+  title.textContent = `No ${kindLabel}${selected === "all" ? "" : "s"} yet.`
+  copy.textContent = "Start with Markdown. Elef keeps your source and assets in your library."
+  if (action) {
+    action.textContent = selected === "documents" ? "Create a document" : "Create a presentation"
+    action.dataset.kind = selected === "documents" ? "document" : "presentation"
+  }
+}
+
 function moveSlot(host, name, target) {
   const slot = host.querySelector(`template[data-library-view-slot="${name}"]`)
   if (!slot || !target) return
-  const wrapperClass = name === "cards" ? "library-list" : name === "empty" ? "empty-state" : null
+  const wrapperClass = name === "cards" ? "library-list" : null
   const wrapper = wrapperClass ? slot.content.firstElementChild : null
   if (wrapper?.classList.contains(wrapperClass)) target.append(...wrapper.childNodes)
   else target.append(slot.content)

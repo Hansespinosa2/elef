@@ -110,7 +110,29 @@ class DesktopEditorUi {
   }
 
   async reopenDeck() {
-    await this.openDeck()
+    await this.openDeck(this.activeDeckTitle || "E2E seed")
+  }
+
+  async renameEditorTitle(title) {
+    await $("#desktop-editor-title").setValue(title)
+    await browser.keys("TAB")
+    this.activeDeckTitle = title
+  }
+
+  async waitForEditorTitle(title) {
+    await browser.waitUntil(async () =>
+      (await $("#desktop-editor-title").getValue()) === title &&
+      (await $("#deck-title").getText()) === title &&
+      (await $("#save-state").getText()) === "Saved", {
+      timeout: 10_000,
+      timeoutMsg: `The presentation title did not save as ${title}`
+    })
+  }
+
+  async assertEditorTitle(title) {
+    if ((await $("#desktop-editor-title").getValue()) !== title) {
+      throw new Error(`The presentation editor did not restore the title ${title}`)
+    }
   }
 
   async replaceSource(source) {
@@ -878,6 +900,50 @@ describe("desktop binary workflows and native boundaries", () => {
     const form = await $("#desktop-editor-form")
     if (await form.getAttribute("data-editor-mode") !== "visual") {
       throw new Error("The editor did not switch into visual mode")
+    }
+  })
+
+  it("accepts trusted keyboard input in CodeMirror and persists it", async () => {
+    const ui = new DesktopEditorUi()
+    await ui.openDeck()
+    await ui.showSourceMode()
+    const original = await ui.readSource()
+    const inserted = "Native keyboard input reaches CodeMirror."
+    const expected = `${original.trimEnd()}\n\n${inserted}`
+    try {
+      await browser.execute(() => {
+        const field = document.querySelector("#desktop-editor-field")
+        const editor = field?.editorController
+        if (!editor) throw new Error("The desktop CodeMirror controller is unavailable")
+        const events = []
+        const handler = event => events.push({ key: event.key, trusted: event.isTrusted })
+        editor.view.contentDOM.addEventListener("keydown", handler)
+        window.__elefTrustedEditorKeys = { target: editor.view.contentDOM, handler, events }
+        editor.setSelectionRange(editor.sourceValue.length)
+        editor.view.focus()
+      })
+      await browser.keys(["ENTER", "ENTER"])
+      await browser.keys(inserted)
+
+      const trustedKeys = await browser.execute(() => {
+        const tracker = window.__elefTrustedEditorKeys
+        tracker?.target.removeEventListener("keydown", tracker.handler)
+        delete window.__elefTrustedEditorKeys
+        return tracker?.events || []
+      })
+      if (!trustedKeys.some(event => event.trusted && event.key.toLowerCase() === "n")) {
+        throw new Error(`WebDriver input did not deliver a trusted key event to CodeMirror: ${JSON.stringify(trustedKeys)}`)
+      }
+      await ui.waitForSaved(expected)
+    } finally {
+      await browser.execute(source => {
+        const tracker = window.__elefTrustedEditorKeys
+        tracker?.target.removeEventListener("keydown", tracker.handler)
+        delete window.__elefTrustedEditorKeys
+        const editor = document.querySelector("#desktop-editor-field")?.editorController
+        if (editor && editor.sourceValue !== source) editor.replaceRange(source, 0, editor.sourceValue.length)
+      }, original)
+      await ui.waitForSaved(original)
     }
   })
 

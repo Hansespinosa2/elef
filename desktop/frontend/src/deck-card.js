@@ -4,7 +4,7 @@ export function createDeckCard(document, deck, actions) {
   const template = document.createElement("template")
   template.innerHTML = renderLibraryCard({
     id: deck.id, title: deck.name, kind: deck.kind,
-    metadata: `${deck.kind === "document" ? "Continuous Markdown" : "Presentation"} · ${deck.source_file}`,
+    updatedAt: deck.modified_ms,
     editUrl: "#" + encodeURIComponent(deck.id), desktop: true
   })
   const card = template.content.firstElementChild

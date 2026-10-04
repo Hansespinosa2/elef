@@ -66,6 +66,20 @@ class WebEditorUi {
     await this.openDeck()
   }
 
+  async renameEditorTitle(title) {
+    await this.page.locator(".editor-title-input").fill(title)
+  }
+
+  async waitForEditorTitle(title) {
+    const input = this.page.locator(".editor-title-input")
+    await expect(input).toHaveValue(title)
+    await expect(this.page.locator('[data-autosave-target="status"]')).toHaveText("Saved")
+  }
+
+  async assertEditorTitle(title) {
+    await expect(this.page.locator(".editor-title-input")).toHaveValue(title)
+  }
+
   async replaceSource(source) {
     const editor = this.page.locator(".source-field .cm-content")
     await editor.click()

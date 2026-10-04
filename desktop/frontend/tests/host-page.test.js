@@ -30,7 +30,7 @@ test("rendered decks reuse Rails styles with only native viewport chrome", () =>
 test("desktop host page provides every element referenced by the app shell", () => {
   const ids = new Set([...main.matchAll(/document\.querySelector\(["']#([\w-]+)/g)].map(match => match[1]))
   const dynamicallyRendered = new Set([
-    "desktop-editor-field", "deck-source", "visual-mode", "desktop-preview", "library-count",
+    "desktop-editor-field", "desktop-editor-title", "deck-source", "visual-mode", "desktop-preview", "library-count",
     "library-description", "library-search", "show-deck-list", "show-documents", "show-presentations",
     "notice", "document-graph-view", "deck-list", "empty-library", "library-no-results"
   ])

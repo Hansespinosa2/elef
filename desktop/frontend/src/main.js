@@ -14,6 +14,7 @@ import { createDocumentGraphCache } from "./document-graph-cache.js"
 import { createTransportAdapter } from "./transport-adapter.js"
 import { waitForEditorController } from "./editor-ready.js"
 import { createSaveFlow } from "./save-flow.js"
+import { createTitleSaveFlow } from "./title-save-flow.js"
 import { createMediaFetch } from "./media-transport.js"
 import { createPreviewFetch } from "./preview-transport.js"
 import { createRendererClient } from "./renderer-client.js"
@@ -26,7 +27,7 @@ import { writeAuthoringRegistry } from "./authoring-registry-write.js"
 import { createPresentationNavigation } from "./presentation-flow.js"
 import { applyDesktopFeatureFlags } from "./feature-flags.js"
 import { renderEditorView } from "../../../app/javascript/lib/editor_view.js"
-import { renderLibraryView } from "../../../app/javascript/lib/library_view.js"
+import { renderLibraryView, updateLibraryEmptyState } from "../../../app/javascript/lib/library_view.js"
 import { filterDecks } from "./library-filter.js"
 import { createLibraryPreviewLoader } from "./library-preview.js"
 import "./editor-runtime.js"
@@ -43,7 +44,7 @@ globalThis.fetch = createPreviewFetch({
   fetchImpl: mediaFetch,
   getContext: async source => ({
     kind: activeDeck?.source_file === "document.md" ? "document" : "presentation",
-    title: activeDeck?.name || "Untitled",
+    title: document.querySelector("#desktop-editor-title")?.value.trim() || activeDeck?.name || "Untitled",
     deckId: activeDeck?.id || "",
     mediaBaseUrl: activeDeck ? `elefasset://localhost/${encodeURIComponent(activeDeck.id)}` : "",
     documentNodes: await previewDocumentNodes(source)
@@ -57,7 +58,7 @@ renderEditorView(document.querySelector("#desktop-editor-mount"), {
   mode: "source",
   visualDisabled: true,
   visualDisabledMessage: "Open a deck to render its preview",
-  showTitle: false,
+  showTitle: true,
   showSubmit: false,
   persisted: false,
   authoringRegistry: desktopAuthoringRegistry(),
@@ -67,6 +68,7 @@ renderEditorView(document.querySelector("#desktop-editor-mount"), {
     source: "deck-source",
     surface: "deck-source-editor",
     label: "deck-source-label",
+    title: "desktop-editor-title",
     visualMode: "visual-mode",
     sourceMode: "source-mode",
     theme: "deck-theme",
@@ -87,6 +89,7 @@ const elements = {
   welcome: document.querySelector("#welcome-view"),
   library: document.querySelector("#library-view"),
   deckView: document.querySelector("#deck-view"),
+  deckTitle: document.querySelector("#deck-title"),
   list: document.querySelector("#deck-list"),
   graphView: document.querySelector("#document-graph-view"),
   count: document.querySelector("#library-count"),
@@ -123,6 +126,7 @@ const elements = {
   editorField: document.querySelector("#desktop-editor-field"),
   editorForm: document.querySelector("#desktop-editor-form"),
   editorInput: document.querySelector("#deck-source"),
+  titleInput: document.querySelector("#desktop-editor-title"),
   saveState: document.querySelector("#save-state"),
   conflictLocal: document.querySelector("#conflict-local"),
   conflictDisk: document.querySelector("#conflict-disk"),
@@ -161,6 +165,7 @@ let sourcePollBusy = false
 let lastSourcePollError = null
 let presentationFrames = []
 let presentationNavigation = null
+let titleFlow = null
 
 const transport = createTransportAdapter({ invoke, onConflict: event => saveFlow?.handleConflict(event) })
 const loadLibraryPreview = createLibraryPreviewLoader({
@@ -181,7 +186,7 @@ saveFlow = createSaveFlow({
   onState: (state, details) => {
     setSaveState(state)
     elements.restoreDraft.hidden = !details.canRestoreDraft
-    elements.retrySave.hidden = !details.blocked
+    elements.retrySave.hidden = !details.blocked && !titleFlow?.isBlocked()
     if (!details.dirty && openFilesWaitingForSave) {
       openFilesWaitingForSave = false
       queueMicrotask(() => void processOpenedFiles())
@@ -189,6 +194,20 @@ saveFlow = createSaveFlow({
   },
   onConflict: showConflict,
   materializeEdits: materializePendingVisualEdits,
+  onError: showError
+})
+titleFlow = createTitleSaveFlow({
+  getDeck: () => activeDeck,
+  getTitle: () => elements.titleInput.value,
+  renameDeck,
+  onRenamed: renamed => {
+    elements.deckTitle.textContent = renamed.name
+    document.querySelector("#breadcrumb-current").textContent = renamed.name
+  },
+  onState: (state, details) => {
+    if (state !== "Saved" || !saveFlow?.dirty) setSaveState(state)
+    elements.retrySave.hidden = !details.blocked && !saveFlow?.blocked
+  },
   onError: showError
 })
 
@@ -365,19 +384,7 @@ function renderDecks() {
   elements.empty.hidden = !isEmptyState
   elements.list.hidden = filtered.length === 0 && !isEmptyState
   elements.noResults.hidden = !query || filtered.length > 0
-  const emptyTitle = elements.empty.querySelector("h2")
-  const emptyCopy = elements.empty.querySelector("p")
-  const emptyAction = elements.empty.querySelector("[data-action='create-presentation']")
-  emptyTitle.textContent = decks.length === 0 && libraryTab === "all"
-    ? "Your first deck starts here."
-    : `No ${kindLabel}${filtered.length === 1 ? "" : "s"} yet.`
-  emptyCopy.textContent = libraryTab === "documents"
-    ? "Start with plain Markdown. Your document stays in its folder."
-    : libraryTab === "presentations"
-      ? "Create a presentation and shape it slide by slide."
-      : "Create a presentation or a document in this library."
-  emptyAction.textContent = libraryTab === "documents" ? "Create a document" : "Create a presentation"
-  emptyAction.dataset.kind = libraryTab === "documents" ? "document" : "presentation"
+  updateLibraryEmptyState(elements.empty, libraryTab)
   if (filtered.length === 0 && query) {
     elements.list.hidden = false
   }
@@ -506,7 +513,10 @@ async function openDeckNow(id) {
     transport.activateDeck(deck, id)
     activeDeck = deck
     saveFlow.activate(deck)
-    document.querySelector("#deck-title").textContent = deck.name
+    elements.deckTitle.textContent = deck.name
+    elements.deckTitle.hidden = !isDocument
+    elements.titleInput.closest(".editor-title-field").hidden = isDocument
+    elements.titleInput.value = deck.name
     document.querySelector("#deck-kind").textContent = deck.source_file === "document.md" ? "DOCUMENT" : "PRESENTATION"
     document.querySelector("#deck-source-name").textContent = deck.source_file
     elements.editorField.dataset.editorInitialSourceValue = JSON.stringify(deck.source)
@@ -566,10 +576,14 @@ function configureEditorKind(isDocument, documentTitles) {
 async function renameDeck(deck, name) {
   if (typeof name !== "string" || name.trim() === deck.name) return
   try {
-    await invoke("rename_deck", { id: deck.id, name: name.trim() })
-    await refreshLibrary()
+    const renamed = await invoke("rename_deck", { id: deck.id, name: name.trim() })
+    if (activeDeck?.id === deck.id) Object.assign(activeDeck, renamed)
+    decks = decks.map(item => item.id === deck.id ? { ...item, ...renamed } : item)
+    renderDecks()
+    return renamed
   } catch (error) {
     showError(error)
+    throw error
   }
 }
 
@@ -661,11 +675,12 @@ function materializePendingVisualEdits() {
 
 function hasUnsavedChanges() {
   materializePendingVisualEdits()
-  return saveFlow?.dirty || false
+  return Boolean(saveFlow?.dirty || titleFlow?.isDirty())
 }
 
-function flushSave(options) {
+async function flushSave(options) {
   hasUnsavedChanges()
+  if (titleFlow && !(await titleFlow.flush(options))) return false
   return saveFlow.flush(options)
 }
 
@@ -1206,6 +1221,7 @@ document.querySelector("#empty-library [data-action='create-presentation']").add
   showCreateDialog(event.currentTarget.dataset.kind || "presentation")
 })
 elements.editorField.addEventListener("input", () => scheduleSave())
+elements.titleInput.addEventListener("input", () => titleFlow.noteChange())
 elements.editorForm.addEventListener("change", event => {
   const key = event.target.id === "deck-theme" ? "theme" : event.target.id === "deck-typography" ? "typography" : null
   if (!key || !activeDeck) return

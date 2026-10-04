@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { parseHTML } from "linkedom"
-import { mountLibraryHosts, renderLibraryView } from "../../../app/javascript/lib/library_view.js"
+import { mountLibraryHosts, renderLibraryView, updateLibraryEmptyState } from "../../../app/javascript/lib/library_view.js"
 
 function mount(config = {}, slots = "") {
   const { document } = parseHTML(`<div id="mount">${slots}</div>`)
@@ -28,22 +28,33 @@ test("both hosts receive one library header, search field, and three shared view
   assert.equal(view.graph.hidden, true)
 })
 
-test("Rails slots populate shared cards, actions, empty state, and the documents graph", () => {
+test("Rails slots populate shared cards, actions, empty action, and the documents graph", () => {
   const { host, view } = mount({ filter: "documents", searchController: true }, `
     <template data-library-view-slot="actions"><button id="library-action">More</button></template>
     <template data-library-view-slot="graph"><section class="document-graph-panel" data-controller="document-graph" data-document-graph-data-value='{"nodes":[],"edges":[]}'><h2 id="document-graph-heading">Document network</h2></section></template>
     <template data-library-view-slot="cards"><article class="library-card"><h2 class="library-card-title">A document</h2></article></template>
-    <template data-library-view-slot="empty"><div class="empty-state"><p id="server-empty">Empty state</p></div></template>
+    <template data-library-view-slot="empty-action"><button id="server-create" data-library-empty-action>Create a presentation</button></template>
   `)
 
   assert.equal(host.querySelector("#library-action").textContent, "More")
   assert.equal(view.list.querySelector(".library-card-title").textContent, "A document")
-  assert.equal(view.empty.querySelector("#server-empty").textContent, "Empty state")
+  assert.equal(view.empty.querySelector("[data-library-empty-title]").textContent, "No documents yet.")
+  assert.equal(view.empty.querySelector("[data-library-empty-copy]").textContent, "Start with Markdown. Elef keeps your source and assets in your library.")
+  assert.equal(view.empty.querySelector("#server-create").textContent, "Create a document")
+  assert.equal(view.empty.querySelector("#server-create").dataset.kind, "document")
   assert.equal(view.empty.querySelectorAll(".empty-state").length, 0)
   assert.equal(view.graph.hidden, false)
   assert.equal(view.graph.dataset.controller, "document-graph")
   assert.equal(view.graph.querySelector("#document-graph-heading").textContent, "Document network")
   assert.equal(view.root.dataset.controller, "library-search")
+})
+
+test("the shared empty state keeps its copy and create action in sync with the active filter", () => {
+  const { view } = mount({}, `<template data-library-view-slot="empty-action"><button data-library-empty-action>create</button></template>`)
+  updateLibraryEmptyState(view.empty, "presentations")
+  assert.equal(view.empty.querySelector("[data-library-empty-title]").textContent, "No presentations yet.")
+  assert.equal(view.empty.querySelector("[data-library-empty-action]").textContent, "Create a presentation")
+  assert.equal(view.empty.querySelector("[data-library-empty-action]").dataset.kind, "presentation")
 })
 
 test("configuration strings remain text and desktop can own navigation and filtering", () => {

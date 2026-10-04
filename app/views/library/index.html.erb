@@ -32,15 +32,7 @@
       <% @works.each do |work| %><%= render "library/work_card", work: work %><% end %>
     </section>
   </template>
-  <template data-library-view-slot="empty">
-    <% if @works.empty? %>
-      <div class="empty-state flex items-center justify-between rounded-2xl border border-[#ddd5c8] bg-[#fffdf8] p-5 max-[920px]:flex-col max-[920px]:items-stretch">
-        <div>
-          <h2 class="mb-2 text-2xl font-bold">No <%= current_filter == "all" ? "work" : current_filter %> yet</h2>
-          <p class="text-[#6f675c]">Start with Markdown. Elef stores the source and derives the rendered result.</p>
-        </div>
-        <%= button_to "Create your first #{current_filter == "documents" ? "document" : "presentation"}", work_start_path(current_filter == "documents" ? "document" : "presentation"), method: :post, class: "button primary inline-flex min-h-10 cursor-pointer items-center gap-1 rounded-full border border-[#6d4aff] bg-[#6d4aff] px-4 py-2 font-bold text-white no-underline hover:brightness-95" %>
-      </div>
-    <% end %>
-  </template>
+  <% if @works.empty? %>
+    <template data-library-view-slot="empty-action"><%= button_to "Create a presentation", work_start_path(current_filter == "documents" ? "document" : "presentation"), method: :post, class: "button primary inline-flex min-h-10 cursor-pointer items-center gap-1 rounded-full border border-[#6d4aff] bg-[#6d4aff] px-4 py-2 font-bold text-white no-underline hover:brightness-95", data: { library_empty_action: true } %></template>
+  <% end %>
 </div>

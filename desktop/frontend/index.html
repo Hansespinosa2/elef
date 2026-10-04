@@ -55,14 +55,7 @@
 
         <section id="library-view" class="library-view" hidden>
           <div id="library-view-mount">
-            <template data-library-view-slot="empty">
-              <div class="empty-state">
-                <span class="empty-glyph" aria-hidden="true">✳</span>
-                <h2>Your first deck starts here.</h2>
-                <p>Create a presentation or a document in this library.</p>
-                <button class="primary-button" type="button" data-action="create-presentation">Create a presentation</button>
-              </div>
-            </template>
+            <template data-library-view-slot="empty-action"><button class="button primary inline-flex min-h-10 cursor-pointer items-center gap-1 rounded-full border border-[#6d4aff] bg-[#6d4aff] px-4 py-2 font-bold text-white no-underline hover:brightness-95" type="button" data-library-empty-action data-action="create-presentation">Create a presentation</button></template>
           </div>
         </section>
 

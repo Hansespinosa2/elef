@@ -4,9 +4,25 @@ function escape(value) {
   })[character])
 }
 
+function formattedUpdateDate(updatedAt) {
+  const timestamp = typeof updatedAt === "number" ? updatedAt : Date.parse(updatedAt || "")
+  if (!Number.isFinite(timestamp) || timestamp <= 0) return "date unavailable"
+  return new Intl.DateTimeFormat("en", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC"
+  }).format(new Date(timestamp))
+}
+
+function libraryMetadata(kind, updatedAt) {
+  const description = kind === "document" ? "Continuous Markdown" : "Markdown slides"
+  return `${description} · Updated ${formattedUpdateDate(updatedAt)}`
+}
+
 // Preview and controls are trusted rendered slots supplied by the host. Never
 // pass Markdown or user strings into these slots; all metadata is escaped here.
-export function renderLibraryCard({ id, title, kind, metadata, editUrl, previewHtml = "", controlsHtml = "", note = "", desktop = false }) {
+export function renderLibraryCard({ id, title, kind, updatedAt, editUrl, previewHtml = "", controlsHtml = "", note = "", desktop = false }) {
   if (!/^(?:\/(?!\/)|#)/.test(String(editUrl))) throw new TypeError("Library cards require a local navigation target")
   const native = desktop ? " deck-card" : ""
   const preview = desktop ? " deck-card-preview" : ""
@@ -22,7 +38,7 @@ export function renderLibraryCard({ id, title, kind, metadata, editUrl, previewH
     <div class="library-card-body">
       <p class="library-card-eyebrow eyebrow mb-1 text-xs font-extrabold uppercase tracking-[0.12em] text-[#6d4aff]">${kind === "document" ? "Document" : "Presentation"}</p>
       <h2 class="library-card-title mb-2 text-2xl font-bold"><a class="hover:underline${name}" href="${escape(editUrl)}">${escape(title)}</a></h2>
-      <p class="library-card-meta text-[#6f675c]${meta}">${escape(metadata)}</p>
+      <p class="library-card-meta text-[#6f675c]${meta}">${escape(libraryMetadata(kind, updatedAt))}</p>
       ${note ? `<p class="library-card-note text-sm text-[#6f675c]">${escape(note)}</p>` : ""}
     </div>
   </article>`
