@@ -4,6 +4,7 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises"
 import path from "node:path"
 import { randomUUID } from "node:crypto"
 import { desktopCommand } from "./offline-macos.js"
+import { reserveWebdriverPort } from "./webdriver-port.js"
 
 const pause = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds))
 
@@ -46,11 +47,12 @@ export async function runNativeQuitSmokes(env) {
     const original = "# Before native Quit\n\nOriginal source.\n"
     const draft = "# Unsaved native Quit\n\nLocal source.\n"
     const external = "# External native Quit\n\nExternal source.\n"
+    const smokeEnv = { ...env, TAURI_WEBDRIVER_PORT: await reserveWebdriverPort() }
     await mkdir(deck)
     await writeFile(sourceFile, original)
     await writeFile(path.join(deck, "elef.json"), JSON.stringify({ id, schema_version: 1 }))
     const restricted = desktopCommand(env.ELEF_E2E_APP_BINARY)
-    const app = spawn(restricted.command, restricted.args, { env, stdio: ["ignore", "pipe", "pipe"] })
+    const app = spawn(restricted.command, restricted.args, { env: smokeEnv, stdio: ["ignore", "pipe", "pipe"] })
     let output = ""
     const record = chunk => { output = (output + chunk.toString()).slice(-4_000) }
     app.stdout.on("data", record)
@@ -60,7 +62,7 @@ export async function runNativeQuitSmokes(env) {
       app.once("error", error => { exitResult = { error }; resolve(exitResult) })
       app.once("exit", (code, signal) => { exitResult = { code, signal }; resolve(exitResult) })
     })
-    const endpoint = `http://127.0.0.1:${env.TAURI_WEBDRIVER_PORT || "4445"}`
+    const endpoint = `http://127.0.0.1:${smokeEnv.TAURI_WEBDRIVER_PORT}`
     const request = async (suffix, body) => {
       const response = await fetch(endpoint + suffix, {
         method: "POST", headers: { "Content-Type": "application/json" },

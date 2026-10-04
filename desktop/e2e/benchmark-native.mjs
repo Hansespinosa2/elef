@@ -6,6 +6,7 @@ import path from "node:path"
 import { randomUUID } from "node:crypto"
 import { desktopCommand } from "./offline-macos.js"
 import { nativeQuit } from "./native-quit-smoke.js"
+import { reserveWebdriverPort } from "./webdriver-port.js"
 import { percentile95 } from "../frontend/src/performance-measurement.js"
 
 const binary = process.argv[process.argv.indexOf("--binary") + 1]
@@ -45,7 +46,7 @@ try {
   for (let run = 0; run < 20; run += 1) {
     const folder = path.join(library, "0000 Large presentation")
     await writeFile(path.join(folder, "presentation.md"), source)
-    const env = { ...process.env, ELEF_E2E_LIBRARY_ROOT: library, TAURI_WEBDRIVER_PORT: "4445" }
+    const env = { ...process.env, ELEF_E2E_LIBRARY_ROOT: library, TAURI_WEBDRIVER_PORT: await reserveWebdriverPort() }
     const command = desktopCommand(binary)
     const launchedAt = Date.now()
     const app = spawn(command.command, command.args, { env, stdio: ["ignore", "pipe", "pipe"] })
@@ -59,7 +60,7 @@ try {
       app.once("exit", (code, signal) => { exitResult = { code, signal }; resolve(exitResult) })
     })
     const request = async (route, body) => {
-      const response = await fetch(`http://127.0.0.1:4445${route}`, {
+      const response = await fetch(`http://127.0.0.1:${env.TAURI_WEBDRIVER_PORT}${route}`, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
         signal: AbortSignal.timeout(10_000)
       })
