@@ -41,10 +41,7 @@ function normalizeLineEndings(source) {
 }
 
 function desktopProcessId() {
-  const executable = process.env.ELEF_E2E_APP_BINARY
-  if (!executable) throw new Error("The desktop application binary is missing")
-  const pattern = "^" + executable.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "( |$)"
-  const pids = execFileSync("pgrep", ["-f", pattern], { encoding: "utf8", timeout: 5_000 })
+  const pids = execFileSync("pgrep", ["-x", "elef-desktop"], { encoding: "utf8", timeout: 5_000 })
     .trim().split(/\s+/).filter(Boolean)
   if (pids.length !== 1 || !/^\d+$/.test(pids[0])) {
     throw new Error(`Expected one desktop application process, found ${pids.length}`)
@@ -72,15 +69,20 @@ function focusDesktopWindow() {
 }
 
 function sendNativeKey(key) {
+  const linuxKeys = {
+    Escape: "Escape", Enter: "Return", ArrowRight: "Right", ArrowLeft: "Left", Home: "Home", End: "End"
+  }
+  const macKeyCodes = { Escape: 53, Enter: 36, ArrowRight: 124, ArrowLeft: 123, Home: 115, End: 119 }
   if (process.platform === "linux") {
     focusDesktopWindow()
-    const nativeKey = key === "Escape" ? "Escape" : key === "Enter" ? "Return" : key
+    const nativeKey = linuxKeys[key]
+    if (!nativeKey) throw new Error(`Unsupported native key ${key}`)
     execFileSync("xdotool", ["key", "--clearmodifiers", nativeKey], { timeout: 5_000 })
     return
   }
   if (process.platform === "darwin") {
-    const keyCode = key === "Escape" ? 53 : key === "Enter" ? 36 : null
-    if (keyCode === null) throw new Error(`Unsupported native key ${key}`)
+    const keyCode = macKeyCodes[key]
+    if (keyCode === undefined) throw new Error(`Unsupported native key ${key}`)
     const pid = desktopProcessId()
     execFileSync("osascript", ["-e", `tell application "System Events"
       tell (first application process whose unix id is ${pid})
@@ -243,15 +245,12 @@ class DesktopEditorUi {
   }
 
   async movePresentation(key) {
-    const webdriverKey = Key[key]
-    if (!webdriverKey) throw new Error(`Unsupported presentation key ${key}`)
-    await browser.keys(webdriverKey)
+    sendNativeKey(key)
   }
 
   async exitPresentationMode() {
     await browser.execute(() => window.focus())
-    focusDesktopWindow()
-    await browser.keys(Key.Escape)
+    sendNativeKey("Escape")
     await browser.waitUntil(async () => !(await browser.execute(() => document.body.classList.contains("presenting-deck"))), {
       timeout: 5_000,
       timeoutMsg: "Escape did not exit desktop presentation mode"
@@ -262,7 +261,7 @@ class DesktopEditorUi {
     if (await browser.execute(() => document.body.classList.contains("presenting-deck"))) {
       // Keep a failed Escape assertion from leaving this shared fixture deck in
       // presentation-test content and cascading into unrelated scenarios.
-      await $("#exit-presentation").click()
+      await browser.execute(() => document.querySelector("#exit-presentation")?.click())
       await browser.waitUntil(async () => !(await browser.execute(() => document.body.classList.contains("presenting-deck"))), {
         timeout: 5_000,
         timeoutMsg: "The native presentation exit control did not return to editing"
