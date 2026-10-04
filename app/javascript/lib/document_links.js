@@ -98,7 +98,7 @@ export function buildDocumentGraph(documents = []) {
     .filter(document => document && document.id != null && (typeof document.title === "string" || typeof document.name === "string"))
     .map(document => ({
       ...document,
-      title: extractFirstMarkdownHeading(document.source || "") || document.title || document.name
+      title: document.title || extractFirstMarkdownHeading(document.source || "") || document.name
     }))
   const resolve = createDocumentLinkResolver(entries)
   const nodes = entries.map((document, index) => ({

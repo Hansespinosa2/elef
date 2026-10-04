@@ -59,6 +59,13 @@ test("graph labels come from shared Markdown heading rules with folder-name fall
   assert.deepEqual(graph.nodes.map(({ title }) => title), ["Actual title", "Fallback folder"])
 })
 
+test("Rails graph titles remain authoritative when the record title differs from its source heading", () => {
+  const graph = buildDocumentGraph([
+    { id: "record-id", title: "Graph orphan with a long mobile document label", source: "# Orphan" }
+  ])
+  assert.equal(graph.nodes[0].title, "Graph orphan with a long mobile document label")
+})
+
 test("aliases resolve before titles consistently and graph nodes retain stable positions", () => {
   const graph = buildDocumentGraph([
     { id: "source", title: "Source", source: "[[Shared]]" },
