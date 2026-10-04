@@ -97,8 +97,8 @@ try {
       }
       assert.ok(interactiveAt, "The release frontend must acknowledge completed startup")
       samples.coldStart.push(interactiveAt - launchedAt)
-      const startupStages = await execute("return window.__elefPerformanceTestHooks.bootstrapStages")
-      report.bootstrapStageRuns.push(startupStages.result)
+      const startupStages = await execute("return JSON.stringify(window.__elefPerformanceTestHooks.bootstrapStages())")
+      report.bootstrapStageRuns.push(JSON.parse(startupStages.result))
       operation = "1,000-deck library refresh"
       const listed = await execute("return await window.__elefPerformanceTestHooks.list()")
       assert.equal(listed.result.total, 1000)
@@ -140,6 +140,9 @@ try {
       bootstrapStageSamples.set(stage.name, values)
     }
   }
+  for (const name of ["library-status", "initial-library-render", "pending-open-check", "editor-ready", "initial-paint", "native-ready-ack"]) {
+    assert.equal(bootstrapStageSamples.get(name)?.length, 20, `Expected 20 native startup measurements for ${name}`)
+  }
   report.p95BootstrapStageMilliseconds = Object.fromEntries([...bootstrapStageSamples]
     .filter(([, values]) => values.length >= 20)
     .map(([name, values]) => [name, percentile95(values)]))
@@ -154,10 +157,20 @@ try {
   const previewStageSamples = new Map(previewStagePairs.map(([name]) => [name, []]))
   for (const trace of report.previewTraceRuns) {
     for (const [name, started, finished] of previewStagePairs) {
-      const start = trace.find(event => event.stage === started)?.time
-      const end = trace.find(event => event.stage === finished && event.time >= start)?.time
-      if (Number.isFinite(start) && Number.isFinite(end)) previewStageSamples.get(name).push(end - start)
+      const durations = []
+      let start = null
+      for (const event of trace) {
+        if (event.stage === started) start = event.time
+        else if (event.stage === finished && Number.isFinite(start)) {
+          durations.push(event.time - start)
+          start = null
+        }
+      }
+      if (durations.length) previewStageSamples.get(name).push(Math.max(...durations))
     }
+  }
+  for (const name of ["render", "previewInstall", "previewEvents", "slideOverview", "slideOverviewScale", "slideOverflow"]) {
+    assert.equal(previewStageSamples.get(name)?.length, 20, `Expected 20 native render measurements for ${name}`)
   }
   report.p95PreviewStageMilliseconds = Object.fromEntries([...previewStageSamples]
     .filter(([, values]) => values.length >= 20)

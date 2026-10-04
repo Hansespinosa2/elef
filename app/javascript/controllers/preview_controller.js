@@ -248,7 +248,6 @@ export default class extends Controller {
 }
 
 function recordPreviewTrace(stage) {
-  if (!globalThis.__ELEF_E2E__) return
   const trace = globalThis.__elefPreviewTrace
   if (!Array.isArray(trace)) return
   trace.push({ time: performance.now(), stage })

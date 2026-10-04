@@ -278,7 +278,7 @@ if (__ELEF_E2E__) {
   Object.defineProperty(window, "__elefPerformanceTestHooks", {
     value: Object.freeze({
       get interactiveAt() { return interactiveAt },
-      get bootstrapStages() { return bootstrapStages.map(stage => ({ ...stage })) },
+      bootstrapStages: () => bootstrapStages.map(stage => ({ ...stage })),
       ready: () => { interactiveAt = performance.timeOrigin + performance.now() },
       async open(id) {
         const traceStart = globalThis.__elefPreviewTrace?.length || 0
