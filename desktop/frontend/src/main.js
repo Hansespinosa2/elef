@@ -45,7 +45,7 @@ globalThis.fetch = createPreviewFetch({
   onEvent: __ELEF_E2E__ ? event => {
     const trace = globalThis.__elefPreviewTrace ||= []
     trace.push(event)
-    if (trace.length > 40) trace.shift()
+    if (trace.length > 512) trace.shift()
   } : undefined,
   getContext: async source => ({
     kind: activeDeck?.source_file === "document.md" ? "document" : "presentation",

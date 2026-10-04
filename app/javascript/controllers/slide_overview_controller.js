@@ -301,5 +301,5 @@ function recordPreviewTrace(stage) {
   const trace = globalThis.__elefPreviewTrace
   if (!Array.isArray(trace)) return
   trace.push({ time: performance.now(), stage })
-  if (trace.length > 40) trace.shift()
+  if (trace.length > 512) trace.shift()
 }
