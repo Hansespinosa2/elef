@@ -991,7 +991,11 @@ class DesktopLibraryUi {
     })
   }
 
-  async openElefArchive() {
+  async openElefArchive(
+    archivePath = process.env.ELEF_E2E_IMPORT_ARCHIVE,
+    deckName = "E2E archive seed",
+    expectedSource = "Portable archive fixture."
+  ) {
     await this.openLibrary()
     await browser.execute(() => window.focus())
     let singleInstanceOwner = "platform transport not inspected"
@@ -1004,7 +1008,7 @@ class DesktopLibraryUi {
         throw new Error("The running desktop app did not register its Linux single-instance D-Bus name")
       }
     }
-    const launched = spawn(process.env.ELEF_E2E_APP_BINARY, [process.env.ELEF_E2E_IMPORT_ARCHIVE], {
+    const launched = spawn(process.env.ELEF_E2E_APP_BINARY, [archivePath], {
       stdio: ["ignore", "pipe", "pipe"]
     })
     let launchError = null
@@ -1018,14 +1022,14 @@ class DesktopLibraryUi {
     launched.once("error", error => { launchError = error })
     launched.once("exit", (code, signal) => { launchExit = { code, signal } })
     try {
-      const card = $('[aria-label="Edit E2E archive seed"]')
+      const card = $(`[aria-label="Edit ${deckName}"]`)
       try {
         await browser.waitUntil(async () => {
           if (launchError) throw new Error(`Opening the .elef file failed: ${launchError.message}`)
           return card.isDisplayed()
         }, {
           timeout: 20_000,
-          timeoutMsg: "The running desktop app did not import the opened .elef file"
+          timeoutMsg: `The running desktop app did not import ${deckName} from the opened .elef file`
         })
       } catch (error) {
         const state = await browser.execute(() => ({
@@ -1038,12 +1042,12 @@ class DesktopLibraryUi {
         throw new Error(`${error.message}; launch exit: ${JSON.stringify(launchExit)}; pending .elef files: ${pending}; library state: ${JSON.stringify(state)}; single-instance owner before launch: ${singleInstanceOwner}; second-process output: ${JSON.stringify(launchOutput)}`)
       }
       await card.click()
-      await browser.waitUntil(async () => (await $("#deck-title").getText()) === "E2E archive seed", {
+      await browser.waitUntil(async () => (await $("#deck-title").getText()) === deckName, {
         timeout: 10_000,
-        timeoutMsg: "The imported .elef deck did not open"
+        timeoutMsg: `The imported .elef deck ${deckName} did not open`
       })
       const source = await browser.execute(() => document.querySelector("#desktop-editor-field")?.editorController?.sourceValue || "")
-      if (!source.includes("Portable archive fixture.")) throw new Error("The imported .elef source was not loaded")
+      if (!source.includes(expectedSource)) throw new Error(`The imported .elef source did not include ${expectedSource}`)
     } finally {
       if (launched.exitCode === null && launched.signalCode === null) {
         launched.kill("SIGTERM")
@@ -1470,6 +1474,42 @@ describe("desktop binary workflows and native boundaries", () => {
 
   it("imports a portable .elef opened by the running application", async () => {
     await new DesktopLibraryUi().openElefArchive()
+  })
+
+  it("resolves portable graph keys and aliases after importing a .elef archive", async () => {
+    const ui = new DesktopLibraryUi()
+    await ui.openLibrary()
+    for (const [name, id, link] of [
+      ["E2E portable key source", process.env.ELEF_E2E_PORTABLE_KEY_SOURCE_ID, "[[document:e2e-portable-graph-key]]"],
+      ["E2E portable alias source", process.env.ELEF_E2E_PORTABLE_ALIAS_SOURCE_ID, "[[E2E portable graph alias]]"]
+    ]) {
+      const folder = path.join(process.env.ELEF_E2E_LIBRARY_ROOT, name)
+      await mkdir(folder, { recursive: true })
+      await writeFile(path.join(folder, "document.md"), `# ${name}\n\n${link}\n`)
+      await writeFile(path.join(folder, "elef.json"), JSON.stringify({ id, schema_version: 1 }))
+    }
+    await $("#refresh-library").click()
+    await ui.openElefArchive(
+      process.env.ELEF_E2E_PORTABLE_GRAPH_ARCHIVE,
+      "E2E portable graph archive",
+      "E2E portable graph target"
+    )
+    await $("#back-to-library").click()
+    await $("#library-view").waitForDisplayed()
+    await ui.showDocuments()
+    await ui.showDocumentGraph()
+
+    const target = process.env.ELEF_E2E_PORTABLE_GRAPH_TARGET_ID
+    const edges = await browser.execute(expectedTarget => [...document.querySelectorAll(".document-graph-edge")]
+      .filter(edge => edge.dataset.targetId === expectedTarget)
+      .map(edge => `${edge.dataset.sourceId}->${edge.dataset.targetId}`).sort(), target)
+    const expectedEdges = [
+      `${process.env.ELEF_E2E_PORTABLE_KEY_SOURCE_ID}->${target}`,
+      `${process.env.ELEF_E2E_PORTABLE_ALIAS_SOURCE_ID}->${target}`
+    ].sort()
+    if (JSON.stringify(edges) !== JSON.stringify(expectedEdges)) {
+      throw new Error(`Imported portable graph metadata did not resolve both links: ${JSON.stringify({ edges, expectedEdges })}`)
+    }
   })
 
   it("exports a portable .elef archive from the desktop command", async () => {

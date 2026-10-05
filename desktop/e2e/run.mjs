@@ -18,6 +18,8 @@ const conflictDeck = path.join(libraryRoot, "E2E conflict")
 const hostileDeck = path.join(libraryRoot, "E2E hostile")
 const archiveFixture = path.join(temporaryRoot, "E2E archive seed")
 const importArchive = path.join(temporaryRoot, "E2E archive seed.elef")
+const portableGraphArchiveFixture = path.join(temporaryRoot, "E2E portable graph archive")
+const portableGraphArchive = path.join(temporaryRoot, "E2E portable graph archive.elef")
 const exportArchive = path.join(temporaryRoot, "E2E seed exported.elef")
 const exportContents = path.join(temporaryRoot, "E2E seed exported")
 // Both runners complete the same editing, media, snippet, and math scenarios
@@ -55,6 +57,7 @@ const env = {
   ELEF_E2E_LIBRARY_ROOT: libraryRoot,
   ELEF_E2E_APP_BINARY: path.join(repoRoot, "desktop", "target", "debug", "elef-desktop"),
   ELEF_E2E_IMPORT_ARCHIVE: importArchive,
+  ELEF_E2E_PORTABLE_GRAPH_ARCHIVE: portableGraphArchive,
   ELEF_E2E_EXPORT_PATH: exportArchive,
   ELEF_E2E_SEED_DECK_ID: "a3d0f020-6605-4f9e-a96d-d825ee4b13f1"
 }
@@ -179,6 +182,26 @@ try {
   await writeFile(path.join(archiveFixture, "presentation.md"), "# Imported from Elef\n\nPortable archive fixture.\n")
   await writeFile(path.join(archiveFixture, "elef.json"), JSON.stringify({ id: randomUUID(), schema_version: 1 }))
   execFileSync("zip", ["-q", "-r", importArchive, path.basename(archiveFixture)], { cwd: temporaryRoot })
+  await mkdir(portableGraphArchiveFixture, { recursive: true })
+  await writeFile(path.join(portableGraphArchiveFixture, "document.md"), [
+    "---",
+    'elef_document_key: "e2e-portable-graph-key"',
+    'elef_aliases: ["E2E portable graph alias"]',
+    "---",
+    "# E2E portable graph target",
+    ""
+  ].join("\n"))
+  const portableGraphTargetId = randomUUID()
+  await writeFile(path.join(portableGraphArchiveFixture, "elef.json"), JSON.stringify({
+    id: portableGraphTargetId,
+    schema_version: 1
+  }))
+  execFileSync("zip", ["-q", "-r", portableGraphArchive, path.basename(portableGraphArchiveFixture)], { cwd: temporaryRoot })
+  const portableKeySourceId = randomUUID()
+  const portableAliasSourceId = randomUUID()
+  env.ELEF_E2E_PORTABLE_GRAPH_TARGET_ID = portableGraphTargetId
+  env.ELEF_E2E_PORTABLE_KEY_SOURCE_ID = portableKeySourceId
+  env.ELEF_E2E_PORTABLE_ALIAS_SOURCE_ID = portableAliasSourceId
   const desktopLinkedDocumentId = randomUUID()
   for (const [name, source] of [
     ["E2E document", "# E2E document\n\nSee [[E2E linked]].\n"],
