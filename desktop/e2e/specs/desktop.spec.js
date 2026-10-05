@@ -90,6 +90,18 @@ function sendNativeKey(key, { activate = true } = {}) {
   throw new Error(`Native keyboard input is unsupported on ${process.platform}`)
 }
 
+async function sendPresentationKey(key) {
+  await browser.execute(() => window.focus())
+  if (process.platform === "darwin") {
+    focusDesktopWindow()
+    const webDriverKey = { Escape: Key.Escape, ArrowRight: Key.ArrowRight, ArrowLeft: Key.ArrowLeft, Home: Key.Home, End: Key.End }[key]
+    if (!webDriverKey) throw new Error(`Unsupported presentation key ${key}`)
+    await browser.keys(webDriverKey)
+    return
+  }
+  sendNativeKey(key)
+}
+
 async function desktopWindowIsFullscreen() {
   return browser.executeAsync(done => {
     const currentWindow = window.__TAURI__?.window?.getCurrentWindow?.()
@@ -260,13 +272,11 @@ class DesktopEditorUi {
   }
 
   async movePresentation(key) {
-    await browser.execute(() => window.focus())
-    sendNativeKey(key)
+    await sendPresentationKey(key)
   }
 
   async exitPresentationMode() {
-    await browser.execute(() => window.focus())
-    sendNativeKey("Escape")
+    await sendPresentationKey("Escape")
     await browser.waitUntil(async () => !(await browser.execute(() => document.body.classList.contains("presenting-deck"))), {
       timeout: 5_000,
       timeoutMsg: "Escape did not exit desktop presentation mode"
