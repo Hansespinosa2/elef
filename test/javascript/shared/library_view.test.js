@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { parseHTML } from "linkedom"
-import { mountLibraryHosts, renderLibraryView, updateLibraryEmptyState } from "../../../app/javascript/lib/library_view.js"
+import { mountLibraryHosts, renderLibraryView, setLibraryViewTab, updateLibraryEmptyState } from "../../../app/javascript/lib/library_view.js"
 
 function mount(config = {}, slots = "") {
   const { document } = parseHTML(`<div id="mount">${slots}</div>`)
@@ -57,6 +57,24 @@ test("the shared empty state keeps its copy and create action in sync with the a
   assert.equal(view.empty.querySelector("[data-library-empty-title]").textContent, "No presentations yet.")
   assert.equal(view.empty.querySelector("[data-library-empty-action]").textContent, "Create a presentation")
   assert.equal(view.empty.querySelector("[data-library-empty-action]").dataset.kind, "presentation")
+})
+
+test("library tab selection owns its shared description, accessibility state, and graph visibility", () => {
+  const { host, view } = mount({}, `
+    <template data-library-view-slot="graph"><section data-controller="document-graph"><h2>Graph</h2></section></template>
+  `)
+
+  assert.equal(setLibraryViewTab(host, "documents"), "documents")
+  assert.equal(view.root.querySelector("#library-description").textContent, "Long-form Markdown, gathered in one calm place.")
+  assert.equal(view.root.querySelector("#show-documents").getAttribute("aria-current"), "page")
+  assert.equal(view.root.querySelector("#show-deck-list").hasAttribute("aria-current"), false)
+  assert.equal(view.root.querySelector("#deck-list").getAttribute("aria-label"), "Saved documents")
+  assert.equal(view.graph.hidden, false)
+
+  setLibraryViewTab(host, "presentations")
+  assert.equal(view.root.querySelector("#library-description").textContent, "Slide-based Markdown, ready to shape into a story.")
+  assert.equal(view.root.querySelector("#show-documents").hasAttribute("aria-current"), false)
+  assert.equal(view.graph.hidden, true)
 })
 
 test("configuration strings remain text and desktop can own navigation and filtering", () => {

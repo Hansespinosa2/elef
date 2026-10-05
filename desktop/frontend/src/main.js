@@ -27,7 +27,7 @@ import { createAuthoringSettingsDialog } from "lib/authoring_settings_dialog"
 import { withAppearanceValue } from "lib/document_map"
 import { applyDesktopFeatureFlags } from "lib/feature_flags"
 import { renderEditorView } from "lib/editor_view"
-import { renderLibraryView, updateLibraryEmptyState } from "lib/library_view"
+import { renderLibraryView, setLibraryViewTab, updateLibraryEmptyState } from "lib/library_view"
 import { filterDecks } from "lib/library_filter"
 import { createLibraryPreviewLoader } from "lib/library_preview"
 import "./editor-runtime.js"
@@ -101,7 +101,6 @@ const elements = {
   loadMore: document.querySelector("#library-load-more"),
   graphView: document.querySelector("#document-graph-view"),
   count: document.querySelector("#library-count"),
-  description: document.querySelector("#library-description"),
   empty: document.querySelector("#empty-library"),
   noResults: document.querySelector("#library-no-results"),
   search: document.querySelector("#library-search"),
@@ -369,20 +368,7 @@ function showLibrary() {
 }
 
 function showLibraryTab(tab) {
-  libraryTab = ["documents", "presentations"].includes(tab) ? tab : "all"
-  const descriptions = {
-    all: "One home for your documents, presentations, and source.",
-    documents: "Long-form Markdown, gathered in one calm place.",
-    presentations: "Slide-based Markdown, ready to shape into a story."
-  }
-  elements.description.textContent = descriptions[libraryTab]
-  elements.graphView.hidden = libraryTab !== "documents" || elements.graphView.dataset.controller !== "document-graph"
-  for (const link of document.querySelectorAll("[data-library-tab]")) {
-    const selected = link.dataset.libraryTab === libraryTab
-    link.classList.toggle("is-active", selected)
-    if (selected) link.setAttribute("aria-current", "page")
-    else link.removeAttribute("aria-current")
-  }
+  libraryTab = setLibraryViewTab(document.querySelector("#library-view-mount"), tab)
   renderDecks()
   if (libraryTab === "documents") void showDocumentGraph()
 }
@@ -406,7 +392,6 @@ async function showDocumentGraph() {
     const graph = await documentGraphData()
     const previous = elements.graphView
     const graphView = previous.cloneNode(false)
-    graphView.hidden = libraryTab !== "documents"
     graphView.dataset.documentGraphDataValue = JSON.stringify(graph)
     graphView.setAttribute("data-controller", "document-graph")
     graphView.addEventListener("click", event => {
@@ -417,6 +402,7 @@ async function showDocumentGraph() {
     })
     previous.replaceWith(graphView)
     elements.graphView = graphView
+    setLibraryViewTab(document.querySelector("#library-view-mount"), libraryTab)
   } catch (error) {
     showError(error)
   }

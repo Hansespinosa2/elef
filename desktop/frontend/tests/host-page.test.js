@@ -72,6 +72,8 @@ test("desktop no longer carries a second copy of the shared editor markup", () =
 test("desktop mounts the shared library view and keeps the document graph in Documents", () => {
   assert.ok(document.querySelector("#library-view-mount"))
   assert.match(main, /renderLibraryView\(document\.querySelector\("#library-view-mount"\)/)
+  assert.match(main, /setLibraryViewTab\(document\.querySelector\("#library-view-mount"\)/)
+  assert.doesNotMatch(main, /elements\.description\.textContent|elements\.graphView\.hidden = libraryTab/)
   assert.match(libraryView, /id="show-deck-list" class="library-tab" data-library-tab="all"/)
   assert.match(libraryView, /id="show-documents" class="library-tab" data-library-tab="documents"/)
   assert.match(libraryView, /id="show-presentations" class="library-tab" data-library-tab="presentations"/)

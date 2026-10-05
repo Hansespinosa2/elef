@@ -103,6 +103,9 @@ assert '"presentation"' in desktop_main and "getControllerForElementAndIdentifie
 assert "createPresentationNavigation" not in desktop_main and "presentationActionForKey" not in desktop_main, (
     "desktop must not maintain its own slide navigation behavior"
 )
+assert "setLibraryViewTab" in desktop_main, "desktop library tabs must use the Rails-owned shared view behavior"
+assert "elements.description.textContent" not in desktop_main, "library tab descriptions belong to the Rails-owned view"
+assert "elements.graphView.hidden = libraryTab" not in desktop_main, "shared library graph visibility belongs to the Rails-owned view"
 assert 'pin "lib/presentation_navigation", to: "lib/presentation_navigation.js"' in importmap, (
     "Rails must resolve the shared presentation navigation module"
 )

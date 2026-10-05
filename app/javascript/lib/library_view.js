@@ -41,6 +41,11 @@ const LIBRARY_VIEW = `
 `
 
 const VALID_FILTERS = new Set(["all", "documents", "presentations"])
+const FILTER_DESCRIPTIONS = {
+  all: "One home for your documents, presentations, and source.",
+  documents: "Long-form Markdown, gathered in one calm place.",
+  presentations: "Slide-based Markdown, ready to shape into a story."
+}
 
 export function mountLibraryHosts(root = globalThis.document) {
   if (!root) return
@@ -65,7 +70,6 @@ export function renderLibraryView(container, config = {}) {
 
   root.querySelector("#library-title").textContent = config.title || "Library"
   root.querySelector("#library-count").textContent = config.countLabel || "0 works"
-  root.querySelector("#library-description").textContent = config.description || "One home for your documents, presentations, and source."
   const search = root.querySelector("#library-search")
   if (config.searchController) root.dataset.controller = "library-search"
   else search.removeAttribute("data-action")
@@ -73,22 +77,18 @@ export function renderLibraryView(container, config = {}) {
   for (const link of root.querySelectorAll("[data-library-tab]")) {
     const name = link.dataset.libraryTab
     link.href = routes[name] || `#library/${name}`
-    const selected = name === filter
-    link.classList.toggle("is-active", selected)
-    if (selected) link.setAttribute("aria-current", "page")
   }
-  root.querySelector("#deck-list").setAttribute("aria-label", `Saved ${filter}`)
 
   const graph = root.querySelector("#document-graph-view")
   const empty = root.querySelector("#empty-library")
   empty.hidden = !config.empty
   const actions = root.querySelector('[data-library-view-slot="actions"]')
   moveSlot(container, "actions", actions)
-  const hasGraph = moveGraphSlot(container, graph)
-  graph.hidden = filter !== "documents" || !hasGraph
+  moveGraphSlot(container, graph)
   moveSlot(container, "lineage", root.querySelector('[data-library-view-slot="lineage"]'))
   moveSlot(container, "cards", root.querySelector("#deck-list"))
   moveSlot(container, "empty-action", empty.querySelector('[data-library-view-slot="empty-action"]'))
+  setLibraryViewTab(root, filter, config.description || FILTER_DESCRIPTIONS[filter])
   updateLibraryEmptyState(empty, filter)
 
   container.replaceChildren(template.content)
@@ -102,6 +102,27 @@ export function renderLibraryView(container, config = {}) {
     noResults: container.querySelector("#library-no-results"),
     search: container.querySelector("#library-search")
   }
+}
+
+export function setLibraryViewTab(root, filter, description = null) {
+  const selected = VALID_FILTERS.has(filter) ? filter : "all"
+  const library = root.querySelector(".library-shared-view") || root
+  const label = library.querySelector("#library-description")
+  if (label) label.textContent = description || FILTER_DESCRIPTIONS[selected]
+  for (const link of library.querySelectorAll("[data-library-tab]")) {
+    const active = link.dataset.libraryTab === selected
+    link.classList.toggle("is-active", active)
+    if (active) link.setAttribute("aria-current", "page")
+    else link.removeAttribute("aria-current")
+  }
+  const list = library.querySelector("#deck-list")
+  if (list) list.setAttribute("aria-label", `Saved ${selected}`)
+  const graph = library.querySelector("#document-graph-view")
+  if (graph) {
+    const hasGraph = graph.dataset.controller?.split(/\s+/).includes("document-graph")
+    graph.hidden = selected !== "documents" || !hasGraph
+  }
+  return selected
 }
 
 export function updateLibraryEmptyState(container, filter = "all") {
