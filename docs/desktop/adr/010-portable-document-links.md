@@ -1,10 +1,9 @@
 # ADR-010: Store portable document-link metadata in Markdown front matter
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-05
 - Decider: Andres
 - Confidence: medium-high
-- Accepted when: shared graph tests prove key and alias resolution from a folder and `.elef` archive, and Rails package import/export round-trips the same metadata
 
 ## Context
 
@@ -16,7 +15,7 @@ Rails stores stable document keys and historical title aliases in database rows.
 - **Add fields to `elef.json`.** Rejected: expands the intentionally tiny manifest and makes links depend on a manifest that is optional for opening a deck.
 - **Store optional metadata in Markdown front matter** (chosen): it travels with the source, is readable in any editor, and does not add another file to a deck.
 
-## Decision (proposed)
+## Decision
 
 Document decks may carry two optional top-level front-matter fields:
 
