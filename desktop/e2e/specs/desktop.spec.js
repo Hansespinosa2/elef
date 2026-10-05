@@ -89,6 +89,14 @@ function sendNativeKey(key, { activate = true } = {}) {
   throw new Error(`Native keyboard input is unsupported on ${process.platform}`)
 }
 
+async function desktopWindowIsFullscreen() {
+  return browser.executeAsync(done => {
+    const currentWindow = window.__TAURI__?.window?.getCurrentWindow?.()
+    if (!currentWindow) return done(false)
+    currentWindow.isFullscreen().then(done, () => done(false))
+  })
+}
+
 function typeNativeText(value, { activate = true } = {}) {
   if (process.platform === "linux") {
     if (activate) focusDesktopWindow()
@@ -856,21 +864,28 @@ class DesktopLibraryUi {
       return Boolean(button)
     }, title)
     if (!started) throw new Error(`The ${title} library card has no Present action`)
-    await browser.waitUntil(async () => browser.execute(() => document.body.classList.contains("presenting-deck")), {
-      timeout: 10_000,
-      timeoutMsg: `The ${title} library card did not start presentation mode`
-    })
-    await browser.waitUntil(async () => browser.execute(() =>
-      document.activeElement === document.querySelector(".presentation-stage")
-    ), {
-      timeout: 10_000,
-      timeoutMsg: `The ${title} presentation did not finish entering native fullscreen`
-    })
-    await $("#exit-presentation").click()
-    await browser.waitUntil(async () => browser.execute(() => !document.body.classList.contains("presenting-deck")), {
-      timeout: 5_000,
-      timeoutMsg: "The native presentation did not return to editing"
-    })
+    try {
+      await browser.waitUntil(async () => browser.execute(() => document.body.classList.contains("presenting-deck")), {
+        timeout: 10_000,
+        timeoutMsg: `The ${title} library card did not start presentation mode`
+      })
+      await browser.waitUntil(desktopWindowIsFullscreen, {
+        timeout: 10_000,
+        timeoutMsg: `The ${title} presentation did not enter native fullscreen`
+      })
+    } finally {
+      if (await browser.execute(() => document.body.classList.contains("presenting-deck"))) {
+        await $("#exit-presentation").click()
+        await browser.waitUntil(async () => browser.execute(() => !document.body.classList.contains("presenting-deck")), {
+          timeout: 5_000,
+          timeoutMsg: "The native presentation did not return to editing"
+        })
+      }
+      await browser.waitUntil(async () => !(await desktopWindowIsFullscreen()), {
+        timeout: 10_000,
+        timeoutMsg: "The native window did not exit fullscreen after presentation"
+      })
+    }
     await this.openLibrary()
   }
 
