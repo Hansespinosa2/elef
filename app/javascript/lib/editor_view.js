@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 5391)
-Total output lines: 308
-
 const EDITOR_VIEW = `
   <section class="editor-shell" aria-label="Visual editor">
     <header class="editor-shell-header">
@@ -95,7 +92,44 @@ const EDITOR_VIEW = `
         <div class="autosave-conflict" data-autosave-target="conflict" hidden role="status">
           <p data-autosave-target="conflictMessage">A newer version is active; your draft was preserved.</p>
           <details><summary>Compare with the active version</summary><pre data-autosave-target="serverSource"></pre></details>
-          <button type="button" data-action="click->autosave#keepLocal">Kee…391 tokens truncated… TypeError("Editor view needs a DOM container")
+          <button type="button" data-action="click->autosave#keepLocal">Keep local draft</button>
+          <button type="button" data-action="click->autosave#discardLocal">Discard local draft</button>
+        </div>
+        <span class="release-state" data-editor-view-target="releaseState" hidden></span>
+        <span class="dirty-state" data-preview-target="status" aria-live="polite"></span>
+        <button type="button" class="preview-retry" data-preview-target="retry" data-action="preview#retry" hidden>Retry preview</button>
+      </div>
+      <span class="presentation-editor-status" data-presentation-editor-target="status" aria-live="polite"></span>
+    </div>
+  </section>
+`
+
+const TARGET = "[data-editor-view-target]"
+
+export function installPreviewHtml(container, html) {
+  if (typeof globalThis.elefInstallDesktopPreview === "function") {
+    globalThis.elefInstallDesktopPreview(container, html)
+    return
+  }
+
+  const template = container.ownerDocument.createElement("template")
+  template.innerHTML = typeof html === "string" ? html : ""
+  container.replaceChildren(template.content)
+}
+
+export function mountEditorHosts(root = globalThis.document) {
+  if (!root) return
+  const hosts = root.querySelectorAll("[data-editor-view-config]")
+  for (const host of hosts) {
+    const config = JSON.parse(host.dataset.editorViewConfig)
+    renderEditorView(host, config)
+    const form = host.closest("form")
+    if (form && host.dataset.editorFormControllers) form.dataset.controller = host.dataset.editorFormControllers
+  }
+}
+
+export function renderEditorView(container, config) {
+  if (!container?.ownerDocument) throw new TypeError("Editor view needs a DOM container")
   if (!config || !["document", "presentation"].includes(config.kind)) throw new TypeError("Editor view needs a supported deck kind")
 
   const doc = container.ownerDocument
