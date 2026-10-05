@@ -121,3 +121,50 @@ test("a stranded stale preview offers retry when no replacement request remains"
     globalThis.CustomEvent = originalCustomEvent
   }
 })
+
+test("an aborted latest preview offers retry after its request handle is cleared", async () => {
+  const originalFetch = globalThis.fetch
+  const originalDocument = globalThis.document
+  const originalCustomEvent = globalThis.CustomEvent
+  let rejectResponse
+  const statusTarget = { textContent: "Updating preview…" }
+  const retryTarget = { hidden: true }
+  const warnings = []
+  const controller = new preview.default()
+  Object.assign(controller, {
+    element: { dispatchEvent() {}, querySelector: () => ({ editorController: { sourceValue: "# Notes" } }) },
+    containerTarget: { setAttribute() {} },
+    statusTarget,
+    retryTarget,
+    hasStatusTarget: true,
+    hasRetryTarget: true,
+    requestFields: [{ name: "document[source]", value: "# Notes" }],
+    requestId: 1,
+    active: true,
+    projectionFresh: false,
+    pendingProjection: null,
+    timer: null,
+    urlValue: "/documents/1/preview",
+    renderWarnings: values => warnings.push(...values)
+  })
+
+  globalThis.fetch = () => new Promise((_resolve, reject) => { rejectResponse = reject })
+  globalThis.document = { querySelector: () => null, activeElement: { closest: () => null } }
+  globalThis.CustomEvent = class { constructor(type, options) { this.type = type; this.options = options } }
+
+  try {
+    const request = controller.refresh(1)
+    await Promise.resolve()
+    controller.abortActiveRequest()
+    rejectResponse(Object.assign(new Error("Request aborted"), { name: "AbortError" }))
+
+    assert.equal(await request, undefined)
+    assert.equal(retryTarget.hidden, false)
+    assert.equal(statusTarget.textContent, "Preview unavailable")
+    assert.match(warnings.join(" "), /request stopped before it finished/i)
+  } finally {
+    globalThis.fetch = originalFetch
+    globalThis.document = originalDocument
+    globalThis.CustomEvent = originalCustomEvent
+  }
+})

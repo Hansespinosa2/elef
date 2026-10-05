@@ -154,26 +154,24 @@ export default class extends Controller {
       return false
     } finally {
       clearTimeout(timeout)
-      if (this.requestController === requestController) {
-        this.requestController = null
-        // An obsolete request can finish after its replacement was scheduled
-        // or discarded. If no work remains, don't leave the editor stuck in
-        // the updating state without a usable retry control.
-        if (
-          this.active &&
-          !this.projectionFresh &&
-          !this.pendingProjection &&
-          !this.timer &&
-          this.hasRetryTarget &&
-          this.retryTarget.hidden &&
-          this.hasStatusTarget &&
-          this.statusTarget.textContent === "Updating preview…"
-        ) {
-          this.renderWarnings(["The preview request stopped before it finished. Your source is still safe; retry the preview."])
-          this.containerTarget.setAttribute("aria-busy", "false")
-          this.showRetry()
-          this.setStatus("Preview unavailable")
-        }
+      if (this.requestController === requestController) this.requestController = null
+      // An aborted request can clear its controller before its fetch promise
+      // settles. If no replacement work remains, keep a retry path.
+      if (
+        this.active &&
+        !this.requestController &&
+        !this.projectionFresh &&
+        !this.pendingProjection &&
+        !this.timer &&
+        this.hasRetryTarget &&
+        this.retryTarget.hidden &&
+        this.hasStatusTarget &&
+        this.statusTarget.textContent === "Updating preview…"
+      ) {
+        this.renderWarnings(["The preview request stopped before it finished. Your source is still safe; retry the preview."])
+        this.containerTarget.setAttribute("aria-busy", "false")
+        this.showRetry()
+        this.setStatus("Preview unavailable")
       }
     }
   }
