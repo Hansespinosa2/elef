@@ -81,6 +81,7 @@ function sendNativeKey(key, { activate = true } = {}) {
     return
   }
   if (process.platform === "darwin") {
+    if (activate) focusDesktopWindow()
     const keyCode = macKeyCodes[key]
     if (keyCode === undefined) throw new Error(`Unsupported native key ${key}`)
     execFileSync("osascript", ["-e", `tell application "System Events" to key code ${keyCode}`], { timeout: 5_000 })
