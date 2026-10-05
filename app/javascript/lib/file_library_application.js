@@ -655,7 +655,7 @@ export function startFileLibraryApplication(platform) {
           : waitForEditorController(elements.editorField, editorFor))
         measureOpenStage("loadDocument", () => {
           editor.loadDocument(deck.source)
-          editor.setEditingMode("visual", { silent: true })
+          editor.setEditingMode("visual")
         })
       } catch (error) {
         elements.editorInput.disabled = true

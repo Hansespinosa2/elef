@@ -91,7 +91,7 @@ test("the Rails-owned application references elements present in its host templa
   assert.deepEqual(missing, [])
 })
 
-test("the desktop host defaults to Rails' Visual mode and gates it until preview renders", () => {
+test("the desktop host defaults to Rails' Visual mode and gates it until preview renders", async () => {
   const sourceForm = document.querySelector("#desktop-editor-form")
   assert.equal(sourceForm.dataset.editorMode, "visual")
   assert.equal(sourceForm.dataset.controller, undefined)
@@ -101,7 +101,9 @@ test("the desktop host defaults to Rails' Visual mode and gates it until preview
   assert.match(application, /sourceName: "presentation\[source\]"/)
   assert.match(application, /document\.body\.dataset\.desktopView = "editor"/)
   assert.match(application, /document\.body\.dataset\.desktopView = "library"/)
-  assert.match(application, /editor\.loadDocument\(deck\.source\)[\s\S]*?editor\.setEditingMode\("visual", \{ silent: true \}\)/)
+  assert.match(application, /editor\.loadDocument\(deck\.source\)[\s\S]*?editor\.setEditingMode\("visual"\)/)
+  const editorController = await read("app/javascript/controllers/editor_controller.js")
+  assert.match(editorController, /this\.form\?\.dispatchEvent\(new CustomEvent\("elef:editor-mode-change"/)
   assert.match(application, /theme: "dark"/)
   assert.match(application, /preview: deck => void openDeck\(deck\.id\)/)
   assert.match(application, /present: deck =>\s*\{[\s\S]*?startPresentation\(\)/)
