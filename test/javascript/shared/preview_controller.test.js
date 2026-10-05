@@ -30,6 +30,7 @@ test("preview timeout also bounds reading the JSON response body", async () => {
   const controller = new preview.default()
   Object.assign(controller, {
     element: {
+      dataset: {},
       dispatchEvent() {},
       querySelector: selector => selector === ".source-field" ? { editorController: { sourceValue: "# Notes" } } : null
     },
@@ -163,6 +164,93 @@ test("an aborted latest preview offers retry after its request handle is cleared
     assert.equal(statusTarget.textContent, "Preview unavailable")
     assert.match(warnings.join(" "), /request stopped before it finished/i)
   } finally {
+    globalThis.fetch = originalFetch
+    globalThis.document = originalDocument
+    globalThis.CustomEvent = originalCustomEvent
+  }
+})
+
+test("coalesces preview revisions behind the active render", async () => {
+  const originalFetch = globalThis.fetch
+  const originalDocument = globalThis.document
+  const originalCustomEvent = globalThis.CustomEvent
+  let source = "# First"
+  const sourceField = { name: "document[source]", value: source }
+  const requestBodies = []
+  const requestSignals = []
+  const resolveResponses = []
+  const installedSources = []
+  const statusTarget = { textContent: "Updating preview…" }
+  const retryTarget = { hidden: true }
+  const controller = new preview.default()
+  Object.assign(controller, {
+    element: {
+      dataset: {},
+      dispatchEvent() {},
+      querySelector: selector => selector === ".source-field"
+        ? { editorController: { get sourceValue() { return source } } }
+        : null
+    },
+    containerTarget: { setAttribute() {} },
+    statusTarget,
+    retryTarget,
+    hasStatusTarget: true,
+    hasRetryTarget: true,
+    requestFields: [sourceField],
+    requestId: 1,
+    active: true,
+    projectionFresh: false,
+    pendingProjection: null,
+    timer: null,
+    delayValue: 1,
+    timeoutValue: 1000,
+    urlValue: "/documents/1/preview",
+    renderWarnings() {},
+    installProjection: (_payload, _response, requestedSource) => {
+      installedSources.push(requestedSource)
+      controller.projectionFresh = true
+    }
+  })
+
+  globalThis.fetch = (_url, options) => {
+    requestBodies.push(options.body)
+    requestSignals.push(options.signal)
+    return new Promise(resolve => {
+      resolveResponses.push(payload => resolve({ ok: true, json: async () => payload }))
+    })
+  }
+  globalThis.document = { querySelector: () => null, activeElement: { closest: () => null } }
+  globalThis.CustomEvent = class { constructor(type, options) { this.type = type; this.options = options } }
+
+  try {
+    const firstRequest = controller.refresh(1)
+
+    source = "# Second"
+    sourceField.value = source
+    controller.schedule()
+    source = "# Latest"
+    sourceField.value = source
+    controller.schedule()
+    await new Promise(resolve => setTimeout(resolve, 10))
+
+    assert.equal(requestBodies.length, 1, "source changes started overlapping render requests")
+    assert.equal(requestSignals[0].aborted, false, "typing aborted work the backend may still be rendering")
+    assert.equal(controller.queuedRequestId, 3)
+
+    resolveResponses[0]({ html: "<p>First</p>", warnings: [] })
+    assert.equal(await firstRequest, false)
+    await new Promise(resolve => setTimeout(resolve, 0))
+
+    assert.equal(requestBodies.length, 2, "the newest source was not rendered after the active request settled")
+    assert.equal(requestBodies[1].get("document[source]"), "# Latest")
+    resolveResponses[1]({ html: "<p>Latest</p>", warnings: [] })
+    await new Promise(resolve => setTimeout(resolve, 0))
+
+    assert.deepEqual(installedSources, ["# Latest"])
+    assert.equal(controller.requestController, null)
+  } finally {
+    clearTimeout(controller.timer)
+    controller.abortActiveRequest()
     globalThis.fetch = originalFetch
     globalThis.document = originalDocument
     globalThis.CustomEvent = originalCustomEvent

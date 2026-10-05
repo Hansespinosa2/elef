@@ -16,6 +16,7 @@ export default class extends Controller {
     ]
     this.timer = null
     this.requestId = 0
+    this.queuedRequestId = null
     this.active = true
     this.pendingProjection = null
     this.projectionFresh = true
@@ -46,6 +47,7 @@ export default class extends Controller {
     clearTimeout(this.timer)
     this.timer = null
     this.abortActiveRequest()
+    this.queuedRequestId = null
     this.element.removeEventListener("focusout", this.focusoutHandler)
     this.element.removeEventListener("elef:live-preview-error", this.localPreviewError)
     this.element.removeEventListener("elef:live-preview-recovered", this.localPreviewRecovered)
@@ -55,7 +57,6 @@ export default class extends Controller {
   schedule() {
     clearTimeout(this.timer)
     this.timer = null
-    this.abortActiveRequest()
     this.pendingProjection = null
     const revision = ++this.requestId
     this.markProjectionStale(this.isEditingProjection())
@@ -81,7 +82,11 @@ export default class extends Controller {
 
   async refresh(requestId = this.requestId) {
     this.timer = null
-    this.abortActiveRequest()
+    if (this.requestController) {
+      if (this.active && requestId === this.requestId) this.queuedRequestId = requestId
+      return false
+    }
+    this.queuedRequestId = null
     const requestController = new AbortController()
     this.requestController = requestController
     let timedOut = false
@@ -155,9 +160,21 @@ export default class extends Controller {
     } finally {
       clearTimeout(timeout)
       if (this.requestController === requestController) this.requestController = null
-      // An aborted request can clear its controller before its fetch promise
-      // settles. If no replacement work remains, keep a retry path.
+      if (this.queuedRequestId !== this.requestId) this.queuedRequestId = null
       if (
+        this.active &&
+        !this.requestController &&
+        !this.timer &&
+        this.queuedRequestId === this.requestId
+      ) {
+        const queuedRequestId = this.queuedRequestId
+        this.queuedRequestId = null
+        queueMicrotask(() => {
+          if (this.active && !this.requestController && !this.timer && queuedRequestId === this.requestId) {
+            void this.refresh(queuedRequestId)
+          }
+        })
+      } else if (
         this.active &&
         !this.requestController &&
         !this.projectionFresh &&
@@ -168,6 +185,8 @@ export default class extends Controller {
         this.hasStatusTarget &&
         this.statusTarget.textContent === "Updating preview…"
       ) {
+        // If the latest request stopped before its handler settled, keep a retry
+        // path instead of leaving the stale preview in an updating state.
         this.renderWarnings(["The preview request stopped before it finished. Your source is still safe; retry the preview."])
         this.containerTarget.setAttribute("aria-busy", "false")
         this.showRetry()
