@@ -1202,10 +1202,10 @@ void completeBootstrap({
   },
   waitForEditor: async () => {
     await measureBootstrapStage("editor-runtime", () => loadDesktopEditorRuntime())
-    if (!elements.editorField.dataset.controller) configureEditorKind(false, [])
-    if (!elements.editorForm.dataset.controller) {
-      elements.editorForm.dataset.controller = "preview visual-editor presentation-editor slide-overview media presentation"
-    }
+    configureEditorKind(elements.editorField.closest(".editor-shell"), "presentation", {
+      showTitle: true,
+      formControllers: "preview visual-editor presentation-editor slide-overview media presentation"
+    })
     await measureBootstrapStage("editor-ready", () => waitForEditorController(elements.editorField, editorFor))
   },
   confirmReady: async () => {

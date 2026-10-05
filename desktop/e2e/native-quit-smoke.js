@@ -158,6 +158,11 @@ export async function runNativeQuitSmokes(env) {
             return {
               editorReady: field?.editorController?.editorReady ?? null,
               editorController: Boolean(field?.editorController),
+              editorFieldControllers: field?.dataset.controller || null,
+              editorFormControllers: document.querySelector('#desktop-editor-form')?.dataset.controller || null,
+              controllerErrors: globalThis.__elefE2EControllerErrors || [],
+              noticeText: document.querySelector('#notice')?.textContent || "",
+              stimulusIdentifiers: Object.keys(window.Stimulus?.controllers || {}),
               libraryViewHidden: document.querySelector('#library-view')?.hidden ?? null,
               targetFound: Boolean(target),
               nativeReadyAt: hooks?.nativeReadyAt || null,

@@ -40,6 +40,15 @@ test("desktop host page provides every element referenced by the app shell", () 
   assert.deepEqual(missing, [])
 })
 
+test("desktop restores shared editor controllers with the rendered root and a supported kind", () => {
+  const bootstrap = main.slice(main.indexOf('waitForEditor: async () => {'), main.indexOf('confirmReady: async () => {'))
+  assert.match(bootstrap, /configureEditorKind\(elements\.editorField\.closest\("\.editor-shell"\), "presentation"/)
+  assert.match(bootstrap, /formControllers: "preview visual-editor presentation-editor slide-overview media presentation"/)
+  assert.doesNotMatch(bootstrap, /configureEditorKind\(false|configureEditorKind\([^,]+,\s*\[\]/)
+  assert.ok(bootstrap.indexOf("loadDesktopEditorRuntime()") < bootstrap.indexOf("configureEditorKind("))
+  assert.ok(bootstrap.indexOf("configureEditorKind(") < bootstrap.indexOf('measureBootstrapStage("editor-ready"'))
+})
+
 test("the shell presents itself as Elef Desktop rather than a preview build", () => {
   assert.match(document.querySelector(".app-version").textContent, /^Elef Desktop · v\d/)
 })
