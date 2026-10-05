@@ -1,5 +1,6 @@
 import { Controller } from "@hotwired/stimulus"
 import { editorFor } from "lib/editor_controller_lookup"
+import { setProjectionBlockEditable } from "lib/projection_editability"
 import { markdownForVisibleText, renderInlineMath, sourceOffsetForVisiblePosition } from "controllers/editor_markdown"
 import {
   moveCaretBetweenBlocks,
@@ -586,23 +587,11 @@ export default class extends Controller {
     const active = preserveActive ? document.activeElement?.closest?.("[data-editor-block-id]") : null
     this.projectionTarget.querySelectorAll(".document-editor-block[data-editor-block-id]").forEach((block) => {
       const editable = visual && (fresh || (preserveActive && block === active))
-      block.contentEditable = String(editable)
-      if (editable) {
-        block.setAttribute("role", "textbox")
-        block.setAttribute("aria-label", "Editable Markdown block")
-        block.setAttribute("aria-multiline", "true")
-        block.setAttribute("spellcheck", "true")
-        block.removeAttribute("aria-readonly")
-      } else {
-        block.removeAttribute("role")
-        block.removeAttribute("aria-label")
-        block.removeAttribute("aria-multiline")
-        block.removeAttribute("spellcheck")
-        block.setAttribute("aria-readonly", "true")
-      }
+      setProjectionBlockEditable(block, editable, "Editable Markdown block")
     })
     this.projectionTarget.querySelectorAll("[data-visual-editor-block-id]").forEach((control) => {
-      control.disabled = !visual || !this.map
+      const disabled = !visual || !this.map
+      if (control.disabled !== disabled) control.disabled = disabled
     })
   }
 

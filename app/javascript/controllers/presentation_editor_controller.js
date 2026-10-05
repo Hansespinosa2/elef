@@ -1,6 +1,7 @@
 import { Controller } from "@hotwired/stimulus"
 import { editorFor } from "lib/editor_controller_lookup"
 import { markdownForVisibleText, renderInlineMath } from "controllers/editor_markdown"
+import { setProjectionBlockEditable } from "lib/projection_editability"
 import {
   moveCaretBetweenBlocks,
   pointAtVisibleOffset,
@@ -625,23 +626,12 @@ export default class extends Controller {
     this.element.querySelectorAll("[data-editor-block-id][data-editor-source-editable]").forEach((block) => {
       const sourceEditable = block.dataset.editorSourceEditable !== "false"
       const editable = sourceEditable && visual && (fresh || (preserveActive && block === active))
-      block.contentEditable = String(editable)
-      if (editable) {
-        block.setAttribute("role", "textbox")
-        block.setAttribute("aria-label", block.classList.contains("slide-title") ? "Editable slide title" : "Editable slide block")
-        block.setAttribute("aria-multiline", "true")
-        block.setAttribute("spellcheck", "true")
-        block.removeAttribute("aria-readonly")
-      } else {
-        block.removeAttribute("role")
-        block.removeAttribute("aria-label")
-        block.removeAttribute("aria-multiline")
-        block.removeAttribute("spellcheck")
-        block.setAttribute("aria-readonly", "true")
-      }
+      const label = block.classList.contains("slide-title") ? "Editable slide title" : "Editable slide block"
+      setProjectionBlockEditable(block, editable, label)
     })
     this.element.querySelectorAll("[data-presentation-editor-align]").forEach((control) => {
-      control.disabled = !visual || !this.map
+      const disabled = !visual || !this.map
+      if (control.disabled !== disabled) control.disabled = disabled
     })
   }
 
@@ -749,11 +739,11 @@ export default class extends Controller {
       }
 
       if (disabled) {
-        control.dataset.editorBoundaryDisabled = "true"
-        control.disabled = true
+        if (control.dataset.editorBoundaryDisabled !== "true") control.dataset.editorBoundaryDisabled = "true"
+        if (!control.disabled) control.disabled = true
       } else {
-        delete control.dataset.editorBoundaryDisabled
-        control.disabled = false
+        if (control.dataset.editorBoundaryDisabled !== undefined) delete control.dataset.editorBoundaryDisabled
+        if (control.disabled) control.disabled = false
       }
     })
   }

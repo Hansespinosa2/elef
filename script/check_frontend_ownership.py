@@ -127,6 +127,9 @@ for shared_module in (
     "authoring_settings_dialog", "save_flow", "title_save_flow",
 ):
     assert f'"lib/{shared_module}"' in desktop_main, f"desktop must consume app/javascript/lib/{shared_module}.js"
+assert '"lib/projection_editability"' in (ROOT / "app/javascript/controllers/presentation_editor_controller.js").read_text()
+assert '"lib/projection_editability"' in (ROOT / "app/javascript/controllers/visual_editor_controller.js").read_text()
+assert 'pin "lib/projection_editability", to: "lib/projection_editability.js"' in importmap
 assert all(path.is_file() for path in renderer_sources), "renderer source must stay under app/javascript"
 assert "desktop/" not in renderer_build, "Rails renderer generation must not reference desktop files"
 desktop_sources = ROOT / "desktop/frontend/src"
