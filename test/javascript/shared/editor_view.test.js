@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { parseHTML } from "linkedom"
-import { configureEditorKind, renderEditorView } from "../../../app/javascript/lib/editor_view.js"
+import { configureEditorKind, enableVisualModeAfterPreview, renderEditorView } from "../../../app/javascript/lib/editor_view.js"
 
 function mount(config) {
   const { document } = parseHTML("<form><div id='mount'></div></form>")
@@ -124,4 +124,23 @@ test("switching deck kinds updates the shared editor controls and controller tar
   assert.equal(root.querySelector("[data-editor-view-target='mediaInput']").getAttribute("accept"), "image/*,video/mp4")
   assert.equal(root.querySelector("[data-editor-view-target='slideOverview']").hidden, false)
   assert.equal(root.querySelector("[data-presentation-editor-target='status']").hidden, false)
+})
+
+test("a successful preview enables visual mode even when the original refresh call returned early", () => {
+  const { root } = mount({ kind: "presentation", mode: "source", visualDisabled: true })
+  const button = root.querySelector("[data-editor-target='visualButton']")
+
+  assert.equal(button.disabled, true)
+  assert.equal(enableVisualModeAfterPreview(root, { response: { ok: true }, payload: { html: "" } }), true)
+  assert.equal(button.disabled, false)
+  assert.equal(button.title, "Edit the rendered deck visually")
+})
+
+test("failed or incomplete previews leave visual mode disabled", () => {
+  const { root } = mount({ kind: "presentation", mode: "source", visualDisabled: true })
+  const button = root.querySelector("[data-editor-target='visualButton']")
+
+  assert.equal(enableVisualModeAfterPreview(root, { response: { ok: false }, payload: { html: "<p>partial</p>" } }), false)
+  assert.equal(enableVisualModeAfterPreview(root, { response: { ok: true }, payload: { html: null } }), false)
+  assert.equal(button.disabled, true)
 })

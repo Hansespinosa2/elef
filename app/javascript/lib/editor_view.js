@@ -287,6 +287,15 @@ export function configureEditorKind(root, kind, { documentTitles = [], sourceNam
   return root
 }
 
+export function enableVisualModeAfterPreview(root, detail) {
+  if (!detail?.response?.ok || typeof detail.payload?.html !== "string") return false
+  const button = root?.querySelector?.("[data-editor-target='visualButton']")
+  if (!button) return false
+  button.disabled = false
+  button.title = "Edit the rendered deck visually"
+  return true
+}
+
 function setPressed(button, pressed) {
   button.classList.toggle("is-active", pressed)
   button.setAttribute("aria-pressed", String(pressed))

@@ -1,5 +1,6 @@
 import { Controller } from "@hotwired/stimulus"
 import { editorFor } from "lib/editor_controller_lookup"
+import { enableVisualModeAfterPreview } from "lib/editor_view"
 import { setProjectionBlockEditable } from "lib/projection_editability"
 import { markdownForVisibleText, renderInlineMath, sourceOffsetForVisiblePosition } from "controllers/editor_markdown"
 import {
@@ -28,7 +29,10 @@ export default class extends Controller {
     this.element.addEventListener("elef:editor-ready", this.editorReady)
     this.modeChangedHandler = (event) => this.applyMode(event.detail.mode)
     this.element.addEventListener("elef:editor-mode-change", this.modeChangedHandler)
-    this.previewHandler = (event) => this.previewUpdated(event.detail.payload)
+    this.previewHandler = (event) => {
+      this.previewUpdated(event.detail.payload)
+      enableVisualModeAfterPreview(this.element, event.detail)
+    }
     this.element.addEventListener("elef:preview-updated", this.previewHandler)
     this.previewStaleHandler = (event) => this.previewStale(event.detail)
     this.element.addEventListener("elef:preview-stale", this.previewStaleHandler)

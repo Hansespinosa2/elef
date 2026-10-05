@@ -681,11 +681,7 @@ export function startFileLibraryApplication(platform) {
       document.querySelector("#breadcrumb-current").textContent = deck.name
       setStatus("Deck opened")
       if (viewSetupStartedAt !== null) recordOpenStage("deckViewSetup", viewSetupStartedAt)
-      const rendered = await measureOpenStage("previewRefresh", () => elements.editorForm.previewController?.refresh())
-      if (rendered) {
-        visualButton.disabled = false
-        visualButton.title = "Edit the rendered deck visually"
-      }
+      await measureOpenStage("previewRefresh", () => elements.editorForm.previewController?.refresh())
     } catch (error) {
       showError(error)
     }
