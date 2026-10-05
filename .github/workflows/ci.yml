@@ -225,16 +225,20 @@ jobs:
         # proc-macro-error and glib via GTK 0.18 (RUSTSEC-2024-0370, RUSTSEC-2024-0429),
         # and rand via Tauri selector (RUSTSEC-2026-0097). Remove each ignore when updated.
         run: cargo audit --file desktop/Cargo.lock --deny warnings --ignore RUSTSEC-2025-0057 --ignore RUSTSEC-2024-0370 --ignore RUSTSEC-2024-0429 --ignore RUSTSEC-2026-0097
-      - name: Test and bundle desktop frontend
-        run: |
-          bin/rails tailwindcss:build
-          git diff --exit-code -- app/assets/builds/tailwind.css
-          npm run renderer:build
-          npm run test:javascript
-          npm test --prefix desktop/frontend
-          npm run build --prefix desktop/frontend
+      - name: Build Rails Tailwind stylesheet
+        run: bin/rails tailwindcss:build
+      - name: Verify the Rails Tailwind artifact is current
+        run: git diff --exit-code -- app/assets/builds/tailwind.css
+      - name: Build the Rails-owned renderer
+        run: npm run renderer:build
       - name: Verify the Rails renderer bundle is current
         run: git diff --exit-code -- vendor/javascript/elef-renderer.bundle.js
+      - name: Test Rails-owned frontend modules
+        run: npm run test:javascript
+      - name: Test desktop frontend adapters
+        run: npm test --prefix desktop/frontend
+      - name: Bundle the desktop frontend
+        run: npm run build --prefix desktop/frontend
       - name: Check command allowlist and CSP
         run: |
           python3 desktop/scripts/check_architecture.py
@@ -333,16 +337,20 @@ jobs:
           npm audit --audit-level=high
           npm audit --prefix desktop/frontend --audit-level=high
           npm audit --prefix desktop/e2e --audit-level=high
-      - name: Test and bundle desktop frontend
-        run: |
-          bin/rails tailwindcss:build
-          git diff --exit-code -- app/assets/builds/tailwind.css
-          npm run renderer:build
-          npm run test:javascript
-          npm test --prefix desktop/frontend
-          npm run build --prefix desktop/frontend
+      - name: Build Rails Tailwind stylesheet
+        run: bin/rails tailwindcss:build
+      - name: Verify the Rails Tailwind artifact is current
+        run: git diff --exit-code -- app/assets/builds/tailwind.css
+      - name: Build the Rails-owned renderer
+        run: npm run renderer:build
       - name: Verify the Rails renderer bundle is current
         run: git diff --exit-code -- vendor/javascript/elef-renderer.bundle.js
+      - name: Test Rails-owned frontend modules
+        run: npm run test:javascript
+      - name: Test desktop frontend adapters
+        run: npm test --prefix desktop/frontend
+      - name: Bundle the desktop frontend
+        run: npm run build --prefix desktop/frontend
       - name: Check command allowlist and CSP
         run: |
           python3 desktop/scripts/check_architecture.py
