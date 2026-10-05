@@ -68,7 +68,10 @@ body.elef-app {
 .new-work-option:hover .new-work-arrow, .new-work-option:focus-visible .new-work-arrow { opacity: 1; transform: translateX(0); }
 .elef-app h1,
 .elef-app h2,
-.elef-app h3 { font-family: var(--oradia-serif); letter-spacing: -0.025em; }
+.elef-app h3,
+.library-shared-view h1,
+.library-shared-view h2,
+.library-shared-view h3 { font-family: var(--oradia-serif); letter-spacing: -0.025em; }
 .elef-app .eyebrow { color: var(--oradia-green) !important; }
 .elef-app .app-shell { max-width: 1440px; }
 .elef-app .source-pane,
@@ -102,13 +105,16 @@ body.elef-app {
 .elef-app .preview-heading p,
 .elef-app .dirty-state,
 .elef-app .text-\[\#6f675c\] { color: var(--oradia-muted) !important; }
-.elef-app .button:not(.primary) {
-  background: var(--oradia-slate-800) !important;
-  border-color: var(--oradia-slate-700) !important;
-  color: var(--oradia-ink) !important;
+.elef-app .button:not(.primary),
+.library-shared-view .button:not(.primary) {
+  background: var(--sidebar, var(--oradia-slate-800)) !important;
+  border-color: var(--line, var(--oradia-slate-700)) !important;
+  color: var(--ink, var(--oradia-ink)) !important;
 }
-.elef-app .button:not(.primary):hover { background: var(--oradia-slate-700) !important; }
-.elef-app .button.primary {
+.elef-app .button:not(.primary):hover,
+.library-shared-view .button:not(.primary):hover { background: var(--canvas, var(--oradia-slate-700)) !important; }
+.elef-app .button.primary,
+.library-shared-view .button.primary {
   background: var(--oradia-green-deep) !important;
   border-color: var(--oradia-green-deep) !important;
   color: #f5faf5 !important;

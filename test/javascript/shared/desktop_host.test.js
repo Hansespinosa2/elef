@@ -19,6 +19,7 @@ const [page, shellStyles, applicationStyles, application, bootstrap, editorRunti
   read("app/javascript/lib/library_view.js")
 ])
 const { document } = parseHTML(page)
+const emptyAction = page.match(/<template data-library-view-slot="empty-action">([\s\S]*?)<\/template>/)?.[1] || ""
 
 test("the desktop packages Rails-owned host markup and styles", () => {
   assert.deepEqual(
@@ -27,6 +28,8 @@ test("the desktop packages Rails-owned host markup and styles", () => {
   )
   assert.match(shellStyles, /\.app-frame\s*\{/)
   assert.match(shellStyles, /\.file-library-editor-form\s*\{/)
+  assert.match(shellStyles, /\.welcome-view h1, \.deck-view h1\s*\{/)
+  assert.doesNotMatch(shellStyles, /^h1\s*\{/m)
   assert.match(bootstrap, /app\/assets\/stylesheets\/application\.css/)
   assert.match(build, /app\/views\/desktop_host\.html/)
   assert.match(build, /app\/assets\/stylesheets\/file_library_host\.css/)
@@ -49,6 +52,10 @@ test("the desktop packages Rails-owned host markup and styles", () => {
   assert.match(applicationStyles, /\.library-shared-view \.search-box\s*\{[^}]*var\(--panel, var\(--oradia-slate-900\)\)/)
   assert.match(applicationStyles, /\.library-shared-view \.library-card\s*\{[^}]*background: var\(--panel,/)
   assert.match(applicationStyles, /\.library-shared-view \.library-card:hover\s*\{[^}]*border-color:.*!important/)
+  assert.match(applicationStyles, /\.library-shared-view h1,\s*\.library-shared-view h2,\s*\.library-shared-view h3\s*\{[^}]*font-family: var\(--oradia-serif\)/)
+  assert.match(applicationStyles, /\.library-shared-view \.button:not\(\.primary\)\s*\{[^}]*var\(--sidebar, var\(--oradia-slate-800\)\)/)
+  assert.match(emptyAction, /class="button primary inline-flex[^\"]+"/)
+  assert.match(applicationStyles, /\.library-shared-view \.button\.primary\s*\{/)
 })
 
 test("the native entry point only wires Tauri APIs into the Rails-owned application", () => {

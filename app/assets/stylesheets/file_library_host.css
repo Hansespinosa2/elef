@@ -84,7 +84,7 @@ button:disabled { opacity: .48; cursor: not-allowed; }
 .library-view, .deck-view { width: min(1050px, 100%); margin: 0 auto; padding: 51px 56px 80px; flex: 1; }
 .deck-view .deck-source-name { color: var(--muted); font-size: 13px; margin: 10px 0 0; }
 .native-eyebrow { color: var(--accent); font-size: 10px; font-weight: 760; letter-spacing: .15em; margin: 0 0 10px; }
-h1 { margin: 0; font-size: clamp(30px, 3vw, 39px); letter-spacing: -.055em; line-height: 1.12; font-weight: 620; }
+.welcome-view h1, .deck-view h1 { margin: 0; font-size: clamp(30px, 3vw, 39px); letter-spacing: -.055em; line-height: 1.12; font-weight: 620; }
 .statusbar { min-height: 33px; display: flex; justify-content: space-between; align-items: center; padding: 0 18px; border-top: 1px solid var(--line); background: var(--panel); color: var(--faint); font-size: 10px; }
 .status-right { color: var(--muted); }
 .welcome-view { flex: 1; display: grid; place-items: center; padding: 44px; }

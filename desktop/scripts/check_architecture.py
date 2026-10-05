@@ -45,6 +45,7 @@ shared_application_styles = (REPO_ROOT / "app" / "assets" / "stylesheets" / "app
 desktop_frontend_source = REPO_ROOT / "desktop" / "frontend" / "src"
 desktop_frontend_files = list(desktop_frontend_source.rglob("*"))
 assert not any(path.suffix.lower() in {".html", ".css"} for path in desktop_frontend_files), "desktop frontend must consume Rails-owned markup and styles, not own UI files"
+assert not re.search(r"(?m)(?:^|,)\s*h[1-6]\s*(?:,|\{)", native_render_styles), "desktop host heading rules must stay scoped away from shared view markup"
 desktop_dom_ui_patterns = (
     r"\bdocument\.(?:querySelector(?:All)?|getElementById|createElement|createTextNode|body|documentElement)\b",
     r"\b(?:innerHTML|outerHTML|insertAdjacentHTML|classList|textContent)\b",
@@ -79,6 +80,7 @@ host_styled_classes.discard("is-active")
 duplicate_library_styles = shared_library_classes & host_styled_classes
 assert not duplicate_library_styles, f"shared library UI classes must not be styled by the host stylesheet: {sorted(duplicate_library_styles)}"
 for shared_selector in (
+    ".library-shared-view h1",
     ".library-shared-view .library-card",
     ".library-shared-view .search-box",
     ".library-shared-view .library-card-preview",
