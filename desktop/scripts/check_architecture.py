@@ -129,8 +129,9 @@ assert {permission for permission in permissions if permission.startswith("core:
     "core:event:allow-unlisten",
     "core:window:allow-close",
     "core:window:allow-destroy",
+    "core:window:allow-set-fullscreen",
     "core:resources:allow-close",
-}, "grant only events, window close completion, and releasing updater resources"
+}, "grant only events, window close completion, presentation fullscreen, and releasing updater resources"
 assert "await this.destroy();" in (REPO_ROOT / "desktop/frontend/node_modules/@tauri-apps/api/window.js").read_text(), "recheck window permissions when the close-listener implementation changes"
 assert not any(permission.startswith(("fs:", "shell:", "dialog:")) for permission in permissions)
 assert config["app"]["security"]["capabilities"] == ["main-capability"], "production must not attach the E2E WebDriver capability"
@@ -140,6 +141,7 @@ assert set(e2e_capability["permissions"]) == {
     "wdio-webdriver:default",
     "updater:allow-download",
     "core:app:allow-version",
+    "core:window:allow-is-fullscreen",
 }, "only the test-only capability may expose WebdriverIO and fixture downloads"
 assert e2e_config["app"].get("withGlobalTauri") is True, "global Tauri access is enabled only for the test-only WebdriverIO build"
 assert config["app"].get("withGlobalTauri") is not True, "production must not expose the global Tauri API"
