@@ -149,7 +149,25 @@ export async function runNativeQuitSmokes(env) {
       assert.equal(await readFile(sourceFile, "utf8"), mode === "dirty" ? draft : mode === "conflict" ? external : original)
       process.stdout.write(`Native ${mode} Quit smoke passed.\n`)
     } catch (error) {
-      throw new Error(`Native ${mode} Quit while ${stage}: ${error.message}; process: ${JSON.stringify(exitResult)}; desktop output: ${output}`)
+      let frontendState = null
+      if (sessionId) {
+        try {
+          frontendState = await execute(`const field = document.querySelector('#desktop-editor-field');
+            const target = document.querySelector('[aria-label="Edit ${title}"]');
+            const hooks = window.__elefPerformanceTestHooks;
+            return {
+              editorReady: field?.editorController?.editorReady ?? null,
+              editorController: Boolean(field?.editorController),
+              libraryViewHidden: document.querySelector('#library-view')?.hidden ?? null,
+              targetFound: Boolean(target),
+              nativeReadyAt: hooks?.nativeReadyAt || null,
+              bootstrapStages: hooks?.bootstrapStages?.() || []
+            }`)
+        } catch (probeError) {
+          frontendState = { probeError: probeError.message }
+        }
+      }
+      throw new Error(`Native ${mode} Quit while ${stage}: ${error.message}; process: ${JSON.stringify(exitResult)}; frontend: ${JSON.stringify(frontendState)}; desktop output: ${output}`)
     } finally {
       if (!exitResult) {
         app.kill("SIGTERM")

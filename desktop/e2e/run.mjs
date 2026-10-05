@@ -236,6 +236,7 @@ try {
     updaterServer.once("error", reject)
     updaterServer.once("exit", code => reject(new Error(`Updater fixture server exited before readiness (${code})`)))
   }), 10_000, "Updater fixture server did not start")
+  if (process.env.CI) await runNativeQuitSmokes(env)
   const desktopResult = spawnSync(webdriverio, ["run", "wdio.conf.js"], {
     cwd: e2eRoot,
     env: {
@@ -246,7 +247,6 @@ try {
   })
   if (desktopResult.error) throw desktopResult.error
   if (desktopResult.status !== 0) throw new Error("Shared desktop scenarios failed with status " + desktopResult.status)
-  if (process.env.CI) await runNativeQuitSmokes(env)
   if (env.ELEF_E2E_PACKAGED_UPDATES === "1") {
     if (process.platform === "linux") await prepareInstalledAppImage()
     const upgradedResult = spawnSync(webdriverio, ["run", "wdio.conf.js"], {
