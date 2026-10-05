@@ -25,7 +25,7 @@ export function startFileLibraryApplication(platform) {
     completeBootstrap, createCloseFlow, createTransportAdapter, createMediaFetch,
     createPreviewFetch, checkForDesktopUpdate, createIdleUpdateCheck, installDesktopUpdate,
     desktopAuthoringRegistry, loadDesktopAuthoringRegistry,
-    loadDesktopEditorRuntime, loadDesktopLibraryRuntime
+    loadEditorRuntime, loadLibraryRuntime
   } = platform
 
   applyDesktopFeatureFlags(document)
@@ -449,7 +449,7 @@ export function startFileLibraryApplication(platform) {
   async function showDocumentGraph() {
     if (!library) return
     try {
-      await loadDesktopLibraryRuntime()
+      await loadLibraryRuntime()
       const graph = await documentGraphData()
       const previous = elements.graphView
       const graphView = previous.cloneNode(false)
@@ -603,7 +603,7 @@ export function startFileLibraryApplication(platform) {
           getRevision: () => saveFlow.revision,
           flushSave,
           prepare: deck => measureOpenStage("prepareDeck", async () => {
-            await loadDesktopEditorRuntime()
+            await loadEditorRuntime()
             let documentTitles = []
             if (deck.source_file === "document.md" || deck.source.includes("[[")) {
               try {
@@ -1195,7 +1195,7 @@ export function startFileLibraryApplication(platform) {
       if (__ELEF_E2E__) window.__elefPerformanceTestHooks.interactive()
     },
     waitForEditor: async () => {
-      await measureBootstrapStage("editor-runtime", () => loadDesktopEditorRuntime())
+      await measureBootstrapStage("editor-runtime", () => loadEditorRuntime())
       configureEditorKind(elements.editorField.closest(".editor-shell"), "presentation", {
         showTitle: true,
         formControllers: "preview visual-editor presentation-editor slide-overview media presentation"

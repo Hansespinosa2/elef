@@ -10,7 +10,7 @@ import { createMediaFetch } from "./media-transport.js"
 import { createPreviewFetch } from "./preview-transport.js"
 import { checkForDesktopUpdate, createIdleUpdateCheck, installDesktopUpdate } from "./update-flow.js"
 import { desktopAuthoringRegistry, loadDesktopAuthoringRegistry } from "./authoring-registry-loader.js"
-import { loadDesktopEditorRuntime, loadDesktopLibraryRuntime } from "./editor-runtime.js"
+import { loadEditorRuntime, loadLibraryRuntime } from "lib/editor_runtime"
 import { startFileLibraryApplication } from "lib/file_library_application"
 import "../../../app/assets/stylesheets/application.css"
 
@@ -31,6 +31,6 @@ startFileLibraryApplication({
   installDesktopUpdate,
   desktopAuthoringRegistry,
   loadDesktopAuthoringRegistry,
-  loadDesktopEditorRuntime,
-  loadDesktopLibraryRuntime
+  loadEditorRuntime,
+  loadLibraryRuntime
 })

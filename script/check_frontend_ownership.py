@@ -62,7 +62,7 @@ renderer_sources = (
     ROOT / "app/javascript/lib/document_map.js",
     ROOT / "app/javascript/lib/renderer_global.js",
 )
-editor_runtime = (ROOT / "desktop/frontend/src/editor-runtime.js").read_text()
+editor_runtime = (ROOT / "app/javascript/lib/editor_runtime.js").read_text()
 
 assert 'path.join(repoRoot, "app/views/desktop_host.html")' in build, "the Rails-owned host template must be packaged by the desktop build"
 assert 'path.join(repoRoot, "app/assets/stylesheets/file_library_host.css")' in build, "the Rails-owned host stylesheet must be packaged by the desktop build"
@@ -75,6 +75,7 @@ assert 'import "../../../app/assets/stylesheets/application.css"' in desktop_mai
 assert "startFileLibraryApplication" in desktop_main and "document.querySelector" not in desktop_main, (
     "the desktop entry point must only wire native services into the Rails-owned application"
 )
+assert 'from "lib/editor_runtime"' in desktop_main, "desktop must consume the Rails-owned Stimulus controller runtime"
 assert "@tauri-apps/" not in desktop_application and "desktop/" not in desktop_application, (
     "the Rails-owned file-library application must depend on injected host services, not desktop code"
 )
@@ -105,12 +106,21 @@ assert "extractFirstMarkdownHeading" in (ROOT / "app/javascript/lib/document_lin
 )
 authoring_settings_dialog = (ROOT / "app/javascript/lib/authoring_settings_dialog.js").read_text()
 assert '"./authoring_registry_write.js"' in authoring_settings_dialog, "authoring UI must use the app-owned persistence flow"
-assert '"controllers/presentation_controller"' in (ROOT / "desktop/frontend/src/editor-runtime.js").read_text(), (
-    "desktop must register the Rails-owned presentation controller"
+assert '"controllers/presentation_controller"' in editor_runtime, (
+    "the Rails-owned controller runtime must register the shared presentation controller"
 )
 assert "splitting: true" in build, "desktop must emit lazy ESM chunks instead of parsing every editor controller at launch"
 assert 'import("controllers/editor_controller")' in editor_runtime, "the heavy shared editor controller must load on demand"
 assert 'import("controllers/document_graph_controller")' in editor_runtime, "the shared graph controller must load on demand"
+assert '"lib/renderer_worker"' in (ROOT / "desktop/frontend/src/renderer-worker.js").read_text(), (
+    "desktop worker bootstrap must delegate renderer response behavior to app/javascript"
+)
+assert 'path.join(frontendRoot, "src/renderer-worker.js")' in build, (
+    "desktop must bundle its worker bootstrap with the shared app-owned worker behavior"
+)
+assert (ROOT / "test/javascript/shared/renderer_worker.test.js").is_file(), (
+    "shared renderer worker behavior must be tested under test/javascript"
+)
 assert '"presentation"' in desktop_application and "getControllerForElementAndIdentifier(elements.editorForm, \"presentation\")" in desktop_application, (
     "desktop presentation mode must delegate slide behavior to the Rails-owned controller"
 )
@@ -146,7 +156,6 @@ desktop_source_reasons = {
     "authoring-registry-loader.js": "loads the library's native authoring-registry commands",
     "bootstrap-flow.js": "orders native app startup and its readiness handshake",
     "close-flow.js": "coordinates native window close with the save transport",
-    "editor-runtime.js": "registers the shared Stimulus controllers in the desktop shell",
     "main.js": "boots the Rails-owned application with Tauri services and native lifecycle",
     "media-transport.js": "adapts browser media fetches to Tauri IPC and asset protocols",
     "preview-transport.js": "adapts the shared renderer to the desktop preview endpoint",

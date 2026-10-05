@@ -22,7 +22,7 @@ if (__ELEF_E2E__) {
 let editorRuntime
 let libraryRuntime
 
-export function loadDesktopEditorRuntime() {
+export function loadEditorRuntime() {
   if (!editorRuntime) {
     editorRuntime = loadKatex()
       .then(() => Promise.all([
@@ -71,7 +71,7 @@ export function loadDesktopEditorRuntime() {
   return editorRuntime
 }
 
-export function loadDesktopLibraryRuntime() {
+export function loadLibraryRuntime() {
   if (!libraryRuntime) {
     libraryRuntime = import("controllers/document_graph_controller")
       .then(({ default: controller }) => register("document-graph", controller))

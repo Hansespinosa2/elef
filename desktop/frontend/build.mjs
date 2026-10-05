@@ -11,6 +11,36 @@ const output = path.join(frontendRoot, e2eBuild ? "dist-e2e" : "dist")
 const assets = path.join(output, "assets")
 
 await mkdir(assets, { recursive: true })
+const appSourceAlias = {
+  name: "app-source-alias",
+  setup(context) {
+    context.onResolve({ filter: /^(?:controllers|lib)\// }, ({ path: importPath }) => ({
+      path: path.join(sharedFrontendRoot, `${importPath}.js`)
+    }))
+    context.onResolve({ filter: /^[^./]/ }, async (args) => {
+      if (args.pluginData?.desktopSharedDependencyResolution) return
+      const relativeImporter = path.relative(sharedFrontendRoot, args.importer)
+      if (relativeImporter.startsWith("..") || path.isAbsolute(relativeImporter)) return
+      if (args.path.startsWith("controllers/") || args.path.startsWith("lib/")) return
+
+      const result = await context.resolve(args.path, {
+        resolveDir: frontendRoot,
+        kind: args.kind,
+        pluginData: { desktopSharedDependencyResolution: true }
+      })
+      if (result.errors.length) {
+        const details = result.errors.map((error) => error.text).join("\n")
+        throw new Error(`Rails-owned frontend dependency ${args.path} is unavailable to the desktop build:\n${details}`)
+      }
+      const resolved = result.path
+      const relativeDependency = path.relative(path.join(frontendRoot, "node_modules"), resolved)
+      if (relativeDependency.startsWith("..") || path.isAbsolute(relativeDependency)) {
+        throw new Error(`Rails-owned frontend dependency ${args.path} must be declared by desktop/frontend/package.json.`)
+      }
+      return { path: resolved }
+    })
+  }
+}
 const frontendResult = await build({
   entryPoints: [path.join(frontendRoot, "src/main.js")],
   nodePaths: [path.join(frontendRoot, "node_modules")],
@@ -24,36 +54,7 @@ const frontendResult = await build({
   minify: true,
   metafile: true,
   define: { __ELEF_E2E__: JSON.stringify(e2eBuild) },
-  plugins: [{
-    name: "app-source-alias",
-    setup(context) {
-      context.onResolve({ filter: /^(?:controllers|lib)\// }, ({ path: importPath }) => ({
-        path: path.join(sharedFrontendRoot, `${importPath}.js`)
-      }))
-      context.onResolve({ filter: /^[^./]/ }, async (args) => {
-        if (args.pluginData?.desktopSharedDependencyResolution) return
-        const relativeImporter = path.relative(sharedFrontendRoot, args.importer)
-        if (relativeImporter.startsWith("..") || path.isAbsolute(relativeImporter)) return
-        if (args.path.startsWith("controllers/") || args.path.startsWith("lib/")) return
-
-        const result = await context.resolve(args.path, {
-          resolveDir: frontendRoot,
-          kind: args.kind,
-          pluginData: { desktopSharedDependencyResolution: true }
-        })
-        if (result.errors.length) {
-          const details = result.errors.map((error) => error.text).join("\n")
-          throw new Error(`Rails-owned frontend dependency ${args.path} is unavailable to the desktop build:\n${details}`)
-        }
-        const resolved = result.path
-        const relativeDependency = path.relative(path.join(frontendRoot, "node_modules"), resolved)
-        if (relativeDependency.startsWith("..") || path.isAbsolute(relativeDependency)) {
-          throw new Error(`Rails-owned frontend dependency ${args.path} must be declared by desktop/frontend/package.json.`)
-        }
-        return { path: resolved }
-      })
-    }
-  }]
+  plugins: [appSourceAlias]
 })
 
 // CodeMirror extensions use instanceof checks across package boundaries. A second
@@ -93,7 +94,17 @@ if (duplicates.length) {
 // Rails owns and builds the renderer. Desktop packages the exact same artifact.
 const rendererBundle = path.join(repoRoot, "vendor/javascript/elef-renderer.bundle.js")
 await copyFile(rendererBundle, path.join(assets, "renderer.bundle.js"))
-await copyFile(path.join(frontendRoot, "src/renderer-worker.js"), path.join(assets, "renderer-worker.js"))
+await build({
+  entryPoints: [path.join(frontendRoot, "src/renderer-worker.js")],
+  nodePaths: [path.join(frontendRoot, "node_modules")],
+  bundle: true,
+  external: ["./renderer.bundle.js"],
+  format: "esm",
+  target: "es2022",
+  outfile: path.join(assets, "renderer-worker.js"),
+  minify: true,
+  plugins: [appSourceAlias]
+})
 
 const indexHtml = await readFile(path.join(repoRoot, "app/views/desktop_host.html"), "utf8")
 if (e2eBuild) {

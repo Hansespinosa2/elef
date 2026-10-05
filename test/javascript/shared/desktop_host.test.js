@@ -12,7 +12,7 @@ const [page, shellStyles, application, bootstrap, editorRuntime, build, editorVi
   read("app/assets/stylesheets/file_library_host.css"),
   read("app/javascript/lib/file_library_application.js"),
   read("desktop/frontend/src/main.js"),
-  read("desktop/frontend/src/editor-runtime.js"),
+  read("app/javascript/lib/editor_runtime.js"),
   read("desktop/frontend/build.mjs"),
   read("app/javascript/lib/editor_view.js"),
   read("app/javascript/lib/library_view.js")
@@ -92,8 +92,9 @@ test("the file-backed host mounts the shared library view and graph", () => {
 })
 
 test("the Rails-owned application loads shared editor and graph controllers on demand", () => {
-  assert.match(application, /loadDesktopEditorRuntime\(\)/)
-  assert.match(application, /loadDesktopLibraryRuntime\(\)/)
+  assert.match(application, /loadEditorRuntime\(\)/)
+  assert.match(application, /loadLibraryRuntime\(\)/)
+  assert.match(bootstrap, /from "lib\/editor_runtime"/)
   assert.match(editorRuntime, /import\("controllers\/editor_controller"\)/)
   assert.match(editorRuntime, /import\("controllers\/document_graph_controller"\)/)
   assert.doesNotMatch(editorRuntime, /^import\s+\w+Controller\s+from\s+["']controllers\//m)
