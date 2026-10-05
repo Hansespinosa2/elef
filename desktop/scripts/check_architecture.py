@@ -41,10 +41,21 @@ renderer_worker = (REPO_ROOT / "desktop" / "frontend" / "src" / "renderer-worker
 desktop_main = (REPO_ROOT / "desktop" / "frontend" / "src" / "main.js").read_text()
 desktop_application = (REPO_ROOT / "app" / "javascript" / "lib" / "file_library_application.js").read_text()
 native_render_styles = (REPO_ROOT / "app" / "assets" / "stylesheets" / "file_library_host.css").read_text()
+shared_application_styles = (REPO_ROOT / "app" / "assets" / "stylesheets" / "application.css").read_text()
 assert 'import "../../../app/assets/stylesheets/application.css"' in desktop_main, "desktop must bundle Rails rendering and authoring styles"
 assert 'lib/performance_measurement' in desktop_application, "desktop performance UI must reuse the Rails-owned browser measurement helper"
 assert (REPO_ROOT / "desktop" / "frontend" / "src" / "performance-measurement.js").exists() is False, "desktop must not own a second performance measurement helper"
 assert not re.search(r"^\.(?:slide-frame|slide-content|presentation-surface|document-surface|katex)(?:\s|\{|:)", native_render_styles, re.MULTILINE), "the Rails-owned host stylesheet must not duplicate rendered-content styles"
+for shared_component in (".search-box", ".library-card-preview", ".deck-action", ".deck-warning", ".notice"):
+    assert shared_component not in native_render_styles, f"shared library component {shared_component!r} must not be styled by the host stylesheet"
+for shared_selector in (
+    ".library-shared-view .search-box",
+    ".library-shared-view .library-card-preview",
+    ".library-shared-view .deck-action",
+    ".library-shared-view .deck-warning",
+    ".library-shared-view .notice",
+):
+    assert shared_selector in shared_application_styles, f"shared library styles must be owned by application.css: {shared_selector}"
 web_card = (REPO_ROOT / "app" / "views" / "library" / "_work_card.html.erb").read_text()
 desktop_card = (REPO_ROOT / "app" / "javascript" / "lib" / "library_card.js").read_text()
 graph_view = (REPO_ROOT / "app" / "javascript" / "lib" / "document_graph_view.js").read_text()

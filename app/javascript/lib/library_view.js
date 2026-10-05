@@ -1,6 +1,6 @@
 const LIBRARY_VIEW = `
   <div class="library-shared-view">
-  <header class="library-hero page-heading mb-8 flex items-end justify-between gap-4 max-[920px]:flex-col max-[920px]:items-stretch">
+  <header class="library-hero mb-8 flex items-end justify-between gap-4 max-[920px]:flex-col max-[920px]:items-stretch">
     <div>
       <div class="library-kicker flex items-center gap-3">
         <p class="eyebrow mb-1 text-xs font-extrabold uppercase tracking-[0.12em] text-[#6d4aff]">Your workspace</p>
@@ -26,7 +26,7 @@ const LIBRARY_VIEW = `
     <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
     <section id="document-graph-view" class="document-graph-panel mt-8 rounded-2xl border border-[#ddd5c8] bg-[#fffdf8] p-5" hidden aria-labelledby="document-graph-heading"></section>
     <div data-library-view-slot="lineage"></div>
-    <section id="deck-list" class="library-list deck-list mt-8 grid gap-4" role="list" aria-label="Saved work"></section>
+    <section id="deck-list" class="library-list mt-8 grid gap-4" role="list" aria-label="Saved work"></section>
     <button id="library-load-more" class="button secondary library-load-more mt-6" type="button" aria-controls="deck-list" hidden>Load more decks</button>
     <div id="empty-library" class="empty-state flex items-center justify-between rounded-2xl border border-[#ddd5c8] bg-[#fffdf8] p-5 max-[920px]:flex-col max-[920px]:items-stretch" hidden>
       <div>
@@ -35,7 +35,7 @@ const LIBRARY_VIEW = `
       </div>
       <div data-library-view-slot="empty-action"></div>
     </div>
-    <p id="library-no-results" class="library-no-results no-results" data-library-search-target="noResults" role="status" hidden>No decks match this search.</p>
+    <p id="library-no-results" class="library-no-results" data-library-search-target="noResults" role="status" hidden>No decks match this search.</p>
   </section>
   </div>
 `

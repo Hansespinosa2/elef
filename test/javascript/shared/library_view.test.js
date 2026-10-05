@@ -20,6 +20,9 @@ test("both hosts receive one library header, search field, and three shared view
 
   assert.equal(document.querySelectorAll("#library-title").length, 1)
   assert.equal(document.querySelector("#library-title").textContent, "Library")
+  assert.equal(view.root.classList.contains("library-shared-view"), true)
+  assert.equal(view.root.querySelector("#deck-list").classList.contains("deck-list"), false)
+  assert.equal(view.root.querySelector("#library-no-results").classList.contains("no-results"), false)
   assert.equal(view.search.getAttribute("aria-label"), "Search decks")
   assert.equal(view.count.textContent, "4 works")
   assert.equal(view.browser.querySelector("#show-documents").getAttribute("aria-current"), "page")

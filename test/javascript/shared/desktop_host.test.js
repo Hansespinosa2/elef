@@ -7,9 +7,10 @@ import { parseHTML } from "linkedom"
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..")
 const read = relative => readFile(path.join(root, relative), "utf8")
-const [page, shellStyles, application, bootstrap, editorRuntime, build, editorView, libraryView] = await Promise.all([
+const [page, shellStyles, applicationStyles, application, bootstrap, editorRuntime, build, editorView, libraryView] = await Promise.all([
   read("app/views/desktop_host.html"),
   read("app/assets/stylesheets/file_library_host.css"),
+  read("app/assets/stylesheets/application.css"),
   read("app/javascript/lib/file_library_application.js"),
   read("desktop/frontend/src/main.js"),
   read("app/javascript/lib/editor_runtime.js"),
@@ -29,6 +30,11 @@ test("the desktop packages Rails-owned host markup and styles", () => {
   assert.match(bootstrap, /app\/assets\/stylesheets\/application\.css/)
   assert.match(build, /app\/views\/desktop_host\.html/)
   assert.match(build, /app\/assets\/stylesheets\/file_library_host\.css/)
+  assert.ok(document.querySelector("#library-view-mount").classList.contains("elef-app"))
+  for (const selector of [".search-box", ".library-card-preview", ".deck-action", ".deck-warning", ".notice"]) {
+    assert.ok(applicationStyles.includes(`.library-shared-view ${selector}`), `${selector} styles must be shared by Rails and desktop`)
+    assert.equal(shellStyles.includes(selector), false, `${selector} styles must not live in the desktop host stylesheet`)
+  }
 })
 
 test("the native entry point only wires Tauri APIs into the Rails-owned application", () => {
