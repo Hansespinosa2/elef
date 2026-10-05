@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { $, browser } from "@wdio/globals"
-import { readdir } from "node:fs/promises"
+import { lstat, readFile, readdir } from "node:fs/promises"
 import path from "node:path"
 
 describe("installed signed update", () => {
@@ -13,12 +13,39 @@ describe("installed signed update", () => {
     assert.equal(result.version, "0.2.0")
     assert.match(result.source, /^# Saved by shared scenario\n/)
     assert.match(result.source, /The visual editor changed this text\./)
-    const binary = process.env.ELEF_E2E_INSTALLED_ARTIFACT
-    const installationParent = process.platform === "darwin"
-      ? path.resolve(binary, "../../../..") : path.dirname(binary)
-    await browser.waitUntil(async () => {
-      const entries = await readdir(installationParent)
-      return !entries.some(name => name.startsWith(".elef-update-"))
-    }, { timeout: 10_000, timeoutMsg: "The launched replacement did not clean its previous installation backup" })
+    const binary = process.env.ELEF_E2E_APP_BINARY
+    const liveInstallation = process.platform === "darwin"
+      ? path.resolve(binary, "../../../") : process.env.ELEF_E2E_INSTALLED_ARTIFACT
+    const installationParent = path.dirname(liveInstallation)
+    try {
+      await browser.waitUntil(async () => {
+        const entries = await readdir(installationParent)
+        return !entries.some(name => name.startsWith(".elef-update-"))
+      }, { timeout: 10_000, timeoutMsg: "The launched replacement did not clean its previous installation backup" })
+    } catch (error) {
+      const remaining = (await readdir(installationParent)).filter(name => name.startsWith(".elef-update-"))
+      const diagnostics = await Promise.all(remaining.map(async name => {
+        const directory = path.join(installationParent, name)
+        try {
+          const receipt = JSON.parse(await readFile(path.join(directory, "activation.json"), "utf8"))
+          const locations = [
+            ["live", receipt.live],
+            ["previous", path.join(directory, path.basename(receipt.live))]
+          ]
+          const identities = await Promise.all(locations.map(async ([label, location]) => {
+            try {
+              const metadata = await lstat(location)
+              return { label, path: location, device: metadata.dev, inode: metadata.ino, uid: metadata.uid, mode: metadata.mode }
+            } catch (failure) {
+              return { label, path: location, error: failure.code }
+            }
+          }))
+          return JSON.stringify({ name, receipt, identities })
+        } catch (failure) {
+          return `${name}: ${failure.code || failure.message}`
+        }
+      }))
+      throw new Error(`${error.message}; remaining backups in ${installationParent}: ${diagnostics.join("; ") || "none"}`)
+    }
   })
 })
