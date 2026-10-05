@@ -129,7 +129,7 @@ async fn confirm_app_ready(
     app: AppHandle,
     window: tauri::WebviewWindow,
     state: State<'_, DesktopState>,
-) -> Result<(), CommandError> {
+) -> Result<usize, CommandError> {
     let url = window.url().map_err(|_| update_install_error())?;
     let local_origin = url.scheme() == "tauri" && url.host_str() == Some("localhost")
         || matches!(url.scheme(), "http" | "https") && url.host_str() == Some("tauri.localhost");
@@ -144,17 +144,23 @@ async fn confirm_app_ready(
         .app_ready
         .swap(true, std::sync::atomic::Ordering::AcqRel)
     {
-        return Ok(());
+        return Ok(0);
     }
-    if let Ok((live, _)) = installed_application(&app) {
+    let removed = if let Ok((live, _)) = installed_application(&app) {
         // Readiness is acknowledged only after successful frontend/editor boot.
         // Failure leaves the previous complete installation available.
-        let _ = tauri::async_runtime::spawn_blocking(move || {
+        match tauri::async_runtime::spawn_blocking(move || {
             elef_core::update_install::cleanup_previous_installation(&live)
         })
-        .await;
-    }
-    Ok(())
+        .await
+        {
+            Ok(Ok(removed)) => removed,
+            _ => 0,
+        }
+    } else {
+        0
+    };
+    Ok(removed)
 }
 
 struct UpdateLease<'a>(&'a std::sync::atomic::AtomicBool);

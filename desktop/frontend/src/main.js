@@ -306,10 +306,12 @@ function recordOpenStage(name, startedAt) {
 if (__ELEF_E2E__) {
   let interactiveAt = null
   let nativeReadyAt = null
+  let previousInstallationsRemoved = null
   Object.defineProperty(window, "__elefPerformanceTestHooks", {
     value: Object.freeze({
       get interactiveAt() { return interactiveAt },
       get nativeReadyAt() { return nativeReadyAt },
+      get previousInstallationsRemoved() { return previousInstallationsRemoved },
       bootstrapStages: () => bootstrapStages.map(stage => ({ ...stage })),
       navigationTiming() {
         const navigation = performance.getEntriesByType("navigation")[0]
@@ -322,7 +324,10 @@ if (__ELEF_E2E__) {
         }
       },
       interactive: () => { interactiveAt = performance.timeOrigin + performance.now() },
-      ready: () => { nativeReadyAt = performance.timeOrigin + performance.now() },
+      ready: removed => {
+        nativeReadyAt = performance.timeOrigin + performance.now()
+        previousInstallationsRemoved = removed
+      },
       async open(id) {
         const traceStart = globalThis.__elefPreviewTrace?.length || 0
         const openStageStart = openStageMeasurements.length
@@ -1204,8 +1209,8 @@ void completeBootstrap({
     await measureBootstrapStage("editor-ready", () => waitForEditorController(elements.editorField, editorFor))
   },
   confirmReady: async () => {
-    await measureBootstrapStage("native-ready-ack", () => invoke("confirm_app_ready"))
-    if (__ELEF_E2E__) window.__elefPerformanceTestHooks.ready()
+    const removed = await measureBootstrapStage("native-ready-ack", () => invoke("confirm_app_ready"))
+    if (__ELEF_E2E__) window.__elefPerformanceTestHooks.ready(removed)
     void invoke("pending_open_elef_count")
       .then(count => { if (count) void processOpenedFiles() })
       .catch(showError)
