@@ -828,6 +828,75 @@ class DesktopEditorUi {
 }
 
 class DesktopLibraryUi {
+  async previewWork(title) {
+    await this.openLibrary()
+    await $("#show-deck-list").click()
+    await $(`[aria-label='Preview ${title}']`).click()
+    await browser.waitUntil(async () => browser.execute(expected => {
+      const editor = document.querySelector("#desktop-editor-title")
+      const form = document.querySelector("#desktop-editor-form")
+      return editor?.value === expected && form?.dataset.editorMode === "visual"
+    }, title), {
+      timeout: 10_000,
+      timeoutMsg: `The ${title} card preview did not open its rendered Visual editor`
+    })
+    await this.openLibrary()
+  }
+
+  async presentWork(title) {
+    await this.openLibrary()
+    await $("#show-deck-list").click()
+    const started = await browser.execute(expected => {
+      const card = [...document.querySelectorAll(".library-card")]
+        .find(candidate => candidate.querySelector(".library-card-title")?.textContent.trim() === expected)
+      const button = [...(card?.querySelectorAll(".library-card-menu-options button") || [])]
+        .find(candidate => candidate.textContent.trim() === "Present")
+      button?.click()
+      return Boolean(button)
+    }, title)
+    if (!started) throw new Error(`The ${title} library card has no Present action`)
+    await browser.waitUntil(async () => browser.execute(() => document.body.classList.contains("presenting-deck")), {
+      timeout: 10_000,
+      timeoutMsg: `The ${title} library card did not start presentation mode`
+    })
+    await $("#exit-presentation").click()
+    await browser.waitUntil(async () => browser.execute(() => !document.body.classList.contains("presenting-deck")), {
+      timeout: 5_000,
+      timeoutMsg: "The native presentation did not return to editing"
+    })
+    await this.openLibrary()
+  }
+
+  async openWork(title) {
+    await this.openLibrary()
+    await $("#show-deck-list").click()
+    await $(`[aria-label='Edit ${title}']`).click()
+    await browser.waitUntil(async () => browser.execute(expected => {
+      const editor = document.querySelector("#desktop-editor-title")
+      const form = document.querySelector("#desktop-editor-form")
+      return editor?.value === expected && !document.querySelector("#deck-view")?.hidden && Boolean(form?.dataset.loadedDeckId)
+    }, title), {
+      timeout: 10_000,
+      timeoutMsg: `The ${title} deck did not open from its library card`
+    })
+  }
+
+  async showSourceMode() {
+    const source = await $("#source-mode")
+    if ((await source.getAttribute("aria-pressed")) !== "true") await source.click()
+    await browser.waitUntil(async () => (await $("#desktop-editor-form").getAttribute("data-editor-mode")) === "source", {
+      timeout: 5_000,
+      timeoutMsg: "The desktop source editor did not activate"
+    })
+  }
+
+  async assertVisualMode() {
+    await browser.waitUntil(async () => (await $("#desktop-editor-form").getAttribute("data-editor-mode")) === "visual", {
+      timeout: 5_000,
+      timeoutMsg: "Opening a deck from the library did not return to Rails' default Visual mode"
+    })
+  }
+
   async renameWork(title, newTitle) {
     let card
     for (const candidate of await $$(".library-card")) {

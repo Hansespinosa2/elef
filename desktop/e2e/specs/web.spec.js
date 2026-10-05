@@ -392,6 +392,45 @@ class WebLibraryUi {
     await this.page.goto("/")
   }
 
+  async previewWork(title) {
+    const card = this.page.locator("article.library-card").filter({
+      has: this.page.getByRole("heading", { name: title, exact: true })
+    })
+    await card.locator(".library-card-preview-button").click()
+    await expect(this.page.getByText("Saved preview", { exact: true })).toBeVisible()
+    await expect(this.page.getByRole("heading", { name: title, exact: true })).toBeVisible()
+    await this.page.getByRole("link", { name: "Edit", exact: true }).click()
+    await expect(this.page.locator(".visual-editor-form")).toBeVisible()
+    await this.openLibrary()
+  }
+
+  async presentWork(title) {
+    const card = this.page.locator("article.library-card").filter({
+      has: this.page.getByRole("heading", { name: title, exact: true })
+    })
+    await card.locator(".library-card-menu-trigger").click()
+    await card.getByRole("button", { name: "Present", exact: true }).click()
+    await expect(this.page.locator(".presentation-stage")).toBeVisible()
+    await this.openLibrary()
+  }
+
+  async openWork(title) {
+    const card = this.page.locator("article.library-card").filter({
+      has: this.page.getByRole("heading", { name: title, exact: true })
+    })
+    await card.locator(".library-card-title a").click()
+    await expect(this.page.locator(".visual-editor-form")).toBeVisible()
+  }
+
+  async showSourceMode() {
+    await this.page.locator('[data-editor-target="sourceButton"]').click()
+    await expect(this.page.locator(".visual-editor-form")).toHaveAttribute("data-editor-mode", "source")
+  }
+
+  async assertVisualMode() {
+    await expect(this.page.locator(".visual-editor-form")).toHaveAttribute("data-editor-mode", "visual")
+  }
+
   async assertAllWorkKindsVisible(presentationTitle, documentTitle) {
     await expect(this.page.getByRole("heading", { name: presentationTitle, exact: true })).toBeVisible()
     await expect(this.page.getByRole("heading", { name: documentTitle, exact: true })).toBeVisible()

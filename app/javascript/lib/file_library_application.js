@@ -150,7 +150,7 @@ export function startFileLibraryApplication(platform) {
   }
 
   let library = null
-  let libraryConfig = { schema_version: 1, theme: "system", hotkeys: {} }
+  let libraryConfig = { schema_version: 1, theme: "dark", hotkeys: {} }
   let decks = []
   let activeDeck = null
   let saveFlow = null
@@ -496,6 +496,12 @@ export function startFileLibraryApplication(platform) {
     }
     libraryListRenderer.render(filtered, deck => createLibraryCard(document, deck, {
       open: id => void openDeck(id),
+      preview: deck => void openDeck(deck.id),
+      present: deck => {
+        void openDeck(deck.id).then(opened => {
+          if (opened) void startPresentation()
+        })
+      },
       rename: (item, name) => void renameDeck(item, name).catch(showError),
       delete: item => void deleteDeck(item)
     }), { onAppend: cards => {
@@ -596,7 +602,7 @@ export function startFileLibraryApplication(platform) {
   async function openDeckNow(id) {
     try {
       if (document.body.classList.contains("presenting-deck")) await exitPresentation()
-      if (activeDeck && hasUnsavedChanges() && !(await flushSave())) return
+      if (activeDeck && hasUnsavedChanges() && !(await flushSave())) return false
       delete elements.editorForm.dataset.loadedDeckId
       let transition
       do {
@@ -622,8 +628,8 @@ export function startFileLibraryApplication(platform) {
         })
       } while (transition && (hasUnsavedChanges() || saveFlow.revision !== transition.revision))
       if (!transition) {
-        elements.editorForm.dataset.loadedDeckId = activeDeck.id
-        return
+        if (activeDeck) elements.editorForm.dataset.loadedDeckId = activeDeck.id
+        return false
       }
       const { deck, prepared: { documentTitles } } = transition
       const isDocument = deck.source_file === "document.md"
@@ -647,7 +653,10 @@ export function startFileLibraryApplication(platform) {
         const editor = await measureOpenStage("editorReady", () => editorFor(elements.editorField)?.editorReady
           ? editorFor(elements.editorField)
           : waitForEditorController(elements.editorField, editorFor))
-        measureOpenStage("loadDocument", () => editor.loadDocument(deck.source))
+        measureOpenStage("loadDocument", () => {
+          editor.loadDocument(deck.source)
+          editor.setEditingMode("visual", { silent: true })
+        })
       } catch (error) {
         elements.editorInput.disabled = true
         showLibrary()
@@ -686,8 +695,10 @@ export function startFileLibraryApplication(platform) {
       setStatus("Deck opened")
       if (viewSetupStartedAt !== null) recordOpenStage("deckViewSetup", viewSetupStartedAt)
       await measureOpenStage("previewRefresh", () => elements.editorForm.previewController?.refresh())
+      return true
     } catch (error) {
       showError(error)
+      return false
     }
   }
 

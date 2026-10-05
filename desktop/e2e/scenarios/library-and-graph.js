@@ -2,6 +2,8 @@ export async function libraryAndGraphWorkflow(ui) {
   await ui.openLibrary()
   await ui.assertAllWorkKindsVisible("E2E seed", "E2E document")
   await ui.assertCardPreview("E2E seed", "The visual editor changed this text.")
+  await ui.previewWork("E2E seed")
+  await ui.presentWork("E2E seed")
   await ui.renameWork("E2E seed", "E2E seed renamed")
   await ui.assertAllWorkKindsVisible("E2E seed renamed", "E2E document")
   await ui.renameWork("E2E seed renamed", "E2E seed")
@@ -20,4 +22,8 @@ export async function libraryAndGraphWorkflow(ui) {
   await ui.assertGraphDocumentsVisible(2, "E2E linked")
   await ui.openGraphDocument("E2E linked")
   await ui.assertDocumentOpened("E2E linked")
+  await ui.showSourceMode()
+  await ui.openLibrary()
+  await ui.openWork("E2E seed")
+  await ui.assertVisualMode()
 }

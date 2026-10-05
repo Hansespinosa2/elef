@@ -168,7 +168,7 @@ impl Default for LibraryConfig {
     fn default() -> Self {
         Self {
             schema_version: LIBRARY_CONFIG_SCHEMA_VERSION,
-            theme: "system".into(),
+            theme: "dark".into(),
             hotkeys: BTreeMap::new(),
         }
     }
@@ -2531,6 +2531,7 @@ mod tests {
     fn library_config_is_portable_and_validated() {
         let (temp, library) = library();
         assert_eq!(library.read_config().unwrap(), LibraryConfig::default());
+        assert_eq!(LibraryConfig::default().theme, "dark");
         let config = LibraryConfig {
             schema_version: 1,
             theme: "dark".into(),

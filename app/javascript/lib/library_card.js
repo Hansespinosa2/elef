@@ -58,6 +58,28 @@ export function createLibraryCard(document, deck, actions) {
     })
   }
 
+  const previewButton = document.createElement("button")
+  previewButton.className = "library-card-preview-button"
+  previewButton.type = "button"
+  previewButton.setAttribute("aria-label", `Preview ${deck.name}`)
+  previewButton.title = `Preview ${deck.name}`
+  const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg")
+  icon.setAttribute("viewBox", "0 0 24 24")
+  icon.setAttribute("fill", "none")
+  icon.setAttribute("stroke", "currentColor")
+  icon.setAttribute("stroke-width", "1.7")
+  icon.setAttribute("aria-hidden", "true")
+  const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle")
+  circle.setAttribute("cx", "12")
+  circle.setAttribute("cy", "12")
+  circle.setAttribute("r", "8.5")
+  const play = document.createElementNS("http://www.w3.org/2000/svg", "path")
+  play.setAttribute("d", "M10.2 8.9 15.6 12l-5.4 3.1V8.9Z")
+  icon.append(circle, play)
+  previewButton.append(icon)
+  previewButton.addEventListener("click", () => actions.preview(deck))
+  card.querySelector(".library-card-controls").prepend(previewButton)
+
   const menu = document.createElement("details")
   menu.className = "library-card-menu"
   const trigger = document.createElement("summary")
@@ -92,6 +114,15 @@ export function createLibraryCard(document, deck, actions) {
   })
   rename.append(form)
   options.append(rename)
+
+  if (deck.kind === "presentation") {
+    const present = document.createElement("button")
+    present.className = "deck-action"
+    present.type = "button"
+    present.textContent = "Present"
+    present.addEventListener("click", () => actions.present(deck))
+    options.append(present)
+  }
 
   const remove = document.createElement("button")
   remove.className = "deck-action danger is-danger"

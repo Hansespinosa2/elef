@@ -3,7 +3,7 @@ import test from "node:test"
 import { readFile } from "node:fs/promises"
 import vm from "node:vm"
 import { parseHTML } from "linkedom"
-import { renderLibraryCard } from "../../../app/javascript/lib/library_card.js"
+import { createLibraryCard, renderLibraryCard } from "../../../app/javascript/lib/library_card.js"
 
 const sandbox = vm.createContext({})
 vm.runInContext(await readFile(new URL("../../../vendor/javascript/elef-renderer.bundle.js", import.meta.url), "utf8"), sandbox)
@@ -31,4 +31,29 @@ test("library metadata remains inert and navigation stays local", () => {
   for (const editUrl of ["javascript:run()", "https://example.com", "//example.com"]) {
     assert.throws(() => renderLibraryCard({ ...properties, editUrl }), TypeError)
   }
+})
+
+test("desktop card actions match web preview and presentation entry points", () => {
+  const { document } = parseHTML("<main></main>")
+  const calls = []
+  const deck = { id: "pres-1", name: "A presentation", kind: "presentation", modified_ms: 0, warnings: [] }
+  const card = createLibraryCard(document, deck, {
+    open: id => calls.push(["edit", id]),
+    preview: item => calls.push(["preview", item.id]),
+    present: item => calls.push(["present", item.id]),
+    rename() {},
+    delete() {}
+  })
+
+  card.querySelector(".library-card-preview-button").click()
+  ;[...card.querySelectorAll(".library-card-menu-options button")]
+    .find(button => button.textContent === "Present")
+    .click()
+
+  assert.deepEqual(calls, [["preview", deck.id], ["present", deck.id]])
+  assert.equal(card.querySelector(".library-card-preview-button").getAttribute("aria-label"), "Preview A presentation")
+
+  const documentDeck = { ...deck, id: "doc-1", kind: "document" }
+  const documentCard = createLibraryCard(document, documentDeck, { open() {}, preview() {}, rename() {}, delete() {} })
+  assert.equal([...documentCard.querySelectorAll(".library-card-menu-options button")].some(button => button.textContent === "Present"), false)
 })
