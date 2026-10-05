@@ -411,7 +411,10 @@ class WebLibraryUi {
     await card.locator(".library-card-menu-trigger").click()
     await card.getByRole("button", { name: "Present", exact: true }).click()
     await expect(this.page.locator(".presentation-stage")).toBeVisible()
-    await this.openLibrary()
+    await this.page.getByRole("link", { name: "Exit", exact: true }).click()
+    await expect(this.page.getByText("Saved preview", { exact: true })).toBeVisible()
+    await this.page.getByRole("link", { name: "Library", exact: true }).click()
+    await expect(this.page.getByRole("heading", { name: title, exact: true })).toBeVisible()
   }
 
   async openWork(title) {
