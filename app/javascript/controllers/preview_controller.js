@@ -1,5 +1,6 @@
 import { Controller } from "@hotwired/stimulus"
 import { installPreviewHtml } from "lib/editor_view"
+import { buildPreviewRequestBody } from "lib/preview_request_body"
 
 export default class extends Controller {
   static targets = ["container", "warnings", "status", "retry"]
@@ -7,6 +8,12 @@ export default class extends Controller {
 
   connect() {
     this.element.previewController = this
+    this.requestFields = [
+      this.element.querySelector(".editor-input-proxy"),
+      this.element.querySelector(".editor-title-input"),
+      this.element.querySelector("[data-appearance-target='theme']"),
+      this.element.querySelector("[data-appearance-target='typography']")
+    ]
     this.timer = null
     this.requestId = 0
     this.active = true
@@ -72,11 +79,7 @@ export default class extends Controller {
     this.requestController = requestController
     let timedOut = false
     let timeout
-    const body = new FormData(this.element)
-    // Persisted Rails forms include _method=patch. Preview is deliberately a
-    // POST to a non-mutating endpoint, so do not let Rack method override it.
-    body.delete("_method")
-    body.delete("commit")
+    const body = buildPreviewRequestBody(this.requestFields)
     body.set("revision", requestId)
     body.set("projection", "editor")
     const sourceFieldName = [...body.keys()].find((name) => name.endsWith("[source]"))
