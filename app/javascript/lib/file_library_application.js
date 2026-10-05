@@ -73,7 +73,9 @@ export function startFileLibraryApplication(platform) {
       sourceMode: "source-mode",
       theme: "deck-theme",
       typography: "deck-typography",
-      preview: "desktop-preview"
+      preview: "desktop-preview",
+      saveState: "save-state",
+      retrySave: "retry-save"
     }
   })
   const editorFieldHost = document.querySelector("#desktop-editor-field")
@@ -1052,6 +1054,11 @@ export function startFileLibraryApplication(platform) {
 
   document.querySelector("#choose-library").addEventListener("click", () => void chooseLibrary())
   document.querySelector("#change-library").addEventListener("click", () => void chooseLibrary())
+  document.querySelector(".brand").addEventListener("click", event => {
+    event.preventDefault()
+    document.querySelector("#back-to-library").click()
+  })
+  document.querySelector("#open-settings").addEventListener("click", () => void showSettings())
   document.querySelector("#new-deck").addEventListener("click", () => {
     showCreateDialog(libraryTab === "documents" ? "document" : "presentation")
   })

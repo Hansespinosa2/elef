@@ -219,6 +219,13 @@ export function renderEditorView(container, config) {
   const saveButton = get("saveButton")
   saveButton.textContent = `Save ${label.toLowerCase()}`
   saveButton.hidden = config.showSubmit === false
+  const saveStatus = root.querySelector('[data-autosave-target="status"]')
+  if (ids.saveState) saveStatus.id = ids.saveState
+  const retryButton = root.querySelector('[data-autosave-target="retry"]')
+  if (ids.retrySave) {
+    retryButton.id = ids.retrySave
+    retryButton.removeAttribute("data-action")
+  }
   get("previewLink").hidden = !config.previewUrl
   if (config.previewUrl) get("previewLink").href = config.previewUrl
   const persisted = Boolean(config.persisted)

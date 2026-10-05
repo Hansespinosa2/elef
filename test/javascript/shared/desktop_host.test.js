@@ -26,9 +26,11 @@ test("the desktop packages Rails-owned host markup and styles", () => {
     Array.from(document.querySelectorAll("link[rel=stylesheet]"), link => link.getAttribute("href")),
     ["./assets/file_library_host.css", "./assets/tailwind.css", "./assets/katex.min.css", "./assets/app.css"]
   )
-  assert.match(shellStyles, /\.app-frame\s*\{/)
+  assert.match(document.querySelector(".desktop-app-header").className, /border-b/)
+  assert.match(document.querySelector(".brand").className, /no-underline/)
+  assert.match(shellStyles, /\.desktop-app-header \.app-header-inner\s*\{/)
   assert.match(shellStyles, /\.file-library-editor-form\s*\{/)
-  assert.match(shellStyles, /\.welcome-view h1, \.deck-view h1\s*\{/)
+  assert.match(shellStyles, /\.desktop-app-shell\s*\{[^}]*max-width: 1440px/)
   assert.doesNotMatch(shellStyles, /^h1\s*\{/m)
   assert.match(bootstrap, /app\/assets\/stylesheets\/application\.css/)
   assert.match(build, /app\/views\/desktop_host\.html/)
@@ -58,6 +60,16 @@ test("the desktop packages Rails-owned host markup and styles", () => {
   assert.match(applicationStyles, /\.library-shared-view \.button\.primary\s*\{/)
 })
 
+test("desktop uses the Rails app shell and shared editor width instead of a second visual layout", () => {
+  assert.equal(document.body.classList.contains("elef-app"), true)
+  assert.ok(document.querySelector("header.app-header.desktop-app-header"))
+  assert.ok(document.querySelector("main.app-shell.desktop-app-shell"))
+  assert.equal(document.querySelector(".sidebar, .topbar, .deck-detail-card"), null)
+  assert.ok(document.querySelector("#deck-view form.file-library-editor-form"))
+  assert.match(shellStyles, /--canvas: var\(--oradia-slate-950\)/)
+  assert.doesNotMatch(shellStyles, /\.library-shared-view|\.library-card\s*\{/)
+})
+
 test("the native entry point only wires Tauri APIs into the Rails-owned application", () => {
   assert.match(bootstrap, /startFileLibraryApplication\(/)
   assert.doesNotMatch(bootstrap, /document\.querySelector|innerHTML|\.textContent|\.classList/)
@@ -68,6 +80,7 @@ test("the Rails-owned application references elements present in its host templa
   const ids = new Set([...application.matchAll(/document\.querySelector\(["']#([\w-]+)/g)].map(match => match[1]))
   const dynamicallyRendered = new Set([
     "desktop-editor-field", "desktop-editor-title", "deck-source", "visual-mode", "desktop-preview", "library-count",
+    "save-state", "retry-save",
     "library-description", "library-search", "show-deck-list", "show-documents", "show-presentations",
     "notice", "document-graph-view", "deck-list", "library-load-more", "empty-library", "library-no-results"
   ])
@@ -89,8 +102,8 @@ test("the desktop host mounts the shared editor and gates visual editing until p
 })
 
 test("the editor discloses the remaining external-write race", () => {
-  assert.match(document.querySelector(".editor-help").textContent, /simultaneous write can still be overwritten during the final atomic replacement/i)
-  assert.match(document.querySelector(".editor-help").textContent, /sync tool's version history enabled/i)
+  assert.match(document.querySelector(".desktop-save-note").textContent, /simultaneous write in the final atomic replacement window can still be overwritten/i)
+  assert.match(document.querySelector(".desktop-save-note").textContent, /sync tool/i)
 })
 
 test("the host uses no inline event handlers under the strict script policy", () => {

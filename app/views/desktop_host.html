@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="color-scheme" content="light dark">
+    <meta name="color-scheme" content="dark light">
     <title>Elef</title>
     <link rel="stylesheet" href="./assets/file_library_host.css">
     <link rel="stylesheet" href="./assets/tailwind.css">
@@ -12,35 +12,31 @@
     <meta name="elef-mermaid-url" content="./assets/mermaid.min.js">
     <script type="module" src="./assets/app.js"></script>
   </head>
-  <body>
-    <div class="app-frame">
-      <aside class="sidebar" aria-label="Library navigation">
-        <a class="brand" href="#library" aria-label="Elef Library">
-          <span class="brand-mark" aria-hidden="true">e</span>
-          <span>elef</span>
-        </a>
-        <div class="sidebar-section-label">YOUR LIBRARY</div>
-        <div class="library-switcher">
-          <span class="library-icon" aria-hidden="true">▧</span>
+  <body class="elef-app">
+    <header class="app-header sticky top-0 z-10 border-b border-[#ddd5c8] px-[clamp(1rem,4vw,3rem)] py-4 desktop-app-header">
+      <div class="app-header-inner mx-auto flex max-w-[1440px] flex-wrap items-center gap-8">
+        <div class="app-header-identity">
+          <a class="brand font-extrabold tracking-[-0.04em] no-underline" href="#library" aria-label="Elef Library">Elef</a>
+        </div>
+        <nav class="app-nav" aria-label="Primary">
+          <button id="back-to-library" class="app-nav-link is-active" type="button">Library</button>
+          <button id="open-settings" class="app-nav-link" type="button">Settings</button>
+        </nav>
+        <div class="desktop-library-location">
           <span id="library-name">No library selected</span>
-          <button id="change-library" class="icon-button" type="button" aria-label="Choose library folder" title="Choose library folder">⌄</button>
+          <button id="change-library" class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" type="button" aria-label="Choose library folder" title="Choose library folder">Change</button>
         </div>
-        <div class="sidebar-bottom">
-          <span class="offline-indicator"><span></span> Available offline</span>
-          <span class="app-version">Elef Desktop · v0.1.0</span>
+        <div class="desktop-header-actions" aria-label="Library actions">
+          <button id="refresh-library" class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" type="button">Refresh</button>
+          <button id="check-for-updates" class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" type="button">Check for updates</button>
+          <button id="import-elef" class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" type="button" disabled>Import .elef</button>
+          <button id="new-deck" class="button primary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" type="button" disabled>＋ New work</button>
         </div>
-      </aside>
+        <span id="breadcrumb-current" class="sr-only">Decks</span>
+      </div>
+    </header>
 
-      <main class="main-area">
-        <header class="topbar">
-          <div class="breadcrumbs"><span>Library</span><span aria-hidden="true">/</span><strong id="breadcrumb-current">Decks</strong></div>
-          <div class="topbar-actions">
-            <button id="refresh-library" class="quiet-button" type="button">Refresh</button>
-            <button id="check-for-updates" class="quiet-button" type="button">Check for updates</button>
-            <button id="import-elef" class="quiet-button" type="button" disabled>Import .elef</button>
-            <button id="new-deck" class="primary-button" type="button" disabled><span aria-hidden="true">＋</span> New deck</button>
-          </div>
-        </header>
+    <main class="app-shell mx-auto max-w-[1440px] p-[clamp(1rem,4vw,3rem)] desktop-app-shell">
 
         <section id="welcome-view" class="welcome-view" aria-labelledby="welcome-title" hidden>
           <div class="welcome-card">
@@ -48,7 +44,7 @@
             <p class="native-eyebrow">YOUR WORK, IN PLAIN FILES</p>
             <h1 id="welcome-title">A quiet place for your ideas.</h1>
             <p class="welcome-copy">Choose a folder for your Elef library. Your decks stay on disk and work offline.</p>
-            <button id="choose-library" class="primary-button large-button" type="button">Choose a library folder <span aria-hidden="true">→</span></button>
+            <button id="choose-library" class="button primary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold large-button" type="button">Choose a library folder <span aria-hidden="true">→</span></button>
             <p class="welcome-footnote">No account. No server. Just your folders.</p>
           </div>
         </section>
@@ -60,32 +56,22 @@
         </section>
 
         <section id="deck-view" class="deck-view" hidden aria-labelledby="deck-title">
-          <button id="back-to-library" class="back-link" type="button"><span aria-hidden="true">←</span> All decks</button>
-          <div class="deck-detail-card">
-            <div class="deck-detail-icon" aria-hidden="true">▤</div>
-            <p id="deck-kind" class="native-eyebrow">PRESENTATION</p>
-            <h1 id="deck-title">Deck</h1>
-            <p id="deck-source-name" class="deck-source-name"></p>
-            <div class="detail-divider"></div>
-            <div class="editor-heading">
-              <p class="detail-label">Markdown source</p>
-              <span id="save-state" class="save-state" role="status">Saved</span>
-            </div>
-            <form id="desktop-editor-form" class="visual-editor-form file-library-editor-form" data-action="input->preview#schedule change->preview#schedule input->slide-overview#sourceChanged change->slide-overview#sourceChanged preview:updated->slide-overview#previewUpdated" data-preview-url-value="elef-preview://localhost/" data-preview-timeout-value="4000" data-media-enabled-value="false" data-media-work-kind-value="presentation" data-editor-mode="source">
-              <div id="desktop-editor-mount"></div>
-              <button id="exit-presentation" class="presentation-mode-exit" type="button" hidden>Exit presentation <kbd>Esc</kbd></button>
-            </form>
-            <p class="editor-help">Changes save automatically. Undo is available while this deck stays open. External edits are checked before each save, but a simultaneous write can still be overwritten during the final atomic replacement. Keep your sync tool's version history enabled.</p>
-            <button id="retry-save" class="quiet-button" type="button" hidden>Retry save</button>
-            <button id="restore-local-draft" class="quiet-button restore-draft" type="button" hidden>Restore discarded local draft</button>
-            <p id="deck-notice" class="deck-notice" hidden></p>
-            <div class="detail-footer"><span id="deck-id" class="deck-id"></span><span class="editing-placeholder">Markdown source · stored as a plain file in this deck folder</span></div>
-          </div>
+          <h1 id="deck-title" class="sr-only">Deck</h1>
+          <span id="deck-kind" class="sr-only">PRESENTATION</span>
+          <span id="deck-source-name" class="sr-only"></span>
+          <span id="deck-id" class="sr-only"></span>
+          <p id="deck-notice" class="notice" role="status" hidden></p>
+          <p class="desktop-save-note">External edits are checked before every save. A simultaneous write in the final atomic replacement window can still be overwritten; keep version history enabled in your sync tool.</p>
+          <form id="desktop-editor-form" class="visual-editor-form file-library-editor-form" data-action="input->preview#schedule change->preview#schedule input->slide-overview#sourceChanged change->slide-overview#sourceChanged preview:updated->slide-overview#previewUpdated" data-preview-url-value="elef-preview://localhost/" data-preview-timeout-value="4000" data-media-enabled-value="false" data-media-work-kind-value="presentation" data-editor-mode="source">
+            <div id="desktop-editor-mount"></div>
+            <button id="restore-local-draft" class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold restore-draft" type="button" hidden>Restore discarded local draft</button>
+            <button id="exit-presentation" class="presentation-mode-exit" type="button" hidden>Exit presentation <kbd>Esc</kbd></button>
+          </form>
         </section>
 
-        <footer class="statusbar"><span id="status-text">Ready</span><span class="status-right">Folders are the source of truth</span></footer>
-      </main>
-    </div>
+    </main>
+
+    <footer class="statusbar" role="status"><span id="status-text" aria-live="polite">Ready</span><span class="status-right">Folders are the source of truth</span></footer>
 
     <dialog id="create-dialog" class="app-dialog">
       <form id="create-form" method="dialog">
@@ -95,7 +81,7 @@
         <input id="new-deck-name" name="name" required maxlength="120" autocomplete="off" placeholder="A clear, memorable title">
         <label for="new-deck-kind">Format</label>
         <select id="new-deck-kind" name="kind"><option value="presentation">Presentation</option><option value="document">Document</option></select>
-        <div class="dialog-actions"><button class="quiet-button" value="cancel">Cancel</button><button id="create-submit" class="primary-button" value="create">Create deck</button></div>
+        <div class="dialog-actions"><button class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" value="cancel">Cancel</button><button id="create-submit" class="button primary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" value="create">Create deck</button></div>
       </form>
     </dialog>
     <dialog id="settings-dialog" class="app-dialog">
@@ -104,8 +90,8 @@
         <h2>Appearance</h2>
         <label for="library-theme">Theme</label>
         <select id="library-theme" name="theme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select>
-        <button id="manage-authoring" class="quiet-button authoring-settings-link" type="button">Manage snippets and math shortcuts</button>
-        <div class="dialog-actions"><button class="quiet-button" value="cancel">Cancel</button><button class="primary-button" value="save">Save settings</button></div>
+        <button id="manage-authoring" class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold authoring-settings-link" type="button">Manage snippets and math shortcuts</button>
+        <div class="dialog-actions"><button class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" value="cancel">Cancel</button><button class="button primary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" value="save">Save settings</button></div>
       </form>
     </dialog>
     <dialog id="authoring-settings-dialog" class="app-dialog authoring-dialog" aria-labelledby="authoring-settings-title">
@@ -114,13 +100,13 @@
         <h2 id="authoring-settings-title">Snippets</h2>
         <p class="authoring-settings-copy">Personal entries are saved in this library’s <code>.elef/</code> folder and are available in the editor palettes. Built-in entries remain available and read-only.</p>
         <div class="authoring-settings-tabs" role="group" aria-label="Authoring settings">
-          <button class="quiet-button is-active" type="button" data-authoring-tab="snippets" aria-pressed="true">Snippets</button>
-          <button class="quiet-button" type="button" data-authoring-tab="math_shortcuts" aria-pressed="false">Math shortcuts</button>
+          <button class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold is-active" type="button" data-authoring-tab="snippets" aria-pressed="true">Snippets</button>
+          <button class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" type="button" data-authoring-tab="math_shortcuts" aria-pressed="false">Math shortcuts</button>
         </div>
         <p id="authoring-settings-status" class="authoring-settings-status" role="status" aria-live="polite"></p>
         <div class="authoring-settings-heading">
           <p id="authoring-settings-count" class="dialog-copy"></p>
-          <button id="new-authoring-entry" class="primary-button" type="button">New snippet</button>
+          <button id="new-authoring-entry" class="button primary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" type="button">New snippet</button>
         </div>
         <div id="authoring-settings-list" class="authoring-settings-list"></div>
         <p id="authoring-settings-empty" class="dialog-copy" hidden>No personal entries yet. Built-in entries remain available in the editor.</p>
@@ -152,11 +138,11 @@
             <textarea id="authoring-expansion" name="expansion" maxlength="20000" rows="4" required></textarea>
           </fieldset>
           <div class="dialog-actions">
-            <button id="cancel-authoring-entry" class="quiet-button" type="button">Cancel</button>
-            <button id="save-authoring-entry" class="primary-button" type="submit">Save snippet</button>
+            <button id="cancel-authoring-entry" class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" type="button">Cancel</button>
+            <button id="save-authoring-entry" class="button primary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" type="submit">Save snippet</button>
           </div>
         </form>
-        <div class="dialog-actions"><button id="close-authoring-settings" class="quiet-button" type="button">Close</button></div>
+        <div class="dialog-actions"><button id="close-authoring-settings" class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" type="button">Close</button></div>
       </div>
     </dialog>
     <dialog id="delete-authoring-dialog" class="app-dialog" aria-labelledby="delete-authoring-title">
@@ -165,8 +151,8 @@
         <h2 id="delete-authoring-title">Delete personal entry?</h2>
         <p id="delete-authoring-message" class="dialog-copy"></p>
         <div class="dialog-actions">
-          <button id="cancel-authoring-delete" class="quiet-button" type="button">Cancel</button>
-          <button id="confirm-authoring-delete" class="primary-button" type="button">Delete entry</button>
+          <button id="cancel-authoring-delete" class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" type="button">Cancel</button>
+          <button id="confirm-authoring-delete" class="button primary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" type="button">Delete entry</button>
         </div>
       </div>
     </dialog>
@@ -177,9 +163,9 @@
         <p id="import-conflict-message" class="dialog-copy"></p>
         <p class="dialog-copy">Replace moves the current folder to Trash. Keep both assigns the imported copy a new identity.</p>
         <div class="dialog-actions">
-          <button id="import-conflict-cancel" class="quiet-button" type="button">Cancel</button>
-          <button id="import-conflict-keep-both" class="quiet-button" type="button">Keep both</button>
-          <button id="import-conflict-replace" class="primary-button" type="button">Replace</button>
+          <button id="import-conflict-cancel" class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" type="button">Cancel</button>
+          <button id="import-conflict-keep-both" class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" type="button">Keep both</button>
+          <button id="import-conflict-replace" class="button primary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" type="button">Replace</button>
         </div>
       </form>
     </dialog>
@@ -191,8 +177,8 @@
         <pre id="update-notes" class="update-notes"></pre>
         <p id="update-progress" class="dialog-copy" role="status" aria-live="polite"></p>
         <div class="dialog-actions">
-          <button id="update-later" class="quiet-button" type="button">Later</button>
-          <button id="install-update" class="primary-button" type="button">Install and relaunch</button>
+          <button id="update-later" class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" type="button">Later</button>
+          <button id="install-update" class="button primary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" type="button">Install and relaunch</button>
         </div>
       </div>
     </dialog>
@@ -201,7 +187,7 @@
         <p class="native-eyebrow">ABOUT ELEF</p>
         <h2>Elef Desktop</h2>
         <p>Offline-first notes and presentations, stored as folders you own.</p>
-        <div class="dialog-actions"><button class="primary-button" value="close">Close</button></div>
+        <div class="dialog-actions"><button class="button primary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" value="close">Close</button></div>
       </form>
     </dialog>
     <dialog id="conflict-dialog" class="app-dialog conflict-dialog" aria-labelledby="conflict-title">
@@ -216,9 +202,9 @@
         <label class="merge-label" for="conflict-merge">Merged version</label>
         <textarea id="conflict-merge" class="conflict-merge" spellcheck="false" aria-label="Merged Markdown version"></textarea>
         <div class="dialog-actions conflict-actions">
-          <button id="use-disk-version" class="quiet-button" type="button">Use disk version</button>
-          <button id="save-merged-version" class="quiet-button" type="button">Save merged version</button>
-          <button id="keep-local-version" class="primary-button" type="button">Keep my edits</button>
+          <button id="use-disk-version" class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" type="button">Use disk version</button>
+          <button id="save-merged-version" class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" type="button">Save merged version</button>
+          <button id="keep-local-version" class="button primary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" type="button">Keep my edits</button>
         </div>
       </div>
     </dialog>

@@ -27,7 +27,10 @@ test("shared editor view exposes the same editing controls and targets to both h
     slideCount: 3,
     previewHtml: "<article class='slide'>Rendered by the shared renderer</article>",
     editorMap: { slides: [{ id: "slide-1" }] },
-    ids: { field: "presentation_source_field", source: "presentation_source", surface: "presentation_source_editor", label: "presentation_source_editor_label" }
+    ids: {
+      field: "presentation_source_field", source: "presentation_source", surface: "presentation_source_editor",
+      label: "presentation_source_editor_label", saveState: "save-state", retrySave: "retry-save"
+    }
   })
 
   assert.ok(root.querySelector(".editor-toolbar"))
@@ -45,6 +48,9 @@ test("shared editor view exposes the same editing controls and targets to both h
   assert.equal(root.querySelector("[data-editor-map-json]").textContent, '{"slides":[{"id":"slide-1"}]}')
   assert.equal(root.querySelector("[data-editor-target='visualButton']").getAttribute("aria-pressed"), "true")
   assert.equal(root.querySelector("[data-editor-target='sourceButton']").getAttribute("aria-pressed"), "false")
+  assert.equal(root.querySelector("[data-autosave-target='status']").id, "save-state")
+  assert.equal(root.querySelector("[data-autosave-target='retry']").id, "retry-save")
+  assert.equal(root.querySelector("[data-autosave-target='retry']").hasAttribute("data-action"), false)
 })
 
 test("shared editor view configures document-only links and media controls", () => {
