@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { checkForDesktopUpdate, installDesktopUpdate } from "../src/update-flow.js"
+import { checkForDesktopUpdate, createIdleUpdateCheck, installDesktopUpdate } from "../src/update-flow.js"
 
 test("update checks distinguish no update from an announced available update", async () => {
   assert.equal(await checkForDesktopUpdate(async () => null), null)
@@ -55,4 +55,42 @@ test("verified updates relaunch after download and installation", async () => {
     installDesktopUpdate(null, { relaunch: async () => {} }),
     error => error.code === "invalid_input"
   )
+})
+
+test("startup update checks wait until the editor is idle and run once", async () => {
+  let busy = true
+  let runTimer
+  let scheduledDelay
+  let checks = 0
+  const updateCheck = createIdleUpdateCheck(async () => { checks += 1 }, () => busy, {
+    setTimer(callback, delay) {
+      runTimer = callback
+      scheduledDelay = delay
+      return 1
+    },
+    clearTimer() { runTimer = null }
+  })
+
+  updateCheck.schedule(10_000)
+  assert.equal(scheduledDelay, 10_000)
+  runTimer()
+  assert.equal(checks, 0)
+  busy = false
+  assert.equal(await updateCheck.resume(), true)
+  assert.equal(await updateCheck.resume(), false)
+  assert.equal(checks, 1)
+})
+
+test("manual update checks cancel a pending startup check", () => {
+  let runTimer
+  let checks = 0
+  const updateCheck = createIdleUpdateCheck(async () => { checks += 1 }, () => false, {
+    setTimer(callback) { runTimer = callback; return 1 },
+    clearTimer() { runTimer = null }
+  })
+
+  updateCheck.schedule(10_000)
+  updateCheck.cancel()
+  assert.equal(runTimer, null)
+  assert.equal(checks, 0)
 })

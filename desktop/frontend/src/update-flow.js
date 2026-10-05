@@ -23,3 +23,36 @@ export async function installDesktopUpdate(update, { onProgress, relaunch, prepa
   await relaunch()
   return true
 }
+
+export function createIdleUpdateCheck(check, isBusy, {
+  setTimer = setTimeout,
+  clearTimer = clearTimeout
+} = {}) {
+  let timer = null
+  let due = false
+
+  const runIfIdle = async () => {
+    if (!due || isBusy()) return false
+
+    due = false
+    await check()
+    return true
+  }
+
+  return {
+    schedule(delayMs) {
+      if (timer !== null) clearTimer(timer)
+      timer = setTimer(() => {
+        timer = null
+        due = true
+        void runIfIdle()
+      }, delayMs)
+    },
+    resume: runIfIdle,
+    cancel() {
+      if (timer !== null) clearTimer(timer)
+      timer = null
+      due = false
+    }
+  }
+}

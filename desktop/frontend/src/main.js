@@ -21,7 +21,7 @@ import { createMediaFetch } from "./media-transport.js"
 import { createPreviewFetch } from "./preview-transport.js"
 import { createRendererClient } from "lib/renderer_worker_client"
 import { installSanitizedPreview } from "lib/preview_sanitizer"
-import { checkForDesktopUpdate, installDesktopUpdate } from "./update-flow.js"
+import { checkForDesktopUpdate, createIdleUpdateCheck, installDesktopUpdate } from "./update-flow.js"
 import { desktopAuthoringRegistry, loadDesktopAuthoringRegistry } from "./authoring-registry-loader.js"
 import { createAuthoringSettingsDialog } from "lib/authoring_settings_dialog"
 import { withAppearanceValue } from "lib/document_map"
@@ -172,6 +172,10 @@ let openFilesWaitingForSave = false
 let sourcePollBusy = false
 let lastSourcePollError = null
 let titleFlow = null
+const startupUpdateCheck = createIdleUpdateCheck(
+  () => checkForUpdates(false),
+  () => !elements.deckView.hidden
+)
 
 const authoringSettings = createAuthoringSettingsDialog({
   elements: {
@@ -412,6 +416,7 @@ function showLibrary() {
   document.querySelector("#import-elef").disabled = !library
   document.querySelector("#breadcrumb-current").textContent = "Decks"
   showLibraryTab("all")
+  void startupUpdateCheck.resume()
 }
 
 function showLibraryTab(tab) {
@@ -895,6 +900,7 @@ async function resolveImportConflict(resolution) {
 }
 
 async function checkForUpdates(showNoUpdate = true) {
+  if (showNoUpdate) startupUpdateCheck.cancel()
   if (updateInstalling) return false
   try {
     const update = await checkForDesktopUpdate(() => checkUpdater({ timeout: 10_000 }),
@@ -1215,6 +1221,6 @@ void completeBootstrap({
     void invoke("pending_open_elef_count")
       .then(count => { if (count) void processOpenedFiles() })
       .catch(showError)
-    setTimeout(() => void checkForUpdates(false), 1_000)
+    startupUpdateCheck.schedule(10_000)
   }
 }).catch(showError)
