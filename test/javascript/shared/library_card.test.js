@@ -13,9 +13,11 @@ test("the library card uses the same HTML producer in the Rails bundle and deskt
   assert.equal(sandbox.ElefRenderer.renderLibraryCard(properties), renderLibraryCard(properties))
   const { document } = parseHTML(renderLibraryCard(properties))
   assert.equal(document.querySelector(".library-card-title a").textContent, properties.title)
+  assert.equal(document.querySelector(".library-card-open").getAttribute("aria-label"), `Edit ${properties.title}`)
   assert.equal(document.querySelector(".library-card-preview p").textContent, "Safe preview")
   assert.equal(document.querySelector(".library-card-controls button").textContent, "Action")
   assert.equal(document.querySelector(".library-card-meta").textContent, "Continuous Markdown · Updated Oct 4, 2026")
+  assert.equal(document.querySelector(".deck-card, .deck-card-preview, .deck-open, .deck-name, .deck-meta"), null)
 })
 
 test("library metadata remains inert and navigation stays local", () => {

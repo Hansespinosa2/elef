@@ -17,7 +17,7 @@ test("untrusted deck names and warnings are inserted as text", () => {
   const card = createLibraryCard(document, deck, { open() {}, rename() {}, delete() {} })
 
   assert.equal(card.querySelector("img, script"), null)
-  assert.equal(card.querySelector(".deck-name").textContent, deck.name)
+  assert.equal(card.querySelector(".library-card-title").textContent, deck.name)
   assert.equal(card.querySelector(".deck-warning").textContent, deck.warnings[0])
 })
 
@@ -32,7 +32,7 @@ test("deck actions carry the selected deck identity", () => {
   })
   const click = () => new Event("click", { bubbles: true })
 
-  card.querySelector(".deck-open").dispatchEvent(click())
+  card.querySelector(".library-card-open").dispatchEvent(click())
   card.querySelector(".library-rename input").value = "New notes"
   card.querySelector(".library-rename").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }))
   card.querySelector(".danger").dispatchEvent(click())

@@ -58,6 +58,11 @@ test("the host mounts the shared editor view and gates visual editing until prev
   assert.match(editorView, /visualButton\.disabled = Boolean\(config\.visualDisabled\)/)
 })
 
+test("the editor discloses the remaining external-write race", () => {
+  assert.match(document.querySelector(".editor-help").textContent, /simultaneous write can still be overwritten during the final atomic replacement/i)
+  assert.match(document.querySelector(".editor-help").textContent, /sync tool's version history enabled/i)
+})
+
 test("the host uses no inline event handlers under the strict script policy", () => {
   assert.equal(document.querySelector("[onclick], [onerror], [onload]"), null)
 })

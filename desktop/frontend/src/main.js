@@ -497,7 +497,7 @@ function renderDecks() {
     rename: (item, name) => void renameDeck(item, name).catch(showError),
     delete: item => void deleteDeck(item)
   }), { onAppend: cards => {
-    const previewTargets = cards.flatMap(card => [...card.querySelectorAll(".deck-card-preview[data-deck-id]")])
+    const previewTargets = cards.flatMap(card => [...card.querySelectorAll(".library-card-preview[data-deck-id]")])
     if (cardPreviewObserver) previewTargets.forEach(target => cardPreviewObserver.observe(target))
     else previewTargets.forEach(startPreview)
   } })

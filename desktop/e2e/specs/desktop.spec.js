@@ -159,7 +159,7 @@ class DesktopEditorUi {
       await $("#library-view").waitForDisplayed()
     }
     await $("#show-deck-list").click()
-    const card = $(`[aria-label="Open ${title}"]`)
+    const card = $(`[aria-label="Edit ${title}"]`)
     await card.waitForDisplayed()
     await card.click()
     try {
@@ -193,7 +193,7 @@ class DesktopEditorUi {
           codeMirrorMounted: Boolean(editorField?.querySelector(".cm-editor")),
           libraryHidden: document.querySelector("#library-view")?.hidden,
           deckViewHidden: document.querySelector("#deck-view")?.hidden,
-          cardVisible: [...document.querySelectorAll(".deck-open")].some(button => button.getAttribute("aria-label") === `Open ${expected}`)
+          cardVisible: [...document.querySelectorAll(".library-card-open")].some(button => button.getAttribute("aria-label") === `Edit ${expected}`)
         }
       }, title)
       throw new Error(`${error.message}; desktop open diagnostic: ${JSON.stringify(diagnostic)}`)
@@ -830,18 +830,18 @@ class DesktopEditorUi {
 class DesktopLibraryUi {
   async renameWork(title, newTitle) {
     let card
-    for (const candidate of await $$(".deck-card")) {
-      if (await candidate.$(".deck-name").getText() === title) card = candidate
+    for (const candidate of await $$(".library-card")) {
+      if (await candidate.$(".library-card-title").getText() === title) card = candidate
     }
     if (!card) throw new Error(`The ${title} library card was missing`)
     await card.$(".library-card-menu-trigger").click()
     await card.$(".rename-menu > summary").click()
     await card.$(".library-rename input[type='text']").setValue(newTitle)
     await card.$(".library-rename button").click()
-    await browser.waitUntil(async () => (await $(`[aria-label='Open ${newTitle}']`).isDisplayed()), {
+    await browser.waitUntil(async () => (await $(`[aria-label='Edit ${newTitle}']`).isDisplayed()), {
       timeout: 10_000, timeoutMsg: `The library did not show the renamed ${newTitle} deck`
     })
-    if (await $(`[aria-label='Open ${title}']`).isExisting()) throw new Error("The old deck name remained after rename")
+    if (await $(`[aria-label='Edit ${title}']`).isExisting()) throw new Error("The old deck name remained after rename")
   }
 
   async openLibrary() {
@@ -853,26 +853,26 @@ class DesktopLibraryUi {
 
   async assertAllWorkKindsVisible(presentationTitle, documentTitle) {
     await browser.waitUntil(async () =>
-      (await $(`[aria-label='Open ${presentationTitle}']`).isDisplayed()) &&
-      (await $(`[aria-label='Open ${documentTitle}']`).isDisplayed()), {
+      (await $(`[aria-label='Edit ${presentationTitle}']`).isDisplayed()) &&
+      (await $(`[aria-label='Edit ${documentTitle}']`).isDisplayed()), {
       timeout: 10_000,
       timeoutMsg: "The All library view did not show both presentations and documents"
     })
-    if ((await $$(".deck-card")).length !== 5) {
+    if ((await $$(".library-card")).length !== 5) {
       throw new Error("The All library view did not show all five fixture decks")
     }
   }
 
   async assertCardPreview(title, text) {
     await browser.execute(deckTitle => {
-      const button = [...document.querySelectorAll(".deck-open")]
-        .find(element => element.getAttribute("aria-label") === `Open ${deckTitle}`)
+      const button = [...document.querySelectorAll(".library-card-open")]
+        .find(element => element.getAttribute("aria-label") === `Edit ${deckTitle}`)
       button?.scrollIntoView({ block: "center", inline: "nearest" })
     }, title)
     const findPreview = (deckTitle, previewText) => {
-      const button = [...document.querySelectorAll(".deck-open")]
-        .find(element => element.getAttribute("aria-label") === `Open ${deckTitle}`)
-      const preview = button?.closest(".deck-card")?.querySelector(".deck-card-preview")
+      const button = [...document.querySelectorAll(".library-card-open")]
+        .find(element => element.getAttribute("aria-label") === `Edit ${deckTitle}`)
+      const preview = button?.closest(".library-card")?.querySelector(".library-card-preview")
       return preview?.dataset.previewState === "ready" && preview.textContent.includes(previewText)
     }
     try {
@@ -882,9 +882,9 @@ class DesktopLibraryUi {
       })
     } catch (error) {
       const diagnostic = await browser.execute(async (deckTitle, previewText) => {
-        const button = [...document.querySelectorAll(".deck-open")]
-          .find(element => element.getAttribute("aria-label") === `Open ${deckTitle}`)
-        const preview = button?.closest(".deck-card")?.querySelector(".deck-card-preview")
+        const button = [...document.querySelectorAll(".library-card-open")]
+          .find(element => element.getAttribute("aria-label") === `Edit ${deckTitle}`)
+        const preview = button?.closest(".library-card")?.querySelector(".library-card-preview")
         try {
           const deck = await window.__TAURI__.core.invoke("read_deck_preview", { id: preview?.dataset.deckId })
           return {
@@ -908,11 +908,11 @@ class DesktopLibraryUi {
   }
 
   async assertSearchResults(title) {
-    await browser.waitUntil(async () => (await $$(".deck-card")).length === 1, {
+    await browser.waitUntil(async () => (await $$(".library-card")).length === 1, {
       timeout: 10_000,
       timeoutMsg: "The library search did not narrow to one deck"
     })
-    if (!(await $(`[aria-label='Open ${title}']`).isDisplayed())) {
+    if (!(await $(`[aria-label='Edit ${title}']`).isDisplayed())) {
       throw new Error(`The library search did not show ${title}`)
     }
   }
@@ -923,7 +923,7 @@ class DesktopLibraryUi {
       timeout: 10_000,
       timeoutMsg: "The library did not show its empty search result"
     })
-    if ((await $$(".deck-card")).length !== 0) throw new Error("The empty search still shows deck cards")
+    if ((await $$(".library-card")).length !== 0) throw new Error("The empty search still shows deck cards")
   }
 
   async showPresentations() {
@@ -931,14 +931,14 @@ class DesktopLibraryUi {
   }
 
   async assertPresentationsOnly(presentationTitle, documentTitle) {
-    await browser.waitUntil(async () => (await $(`[aria-label='Open ${presentationTitle}']`).isDisplayed()), {
+    await browser.waitUntil(async () => (await $(`[aria-label='Edit ${presentationTitle}']`).isDisplayed()), {
       timeout: 10_000,
       timeoutMsg: "The presentation filter did not show its presentation"
     })
-    if ((await $$(".deck-card")).length !== 3) {
+    if ((await $$(".library-card")).length !== 3) {
       throw new Error("The presentation filter did not show the three fixture presentations")
     }
-    if (await $(`[aria-label='Open ${documentTitle}']`).isExisting()) {
+    if (await $(`[aria-label='Edit ${documentTitle}']`).isExisting()) {
       throw new Error("The presentation filter still shows a document")
     }
   }
@@ -948,14 +948,14 @@ class DesktopLibraryUi {
   }
 
   async assertDocumentsOnly(documentTitle) {
-    await browser.waitUntil(async () => (await $(`[aria-label='Open ${documentTitle}']`).isDisplayed()), {
+    await browser.waitUntil(async () => (await $(`[aria-label='Edit ${documentTitle}']`).isDisplayed()), {
       timeout: 10_000,
       timeoutMsg: "The document filter did not show its document"
     })
-    if ((await $$(".deck-card")).length !== 2) {
+    if ((await $$(".library-card")).length !== 2) {
       throw new Error("The document filter did not show the two fixture documents")
     }
-    if (await $(`[aria-label='Open E2E seed']`).isExisting()) {
+    if (await $(`[aria-label='Edit E2E seed']`).isExisting()) {
       throw new Error("The document filter still shows a presentation")
     }
   }
@@ -1018,7 +1018,7 @@ class DesktopLibraryUi {
     launched.once("error", error => { launchError = error })
     launched.once("exit", (code, signal) => { launchExit = { code, signal } })
     try {
-      const card = $('[aria-label="Open E2E archive seed"]')
+      const card = $('[aria-label="Edit E2E archive seed"]')
       try {
         await browser.waitUntil(async () => {
           if (launchError) throw new Error(`Opening the .elef file failed: ${launchError.message}`)
@@ -1031,7 +1031,7 @@ class DesktopLibraryUi {
         const state = await browser.execute(() => ({
           status: document.querySelector("#status-text")?.textContent || "",
           notice: document.querySelector("#notice")?.textContent || "",
-          cards: [...document.querySelectorAll(".deck-card")].map(card => card.getAttribute("aria-label"))
+          cards: [...document.querySelectorAll(".library-card")].map(card => card.getAttribute("aria-label"))
         })).catch(() => ({ unavailable: true }))
         const pending = await browser.execute(async () => window.__TAURI__?.core?.invoke("pending_open_elef_count"))
           .catch(() => "unavailable")
