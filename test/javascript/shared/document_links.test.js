@@ -1,7 +1,16 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { buildDocumentGraph, createDocumentLinkResolver, extractDocumentLinkTitles, extractFirstMarkdownHeading, parsePortableDocumentLinks } from "../../../app/javascript/lib/document_links.js"
+import {
+  buildDocumentGraph,
+  createDocumentLinkResolver,
+  extractDocumentLinkTitles,
+  extractDocumentLinkTokens,
+  extractFirstMarkdownHeading,
+  isLinkableDocumentTitle,
+  linkableDocumentTitles,
+  parsePortableDocumentLinks
+} from "../../../app/javascript/lib/document_links.js"
 
 test("document link extraction ignores escaped, inline, fenced, and indented code", () => {
   const source = [
@@ -17,6 +26,17 @@ test("document link extraction ignores escaped, inline, fenced, and indented cod
   ].join("\r\n")
 
   assert.deepEqual(extractDocumentLinkTitles(`${source}\r\n[[[Not a link]]]`), ["Visible|label"])
+})
+
+test("document link tokens preserve UTF-16 source ranges and share title validation", () => {
+  const source = "😀 [[Target]] [[Bad\rTitle]] [[[Triple]]]"
+  const tokens = extractDocumentLinkTokens(source)
+  assert.deepEqual(tokens.map(({ title }) => title), ["Target"])
+  assert.equal(tokens[0].start, source.indexOf("[[Target]]"))
+  assert.equal(tokens[0].end, source.indexOf("[[Target]]") + "[[Target]]".length)
+  assert.equal(isLinkableDocumentTitle("Readable title"), true)
+  assert.equal(isLinkableDocumentTitle("Title with ]"), false)
+  assert.deepEqual(linkableDocumentTitles(["Readable title", "", "Title with `code`"]), ["Readable title"])
 })
 
 test("web and desktop graph inputs use one resolver for titles, aliases, and stable keys", () => {

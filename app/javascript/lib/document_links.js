@@ -6,38 +6,58 @@ export function parseDocumentLinkAt(source, start = 0) {
   return { title: source.slice(start + 2, close), start, end: close + 2 }
 }
 
-export function extractDocumentLinkTitles(source = "") {
+export function isLinkableDocumentTitle(title) {
+  const value = String(title ?? "")
+  return value.length > 0 && !/[\]\r\n`]/.test(value)
+}
+
+export function linkableDocumentTitles(titles = []) {
+  if (!Array.isArray(titles)) return []
+  return titles.map(title => String(title ?? "")).filter(isLinkableDocumentTitle)
+}
+
+export function extractDocumentLinkTokens(source = "") {
   if (typeof source !== "string") return []
   const links = []
   let fence = null
+  let lineStart = 0
 
-  for (const line of source.split(/\r?\n/)) {
+  while (lineStart <= source.length) {
+    const newline = source.indexOf("\n", lineStart)
+    let lineEnd = newline < 0 ? source.length : newline
+    if (lineEnd > lineStart && source[lineEnd - 1] === "\r") lineEnd -= 1
+    const line = source.slice(lineStart, lineEnd)
     const marker = line.match(/^ {0,3}(`{3,}|~{3,})(.*)$/)
     if (marker) {
       if (!fence) fence = { character: marker[1][0], length: marker[1].length }
       else if (marker[1][0] === fence.character && marker[1].length >= fence.length && !marker[2].trim()) fence = null
-      continue
+    } else if (!fence && !line.startsWith("    ") && !line.startsWith("\t")) {
+      let cursor = 0
+      while (cursor + 1 < line.length) {
+        const start = line.indexOf("[[", cursor)
+        if (start < 0) break
+        const token = parseDocumentLinkAt(line, start)
+        if (!token) {
+          cursor = start + 2
+          continue
+        }
+        if (!isEscaped(line, start) && !inlineCodeContains(line, start, token.end) &&
+            isLinkableDocumentTitle(token.title)) {
+          links.push({ ...token, start: lineStart + token.start, end: lineStart + token.end })
+        }
+        cursor = token.end
+      }
     }
-    if (fence || line.startsWith("    ") || line.startsWith("\t")) continue
 
-    let cursor = 0
-    while (cursor + 1 < line.length) {
-      const start = line.indexOf("[[", cursor)
-      if (start < 0) break
-      const token = parseDocumentLinkAt(line, start)
-      if (!token) {
-        cursor = start + 2
-        continue
-      }
-      const end = token.end
-      if (!isEscaped(line, start) && !inlineCodeContains(line, start, end) &&
-          token.title.length > 0 && !/[\]`]/.test(token.title)) {
-        links.push(token.title)
-      }
-      cursor = end
-    }
+    if (newline < 0) break
+    lineStart = newline + 1
   }
+
   return links
+}
+
+export function extractDocumentLinkTitles(source = "") {
+  return extractDocumentLinkTokens(source).map(token => token.title)
 }
 
 export function extractFirstMarkdownHeading(source = "") {

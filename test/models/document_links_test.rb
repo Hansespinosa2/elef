@@ -11,6 +11,17 @@ class DocumentLinksTest < ActiveSupport::TestCase
     assert_equal ["Target"], DocumentLinks::Parser.parse(source).map(&:title)
   end
 
+  test "shared JavaScript parsing preserves Ruby character offsets and rejects malformed brackets" do
+    source = "😀 [[Target]] [[[Not a link]]] `[[Inline code]]`"
+    token = DocumentLinks::Parser.parse(source).sole
+
+    assert_equal "Target", token.title
+    assert_equal 2, token.start
+    assert_equal 12, token.end
+    assert_equal "😀 [[Renamed]] [[[Not a link]]] `[[Inline code]]`",
+      DocumentLinks::Parser.rewrite(source, "Target", "Renamed")
+  end
+
   test "rewrites only exact document titles outside code" do
     source = "[[Old title]] [[Old title extended]] `[[Old title]]`\n\n```\n[[Old title]]\n```"
 
@@ -22,6 +33,8 @@ class DocumentLinksTest < ActiveSupport::TestCase
     assert DocumentLinks::Parser.linkable_title?("Readable title")
     refute DocumentLinks::Parser.linkable_title?("Title with ]")
     refute DocumentLinks::Parser.linkable_title?("Title with `code`")
+    assert_equal ["Readable title"],
+      Source::JavascriptRenderer.linkable_document_titles(["Readable title", "", "Title with ]", "Title with `code`"])
   end
 
   test "renders resolved links and keeps missing links visibly unresolved" do

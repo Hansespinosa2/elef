@@ -18,6 +18,15 @@ module Source
       context.call("ElefRenderer.buildDocumentGraph", documents).deep_symbolize_keys
     end
 
+    def document_link_tokens(source)
+      context.call("ElefRenderer.extractDocumentLinkTokens", source.to_s)
+        .map(&:deep_symbolize_keys)
+    end
+
+    def linkable_document_titles(titles)
+      context.call("ElefRenderer.linkableDocumentTitles", Array(titles).map(&:to_s))
+    end
+
     def render(markdown, media_resolver: nil, document_nodes: [], allow_remote_media: true)
       source = markdown.to_s
       raise ArgumentError, "Markdown source exceeds the renderer limit" if source.bytesize > MAX_RENDER_BYTES

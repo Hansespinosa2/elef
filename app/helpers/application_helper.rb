@@ -49,9 +49,8 @@ module ApplicationHelper
   end
 
   def document_link_titles(workspace: Workspace.default)
-    Document.where(workspace: workspace || Workspace.default).order(:title).pluck(:title).select do |title|
-      DocumentLinks::Parser.linkable_title?(title)
-    end
+    titles = Document.where(workspace: workspace || Workspace.default).order(:title).pluck(:title)
+    Source::JavascriptRenderer.linkable_document_titles(titles)
   end
 
   def shared_editor_projection(
@@ -60,21 +59,25 @@ module ApplicationHelper
     title: work.title
   )
     workspace = work.workspace || Workspace.default
-    document_nodes = Document.where(workspace: workspace)
+    documents = Document.where(workspace: workspace)
       .includes(:document_detail, :document_aliases)
       .order(:title)
-      .map do |document|
-        {
-          id: document.id.to_s,
-          title: document.title,
-          documentKey: document.document_key,
-          aliases: document.document_aliases
-            .map(&:alias_name)
-            .select { |name| DocumentLinks::Parser.linkable_title?(name) },
-          href: document_path(document)
-        }
-      end
-      .select { |node| DocumentLinks::Parser.linkable_title?(node[:title]) }
+      .to_a
+    linkable_titles = Source::JavascriptRenderer.linkable_document_titles(
+      documents.flat_map { |document| [document.title, *document.document_aliases.map(&:alias_name)] }
+    ).to_h { |value| [value, true] }
+    document_nodes = documents.map do |document|
+      {
+        id: document.id.to_s,
+        title: document.title,
+        documentKey: document.document_key,
+        aliases: document.document_aliases
+          .map(&:alias_name)
+          .select { |name| linkable_titles.key?(name) },
+        href: document_path(document)
+      }
+    end
+    document_nodes.select! { |node| linkable_titles.key?(node[:title]) }
 
     margin_settings = if work.presentation?
       margin = work.document.margin_settings
