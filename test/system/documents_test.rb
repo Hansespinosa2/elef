@@ -2483,7 +2483,7 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_equal 1, page.evaluate_script("window.previewRequests")
   end
 
-  test "ignores a slow preview response after a newer edit" do
+  test "serializes slow preview responses and renders the latest edit" do
     document = Document.create!(title: "Race notes", source: "# Initial")
     visit edit_document_path(document)
 
@@ -2503,9 +2503,23 @@ class DocumentsTest < ApplicationSystemTestCase
     wait_for_preview_response(1)
     assert_equal 1, page.evaluate_script("window.previewResponses.length")
 
+    initial_request_id = page.evaluate_script("document.querySelector('form.visual-editor-form').previewController.requestId")
     fill_in "Markdown source", with: "# Latest response"
-    wait_for_preview_response(2)
-    assert_equal 2, page.evaluate_script("window.previewResponses.length")
+    latest_edit_queued = page.evaluate_async_script(<<~JAVASCRIPT, initial_request_id)
+      const initialRequestId = arguments[0];
+      const done = arguments[arguments.length - 1];
+      const deadline = Date.now() + 5000;
+      const waitForQueuedPreview = () => {
+        const preview = document.querySelector('form.visual-editor-form')?.previewController;
+        if (preview?.requestId > initialRequestId && preview.timer === null && preview.queuedRequestId === preview.requestId) return done(true);
+        if (Date.now() >= deadline) return done(false);
+        window.setTimeout(waitForQueuedPreview, 10);
+      };
+      waitForQueuedPreview();
+    JAVASCRIPT
+    assert latest_edit_queued, "latest source was not queued behind the active preview"
+    requests_during_active_render = page.evaluate_script("window.previewResponses.length")
+    assert_equal 1, requests_during_active_render, "a newer edit must wait for the active render"
 
     page.evaluate_async_script(<<~JAVASCRIPT)
       const done = arguments[arguments.length - 1];
@@ -2519,6 +2533,9 @@ class DocumentsTest < ApplicationSystemTestCase
       window.setTimeout(done, 20);
     JAVASCRIPT
     assert_no_selector ".document-surface h1", text: "First response"
+
+    wait_for_preview_response(2)
+    assert_equal 2, page.evaluate_script("window.previewResponses.length")
 
     page.execute_script(<<~JAVASCRIPT)
       const response = window.previewResponses[1];
