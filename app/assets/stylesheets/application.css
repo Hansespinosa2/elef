@@ -1010,7 +1010,6 @@ body.elef-app {
 
 .slide-frame {
   aspect-ratio: 16 / 9;
-  content-visibility: auto;
   overflow: hidden;
   position: relative;
   width: 100%;
@@ -1393,7 +1392,7 @@ body.elef-app {
   .presentation-print { background: white !important; color-adjust: exact; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
   .presentation-print-toolbar { display: none !important; }
   .presentation-print-slides { display: block; gap: 0; }
-  .presentation-print-slides > .slide-frame { aspect-ratio: auto; break-after: page; content-visibility: visible; height: 7.5in; overflow: hidden; page-break-after: always; width: 13.333in; }
+  .presentation-print-slides > .slide-frame { aspect-ratio: auto; break-after: page; height: 7.5in; overflow: hidden; page-break-after: always; width: 13.333in; }
   .presentation-print-slides > .slide-frame:last-child { break-after: auto; page-break-after: auto; }
   .presentation-print .slide { border: 0; border-radius: 0; box-shadow: none; height: 7.5in; padding: 5rem; transform: none; width: 13.333in; }
   .presentation-print .slide-frame.is-overflowing > .slide { outline: none; }

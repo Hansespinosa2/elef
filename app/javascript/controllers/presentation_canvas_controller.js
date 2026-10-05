@@ -9,6 +9,7 @@ export default class extends Controller {
   connect() {
     this.resizeObserver = new ResizeObserver(() => this.resizeCanvas())
     this.resizeObserver.observe(this.element)
+    this.resizeCanvas()
   }
 
   disconnect() {
