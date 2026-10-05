@@ -62,7 +62,7 @@ The JS Markdown block renderer and slide/document structure/editor-map/editable-
 
 Automated checks that keep the architecture from drifting:
 - Ruby `Source::HtmlRenderer` is absent after cutover; Rails and desktop load a renderer bundle with the same hash (QS-7).
-- Rails-owned source, tests, and build scripts contain no dependency on `desktop/`; desktop imports the app-owned host markup, product styles, and shared modules. `desktop/` contains only the Tauri bootstrap, transport and lifecycle adapters, and native shell integration.
+- Rails application/runtime source does not import desktop code; desktop packaging consumes the app-owned host markup, product styles, and shared modules. Architecture tests intentionally inspect selected desktop bootstrap/build files to enforce this direction. `desktop/` owns the `elef-core` filesystem crate, Tauri commands, and shell-specific bootstrap, transport, lifecycle, updater, and native window/menu integration.
 - The tracked `app/assets/builds/tailwind.css` matches a fresh Rails Tailwind build; desktop packages that checked-in output without booting Rails.
 - Tauri capability file equals the command table in [transport-adapter.md](transport-adapter.md); no wildcard fs or shell permission.
 - Shipped CSP equals the policy recorded in [security.md](security.md); `script-src` has no `unsafe-inline` / `unsafe-eval`.
