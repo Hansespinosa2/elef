@@ -619,6 +619,8 @@ export default class extends Controller {
   }
 
   syncProjectionEditability({ preserveActive = false } = {}) {
+    if (this.element.dataset.editorMode !== "source" &&
+        this.element.previewController?.projectionFresh !== false && this.map) return
     const visual = this.element.dataset.editorMode !== "source"
     const fresh = this.element.previewController?.projectionFresh !== false
     const active = preserveActive ? document.activeElement?.closest?.("[data-editor-block-id]") : null
@@ -735,6 +737,11 @@ export default class extends Controller {
   }
 
   updateBlockBoundaries() {
+    const hasGroupedBlocks = this.map?.slides?.some(slide =>
+      slide.blocks?.some((block) => block.position_scope === "group")
+    )
+    if (!hasGroupedBlocks) return
+
     this.element.querySelectorAll('[data-presentation-editor-action="move-block-up"], [data-presentation-editor-action="move-block-down"]').forEach((control) => {
       const slide = this.map?.slides?.[Number(control.dataset.slideIndex)]
       const index = Number(control.dataset.blockIndex)

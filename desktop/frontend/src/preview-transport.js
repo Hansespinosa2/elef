@@ -42,8 +42,10 @@ export function createPreviewFetch({ renderer, getContext = () => ({}), fetchImp
 }
 
 function jsonResponse(payload, status = 200) {
-  return new Response(JSON.stringify(payload), {
+  const response = new Response(JSON.stringify(payload), {
     status,
     headers: { "Content-Type": "application/json" }
   })
+  Object.defineProperty(response, "json", { value: () => Promise.resolve(payload) })
+  return response
 }

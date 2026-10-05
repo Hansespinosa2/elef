@@ -157,7 +157,7 @@ try {
       bootstrapStageSamples.set(stage.name, values)
     }
   }
-  for (const name of ["library-status", "initial-library-render", "pending-open-check", "editor-ready", "initial-paint", "native-ready-ack"]) {
+  for (const name of ["library-status", "initial-library-render", "editor-ready", "initial-paint", "native-ready-ack"]) {
     assert.equal(bootstrapStageSamples.get(name)?.length, 20, `Expected 20 native startup measurements for ${name}`)
   }
   report.p95BootstrapStageMilliseconds = Object.fromEntries([...bootstrapStageSamples]

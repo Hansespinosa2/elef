@@ -580,6 +580,8 @@ export default class extends Controller {
 
   syncProjectionEditability({ preserveActive = false } = {}) {
     if (!this.hasProjectionTarget) return
+    if (this.element.dataset.editorMode !== "source" &&
+        this.element.previewController?.projectionFresh !== false && this.map) return
 
     const visual = this.element.dataset.editorMode !== "source"
     const fresh = this.element.previewController?.projectionFresh !== false

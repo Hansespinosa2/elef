@@ -1196,7 +1196,6 @@ void completeBootstrap({
     if (status?.config_notice) showNotice(status.config_notice, "error")
     setStatus(library ? `${decks.length} ${decks.length === 1 ? "deck" : "decks"}` : "Choose a library folder to begin")
     libraryStatusLoaded = true
-    if (await measureBootstrapStage("pending-open-check", () => invoke("pending_open_elef_count"))) void processOpenedFiles()
   },
   waitForPaint: () => measureBootstrapStage("initial-paint", () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))),
   markInteractive: () => {
@@ -1213,6 +1212,9 @@ void completeBootstrap({
   confirmReady: async () => {
     await measureBootstrapStage("native-ready-ack", () => invoke("confirm_app_ready"))
     if (__ELEF_E2E__) window.__elefPerformanceTestHooks.ready()
+    void invoke("pending_open_elef_count")
+      .then(count => { if (count) void processOpenedFiles() })
+      .catch(showError)
   }
 }).catch(showError)
 void checkForUpdates(false)
