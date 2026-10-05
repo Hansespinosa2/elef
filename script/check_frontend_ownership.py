@@ -114,6 +114,9 @@ assert "elements.graphView.hidden = libraryTab" not in desktop_main, "shared lib
 assert 'pin "lib/presentation_navigation", to: "lib/presentation_navigation.js"' in importmap, (
     "Rails must resolve the shared presentation navigation module"
 )
+assert 'pin "lib/editor_controller_lookup", to: "lib/editor_controller_lookup.js"' in importmap, (
+    "Rails must resolve the shared editor controller lookup"
+)
 assert '"lib/presentation_navigation"' in presentation_controller, "the shared controller must own presentation key mapping"
 assert "write_authoring_registry" not in (ROOT / "app/javascript/lib/authoring_registry_write.js").read_text(), (
     "Rails-owned authoring flow must receive persistence through a host transport callback"
