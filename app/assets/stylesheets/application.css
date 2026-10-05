@@ -1420,7 +1420,8 @@ body.elef-app {
 .document-graph-controls { display: flex; gap: 4px; }
 .document-graph-controls button { background: var(--oradia-paper-bright); border: 1px solid var(--oradia-paper-line); border-radius: 6px; color: var(--oradia-paper-ink); cursor: pointer; font-size: 13px; font-weight: 600; min-height: 40px; min-width: 40px; padding: 7px 10px; }
 .document-graph-controls button:hover { background: #eee8fc; }
-.document-graph-canvas { background: linear-gradient(145deg, #fcfaf5, #f5f0e7); min-height: 440px; overflow: hidden; position: relative; touch-action: none; }
+.document-graph-canvas { background: linear-gradient(145deg, #fcfaf5, #f5f0e7); cursor: grab; min-height: 440px; overflow: hidden; position: relative; touch-action: none; }
+.document-graph-canvas:active { cursor: grabbing; }
 .document-graph-canvas svg { display: block; height: min(620px, 68vh); min-height: 440px; width: 100%; }
 .document-graph-edges, .document-graph-nodes { overflow: visible; }
 .document-graph-edge { color: var(--oradia-green-deep); fill: none; marker-end: url(#document-graph-arrow); stroke: currentColor; stroke-width: 2; transition: opacity 120ms ease, stroke-width 120ms ease; }
