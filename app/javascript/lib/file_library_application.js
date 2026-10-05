@@ -55,7 +55,7 @@ export function startFileLibraryApplication(platform) {
     kind: "presentation",
     source: "",
     sourceName: "presentation[source]",
-    mode: "source",
+    mode: "visual",
     visualDisabled: true,
     visualDisabledMessage: "Open a deck to render its preview",
     showTitle: true,
@@ -418,6 +418,7 @@ export function startFileLibraryApplication(platform) {
   }
 
   function showLibrary() {
+    document.body.dataset.desktopView = "library"
     elements.welcome.hidden = Boolean(library)
     elements.library.hidden = !library
     elements.deckView.hidden = true
@@ -680,6 +681,7 @@ export function startFileLibraryApplication(platform) {
       notice.hidden = deck.notices.length === 0
       elements.library.hidden = true
       elements.deckView.hidden = false
+      document.body.dataset.desktopView = "editor"
       document.querySelector("#breadcrumb-current").textContent = deck.name
       setStatus("Deck opened")
       if (viewSetupStartedAt !== null) recordOpenStage("deckViewSetup", viewSetupStartedAt)

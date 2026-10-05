@@ -67,6 +67,9 @@ test("desktop uses the Rails app shell and shared editor width instead of a seco
   assert.equal(document.querySelector(".sidebar, .topbar, .deck-detail-card"), null)
   assert.ok(document.querySelector("#deck-view form.file-library-editor-form"))
   assert.match(shellStyles, /--canvas: var\(--oradia-slate-950\)/)
+  assert.match(shellStyles, /:root\[data-theme="light"\][^{]*\{[^}]*--oradia-slate-950: #f5f4f0/)
+  assert.match(shellStyles, /@media \(prefers-color-scheme: light\)[\s\S]*:root\[data-theme="system"\]/)
+  assert.match(shellStyles, /body\[data-desktop-view="editor"\] \.desktop-library-location,[\s\S]*?\.desktop-header-actions \{ display: none; \}/)
   assert.doesNotMatch(shellStyles, /\.library-shared-view|\.library-card\s*\{/)
 })
 
@@ -88,13 +91,16 @@ test("the Rails-owned application references elements present in its host templa
   assert.deepEqual(missing, [])
 })
 
-test("the desktop host mounts the shared editor and gates visual editing until preview renders", () => {
+test("the desktop host defaults to Rails' Visual mode and gates it until preview renders", () => {
   const sourceForm = document.querySelector("#desktop-editor-form")
-  assert.equal(sourceForm.dataset.editorMode, "source")
+  assert.equal(sourceForm.dataset.editorMode, "visual")
   assert.equal(sourceForm.dataset.controller, undefined)
   assert.ok(document.querySelector("#desktop-editor-mount"))
   assert.match(application, /renderEditorView\(document\.querySelector\("#desktop-editor-mount"\)/)
+  assert.match(application, /mode: "visual"/)
   assert.match(application, /sourceName: "presentation\[source\]"/)
+  assert.match(application, /document\.body\.dataset\.desktopView = "editor"/)
+  assert.match(application, /document\.body\.dataset\.desktopView = "library"/)
   assert.match(application, /configureEditorKind\(elements\.editorField\.closest\("\.editor-shell"\), isDocument \? "document" : "presentation"/)
   assert.doesNotMatch(application, /elements\.editorInput\.name = isDocument/)
   assert.match(editorView, /export function configureEditorKind\(root, kind/)
