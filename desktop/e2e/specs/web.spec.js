@@ -389,10 +389,16 @@ class WebLibraryUi {
   }
 
   async openLibrary() {
-    if (new URL(this.page.url()).pathname !== "/") {
-      await this.page.getByRole("link", { name: "Library", exact: true }).click()
-      await expect(this.page.locator("#deck-list")).toBeVisible()
+    if (new URL(this.page.url()).pathname === "/") return
+    const exitLink = this.page.getByRole("link", { name: "Exit", exact: true })
+    if (await exitLink.count()) {
+      await exitLink.click()
+      await expect(this.page.getByText("Saved preview", { exact: true })).toBeVisible()
     }
+    const libraryLink = this.page.getByRole("link", { name: "Library", exact: true })
+    if (await libraryLink.count()) await libraryLink.click()
+    else await this.page.goto("/", { waitUntil: "domcontentloaded" })
+    await expect(this.page.locator("#deck-list")).toBeVisible()
   }
 
   async previewWork(title) {
