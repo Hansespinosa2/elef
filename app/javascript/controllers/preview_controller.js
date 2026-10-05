@@ -94,7 +94,7 @@ export default class extends Controller {
         },
         signal: requestController.signal,
         body
-      })
+      }).then(async (response) => ({ response, payload: await response.json() }))
       const timeoutFailure = new Promise((_, reject) => {
         timeout = setTimeout(() => {
           timedOut = true
@@ -104,8 +104,7 @@ export default class extends Controller {
           reject(error)
         }, this.timeoutValue)
       })
-      const response = await Promise.race([request, timeoutFailure])
-      const payload = await response.json()
+      const { response, payload } = await Promise.race([request, timeoutFailure])
       if (!this.active || requestId !== this.requestId) return false
 
       this.renderWarnings(payload.warnings || [])

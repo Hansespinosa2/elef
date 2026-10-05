@@ -5,6 +5,8 @@ class DocumentsTest < ApplicationSystemTestCase
     selector = "form.visual-editor-form:not([data-preview-projection-stale='true'])"
     return if has_selector?(selector, wait: 2)
 
+    return if has_selector?(selector, wait: 10)
+
     if has_css?(".preview-retry:not([hidden])", wait: 0)
       click_button "Retry preview"
     end
