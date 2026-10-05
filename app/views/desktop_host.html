@@ -45,7 +45,7 @@
         <section id="welcome-view" class="welcome-view" aria-labelledby="welcome-title" hidden>
           <div class="welcome-card">
             <div class="welcome-art" aria-hidden="true"><span class="art-page art-page-back"></span><span class="art-page art-page-front"><i></i><i></i><i></i></span></div>
-            <p class="eyebrow">YOUR WORK, IN PLAIN FILES</p>
+            <p class="native-eyebrow">YOUR WORK, IN PLAIN FILES</p>
             <h1 id="welcome-title">A quiet place for your ideas.</h1>
             <p class="welcome-copy">Choose a folder for your Elef library. Your decks stay on disk and work offline.</p>
             <button id="choose-library" class="primary-button large-button" type="button">Choose a library folder <span aria-hidden="true">→</span></button>
@@ -54,7 +54,7 @@
         </section>
 
         <section id="library-view" class="library-view" hidden>
-          <div id="library-view-mount" class="elef-app">
+          <div id="library-view-mount">
             <template data-library-view-slot="empty-action"><button class="button primary inline-flex min-h-10 cursor-pointer items-center gap-1 rounded-full border border-[#6d4aff] bg-[#6d4aff] px-4 py-2 font-bold text-white no-underline hover:brightness-95" type="button" data-library-empty-action data-action="create-presentation">Create a presentation</button></template>
           </div>
         </section>
@@ -63,9 +63,9 @@
           <button id="back-to-library" class="back-link" type="button"><span aria-hidden="true">←</span> All decks</button>
           <div class="deck-detail-card">
             <div class="deck-detail-icon" aria-hidden="true">▤</div>
-            <p id="deck-kind" class="eyebrow">PRESENTATION</p>
+            <p id="deck-kind" class="native-eyebrow">PRESENTATION</p>
             <h1 id="deck-title">Deck</h1>
-            <p id="deck-source-name" class="subheading"></p>
+            <p id="deck-source-name" class="deck-source-name"></p>
             <div class="detail-divider"></div>
             <div class="editor-heading">
               <p class="detail-label">Markdown source</p>
@@ -89,7 +89,7 @@
 
     <dialog id="create-dialog" class="app-dialog">
       <form id="create-form" method="dialog">
-        <p class="eyebrow">NEW DECK</p>
+        <p class="native-eyebrow">NEW DECK</p>
         <h2>Create a deck</h2>
         <label for="new-deck-name">Name</label>
         <input id="new-deck-name" name="name" required maxlength="120" autocomplete="off" placeholder="A clear, memorable title">
@@ -100,7 +100,7 @@
     </dialog>
     <dialog id="settings-dialog" class="app-dialog">
       <form id="settings-form" method="dialog">
-        <p class="eyebrow">LIBRARY SETTINGS</p>
+        <p class="native-eyebrow">LIBRARY SETTINGS</p>
         <h2>Appearance</h2>
         <label for="library-theme">Theme</label>
         <select id="library-theme" name="theme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select>
@@ -110,7 +110,7 @@
     </dialog>
     <dialog id="authoring-settings-dialog" class="app-dialog authoring-dialog" aria-labelledby="authoring-settings-title">
       <div>
-        <p class="eyebrow">AUTHORING SETTINGS</p>
+        <p class="native-eyebrow">AUTHORING SETTINGS</p>
         <h2 id="authoring-settings-title">Snippets</h2>
         <p class="authoring-settings-copy">Personal entries are saved in this library’s <code>.elef/</code> folder and are available in the editor palettes. Built-in entries remain available and read-only.</p>
         <div class="authoring-settings-tabs" role="group" aria-label="Authoring settings">
@@ -161,7 +161,7 @@
     </dialog>
     <dialog id="delete-authoring-dialog" class="app-dialog" aria-labelledby="delete-authoring-title">
       <div>
-        <p class="eyebrow">AUTHORING SETTINGS</p>
+        <p class="native-eyebrow">AUTHORING SETTINGS</p>
         <h2 id="delete-authoring-title">Delete personal entry?</h2>
         <p id="delete-authoring-message" class="dialog-copy"></p>
         <div class="dialog-actions">
@@ -172,7 +172,7 @@
     </dialog>
     <dialog id="import-conflict-dialog" class="app-dialog">
       <form method="dialog">
-        <p class="eyebrow">DUPLICATE DECK</p>
+        <p class="native-eyebrow">DUPLICATE DECK</p>
         <h2>Deck already in this library</h2>
         <p id="import-conflict-message" class="dialog-copy"></p>
         <p class="dialog-copy">Replace moves the current folder to Trash. Keep both assigns the imported copy a new identity.</p>
@@ -185,7 +185,7 @@
     </dialog>
     <dialog id="update-dialog" class="app-dialog">
       <div>
-        <p class="eyebrow">SOFTWARE UPDATE</p>
+        <p class="native-eyebrow">SOFTWARE UPDATE</p>
         <h2>A new Elef version is ready</h2>
         <p id="update-version" class="dialog-copy"></p>
         <pre id="update-notes" class="update-notes"></pre>
@@ -198,7 +198,7 @@
     </dialog>
     <dialog id="about-dialog" class="app-dialog about-dialog">
       <form method="dialog">
-        <p class="eyebrow">ABOUT ELEF</p>
+        <p class="native-eyebrow">ABOUT ELEF</p>
         <h2>Elef Desktop</h2>
         <p>Offline-first notes and presentations, stored as folders you own.</p>
         <div class="dialog-actions"><button class="primary-button" value="close">Close</button></div>
@@ -206,7 +206,7 @@
     </dialog>
     <dialog id="conflict-dialog" class="app-dialog conflict-dialog" aria-labelledby="conflict-title">
       <div class="conflict-content">
-        <p class="eyebrow">EXTERNAL CHANGE</p>
+        <p class="native-eyebrow">EXTERNAL CHANGE</p>
         <h2 id="conflict-title">This file changed outside Elef</h2>
         <p class="conflict-explanation">Compare the version on disk with your edits before choosing what to keep.</p>
         <div class="conflict-columns">

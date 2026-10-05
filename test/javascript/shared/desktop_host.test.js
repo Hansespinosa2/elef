@@ -30,11 +30,25 @@ test("the desktop packages Rails-owned host markup and styles", () => {
   assert.match(bootstrap, /app\/assets\/stylesheets\/application\.css/)
   assert.match(build, /app\/views\/desktop_host\.html/)
   assert.match(build, /app\/assets\/stylesheets\/file_library_host\.css/)
-  assert.ok(document.querySelector("#library-view-mount").classList.contains("elef-app"))
-  for (const selector of [".search-box", ".library-card-preview", ".deck-action", ".deck-warning", ".notice"]) {
-    assert.ok(applicationStyles.includes(`.library-shared-view ${selector}`), `${selector} styles must be shared by Rails and desktop`)
-    assert.equal(shellStyles.includes(selector), false, `${selector} styles must not live in the desktop host stylesheet`)
+  assert.equal(document.querySelector("#library-view-mount").classList.contains("elef-app"), false)
+  const sharedRules = new Map([
+    [".library-card", ".library-shared-view .library-card"],
+    [".library-list", ".library-list"],
+    [".library-tab", ".library-tab"],
+    [".search-box", ".library-shared-view .search-box"],
+    [".library-card-preview", ".library-shared-view .library-card-preview"],
+    [".deck-action", ".library-shared-view .deck-action"],
+    [".deck-warning", ".library-shared-view .deck-warning"],
+    [".notice", ".library-shared-view .notice"],
+    [".library-no-results", ".library-no-results"]
+  ])
+  for (const [hostSelector, sharedSelector] of sharedRules) {
+    assert.ok(applicationStyles.includes(sharedSelector), `${hostSelector} styles must be shared by Rails and desktop`)
+    assert.equal(shellStyles.includes(hostSelector), false, `${hostSelector} styles must not live in the desktop host stylesheet`)
   }
+  assert.match(applicationStyles, /\.library-shared-view \.search-box\s*\{[^}]*var\(--panel, var\(--oradia-slate-900\)\)/)
+  assert.match(applicationStyles, /\.library-shared-view \.library-card\s*\{[^}]*background: var\(--panel,/)
+  assert.match(applicationStyles, /\.library-shared-view \.library-card:hover\s*\{[^}]*border-color:.*!important/)
 })
 
 test("the native entry point only wires Tauri APIs into the Rails-owned application", () => {

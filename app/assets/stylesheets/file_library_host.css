@@ -82,8 +82,8 @@ button:disabled { opacity: .48; cursor: not-allowed; }
 .quiet-button { border: 1px solid var(--line); background: var(--panel); color: var(--muted); }
 .quiet-button:hover { color: var(--ink); background: var(--canvas); }
 .library-view, .deck-view { width: min(1050px, 100%); margin: 0 auto; padding: 51px 56px 80px; flex: 1; }
-.deck-view .subheading { color: var(--muted); font-size: 13px; margin: 10px 0 0; }
-.eyebrow { color: var(--accent); font-size: 10px; font-weight: 760; letter-spacing: .15em; margin: 0 0 10px; }
+.deck-view .deck-source-name { color: var(--muted); font-size: 13px; margin: 10px 0 0; }
+.native-eyebrow { color: var(--accent); font-size: 10px; font-weight: 760; letter-spacing: .15em; margin: 0 0 10px; }
 h1 { margin: 0; font-size: clamp(30px, 3vw, 39px); letter-spacing: -.055em; line-height: 1.12; font-weight: 620; }
 .statusbar { min-height: 33px; display: flex; justify-content: space-between; align-items: center; padding: 0 18px; border-top: 1px solid var(--line); background: var(--panel); color: var(--faint); font-size: 10px; }
 .status-right { color: var(--muted); }
@@ -149,7 +149,7 @@ h1 { margin: 0; font-size: clamp(30px, 3vw, 39px); letter-spacing: -.055em; line
 .authoring-entry-form fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
 .authoring-entry-form .dialog-actions { margin-top: 16px; }
 .authoring-dialog > div > .dialog-actions { position: sticky; bottom: -28px; padding: 12px 0 2px; background: var(--panel); }
-.about-dialog p:not(.eyebrow) { color: var(--muted); font-size: 12px; line-height: 1.6; }
+.about-dialog p:not(.native-eyebrow) { color: var(--muted); font-size: 12px; line-height: 1.6; }
 .conflict-dialog { width: min(980px, calc(100vw - 36px)); max-height: 90vh; overflow: auto; }
 .conflict-explanation { color: var(--muted); font-size: 12px; }
 .conflict-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 18px; }

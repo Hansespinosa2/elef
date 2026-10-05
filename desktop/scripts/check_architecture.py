@@ -42,18 +42,52 @@ desktop_main = (REPO_ROOT / "desktop" / "frontend" / "src" / "main.js").read_tex
 desktop_application = (REPO_ROOT / "app" / "javascript" / "lib" / "file_library_application.js").read_text()
 native_render_styles = (REPO_ROOT / "app" / "assets" / "stylesheets" / "file_library_host.css").read_text()
 shared_application_styles = (REPO_ROOT / "app" / "assets" / "stylesheets" / "application.css").read_text()
+desktop_frontend_source = REPO_ROOT / "desktop" / "frontend" / "src"
+desktop_frontend_files = list(desktop_frontend_source.rglob("*"))
+assert not any(path.suffix.lower() in {".html", ".css"} for path in desktop_frontend_files), "desktop frontend must consume Rails-owned markup and styles, not own UI files"
+desktop_dom_ui_patterns = (
+    r"\bdocument\.(?:querySelector(?:All)?|getElementById|createElement|createTextNode|body|documentElement)\b",
+    r"\b(?:innerHTML|outerHTML|insertAdjacentHTML|classList|textContent)\b",
+)
+for source_file in desktop_frontend_source.rglob("*.js"):
+    source = source_file.read_text()
+    assert not any(re.search(pattern, source) for pattern in desktop_dom_ui_patterns), f"desktop frontend must not implement UI/UX DOM logic: {source_file.relative_to(REPO_ROOT)}"
+shared_library_sources = [
+    (REPO_ROOT / "app" / "javascript" / "lib" / name).read_text()
+    for name in ("library_view.js", "library_card.js", "document_graph_view.js")
+]
 assert 'import "../../../app/assets/stylesheets/application.css"' in desktop_main, "desktop must bundle Rails rendering and authoring styles"
 assert 'lib/performance_measurement' in desktop_application, "desktop performance UI must reuse the Rails-owned browser measurement helper"
 assert (REPO_ROOT / "desktop" / "frontend" / "src" / "performance-measurement.js").exists() is False, "desktop must not own a second performance measurement helper"
 assert not re.search(r"^\.(?:slide-frame|slide-content|presentation-surface|document-surface|katex)(?:\s|\{|:)", native_render_styles, re.MULTILINE), "the Rails-owned host stylesheet must not duplicate rendered-content styles"
-for shared_component in (".search-box", ".library-card-preview", ".deck-action", ".deck-warning", ".notice"):
-    assert shared_component not in native_render_styles, f"shared library component {shared_component!r} must not be styled by the host stylesheet"
+shared_library_classes = set()
+for source in shared_library_sources:
+    for class_list in re.findall(r"\bclass(?:Name)?\s*=\s*['\"]([^'\"]*)['\"]", source):
+        shared_library_classes.update(class_list.split())
+    for arguments in re.findall(r"classList\.(?:add|remove|toggle)\(([^)]*)\)", source):
+        for class_list in re.findall(r"['\"]([^'\"]+)['\"]", arguments):
+            shared_library_classes.update(class_list.split())
+host_styled_classes = {
+    class_name
+    for selector_list in re.findall(r"([^{}]+)\{", native_render_styles)
+    if not selector_list.strip().startswith("@")
+    for class_name in re.findall(r"\.([\w-]+)", selector_list)
+}
+# State classes are generic across unrelated native dialogs and shared views;
+# require the component class itself to stay on the owning Rails stylesheet.
+host_styled_classes.discard("is-active")
+duplicate_library_styles = shared_library_classes & host_styled_classes
+assert not duplicate_library_styles, f"shared library UI classes must not be styled by the host stylesheet: {sorted(duplicate_library_styles)}"
 for shared_selector in (
+    ".library-shared-view .library-card",
     ".library-shared-view .search-box",
     ".library-shared-view .library-card-preview",
     ".library-shared-view .deck-action",
     ".library-shared-view .deck-warning",
     ".library-shared-view .notice",
+    ".library-tabs",
+    ".library-tab",
+    ".library-no-results",
 ):
     assert shared_selector in shared_application_styles, f"shared library styles must be owned by application.css: {shared_selector}"
 web_card = (REPO_ROOT / "app" / "views" / "library" / "_work_card.html.erb").read_text()
