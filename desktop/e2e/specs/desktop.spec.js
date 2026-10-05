@@ -835,7 +835,8 @@ class DesktopLibraryUi {
     await browser.waitUntil(async () => browser.execute(expected => {
       const editor = document.querySelector("#desktop-editor-title")
       const form = document.querySelector("#desktop-editor-form")
-      return editor?.value === expected && form?.dataset.editorMode === "visual"
+      return editor?.value === expected && form?.dataset.editorMode === "visual" &&
+        !document.querySelector("#deck-view")?.hidden && Boolean(form?.dataset.loadedDeckId)
     }, title), {
       timeout: 10_000,
       timeoutMsg: `The ${title} card preview did not open its rendered Visual editor`
@@ -858,6 +859,12 @@ class DesktopLibraryUi {
     await browser.waitUntil(async () => browser.execute(() => document.body.classList.contains("presenting-deck")), {
       timeout: 10_000,
       timeoutMsg: `The ${title} library card did not start presentation mode`
+    })
+    await browser.waitUntil(async () => browser.execute(() =>
+      document.activeElement === document.querySelector(".presentation-stage")
+    ), {
+      timeout: 10_000,
+      timeoutMsg: `The ${title} presentation did not finish entering native fullscreen`
     })
     await $("#exit-presentation").click()
     await browser.waitUntil(async () => browser.execute(() => !document.body.classList.contains("presenting-deck")), {
