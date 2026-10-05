@@ -26,7 +26,7 @@ The adapter maps known Rails outcomes as follows: `409 → conflict`, `404 → n
 
 ## Static editor host page contract
 
-`app/views/works/_form.html.erb` is the web host-page contract; desktop's static shell source is `desktop/frontend/index.html`. Both mount shared components from `app/javascript`; desktop packaging copies the static template and does not boot Rails. The desktop shell needs:
+`app/views/works/_form.html.erb` is the web host-page contract; desktop's standalone host source is Rails-owned at `app/views/desktop_host.html`, with app-owned workflows in `app/javascript/lib/file_library_application.js`. Both mount shared components from `app/javascript`; desktop packaging copies the static template and does not boot Rails. The thin Tauri entry point injects native APIs and adapters. The host needs:
 
 - A work form with the editor's Rails-compatible field names (`presentation[source]` or `document[source]`), title for presentations, theme, typography, save status, retry button, and conflict controls.
 - Root controllers: `dirty`, `preview`, `autosave`, `visual-editor`, and `media`; presentations also use `presentation-editor` and `slide-overview`.

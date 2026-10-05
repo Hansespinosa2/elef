@@ -95,7 +95,7 @@ const rendererBundle = path.join(repoRoot, "vendor/javascript/elef-renderer.bund
 await copyFile(rendererBundle, path.join(assets, "renderer.bundle.js"))
 await copyFile(path.join(frontendRoot, "src/renderer-worker.js"), path.join(assets, "renderer-worker.js"))
 
-const indexHtml = await readFile(path.join(frontendRoot, "index.html"), "utf8")
+const indexHtml = await readFile(path.join(repoRoot, "app/views/desktop_host.html"), "utf8")
 if (e2eBuild) {
   await build({
     entryPoints: [path.join(frontendRoot, "../e2e/wdio-init.js")],
@@ -115,7 +115,7 @@ if (e2eBuild) {
 } else {
   await writeFile(path.join(output, "index.html"), indexHtml)
 }
-await copyFile(path.join(frontendRoot, "src/desktop-shell.css"), path.join(assets, "desktop_shell.css"))
+await copyFile(path.join(repoRoot, "app/assets/stylesheets/file_library_host.css"), path.join(assets, "file_library_host.css"))
 await copyFile(path.join(repoRoot, "app/assets/builds/tailwind.css"), path.join(assets, "tailwind.css"))
 await copyFile(path.join(frontendRoot, "node_modules/katex/dist/katex.min.css"), path.join(assets, "katex.min.css"))
 await cp(path.join(frontendRoot, "node_modules/katex/dist/fonts"), path.join(assets, "fonts"), { recursive: true })

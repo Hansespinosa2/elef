@@ -280,3 +280,7 @@ kbd { padding: 3px 5px; color: var(--faint); background: var(--canvas); border: 
   .conflict-columns { grid-template-columns: 1fr; }
   .conflict-source { max-height: 25vh; }
 }
+
+/* Rails-owned file-library host layout. Rendered deck styling stays in application.css. */
+.file-library-editor-form { margin: 0; }
+.file-library-editor-form .editor-projection { margin-top: 16px; max-height: min(68vh, 56rem); overflow: auto; padding: 20px; }

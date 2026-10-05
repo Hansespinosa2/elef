@@ -514,7 +514,7 @@ test("appearance persists through the shared editing flow", async ({ page }) => 
 test("shared rendering styles preserve slide layouts and document typography", async ({ page }) => {
   const styles = {
     web: await readFile(new URL("../../../app/assets/stylesheets/application.css", import.meta.url), "utf8"),
-    desktop: (await readFile(new URL("../../frontend/src/desktop-shell.css", import.meta.url), "utf8")) +
+    desktop: (await readFile(new URL("../../../app/assets/stylesheets/file_library_host.css", import.meta.url), "utf8")) +
       (await readFile(new URL("../../frontend/dist/assets/app.css", import.meta.url), "utf8"))
   }
   const fixtures = [

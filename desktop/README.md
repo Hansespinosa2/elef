@@ -1,6 +1,6 @@
 # Elef Desktop
 
-The desktop app lives in this workspace. `crates/elef-core` owns file and folder operations without a Tauri dependency; `src-tauri` exposes the named command boundary; `frontend` contains the static library shell.
+The native app lives in this workspace. `crates/elef-core` owns file and folder operations without a Tauri dependency; `src-tauri` exposes the named command boundary; `frontend/src` contains the Tauri bootstrap, native transports, and lifecycle adapters. Rails `app/` owns the product workflow, host markup, and styles consumed by the desktop.
 
 ## Local development
 

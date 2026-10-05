@@ -39,11 +39,12 @@ javascript_renderer = (REPO_ROOT / "app" / "lib" / "source" / "javascript_render
 renderer_global = (REPO_ROOT / "app" / "javascript" / "lib" / "renderer_global.js").read_text()
 renderer_worker = (REPO_ROOT / "desktop" / "frontend" / "src" / "renderer-worker.js").read_text()
 desktop_main = (REPO_ROOT / "desktop" / "frontend" / "src" / "main.js").read_text()
-native_render_styles = (REPO_ROOT / "desktop" / "frontend" / "src" / "desktop-rendered-content.css").read_text()
-assert 'import "../../../app/assets/stylesheets/application.css"' in desktop_main, "desktop must reuse Rails rendering and authoring styles"
-assert 'lib/performance_measurement' in desktop_main, "desktop performance UI must reuse the Rails-owned browser measurement helper"
+desktop_application = (REPO_ROOT / "app" / "javascript" / "lib" / "file_library_application.js").read_text()
+native_render_styles = (REPO_ROOT / "app" / "assets" / "stylesheets" / "file_library_host.css").read_text()
+assert 'import "../../../app/assets/stylesheets/application.css"' in desktop_main, "desktop must bundle Rails rendering and authoring styles"
+assert 'lib/performance_measurement' in desktop_application, "desktop performance UI must reuse the Rails-owned browser measurement helper"
 assert (REPO_ROOT / "desktop" / "frontend" / "src" / "performance-measurement.js").exists() is False, "desktop must not own a second performance measurement helper"
-assert not re.search(r"^\.(?:slide|document|presentation|katex)[\w.-]*(?:\s|\{|:)", native_render_styles, re.MULTILINE), "native viewport CSS must not contain another rendering stylesheet"
+assert not re.search(r"^\.(?:slide-frame|slide-content|presentation-surface|document-surface|katex)(?:\s|\{|:)", native_render_styles, re.MULTILINE), "the Rails-owned host stylesheet must not duplicate rendered-content styles"
 web_card = (REPO_ROOT / "app" / "views" / "library" / "_work_card.html.erb").read_text()
 desktop_card = (REPO_ROOT / "app" / "javascript" / "lib" / "library_card.js").read_text()
 graph_view = (REPO_ROOT / "app" / "javascript" / "lib" / "document_graph_view.js").read_text()
@@ -54,7 +55,7 @@ assert "ElefRenderer.renderLibraryCard" in javascript_renderer and "renderLibrar
 assert "export function createLibraryCard" in desktop_card, "desktop card UI must be owned by app/javascript"
 assert "renderDocumentGraphView" in graph_controller and "renderDocumentGraphView" in graph_view, "both hosts must use the shared document graph view"
 assert "document-graph-node" not in graph_partial, "Rails must not keep a second document graph node template"
-assert "createElementNS" not in desktop_main and "document-graph-node" not in desktop_main, "desktop must not keep a second document graph node template"
+assert "createElementNS" not in desktop_application and "document-graph-node" not in desktop_application, "desktop must not keep a second document graph node template"
 
 declared = command_names(build_source, r"let app_commands = &\[(.*?)\];")
 handler_match = re.search(
@@ -118,7 +119,7 @@ assert feature_flags == {
 }, f"desktop deferred-feature defaults must stay explicitly off: {feature_flags}"
 for flag in feature_flags:
     assert re.search(rf"\| `{flag}` \| off \| on \|", delivery_plan), f"{flag} is missing from the feature register"
-assert "applyDesktopFeatureFlags(document)" in (REPO_ROOT / "desktop" / "frontend" / "src" / "main.js").read_text(), "desktop must apply the feature flags at startup"
+assert "applyDesktopFeatureFlags(document)" in desktop_application, "the Rails-owned application must apply feature flags at startup"
 assert re.search(r"def editor_map\([^)]*\).*?Source::JavascriptRenderer\.editor_map", document_model, re.DOTALL), "Rails editor maps must delegate to the shared JavaScript implementation"
 assert '"ElefRenderer.buildEditorMap"' in javascript_renderer, "the Rails wrapper must call the shared map exported by the renderer bundle"
 assert "buildEditorMap" in renderer_global and "buildEditorStructure" in renderer_global, "the renderer bundle must expose the shared editor map and structure"

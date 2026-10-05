@@ -62,7 +62,7 @@ flowchart TB
 | Block | Responsibility | Notes |
 |---|---|---|
 | Shell (Tauri) | Window lifecycle, native menus (File / Edit / View / Presentation / Window / Help / About), single-instance, updater | ADR-002 |
-| Webview frontend | Shared CodeMirror/Stimulus editor and library views, cards, search/filter behavior, document graph, and preview styling; each host binds its own persistence and native file actions. Shared flows run on web and both desktop OSes | ADR-004 |
+| Webview frontend | Rails-owned file-library host, editor/library/graph components, application workflows, and styles; the thin desktop entry point supplies native services through adapters | ADR-004 |
 | Transport adapter | Routes the controllers' existing JSON calls to Rust commands or to webview-local handlers; owns the hash handshake | [transport-adapter.md](transport-adapter.md) |
 | Renderer worker | Loads the exact `renderer.bundle.js` used by Rails and renders off the main thread. Mermaid itself runs in the webview (needs a DOM) | ADR-007 |
 | Commands | Thin, validated entry points; each is on the capability allowlist | [security.md](security.md) |
@@ -71,7 +71,7 @@ flowchart TB
 
 Dependency rule: webview → adapter → commands → core → OS. Core never calls upward.
 
-**Frontend ownership.** Rails `app/` owns platform-neutral product UI, components, behavior, styles, and the shared renderer. Desktop imports the same `app/javascript` modules and packages the same generated assets; Rails code, tests, and build scripts never read from `desktop/`. The Rails-generated utility stylesheet is checked in at `app/assets/builds/tailwind.css`, so clean desktop packaging does not need Rails. `desktop/` owns the Tauri bootstrap, transport and filesystem adapters, lifecycle/updater integration, and unavoidable native shell UI and styling (`desktop/frontend/index.html` and `desktop/frontend/src/`). The desktop build packages those with the Rails-owned frontend and shared assets without starting Rails.
+**Frontend ownership.** Rails `app/` owns the product host markup (`app/views/desktop_host.html`), styles, workflows, shared components, and renderer. Desktop imports the same `app/javascript` modules and packages the app-owned host and styles; Rails code, tests, and build scripts never read from `desktop/`. The Rails-generated utility stylesheet is checked in at `app/assets/builds/tailwind.css`, so clean desktop packaging does not need Rails. `desktop/` owns only the Tauri bootstrap, transport and filesystem adapters, lifecycle/updater integration, and unavoidable native window/menu behavior. The desktop build packages the Rails-owned frontend without starting Rails.
 
 ## 4. Runtime view
 
@@ -110,7 +110,7 @@ Where state lives
 - **Case and Unicode.** Folder-name collision semantics are defined in [data-format.md](data-format.md); import warns while preserving the original name.
 - **Shared renderer.** Source lives in `app/javascript/lib/`; root `npm run renderer:build` creates the checked-in bundle in `vendor/javascript/`. Rails calls `ElefRenderer.renderPreview` through MiniRacer for its edit host and editor-preview endpoint; desktop packages those exact bytes and calls them in a worker. Rails supplies web routes and Active Storage URLs, while desktop supplies local document IDs and deck-scoped asset URLs. Read-only Rails views retain their server-side wrappers. The Ruby renderer remains an explicit rollback until the full consumer fixture gate and soak pass. ADR-007 owns the cutover.
 - **Concurrency.** Saves are serialized per deck and coalesced (latest wins); the app never has two writers on one deck. Periodic source checks compare the content hash to the last successful save and reload or raise a conflict. Rendering runs in a worker with a time limit; a runaway render is terminated, not waited on.
-- **Shared rendering styles.** Desktop imports Rails `app/assets/stylesheets/application.css` for rendered slides, documents, authoring controls and graph styles. Its rendering stylesheet contains only native viewport chrome. A browser comparison checks slide layouts, themes, fonts and document typography against both built stylesheets; CI rejects a second native rendering stylesheet.
+- **Shared styles.** Desktop packages Rails `app/assets/stylesheets/application.css` and the Rails-owned file-library host stylesheet. Editor, authoring, library, graph, and presentation styles are app-owned; desktop contains no HTML or CSS product source. A browser comparison checks slide layouts, themes, fonts and document typography against both built stylesheets.
 - **Errors.** Commands return typed errors `{ code, message, retryable }`; the code set is in [transport-adapter.md](transport-adapter.md). The UI maps codes to messages; raw OS errors never reach the user.
 - **Diagnostics (proposed, Q6).** Structured local logs in the OS log/app-data directory, size-capped and rotated, never containing deck content. Help → "Copy diagnostics" produces a bundle for a bug report. No telemetry.
 - **Offline-first.** Nothing requires the network except the updater, which degrades silently.
