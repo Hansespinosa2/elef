@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { parseHTML } from "linkedom"
-import { renderEditorView } from "../../../app/javascript/lib/editor_view.js"
+import { configureEditorKind, renderEditorView } from "../../../app/javascript/lib/editor_view.js"
 
 function mount(config) {
   const { document } = parseHTML("<form><div id='mount'></div></form>")
@@ -82,4 +82,46 @@ test("shared view writes deck text as text and disables document links in presen
   assert.equal(root.querySelector(".source-field").dataset.controller.includes("document-link-palette"), false)
   assert.ok(root.querySelector("[data-document-link-palette-target='palette']"))
   assert.equal(root.querySelector("[data-editor-view-target='mediaInput']").getAttribute("accept"), "image/*,video/mp4")
+})
+
+test("switching deck kinds updates the shared editor controls and controller targets", () => {
+  const { document, root } = mount({ kind: "presentation", mode: "source" })
+  const form = document.querySelector("form")
+
+  configureEditorKind(root, "document", {
+    documentTitles: ["Meeting notes"],
+    showTitle: true,
+    formControllers: "preview visual-editor presentation-editor slide-overview media presentation"
+  })
+
+  const sourceField = root.querySelector(".source-field")
+  const sourceInput = root.querySelector("[data-editor-target='input']")
+  assert.equal(root.getAttribute("aria-label"), "Visual document editor")
+  assert.equal(root.querySelector("[data-editor-view-target='kindBadge']").textContent, "Document")
+  assert.equal(root.querySelector("[data-editor-view-target='titleField']").hidden, true)
+  assert.equal(sourceInput.name, "document[source]")
+  assert.match(sourceField.dataset.controller, /document-link-palette/)
+  assert.equal(sourceField.dataset.documentLinkPaletteTitlesValue, '["Meeting notes"]')
+  assert.equal(sourceField.dataset.presentationEditorTarget, undefined)
+  assert.equal(sourceInput.dataset.documentLinkPaletteTarget, "editor")
+  assert.match(sourceInput.dataset.action, /input->document-link-palette#input/)
+  assert.equal(root.querySelector("[data-editor-view-target='mediaInput']").getAttribute("accept"), "image/*")
+  assert.equal(root.querySelector("[data-editor-view-target='slideOverview']").hidden, true)
+  assert.equal(root.querySelector("[data-presentation-editor-target='status']").hidden, true)
+  assert.match(form.dataset.controller, /presentation/)
+
+  configureEditorKind(root, "presentation", { showTitle: true })
+
+  assert.equal(root.getAttribute("aria-label"), "Visual presentation editor")
+  assert.equal(root.querySelector("[data-editor-view-target='kindBadge']").textContent, "Presentation")
+  assert.equal(root.querySelector("[data-editor-view-target='titleField']").hidden, false)
+  assert.equal(sourceInput.name, "presentation[source]")
+  assert.doesNotMatch(sourceField.dataset.controller, /document-link-palette/)
+  assert.equal(sourceField.dataset.documentLinkPaletteTitlesValue, "[]")
+  assert.equal(sourceField.dataset.presentationEditorTarget, "source")
+  assert.equal(sourceInput.dataset.documentLinkPaletteTarget, undefined)
+  assert.doesNotMatch(sourceInput.dataset.action, /document-link-palette/)
+  assert.equal(root.querySelector("[data-editor-view-target='mediaInput']").getAttribute("accept"), "image/*,video/mp4")
+  assert.equal(root.querySelector("[data-editor-view-target='slideOverview']").hidden, false)
+  assert.equal(root.querySelector("[data-presentation-editor-target='status']").hidden, false)
 })

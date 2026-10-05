@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 5391)
+Total output lines: 308
+
 const EDITOR_VIEW = `
   <section class="editor-shell" aria-label="Visual editor">
     <header class="editor-shell-header">
@@ -92,44 +95,7 @@ const EDITOR_VIEW = `
         <div class="autosave-conflict" data-autosave-target="conflict" hidden role="status">
           <p data-autosave-target="conflictMessage">A newer version is active; your draft was preserved.</p>
           <details><summary>Compare with the active version</summary><pre data-autosave-target="serverSource"></pre></details>
-          <button type="button" data-action="click->autosave#keepLocal">Keep local draft</button>
-          <button type="button" data-action="click->autosave#discardLocal">Discard local draft</button>
-        </div>
-        <span class="release-state" data-editor-view-target="releaseState" hidden></span>
-        <span class="dirty-state" data-preview-target="status" aria-live="polite"></span>
-        <button type="button" class="preview-retry" data-preview-target="retry" data-action="preview#retry" hidden>Retry preview</button>
-      </div>
-      <span class="presentation-editor-status" data-presentation-editor-target="status" aria-live="polite"></span>
-    </div>
-  </section>
-`
-
-const TARGET = "[data-editor-view-target]"
-
-export function installPreviewHtml(container, html) {
-  if (typeof globalThis.elefInstallDesktopPreview === "function") {
-    globalThis.elefInstallDesktopPreview(container, html)
-    return
-  }
-
-  const template = container.ownerDocument.createElement("template")
-  template.innerHTML = typeof html === "string" ? html : ""
-  container.replaceChildren(template.content)
-}
-
-export function mountEditorHosts(root = globalThis.document) {
-  if (!root) return
-  const hosts = root.querySelectorAll("[data-editor-view-config]")
-  for (const host of hosts) {
-    const config = JSON.parse(host.dataset.editorViewConfig)
-    renderEditorView(host, config)
-    const form = host.closest("form")
-    if (form && host.dataset.editorFormControllers) form.dataset.controller = host.dataset.editorFormControllers
-  }
-}
-
-export function renderEditorView(container, config) {
-  if (!container?.ownerDocument) throw new TypeError("Editor view needs a DOM container")
+          <button type="button" data-action="click->autosave#keepLocal">Kee…391 tokens truncated… TypeError("Editor view needs a DOM container")
   if (!config || !["document", "presentation"].includes(config.kind)) throw new TypeError("Editor view needs a supported deck kind")
 
   const doc = container.ownerDocument
@@ -137,13 +103,9 @@ export function renderEditorView(container, config) {
   template.innerHTML = EDITOR_VIEW
   const root = template.content.querySelector(".editor-shell")
   const get = name => root.querySelector(`${TARGET}[data-editor-view-target~="${name}"]`)
-  const isDocument = config.kind === "document"
-  const label = isDocument ? "Document" : "Presentation"
+  const label = config.kind === "document" ? "Document" : "Presentation"
   const ids = config.ids || {}
 
-  root.setAttribute("aria-label", `Visual ${label.toLowerCase()} editor`)
-  get("kindBadge").textContent = label
-  get("titleField").hidden = isDocument || !config.showTitle
   get("title").setAttribute("value", config.title || "")
   if (ids.title) get("title").id = ids.title
   if (config.titleName) get("title").name = config.titleName
@@ -152,11 +114,8 @@ export function renderEditorView(container, config) {
 
   const sourceField = root.querySelector(".source-field")
   sourceField.id = ids.field || "elef-editor-field"
-  sourceField.dataset.controller = `editor snippet-palette math-shorthand math-shortcut-palette mermaid-assist${isDocument ? " document-link-palette" : ""}`
   sourceField.dataset.editorInitialSourceValue = JSON.stringify(config.source || "")
   sourceField.dataset.authoringRegistry = JSON.stringify(config.authoringRegistry || [])
-  sourceField.dataset.documentLinkPaletteTitlesValue = JSON.stringify(config.documentTitles || [])
-  if (!isDocument) sourceField.dataset.presentationEditorTarget = "source"
 
   const sourceLabel = get("sourceLabel")
   sourceLabel.textContent = "Markdown source"
@@ -169,19 +128,10 @@ export function renderEditorView(container, config) {
   for (const target of ["snippet-palette", "math-shorthand", "math-shortcut-palette"]) {
     sourceSurface.dataset[`${target.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase())}Target`] = "editor"
   }
-  if (isDocument) sourceSurface.dataset.documentLinkPaletteTarget = "editor"
-  else delete sourceSurface.dataset.documentLinkPaletteTarget
-
   const sourceInput = root.querySelector("[data-editor-target='input']")
   sourceInput.id = ids.source || "elef-source"
   sourceInput.textContent = config.source || ""
   if (config.sourceName) sourceInput.name = config.sourceName
-  if (isDocument) sourceInput.dataset.documentLinkPaletteTarget = "editor"
-  else {
-    sourceInput.dataset.action = sourceInput.dataset.action.replace(" input->document-link-palette#input keydown->document-link-palette#keydown", "")
-    delete sourceInput.dataset.documentLinkPaletteTarget
-  }
-
   for (const [name, suffix, options] of [
     ["snippet-palette", "snippet_palette", "snippet-palette"],
     ["math-shortcut-palette", "math_shortcut_palette", "math-shortcut-palette"],
@@ -217,14 +167,6 @@ export function renderEditorView(container, config) {
   if (form) form.dataset.editorMode = mode
   root.querySelector(".appearance-settings").hidden = mode !== "visual"
   root.querySelector("[data-editor-target='metadataToggle']").hidden = mode === "visual"
-  root.querySelector(".editor-mode-hint").textContent = isDocument
-    ? "Visual mode keeps Markdown source canonical. Use Source mode for unsupported syntax or to edit LaTeX expressions directly. Type [[ to link another document. In math, type @a, @frac, or @gather; Tab walks multi-slot expressions. Type /diagram to open Mermaid Assist."
-    : "Visual mode keeps Markdown source canonical. Use Source mode for unsupported syntax, inline media, or to edit LaTeX expressions directly. Type /trigger for document structures and :align or :footnote for Elef directives. In math, type @a, @frac, or @gather; Tab walks multi-slot expressions. Type /diagram to open Mermaid Assist. Math transforms such as $x.b.vec.t$ commit with Enter or Tab."
-
-  get("mediaButton").textContent = isDocument ? "Add image" : "Add image or MP4"
-  get("mediaInput").setAttribute("accept", isDocument ? "image/*" : "image/*,video/mp4")
-  get("presentationTools").hidden = isDocument
-  get("slideOverview").hidden = isDocument
   get("slideHeading").id = ids.slideHeading || "slide-overview-heading"
   root.querySelector(".slide-overview").setAttribute("aria-labelledby", get("slideHeading").id)
   const slideCount = root.querySelector("[data-slide-overview-target='count']")
@@ -253,9 +195,61 @@ export function renderEditorView(container, config) {
     get("releaseState").dataset.releaseStatus = config.releaseStatus || ""
     get("releaseState").textContent = config.releaseState
   }
+  container.replaceChildren(template.content)
+  const mountedRoot = container.querySelector(".editor-shell")
+  configureEditorKind(mountedRoot, config.kind, {
+    documentTitles: config.documentTitles,
+    sourceName: config.sourceName,
+    showTitle: config.showTitle
+  })
+  return mountedRoot
+}
+
+export function configureEditorKind(root, kind, { documentTitles = [], sourceName, showTitle = false, formControllers } = {}) {
+  if (!root?.querySelector) throw new TypeError("Editor kind needs a rendered editor view")
+  if (!["document", "presentation"].includes(kind)) throw new TypeError("Editor view needs a supported deck kind")
+
+  const isDocument = kind === "document"
+  const sourceField = root.querySelector(".source-field")
+  const sourceSurface = root.querySelector("[data-editor-target='surface']")
+  const sourceInput = root.querySelector("[data-editor-target='input']")
+  const controllerNames = ["editor", "snippet-palette", "math-shorthand", "math-shortcut-palette", "mermaid-assist"]
+  const documentLinkActions = ["input->document-link-palette#input", "keydown->document-link-palette#keydown"]
+
+  root.setAttribute("aria-label", `Visual ${kind} editor`)
+  root.querySelector('[data-editor-view-target="kindBadge"]').textContent = isDocument ? "Document" : "Presentation"
+  root.querySelector('[data-editor-view-target="titleField"]').hidden = isDocument || !showTitle
+  sourceField.dataset.controller = [...controllerNames, ...(isDocument ? ["document-link-palette"] : [])].join(" ")
+  sourceField.dataset.documentLinkPaletteTitlesValue = JSON.stringify(documentTitles)
+  sourceInput.name = sourceName || `${kind}[source]`
+
+  const actions = new Set((sourceInput.dataset.action || "").split(/\s+/).filter(Boolean))
+  for (const action of documentLinkActions) actions.delete(action)
+  if (isDocument) {
+    sourceSurface.dataset.documentLinkPaletteTarget = "editor"
+    sourceInput.dataset.documentLinkPaletteTarget = "editor"
+    documentLinkActions.forEach(action => actions.add(action))
+    delete sourceField.dataset.presentationEditorTarget
+  } else {
+    delete sourceSurface.dataset.documentLinkPaletteTarget
+    delete sourceInput.dataset.documentLinkPaletteTarget
+    sourceField.dataset.presentationEditorTarget = "source"
+  }
+  sourceInput.dataset.action = [...actions].join(" ")
+
+  root.querySelector(".editor-mode-hint").textContent = isDocument
+    ? "Visual mode keeps Markdown source canonical. Use Source mode for unsupported syntax or to edit LaTeX expressions directly. Type [[ to link another document. In math, type @a, @frac, or @gather; Tab walks multi-slot expressions. Type /diagram to open Mermaid Assist."
+    : "Visual mode keeps Markdown source canonical. Use Source mode for unsupported syntax, inline media, or to edit LaTeX expressions directly. Type /trigger for document structures and :align or :footnote for Elef directives. In math, type @a, @frac, or @gather; Tab walks multi-slot expressions. Type /diagram to open Mermaid Assist. Math transforms such as $x.b.vec.t$ commit with Enter or Tab."
+  root.querySelector('[data-editor-view-target="mediaButton"]').textContent = isDocument ? "Add image" : "Add image or MP4"
+  root.querySelector('[data-editor-view-target="mediaInput"]').setAttribute("accept", isDocument ? "image/*" : "image/*,video/mp4")
+  root.querySelector('[data-editor-view-target="presentationTools"]').hidden = isDocument
+  root.querySelector('[data-editor-view-target="slideOverview"]').hidden = isDocument
   root.querySelector("[data-presentation-editor-target='status']").hidden = isDocument
 
-  container.replaceChildren(template.content)
+  if (formControllers !== undefined) {
+    const form = root.closest("form")
+    if (form) form.dataset.controller = formControllers
+  }
   return root
 }
 
