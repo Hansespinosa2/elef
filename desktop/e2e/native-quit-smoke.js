@@ -8,13 +8,19 @@ import { reserveWebdriverPort } from "./webdriver-port.js"
 
 const pause = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds))
 
-async function waitFor(check, message, timeoutMs = 20_000) {
+export async function waitFor(check, message, timeoutMs = 20_000) {
   const deadline = Date.now() + timeoutMs
+  let lastScriptTimeout
   while (Date.now() < deadline) {
-    if (await check()) return
+    try {
+      if (await check()) return
+    } catch (error) {
+      if (!/script execution timed out/i.test(error?.message || "")) throw error
+      lastScriptTimeout = error
+    }
     await pause(100)
   }
-  throw new Error(message)
+  throw new Error(lastScriptTimeout ? `${message}: ${lastScriptTimeout.message}` : message, { cause: lastScriptTimeout })
 }
 
 export function nativeQuit(pid) {
@@ -91,12 +97,14 @@ export async function runNativeQuitSmokes(env) {
           throw error
         }
       }, "The native Quit smoke driver did not start", 65_000)
+      await request(`/session/${sessionId}/timeouts`, { script: 2_000 })
       stage = "waiting for editor readiness"
       await waitFor(() => {
         if (exitResult) throw new Error(`Elef exited before the editor connected: ${JSON.stringify(exitResult)}`)
         return execute(`return Boolean(document.querySelector('[aria-label="Open ${title}"]')
           && document.querySelector('#desktop-editor-field')?.editorController?.editorReady)`)
       }, "The native Quit smoke frontend did not finish loading", 65_000)
+      await request(`/session/${sessionId}/timeouts`, { script: 60_000 })
       stage = "opening the smoke deck"
       await execute(`document.querySelector('[aria-label="Open ${title}"]').click(); return true`)
       stage = "waiting for the deck to finish opening"
