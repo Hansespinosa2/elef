@@ -395,7 +395,8 @@ class WebLibraryUi {
       await exitLink.click()
       await expect(this.page.getByText("Saved preview", { exact: true })).toBeVisible()
     }
-    const libraryLink = this.page.getByRole("link", { name: "Library", exact: true })
+    const libraryLink = this.page.getByRole("navigation", { name: "Primary" })
+      .getByRole("link", { name: "Library", exact: true })
     if (await libraryLink.count()) await libraryLink.click()
     else await this.page.goto("/", { waitUntil: "domcontentloaded" })
     await expect(this.page.locator("#deck-list")).toBeVisible()
@@ -422,7 +423,8 @@ class WebLibraryUi {
     await expect(this.page.locator(".presentation-stage")).toBeVisible()
     await this.page.getByRole("link", { name: "Exit", exact: true }).click()
     await expect(this.page.getByText("Saved preview", { exact: true })).toBeVisible()
-    await this.page.getByRole("link", { name: "Library", exact: true }).click()
+    await this.page.getByRole("navigation", { name: "Primary" })
+      .getByRole("link", { name: "Library", exact: true }).click()
     await expect(this.page.getByRole("heading", { name: title, exact: true })).toBeVisible()
   }
 
