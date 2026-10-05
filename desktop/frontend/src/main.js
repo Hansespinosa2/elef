@@ -1215,6 +1215,6 @@ void completeBootstrap({
     void invoke("pending_open_elef_count")
       .then(count => { if (count) void processOpenedFiles() })
       .catch(showError)
+    setTimeout(() => void checkForUpdates(false), 1_000)
   }
 }).catch(showError)
-void checkForUpdates(false)
