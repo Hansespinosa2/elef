@@ -101,12 +101,12 @@ export async function runNativeQuitSmokes(env) {
       stage = "waiting for editor readiness"
       await waitFor(() => {
         if (exitResult) throw new Error(`Elef exited before the editor connected: ${JSON.stringify(exitResult)}`)
-        return execute(`return Boolean(document.querySelector('[aria-label="Open ${title}"]')
+        return execute(`return Boolean(document.querySelector('[aria-label="Edit ${title}"]')
           && document.querySelector('#desktop-editor-field')?.editorController?.editorReady)`)
       }, "The native Quit smoke frontend did not finish loading", 65_000)
       await request(`/session/${sessionId}/timeouts`, { script: 60_000 })
       stage = "opening the smoke deck"
-      await execute(`document.querySelector('[aria-label="Open ${title}"]').click(); return true`)
+      await execute(`document.querySelector('[aria-label="Edit ${title}"]').click(); return true`)
       stage = "waiting for the deck to finish opening"
       await waitFor(() => execute(`const form = document.querySelector('#desktop-editor-form');
         return form?.dataset.loadedDeckId === arguments[0] && !document.querySelector('#deck-view').hidden`, id),
