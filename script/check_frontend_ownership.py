@@ -50,6 +50,8 @@ assert not frontend_import_violations, (
 
 build = (ROOT / "desktop/frontend/build.mjs").read_text()
 desktop_main = (ROOT / "desktop/frontend/src/main.js").read_text()
+desktop_shell_styles = (ROOT / "desktop/frontend/src/desktop-shell.css").read_text()
+shared_styles = (ROOT / "app/assets/stylesheets/application.css").read_text()
 presentation_controller = (ROOT / "app/javascript/controllers/presentation_controller.js").read_text()
 importmap = (ROOT / "config/importmap.rb").read_text()
 renderer_build = (ROOT / "script/build_renderer.mjs").read_text()
@@ -161,6 +163,8 @@ assert all(desktop_source_reasons.values()), "Every desktop frontend source clas
 assert not (ROOT / "app/views/desktop_shell").exists(), "platform-specific desktop host markup must stay under desktop/"
 assert not (ROOT / "app/assets/stylesheets/desktop_shell.css").exists(), "platform-specific desktop chrome must stay under desktop/"
 assert not (ROOT / "app/assets/stylesheets/desktop_rendered_content.css").exists(), "native viewport styles must stay under desktop/"
+assert not re.search(r"\.document-graph(?:-[\w-]+)?", desktop_shell_styles), "document graph styles must be shared from the Rails-owned stylesheet"
+assert ".document-graph-canvas" in shared_styles, "Rails must retain the canonical document graph styles"
 assert (ROOT / "desktop/frontend/index.html").is_file(), "desktop package must contain its standalone host template"
 assert (ROOT / "desktop/frontend/src/desktop-shell.css").is_file(), "desktop package must contain its native shell styles"
 assert (ROOT / "desktop/frontend/src/desktop-rendered-content.css").is_file(), "native editor viewport styles must stay with the desktop shell"

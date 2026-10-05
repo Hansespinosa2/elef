@@ -280,32 +280,3 @@ kbd { padding: 3px 5px; color: var(--faint); background: var(--canvas); border: 
   .conflict-columns { grid-template-columns: 1fr; }
   .conflict-source { max-height: 25vh; }
 }
-
-.library-view-tabs { display: flex; gap: 8px; margin-bottom: 18px; border-bottom: 1px solid var(--line); }
-.library-view-tab { padding: 9px 12px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted); font-weight: 700; }
-.library-view-tab.is-active { border-bottom-color: var(--accent); color: var(--ink); }
-.document-graph-panel { margin-top: 24px; padding: 20px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); }
-.document-graph-heading { display: flex; align-items: end; justify-content: space-between; gap: 20px; margin-bottom: 14px; }
-.document-graph-heading h2 { margin: 0 0 5px; font-size: 20px; }
-.document-graph-heading p:not(.eyebrow) { margin: 0; color: var(--muted); }
-.document-graph-controls { position: relative; display: flex; align-items: center; gap: 6px; }
-.document-graph-controls input { width: min(240px, 24vw); padding: 8px 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--canvas); color: var(--ink); }
-.document-graph-controls button { min-width: 34px; padding: 7px; border: 1px solid var(--line); border-radius: 7px; background: var(--canvas); color: var(--ink); }
-.document-graph-results { position: absolute; z-index: 10; top: calc(100% + 5px); left: 0; width: min(320px, 70vw); border: 1px solid var(--line); border-radius: 9px; background: var(--panel); box-shadow: var(--shadow); }
-.document-graph-results[hidden] { display: none; }
-.document-graph-result { display: block; width: 100%; padding: 8px 10px; border: 0; background: transparent; color: var(--ink); text-align: left; }
-.document-graph-result.is-selected { background: var(--accent-wash); }
-.document-graph-canvas { height: min(54vh, 520px); min-height: 340px; overflow: hidden; border: 1px solid var(--line); border-radius: 10px; background: var(--canvas); cursor: grab; touch-action: none; }
-.document-graph-canvas:active { cursor: grabbing; }
-.document-graph-canvas svg { width: 100%; height: 100%; }
-.document-graph-edge { stroke: var(--faint); stroke-width: 1.5; opacity: .7; }
-.document-graph-node { cursor: pointer; }
-.document-graph-node circle { fill: var(--panel); stroke: var(--accent); stroke-width: 3; }
-.document-graph-node text { fill: var(--ink); pointer-events: none; }
-.document-graph-node-hit-area { pointer-events: all; }
-.document-graph-empty { padding: 36px 16px; color: var(--muted); text-align: center; }
-.document-graph-help { margin: 10px 0 0; color: var(--muted); font-size: 12px; }
-@media (max-width: 760px) {
-  .document-graph-heading { align-items: stretch; flex-direction: column; }
-  .document-graph-controls input { width: min(240px, 48vw); }
-}
