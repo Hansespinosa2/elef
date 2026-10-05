@@ -281,7 +281,30 @@ jobs:
             echo "External network remained reachable during the offline desktop scenario run"
             exit 1
           fi
-          dbus-run-session -- xvfb-run --auto-servernum bash -c 'openbox --sm-disable >/tmp/elef-e2e-openbox.log 2>&1 & sleep 1; npm test --prefix desktop/e2e'
+          dbus-run-session -- xvfb-run --auto-servernum bash -c 'set -o pipefail; openbox --sm-disable >/tmp/elef-e2e-openbox.log 2>&1 & sleep 1; npm test --prefix desktop/e2e 2>&1 | tee desktop/e2e/native-scenarios.log'
+      - name: Summarize failed Linux desktop scenarios
+        if: failure()
+        shell: bash
+        run: |
+          if [[ -f desktop/e2e/native-scenarios.log ]]; then
+            {
+              echo "### Linux desktop scenario output (last 120 lines)"
+              echo '```text'
+              tail -n 120 desktop/e2e/native-scenarios.log
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Preserve Linux desktop scenario diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-e2e-linux-diagnostics
+          path: |
+            desktop/e2e/native-scenarios.log
+            desktop/e2e/logs
+            desktop/e2e/test-results
+            desktop/e2e/playwright-report
+          if-no-files-found: ignore
       - name: Build the release binary for native performance measurements
         env:
           ELEF_E2E_BUILD: "1"
@@ -377,7 +400,32 @@ jobs:
           RAILS_ENV: test
           ELEF_USE_SQLITE: "1"
           ELEF_E2E_OFFLINE: "1"
-        run: npm test --prefix desktop/e2e
+        run: |
+          set -o pipefail
+          npm test --prefix desktop/e2e 2>&1 | tee desktop/e2e/native-scenarios.log
+      - name: Summarize failed macOS desktop scenarios
+        if: failure()
+        shell: bash
+        run: |
+          if [[ -f desktop/e2e/native-scenarios.log ]]; then
+            {
+              echo "### macOS desktop scenario output (last 120 lines)"
+              echo '```text'
+              tail -n 120 desktop/e2e/native-scenarios.log
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Preserve macOS desktop scenario diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-e2e-macos-diagnostics
+          path: |
+            desktop/e2e/native-scenarios.log
+            desktop/e2e/logs
+            desktop/e2e/test-results
+            desktop/e2e/playwright-report
+          if-no-files-found: ignore
       - name: Build the release binary for native performance measurements
         env:
           ELEF_E2E_BUILD: "1"
