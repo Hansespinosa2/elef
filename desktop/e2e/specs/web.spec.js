@@ -389,7 +389,10 @@ class WebLibraryUi {
   }
 
   async openLibrary() {
-    await this.page.goto("/")
+    if (new URL(this.page.url()).pathname !== "/") {
+      await this.page.getByRole("link", { name: "Library", exact: true }).click()
+      await expect(this.page.locator("#deck-list")).toBeVisible()
+    }
   }
 
   async previewWork(title) {
