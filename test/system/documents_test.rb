@@ -2,8 +2,34 @@ require "application_system_test_case"
 
 class DocumentsTest < ApplicationSystemTestCase
   def wait_for_fresh_projection
-    # The shared preview controller allows requests up to 8 seconds to finish.
-    assert_selector "form.visual-editor-form:not([data-preview-projection-stale='true'])", wait: 10
+    selector = "form.visual-editor-form:not([data-preview-projection-stale='true'])"
+    return if has_selector?(selector, wait: 2)
+
+    if has_css?(".preview-retry:not([hidden])", wait: 0)
+      click_button "Retry preview"
+    end
+    return if has_selector?(selector, wait: 10)
+
+    state = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const form = document.querySelector("form.visual-editor-form");
+        const preview = form?.previewController;
+        const active = document.activeElement;
+        return JSON.stringify({
+          stale: form?.dataset.previewProjectionStale || null,
+          projectionFresh: preview?.projectionFresh ?? null,
+          status: form?.querySelector("[data-preview-target='status']")?.textContent?.trim() || "",
+          warnings: [...(form?.querySelectorAll(".preview-warnings li") || [])].map((item) => item.textContent),
+          retryVisible: Boolean(form?.querySelector(".preview-retry:not([hidden])")),
+          activeElement: active?.tagName || null,
+          activeEditableBlock: Boolean(active?.closest?.("[contenteditable='true']") && form?.querySelector("[data-preview-target='container']")?.contains(active.closest("[contenteditable='true']"))),
+          requestId: preview?.requestId ?? null,
+          pendingProjection: Boolean(preview?.pendingProjection),
+          activeRequest: Boolean(preview?.requestController)
+        });
+      })()
+    JAVASCRIPT
+    assert has_selector?(selector, wait: 0), "preview remained stale after one retry: #{state}"
   end
 
   def wait_for_settled_document_projection
