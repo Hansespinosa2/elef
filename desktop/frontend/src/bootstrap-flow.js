@@ -1,6 +1,7 @@
-export async function completeBootstrap({ initialize, waitForEditor, waitForPaint, confirmReady }) {
+export async function completeBootstrap({ initialize, waitForPaint, markInteractive = () => {}, waitForEditor, confirmReady }) {
   await initialize()
-  await waitForEditor()
   await waitForPaint()
+  markInteractive()
+  await waitForEditor()
   await confirmReady()
 }

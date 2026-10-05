@@ -8,7 +8,7 @@ import { listen } from "@tauri-apps/api/event"
 import { getCurrentWindow } from "@tauri-apps/api/window"
 import { relaunch } from "@tauri-apps/plugin-process"
 import { check as checkUpdater } from "@tauri-apps/plugin-updater"
-import { editorFor } from "controllers/editor_controller"
+import { editorFor } from "lib/editor_controller_lookup"
 import { createLibraryCard } from "lib/library_card"
 import { createIncrementalList } from "lib/incremental_list"
 import { createDocumentGraphCache } from "lib/document_graph_cache"
@@ -30,7 +30,7 @@ import { renderEditorView } from "lib/editor_view"
 import { renderLibraryView, setLibraryViewTab, updateLibraryEmptyState } from "lib/library_view"
 import { filterDecks } from "lib/library_filter"
 import { createLibraryPreviewLoader } from "lib/library_preview"
-import "./editor-runtime.js"
+import { loadDesktopEditorRuntime, loadDesktopLibraryRuntime } from "./editor-runtime.js"
 import "../../../app/assets/stylesheets/application.css"
 import "./desktop-rendered-content.css"
 
@@ -82,8 +82,11 @@ renderEditorView(document.querySelector("#desktop-editor-mount"), {
     preview: "desktop-preview"
   }
 })
-document.querySelector("#desktop-editor-form").dataset.controller = "preview visual-editor presentation-editor slide-overview media presentation"
-document.querySelector("#desktop-editor-form").dataset.presentationActiveValue = "false"
+const editorFieldHost = document.querySelector("#desktop-editor-field")
+const editorFormHost = document.querySelector("#desktop-editor-form")
+editorFieldHost.removeAttribute("data-controller")
+editorFormHost.removeAttribute("data-controller")
+editorFormHost.dataset.presentationActiveValue = "false"
 
 renderLibraryView(document.querySelector("#library-view-mount"), {
   filter: "all",
@@ -274,11 +277,14 @@ function measureBootstrapStage(name, action) {
 
 if (__ELEF_E2E__) {
   let interactiveAt = null
+  let nativeReadyAt = null
   Object.defineProperty(window, "__elefPerformanceTestHooks", {
     value: Object.freeze({
       get interactiveAt() { return interactiveAt },
+      get nativeReadyAt() { return nativeReadyAt },
       bootstrapStages: () => bootstrapStages.map(stage => ({ ...stage })),
-      ready: () => { interactiveAt = performance.timeOrigin + performance.now() },
+      interactive: () => { interactiveAt = performance.timeOrigin + performance.now() },
+      ready: () => { nativeReadyAt = performance.timeOrigin + performance.now() },
       async open(id) {
         const traceStart = globalThis.__elefPreviewTrace?.length || 0
         return measurePaintedAction(async () => {
@@ -305,15 +311,20 @@ if (__ELEF_E2E__) {
       async typeDuringSave(text) {
         const editor = editorFor(elements.editorField)
         const original = currentSource()
+        const expected = original + "\n" + text
         editor.replaceRange("\n", editor.value.length)
         const saving = flushSave()
         for (const character of text) {
           editor.replaceRange(character, editor.value.length)
           await new Promise(resolve => requestAnimationFrame(resolve))
         }
-        await saving
-        if (!(await flushSave()) || currentSource() !== original + "\n" + text) throw new Error("Input changed during autosave.")
-        return currentSource()
+        if (!(await saving)) throw new Error("The in-flight save did not finish while input was arriving.")
+        const actual = currentSource()
+        if (actual !== expected) throw new Error(`Input changed during autosave: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}.`)
+        if (!(await flushSave({ force: true }))) throw new Error("The final source could not be saved after input stopped.")
+        const saved = currentSource()
+        if (saved !== expected) throw new Error(`The editor source changed after save: expected ${JSON.stringify(expected)}, got ${JSON.stringify(saved)}.`)
+        return saved
       }
     })
   })
@@ -389,6 +400,7 @@ async function previewDocumentNodes(source) {
 async function showDocumentGraph() {
   if (!library) return
   try {
+    await loadDesktopLibraryRuntime()
     const graph = await documentGraphData()
     const previous = elements.graphView
     const graphView = previous.cloneNode(false)
@@ -542,7 +554,7 @@ async function openDeckNow(id) {
         getRevision: () => saveFlow.revision,
         flushSave,
         prepare: async deck => {
-          const editor = await waitForEditorController(elements.editorField, editorFor)
+          await loadDesktopEditorRuntime()
           let documentTitles = []
           if (deck.source_file === "document.md" || deck.source.includes("[[")) {
             try {
@@ -553,7 +565,7 @@ async function openDeckNow(id) {
                 ? decks.filter(item => item.kind === "document").map(item => item.name) : []
             }
           }
-          return { editor, documentTitles }
+          return { documentTitles }
         }
       })
     } while (transition && (hasUnsavedChanges() || saveFlow.revision !== transition.revision))
@@ -561,7 +573,7 @@ async function openDeckNow(id) {
       elements.editorForm.dataset.loadedDeckId = activeDeck.id
       return
     }
-    const { deck, prepared: { editor, documentTitles } } = transition
+    const { deck, prepared: { documentTitles } } = transition
     const isDocument = deck.source_file === "document.md"
     if (deck.id !== id) {
       decks = decks.map(item => item.id === id ? { ...item, id: deck.id } : item)
@@ -575,6 +587,9 @@ async function openDeckNow(id) {
     activeDeck = null
     try {
       configureEditorKind(isDocument, documentTitles)
+      const editor = editorFor(elements.editorField)?.editorReady
+        ? editorFor(elements.editorField)
+        : await waitForEditorController(elements.editorField, editorFor)
       editor.loadDocument(deck.source)
     } catch (error) {
       elements.editorInput.disabled = true
@@ -627,6 +642,7 @@ function configureEditorKind(isDocument, documentTitles) {
   elements.editorInput.name = isDocument ? "document[source]" : "presentation[source]"
   if (isDocument) controllerNames.push("document-link-palette")
   elements.editorField.dataset.controller = controllerNames.join(" ")
+  elements.editorForm.dataset.controller = "preview visual-editor presentation-editor slide-overview media presentation"
   elements.editorField.dataset.documentLinkPaletteTitlesValue = JSON.stringify(documentTitles)
   const surface = elements.editorField.querySelector("[data-editor-target='surface']")
   const input = elements.editorInput
@@ -1144,8 +1160,18 @@ void completeBootstrap({
     libraryStatusLoaded = true
     if (await measureBootstrapStage("pending-open-check", () => invoke("pending_open_elef_count"))) void processOpenedFiles()
   },
-  waitForEditor: () => measureBootstrapStage("editor-ready", () => waitForEditorController(elements.editorField, editorFor)),
   waitForPaint: () => measureBootstrapStage("initial-paint", () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))),
+  markInteractive: () => {
+    if (__ELEF_E2E__) window.__elefPerformanceTestHooks.interactive()
+  },
+  waitForEditor: async () => {
+    await measureBootstrapStage("editor-runtime", () => loadDesktopEditorRuntime())
+    if (!elements.editorField.dataset.controller) configureEditorKind(false, [])
+    if (!elements.editorForm.dataset.controller) {
+      elements.editorForm.dataset.controller = "preview visual-editor presentation-editor slide-overview media presentation"
+    }
+    await measureBootstrapStage("editor-ready", () => waitForEditorController(elements.editorField, editorFor))
+  },
   confirmReady: async () => {
     await measureBootstrapStage("native-ready-ack", () => invoke("confirm_app_ready"))
     if (__ELEF_E2E__) window.__elefPerformanceTestHooks.ready()

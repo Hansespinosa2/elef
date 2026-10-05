@@ -1,5 +1,5 @@
 import { Controller } from "@hotwired/stimulus"
-import { editorFor } from "controllers/editor_controller"
+import { editorFor } from "lib/editor_controller_lookup"
 import { markdownForVisibleText, renderInlineMath, sourceOffsetForVisiblePosition } from "controllers/editor_markdown"
 import {
   moveCaretBetweenBlocks,

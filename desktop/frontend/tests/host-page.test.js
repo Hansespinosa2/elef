@@ -6,6 +6,8 @@ import { parseHTML } from "linkedom"
 const page = await readFile(new URL("../index.html", import.meta.url), "utf8")
 const shellStyles = await readFile(new URL("../src/desktop-shell.css", import.meta.url), "utf8")
 const main = await readFile(new URL("../src/main.js", import.meta.url), "utf8")
+const editorRuntime = await readFile(new URL("../src/editor-runtime.js", import.meta.url), "utf8")
+const build = await readFile(new URL("../build.mjs", import.meta.url), "utf8")
 const editorView = await readFile(new URL("../../../app/javascript/lib/editor_view.js", import.meta.url), "utf8")
 const libraryView = await readFile(new URL("../../../app/javascript/lib/library_view.js", import.meta.url), "utf8")
 const viewportStyles = await readFile(new URL("../src/desktop-rendered-content.css", import.meta.url), "utf8")
@@ -50,7 +52,7 @@ test("the host mounts the shared editor view and gates visual editing until prev
   assert.match(main, /renderEditorView\(document\.querySelector\("#desktop-editor-mount"\)/)
   assert.match(main, /sourceName: "presentation\[source\]"/)
   assert.match(main, /elements\.editorInput\.name = isDocument \? "document\[source\]" : "presentation\[source\]"/)
-  assert.match(main, /desktop-editor-form"\)\.dataset\.controller = "preview visual-editor presentation-editor slide-overview media presentation"/)
+  assert.match(main, /elements\.editorForm\.dataset\.controller = "preview visual-editor presentation-editor slide-overview media presentation"/)
   assert.match(editorView, /data-editor-target="visualButton"/)
   assert.match(editorView, /data-presentation-target="stage"/)
   assert.match(editorView, /visualButton\.disabled = Boolean\(config\.visualDisabled\)/)
@@ -79,6 +81,15 @@ test("desktop mounts the shared library view and keeps the document graph in Doc
   assert.match(libraryView, /id="show-presentations" class="library-tab" data-library-tab="presentations"/)
   assert.match(libraryView, /id="document-graph-view"/)
   assert.doesNotMatch(libraryView, /show-document-graph/)
+})
+
+test("desktop defers shared editor and graph controllers until their views are used", () => {
+  assert.match(main, /loadDesktopEditorRuntime\(\)/)
+  assert.match(main, /loadDesktopLibraryRuntime\(\)/)
+  assert.match(editorRuntime, /import\("controllers\/editor_controller"\)/)
+  assert.match(editorRuntime, /import\("controllers\/document_graph_controller"\)/)
+  assert.doesNotMatch(editorRuntime, /^import\s+\w+Controller\s+from\s+["']controllers\//m)
+  assert.match(build, /splitting:\s*true/)
 })
 
 test("document reload reapplies editor preferences and readiness follows successful connection", async () => {

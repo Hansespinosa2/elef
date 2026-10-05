@@ -1,5 +1,5 @@
 import { Controller } from "@hotwired/stimulus"
-import { editorFor } from "controllers/editor_controller"
+import { editorFor } from "lib/editor_controller_lookup"
 import { editorInsideCode, editorInsideMath } from "controllers/math_shorthand_controller"
 import { authoringRegistryFor } from "controllers/authoring_registry"
 import { snippetStopsEffect } from "controllers/snippet_stops"

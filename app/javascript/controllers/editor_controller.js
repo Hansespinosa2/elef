@@ -747,7 +747,3 @@ export default class extends Controller {
     this.surfaceTarget.dataset.editorMode = this.element.dataset.editorMode || "standard"
   }
 }
-
-export function editorFor(element) {
-  return element.editorController || null
-}

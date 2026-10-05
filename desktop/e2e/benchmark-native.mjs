@@ -103,6 +103,12 @@ try {
       assert.ok(interactiveAt, "The release frontend must acknowledge completed startup")
       await request(`/session/${session.sessionId}/timeouts`, { script: 60_000 })
       samples.coldStart.push(interactiveAt - launchedAt)
+      let nativeReadyAt
+      while (!nativeReadyAt && Date.now() < deadline) {
+        nativeReadyAt = await execute("return window.__elefPerformanceTestHooks?.nativeReadyAt || null")
+        if (!nativeReadyAt) await pause(50)
+      }
+      assert.ok(nativeReadyAt, "The release frontend must finish editor initialization before acknowledging the installed update")
       const startupStagesJson = await execute("return JSON.stringify(window.__elefPerformanceTestHooks.bootstrapStages())")
       report.bootstrapStageRuns.push(JSON.parse(startupStagesJson))
       operation = "1,000-deck library refresh"

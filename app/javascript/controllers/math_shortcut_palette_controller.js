@@ -1,5 +1,5 @@
 import { Controller } from "@hotwired/stimulus"
-import { editorFor } from "controllers/editor_controller"
+import { editorFor } from "lib/editor_controller_lookup"
 import { application } from "controllers/application"
 import { editorInsideMath, expandMathShorthand, mathShorthandAtEditor, parseMathShorthand } from "controllers/math_shorthand_controller"
 import { authoringRegistryFor } from "controllers/authoring_registry"

@@ -59,6 +59,7 @@ renderer_sources = (
     ROOT / "app/javascript/lib/document_map.js",
     ROOT / "app/javascript/lib/renderer_global.js",
 )
+editor_runtime = (ROOT / "desktop/frontend/src/editor-runtime.js").read_text()
 
 assert 'path.join(frontendRoot, "index.html")' in build, "the native host template must stay with the desktop shell"
 assert 'path.join(frontendRoot, "src/desktop-shell.css")' in build, "native shell styling must stay with the desktop shell"
@@ -77,6 +78,7 @@ assert '"lib/library_view"' in desktop_main and '"lib/library_filter"' in deskto
 )
 assert '"lib/authoring_settings_dialog"' in desktop_main, "desktop authoring settings UI must consume the Rails-owned dialog"
 assert '"lib/library_card"' in desktop_main, "desktop library cards must be owned by app/javascript"
+assert '"lib/editor_controller_lookup"' in desktop_main, "desktop editor lookup must use the app-owned controller helper"
 assert '"lib/document_links"' in desktop_main and "buildDocumentGraph" in desktop_main, (
     "desktop graph construction must consume the Rails-owned resolver"
 )
@@ -97,6 +99,9 @@ assert '"./authoring_registry_write.js"' in authoring_settings_dialog, "authorin
 assert '"controllers/presentation_controller"' in (ROOT / "desktop/frontend/src/editor-runtime.js").read_text(), (
     "desktop must register the Rails-owned presentation controller"
 )
+assert "splitting: true" in build, "desktop must emit lazy ESM chunks instead of parsing every editor controller at launch"
+assert 'import("controllers/editor_controller")' in editor_runtime, "the heavy shared editor controller must load on demand"
+assert 'import("controllers/document_graph_controller")' in editor_runtime, "the shared graph controller must load on demand"
 assert '"presentation"' in desktop_main and "getControllerForElementAndIdentifier(elements.editorForm, \"presentation\")" in desktop_main, (
     "desktop presentation mode must delegate slide behavior to the Rails-owned controller"
 )

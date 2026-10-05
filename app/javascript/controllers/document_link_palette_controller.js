@@ -1,5 +1,5 @@
 import { Controller } from "@hotwired/stimulus"
-import { editorFor } from "controllers/editor_controller"
+import { editorFor } from "lib/editor_controller_lookup"
 
 // Prefix matches score 0, later substring matches score their index, and titles
 // that miss the query entirely drop out. Ties fall back to the title so the

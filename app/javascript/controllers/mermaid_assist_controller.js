@@ -1,5 +1,5 @@
 import { Controller } from "@hotwired/stimulus"
-import { editorFor } from "controllers/editor_controller"
+import { editorFor } from "lib/editor_controller_lookup"
 import { diagramTemplate, mermaidCompletion, mermaidEnterEdit, mermaidTabEdit, MERMAID_DIAGRAMS, slashDiagramQuery } from "controllers/mermaid_syntax"
 
 export default class extends Controller {

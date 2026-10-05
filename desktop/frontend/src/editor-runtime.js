@@ -1,23 +1,4 @@
-import { loadDesktopAuthoringRegistry } from "./authoring-registry-loader.js"
 import { application } from "controllers/application"
-import katex from "katex"
-import EditorController from "controllers/editor_controller"
-import AppearanceController from "controllers/appearance_controller"
-import DocumentLinkPaletteController from "controllers/document_link_palette_controller"
-import DocumentGraphController from "controllers/document_graph_controller"
-import MathShortcutPaletteController from "controllers/math_shortcut_palette_controller"
-import MathShorthandController from "controllers/math_shorthand_controller"
-import MermaidAssistController from "controllers/mermaid_assist_controller"
-import MediaController from "controllers/media_controller"
-import PreviewController from "controllers/preview_controller"
-import PresentationCanvasController from "controllers/presentation_canvas_controller"
-import PresentationController from "controllers/presentation_controller"
-import VisualEditorController from "controllers/visual_editor_controller"
-import PresentationEditorController from "controllers/presentation_editor_controller"
-import SlideOverviewController from "controllers/slide_overview_controller"
-import DocumentPagesController from "controllers/document_pages_controller"
-import MermaidDiagramsController from "controllers/mermaid_diagrams_controller"
-import SnippetPaletteController from "controllers/snippet_palette_controller"
 
 if (__ELEF_E2E__) {
   const handleError = application.handleError.bind(application)
@@ -38,22 +19,75 @@ if (__ELEF_E2E__) {
   }
 }
 
-globalThis.katex = katex
+let editorRuntime
+let libraryRuntime
 
-application.register("editor", EditorController)
-application.register("appearance", AppearanceController)
-application.register("document-link-palette", DocumentLinkPaletteController)
-application.register("document-graph", DocumentGraphController)
-application.register("math-shortcut-palette", MathShortcutPaletteController)
-application.register("math-shorthand", MathShorthandController)
-application.register("mermaid-assist", MermaidAssistController)
-application.register("media", MediaController)
-application.register("preview", PreviewController)
-application.register("presentation-canvas", PresentationCanvasController)
-application.register("presentation", PresentationController)
-application.register("visual-editor", VisualEditorController)
-application.register("presentation-editor", PresentationEditorController)
-application.register("slide-overview", SlideOverviewController)
-application.register("document-pages", DocumentPagesController)
-application.register("mermaid-diagrams", MermaidDiagramsController)
-application.register("snippet-palette", SnippetPaletteController)
+export function loadDesktopEditorRuntime() {
+  if (!editorRuntime) {
+    editorRuntime = loadKatex()
+      .then(() => Promise.all([
+        import("controllers/editor_controller"),
+        import("controllers/appearance_controller"),
+        import("controllers/document_link_palette_controller"),
+        import("controllers/math_shortcut_palette_controller"),
+        import("controllers/math_shorthand_controller"),
+        import("controllers/mermaid_assist_controller"),
+        import("controllers/media_controller"),
+        import("controllers/preview_controller"),
+        import("controllers/presentation_canvas_controller"),
+        import("controllers/presentation_controller"),
+        import("controllers/visual_editor_controller"),
+        import("controllers/presentation_editor_controller"),
+        import("controllers/slide_overview_controller"),
+        import("controllers/document_pages_controller"),
+        import("controllers/mermaid_diagrams_controller"),
+        import("controllers/snippet_palette_controller")
+      ]))
+      .then(([editor, appearance, documentLinks, mathPalette, mathShorthand, mermaidAssist, media, preview,
+        presentationCanvas, presentation, visualEditor, presentationEditor, slideOverview, documentPages,
+        mermaidDiagrams, snippetPalette]) => {
+        register("editor", editor.default)
+        register("appearance", appearance.default)
+        register("document-link-palette", documentLinks.default)
+        register("math-shortcut-palette", mathPalette.default)
+        register("math-shorthand", mathShorthand.default)
+        register("mermaid-assist", mermaidAssist.default)
+        register("media", media.default)
+        register("preview", preview.default)
+        register("presentation-canvas", presentationCanvas.default)
+        register("presentation", presentation.default)
+        register("visual-editor", visualEditor.default)
+        register("presentation-editor", presentationEditor.default)
+        register("slide-overview", slideOverview.default)
+        register("document-pages", documentPages.default)
+        register("mermaid-diagrams", mermaidDiagrams.default)
+        register("snippet-palette", snippetPalette.default)
+      })
+      .catch(error => {
+        editorRuntime = null
+        throw error
+      })
+  }
+  return editorRuntime
+}
+
+export function loadDesktopLibraryRuntime() {
+  if (!libraryRuntime) {
+    libraryRuntime = import("controllers/document_graph_controller")
+      .then(({ default: controller }) => register("document-graph", controller))
+      .catch(error => {
+        libraryRuntime = null
+        throw error
+      })
+  }
+  return libraryRuntime
+}
+
+async function loadKatex() {
+  const { default: katex } = await import("katex")
+  globalThis.katex = katex
+}
+
+function register(identifier, controller) {
+  application.register(identifier, controller)
+}

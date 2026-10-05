@@ -88,6 +88,8 @@ Media insertion uses the reused Rails `media_controller`: a file is sent as a ra
 
 The document graph reuses the web `document-graph` Stimulus controller and derives its nodes and `[[title]]` edges from document deck files. It is an on-demand view; no graph cache or identity data is stored outside the source folders.
 
+The library paints before the shared editor-controller runtime loads. Editor controllers are loaded after that first paint and must connect before the native updater receives its ready acknowledgement; the document-graph controller loads when the Documents view is selected.
+
 ## 5. Deployment and distribution
 
 | Platform | Artifact | Updater target |

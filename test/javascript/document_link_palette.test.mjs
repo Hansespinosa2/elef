@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises"
 
 const source = (await readFile(new URL("../../app/javascript/controllers/document_link_palette_controller.js", import.meta.url), "utf8"))
   .replace('import { Controller } from "@hotwired/stimulus"', "class Controller {}")
-  .replace('import { editorFor } from "controllers/editor_controller"', "const editorFor = () => null")
+  .replace('import { editorFor } from "lib/editor_controller_lookup"', "const editorFor = () => null")
 const palette = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`)
 
 const { insideCode, insideInlineCode, rankLinkTitles, scoreLinkTitle } = palette
