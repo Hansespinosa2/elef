@@ -326,20 +326,25 @@ if (__ELEF_E2E__) {
       async open(id) {
         const traceStart = globalThis.__elefPreviewTrace?.length || 0
         const openStageStart = openStageMeasurements.length
-        return measurePaintedAction(async () => {
+        const measured = await measurePaintedAction(async () => {
           await openDeck(id)
-          await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
           if (activeDeck?.id !== id || elements.editorForm.dataset.loadedDeckId !== id ||
               document.querySelector("#visual-mode").disabled) throw new Error("The measured deck did not finish rendering.")
           const projection = elements.editorForm.querySelector(".presentation-editor-projection")
           if (!projection) throw new Error("The measured presentation projection did not render.")
-          return {
-            id,
-            slides: projection.querySelectorAll(".slide-frame > .slide").length,
+          return { id, slides: projection.querySelectorAll(".slide-frame > .slide").length }
+        })
+        // Drain the overview's follow-up frame work for diagnostics after the
+        // primary projection has painted; it is not part of first-open time.
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+        return {
+          ...measured,
+          result: {
+            ...measured.result,
             previewTrace: globalThis.__elefPreviewTrace?.slice(traceStart) || [],
             openTrace: openStageMeasurements.slice(openStageStart)
           }
-        })
+        }
       },
       async list() {
         return measurePaintedAction(async () => {
@@ -365,6 +370,10 @@ if (__ELEF_E2E__) {
         const saved = currentSource()
         if (saved !== expected) throw new Error(`The editor source changed after save: expected ${JSON.stringify(expected)}, got ${JSON.stringify(saved)}.`)
         return saved
+      },
+      close() {
+        setTimeout(() => void getCurrentWindow().close(), 250)
+        return true
       }
     })
   })

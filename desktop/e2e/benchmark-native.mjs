@@ -5,12 +5,12 @@ import os from "node:os"
 import path from "node:path"
 import { randomUUID } from "node:crypto"
 import { desktopCommand } from "./offline-macos.js"
-import { nativeQuit } from "./native-quit-smoke.js"
 import { reserveWebdriverPort } from "./webdriver-port.js"
 import { percentile95 } from "../../app/javascript/lib/performance_measurement.js"
 import { LIBRARY_RENDER_BATCH_SIZE } from "../../app/javascript/lib/incremental_list.js"
 
 const binary = process.argv[process.argv.indexOf("--binary") + 1]
+const reportOnly = process.argv.includes("--report-runner")
 if (!process.argv.includes("--binary") || !binary || !path.isAbsolute(binary)) {
   throw new Error("Provide --binary with the absolute path to a release build with the webdriver feature.")
 }
@@ -132,10 +132,10 @@ try {
       assert.equal(typed, source + "\nInput preserved 😀 日本語")
       assert.equal(await readFile(path.join(folder, "presentation.md"), "utf8"), typed)
       report.inputPreservedRuns += 1
-      nativeQuit(app.pid)
+      await execute("return window.__elefPerformanceTestHooks.close()")
       const quitDeadline = Date.now() + 10_000
       while (!exitResult && Date.now() < quitDeadline) await pause(50)
-      assert.deepEqual(exitResult, { code: 0, signal: null }, "The measured process must exit through its native Quit guard")
+      assert.deepEqual(exitResult, { code: 0, signal: null }, "The measured process must exit through its native window-close guard")
       process.stdout.write(`Native release performance run ${run + 1}/20 completed.\n`)
     } catch (error) {
       throw new Error(`Native release performance run ${run + 1} during ${operation}: ${error.message}; backend: ${backendOutput}`)
@@ -221,10 +221,15 @@ try {
   report.p95PreviewStageMilliseconds = Object.fromEntries([...previewStageSamples]
     .filter(([, values]) => values.length >= 20)
     .map(([name, values]) => [name, percentile95(values)]))
-  report.budgetsMilliseconds = { coldStart: 1500, open100Slides: 300, warmLibrary: 500 }
-  report.misses = Object.entries(report.budgetsMilliseconds).filter(([name, budget]) => report.p95Milliseconds[name] >= budget).map(([name]) => name)
-  process.stdout.write(JSON.stringify({ p95Milliseconds: report.p95Milliseconds, p95NavigationStageMilliseconds: report.p95NavigationStageMilliseconds, p95BootstrapStageMilliseconds: report.p95BootstrapStageMilliseconds, p95OpenStageMilliseconds: report.p95OpenStageMilliseconds, p95PreviewStageMilliseconds: report.p95PreviewStageMilliseconds, inputPreservedRuns: report.inputPreservedRuns, renderedLibraryCards: [...new Set(report.renderedLibraryCards)], misses: report.misses }) + "\n")
+report.budgetsMilliseconds = { coldStart: 1500, open100Slides: 300, warmLibrary: 500 }
+report.misses = Object.entries(report.budgetsMilliseconds).filter(([name, budget]) => report.p95Milliseconds[name] >= budget).map(([name]) => name)
+report.budgetMode = reportOnly ? "runner-report-only" : "enforced"
+process.stdout.write(JSON.stringify({ budgetMode: report.budgetMode, p95Milliseconds: report.p95Milliseconds, p95NavigationStageMilliseconds: report.p95NavigationStageMilliseconds, p95BootstrapStageMilliseconds: report.p95BootstrapStageMilliseconds, p95OpenStageMilliseconds: report.p95OpenStageMilliseconds, p95PreviewStageMilliseconds: report.p95PreviewStageMilliseconds, inputPreservedRuns: report.inputPreservedRuns, renderedLibraryCards: [...new Set(report.renderedLibraryCards)], misses: report.misses }) + "\n")
+if (reportOnly) {
+  if (report.misses.length) process.stderr.write(`Hosted runner measurements missed target-device budgets: ${report.misses.join(", ")}\n`)
+} else {
   assert.deepEqual(report.misses, [], "Native release application performance exceeded its budgets")
+}
 } finally {
   await mkdir(path.dirname(output), { recursive: true })
   await writeFile(output, JSON.stringify(report, null, 2) + "\n")

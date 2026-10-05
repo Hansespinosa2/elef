@@ -26,6 +26,12 @@ config = json.loads((TAURI_ROOT / "tauri.conf.json").read_text())
 e2e_config = json.loads((TAURI_ROOT / "tauri.e2e.conf.json").read_text())
 performance_config = json.loads((TAURI_ROOT / "tauri.performance.conf.json").read_text())
 assert performance_config == {"plugins": {"updater": {"endpoints": ["https://127.0.0.1:8888/manifest"]}}}, "release measurement must keep secure transport and a loopback-only offline check"
+performance_benchmark = (REPO_ROOT / "desktop" / "e2e" / "benchmark-native.mjs").read_text()
+ci_workflow = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text()
+assert 'process.argv.includes("--report-runner")' in performance_benchmark, "hosted native performance must be identified explicitly"
+assert 'report.budgetMode = reportOnly ? "runner-report-only" : "enforced"' in performance_benchmark
+assert 'assert.deepEqual(report.misses, [], "Native release application performance exceeded its budgets")' in performance_benchmark, "target-device performance runs must keep hard budget assertions"
+assert ci_workflow.count("benchmark-native.mjs --binary") == 2 and ci_workflow.count("--report-runner") == 2, "both hosted benchmark jobs must report their measurements without claiming target-device enforcement"
 feature_flags_source = (REPO_ROOT / "app" / "javascript" / "lib" / "feature_flags.js").read_text()
 delivery_plan = (REPO_ROOT / "docs" / "desktop" / "delivery-plan.md").read_text()
 document_model = (REPO_ROOT / "app" / "lib" / "source" / "document.rb").read_text()
