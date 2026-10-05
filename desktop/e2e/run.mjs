@@ -246,6 +246,7 @@ try {
   })
   if (desktopResult.error) throw desktopResult.error
   if (desktopResult.status !== 0) throw new Error("Shared desktop scenarios failed with status " + desktopResult.status)
+  if (process.env.CI) await runNativeQuitSmokes(env)
   if (env.ELEF_E2E_PACKAGED_UPDATES === "1") {
     if (process.platform === "linux") await prepareInstalledAppImage()
     const upgradedResult = spawnSync(webdriverio, ["run", "wdio.conf.js"], {
@@ -254,7 +255,6 @@ try {
     if (upgradedResult.error) throw upgradedResult.error
     if (upgradedResult.status !== 0) throw new Error("The installed update did not launch and preserve the deck")
   }
-  if (process.env.CI) await runNativeQuitSmokes(env)
 
   const desktopSource = await readFile(path.join(seedDeck, "presentation.md"), "utf8")
   assert.equal(normalizeLineEndings(desktopSource), expectedDesktopSource)
