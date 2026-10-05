@@ -256,6 +256,7 @@ titleFlow = createTitleSaveFlow({
 })
 
 const bootstrapStages = []
+const openStageMeasurements = []
 
 function measureBootstrapStage(name, action) {
   if (!__ELEF_E2E__) return action()
@@ -275,6 +276,29 @@ function measureBootstrapStage(name, action) {
   }
 }
 
+function measureOpenStage(name, action) {
+  if (!__ELEF_E2E__) return action()
+
+  const startedAt = performance.now()
+  const record = () => recordOpenStage(name, startedAt)
+  try {
+    const result = action()
+    if (result && typeof result.then === "function") {
+      return result.then(value => { record(); return value }, error => { record(); throw error })
+    }
+    record()
+    return result
+  } catch (error) {
+    record()
+    throw error
+  }
+}
+
+function recordOpenStage(name, startedAt) {
+  openStageMeasurements.push({ name, milliseconds: performance.now() - startedAt })
+  if (openStageMeasurements.length > 512) openStageMeasurements.shift()
+}
+
 if (__ELEF_E2E__) {
   let interactiveAt = null
   let nativeReadyAt = null
@@ -283,10 +307,21 @@ if (__ELEF_E2E__) {
       get interactiveAt() { return interactiveAt },
       get nativeReadyAt() { return nativeReadyAt },
       bootstrapStages: () => bootstrapStages.map(stage => ({ ...stage })),
+      navigationTiming() {
+        const navigation = performance.getEntriesByType("navigation")[0]
+        if (!navigation) return null
+        return {
+          responseEnd: navigation.responseEnd,
+          domInteractive: navigation.domInteractive,
+          domContentLoadedEventEnd: navigation.domContentLoadedEventEnd,
+          loadEventEnd: navigation.loadEventEnd
+        }
+      },
       interactive: () => { interactiveAt = performance.timeOrigin + performance.now() },
       ready: () => { nativeReadyAt = performance.timeOrigin + performance.now() },
       async open(id) {
         const traceStart = globalThis.__elefPreviewTrace?.length || 0
+        const openStageStart = openStageMeasurements.length
         return measurePaintedAction(async () => {
           await openDeck(id)
           await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
@@ -297,7 +332,8 @@ if (__ELEF_E2E__) {
           return {
             id,
             slides: projection.querySelectorAll(".slide-frame > .slide").length,
-            previewTrace: globalThis.__elefPreviewTrace?.slice(traceStart) || []
+            previewTrace: globalThis.__elefPreviewTrace?.slice(traceStart) || [],
+            openTrace: openStageMeasurements.slice(openStageStart)
           }
         })
       },
@@ -549,11 +585,11 @@ async function openDeckNow(id) {
     let transition
     do {
       transition = await prepareDeckOpen(id, {
-        read: target => transport.readDeck(target),
+        read: target => measureOpenStage("readDeck", () => transport.readDeck(target)),
         isDirty: hasUnsavedChanges,
         getRevision: () => saveFlow.revision,
         flushSave,
-        prepare: async deck => {
+        prepare: deck => measureOpenStage("prepareDeck", async () => {
           await loadDesktopEditorRuntime()
           let documentTitles = []
           if (deck.source_file === "document.md" || deck.source.includes("[[")) {
@@ -566,7 +602,7 @@ async function openDeckNow(id) {
             }
           }
           return { documentTitles }
-        }
+        })
       })
     } while (transition && (hasUnsavedChanges() || saveFlow.revision !== transition.revision))
     if (!transition) {
@@ -587,15 +623,16 @@ async function openDeckNow(id) {
     activeDeck = null
     try {
       configureEditorKind(isDocument, documentTitles)
-      const editor = editorFor(elements.editorField)?.editorReady
+      const editor = await measureOpenStage("editorReady", () => editorFor(elements.editorField)?.editorReady
         ? editorFor(elements.editorField)
-        : await waitForEditorController(elements.editorField, editorFor)
-      editor.loadDocument(deck.source)
+        : waitForEditorController(elements.editorField, editorFor))
+      measureOpenStage("loadDocument", () => editor.loadDocument(deck.source))
     } catch (error) {
       elements.editorInput.disabled = true
       showLibrary()
       throw error
     }
+    const viewSetupStartedAt = __ELEF_E2E__ ? performance.now() : null
     transport.activateDeck(deck, id)
     activeDeck = deck
     saveFlow.activate(deck)
@@ -627,7 +664,8 @@ async function openDeckNow(id) {
     elements.deckView.hidden = false
     document.querySelector("#breadcrumb-current").textContent = deck.name
     setStatus("Deck opened")
-    const rendered = await elements.editorForm.previewController?.refresh()
+    if (viewSetupStartedAt !== null) recordOpenStage("deckViewSetup", viewSetupStartedAt)
+    const rendered = await measureOpenStage("previewRefresh", () => elements.editorForm.previewController?.refresh())
     if (rendered) {
       visualButton.disabled = false
       visualButton.title = "Edit the rendered deck visually"

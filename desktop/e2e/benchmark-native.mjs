@@ -31,6 +31,8 @@ const report = { platform: process.platform, architecture: process.arch, release
   samples, inputPreservedRuns: 0 }
 report.renderedLibraryCards = []
 report.bootstrapStageRuns = []
+report.frontendNavigationRuns = []
+report.openTraceRuns = []
 report.previewTraceRuns = []
 
 try {
@@ -103,6 +105,7 @@ try {
       assert.ok(interactiveAt, "The release frontend must acknowledge completed startup")
       await request(`/session/${session.sessionId}/timeouts`, { script: 60_000 })
       samples.coldStart.push(interactiveAt - launchedAt)
+      report.frontendNavigationRuns.push(await execute("return window.__elefPerformanceTestHooks.navigationTiming()"))
       let nativeReadyAt
       while (!nativeReadyAt && Date.now() < deadline) {
         nativeReadyAt = await execute("return window.__elefPerformanceTestHooks?.nativeReadyAt || null")
@@ -122,6 +125,7 @@ try {
       assert.equal(opened.result.id, deckId)
       assert.equal(opened.result.slides, 100)
       samples.open100Slides.push(opened.milliseconds)
+      report.openTraceRuns.push(opened.result.openTrace)
       report.previewTraceRuns.push(opened.result.previewTrace)
       operation = "autosave while typing"
       const typed = await execute("return await window.__elefPerformanceTestHooks.typeDuringSave(arguments[0])", "Input preserved 😀 日本語")
@@ -159,6 +163,35 @@ try {
   report.p95BootstrapStageMilliseconds = Object.fromEntries([...bootstrapStageSamples]
     .filter(([, values]) => values.length >= 20)
     .map(([name, values]) => [name, percentile95(values)]))
+  const openStageSamples = new Map()
+  for (const trace of report.openTraceRuns) {
+    const runStages = new Map()
+    for (const stage of trace) {
+      runStages.set(stage.name, (runStages.get(stage.name) || 0) + stage.milliseconds)
+    }
+    for (const [name, milliseconds] of runStages) {
+      const values = openStageSamples.get(name) || []
+      values.push(milliseconds)
+      openStageSamples.set(name, values)
+    }
+  }
+  for (const name of ["readDeck", "prepareDeck", "editorReady", "loadDocument", "deckViewSetup", "previewRefresh"]) {
+    assert.equal(openStageSamples.get(name)?.length, 20, `Expected 20 native open measurements for ${name}`)
+  }
+  report.p95OpenStageMilliseconds = Object.fromEntries([...openStageSamples]
+    .filter(([, values]) => values.length >= 20)
+    .map(([name, values]) => [name, percentile95(values)]))
+  const navigationStageSamples = new Map()
+  for (const navigation of report.frontendNavigationRuns) {
+    for (const [name, value] of Object.entries(navigation || {})) {
+      const values = navigationStageSamples.get(name) || []
+      values.push(value)
+      navigationStageSamples.set(name, values)
+    }
+  }
+  report.p95NavigationStageMilliseconds = Object.fromEntries([...navigationStageSamples]
+    .filter(([, values]) => values.length >= 20)
+    .map(([name, values]) => [name, percentile95(values)]))
   const previewStagePairs = [
     ["render", "render-start", "render-ready"],
     ["previewInstall", "preview-install-start", "preview-install-ready"],
@@ -190,7 +223,7 @@ try {
     .map(([name, values]) => [name, percentile95(values)]))
   report.budgetsMilliseconds = { coldStart: 1500, open100Slides: 300, warmLibrary: 500 }
   report.misses = Object.entries(report.budgetsMilliseconds).filter(([name, budget]) => report.p95Milliseconds[name] >= budget).map(([name]) => name)
-  process.stdout.write(JSON.stringify({ p95Milliseconds: report.p95Milliseconds, p95BootstrapStageMilliseconds: report.p95BootstrapStageMilliseconds, p95PreviewStageMilliseconds: report.p95PreviewStageMilliseconds, inputPreservedRuns: report.inputPreservedRuns, renderedLibraryCards: [...new Set(report.renderedLibraryCards)], misses: report.misses }) + "\n")
+  process.stdout.write(JSON.stringify({ p95Milliseconds: report.p95Milliseconds, p95NavigationStageMilliseconds: report.p95NavigationStageMilliseconds, p95BootstrapStageMilliseconds: report.p95BootstrapStageMilliseconds, p95OpenStageMilliseconds: report.p95OpenStageMilliseconds, p95PreviewStageMilliseconds: report.p95PreviewStageMilliseconds, inputPreservedRuns: report.inputPreservedRuns, renderedLibraryCards: [...new Set(report.renderedLibraryCards)], misses: report.misses }) + "\n")
   assert.deepEqual(report.misses, [], "Native release application performance exceeded its budgets")
 } finally {
   await mkdir(path.dirname(output), { recursive: true })
