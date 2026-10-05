@@ -28,6 +28,7 @@ The elicited preferences list (batch-elicit-me, 4 batches) is the brief; these d
 | 007 | One shared JS renderer | Proposed | S1 renderer items pass |
 | 008 | Atomic writes, fingerprint checks, conflict UI | Accepted | — |
 | 009 | Distribution, signed updates, key custody | Proposed | S3 + S4 pass; key custody performed |
+| 010 | Portable document-link metadata in Markdown | Proposed | Shared graph, folder/archive, and Rails package round-trip tests pass |
 
 Proposed ADRs are accepted on spike results, not on a nod (see Q10 if you want an additional sign-off).
 
@@ -56,7 +57,7 @@ Point the agent at `architecture.md` + the relevant ADR(s) + the seam spec for t
 | `adr/003-…` renderer text | Removed; owned by ADR-007 |
 | ADR-001/002/004/005/007 | Same names, revised to the standard template |
 | `data-format.md`, `transport-adapter.md`, `test-strategy.md` | Same names, revised |
-| — | New: `requirements.md`, `security.md`, `risks-and-open-questions.md`, `adr/008`, `adr/009`, `adr/README.md` |
+| — | New: `requirements.md`, `security.md`, `risks-and-open-questions.md`, `adr/008`, `adr/009`, `adr/010`, `adr/README.md` |
 
 ## What changed in v3
 

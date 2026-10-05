@@ -95,6 +95,24 @@ test("portable Markdown front matter resolves stable keys and aliases in the sha
   assert.deepEqual(graph.edges, [{ source: "source", target: "manifest-uuid" }])
 })
 
+test("duplicate portable keys and aliases stay unresolved instead of selecting the last document", () => {
+  const source = key => `---\nelef_document_key: ${JSON.stringify(key)}\nelef_aliases: ["Shared previous title"]\n---\n`
+  const resolve = createDocumentLinkResolver([
+    { id: "first", title: "First", source: source("shared-key") },
+    { id: "second", title: "Second", source: source("shared-key") }
+  ])
+
+  assert.equal(resolve("document:shared-key"), null)
+  assert.equal(resolve("Shared previous title"), null)
+  assert.equal(resolve("id:first")?.id, "first")
+  assert.equal(resolve("id:second")?.id, "second")
+  assert.deepEqual(buildDocumentGraph([
+    { id: "source", title: "Source", source: "[[document:shared-key]] [[Shared previous title]]" },
+    { id: "first", title: "First", source: source("shared-key") },
+    { id: "second", title: "Second", source: source("shared-key") }
+  ]).edges, [])
+})
+
 test("malformed portable Markdown metadata safely falls back to the deck identity", () => {
   assert.deepEqual(parsePortableDocumentLinks("---\nelef_document_key: [bad\nelef_aliases: nope\n---\n# Notes"), {
     documentKey: null,

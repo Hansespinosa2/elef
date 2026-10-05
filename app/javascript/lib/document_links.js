@@ -106,7 +106,9 @@ export function parsePortableDocumentLinks(source = "") {
 export function createDocumentLinkResolver(documents = []) {
   const byTitle = new Map()
   const byAlias = new Map()
+  const ambiguousAliases = new Set()
   const byKey = new Map()
+  const ambiguousKeys = new Set()
   const byId = new Map()
 
   for (const input of documents) {
@@ -114,16 +116,19 @@ export function createDocumentLinkResolver(documents = []) {
     if (document?.title != null) byTitle.set(String(document.title), document)
     if (document?.id != null) byId.set(String(document.id), document)
     const key = document?.documentKey ?? document?.document_key ?? document?.id
-    if (key != null) byKey.set(String(key), document)
+    if (key != null) addUniqueIndex(byKey, ambiguousKeys, key, document)
     for (const alias of Array.isArray(document?.aliases) ? document.aliases : []) {
-      if (typeof alias === "string") byAlias.set(alias, document)
+      if (typeof alias === "string") addUniqueIndex(byAlias, ambiguousAliases, alias, document)
     }
   }
 
   return value => {
     const tokenKey = String(value ?? "").split("|", 2)[0]
-    const explicitKey = tokenKey.match(/^(?:document|id):(.*)$/)
-    if (explicitKey) return byKey.get(explicitKey[1]) || byId.get(explicitKey[1]) || null
+    const explicitDocumentKey = tokenKey.match(/^document:(.*)$/)
+    if (explicitDocumentKey) return byKey.get(explicitDocumentKey[1]) || null
+    const explicitId = tokenKey.match(/^id:(.*)$/)
+    if (explicitId) return byId.get(explicitId[1]) || null
+    if (ambiguousAliases.has(tokenKey) || ambiguousKeys.has(tokenKey)) return null
     return byAlias.get(tokenKey) || byTitle.get(tokenKey) || byKey.get(tokenKey) || byId.get(tokenKey) || null
   }
 }
@@ -170,6 +175,18 @@ function withPortableDocumentLinks(document) {
     ...document,
     documentKey: portable.documentKey || document.documentKey || document.document_key || String(document.id ?? ""),
     aliases: [...new Set([...aliases, ...portable.aliases])]
+  }
+}
+
+function addUniqueIndex(index, ambiguous, value, document) {
+  const key = String(value).trim()
+  if (!key || ambiguous.has(key)) return
+  const existing = index.get(key)
+  if (existing && String(existing.id) !== String(document.id)) {
+    index.delete(key)
+    ambiguous.add(key)
+  } else if (!existing) {
+    index.set(key, document)
   }
 }
 

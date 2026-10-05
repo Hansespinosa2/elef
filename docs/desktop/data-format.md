@@ -49,6 +49,7 @@ elef_aliases: ["Earlier title", "Short name"]
 ```
 
 - Both values use JSON string/array syntax, which is valid YAML. `elef_document_key` is optional; desktop falls back to the deck UUID in `elef.json`. `elef_aliases` is optional and contains previous or alternate document titles.
+- Folder copies and imports preserve these bytes. If multiple decks have the same portable key or alias, shared link resolution treats that value as ambiguous and leaves its links unresolved; it never picks a deck based on scan order.
 - The Rails JavaScript reads these fields for the shared web and desktop graph. Rails database key/alias rows mirror the source metadata for indexed lookups.
 - Writers preserve unrelated front matter and body bytes. Readers ignore malformed optional metadata and continue with the normal identity fallback. `elef.json` remains exactly `{ id, schema_version }`; the additive source fields do not change the folder schema version. See [ADR-010](adr/010-portable-document-links.md).
 

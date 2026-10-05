@@ -23,7 +23,7 @@ Document decks may carry two optional top-level front-matter fields:
 - `elef_document_key`: a JSON-quoted string with the stable graph key.
 - `elef_aliases`: a JSON array of historical or alternate titles.
 
-These JSON values are valid YAML scalars. The shared Rails JavaScript reads them for both graph hosts. An explicit front-matter key takes precedence; Rails database fields remain an index mirror. Desktop uses the manifest UUID when the optional key is absent. Old readers preserve the lines as ordinary front matter; new readers ignore malformed values and continue with the database or manifest fallback.
+These JSON values are valid YAML scalars. The shared Rails JavaScript reads them for both graph hosts. An explicit front-matter key takes precedence; Rails database fields remain an index mirror. Desktop uses the manifest UUID when the optional key is absent. Old readers preserve the lines as ordinary front matter; new readers ignore malformed values and continue with the database or manifest fallback. When duplicate keys or aliases occur, imports preserve the source bytes and shared resolution leaves matching links unresolved instead of choosing one document by scan order.
 
 Rails leaves canonical Markdown untouched during ordinary saves and adds these fields to exported work packages from its existing document-key and alias records. The importer merges package metadata into the imported Markdown and rebuilds its database indexes. The `elef.json` shape and folder `schema_version` do not change: these fields are additive, optional source metadata, and the source file remains openable without them.
 
