@@ -93,12 +93,14 @@ function sendNativeKey(key, { activate = true } = {}) {
 async function sendPresentationKey(key) {
   await browser.execute(() => window.focus())
   if (process.platform === "darwin") {
-    if (key === "Home" || key === "End") {
-      sendNativeKey(key)
-      return
-    }
     focusDesktopWindow()
-    const webDriverKey = { Escape: Key.Escape, ArrowRight: Key.ArrowRight, ArrowLeft: Key.ArrowLeft }[key]
+    const webDriverKey = {
+      Escape: Key.Escape,
+      ArrowRight: Key.ArrowRight,
+      ArrowLeft: Key.ArrowLeft,
+      Home: Key.Home,
+      End: Key.End
+    }[key]
     if (!webDriverKey) throw new Error(`Unsupported presentation key ${key}`)
     await browser.keys(webDriverKey)
     return
