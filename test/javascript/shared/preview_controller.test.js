@@ -75,6 +75,45 @@ test("preview timeout also bounds reading the JSON response body", async () => {
   }
 })
 
+test("finishEditing blurs a focused visual projection block", () => {
+  const originalDocument = globalThis.document
+  const controller = new preview.default()
+  let blurred = false
+  const activeEditable = {
+    blur: () => { blurred = true },
+    closest: selector => selector === "[contenteditable='true']" ? activeEditable : null
+  }
+  const container = { contains: element => element === activeEditable }
+  controller.containerTarget = container
+  globalThis.document = { activeElement: activeEditable }
+
+  try {
+    assert.equal(controller.finishEditing(), true)
+    assert.equal(blurred, true)
+  } finally {
+    globalThis.document = originalDocument
+  }
+})
+
+test("finishEditing leaves focus outside the visual projection alone", () => {
+  const originalDocument = globalThis.document
+  const controller = new preview.default()
+  let blurred = false
+  const activeEditable = {
+    blur: () => { blurred = true },
+    closest: selector => selector === "[contenteditable='true']" ? activeEditable : null
+  }
+  controller.containerTarget = { contains: () => false }
+  globalThis.document = { activeElement: activeEditable }
+
+  try {
+    assert.equal(controller.finishEditing(), false)
+    assert.equal(blurred, false)
+  } finally {
+    globalThis.document = originalDocument
+  }
+})
+
 test("a stranded stale preview offers retry when no replacement request remains", async () => {
   const originalFetch = globalThis.fetch
   const originalDocument = globalThis.document

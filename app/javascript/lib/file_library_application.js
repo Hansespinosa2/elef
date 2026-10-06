@@ -427,6 +427,7 @@ export function startFileLibraryApplication(platform) {
   }
 
   function showLibrary() {
+    elements.editorForm.previewController?.finishEditing()
     document.body.dataset.desktopView = "library"
     elements.welcome.hidden = Boolean(library)
     elements.library.hidden = !library
@@ -611,6 +612,8 @@ export function startFileLibraryApplication(platform) {
   async function openDeckNow(id) {
     try {
       if (document.body.classList.contains("presenting-deck")) await exitPresentation()
+      elements.editorForm.previewController?.finishEditing()
+      await Promise.resolve()
       if (activeDeck && hasUnsavedChanges() && !(await flushSave())) return false
       delete elements.editorForm.dataset.loadedDeckId
       let transition

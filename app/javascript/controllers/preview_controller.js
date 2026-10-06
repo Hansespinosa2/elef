@@ -205,6 +205,14 @@ export default class extends Controller {
     return Boolean(activeEditable && this.containerTarget.contains(activeEditable))
   }
 
+  finishEditing() {
+    const activeEditable = document.activeElement?.closest?.("[contenteditable='true']")
+    if (!activeEditable || !this.containerTarget.contains(activeEditable)) return false
+
+    activeEditable.blur()
+    return true
+  }
+
   applyPendingProjection() {
     if (!this.pendingProjection || this.isEditingProjection()) return
 

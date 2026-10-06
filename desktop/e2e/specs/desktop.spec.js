@@ -1533,6 +1533,26 @@ describe("desktop binary workflows and native boundaries", () => {
     }
   })
 
+  it("opens the next deck after leaving a focused visual editor", async () => {
+    const ui = new DesktopEditorUi()
+    await ui.openDeck("E2E seed")
+    const focused = await browser.execute(() => {
+      const block = document.querySelector("#desktop-preview [contenteditable='true']")
+      block?.focus()
+      return Boolean(block && document.activeElement === block)
+    })
+    if (!focused) throw new Error("The visual editor block did not receive focus")
+
+    await ui.openDeck("E2E document")
+    await browser.waitUntil(async () => browser.execute(() =>
+      document.querySelector("#desktop-editor-form")?.dataset.editorMode === "visual" &&
+      !document.querySelector("#visual-mode")?.disabled
+    ), {
+      timeout: 10_000,
+      timeoutMsg: "The next deck preview stayed disabled after switching from a focused visual block"
+    })
+  })
+
   it("runs the shared presentation navigation flow in the desktop binary", async () => {
     await presentationModeWorkflow(new DesktopEditorUi())
   })
