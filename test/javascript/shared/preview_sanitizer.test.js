@@ -75,11 +75,23 @@ test("sanitized renderer output retains the document and presentation editing co
 
     if (kind === "presentation") {
       assert.ok(container.querySelector("button[data-presentation-editor-action]"), "presentation actions remain available")
+      assert.equal(container.querySelector(".presentation-surface").getAttribute("data-presentation-editor-target"), "canvas")
     }
     const alignment = container.querySelector("select[data-visual-editor-block-id], select[data-presentation-editor-align]")
     assert.ok(alignment, `${kind} alignment control remains available`)
     assert.ok(alignment.querySelector('option[value="left"]'), `${kind} alignment options retain values`)
   }
+})
+
+test("sanitized renderer output keeps editable display math source", () => {
+  const { document } = parseHTML("<main id='preview'></main>")
+  const container = document.querySelector("#preview")
+  const rendered = renderPreview({ source: "# Title\n\n$$\\sum_{i=1}^{n} i$$" }).html
+  installSanitizedPreview(container, rendered)
+
+  const math = container.querySelector(".katex-display[data-editor-math-source]")
+  assert.ok(math)
+  assert.equal(math.getAttribute("contenteditable"), "false")
 })
 
 test("sanitized renderer output preserves safe Markdown table alignment", () => {

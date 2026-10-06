@@ -285,6 +285,10 @@ class WebEditorUi {
               .toBeLessThan(frameWidths[0] - 1)
           }
           await expect(frame).toBeVisible()
+          await expect.poll(() => frame.evaluate(element => {
+            const rect = element.getBoundingClientRect()
+            return rect.width > 0 && rect.height > 0 ? rect.width / rect.height : null
+          })).toBeCloseTo(210 / 297, 2)
           const metrics = await frame.evaluate(element => {
             const rect = element.getBoundingClientRect()
             const preview = element.closest(".preview-pane")
