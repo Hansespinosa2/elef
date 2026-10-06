@@ -4,6 +4,7 @@ const ALLOWED_ELEMENTS = new Set([
   "MTR", "MOVER", "MUNDER", "MUNDEROVER", "MSQRT", "MROOT", "MSTYLE", "MSPACE", "OL", "P", "PRE", "SECTION",
   "BUTTON", "FIGCAPTION", "FIGURE", "LABEL", "OPTION", "SELECT", "SEMANTICS", "SPAN", "STRONG", "SUB", "SUP", "TABLE", "TBODY", "TD", "TH", "THEAD", "TR", "UL", "VIDEO", "WBR"
 ])
+const INTERACTIVE_ELEMENTS = new Set(["BUTTON", "LABEL", "OPTION", "SELECT"])
 const SAFE_PROTOCOLS = /^(?:https?:|mailto:|tel:|elefasset:|#|\/|\.\.?\/|[^:]*$)/i
 const ALLOWED_ACTIONS = new Set([
   "input->visual-editor#projectionInput focus->visual-editor#blockFocus blur->visual-editor#blockBlur",
@@ -25,7 +26,7 @@ export function installSanitizedPreview(container, html, { interactive = true, d
   while (walker.nextNode()) elements.push(walker.currentNode)
 
   for (const element of elements) {
-    if (!ALLOWED_ELEMENTS.has(element.tagName)) {
+    if (!ALLOWED_ELEMENTS.has(element.tagName) || (!interactive && INTERACTIVE_ELEMENTS.has(element.tagName))) {
       element.remove()
       continue
     }

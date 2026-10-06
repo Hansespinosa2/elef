@@ -89,6 +89,15 @@ test("sanitized renderer output preserves safe Markdown table alignment", () => 
   assert.equal(container.querySelector("th:nth-child(2)").getAttribute("style"), "text-align:right")
 })
 
+test("non-interactive library previews omit the renderer's editing controls", () => {
+  const { document } = parseHTML("<main id='preview'></main>")
+  const container = document.querySelector("#preview")
+  const rendered = renderPreview({ source: "# Title\n\nA paragraph.", kind: "presentation" }).html
+  installSanitizedPreview(container, rendered, { interactive: false })
+
+  assert.equal(container.querySelector("button, label, select, option"), null)
+})
+
 test("preview sink keeps sanitized deck media inside editable figure captions", () => {
   const { document } = parseHTML("<main id='preview'></main>")
   const container = document.querySelector("#preview")
