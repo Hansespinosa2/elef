@@ -148,6 +148,7 @@ export function startFileLibraryApplication(platform) {
   let decks = []
   let activeDeck = null
   let saveFlow = null
+  let e2eNextSaveDelayMs = 0
   const documentGraphCache = createDocumentGraphCache(async () => buildDocumentGraph(await invoke("document_graph")))
   let libraryTab = "all"
   let cardPreviewObserver = null
@@ -214,6 +215,11 @@ export function startFileLibraryApplication(platform) {
   saveFlow = createSaveFlow({
     saveSource: async (id, source) => {
       const isDocument = decks.find(deck => deck.id === id)?.source_file === "document.md"
+      if (__ELEF_E2E__ && e2eNextSaveDelayMs > 0) {
+        const delay = e2eNextSaveDelayMs
+        e2eNextSaveDelayMs = 0
+        await new Promise(resolve => setTimeout(resolve, delay))
+      }
       const result = await transport.saveSource(id, source)
       if (isDocument) documentGraphCache.invalidate()
       return result
@@ -297,6 +303,7 @@ export function startFileLibraryApplication(platform) {
     let interactiveAt = null
     let nativeReadyAt = null
     let previousInstallationsRemoved = null
+    let typingSave = null
     Object.defineProperty(window, "__elefPerformanceTestHooks", {
       value: Object.freeze({
         get interactiveAt() { return interactiveAt },
@@ -348,16 +355,24 @@ export function startFileLibraryApplication(platform) {
             return { total: decks.length, rendered: libraryListRenderer.renderedCount }
           })
         },
-        async typeDuringSave(text) {
+        startTypingDuringSave(text) {
           const editor = editorFor(elements.editorField)
+          if (!editor) throw new Error("The measured source editor is not ready.")
+          editor.setEditingMode("source")
           const original = currentSource()
           const expected = original + "\n" + text
           editor.replaceRange("\n", editor.value.length)
-          const saving = flushSave()
-          for (const character of text) {
-            editor.replaceRange(character, editor.value.length)
-            await new Promise(resolve => requestAnimationFrame(resolve))
-          }
+          // Keep native keystrokes inside a save even on a fast local filesystem.
+          e2eNextSaveDelayMs = 500
+          typingSave = { expected, saving: flushSave() }
+          editor.setSelectionRange(editor.value.length)
+          editor.focus()
+          return true
+        },
+        async finishTypingDuringSave() {
+          if (!typingSave) throw new Error("Autosave typing was not started.")
+          const { expected, saving } = typingSave
+          typingSave = null
           if (!(await saving)) throw new Error("The in-flight save did not finish while input was arriving.")
           const actual = currentSource()
           if (actual !== expected) throw new Error(`Input changed during autosave: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}.`)

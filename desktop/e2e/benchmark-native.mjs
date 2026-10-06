@@ -128,7 +128,13 @@ try {
       report.openTraceRuns.push(opened.result.openTrace)
       report.previewTraceRuns.push(opened.result.previewTrace)
       operation = "autosave while typing"
-      const typed = await execute("return await window.__elefPerformanceTestHooks.typeDuringSave(arguments[0])", "Input preserved 😀 日本語")
+      const text = "Input preserved 😀 日本語"
+      await execute("return window.__elefPerformanceTestHooks.startTypingDuringSave(arguments[0])", text)
+      const editorElement = await request("/element", { using: "css selector", value: ".source-field .cm-content" })
+      const editorElementId = editorElement["element-6066-11e4-a52e-4f735466cecf"] || editorElement.ELEMENT
+      assert.ok(editorElementId, "The source editor must be available for native keyboard input")
+      await request(`/element/${encodeURIComponent(editorElementId)}/value`, { text })
+      const typed = await execute("return await window.__elefPerformanceTestHooks.finishTypingDuringSave()")
       assert.equal(typed, source + "\nInput preserved 😀 日本語")
       assert.equal(await readFile(path.join(folder, "presentation.md"), "utf8"), typed)
       report.inputPreservedRuns += 1
