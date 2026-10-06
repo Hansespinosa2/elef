@@ -252,7 +252,10 @@ export default class extends Controller {
       this.hasSavedSinceConnect = true
       const savedSource = typeof payload.source === "string" ? payload.source : currentSource
       if (this.currentSource() === currentSource && typeof payload.source === "string") this.synchronizeCanonicalSource(savedSource)
-      if (sourceIndex >= 0) fieldValues[sourceIndex] = savedSource
+      // The browser's textarea value is always LF-normalized, while a saved
+      // Markdown file may retain CRLF. Keep the flow snapshot in the same
+      // representation as `snapshot()` so a successful save does not loop.
+      if (sourceIndex >= 0) fieldValues[sourceIndex] = savedSource.replace(/\r\n?/g, "\n")
       const savedSnapshot = fieldValues.join("\u001f")
       this.element.dispatchEvent(new CustomEvent("autosave:saved", { detail: { snapshot: savedSnapshot, payload } }))
       return {

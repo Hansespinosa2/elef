@@ -229,6 +229,75 @@ test("Rails autosave uses the shared state machine for source and metadata snaps
   assert.equal(deck.savedSnapshot, "# Start\u001fUpdated title")
 })
 
+test("CRLF responses settle against the browser's normalized source snapshot", async () => {
+  const source = "# Before\n\nText."
+  const sourceWithCrLf = source.replace(/\n/g, "\r\n")
+  const sourceField = { name: "presentation[source]", value: source }
+  const titleField = { name: "presentation[title]", value: "Before" }
+  const form = {
+    action: "/presentations/1",
+    querySelector: selector => selector === '[name$="[source]"]' ? sourceField : null,
+    dispatchEvent() {}
+  }
+  const controller = new autosave.default()
+  let requestCount = 0
+  Object.assign(controller, {
+    element: form,
+    delayValue: 1000,
+    fieldTargets: [sourceField, titleField],
+    active: true,
+    saveEnabledValue: true,
+    timeoutValue: 1000,
+    recoveryTimeoutValue: 1,
+    persistLocalDraft: async () => true,
+    updateRevisionTokens() {},
+    setStatus() {},
+    materializeEditorEdits() {},
+    currentSource: () => sourceWithCrLf,
+    snapshot: () => [sourceField.value, titleField.value].join("\u001f"),
+    sourceField: () => sourceField,
+    synchronizeCanonicalSource: savedSource => {
+      sourceField.value = savedSource.replace(/\r\n?/g, "\n")
+    }
+  })
+  controller.flow = controller.createSaveFlow()
+  const deck = { id: "presentation-1", source: sourceWithCrLf, content_hash: "revision-1" }
+  controller.flow.activate(deck)
+
+  const originalFetch = globalThis.fetch
+  const originalFormData = globalThis.FormData
+  const originalDocument = globalThis.document
+  const originalCustomEvent = globalThis.CustomEvent
+  globalThis.fetch = async () => {
+    requestCount += 1
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ source: sourceWithCrLf, revision_token: "revision-2" })
+    }
+  }
+  globalThis.FormData = class {
+    constructor() { this.values = new Map(controller.fieldTargets.map(field => [field.name, field.value])) }
+    set(name, value) { this.values.set(name, value) }
+  }
+  globalThis.document = { querySelector: () => null }
+  globalThis.CustomEvent = class { constructor(type) { this.type = type } }
+
+  try {
+    titleField.value = "Updated title"
+    controller.flow.noteChange()
+    assert.equal(await controller.flow.flush({ force: true }), true, controller.lastSaveError?.stack)
+    assert.equal(controller.flow.dirty, false)
+    assert.equal(requestCount, 1)
+    assert.equal(deck.savedSnapshot, `${source}\u001fUpdated title`)
+  } finally {
+    globalThis.fetch = originalFetch
+    globalThis.FormData = originalFormData
+    globalThis.document = originalDocument
+    globalThis.CustomEvent = originalCustomEvent
+  }
+})
+
 test("Rails revision conflicts resolve through the shared flow without requiring a file hash", async () => {
   const sourceField = { name: "document[source]", value: "original" }
   const titleField = { name: "document[title]", value: "Initial title" }

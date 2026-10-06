@@ -199,7 +199,7 @@ body.elef-app {
 .visual-editor-form[data-editor-mode="source"] .document-block-position-control { display: none; }
 @media (max-width: 900px) {
   .visual-editor-form[data-editor-mode="source"] .editor-layout { grid-template-columns: minmax(0, 1fr); }
-  .visual-editor-form[data-editor-mode="source"] .editor-projection { max-height: 60vh; }
+  .visual-editor-form[data-editor-mode="source"] .editor-projection { max-height: 60vh; min-height: min(24rem, 60vh); }
 }
 .editor-toolbar { align-items: center; color: var(--oradia-muted); display: flex; flex-wrap: wrap; gap: 0.55rem; min-height: 2rem; position: relative; }
 .editor-mode-switch { align-items: center; display: inline-flex; gap: 0.15rem; }
