@@ -201,10 +201,12 @@ class DesktopEditorUi {
         const form = document.querySelector("#desktop-editor-form")
         return document.querySelector("#deck-title")?.textContent === expected
           && form?.dataset.loadedDeckId === document.querySelector("#deck-id")?.textContent
+          && form?.dataset.editorMode === "visual"
+          && !document.querySelector("#visual-mode")?.disabled
           && !document.querySelector("#deck-view")?.hidden
       }, title), {
         timeout: 10_000,
-        timeoutMsg: `The ${title} deck did not open`
+        timeoutMsg: `The ${title} deck did not finish opening in visual mode`
       })
     } catch (error) {
       const diagnostic = await browser.execute(expected => {

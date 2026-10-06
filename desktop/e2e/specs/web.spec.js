@@ -60,7 +60,8 @@ class WebEditorUi {
     if (!id) throw new Error(`The shared web scenario requires an E2E ${isDocument ? "document" : "presentation"} fixture`)
     this.activeWorkId = id
     const path = isDocument ? "documents" : "presentations"
-    await this.page.goto(`/${path}/${id}/edit?editor_mode=source`)
+    await this.page.goto(`/${path}/${id}/edit`)
+    await expect(this.page.locator(".visual-editor-form")).toHaveAttribute("data-editor-mode", "visual")
     await expect(this.page.locator(".source-field .cm-content")).toBeVisible()
   }
 
@@ -88,7 +89,8 @@ class WebEditorUi {
 
   async returnToEditor() {
     if (this.activeWorkId && !this.page.url().includes(`/presentations/${this.activeWorkId}/edit`)) {
-      await this.page.goto(`/presentations/${this.activeWorkId}/edit?editor_mode=source`)
+      await this.page.goto(`/presentations/${this.activeWorkId}/edit`)
+      await expect(this.page.locator(".visual-editor-form")).toHaveAttribute("data-editor-mode", "visual")
       await expect(this.page.locator(".source-field .cm-content")).toBeVisible()
     }
   }
@@ -640,8 +642,10 @@ test("appearance persists through the shared editing flow", async ({ page }) => 
 
 test("shared rendering styles preserve slide layouts and document typography", async ({ page }) => {
   const styles = {
-    web: await readFile(new URL("../../../app/assets/stylesheets/application.css", import.meta.url), "utf8"),
+    web: (await readFile(new URL("../../../app/assets/builds/tailwind.css", import.meta.url), "utf8")) +
+      (await readFile(new URL("../../../app/assets/stylesheets/application.css", import.meta.url), "utf8")),
     desktop: (await readFile(new URL("../../../app/assets/stylesheets/file_library_host.css", import.meta.url), "utf8")) +
+      (await readFile(new URL("../../frontend/dist/assets/tailwind.css", import.meta.url), "utf8")) +
       (await readFile(new URL("../../frontend/dist/assets/app.css", import.meta.url), "utf8"))
   }
   const fixtures = [
@@ -673,4 +677,47 @@ test("shared rendering styles preserve slide layouts and document typography", a
       expect(measured.desktop[".slide-regions"].columns.split(" ")).toHaveLength(2)
     }
   }
+})
+
+test("the source editor has matching styles in Rails and the desktop asset bundle", async ({ page }) => {
+  const presentationId = process.env.ELEF_E2E_PRESENTATION_ID
+  if (!presentationId) throw new Error("The source-editor parity check requires the E2E presentation fixture")
+  await page.setViewportSize({ width: 1280, height: 840 })
+  await page.goto(`/presentations/${presentationId}/edit?editor_mode=source`)
+  await expect(page.locator(".visual-editor-form")).toHaveAttribute("data-editor-mode", "source")
+  await expect(page.locator(".source-field .cm-content")).toBeVisible()
+
+  const editorHtml = await page.locator(".editor-shell").evaluate(element => element.outerHTML)
+  const codeMirrorStyles = await page.locator("head style").evaluateAll(styles => styles.map(style => style.textContent).join("\n"))
+  const stylesheets = {
+    web: (await readFile(new URL("../../../app/assets/builds/tailwind.css", import.meta.url), "utf8")) +
+      (await readFile(new URL("../../../app/assets/stylesheets/application.css", import.meta.url), "utf8")),
+    desktop: (await readFile(new URL("../../../app/assets/stylesheets/file_library_host.css", import.meta.url), "utf8")) +
+      (await readFile(new URL("../../frontend/dist/assets/tailwind.css", import.meta.url), "utf8")) +
+      (await readFile(new URL("../../frontend/dist/assets/app.css", import.meta.url), "utf8"))
+  }
+  const measured = {}
+  for (const [target, css] of Object.entries(stylesheets)) {
+    await page.setContent(`<!doctype html><html data-theme="dark"><head><style>${css}</style><style>${codeMirrorStyles}</style></head><body class="elef-app"><main class="app-shell mx-auto max-w-[1440px] p-[clamp(1rem,4vw,3rem)]"><form class="visual-editor-form" data-editor-mode="source">${editorHtml}</form></main></body></html>`)
+    measured[target] = await page.evaluate(() => {
+      const selectors = [".editor-shell", ".editor-layout", ".source-pane", ".source-field", ".editor-toolbar",
+        ".editor-surface", ".cm-editor", ".cm-scroller", ".cm-content", ".editor-projection"]
+      const properties = ["display", "position", "width", "height", "minHeight", "maxHeight", "gridTemplateColumns",
+        "gap", "fontFamily", "fontSize", "lineHeight", "color", "backgroundColor", "overflow", "padding", "borderRadius"]
+      return Object.fromEntries(selectors.flatMap(selector => {
+        const element = document.querySelector(selector)
+        if (!element) return []
+        const style = getComputedStyle(element)
+        const rect = element.getBoundingClientRect()
+        return [[selector, {
+          ...Object.fromEntries(properties.map(property => [property, style[property]])),
+          rectWidth: rect.width,
+          rectHeight: rect.height
+        }]]
+      }))
+    })
+  }
+  expect(measured.desktop).toEqual(measured.web)
+  expect(measured.web[".editor-layout"].gridTemplateColumns.split(" ")).toHaveLength(2)
+  expect(measured.web[".cm-editor"].rectHeight).toBeGreaterThan(300)
 })
