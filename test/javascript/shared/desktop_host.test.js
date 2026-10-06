@@ -127,7 +127,7 @@ test("the desktop host defaults to Rails' Visual mode and gates it until preview
   assert.match(application, /sourceName: "presentation\[source\]"/)
   assert.match(application, /document\.body\.dataset\.desktopView = "editor"/)
   assert.match(application, /document\.body\.dataset\.desktopView = "library"/)
-  assert.match(application, /editor\.loadDocument\(deck\.source\)[\s\S]*?editor\.setEditingMode\("visual"\)/)
+  assert.match(application, /editor\.loadDocument\(deck\.source\)[\s\S]*?editor\.setEditingMode\("visual", \{ restoreCaret: false \}\)/)
   const editorController = await read("app/javascript/controllers/editor_controller.js")
   assert.match(editorController, /this\.form\?\.dispatchEvent\(new CustomEvent\("elef:editor-mode-change"/)
   assert.match(application, /theme: "dark"/)

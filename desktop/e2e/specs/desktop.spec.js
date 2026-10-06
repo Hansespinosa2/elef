@@ -1543,6 +1543,7 @@ describe("desktop binary workflows and native boundaries", () => {
     })
     if (!focused) throw new Error("The visual editor block did not receive focus")
 
+    await ui.showSourceMode()
     await ui.openDeck("E2E document")
     await browser.waitUntil(async () => browser.execute(() =>
       document.querySelector("#desktop-editor-form")?.dataset.editorMode === "visual" &&

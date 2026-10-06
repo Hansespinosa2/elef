@@ -280,7 +280,7 @@ export default class extends Controller {
     this.setEditingMode("source")
   }
 
-  setEditingMode(mode, { silent = false } = {}) {
+  setEditingMode(mode, { silent = false, restoreCaret = true } = {}) {
     const nextMode = mode === "source" ? "source" : "visual"
     const previousMode = this.editingMode
     if (!silent && previousMode === nextMode) return
@@ -319,7 +319,7 @@ export default class extends Controller {
           if (this.vimEnabled && this.vimMode.startsWith("visual")) Vim.handleKey(this.vim, "<Esc>", "user")
           this.view.dispatch({ selection: { anchor: sourceOffset } })
           this.view.focus()
-        } else {
+        } else if (restoreCaret) {
           this.projectionController()?.restoreCaret?.(sourceOffset, preferredBlockId)
         }
       })
