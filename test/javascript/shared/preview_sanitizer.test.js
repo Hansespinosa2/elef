@@ -38,16 +38,16 @@ test("interactive preview keeps renderer-owned alignment controls and drops unkn
       </select>
     </label>
     <select data-presentation-editor-align data-slide-index="0" data-block-index="1" data-action="change->presentation-editor#alignmentChanged"></select>
-    <button data-presentation-editor-action="move-block-up" data-slide-index="0" data-block-index="1">Move up</button>
+    <button type="button" data-presentation-editor-action="move-block-up" data-slide-index="0" data-block-index="1">Move up</button>
     <select data-visual-editor-block-id="bad id" data-action="change->hostile#invoke"></select>
-    <button data-presentation-editor-action="invoke" data-slide-index="-1" data-block-index="not-an-index">Bad action</button>`)
+    <button type="button" data-presentation-editor-action="invoke" data-slide-index="-1" data-block-index="not-an-index">Bad action</button>
+    <button type="submit" data-presentation-editor-action="delete-slide" data-slide-index="0">Submit action</button>`)
 
   const visualLabel = container.querySelector("label")
   const visualAlignment = container.querySelector("[data-visual-editor-block-id='block-1']")
   const presentationAlignment = container.querySelector("[data-presentation-editor-align]")
   const presentationMove = container.querySelector("[data-presentation-editor-action='move-block-up']")
   const hostileControls = [...container.querySelectorAll("select")].filter(control => !control.dataset.visualEditorBlockId && !control.hasAttribute("data-presentation-editor-align"))
-  const invalidAction = container.querySelector("button:not([data-presentation-editor-action='move-block-up'])")
 
   assert.equal(visualLabel.getAttribute("data-action"), "pointerdown->visual-editor#positionControlOpened")
   assert.equal(visualAlignment.getAttribute("data-action"), "focus->visual-editor#positionControlOpened keydown->visual-editor#positionControlKeydown change->visual-editor#alignmentChanged")
@@ -58,9 +58,9 @@ test("interactive preview keeps renderer-owned alignment controls and drops unkn
   assert.equal(presentationMove.dataset.blockIndex, "1")
   assert.equal(hostileControls[0].hasAttribute("data-action"), false)
   assert.equal(hostileControls[0].hasAttribute("data-visual-editor-block-id"), false)
-  assert.equal(invalidAction.hasAttribute("data-presentation-editor-action"), false)
-  assert.equal(invalidAction.hasAttribute("data-slide-index"), false)
-  assert.equal(invalidAction.hasAttribute("data-block-index"), false)
+  assert.equal(container.querySelectorAll("button").length, 1)
+  assert.equal(container.textContent.includes("Bad action"), false)
+  assert.equal(container.textContent.includes("Submit action"), false)
 })
 
 test("sanitized renderer output retains the document and presentation editing controls", () => {

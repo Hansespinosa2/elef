@@ -26,7 +26,7 @@ export function installSanitizedPreview(container, html, { interactive = true, d
   while (walker.nextNode()) elements.push(walker.currentNode)
 
   for (const element of elements) {
-    if (!ALLOWED_ELEMENTS.has(element.tagName) || (!interactive && INTERACTIVE_ELEMENTS.has(element.tagName))) {
+    if (!ALLOWED_ELEMENTS.has(element.tagName) || (!interactive && INTERACTIVE_ELEMENTS.has(element.tagName)) || (element.tagName === "BUTTON" && !safePreviewButton(element, interactive))) {
       element.remove()
       continue
     }
@@ -54,7 +54,7 @@ function safeAttribute(element, name, value, interactive, documentPagination) {
     if (interactive) return value.split(/\s+/).every((controller) => ["mermaid-diagrams", "presentation-canvas", "document-pages"].includes(controller))
     return documentPagination && element.parentNode?.nodeType === 11 && element.classList.contains("document-reader") && value === "document-pages mermaid-diagrams"
   }
-  if (lower === "data-presentation-editor-action") return interactive && ALLOWED_PRESENTATION_ACTIONS.has(value)
+  if (lower === "data-presentation-editor-action") return interactive && element.tagName === "BUTTON" && ALLOWED_PRESENTATION_ACTIONS.has(value)
   if (lower === "data-block-index" || lower === "data-slide-index") return interactive && /^(?:0|[1-9]\d*)$/.test(value)
   if (lower === "data-presentation-editor-align") return interactive && element.tagName === "SELECT" && value === ""
   if (lower === "data-visual-editor-block-id") return interactive && element.tagName === "SELECT" && /^[A-Za-z0-9_-]+$/.test(value)
@@ -67,6 +67,11 @@ function safeAttribute(element, name, value, interactive, documentPagination) {
   if (lower === "src" && ["IMG", "VIDEO"].includes(element.tagName)) return safeUrl(value) && !/^(?:https?:|data:|javascript:)/i.test(value)
   if (lower === "data-editor-image-source") return value === "true"
   return false
+}
+
+function safePreviewButton(element, interactive) {
+  if (!interactive || element.getAttribute("type") !== "button") return false
+  return ALLOWED_PRESENTATION_ACTIONS.has(element.getAttribute("data-presentation-editor-action")) || element.getAttribute("data-action") === "click->media#chooseForSlide"
 }
 
 function safeUrl(value) {
