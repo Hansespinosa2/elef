@@ -407,19 +407,37 @@ class WebLibraryUi {
   }
 
   async createWork(title, kind) {
-    if (kind !== "presentation") throw new Error(`Unsupported shared library fixture kind: ${kind}`)
+    if (!["presentation", "document"].includes(kind)) throw new Error(`Unsupported shared library fixture kind: ${kind}`)
     await this.page.locator(".new-work-trigger").click()
-    await this.page.getByRole("menuitem", { name: /Presentation/ }).click()
+    await this.page.getByRole("menuitem", { name: kind === "document" ? /Document/ : /Presentation/ }).click()
     await expect(this.page.locator(".visual-editor-form")).toBeVisible()
-    await this.page.locator(".editor-title-input").fill(title)
+    if (kind === "presentation") {
+      await this.page.locator(".editor-title-input").fill(title)
+    } else {
+      await this.page.locator('[data-editor-target="sourceButton"]').click()
+      await expect(this.page.locator(".visual-editor-form")).toHaveAttribute("data-editor-mode", "source")
+      const editor = this.page.locator(".source-field .cm-content")
+      await editor.click()
+      await this.page.keyboard.press(process.platform === "darwin" ? "Meta+A" : "Control+A")
+      await this.page.keyboard.insertText(`# ${title}\n\n`)
+      await expect.poll(() => this.page.locator(".source-field")
+        .evaluate(field => field.editorController?.sourceValue ?? "")).toBe(`# ${title}\n\n`)
+    }
     await this.page.locator(".visual-editor-form button[type='submit']").click()
-    await expect(this.page).toHaveURL(/\/presentations\/\d+\/edit/)
-    await expect(this.page.locator(".editor-title-input")).toHaveValue(title)
+    await expect(this.page).toHaveURL(kind === "document" ? /\/documents\/\d+\/edit/ : /\/presentations\/\d+\/edit/)
+    if (kind === "presentation") await expect(this.page.locator(".editor-title-input")).toHaveValue(title)
+    else await expect.poll(() => this.page.locator(".source-field")
+      .evaluate(field => field.editorController?.sourceValue ?? "")).toBe(`# ${title}\n\n`)
   }
 
-  async assertCreatedWork(title) {
+  async assertCreatedWork(title, kind) {
     await expect(this.page.locator(".visual-editor-form")).toBeVisible()
-    await expect(this.page.locator(".editor-title-input")).toHaveValue(title)
+    if (kind === "document") {
+      await expect.poll(() => this.page.locator(".source-field")
+        .evaluate(field => field.editorController?.sourceValue ?? "")).toBe(`# ${title}\n\n`)
+    } else {
+      await expect(this.page.locator(".editor-title-input")).toHaveValue(title)
+    }
   }
 
   async assertWorkVisible(title) {

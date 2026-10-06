@@ -6,7 +6,7 @@ import path from "node:path"
 import { editAndPreviewWorkflow } from "../scenarios/edit-and-preview.js"
 import { appearanceWorkflow } from "../scenarios/appearance.js"
 import { libraryAndGraphWorkflow } from "../scenarios/library-and-graph.js"
-import { libraryCreateDeleteWorkflow, SHARED_LIBRARY_CREATE_DELETE_TITLE } from "../scenarios/library-create-delete.js"
+import { libraryCreateDeleteWorkflow } from "../scenarios/library-create-delete.js"
 import { externalEditConflictWorkflow, CONFLICT_EXTERNAL_SOURCE } from "../scenarios/external-edit-conflict.js"
 import { hostileDeckNeutralizedWorkflow } from "../scenarios/hostile-deck.js"
 import { mathInputWorkflow, snippetInsertWorkflow } from "../scenarios/authoring-palettes.js"
@@ -908,16 +908,25 @@ class DesktopLibraryUi {
     await $("#new-deck-name").setValue(title)
     await $("#create-submit").click()
     await $("#deck-view").waitForDisplayed()
-    await browser.waitUntil(async () => (await $("#desktop-editor-title").getValue()) === title, {
+    await browser.waitUntil(async () => browser.execute(({ expected, documentKind }) => {
+      if (documentKind) return document.querySelector("#deck-title")?.textContent.trim() === expected
+      return document.querySelector("#desktop-editor-title")?.value === expected
+    }, { expected: title, documentKind: kind === "document" }), {
       timeout: 10_000,
       timeoutMsg: `The newly created ${kind} did not open in the editor`
     })
   }
 
-  async assertCreatedWork(title) {
+  async assertCreatedWork(title, kind) {
     await $("#deck-view").waitForDisplayed()
-    if ((await $("#desktop-editor-title").getValue()) !== title) {
-      throw new Error(`The editor did not open ${title}`)
+    const result = await browser.execute(({ expected, documentKind }) => ({
+      title: documentKind
+        ? document.querySelector("#deck-title")?.textContent.trim()
+        : document.querySelector("#desktop-editor-title")?.value,
+      source: document.querySelector("#desktop-editor-field")?.editorController?.sourceValue
+    }), { expected: title, documentKind: kind === "document" })
+    if (result.title !== title || (kind === "document" && result.source !== `# ${title}\n\n`)) {
+      throw new Error(`The editor did not open the new ${kind} with its expected content: ${JSON.stringify(result)}`)
     }
   }
 
