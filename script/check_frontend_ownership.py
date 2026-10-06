@@ -175,6 +175,7 @@ shared_workflows = {
     "externalEditConflictWorkflow",
     "hostileDeckNeutralizedWorkflow",
     "libraryAndGraphWorkflow",
+    "libraryCreateDeleteWorkflow",
     "mathInputWorkflow",
     "presentationModeWorkflow",
     "snippetInsertWorkflow",

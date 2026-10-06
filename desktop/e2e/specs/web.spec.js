@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test"
 import { editAndPreviewWorkflow, SAVED_SOURCE } from "../scenarios/edit-and-preview.js"
 import { appearanceWorkflow } from "../scenarios/appearance.js"
 import { libraryAndGraphWorkflow } from "../scenarios/library-and-graph.js"
+import { libraryCreateDeleteWorkflow } from "../scenarios/library-create-delete.js"
 import { externalEditConflictWorkflow, CONFLICT_EXTERNAL_SOURCE } from "../scenarios/external-edit-conflict.js"
 import { hostileDeckNeutralizedWorkflow } from "../scenarios/hostile-deck.js"
 import { mathInputWorkflow, snippetInsertWorkflow } from "../scenarios/authoring-palettes.js"
@@ -405,6 +406,40 @@ class WebLibraryUi {
     await expect(this.page.locator("#deck-list")).toBeVisible()
   }
 
+  async createWork(title, kind) {
+    if (kind !== "presentation") throw new Error(`Unsupported shared library fixture kind: ${kind}`)
+    await this.page.locator(".new-work-trigger").click()
+    await this.page.getByRole("menuitem", { name: /Presentation/ }).click()
+    await expect(this.page.locator(".visual-editor-form")).toBeVisible()
+    await this.page.locator(".editor-title-input").fill(title)
+    await this.page.locator(".visual-editor-form button[type='submit']").click()
+    await expect(this.page).toHaveURL(/\/presentations\/\d+\/edit/)
+    await expect(this.page.locator(".editor-title-input")).toHaveValue(title)
+  }
+
+  async assertCreatedWork(title) {
+    await expect(this.page.locator(".visual-editor-form")).toBeVisible()
+    await expect(this.page.locator(".editor-title-input")).toHaveValue(title)
+  }
+
+  async assertWorkVisible(title) {
+    await expect(this.page.getByRole("heading", { name: title, exact: true })).toBeVisible()
+  }
+
+  async deleteWork(title) {
+    const card = this.page.locator("article.library-card").filter({
+      has: this.page.getByRole("heading", { name: title, exact: true })
+    })
+    this.page.once("dialog", dialog => dialog.accept())
+    await card.getByRole("button", { name: "Delete", exact: true }).click()
+    await expect(this.page.getByRole("heading", { name: title, exact: true })).toHaveCount(0)
+  }
+
+  async assertWorkAbsent(title) {
+    await this.openLibrary()
+    await expect(this.page.getByRole("heading", { name: title, exact: true })).toHaveCount(0)
+  }
+
   async previewWork(title) {
     const card = this.page.locator("article.library-card").filter({
       has: this.page.getByRole("heading", { name: title, exact: true })
@@ -539,6 +574,10 @@ test("shared presentation navigation works in the web app", async ({ page }) => 
 
 test("shared library and document graph flow works in the web app", async ({ page }) => {
   await libraryAndGraphWorkflow(new WebLibraryUi(page))
+})
+
+test("shared library create and delete flow works in the web app", async ({ page }) => {
+  await libraryCreateDeleteWorkflow(new WebLibraryUi(page))
 })
 
 test("shared external-edit conflict flow preserves the disk version in the web app", async ({ page }) => {

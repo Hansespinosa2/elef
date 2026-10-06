@@ -6,6 +6,7 @@ import path from "node:path"
 import { editAndPreviewWorkflow } from "../scenarios/edit-and-preview.js"
 import { appearanceWorkflow } from "../scenarios/appearance.js"
 import { libraryAndGraphWorkflow } from "../scenarios/library-and-graph.js"
+import { libraryCreateDeleteWorkflow, SHARED_LIBRARY_CREATE_DELETE_TITLE } from "../scenarios/library-create-delete.js"
 import { externalEditConflictWorkflow, CONFLICT_EXTERNAL_SOURCE } from "../scenarios/external-edit-conflict.js"
 import { hostileDeckNeutralizedWorkflow } from "../scenarios/hostile-deck.js"
 import { mathInputWorkflow, snippetInsertWorkflow } from "../scenarios/authoring-palettes.js"
@@ -900,6 +901,68 @@ class DesktopEditorUi {
 }
 
 class DesktopLibraryUi {
+  async createWork(title, kind) {
+    await this.openLibrary()
+    await $("#new-deck").click()
+    await $("#new-deck-kind").selectByAttribute("value", kind)
+    await $("#new-deck-name").setValue(title)
+    await $("#create-submit").click()
+    await $("#deck-view").waitForDisplayed()
+    await browser.waitUntil(async () => (await $("#desktop-editor-title").getValue()) === title, {
+      timeout: 10_000,
+      timeoutMsg: `The newly created ${kind} did not open in the editor`
+    })
+  }
+
+  async assertCreatedWork(title) {
+    await $("#deck-view").waitForDisplayed()
+    if ((await $("#desktop-editor-title").getValue()) !== title) {
+      throw new Error(`The editor did not open ${title}`)
+    }
+  }
+
+  async assertWorkVisible(title) {
+    await this.openLibrary()
+    await $("#show-deck-list").click()
+    await $(`[aria-label='Edit ${title}']`).waitForDisplayed()
+  }
+
+  async deleteWork(title) {
+    await this.openLibrary()
+    await $("#show-deck-list").click()
+    let card
+    for (const candidate of await $$(".library-card")) {
+      if (await candidate.$(".library-card-title").getText() === title) card = candidate
+    }
+    if (!card) throw new Error(`The ${title} library card was missing`)
+    const menu = await card.$(".library-card-menu-trigger")
+    await menu.click()
+    await card.$(".library-card-menu-options .is-danger").click()
+    if (process.platform === "darwin") {
+      answerMacNativeDialog("OK")
+    } else if (process.platform === "linux") {
+      const dialogId = execFileSync("xdotool", ["search", "--sync", "--onlyvisible", "--name", "^Move deck to Trash$"], {
+        encoding: "utf8", timeout: 15_000
+      }).trim().split(/\s+/).at(-1)
+      execFileSync("xdotool", ["windowactivate", "--sync", dialogId], { timeout: 5_000 })
+      execFileSync("xdotool", ["key", "--clearmodifiers", "alt+o"], { timeout: 5_000 })
+    } else {
+      throw new Error(`Native delete confirmation is unsupported on ${process.platform}`)
+    }
+    await browser.waitUntil(async () => !(await $(`[aria-label='Edit ${title}']`).isExisting()), {
+      timeout: 10_000,
+      timeoutMsg: `The deleted ${title} remained in the library`
+    })
+  }
+
+  async assertWorkAbsent(title) {
+    await this.openLibrary()
+    await $("#show-deck-list").click()
+    if (await $(`[aria-label='Edit ${title}']`).isExisting()) {
+      throw new Error(`The library still shows deleted work ${title}`)
+    }
+  }
+
   async previewWork(title) {
     await this.openLibrary()
     await $("#show-deck-list").click()
@@ -1352,6 +1415,10 @@ describe("desktop binary workflows and native boundaries", () => {
 
   it("runs the shared library and document graph flow", async () => {
     await libraryAndGraphWorkflow(new DesktopLibraryUi())
+  })
+
+  it("runs the shared library create and delete flow", async () => {
+    await libraryCreateDeleteWorkflow(new DesktopLibraryUi())
   })
 
   it("persists appearance through the shared editing flow", async () => {
