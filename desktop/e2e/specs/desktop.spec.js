@@ -467,13 +467,16 @@ class DesktopEditorUi {
       })()
     })
 
-    const expected = JSON.stringify({
+    const expected = {
       mode: "relative",
       vimEnabled: true,
       firstLineActive: ["0", "1", "2", "3"],
       thirdLineActive: ["2", "1", "0", "1"]
-    })
-    if (result?.error || JSON.stringify(result) !== expected) {
+    }
+    const matchesExpectedValues = result && Object.entries(expected).every(([key, value]) =>
+      JSON.stringify(result[key]) === JSON.stringify(value)
+    )
+    if (result?.error || !matchesExpectedValues) {
       throw new Error(`Vim relative line numbers did not track CodeMirror cursor positions: ${JSON.stringify(result)}`)
     }
   }
