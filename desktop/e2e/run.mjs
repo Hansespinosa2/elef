@@ -204,9 +204,11 @@ try {
   env.ELEF_E2E_PORTABLE_KEY_SOURCE_ID = portableKeySourceId
   env.ELEF_E2E_PORTABLE_ALIAS_SOURCE_ID = portableAliasSourceId
   const desktopLinkedDocumentId = randomUUID()
+  const e2eDocumentSource = "---\ntheme: dark\n---\n# E2E document\n\nSee [[E2E linked]].\n"
+  const e2eLinkedDocumentSource = "---\ntheme: light\n---\n# E2E linked\n\nTarget document.\n"
   for (const [name, source] of [
-    ["E2E document", "# E2E document\n\nSee [[E2E linked]].\n"],
-    ["E2E linked", "# E2E linked\n\nTarget document.\n"]
+    ["E2E document", e2eDocumentSource],
+    ["E2E linked", e2eLinkedDocumentSource]
   ]) {
     const folder = path.join(libraryRoot, name)
     const id = name === "E2E linked" ? desktopLinkedDocumentId : randomUUID()
@@ -218,7 +220,7 @@ try {
 
   if (process.env.CI) {
     const seeded = runRails(
-      `Presentation.where(title: ${JSON.stringify(SHARED_LIBRARY_CREATE_DELETE_TITLES.presentation)}).destroy_all; Document.where(title: ${JSON.stringify(SHARED_LIBRARY_CREATE_DELETE_TITLES.document)}).destroy_all; presentation = Presentation.create!(title: ${JSON.stringify(webTitle)}, source: "# Before E2E\\n\\nSeed paragraph.\\n\\nSee [[E2E linked]].\\n"); conflict = Presentation.create!(title: "E2E conflict", source: "# Before conflict test\\n\\nSeed paragraph.\\n"); hostile = Presentation.create!(title: "E2E hostile", source: ${JSON.stringify(hostileSource)}); document = Document.create!(source: "# E2E document\\n\\nSee [[E2E linked]].\\n"); linked = Document.create!(source: "# E2E linked\\n\\nTarget document.\\n"); puts "ELEF_E2E_PRESENTATION_ID=#{presentation.id}"; puts "ELEF_E2E_CONFLICT_PRESENTATION_ID=#{conflict.id}"; puts "ELEF_E2E_HOSTILE_PRESENTATION_ID=#{hostile.id}"; puts "ELEF_E2E_DOCUMENT_IDS=#{[document.id, linked.id].join(',')}"`
+      `Presentation.where(title: ${JSON.stringify(SHARED_LIBRARY_CREATE_DELETE_TITLES.presentation)}).destroy_all; Document.where(title: ${JSON.stringify(SHARED_LIBRARY_CREATE_DELETE_TITLES.document)}).destroy_all; presentation = Presentation.create!(title: ${JSON.stringify(webTitle)}, source: "# Before E2E\\n\\nSeed paragraph.\\n\\nSee [[E2E linked]].\\n"); conflict = Presentation.create!(title: "E2E conflict", source: "# Before conflict test\\n\\nSeed paragraph.\\n"); hostile = Presentation.create!(title: "E2E hostile", source: ${JSON.stringify(hostileSource)}); document = Document.create!(source: ${JSON.stringify(e2eDocumentSource)}); linked = Document.create!(source: ${JSON.stringify(e2eLinkedDocumentSource)}); puts "ELEF_E2E_PRESENTATION_ID=#{presentation.id}"; puts "ELEF_E2E_CONFLICT_PRESENTATION_ID=#{conflict.id}"; puts "ELEF_E2E_HOSTILE_PRESENTATION_ID=#{hostile.id}"; puts "ELEF_E2E_DOCUMENT_IDS=#{[document.id, linked.id].join(',')}"`
     )
     const id = seeded.match(/^ELEF_E2E_PRESENTATION_ID=(\d+)$/m)?.[1]
     assert.match(id, /^\d+$/, "Rails fixture command should return the presentation id")

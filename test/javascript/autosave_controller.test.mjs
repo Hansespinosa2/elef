@@ -71,6 +71,81 @@ test("the Rails transport saves the live editor source without requesting a sour
   assert.equal(dispatchedEvents.includes("elef:before-save"), false)
 })
 
+test("Rails autosave rebuilds its payload after recovery storage finishes", async () => {
+  const sourceField = { name: "presentation[source]", value: "# Before" }
+  const titleField = { name: "presentation[title]", value: "Before" }
+  let releaseDraft
+  const pendingDraft = new Promise(resolve => { releaseDraft = resolve })
+  let requestBody
+  const form = {
+    action: "/presentations/1",
+    querySelector: selector => selector === '[name$="[source]"]' ? sourceField : null,
+    dispatchEvent() {}
+  }
+  const controller = new autosave.default()
+  Object.assign(controller, {
+    element: form,
+    fieldTargets: [sourceField, titleField],
+    active: true,
+    saveEnabledValue: true,
+    timeoutValue: 10_000,
+    recoveryTimeoutValue: 2_000,
+    persistLocalDraft: () => pendingDraft,
+    materializeEditorEdits() {},
+    updateRevisionTokens() {},
+    setStatus() {},
+    currentSource: () => sourceField.value,
+    sourceField: () => sourceField,
+    synchronizeCanonicalSource() {}
+  })
+
+  const originalFetch = globalThis.fetch
+  const originalFormData = globalThis.FormData
+  const originalDocument = globalThis.document
+  const originalCustomEvent = globalThis.CustomEvent
+  globalThis.fetch = async (_url, options) => {
+    requestBody = options.body
+    return { ok: true, status: 200, json: async () => ({ source: "# After", revision_token: "r2" }) }
+  }
+  globalThis.FormData = class {
+    constructor() {
+      this.values = new Map(controller.fieldTargets.map(field => [field.name, field.value]))
+    }
+    set(name, value) { this.values.set(name, value) }
+    get(name) { return this.values.get(name) }
+  }
+  globalThis.document = { querySelector: () => null }
+  globalThis.CustomEvent = class { constructor(type) { this.type = type } }
+
+  try {
+    const saving = controller.saveToRails("# Before", "# Before\u001fBefore")
+    await Promise.resolve()
+    sourceField.value = "# After"
+    titleField.value = "After"
+    releaseDraft(true)
+    const result = await saving
+    assert.equal(requestBody.get(sourceField.name), "# After")
+    assert.equal(requestBody.get(titleField.name), "After")
+    assert.equal(result.snapshot, "# After\u001fAfter")
+  } finally {
+    globalThis.fetch = originalFetch
+    globalThis.FormData = originalFormData
+    globalThis.document = originalDocument
+    globalThis.CustomEvent = originalCustomEvent
+  }
+})
+
+test("a stalled browser recovery store does not hold the autosave transport", async () => {
+  const controller = new autosave.default()
+  Object.assign(controller, {
+    recoveryTimeoutValue: 5,
+    snapshot: () => "source",
+    persistLocalDraft: () => new Promise(() => {})
+  })
+
+  assert.equal(await controller.persistDraftBeforeSave(), false)
+})
+
 test("Rails autosave uses the shared state machine for source and metadata snapshots", async () => {
   const sourceField = { name: "presentation[source]", value: "# Start" }
   const titleField = { name: "presentation[title]", value: "Start" }
@@ -335,6 +410,23 @@ test("draft recovery leaves edits made while the editor connects untouched", asy
   assert.equal(sourceField.value, "# New user edit")
   assert.deepEqual(sourceField.dispatched, [])
   assert.deepEqual(status, [])
+})
+
+test("typing during a Rails conflict preserves the conflict message", () => {
+  const sourceField = { name: "document[source]", value: "local edit" }
+  const status = []
+  const controller = new autosave.default()
+  Object.assign(controller, {
+    fieldTargets: [sourceField],
+    conflictPayload: { message: "The disk version changed." },
+    flow: { conflict: {} },
+    persistLocalDraft: async () => true,
+    setStatus: (message, state) => status.push({ message, state })
+  })
+
+  controller.schedule()
+
+  assert.deepEqual(status, [{ message: "The disk version changed.", state: "conflict" }])
 })
 
 test("autosave conflict review presents both byte versions and starts the merge with local text", () => {

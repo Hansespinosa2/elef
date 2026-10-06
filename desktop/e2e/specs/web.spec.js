@@ -8,6 +8,8 @@ import { hostileDeckNeutralizedWorkflow } from "../scenarios/hostile-deck.js"
 import { mathInputWorkflow, snippetInsertWorkflow } from "../scenarios/authoring-palettes.js"
 import { PIXEL_PNG_MARKDOWN } from "../scenarios/media-fixture.js"
 import { presentationModeWorkflow } from "../scenarios/presentation-mode.js"
+import { vimRelativeLineNumbersWorkflow } from "../scenarios/vim-relative-line-numbers.js"
+import { documentPageAspectRatioWorkflow } from "../scenarios/document-page-aspect-ratio.js"
 import { execFileSync } from "node:child_process"
 import path from "node:path"
 import { readFile } from "node:fs/promises"
@@ -134,6 +136,41 @@ class WebEditorUi {
     expect(selection).toEqual([position, position])
   }
 
+  async assertRelativeLineNumbers() {
+    const result = await this.page.locator(".source-field").evaluate(async field => {
+      const editor = field.editorController
+      if (!editor) return { error: "The shared CodeMirror controller is unavailable" }
+      const source = editor.sourceValue
+      const selection = editor.view.state.selection.main
+      const mode = editor.lineNumberMode
+      const values = () => [...editor.view.dom.querySelectorAll(".cm-lineNumbers .cm-gutterElement")]
+        .filter(element => element.style.visibility !== "hidden")
+        .map(element => element.textContent)
+      const twoFrames = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+
+      try {
+        editor.loadDocument("One\ntwo\nthree\nfour")
+        editor.setLineNumberMode("relative")
+        editor.setSelectionRange(0)
+        await twoFrames()
+        const firstLineActive = values()
+        editor.setSelectionRange(editor.view.state.doc.line(3).from)
+        await twoFrames()
+        return { firstLineActive, thirdLineActive: values() }
+      } finally {
+        editor.loadDocument(source)
+        editor.setLineNumberMode(mode)
+        editor.view.dispatch({ selection })
+        await twoFrames()
+      }
+    })
+
+    expect(result).toEqual({
+      firstLineActive: ["0", "1", "2", "3"],
+      thirdLineActive: ["2", "1", "0", "1"]
+    })
+  }
+
   async assertCaretPosition(position) {
     await expect.poll(() => this.page.locator(".source-field").evaluate(field => [
       field.editorController?.selectionStart,
@@ -198,6 +235,42 @@ class WebEditorUi {
   async showSourceMode() {
     await this.page.locator('[data-editor-target="sourceButton"]').click()
     await expect(this.page.locator(".visual-editor-form")).toHaveAttribute("data-editor-mode", "source")
+  }
+
+  async assertDocumentPageAspectRatio() {
+    const originalViewport = this.page.viewportSize()
+    try {
+      for (const mode of ["visual", "source"]) {
+        if (mode === "visual") await this.showVisualMode()
+        else await this.showSourceMode()
+
+        const frameWidths = []
+        for (const viewport of [{ width: 1280, height: 840 }, { width: 720, height: 900 }]) {
+          await this.page.setViewportSize(viewport)
+          const frame = this.page.locator(".document-page-frame").first()
+          if (frameWidths.length) {
+            await expect.poll(() => frame.evaluate(element => element.getBoundingClientRect().width))
+              .toBeLessThan(frameWidths[0] - 1)
+          }
+          await expect(frame).toBeVisible()
+          const metrics = await frame.evaluate(element => {
+            const rect = element.getBoundingClientRect()
+            const preview = element.closest(".preview-pane")
+            return {
+              width: rect.width,
+              ratio: rect.width / rect.height,
+              fitsPreviewWidth: !preview || rect.width <= preview.clientWidth + 1
+            }
+          })
+          expect(Math.abs(metrics.ratio - 210 / 297)).toBeLessThan(0.005)
+          expect(metrics.fitsPreviewWidth).toBe(true)
+          frameWidths.push(metrics.width)
+        }
+        expect(frameWidths[1]).toBeLessThan(frameWidths[0] - 1)
+      }
+    } finally {
+      if (originalViewport) await this.page.setViewportSize(originalViewport)
+    }
   }
 
   async assertSourceEditorUsable() {
@@ -318,9 +391,7 @@ class WebEditorUi {
       const form = document.querySelector('form[data-controller~="autosave"]')
       const controller = form && Stimulus.getControllerForElementAndIdentifier(form, "autosave")
       if (!controller) return false
-      controller.clearSaveTimer()
-      controller.delayValue = 60_000
-      controller.schedule()
+      controller.flow?.pause()
       return true
     })
     expect(paused).toBe(true)
@@ -543,6 +614,33 @@ class WebLibraryUi {
     )).toContain(text)
   }
 
+  async assertDocumentCardTheme(title, theme) {
+    const card = this.page.locator("article.library-card").filter({
+      has: this.page.getByRole("heading", { name: title, exact: true })
+    })
+    const surface = card.locator(".library-card-preview .document-surface")
+    await expect.poll(() => surface.getAttribute("data-document-pages-settled")).toBe("true")
+    const frame = card.locator(".library-card-preview .document-page-frame").first()
+    await expect(frame).toBeVisible()
+    const page = card.locator(".library-card-preview .document-page").first()
+    const style = await page.evaluate((element, expectedTheme) => {
+      const rect = element.closest(".document-page-frame").getBoundingClientRect()
+      return {
+        hasTheme: Boolean(element.closest(`.document-reader.document-theme-${expectedTheme}`)),
+        background: getComputedStyle(element).backgroundImage,
+        backgroundColor: getComputedStyle(element).backgroundColor,
+        frame: { width: rect.width, height: rect.height }
+      }
+    }, theme)
+    expect(style.hasTheme).toBe(true)
+    if (theme === "dark") expect(style.background).toContain("linear-gradient")
+    else {
+      expect(style.background).toBe("none")
+      expect(style.backgroundColor).toBe("rgb(255, 253, 248)")
+    }
+    expect(Math.abs(style.frame.width / style.frame.height - 210 / 297)).toBeLessThan(0.005)
+  }
+
   async searchFor(query) {
     await this.page.locator("#library-search").fill(query)
   }
@@ -604,6 +702,14 @@ test("shared editing flow works in the web app", async ({ page }) => {
 
 test("shared presentation navigation works in the web app", async ({ page }) => {
   await presentationModeWorkflow(new WebEditorUi(page))
+})
+
+test("Vim relative line numbers update from CodeMirror cursor positions", async ({ page }) => {
+  await vimRelativeLineNumbersWorkflow(new WebEditorUi(page))
+})
+
+test("document pages keep their A4 aspect ratio when the web editor is resized", async ({ page }) => {
+  await documentPageAspectRatioWorkflow(new WebEditorUi(page))
 })
 
 test("shared library and document graph flow works in the web app", async ({ page }) => {

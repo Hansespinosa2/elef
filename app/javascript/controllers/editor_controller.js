@@ -1,7 +1,7 @@
 import { Controller } from "@hotwired/stimulus"
 import { createDocumentState } from "lib/editor_document_state"
 import { Compartment, EditorState } from "@codemirror/state"
-import { EditorView } from "@codemirror/view"
+import { EditorView, lineNumbers } from "@codemirror/view"
 import { foldEffect, foldedRanges, unfoldEffect } from "@codemirror/language"
 import { basicSetup } from "codemirror"
 import { markdown } from "@codemirror/lang-markdown"
@@ -22,6 +22,7 @@ import {
   writeValue
 } from "controllers/vim_preferences"
 import { snippetStopsField } from "controllers/snippet_stops"
+import { formatLineNumber } from "lib/vim_line_numbers"
 
 const VIM_ESCAPE_MODES = ["normal", "insert", "visual", "operatorPending"]
 let activeEscapeKey = ""
@@ -85,6 +86,7 @@ export default class extends Controller {
     this.initialSource = this.readInitialSource()
     this.lineSeparator = this.initialSource.match(/\r\n|\r|\n/)?.[0] || "\n"
     this.vimCompartment = new Compartment()
+    this.lineNumbersCompartment = new Compartment()
     this.updateVisualSurfaceGeometry = () => this.syncVisualSurfaceGeometry()
     this.resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(this.updateVisualSurfaceGeometry)
     window.addEventListener("resize", this.updateVisualSurfaceGeometry)
@@ -99,7 +101,8 @@ export default class extends Controller {
 
     this.documentExtensions = [
       this.vimCompartment.of(this.vimEnabled ? vim() : []),
-      basicSetup,
+      this.lineNumbersCompartment.of(this.createLineNumbersExtension()),
+      ...basicSetup.slice(1),
       markdown({ extensions: elefMetadata }),
       livePreviewField,
       snippetStopsField,
@@ -725,6 +728,12 @@ export default class extends Controller {
     this.scheduleLineNumberUpdate()
   }
 
+  createLineNumbersExtension() {
+    return lineNumbers({
+      formatNumber: (number, state) => formatLineNumber(number, state, this.lineNumberMode)
+    })
+  }
+
   scheduleLineNumberUpdate() {
     if (this.destroyed || this.lineNumberMode === "off" || this.lineNumberFrame) return
 
@@ -735,18 +744,8 @@ export default class extends Controller {
       const gutter = this.view.dom.querySelector(".cm-lineNumbers")
       if (!gutter) return
 
-      const contentLeft = this.view.contentDOM.getBoundingClientRect().left + 1
-      const activeLine = this.view.state.doc.lineAt(this.view.state.selection.main.head).number
-      gutter.querySelectorAll(".cm-gutterElement").forEach((element) => {
-        if (element.style.visibility === "hidden") return
-
-        const rect = element.getBoundingClientRect()
-        const position = this.view.posAtCoords({ x: contentLeft, y: rect.top + rect.height / 2 })
-        if (position === null) return
-
-        const line = this.view.state.doc.lineAt(position).number
-        const number = this.lineNumberMode === "relative" ? Math.abs(activeLine - line) : line
-        element.textContent = String(number)
+      this.view.dispatch({
+        effects: this.lineNumbersCompartment.reconfigure(this.createLineNumbersExtension())
       })
     })
   }

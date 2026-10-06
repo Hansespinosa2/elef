@@ -205,12 +205,12 @@ export function createSaveFlow({
             return false
           }
           onError(error)
-          setStatus("Save failed")
           if (error?.retryable !== true) {
             blocked = true
-            setStatus("Save blocked · retry manually")
+            setStatus("Save failed")
             return false
           }
+          setStatus("Save failed")
           const retryDelay = RETRY_DELAYS[Math.min(retryAttempt, RETRY_DELAYS.length - 1)]
           retryAttempt += 1
           if (!retryTimer && activeDeck === deck) {
@@ -230,7 +230,7 @@ export function createSaveFlow({
       return await saveWorker
     } finally {
       saveWorker = null
-      if (activeDeck && dirty && !activeConflict && !retryTimer && !saveTimer) schedule(0)
+      if (activeDeck && dirty && !activeConflict && !blocked && !retryTimer && !saveTimer) schedule(0)
     }
   }
 
@@ -298,7 +298,7 @@ export function createSaveFlow({
     activeConflict = null
     dirty = getSnapshot() !== deck.savedSnapshot
     if (dirty) schedule()
-    else setStatus("Saved external version")
+    else setStatus("Saved")
     return true
   }
 

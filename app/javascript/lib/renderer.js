@@ -266,7 +266,7 @@ function renderDocument(source, slide, style, env) {
     appendEmpty(emptyBlocks[emptyIndex])
     emptyIndex += 1
   }
-  return `<div class="document-reader document-theme-${style.theme} document-typography-${style.typography} work-theme-${style.theme} work-typography-${style.typography} document-editor-projection" data-controller="document-pages mermaid-diagrams"><div class="document-surface" data-document-pages-target="surface">${blocks}</div></div>`
+  return `<div class="document-reader document-theme-${style.theme} document-typography-${style.typography} work-theme-${style.theme} work-typography-${style.typography} document-editor-projection" data-controller="document-pages mermaid-diagrams"><div class="document-surface" data-document-pages-target="surface">${blocks.join("")}</div></div>`
 }
 
 function editableStructuredSource(markdown, kind) {

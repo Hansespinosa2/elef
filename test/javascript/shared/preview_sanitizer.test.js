@@ -59,3 +59,40 @@ test("non-interactive library previews remove controller and editing hooks", () 
   assert.equal(container.querySelector("[data-action]"), null)
   assert.equal(container.textContent.trim(), "safe text")
 })
+
+test("non-interactive document cards preserve only the trusted page controller and its surface target", () => {
+  const { document } = parseHTML("<main id='preview'></main>")
+  const container = document.querySelector("#preview")
+  installSanitizedPreview(container, `
+    <div class="document-reader document-theme-dark" data-controller="document-pages mermaid-diagrams">
+      <div class="document-surface" data-document-pages-target="surface">
+        <p>Page content</p>
+        <div class="hostile" data-controller="file-library" data-document-pages-target="surface">Injected controller</div>
+        <div class="document-reader" data-controller="document-pages mermaid-diagrams">
+          <div class="document-surface" data-document-pages-target="surface">Nested injected pagination</div>
+        </div>
+      </div>
+    </div>`, { interactive: false, documentPagination: true })
+
+  const reader = container.querySelector(".document-reader")
+  const surface = container.querySelector(".document-surface")
+  const hostile = container.querySelector(".hostile")
+  assert.equal(reader.getAttribute("data-controller"), "document-pages mermaid-diagrams")
+  assert.equal(surface.getAttribute("data-document-pages-target"), "surface")
+  assert.equal(hostile.getAttribute("data-controller"), null)
+  assert.equal(hostile.getAttribute("data-document-pages-target"), null)
+  assert.equal(container.querySelectorAll("[data-controller]").length, 1)
+  assert.equal(container.querySelectorAll("[data-document-pages-target]").length, 1)
+})
+
+test("non-document library previews cannot activate document pagination", () => {
+  const { document } = parseHTML("<main id='preview'></main>")
+  const container = document.querySelector("#preview")
+  installSanitizedPreview(container, `
+    <div class="document-reader" data-controller="document-pages mermaid-diagrams">
+      <div class="document-surface" data-document-pages-target="surface">Presentation text</div>
+    </div>`, { interactive: false })
+
+  assert.equal(container.querySelector("[data-controller]"), null)
+  assert.equal(container.querySelector("[data-document-pages-target]"), null)
+})

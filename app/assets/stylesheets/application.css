@@ -1281,10 +1281,8 @@ body.elef-app {
 .library-preview { aspect-ratio: 16 / 9; background: var(--oradia-slate-950); border-radius: 0.55rem; overflow: hidden; position: relative; width: 100%; }
 .library-preview-stage { inset: 0; position: absolute; }
 .library-preview-stage > .slide { left: 0; position: absolute; top: 0; }
-.library-preview > .library-preview-page {
-  left: 50%; position: absolute; top: 50%;
-  height: 1123px; transform: translate(-50%, -50%) scale(var(--slide-scale, 1)); width: 794px;
-}
+.library-preview > .document-reader { height: 100%; }
+.library-preview .document-surface.is-paginated { align-content: center; height: 100%; min-height: 0; overflow: hidden; }
 .library-preview .document-surface > .document-page-frame:not(:first-child) { left: -100000px; margin: 0; position: absolute; top: 0; visibility: hidden; }
 .library-card-open { border-radius: 0.55rem; inset: 0; position: absolute; z-index: 1; }
 .library-card-open:hover, .library-card-open:focus-visible { box-shadow: 0 0 0 3px var(--accent, var(--oradia-green)); }

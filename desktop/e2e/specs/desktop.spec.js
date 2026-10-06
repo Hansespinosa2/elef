@@ -12,6 +12,8 @@ import { hostileDeckNeutralizedWorkflow } from "../scenarios/hostile-deck.js"
 import { mathInputWorkflow, snippetInsertWorkflow } from "../scenarios/authoring-palettes.js"
 import { PIXEL_PNG_DIGEST, PIXEL_PNG_MARKDOWN } from "../scenarios/media-fixture.js"
 import { presentationModeWorkflow } from "../scenarios/presentation-mode.js"
+import { vimRelativeLineNumbersWorkflow } from "../scenarios/vim-relative-line-numbers.js"
+import { documentPageAspectRatioWorkflow } from "../scenarios/document-page-aspect-ratio.js"
 import { createHash } from "node:crypto"
 import { answerMacNativeDialog } from "../mac-native-dialog.js"
 
@@ -401,6 +403,103 @@ class DesktopEditorUi {
     }, position)
     if (selection?.[0] !== position || selection?.[1] !== position) {
       throw new Error(`The desktop editor could not place its caret at ${position}: ${JSON.stringify(selection)}`)
+    }
+  }
+
+  async assertRelativeLineNumbers() {
+    const result = await browser.executeAsync(done => {
+      const editor = document.querySelector("#desktop-editor-field")?.editorController
+      if (!editor) return done({ error: "The shared CodeMirror controller is unavailable" })
+      const source = editor.sourceValue
+      const selection = editor.view.state.selection.main
+      const mode = editor.lineNumberMode
+      const values = () => [...editor.view.dom.querySelectorAll(".cm-lineNumbers .cm-gutterElement")]
+        .filter(element => element.style.visibility !== "hidden")
+        .map(element => element.textContent)
+      const twoFrames = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+
+      ;(async () => {
+        let outcome
+        try {
+          editor.loadDocument("One\ntwo\nthree\nfour")
+          editor.setLineNumberMode("relative")
+          editor.setSelectionRange(0)
+          await twoFrames()
+          const firstLineActive = values()
+          editor.setSelectionRange(editor.view.state.doc.line(3).from)
+          await twoFrames()
+          outcome = { firstLineActive, thirdLineActive: values() }
+        } catch (error) {
+          outcome = { error: error.message || String(error) }
+        } finally {
+          editor.loadDocument(source)
+          editor.setLineNumberMode(mode)
+          editor.view.dispatch({ selection })
+          await twoFrames()
+        }
+        done(outcome)
+      })()
+    })
+
+    const expected = JSON.stringify({
+      firstLineActive: ["0", "1", "2", "3"],
+      thirdLineActive: ["2", "1", "0", "1"]
+    })
+    if (result?.error || JSON.stringify(result) !== expected) {
+      throw new Error(`Vim relative line numbers did not track CodeMirror cursor positions: ${JSON.stringify(result)}`)
+    }
+  }
+
+  async assertDocumentPageAspectRatio() {
+    const originalSize = await browser.getWindowSize()
+    try {
+      for (const mode of ["visual", "source"]) {
+        if (mode === "visual") await this.showVisualMode()
+        else await this.showSourceMode()
+
+        const frameWidths = []
+        for (const size of [{ width: 1280, height: 840 }, { width: 900, height: 600 }]) {
+          await browser.setWindowSize(size.width, size.height)
+          const previousWidth = frameWidths.at(-1)
+          await browser.waitUntil(async () => browser.execute(() => {
+            const frame = document.querySelector("#desktop-preview .document-page-frame")
+            if (!frame || document.querySelector("#desktop-preview .document-surface")?.dataset.documentPagesSettled !== "true") return false
+            const rect = frame.getBoundingClientRect()
+            return rect.width > 0 && rect.height > 0
+          }), {
+            timeout: 5_000,
+            timeoutMsg: `The document page did not settle at ${size.width}×${size.height}`
+          })
+          if (mode === "source" && previousWidth !== undefined) {
+            await browser.waitUntil(async () => browser.execute(width => {
+              const frame = document.querySelector("#desktop-preview .document-page-frame")
+              return frame && frame.getBoundingClientRect().width < width - 1
+            }, previousWidth), {
+              timeout: 5_000,
+              timeoutMsg: "The source-mode document page did not shrink to the resized preview"
+            })
+          }
+          const metrics = await browser.execute(() => {
+            const frame = document.querySelector("#desktop-preview .document-page-frame")
+            const rect = frame.getBoundingClientRect()
+            const preview = frame.closest(".preview-pane")
+            return {
+              width: rect.width,
+              ratio: rect.width / rect.height,
+              fitsPreviewWidth: !preview || rect.width <= preview.clientWidth + 1
+            }
+          })
+          if (Math.abs(metrics.ratio - 210 / 297) >= 0.005 || !metrics.fitsPreviewWidth) {
+            throw new Error(`Document page left its A4 preview bounds at ${metrics.ratio} in ${mode} mode at ${size.width}×${size.height}`)
+          }
+          frameWidths.push(metrics.width)
+        }
+        if (mode === "source" && frameWidths[1] >= frameWidths[0] - 1) {
+          throw new Error(`The document page did not shrink with the available width in ${mode} mode: ${frameWidths.join("px → ")}px`)
+        }
+      }
+    } finally {
+      await browser.setWindowSize(originalSize.width, originalSize.height)
     }
   }
 
@@ -1132,6 +1231,40 @@ class DesktopLibraryUi {
     }
   }
 
+  async assertDocumentCardTheme(title, theme) {
+    const state = deckTitle => {
+      const button = [...document.querySelectorAll(".library-card-open")]
+        .find(element => element.getAttribute("aria-label") === `Edit ${deckTitle}`)
+      const preview = button?.closest(".library-card")?.querySelector(".library-card-preview")
+      const surface = preview?.querySelector(".document-reader .document-surface")
+      const frame = surface?.querySelector(".document-page-frame")
+      const page = frame?.querySelector(".document-page")
+      if (!preview || preview.dataset.previewState !== "ready" || surface?.dataset.documentPagesSettled !== "true" || !page) return null
+      const rect = frame.getBoundingClientRect()
+      return {
+        hasTheme: Boolean(page.closest(`.document-reader.document-theme-${theme}`)),
+        background: getComputedStyle(page).backgroundImage,
+        backgroundColor: getComputedStyle(page).backgroundColor,
+        ratio: rect.width / rect.height
+      }
+    }
+
+    let result
+    await browser.waitUntil(async () => {
+      result = await browser.execute(state, title)
+      return result !== null
+    }, {
+      timeout: 10_000,
+      timeoutMsg: `The ${title} library card did not paginate its ${theme} document preview`
+    })
+    const themeMatches = theme === "dark"
+      ? result.background.includes("linear-gradient")
+      : result.background === "none" && result.backgroundColor === "rgb(255, 253, 248)"
+    if (!result.hasTheme || !themeMatches || Math.abs(result.ratio - 210 / 297) >= 0.005) {
+      throw new Error(`The ${title} library card lost its ${theme} theme or A4 proportions: ${JSON.stringify(result)}`)
+    }
+  }
+
   async searchFor(query) {
     await $("#library-search").setValue(query)
   }
@@ -1356,6 +1489,14 @@ describe("desktop binary workflows and native boundaries", () => {
 
   it("runs the shared presentation navigation flow in the desktop binary", async () => {
     await presentationModeWorkflow(new DesktopEditorUi())
+  })
+
+  it("updates Vim relative line numbers from CodeMirror cursor positions", async () => {
+    await vimRelativeLineNumbersWorkflow(new DesktopEditorUi())
+  })
+
+  it("keeps document pages at A4 proportions when the desktop window is resized", async () => {
+    await documentPageAspectRatioWorkflow(new DesktopEditorUi())
   })
 
   it("accepts trusted keyboard input in CodeMirror and persists it", async () => {

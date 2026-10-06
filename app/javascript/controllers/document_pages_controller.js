@@ -54,7 +54,7 @@ export default class extends Controller {
 
   resizeFrames() {
     if (!this.surfaceTarget) return
-    const preview = this.sourceModePreview()
+    const preview = this.element.closest(".library-preview") || this.sourceModePreview()
     const previewStyle = preview && getComputedStyle(preview)
     const fittedWidth = previewStyle
       ? Math.max(0, Math.min(
@@ -140,7 +140,7 @@ export default class extends Controller {
       page.querySelector(".document-page-number").textContent = `Page ${number} of ${pages.length}`
       if (this.resizeObserver) this.resizeObserver.observe(frame)
     })
-    const preview = this.element.closest(".preview-pane")
+    const preview = this.element.closest(".library-preview") || this.element.closest(".preview-pane")
     if (preview && this.resizeObserver) this.resizeObserver.observe(preview)
 
     this.resizeFrames()

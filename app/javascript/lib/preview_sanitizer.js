@@ -14,7 +14,7 @@ const ALLOWED_PRESENTATION_ACTIONS = new Set([
   "add-slide-after", "delete-slide", "move-slide-up", "move-slide-down", "add-block-after", "delete-block", "move-block-up", "move-block-down"
 ])
 
-export function installSanitizedPreview(container, html, { interactive = true } = {}) {
+export function installSanitizedPreview(container, html, { interactive = true, documentPagination = false } = {}) {
   const template = container.ownerDocument.createElement("template")
   template.innerHTML = typeof html === "string" ? html : ""
   const walker = container.ownerDocument.createTreeWalker(template.content, container.ownerDocument.defaultView?.NodeFilter?.SHOW_ELEMENT || 1)
@@ -27,13 +27,13 @@ export function installSanitizedPreview(container, html, { interactive = true } 
       continue
     }
     for (const attribute of [...element.attributes]) {
-      if (!safeAttribute(element, attribute.name, attribute.value, interactive)) element.removeAttribute(attribute.name)
+      if (!safeAttribute(element, attribute.name, attribute.value, interactive, documentPagination)) element.removeAttribute(attribute.name)
     }
   }
   container.replaceChildren(template.content)
 }
 
-function safeAttribute(element, name, value, interactive) {
+function safeAttribute(element, name, value, interactive, documentPagination) {
   const lower = name.toLowerCase()
   if (lower.startsWith("on") || lower === "srcdoc" || lower === "formaction") return false
   if (["class", "role", "alt", "title", "aria-label", "aria-multiline", "aria-readonly", "aria-hidden", "spellcheck", "controls", "playsinline", "preload", "colspan", "rowspan"].includes(lower)) return true
@@ -42,9 +42,16 @@ function safeAttribute(element, name, value, interactive) {
   if (lower === "style") return isSafeKatexStyle(element, value)
   if (lower.startsWith("aria-") && /^[a-z-]+$/.test(lower)) return true
   if (lower === "data-action") return interactive && ALLOWED_ACTIONS.has(value)
-  if (lower === "data-controller") return interactive && value.split(/\s+/).every((controller) => ["mermaid-diagrams", "presentation-canvas", "document-pages"].includes(controller))
+  if (lower === "data-controller") {
+    if (interactive) return value.split(/\s+/).every((controller) => ["mermaid-diagrams", "presentation-canvas", "document-pages"].includes(controller))
+    return documentPagination && element.parentNode?.nodeType === 11 && element.classList.contains("document-reader") && value === "document-pages mermaid-diagrams"
+  }
   if (lower === "data-presentation-editor-action") return interactive && ALLOWED_PRESENTATION_ACTIONS.has(value)
   if (/^data-(?:editor|presentation-canvas|slide-index)/.test(lower)) return true
+  if (lower === "data-document-pages-target") {
+    const reader = element.parentElement
+    return (interactive || (documentPagination && reader?.parentNode?.nodeType === 11)) && value === "surface" && element.classList.contains("document-surface") && reader?.classList.contains("document-reader")
+  }
   if (lower === "href" && element.tagName === "A") return safeUrl(value)
   if (lower === "src" && ["IMG", "VIDEO"].includes(element.tagName)) return safeUrl(value) && !/^(?:https?:|data:|javascript:)/i.test(value)
   if (lower === "data-editor-image-source") return value === "true"

@@ -14,6 +14,7 @@ export default class extends Controller {
   static values = {
     delay: { type: Number, default: 900 },
     timeout: { type: Number, default: 15000 },
+    recoveryTimeout: { type: Number, default: 1000 },
     workId: String,
     workKind: String,
     workIdentity: String,
@@ -91,7 +92,7 @@ export default class extends Controller {
 
     const snapshot = this.snapshot()
     if (this.flow?.conflict) {
-      this.setStatus("Resolve the external edit before saving", "conflict")
+      this.setStatus(this.conflictStatusMessage(this.conflictPayload), "conflict")
       this.persistLocalDraft(snapshot)
       return
     }
@@ -192,6 +193,9 @@ export default class extends Controller {
     }
 
     this.materializeEditorEdits()
+    const recoveryCopySaved = await this.persistDraftBeforeSave()
+    if (!this.active) return { content_hash: this.currentRevisionBaseline(), source, snapshot: _snapshot }
+    this.materializeEditorEdits()
     const fieldValues = this.fieldTargets.map(field => field.value)
     const sourceField = this.sourceField()
     const sourceIndex = this.fieldTargets.indexOf(sourceField)
@@ -199,8 +203,6 @@ export default class extends Controller {
     const currentSnapshot = this.snapshot()
     const formData = new FormData(this.element)
     if (sourceField?.name) formData.set(sourceField.name, currentSource)
-    const recoveryCopySaved = await this.persistLocalDraft(currentSnapshot)
-    if (!this.active) return { content_hash: this.currentRevisionBaseline(), source: currentSource, snapshot: currentSnapshot }
     this.setStatus(recoveryCopySaved ? "Saving…" : "Saving… Browser recovery is unavailable.")
 
     const requestController = new AbortController()
@@ -312,6 +314,25 @@ export default class extends Controller {
     }
     this.element.dispatchEvent(new CustomEvent("autosave:conflict", { detail: this.conflictPayload }))
     this.showConflict(this.conflictPayload)
+    this.setStatus(this.conflictStatusMessage(this.conflictPayload), "conflict")
+  }
+
+  conflictStatusMessage(payload) {
+    const recoveryId = payload?.recovery_revision_id ? ` Recovery revision ${payload.recovery_revision_id} is available.` : ""
+    return `${payload?.message || "A newer version is active; your draft was preserved."}${recoveryId}`
+  }
+
+  async persistDraftBeforeSave() {
+    let timeout
+    const pending = Promise.resolve()
+      .then(() => this.persistLocalDraft(this.snapshot()))
+      .catch(() => false)
+    const recoveryCopySaved = await Promise.race([
+      pending,
+      new Promise(resolve => { timeout = setTimeout(() => resolve(false), this.recoveryTimeoutValue) })
+    ])
+    clearTimeout(timeout)
+    return recoveryCopySaved === true
   }
 
   async applyExternalSource(source, { id, expectedSource, preserveMetadata = false }) {
@@ -453,8 +474,8 @@ export default class extends Controller {
       field.dispatchEvent(new Event("input", { bubbles: true }))
     })
     if (!this.active) return
-    this.setStatus("Recovered unsent changes", "recovered")
     this.scheduleSave(this.delayValue)
+    this.setStatus("Recovered unsent changes", "recovered")
   }
 
   waitForEditorReady(editorHost) {

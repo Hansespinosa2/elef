@@ -12,25 +12,17 @@ export function createLibraryPreviewLoader({ readPreview, render, install }) {
         mediaBaseUrl: `elefasset://localhost/${encodeURIComponent(deck.id)}`,
         documentNodes: []
       })
-      install(container, rendered.html, { interactive: false })
-      // Reattach only the trusted sizing controller after sanitization. The
-      // preview has no authoring controller, IPC action or editable content.
+      install(container, rendered.html, { interactive: false, documentPagination: deck.kind === "document" })
       container.classList.add("library-preview")
-      container.dataset.controller = "presentation-canvas"
-      const canvas = deck.kind === "document"
-        ? container.querySelector(".document-reader") : container.querySelector(".slide")
-      if (canvas) {
-        canvas.dataset.presentationCanvasTarget = "canvas"
-        if (deck.kind === "document") {
-          canvas.classList.add("library-preview-page")
-          canvas.classList.remove("document-editor-projection")
-          container.dataset.presentationCanvasDesignWidthValue = "794"
-          container.dataset.presentationCanvasDesignHeightValue = "1123"
-        } else {
-          const surface = container.querySelector(".presentation-surface")
-          surface?.classList.remove("presentation-editor-projection")
-          surface?.classList.add("library-preview-stage")
-        }
+      if (deck.kind === "document") {
+        container.querySelector(".document-reader")?.classList.remove("document-editor-projection")
+      } else {
+        container.dataset.controller = "presentation-canvas"
+        const canvas = container.querySelector(".slide")
+        if (canvas) canvas.dataset.presentationCanvasTarget = "canvas"
+        const surface = container.querySelector(".presentation-surface")
+        surface?.classList.remove("presentation-editor-projection")
+        surface?.classList.add("library-preview-stage")
       }
       container.setAttribute("inert", "")
       container.dataset.previewState = "ready"

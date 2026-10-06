@@ -73,6 +73,17 @@ test("document preview renders basic Markdown with safe content-addressed local 
   assert.match(preview.html, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/)
 })
 
+test("document preview joins blocks without inserting punctuation between them", () => {
+  const html = renderPreview({
+    kind: "document",
+    source: "# Notes\n\nFirst, don't change this punctuation.\n\nSecond block.\n"
+  }).html
+
+  assert.doesNotMatch(html, /<\/div>,<div class="document-editor-block-shell">/)
+  assert.match(html, /<p>First, don't change this punctuation\.<\/p>/)
+  assert.match(html, /<p>Second block\.<\/p>/)
+})
+
 test("full editor projection accepts platform document links, settings, and assets", () => {
   const preview = renderPreview({
     source: "# Notes\n\n[[Target alias|Open target]] and [[document:target-key]] and [[Missing|Missing target]]\n\n![diagram](elef-asset:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)",

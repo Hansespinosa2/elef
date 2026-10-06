@@ -5,23 +5,27 @@ import { parseHTML } from "linkedom"
 import { createLibraryPreviewLoader } from "../../../app/javascript/lib/library_preview.js"
 import { installSanitizedPreview } from "../../../app/javascript/lib/preview_sanitizer.js"
 
-test("library canvases reuse web sizing while retaining only the trusted read-only controller", async () => {
+test("library cards keep document pagination and use the presentation canvas only for slides", async () => {
   for (const kind of ["document", "presentation"]) {
     const { document } = parseHTML("<div id='preview'></div>")
     const container = document.querySelector("#preview")
     const html = kind === "document"
-      ? '<div class="document-reader document-editor-projection" data-controller="visual-editor"><div class="document-surface" contenteditable="true">Notes</div></div>'
+      ? '<div class="document-reader document-theme-dark document-editor-projection" data-controller="document-pages mermaid-diagrams"><div class="document-surface" data-document-pages-target="surface" contenteditable="true">Notes</div></div>'
       : '<div class="presentation-surface presentation-editor-projection" data-controller="presentation-editor"><div class="slide" contenteditable="true">Slides</div></div>'
     const load = createLibraryPreviewLoader({ readPreview: async () => ({ source: "# Notes" }), render: async () => ({ html }), install: installSanitizedPreview })
     assert.equal(await load(container, { id: "fixture", name: "Notes", kind }), true)
-    assert.equal(container.dataset.controller, "presentation-canvas")
-    assert.equal(container.querySelector("[data-controller], [contenteditable], [data-action]"), null)
-    const canvas = container.querySelector('[data-presentation-canvas-target="canvas"]')
-    assert.ok(canvas)
+    assert.equal(container.classList.contains("library-preview"), true)
+    assert.equal(container.querySelector("[contenteditable], [data-action]"), null)
     if (kind === "document") {
-      assert.equal(container.dataset.presentationCanvasDesignWidthValue, "794")
-      assert.equal(container.dataset.presentationCanvasDesignHeightValue, "1123")
-      assert.ok(canvas.classList.contains("library-preview-page"))
+      const reader = container.querySelector(".document-reader")
+      assert.equal(container.dataset.controller, undefined)
+      assert.equal(reader.getAttribute("data-controller"), "document-pages mermaid-diagrams")
+      assert.equal(reader.querySelector(".document-surface").getAttribute("data-document-pages-target"), "surface")
+      assert.equal(reader.classList.contains("document-theme-dark"), true)
+      assert.equal(reader.classList.contains("document-editor-projection"), false)
+    } else {
+      assert.equal(container.dataset.controller, "presentation-canvas")
+      assert.ok(container.querySelector('[data-presentation-canvas-target="canvas"]'))
     }
   }
 })
@@ -37,7 +41,7 @@ test("library previews use the shared renderer and the non-interactive sanitizer
     },
     render: async input => {
       calls.push(["render", input])
-      return { html: "<h1>Notes</h1>" }
+      return { html: '<div class="document-reader" data-controller="document-pages mermaid-diagrams"><div class="document-surface" data-document-pages-target="surface"><h1>Notes</h1></div></div>' }
     },
     install: (target, html, options) => calls.push(["install", target, html, options])
   })
@@ -54,8 +58,8 @@ test("library previews use the shared renderer and the non-interactive sanitizer
     mediaBaseUrl: "elefasset://localhost/doc-1",
     documentNodes: []
   })
-  assert.equal(calls[2][2], "<h1>Notes</h1>")
-  assert.deepEqual(calls[2][3], { interactive: false })
+  assert.match(calls[2][2], /document-reader/)
+  assert.deepEqual(calls[2][3], { interactive: false, documentPagination: true })
 })
 
 test("large sources show a bounded-preview message without invoking the renderer", async () => {
