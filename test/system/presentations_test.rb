@@ -444,6 +444,8 @@ class PresentationsTest < ApplicationSystemTestCase
     fill_in "Markdown source", with: "# Manual latest"
     click_on "Save presentation"
     page.execute_script("window.autosaveRequests[0].release()")
+    wait_for_autosave_request(1)
+    page.execute_script("window.autosaveRequests[1].release()")
     assert_text "Presentation saved."
     assert_selector '.preview-pane .slide', text: "Manual latest"
     assert_includes presentation.reload.source, "# Manual latest"

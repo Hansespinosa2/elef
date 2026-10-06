@@ -475,6 +475,7 @@ class DesktopEditorUi {
         const frameWidths = []
         for (const size of [{ width: 1280, height: 840 }, { width: 900, height: 600 }]) {
           await browser.setWindowSize(size.width, size.height)
+          await browser.executeAsync(done => requestAnimationFrame(() => requestAnimationFrame(done)))
           const previousWidth = frameWidths.at(-1)
           await browser.waitUntil(async () => browser.execute(() => {
             const frame = document.querySelector("#desktop-preview .document-page-frame")

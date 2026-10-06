@@ -276,6 +276,9 @@ class WebEditorUi {
         const frameWidths = []
         for (const viewport of [{ width: 1280, height: 840 }, { width: 600, height: 500 }]) {
           await this.page.setViewportSize(viewport)
+          await this.page.evaluate(() => new Promise(resolve => {
+            requestAnimationFrame(() => requestAnimationFrame(resolve))
+          }))
           const frame = this.page.locator(".document-page-frame").first()
           if (frameWidths.length) {
             await expect.poll(() => frame.evaluate(element => element.getBoundingClientRect().width))
