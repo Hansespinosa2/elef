@@ -444,13 +444,22 @@ class WebLibraryUi {
     await expect(this.page.getByRole("heading", { name: title, exact: true })).toBeVisible()
   }
 
+  async openCardAction(card, actionName) {
+    const menu = card.locator(".library-card-menu")
+    await menu.locator(".library-card-menu-trigger").click()
+    await expect(menu).toHaveAttribute("open", "")
+    const action = card.getByRole("button", { name: actionName, exact: true })
+    await expect(action).toBeVisible()
+    return action
+  }
+
   async deleteWork(title) {
     const card = this.page.locator("article.library-card").filter({
       has: this.page.getByRole("heading", { name: title, exact: true })
     })
-    await card.locator(".library-card-menu-trigger").click()
     this.page.once("dialog", dialog => dialog.accept())
-    await card.getByRole("button", { name: "Delete", exact: true }).click()
+    const action = await this.openCardAction(card, "Delete")
+    await action.evaluate(button => button.click())
     await expect(this.page.getByRole("heading", { name: title, exact: true })).toHaveCount(0)
   }
 
@@ -475,8 +484,8 @@ class WebLibraryUi {
     const card = this.page.locator("article.library-card").filter({
       has: this.page.getByRole("heading", { name: title, exact: true })
     })
-    await card.locator(".library-card-menu-trigger").click()
-    await card.getByRole("button", { name: "Present", exact: true }).click()
+    const action = await this.openCardAction(card, "Present")
+    await action.evaluate(button => button.click())
     await expect(this.page.locator(".presentation-stage")).toBeVisible()
     await this.page.getByRole("link", { name: "Exit", exact: true }).click()
     await expect(this.page.getByText("Saved preview", { exact: true })).toBeVisible()
