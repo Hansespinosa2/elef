@@ -47,12 +47,14 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "stale JSON saves return recovery metadata without overwriting the server draft" do
-    presentation = Presentation.create!(title: "Concurrent", source: "# Initial")
+    source = "---\ntheme: dark\ntypography: technical\n---\n# Initial"
+    server_source = "---\ntheme: dark\ntypography: technical\n---\n# Server"
+    presentation = Presentation.create!(title: "Concurrent", source: source)
     lock_version = presentation.lock_version
     base_revision = presentation.revision_token
 
     patch presentation_path(presentation), params: {
-      presentation: { source: "# Server", lock_version: lock_version, base_revision: base_revision }
+      presentation: { source: server_source, lock_version: lock_version, base_revision: base_revision }
     }, as: :json
     assert_response :ok
 
@@ -64,7 +66,9 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "conflict", response.parsed_body["status"]
     assert_predicate response.parsed_body["recovery_revision_id"], :present?
     assert_equal "# Local", response.parsed_body.dig("recovery_revision", "source")
-    assert_equal "# Server", presentation.reload.source
+    assert_equal server_source, presentation.reload.source
+    assert_equal "dark", response.parsed_body.dig("current", "theme")
+    assert_equal "technical", response.parsed_body.dig("current", "typography")
   end
 
   test "invalid HTML draft saves re-render the edit form instead of redirecting" do

@@ -45,6 +45,16 @@ shared_application_styles = (REPO_ROOT / "app" / "assets" / "stylesheets" / "app
 desktop_frontend_source = REPO_ROOT / "desktop" / "frontend" / "src"
 desktop_frontend_files = list(desktop_frontend_source.rglob("*"))
 assert not any(path.suffix.lower() in {".html", ".css"} for path in desktop_frontend_files), "desktop frontend must consume Rails-owned markup and styles, not own UI files"
+app_javascript_source = REPO_ROOT / "app" / "javascript"
+app_import_pattern = re.compile(r"(?:\bfrom\s*|\bimport\s*(?:\(\s*)?)['\"]([^'\"]+)['\"]")
+for source_file in app_javascript_source.rglob("*.js"):
+    source = source_file.read_text()
+    for specifier in app_import_pattern.findall(source):
+        path_parts = Path(specifier).parts
+        assert not any(part == "desktop" or part.startswith("@tauri-apps") for part in path_parts), (
+            f"Rails-owned frontend must not depend on desktop code: {source_file.relative_to(REPO_ROOT)} -> {specifier}"
+        )
+    assert "__TAURI__" not in source, f"Rails-owned frontend must not depend on Tauri globals: {source_file.relative_to(REPO_ROOT)}"
 assert not re.search(r"(?m)(?:^|,)\s*h[1-6]\s*(?:,|\{)", native_render_styles), "desktop host heading rules must stay scoped away from shared view markup"
 desktop_dom_ui_patterns = (
     r"\bdocument\.(?:querySelector(?:All)?|getElementById|createElement|createTextNode|body|documentElement)\b",

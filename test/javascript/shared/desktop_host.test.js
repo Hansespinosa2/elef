@@ -19,6 +19,7 @@ const [page, shellStyles, applicationStyles, application, bootstrap, editorRunti
   read("app/javascript/lib/library_view.js")
 ])
 const appearanceController = await read("app/javascript/controllers/appearance_controller.js")
+const autosaveController = await read("app/javascript/controllers/autosave_controller.js")
 const { document } = parseHTML(page)
 const emptyAction = page.match(/<template data-library-view-slot="empty-action">([\s\S]*?)<\/template>/)?.[1] || ""
 
@@ -34,6 +35,8 @@ test("the desktop packages Rails-owned host markup and styles", () => {
   assert.match(shellStyles, /\.desktop-app-shell\s*\{[^}]*max-width: 1440px/)
   assert.doesNotMatch(shellStyles, /^h1\s*\{/m)
   assert.match(bootstrap, /app\/assets\/stylesheets\/application\.css/)
+  assert.match(editorRuntime, /import\("controllers\/vim_settings_controller"\)/)
+  assert.match(page, /data-controller="vim-settings" data-vim-settings-view/)
   assert.match(build, /app\/views\/desktop_host\.html/)
   assert.match(build, /app\/assets\/stylesheets\/file_library_host\.css/)
   assert.equal(document.querySelector("#library-view-mount").classList.contains("elef-app"), false)
@@ -78,6 +81,14 @@ test("the native entry point only wires Tauri APIs into the Rails-owned applicat
   assert.match(bootstrap, /startFileLibraryApplication\(/)
   assert.doesNotMatch(bootstrap, /document\.querySelector|innerHTML|\.textContent|\.classList/)
   assert.doesNotMatch(bootstrap, /desktop-shell\.css|desktop-rendered-content\.css/)
+})
+
+test("Rails and desktop consume the same Rails-owned save state machine", () => {
+  assert.match(autosaveController, /import \{ createSaveFlow \} from "lib\/save_flow"/)
+  assert.match(application, /import \{ createSaveFlow \} from "lib\/save_flow"/)
+  assert.match(autosaveController, /import \{ presentConflictDialog \} from "lib\/conflict_dialog"/)
+  assert.match(application, /import \{ presentConflictDialog \} from "lib\/conflict_dialog"/)
+  assert.doesNotMatch(bootstrap, /createSaveFlow|conflict-dialog|autosave#schedule/)
 })
 
 test("the Rails-owned application references elements present in its host template", () => {

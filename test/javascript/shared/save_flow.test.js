@@ -88,6 +88,38 @@ test("save orchestration serializes writes and drains edits made during an in-fl
   assert.equal(context.flow.dirty, false)
 })
 
+test("a shared snapshot drains metadata changes made during a source save", async () => {
+  const firstSave = deferred()
+  const source = { value: "source" }
+  const metadata = { value: "initial title" }
+  const calls = []
+  const flow = createSaveFlow({
+    saveSource: async (_id, value, { snapshot }) => {
+      calls.push({ value, snapshot })
+      if (calls.length === 1) return firstSave.promise
+      return { content_hash: hash("c"), snapshot }
+    },
+    acceptDiskVersion() {},
+    getSource: () => source.value,
+    getSnapshot: () => `${source.value}\u001f${metadata.value}`,
+    setSource: async value => { source.value = value }
+  })
+  flow.activate({ id: "deck-1", source: source.value, content_hash: hash("a") })
+  metadata.value = "first title"
+  flow.noteChange()
+  const saving = flow.flush({ force: true })
+  metadata.value = "latest title"
+  flow.noteChange()
+  firstSave.resolve({ content_hash: hash("b"), snapshot: "source\u001ffirst title" })
+
+  assert.equal(await saving, true)
+  assert.deepEqual(calls, [
+    { value: "source", snapshot: "source\u001ffirst title" },
+    { value: "source", snapshot: "source\u001flatest title" }
+  ])
+  assert.equal(flow.dirty, false)
+})
+
 test("paused autosave holds edits until an explicit flush", async () => {
   const timers = fakeTimers()
   const context = setup({ setTimer: timers.setTimer, clearTimer: timers.clearTimer })
@@ -275,6 +307,26 @@ test("permanent save failures stop retrying until the user retries explicitly", 
 
   await context.flow.flush({ force: true })
   assert.equal(attempts, 2)
+})
+
+test("an invalid conflict fingerprint blocks saving instead of retrying in a loop", async () => {
+  const timers = fakeTimers()
+  let attempts = 0
+  const context = setup({
+    setTimer: timers.setTimer,
+    clearTimer: timers.clearTimer,
+    saveSource: async () => {
+      attempts += 1
+      throw { code: "conflict", details: { current: { source: "external" } } }
+    }
+  })
+  context.setSource("local")
+  context.flow.noteChange()
+
+  assert.equal(await context.flow.flush({ force: true }), false)
+  assert.equal(context.flow.blocked, true)
+  assert.equal(timers.count(), 0)
+  assert.equal(attempts, 1)
 })
 
 test("undo to the old baseline waits for the outstanding write and persists the final buffer", async () => {

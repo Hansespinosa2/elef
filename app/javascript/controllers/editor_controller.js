@@ -183,13 +183,14 @@ export default class extends Controller {
   }
 
   toggleVim(event) {
-    if (event && typeof event.target?.checked === "boolean") {
-      this.vimEnabled = event.target.checked
-    } else if (typeof event === "boolean") {
-      this.vimEnabled = event
-    } else {
-      this.vimEnabled = !this.vimEnabled
-    }
+    const enabled = event && typeof event.target?.checked === "boolean"
+      ? event.target.checked
+      : typeof event === "boolean" ? event : !this.vimEnabled
+    this.setVimEnabled(enabled, { focus: true })
+  }
+
+  setVimEnabled(enabled, { focus = false } = {}) {
+    this.vimEnabled = Boolean(enabled)
     writeBoolean(ENABLED_STORAGE_KEY, this.vimEnabled)
     if (this.hasVimToggleTarget) this.vimToggleTarget.checked = this.vimEnabled
     this.view.dispatch({
@@ -200,7 +201,7 @@ export default class extends Controller {
       if (this.destroyed) return
       this.bindVimEvents()
       this.updateMode()
-      this.view.focus()
+      if (focus) this.view.focus()
     }, 0)
   }
 
@@ -210,6 +211,10 @@ export default class extends Controller {
 
     event.preventDefault()
     event.stopPropagation()
+    this.setEscapeKey(key)
+  }
+
+  setEscapeKey(key) {
     this.escapeKey = key
     if (this.hasEscapeKeyTarget) this.escapeKeyTarget.value = escapeKeyDisplay(key)
     writeValue(ESCAPE_KEY_STORAGE_KEY, key)
@@ -217,20 +222,25 @@ export default class extends Controller {
   }
 
   clearEscapeKey() {
-    this.escapeKey = ""
-    if (this.hasEscapeKeyTarget) this.escapeKeyTarget.value = ""
-    writeValue(ESCAPE_KEY_STORAGE_KEY, "")
-    this.applyMapping()
+    this.setEscapeKey("")
   }
 
   lineNumbersChanged(event) {
-    this.lineNumberMode = normalizeLineNumberMode(event.target.value)
+    this.setLineNumberMode(event.target.value)
+  }
+
+  setLineNumberMode(mode) {
+    this.lineNumberMode = normalizeLineNumberMode(mode)
     writeValue(LINE_NUMBERS_STORAGE_KEY, this.lineNumberMode)
     this.applyLineNumbers()
   }
 
   modeAwareCursorChanged(event) {
-    this.modeAwareCursor = event.target.checked
+    this.setModeAwareCursor(event.target.checked)
+  }
+
+  setModeAwareCursor(enabled) {
+    this.modeAwareCursor = Boolean(enabled)
     writeBoolean(MODE_AWARE_CURSOR_STORAGE_KEY, this.modeAwareCursor)
     this.applyCursorStyle()
   }

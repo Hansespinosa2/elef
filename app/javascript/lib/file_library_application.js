@@ -9,6 +9,7 @@ import { buildDocumentGraph } from "lib/document_links"
 import { waitForEditorController } from "lib/editor_ready"
 import { createSaveFlow } from "lib/save_flow"
 import { createTitleSaveFlow } from "lib/title_save_flow"
+import { presentConflictDialog } from "lib/conflict_dialog"
 import { createRendererClient } from "lib/renderer_worker_client"
 import { installSanitizedPreview } from "lib/preview_sanitizer"
 import { createAuthoringSettingsDialog } from "lib/authoring_settings_dialog"
@@ -819,13 +820,13 @@ export function startFileLibraryApplication(platform) {
 
   function showConflict(conflict) {
     const dialog = elements.editorForm.querySelector("#conflict-dialog")
-    elements.editorForm.querySelector("#conflict-message").textContent =
-      "The source file changed outside Elef. Choose which version to keep, or edit a merge."
-    elements.editorForm.querySelector("#conflict-local").textContent = conflict.localSource
-    elements.editorForm.querySelector("#conflict-disk").textContent = conflict.diskSource
-    elements.editorForm.querySelector("#conflict-source-name").textContent = conflict.diskSourceFile
-    elements.editorForm.querySelector("#conflict-merge").value = currentSource()
-    if (!dialog.open) dialog.showModal()
+    presentConflictDialog(dialog, {
+      message: "The source file changed outside Elef. Choose which version to keep, or edit a merge.",
+      localSource: conflict.localSource,
+      diskSource: conflict.diskSource,
+      diskSourceFile: conflict.diskSourceFile,
+      mergeSource: currentSource()
+    })
   }
 
   function currentSource() {
