@@ -12,7 +12,6 @@ import { createTitleSaveFlow } from "lib/title_save_flow"
 import { createRendererClient } from "lib/renderer_worker_client"
 import { installSanitizedPreview } from "lib/preview_sanitizer"
 import { createAuthoringSettingsDialog } from "lib/authoring_settings_dialog"
-import { withAppearanceValue } from "lib/document_map"
 import { applyDesktopFeatureFlags } from "lib/feature_flags"
 import { configureEditorKind, renderEditorView } from "lib/editor_view"
 import { renderLibraryView, setLibraryViewTab, updateLibraryEmptyState } from "lib/library_view"
@@ -1123,23 +1122,6 @@ export function startFileLibraryApplication(platform) {
   })
   elements.editorField.addEventListener("input", () => scheduleSave())
   elements.titleInput.addEventListener("input", () => titleFlow.noteChange())
-  elements.editorForm.addEventListener("change", event => {
-    const key = event.target.id === "deck-theme" ? "theme" : event.target.id === "deck-typography" ? "typography" : null
-    if (!key || !activeDeck) return
-    try {
-      const editor = editorFor(elements.editorField)
-      if (!editor) throw Object.assign(new Error("The editor is still loading."), { code: "editor_unavailable" })
-      let source = currentSource()
-      for (const styleKey of ["theme", "typography"]) {
-        source = withAppearanceValue(source, styleKey, elements.editorForm.querySelector(`#deck-${styleKey}`).value)
-      }
-      editor.setExternalValue(source)
-      scheduleSave()
-      void elements.editorForm.previewController?.refresh()
-    } catch (error) {
-      showError(error)
-    }
-  })
   elements.editorForm.querySelector("#use-disk-version").addEventListener("click", resolveConflictWithDisk)
   elements.editorForm.querySelector("#keep-local-version").addEventListener("click", resolveConflictWithLocal)
   elements.editorForm.querySelector("#save-merged-version").addEventListener("click", resolveConflictWithMerge)

@@ -178,6 +178,7 @@ class WebEditorUi {
 
   async showVisualMode() {
     await this.page.locator('[data-editor-target="visualButton"]').click()
+    await expect(this.page.locator(".visual-editor-form")).toHaveAttribute("data-editor-mode", "visual")
   }
 
   async assertDocumentLinkPreview(title) {

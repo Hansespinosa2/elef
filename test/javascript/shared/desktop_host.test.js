@@ -18,6 +18,7 @@ const [page, shellStyles, applicationStyles, application, bootstrap, editorRunti
   read("app/javascript/lib/editor_view.js"),
   read("app/javascript/lib/library_view.js")
 ])
+const appearanceController = await read("app/javascript/controllers/appearance_controller.js")
 const { document } = parseHTML(page)
 const emptyAction = page.match(/<template data-library-view-slot="empty-action">([\s\S]*?)<\/template>/)?.[1] || ""
 
@@ -155,6 +156,12 @@ test("the Rails-owned application loads shared editor and graph controllers on d
   assert.match(editorRuntime, /import\("controllers\/document_graph_controller"\)/)
   assert.doesNotMatch(editorRuntime, /^import\s+\w+Controller\s+from\s+["']controllers\//m)
   assert.match(build, /splitting:\s*true/)
+})
+
+test("Markdown appearance persistence is shared and absent from desktop orchestration", () => {
+  assert.match(appearanceController, /withAppearanceValue/)
+  assert.doesNotMatch(application, /withAppearanceValue/)
+  assert.doesNotMatch(application, /editorForm\.addEventListener\("change"/)
 })
 
 test("document reload reapplies editor preferences and readiness follows connection", async () => {
