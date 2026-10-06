@@ -247,7 +247,20 @@ class DesktopEditorUi {
     await openDesktopSettings()
     const vimToggle = $("[data-vim-settings-target='vimToggle']")
     if (!(await vimToggle.isSelected())) await vimToggle.click()
-    await $("[data-vim-settings-target='lineNumbers']").selectByAttribute("value", "relative")
+    // The embedded driver's option click does not update native <select>s.
+    // Exercise the same input/change seam as a browser selection.
+    await browser.execute(() => {
+      const select = document.querySelector("[data-vim-settings-target='lineNumbers']")
+      select.value = "relative"
+      select.dispatchEvent(new Event("input", { bubbles: true }))
+      select.dispatchEvent(new Event("change", { bubbles: true }))
+    })
+    await browser.waitUntil(async () => browser.execute(() =>
+      localStorage.getItem("elef.editor.lineNumbers") === "relative"
+    ), {
+      timeout: 5_000,
+      timeoutMsg: "The native Vim settings control did not save relative line numbers"
+    })
     await $("#settings-form button[value='save']").click()
     await $("#settings-dialog").waitForDisplayed({ reverse: true })
   }
@@ -1248,7 +1261,7 @@ class DesktopLibraryUi {
   }
 
   async assertDocumentCardTheme(title, theme) {
-    const state = deckTitle => {
+    const state = (deckTitle, theme) => {
       const button = [...document.querySelectorAll(".library-card-open")]
         .find(element => element.getAttribute("aria-label") === `Edit ${deckTitle}`)
       const preview = button?.closest(".library-card")?.querySelector(".library-card-preview")
@@ -1267,7 +1280,7 @@ class DesktopLibraryUi {
 
     let result
     await browser.waitUntil(async () => {
-      result = await browser.execute(state, title)
+      result = await browser.execute(state, title, theme)
       return result !== null
     }, {
       timeout: 10_000,
@@ -1544,6 +1557,18 @@ describe("desktop binary workflows and native boundaries", () => {
           })}`)
         }
       })
+      const vimEnabled = await browser.execute(() =>
+        document.querySelector("#desktop-editor-field")?.editorController?.vimEnabled === true
+      )
+      if (vimEnabled) {
+        typeNativeText("i", { activate: false })
+        await browser.waitUntil(async () => browser.execute(() =>
+          document.querySelector("#desktop-editor-field")?.editorController?.vimMode?.startsWith("insert") === true
+        ), {
+          timeout: 5_000,
+          timeoutMsg: "The native editor did not enter Vim insert mode"
+        })
+      }
       if (needsLineBreak) sendNativeKey("Enter", { activate: false })
       typeNativeText(inserted, { activate: false })
 
