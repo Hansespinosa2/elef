@@ -53,6 +53,8 @@ assert not frontend_import_violations, (
 
 build = (ROOT / "desktop/frontend/build.mjs").read_text()
 desktop_main = (ROOT / "desktop/frontend/src/main.js").read_text()
+tauri_config = json.loads((ROOT / "desktop/src-tauri/tauri.conf.json").read_text())
+desktop_scripts = json.loads((ROOT / "desktop/frontend/package.json").read_text())["scripts"]
 desktop_application = (ROOT / "app/javascript/lib/file_library_application.js").read_text()
 desktop_shell_styles = (ROOT / "app/assets/stylesheets/file_library_host.css").read_text()
 shared_styles = (ROOT / "app/assets/stylesheets/application.css").read_text()
@@ -66,6 +68,16 @@ renderer_sources = (
     ROOT / "app/javascript/lib/renderer_global.js",
 )
 editor_runtime = (ROOT / "app/javascript/lib/editor_runtime.js").read_text()
+
+assert tauri_config["build"]["beforeDevCommand"]["script"] == tauri_config["build"]["beforeBuildCommand"], (
+    "Tauri dev and production launches must build the same Rails-owned frontend"
+)
+assert tauri_config["build"]["beforeDevCommand"]["wait"] is True, (
+    "Tauri dev must wait for the frontend build before loading static assets"
+)
+assert "npm run build" not in desktop_scripts["tauri:dev"], (
+    "The Tauri dev wrapper must use the config hook instead of building twice"
+)
 
 # The Rails importmap and desktop bundle must run the same shared editor
 # packages. Tauri-only packages stay in the desktop manifest.
