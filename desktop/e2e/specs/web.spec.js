@@ -430,6 +430,7 @@ class WebLibraryUi {
     const card = this.page.locator("article.library-card").filter({
       has: this.page.getByRole("heading", { name: title, exact: true })
     })
+    await card.locator(".library-card-menu-trigger").click()
     this.page.once("dialog", dialog => dialog.accept())
     await card.getByRole("button", { name: "Delete", exact: true }).click()
     await expect(this.page.getByRole("heading", { name: title, exact: true })).toHaveCount(0)
