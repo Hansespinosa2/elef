@@ -1,6 +1,11 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { readWebdriverValue } from "./webdriver-port.js"
+import { readWebdriverValue, webdriverElementPath } from "./webdriver-port.js"
+
+test("WebDriver element endpoints include the active session", () => {
+  assert.equal(webdriverElementPath("session id"), "/session/session%20id/element")
+  assert.equal(webdriverElementPath("session id", "element id"), "/session/session%20id/element/element%20id/value")
+})
 
 test("WebDriver response parsing accepts successful commands with no response body", async () => {
   assert.equal(await readWebdriverValue(new Response(null, { status: 204 })), undefined)

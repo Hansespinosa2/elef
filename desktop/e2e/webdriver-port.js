@@ -17,6 +17,11 @@ export async function readWebdriverValue(response) {
   return payload.value
 }
 
+export function webdriverElementPath(sessionId, elementId) {
+  const collection = `/session/${encodeURIComponent(sessionId)}/element`
+  return elementId === undefined ? collection : `${collection}/${encodeURIComponent(elementId)}/value`
+}
+
 export async function reserveWebdriverPort() {
   const server = createServer()
   await new Promise((resolve, reject) => {

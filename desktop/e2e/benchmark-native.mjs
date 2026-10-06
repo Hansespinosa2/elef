@@ -5,7 +5,7 @@ import os from "node:os"
 import path from "node:path"
 import { randomUUID } from "node:crypto"
 import { desktopCommand } from "./offline-macos.js"
-import { readWebdriverValue, reserveWebdriverPort } from "./webdriver-port.js"
+import { readWebdriverValue, reserveWebdriverPort, webdriverElementPath } from "./webdriver-port.js"
 import { percentile95 } from "../../app/javascript/lib/performance_measurement.js"
 import { LIBRARY_RENDER_BATCH_SIZE } from "../../app/javascript/lib/incremental_list.js"
 
@@ -128,10 +128,12 @@ try {
       operation = "autosave while typing"
       const text = "Input preserved 😀 日本語"
       await execute("return window.__elefPerformanceTestHooks.startTypingDuringSave(arguments[0])", text)
-      const editorElement = await request("/element", { using: "css selector", value: ".source-field .cm-content" })
+      const editorElement = await request(webdriverElementPath(session.sessionId), {
+        using: "css selector", value: ".source-field .cm-content"
+      })
       const editorElementId = editorElement["element-6066-11e4-a52e-4f735466cecf"] || editorElement.ELEMENT
       assert.ok(editorElementId, "The source editor must be available for native keyboard input")
-      await request(`/element/${encodeURIComponent(editorElementId)}/value`, { text })
+      await request(webdriverElementPath(session.sessionId, editorElementId), { text })
       const typed = await execute("return await window.__elefPerformanceTestHooks.finishTypingDuringSave()")
       assert.equal(typed, source + "\nInput preserved 😀 日本語")
       assert.equal(await readFile(path.join(folder, "presentation.md"), "utf8"), typed)
