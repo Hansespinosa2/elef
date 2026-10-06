@@ -7,11 +7,17 @@ import { fileURLToPath, pathToFileURL } from "node:url"
 const controllerPath = new URL("../../app/javascript/controllers/appearance_controller.js", import.meta.url)
 const testPath = fileURLToPath(import.meta.url)
 const documentMapPath = path.resolve(path.dirname(testPath), "../../app/javascript/lib/document_map.js")
+const importmapPath = path.resolve(path.dirname(testPath), "../../config/importmap.rb")
 const documentMapUrl = pathToFileURL(documentMapPath).href
 const source = (await readFile(controllerPath, "utf8"))
   .replace('import { Controller } from "@hotwired/stimulus"', "class Controller {}")
   .replace('import { withAppearanceValue } from "lib/document_map"', `import { withAppearanceValue } from "${documentMapUrl}"`)
 const appearance = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`)
+
+test("Rails importmap pins the shared appearance source mapper", async () => {
+  const importmap = await readFile(importmapPath, "utf8")
+  assert.match(importmap, /pin "lib\/document_map", to: "lib\/document_map\.js"/)
+})
 
 test("the shared appearance controller commits selected styles to Markdown", () => {
   const body = "# Shared deck\n\nKeep this body.\n"
