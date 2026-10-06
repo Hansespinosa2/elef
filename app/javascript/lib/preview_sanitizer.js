@@ -5,6 +5,7 @@ const ALLOWED_ELEMENTS = new Set([
   "BUTTON", "FIGCAPTION", "FIGURE", "LABEL", "OPTION", "SELECT", "SEMANTICS", "SPAN", "STRONG", "SUB", "SUP", "TABLE", "TBODY", "TD", "TH", "THEAD", "TR", "UL", "VIDEO", "WBR"
 ])
 const INTERACTIVE_ELEMENTS = new Set(["BUTTON", "LABEL", "OPTION", "SELECT"])
+const MATH_DELIMITERS = new Set(["$", "$$", "\\(", "\\)", "\\[", "\\]"])
 const SAFE_PROTOCOLS = /^(?:https?:|mailto:|tel:|elefasset:|#|\/|\.\.?\/|[^:]*$)/i
 const ALLOWED_ACTIONS = new Set([
   "input->visual-editor#projectionInput focus->visual-editor#blockFocus blur->visual-editor#blockBlur",
@@ -58,14 +59,20 @@ function safeAttribute(element, name, value, interactive, documentPagination) {
   if (lower === "data-block-index" || lower === "data-slide-index") return interactive && /^(?:0|[1-9]\d*)$/.test(value)
   if (lower === "data-presentation-editor-align") return interactive && element.tagName === "SELECT" && value === ""
   if (lower === "data-visual-editor-block-id") return interactive && element.tagName === "SELECT" && /^[A-Za-z0-9_-]+$/.test(value)
-  if (/^data-(?:editor|presentation-canvas)/.test(lower)) return true
+  if (lower === "data-editor-image-source") return value === "true"
+  if (["data-editor-block-id", "data-editor-region-id"].includes(lower)) return /^[A-Za-z0-9_-]+$/.test(value)
+  if (lower === "data-editor-empty-block") return value === "true"
+  if (lower === "data-editor-source-editable") return value === "true" || value === "false"
+  if (lower === "data-editor-slide-id") return /^slide-\d+$/.test(value)
+  if (lower === "data-editor-math-source") return element.tagName === "SPAN" && (element.classList.contains("katex") || element.classList.contains("math-error"))
+  if (lower === "data-editor-math-open" || lower === "data-editor-math-close") return MATH_DELIMITERS.has(value)
+  if (lower === "data-presentation-canvas-target") return interactive && element.tagName === "SECTION" && value === "canvas"
   if (lower === "data-document-pages-target") {
     const reader = element.parentElement
     return (interactive || (documentPagination && reader?.parentNode?.nodeType === 11)) && value === "surface" && element.classList.contains("document-surface") && reader?.classList.contains("document-reader")
   }
   if (lower === "href" && element.tagName === "A") return safeUrl(value)
   if (lower === "src" && ["IMG", "VIDEO"].includes(element.tagName)) return safeUrl(value) && !/^(?:https?:|data:|javascript:)/i.test(value)
-  if (lower === "data-editor-image-source") return value === "true"
   return false
 }
 
