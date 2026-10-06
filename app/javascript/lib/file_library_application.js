@@ -49,7 +49,6 @@ export function startFileLibraryApplication(platform) {
       documentNodes: await previewDocumentNodes(source)
     })
   })
-  globalThis.elefInstallDesktopPreview = installSanitizedPreview
 
   renderEditorView(document.querySelector("#desktop-editor-mount"), {
     kind: "presentation",

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { parseHTML } from "linkedom"
-import { configureEditorKind, enableVisualModeAfterPreview, mountEditorHosts, renderEditorView } from "../../../app/javascript/lib/editor_view.js"
+import { configureEditorKind, enableVisualModeAfterPreview, installPreviewHtml, mountEditorHosts, renderEditorView } from "../../../app/javascript/lib/editor_view.js"
 
 function mount(config) {
   const { document } = parseHTML("<form><div id='mount'></div></form>")
@@ -44,7 +44,7 @@ test("shared editor view exposes the same editing controls and targets to both h
     persisted: true,
     showSubmit: true,
     slideCount: 3,
-    previewHtml: "<article class='slide'>Rendered by the shared renderer</article>",
+    previewHtml: "<section class='slide'>Rendered by the shared renderer</section>",
     editorMap: { slides: [{ id: "slide-1" }] },
     ids: {
       field: "presentation_source_field", source: "presentation_source", surface: "presentation_source_editor",
@@ -70,6 +70,25 @@ test("shared editor view exposes the same editing controls and targets to both h
   assert.equal(root.querySelector("[data-autosave-target='status']").id, "save-state")
   assert.equal(root.querySelector("[data-autosave-target='retry']").id, "retry-save")
   assert.equal(root.querySelector("[data-autosave-target='retry']").hasAttribute("data-action"), false)
+})
+
+test("Rails and desktop install previews through the same sanitized DOM sink", () => {
+  const { document } = parseHTML("<main id='preview'></main>")
+  const preview = document.querySelector("#preview")
+  installPreviewHtml(preview, `
+    <section class="document-reader" data-controller="document-pages mermaid-diagrams">
+      <div class="document-surface" data-document-pages-target="surface">
+        <div class="document-editor-block" data-action="input->visual-editor#projectionInput focus->visual-editor#blockFocus blur->visual-editor#blockBlur" onclick="run()">Safe content</div>
+        <script>run()</script>
+      </div>
+    </section>`)
+
+  const block = preview.querySelector(".document-editor-block")
+  assert.equal(block.textContent, "Safe content")
+  assert.equal(block.hasAttribute("onclick"), false)
+  assert.equal(block.getAttribute("data-action"), "input->visual-editor#projectionInput focus->visual-editor#blockFocus blur->visual-editor#blockBlur")
+  assert.equal(preview.querySelector("script"), null)
+  assert.equal(preview.querySelector(".document-surface").getAttribute("data-document-pages-target"), "surface")
 })
 
 test("shared editor view owns one conflict dialog with disk, local, and merge choices", () => {

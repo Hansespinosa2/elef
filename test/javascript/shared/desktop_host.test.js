@@ -91,6 +91,15 @@ test("Rails and desktop consume the same Rails-owned save state machine", () => 
   assert.doesNotMatch(bootstrap, /createSaveFlow|conflict-dialog|autosave#schedule/)
 })
 
+test("Rails and desktop share one sanitized preview insertion path", () => {
+  assert.match(editorView, /import \{ installSanitizedPreview \} from "\.\/preview_sanitizer\.js"/)
+  assert.match(editorView, /installSanitizedPreview\(container, html\)/)
+  const previewInstaller = editorView.match(/export function installPreviewHtml\([\s\S]*?\n\}/)?.[0] || ""
+  assert.doesNotMatch(previewInstaller, /elefInstallDesktopPreview|innerHTML/)
+  assert.doesNotMatch(editorView, /elefInstallDesktopPreview/)
+  assert.doesNotMatch(application, /elefInstallDesktopPreview/)
+})
+
 test("the Rails-owned application references elements present in its host template", () => {
   const ids = new Set([...application.matchAll(/document\.querySelector\(["']#([\w-]+)/g)].map(match => match[1]))
   const dynamicallyRendered = new Set([

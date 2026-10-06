@@ -1,3 +1,5 @@
+import { installSanitizedPreview } from "./preview_sanitizer.js"
+
 const EDITOR_VIEW = `
   <section class="editor-shell" aria-label="Visual editor">
     <header class="editor-shell-header">
@@ -119,14 +121,7 @@ const EDITOR_VIEW = `
 const TARGET = "[data-editor-view-target]"
 
 export function installPreviewHtml(container, html) {
-  if (typeof globalThis.elefInstallDesktopPreview === "function") {
-    globalThis.elefInstallDesktopPreview(container, html)
-    return
-  }
-
-  const template = container.ownerDocument.createElement("template")
-  template.innerHTML = typeof html === "string" ? html : ""
-  container.replaceChildren(template.content)
+  installSanitizedPreview(container, html)
 }
 
 export function mountEditorHosts(root = globalThis.document) {
