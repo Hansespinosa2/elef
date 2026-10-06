@@ -218,11 +218,25 @@ class DesktopEditorUi {
       const diagnostic = await browser.execute(expected => {
         const form = document.querySelector("#desktop-editor-form")
         const editorField = document.querySelector("#desktop-editor-field")
+        const visualButton = document.querySelector("#visual-mode")
+        const previewController = form?.previewController
         const stimulus = window.Stimulus
         return {
           expected,
+          editorMode: form?.dataset.editorMode || "",
+          visualButtonDisabled: visualButton?.disabled ?? null,
           status: document.querySelector("#status-text")?.textContent || "",
           notice: document.querySelector("#notice")?.textContent || "",
+          previewControllerConnected: Boolean(previewController),
+          previewRequestInFlight: Boolean(previewController?.requestController),
+          previewQueuedRequestId: previewController?.queuedRequestId ?? null,
+          previewProjectionFresh: previewController?.projectionFresh ?? null,
+          previewStatus: form?.querySelector("[data-preview-target='status']")?.textContent || "",
+          previewWarnings: form?.querySelector("[data-preview-target='warnings']")?.textContent || "",
+          previewChildren: form?.querySelector("#desktop-preview")?.childElementCount ?? null,
+          previewTrace: window.__elefPreviewTrace?.slice(-8) || [],
+          visualEditorConnected: Boolean(form?.visualEditorController),
+          presentationEditorConnected: Boolean(form?.presentationEditorController),
           deckTitle: document.querySelector("#deck-title")?.textContent || "",
           deckId: document.querySelector("#deck-id")?.textContent || "",
           loadedDeckId: form?.dataset.loadedDeckId || "",
