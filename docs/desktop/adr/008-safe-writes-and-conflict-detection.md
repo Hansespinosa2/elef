@@ -8,7 +8,7 @@
 
 ## Context
 
-Auto-save is continuous, and other programs (editors, Dropbox, iCloud, Syncthing) can write the same files at any time. The v2 docs contradicted themselves: ADR-001 said last-write-wins, [architecture.md](../architecture.md) said never silent last-write-wins. The product is user-owned files, so silent loss is the worst failure. This decision had no ADR of its own.
+Auto-save is continuous, and other programs (editors, Dropbox, iCloud, Syncthing) can write the same files at any time. The v2 docs contradicted themselves: ADR-001 said last-write-wins, while the [architecture guide](../../architecture.md) described conflict detection. The product is user-owned files, so silent loss is the worst failure. This decision had no ADR of its own.
 
 ## Options considered
 
@@ -67,3 +67,7 @@ Polling and the replacement's final buffer check materialize pending visual edit
 ## Revisit when
 
 Saves are shown to miss the autosave budget, or the residual race is observed in practice.
+
+### Documentation amendment — 2026-10-07
+
+The historical architecture reference now points to the consolidated repository guide. The save and conflict decision is unchanged.

@@ -32,15 +32,19 @@ No new Tauri command ships without a capability review (what it can touch, why t
 
 ## Consequences
 
-- The command allowlist and the CSP are testable contracts; threats T1–T9 each map to fixtures or CI checks ([test-strategy.md](../test-strategy.md)).
+- The command allowlist and the CSP are testable contracts; hostile-input and boundary checks are described in [development and testing](../../development.md).
 - Hostile fixtures (script payloads, traversal paths, zip-slip archives, zip-bombs) must be neutralized in CI.
-- Remote images are blocked in v1 because a static CSP cannot express a per-deck opt-in (Q5). This supersedes the earlier "opt-in per deck" wording, which could not be implemented as written.
+- Remote images are blocked in v1 because a static CSP cannot express a per-deck opt-in. This supersedes the earlier "opt-in per deck" wording, which could not be implemented as written.
 - Residual risk is documented, not hidden ([security.md](../security.md) §6).
 
 ## Revisit when
 
-S5 finds hostile content reaching IPC on a supported OS, the pinned Tauri version changes major/minor, or distribution widens beyond the owner's devices.
+The hostile-deck test suite finds content reaching IPC on a supported OS, the pinned Tauri version changes major/minor, or distribution widens beyond the owner's devices.
 
 ## Dated amendment — 2026-10-02
 
-Accepted after the shared hostile-deck workflow passed against the real Tauri WebView on Linux and macOS in [CI run 37061835922](https://github.com/Hansespinosa2/elef/actions/runs/37061835922). The tested corpus and its limits are recorded in [S5 results](../spike-results/S5-hostile-deck-probe.md). This acceptance applies to the layered security decision and the planned probe corpus; it is not a claim that arbitrary hostile decks are harmless. Sanitizer timing characterization and broader adversarial coverage remain follow-up work.
+Accepted after the shared hostile-deck workflow passed against the real Tauri WebView on Linux and macOS in [CI run 37061835922](https://github.com/Hansespinosa2/elef/actions/runs/37061835922). The tested categories and limits are summarized in [security.md](../security.md); this acceptance applies to the layered security decision and the tested corpus, not arbitrary hostile decks. Sanitizer timing characterization and broader adversarial coverage remain follow-up work.
+
+### Documentation amendment — 2026-10-07
+
+The retired test-strategy and S5 report links now point to the consolidated development guide and security spec. Security decision and acceptance evidence are unchanged.

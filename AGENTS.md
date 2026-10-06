@@ -7,6 +7,7 @@
 - `desktop/` consumes Rails-owned frontend sources and owns only the Tauri bootstrap and transport, Rust file operations, native menus/dialogs/windows, lifecycle, updater, and UI that cannot be shared. Keep the dependency one-way: Rails never imports or depends on desktop code or Tauri APIs.
 - Prefer changing an existing shared implementation and deleting redundant code over adding a new abstraction or parallel implementation. Keep Rails importmap and desktop package versions/build outputs in sync.
 - Preserve the product boundaries: web persistence remains Rails-owned; desktop deck files are the source of truth. Do not add a database server to desktop.
+- Use [ELEF-DOCTRINE.md](ELEF-DOCTRINE.md) for product principles, [docs/architecture.md](docs/architecture.md) for the current code map, and [docs/development.md](docs/development.md) for setup and validation paths.
 
 ## Development environment
 

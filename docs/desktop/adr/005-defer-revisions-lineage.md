@@ -28,8 +28,12 @@ Desktop v1 ships **no revision history and no lineage graph**. Saving is automat
 - When revisions return (post-v1) they must honor the no-clutter rule: version data lives in the SQLite cache or a single sidecar, never as version files inside deck folders.
 - Both are labeled experimental/deferred in UI copy and docs until shipped.
 - **Flag hygiene:** each flag has an entry in the register in [delivery-plan.md](../delivery-plan.md) with a removal condition; CI compares live flags to that register.
-- **Known cost:** with session-only undo, an accidental large deletion followed by closing the app cannot be recovered. A minimal safety net is an open question (Q2 in [risks-and-open-questions.md](../risks-and-open-questions.md)); it must also honor the no-clutter rule.
+- **Known cost:** with session-only undo, an accidental large deletion followed by closing the app cannot be recovered. Desktop v1 has no durable recovery snapshot; any future safety net must honor the no-clutter rule.
 
 ## Revisit when
 
-Q2 is decided, or revisions are scheduled post-v1.
+Revisions are scheduled post-v1, or a durable recovery design is adopted.
+
+### Documentation amendment — 2026-10-07
+
+The removed open-questions draft was replaced with the current recovery limitation and revisit trigger above. The feature decision is unchanged.

@@ -1,48 +1,31 @@
-# ADR-007: One shared JS renderer — used by Rails and desktop alike
+# ADR-007: One shared JavaScript renderer
 
-- Status: **Proposed**
+- Status: Proposed
 - Date: 2026-10-01
 - Decider: Andres
-- Confidence: medium (feasibility items are verified in S1)
-- Accepted when: S1's renderer items pass — consumer inventory complete, mini_racer green or fallback recorded, bundle build planned, 10-fixture probe renders through the wrapper
-- Supersedes: the renderer portion of the earlier ADR-003 draft (port + golden bridge + "converge later")
+- Confidence: medium
+- Accepted when: the remaining consumer and exact-fixture gates in [issue #126](https://github.com/Hansespinosa2/elef/issues/126) are closed
 
 ## Context
 
-The earlier plan ported the Markdown → HTML pipeline from Ruby to JS and kept both implementations aligned with golden-file tests, converging "later". The elicited preference is explicit: **rewrite over maintaining two systems**; duplication must be visible and temporary, never a permanent tax. "Later" in a solo-maintained codebase means "forever", and every renderer bugfix would be done twice until then.
+Maintaining separate Ruby and JavaScript Markdown renderers would make each rendering fix a permanent two-implementation task.
 
 ## Options considered
 
-1. **Port to JS, keep both, converge later** (rejected): no forcing function; perpetual parity cost.
-2. **Rust renderer for desktop, Ruby for web** (rejected): two implementations again, plus a third language.
-3. **One JS renderer used by both** (chosen): the equivalence work (JS output vs Ruby output against the fixtures) is paid once, then the Ruby renderer is deleted.
+- Keep and synchronize separate Ruby and JavaScript renderers.
+- Write a renderer in Rust for desktop.
+- Use one JavaScript renderer in both Rails and desktop.
 
-## Decision (proposed)
+## Decision
 
-**Rails `app/` owns the renderer source.** Markdown blocks render to HTML without DOM or browser dependencies; `buildEditorStructure` derives slide/document metadata, `buildEditorMap` maps editable regions to UTF-16 source ranges, and `renderPreview` builds the editable projection. Source is in `app/javascript/lib/`; shared fixtures and behavior tests are in `test/javascript/`. Rails calls these functions through MiniRacer and desktop calls them in a worker. The adapters supply platform-specific document routes, media URLs, IDs, and settings. Rails retains model/view wrappers for read-only presentation/document pages and PPTX generation. Full consumer fixtures, browser-visible parity, the soak, and removal of the Ruby rollback remain open, so this ADR remains proposed.
-
-**Mermaid:** the renderer emits placeholders only and sets strict mode in the markup; diagrams render in the browser/webview, which has the DOM Mermaid needs. Rails therefore never renders diagrams server-side.
-
-**One bundle, two consumers:**
-- `npm run renderer:build` (esbuild, from the Rails repository root) produces the checked-in `vendor/javascript/elef-renderer.bundle.js` from `app/javascript/lib/renderer_global.js`.
-- **Desktop:** its Node-only package build copies that exact artifact into the worker assets; it does not build renderer source or start Rails. `render_preview` is webview-local — [transport-adapter.md](../transport-adapter.md) — with a wall-clock limit.
-- **Rails:** loads the same bundle through **mini_racer** (V8 embedded in the Ruby process). A thin wrapper, `Source::Renderer`, loads the bundle once and exposes `render(source) → html`. Every existing call site (preview endpoint, exports, anything S1's inventory finds) calls the wrapper. Set a timeout and a memory limit on the context; budget contexts for Puma threads and for fork (cluster mode).
-
-**The Ruby renderer is strangled, then deleted.** `Source::HtmlRenderer` stays behind `ELEF_RENDERER=ruby` only until the JS renderer passes 100% of the fixture suite (normalized comparison — [test-strategy.md](../test-strategy.md) §3). Then it is deleted. Dual existence is measured in weeks and ends in deletion.
+Use one JavaScript renderer bundle. Rails runs it through MiniRacer; desktop runs it in a web worker. Mermaid rendering remains in the browser/webview because it needs a DOM. The shared renderer and build entry point live under `app/javascript/lib/` and `script/`.
 
 ## Consequences
 
-Positive
-- The fixture suite tests **the** renderer directly, fast, in Node; no bridge to maintain.
-- After cutover, expected outputs are regenerated from the JS renderer and comparison is exact; normalization was only the cutover gate.
-- The katex gem remains only for the temporary Ruby renderer rollback path. Rails and desktop share the exact pinned npm KaTeX runtime and browser assets; the gem can be removed when the rollback renderer is deleted.
-- A CI fitness check asserts Ruby `Source::HtmlRenderer` is gone and Rails and desktop load a bundle with the same hash ([requirements.md](../requirements.md) QS-7).
-
-Negative (honest costs)
-1. **A new gem in Rails** (mini_racer, which needs a V8 build). The bundle loads and representative Rails tests pass on Omarchy and macOS arm64 CI. Exact runtime fixtures, concurrent contexts, a preloaded-master/worker-fork probe, and renderer-only latency have local evidence in [S1](../spike-results/S1-rails-inventory.md); the expanded macOS runtime and fork results are linked there. Legacy normalized comparison and full consumer/device acceptance remain open. Highlight.js is used instead of Shiki, so there is no Shiki WebAssembly engine dependency. A persistent Node sidecar remains a fallback if MiniRacer proves unacceptable on a supported target.
-2. **A Node build step** for the bundle, with its pinned root `package.json` and lockfile; small, but new in the Rails development workflow.
-3. **The web app's rendering path changes.** A subtle bug would affect the existing product. Mitigations: the 100% fixture gate, the `ELEF_RENDERER` flag for instant rollback, and a soak period before deletion ([delivery-plan.md](../delivery-plan.md) M3w).
+- Renderer behavior is tested from one fixture set and the desktop packages the Rails-built bundle.
+- The Ruby renderer remains only as a rollback path until consumer parity, exact fixtures, and the production soak are complete.
+- Renderer changes update the shared tests and both consumers; see [development and testing](../../development.md).
 
 ## Revisit when
 
-S1 shows libv8 and the Node sidecar are both unacceptable on a target platform, or in-process render latency regresses the preview endpoint.
+MiniRacer or the shared bundle cannot meet the supported Rails runtime requirements, or a measured renderer regression cannot be resolved within the shared implementation.

@@ -1,94 +1,61 @@
-# Elef Desktop — Data Format Spec (storage seam)
+# Desktop data format
 
-Status: draft v3 (2026-10-01). The seam between the app and the user's files. Everything here must stay stable: agents, the web app, and any future sync read it. Format changes require an ADR.
+The desktop library is a user-owned directory tree. This document records the formats read and written by desktop code; changes to these contracts need matching Rust and fixture coverage.
 
-Items marked **(proposed)** are new in v3 and wait on an open question in [risks-and-open-questions.md](risks-and-open-questions.md).
+## Deck folders
 
-## Deck folder layout
+A deck is an immediate, non-hidden child directory of the chosen library that contains a top-level Markdown file. Nested folders are deck contents, not separate decks. Discovery does not follow symlinks.
 
-```
-My Deck/
-  presentation.md        # the source file (rule below)
-  images/
-    diagram.png
-  elef.json              # optional; auto-created when absent
-```
+~~~text
+Elef/
+  .elef/
+    config.json
+    snippets.json
+    math-shortcuts.json
+  My Deck/
+    presentation.md
+    images/
+    elef.json
+~~~
 
-- A deck is **any immediate child folder of the library root** containing at least one top-level `.md` file. No manifest is needed to recognize or open it.
-- **Source-file rule** (deterministic, never interactive): among top-level `.md` files prefer `presentation.md`, then `document.md`, then the **shortest** filename, then alphabetical. Shortest-before-alphabetical stops `talk (conflicted copy).md` from shadowing `talk.md` (a real Dropbox/iCloud/Syncthing failure). One source file per deck.
-- **Not decks:** dot-folders (except `.elef/` at the library root, which is config), folders nested inside a deck (they are deck content), symlinks (never followed during discovery). A notes folder with `.md` files two levels down does not become decks.
-- `images/` holds referenced assets. Ordinary references are relative (`images/foo.png`); desktop serves them through a read-only, deck-scoped asset protocol after rejecting traversal and symlink components. Absolute paths are rewritten on import.
-- Media inserted through Elef may use `elef-asset:<sha256>` references. Those point to a content-addressed file named `<sha256>.<extension>` under the deck's `images/` directory. Desktop resolves the reference through its read-only asset protocol; the Rails app resolves the same digest through its media store. The asset bytes travel with the deck folder and `.elef` archive.
-- Deck folders contain **no version files, ever** (ADR-005).
-- Transient exception: the atomic-write temp file (dot-prefixed, same directory) exists for milliseconds during a save and is removed on the next open if a crash left one behind (ADR-008). Discovery ignores dot-files.
+When a deck contains several top-level Markdown files, desktop chooses deterministically: presentation.md first, then document.md, then the shortest filename, then case-insensitive and bytewise lexical order. This keeps a sync-tool conflicted copy from shadowing the original.
 
-## `elef.json` manifest
+## Manifest
 
-```json
+elef.json is optional and is created on first open when the directory is writable.
+
+~~~json
 {
   "id": "550e8400-e29b-41d1-a716-446655440000",
   "schema_version": 1
 }
-```
+~~~
 
-- `id`: UUID v4, the deck's stable identity. Created on first open if absent. Creation is **best effort**: if the folder is read-only the deck still opens, identity falls back to the path, and a notice is shown.
-- `schema_version`: integer, bumped only when the folder contract changes. Readers tolerate newer versions: read what they understand, show a non-blocking "newer format" notice.
-- Never required: a folder without one is still a deck. The user never creates it by hand.
-- Folder name is display-only; renames never change identity.
-- **UUID collisions.** Copying a deck folder copies its `elef.json`, so two folders can share one UUID. On a cold scan, normalized path order decides deterministically: the first path retains the UUID; other copies use their path-derived identity in the in-memory index. Opening a duplicate best-effort writes it a fresh UUID v4 manifest. If that folder is read-only, its path remains the identity and the app shows a notice. No persistent UUID map is required.
+The id is a UUID. The folder name is display-only. A missing or invalid manifest does not prevent opening; desktop uses a path-derived identity and displays a notice where applicable. A manifest with a newer schema version is read for known fields and produces a non-blocking notice. Duplicate UUIDs are resolved deterministically during discovery; opening a duplicate can repair its manifest when writable.
 
-## Portable document links
+## Source, assets, and portable links
 
-Document Markdown may carry stable graph keys and historical titles in its front matter:
+Markdown is the editable source. Relative media paths stay inside the deck. Media inserted by Elef may use a content-addressed elef-asset reference; its bytes are stored below that deck's images directory.
 
-```yaml
----
-elef_document_key: "550e8400-e29b-41d1-a716-446655440000"
-elef_aliases: ["Earlier title", "Short name"]
----
-```
+Document links can carry optional elef_document_key and elef_aliases values in Markdown front matter. Rails and desktop use the shared link parser and resolver. See [ADR-010](adr/010-portable-document-links.md).
 
-- Both values use JSON string/array syntax, which is valid YAML. `elef_document_key` is optional; desktop falls back to the deck UUID in `elef.json`. `elef_aliases` is optional and contains previous or alternate document titles.
-- Folder copies and imports preserve these bytes. If multiple decks have the same portable key or alias, shared link resolution treats that value as ambiguous and leaves its links unresolved; it never picks a deck based on scan order.
-- The Rails JavaScript reads these fields for the shared web and desktop graph. Rails database key/alias rows mirror the source metadata for indexed lookups.
-- Writers preserve unrelated front matter and body bytes. Readers ignore malformed optional metadata and continue with the normal identity fallback. `elef.json` remains exactly `{ id, schema_version }`; the additive source fields do not change the folder schema version. See [ADR-010](adr/010-portable-document-links.md).
+Source writes use an adjacent temporary file and atomic replacement with a source fingerprint check. The accepted behavior and the remaining external-writer race are described in [ADR-008](adr/008-safe-writes-and-conflict-detection.md).
 
-## `.elef` single-file format
+## .elef archive
 
-- A zip whose root is the deck folder's contents: source `.md`, `images/`, `elef.json` when present. Import tolerates exactly one wrapping top-level folder (Finder's "Compress" adds one).
-- Entries: relative paths only, `/` separators, UTF-8 names. Symlink entries, special files, absolute paths and `..` are rejected (import hardening, [security.md](security.md)). File modes and timestamps are ignored on import.
-- Export is deterministic: entries sorted, timestamps fixed, so exporting identical folder contents yields identical bytes.
-- **"Round-trips byte-identical" means:** export → import into an empty library → compare per-file SHA-256 of the deck folder; all equal. (Archive-level determinism is the stronger, testable bonus.)
-- Import flow: extract to a staging dir → validate → read/keep `id` → if the UUID exists in the library, prompt (replace / keep both with new UUID / cancel) → move into the library root.
-- The app registers `.elef` with the OS for double-click import. The container version tracks `schema_version`.
+An .elef file is a ZIP archive containing the deck's files at its root. Import also accepts a single wrapping directory. Export sorts entries and fixes archive metadata for deterministic output.
 
-## Library-level files (`.elef/` in the library root)
+Import rejects absolute paths, traversal, symlinks, and special files. Current core limits are 10,000 entries, 500 MiB uncompressed, and 600 MiB for the archive itself; extreme compression ratios are rejected. Data is extracted to a staging directory under the library, validated, then moved into place. UUID collisions prompt for replace, keep both, or cancel. Replacing moves the prior deck to the operating system's Trash.
 
-Mirrors Obsidian's `.obsidian/`.
+The Tauri bundle registers the .elef extension. The app's file-open path accepts these archives for import.
 
-```
-~/Elef/                  # library root (user-chosen)
-  .elef/
-    config.json          # portable library preferences (theme, hotkeys)
-    snippets.json        # optional custom user snippets; same JSON shape as the web resource
-    math-shortcuts.json  # optional custom user math shortcuts; same JSON shape as the web resource
-  My Deck/
-  Another Deck/
-```
+## Library settings
 
-- Each file carries its own `schema_version`.
-- **(proposed, Q4)** Device-specific state (window geometry, last-open deck, recents) lives in the OS app-data directory, not in the library root. Otherwise a library synced between the MacBook and Omarchy ping-pongs window geometry between two machines.
-- Desktop reads the shared built-in authoring registry and overlays optional custom snippet/math-shortcut entries from these files. Missing files mean no custom entries. The settings UI writes validate the registry type, entry count, and JSON size, serialize writes per registry, then atomically replace only the selected `.elef` file after a content-hash check. A mismatch at the final check returns a conflict. As with source saves, an external write in the narrow check-to-replace interval can still be overwritten; this residual race is measured and documented in [ADR-008](adr/008-safe-writes-and-conflict-detection.md).
+The library-level .elef directory stores portable configuration and authoring registries:
 
-## Cross-platform rules
+- config.json: library appearance and hotkey preferences.
+- snippets.json and math-shortcuts.json: optional user entries. Built-in entries remain in the shared frontend registry.
 
-- **Case and Unicode:** collision keys apply NFC normalization, full default Unicode 16.0 case folding (non-Turkic), then NFC normalization again. Import warns on equivalent names, including case-only (`My Deck` vs `my deck`), canonically equivalent spellings (decomposed `Cafe` + U+0301 vs precomposed `Café`), and full-fold equivalents (`Straße` vs `STRASSE`).
-- **Names:** warn on characters and patterns that break elsewhere (`/ \ : * ? " < > |`, trailing dot or space, reserved device names). Warn, don't rename.
-- **Paths:** `/` separators in stored references; no drive letters; UTF-8.
-- **Atomicity:** every source write is temp file + flush + rename in the same directory, so a crash never leaves a half-written source file (ADR-008).
-- **Library root on a synced or removable volume:** supported; the source-file rule, atomic writes and conflict detection are the safeguards. Not a v1 test target beyond the fixtures in [test-strategy.md](test-strategy.md).
+Names are compared after Unicode normalization and case folding. Cross-platform-incompatible names produce a warning; desktop preserves the original spelling.
 
-## Schema evolution
-
-- `schema_version` starts at 1. A reader meeting a higher version reads known fields and shows a non-blocking notice.
-- Every change to this document that alters on-disk or in-archive bytes requires an ADR and a `schema_version` decision.
+See [security.md](security.md) for path containment and archive validation details.
