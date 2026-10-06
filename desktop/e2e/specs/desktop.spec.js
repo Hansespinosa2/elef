@@ -598,12 +598,15 @@ class DesktopEditorUi {
         height: rect?.height || 0,
         fontFamily: style?.fontFamily || "",
         color: style?.color || "",
+        scrollerDisplay: scroller ? getComputedStyle(scroller).display : "",
+        contentWhiteSpace: style?.whiteSpace || "",
         lineHeight: scroller ? parseFloat(getComputedStyle(scroller).lineHeight) || 0 : 0,
         previewVisible: projection ? getComputedStyle(projection).display !== "none" : false
       }
     })
     if (!metrics.ready || metrics.mode !== "source" || metrics.width < 280 || metrics.height < 300
       || !metrics.fontFamily.toLowerCase().includes("monospace") || metrics.color === "rgba(0, 0, 0, 0)"
+      || metrics.scrollerDisplay !== "flex" || metrics.contentWhiteSpace !== "pre"
       || metrics.lineHeight <= 0 || !metrics.previewVisible) {
       throw new Error(`The Tauri source editor layout or CodeMirror state is unusable: ${JSON.stringify(metrics)}`)
     }

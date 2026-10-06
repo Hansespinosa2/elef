@@ -197,8 +197,15 @@ for part in csp.split(";"):
         directives[tokens[0]] = tokens[1:]
 assert directives.get("script-src") == ["'self'"], "script-src must stay self-only"
 assert "'unsafe-eval'" not in csp and "'unsafe-inline'" not in directives.get("script-src", [])
-assert directives.get("style-src") == ["'self'"]
-assert directives.get("style-src-attr") == ["'unsafe-inline'"], "allow only runtime style attributes required by CodeMirror and KaTeX"
+assert directives.get("style-src") == ["'self'", "'unsafe-inline'"], (
+    "CodeMirror's style-mod runtime inserts its base and theme rules in inline style elements"
+)
+assert directives.get("style-src-attr") == ["'unsafe-inline'"], "allow inline geometry and formula styles used by CodeMirror and KaTeX"
+assert "CodeMirror 6's `style-mod` inserts its base and theme rules in a `<style>` element" in (
+    REPO_ROOT / "docs/desktop/security.md"
+).read_text(), (
+    "document why desktop CSP permits inline style elements"
+)
 assert directives.get("frame-src") == ["'none'"]
 assert "https:" not in directives.get("img-src", [])
 assert "*" not in directives.get("img-src", [])
