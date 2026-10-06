@@ -18,6 +18,7 @@ const [page, shellStyles, applicationStyles, application, bootstrap, editorRunti
   read("app/javascript/lib/editor_view.js"),
   read("app/javascript/lib/library_view.js")
 ])
+const importmap = await read("config/importmap.rb")
 const appearanceController = await read("app/javascript/controllers/appearance_controller.js")
 const autosaveController = await read("app/javascript/controllers/autosave_controller.js")
 const { document } = parseHTML(page)
@@ -93,6 +94,7 @@ test("Rails and desktop consume the same Rails-owned save state machine", () => 
 
 test("Rails and desktop share one sanitized preview insertion path", () => {
   assert.match(editorView, /import \{ installSanitizedPreview \} from "\.\/preview_sanitizer\.js"/)
+  assert.match(importmap, /pin "lib\/preview_sanitizer", to: "lib\/preview_sanitizer\.js"/)
   assert.match(editorView, /installSanitizedPreview\(container, html\)/)
   const previewInstaller = editorView.match(/export function installPreviewHtml\([\s\S]*?\n\}/)?.[0] || ""
   assert.doesNotMatch(previewInstaller, /elefInstallDesktopPreview|innerHTML/)
