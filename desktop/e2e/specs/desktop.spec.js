@@ -94,12 +94,18 @@ async function sendPresentationKey(key) {
   await browser.execute(() => window.focus())
   if (process.platform === "darwin") {
     focusDesktopWindow()
+    if (key === "Home" || key === "End") {
+      // The embedded WebDriver forwards its private-use Home/End codes as
+      // event.key instead of the standard key names expected by the shared
+      // presentation controller. Dispatch the canonical key event at the
+      // same document listener used by real keyboard input.
+      await browser.execute(name => document.dispatchEvent(new KeyboardEvent("keydown", { key: name, bubbles: true })), key)
+      return
+    }
     const webDriverKey = {
       Escape: Key.Escape,
       ArrowRight: Key.ArrowRight,
       ArrowLeft: Key.ArrowLeft,
-      Home: Key.Home,
-      End: Key.End
     }[key]
     if (!webDriverKey) throw new Error(`Unsupported presentation key ${key}`)
     await browser.keys(webDriverKey)
