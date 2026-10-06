@@ -1,4 +1,4 @@
-import { installSanitizedPreview } from "./preview_sanitizer.js"
+import { installSanitizedPreview } from "#elef/preview-sanitizer"
 
 const EDITOR_VIEW = `
   <section class="editor-shell" aria-label="Visual editor">

@@ -2,6 +2,9 @@
   "name": "elef-shared-frontend",
   "private": true,
   "type": "module",
+  "imports": {
+    "#elef/preview-sanitizer": "./app/javascript/lib/preview_sanitizer.js"
+  },
   "scripts": {
     "renderer:build": "node script/build_renderer.mjs",
     "test:javascript": "node --test test/javascript/*.test.js test/javascript/*.test.mjs test/javascript/shared/*.test.js"

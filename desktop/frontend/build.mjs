@@ -15,6 +15,9 @@ await mkdir(assets, { recursive: true })
 const appSourceAlias = {
   name: "app-source-alias",
   setup(context) {
+    context.onResolve({ filter: /^#elef\/preview-sanitizer$/ }, () => ({
+      path: path.join(sharedFrontendRoot, "lib/preview_sanitizer.js")
+    }))
     context.onResolve({ filter: /^(?:controllers|lib)\// }, ({ path: importPath }) => ({
       path: path.join(sharedFrontendRoot, `${importPath}.js`)
     }))
