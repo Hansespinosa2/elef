@@ -303,63 +303,34 @@ class WebEditorUi {
   }
 
   async waitForConflict() {
-    await expect(this.page.locator('[data-autosave-target="conflict"]')).toBeVisible()
+    await expect(this.page.locator("#conflict-dialog")).toBeVisible()
   }
 
   async assertConflict(localSource, externalSource) {
     await expect.poll(() => this.readSource()).toBe(localSource)
-    await expect.poll(() => this.page.locator('[data-autosave-target="serverSource"]').evaluate(element => element.textContent))
-      .toBe(externalSource)
+    await expect(this.page.locator("#conflict-local")).toHaveText(localSource)
+    await expect(this.page.locator("#conflict-disk")).toHaveText(externalSource)
   }
 
   async useDiskVersion() {
-    await this.page.evaluate(() => {
-      const form = document.querySelector('form[data-controller~="autosave"]')
-      const controller = form && Stimulus.getControllerForElementAndIdentifier(form, "autosave")
-      if (!controller) return
-      const discardLocal = controller.discardLocal.bind(controller)
-      window.__elefDiscardTrace = []
-      controller.discardLocal = (...args) => {
-        window.__elefDiscardTrace.push({ phase: "entered", hidden: form.querySelector('[data-autosave-target="conflict"]')?.hidden })
-        const result = discardLocal(...args)
-        window.__elefDiscardTrace.push({
-          phase: "returned",
-          hidden: form.querySelector('[data-autosave-target="conflict"]')?.hidden,
-          hasConflict: Boolean(controller.conflictPayload),
-          status: form.querySelector('[data-autosave-target="status"]')?.textContent
-        })
-        return result
-      }
-    })
-    await this.page.locator('[data-action="click->autosave#discardLocal"]').click()
-    try {
-      await expect(this.page.locator('[data-autosave-target="conflict"]')).toBeHidden()
-    } catch (error) {
-      const state = await this.page.evaluate(() => {
-        const form = document.querySelector('form[data-controller~="autosave"]')
-        const controller = form && Stimulus.getControllerForElementAndIdentifier(form, "autosave")
-        const conflict = form?.querySelector('[data-autosave-target="conflict"]')
-        return {
-          hidden: conflict?.hidden,
-          status: form?.querySelector('[data-autosave-target="status"]')?.textContent,
-          action: form?.querySelector('[data-action*="discardLocal"]')?.getAttribute("data-action"),
-          controllerConnected: Boolean(controller),
-          discardTrace: window.__elefDiscardTrace,
-          conflictPayload: controller?.conflictPayload ? {
-            currentPresent: Boolean(controller.conflictPayload.current),
-            currentSource: controller.conflictPayload.current?.source
-          } : null
-        }
-      })
-      throw new Error(`${error.message}; discard state: ${JSON.stringify(state)}`)
-    }
+    await this.page.locator("#use-disk-version").click()
+    await expect(this.page.locator("#conflict-dialog")).toBeHidden()
     await expect(this.page.locator('[data-autosave-target="status"]')).toHaveText("Saved")
   }
 
   async keepLocalVersion() {
-    await this.page.locator('[data-action="click->autosave#keepLocal"]').click()
-    await expect(this.page.locator('[data-autosave-target="conflict"]')).toBeHidden()
+    await this.page.locator("#keep-local-version").click()
+    await expect(this.page.locator("#conflict-dialog")).toBeHidden()
     await this.flushLocalSave()
+  }
+
+  async editMergedSource(source) {
+    await this.page.locator("#conflict-merge").fill(source)
+  }
+
+  async saveMergedVersion() {
+    await this.page.locator("#save-merged-version").click()
+    await expect(this.page.locator("#conflict-dialog")).toBeHidden()
   }
 
   async assertDiskSource(source) {
@@ -546,6 +517,10 @@ test("shared external-edit conflict flow preserves the disk version in the web a
 
 test("shared external-edit conflict flow keeps the local version in the web app", async ({ page }) => {
   await externalEditConflictWorkflow(new WebEditorUi(page), "local")
+})
+
+test("shared external-edit conflict flow saves a merge in the web app", async ({ page }) => {
+  await externalEditConflictWorkflow(new WebEditorUi(page), "merge")
 })
 
 test("shared snippet insertion flow works in the web app", async ({ page }) => {

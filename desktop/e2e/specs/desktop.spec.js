@@ -708,8 +708,9 @@ class DesktopEditorUi {
   async assertConflict(localSource, externalSource) {
     const local = await $("#conflict-local").getText()
     const disk = await $("#conflict-disk").getText()
-    if (!local.includes(localSource.trim()) || !disk.includes(externalSource.trim())) {
-      throw new Error(`Conflict dialog did not preserve both versions: ${JSON.stringify({ local, disk })}`)
+    const editor = await this.readSource()
+    if (!local.includes(localSource.trim()) || !disk.includes(externalSource.trim()) || editor !== localSource) {
+      throw new Error(`Conflict dialog did not preserve both versions and the editor buffer: ${JSON.stringify({ local, disk, editor })}`)
     }
   }
 
@@ -720,6 +721,15 @@ class DesktopEditorUi {
 
   async keepLocalVersion() {
     await $("#keep-local-version").click()
+    await $("#conflict-dialog").waitForDisplayed({ reverse: true })
+  }
+
+  async editMergedSource(source) {
+    await $("#conflict-merge").setValue(source)
+  }
+
+  async saveMergedVersion() {
+    await $("#save-merged-version").click()
     await $("#conflict-dialog").waitForDisplayed({ reverse: true })
   }
 
@@ -1319,6 +1329,10 @@ describe("desktop binary workflows and native boundaries", () => {
 
   it("keeps the local version through the shared external-edit conflict flow", async () => {
     await externalEditConflictWorkflow(new DesktopEditorUi(), "local")
+  })
+
+  it("saves a merge through the shared external-edit conflict flow", async () => {
+    await externalEditConflictWorkflow(new DesktopEditorUi(), "merge")
   })
 
   it("runs the shared snippet insertion flow in the desktop binary", async () => {

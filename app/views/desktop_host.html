@@ -190,23 +190,5 @@
         <div class="dialog-actions"><button class="button primary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" value="close">Close</button></div>
       </form>
     </dialog>
-    <dialog id="conflict-dialog" class="app-dialog conflict-dialog" aria-labelledby="conflict-title">
-      <div class="conflict-content">
-        <p class="native-eyebrow">EXTERNAL CHANGE</p>
-        <h2 id="conflict-title">This file changed outside Elef</h2>
-        <p class="conflict-explanation">Compare the version on disk with your edits before choosing what to keep.</p>
-        <div class="conflict-columns">
-          <section><h3>Your edits</h3><pre id="conflict-local" class="conflict-source"></pre></section>
-          <section><h3>On disk · <span id="conflict-source-name"></span></h3><pre id="conflict-disk" class="conflict-source"></pre></section>
-        </div>
-        <label class="merge-label" for="conflict-merge">Merged version</label>
-        <textarea id="conflict-merge" class="conflict-merge" spellcheck="false" aria-label="Merged Markdown version"></textarea>
-        <div class="dialog-actions conflict-actions">
-          <button id="use-disk-version" class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" type="button">Use disk version</button>
-          <button id="save-merged-version" class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" type="button">Save merged version</button>
-          <button id="keep-local-version" class="button primary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" type="button">Keep my edits</button>
-        </div>
-      </div>
-    </dialog>
   </body>
 </html>

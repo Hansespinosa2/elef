@@ -5,7 +5,7 @@ const DATABASE_VERSION = 1
 const STORE_NAME = "drafts"
 
 export default class extends Controller {
-  static targets = ["field", "status", "retry", "conflict", "conflictMessage", "serverSource"]
+  static targets = ["field", "status", "retry", "conflict", "conflictMessage", "localSource", "serverSource", "mergeSource"]
   static values = {
     delay: { type: Number, default: 900 },
     timeout: { type: Number, default: 15000 },
@@ -24,6 +24,20 @@ export default class extends Controller {
     this.recoveryNotice = false
     this.savedSnapshot = this.snapshot()
     this.saveFailed = false
+    this.preventConflictDismiss = (event) => {
+      if (this.conflictPayload) event.preventDefault()
+    }
+    this.resolveConflictClick = (event) => {
+      const button = event.target.closest?.("[data-conflict-resolution]")
+      if (!button || !this.hasConflictTarget || !this.conflictTarget.contains(button)) return
+      if (button.dataset.conflictResolution === "disk") this.discardLocal()
+      else if (button.dataset.conflictResolution === "local") this.keepLocal()
+      else if (button.dataset.conflictResolution === "merge") this.saveMergedVersion()
+    }
+    if (this.hasConflictTarget) {
+      this.conflictTarget.addEventListener("cancel", this.preventConflictDismiss)
+      this.conflictTarget.addEventListener("click", this.resolveConflictClick)
+    }
     const workKind = this.hasWorkKindValue ? this.workKindValue : "work"
     this.freshNewWorkNavigation = !this.hasWorkIdValue && window.performance?.getEntriesByType?.("navigation")?.[0]?.type === "navigate"
     this.localDraftKey = this.hasWorkIdValue
@@ -35,6 +49,10 @@ export default class extends Controller {
 
   disconnect() {
     this.active = false
+    if (this.hasConflictTarget) {
+      this.conflictTarget.removeEventListener("cancel", this.preventConflictDismiss)
+      this.conflictTarget.removeEventListener("click", this.resolveConflictClick)
+    }
     this.editorReadyCleanup?.()
     this.clearSaveTimer()
     clearTimeout(this.requestTimeout)
@@ -86,12 +104,15 @@ export default class extends Controller {
   }
 
   showConflict(payload) {
-    if (this.hasConflictTarget) this.conflictTarget.hidden = false
+    const source = this.element.querySelector('[name$="[source]"]')?.value || ""
+    if (this.hasLocalSourceTarget) this.localSourceTarget.textContent = source
+    if (this.hasMergeSourceTarget) this.mergeSourceTarget.value = source
     if (this.hasConflictMessageTarget) {
       const recoveryId = payload.recovery_revision_id ? ` Recovery revision ${payload.recovery_revision_id} is available.` : ""
       this.conflictMessageTarget.textContent = `${payload.message || "A newer version is active; your draft was preserved."}${recoveryId}`
     }
     if (this.hasServerSourceTarget) this.serverSourceTarget.textContent = payload.current?.source || ""
+    if (this.hasConflictTarget && !this.conflictTarget.open) this.conflictTarget.showModal()
   }
 
   keepLocal() {
@@ -101,7 +122,7 @@ export default class extends Controller {
     this.updateRevisionTokens(current)
     this.conflictPayload = null
     this.savedSnapshot = null
-    if (this.hasConflictTarget) this.conflictTarget.hidden = true
+    this.closeConflictDialog()
     this.setStatus("Unsaved changes")
     this.schedule()
   }
@@ -123,9 +144,29 @@ export default class extends Controller {
     this.conflictPayload = null
     this.savedSnapshot = this.snapshot()
     this.saveFailed = false
-    if (this.hasConflictTarget) this.conflictTarget.hidden = true
+    this.closeConflictDialog()
     this.element.dispatchEvent(new CustomEvent("autosave:saved", { detail: { snapshot: this.snapshot(), payload: current } }))
     this.setStatus("Saved")
+  }
+
+  saveMergedVersion() {
+    const current = this.conflictPayload?.current
+    const sourceField = this.element.querySelector('[name$="[source]"]')
+    if (!current || !sourceField || !this.hasMergeSourceTarget) return
+
+    this.clearSaveTimer()
+    this.updateRevisionTokens(current)
+    this.conflictPayload = null
+    this.savedSnapshot = null
+    this.saveFailed = false
+    sourceField.value = this.mergeSourceTarget.value
+    this.closeConflictDialog()
+    sourceField.dispatchEvent(new Event("input", { bubbles: true }))
+    return true
+  }
+
+  closeConflictDialog() {
+    if (this.hasConflictTarget && this.conflictTarget.open) this.conflictTarget.close()
   }
 
   async save() {

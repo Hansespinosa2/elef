@@ -127,3 +127,62 @@ test("draft recovery leaves edits made while the editor connects untouched", asy
   assert.deepEqual(sourceField.dispatched, [])
   assert.deepEqual(status, [])
 })
+
+test("autosave conflict review presents both byte versions and starts the merge with local text", () => {
+  const dialog = { open: false, showModal() { this.open = true } }
+  const sourceField = { value: "local <draft>" }
+  const controller = new autosave.default()
+  Object.assign(controller, {
+    element: { querySelector: () => sourceField },
+    hasConflictTarget: true,
+    conflictTarget: dialog,
+    hasConflictMessageTarget: true,
+    conflictMessageTarget: { textContent: "" },
+    hasLocalSourceTarget: true,
+    localSourceTarget: { textContent: "" },
+    hasServerSourceTarget: true,
+    serverSourceTarget: { textContent: "" },
+    hasMergeSourceTarget: true,
+    mergeSourceTarget: { value: "" }
+  })
+
+  controller.showConflict({ message: "A newer version is active.", current: { source: "disk <edit>" } })
+
+  assert.equal(dialog.open, true)
+  assert.equal(controller.localSourceTarget.textContent, "local <draft>")
+  assert.equal(controller.serverSourceTarget.textContent, "disk <edit>")
+  assert.equal(controller.mergeSourceTarget.value, "local <draft>")
+  assert.equal(controller.conflictMessageTarget.textContent, "A newer version is active.")
+})
+
+test("saving a merge accepts the current revision and sends merged source through the editor input", () => {
+  const events = []
+  const current = { source: "disk", revision_token: "current-token", lock_version: 4 }
+  const sourceField = {
+    value: "local",
+    dispatchEvent(event) {
+      assert.equal(controller.conflictPayload, null)
+      events.push({ type: event.type, bubbles: event.bubbles })
+      return true
+    }
+  }
+  const dialog = { open: true, close() { this.open = false } }
+  const controller = new autosave.default()
+  let accepted = null
+  Object.assign(controller, {
+    element: { querySelector: () => sourceField },
+    conflictPayload: { current },
+    hasMergeSourceTarget: true,
+    mergeSourceTarget: { value: "combined" },
+    hasConflictTarget: true,
+    conflictTarget: dialog,
+    clearSaveTimer() {},
+    updateRevisionTokens(payload) { accepted = payload }
+  })
+
+  assert.equal(controller.saveMergedVersion(), true)
+  assert.equal(accepted, current)
+  assert.equal(sourceField.value, "combined")
+  assert.deepEqual(events, [{ type: "input", bubbles: true }])
+  assert.equal(dialog.open, false)
+})

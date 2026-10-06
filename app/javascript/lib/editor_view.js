@@ -89,18 +89,30 @@ const EDITOR_VIEW = `
         <a class="button" data-editor-view-target="previewLink" data-dirty-navigation="true" hidden>Preview</a>
         <span class="dirty-state" data-autosave-target="status" aria-live="polite">Saved</span>
         <button type="button" class="autosave-retry" data-autosave-target="retry" data-action="autosave#retry" hidden>Retry save</button>
-        <div class="autosave-conflict" data-autosave-target="conflict" hidden role="status">
-          <p data-autosave-target="conflictMessage">A newer version is active; your draft was preserved.</p>
-          <details><summary>Compare with the active version</summary><pre data-autosave-target="serverSource"></pre></details>
-          <button type="button" data-action="click->autosave#keepLocal">Keep local draft</button>
-          <button type="button" data-action="click->autosave#discardLocal">Discard local draft</button>
-        </div>
         <span class="release-state" data-editor-view-target="releaseState" hidden></span>
         <span class="dirty-state" data-preview-target="status" aria-live="polite"></span>
         <button type="button" class="preview-retry" data-preview-target="retry" data-action="preview#retry" hidden>Retry preview</button>
       </div>
       <span class="presentation-editor-status" data-presentation-editor-target="status" aria-live="polite"></span>
     </div>
+    <dialog id="conflict-dialog" class="conflict-dialog" data-autosave-target="conflict" aria-labelledby="conflict-title" aria-describedby="conflict-message">
+      <div class="conflict-content">
+        <p class="conflict-eyebrow">EXTERNAL CHANGE</p>
+        <h2 id="conflict-title">This deck changed elsewhere</h2>
+        <p id="conflict-message" class="conflict-explanation" data-autosave-target="conflictMessage">A newer version is active; your draft was preserved.</p>
+        <div class="conflict-columns">
+          <section><h3>Your edits</h3><pre id="conflict-local" class="conflict-source" data-autosave-target="localSource"></pre></section>
+          <section><h3>Current version · <span id="conflict-source-name"></span></h3><pre id="conflict-disk" class="conflict-source" data-autosave-target="serverSource"></pre></section>
+        </div>
+        <label class="merge-label" for="conflict-merge">Merged Markdown</label>
+        <textarea id="conflict-merge" class="conflict-merge" spellcheck="false" aria-label="Merged Markdown version" data-autosave-target="mergeSource"></textarea>
+        <div class="dialog-actions conflict-actions">
+          <button id="use-disk-version" class="button secondary" type="button" data-conflict-resolution="disk">Use current version</button>
+          <button id="save-merged-version" class="button secondary" type="button" data-conflict-resolution="merge">Save merged version</button>
+          <button id="keep-local-version" class="button primary" type="button" data-conflict-resolution="local">Keep my edits</button>
+        </div>
+      </div>
+    </dialog>
   </section>
 `
 
@@ -229,7 +241,6 @@ export function renderEditorView(container, config) {
   get("previewLink").hidden = !config.previewUrl
   if (config.previewUrl) get("previewLink").href = config.previewUrl
   const persisted = Boolean(config.persisted)
-  root.querySelector("[data-autosave-target='conflict']").hidden = !persisted
   root.querySelector("[data-autosave-target='retry']").hidden = !persisted
   get("releaseState").hidden = !config.releaseState
   if (config.releaseState) {

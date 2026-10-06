@@ -53,6 +53,21 @@ test("shared editor view exposes the same editing controls and targets to both h
   assert.equal(root.querySelector("[data-autosave-target='retry']").hasAttribute("data-action"), false)
 })
 
+test("shared editor view owns one conflict dialog with disk, local, and merge choices", () => {
+  const { root } = mount({ kind: "presentation", mode: "source", persisted: true })
+  const dialog = root.querySelector("#conflict-dialog")
+
+  assert.ok(dialog)
+  assert.equal(dialog.tagName, "DIALOG")
+  assert.equal(dialog.getAttribute("aria-describedby"), "conflict-message")
+  assert.ok(dialog.querySelector("#conflict-local"))
+  assert.ok(dialog.querySelector("#conflict-disk"))
+  assert.ok(dialog.querySelector("#conflict-merge"))
+  assert.ok(dialog.querySelector("#use-disk-version"))
+  assert.ok(dialog.querySelector("#keep-local-version"))
+  assert.ok(dialog.querySelector("#save-merged-version"))
+})
+
 test("shared editor view configures document-only links and media controls", () => {
   const { root } = mount({
     kind: "document",

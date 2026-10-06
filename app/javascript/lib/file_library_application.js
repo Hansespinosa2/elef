@@ -128,16 +128,11 @@ export function startFileLibraryApplication(platform) {
     cancelAuthoringDelete: document.querySelector("#cancel-authoring-delete"),
     createForm: document.querySelector("#create-form"),
     aboutDialog: document.querySelector("#about-dialog"),
-    conflictDialog: document.querySelector("#conflict-dialog"),
     editorField: document.querySelector("#desktop-editor-field"),
     editorForm: document.querySelector("#desktop-editor-form"),
     editorInput: document.querySelector("#deck-source"),
     titleInput: document.querySelector("#desktop-editor-title"),
     saveState: document.querySelector("#save-state"),
-    conflictLocal: document.querySelector("#conflict-local"),
-    conflictDisk: document.querySelector("#conflict-disk"),
-    conflictSourceName: document.querySelector("#conflict-source-name"),
-    conflictMerge: document.querySelector("#conflict-merge"),
     retrySave: document.querySelector("#retry-save"),
     restoreDraft: document.querySelector("#restore-local-draft"),
     importConflictDialog: document.querySelector("#import-conflict-dialog"),
@@ -809,11 +804,14 @@ export function startFileLibraryApplication(platform) {
   }
 
   function showConflict(conflict) {
-    elements.conflictLocal.textContent = conflict.localSource
-    elements.conflictDisk.textContent = conflict.diskSource
-    elements.conflictSourceName.textContent = conflict.diskSourceFile
-    elements.conflictMerge.value = currentSource()
-    if (!elements.conflictDialog.open) elements.conflictDialog.showModal()
+    const dialog = elements.editorForm.querySelector("#conflict-dialog")
+    elements.editorForm.querySelector("#conflict-message").textContent =
+      "The source file changed outside Elef. Choose which version to keep, or edit a merge."
+    elements.editorForm.querySelector("#conflict-local").textContent = conflict.localSource
+    elements.editorForm.querySelector("#conflict-disk").textContent = conflict.diskSource
+    elements.editorForm.querySelector("#conflict-source-name").textContent = conflict.diskSourceFile
+    elements.editorForm.querySelector("#conflict-merge").value = currentSource()
+    if (!dialog.open) dialog.showModal()
   }
 
   function currentSource() {
@@ -1020,20 +1018,20 @@ export function startFileLibraryApplication(platform) {
   async function resolveConflictWithDisk() {
     if (!await saveFlow.useDiskVersion()) return
     syncSourceLabel()
-    elements.conflictDialog.close()
+    elements.editorForm.querySelector("#conflict-dialog").close()
   }
 
   function resolveConflictWithLocal() {
     if (!saveFlow.keepLocalVersion()) return
     syncSourceLabel()
-    elements.conflictDialog.close()
+    elements.editorForm.querySelector("#conflict-dialog").close()
   }
 
   async function resolveConflictWithMerge() {
-    const mergedSource = elements.conflictMerge.value
+    const mergedSource = elements.editorForm.querySelector("#conflict-merge").value
     if (!await saveFlow.saveMergedVersion(mergedSource)) return
     syncSourceLabel()
-    elements.conflictDialog.close()
+    elements.editorForm.querySelector("#conflict-dialog").close()
   }
 
   function syncSourceLabel() {
@@ -1142,9 +1140,12 @@ export function startFileLibraryApplication(platform) {
       showError(error)
     }
   })
-  document.querySelector("#use-disk-version").addEventListener("click", resolveConflictWithDisk)
-  document.querySelector("#keep-local-version").addEventListener("click", resolveConflictWithLocal)
-  document.querySelector("#save-merged-version").addEventListener("click", resolveConflictWithMerge)
+  elements.editorForm.querySelector("#use-disk-version").addEventListener("click", resolveConflictWithDisk)
+  elements.editorForm.querySelector("#keep-local-version").addEventListener("click", resolveConflictWithLocal)
+  elements.editorForm.querySelector("#save-merged-version").addEventListener("click", resolveConflictWithMerge)
+  elements.editorForm.querySelector("#conflict-dialog").addEventListener("cancel", event => {
+    if (saveFlow.conflict) event.preventDefault()
+  })
   elements.restoreDraft.addEventListener("click", () => {
     void saveFlow.restoreDraft()
   })
