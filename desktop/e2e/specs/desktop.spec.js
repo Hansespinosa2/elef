@@ -485,7 +485,7 @@ class DesktopEditorUi {
             timeout: 5_000,
             timeoutMsg: `The document page did not settle at ${size.width}×${size.height}`
           })
-          if (mode === "source" && previousWidth !== undefined) {
+          if (previousWidth !== undefined) {
             await browser.waitUntil(async () => browser.execute(width => {
               const frame = document.querySelector("#desktop-preview .document-page-frame")
               return frame && frame.getBoundingClientRect().width < width - 1
@@ -509,7 +509,7 @@ class DesktopEditorUi {
           }
           frameWidths.push(metrics.width)
         }
-        if (mode === "source" && frameWidths[1] >= frameWidths[0] - 1) {
+        if (frameWidths[1] >= frameWidths[0] - 1) {
           throw new Error(`The document page did not shrink with the available width in ${mode} mode: ${frameWidths.join("px → ")}px`)
         }
       }

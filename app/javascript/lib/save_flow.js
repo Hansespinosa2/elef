@@ -23,6 +23,7 @@ export function createSaveFlow({
   let activeConflict = null
   let dirty = false
   let blocked = false
+  let blockedSnapshot = null
   let paused = false
   let saveWorker = null
   let sourceMutation = null
@@ -41,6 +42,7 @@ export function createSaveFlow({
     if (!saveWorker && getSnapshot() === activeDeck.savedSnapshot) {
       dirty = false
       blocked = false
+      blockedSnapshot = null
       setStatus("Saved")
       return
     }
@@ -172,7 +174,10 @@ export function createSaveFlow({
     if (!dirty && getSnapshot() === activeDeck.savedSnapshot) return true
     dirty = true
     if (blocked && !force) return false
-    if (force) blocked = false
+    if (force) {
+      blocked = false
+      blockedSnapshot = null
+    }
     if (retryTimer) {
       if (!force) return false
       clearTimer(retryTimer)
@@ -193,6 +198,8 @@ export function createSaveFlow({
           deck.source = typeof result.source === "string" ? result.source : source
           deck.savedSnapshot = typeof result.snapshot === "string" ? result.snapshot : snapshot
           retryAttempt = 0
+          blocked = false
+          blockedSnapshot = null
           dirty = getSnapshot() !== deck.savedSnapshot
           setStatus(dirty ? "Unsaved changes" : "Saved")
         } catch (error) {
@@ -206,7 +213,13 @@ export function createSaveFlow({
           }
           onError(error)
           if (error?.retryable !== true) {
+            if (getSnapshot() !== snapshot) {
+              blocked = false
+              blockedSnapshot = null
+              continue
+            }
             blocked = true
+            blockedSnapshot = snapshot
             setStatus("Save failed")
             return false
           }
@@ -245,6 +258,7 @@ export function createSaveFlow({
     activeConflict = null
     dirty = false
     blocked = false
+    blockedSnapshot = null
     paused = false
     retryAttempt = 0
     setStatus("Saved")
@@ -252,6 +266,10 @@ export function createSaveFlow({
 
   function noteChange(delay) {
     revision += 1
+    if (blocked && blockedSnapshot !== null && getSnapshot() !== blockedSnapshot) {
+      blocked = false
+      blockedSnapshot = null
+    }
     schedule(delay)
   }
 
@@ -364,6 +382,7 @@ export function createSaveFlow({
     activeConflict = null
     dirty = false
     blocked = false
+    blockedSnapshot = null
     paused = false
     setStatus("Saved")
   }

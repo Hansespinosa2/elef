@@ -208,10 +208,13 @@ export default class extends Controller {
     const requestController = new AbortController()
     this.requestController = requestController
     let timeoutReject
+    let requestTimedOut = false
+    const timeoutError = Object.assign(new Error("Save timed out"), { code: "timeout", retryable: true })
     const timeoutFailure = new Promise((_, reject) => { timeoutReject = reject })
     this.requestTimeout = setTimeout(() => {
+      requestTimedOut = true
+      timeoutReject(timeoutError)
       requestController.abort()
-      timeoutReject(Object.assign(new Error("Save timed out"), { code: "timeout", retryable: true }))
     }, this.timeoutValue)
 
     try {
@@ -259,13 +262,19 @@ export default class extends Controller {
         snapshot: savedSnapshot
       }
     } catch (error) {
-      if (error?.code === "timeout") {
-        error.message = "Save timed out; your changes remain in the editor."
-        if (!recoveryCopySaved) error.message += " Browser recovery is unavailable; keep this page open and copy your changes before leaving."
+      if (requestTimedOut || error?.code === "timeout") {
+        error = Object.assign(new Error("Save timed out; your changes remain in the editor."), {
+          code: "timeout",
+          retryable: true
+        })
       } else if (!error?.code && error?.name !== "AbortError") {
         error.code = "network_error"
         error.retryable = true
-        error.message = "Network save failed; retrying."
+        error.message = "Save failed; the network request could not be completed."
+      }
+      if (!recoveryCopySaved && !String(error?.message || "").includes("Browser recovery is unavailable")) {
+        const prefix = error?.code === "timeout" ? error.message : `Save failed. ${error?.message || "The server did not save your changes."}`
+        error.message = `${prefix} Browser recovery is unavailable; keep this page open and copy your changes before leaving.`
       }
       throw error
     } finally {
@@ -277,7 +286,8 @@ export default class extends Controller {
 
   handleSaveState(state, details) {
     const resolvingConflict = Boolean(this.conflictPayload && !details.conflict)
-    const status = state === "Save failed" && this.lastSaveError?.message ? this.lastSaveError.message : state
+    const failed = state.startsWith("Save failed") || state.startsWith("Save timed out")
+    const status = failed && this.lastSaveError?.message ? this.lastSaveError.message : state
     this.setStatus(status, details.conflict ? "conflict" : details.blocked ? "error" : "")
     if (state === "Saving…" || state.startsWith("Saving…")) {
       this.element.dispatchEvent(new CustomEvent("autosave:saving"))

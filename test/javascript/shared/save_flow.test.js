@@ -289,7 +289,7 @@ test("transient save failures retry with bounded backoff instead of every keystr
   assert.equal(context.flow.dirty, true)
 })
 
-test("permanent save failures stop retrying until the user retries explicitly", async () => {
+test("permanent save failures stop retrying until the source changes or the user retries", async () => {
   let attempts = 0
   const context = setup({
     saveSource: async () => {
@@ -305,10 +305,11 @@ test("permanent save failures stop retrying until the user retries explicitly", 
   context.setSource("newer local")
   context.flow.noteChange()
   assert.equal(await context.flow.flush(), false)
-  assert.equal(attempts, 1)
+  assert.equal(attempts, 2)
+  assert.equal(context.flow.blocked, true)
 
   await context.flow.flush({ force: true })
-  assert.equal(attempts, 2)
+  assert.equal(attempts, 3)
 })
 
 test("an invalid conflict fingerprint blocks saving instead of retrying in a loop", async () => {

@@ -146,6 +146,57 @@ test("a stalled browser recovery store does not hold the autosave transport", as
   assert.equal(await controller.persistDraftBeforeSave(), false)
 })
 
+test("a stalled PATCH times out, aborts the request, and warns when recovery storage failed", async () => {
+  const sourceField = { name: "presentation[source]", value: "# Keep this" }
+  const form = {
+    action: "/presentations/1",
+    querySelector: selector => selector === '[name$="[source]"]' ? sourceField : null
+  }
+  const controller = new autosave.default()
+  Object.assign(controller, {
+    element: form,
+    fieldTargets: [sourceField],
+    active: true,
+    saveEnabledValue: true,
+    timeoutValue: 5,
+    recoveryTimeoutValue: 1,
+    persistLocalDraft: async () => false,
+    materializeEditorEdits() {},
+    updateRevisionTokens() {},
+    setStatus() {},
+    currentSource: () => sourceField.value,
+    sourceField: () => sourceField
+  })
+
+  const originalFetch = globalThis.fetch
+  const originalFormData = globalThis.FormData
+  const originalDocument = globalThis.document
+  let requestSignal
+  globalThis.fetch = async (_url, options) => {
+    requestSignal = options.signal
+    return new Promise(() => {})
+  }
+  globalThis.FormData = class {
+    set() {}
+  }
+  globalThis.document = { querySelector: () => null }
+
+  try {
+    await assert.rejects(controller.saveToRails("# Keep this", "# Keep this"), error => {
+      assert.equal(error.code, "timeout")
+      assert.equal(error.retryable, true)
+      assert.match(error.message, /Browser recovery is unavailable/)
+      assert.match(error.message, /copy your changes before leaving/)
+      return true
+    })
+    assert.equal(requestSignal.aborted, true)
+  } finally {
+    globalThis.fetch = originalFetch
+    globalThis.FormData = originalFormData
+    globalThis.document = originalDocument
+  }
+})
+
 test("Rails autosave uses the shared state machine for source and metadata snapshots", async () => {
   const sourceField = { name: "presentation[source]", value: "# Start" }
   const titleField = { name: "presentation[title]", value: "Start" }

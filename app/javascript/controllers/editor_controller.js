@@ -17,6 +17,7 @@ import {
   readBoolean,
   readEscapeKey,
   readLineNumberMode,
+  normalizeLineNumberMode,
   vimKeyFromEvent,
   writeBoolean,
   writeValue

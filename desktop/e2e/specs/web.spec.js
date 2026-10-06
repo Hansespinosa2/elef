@@ -115,7 +115,7 @@ class WebEditorUi {
   async waitForEditorTitle(title) {
     const input = this.page.locator(".editor-title-input")
     await expect(input).toHaveValue(title)
-    await expect(this.page.locator('[data-autosave-target="status"]')).toHaveText("Saved")
+    await this.waitForSaved()
   }
 
   async assertEditorTitle(title) {
@@ -221,7 +221,27 @@ class WebEditorUi {
 
   async waitForSaved(source) {
     if (source !== undefined) await this.waitForSource(source)
-    await expect(this.page.locator('[data-autosave-target="status"]')).toHaveText("Saved")
+    try {
+      await expect(this.page.locator('[data-autosave-target="status"]')).toHaveText("Saved")
+    } catch (error) {
+      const diagnostic = await this.page.evaluate(() => {
+        const form = document.querySelector('form[data-controller~="autosave"]')
+        const controller = form && window.Stimulus?.getControllerForElementAndIdentifier(form, "autosave")
+        return {
+          status: form?.querySelector('[data-autosave-target="status"]')?.textContent || "<missing>",
+          timeoutValue: controller?.timeoutValue ?? null,
+          recoveryTimeoutValue: controller?.recoveryTimeoutValue ?? null,
+          requestActive: Boolean(controller?.requestController),
+          requestAborted: controller?.requestController?.signal.aborted ?? null,
+          timeoutScheduled: Boolean(controller?.requestTimeout),
+          flowSaving: controller?.flow?.saving ?? null,
+          flowDirty: controller?.flow?.dirty ?? null,
+          flowBlocked: controller?.flow?.blocked ?? null,
+          lastSaveErrorCode: controller?.lastSaveError?.code || null
+        }
+      })
+      throw new Error(`${error.message}; autosave diagnostic: ${JSON.stringify(diagnostic)}`)
+    }
     if (source !== undefined) await this.assertPersistedSource(source)
   }
 
@@ -254,7 +274,7 @@ class WebEditorUi {
         else await this.showSourceMode()
 
         const frameWidths = []
-        for (const viewport of [{ width: 1280, height: 840 }, { width: 720, height: 900 }]) {
+        for (const viewport of [{ width: 1280, height: 840 }, { width: 600, height: 500 }]) {
           await this.page.setViewportSize(viewport)
           const frame = this.page.locator(".document-page-frame").first()
           if (frameWidths.length) {

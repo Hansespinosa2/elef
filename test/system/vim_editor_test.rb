@@ -228,7 +228,7 @@ class VimEditorTest < ApplicationSystemTestCase
     visit settings_path
     select "Relative", from: "Line numbers"
     check "Mode-aware cursor styling"
-    check "Enable Vim mode in this browser"
+    check "Enable Vim mode"
 
     visit edit_document_path(document)
 
