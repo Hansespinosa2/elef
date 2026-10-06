@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "test": "node run.mjs",
-    "test:unit": "node --test native-quit-smoke.test.js",
+    "test:unit": "node --test *.test.js",
     "test:web": "playwright test --project=web",
     "test:desktop": "wdio run wdio.conf.js"
   },

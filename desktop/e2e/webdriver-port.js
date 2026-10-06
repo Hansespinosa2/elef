@@ -1,5 +1,22 @@
 import { createServer } from "node:net"
 
+export async function readWebdriverValue(response) {
+  const body = await response.text()
+  let payload = {}
+  if (body.trim()) {
+    try {
+      payload = JSON.parse(body)
+    } catch {
+      throw new Error(`WebDriver HTTP ${response.status} returned invalid JSON.`)
+    }
+  }
+
+  if (!response.ok || payload.value?.error) {
+    throw new Error(payload.value?.message || `Driver HTTP ${response.status}`)
+  }
+  return payload.value
+}
+
 export async function reserveWebdriverPort() {
   const server = createServer()
   await new Promise((resolve, reject) => {

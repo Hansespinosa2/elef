@@ -5,7 +5,7 @@ import os from "node:os"
 import path from "node:path"
 import { randomUUID } from "node:crypto"
 import { desktopCommand } from "./offline-macos.js"
-import { reserveWebdriverPort } from "./webdriver-port.js"
+import { readWebdriverValue, reserveWebdriverPort } from "./webdriver-port.js"
 import { percentile95 } from "../../app/javascript/lib/performance_measurement.js"
 import { LIBRARY_RENDER_BATCH_SIZE } from "../../app/javascript/lib/incremental_list.js"
 
@@ -70,9 +70,7 @@ try {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
         signal: AbortSignal.timeout(60_000)
       })
-      const { value } = await response.json()
-      if (!response.ok || value?.error) throw new Error(value?.message || `Driver HTTP ${response.status}`)
-      return value
+      return readWebdriverValue(response)
     }
     let session
     let operation = "WebDriver session startup"
