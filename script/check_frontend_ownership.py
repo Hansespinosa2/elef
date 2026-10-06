@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Enforce Rails ownership of shared frontend code and one-way desktop reuse."""
 
+import hashlib
 import json
 import re
 from collections import Counter
@@ -69,6 +70,7 @@ editor_runtime = (ROOT / "app/javascript/lib/editor_runtime.js").read_text()
 # The Rails importmap and desktop bundle must run the same shared editor
 # packages. Tauri-only packages stay in the desktop manifest.
 desktop_package = json.loads((ROOT / "desktop/frontend/package.json").read_text())
+root_package = json.loads((ROOT / "package.json").read_text())
 desktop_shared_versions = {
     name: version
     for name, version in desktop_package["dependencies"].items()
@@ -95,6 +97,41 @@ assert rails_shared_versions == desktop_shared_versions, (
         if rails_shared_versions.get(name) != desktop_shared_versions[name]
     )
 )
+root_katex_version = root_package["devDependencies"].get("katex")
+assert root_katex_version == desktop_package["dependencies"].get("katex") == rails_pins.get("katex"), (
+    "Rails browser math, the shared renderer, and desktop must use one exact KaTeX package version"
+)
+assert 'pin "katex", to: "katex.js"' in importmap, "Rails must load the npm KaTeX browser module with a JavaScript MIME type"
+
+def assert_same_file(left, right, description):
+    left_hash = hashlib.sha256(left.read_bytes()).hexdigest()
+    right_hash = hashlib.sha256(right.read_bytes()).hexdigest()
+    assert left_hash == right_hash, f"{description} must be byte-identical ({left} != {right})"
+
+
+katex_dist = ROOT / "node_modules/katex/dist"
+assert_same_file(
+    ROOT / "vendor/javascript/katex.js",
+    katex_dist / "katex.mjs",
+    "Rails' browser KaTeX module must match the pinned npm package",
+)
+assert_same_file(
+    ROOT / "app/assets/stylesheets/katex/katex.min.css",
+    katex_dist / "katex.min.css",
+    "Rails' KaTeX stylesheet must match the pinned npm package",
+)
+rails_katex_fonts = ROOT / "app/assets/stylesheets/katex/fonts"
+npm_katex_fonts = katex_dist / "fonts"
+rails_font_names = {path.name for path in rails_katex_fonts.iterdir() if path.is_file()}
+npm_font_names = {path.name for path in npm_katex_fonts.iterdir() if path.is_file()}
+assert rails_font_names == npm_font_names, "Rails and npm KaTeX font asset sets must match"
+for font_name in sorted(npm_font_names):
+    assert_same_file(
+        rails_katex_fonts / font_name,
+        npm_katex_fonts / font_name,
+        f"Rails KaTeX font {font_name} must match the pinned npm package",
+    )
+
 assert rails_pins.get("mermaid") == "11.17.2", "Rails must pin the reviewed vendored Mermaid version"
 assert "vendor/javascript/mermaid.min.js" in build, "Desktop must package Rails' vendored Mermaid asset"
 assert "mermaid@11.17.2" in (ROOT / "vendor/javascript/mermaid.min.js").read_text()[:200], (

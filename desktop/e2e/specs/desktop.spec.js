@@ -581,6 +581,34 @@ class DesktopEditorUi {
     await this.waitForEditorModeTransition()
   }
 
+  async assertSourceEditorUsable() {
+    const metrics = await browser.execute(() => {
+      const field = document.querySelector("#desktop-editor-field")
+      const controller = field?.editorController
+      const editor = field?.querySelector(".cm-editor")
+      const content = field?.querySelector(".cm-content")
+      const scroller = field?.querySelector(".cm-scroller")
+      const projection = document.querySelector("#desktop-preview")
+      const rect = editor?.getBoundingClientRect()
+      const style = content ? getComputedStyle(content) : null
+      return {
+        ready: Boolean(controller?.editorReady && controller.view?.state?.doc),
+        mode: document.querySelector("#desktop-editor-form")?.dataset.editorMode,
+        width: rect?.width || 0,
+        height: rect?.height || 0,
+        fontFamily: style?.fontFamily || "",
+        color: style?.color || "",
+        lineHeight: scroller ? parseFloat(getComputedStyle(scroller).lineHeight) || 0 : 0,
+        previewVisible: projection ? getComputedStyle(projection).display !== "none" : false
+      }
+    })
+    if (!metrics.ready || metrics.mode !== "source" || metrics.width < 280 || metrics.height < 300
+      || !metrics.fontFamily.toLowerCase().includes("monospace") || metrics.color === "rgba(0, 0, 0, 0)"
+      || metrics.lineHeight <= 0 || !metrics.previewVisible) {
+      throw new Error(`The Tauri source editor layout or CodeMirror state is unusable: ${JSON.stringify(metrics)}`)
+    }
+  }
+
   async waitForPreview(text) {
     try {
       await browser.waitUntil(async () => (await $("#desktop-preview").getText()).includes(text), {

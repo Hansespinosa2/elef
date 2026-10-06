@@ -57,7 +57,7 @@ Each is a day or less with a checkable exit. ADRs 002, 003, 006 and 007 are acce
 **S1 — Rails-side inventory** (feeds ADR-003, 004, 007; [transport-adapter.md](transport-adapter.md))
 - Every endpoint the editor/library JS calls: method, path, request/response JSON, error shapes → complete the command table.
 - Host page: everything `works/_form.html.erb` injects that JS depends on (`data-*`, registry JSON, CSRF meta) → Rails-owned standalone host at `app/views/desktop_host.html`; both hosts mount app-owned components. Desktop packages it without booting Rails.
-- Asset pipeline: importmap pins and npm lockfile; esbuild builds the checked-in renderer bundle; npm KaTeX is version-pinned to the gem's vendored runtime.
+- Asset pipeline: importmap pins and npm lockfiles; esbuild builds the checked-in renderer bundle; Rails and desktop use the same exact pinned npm KaTeX module, stylesheet, and fonts. The legacy Ruby renderer's gem dependency remains only during the rollback window.
 - Turbo: confirm no controller depends on Turbo events or navigation.
 - Autosave controller: confirm it keeps dirty state and does not retry destructively on an error response.
 - Preview DOM sink: record how preview HTML reaches the DOM (security C11).

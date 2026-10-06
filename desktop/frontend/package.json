@@ -38,7 +38,7 @@
     "@tauri-apps/plugin-updater": "2.13.1",
     "codemirror": "6.0.2",
     "crelt": "1.0.7",
-    "katex": "0.17.0",
+    "katex": "0.18.7",
     "style-mod": "4.1.4",
     "w3c-keyname": "2.2.8"
   },

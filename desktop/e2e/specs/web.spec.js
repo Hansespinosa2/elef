@@ -197,6 +197,34 @@ class WebEditorUi {
     await expect(this.page.locator(".visual-editor-form")).toHaveAttribute("data-editor-mode", "source")
   }
 
+  async assertSourceEditorUsable() {
+    const metrics = await this.page.locator(".source-field").evaluate(field => {
+      const controller = field.editorController
+      const editor = field.querySelector(".cm-editor")
+      const content = field.querySelector(".cm-content")
+      const scroller = field.querySelector(".cm-scroller")
+      const form = field.closest("form")
+      const projection = form?.querySelector(".editor-projection")
+      const rect = editor?.getBoundingClientRect()
+      const style = content ? getComputedStyle(content) : null
+      return {
+        ready: Boolean(controller?.editorReady && controller.view?.state?.doc),
+        mode: field.closest("form")?.dataset.editorMode,
+        width: rect?.width || 0,
+        height: rect?.height || 0,
+        fontFamily: style?.fontFamily || "",
+        color: style?.color || "",
+        lineHeight: scroller ? parseFloat(getComputedStyle(scroller).lineHeight) || 0 : 0,
+        previewVisible: projection ? getComputedStyle(projection).display !== "none" : false
+      }
+    })
+    if (!metrics.ready || metrics.mode !== "source" || metrics.width < 280 || metrics.height < 300
+      || !metrics.fontFamily.toLowerCase().includes("monospace") || metrics.color === "rgba(0, 0, 0, 0)"
+      || metrics.lineHeight <= 0 || !metrics.previewVisible) {
+      throw new Error(`The source editor layout or CodeMirror state is unusable: ${JSON.stringify(metrics)}`)
+    }
+  }
+
   async waitForAuthoringOption(palette, name) {
     const label = palette === "snippet" ? "Snippet suggestions" : "Math shortcut suggestions"
     const option = this.page.locator(`.source-field [role="listbox"][aria-label="${label}"] [role="option"]`).filter({ hasText: name }).first()

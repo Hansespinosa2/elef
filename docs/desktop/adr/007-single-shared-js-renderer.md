@@ -35,7 +35,7 @@ The earlier plan ported the Markdown → HTML pipeline from Ruby to JS and kept 
 Positive
 - The fixture suite tests **the** renderer directly, fast, in Node; no bridge to maintain.
 - After cutover, expected outputs are regenerated from the JS renderer and comparison is exact; normalization was only the cutover gate.
-- The katex gem becomes unused for rendering after cutover; S1 records both pinned versions.
+- The katex gem remains only for the temporary Ruby renderer rollback path. Rails and desktop share the exact pinned npm KaTeX runtime and browser assets; the gem can be removed when the rollback renderer is deleted.
 - A CI fitness check asserts Ruby `Source::HtmlRenderer` is gone and Rails and desktop load a bundle with the same hash ([requirements.md](../requirements.md) QS-7).
 
 Negative (honest costs)

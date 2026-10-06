@@ -9,10 +9,10 @@
   "devDependencies": {
     "@codemirror/commands": "6.11.1",
     "@codemirror/state": "6.7.5",
-    "highlight.js": "11.11.1",
-    "katex": "0.17.0",
-    "markdown-it": "14.3.2",
     "esbuild": "0.25.11",
-    "linkedom": "0.18.13"
+    "highlight.js": "11.11.1",
+    "katex": "0.18.7",
+    "linkedom": "0.18.13",
+    "markdown-it": "14.3.2"
   }
 }
