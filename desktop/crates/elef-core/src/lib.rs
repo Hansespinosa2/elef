@@ -667,7 +667,7 @@ impl Library {
     pub fn delete_deck(&self, id: &str) -> Result<(), CoreError> {
         let record = self.record(id)?;
         self.validate_deck_path(&record.path)?;
-        trash::delete(&record.path)
+        move_to_trash(&record.path)
             .map_err(|_| CoreError::Io(std::io::Error::other("trash failed")))?;
         self.records
             .write()
@@ -1076,7 +1076,7 @@ impl Library {
 
         if let Some(existing) = collision.filter(|_| replaced) {
             self.validate_deck_path(&existing.path)?;
-            trash::delete(&existing.path)
+            move_to_trash(&existing.path)
                 .map_err(|_| CoreError::Io(std::io::Error::other("trash failed")))?;
             self.records
                 .write()
@@ -1850,6 +1850,24 @@ fn conflict_error(disk_hash: String, disk_bytes: Vec<u8>, disk_source_file: Stri
         disk_hash,
         disk_source: String::from_utf8_lossy(&disk_bytes).into_owned(),
         disk_source_file,
+    }
+}
+
+fn move_to_trash(path: &Path) -> Result<(), trash::Error> {
+    #[cfg(target_os = "macos")]
+    {
+        use trash::macos::{DeleteMethod, TrashContextExtMacos};
+
+        // The default macOS implementation automates Finder with AppleScript,
+        // which can require an Automation permission prompt. NSFileManager
+        // moves the same item to Trash without that prompt.
+        let mut context = trash::TrashContext::new();
+        context.set_delete_method(DeleteMethod::NsFileManager);
+        context.delete(path)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        trash::delete(path)
     }
 }
 
