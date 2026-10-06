@@ -3,7 +3,7 @@
 pin "application"
 pin "bug_report_events", to: "bug_report_events.js"
 pin "@hotwired/turbo-rails", to: "turbo.min.js"
-pin "@hotwired/stimulus", to: "stimulus.min.js"
+pin "@hotwired/stimulus", to: "stimulus.min.js" # @3.2.2
 pin "@hotwired/stimulus-loading", to: "stimulus-loading.js"
 pin_all_from "app/javascript/controllers", under: "controllers"
 pin "@codemirror/lang-markdown", to: "@codemirror--lang-markdown.js" # @6.5.2
@@ -31,7 +31,7 @@ pin "@replit/codemirror-vim-core", to: "@replit--codemirror-vim-core.js" # @0.1.
 pin "crelt" # @1.0.7
 pin "style-mod" # @4.1.4
 pin "w3c-keyname" # @2.2.8
-pin "katex", to: "katex.js" # Provided by the katex gem for consistent client-side live math
+pin "katex", to: "katex.js" # @0.17.0 Provided by the katex gem for consistent client-side live math
 pin "mermaid", to: "mermaid.min.js" # @11.17.2 Vendored self-contained build; exposes globalThis.mermaid like katex
 
 pin "lib/editor_document_state", to: "lib/editor_document_state.js"

@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Enforce Rails ownership of shared frontend code and one-way desktop reuse."""
 
+import json
 import re
+from collections import Counter
 from pathlib import Path
 
 
@@ -63,6 +65,85 @@ renderer_sources = (
     ROOT / "app/javascript/lib/renderer_global.js",
 )
 editor_runtime = (ROOT / "app/javascript/lib/editor_runtime.js").read_text()
+
+# The Rails importmap and desktop bundle must run the same shared editor
+# packages. Tauri-only packages stay in the desktop manifest.
+desktop_package = json.loads((ROOT / "desktop/frontend/package.json").read_text())
+desktop_shared_versions = {
+    name: version
+    for name, version in desktop_package["dependencies"].items()
+    if not name.startswith("@tauri-apps/")
+}
+rails_pins = {
+    name: version
+    for name, version in re.findall(
+        r'^pin "([^"]+)"(?:,\s*to:\s*"[^"]+")?\s+#\s*@([0-9][^\s]*)',
+        importmap,
+        re.MULTILINE,
+    )
+}
+rails_shared_versions = {name: rails_pins.get(name) for name in desktop_shared_versions}
+assert all(rails_shared_versions.values()), (
+    "Every desktop-shared package must have an explicit version on its Rails importmap pin: "
+    + ", ".join(sorted(name for name, version in rails_shared_versions.items() if not version))
+)
+assert rails_shared_versions == desktop_shared_versions, (
+    "Rails importmap and desktop frontend package versions must match: "
+    + ", ".join(
+        f"{name} Rails={rails_shared_versions[name]} desktop={desktop_shared_versions[name]}"
+        for name in sorted(desktop_shared_versions)
+        if rails_shared_versions.get(name) != desktop_shared_versions[name]
+    )
+)
+assert rails_pins.get("mermaid") == "11.17.2", "Rails must pin the reviewed vendored Mermaid version"
+assert "vendor/javascript/mermaid.min.js" in build, "Desktop must package Rails' vendored Mermaid asset"
+assert "mermaid@11.17.2" in (ROOT / "vendor/javascript/mermaid.min.js").read_text()[:200], (
+    "The shared Mermaid asset must match its versioned Rails importmap pin"
+)
+
+# Both runners need the same shared workflow imports and executions. Explicit
+# required exports make removing a flow from both adapters fail this check too.
+shared_workflows = {
+    "appearanceWorkflow",
+    "editAndPreviewWorkflow",
+    "externalEditConflictWorkflow",
+    "hostileDeckNeutralizedWorkflow",
+    "libraryAndGraphWorkflow",
+    "mathInputWorkflow",
+    "presentationModeWorkflow",
+    "snippetInsertWorkflow",
+}
+scenario_imports = {}
+scenario_calls = {}
+for runner in ("web", "desktop"):
+    source = (ROOT / f"desktop/e2e/specs/{runner}.spec.js").read_text()
+    imports = {}
+    for clause, module in re.findall(
+        r'^import\s+\{([^}]+)\}\s+from\s+["\']\.\./scenarios/([^"\']+)["\']',
+        source,
+        re.MULTILINE,
+    ):
+        imports[module] = set(re.findall(r"\b([A-Za-z_$][\w$]*Workflow)\b", clause))
+    calls = Counter(re.findall(r"\bawait\s+([A-Za-z_$][\w$]*Workflow)\s*\(", source))
+    imported_workflows = set().union(*imports.values()) if imports else set()
+    assert imported_workflows == shared_workflows, (
+        f"{runner} runner must import the complete shared workflow set; "
+        f"missing={sorted(shared_workflows - imported_workflows)}, "
+        f"extra={sorted(imported_workflows - shared_workflows)}"
+    )
+    assert set(calls) == shared_workflows, (
+        f"{runner} runner must execute every imported shared workflow; "
+        f"missing={sorted(shared_workflows - set(calls))}, "
+        f"extra={sorted(set(calls) - shared_workflows)}"
+    )
+    scenario_imports[runner] = imports
+    scenario_calls[runner] = calls
+assert scenario_imports["web"] == scenario_imports["desktop"], (
+    "Web and desktop must import the same shared scenario modules and workflow exports"
+)
+assert scenario_calls["web"] == scenario_calls["desktop"], (
+    "Web and desktop must execute the same shared workflow scenarios with matching counts"
+)
 
 assert 'path.join(repoRoot, "app/views/desktop_host.html")' in build, "the Rails-owned host template must be packaged by the desktop build"
 assert 'path.join(repoRoot, "app/assets/stylesheets/file_library_host.css")' in build, "the Rails-owned host stylesheet must be packaged by the desktop build"

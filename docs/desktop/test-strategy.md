@@ -67,6 +67,7 @@ Automated checks that keep the architecture from drifting:
 - Tauri capability file equals the command table in [transport-adapter.md](transport-adapter.md); no wildcard fs or shell permission.
 - Shipped CSP equals the policy recorded in [security.md](security.md); `script-src` has no `unsafe-inline` / `unsafe-eval`.
 - The test-only WebdriverIO plugins, global Tauri API, and frontend initializer do not enter the default production build or capability.
+- CI compares the shared workflow imports and invocation counts in the web and desktop runners, and checks every desktop-shared npm package version against the Rails importmap pin. A changed shared flow or package pin must update both consumers together.
 - `elef-core` has no dependency on Tauri crates.
 - Live feature flags match the register in [delivery-plan.md](delivery-plan.md); each has a removal condition.
 - `cargo audit` and `npm audit` pass or have a dated, recorded exception.
