@@ -35,6 +35,7 @@ pin "katex", to: "katex.js" # @0.18.7 Shared Rails and desktop browser runtime
 pin "mermaid", to: "mermaid.min.js" # @11.17.2 Vendored self-contained build; exposes globalThis.mermaid
 
 pin "lib/editor_document_state", to: "lib/editor_document_state.js"
+pin "lib/vim_line_numbers", to: "lib/vim_line_numbers.js"
 pin "lib/document_graph_view", to: "lib/document_graph_view.js"
 pin "lib/document_map", to: "lib/document_map.js"
 pin "lib/editor_controller_lookup", to: "lib/editor_controller_lookup.js"

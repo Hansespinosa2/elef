@@ -18,6 +18,12 @@ import { createHash } from "node:crypto"
 import { answerMacNativeDialog } from "../mac-native-dialog.js"
 
 async function openDesktopAuthoringSettings() {
+  await openDesktopSettings()
+  await $("#manage-authoring").click()
+  await $("#authoring-settings-dialog").waitForDisplayed()
+}
+
+async function openDesktopSettings() {
   await browser.execute(() => window.focus())
   if (process.platform === "darwin") {
     execFileSync("osascript", ["-e", 'tell application "System Events" to keystroke "," using {command down}'], { timeout: 5_000 })
@@ -27,8 +33,6 @@ async function openDesktopAuthoringSettings() {
     throw new Error(`Settings menu smoke is unsupported on ${process.platform}`)
   }
   await $("#settings-dialog").waitForDisplayed()
-  await $("#manage-authoring").click()
-  await $("#authoring-settings-dialog").waitForDisplayed()
 }
 
 async function confirmAuthoringDeletion(expectedName) {
@@ -239,6 +243,15 @@ class DesktopEditorUi {
     this.activeDeckTitle = title
   }
 
+  async enableVimRelativeLineNumbers() {
+    await openDesktopSettings()
+    const vimToggle = $("[data-vim-settings-target='vimToggle']")
+    if (!(await vimToggle.isSelected())) await vimToggle.click()
+    await $("[data-vim-settings-target='lineNumbers']").selectByAttribute("value", "relative")
+    await $("#settings-form button[value='save']").click()
+    await $("#settings-dialog").waitForDisplayed({ reverse: true })
+  }
+
   async reopenDeck() {
     await this.openDeck(this.activeDeckTitle || "E2E seed")
   }
@@ -413,6 +426,7 @@ class DesktopEditorUi {
       const source = editor.sourceValue
       const selection = editor.view.state.selection.main
       const mode = editor.lineNumberMode
+      const vimEnabled = editor.vimEnabled
       const values = () => [...editor.view.dom.querySelectorAll(".cm-lineNumbers .cm-gutterElement")]
         .filter(element => element.style.visibility !== "hidden")
         .map(element => element.textContent)
@@ -422,13 +436,12 @@ class DesktopEditorUi {
         let outcome
         try {
           editor.loadDocument("One\ntwo\nthree\nfour")
-          editor.setLineNumberMode("relative")
           editor.setSelectionRange(0)
           await twoFrames()
           const firstLineActive = values()
           editor.setSelectionRange(editor.view.state.doc.line(3).from)
           await twoFrames()
-          outcome = { firstLineActive, thirdLineActive: values() }
+          outcome = { mode, vimEnabled, firstLineActive, thirdLineActive: values() }
         } catch (error) {
           outcome = { error: error.message || String(error) }
         } finally {
@@ -442,6 +455,8 @@ class DesktopEditorUi {
     })
 
     const expected = JSON.stringify({
+      mode: "relative",
+      vimEnabled: true,
       firstLineActive: ["0", "1", "2", "3"],
       thirdLineActive: ["2", "1", "0", "1"]
     })

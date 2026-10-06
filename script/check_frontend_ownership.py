@@ -74,6 +74,22 @@ math_modules = (
     ROOT / "app/javascript/controllers/editor_markdown.js",
 )
 
+# Rails controllers use import-map specifiers while the desktop esbuild alias
+# resolves the same app-owned modules directly. Keep every controller-to-lib
+# edge pinned so a desktop-only build cannot hide a broken Rails module graph.
+controller_lib_imports = {
+    specifier
+    for path in (app_frontend / "controllers").rglob("*.js")
+    for specifier in MODULE_SPECIFIER.findall(path.read_text())
+    if specifier.startswith("lib/")
+}
+rails_lib_pins = set(re.findall(r'^pin "(lib/[^\"]+)"', importmap, re.MULTILINE))
+missing_controller_lib_pins = sorted(controller_lib_imports - rails_lib_pins)
+assert not missing_controller_lib_pins, (
+    "Every Rails controller's app-owned lib import must be pinned in the Rails importmap: "
+    + ", ".join(missing_controller_lib_pins)
+)
+
 for module in math_modules:
     source = module.read_text()
     assert re.search(r'^import katex from "katex"$', source, re.MULTILINE), (

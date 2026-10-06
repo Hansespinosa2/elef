@@ -67,6 +67,13 @@ class WebEditorUi {
     await expect(this.page.locator(".source-field .cm-content")).toBeVisible()
   }
 
+  async enableVimRelativeLineNumbers() {
+    await this.page.goto("/settings")
+    const vimToggle = this.page.locator("[data-vim-settings-target='vimToggle']")
+    if (!await vimToggle.isChecked()) await vimToggle.check()
+    await this.page.locator("[data-vim-settings-target='lineNumbers']").selectOption("relative")
+  }
+
   async enterPresentationMode() {
     if (!this.activeWorkId) throw new Error("Open a presentation deck before entering presentation mode")
     await this.page.goto(`/presentations/${this.activeWorkId}/present`)
@@ -143,6 +150,7 @@ class WebEditorUi {
       const source = editor.sourceValue
       const selection = editor.view.state.selection.main
       const mode = editor.lineNumberMode
+      const vimEnabled = editor.vimEnabled
       const values = () => [...editor.view.dom.querySelectorAll(".cm-lineNumbers .cm-gutterElement")]
         .filter(element => element.style.visibility !== "hidden")
         .map(element => element.textContent)
@@ -150,13 +158,12 @@ class WebEditorUi {
 
       try {
         editor.loadDocument("One\ntwo\nthree\nfour")
-        editor.setLineNumberMode("relative")
         editor.setSelectionRange(0)
         await twoFrames()
         const firstLineActive = values()
         editor.setSelectionRange(editor.view.state.doc.line(3).from)
         await twoFrames()
-        return { firstLineActive, thirdLineActive: values() }
+        return { mode, vimEnabled, firstLineActive, thirdLineActive: values() }
       } finally {
         editor.loadDocument(source)
         editor.setLineNumberMode(mode)
@@ -166,6 +173,8 @@ class WebEditorUi {
     })
 
     expect(result).toEqual({
+      mode: "relative",
+      vimEnabled: true,
       firstLineActive: ["0", "1", "2", "3"],
       thirdLineActive: ["2", "1", "0", "1"]
     })
