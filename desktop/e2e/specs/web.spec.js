@@ -268,10 +268,12 @@ class WebEditorUi {
 
   async assertDocumentPageAspectRatio() {
     const originalViewport = this.page.viewportSize()
+    const surface = this.page.locator(".visual-editor-form .document-surface").first()
     try {
       for (const mode of ["visual", "source"]) {
         if (mode === "visual") await this.showVisualMode()
         else await this.showSourceMode()
+        await expect.poll(() => surface.getAttribute("data-document-pages-settled")).toBe("true")
 
         const frameWidths = []
         for (const viewport of [{ width: 1280, height: 840 }, { width: 600, height: 500 }]) {
@@ -279,27 +281,27 @@ class WebEditorUi {
           await this.page.evaluate(() => new Promise(resolve => {
             requestAnimationFrame(() => requestAnimationFrame(resolve))
           }))
+          await expect.poll(() => surface.getAttribute("data-document-pages-settled")).toBe("true")
           const frame = this.page.locator(".document-page-frame").first()
-          if (frameWidths.length) {
-            await expect.poll(() => frame.evaluate(element => element.getBoundingClientRect().width))
-              .toBeLessThan(frameWidths[0] - 1)
-          }
           await expect(frame).toBeVisible()
-          await expect.poll(() => frame.evaluate(element => {
-            const rect = element.getBoundingClientRect()
-            return rect.width > 0 && rect.height > 0 ? rect.width / rect.height : null
-          })).toBeCloseTo(210 / 297, 2)
-          const metrics = await frame.evaluate(element => {
-            const rect = element.getBoundingClientRect()
-            const preview = element.closest(".preview-pane")
-            return {
-              width: rect.width,
-              ratio: rect.width / rect.height,
-              fitsPreviewWidth: !preview || rect.width <= preview.clientWidth + 1
-            }
-          })
+          let metrics
+          await expect.poll(async () => {
+            metrics = await frame.evaluate(element => {
+              const rect = element.getBoundingClientRect()
+              const preview = element.closest(".preview-pane")
+              return {
+                width: rect.width,
+                height: rect.height,
+                ratio: rect.width / rect.height,
+                fitsPreviewWidth: !preview || rect.width <= preview.clientWidth + 1
+              }
+            })
+            return metrics.width > 0 && metrics.height > 0 && Number.isFinite(metrics.ratio)
+              && Math.abs(metrics.ratio - 210 / 297) < 0.005 && metrics.fitsPreviewWidth
+          }).toBe(true)
           expect(Math.abs(metrics.ratio - 210 / 297)).toBeLessThan(0.005)
           expect(metrics.fitsPreviewWidth).toBe(true)
+          if (frameWidths.length) expect(metrics.width).toBeLessThan(frameWidths[0] - 1)
           frameWidths.push(metrics.width)
         }
         expect(frameWidths[1]).toBeLessThan(frameWidths[0] - 1)
