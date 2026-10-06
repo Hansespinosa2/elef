@@ -410,7 +410,7 @@ class PresentationsTest < ApplicationSystemTestCase
     page.execute_script("window.autosaveRequests[0].release()")
 
     assert_selector "[data-autosave-target='conflict']", visible: true
-    click_button "Discard local draft"
+    click_button "Use current version"
     assert_no_selector "[data-autosave-target='conflict']", visible: true
     assert_field "Markdown source", with: external_source
     assert_selector "[data-autosave-target='status']", exact_text: "Saved"

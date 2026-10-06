@@ -169,6 +169,7 @@ test("saving a merge accepts the current revision and sends merged source throug
   const dialog = { open: true, close() { this.open = false } }
   const controller = new autosave.default()
   let accepted = null
+  let scheduledDelay = null
   Object.assign(controller, {
     element: { querySelector: () => sourceField },
     conflictPayload: { current },
@@ -177,6 +178,7 @@ test("saving a merge accepts the current revision and sends merged source throug
     hasConflictTarget: true,
     conflictTarget: dialog,
     clearSaveTimer() {},
+    scheduleSave(delay) { scheduledDelay = delay },
     updateRevisionTokens(payload) { accepted = payload }
   })
 
@@ -185,4 +187,5 @@ test("saving a merge accepts the current revision and sends merged source throug
   assert.equal(sourceField.value, "combined")
   assert.deepEqual(events, [{ type: "input", bubbles: true }])
   assert.equal(dialog.open, false)
+  assert.equal(scheduledDelay, 0)
 })

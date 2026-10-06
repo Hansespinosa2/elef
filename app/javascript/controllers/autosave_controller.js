@@ -162,6 +162,7 @@ export default class extends Controller {
     sourceField.value = this.mergeSourceTarget.value
     this.closeConflictDialog()
     sourceField.dispatchEvent(new Event("input", { bubbles: true }))
+    this.scheduleSave(0)
     return true
   }
 
