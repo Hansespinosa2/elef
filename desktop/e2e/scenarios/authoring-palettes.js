@@ -1,5 +1,6 @@
 export async function snippetInsertWorkflow(ui) {
   await ui.openDeck()
+  await ui.showSourceMode()
   const prefix = (await ui.readSource()).trimEnd() + "\n"
   const query = `${prefix}/bold`
 
@@ -14,6 +15,7 @@ export async function snippetInsertWorkflow(ui) {
 
 export async function mathInputWorkflow(ui) {
   await ui.openDeck()
+  await ui.showSourceMode()
   const prefix = (await ui.readSource()).trimEnd()
   const query = `${prefix}\n\n$$\n@a`
 

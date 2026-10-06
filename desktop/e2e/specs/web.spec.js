@@ -411,7 +411,11 @@ class WebLibraryUi {
   async createWork(title, kind) {
     if (!["presentation", "document"].includes(kind)) throw new Error(`Unsupported shared library fixture kind: ${kind}`)
     await this.page.locator(".new-work-trigger").click()
-    await this.page.getByRole("menuitem", { name: kind === "document" ? /Document/ : /Presentation/ }).click()
+    const menuItem = this.page.getByRole("menuitem", { name: kind === "document" ? /Document/ : /Presentation/ })
+    await expect(menuItem).toBeVisible()
+    const destination = kind === "document" ? "/documents/new" : "/presentations/new"
+    await menuItem.evaluate(link => link.click())
+    await expect(this.page).toHaveURL(new RegExp(`${destination.replaceAll("/", "\\/")}$`))
     await expect(this.page.locator(".visual-editor-form")).toBeVisible()
     if (kind === "presentation") {
       await this.page.locator(".editor-title-input").fill(title)
