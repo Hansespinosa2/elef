@@ -133,10 +133,12 @@ export function mountEditorHosts(root = globalThis.document) {
   if (!root) return
   const hosts = root.querySelectorAll("[data-editor-view-config]")
   for (const host of hosts) {
+    if (host.dataset.editorViewMounted === "true") continue
     const config = JSON.parse(host.dataset.editorViewConfig)
     renderEditorView(host, config)
     const form = host.closest("form")
     if (form && host.dataset.editorFormControllers) form.dataset.controller = host.dataset.editorFormControllers
+    host.dataset.editorViewMounted = "true"
   }
 }
 

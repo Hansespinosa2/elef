@@ -1,13 +1,32 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { parseHTML } from "linkedom"
-import { configureEditorKind, enableVisualModeAfterPreview, renderEditorView } from "../../../app/javascript/lib/editor_view.js"
+import { configureEditorKind, enableVisualModeAfterPreview, mountEditorHosts, renderEditorView } from "../../../app/javascript/lib/editor_view.js"
 
 function mount(config) {
   const { document } = parseHTML("<form><div id='mount'></div></form>")
   const root = renderEditorView(document.querySelector("#mount"), config)
   return { document, root }
 }
+
+test("Rails editor hosts hydrate once across repeated Turbo load notifications", () => {
+  const { document } = parseHTML(`
+    <form>
+      <div data-editor-form-controllers="dirty preview autosave" data-editor-view-config='{"kind":"document","mode":"source","source":"# Shared"}'></div>
+    </form>
+  `)
+  const host = document.querySelector("[data-editor-view-config]")
+
+  mountEditorHosts(document)
+  const firstRoot = host.querySelector(".editor-shell")
+  const firstEditorField = host.querySelector(".source-field")
+  mountEditorHosts(document)
+
+  assert.equal(host.querySelectorAll(".editor-shell").length, 1)
+  assert.equal(host.querySelector(".editor-shell"), firstRoot)
+  assert.equal(host.querySelector(".source-field"), firstEditorField)
+  assert.equal(document.querySelector("form").dataset.controller, "dirty preview autosave")
+})
 
 test("shared editor view exposes the same editing controls and targets to both hosts", () => {
   const { document, root } = mount({
