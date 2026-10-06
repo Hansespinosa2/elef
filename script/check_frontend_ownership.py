@@ -68,6 +68,23 @@ renderer_sources = (
     ROOT / "app/javascript/lib/renderer_global.js",
 )
 editor_runtime = (ROOT / "app/javascript/lib/editor_runtime.js").read_text()
+math_modules = (
+    ROOT / "app/javascript/controllers/live_preview.js",
+    ROOT / "app/javascript/controllers/editor_math.js",
+    ROOT / "app/javascript/controllers/editor_markdown.js",
+)
+
+for module in math_modules:
+    source = module.read_text()
+    assert re.search(r'^import katex from "katex"$', source, re.MULTILINE), (
+        f"{module.relative_to(ROOT)} must import the shared KaTeX module directly"
+    )
+    assert "globalThis.katex" not in source, (
+        f"{module.relative_to(ROOT)} must not rely on a KaTeX global initialized by one runtime"
+    )
+assert "loadKatex" not in editor_runtime and "globalThis.katex" not in editor_runtime, (
+    "Desktop bootstrap must not initialize a KaTeX global that Rails does not provide"
+)
 
 assert tauri_config["build"]["beforeDevCommand"]["script"] == tauri_config["build"]["beforeBuildCommand"], (
     "Tauri dev and production launches must build the same Rails-owned frontend"

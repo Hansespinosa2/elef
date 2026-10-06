@@ -1,4 +1,4 @@
-import "katex"
+import katex from "katex"
 
 export function deRenderMath(mathElement, { caret = "end", clickEvent = null } = {}) {
   if (!mathElement?.parentNode) return null
@@ -76,7 +76,6 @@ export function reRenderMath(activeSpan, { caret = null } = {}, onFlush = null) 
 
   if (hasDelimiters) {
     const expression = fullText.slice(open.length, fullText.length - close.length)
-    const katex = globalThis.katex
     if (katex?.renderToString && expression.trim().length > 0) {
       try {
         const wrapper = document.createElement("span")

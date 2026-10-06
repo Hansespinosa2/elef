@@ -24,25 +24,24 @@ let libraryRuntime
 
 export function loadEditorRuntime() {
   if (!editorRuntime) {
-    editorRuntime = loadKatex()
-      .then(() => Promise.all([
-        import("controllers/editor_controller"),
-        import("controllers/appearance_controller"),
-        import("controllers/document_link_palette_controller"),
-        import("controllers/math_shortcut_palette_controller"),
-        import("controllers/math_shorthand_controller"),
-        import("controllers/mermaid_assist_controller"),
-        import("controllers/media_controller"),
-        import("controllers/preview_controller"),
-        import("controllers/presentation_canvas_controller"),
-        import("controllers/presentation_controller"),
-        import("controllers/visual_editor_controller"),
-        import("controllers/presentation_editor_controller"),
-        import("controllers/slide_overview_controller"),
-        import("controllers/document_pages_controller"),
-        import("controllers/mermaid_diagrams_controller"),
-        import("controllers/snippet_palette_controller")
-      ]))
+    editorRuntime = Promise.all([
+      import("controllers/editor_controller"),
+      import("controllers/appearance_controller"),
+      import("controllers/document_link_palette_controller"),
+      import("controllers/math_shortcut_palette_controller"),
+      import("controllers/math_shorthand_controller"),
+      import("controllers/mermaid_assist_controller"),
+      import("controllers/media_controller"),
+      import("controllers/preview_controller"),
+      import("controllers/presentation_canvas_controller"),
+      import("controllers/presentation_controller"),
+      import("controllers/visual_editor_controller"),
+      import("controllers/presentation_editor_controller"),
+      import("controllers/slide_overview_controller"),
+      import("controllers/document_pages_controller"),
+      import("controllers/mermaid_diagrams_controller"),
+      import("controllers/snippet_palette_controller")
+    ])
       .then(([editor, appearance, documentLinks, mathPalette, mathShorthand, mermaidAssist, media, preview,
         presentationCanvas, presentation, visualEditor, presentationEditor, slideOverview, documentPages,
         mermaidDiagrams, snippetPalette]) => {
@@ -81,11 +80,6 @@ export function loadLibraryRuntime() {
       })
   }
   return libraryRuntime
-}
-
-async function loadKatex() {
-  const { default: katex } = await import("katex")
-  globalThis.katex = katex
 }
 
 function register(identifier, controller) {

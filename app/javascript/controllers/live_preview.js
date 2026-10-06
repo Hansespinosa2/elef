@@ -1,7 +1,7 @@
 import { StateEffect, StateField } from "@codemirror/state"
 import { syntaxTree } from "@codemirror/language"
 import { Decoration, EditorView, WidgetType } from "@codemirror/view"
-import "katex"
+import katex from "katex"
 import { MERMAID_ERROR_CLASS, renderMermaidSvg } from "controllers/mermaid_runtime"
 
 export const livePreviewMode = StateEffect.define()
@@ -75,7 +75,7 @@ class PreviewWidget extends WidgetType {
     element.className = `cm-live-widget cm-live-widget-${this.kind}${this.kind === "quote-marker" ? " cm-live-syntax-marker" : ""}`
     if (this.kind === "math" || this.kind === "math-display") {
       try {
-        element.innerHTML = globalThis.katex.renderToString(this.value, {
+        element.innerHTML = katex.renderToString(this.value, {
           displayMode: this.kind === "math-display",
           throwOnError: true
         })
