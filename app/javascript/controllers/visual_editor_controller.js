@@ -154,12 +154,13 @@ export default class extends Controller {
     const region = this.regionForBlock(current.blockId)
     if (!region) return null
     const source = this.editorController.value.slice(region.content_range.start, region.content_range.end)
-    const focusElement = selection.focusNode.nodeType === Node.ELEMENT_NODE
-      ? selection.focusNode
-      : selection.focusNode.parentElement
+    const focusNode = selection?.focusNode
+    const focusElement = focusNode?.nodeType === Node.ELEMENT_NODE
+      ? focusNode
+      : focusNode?.parentElement
     const activeDisplayMath = focusElement?.closest?.(".editor-math-active.editor-live-math-display")
-    if (activeDisplayMath && source === activeDisplayMath.textContent) {
-      const offset = visibleOffsetAtPoint(activeDisplayMath, selection.focusNode, selection.focusOffset)
+    if (focusNode && activeDisplayMath && source === activeDisplayMath.textContent) {
+      const offset = visibleOffsetAtPoint(activeDisplayMath, focusNode, selection.focusOffset)
       if (offset !== null) {
         return { blockId: current.blockId, sourceOffset: region.content_range.start + offset }
       }
