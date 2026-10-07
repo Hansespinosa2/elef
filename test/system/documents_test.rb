@@ -2,7 +2,36 @@ require "application_system_test_case"
 
 class DocumentsTest < ApplicationSystemTestCase
   def wait_for_fresh_projection
-    assert_selector "form.visual-editor-form:not([data-preview-projection-stale='true'])", wait: 5
+    selector = "form.visual-editor-form:not([data-preview-projection-stale='true'])"
+    return if has_selector?(selector, wait: 2)
+
+    return if has_selector?(selector, wait: 10)
+
+    if has_css?(".preview-retry:not([hidden])", wait: 0)
+      click_button "Retry preview"
+    end
+    return if has_selector?(selector, wait: 10)
+
+    state = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const form = document.querySelector("form.visual-editor-form");
+        const preview = form?.previewController;
+        const active = document.activeElement;
+        return JSON.stringify({
+          stale: form?.dataset.previewProjectionStale || null,
+          projectionFresh: preview?.projectionFresh ?? null,
+          status: form?.querySelector("[data-preview-target='status']")?.textContent?.trim() || "",
+          warnings: [...(form?.querySelectorAll(".preview-warnings li") || [])].map((item) => item.textContent),
+          retryVisible: Boolean(form?.querySelector(".preview-retry:not([hidden])")),
+          activeElement: active?.tagName || null,
+          activeEditableBlock: Boolean(active?.closest?.("[contenteditable='true']") && form?.querySelector("[data-preview-target='container']")?.contains(active.closest("[contenteditable='true']"))),
+          requestId: preview?.requestId ?? null,
+          pendingProjection: Boolean(preview?.pendingProjection),
+          activeRequest: Boolean(preview?.requestController)
+        });
+      })()
+    JAVASCRIPT
+    assert has_selector?(selector, wait: 0), "preview remained stale after one retry: #{state}"
   end
 
   def wait_for_settled_document_projection
@@ -1939,6 +1968,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
       expected = Regexp.new(Regexp.escape("#{opening}\n\n#{closing}"))
       assert_field "Markdown source", with: expected, wait: 5
+      assert_selector ".document-editor-block .editor-math-active", wait: 5
 
       active_document_block.send_keys("x=1")
       completed = Regexp.new(Regexp.escape("#{opening}\nx=1\n#{closing}"))
@@ -2453,7 +2483,7 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_equal 1, page.evaluate_script("window.previewRequests")
   end
 
-  test "ignores a slow preview response after a newer edit" do
+  test "serializes slow preview responses and renders the latest edit" do
     document = Document.create!(title: "Race notes", source: "# Initial")
     visit edit_document_path(document)
 
@@ -2473,9 +2503,23 @@ class DocumentsTest < ApplicationSystemTestCase
     wait_for_preview_response(1)
     assert_equal 1, page.evaluate_script("window.previewResponses.length")
 
+    initial_request_id = page.evaluate_script("document.querySelector('form.visual-editor-form').previewController.requestId")
     fill_in "Markdown source", with: "# Latest response"
-    wait_for_preview_response(2)
-    assert_equal 2, page.evaluate_script("window.previewResponses.length")
+    latest_edit_queued = page.evaluate_async_script(<<~JAVASCRIPT, initial_request_id)
+      const initialRequestId = arguments[0];
+      const done = arguments[arguments.length - 1];
+      const deadline = Date.now() + 5000;
+      const waitForQueuedPreview = () => {
+        const preview = document.querySelector('form.visual-editor-form')?.previewController;
+        if (preview?.requestId > initialRequestId && preview.timer === null && preview.queuedRequestId === preview.requestId) return done(true);
+        if (Date.now() >= deadline) return done(false);
+        window.setTimeout(waitForQueuedPreview, 10);
+      };
+      waitForQueuedPreview();
+    JAVASCRIPT
+    assert latest_edit_queued, "latest source was not queued behind the active preview"
+    requests_during_active_render = page.evaluate_script("window.previewResponses.length")
+    assert_equal 1, requests_during_active_render, "a newer edit must wait for the active render"
 
     page.evaluate_async_script(<<~JAVASCRIPT)
       const done = arguments[arguments.length - 1];
@@ -2489,6 +2533,9 @@ class DocumentsTest < ApplicationSystemTestCase
       window.setTimeout(done, 20);
     JAVASCRIPT
     assert_no_selector ".document-surface h1", text: "First response"
+
+    wait_for_preview_response(2)
+    assert_equal 2, page.evaluate_script("window.previewResponses.length")
 
     page.execute_script(<<~JAVASCRIPT)
       const response = window.previewResponses[1];
@@ -2554,10 +2601,12 @@ class DocumentsTest < ApplicationSystemTestCase
         .join('')
     JAVASCRIPT
 
-    last_fragment = all(".document-editor-block[data-editor-block-id]").last
-    assert_includes last_fragment.text, "next A4 page."
-    page.execute_script(<<~JAVASCRIPT, last_fragment)
-      const block = arguments[0];
+    # Font completion can repaginate between WebDriver commands. Resolve and
+    # focus the current fragment together; focused editable content suppresses
+    # subsequent reflow while the user is typing.
+    focused_text = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+      const block = [...document.querySelectorAll('.document-editor-block[data-editor-block-id]')].at(-1);
       const paragraph = block.querySelector('p') || block;
       const range = document.createRange();
       range.selectNodeContents(paragraph);
@@ -2566,8 +2615,11 @@ class DocumentsTest < ApplicationSystemTestCase
       const selection = window.getSelection();
       selection.removeAllRanges();
       selection.addRange(range);
+      return block.textContent;
+      })()
     JAVASCRIPT
-    last_fragment.send_keys(" Continued")
+    assert_includes focused_text, "next A4 page."
+    active_document_block.send_keys(" Continued")
     assert_field "Markdown source", with: source.sub(paragraph, "#{paragraph} Continued"), wait: 5
 
     focused_fragment = active_document_block
@@ -2883,6 +2935,7 @@ class DocumentsTest < ApplicationSystemTestCase
     alignment.select("Center")
 
     assert_field "Markdown source", with: /\A:::align\{center\}\n\nTest\z/, wait: 5
+    wait_for_fresh_projection
 
     find(".document-editor-block[data-editor-block-id='#{block_id}']").find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
     find("[data-visual-editor-block-id='#{block_id}']").select("Right")

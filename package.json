@@ -1,0 +1,23 @@
+{
+  "name": "elef-shared-frontend",
+  "private": true,
+  "type": "module",
+  "imports": {
+    "#elef/preview-sanitizer": "./app/javascript/lib/preview_sanitizer.js",
+    "#elef/authoring-settings": "./app/javascript/lib/authoring_settings.js",
+    "#elef/authoring-registry-write": "./app/javascript/lib/authoring_registry_write.js"
+  },
+  "scripts": {
+    "renderer:build": "node script/build_renderer.mjs",
+    "test:javascript": "node --test test/javascript/*.test.js test/javascript/*.test.mjs test/javascript/shared/*.test.js"
+  },
+  "devDependencies": {
+    "@codemirror/commands": "6.11.1",
+    "@codemirror/state": "6.7.5",
+    "esbuild": "0.25.11",
+    "highlight.js": "11.11.1",
+    "katex": "0.18.7",
+    "linkedom": "0.18.13",
+    "markdown-it": "14.3.2"
+  }
+}

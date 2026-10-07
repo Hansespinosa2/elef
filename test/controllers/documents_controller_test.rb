@@ -5,6 +5,16 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
     Document.delete_all
   end
 
+  test "rename preserves the all-library view and rejects arbitrary destinations" do
+    work = Document.create!(source: "# Before")
+    get root_path
+    assert_select "form[action='#{rename_document_path(work)}'] input[name='library_view'][value='all']"
+    patch rename_document_path(work), params: { library_view: "all", document: { title: "Renamed" } }
+    assert_redirected_to root_path
+    patch rename_document_path(work), params: { library_view: "https://example.invalid/", document: { title: "Again" } }
+    assert_redirected_to documents_path
+  end
+
   test "creates, edits, previews, renames, and deletes a document" do
     assert_difference("Document.count") do
       post documents_path, params: { document: { title: "Separate document title", source: "# Notes" } }
@@ -41,12 +51,41 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
 
     get new_document_path
     assert_response :success
-    assert_select ".document-editor-block h1", "Untitled document 2"
+    config = editor_host_config
+    assert_equal "# Untitled document 2", config.fetch("source")
+    assert_includes config.fetch("previewHtml"), "Untitled document 2"
 
     assert_difference("Document.count") do
       post documents_path, params: { document: { source: Document.available_default_source } }, as: :json
     end
     assert_response :created
+  end
+
+  test "editor projections resolve document links through the shared renderer" do
+    source = Document.create!(source: "# Source notes\n\n[[Target notes]]")
+    target = Document.create!(title: "Target notes", source: "# Target notes")
+    draft = "# Draft notes\n\n[[Target notes|Open target]]\n\n![Diagram](/diagram.svg)"
+
+    post preview_document_path(source), params: {
+      document: { source: draft }, projection: "editor", revision: "shared-projection-1"
+    }, as: :json
+
+    assert_response :success
+    payload = response.parsed_body
+    assert_equal "shared-projection-1", payload["revision"]
+    assert_equal "document", payload.dig("editor_map", "mode")
+    assert_includes payload["html"], %(href="#{document_path(target)}")
+    assert_includes payload["html"], %(data-document-link-title="Target notes")
+    assert_includes payload["html"], %(src="/diagram.svg")
+    assert_includes payload["html"], %(data-editor-image-source="true" contenteditable="false")
+    assert_includes payload["html"], %(class="editor-media-caption")
+    assert_includes payload["html"], %(contenteditable="true")
+    assert_equal "# Source notes\n\n[[Target notes]]", source.reload.source
+
+    get edit_document_path(source)
+
+    assert_response :success
+    assert_includes editor_host_config.fetch("previewHtml"), %(href="#{document_path(target)}")
   end
 
   test "uploads and serves image assets for documents" do
@@ -162,9 +201,11 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to documents_path
     assert_equal "Sample documents loaded.", flash[:notice]
     follow_redirect!
-    assert_select ".document-graph-node", count: Document.count
-    assert_select ".document-graph-node[data-title='Stress: Renderer kitchen sink']"
-    assert_select ".document-graph-node[data-title='Fixture: Graph orphan']"
+    graph_element = Nokogiri::HTML(response.body).at_css('[data-controller="document-graph"]')
+    graph = JSON.parse(graph_element["data-document-graph-data-value"])
+    assert_equal Document.count, graph.fetch("nodes").length
+    assert_includes graph.fetch("nodes").map { |node| node.fetch("title") }, "Stress: Renderer kitchen sink"
+    assert_includes graph.fetch("nodes").map { |node| node.fetch("title") }, "Fixture: Graph orphan"
 
     Documents::SampleData::SAMPLES.each do |sample|
       assert_equal sample[:source], Document.find_by!(sample_id: sample[:id]).reload.source
@@ -215,9 +256,11 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
     Document.create!(title: "Orphan", source: "# Orphan")
 
     get documents_path
-    assert_select ".document-graph"
-    assert_select ".document-graph-node", count: 3
-    assert_select ".document-graph-edge[data-source-id='#{source.id}'][data-target-id='#{target.id}']"
+    assert_select ".document-graph-panel[data-controller='document-graph']"
+    graph_element = Nokogiri::HTML(response.body).at_css('[data-controller="document-graph"]')
+    graph = JSON.parse(graph_element["data-document-graph-data-value"])
+    assert_equal 3, graph.fetch("nodes").length
+    assert_includes graph.fetch("edges"), { "source" => source.id, "target" => target.id }
     assert_select ".lineage-panel", count: 0
 
     get root_path
@@ -346,5 +389,13 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
     assert_select ".document-print-toolbar", text: /Printable Document/
     assert_select ".document-print-toolbar button", text: "Print / Save PDF"
     assert_select ".document-surface"
+  end
+
+  private
+
+  def editor_host_config
+    host = css_select("[data-editor-view-config]").first
+    assert host, "expected the shared editor host"
+    JSON.parse(host["data-editor-view-config"])
   end
 end

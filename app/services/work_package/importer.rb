@@ -23,7 +23,7 @@ module WorkPackage
       work_data = manifest.fetch("work")
       ensure_does_not_replace_existing!(work_data, metadata)
 
-      work = build_work(work_data, entries.fetch("source.md"))
+      work = build_work(work_data, entries.fetch("source.md"), metadata)
       Work.transaction do
         work.save!
         import_details(work, metadata)
@@ -69,7 +69,16 @@ module WorkPackage
       end
     end
 
-    def build_work(work_data, source)
+    def build_work(work_data, source, metadata)
+      if work_data["kind"] == "document"
+        document = metadata.fetch("document", {})
+        existing = Source::Document.portable_document_link_metadata(source)
+        source = Source::Document.with_portable_document_link_metadata(
+          source,
+          document_key: document["document_key"].presence || existing[:document_key],
+          aliases: existing[:aliases] + Array(document["aliases"])
+        )
+      end
       klass = work_data["kind"] == "document" ? Document : Presentation
       work = klass.new(
         workspace: @workspace,

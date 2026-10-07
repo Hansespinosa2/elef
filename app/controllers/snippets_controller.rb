@@ -1,14 +1,16 @@
 class SnippetsController < ApplicationController
   def index
-    @query = params[:q].to_s
-    @category = params[:category].to_s
-    matching_snippets = Snippet.search(@query)
-    @snippet_category_counts = matching_snippets.group_by(&:category).transform_values(&:size)
-    @snippets = matching_snippets
-    @snippets = @snippets.select { |snippet| snippet.category == @category } if @category.present?
-    @snippet_groups = Snippet::CATEGORIES.filter_map do |category|
-      snippets = @snippets.select { |snippet| snippet.category == category }
-      [category, snippets] if snippets.any?
+    respond_to do |format|
+      format.html
+      format.json do
+        records = Snippet.all.index_by { |snippet| snippet.id.to_s }
+        entries = Snippets::Catalog.for_editor.map do |attributes|
+          entry = attributes.stringify_keys
+          record = records[entry["id"].to_s]
+          entry.merge("built_in" => record ? record.built_in? : true)
+        end
+        render json: { entries: entries }
+      end
     end
   end
 
@@ -19,9 +21,15 @@ class SnippetsController < ApplicationController
   def create
     @snippet = Snippet.new(snippet_params)
     if @snippet.save
-      redirect_to snippets_path, notice: "Snippet created."
+      respond_to do |format|
+        format.html { redirect_to snippets_path, notice: "Snippet created." }
+        format.json { render json: { entry: authoring_entry(@snippet) }, status: :created }
+      end
     else
-      render :new, status: :unprocessable_content
+      respond_to do |format|
+        format.html { redirect_to snippets_path, alert: @snippet.errors.full_messages.to_sentence }
+        format.json { render json: { code: "invalid_input" }, status: :unprocessable_content }
+      end
     end
   end
 
@@ -32,16 +40,25 @@ class SnippetsController < ApplicationController
   def update
     @snippet = personal_snippet
     if @snippet.update(snippet_params)
-      redirect_to snippets_path, notice: "Snippet saved."
+      respond_to do |format|
+        format.html { redirect_to snippets_path, notice: "Snippet saved." }
+        format.json { render json: { entry: authoring_entry(@snippet) } }
+      end
     else
-      render :edit, status: :unprocessable_content
+      respond_to do |format|
+        format.html { redirect_to snippets_path, alert: @snippet.errors.full_messages.to_sentence }
+        format.json { render json: { code: "invalid_input" }, status: :unprocessable_content }
+      end
     end
   end
 
   def destroy
     @snippet = personal_snippet
     @snippet.destroy!
-    redirect_to snippets_path, notice: "Snippet deleted."
+    respond_to do |format|
+      format.html { redirect_to snippets_path, notice: "Snippet deleted." }
+      format.json { head :no_content }
+    end
   end
 
   private
@@ -52,5 +69,9 @@ class SnippetsController < ApplicationController
 
   def snippet_params
     params.require(:snippet).permit(:name, :trigger, :description, :category, :body)
+  end
+
+  def authoring_entry(snippet)
+    snippet.attributes.slice("id", "name", "trigger", "description", "category", "body", "built_in")
   end
 end

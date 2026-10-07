@@ -1,5 +1,7 @@
 import { Controller } from "@hotwired/stimulus"
-import { editorFor } from "controllers/editor_controller"
+import { editorFor } from "lib/editor_controller_lookup"
+import { enableVisualModeAfterPreview, enableVisualModeFromInstalledPreview } from "lib/editor_view"
+import { setProjectionBlockEditable } from "lib/projection_editability"
 import { markdownForVisibleText, renderInlineMath, sourceOffsetForVisiblePosition } from "controllers/editor_markdown"
 import {
   moveCaretBetweenBlocks,
@@ -9,7 +11,7 @@ import {
   visibleOffsetAtPoint,
   visibleOffsetForSourceOffset
 } from "controllers/editor_caret"
-import { deRenderMath, finishMathBeforeEnter, handleMathClick, handleMathKeydown, syncActiveMath } from "controllers/editor_math"
+import { createActiveMathSpan, deRenderMath, finishMathBeforeEnter, handleMathClick, handleMathKeydown, syncActiveMath } from "controllers/editor_math"
 
 export default class extends Controller {
   static targets = ["projection"]
@@ -27,7 +29,10 @@ export default class extends Controller {
     this.element.addEventListener("elef:editor-ready", this.editorReady)
     this.modeChangedHandler = (event) => this.applyMode(event.detail.mode)
     this.element.addEventListener("elef:editor-mode-change", this.modeChangedHandler)
-    this.previewHandler = (event) => this.previewUpdated(event.detail.payload)
+    this.previewHandler = (event) => {
+      this.previewUpdated(event.detail.payload)
+      enableVisualModeAfterPreview(this.element, event.detail)
+    }
     this.element.addEventListener("elef:preview-updated", this.previewHandler)
     this.previewStaleHandler = (event) => this.previewStale(event.detail)
     this.element.addEventListener("elef:preview-stale", this.previewStaleHandler)
@@ -40,6 +45,10 @@ export default class extends Controller {
     this.element.addEventListener("elef:document-paginated", this.documentPaginatedHandler)
     this.projectionLinkHandler = (event) => this.projectionLinkClicked(event)
     this.element.addEventListener("click", this.projectionLinkHandler)
+    // Stimulus can connect this controller after the first preview event when
+    // a desktop deck is opened. Restore the toggle from the installed preview
+    // state so that a successful render cannot leave Visual permanently disabled.
+    enableVisualModeFromInstalledPreview(this.element)
     this.positionControlOutsidePointerDown = (event) => {
       const targetControl = event.target.closest?.(".document-block-position-control")
       this.projectionTarget.querySelectorAll(".document-block-position-control.is-open").forEach((control) => {
@@ -370,10 +379,14 @@ export default class extends Controller {
         : marker === "$$" ? "$$" : "\\]"
       const lineEnding = source.match(/\r\n|\r|\n/)?.[0] || "\n"
       const replacement = markdown + lineEnding + lineEnding + indentation + closingMarker
-      this.replaceAndFocus(blockElement, start, end, replacement, {
-        sourceOffset: start + markdown.length + lineEnding.length,
-        location: openingMathFence ? "math_expression_start" : "block_end"
-      })
+      if (openingMathFence) {
+        const [, indentation] = openingMathFence
+        const open = openingMathFence[2]
+        const close = open === "$$" ? "$$" : "\\]"
+        this.replaceAndEnterDisplayMath(blockElement, start, end, replacement, indentation, open, close, lineEnding)
+      } else {
+        this.replaceAndFocus(blockElement, start, end, replacement, { sourceOffset: start + markdown.length + lineEnding.length, location: "block_end" })
+      }
       return
     }
 
@@ -582,23 +595,11 @@ export default class extends Controller {
     const active = preserveActive ? document.activeElement?.closest?.("[data-editor-block-id]") : null
     this.projectionTarget.querySelectorAll(".document-editor-block[data-editor-block-id]").forEach((block) => {
       const editable = visual && (fresh || (preserveActive && block === active))
-      block.contentEditable = String(editable)
-      if (editable) {
-        block.setAttribute("role", "textbox")
-        block.setAttribute("aria-label", "Editable Markdown block")
-        block.setAttribute("aria-multiline", "true")
-        block.setAttribute("spellcheck", "true")
-        block.removeAttribute("aria-readonly")
-      } else {
-        block.removeAttribute("role")
-        block.removeAttribute("aria-label")
-        block.removeAttribute("aria-multiline")
-        block.removeAttribute("spellcheck")
-        block.setAttribute("aria-readonly", "true")
-      }
+      setProjectionBlockEditable(block, editable, "Editable Markdown block")
     })
     this.projectionTarget.querySelectorAll("[data-visual-editor-block-id]").forEach((control) => {
-      control.disabled = !visual || !this.map
+      const disabled = !visual || !this.map
+      if (control.disabled !== disabled) control.disabled = disabled
     })
   }
 
@@ -781,6 +782,35 @@ export default class extends Controller {
     this.shiftMapAfterEdit(from, to, replacement.length, blockElement.dataset.editorBlockId)
     this.editorController.replaceRange(replacement, from, to)
     blockElement.blur()
+  }
+
+  replaceAndEnterDisplayMath(blockElement, from, to, replacement, indentation, open, close, lineEnding) {
+    this.pendingCaret = null
+    this.shiftMapAfterEdit(from, to, replacement.length, blockElement.dataset.editorBlockId)
+
+    const content = blockElement.matches("[data-document-page-flow-content]")
+      ? blockElement
+      : blockElement.querySelector("[data-document-page-flow-content]") || blockElement
+    let paragraph = content.querySelector(":scope > p")
+    if (!paragraph) {
+      paragraph = document.createElement("p")
+      content.replaceChildren(paragraph)
+    }
+
+    const openingLength = indentation.length + open.length
+    const source = replacement.slice(openingLength, replacement.length - indentation.length - close.length)
+    const activeMath = createActiveMathSpan(replacement, { source, open, close, display: true })
+    paragraph.replaceChildren(activeMath)
+    blockElement.focus({ preventScroll: true })
+    const textNode = activeMath.firstChild
+    const offset = Math.min(openingLength + lineEnding.length, textNode.textContent.length)
+    window.getSelection()?.setBaseAndExtent(textNode, offset, textNode, offset)
+    this.lastProjectionCaret = { blockId: blockElement.dataset.editorBlockId, visibleOffset: 0 }
+
+    // Install the source after the active DOM and selection are ready. The
+    // preview's stale-projection handler then preserves this focused block,
+    // while the shifted map lets the first typed character round-trip safely.
+    this.editorController.replaceRange(replacement, from, to)
   }
 
   continueStructuredBlock(blockElement, region, kind, markdown, source, emptyMarker) {

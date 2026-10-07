@@ -89,6 +89,8 @@ module Source
     module_function
 
     def render(markdown, media_resolver: nil)
+      return Source::JavascriptRenderer.render(markdown, media_resolver: media_resolver).html_safe unless ENV["ELEF_RENDERER"] == "ruby"
+
       renderer = media_resolver ? renderer_with_media(media_resolver) : markdown_renderer
       source, expressions = protect_math(markdown.to_s)
       html = renderer.render(source)

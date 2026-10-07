@@ -16,7 +16,18 @@ module AuthoringRegistry
   }.freeze
 
   def for_editor(workspace: Workspace.default)
-    snippet_entries = Snippets::Catalog.for_editor.map do |snippet|
+    build_entries(
+      Snippets::Catalog.for_editor,
+      MathShortcuts::Catalog.for_editor(workspace: workspace)
+    )
+  end
+
+  def built_in_entries
+    build_entries(Snippets::Catalog::DEFAULTS, MathShortcuts::Catalog::DEFAULTS)
+  end
+
+  def build_entries(snippets, math_shortcuts)
+    snippet_entries = snippets.map do |snippet|
       namespace = snippet[:category] == "Elef DSL" ? ":" : "/"
       canonical_trigger = LEGACY_DIRECTIVE_TRIGGERS.fetch(snippet[:trigger], snippet[:trigger])
       aliases = canonical_trigger == snippet[:trigger] ? [] : [snippet[:trigger]]
@@ -37,7 +48,7 @@ module AuthoringRegistry
       }
     end
 
-    math_entries = MathShortcuts::Catalog.for_editor(workspace: workspace).map do |shortcut|
+    math_entries = math_shortcuts.map do |shortcut|
       behavior = shortcut[:prefix] == "." ? "transform" : "insert"
       placeholders = shortcut[:expansion].to_s.scan(/\$\{(\d+)(?::([^}]*))?\}/).map do |number, label|
         { position: number.to_i, label: label.to_s }
@@ -63,6 +74,7 @@ module AuthoringRegistry
 
     [*snippet_entries, *math_entries]
   end
+  private_class_method :build_entries
 
   def operator_class(name)
     case name

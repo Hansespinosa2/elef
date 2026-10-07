@@ -40,13 +40,22 @@ module WorkPreview
     preview_work.theme = attributes[:theme] if attributes.key?(:theme)
     preview_work.typography = attributes[:typography] if attributes.key?(:typography)
 
-    editor_map = Source::Document.editor_map(
+    editor_projection = if params[:projection].to_s == "editor"
+      helpers.shared_editor_projection(
+        preview_work,
+        source: source.gsub(/\r\n?/, "\n"),
+        title: title.presence || preview_work.default_title
+      )
+    end
+    editor_map = editor_projection&.fetch(:editor_map) || Source::Document.editor_map(
       source.gsub(/\r\n?/, "\n"),
       source_name: title.presence || preview_work.default_title,
       mode: preview_work.work_type.to_sym
     )
 
-    html = if preview_work.presentation?
+    html = if editor_projection
+      editor_projection[:html]
+    elsif preview_work.presentation?
       margin = preview_work.document.margin_settings
       settings = {
         "theme" => preview_work.theme,
@@ -87,7 +96,7 @@ module WorkPreview
       html: html,
       editor_map: editor_map,
       style: { theme: preview_work.theme_override, typography: preview_work.typography_override },
-      warnings: preview_work.preview_warnings,
+      warnings: editor_projection ? editor_projection[:warnings] : preview_work.preview_warnings,
       revision: work_preview_revision(work)
     }
   end

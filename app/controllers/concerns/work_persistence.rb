@@ -37,6 +37,8 @@ module WorkPersistence
       work_id: work.id,
       title: work.title,
       source: work.source,
+      theme: work.theme_override,
+      typography: work.typography_override,
       lock_version: work.lock_version,
       draft_digest: work.draft_digest,
       latest_checkpoint_id: result.checkpoint&.id || work.latest_checkpoint_id,

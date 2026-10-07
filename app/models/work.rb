@@ -245,7 +245,8 @@ class Work < ApplicationRecord
 
   def ensure_kind_details
     if document?
-      DocumentDetail.create!(work: self, document_key: SecureRandom.uuid)
+      portable_key = Source::Document.portable_document_link_metadata(source)[:document_key]
+      DocumentDetail.create!(work: self, document_key: portable_key.presence || SecureRandom.uuid)
     else
       detail = PresentationDetail.create!(work: self, settings: {})
       detail.update!(sample_id: sample_id) if respond_to?(:sample_id) && sample_id.present?

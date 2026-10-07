@@ -1,46 +1,41 @@
-<article id="<%= work_dom_id(work) %>" class="library-card rounded-2xl border border-[#ddd5c8] bg-[#fffdf8]">
-  <div class="library-card-media">
-    <div class="library-card-preview" aria-hidden="true" inert>
-      <%= render "library/work_preview", work: work %>
-    </div>
-    <a class="library-card-open" href="<%= work_edit_path(work) %>" aria-label="Edit <%= work.title %>"></a>
-    <div class="library-card-controls">
-      <%= link_to work_show_path(work), class: "library-card-preview-button", aria: { label: "Preview #{work.title}" } do %>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M10.2 8.9 15.6 12l-5.4 3.1V8.9Z"/></svg>
-        <span class="sr-only">Preview</span>
-      <% end %>
-      <details class="library-card-menu">
-        <summary class="library-card-menu-trigger" aria-label="More actions for <%= work.title %>"><span aria-hidden="true">...</span></summary>
-        <div class="library-card-menu-options">
-          <details class="library-card-submenu rename-menu">
-            <summary>Rename</summary>
-            <%= form_with scope: work_param_key(work), url: work_rename_path(work), method: :patch, class: "library-rename" do |form| %>
-              <%= form.text_field :title, id: "#{work_dom_id(work)}_rename_title", value: work.title, aria: { label: "Rename #{work.title}" } %>
-              <%= form.submit "Save title" %>
-            <% end %>
-          </details>
-          <% if work.presentation? %>
-            <details class="library-card-submenu fork-menu">
-              <summary>Fork</summary>
-              <div class="fork-menu-options">
-                <%= button_to "As continuation", fork_presentation_path(work), method: :post, params: { fork_type: "continuation" } %>
-                <%= button_to "As inspiration", fork_presentation_path(work), method: :post, params: { fork_type: "inspiration" } %>
-              </div>
-            </details>
-            <%= button_to "Present", publish_presentation_path(work), method: :post, form: { data: { turbo: false } } %>
-          <% end %>
-          <%= button_to "Delete", work_delete_path(work), method: :delete, form: { data: { turbo_confirm: "Delete #{work.title}?" } }, class: "is-danger" %>
-        </div>
-      </details>
-    </div>
-  </div>
-  <div class="library-card-body">
-    <p class="library-card-eyebrow eyebrow mb-1 text-xs font-extrabold uppercase tracking-[0.12em] text-[#6d4aff]"><%= work_type_label(work) %></p>
-    <h2 class="library-card-title mb-2 text-2xl font-bold"><%= link_to work.title, work_edit_path(work), class: "hover:underline" %></h2>
-    <p class="library-card-meta text-[#6f675c]">
-      <% if work.presentation? %><%= pluralize(work.slides.length, "slide") %> · <% else %>Continuous Markdown · <% end %>
-      Updated <%= time_ago_in_words(work.updated_at) %> ago
-    </p>
-    <% if work.presentation? && work.parent %><p class="library-card-note text-sm text-[#6f675c]">Forked from <%= work.parent.title %> · <%= work.fork_type %></p><% elsif work.presentation? && work.fork_parent_title.present? %><p class="library-card-note text-sm text-[#a63a2d]">Parent no longer available · <%= work.fork_type %></p><% end %>
-  </div>
-</article>
+<% kind = work.document? ? "document" : "presentation" %>
+<% library_card_controls = Source::JavascriptRenderer.library_card_controls({
+  title: work.title,
+  kind: kind,
+  previewUrl: work_show_path(work),
+  authenticityToken: form_authenticity_token,
+  rename: {
+    url: work_rename_path(work),
+    method: "patch",
+    name: "#{work_param_key(work)}[title]",
+    id: "#{work_dom_id(work)}_rename_title",
+    fields: [{ name: "library_view", value: @filter }]
+  },
+  fork: work.presentation? ? {
+    choices: [
+      { label: "As continuation", url: fork_presentation_path(work), method: "post", fields: [{ name: "fork_type", value: "continuation" }] },
+      { label: "As inspiration", url: fork_presentation_path(work), method: "post", fields: [{ name: "fork_type", value: "inspiration" }] }
+    ]
+  } : nil,
+  present: work.presentation? ? { url: publish_presentation_path(work), method: "post", turbo: false } : nil,
+  remove: {
+    url: work_delete_path(work),
+    method: "delete",
+    confirm: "Delete #{work.title}?"
+  }
+}) %>
+<% note = if work.presentation? && work.parent
+  "Forked from #{work.parent.title} · #{work.fork_type}"
+elsif work.presentation? && work.fork_parent_title.present?
+  "Parent no longer available · #{work.fork_type}"
+end %>
+<%= Source::JavascriptRenderer.library_card({
+  id: work_dom_id(work),
+  title: work.title,
+  kind: kind,
+  updatedAt: work.updated_at.iso8601(3),
+  editUrl: work_edit_path(work),
+  previewHtml: render("library/work_preview", work: work),
+  controlsHtml: library_card_controls,
+  note: note
+}).html_safe %>

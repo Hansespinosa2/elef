@@ -1,7 +1,7 @@
 import { StateEffect, StateField } from "@codemirror/state"
 import { syntaxTree } from "@codemirror/language"
 import { Decoration, EditorView, WidgetType } from "@codemirror/view"
-import "katex"
+import katex from "katex"
 import { MERMAID_ERROR_CLASS, renderMermaidSvg } from "controllers/mermaid_runtime"
 
 export const livePreviewMode = StateEffect.define()
@@ -31,8 +31,14 @@ class PreviewWidget extends WidgetType {
       image.alt = this.attributes.alt || ""
       const source = this.attributes.src || ""
       const assetDigest = source.match(/^elef-asset:([0-9a-f]{64})$/)?.[1]
-      const uploadUrl = document.querySelector("form[data-media-upload-url-value]")?.dataset.mediaUploadUrlValue
-      image.src = assetDigest && uploadUrl ? `${uploadUrl}/${assetDigest}` : source
+      const mediaForm = document.querySelector("form[data-media-upload-url-value]")
+      const assetBaseUrl = mediaForm?.dataset.mediaAssetBaseUrlValue
+      const uploadUrl = mediaForm?.dataset.mediaUploadUrlValue
+      if (assetDigest && assetBaseUrl) image.src = `${assetBaseUrl}/${assetDigest}`
+      else if (assetDigest && uploadUrl) image.src = `${uploadUrl}/${assetDigest}`
+      else if (assetBaseUrl && source.startsWith("images/")) {
+        image.src = `${assetBaseUrl}/path/${source.split("/").map(encodeURIComponent).join("/")}`
+      } else image.src = source
       image.title = this.attributes.alt || ""
       return image
     }
@@ -69,7 +75,7 @@ class PreviewWidget extends WidgetType {
     element.className = `cm-live-widget cm-live-widget-${this.kind}${this.kind === "quote-marker" ? " cm-live-syntax-marker" : ""}`
     if (this.kind === "math" || this.kind === "math-display") {
       try {
-        element.innerHTML = globalThis.katex.renderToString(this.value, {
+        element.innerHTML = katex.renderToString(this.value, {
           displayMode: this.kind === "math-display",
           throwOnError: true
         })

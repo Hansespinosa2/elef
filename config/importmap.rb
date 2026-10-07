@@ -3,7 +3,7 @@
 pin "application"
 pin "bug_report_events", to: "bug_report_events.js"
 pin "@hotwired/turbo-rails", to: "turbo.min.js"
-pin "@hotwired/stimulus", to: "stimulus.min.js"
+pin "@hotwired/stimulus", to: "stimulus.min.js" # @3.2.2
 pin "@hotwired/stimulus-loading", to: "stimulus-loading.js"
 pin_all_from "app/javascript/controllers", under: "controllers"
 pin "@codemirror/lang-markdown", to: "@codemirror--lang-markdown.js" # @6.5.2
@@ -31,5 +31,28 @@ pin "@replit/codemirror-vim-core", to: "@replit--codemirror-vim-core.js" # @0.1.
 pin "crelt" # @1.0.7
 pin "style-mod" # @4.1.4
 pin "w3c-keyname" # @2.2.8
-pin "katex", to: "katex.js" # Provided by the katex gem for consistent client-side live math
-pin "mermaid", to: "mermaid.min.js" # @11.17.2 Vendored self-contained build; exposes globalThis.mermaid like katex
+pin "katex", to: "katex.js" # @0.18.7 Shared Rails and desktop browser runtime
+pin "elef-renderer", to: "elef-renderer.bundle.js"
+pin "mermaid", to: "mermaid.min.js" # @11.17.2 Vendored self-contained build; exposes globalThis.mermaid
+
+pin "lib/editor_document_state", to: "lib/editor_document_state.js"
+pin "lib/vim_line_numbers", to: "lib/vim_line_numbers.js"
+pin "lib/document_graph_view", to: "lib/document_graph_view.js"
+pin "lib/document_map", to: "lib/document_map.js"
+pin "lib/editor_controller_lookup", to: "lib/editor_controller_lookup.js"
+pin "lib/editor_view", to: "lib/editor_view.js"
+pin "#elef/preview-sanitizer", to: "lib/preview_sanitizer.js"
+pin "lib/library_view", to: "lib/library_view.js"
+pin "lib/library_filter", to: "lib/library_filter.js"
+pin "lib/presentation_navigation", to: "lib/presentation_navigation.js"
+pin "lib/projection_editability", to: "lib/projection_editability.js"
+pin "lib/preview_request_body", to: "lib/preview_request_body.js"
+pin "lib/vim_settings_view", to: "lib/vim_settings_view.js"
+pin "lib/save_flow", to: "lib/save_flow.js"
+pin "lib/editor_source", to: "lib/editor_source.js"
+pin "#elef/authoring-settings", to: "lib/authoring_settings.js"
+pin "#elef/authoring-registry-write", to: "lib/authoring_registry_write.js"
+pin "lib/authoring_settings_dialog", to: "lib/authoring_settings_dialog.js"
+pin "lib/rails_authoring_settings_transport", to: "lib/rails_authoring_settings_transport.js"
+pin "lib/editor_ready", to: "lib/editor_ready.js"
+pin "lib/conflict_dialog", to: "lib/conflict_dialog.js"

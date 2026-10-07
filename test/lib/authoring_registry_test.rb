@@ -1,6 +1,16 @@
 require "test_helper"
 
 class AuthoringRegistryTest < ActiveSupport::TestCase
+  test "the checked-in editor registry matches the canonical built-in entries" do
+    artifact = Rails.root.join("app/javascript/data/default_authoring_registry.json")
+    checked_in = JSON.parse(File.read(artifact))
+    generated = JSON.parse(AuthoringRegistry.built_in_entries.to_json)
+
+    assert_equal generated, checked_in
+    assert checked_in.any? { |entry| entry["namespace"] == "/" && entry["trigger"] == "bold" }
+    assert checked_in.any? { |entry| entry["namespace"] == "@" && entry["aliases"].include?("alpha") }
+  end
+
   test "exposes canonical directive names with compatibility aliases and schemas" do
     registry = AuthoringRegistry.for_editor(workspace: Workspace.default)
 

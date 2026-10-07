@@ -1,4 +1,4 @@
-import "katex"
+import katex from "katex"
 
 const INLINE_MATH = /(?<!\\)\\\[([\s\S]+?)\\\]|(?<!\\)\$\$([\s\S]+?)\$\$(?!\$)|(?<!\\)\\\(([^\r\n]+?)\\\)|(?<![\\$])\$(?!\$|\s)([^$\r\n]+?)(?<!\s)\$(?!\$)/g
 
@@ -59,7 +59,6 @@ export function sourceOffsetForVisiblePosition(source, element, visiblePosition)
 // that its HTML and source map stay atomic. Project completed expressions into
 // the active block locally, keeping their Markdown delimiters in the source.
 export function renderInlineMath(element) {
-  const katex = globalThis.katex
   if (!element || typeof katex?.renderToString !== "function") return 0
 
   const textNodes = []

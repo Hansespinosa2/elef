@@ -7,34 +7,37 @@ class LibraryControllerTest < ActionDispatch::IntegrationTest
     get root_path
 
     assert_response :success
-    assert_select "h1", "Library"
-    assert_select "#document_#{document.id}"
-    assert_select "#presentation_#{presentations(:one).id}"
-    assert_select ".document-graph", count: 0
-    assert_select ".lineage-panel", count: 0
+    config = library_view_config
+    assert_equal "Library", config.fetch("title")
+    assert_equal "all", config.fetch("filter")
+    assert_select "template[data-library-view-slot='cards'] #document_#{document.id}"
+    assert_select "template[data-library-view-slot='cards'] #presentation_#{presentations(:one).id}"
+    assert_select "template[data-library-view-slot='graph'] .document-graph-panel", count: 0
+    assert_select "template[data-library-view-slot='lineage'] .lineage-panel", count: 0
     assert_select "a.app-nav-link[href='#{root_path}']", text: "Library"
-    assert_select "a.library-tab[href='#{root_path}']", text: "All"
-    assert_select "a.library-tab[href='#{documents_path}']", text: "Documents"
-    assert_select "a.library-tab[href='#{presentations_path}']", text: "Presentations"
+    assert_equal({ "all" => root_path, "documents" => documents_path, "presentations" => presentations_path }, config.fetch("routes"))
     assert_select "a[href*='type=']", count: 0
   end
 
-  test "canonical library tabs link to all, documents, and presentations collection paths" do
-    get root_path
-    assert_response :success
-    assert_select "nav.library-tabs" do
-      assert_select "a[href='#{root_path}']", text: "All"
-      assert_select "a[href='#{documents_path}']", text: "Documents"
-      assert_select "a[href='#{presentations_path}']", text: "Presentations"
+  test "library search is available on every collection view" do
+    [root_path, documents_path, presentations_path].each do |path|
+      get path
+
+      assert_response :success
+      assert_equal true, library_view_config.fetch("searchController")
+      assert_select "#library-view-mount[data-library-view-config]", 1
+      assert_select "template[data-library-view-slot='cards'] section.library-list", 1
     end
+  end
 
-    get documents_path
-    assert_response :success
-    assert_select "nav.library-tabs a[href='#{documents_path}'].is-active", text: "Documents"
-
-    get presentations_path
-    assert_response :success
-    assert_select "nav.library-tabs a[href='#{presentations_path}'].is-active", text: "Presentations"
+  test "canonical library tabs link to all, documents, and presentations collection paths" do
+    [[root_path, "all"], [documents_path, "documents"], [presentations_path, "presentations"]].each do |path, filter|
+      get path
+      assert_response :success
+      config = library_view_config
+      assert_equal filter, config.fetch("filter")
+      assert_equal({ "all" => root_path, "documents" => documents_path, "presentations" => presentations_path }, config.fetch("routes"))
+    end
   end
 
   test "every library view renders work as a preview card" do
@@ -83,7 +86,11 @@ class LibraryControllerTest < ActionDispatch::IntegrationTest
       assert_select "a.library-card-preview-button[href=?]", document_path(document)
       assert_select "summary.library-card-menu-trigger[aria-label=?]", "More actions for Quiet document"
       assert_select "form[action=?]", rename_document_path(document), 1
+      assert_select "form[action=?][method=post] input[name=_method][value=patch]", rename_document_path(document), 1
+      assert_select "form[action=?] input[name=authenticity_token]", rename_document_path(document), 1
+      assert_select "form[action=?] input[name=library_view]", rename_document_path(document), 1
       assert_select "form[action=?]", document_path(document), 1
+      assert_select "form[action=?][data-turbo-confirm=?] input[name=_method][value=delete]", document_path(document), "Delete Quiet document?", 1
       assert_select "form[action=?]", publish_presentation_path(document), 0
       assert_select "form[action=?]", fork_presentation_path(document), 0
       assert_select "h2.library-card-title a[href=?]", edit_document_path(document)
@@ -101,9 +108,15 @@ class LibraryControllerTest < ActionDispatch::IntegrationTest
       assert_select "a.library-card-preview-button[href=?]", presentation_path(presentation)
       assert_select "summary.library-card-menu-trigger[aria-label=?]", "More actions for Loud deck"
       assert_select "form[action=?]", rename_presentation_path(presentation), 1
+      assert_select "form[action=?] input[name=_method][value=patch]", rename_presentation_path(presentation), 1
+      assert_select "form[action=?] input[name=authenticity_token]", rename_presentation_path(presentation), 1
       assert_select "form[action=?]", presentation_path(presentation), 1
       assert_select "form[action=?]", publish_presentation_path(presentation), 1
       assert_select "form[action=?]", fork_presentation_path(presentation), 2
+      assert_select "form[action=?] input[name=fork_type][value=continuation]", fork_presentation_path(presentation), 1
+      assert_select "form[action=?] input[name=fork_type][value=inspiration]", fork_presentation_path(presentation), 1
+      assert_select "form[action=?][data-turbo=false]", publish_presentation_path(presentation), 1
+      assert_select "form[action=?][data-turbo-confirm=?] input[name=_method][value=delete]", presentation_path(presentation), "Delete Loud deck?", 1
       assert_select "h2.library-card-title a[href=?]", edit_presentation_path(presentation)
     end
   end
@@ -147,5 +160,11 @@ class LibraryControllerTest < ActionDispatch::IntegrationTest
     get search_path, params: { q: "" }
     assert_response :success
     assert_empty response.parsed_body["results"]
+  end
+
+  private
+
+  def library_view_config
+    JSON.parse(css_select("#library-view-mount").first["data-library-view-config"])
   end
 end

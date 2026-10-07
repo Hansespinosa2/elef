@@ -1,4 +1,6 @@
 import { Controller } from "@hotwired/stimulus"
+import { installPreviewHtml } from "lib/editor_view"
+import { buildPreviewRequestBody } from "lib/preview_request_body"
 
 export default class extends Controller {
   static targets = ["container", "warnings", "status", "retry"]
@@ -6,8 +8,15 @@ export default class extends Controller {
 
   connect() {
     this.element.previewController = this
+    this.requestFields = [
+      this.element.querySelector(".editor-input-proxy"),
+      this.element.querySelector(".editor-title-input"),
+      this.element.querySelector("[data-appearance-target='theme']"),
+      this.element.querySelector("[data-appearance-target='typography']")
+    ]
     this.timer = null
     this.requestId = 0
+    this.queuedRequestId = null
     this.active = true
     this.pendingProjection = null
     this.projectionFresh = true
@@ -36,7 +45,9 @@ export default class extends Controller {
   disconnect() {
     this.active = false
     clearTimeout(this.timer)
+    this.timer = null
     this.abortActiveRequest()
+    this.queuedRequestId = null
     this.element.removeEventListener("focusout", this.focusoutHandler)
     this.element.removeEventListener("elef:live-preview-error", this.localPreviewError)
     this.element.removeEventListener("elef:live-preview-recovered", this.localPreviewRecovered)
@@ -45,18 +56,22 @@ export default class extends Controller {
 
   schedule() {
     clearTimeout(this.timer)
-    this.abortActiveRequest()
+    this.timer = null
     this.pendingProjection = null
     const revision = ++this.requestId
     this.markProjectionStale(this.isEditingProjection())
     this.hideRetry()
     this.setStatus("Updating preview…")
-    this.timer = setTimeout(() => this.refresh(revision), this.delayValue)
+    this.timer = setTimeout(() => {
+      this.timer = null
+      this.refresh(revision)
+    }, this.delayValue)
   }
 
   retry(event) {
     event?.preventDefault()
     clearTimeout(this.timer)
+    this.timer = null
     this.pendingProjection = null
     const revision = ++this.requestId
     this.markProjectionStale(this.isEditingProjection())
@@ -66,16 +81,17 @@ export default class extends Controller {
   }
 
   async refresh(requestId = this.requestId) {
-    this.abortActiveRequest()
+    this.timer = null
+    if (this.requestController) {
+      if (this.active && requestId === this.requestId) this.queuedRequestId = requestId
+      return false
+    }
+    this.queuedRequestId = null
     const requestController = new AbortController()
     this.requestController = requestController
     let timedOut = false
     let timeout
-    const body = new FormData(this.element)
-    // Persisted Rails forms include _method=patch. Preview is deliberately a
-    // POST to a non-mutating endpoint, so do not let Rack method override it.
-    body.delete("_method")
-    body.delete("commit")
+    const body = buildPreviewRequestBody(this.requestFields)
     body.set("revision", requestId)
     body.set("projection", "editor")
     const sourceFieldName = [...body.keys()].find((name) => name.endsWith("[source]"))
@@ -90,7 +106,7 @@ export default class extends Controller {
         },
         signal: requestController.signal,
         body
-      })
+      }).then(async (response) => ({ response, payload: await response.json() }))
       const timeoutFailure = new Promise((_, reject) => {
         timeout = setTimeout(() => {
           timedOut = true
@@ -100,9 +116,8 @@ export default class extends Controller {
           reject(error)
         }, this.timeoutValue)
       })
-      const response = await Promise.race([request, timeoutFailure])
-      const payload = await response.json()
-      if (!this.active || requestId !== this.requestId) return
+      const { response, payload } = await Promise.race([request, timeoutFailure])
+      if (!this.active || requestId !== this.requestId) return false
 
       this.renderWarnings(payload.warnings || [])
       if (!response.ok || payload.html === null || payload.html === undefined) {
@@ -113,7 +128,7 @@ export default class extends Controller {
         this.element.dispatchEvent(new CustomEvent("elef:preview-updated", { bubbles: true, detail: { payload: unavailablePayload, response } }))
         this.showRetry()
         this.setStatus("Preview unavailable")
-        return
+        return false
       }
 
       if (!this.sameSource(this.currentSource(), requestedSource)) {
@@ -129,6 +144,7 @@ export default class extends Controller {
       }
 
       this.installProjection(payload, response, requestedSource)
+      return response.ok && payload.html !== null && payload.html !== undefined
     } catch (error) {
       if (error.name === "AbortError" && !timedOut) return
       if (!this.active || requestId !== this.requestId) return
@@ -140,9 +156,42 @@ export default class extends Controller {
       this.element.dispatchEvent(new CustomEvent("elef:preview-updated", { bubbles: true, detail: { payload: null, response: null, error } }))
       this.showRetry()
       this.setStatus("Preview unavailable")
+      return false
     } finally {
       clearTimeout(timeout)
       if (this.requestController === requestController) this.requestController = null
+      if (this.queuedRequestId !== this.requestId) this.queuedRequestId = null
+      if (
+        this.active &&
+        !this.requestController &&
+        !this.timer &&
+        this.queuedRequestId === this.requestId
+      ) {
+        const queuedRequestId = this.queuedRequestId
+        this.queuedRequestId = null
+        queueMicrotask(() => {
+          if (this.active && !this.requestController && !this.timer && queuedRequestId === this.requestId) {
+            void this.refresh(queuedRequestId)
+          }
+        })
+      } else if (
+        this.active &&
+        !this.requestController &&
+        !this.projectionFresh &&
+        !this.pendingProjection &&
+        !this.timer &&
+        this.hasRetryTarget &&
+        this.retryTarget.hidden &&
+        this.hasStatusTarget &&
+        this.statusTarget.textContent === "Updating preview…"
+      ) {
+        // If the latest request stopped before its handler settled, keep a retry
+        // path instead of leaving the stale preview in an updating state.
+        this.renderWarnings(["The preview request stopped before it finished. Your source is still safe; retry the preview."])
+        this.containerTarget.setAttribute("aria-busy", "false")
+        this.showRetry()
+        this.setStatus("Preview unavailable")
+      }
     }
   }
 
@@ -154,6 +203,14 @@ export default class extends Controller {
   isEditingProjection() {
     const activeEditable = document.activeElement?.closest?.("[contenteditable='true']")
     return Boolean(activeEditable && this.containerTarget.contains(activeEditable))
+  }
+
+  finishEditing() {
+    const activeEditable = document.activeElement?.closest?.("[contenteditable='true']")
+    if (!activeEditable || !this.containerTarget.contains(activeEditable)) return false
+
+    activeEditable.blur()
+    return true
   }
 
   applyPendingProjection() {
@@ -172,13 +229,16 @@ export default class extends Controller {
 
     const scrollLeft = this.containerTarget.scrollLeft
     const scrollTop = this.containerTarget.scrollTop
-    this.containerTarget.innerHTML = payload.html
+    recordPreviewTrace("preview-install-start")
+    installPreviewHtml(this.containerTarget, payload.html)
+    recordPreviewTrace("preview-install-ready")
     this.containerTarget.scrollLeft = scrollLeft
     this.containerTarget.scrollTop = scrollTop
     this.projectionFresh = true
     delete this.element.dataset.previewProjectionStale
     this.containerTarget.removeAttribute("aria-busy")
     this.element.dispatchEvent(new CustomEvent("elef:preview-updated", { bubbles: true, detail: { payload, response, source } }))
+    recordPreviewTrace("preview-events-ready")
     this.containerTarget.dispatchEvent(new CustomEvent("preview:updated", { bubbles: true }))
     this.hideRetry()
     this.setStatus("")
@@ -239,4 +299,11 @@ export default class extends Controller {
   hideRetry() {
     if (this.hasRetryTarget) this.retryTarget.hidden = true
   }
+}
+
+function recordPreviewTrace(stage) {
+  const trace = globalThis.__elefPreviewTrace
+  if (!Array.isArray(trace)) return
+  trace.push({ time: performance.now(), stage })
+  if (trace.length > 512) trace.shift()
 }

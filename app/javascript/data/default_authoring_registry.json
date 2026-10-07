@@ -1,0 +1,4976 @@
+[
+  {
+    "id": "default-bold",
+    "name": "Bold text",
+    "trigger": "bold",
+    "description": "Emphasized Markdown text",
+    "category": "Markdown",
+    "body": "**${1:text}**",
+    "built_in": true,
+    "namespace": "/",
+    "aliases": [],
+    "search_terms": [
+      "bold",
+      "Bold text",
+      "Emphasized Markdown text"
+    ],
+    "contexts": [
+      "source"
+    ],
+    "behavior": {
+      "type": "insert",
+      "template": "**${1:text}**",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": "text"
+        }
+      ]
+    },
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "/bold → **${1:text}**",
+    "argument_schema": null
+  },
+  {
+    "id": "default-image",
+    "name": "Image",
+    "trigger": "image",
+    "description": "Markdown image",
+    "category": "Markdown",
+    "body": "![${1:description}](${2:image URL})",
+    "built_in": true,
+    "namespace": "/",
+    "aliases": [],
+    "search_terms": [
+      "image",
+      "Image",
+      "Markdown image"
+    ],
+    "contexts": [
+      "source"
+    ],
+    "behavior": {
+      "type": "insert",
+      "template": "![${1:description}](${2:image URL})",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": "description"
+        },
+        {
+          "position": 2,
+          "label": "image URL"
+        }
+      ]
+    },
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "/image → ![${1:description}](${2:image URL})",
+    "argument_schema": null
+  },
+  {
+    "id": "default-table",
+    "name": "Table",
+    "trigger": "table",
+    "description": "Markdown table",
+    "category": "Markdown",
+    "body": "| ${1:Column 1} | ${2:Column 2} |\n| --- | --- |\n| ${3:Value 1} | ${4:Value 2} |",
+    "built_in": true,
+    "namespace": "/",
+    "aliases": [],
+    "search_terms": [
+      "table",
+      "Table",
+      "Markdown table"
+    ],
+    "contexts": [
+      "source"
+    ],
+    "behavior": {
+      "type": "insert",
+      "template": "| ${1:Column 1} | ${2:Column 2} |\n| --- | --- |\n| ${3:Value 1} | ${4:Value 2} |",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": "Column 1"
+        },
+        {
+          "position": 2,
+          "label": "Column 2"
+        },
+        {
+          "position": 3,
+          "label": "Value 1"
+        },
+        {
+          "position": 4,
+          "label": "Value 2"
+        }
+      ]
+    },
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "/table → | ${1:Column 1} | ${2:Column 2} |\n| --- | --- |\n| ${3:Value 1} | ${4:Value 2} |",
+    "argument_schema": null
+  },
+  {
+    "id": "default-code",
+    "name": "Code block",
+    "trigger": "code",
+    "description": "Fenced code block",
+    "category": "Markdown",
+    "body": "```\n${1:code}\n```",
+    "built_in": true,
+    "namespace": "/",
+    "aliases": [],
+    "search_terms": [
+      "code",
+      "Code block",
+      "Fenced code block"
+    ],
+    "contexts": [
+      "source"
+    ],
+    "behavior": {
+      "type": "insert",
+      "template": "```\n${1:code}\n```",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": "code"
+        }
+      ]
+    },
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "/code → ```\n${1:code}\n```",
+    "argument_schema": null
+  },
+  {
+    "id": "default-quote",
+    "name": "Quote",
+    "trigger": "quote",
+    "description": "Markdown blockquote",
+    "category": "Markdown",
+    "body": "> ${1:quoted text}",
+    "built_in": true,
+    "namespace": "/",
+    "aliases": [],
+    "search_terms": [
+      "quote",
+      "Quote",
+      "Markdown blockquote"
+    ],
+    "contexts": [
+      "source"
+    ],
+    "behavior": {
+      "type": "insert",
+      "template": "> ${1:quoted text}",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": "quoted text"
+        }
+      ]
+    },
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "/quote → > ${1:quoted text}",
+    "argument_schema": null
+  },
+  {
+    "id": "default-callout",
+    "name": "Callout",
+    "trigger": "callout",
+    "description": "Highlighted callout",
+    "category": "Markdown",
+    "body": "> [!NOTE]\n> ${1:Callout text}",
+    "built_in": true,
+    "namespace": "/",
+    "aliases": [],
+    "search_terms": [
+      "callout",
+      "Callout",
+      "Highlighted callout"
+    ],
+    "contexts": [
+      "source"
+    ],
+    "behavior": {
+      "type": "insert",
+      "template": "> [!NOTE]\n> ${1:Callout text}",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": "Callout text"
+        }
+      ]
+    },
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "/callout → > [!NOTE]\n> ${1:Callout text}",
+    "argument_schema": null
+  },
+  {
+    "id": "default-columns",
+    "name": "Columns",
+    "trigger": "columns",
+    "description": "Two-column layout",
+    "category": "Markdown",
+    "body": "| ${1:Left column} | ${2:Right column} |\n| --- | --- |",
+    "built_in": true,
+    "namespace": "/",
+    "aliases": [],
+    "search_terms": [
+      "columns",
+      "Columns",
+      "Two-column layout"
+    ],
+    "contexts": [
+      "source"
+    ],
+    "behavior": {
+      "type": "insert",
+      "template": "| ${1:Left column} | ${2:Right column} |\n| --- | --- |",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": "Left column"
+        },
+        {
+          "position": 2,
+          "label": "Right column"
+        }
+      ]
+    },
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "/columns → | ${1:Left column} | ${2:Right column} |\n| --- | --- |",
+    "argument_schema": null
+  },
+  {
+    "id": "default-slide",
+    "name": "Slide",
+    "trigger": "slide",
+    "description": "Start a new slide",
+    "category": "Markdown",
+    "body": "---\n\n# ${1:Slide title}\n\n${2:Content}",
+    "built_in": true,
+    "namespace": "/",
+    "aliases": [],
+    "search_terms": [
+      "slide",
+      "Slide",
+      "Start a new slide"
+    ],
+    "contexts": [
+      "source"
+    ],
+    "behavior": {
+      "type": "insert",
+      "template": "---\n\n# ${1:Slide title}\n\n${2:Content}",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": "Slide title"
+        },
+        {
+          "position": 2,
+          "label": "Content"
+        }
+      ]
+    },
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "/slide → ---\n\n# ${1:Slide title}\n\n${2:Content}",
+    "argument_schema": null
+  },
+  {
+    "id": "default-section",
+    "name": "Section",
+    "trigger": "section",
+    "description": "Markdown section heading",
+    "category": "Markdown",
+    "body": "## ${1:Section title}",
+    "built_in": true,
+    "namespace": "/",
+    "aliases": [],
+    "search_terms": [
+      "section",
+      "Section",
+      "Markdown section heading"
+    ],
+    "contexts": [
+      "source"
+    ],
+    "behavior": {
+      "type": "insert",
+      "template": "## ${1:Section title}",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": "Section title"
+        }
+      ]
+    },
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "/section → ## ${1:Section title}",
+    "argument_schema": null
+  },
+  {
+    "id": "default-footnote",
+    "name": "Footnote",
+    "trigger": "footnote",
+    "description": "Elef footnote directive",
+    "category": "Markdown",
+    "body": ":::footnote{${1:Footnote text}}",
+    "built_in": true,
+    "namespace": "/",
+    "aliases": [],
+    "search_terms": [
+      "footnote",
+      "Footnote",
+      "Elef footnote directive"
+    ],
+    "contexts": [
+      "source"
+    ],
+    "behavior": {
+      "type": "insert",
+      "template": ":::footnote{${1:Footnote text}}",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": "Footnote text"
+        }
+      ]
+    },
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "/footnote → :::footnote{${1:Footnote text}}",
+    "argument_schema": null
+  },
+  {
+    "id": "default-equation",
+    "name": "Equation",
+    "trigger": "equation",
+    "description": "Display math equation",
+    "category": "LaTeX",
+    "body": "$$\n${1:equation}\n$$",
+    "built_in": true,
+    "namespace": "/",
+    "aliases": [],
+    "search_terms": [
+      "equation",
+      "Equation",
+      "Display math equation"
+    ],
+    "contexts": [
+      "source"
+    ],
+    "behavior": {
+      "type": "insert",
+      "template": "$$\n${1:equation}\n$$",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": "equation"
+        }
+      ]
+    },
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "/equation → $$\n${1:equation}\n$$",
+    "argument_schema": null
+  },
+  {
+    "id": "default-diagram",
+    "name": "Diagram",
+    "trigger": "diagram",
+    "description": "Mermaid diagram",
+    "category": "Mermaid",
+    "body": "```mermaid\n${1:flowchart TD}\n  ${2:A --> B}\n```",
+    "built_in": true,
+    "namespace": "/",
+    "aliases": [],
+    "search_terms": [
+      "diagram",
+      "Diagram",
+      "Mermaid diagram"
+    ],
+    "contexts": [
+      "source"
+    ],
+    "behavior": {
+      "type": "mermaid_assist",
+      "template": "```mermaid\n${1:flowchart TD}\n  ${2:A --> B}\n```",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": "flowchart TD"
+        },
+        {
+          "position": 2,
+          "label": "A --> B"
+        }
+      ]
+    },
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "/diagram → ```mermaid\n${1:flowchart TD}\n  ${2:A --> B}\n```",
+    "argument_schema": null
+  },
+  {
+    "id": "default-list",
+    "name": "Bullet list",
+    "trigger": "list",
+    "description": "A short Markdown list",
+    "category": "Markdown",
+    "body": "- ${1:first item}\n- ${2:second item}",
+    "built_in": true,
+    "namespace": "/",
+    "aliases": [],
+    "search_terms": [
+      "list",
+      "Bullet list",
+      "A short Markdown list"
+    ],
+    "contexts": [
+      "source"
+    ],
+    "behavior": {
+      "type": "insert",
+      "template": "- ${1:first item}\n- ${2:second item}",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": "first item"
+        },
+        {
+          "position": 2,
+          "label": "second item"
+        }
+      ]
+    },
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "/list → - ${1:first item}\n- ${2:second item}",
+    "argument_schema": null
+  },
+  {
+    "id": "default-bit",
+    "name": "Bullet list (BIT)",
+    "trigger": "bit",
+    "description": "A short Markdown bullet list",
+    "category": "Markdown",
+    "body": "- ${1:first item}\n- ${2:second item}",
+    "built_in": true,
+    "namespace": "/",
+    "aliases": [],
+    "search_terms": [
+      "bit",
+      "Bullet list (BIT)",
+      "A short Markdown bullet list"
+    ],
+    "contexts": [
+      "source"
+    ],
+    "behavior": {
+      "type": "insert",
+      "template": "- ${1:first item}\n- ${2:second item}",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": "first item"
+        },
+        {
+          "position": 2,
+          "label": "second item"
+        }
+      ]
+    },
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "/bit → - ${1:first item}\n- ${2:second item}",
+    "argument_schema": null
+  },
+  {
+    "id": "default-ben",
+    "name": "Numbered list (BEN)",
+    "trigger": "ben",
+    "description": "A short Markdown numbered list",
+    "category": "Markdown",
+    "body": "1. ${1:first item}\n2. ${2:second item}",
+    "built_in": true,
+    "namespace": "/",
+    "aliases": [],
+    "search_terms": [
+      "ben",
+      "Numbered list (BEN)",
+      "A short Markdown numbered list"
+    ],
+    "contexts": [
+      "source"
+    ],
+    "behavior": {
+      "type": "insert",
+      "template": "1. ${1:first item}\n2. ${2:second item}",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": "first item"
+        },
+        {
+          "position": 2,
+          "label": "second item"
+        }
+      ]
+    },
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "/ben → 1. ${1:first item}\n2. ${2:second item}",
+    "argument_schema": null
+  },
+  {
+    "id": "default-bfr",
+    "name": "Slide frame",
+    "trigger": "bfr",
+    "description": "A titled presentation section",
+    "category": "Markdown",
+    "body": "## ${1:title}\n\n${2:content}",
+    "built_in": true,
+    "namespace": "/",
+    "aliases": [],
+    "search_terms": [
+      "bfr",
+      "Slide frame",
+      "A titled presentation section"
+    ],
+    "contexts": [
+      "source"
+    ],
+    "behavior": {
+      "type": "insert",
+      "template": "## ${1:title}\n\n${2:content}",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": "title"
+        },
+        {
+          "position": 2,
+          "label": "content"
+        }
+      ]
+    },
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "/bfr → ## ${1:title}\n\n${2:content}",
+    "argument_schema": null
+  },
+  {
+    "id": "default-bfi",
+    "name": "Figure",
+    "trigger": "bfi",
+    "description": "A Markdown image",
+    "category": "Markdown",
+    "body": "![${1:description}](${2:image URL})",
+    "built_in": true,
+    "namespace": "/",
+    "aliases": [],
+    "search_terms": [
+      "bfi",
+      "Figure",
+      "A Markdown image"
+    ],
+    "contexts": [
+      "source"
+    ],
+    "behavior": {
+      "type": "insert",
+      "template": "![${1:description}](${2:image URL})",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": "description"
+        },
+        {
+          "position": 2,
+          "label": "image URL"
+        }
+      ]
+    },
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "/bfi → ![${1:description}](${2:image URL})",
+    "argument_schema": null
+  },
+  {
+    "id": "default-bta",
+    "name": "Table",
+    "trigger": "bta",
+    "description": "A small Markdown table",
+    "category": "Markdown",
+    "body": "| ${1:Column 1} | ${2:Column 2} |\n| --- | --- |\n| ${3:Value 1} | ${4:Value 2} |",
+    "built_in": true,
+    "namespace": "/",
+    "aliases": [],
+    "search_terms": [
+      "bta",
+      "Table",
+      "A small Markdown table"
+    ],
+    "contexts": [
+      "source"
+    ],
+    "behavior": {
+      "type": "insert",
+      "template": "| ${1:Column 1} | ${2:Column 2} |\n| --- | --- |\n| ${3:Value 1} | ${4:Value 2} |",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": "Column 1"
+        },
+        {
+          "position": 2,
+          "label": "Column 2"
+        },
+        {
+          "position": 3,
+          "label": "Value 1"
+        },
+        {
+          "position": 4,
+          "label": "Value 2"
+        }
+      ]
+    },
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "/bta → | ${1:Column 1} | ${2:Column 2} |\n| --- | --- |\n| ${3:Value 1} | ${4:Value 2} |",
+    "argument_schema": null
+  },
+  {
+    "id": "default-beq",
+    "name": "Display equation",
+    "trigger": "beq",
+    "description": "A block LaTeX equation",
+    "category": "LaTeX",
+    "body": "$$\n${1:equation}\n$$",
+    "built_in": true,
+    "namespace": "/",
+    "aliases": [],
+    "search_terms": [
+      "beq",
+      "Display equation",
+      "A block LaTeX equation"
+    ],
+    "contexts": [
+      "source"
+    ],
+    "behavior": {
+      "type": "insert",
+      "template": "$$\n${1:equation}\n$$",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": "equation"
+        }
+      ]
+    },
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "/beq → $$\n${1:equation}\n$$",
+    "argument_schema": null
+  },
+  {
+    "id": "default-bseq",
+    "name": "Display equation (starred)",
+    "trigger": "bseq",
+    "description": "A block equation without numbering",
+    "category": "LaTeX",
+    "body": "$$\n${1:equation}\n$$",
+    "built_in": true,
+    "namespace": "/",
+    "aliases": [],
+    "search_terms": [
+      "bseq",
+      "Display equation (starred)",
+      "A block equation without numbering"
+    ],
+    "contexts": [
+      "source"
+    ],
+    "behavior": {
+      "type": "insert",
+      "template": "$$\n${1:equation}\n$$",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": "equation"
+        }
+      ]
+    },
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "/bseq → $$\n${1:equation}\n$$",
+    "argument_schema": null
+  },
+  {
+    "id": "default-bga",
+    "name": "Gathered equations (BGA)",
+    "trigger": "bga",
+    "description": "A block of gathered equations",
+    "category": "LaTeX",
+    "body": "$$\n\\begin{gathered}\n${1:equation}\n\\end{gathered}\n$$",
+    "built_in": true,
+    "namespace": "/",
+    "aliases": [],
+    "search_terms": [
+      "bga",
+      "Gathered equations (BGA)",
+      "A block of gathered equations"
+    ],
+    "contexts": [
+      "source"
+    ],
+    "behavior": {
+      "type": "insert",
+      "template": "$$\n\\begin{gathered}\n${1:equation}\n\\end{gathered}\n$$",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": "equation"
+        }
+      ]
+    },
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "/bga → $$\n\\begin{gathered}\n${1:equation}\n\\end{gathered}\n$$",
+    "argument_schema": null
+  },
+  {
+    "id": "default-bsga",
+    "name": "Gathered equations (starred)",
+    "trigger": "bsga",
+    "description": "A block of unnumbered gathered equations",
+    "category": "LaTeX",
+    "body": "$$\n\\begin{gathered}\n${1:equation}\n\\end{gathered}\n$$",
+    "built_in": true,
+    "namespace": "/",
+    "aliases": [],
+    "search_terms": [
+      "bsga",
+      "Gathered equations (starred)",
+      "A block of unnumbered gathered equations"
+    ],
+    "contexts": [
+      "source"
+    ],
+    "behavior": {
+      "type": "insert",
+      "template": "$$\n\\begin{gathered}\n${1:equation}\n\\end{gathered}\n$$",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": "equation"
+        }
+      ]
+    },
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "/bsga → $$\n\\begin{gathered}\n${1:equation}\n\\end{gathered}\n$$",
+    "argument_schema": null
+  },
+  {
+    "id": "default-bal",
+    "name": "Aligned equations (BAL)",
+    "trigger": "bal",
+    "description": "A block of aligned equations",
+    "category": "LaTeX",
+    "body": "$$\n\\begin{aligned}\n${1:left} & = ${2:right}\\\\\n${3:next line}\n\\end{aligned}\n$$",
+    "built_in": true,
+    "namespace": "/",
+    "aliases": [],
+    "search_terms": [
+      "bal",
+      "Aligned equations (BAL)",
+      "A block of aligned equations"
+    ],
+    "contexts": [
+      "source"
+    ],
+    "behavior": {
+      "type": "insert",
+      "template": "$$\n\\begin{aligned}\n${1:left} & = ${2:right}\\\\\n${3:next line}\n\\end{aligned}\n$$",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": "left"
+        },
+        {
+          "position": 2,
+          "label": "right"
+        },
+        {
+          "position": 3,
+          "label": "next line"
+        }
+      ]
+    },
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "/bal → $$\n\\begin{aligned}\n${1:left} & = ${2:right}\\\\\n${3:next line}\n\\end{aligned}\n$$",
+    "argument_schema": null
+  },
+  {
+    "id": "default-bsal",
+    "name": "Aligned equations (starred)",
+    "trigger": "bsal",
+    "description": "A block of unnumbered aligned equations",
+    "category": "LaTeX",
+    "body": "$$\n\\begin{aligned}\n${1:left} & = ${2:right}\\\\\n${3:next line}\n\\end{aligned}\n$$",
+    "built_in": true,
+    "namespace": "/",
+    "aliases": [],
+    "search_terms": [
+      "bsal",
+      "Aligned equations (starred)",
+      "A block of unnumbered aligned equations"
+    ],
+    "contexts": [
+      "source"
+    ],
+    "behavior": {
+      "type": "insert",
+      "template": "$$\n\\begin{aligned}\n${1:left} & = ${2:right}\\\\\n${3:next line}\n\\end{aligned}\n$$",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": "left"
+        },
+        {
+          "position": 2,
+          "label": "right"
+        },
+        {
+          "position": 3,
+          "label": "next line"
+        }
+      ]
+    },
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "/bsal → $$\n\\begin{aligned}\n${1:left} & = ${2:right}\\\\\n${3:next line}\n\\end{aligned}\n$$",
+    "argument_schema": null
+  },
+  {
+    "id": "default-bspl",
+    "name": "Split equation (BSPL)",
+    "trigger": "bspl",
+    "description": "A multi-line split equation",
+    "category": "LaTeX",
+    "body": "$$\n\\begin{split}\n${1:left} & = ${2:right}\\\\\n${3:next line}\n\\end{split}\n$$",
+    "built_in": true,
+    "namespace": "/",
+    "aliases": [],
+    "search_terms": [
+      "bspl",
+      "Split equation (BSPL)",
+      "A multi-line split equation"
+    ],
+    "contexts": [
+      "source"
+    ],
+    "behavior": {
+      "type": "insert",
+      "template": "$$\n\\begin{split}\n${1:left} & = ${2:right}\\\\\n${3:next line}\n\\end{split}\n$$",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": "left"
+        },
+        {
+          "position": 2,
+          "label": "right"
+        },
+        {
+          "position": 3,
+          "label": "next line"
+        }
+      ]
+    },
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "/bspl → $$\n\\begin{split}\n${1:left} & = ${2:right}\\\\\n${3:next line}\n\\end{split}\n$$",
+    "argument_schema": null
+  },
+  {
+    "id": "default-bcas",
+    "name": "Cases (BCAS)",
+    "trigger": "bcas",
+    "description": "A piecewise cases expression",
+    "category": "LaTeX",
+    "body": "$$\n\\begin{cases}\n${1:value} & ${2:condition}\\\\\n${3:otherwise} & ${4:condition}\n\\end{cases}\n$$",
+    "built_in": true,
+    "namespace": "/",
+    "aliases": [],
+    "search_terms": [
+      "bcas",
+      "Cases (BCAS)",
+      "A piecewise cases expression"
+    ],
+    "contexts": [
+      "source"
+    ],
+    "behavior": {
+      "type": "insert",
+      "template": "$$\n\\begin{cases}\n${1:value} & ${2:condition}\\\\\n${3:otherwise} & ${4:condition}\n\\end{cases}\n$$",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": "value"
+        },
+        {
+          "position": 2,
+          "label": "condition"
+        },
+        {
+          "position": 3,
+          "label": "otherwise"
+        },
+        {
+          "position": 4,
+          "label": "condition"
+        }
+      ]
+    },
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "/bcas → $$\n\\begin{cases}\n${1:value} & ${2:condition}\\\\\n${3:otherwise} & ${4:condition}\n\\end{cases}\n$$",
+    "argument_schema": null
+  },
+  {
+    "id": "default-bmat",
+    "name": "Matrix (BMAT)",
+    "trigger": "bmat",
+    "description": "A two-by-two matrix",
+    "category": "LaTeX",
+    "body": "$$\n\\begin{bmatrix}\n${1:a} & ${2:b}\\\\\n${3:c} & ${4:d}\n\\end{bmatrix}\n$$",
+    "built_in": true,
+    "namespace": "/",
+    "aliases": [],
+    "search_terms": [
+      "bmat",
+      "Matrix (BMAT)",
+      "A two-by-two matrix"
+    ],
+    "contexts": [
+      "source"
+    ],
+    "behavior": {
+      "type": "insert",
+      "template": "$$\n\\begin{bmatrix}\n${1:a} & ${2:b}\\\\\n${3:c} & ${4:d}\n\\end{bmatrix}\n$$",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": "a"
+        },
+        {
+          "position": 2,
+          "label": "b"
+        },
+        {
+          "position": 3,
+          "label": "c"
+        },
+        {
+          "position": 4,
+          "label": "d"
+        }
+      ]
+    },
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "/bmat → $$\n\\begin{bmatrix}\n${1:a} & ${2:b}\\\\\n${3:c} & ${4:d}\n\\end{bmatrix}\n$$",
+    "argument_schema": null
+  },
+  {
+    "id": "default-bpm",
+    "name": "Parenthesized matrix (BPM)",
+    "trigger": "bpm",
+    "description": "A two-by-two parenthesized matrix",
+    "category": "LaTeX",
+    "body": "$$\n\\begin{pmatrix}\n${1:a} & ${2:b}\\\\\n${3:c} & ${4:d}\n\\end{pmatrix}\n$$",
+    "built_in": true,
+    "namespace": "/",
+    "aliases": [],
+    "search_terms": [
+      "bpm",
+      "Parenthesized matrix (BPM)",
+      "A two-by-two parenthesized matrix"
+    ],
+    "contexts": [
+      "source"
+    ],
+    "behavior": {
+      "type": "insert",
+      "template": "$$\n\\begin{pmatrix}\n${1:a} & ${2:b}\\\\\n${3:c} & ${4:d}\n\\end{pmatrix}\n$$",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": "a"
+        },
+        {
+          "position": 2,
+          "label": "b"
+        },
+        {
+          "position": 3,
+          "label": "c"
+        },
+        {
+          "position": 4,
+          "label": "d"
+        }
+      ]
+    },
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "/bpm → $$\n\\begin{pmatrix}\n${1:a} & ${2:b}\\\\\n${3:c} & ${4:d}\n\\end{pmatrix}\n$$",
+    "argument_schema": null
+  },
+  {
+    "id": "default-bvm",
+    "name": "Determinant matrix (BVM)",
+    "trigger": "bvm",
+    "description": "A two-by-two determinant matrix",
+    "category": "LaTeX",
+    "body": "$$\n\\begin{vmatrix}\n${1:a} & ${2:b}\\\\\n${3:c} & ${4:d}\n\\end{vmatrix}\n$$",
+    "built_in": true,
+    "namespace": "/",
+    "aliases": [],
+    "search_terms": [
+      "bvm",
+      "Determinant matrix (BVM)",
+      "A two-by-two determinant matrix"
+    ],
+    "contexts": [
+      "source"
+    ],
+    "behavior": {
+      "type": "insert",
+      "template": "$$\n\\begin{vmatrix}\n${1:a} & ${2:b}\\\\\n${3:c} & ${4:d}\n\\end{vmatrix}\n$$",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": "a"
+        },
+        {
+          "position": 2,
+          "label": "b"
+        },
+        {
+          "position": 3,
+          "label": "c"
+        },
+        {
+          "position": 4,
+          "label": "d"
+        }
+      ]
+    },
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "/bvm → $$\n\\begin{vmatrix}\n${1:a} & ${2:b}\\\\\n${3:c} & ${4:d}\n\\end{vmatrix}\n$$",
+    "argument_schema": null
+  },
+  {
+    "id": "default-ieq",
+    "name": "Inline equation",
+    "trigger": "ieq",
+    "description": "An inline LaTeX equation",
+    "category": "LaTeX",
+    "body": "$\n${1:equation}\n$",
+    "built_in": true,
+    "namespace": "/",
+    "aliases": [],
+    "search_terms": [
+      "ieq",
+      "Inline equation",
+      "An inline LaTeX equation"
+    ],
+    "contexts": [
+      "source"
+    ],
+    "behavior": {
+      "type": "insert",
+      "template": "$\n${1:equation}\n$",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": "equation"
+        }
+      ]
+    },
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "/ieq → $\n${1:equation}\n$",
+    "argument_schema": null
+  },
+  {
+    "id": "default-frac",
+    "name": "Fraction",
+    "trigger": "frac",
+    "description": "A fraction with numerator and denominator",
+    "category": "LaTeX",
+    "body": "\\frac{${1:numerator}}{${2:denominator}}",
+    "built_in": true,
+    "namespace": "/",
+    "aliases": [],
+    "search_terms": [
+      "frac",
+      "Fraction",
+      "A fraction with numerator and denominator"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "behavior": {
+      "type": "insert",
+      "template": "\\frac{${1:numerator}}{${2:denominator}}",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": "numerator"
+        },
+        {
+          "position": 2,
+          "label": "denominator"
+        }
+      ]
+    },
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "/frac → \\frac{${1:numerator}}{${2:denominator}}",
+    "argument_schema": null
+  },
+  {
+    "id": "default-sqrt",
+    "name": "Square root",
+    "trigger": "sqrt",
+    "description": "A square root",
+    "category": "LaTeX",
+    "body": "\\sqrt{${1:expression}}",
+    "built_in": true,
+    "namespace": "/",
+    "aliases": [],
+    "search_terms": [
+      "sqrt",
+      "Square root",
+      "A square root"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "behavior": {
+      "type": "insert",
+      "template": "\\sqrt{${1:expression}}",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": "expression"
+        }
+      ]
+    },
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "/sqrt → \\sqrt{${1:expression}}",
+    "argument_schema": null
+  },
+  {
+    "id": "default-sup",
+    "name": "Superscript",
+    "trigger": "sup",
+    "description": "A superscript",
+    "category": "LaTeX",
+    "body": "^{${1:power}}",
+    "built_in": true,
+    "namespace": "/",
+    "aliases": [],
+    "search_terms": [
+      "sup",
+      "Superscript",
+      "A superscript"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "behavior": {
+      "type": "insert",
+      "template": "^{${1:power}}",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": "power"
+        }
+      ]
+    },
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "/sup → ^{${1:power}}",
+    "argument_schema": null
+  },
+  {
+    "id": "default-sub",
+    "name": "Subscript",
+    "trigger": "sub",
+    "description": "A subscript",
+    "category": "LaTeX",
+    "body": "_{${1:index}}",
+    "built_in": true,
+    "namespace": "/",
+    "aliases": [],
+    "search_terms": [
+      "sub",
+      "Subscript",
+      "A subscript"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "behavior": {
+      "type": "insert",
+      "template": "_{${1:index}}",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": "index"
+        }
+      ]
+    },
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "/sub → _{${1:index}}",
+    "argument_schema": null
+  },
+  {
+    "id": "default-mtext",
+    "name": "Text in math",
+    "trigger": "mtext",
+    "description": "Readable text inside math",
+    "category": "LaTeX",
+    "body": "\\text{${1:text}}",
+    "built_in": true,
+    "namespace": "/",
+    "aliases": [],
+    "search_terms": [
+      "mtext",
+      "Text in math",
+      "Readable text inside math"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "behavior": {
+      "type": "insert",
+      "template": "\\text{${1:text}}",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": "text"
+        }
+      ]
+    },
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "/mtext → \\text{${1:text}}",
+    "argument_schema": null
+  },
+  {
+    "id": "default-align",
+    "name": "Align directive",
+    "trigger": "align",
+    "description": "Align a block horizontally or vertically",
+    "category": "Elef DSL",
+    "body": ":::align{${1}}",
+    "built_in": true,
+    "namespace": ":",
+    "aliases": [],
+    "search_terms": [
+      "align",
+      "Align directive",
+      "Align a block horizontally or vertically"
+    ],
+    "contexts": [
+      "source"
+    ],
+    "behavior": {
+      "type": "insert",
+      "template": ":::align{${1}}",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": ""
+        }
+      ]
+    },
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": ":align → :::align{${1}}",
+    "argument_schema": {
+      "grammar": [
+        "alignment_or_position",
+        "vertical_position?"
+      ],
+      "argument_count": {
+        "minimum": 1,
+        "maximum": 2
+      },
+      "values": [
+        [
+          "left",
+          "center",
+          "right",
+          "top",
+          "middle",
+          "bottom"
+        ],
+        [
+          "top",
+          "middle",
+          "bottom"
+        ]
+      ]
+    }
+  },
+  {
+    "id": "default-sse",
+    "name": "Section directive",
+    "trigger": "section",
+    "description": "Create a section",
+    "category": "Elef DSL",
+    "body": ":::section{${1:section name}}",
+    "built_in": true,
+    "namespace": ":",
+    "aliases": [
+      "sse"
+    ],
+    "search_terms": [
+      "section",
+      "sse",
+      "Section directive",
+      "Create a section"
+    ],
+    "contexts": [
+      "source"
+    ],
+    "behavior": {
+      "type": "insert",
+      "template": ":::section{${1:section name}}",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": "section name"
+        }
+      ]
+    },
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": ":section → :::section{${1:section name}}",
+    "argument_schema": {
+      "grammar": [
+        "text"
+      ],
+      "argument_count": 1,
+      "values": []
+    }
+  },
+  {
+    "id": "default-sss",
+    "name": "Subsection directive",
+    "trigger": "subsection",
+    "description": "Create a subsection",
+    "category": "Elef DSL",
+    "body": ":::subsection{${1:subsection name}}",
+    "built_in": true,
+    "namespace": ":",
+    "aliases": [
+      "sss"
+    ],
+    "search_terms": [
+      "subsection",
+      "sss",
+      "Subsection directive",
+      "Create a subsection"
+    ],
+    "contexts": [
+      "source"
+    ],
+    "behavior": {
+      "type": "insert",
+      "template": ":::subsection{${1:subsection name}}",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": "subsection name"
+        }
+      ]
+    },
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": ":subsection → :::subsection{${1:subsection name}}",
+    "argument_schema": {
+      "grammar": [
+        "text"
+      ],
+      "argument_count": 1,
+      "values": []
+    }
+  },
+  {
+    "id": "default-foot",
+    "name": "Footnote directive",
+    "trigger": "footnote",
+    "description": "Add a footnote",
+    "category": "Elef DSL",
+    "body": ":::footnote{${1:footnote text}}",
+    "built_in": true,
+    "namespace": ":",
+    "aliases": [
+      "foot"
+    ],
+    "search_terms": [
+      "footnote",
+      "foot",
+      "Footnote directive",
+      "Add a footnote"
+    ],
+    "contexts": [
+      "source"
+    ],
+    "behavior": {
+      "type": "insert",
+      "template": ":::footnote{${1:footnote text}}",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": "footnote text"
+        }
+      ]
+    },
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": ":footnote → :::footnote{${1:footnote text}}",
+    "argument_schema": {
+      "grammar": [
+        "text"
+      ],
+      "argument_count": 1,
+      "values": []
+    }
+  },
+  {
+    "id": "default-bold",
+    "name": "Bold",
+    "aliases": [
+      "b"
+    ],
+    "prefix": ".",
+    "description": "Bold mathematical symbols",
+    "expansion": "\\mathbf{${1}}",
+    "built_in": true,
+    "namespace": ".",
+    "trigger": "b",
+    "search_terms": [
+      "Bold",
+      "b",
+      "Bold mathematical symbols"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": [
+      "space",
+      "tab",
+      "enter",
+      "cursor_leaves_chain",
+      "editor_blur",
+      "save"
+    ],
+    "documentation_example": ".b → \\mathbf{${1}}",
+    "behavior": {
+      "type": "transform",
+      "template": "\\mathbf{${1}}",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": ""
+        }
+      ],
+      "operator_class": "style",
+      "accepted_operand": "atomic_math_object",
+      "serializer": "\\mathbf{${1}}"
+    }
+  },
+  {
+    "id": "default-calligraphic",
+    "name": "Calligraphic",
+    "aliases": [
+      "cal",
+      "calligraphic"
+    ],
+    "prefix": ".",
+    "description": "Calligraphic mathematical symbols",
+    "expansion": "\\mathcal{${1}}",
+    "built_in": true,
+    "namespace": ".",
+    "trigger": "cal",
+    "search_terms": [
+      "Calligraphic",
+      "cal",
+      "calligraphic",
+      "Calligraphic mathematical symbols"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": [
+      "space",
+      "tab",
+      "enter",
+      "cursor_leaves_chain",
+      "editor_blur",
+      "save"
+    ],
+    "documentation_example": ".cal → \\mathcal{${1}}",
+    "behavior": {
+      "type": "transform",
+      "template": "\\mathcal{${1}}",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": ""
+        }
+      ],
+      "operator_class": "style",
+      "accepted_operand": "atomic_math_object",
+      "serializer": "\\mathcal{${1}}"
+    }
+  },
+  {
+    "id": "default-roman",
+    "name": "Roman",
+    "aliases": [
+      "rm",
+      "roman"
+    ],
+    "prefix": ".",
+    "description": "Upright roman type in math",
+    "expansion": "\\mathrm{${1}}",
+    "built_in": true,
+    "namespace": ".",
+    "trigger": "rm",
+    "search_terms": [
+      "Roman",
+      "rm",
+      "roman",
+      "Upright roman type in math"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": [
+      "space",
+      "tab",
+      "enter",
+      "cursor_leaves_chain",
+      "editor_blur",
+      "save"
+    ],
+    "documentation_example": ".rm → \\mathrm{${1}}",
+    "behavior": {
+      "type": "transform",
+      "template": "\\mathrm{${1}}",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": ""
+        }
+      ],
+      "operator_class": "style",
+      "accepted_operand": "atomic_math_object",
+      "serializer": "\\mathrm{${1}}"
+    }
+  },
+  {
+    "id": "default-blackboard",
+    "name": "Blackboard bold",
+    "aliases": [
+      "bb"
+    ],
+    "prefix": ".",
+    "description": "Use blackboard bold typography",
+    "expansion": "\\mathbb{${1}}",
+    "built_in": true,
+    "namespace": ".",
+    "trigger": "bb",
+    "search_terms": [
+      "Blackboard bold",
+      "bb",
+      "Use blackboard bold typography"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": [
+      "space",
+      "tab",
+      "enter",
+      "cursor_leaves_chain",
+      "editor_blur",
+      "save"
+    ],
+    "documentation_example": ".bb → \\mathbb{${1}}",
+    "behavior": {
+      "type": "transform",
+      "template": "\\mathbb{${1}}",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": ""
+        }
+      ],
+      "operator_class": "style",
+      "accepted_operand": "atomic_math_object",
+      "serializer": "\\mathbb{${1}}"
+    }
+  },
+  {
+    "id": "default-transpose",
+    "name": "Transpose",
+    "aliases": [
+      "t",
+      "T",
+      "transpose"
+    ],
+    "prefix": ".",
+    "description": "Add a mathematical transpose",
+    "expansion": "${1}^{\\mathsf{T}}",
+    "built_in": true,
+    "namespace": ".",
+    "trigger": "t",
+    "search_terms": [
+      "Transpose",
+      "t",
+      "T",
+      "transpose",
+      "Add a mathematical transpose"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": [
+      "space",
+      "tab",
+      "enter",
+      "cursor_leaves_chain",
+      "editor_blur",
+      "save"
+    ],
+    "documentation_example": ".t → ${1}^{\\mathsf{T}}",
+    "behavior": {
+      "type": "transform",
+      "template": "${1}^{\\mathsf{T}}",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": ""
+        }
+      ],
+      "operator_class": "mathematical_postfix",
+      "accepted_operand": "atomic_math_object",
+      "serializer": "${1}^{\\mathsf{T}}"
+    }
+  },
+  {
+    "id": "default-vector",
+    "name": "Vector",
+    "aliases": [
+      "vec",
+      "v",
+      "vector"
+    ],
+    "prefix": ".",
+    "description": "Put a vector arrow over a symbol",
+    "expansion": "\\vec{${1}}",
+    "built_in": true,
+    "namespace": ".",
+    "trigger": "vec",
+    "search_terms": [
+      "Vector",
+      "vec",
+      "v",
+      "vector",
+      "Put a vector arrow over a symbol"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": [
+      "space",
+      "tab",
+      "enter",
+      "cursor_leaves_chain",
+      "editor_blur",
+      "save"
+    ],
+    "documentation_example": ".vec → \\vec{${1}}",
+    "behavior": {
+      "type": "transform",
+      "template": "\\vec{${1}}",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": ""
+        }
+      ],
+      "operator_class": "decoration",
+      "accepted_operand": "atomic_math_object",
+      "serializer": "\\vec{${1}}"
+    }
+  },
+  {
+    "id": "default-bar",
+    "name": "Bar",
+    "aliases": [
+      "bar"
+    ],
+    "prefix": ".",
+    "description": "Put a bar over a symbol",
+    "expansion": "\\bar{${1}}",
+    "built_in": true,
+    "namespace": ".",
+    "trigger": "bar",
+    "search_terms": [
+      "Bar",
+      "bar",
+      "Put a bar over a symbol"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": [
+      "space",
+      "tab",
+      "enter",
+      "cursor_leaves_chain",
+      "editor_blur",
+      "save"
+    ],
+    "documentation_example": ".bar → \\bar{${1}}",
+    "behavior": {
+      "type": "transform",
+      "template": "\\bar{${1}}",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": ""
+        }
+      ],
+      "operator_class": "decoration",
+      "accepted_operand": "atomic_math_object",
+      "serializer": "\\bar{${1}}"
+    }
+  },
+  {
+    "id": "default-hat",
+    "name": "Hat",
+    "aliases": [
+      "hat"
+    ],
+    "prefix": ".",
+    "description": "Put a hat over an atomic symbol",
+    "expansion": "\\hat{${1}}",
+    "built_in": true,
+    "namespace": ".",
+    "trigger": "hat",
+    "search_terms": [
+      "Hat",
+      "hat",
+      "Put a hat over an atomic symbol"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": [
+      "space",
+      "tab",
+      "enter",
+      "cursor_leaves_chain",
+      "editor_blur",
+      "save"
+    ],
+    "documentation_example": ".hat → \\hat{${1}}",
+    "behavior": {
+      "type": "transform",
+      "template": "\\hat{${1}}",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": ""
+        }
+      ],
+      "operator_class": "decoration",
+      "accepted_operand": "atomic_math_object",
+      "serializer": "\\hat{${1}}"
+    }
+  },
+  {
+    "id": "default-tilde",
+    "name": "Tilde",
+    "aliases": [
+      "tilde"
+    ],
+    "prefix": ".",
+    "description": "Put a tilde over an atomic symbol",
+    "expansion": "\\tilde{${1}}",
+    "built_in": true,
+    "namespace": ".",
+    "trigger": "tilde",
+    "search_terms": [
+      "Tilde",
+      "tilde",
+      "Put a tilde over an atomic symbol"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": [
+      "space",
+      "tab",
+      "enter",
+      "cursor_leaves_chain",
+      "editor_blur",
+      "save"
+    ],
+    "documentation_example": ".tilde → \\tilde{${1}}",
+    "behavior": {
+      "type": "transform",
+      "template": "\\tilde{${1}}",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": ""
+        }
+      ],
+      "operator_class": "decoration",
+      "accepted_operand": "atomic_math_object",
+      "serializer": "\\tilde{${1}}"
+    }
+  },
+  {
+    "id": "default-inverse",
+    "name": "Inverse",
+    "aliases": [
+      "inv",
+      "inverse"
+    ],
+    "prefix": ".",
+    "description": "Take the inverse of an object",
+    "expansion": "${1}^{-1}",
+    "built_in": true,
+    "namespace": ".",
+    "trigger": "inv",
+    "search_terms": [
+      "Inverse",
+      "inv",
+      "inverse",
+      "Take the inverse of an object"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": [
+      "space",
+      "tab",
+      "enter",
+      "cursor_leaves_chain",
+      "editor_blur",
+      "save"
+    ],
+    "documentation_example": ".inv → ${1}^{-1}",
+    "behavior": {
+      "type": "transform",
+      "template": "${1}^{-1}",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": ""
+        }
+      ],
+      "operator_class": "mathematical_postfix",
+      "accepted_operand": "atomic_math_object",
+      "serializer": "${1}^{-1}"
+    }
+  },
+  {
+    "id": "default-alpha",
+    "name": "Alpha",
+    "aliases": [
+      "a",
+      "alpha"
+    ],
+    "prefix": "@",
+    "description": "Greek alpha",
+    "expansion": "\\alpha",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "a",
+    "search_terms": [
+      "Alpha",
+      "a",
+      "alpha",
+      "Greek alpha"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@a → \\alpha",
+    "behavior": {
+      "type": "insert",
+      "template": "\\alpha",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\alpha"
+    }
+  },
+  {
+    "id": "default-beta",
+    "name": "Beta",
+    "aliases": [
+      "b",
+      "beta"
+    ],
+    "prefix": "@",
+    "description": "Greek beta",
+    "expansion": "\\beta",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "b",
+    "search_terms": [
+      "Beta",
+      "b",
+      "beta",
+      "Greek beta"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@b → \\beta",
+    "behavior": {
+      "type": "insert",
+      "template": "\\beta",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\beta"
+    }
+  },
+  {
+    "id": "default-gamma",
+    "name": "Gamma",
+    "aliases": [
+      "g",
+      "gamma"
+    ],
+    "prefix": "@",
+    "description": "Greek gamma",
+    "expansion": "\\gamma",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "g",
+    "search_terms": [
+      "Gamma",
+      "g",
+      "gamma",
+      "Greek gamma"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@g → \\gamma",
+    "behavior": {
+      "type": "insert",
+      "template": "\\gamma",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\gamma"
+    }
+  },
+  {
+    "id": "default-delta",
+    "name": "Delta",
+    "aliases": [
+      "d",
+      "delta"
+    ],
+    "prefix": "@",
+    "description": "Greek delta",
+    "expansion": "\\delta",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "d",
+    "search_terms": [
+      "Delta",
+      "d",
+      "delta",
+      "Greek delta"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@d → \\delta",
+    "behavior": {
+      "type": "insert",
+      "template": "\\delta",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\delta"
+    }
+  },
+  {
+    "id": "default-epsilon",
+    "name": "Epsilon",
+    "aliases": [
+      "e",
+      "epsilon"
+    ],
+    "prefix": "@",
+    "description": "Greek epsilon",
+    "expansion": "\\epsilon",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "e",
+    "search_terms": [
+      "Epsilon",
+      "e",
+      "epsilon",
+      "Greek epsilon"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@e → \\epsilon",
+    "behavior": {
+      "type": "insert",
+      "template": "\\epsilon",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\epsilon"
+    }
+  },
+  {
+    "id": "default-zeta",
+    "name": "Zeta",
+    "aliases": [
+      "z",
+      "zeta"
+    ],
+    "prefix": "@",
+    "description": "Greek zeta",
+    "expansion": "\\zeta",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "z",
+    "search_terms": [
+      "Zeta",
+      "z",
+      "zeta",
+      "Greek zeta"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@z → \\zeta",
+    "behavior": {
+      "type": "insert",
+      "template": "\\zeta",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\zeta"
+    }
+  },
+  {
+    "id": "default-eta",
+    "name": "Eta",
+    "aliases": [
+      "h",
+      "eta"
+    ],
+    "prefix": "@",
+    "description": "Greek eta",
+    "expansion": "\\eta",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "h",
+    "search_terms": [
+      "Eta",
+      "h",
+      "eta",
+      "Greek eta"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@h → \\eta",
+    "behavior": {
+      "type": "insert",
+      "template": "\\eta",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\eta"
+    }
+  },
+  {
+    "id": "default-theta",
+    "name": "Theta",
+    "aliases": [
+      "q",
+      "th",
+      "theta"
+    ],
+    "prefix": "@",
+    "description": "Greek theta",
+    "expansion": "\\theta",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "q",
+    "search_terms": [
+      "Theta",
+      "q",
+      "th",
+      "theta",
+      "Greek theta"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@q → \\theta",
+    "behavior": {
+      "type": "insert",
+      "template": "\\theta",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\theta"
+    }
+  },
+  {
+    "id": "default-iota",
+    "name": "Iota",
+    "aliases": [
+      "i",
+      "iota"
+    ],
+    "prefix": "@",
+    "description": "Greek iota",
+    "expansion": "\\iota",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "i",
+    "search_terms": [
+      "Iota",
+      "i",
+      "iota",
+      "Greek iota"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@i → \\iota",
+    "behavior": {
+      "type": "insert",
+      "template": "\\iota",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\iota"
+    }
+  },
+  {
+    "id": "default-kappa",
+    "name": "Kappa",
+    "aliases": [
+      "k",
+      "kappa"
+    ],
+    "prefix": "@",
+    "description": "Greek kappa",
+    "expansion": "\\kappa",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "k",
+    "search_terms": [
+      "Kappa",
+      "k",
+      "kappa",
+      "Greek kappa"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@k → \\kappa",
+    "behavior": {
+      "type": "insert",
+      "template": "\\kappa",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\kappa"
+    }
+  },
+  {
+    "id": "default-lambda",
+    "name": "Lambda",
+    "aliases": [
+      "l",
+      "lambda"
+    ],
+    "prefix": "@",
+    "description": "Greek lambda",
+    "expansion": "\\lambda",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "l",
+    "search_terms": [
+      "Lambda",
+      "l",
+      "lambda",
+      "Greek lambda"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@l → \\lambda",
+    "behavior": {
+      "type": "insert",
+      "template": "\\lambda",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\lambda"
+    }
+  },
+  {
+    "id": "default-mu",
+    "name": "Mu",
+    "aliases": [
+      "m",
+      "mu"
+    ],
+    "prefix": "@",
+    "description": "Greek mu",
+    "expansion": "\\mu",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "m",
+    "search_terms": [
+      "Mu",
+      "m",
+      "mu",
+      "Greek mu"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@m → \\mu",
+    "behavior": {
+      "type": "insert",
+      "template": "\\mu",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\mu"
+    }
+  },
+  {
+    "id": "default-nu",
+    "name": "Nu",
+    "aliases": [
+      "n",
+      "nu"
+    ],
+    "prefix": "@",
+    "description": "Greek nu",
+    "expansion": "\\nu",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "n",
+    "search_terms": [
+      "Nu",
+      "n",
+      "nu",
+      "Greek nu"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@n → \\nu",
+    "behavior": {
+      "type": "insert",
+      "template": "\\nu",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\nu"
+    }
+  },
+  {
+    "id": "default-xi",
+    "name": "Xi",
+    "aliases": [
+      "x",
+      "xi"
+    ],
+    "prefix": "@",
+    "description": "Greek xi",
+    "expansion": "\\xi",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "x",
+    "search_terms": [
+      "Xi",
+      "x",
+      "xi",
+      "Greek xi"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@x → \\xi",
+    "behavior": {
+      "type": "insert",
+      "template": "\\xi",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\xi"
+    }
+  },
+  {
+    "id": "default-pi",
+    "name": "Pi",
+    "aliases": [
+      "p",
+      "pi"
+    ],
+    "prefix": "@",
+    "description": "Greek pi",
+    "expansion": "\\pi",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "p",
+    "search_terms": [
+      "Pi",
+      "p",
+      "pi",
+      "Greek pi"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@p → \\pi",
+    "behavior": {
+      "type": "insert",
+      "template": "\\pi",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\pi"
+    }
+  },
+  {
+    "id": "default-rho",
+    "name": "Rho",
+    "aliases": [
+      "r",
+      "rho"
+    ],
+    "prefix": "@",
+    "description": "Greek rho",
+    "expansion": "\\rho",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "r",
+    "search_terms": [
+      "Rho",
+      "r",
+      "rho",
+      "Greek rho"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@r → \\rho",
+    "behavior": {
+      "type": "insert",
+      "template": "\\rho",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\rho"
+    }
+  },
+  {
+    "id": "default-sigma",
+    "name": "Sigma",
+    "aliases": [
+      "s",
+      "sigma"
+    ],
+    "prefix": "@",
+    "description": "Greek sigma",
+    "expansion": "\\sigma",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "s",
+    "search_terms": [
+      "Sigma",
+      "s",
+      "sigma",
+      "Greek sigma"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@s → \\sigma",
+    "behavior": {
+      "type": "insert",
+      "template": "\\sigma",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\sigma"
+    }
+  },
+  {
+    "id": "default-tau",
+    "name": "Tau",
+    "aliases": [
+      "t",
+      "tau"
+    ],
+    "prefix": "@",
+    "description": "Greek tau",
+    "expansion": "\\tau",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "t",
+    "search_terms": [
+      "Tau",
+      "t",
+      "tau",
+      "Greek tau"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@t → \\tau",
+    "behavior": {
+      "type": "insert",
+      "template": "\\tau",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\tau"
+    }
+  },
+  {
+    "id": "default-upsilon",
+    "name": "Upsilon",
+    "aliases": [
+      "u",
+      "upsilon"
+    ],
+    "prefix": "@",
+    "description": "Greek upsilon",
+    "expansion": "\\upsilon",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "u",
+    "search_terms": [
+      "Upsilon",
+      "u",
+      "upsilon",
+      "Greek upsilon"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@u → \\upsilon",
+    "behavior": {
+      "type": "insert",
+      "template": "\\upsilon",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\upsilon"
+    }
+  },
+  {
+    "id": "default-phi",
+    "name": "Phi",
+    "aliases": [
+      "f",
+      "ph",
+      "phi"
+    ],
+    "prefix": "@",
+    "description": "Greek phi",
+    "expansion": "\\phi",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "f",
+    "search_terms": [
+      "Phi",
+      "f",
+      "ph",
+      "phi",
+      "Greek phi"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@f → \\phi",
+    "behavior": {
+      "type": "insert",
+      "template": "\\phi",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\phi"
+    }
+  },
+  {
+    "id": "default-chi",
+    "name": "Chi",
+    "aliases": [
+      "c",
+      "chi"
+    ],
+    "prefix": "@",
+    "description": "Greek chi",
+    "expansion": "\\chi",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "c",
+    "search_terms": [
+      "Chi",
+      "c",
+      "chi",
+      "Greek chi"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@c → \\chi",
+    "behavior": {
+      "type": "insert",
+      "template": "\\chi",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\chi"
+    }
+  },
+  {
+    "id": "default-psi",
+    "name": "Psi",
+    "aliases": [
+      "y",
+      "psi"
+    ],
+    "prefix": "@",
+    "description": "Greek psi",
+    "expansion": "\\psi",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "y",
+    "search_terms": [
+      "Psi",
+      "y",
+      "psi",
+      "Greek psi"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@y → \\psi",
+    "behavior": {
+      "type": "insert",
+      "template": "\\psi",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\psi"
+    }
+  },
+  {
+    "id": "default-omega",
+    "name": "Omega",
+    "aliases": [
+      "o",
+      "w",
+      "omega"
+    ],
+    "prefix": "@",
+    "description": "Greek omega",
+    "expansion": "\\omega",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "o",
+    "search_terms": [
+      "Omega",
+      "o",
+      "w",
+      "omega",
+      "Greek omega"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@o → \\omega",
+    "behavior": {
+      "type": "insert",
+      "template": "\\omega",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\omega"
+    }
+  },
+  {
+    "id": "default-varepsilon",
+    "name": "Variant epsilon",
+    "aliases": [
+      "ve",
+      "varepsilon"
+    ],
+    "prefix": "@",
+    "description": "Greek variant epsilon",
+    "expansion": "\\varepsilon",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "ve",
+    "search_terms": [
+      "Variant epsilon",
+      "ve",
+      "varepsilon",
+      "Greek variant epsilon"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@ve → \\varepsilon",
+    "behavior": {
+      "type": "insert",
+      "template": "\\varepsilon",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\varepsilon"
+    }
+  },
+  {
+    "id": "default-varphi",
+    "name": "Variant phi",
+    "aliases": [
+      "vf",
+      "varphi"
+    ],
+    "prefix": "@",
+    "description": "Greek variant phi",
+    "expansion": "\\varphi",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "vf",
+    "search_terms": [
+      "Variant phi",
+      "vf",
+      "varphi",
+      "Greek variant phi"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@vf → \\varphi",
+    "behavior": {
+      "type": "insert",
+      "template": "\\varphi",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\varphi"
+    }
+  },
+  {
+    "id": "default-varsigma",
+    "name": "Variant sigma",
+    "aliases": [
+      "vs",
+      "varsigma"
+    ],
+    "prefix": "@",
+    "description": "Greek variant sigma",
+    "expansion": "\\varsigma",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "vs",
+    "search_terms": [
+      "Variant sigma",
+      "vs",
+      "varsigma",
+      "Greek variant sigma"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@vs → \\varsigma",
+    "behavior": {
+      "type": "insert",
+      "template": "\\varsigma",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\varsigma"
+    }
+  },
+  {
+    "id": "default-vartheta",
+    "name": "Variant theta",
+    "aliases": [
+      "vq",
+      "vartheta"
+    ],
+    "prefix": "@",
+    "description": "Greek variant theta",
+    "expansion": "\\vartheta",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "vq",
+    "search_terms": [
+      "Variant theta",
+      "vq",
+      "vartheta",
+      "Greek variant theta"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@vq → \\vartheta",
+    "behavior": {
+      "type": "insert",
+      "template": "\\vartheta",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\vartheta"
+    }
+  },
+  {
+    "id": "default-varpi",
+    "name": "Variant pi",
+    "aliases": [
+      "vp",
+      "varpi"
+    ],
+    "prefix": "@",
+    "description": "Greek variant pi",
+    "expansion": "\\varpi",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "vp",
+    "search_terms": [
+      "Variant pi",
+      "vp",
+      "varpi",
+      "Greek variant pi"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@vp → \\varpi",
+    "behavior": {
+      "type": "insert",
+      "template": "\\varpi",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\varpi"
+    }
+  },
+  {
+    "id": "default-varrho",
+    "name": "Variant rho",
+    "aliases": [
+      "vr",
+      "varrho"
+    ],
+    "prefix": "@",
+    "description": "Greek variant rho",
+    "expansion": "\\varrho",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "vr",
+    "search_terms": [
+      "Variant rho",
+      "vr",
+      "varrho",
+      "Greek variant rho"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@vr → \\varrho",
+    "behavior": {
+      "type": "insert",
+      "template": "\\varrho",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\varrho"
+    }
+  },
+  {
+    "id": "default-capital-gamma",
+    "name": "Capital Gamma",
+    "aliases": [
+      "G",
+      "Gamma"
+    ],
+    "prefix": "@",
+    "description": "Uppercase Greek gamma",
+    "expansion": "\\Gamma",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "G",
+    "search_terms": [
+      "Capital Gamma",
+      "G",
+      "Gamma",
+      "Uppercase Greek gamma"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@G → \\Gamma",
+    "behavior": {
+      "type": "insert",
+      "template": "\\Gamma",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\Gamma"
+    }
+  },
+  {
+    "id": "default-capital-delta",
+    "name": "Capital Delta",
+    "aliases": [
+      "D",
+      "Delta"
+    ],
+    "prefix": "@",
+    "description": "Uppercase Greek delta",
+    "expansion": "\\Delta",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "D",
+    "search_terms": [
+      "Capital Delta",
+      "D",
+      "Delta",
+      "Uppercase Greek delta"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@D → \\Delta",
+    "behavior": {
+      "type": "insert",
+      "template": "\\Delta",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\Delta"
+    }
+  },
+  {
+    "id": "default-capital-theta",
+    "name": "Capital Theta",
+    "aliases": [
+      "Q",
+      "Theta"
+    ],
+    "prefix": "@",
+    "description": "Uppercase Greek theta",
+    "expansion": "\\Theta",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "Q",
+    "search_terms": [
+      "Capital Theta",
+      "Q",
+      "Theta",
+      "Uppercase Greek theta"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@Q → \\Theta",
+    "behavior": {
+      "type": "insert",
+      "template": "\\Theta",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\Theta"
+    }
+  },
+  {
+    "id": "default-capital-lambda",
+    "name": "Capital Lambda",
+    "aliases": [
+      "L",
+      "Lambda"
+    ],
+    "prefix": "@",
+    "description": "Uppercase Greek lambda",
+    "expansion": "\\Lambda",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "L",
+    "search_terms": [
+      "Capital Lambda",
+      "L",
+      "Lambda",
+      "Uppercase Greek lambda"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@L → \\Lambda",
+    "behavior": {
+      "type": "insert",
+      "template": "\\Lambda",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\Lambda"
+    }
+  },
+  {
+    "id": "default-capital-xi",
+    "name": "Capital Xi",
+    "aliases": [
+      "X",
+      "Xi"
+    ],
+    "prefix": "@",
+    "description": "Uppercase Greek xi",
+    "expansion": "\\Xi",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "X",
+    "search_terms": [
+      "Capital Xi",
+      "X",
+      "Xi",
+      "Uppercase Greek xi"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@X → \\Xi",
+    "behavior": {
+      "type": "insert",
+      "template": "\\Xi",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\Xi"
+    }
+  },
+  {
+    "id": "default-capital-pi",
+    "name": "Capital Pi",
+    "aliases": [
+      "P",
+      "Pi"
+    ],
+    "prefix": "@",
+    "description": "Uppercase Greek pi",
+    "expansion": "\\Pi",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "P",
+    "search_terms": [
+      "Capital Pi",
+      "P",
+      "Pi",
+      "Uppercase Greek pi"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@P → \\Pi",
+    "behavior": {
+      "type": "insert",
+      "template": "\\Pi",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\Pi"
+    }
+  },
+  {
+    "id": "default-capital-sigma",
+    "name": "Capital Sigma",
+    "aliases": [
+      "S",
+      "Sigma"
+    ],
+    "prefix": "@",
+    "description": "Uppercase Greek sigma",
+    "expansion": "\\Sigma",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "S",
+    "search_terms": [
+      "Capital Sigma",
+      "S",
+      "Sigma",
+      "Uppercase Greek sigma"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@S → \\Sigma",
+    "behavior": {
+      "type": "insert",
+      "template": "\\Sigma",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\Sigma"
+    }
+  },
+  {
+    "id": "default-capital-upsilon",
+    "name": "Capital Upsilon",
+    "aliases": [
+      "U",
+      "Upsilon"
+    ],
+    "prefix": "@",
+    "description": "Uppercase Greek upsilon",
+    "expansion": "\\Upsilon",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "U",
+    "search_terms": [
+      "Capital Upsilon",
+      "U",
+      "Upsilon",
+      "Uppercase Greek upsilon"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@U → \\Upsilon",
+    "behavior": {
+      "type": "insert",
+      "template": "\\Upsilon",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\Upsilon"
+    }
+  },
+  {
+    "id": "default-capital-phi",
+    "name": "Capital Phi",
+    "aliases": [
+      "F",
+      "Phi"
+    ],
+    "prefix": "@",
+    "description": "Uppercase Greek phi",
+    "expansion": "\\Phi",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "F",
+    "search_terms": [
+      "Capital Phi",
+      "F",
+      "Phi",
+      "Uppercase Greek phi"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@F → \\Phi",
+    "behavior": {
+      "type": "insert",
+      "template": "\\Phi",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\Phi"
+    }
+  },
+  {
+    "id": "default-capital-psi",
+    "name": "Capital Psi",
+    "aliases": [
+      "Y",
+      "Psi"
+    ],
+    "prefix": "@",
+    "description": "Uppercase Greek psi",
+    "expansion": "\\Psi",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "Y",
+    "search_terms": [
+      "Capital Psi",
+      "Y",
+      "Psi",
+      "Uppercase Greek psi"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@Y → \\Psi",
+    "behavior": {
+      "type": "insert",
+      "template": "\\Psi",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\Psi"
+    }
+  },
+  {
+    "id": "default-capital-omega",
+    "name": "Capital Omega",
+    "aliases": [
+      "W",
+      "Omega"
+    ],
+    "prefix": "@",
+    "description": "Uppercase Greek omega",
+    "expansion": "\\Omega",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "W",
+    "search_terms": [
+      "Capital Omega",
+      "W",
+      "Omega",
+      "Uppercase Greek omega"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@W → \\Omega",
+    "behavior": {
+      "type": "insert",
+      "template": "\\Omega",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\Omega"
+    }
+  },
+  {
+    "id": "default-nabla",
+    "name": "Nabla",
+    "aliases": [
+      "nabla",
+      "grad",
+      "del"
+    ],
+    "prefix": "@",
+    "description": "Gradient or del operator",
+    "expansion": "\\nabla",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "nabla",
+    "search_terms": [
+      "Nabla",
+      "nabla",
+      "grad",
+      "del",
+      "Gradient or del operator"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@nabla → \\nabla",
+    "behavior": {
+      "type": "insert",
+      "template": "\\nabla",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\nabla"
+    }
+  },
+  {
+    "id": "default-to",
+    "name": "Right arrow",
+    "aliases": [
+      "to",
+      "rightarrow"
+    ],
+    "prefix": "@",
+    "description": "Right-pointing relation",
+    "expansion": "\\to",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "to",
+    "search_terms": [
+      "Right arrow",
+      "to",
+      "rightarrow",
+      "Right-pointing relation"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@to → \\to",
+    "behavior": {
+      "type": "insert",
+      "template": "\\to",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\to"
+    }
+  },
+  {
+    "id": "default-longrightarrow",
+    "name": "Long right arrow",
+    "aliases": [
+      "longrightarrow",
+      "longright",
+      "lra"
+    ],
+    "prefix": "@",
+    "description": "Long right-pointing arrow",
+    "expansion": "\\longrightarrow",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "longrightarrow",
+    "search_terms": [
+      "Long right arrow",
+      "longrightarrow",
+      "longright",
+      "lra",
+      "Long right-pointing arrow"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@longrightarrow → \\longrightarrow",
+    "behavior": {
+      "type": "insert",
+      "template": "\\longrightarrow",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\longrightarrow"
+    }
+  },
+  {
+    "id": "default-implies",
+    "name": "Implies",
+    "aliases": [
+      "implies"
+    ],
+    "prefix": "@",
+    "description": "Logical implication arrow",
+    "expansion": "\\implies",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "implies",
+    "search_terms": [
+      "Implies",
+      "implies",
+      "Logical implication arrow"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@implies → \\implies",
+    "behavior": {
+      "type": "insert",
+      "template": "\\implies",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\implies"
+    }
+  },
+  {
+    "id": "default-iff",
+    "name": "If and only if",
+    "aliases": [
+      "iff",
+      "longleftrightarrow"
+    ],
+    "prefix": "@",
+    "description": "Logical equivalence arrow",
+    "expansion": "\\iff",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "iff",
+    "search_terms": [
+      "If and only if",
+      "iff",
+      "longleftrightarrow",
+      "Logical equivalence arrow"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@iff → \\iff",
+    "behavior": {
+      "type": "insert",
+      "template": "\\iff",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\iff"
+    }
+  },
+  {
+    "id": "default-inf",
+    "name": "Infimum",
+    "aliases": [
+      "inf",
+      "infimum"
+    ],
+    "prefix": "@",
+    "description": "Infimum operator",
+    "expansion": "\\inf",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "inf",
+    "search_terms": [
+      "Infimum",
+      "inf",
+      "infimum",
+      "Infimum operator"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@inf → \\inf",
+    "behavior": {
+      "type": "insert",
+      "template": "\\inf",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\inf"
+    }
+  },
+  {
+    "id": "default-sup",
+    "name": "Supremum",
+    "aliases": [
+      "sup",
+      "supremum"
+    ],
+    "prefix": "@",
+    "description": "Supremum operator",
+    "expansion": "\\sup",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "sup",
+    "search_terms": [
+      "Supremum",
+      "sup",
+      "supremum",
+      "Supremum operator"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@sup → \\sup",
+    "behavior": {
+      "type": "insert",
+      "template": "\\sup",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\sup"
+    }
+  },
+  {
+    "id": "default-lim",
+    "name": "Limit",
+    "aliases": [
+      "lim",
+      "limit"
+    ],
+    "prefix": "@",
+    "description": "Limit operator",
+    "expansion": "\\lim",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "lim",
+    "search_terms": [
+      "Limit",
+      "lim",
+      "limit",
+      "Limit operator"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@lim → \\lim",
+    "behavior": {
+      "type": "insert",
+      "template": "\\lim",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\lim"
+    }
+  },
+  {
+    "id": "default-sum",
+    "name": "Summation",
+    "aliases": [
+      "sum",
+      "summation"
+    ],
+    "prefix": "@",
+    "description": "Summation operator",
+    "expansion": "\\sum",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "sum",
+    "search_terms": [
+      "Summation",
+      "sum",
+      "summation",
+      "Summation operator"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@sum → \\sum",
+    "behavior": {
+      "type": "insert",
+      "template": "\\sum",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\sum"
+    }
+  },
+  {
+    "id": "default-prod",
+    "name": "Product",
+    "aliases": [
+      "prod",
+      "product"
+    ],
+    "prefix": "@",
+    "description": "Product operator",
+    "expansion": "\\prod",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "prod",
+    "search_terms": [
+      "Product",
+      "prod",
+      "product",
+      "Product operator"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@prod → \\prod",
+    "behavior": {
+      "type": "insert",
+      "template": "\\prod",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\prod"
+    }
+  },
+  {
+    "id": "default-int",
+    "name": "Integral",
+    "aliases": [
+      "int",
+      "integral"
+    ],
+    "prefix": "@",
+    "description": "Integral operator",
+    "expansion": "\\int",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "int",
+    "search_terms": [
+      "Integral",
+      "int",
+      "integral",
+      "Integral operator"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@int → \\int",
+    "behavior": {
+      "type": "insert",
+      "template": "\\int",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\int"
+    }
+  },
+  {
+    "id": "default-partial",
+    "name": "Partial",
+    "aliases": [
+      "6",
+      "partial"
+    ],
+    "prefix": "@",
+    "description": "Partial derivative symbol",
+    "expansion": "\\partial",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "6",
+    "search_terms": [
+      "Partial",
+      "6",
+      "partial",
+      "Partial derivative symbol"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@6 → \\partial",
+    "behavior": {
+      "type": "insert",
+      "template": "\\partial",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\partial"
+    }
+  },
+  {
+    "id": "default-infty",
+    "name": "Infinity",
+    "aliases": [
+      "8",
+      "infty",
+      "infinity"
+    ],
+    "prefix": "@",
+    "description": "Infinity symbol",
+    "expansion": "\\infty",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "8",
+    "search_terms": [
+      "Infinity",
+      "8",
+      "infty",
+      "infinity",
+      "Infinity symbol"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@8 → \\infty",
+    "behavior": {
+      "type": "insert",
+      "template": "\\infty",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\infty"
+    }
+  },
+  {
+    "id": "default-superscript-circle",
+    "name": "Superscript circle",
+    "aliases": [
+      "0"
+    ],
+    "prefix": "@",
+    "description": "Superscript circle",
+    "expansion": "^\\circ",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "0",
+    "search_terms": [
+      "Superscript circle",
+      "0",
+      "Superscript circle"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@0 → ^\\circ",
+    "behavior": {
+      "type": "insert",
+      "template": "^\\circ",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "^\\circ"
+    }
+  },
+  {
+    "id": "default-forall",
+    "name": "For all",
+    "aliases": [
+      "forall"
+    ],
+    "prefix": "@",
+    "description": "Universal quantifier",
+    "expansion": "\\forall",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "forall",
+    "search_terms": [
+      "For all",
+      "forall",
+      "Universal quantifier"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@forall → \\forall",
+    "behavior": {
+      "type": "insert",
+      "template": "\\forall",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\forall"
+    }
+  },
+  {
+    "id": "default-exists",
+    "name": "There exists",
+    "aliases": [
+      "exists"
+    ],
+    "prefix": "@",
+    "description": "Existential quantifier",
+    "expansion": "\\exists",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "exists",
+    "search_terms": [
+      "There exists",
+      "exists",
+      "Existential quantifier"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@exists → \\exists",
+    "behavior": {
+      "type": "insert",
+      "template": "\\exists",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\exists"
+    }
+  },
+  {
+    "id": "default-in",
+    "name": "Element of",
+    "aliases": [
+      "in",
+      "element"
+    ],
+    "prefix": "@",
+    "description": "Set membership relation",
+    "expansion": "\\in",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "in",
+    "search_terms": [
+      "Element of",
+      "in",
+      "element",
+      "Set membership relation"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@in → \\in",
+    "behavior": {
+      "type": "insert",
+      "template": "\\in",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\in"
+    }
+  },
+  {
+    "id": "default-notin",
+    "name": "Not an element of",
+    "aliases": [
+      "notin"
+    ],
+    "prefix": "@",
+    "description": "Set non-membership relation",
+    "expansion": "\\notin",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "notin",
+    "search_terms": [
+      "Not an element of",
+      "notin",
+      "Set non-membership relation"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@notin → \\notin",
+    "behavior": {
+      "type": "insert",
+      "template": "\\notin",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\notin"
+    }
+  },
+  {
+    "id": "default-leq",
+    "name": "Less than or equal",
+    "aliases": [
+      "leq",
+      "le"
+    ],
+    "prefix": "@",
+    "description": "Less-than-or-equal relation",
+    "expansion": "\\leq",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "leq",
+    "search_terms": [
+      "Less than or equal",
+      "leq",
+      "le",
+      "Less-than-or-equal relation"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@leq → \\leq",
+    "behavior": {
+      "type": "insert",
+      "template": "\\leq",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\leq"
+    }
+  },
+  {
+    "id": "default-geq",
+    "name": "Greater than or equal",
+    "aliases": [
+      "geq",
+      "ge"
+    ],
+    "prefix": "@",
+    "description": "Greater-than-or-equal relation",
+    "expansion": "\\geq",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "geq",
+    "search_terms": [
+      "Greater than or equal",
+      "geq",
+      "ge",
+      "Greater-than-or-equal relation"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@geq → \\geq",
+    "behavior": {
+      "type": "insert",
+      "template": "\\geq",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\geq"
+    }
+  },
+  {
+    "id": "default-neq",
+    "name": "Not equal",
+    "aliases": [
+      "neq"
+    ],
+    "prefix": "@",
+    "description": "Not-equal relation",
+    "expansion": "\\neq",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "neq",
+    "search_terms": [
+      "Not equal",
+      "neq",
+      "Not-equal relation"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@neq → \\neq",
+    "behavior": {
+      "type": "insert",
+      "template": "\\neq",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\neq"
+    }
+  },
+  {
+    "id": "default-approx",
+    "name": "Approximately",
+    "aliases": [
+      "approx"
+    ],
+    "prefix": "@",
+    "description": "Approximation relation",
+    "expansion": "\\approx",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "approx",
+    "search_terms": [
+      "Approximately",
+      "approx",
+      "Approximation relation"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@approx → \\approx",
+    "behavior": {
+      "type": "insert",
+      "template": "\\approx",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\approx"
+    }
+  },
+  {
+    "id": "default-times",
+    "name": "Times",
+    "aliases": [
+      "times"
+    ],
+    "prefix": "@",
+    "description": "Multiplication symbol",
+    "expansion": "\\times",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "times",
+    "search_terms": [
+      "Times",
+      "times",
+      "Multiplication symbol"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@times → \\times",
+    "behavior": {
+      "type": "insert",
+      "template": "\\times",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\times"
+    }
+  },
+  {
+    "id": "default-cdot",
+    "name": "Dot product",
+    "aliases": [
+      "cdot",
+      "dotproduct"
+    ],
+    "prefix": "@",
+    "description": "Centered multiplication dot",
+    "expansion": "\\cdot",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "cdot",
+    "search_terms": [
+      "Dot product",
+      "cdot",
+      "dotproduct",
+      "Centered multiplication dot"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@cdot → \\cdot",
+    "behavior": {
+      "type": "insert",
+      "template": "\\cdot",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\cdot"
+    }
+  },
+  {
+    "id": "default-equiv",
+    "name": "Equivalent",
+    "aliases": [
+      "=",
+      "equiv",
+      "equivalent"
+    ],
+    "prefix": "@",
+    "description": "Equivalent relation",
+    "expansion": "\\equiv",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "=",
+    "search_terms": [
+      "Equivalent",
+      "=",
+      "equiv",
+      "equivalent",
+      "Equivalent relation"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@= → \\equiv",
+    "behavior": {
+      "type": "insert",
+      "template": "\\equiv",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\equiv"
+    }
+  },
+  {
+    "id": "default-sim",
+    "name": "Similar",
+    "aliases": [
+      "sim",
+      "similar"
+    ],
+    "prefix": "@",
+    "description": "Similarity relation",
+    "expansion": "\\sim",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "sim",
+    "search_terms": [
+      "Similar",
+      "sim",
+      "similar",
+      "Similarity relation"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@sim → \\sim",
+    "behavior": {
+      "type": "insert",
+      "template": "\\sim",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\sim"
+    }
+  },
+  {
+    "id": "default-propto",
+    "name": "Proportional",
+    "aliases": [
+      "propto",
+      "proportional"
+    ],
+    "prefix": "@",
+    "description": "Proportionality relation",
+    "expansion": "\\propto",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "propto",
+    "search_terms": [
+      "Proportional",
+      "propto",
+      "proportional",
+      "Proportionality relation"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@propto → \\propto",
+    "behavior": {
+      "type": "insert",
+      "template": "\\propto",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\propto"
+    }
+  },
+  {
+    "id": "default-perp",
+    "name": "Perpendicular",
+    "aliases": [
+      "perp",
+      "perpendicular"
+    ],
+    "prefix": "@",
+    "description": "Perpendicular relation",
+    "expansion": "\\perp",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "perp",
+    "search_terms": [
+      "Perpendicular",
+      "perp",
+      "perpendicular",
+      "Perpendicular relation"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@perp → \\perp",
+    "behavior": {
+      "type": "insert",
+      "template": "\\perp",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\perp"
+    }
+  },
+  {
+    "id": "default-subseteq",
+    "name": "Subset or equal",
+    "aliases": [
+      "subseteq"
+    ],
+    "prefix": "@",
+    "description": "Subset-or-equal relation",
+    "expansion": "\\subseteq",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "subseteq",
+    "search_terms": [
+      "Subset or equal",
+      "subseteq",
+      "Subset-or-equal relation"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@subseteq → \\subseteq",
+    "behavior": {
+      "type": "insert",
+      "template": "\\subseteq",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\subseteq"
+    }
+  },
+  {
+    "id": "default-supseteq",
+    "name": "Superset or equal",
+    "aliases": [
+      "supseteq"
+    ],
+    "prefix": "@",
+    "description": "Superset-or-equal relation",
+    "expansion": "\\supseteq",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "supseteq",
+    "search_terms": [
+      "Superset or equal",
+      "supseteq",
+      "Superset-or-equal relation"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@supseteq → \\supseteq",
+    "behavior": {
+      "type": "insert",
+      "template": "\\supseteq",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\supseteq"
+    }
+  },
+  {
+    "id": "default-cup",
+    "name": "Union",
+    "aliases": [
+      "cup",
+      "union"
+    ],
+    "prefix": "@",
+    "description": "Set union",
+    "expansion": "\\cup",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "cup",
+    "search_terms": [
+      "Union",
+      "cup",
+      "union",
+      "Set union"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@cup → \\cup",
+    "behavior": {
+      "type": "insert",
+      "template": "\\cup",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\cup"
+    }
+  },
+  {
+    "id": "default-cap",
+    "name": "Intersection",
+    "aliases": [
+      "cap",
+      "intersection"
+    ],
+    "prefix": "@",
+    "description": "Set intersection",
+    "expansion": "\\cap",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "cap",
+    "search_terms": [
+      "Intersection",
+      "cap",
+      "intersection",
+      "Set intersection"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@cap → \\cap",
+    "behavior": {
+      "type": "insert",
+      "template": "\\cap",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\cap"
+    }
+  },
+  {
+    "id": "default-ldots",
+    "name": "Ellipsis",
+    "aliases": [
+      "ldots",
+      "dots"
+    ],
+    "prefix": "@",
+    "description": "Mathematical ellipsis",
+    "expansion": "\\ldots",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "ldots",
+    "search_terms": [
+      "Ellipsis",
+      "ldots",
+      "dots",
+      "Mathematical ellipsis"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@ldots → \\ldots",
+    "behavior": {
+      "type": "insert",
+      "template": "\\ldots",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\ldots"
+    }
+  },
+  {
+    "id": "default-log",
+    "name": "Logarithm",
+    "aliases": [
+      "log",
+      "logarithm"
+    ],
+    "prefix": "@",
+    "description": "Logarithm operator",
+    "expansion": "\\log",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "log",
+    "search_terms": [
+      "Logarithm",
+      "log",
+      "logarithm",
+      "Logarithm operator"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@log → \\log",
+    "behavior": {
+      "type": "insert",
+      "template": "\\log",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\log"
+    }
+  },
+  {
+    "id": "default-ln",
+    "name": "Natural logarithm",
+    "aliases": [
+      "ln"
+    ],
+    "prefix": "@",
+    "description": "Natural logarithm operator",
+    "expansion": "\\ln",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "ln",
+    "search_terms": [
+      "Natural logarithm",
+      "ln",
+      "Natural logarithm operator"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@ln → \\ln",
+    "behavior": {
+      "type": "insert",
+      "template": "\\ln",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\ln"
+    }
+  },
+  {
+    "id": "default-exp",
+    "name": "Exponential",
+    "aliases": [
+      "exp",
+      "exponential"
+    ],
+    "prefix": "@",
+    "description": "Exponential operator",
+    "expansion": "\\exp",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "exp",
+    "search_terms": [
+      "Exponential",
+      "exp",
+      "exponential",
+      "Exponential operator"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@exp → \\exp",
+    "behavior": {
+      "type": "insert",
+      "template": "\\exp",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\exp"
+    }
+  },
+  {
+    "id": "default-sin",
+    "name": "Sine",
+    "aliases": [
+      "sin"
+    ],
+    "prefix": "@",
+    "description": "Sine operator",
+    "expansion": "\\sin",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "sin",
+    "search_terms": [
+      "Sine",
+      "sin",
+      "Sine operator"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@sin → \\sin",
+    "behavior": {
+      "type": "insert",
+      "template": "\\sin",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\sin"
+    }
+  },
+  {
+    "id": "default-cos",
+    "name": "Cosine",
+    "aliases": [
+      "cos"
+    ],
+    "prefix": "@",
+    "description": "Cosine operator",
+    "expansion": "\\cos",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "cos",
+    "search_terms": [
+      "Cosine",
+      "cos",
+      "Cosine operator"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@cos → \\cos",
+    "behavior": {
+      "type": "insert",
+      "template": "\\cos",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\cos"
+    }
+  },
+  {
+    "id": "default-tan",
+    "name": "Tangent",
+    "aliases": [
+      "tan"
+    ],
+    "prefix": "@",
+    "description": "Tangent operator",
+    "expansion": "\\tan",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "tan",
+    "search_terms": [
+      "Tangent",
+      "tan",
+      "Tangent operator"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@tan → \\tan",
+    "behavior": {
+      "type": "insert",
+      "template": "\\tan",
+      "placeholders": [],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\tan"
+    }
+  },
+  {
+    "id": "default-frac",
+    "name": "Fraction",
+    "aliases": [
+      "frac",
+      "fraction"
+    ],
+    "prefix": "@",
+    "description": "Fraction with numerator and denominator",
+    "expansion": "\\frac{${1}}{${2}}",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "frac",
+    "search_terms": [
+      "Fraction",
+      "frac",
+      "fraction",
+      "Fraction with numerator and denominator"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@frac → \\frac{${1}}{${2}}",
+    "behavior": {
+      "type": "insert",
+      "template": "\\frac{${1}}{${2}}",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": ""
+        },
+        {
+          "position": 2,
+          "label": ""
+        }
+      ],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\frac{${1}}{${2}}"
+    }
+  },
+  {
+    "id": "default-sqrt",
+    "name": "Square root",
+    "aliases": [
+      "sqrt",
+      "root"
+    ],
+    "prefix": "@",
+    "description": "Square root with one slot",
+    "expansion": "\\sqrt{${1}}",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "sqrt",
+    "search_terms": [
+      "Square root",
+      "sqrt",
+      "root",
+      "Square root with one slot"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@sqrt → \\sqrt{${1}}",
+    "behavior": {
+      "type": "insert",
+      "template": "\\sqrt{${1}}",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": ""
+        }
+      ],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\sqrt{${1}}"
+    }
+  },
+  {
+    "id": "default-binomial",
+    "name": "Choose",
+    "aliases": [
+      "choose",
+      "binom"
+    ],
+    "prefix": "@",
+    "description": "Binomial coefficient",
+    "expansion": "\\binom{${1}}{${2}}",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "choose",
+    "search_terms": [
+      "Choose",
+      "choose",
+      "binom",
+      "Binomial coefficient"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@choose → \\binom{${1}}{${2}}",
+    "behavior": {
+      "type": "insert",
+      "template": "\\binom{${1}}{${2}}",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": ""
+        },
+        {
+          "position": 2,
+          "label": ""
+        }
+      ],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\binom{${1}}{${2}}"
+    }
+  },
+  {
+    "id": "default-cases",
+    "name": "Cases",
+    "aliases": [
+      "cases",
+      "piecewise"
+    ],
+    "prefix": "@",
+    "description": "Piecewise cases expression",
+    "expansion": "\\begin{cases}\n${1:value} & ${2:condition}\\\\\n${3:otherwise} & ${4:condition}\n\\end{cases}",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "cases",
+    "search_terms": [
+      "Cases",
+      "cases",
+      "piecewise",
+      "Piecewise cases expression"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@cases → \\begin{cases}\n${1:value} & ${2:condition}\\\\\n${3:otherwise} & ${4:condition}\n\\end{cases}",
+    "behavior": {
+      "type": "insert",
+      "template": "\\begin{cases}\n${1:value} & ${2:condition}\\\\\n${3:otherwise} & ${4:condition}\n\\end{cases}",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": "value"
+        },
+        {
+          "position": 2,
+          "label": "condition"
+        },
+        {
+          "position": 3,
+          "label": "otherwise"
+        },
+        {
+          "position": 4,
+          "label": "condition"
+        }
+      ],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\begin{cases}\n${1:value} & ${2:condition}\\\\\n${3:otherwise} & ${4:condition}\n\\end{cases}"
+    }
+  },
+  {
+    "id": "default-equation",
+    "name": "Equation",
+    "aliases": [
+      "equation",
+      "beq"
+    ],
+    "prefix": "@",
+    "description": "Aligned equation",
+    "expansion": "\\begin{aligned}\n${1:left} &= ${2:right}\n\\end{aligned}",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "equation",
+    "search_terms": [
+      "Equation",
+      "equation",
+      "beq",
+      "Aligned equation"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@equation → \\begin{aligned}\n${1:left} &= ${2:right}\n\\end{aligned}",
+    "behavior": {
+      "type": "insert",
+      "template": "\\begin{aligned}\n${1:left} &= ${2:right}\n\\end{aligned}",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": "left"
+        },
+        {
+          "position": 2,
+          "label": "right"
+        }
+      ],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\begin{aligned}\n${1:left} &= ${2:right}\n\\end{aligned}"
+    }
+  },
+  {
+    "id": "default-gather",
+    "name": "Gather",
+    "aliases": [
+      "gather",
+      "bga"
+    ],
+    "prefix": "@",
+    "description": "Gathered equations",
+    "expansion": "\\begin{gathered}\n${1:first equation} \\\\\n${2:second equation}\n\\end{gathered}",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "gather",
+    "search_terms": [
+      "Gather",
+      "gather",
+      "bga",
+      "Gathered equations"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@gather → \\begin{gathered}\n${1:first equation} \\\\\n${2:second equation}\n\\end{gathered}",
+    "behavior": {
+      "type": "insert",
+      "template": "\\begin{gathered}\n${1:first equation} \\\\\n${2:second equation}\n\\end{gathered}",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": "first equation"
+        },
+        {
+          "position": 2,
+          "label": "second equation"
+        }
+      ],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\begin{gathered}\n${1:first equation} \\\\\n${2:second equation}\n\\end{gathered}"
+    }
+  },
+  {
+    "id": "default-matrix",
+    "name": "Matrix",
+    "aliases": [
+      "matrix",
+      "bmat"
+    ],
+    "prefix": "@",
+    "description": "Two by two matrix",
+    "expansion": "\\begin{bmatrix}\n${1:a} & ${2:b}\\\\\n${3:c} & ${4:d}\n\\end{bmatrix}",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "matrix",
+    "search_terms": [
+      "Matrix",
+      "matrix",
+      "bmat",
+      "Two by two matrix"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@matrix → \\begin{bmatrix}\n${1:a} & ${2:b}\\\\\n${3:c} & ${4:d}\n\\end{bmatrix}",
+    "behavior": {
+      "type": "insert",
+      "template": "\\begin{bmatrix}\n${1:a} & ${2:b}\\\\\n${3:c} & ${4:d}\n\\end{bmatrix}",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": "a"
+        },
+        {
+          "position": 2,
+          "label": "b"
+        },
+        {
+          "position": 3,
+          "label": "c"
+        },
+        {
+          "position": 4,
+          "label": "d"
+        }
+      ],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\begin{bmatrix}\n${1:a} & ${2:b}\\\\\n${3:c} & ${4:d}\n\\end{bmatrix}"
+    }
+  },
+  {
+    "id": "default-int-bounds",
+    "name": "Bounded integral",
+    "aliases": [
+      "intb",
+      "integralbounds"
+    ],
+    "prefix": "@",
+    "description": "Integral with lower and upper bounds",
+    "expansion": "\\int_{${1}}^{${2}}",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "intb",
+    "search_terms": [
+      "Bounded integral",
+      "intb",
+      "integralbounds",
+      "Integral with lower and upper bounds"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@intb → \\int_{${1}}^{${2}}",
+    "behavior": {
+      "type": "insert",
+      "template": "\\int_{${1}}^{${2}}",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": ""
+        },
+        {
+          "position": 2,
+          "label": ""
+        }
+      ],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\int_{${1}}^{${2}}"
+    }
+  },
+  {
+    "id": "default-sum-bounds",
+    "name": "Bounded sum",
+    "aliases": [
+      "sumb",
+      "summationbounds"
+    ],
+    "prefix": "@",
+    "description": "Sum with lower and upper bounds",
+    "expansion": "\\sum_{${1}}^{${2}}",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "sumb",
+    "search_terms": [
+      "Bounded sum",
+      "sumb",
+      "summationbounds",
+      "Sum with lower and upper bounds"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@sumb → \\sum_{${1}}^{${2}}",
+    "behavior": {
+      "type": "insert",
+      "template": "\\sum_{${1}}^{${2}}",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": ""
+        },
+        {
+          "position": 2,
+          "label": ""
+        }
+      ],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\sum_{${1}}^{${2}}"
+    }
+  },
+  {
+    "id": "default-left-parens",
+    "name": "Parentheses",
+    "aliases": [
+      "paren",
+      "parentheses"
+    ],
+    "prefix": "@",
+    "description": "Sized parentheses around an expression",
+    "expansion": "\\left( ${1} \\right)",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "paren",
+    "search_terms": [
+      "Parentheses",
+      "paren",
+      "parentheses",
+      "Sized parentheses around an expression"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@paren → \\left( ${1} \\right)",
+    "behavior": {
+      "type": "insert",
+      "template": "\\left( ${1} \\right)",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": ""
+        }
+      ],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\left( ${1} \\right)"
+    }
+  },
+  {
+    "id": "default-absolute",
+    "name": "Absolute value",
+    "aliases": [
+      "abs",
+      "absolute"
+    ],
+    "prefix": "@",
+    "description": "Sized absolute value bars",
+    "expansion": "\\left| ${1} \\right|",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "abs",
+    "search_terms": [
+      "Absolute value",
+      "abs",
+      "absolute",
+      "Sized absolute value bars"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@abs → \\left| ${1} \\right|",
+    "behavior": {
+      "type": "insert",
+      "template": "\\left| ${1} \\right|",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": ""
+        }
+      ],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\left| ${1} \\right|"
+    }
+  },
+  {
+    "id": "default-norm",
+    "name": "Norm",
+    "aliases": [
+      "norm"
+    ],
+    "prefix": "@",
+    "description": "Sized norm bars",
+    "expansion": "\\left\\| ${1} \\right\\|",
+    "built_in": true,
+    "namespace": "@",
+    "trigger": "norm",
+    "search_terms": [
+      "Norm",
+      "norm",
+      "Sized norm bars"
+    ],
+    "contexts": [
+      "math"
+    ],
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": "@norm → \\left\\| ${1} \\right\\|",
+    "behavior": {
+      "type": "insert",
+      "template": "\\left\\| ${1} \\right\\|",
+      "placeholders": [
+        {
+          "position": 1,
+          "label": ""
+        }
+      ],
+      "operator_class": null,
+      "accepted_operand": null,
+      "serializer": "\\left\\| ${1} \\right\\|"
+    }
+  }
+]

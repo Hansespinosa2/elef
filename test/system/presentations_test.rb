@@ -47,7 +47,8 @@ class PresentationsTest < ApplicationSystemTestCase
   end
 
   def wait_for_fresh_projection
-    assert_selector "form.visual-editor-form:not([data-preview-projection-stale='true'])", wait: 5
+    # The shared preview controller allows requests up to 8 seconds to finish.
+    assert_selector "form.visual-editor-form:not([data-preview-projection-stale='true'])", wait: 10
   end
 
   def type_visual_text(selector, visible_text, replacement)
@@ -397,6 +398,28 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_includes presentation.revisions.recoveries.order(:id).last.source, "# Local tab"
   end
 
+  test "discarding a conflicted draft accepts the disk baseline without another save" do
+    presentation = Presentation.create!(title: "Discard conflict", source: "# Initial")
+    external_source = "# External version\n\nKeep the disk bytes.\n"
+
+    visit edit_presentation_path(presentation)
+    hold_autosaves
+    fill_in "Markdown source", with: "# Local draft"
+    wait_for_autosave_request(0)
+    presentation.update!(source: external_source)
+    page.execute_script("window.autosaveRequests[0].release()")
+
+    assert_selector "[data-autosave-target='conflict']", visible: true
+    click_button "Use current version"
+    assert_no_selector "[data-autosave-target='conflict']", visible: true
+    assert_field "Markdown source", with: external_source
+    assert_selector "[data-autosave-target='status']", exact_text: "Saved"
+
+    page.evaluate_async_script("window.setTimeout(() => arguments[0](), 1200)")
+    assert_equal 1, page.evaluate_script("window.autosaveRequests.length")
+    assert_equal external_source, presentation.reload.source
+  end
+
   test "refresh recovers an unsent draft from browser persistence" do
     presentation = Presentation.create!(title: "Refresh recovery", source: "# Initial")
     visit edit_presentation_path(presentation)
@@ -421,6 +444,8 @@ class PresentationsTest < ApplicationSystemTestCase
     fill_in "Markdown source", with: "# Manual latest"
     click_on "Save presentation"
     page.execute_script("window.autosaveRequests[0].release()")
+    wait_for_autosave_request(1)
+    page.execute_script("window.autosaveRequests[1].release()")
     assert_text "Presentation saved."
     assert_selector '.preview-pane .slide', text: "Manual latest"
     assert_includes presentation.reload.source, "# Manual latest"
@@ -1732,15 +1757,16 @@ class PresentationsTest < ApplicationSystemTestCase
     visit edit_presentation_path(presentation)
     page.execute_script(<<~JAVASCRIPT)
       const originalFetch = window.fetch.bind(window);
+      window.fetchForSaveRetry = originalFetch;
       window.fetch = (url, options) => {
         if (options?.method !== 'PATCH') return originalFetch(url, options);
-        window.fetch = originalFetch;
         return Promise.reject(new Error('Simulated connection failure'));
       };
     JAVASCRIPT
     fill_in "Markdown source", with: "# Recovered"
     assert_selector '[data-autosave-target="status"]', text: "Save failed"
     assert_equal "# Original", presentation.reload.source
+    page.execute_script("window.fetch = window.fetchForSaveRetry")
     click_on "Retry save"
     assert_selector '[data-autosave-target="status"]', exact_text: "Saved"
     assert_includes presentation.reload.source, "# Recovered"
@@ -1751,6 +1777,8 @@ class PresentationsTest < ApplicationSystemTestCase
     fill_in "Title", with: "Valid title"
     assert_selector '[data-autosave-target="status"]', exact_text: "Saved"
     assert_equal "Valid title", presentation.reload.title
+  ensure
+    page.execute_script("window.fetch = window.fetchForSaveRetry") if page
   end
 
   test "recovers the browser draft after an autosave outage and reload" do
@@ -1758,9 +1786,9 @@ class PresentationsTest < ApplicationSystemTestCase
     visit edit_presentation_path(presentation)
     page.execute_script(<<~JAVASCRIPT)
       const originalFetch = window.fetch.bind(window);
+      window.restoreSaveFetch = () => { window.fetch = originalFetch; };
       window.fetch = (url, options = {}) => {
         if (options.method === "PATCH") {
-          window.fetch = originalFetch;
           return Promise.reject(new TypeError("Failed to fetch"));
         }
         return originalFetch(url, options);
@@ -1770,12 +1798,17 @@ class PresentationsTest < ApplicationSystemTestCase
     fill_in "Markdown source", with: "# Offline edit"
     assert_selector '[data-autosave-target="status"]', text: "Save failed", wait: 5
     assert_equal "# Original", presentation.reload.source
+    page.execute_script("window.restoreSaveFetch()")
 
     page.refresh
 
     assert_field "Markdown source", with: "# Offline edit", wait: 5
+    assert_selector '[data-autosave-target="status"]', exact_text: "Recovered unsent changes", wait: 5
+    assert_equal "# Offline edit", page.evaluate_script("document.querySelector('.source-field')?.editorController?.sourceValue")
     assert_selector '[data-autosave-target="status"]', exact_text: "Saved", wait: 5
     assert_includes presentation.reload.source, "# Offline edit"
+  ensure
+    page.execute_script("window.restoreSaveFetch?.()") if page
   end
 
   test "falls back to local storage when indexeddb cannot read a draft" do
@@ -1822,9 +1855,9 @@ class PresentationsTest < ApplicationSystemTestCase
       };
       window.restoreDraftStorage = () => { Storage.prototype.setItem = originalSetItem; };
       const originalFetch = window.fetch.bind(window);
+      window.restoreSaveFetch = () => { window.fetch = originalFetch; };
       window.fetch = (url, options = {}) => {
         if (options.method === 'PATCH') {
-          window.fetch = originalFetch;
           return Promise.reject(new TypeError('Failed to fetch'));
         }
         return originalFetch(url, options);
@@ -1837,7 +1870,7 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: "# Keep this open"
     assert_equal "# Original", presentation.reload.source
   ensure
-    page.execute_script("window.restoreDraftStorage?.()") if page
+    page.execute_script("window.restoreDraftStorage?.(); window.restoreSaveFetch?.()") if page
   end
 
   test "times out a stalled autosave and lets the user retry the latest edit" do

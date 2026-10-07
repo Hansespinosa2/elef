@@ -1,9 +1,9 @@
 <% persisted = work.persisted? %>
 <% type_label = work_type_label(work) %>
-<% editor_map = Source::Document.editor_map(
-  work.source.to_s.gsub(/\r\n?/, "\n"),
-  source_name: work.title.presence || work.default_title,
-  mode: work.work_type.to_sym
+<% editor_projection = shared_editor_projection(
+  work,
+  source: work.source.to_s.gsub(/\r\n?/, "\n"),
+  title: work.title.presence || work.default_title
 ) %>
 <% visual_mode = params[:editor_mode] != "source" %>
 <% controllers = %w[dirty preview autosave visual-editor media] %>
@@ -15,7 +15,7 @@
 <% actions << "paste->media#paste:capture" %>
 <% actions += ["input->slide-overview#sourceChanged", "change->slide-overview#sourceChanged", "preview:updated->slide-overview#previewUpdated"] if work.presentation? %>
 <% editor_mode = visual_mode ? "visual" : "source" %>
-<% form_data = { controller: controllers.join(" "), action: actions.join(" "), editor_mode: editor_mode, dirty_unsaved_message_value: "You have unsaved #{type_label.downcase} changes. Leave without saving?" } %>
+<% form_data = { action: actions.join(" "), editor_mode: editor_mode, dirty_unsaved_message_value: "You have unsaved #{type_label.downcase} changes. Leave without saving?" } %>
 <% form_data[:preview_url_value] = persisted ? work_preview_path(work) : work_preview_collection_path(work) %>
 <% form_data[:visual_editor_kind_value] = work.kind %>
 <% form_data[:media_work_kind_value] = work.kind %>
@@ -31,29 +31,12 @@
   <% form_data[:autosave_work_kind_value] = work.kind %>
   <% form_data[:autosave_save_enabled_value] = false %>
 <% end %>
-<% editor_data = {
-  dirty_target: "field",
-  autosave_target: "field",
-  snippet_palette_target: "editor",
-  math_shorthand_target: "editor",
-  math_shortcut_palette_target: "editor",
-  editor_target: "input",
-  action: "input->dirty#markDirty input->snippet-palette#input keydown->snippet-palette#keydown keydown->math-shorthand#keydown input->math-shortcut-palette#input keydown->math-shortcut-palette#keydown input->mermaid-assist#input"
-} %>
-<% if work.document? %>
-  <% editor_data[:document_link_palette_target] = "editor" %>
-  <% editor_data[:action] += " input->document-link-palette#input keydown->document-link-palette#keydown" %>
-<% end %>
 
 <%= form_with model: work, class: "visual-editor-form", data: form_data do |form| %>
   <% if work.errors.any? %>
     <section class="error-panel rounded-2xl border border-[#efb0a8] bg-[#fff1ee] p-4 text-[#a63a2d]" aria-label="Validation errors">
       <h2><%= pluralize(work.errors.count, "error") %> prevented saving</h2>
-      <ul>
-        <% work.errors.full_messages.each do |message| %>
-          <li><%= message %></li>
-        <% end %>
-      </ul>
+      <ul><% work.errors.full_messages.each do |message| %><li><%= message %></li><% end %></ul>
     </section>
   <% end %>
 
@@ -64,144 +47,40 @@
   <% end %>
   <%= hidden_field_tag :editor_mode, editor_mode %>
 
-  <section class="editor-shell" aria-label="Visual <%= type_label.downcase %> editor">
-    <header class="editor-shell-header">
-      <% unless work.document? %>
-        <div class="editor-title-field">
-          <%= form.label :title, class: "editor-title-label" %>
-          <%= form.text_field :title,
-            class: "editor-title-input",
-            data: { dirty_target: "field", autosave_target: "field", action: "input->dirty#markDirty" },
-            autocomplete: "off" %>
-        </div>
-      <% end %>
-      <div class="editor-kind-badge"><%= type_label %></div>
-    </header>
-
-    <div class="editor-layout">
-      <div class="source-pane">
-    <% authoring_registry_json = json_escape(AuthoringRegistry.for_editor(workspace: work.workspace || Workspace.default).to_json) %>
-    <div class="field source-field relative mb-4" data-controller="editor snippet-palette math-shorthand math-shortcut-palette mermaid-assist<%= " document-link-palette" if work.document? %>" data-editor-initial-source-value="<%= ERB::Util.html_escape(work.source.to_s.to_json) %>" data-authoring-registry="<%= authoring_registry_json %>"<% if work.document? %> data-document-link-palette-titles-value="<%= ERB::Util.html_escape(document_link_titles(workspace: work.workspace).to_json) %>"<% end %><% if work.presentation? %> data-presentation-editor-target="source"<% end %>>
-      <% source_id = form.field_id(:source) %>
-      <% editor_id = "#{source_id}_editor" %>
-      <%= form.label :source, "Markdown source", for: source_id, id: "#{editor_id}_label", class: "sr-only" %>
-      <div class="editor-toolbar" aria-label="Editor controls">
-        <div class="editor-mode-switch" role="group" aria-label="Editing mode">
-          <button type="button" class="editor-mode-button<%= " is-active" if visual_mode %>" data-editor-target="visualButton" data-action="click->editor#showVisual" aria-pressed="<%= visual_mode %>">Visual</button>
-          <button type="button" class="editor-mode-button<%= " is-active" unless visual_mode %>" data-editor-target="sourceButton" data-action="click->editor#showSource" aria-pressed="<%= !visual_mode %>">Source</button>
-          <span class="editor-editing-mode" data-editor-target="editingMode" aria-live="polite"><%= editor_mode.capitalize %></span>
-        </div>
-        <span class="editor-mode" data-editor-target="mode" data-mode="standard" aria-live="polite">Standard</span>
-        <span class="editor-command" data-editor-target="command" aria-live="polite"></span>
-        <details class="editor-settings appearance-settings" data-controller="appearance" data-appearance-target="panelContainer"<%= " hidden" unless editor_mode == "visual" %>>
-          <summary class="editor-reveal-metadata">Appearance</summary>
-          <div class="editor-settings-panel appearance-fields" aria-label="Visual appearance controls">
-            <div data-appearance-target="themeField">
-              <%= form.label :theme, "Theme", class: "appearance-label mb-1 block font-extrabold" %>
-              <%= form.select :theme,
-                [["Workspace default", ""], ["Light", "light"], ["Dark", "dark"], ["Match", "match"]],
-                { selected: work.theme_override },
-                class: "appearance-select w-full rounded-xl p-3",
-                data: { appearance_target: "theme", dirty_target: "field", autosave_target: "field", action: "change->dirty#markDirty" } %>
-            </div>
-            <div data-appearance-target="typographyField">
-              <%= form.label :typography, "Typography", class: "appearance-label mb-1 block font-extrabold" %>
-              <%= form.select :typography,
-                [["Workspace default", ""], ["Book", "book"], ["Modern", "modern"], ["Technical", "technical"]],
-                { selected: work.typography_override },
-                class: "appearance-select w-full rounded-xl p-3",
-                data: { appearance_target: "typography", dirty_target: "field", autosave_target: "field", action: "change->dirty#markDirty" } %>
-            </div>
-            <p class="field-hint appearance-hint" data-appearance-target="hint">Appearance overrides stay in the Markdown front matter.</p>
-          </div>
-        </details>
-        <button type="button" class="editor-reveal-metadata" data-editor-target="metadataToggle" data-action="editor#toggleMetadataVisibility"<%= " hidden" if editor_mode == "visual" %>>Reveal source metadata</button>
-      </div>
-      <div class="media-editor-controls mb-3 flex flex-wrap items-center gap-2" aria-label="Media controls">
-        <button type="button" class="button secondary" data-action="media#choose">Add <%= work.document? ? "image" : "image or MP4" %></button>
-        <label class="media-fit-control">Fit
-          <select data-media-target="fit">
-            <option value="contain">Contain</option>
-            <option value="cover">Cover</option>
-          </select>
-        </label>
-        <input type="file" accept="<%= work.document? ? "image/*" : "image/*,video/mp4" %>" hidden data-media-target="input" data-action="change->media#selected">
-        <span class="media-upload-status" data-media-target="status" role="status" aria-live="polite" aria-busy="false"></span>
-      </div>
-      <div id="<%= editor_id %>" class="editor-surface" aria-labelledby="<%= editor_id %>_label" data-editor-target="surface" data-snippet-palette-target="editor" data-math-shorthand-target="editor" data-math-shortcut-palette-target="editor" data-action="dragover->media#sourceDragOver:capture dragleave->media#sourceDragLeave drop->media#sourceDrop:capture"></div>
-      <%= form.text_area :source, rows: 24, id: source_id, class: "editor-input-proxy", spellcheck: "false", tabindex: "-1", aria: { label: "Markdown source" }, data: editor_data %>
-      <div id="<%= editor_id %>_snippet_palette" class="snippet-palette" data-snippet-palette-target="palette" hidden role="listbox" aria-label="Snippet suggestions"></div>
-      <div id="<%= editor_id %>_math_shortcut_palette" class="snippet-palette math-shortcut-palette" data-math-shortcut-palette-target="palette" hidden role="listbox" aria-label="Math shortcut suggestions"></div>
-      <div id="<%= editor_id %>_mermaid_assist_palette" class="snippet-palette" data-mermaid-assist-target="palette" hidden role="listbox" aria-label="Mermaid suggestions"></div>
-      <% if work.document? %><div id="<%= editor_id %>_document_link_palette" class="snippet-palette" data-document-link-palette-target="palette" hidden role="listbox" aria-label="Document link suggestions"></div><% end %>
-      <p class="field-hint editor-mode-hint">Visual mode keeps Markdown source canonical. Use Source mode for unsupported syntax, inline media, or to edit LaTeX expressions directly. Type <code>/trigger</code> for document structures and <code>:align</code> or <code>:footnote</code> for Elef directives<% if work.document? %>. Type <code>[[</code> to link another document.<% end %>. In math, type <code>@a</code>, <code>@frac</code>, or <code>@gather</code>; Tab walks multi-slot expressions. Type <code>/diagram</code> to open Mermaid Assist. Math transforms such as <code>$x.b.vec.t$</code> commit with Enter or Tab.</p>
-    </div>
-
-    <% if work.presentation? %>
-      <div class="presentation-editor-tools" aria-label="Presentation editing tools">
-        <span class="presentation-editor-help">Edit slide text directly. Use the controls on each slide for structure and positioning.</span>
-      </div>
-    <% end %>
-
-    <% if work.presentation? %>
-      <section class="slide-overview" aria-labelledby="slide-overview-heading">
-        <div class="slide-overview-heading-row">
-          <div>
-            <h3 id="slide-overview-heading">Slide overview</h3>
-            <p data-slide-overview-target="count" aria-live="polite"><%= pluralize(work.slides.length, "slide") %></p>
-          </div>
-          <div class="slide-overview-actions" aria-label="Slide actions">
-            <button type="button" data-action="slide-overview#add" aria-label="Add slide after selected">Add</button>
-            <button type="button" data-action="slide-overview#duplicate" aria-label="Duplicate selected slide">Duplicate</button>
-            <button type="button" data-action="slide-overview#delete" aria-label="Delete selected slide">Delete</button>
-            <button type="button" data-action="slide-overview#moveUp" aria-label="Move selected slide earlier">↑</button>
-            <button type="button" data-action="slide-overview#moveDown" aria-label="Move selected slide later">↓</button>
-          </div>
-        </div>
-        <div class="slide-overview-grid" data-slide-overview-target="grid" role="group" aria-label="Slides"></div>
-        <section class="slide-overflow-warnings" data-slide-overview-target="warnings" aria-label="Slide overflow warnings" role="status" hidden>
-          <h4>Overflow warnings</h4>
-          <ul></ul>
-        </section>
-      </section>
-    <% end %>
-
-      </div>
-    <script type="application/json" data-editor-map-json><%= raw json_escape(editor_map.to_json) %></script>
-    <div class="editor-projection preview-pane" data-visual-editor-target="projection" data-preview-target="container" aria-label="Visual editing surface" data-action="dragover->media#dragOver dragleave->media#dragLeave drop->media#drop">
-      <%= render "works/preview", work: work, editable: true, editor_map: editor_map %>
-    </div>
-    </div>
-
-    <%= render "works/warnings", warnings: work.preview_warnings %>
-    <div class="editor-footer">
-      <div class="editor-actions">
-        <%= form.submit "Save #{type_label.downcase}", class: "button primary", data: { dirty_target: "saveButton" } %>
-        <% if persisted %>
-          <%= link_to "Preview", work_show_path(work), class: "button", data: { dirty_navigation: true } %>
-          <span class="dirty-state" data-autosave-target="status" aria-live="polite">Saved</span>
-          <button type="button" class="autosave-retry" data-autosave-target="retry" data-action="autosave#retry" hidden>Retry save</button>
-          <div class="autosave-conflict" data-autosave-target="conflict" hidden role="status">
-            <p data-autosave-target="conflictMessage">A newer version is active; your draft was preserved.</p>
-            <details>
-              <summary>Compare with the active version</summary>
-              <pre data-autosave-target="serverSource"></pre>
-            </details>
-            <button type="button" data-action="autosave#keepLocal">Keep local draft</button>
-            <button type="button" data-action="autosave#discardLocal">Discard local draft</button>
-          </div>
-          <% if work.presentation? %>
-            <span class="release-state" data-release-status="<%= work.published_release_status %>">
-              <% if work.published_release_status == "stale" %>Published release is stale — republish to present the latest draft.<% elsif work.published_release_status == "current" %>Published release is current.<% end %>
-            </span>
-          <% end %>
-        <% else %>
-          <span class="dirty-state" data-dirty-target="status" data-autosave-target="status" aria-live="polite">Saved</span>
-        <% end %>
-        <span class="dirty-state" data-preview-target="status" aria-live="polite"></span>
-        <button type="button" class="preview-retry" data-preview-target="retry" data-action="preview#retry" hidden>Retry preview</button>
-      </div>
-      <% if work.presentation? %><span class="presentation-editor-status" data-presentation-editor-target="status" aria-live="polite"></span><% end %>
-    </div>
-  </section>
+  <% workspace = work.workspace || Workspace.default %>
+  <% editor_host_config = {
+    kind: work.document? ? "document" : "presentation",
+    persisted: persisted,
+    showTitle: work.presentation?,
+    showSubmit: true,
+    source: work.source.to_s,
+    title: work.title.presence || work.default_title,
+    titleName: work.presentation? ? form.field_name(:title) : nil,
+    sourceName: form.field_name(:source),
+    themeName: form.field_name(:theme),
+    typographyName: form.field_name(:typography),
+    theme: work.theme_override,
+    typography: work.typography_override,
+    mode: editor_mode,
+    previewUrl: persisted ? work_show_path(work) : nil,
+    previewHtml: editor_projection[:html],
+    editorMap: editor_projection[:editor_map],
+    warnings: editor_projection[:warnings],
+    slideCount: work.presentation? ? work.slides.length : 0,
+    authoringRegistry: AuthoringRegistry.for_editor(workspace: workspace),
+    documentTitles: work.document? ? document_link_titles(workspace: work.workspace) : [],
+    releaseStatus: work.presentation? ? work.published_release_status : nil,
+    releaseState: work.presentation? ? (work.published_release_status == "stale" ? "Published release is stale — republish to present the latest draft." : work.published_release_status == "current" ? "Published release is current." : nil) : nil,
+    ids: {
+      title: form.field_id(:title),
+      source: form.field_id(:source),
+      field: "#{form.field_id(:source)}_field",
+      surface: "#{form.field_id(:source)}_editor",
+      label: "#{form.field_id(:source)}_editor_label",
+      theme: form.field_id(:theme),
+      typography: form.field_id(:typography),
+      slideHeading: "#{form.field_id(:source)}_slide_overview_heading"
+    }
+  } %>
+  <div data-editor-form-controllers="<%= controllers.join(" ") %>" data-editor-view-config="<%= ERB::Util.html_escape(editor_host_config.to_json) %>"></div>
 <% end %>

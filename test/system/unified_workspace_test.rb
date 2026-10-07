@@ -28,20 +28,20 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     input.send_keys("new snippet", :enter)
 
     assert_current_path new_snippet_path
-    assert_selector "#snippet_name:focus"
-    assert_selector "label[for='snippet_name']", text: "Name"
-    assert_selector "label[for='snippet_trigger']", text: "Trigger"
-    assert_selector "label[for='snippet_body']", text: "Body"
+    assert_selector "#authoring-name:focus"
+    assert_selector "label[for='authoring-name']", text: "Name"
+    assert_selector "label[for='authoring-trigger']", text: "Trigger"
+    assert_selector "label[for='authoring-body']", text: "Body"
 
     keyboard = page.driver.browser.action
     keyboard.send_keys("Meeting outline").send_keys(:tab).send_keys("agenda")
       .send_keys(:tab).send_keys("A reusable meeting outline")
       .send_keys(:tab).send_keys(:tab).send_keys("# Agenda")
       .send_keys(:enter).send_keys(:enter).send_keys("- ${1:topic}")
-      .send_keys(:tab).send_keys(:enter).perform
+      .send_keys(:tab).send_keys(:tab).send_keys(:enter).perform
 
-    assert_current_path snippets_path
-    assert_selector ".flash", text: "Snippet created."
+    assert_current_path new_snippet_path
+    assert_selector "#authoring-settings-status", text: "New entry saved (snippet)."
     assert_selector ".snippet-card", text: "Meeting outline"
     snippet = Snippet.find_by!(trigger: "agenda")
     assert_equal "# Agenda\n\n- ${1:topic}", snippet.body
@@ -248,11 +248,11 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
 
     assert_selector ".math-shortcut-card"
     assert_equal "rgb(24, 33, 38)", page.evaluate_script("getComputedStyle(document.querySelector('.math-shortcut-card')).backgroundColor")
+    assert_equal "rgb(24, 33, 38)", page.evaluate_script("getComputedStyle(document.querySelector('.authoring-settings-dialog')).backgroundColor")
 
     click_on "New shortcut"
-    assert_selector ".math-shortcut-form"
-    assert_equal "rgb(24, 33, 38)", page.evaluate_script("getComputedStyle(document.querySelector('.math-shortcut-form')).backgroundColor")
-    assert_equal "rgb(17, 22, 26)", page.evaluate_script("getComputedStyle(document.querySelector('.math-shortcut-form input')).backgroundColor")
+    assert_selector ".authoring-entry-form:not([hidden]) .authoring-math-fields:not([hidden])"
+    assert_equal "rgb(17, 22, 26)", page.evaluate_script("getComputedStyle(document.querySelector('.authoring-math-fields input')).backgroundColor")
   end
 
   test "expands common TeX operators and walks fraction tab stops" do

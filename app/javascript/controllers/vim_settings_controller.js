@@ -13,11 +13,14 @@ import {
   writeBoolean,
   writeValue
 } from "controllers/vim_preferences"
+import { mountVimSettingsView } from "lib/vim_settings_view"
 
 export default class extends Controller {
   static targets = ["vimToggle", "escapeKey", "lineNumbers", "modeAwareCursor"]
 
   connect() {
+    if (this.element.hasAttribute("data-vim-settings-view")) mountVimSettingsView(this.element)
+
     this.vimEnabled = readBoolean(ENABLED_STORAGE_KEY)
     this.escapeKey = readEscapeKey()
     this.lineNumberMode = readLineNumberMode()
@@ -32,6 +35,7 @@ export default class extends Controller {
   toggleVim(event) {
     this.vimEnabled = event.target.checked
     writeBoolean(ENABLED_STORAGE_KEY, this.vimEnabled)
+    this.activeEditor()?.setVimEnabled(this.vimEnabled)
   }
 
   captureEscapeKey(event) {
@@ -43,21 +47,29 @@ export default class extends Controller {
     this.escapeKey = key
     if (this.hasEscapeKeyTarget) this.escapeKeyTarget.value = escapeKeyDisplay(key)
     writeValue(ESCAPE_KEY_STORAGE_KEY, key)
+    this.activeEditor()?.setEscapeKey(key)
   }
 
   clearEscapeKey() {
     this.escapeKey = ""
     if (this.hasEscapeKeyTarget) this.escapeKeyTarget.value = ""
     writeValue(ESCAPE_KEY_STORAGE_KEY, "")
+    this.activeEditor()?.clearEscapeKey()
   }
 
   lineNumbersChanged(event) {
     this.lineNumberMode = normalizeLineNumberMode(event.target.value)
     writeValue(LINE_NUMBERS_STORAGE_KEY, this.lineNumberMode)
+    this.activeEditor()?.setLineNumberMode(this.lineNumberMode)
   }
 
   modeAwareCursorChanged(event) {
     this.modeAwareCursor = event.target.checked
     writeBoolean(MODE_AWARE_CURSOR_STORAGE_KEY, this.modeAwareCursor)
+    this.activeEditor()?.setModeAwareCursor(this.modeAwareCursor)
+  }
+
+  activeEditor() {
+    return this.element.ownerDocument.querySelector(".source-field")?.editorController || null
   }
 }
