@@ -743,10 +743,33 @@ class DesktopEditorUi {
       target = await $("#desktop-preview .document-editor-block[data-editor-empty-block='true'][contenteditable='true']")
       await target.waitForDisplayed()
       await target.click()
+      const focus = await browser.execute(() => {
+        const block = document.querySelector("#desktop-preview .document-editor-block[data-editor-empty-block='true'][contenteditable='true']")
+        block?.focus({ preventScroll: true })
+        const selection = window.getSelection()
+        return {
+          active: document.activeElement === block,
+          selectionInsideBlock: Boolean(selection?.focusNode && block?.contains(selection.focusNode))
+        }
+      })
+      if (!focus?.active || !focus.selectionInsideBlock) {
+        throw new Error(`The visual editor did not receive focus before native typing: ${JSON.stringify(focus)}`)
+      }
     } else {
       target = await $("#deck-source-editor .cm-content")
       await target.waitForDisplayed()
       await target.click()
+      const focus = await browser.execute(() => {
+        const editor = document.querySelector("#desktop-editor-field")?.editorController
+        editor?.view.focus()
+        return {
+          editorHasFocus: Boolean(editor?.view.hasFocus),
+          contentDomActive: document.activeElement === editor?.view.contentDOM
+        }
+      })
+      if (!focus?.editorHasFocus || !focus.contentDomActive) {
+        throw new Error(`CodeMirror did not receive focus before native typing: ${JSON.stringify(focus)}`)
+      }
       sendNativeKey("ControlOrMeta+End", { activate: false })
     }
 
