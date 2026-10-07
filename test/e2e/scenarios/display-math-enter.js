@@ -29,6 +29,7 @@ export async function displayMathEnterWorkflow(ui) {
   } finally {
     if (await ui.readSource() !== originalSource) {
       await ui.replaceSource(originalSource)
+      await ui.flushLocalSave()
       await ui.waitForSaved(originalSource)
     }
   }
