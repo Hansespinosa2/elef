@@ -4,6 +4,8 @@ const RETRY_DELAYS = [1_000, 3_000, 10_000, 30_000]
 export function createSaveFlow({
   saveSource,
   acceptDiskVersion,
+  mergeExternalChange = null,
+  takeSnapshot = null,
   getSource,
   getSnapshot = getSource,
   setSource,
@@ -163,6 +165,56 @@ export function createSaveFlow({
     if (dirty) schedule()
     else setStatus("External changes loaded")
     return "reloaded"
+  }
+
+  async function resolveExternalChange(id, snapshot) {
+    if (!activeDeck || activeDeck.id !== id) return "inactive"
+    materializeEdits()
+    if (sourceMutation) return "busy"
+    if (!mergeExternalChange || !takeSnapshot) return checkExternalChange(id, snapshot)
+    if (!snapshot || !isValidConflictBaseline(snapshot.content_hash)) {
+      const error = Object.assign(new Error("Elef received an invalid file fingerprint."), {
+        code: "invalid_response",
+        retryable: false
+      })
+      onError(error)
+      return "invalid"
+    }
+    if (snapshot.source === getSource() || (!dirty && getSnapshot() === activeDeck.savedSnapshot && !activeConflict)) {
+      return checkExternalChange(id, snapshot)
+    }
+    const localSource = getSource()
+    try {
+      await takeSnapshot(id, "pre-merge", localSource)
+    } catch (error) {
+      onError(error)
+      return checkExternalChange(id, snapshot)
+    }
+    let outcome
+    try {
+      outcome = await mergeExternalChange(id, localSource)
+    } catch (error) {
+      onError(error)
+      return checkExternalChange(id, snapshot)
+    }
+    if (!outcome || outcome.kind !== "merged" || typeof outcome.source !== "string") {
+      return checkExternalChange(id, snapshot)
+    }
+    const deck = activeDeck
+    if (!(await applySource(outcome.source, deck, { preserveMetadata: true })) || activeDeck !== deck) {
+      if (activeDeck?.id === id) return checkExternalChange(id, snapshot)
+      return "inactive"
+    }
+    acceptDiskVersion(id, snapshot.content_hash)
+    revision += 1
+    deck.content_hash = snapshot.content_hash
+    deck.source = snapshot.source
+    deck.source_file = snapshot.source_file || deck.source_file
+    activeConflict = null
+    dirty = true
+    setStatus("Saving merged changes…")
+    await flush({ force: true })
+    return "merged"
   }
 
   async function flush({ force = false } = {}) {
@@ -396,6 +448,7 @@ export function createSaveFlow({
     flush,
     handleConflict,
     checkExternalChange,
+    resolveExternalChange,
     useDiskVersion,
     keepLocalVersion,
     saveMergedVersion,
