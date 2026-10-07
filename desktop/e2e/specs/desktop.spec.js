@@ -496,7 +496,8 @@ class DesktopEditorUi {
     if ((await sourceMode.getAttribute("aria-pressed")) !== "true") await sourceMode.click()
     await browser.waitUntil(async () => {
       const mode = await $("#desktop-editor-form").getAttribute("data-editor-mode")
-      return mode === "source" && (await sourceMode.getAttribute("aria-pressed")) === "true"
+      const currentSourceMode = await $("#source-mode")
+      return mode === "source" && (await currentSourceMode.getAttribute("aria-pressed")) === "true"
     }, {
       timeout: 5_000,
       timeoutMsg: "The source editor did not finish restoring after the mode switch"
