@@ -1728,14 +1728,35 @@ describe("desktop binary workflows and native boundaries", () => {
           }
         }
       })
+      // Snapshot without detaching: lagged tail keystrokes may still be in
+      // flight when typing returns, so the listener stays until the buffer
+      // proves they landed.
+      const earlyKeys = await browser.execute(() => {
+        const tracker = window.__elefTrustedEditorKeys
+        return tracker?.events.slice() || []
+      })
+      if (!earlyKeys.some(event => event.trusted && event.key.toLowerCase() === "n")) {
+        throw new Error(`Native input did not reach CodeMirror: ${JSON.stringify({ focus, trustedKeys: earlyKeys })}`)
+      }
+      await ui.waitForSource(expected).catch(async error => {
+        const lateKeys = await browser.execute(() => window.__elefTrustedEditorKeys?.events.slice() || []).catch(() => [])
+        const sequence = lateKeys.map(event => (event.trusted ? event.key : `(${event.key}?)`)).join(" ")
+        throw new Error(`${error.message}; keydown sequence (${lateKeys.length}): ${sequence}`)
+      })
       const trustedKeys = await browser.execute(() => {
         const tracker = window.__elefTrustedEditorKeys
         tracker?.target.removeEventListener("keydown", tracker.handler)
         delete window.__elefTrustedEditorKeys
         return tracker?.events || []
       })
-      if (!trustedKeys.some(event => event.trusted && event.key.toLowerCase() === "n")) {
-        throw new Error(`Native input did not reach CodeMirror: ${JSON.stringify({ focus, trustedKeys })}`)
+      // Every synthesized character must surface as a trusted keydown. Extras
+      // (modifier or repeat events) are harmless; anything below the minimum
+      // means keystrokes were swallowed before CodeMirror.
+      const trustedCount = trustedKeys.filter(event => event.trusted).length
+      const expectedMinKeys = inserted.length + (vimEnabled ? 1 : 0) + (needsLineBreak ? 1 : 0)
+      if (trustedCount < expectedMinKeys) {
+        const sequence = trustedKeys.map(event => (event.trusted ? event.key : `(${event.key}?)`)).join(" ")
+        throw new Error(`Native input lost keystrokes before CodeMirror: ${JSON.stringify({ focus, trustedCount, expectedMinKeys, sequence })}`)
       }
       await ui.waitForSaved(expected)
     } finally {
