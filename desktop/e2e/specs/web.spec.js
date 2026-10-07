@@ -81,7 +81,10 @@ class WebEditorUi {
   }
 
   async closeAuthoringSettings() {
-    await this.page.locator("#close-authoring-settings").click()
+    await Promise.all([
+      this.page.waitForURL("**/settings"),
+      this.page.locator("#close-authoring-settings").click()
+    ])
     await expect(this.page.locator("#authoring-settings-dialog")).toBeHidden()
   }
 
