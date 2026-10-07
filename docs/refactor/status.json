@@ -3,7 +3,7 @@
   "campaign_branch": "feat/refactor-desktop-and-web",
   "campaign_base_sha": "88f61a7a8ffd7c276bafcf06eee09c36a8adf134",
   "current_phase": 0,
-  "phase_state": "CHECK",
+  "phase_state": "ACT",
   "phase_base_sha": "88f61a7a8ffd7c276bafcf06eee09c36a8adf134",
   "head_sha": "4f71a97885256063dcd5f4651375cfec29c9b885",
   "review_round": 2,
@@ -100,5 +100,5 @@
   },
   "pending_human_gates": [],
   "blocker": null,
-  "next_action": "Review candidate 4f71a97885256063dcd5f4651375cfec29c9b885 independently, then re-plan Phase 00 for the owner-directed local web and desktop test-environment requirement."
+  "next_action": "Record round-2 PASS (P00-CI-OWNERSHIP-001 and P00-CI-NATIVE-001 resolved, no findings), then transition Phase 00 to PASS."
 }
