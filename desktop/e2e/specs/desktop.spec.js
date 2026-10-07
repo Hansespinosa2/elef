@@ -535,7 +535,16 @@ class DesktopEditorUi {
   }
 
   async restoreSource(source) {
-    await this.replaceSource(source)
+    const restoredSource = await browser.execute(nextSource => {
+      const controller = document.querySelector("#desktop-editor-field")?.editorController
+      if (!controller) return null
+      controller.replaceRange(nextSource, 0, controller.value.length)
+      controller.setSelectionRange(nextSource.length)
+      return controller.sourceValue
+    }, source)
+    if (restoredSource !== source) {
+      throw new Error(`The desktop editor could not restore its original fixture source: ${JSON.stringify(restoredSource)}`)
+    }
   }
 
   async waitForEditorModeTransition() {
