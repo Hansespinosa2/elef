@@ -1,0 +1,146 @@
+{
+  "schema_version": 1,
+  "candidate_sha": "3d1a1fb5ff97f85979f31b2c17f6a1287ebaf942",
+  "pull_request": {
+    "number": 136,
+    "url": "https://github.com/Hansespinosa2/elef/pull/136",
+    "base_branch": "dev",
+    "base_sha": "73ba6afed637fbe4da261d58efcca0ffe2e23ae8",
+    "head_branch": "feat/refactor-desktop-and-web"
+  },
+  "run": {
+    "id": 37692902433,
+    "url": "https://github.com/Hansespinosa2/elef/actions/runs/37692902433",
+    "event": "pull_request",
+    "attempt": 2,
+    "conclusion": "success",
+    "tested_merge_sha": "76debe1d56c04ee8c362d451c6fce96d1574fecf",
+    "tested_merge_parents": [
+      "73ba6afed637fbe4da261d58efcca0ffe2e23ae8",
+      "3d1a1fb5ff97f85979f31b2c17f6a1287ebaf942"
+    ],
+    "attempt_history": [
+      {
+        "attempt": 1,
+        "conclusion": "cancelled",
+        "note": "desktop job silently killed by the runner mid-e2e (orphan reap, no error, no test failure); all other jobs green."
+      },
+      {
+        "attempt": 2,
+        "conclusion": "success",
+        "note": "desktop job rerun on the same commit: green including benchmark."
+      }
+    ],
+    "note": "Candidate differs from c9bdaeb only by steps 12-13 (desktop/e2e/specs/desktop.spec.js, test-only); production tree identical. Prior runs: 37679462923 on c9bdaeb (macOS trusted-keys flakes x3), 37690357888 on f9fbd46 (macOS single-char keydown-without-text drop + Linux benchmark close-timeout flake; Linux rerun green)."
+  },
+  "jobs": [
+    {
+      "name": "desktop-fast",
+      "id": 113044885418,
+      "conclusion": "success"
+    },
+    {
+      "name": "test",
+      "id": 113044884306,
+      "conclusion": "success"
+    },
+    {
+      "name": "system-test",
+      "id": 113044844249,
+      "conclusion": "success"
+    },
+    {
+      "name": "affected",
+      "id": 113044878178,
+      "conclusion": "success",
+      "note": "bin/check affected: PASS (53.2s warm, ceiling 420s)."
+    },
+    {
+      "name": "sqlite-test",
+      "id": 113044893809,
+      "conclusion": "success"
+    },
+    {
+      "name": "desktop",
+      "id": 113044841873,
+      "conclusion": "success",
+      "tested_merge_sha": "76debe1d56c04ee8c362d451c6fce96d1574fecf",
+      "shared_scenarios_step": "success",
+      "note": "Rerun job after attempt-1 runner cancellation. e2e: desktop.spec 35 passing, contract-conformance 1 passing, quiet-save 11 passing. Release benchmark 20/20 runs, inputPreservedRuns 20."
+    },
+    {
+      "name": "desktop-macos",
+      "id": 113044902677,
+      "conclusion": "success",
+      "tested_merge_sha": "76debe1d56c04ee8c362d451c6fce96d1574fecf",
+      "shared_scenarios_step": "success",
+      "note": "e2e: desktop.spec 35 passing, contract-conformance 1 passing, quiet-save 11 passing. Trusted-keys test passed clean (no E2E-RETRY taken); retype fallback logic proven against all three observed drop shapes via span probe, e2e-exercised on the happy path only."
+    },
+    {
+      "name": "renderer-macos",
+      "id": 113044886471,
+      "conclusion": "success"
+    },
+    {
+      "name": "production-smoke",
+      "id": 113044903579,
+      "conclusion": "success"
+    },
+    {
+      "name": "development-smoke",
+      "id": 113044896807,
+      "conclusion": "success"
+    },
+    {
+      "name": "record-ci-attestation",
+      "id": 113050703914,
+      "conclusion": "success"
+    }
+  ],
+  "rails_conformance": {
+    "conclusion": "success",
+    "job": "system-test",
+    "job_id": 113044844249,
+    "command": "node tests/host-conformance/run-node.js rails",
+    "result": "conformance rails: 11 passed, 1 skipped, 0 failed (suite v12 cases)"
+  },
+  "tauri_conformance": {
+    "conclusion": "success",
+    "jobs": [
+      {
+        "name": "desktop",
+        "job_id": 113044841873,
+        "spec": "specs/contract-conformance.spec.js",
+        "result": "host contract conformance (desktop invoke): 1 passing"
+      },
+      {
+        "name": "desktop-macos",
+        "job_id": 113044902677,
+        "spec": "specs/contract-conformance.spec.js",
+        "result": "host contract conformance (desktop invoke): 1 passing"
+      }
+    ]
+  },
+  "artifacts": [
+    {
+      "name": "ci-attestation-pr136-run37692902433-attempt2",
+      "id": 11515522566,
+      "sha256": "658bd503fae62ac875aabeb98082fb6b6cf957bd49be9a007f8b340d9c8a6dcf",
+      "size_bytes": 198,
+      "note": "Attests run_attempt 2, tested_sha 76debe1d56c04ee8c362d451c6fce96d1574fecf (matches tested_merge_sha)."
+    },
+    {
+      "name": "native-performance-linux",
+      "id": 11515851958,
+      "sha256": "3767f854fdbc8dc3c7e93d394440fd46a06213741c4d61afc4803837c9c7cb37",
+      "size_bytes": 65431,
+      "note": "20/20 runs; p95 coldStart 892ms, open100Slides 1051ms, warmLibrary 397ms; misses 1 in runner-report-only budgetMode (job green)."
+    },
+    {
+      "name": "native-performance-darwin",
+      "id": 11515475161,
+      "sha256": "0d8d32547dc1c3ad033dda929401cbddc91fa505e388bae4619f2730bae69dc7",
+      "size_bytes": 70167
+    }
+  ]
+}
