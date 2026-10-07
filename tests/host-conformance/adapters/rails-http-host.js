@@ -263,7 +263,7 @@ export async function createRailsHost({ baseUrl, fetchImpl = fetch }) {
     async removeMedia(mediaId) {
       const found = await findOwningWork(mediaId);
       await request(
-        `/api/host/works/${encodeURIComponent(found)}/media/${encodeURIComponent(mediaId)}`,
+        `/api/host/works/${encodeURIComponent(found.workId)}/media/${encodeURIComponent(mediaId)}`,
         { method: "DELETE" },
       );
     },

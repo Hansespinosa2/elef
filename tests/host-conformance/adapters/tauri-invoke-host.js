@@ -19,17 +19,32 @@ export function createTauriHost({ invoke, readExportFile }) {
   const sessions = new Set();
 
   function summary(deck) {
+    // DeckSummary carries kind; OpenDeck (create/open) does not, so derive it
+    // from the kind-specific source file for those shapes.
+    const kind =
+      deck.kind ?? (deck.source_file === "presentation.md" ? "presentation" : "document");
     return {
       id: String(deck.id),
       workspaceId: "local",
       title: deck.name,
-      kind: deck.kind === "presentation" ? "presentation" : "document",
+      kind: kind === "presentation" ? "presentation" : "document",
     };
   }
 
+  async function call(command, args, options) {
+    // The wdio wrapper cannot rethrow across the WebDriver boundary with its
+    // code intact, so it resolves command failures into an envelope the
+    // adapter turns back into a rejection. Native invoke already rejects.
+    const result = await invoke(command, args, options);
+    if (result && typeof result === "object" && "__elefInvokeError" in result) {
+      throw result.__elefInvokeError;
+    }
+    return result;
+  }
+
   async function snapshotOf(deckId) {
-    const snapshot = await invoke("read_source_snapshot", { id: deckId });
-    const deck = await invoke("open_deck", { id: deckId });
+    const snapshot = await call("read_source_snapshot", { id: deckId });
+    const deck = await call("open_deck", { id: deckId });
     baseHashes.set(deck.id, deck.content_hash);
     return {
       ...summary(deck),
@@ -40,31 +55,31 @@ export function createTauriHost({ invoke, readExportFile }) {
 
   const library = {
     async listWorkspaces() {
-      const status = await invoke("get_library_status");
+      const status = await call("get_library_status");
       return [{ id: "local", name: status?.root ? String(status.root) : "Local library" }];
     },
     async listWorks() {
-      const decks = await invoke("list_decks");
+      const decks = await call("list_decks");
       return decks.map(summary);
     },
     async createWork(input) {
-      const deck = await invoke("create_deck", { name: input.title, kind: input.kind });
+      const deck = await call("create_deck", { name: input.title, kind: input.kind });
       baseHashes.set(deck.id, deck.content_hash);
       if (input.text !== undefined && input.text !== null) {
         await worksPort.saveWork(deck.id, input.text, {
           revision: String(deck.content_hash),
         });
       }
-      const opened = await invoke("open_deck", { id: deck.id });
+      const opened = await call("open_deck", { id: deck.id });
       baseHashes.set(opened.id, opened.content_hash);
       return summary(opened);
     },
     async renameWork(workId, title) {
-      const deck = await invoke("rename_deck", { id: workId, name: title });
+      const deck = await call("rename_deck", { id: workId, name: title });
       return summary(deck);
     },
     async deleteWork(workId) {
-      await invoke("delete_deck", { id: workId });
+      await call("delete_deck", { id: workId });
       baseHashes.delete(workId);
     },
   };
@@ -75,7 +90,7 @@ export function createTauriHost({ invoke, readExportFile }) {
     },
     async saveWork(workId, text, baseline) {
       try {
-        const result = await invoke("save_source", {
+        const result = await call("save_source", {
           id: workId,
           source: text,
           baseHash: baseline.revision,
@@ -168,7 +183,7 @@ export function createTauriHost({ invoke, readExportFile }) {
 
   const mediaPort = {
     async listMedia(workId) {
-      const items = await invoke("list_media", { id: workId });
+      const items = await call("list_media", { id: workId });
       return items.map((item) => ({
         id: String(item.digest),
         workId: String(workId),
@@ -179,7 +194,7 @@ export function createTauriHost({ invoke, readExportFile }) {
     async addMedia(workId, input) {
       // Plain array: WebDriver JSON-serializes execute args, so the in-page
       // invoke wrapper rehydrates bytes into a Uint8Array for the raw body.
-      const uploaded = await invoke("upload_asset", Array.from(input.bytes), {
+      const uploaded = await call("upload_asset", Array.from(input.bytes), {
         headers: {
           "x-elef-deck-id": workId,
           "x-elef-filename": input.name,
@@ -196,11 +211,11 @@ export function createTauriHost({ invoke, readExportFile }) {
     },
     async removeMedia(mediaId) {
       const found = await findOwningWork(mediaId);
-      await invoke("remove_media", { id: found, digest: mediaId });
+      await call("remove_media", { id: found, digest: mediaId });
     },
     async resolveMedia(mediaId) {
       const found = await findOwningWork(mediaId);
-      const items = await invoke("list_media", { id: found });
+      const items = await call("list_media", { id: found });
       const match = items.find((item) => String(item.digest) === String(mediaId));
       if (!match) {
         throw commandError({ code: "not_found", message: "media not found", retryable: false });
@@ -216,9 +231,9 @@ export function createTauriHost({ invoke, readExportFile }) {
   };
 
   async function findOwningWork(mediaId) {
-    const decks = await invoke("list_decks");
+    const decks = await call("list_decks");
     for (const deck of decks) {
-      const items = await invoke("list_media", { id: deck.id });
+      const items = await call("list_media", { id: deck.id });
       if (items.some((item) => String(item.digest) === String(mediaId))) return deck.id;
     }
     throw commandError({ code: "not_found", message: "media not found", retryable: false });
@@ -229,9 +244,9 @@ export function createTauriHost({ invoke, readExportFile }) {
       return invoke("read_library_config");
     },
     async updateSettings(patch) {
-      const current = await invoke("read_library_config");
+      const current = await call("read_library_config");
       const merged = { ...current, ...patch };
-      await invoke("write_library_config", { config: merged });
+      await call("write_library_config", { config: merged });
       return invoke("read_library_config");
     },
   };
@@ -239,8 +254,8 @@ export function createTauriHost({ invoke, readExportFile }) {
   const searchPort = {
     async search(input) {
       const query = input.query.toLowerCase();
-      const decks = await invoke("list_decks");
-      const graph = await invoke("document_graph").catch(() => []);
+      const decks = await call("list_decks");
+      const graph = await call("document_graph").catch(() => []);
       const sources = new Map(graph.map((doc) => [String(doc.id), doc.source ?? ""]));
       const hits = [];
       for (const deck of decks) {
@@ -258,22 +273,22 @@ export function createTauriHost({ invoke, readExportFile }) {
       if (typeof readExportFile !== "function") {
         throw new Error("tauri export bytes require the e2e harness export file");
       }
-      await invoke("export_elef", { id: workIds[0] });
+      await call("export_elef", { id: workIds[0] });
       return readExportFile();
     },
     async importElef(bytes) {
       try {
-        const result = await invoke("import_elef_bytes", { bytes: Array.from(bytes) });
+        const result = await call("import_elef_bytes", { bytes: Array.from(bytes) });
         if (!result) throw new Error("import produced no deck");
         if (result.name_collision) {
-          const resolved = await invoke("resolve_import_conflict", { resolution: "keep_both" });
+          const resolved = await call("resolve_import_conflict", { resolution: "keep_both" });
           if (!resolved) throw new Error("import conflict could not be resolved");
           return [summary(resolved.deck)];
         }
         return [summary(result.deck)];
       } catch (error) {
         if (error?.code !== "import_conflict") throw error;
-        const resolved = await invoke("resolve_import_conflict", { resolution: "keep_both" });
+        const resolved = await call("resolve_import_conflict", { resolution: "keep_both" });
         if (!resolved) throw new Error("import conflict could not be resolved");
         return [summary(resolved.deck)];
       }

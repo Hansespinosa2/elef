@@ -9,16 +9,19 @@ import { createTauriHost, tauriPolicy } from "../../../tests/host-conformance/ad
 // export bytes come from the harness ELEF_E2E_EXPORT_PATH file.
 
 async function invoke(command, args, options) {
-  return browser.execute(
+  const result = await browser.execute(
     (cmd, payload, invokeOptions) => {
       let body = payload
       if (cmd === "upload_asset" && Array.isArray(payload)) body = new Uint8Array(payload)
-      return window.__TAURI__.core.invoke(cmd, body, invokeOptions ?? undefined)
+      return window.__TAURI__.core
+        .invoke(cmd, body, invokeOptions ?? undefined)
+        .catch(error => ({ __elefInvokeError: error ?? { code: "internal" } }))
     },
     command,
     args,
     options ?? null,
   )
+  return result
 }
 
 async function readExportFile() {
