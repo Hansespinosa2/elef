@@ -240,11 +240,6 @@
 
 .slide h1 { font-size: 7rem; line-height: 0.95; }
 .slide h2 { font-size: 5rem; }
-.slide p,
-.slide li,
-.slide blockquote,
-.slide td,
-.slide th { font-size: 2.4rem; }
 .presentation-surface pre {
   background: #191714;
   border: 1px solid rgba(255, 247, 232, 0.12);
