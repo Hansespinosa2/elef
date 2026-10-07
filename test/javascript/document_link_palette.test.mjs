@@ -227,6 +227,16 @@ test("refresh hides the palette when the caret leaves the link token", () => {
   assert.equal(paletteTarget.children.length, 0)
 })
 
+test("refresh closes the palette after a literal closing bracket", () => {
+  const value = "[[Research]"
+  const { controller, paletteTarget } = build({ titles: ["Research target"], value })
+
+  controller.refresh()
+
+  assert.equal(paletteTarget.hidden, true)
+  assert.deepEqual(controller.matches, [])
+})
+
 test("refresh stays closed inside fenced, indented, and inline code", () => {
   for (const value of ["```\n[[Research ta", "Prose\n\n    [[Research ta", "`[[Research ta"]) {
     const { controller, paletteTarget } = build({ titles: ["Research target"], value })
@@ -341,7 +351,7 @@ test("setupEditor falls back to the textarea once the CodeMirror editor is gone"
 })
 
 test("keydown moves the selection within the five visible options and closes on Escape", () => {
-  const { controller, paletteTarget } = build({ titles: ["A one", "B two", "C three", "D four", "E five", "F six"], value: "[[" })
+  const { controller, paletteTarget, editorTarget } = build({ titles: ["A one", "B two", "C three", "D four", "E five", "F six"], value: "[[" })
 
   controller.refresh()
 
@@ -364,6 +374,7 @@ test("keydown moves the selection within the five visible options and closes on 
   controller.keydown(escape)
   assert.equal(escape.defaultPrevented, true)
   assert.equal(paletteTarget.hidden, true)
+  assert.equal(editorTarget.value, "[[")
 
   const ignored = keyEvent("ArrowDown")
   controller.keydown(ignored)
@@ -383,14 +394,22 @@ test("keydown ignores editor events that do not come from the palette editor con
 
 test("Enter and Tab insert the selected title and close the palette", () => {
   for (const key of ["Enter", "Tab"]) {
-    const { controller, paletteTarget, editorTarget } = build({ titles: ["Alpha", "Beta"], value: "[[Al" })
+    const value = "[[Al]]"
+    const caret = "[[Al".length
+    const { controller, paletteTarget, editorTarget, editor } = build({
+      titles: ["Alpha", "Beta"],
+      value,
+      caret,
+      editorController: true
+    })
 
     controller.refresh()
     const event = keyEvent(key)
     controller.keydown(event)
 
     assert.equal(event.defaultPrevented, true, key)
-    assert.equal(editorTarget.value, "[[Alpha]]", key)
+    assert.deepEqual(editor.calls[0], ["replaceRange", "[[Alpha]]", 0, value.length], key)
+    assert.equal(editorTarget.value, value, key)
     assert.equal(paletteTarget.hidden, true, key)
   }
 })
@@ -408,22 +427,41 @@ test("insertSelected rewrites the token in a plain textarea and restores the car
   assert.deepEqual(controller.matches, [])
 })
 
+test("insertSelected removes auto-paired closers in the plain textarea fallback", () => {
+  const value = "See [[Research ta]]"
+  const caret = "See [[Research ta".length
+  const { controller, editorTarget } = build({
+    titles: ["Research target"],
+    value,
+    caret
+  })
+
+  controller.refresh()
+  controller.insertSelected()
+
+  assert.equal(editorTarget.value, "See [[Research target]]")
+  assert.equal(editorTarget.selectionStart, "See [[Research target]]".length)
+  assert.equal(editorTarget.selectionEnd, editorTarget.selectionStart)
+})
+
 test("insertSelected commits through the editor controller and leaves the textarea alone", () => {
-  const { controller, editorTarget, editor } = build({ titles: ["Research target"], value: "[[Research ta", editorController: true })
+  const value = "[[Research ta]]"
+  const caret = "[[Research ta".length
+  const { controller, editorTarget, editor } = build({ titles: ["Research target"], value, caret, editorController: true })
 
   controller.refresh()
   controller.insertSelected()
 
   assert.deepEqual(editor.calls, [
-    ["replaceRange", "[[Research target]]", 0, "[[Research ta".length],
+    ["replaceRange", "[[Research target]]", 0, value.length],
     ["focus"],
     ["setSelectionRange", "[[Research target]]".length, "[[Research target]]".length]
   ])
-  assert.equal(editorTarget.value, "[[Research ta")
+  assert.equal(editorTarget.value, value)
 })
 
 test("mousedown on a visible option selects it before inserting", () => {
-  const { controller, editorTarget } = build({ titles: ["A one", "B two"], value: "[[" })
+  const { controller, editorTarget } = build({ titles: ["A one", "B two"], value: "[[]]", caret: 2 })
 
   controller.refresh()
   const event = keyEvent("MouseEvent")

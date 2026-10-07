@@ -253,11 +253,13 @@ export default class extends Controller {
 
     const editor = this.editor()
     const before = editor.value.slice(0, this.queryStart)
-    const after = editor.value.slice(editor.selectionStart)
+    let end = editor.selectionStart
+    if (editor.value.slice(end, end + 2) === "]]") end += 2
+    const after = editor.value.slice(end)
     const insertion = `[[${title}]]`
     const caret = before.length + insertion.length
     if (this.editorController) {
-      this.editorController.replaceRange(insertion, this.queryStart, this.editorController.selectionStart)
+      this.editorController.replaceRange(insertion, this.queryStart, end)
       this.editorController.focus()
       this.editorController.setSelectionRange(caret, caret)
     } else {
