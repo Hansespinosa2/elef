@@ -475,7 +475,7 @@ class DesktopEditorUi {
     await browser.waitUntil(async () =>
       (await $("#desktop-editor-title").getValue()) === title &&
       (await $("#deck-title").getText()) === title &&
-      (await $("#save-state").getText()) === "Saved", {
+      (await browser.execute(() => window.__elefSaveTestHooks?.saveStatus())) === "clean", {
       timeout: 10_000,
       timeoutMsg: `The presentation title did not save as ${title}`
     })
@@ -747,7 +747,7 @@ class DesktopEditorUi {
         const [diskSource, state] = await Promise.all([
           readFile(sourcePath, "utf8").catch(readError => `<${readError.code || "read_error"}>`),
           browser.execute(() => ({
-            saveState: document.querySelector("#save-state")?.textContent || "<missing>",
+            saveStatus: window.__elefSaveTestHooks?.saveStatus?.() || "<missing>",
             status: document.querySelector("#status-text")?.textContent || "<missing>",
             notice: document.querySelector("#notice")?.textContent || "",
             deckId: document.querySelector("#deck-id")?.textContent || "",
@@ -757,7 +757,7 @@ class DesktopEditorUi {
         throw new Error(`${error.message}; desktop state: ${JSON.stringify(state)}; disk source: ${JSON.stringify(diskSource)}`)
       })
     }
-    await browser.waitUntil(async () => (await $("#save-state").getText()) === "Saved", {
+    await browser.waitUntil(async () => (await browser.execute(() => window.__elefSaveTestHooks?.saveStatus())) === "clean", {
       timeout: 10_000,
       timeoutMsg: "The desktop editor did not finish saving"
     })
@@ -777,7 +777,7 @@ class DesktopEditorUi {
           buttonTitle: document.querySelector("#visual-mode")?.title || "",
           previewUrl: form?.previewController?.urlValue || form?.dataset.previewUrlValue || "",
           status: document.querySelector("#status-text")?.textContent || "",
-          saveState: document.querySelector("#save-state")?.textContent || "",
+          saveStatus: window.__elefSaveTestHooks?.saveStatus?.() || "",
           previewStatus: form?.querySelector("[data-preview-target='status']")?.textContent || "",
           previewWarnings: [...(form?.querySelectorAll(".preview-warnings li") || [])].map((item) => item.textContent),
           previewText: preview?.textContent || "",
@@ -879,7 +879,7 @@ class DesktopEditorUi {
         return {
           mode: form?.dataset.editorMode,
           source: field?.editorController?.sourceValue,
-          saveState: document.querySelector("#save-state")?.textContent,
+          saveStatus: window.__elefSaveTestHooks?.saveStatus?.(),
           previewStatus: document.querySelector("[data-preview-target='status']")?.textContent,
           preview: document.querySelector("#desktop-preview")?.innerText,
           warnings: document.querySelector("[data-preview-target='warnings']")?.innerText,

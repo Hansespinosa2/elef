@@ -72,6 +72,26 @@ test("shared editor view exposes the same editing controls and targets to both h
   assert.equal(root.querySelector("[data-autosave-target='retry']").hasAttribute("data-action"), false)
 })
 
+test("quiet-save hosts render no save status, unsaved marker, or manual retry", () => {
+  const { root } = mount({
+    kind: "presentation",
+    mode: "visual",
+    source: "# Shared source",
+    title: "Shared title",
+    showTitle: true,
+    showSubmit: false,
+    showSaveStatus: false,
+    persisted: false,
+    ids: { field: "quiet_field", source: "quiet_source", surface: "quiet_editor", label: "quiet_label" }
+  })
+
+  assert.equal(root.querySelector("[data-autosave-target='status']"), null)
+  assert.equal(root.querySelector("[data-autosave-target='retry']"), null)
+  assert.equal(root.querySelector("#save-state"), null)
+  assert.equal(root.querySelector("#retry-save"), null)
+  assert.ok(root.querySelector("#conflict-dialog"))
+})
+
 test("Rails and desktop install previews through the same sanitized DOM sink", () => {
   const { document } = parseHTML("<main id='preview'></main>")
   const preview = document.querySelector("#preview")

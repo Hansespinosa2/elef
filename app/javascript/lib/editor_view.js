@@ -240,6 +240,12 @@ export function renderEditorView(container, config) {
   if (config.previewUrl) get("previewLink").href = config.previewUrl
   const persisted = Boolean(config.persisted)
   root.querySelector("[data-autosave-target='retry']").hidden = !persisted
+  if (config.showSaveStatus === false) {
+    // Quiet-save hosts show no save status, unsaved marker, or manual retry:
+    // saves run silently and retry automatically.
+    saveStatus.remove()
+    retryButton.remove()
+  }
   get("releaseState").hidden = !config.releaseState
   if (config.releaseState) {
     get("releaseState").dataset.releaseStatus = config.releaseStatus || ""

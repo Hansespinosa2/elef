@@ -52,6 +52,7 @@ export function startFileLibraryApplication(platform) {
     visualDisabledMessage: "Open a deck to render its preview",
     showTitle: true,
     showSubmit: false,
+    showSaveStatus: false,
     persisted: false,
     authoringRegistry: desktopAuthoringRegistry(),
     documentTitles: [],
@@ -65,9 +66,7 @@ export function startFileLibraryApplication(platform) {
       sourceMode: "source-mode",
       theme: "deck-theme",
       typography: "deck-typography",
-      preview: "desktop-preview",
-      saveState: "save-state",
-      retrySave: "retry-save"
+      preview: "desktop-preview"
     }
   })
   const editorFieldHost = document.querySelector("#desktop-editor-field")
@@ -107,8 +106,6 @@ export function startFileLibraryApplication(platform) {
     editorForm: document.querySelector("#desktop-editor-form"),
     editorInput: document.querySelector("#deck-source"),
     titleInput: document.querySelector("#desktop-editor-title"),
-    saveState: document.querySelector("#save-state"),
-    retrySave: document.querySelector("#retry-save"),
     restoreDraft: document.querySelector("#restore-local-draft"),
     importConflictDialog: document.querySelector("#import-conflict-dialog"),
     importConflictMessage: document.querySelector("#import-conflict-message"),
@@ -124,6 +121,7 @@ export function startFileLibraryApplication(platform) {
   let decks = []
   let activeDeck = null
   let saveFlow = null
+  let sessionStatusKind = "clean"
   let e2eNextSaveDelayMs = 0
   const documentGraphCache = createDocumentGraphCache(async () => buildDocumentGraph(await fileLibrary.readDocumentGraph()))
   let libraryTab = "all"
@@ -223,13 +221,8 @@ export function startFileLibraryApplication(platform) {
       }
     })
     session.onStatus(status => {
-      const state = status.kind === "clean" ? "Saved"
-        : status.kind === "saving" ? "Saving…"
-        : status.kind === "error" ? "Save failed"
-        : "Unsaved changes"
-      if (state !== "Saved" || !titleFlow?.isDirty()) setSaveState(state)
+      sessionStatusKind = status.kind
       elements.restoreDraft.hidden = !session.canRestoreDraft
-      elements.retrySave.hidden = !session.blocked && !titleFlow?.isBlocked()
       if (status.kind === "clean" && openFilesWaitingForSave) {
         openFilesWaitingForSave = false
         queueMicrotask(() => void processOpenedFiles())
@@ -242,6 +235,7 @@ export function startFileLibraryApplication(platform) {
     if (!saveFlow) return
     saveFlow.dispose()
     saveFlow = null
+    sessionStatusKind = "clean"
   }
   titleFlow = createTitleSaveFlow({
     getDeck: () => activeDeck,
@@ -251,10 +245,7 @@ export function startFileLibraryApplication(platform) {
       elements.deckTitle.textContent = renamed.name
       document.querySelector("#breadcrumb-current").textContent = renamed.name
     },
-    onState: (state, details) => {
-      if (state !== "Saved" || !saveFlow?.dirty) setSaveState(state)
-      elements.retrySave.hidden = !details.blocked && !saveFlow?.blocked
-    },
+    onState: () => {},
     onError: showError
   })
 
@@ -393,6 +384,10 @@ export function startFileLibraryApplication(platform) {
     Object.defineProperty(window, "__elefSaveTestHooks", {
       value: Object.freeze({
         pause: () => saveFlow?.pause(),
+        saveStatus: () => {
+          if (titleFlow?.isDirty() || titleFlow?.isBlocked()) return "dirty"
+          return sessionStatusKind
+        },
         async flush() {
           try {
             if (!saveFlow) return true
@@ -700,7 +695,6 @@ export function startFileLibraryApplication(platform) {
       visualButton.disabled = true
       visualButton.title = "Rendering preview…"
       elements.editorInput.disabled = false
-      setSaveState("Saved")
       document.querySelector("#deck-id").textContent = deck.id
       elements.editorForm.dataset.loadedDeckId = deck.id
       const notice = document.querySelector("#deck-notice")
@@ -801,13 +795,8 @@ export function startFileLibraryApplication(platform) {
     }
   }
 
-  function setSaveState(state) {
-    elements.saveState.textContent = state
-    elements.saveState.dataset.state = state.toLowerCase().replaceAll(" ", "-")
-  }
-
   function scheduleSave() {
-    saveFlow.noteChange()
+    saveFlow?.noteChange()
   }
 
   function materializePendingVisualEdits() {
@@ -1165,7 +1154,6 @@ export function startFileLibraryApplication(platform) {
   elements.restoreDraft.addEventListener("click", () => {
     void saveFlow?.restoreDraft()
   })
-  elements.retrySave.addEventListener("click", () => void flushSave({ force: true }))
   window.addEventListener("blur", () => void flushSave())
   void getCurrentWindow().onCloseRequested(createCloseFlow({
     isDirty: () => hasUnsavedChanges(),
