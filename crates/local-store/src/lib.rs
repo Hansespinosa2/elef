@@ -124,6 +124,13 @@ pub struct UploadedAsset {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct StoredAsset {
+    pub digest: String,
+    pub content_type: String,
+    pub size: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct LibraryConfig {
     pub schema_version: u32,
     pub theme: String,
@@ -961,6 +968,109 @@ impl Library {
         let bytes = read_regular_file_limited(&canonical_path, MAX_ASSET_BYTES as u64)?;
         let (_, content_type) = detect_asset_type(&bytes)?;
         Ok((bytes, content_type))
+    }
+
+    pub fn list_assets(&self, id: &str) -> Result<Vec<StoredAsset>, CoreError> {
+        let record = self.record(id)?;
+        self.validate_deck_path(&record.path)?;
+        let images = record.path.join("images");
+        let metadata = match fs::symlink_metadata(&images) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return Ok(Vec::new());
+            }
+            Err(error) => return Err(CoreError::Io(error)),
+        };
+        if metadata.file_type().is_symlink() || !metadata.is_dir() {
+            return Err(CoreError::PathRejected);
+        }
+        let canonical_images = fs::canonicalize(&images).map_err(|_| CoreError::PathRejected)?;
+        if canonical_images.parent() != Some(record.path.as_path()) {
+            return Err(CoreError::PathRejected);
+        }
+
+        let mut assets = Vec::new();
+        for entry in fs::read_dir(&canonical_images)? {
+            let entry = entry?;
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let Some((digest, extension)) = name.rsplit_once('.') else {
+                continue;
+            };
+            if !is_sha256(digest) {
+                continue;
+            }
+            let Some(content_type) = ASSET_TYPES
+                .iter()
+                .find(|(known, _)| *known == extension)
+                .map(|(_, content_type)| *content_type)
+            else {
+                continue;
+            };
+            let file_type = entry.file_type()?;
+            if file_type.is_symlink() {
+                return Err(CoreError::PathRejected);
+            }
+            if !file_type.is_file() {
+                continue;
+            }
+            let bytes = read_regular_file_limited(&entry.path(), MAX_ASSET_BYTES as u64)?;
+            if sha256(&bytes) != digest {
+                continue;
+            }
+            assets.push(StoredAsset {
+                digest: digest.into(),
+                content_type: content_type.into(),
+                size: bytes.len() as u64,
+            });
+        }
+        assets.sort_by(|left, right| left.digest.cmp(&right.digest));
+        Ok(assets)
+    }
+
+    pub fn remove_asset(&self, id: &str, digest: &str) -> Result<bool, CoreError> {
+        if !is_sha256(digest) {
+            return Err(CoreError::NotFound);
+        }
+        let lock = self.write_lock(id);
+        let _guard = lock.lock().expect("deck write lock poisoned");
+        let record = self.record(id)?;
+        self.validate_deck_path(&record.path)?;
+        let images = record.path.join("images");
+        let metadata = fs::symlink_metadata(&images).map_err(|error| {
+            if error.kind() == std::io::ErrorKind::NotFound {
+                CoreError::NotFound
+            } else {
+                CoreError::Io(error)
+            }
+        })?;
+        if metadata.file_type().is_symlink() || !metadata.is_dir() {
+            return Err(CoreError::PathRejected);
+        }
+        let canonical_images = fs::canonicalize(&images).map_err(|_| CoreError::PathRejected)?;
+        if canonical_images.parent() != Some(record.path.as_path()) {
+            return Err(CoreError::PathRejected);
+        }
+
+        for (extension, _) in ASSET_TYPES {
+            let path = canonical_images.join(format!("{digest}.{extension}"));
+            match fs::symlink_metadata(&path) {
+                Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_file() => {
+                    return Err(CoreError::PathRejected);
+                }
+                Ok(_) => {
+                    let bytes = read_regular_file_limited(&path, MAX_ASSET_BYTES as u64)?;
+                    if sha256(&bytes) != digest {
+                        continue;
+                    }
+                    move_to_trash(&path)
+                        .map_err(|_| CoreError::Io(std::io::Error::other("trash failed")))?;
+                    return Ok(true);
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(CoreError::Io(error)),
+            }
+        }
+        Ok(false)
     }
 
     pub fn export_elef<W: Write + Seek>(&self, id: &str, destination: W) -> Result<(), CoreError> {
@@ -2252,6 +2362,36 @@ mod tests {
         assert!(matches!(
             library.read_asset_path(&id, Path::new("images/../presentation.md")),
             Err(CoreError::PathRejected)
+        ));
+    }
+
+    #[test]
+    fn asset_list_reports_verified_uploads_and_remove_trashes_them() {
+        let (temp, library) = library();
+        write_deck(temp.path(), "Assets", &[("presentation.md", "# Talk")]);
+        let id = library.list_decks().unwrap()[0].id.clone();
+        assert_eq!(library.list_assets(&id).unwrap(), Vec::new());
+
+        let png = b"\x89PNG\r\n\x1a\nlisted image";
+        let uploaded = library
+            .upload_asset(&id, "photo.png", "image/png", png, "contain")
+            .unwrap();
+        let listed = library.list_assets(&id).unwrap();
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].digest, uploaded.digest);
+        assert_eq!(listed[0].content_type, "image/png");
+        assert_eq!(listed[0].size, png.len() as u64);
+
+        assert!(library.remove_asset(&id, &uploaded.digest).unwrap());
+        assert_eq!(library.list_assets(&id).unwrap(), Vec::new());
+        assert!(!library.remove_asset(&id, &uploaded.digest).unwrap());
+        assert!(matches!(
+            library.read_asset(&id, &uploaded.digest),
+            Err(CoreError::NotFound)
+        ));
+        assert!(matches!(
+            library.remove_asset(&id, "not-a-digest"),
+            Err(CoreError::NotFound)
         ));
     }
 

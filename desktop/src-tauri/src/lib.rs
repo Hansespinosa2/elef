@@ -6,7 +6,7 @@ use std::sync::{Arc, RwLock};
 use local_store::{
     AuthoringRegistries, CoreError, DeckPreview, DeckSummary, DocumentGraphDocument,
     ImportResolution, ImportResult, Library, LibraryConfig, OpenDeck, SaveResult, SourceSnapshot,
-    UploadedAsset,
+    StoredAsset, UploadedAsset,
 };
 use serde::Serialize;
 use tauri::RunEvent;
@@ -940,6 +940,52 @@ fn upload_asset(
         .upload_asset(id, filename, media_type, bytes, fit)?)
 }
 
+#[tauri::command]
+fn list_media(
+    state: State<'_, DesktopState>,
+    id: String,
+) -> Result<Vec<StoredAsset>, CommandError> {
+    Ok(state.current_library()?.list_assets(&id)?)
+}
+
+#[tauri::command]
+fn remove_media(
+    state: State<'_, DesktopState>,
+    id: String,
+    digest: String,
+) -> Result<bool, CommandError> {
+    Ok(state.current_library()?.remove_asset(&id, &digest)?)
+}
+
+#[tauri::command]
+fn import_elef_bytes(
+    state: State<'_, DesktopState>,
+    bytes: Vec<u8>,
+) -> Result<Option<ImportResult>, CommandError> {
+    if bytes.is_empty() {
+        return Err(CommandError::new(
+            "invalid_input",
+            "Choose an .elef archive to import.",
+            false,
+        ));
+    }
+    let staged = tempfile::Builder::new()
+        .prefix("elef-import-")
+        .suffix(".elef")
+        .tempfile()
+        .map_err(|_| CommandError::new("io_error", "The archive could not be staged.", true))?;
+    std::io::Write::write_all(&mut &staged, &bytes)
+        .map_err(|_| CommandError::new("io_error", "The archive could not be staged.", true))?;
+    let path = staged
+        .into_temp_path()
+        .keep()
+        .map_err(|_| CommandError::new("io_error", "The archive could not be staged.", true))?;
+    let library = state.current_library()?;
+    let result = import_archive(&state, &library, path.clone());
+    let _ = fs::remove_file(&path);
+    result
+}
+
 fn persisted_root_path(app: &AppHandle) -> Result<PathBuf, tauri::Error> {
     Ok(app.path().app_data_dir()?.join("library-root.json"))
 }
@@ -1231,6 +1277,9 @@ pub fn run() {
             delete_deck,
             save_source,
             upload_asset,
+            list_media,
+            remove_media,
+            import_elef_bytes,
             export_elef,
             import_elef,
             import_opened_elef,
