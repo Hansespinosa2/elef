@@ -1,0 +1,120 @@
+{
+  "schema_version": 1,
+  "candidate_sha": "4f71a97885256063dcd5f4651375cfec29c9b885",
+  "pull_request": {
+    "number": 136,
+    "url": "https://github.com/Hansespinosa2/elef/pull/136",
+    "base_branch": "dev",
+    "base_sha": "175ac5b32eb8824955b01dbb487fe93ad693f2a7",
+    "head_branch": "feat/refactor-desktop-and-web"
+  },
+  "run": {
+    "id": 37614783436,
+    "url": "https://github.com/Hansespinosa2/elef/actions/runs/37614783436",
+    "event": "pull_request",
+    "attempt": 2,
+    "conclusion": "success",
+    "tested_merge_sha": "097a2f6a39eb0b5f108f3462cd48814d9721f2dc",
+    "tested_merge_parents": [
+      "4f71a97885256063dcd5f4651375cfec29c9b885",
+      "175ac5b32eb8824955b01dbb487fe93ad693f2a7"
+    ],
+    "attempt_history": [
+      {
+        "attempt": 1,
+        "conclusion": "failure",
+        "failed_job": "desktop",
+        "failure": "One Linux shared scenario timed out while opening a deck; the same job passed on attempt 2 without source changes."
+      },
+      {
+        "attempt": 2,
+        "conclusion": "success",
+        "failed_jobs_rerun": true
+      }
+    ]
+  },
+  "jobs": [
+    {
+      "name": "desktop-fast",
+      "id": 112775268420,
+      "conclusion": "success"
+    },
+    {
+      "name": "desktop",
+      "id": 112775266670,
+      "conclusion": "success",
+      "tested_merge_sha": "097a2f6a39eb0b5f108f3462cd48814d9721f2dc",
+      "shared_scenarios_step": "success"
+    },
+    {
+      "name": "desktop-macos",
+      "id": 112775318865,
+      "conclusion": "success",
+      "tested_merge_sha": "097a2f6a39eb0b5f108f3462cd48814d9721f2dc",
+      "shared_scenarios_step": "success"
+    },
+    {
+      "name": "renderer-macos",
+      "id": 112775268821,
+      "conclusion": "success"
+    },
+    {
+      "name": "test",
+      "id": 112775330684,
+      "conclusion": "success"
+    },
+    {
+      "name": "sqlite-test",
+      "id": 112775301108,
+      "conclusion": "success"
+    },
+    {
+      "name": "system-test",
+      "id": 112775269264,
+      "conclusion": "success"
+    },
+    {
+      "name": "production-smoke",
+      "id": 112775269132,
+      "conclusion": "success"
+    },
+    {
+      "name": "development-smoke",
+      "id": 112775323091,
+      "conclusion": "success"
+    },
+    {
+      "name": "record-ci-attestation",
+      "id": 112780766061,
+      "conclusion": "success"
+    }
+  ],
+  "artifacts": [
+    {
+      "name": "ci-attestation-pr136-run37614783436-attempt2",
+      "id": 11480967258,
+      "sha256": "73cf8b1e49c84347a4f0f49928f53b72a397d0416d75a1b4ce094ebae71cb140",
+      "size_bytes": 315
+    },
+    {
+      "name": "native-performance-linux",
+      "id": 11480248129,
+      "sha256": "6d4f3747b21c49f310c207981bd9a222a16b3eca266dbb5a392698693a10ca9b",
+      "size_bytes": 4796
+    },
+    {
+      "name": "native-performance-darwin",
+      "id": 11478519983,
+      "sha256": "f18f58890cf69835f241b716e9930d49b5d8c8aa7789a32dd85abef618a12b94",
+      "size_bytes": 5287
+    },
+    {
+      "name": "desktop-e2e-linux-diagnostics",
+      "id": 11479329734,
+      "sha256": "3d9384120b0888487006b43af585b8a65826cf353fc05c664be696282fa82f11",
+      "size_bytes": 4290,
+      "attempt": 1,
+      "note": "Preserved Linux failure diagnostics from the initial transient timeout."
+    }
+  ]
+}

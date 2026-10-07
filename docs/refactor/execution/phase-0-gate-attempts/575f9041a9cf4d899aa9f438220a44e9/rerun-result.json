@@ -1,0 +1,13 @@
+{
+  "phase": 0,
+  "candidate_head": "4f71a97885256063dcd5f4651375cfec29c9b885",
+  "exit_code": 0,
+  "duration_seconds": 1.286,
+  "stdout_identical_to_official_gate": true,
+  "stdout_sha256": "a487191be3be0a2d1f67893bcc5816425287281d3a458726f4a21cc8f7bb6d1d",
+  "stderr_empty": true,
+  "snapshot_sha256_before": "6bfd16993c9096ae51054b235637e2a6fbbeeef3d2e8c2e57fd0f680a9625700",
+  "snapshot_sha256_after": "6bfd16993c9096ae51054b235637e2a6fbbeeef3d2e8c2e57fd0f680a9625700",
+  "snapshot_unchanged": true,
+  "checkout_clean": true
+}

@@ -3,10 +3,10 @@
   "campaign_branch": "feat/refactor-desktop-and-web",
   "campaign_base_sha": "88f61a7a8ffd7c276bafcf06eee09c36a8adf134",
   "current_phase": 0,
-  "phase_state": "CHECK",
+  "phase_state": "DO",
   "phase_base_sha": "88f61a7a8ffd7c276bafcf06eee09c36a8adf134",
   "head_sha": "4f71a97885256063dcd5f4651375cfec29c9b885",
-  "review_round": 2,
+  "review_round": 1,
   "phase_contract_sha256": "57a5419cace79af009b9b2889cd0aa8cd481b1de561a582214d8adea883394ce",
   "frozen_plan_sha256": "fc6d3f6595a8e90bd92e91826bbed8044687e18c89d4c4acc3d8b08405c0b93c",
   "last_completed_phase": null,
@@ -48,44 +48,6 @@
       "snapshot_unchanged": true,
       "checkout_clean": true,
       "result_path": "docs/refactor/execution/phase-0-gate-attempts/a03b10a585714f3185ca7d32a0777989/rerun-result.json"
-    },
-    {
-      "attempt_id": "575f9041a9cf4d899aa9f438220a44e9",
-      "phase": 0,
-      "head": "4f71a97885256063dcd5f4651375cfec29c9b885",
-      "root": "/root/elef",
-      "checkout": "/root/elef/tmp/gates/phase-0-575f9041a9cf4d899aa9f438220a44e9",
-      "state": "completed",
-      "started_ns": 1791372756902951674,
-      "status_sha256": "6bfd16993c9096ae51054b235637e2a6fbbeeef3d2e8c2e57fd0f680a9625700",
-      "frozen_plan_sha256": "fc6d3f6595a8e90bd92e91826bbed8044687e18c89d4c4acc3d8b08405c0b93c",
-      "phase_contract_sha256": "57a5419cace79af009b9b2889cd0aa8cd481b1de561a582214d8adea883394ce",
-      "runner_pid": 3866,
-      "runner_start": "1490785",
-      "child_pid": 3871,
-      "child_start": "1490808",
-      "command": "bin/check phase 0 --json",
-      "exit": 0,
-      "duration_s": 1.264,
-      "tier": "phase",
-      "stdout_sha256": "a487191be3be0a2d1f67893bcc5816425287281d3a458726f4a21cc8f7bb6d1d",
-      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "result_path": "docs/refactor/execution/phase-0-gate-attempts/575f9041a9cf4d899aa9f438220a44e9/result.json",
-      "selected_gate_path": "docs/refactor/execution/phase-0-gate.json"
-    },
-    {
-      "command": "bin/check phase 0 --json",
-      "exit": 0,
-      "duration_s": 1.286,
-      "tier": "phase-repeat",
-      "head": "4f71a97885256063dcd5f4651375cfec29c9b885",
-      "stdout_sha256": "a487191be3be0a2d1f67893bcc5816425287281d3a458726f4a21cc8f7bb6d1d",
-      "stdout_identical_to_selected_attempt": true,
-      "snapshot_sha256_before": "6bfd16993c9096ae51054b235637e2a6fbbeeef3d2e8c2e57fd0f680a9625700",
-      "snapshot_sha256_after": "6bfd16993c9096ae51054b235637e2a6fbbeeef3d2e8c2e57fd0f680a9625700",
-      "snapshot_unchanged": true,
-      "checkout_clean": true,
-      "result_path": "docs/refactor/execution/phase-0-gate-attempts/575f9041a9cf4d899aa9f438220a44e9/rerun-result.json"
     }
   ],
   "execution_environment": {
@@ -94,11 +56,11 @@
     "ram_mb": 7966,
     "swap_mb": 0,
     "cpu_count": 4,
-    "free_disk_mb": 33157,
-    "display_mode": "headless",
-    "tauri_native_runner": "available"
+    "free_disk_mb": 33520,
+    "display_mode": "none",
+    "tauri_native_runner": "unavailable"
   },
   "pending_human_gates": [],
   "blocker": null,
-  "next_action": "Review candidate 4f71a97885256063dcd5f4651375cfec29c9b885 independently, then re-plan Phase 00 for the owner-directed local web and desktop test-environment requirement."
+  "next_action": "Remove bin/check source literals matching the desktop/ ownership scan while preserving Phase 00 command outputs; run the ownership checker and affected verification."
 }

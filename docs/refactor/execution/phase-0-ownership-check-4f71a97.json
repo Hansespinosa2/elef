@@ -1,0 +1,8 @@
+{
+  "candidate_head": "4f71a97885256063dcd5f4651375cfec29c9b885",
+  "command": "python3 script/check_frontend_ownership.py",
+  "exit": 0,
+  "duration_s": 0.181,
+  "stdout": "Frontend ownership checks passed: Rails owns shared source; desktop consumes it one-way.\n",
+  "stderr": ""
+}
