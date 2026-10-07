@@ -2,13 +2,13 @@
   "campaign_version": 9,
   "campaign_branch": "feat/refactor-desktop-and-web",
   "campaign_base_sha": "88f61a7a8ffd7c276bafcf06eee09c36a8adf134",
-  "current_phase": 0,
-  "phase_state": "PASS",
-  "phase_base_sha": "88f61a7a8ffd7c276bafcf06eee09c36a8adf134",
-  "head_sha": "4f71a97885256063dcd5f4651375cfec29c9b885",
-  "review_round": 2,
-  "phase_contract_sha256": "57a5419cace79af009b9b2889cd0aa8cd481b1de561a582214d8adea883394ce",
-  "frozen_plan_sha256": "fc6d3f6595a8e90bd92e91826bbed8044687e18c89d4c4acc3d8b08405c0b93c",
+  "current_phase": 1,
+  "phase_state": "PLAN",
+  "phase_base_sha": "64abf6ed087f1b1b2ff232f88123c76ca362a7d0",
+  "head_sha": "64abf6ed087f1b1b2ff232f88123c76ca362a7d0",
+  "review_round": 0,
+  "phase_contract_sha256": "1bda595270159ae4cbdbb87b31951cdeeb9ef28ea5cadef2cb44b3fb530f80d0",
+  "frozen_plan_sha256": null,
   "last_completed_phase": 0,
   "last_verified_checks": [
     {
@@ -100,5 +100,5 @@
   },
   "pending_human_gates": [],
   "blocker": null,
-  "next_action": "Begin Phase 01 PLAN: read phases/01-foundations.md and freeze the foundation plan."
+  "next_action": "Freeze the Phase 01 plan: verify current facts and map all phase criteria to proof."
 }
