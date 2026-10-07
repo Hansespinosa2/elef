@@ -36,25 +36,26 @@ export async function createRailsHost({ baseUrl, fetchImpl = fetch }) {
   }
 
   async function bootstrap() {
-    let response = await fetchImpl(`${base}/`, { headers: { "User-Agent": MODERN_UA } });
-    storeCookies(response);
-    let html = await response.text();
-    let token = csrfToken(html);
-    if (!token) {
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      response = await fetchImpl(`${base}/`, { headers: { "User-Agent": MODERN_UA } });
+    // The test environment disables forgery protection, so csrf_meta_tags
+    // renders nothing there; the token is required only when present.
+    // Anything that is not the app page is still a hard failure.
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const response = await fetchImpl(`${base}/`, { headers: { "User-Agent": MODERN_UA } });
       storeCookies(response);
-      html = await response.text();
-      token = csrfToken(html);
+      const html = await response.text();
+      const token = csrfToken(html);
+      if (token) return token;
+      if (response.status === 200 && html.includes("<title>Elef library</title>")) return null;
+      if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 2000));
+      else {
+        throw new Error(
+          `rails host bootstrap failed: status ${response.status}, ` +
+            `content-type ${response.headers.get("content-type")}, ` +
+            `body head ${JSON.stringify(html.slice(0, 300))}`,
+        );
+      }
     }
-    if (!token) {
-      throw new Error(
-        `rails host bootstrap failed: status ${response.status}, ` +
-          `content-type ${response.headers.get("content-type")}, ` +
-          `body head ${JSON.stringify(html.slice(0, 300))}`,
-      );
-    }
-    return token;
+    throw new Error("rails host bootstrap failed unexpectedly");
   }
 
   const csrf = await bootstrap();
@@ -64,12 +65,11 @@ export async function createRailsHost({ baseUrl, fetchImpl = fetch }) {
     const jar = cookieHeader();
     if (jar) headers.Cookie = jar;
     let body;
+    if (csrf) headers["X-CSRF-Token"] = csrf;
     if (json !== undefined) {
       headers["Content-Type"] = "application/json";
-      headers["X-CSRF-Token"] = csrf;
       body = JSON.stringify(json);
     } else if (form !== undefined) {
-      headers["X-CSRF-Token"] = csrf;
       body = form;
     }
     const response = await fetchImpl(`${base}${path}`, { method, headers, body });
