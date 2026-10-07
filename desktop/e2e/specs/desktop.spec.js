@@ -1897,10 +1897,28 @@ describe("desktop binary workflows and native boundaries", () => {
     await $("#authoring-category").selectByVisibleText("Markdown")
     await $("#authoring-body").setValue("**${1:managed}**")
     await $("#save-authoring-entry").click()
-    await browser.waitUntil(async () => (await $("#authoring-settings-status").getText()).includes("saved (snippet)"), {
-      timeout: 10_000,
-      timeoutMsg: "Saving the personal snippet did not finish"
-    })
+    try {
+      await browser.waitUntil(async () => (await $("#authoring-settings-status").getText()).includes("saved (snippet)"), {
+        timeout: 10_000,
+        timeoutMsg: "Saving the personal snippet did not finish"
+      })
+    } catch (error) {
+      const diagnostic = await browser.execute(async () => {
+        const form = document.querySelector("#authoring-entry-form")
+        const fields = ["authoring-name", "authoring-trigger", "authoring-description", "authoring-category", "authoring-body"]
+        return {
+          status: document.querySelector("#authoring-settings-status")?.textContent || "",
+          formVisible: form ? !form.hidden : null,
+          formValid: form?.checkValidity() ?? null,
+          fields: Object.fromEntries(fields.map(id => {
+            const field = document.getElementById(id)
+            return [id, { value: field?.value, disabled: field?.disabled, valid: field?.validity?.valid, validationMessage: field?.validationMessage }]
+          })),
+          registries: await window.__TAURI__.core.invoke("read_authoring_registries")
+        }
+      })
+      throw new Error(`${error.message}; authoring save diagnostic: ${JSON.stringify(diagnostic)}`)
+    }
 
     const persisted = await browser.execute(async () => await window.__TAURI__.core.invoke("read_authoring_registries"))
     const savedEntry = persisted.snippets.find(entry => entry.trigger === trigger)

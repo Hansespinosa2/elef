@@ -305,6 +305,17 @@ export function configureEditorKind(root, kind, { documentTitles = [], sourceNam
 
 export function enableVisualModeAfterPreview(root, detail) {
   if (!detail?.response?.ok || typeof detail.payload?.html !== "string") return false
+  return enableVisualMode(root)
+}
+
+export function enableVisualModeFromInstalledPreview(root) {
+  const preview = root?.previewController
+  const projection = root?.querySelector?.("[data-preview-target='container']")
+  if (preview?.projectionFresh !== true || !projection?.childElementCount) return false
+  return enableVisualMode(root)
+}
+
+function enableVisualMode(root) {
   const button = root?.querySelector?.("[data-editor-target='visualButton']")
   if (!button) return false
   button.disabled = false

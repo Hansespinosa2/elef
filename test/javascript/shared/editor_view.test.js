@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { parseHTML } from "linkedom"
-import { configureEditorKind, enableVisualModeAfterPreview, installPreviewHtml, mountEditorHosts, renderEditorView } from "../../../app/javascript/lib/editor_view.js"
+import { configureEditorKind, enableVisualModeAfterPreview, enableVisualModeFromInstalledPreview, installPreviewHtml, mountEditorHosts, renderEditorView } from "../../../app/javascript/lib/editor_view.js"
 
 function mount(config) {
   const { document } = parseHTML("<form><div id='mount'></div></form>")
@@ -202,4 +202,25 @@ test("failed or incomplete previews leave visual mode disabled", () => {
   assert.equal(enableVisualModeAfterPreview(root, { response: { ok: false }, payload: { html: "<p>partial</p>" } }), false)
   assert.equal(enableVisualModeAfterPreview(root, { response: { ok: true }, payload: { html: null } }), false)
   assert.equal(button.disabled, true)
+})
+
+test("a controller connecting after preview installation restores the visual mode control", () => {
+  const { root } = mount({ kind: "presentation", mode: "visual", visualDisabled: true })
+  const projection = root.querySelector("[data-preview-target='container']")
+  projection.append(root.ownerDocument.createElement("article"))
+  root.previewController = { projectionFresh: true }
+
+  assert.equal(enableVisualModeFromInstalledPreview(root), true)
+  assert.equal(root.querySelector("[data-editor-target='visualButton']").disabled, false)
+})
+
+test("an absent or stale installed preview does not enable visual mode", () => {
+  const { root } = mount({ kind: "presentation", mode: "visual", visualDisabled: true })
+  root.previewController = { projectionFresh: true }
+  assert.equal(enableVisualModeFromInstalledPreview(root), false)
+
+  root.querySelector("[data-preview-target='container']").append(root.ownerDocument.createElement("article"))
+  root.previewController.projectionFresh = false
+  assert.equal(enableVisualModeFromInstalledPreview(root), false)
+  assert.equal(root.querySelector("[data-editor-target='visualButton']").disabled, true)
 })

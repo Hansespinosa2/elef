@@ -1,6 +1,6 @@
 import { Controller } from "@hotwired/stimulus"
 import { editorFor } from "lib/editor_controller_lookup"
-import { enableVisualModeAfterPreview } from "lib/editor_view"
+import { enableVisualModeAfterPreview, enableVisualModeFromInstalledPreview } from "lib/editor_view"
 import { setProjectionBlockEditable } from "lib/projection_editability"
 import { markdownForVisibleText, renderInlineMath, sourceOffsetForVisiblePosition } from "controllers/editor_markdown"
 import {
@@ -45,6 +45,10 @@ export default class extends Controller {
     this.element.addEventListener("elef:document-paginated", this.documentPaginatedHandler)
     this.projectionLinkHandler = (event) => this.projectionLinkClicked(event)
     this.element.addEventListener("click", this.projectionLinkHandler)
+    // Stimulus can connect this controller after the first preview event when
+    // a desktop deck is opened. Restore the toggle from the installed preview
+    // state so that a successful render cannot leave Visual permanently disabled.
+    enableVisualModeFromInstalledPreview(this.element)
     this.positionControlOutsidePointerDown = (event) => {
       const targetControl = event.target.closest?.(".document-block-position-control")
       this.projectionTarget.querySelectorAll(".document-block-position-control.is-open").forEach((control) => {
