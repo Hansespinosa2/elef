@@ -1,0 +1,175 @@
+{
+  "schema_version": 1,
+  "candidate_sha": "a83c96ce0ef282c39bb76819857ac443e2896336",
+  "pull_request": {
+    "number": 136,
+    "url": "https://github.com/Hansespinosa2/elef/pull/136",
+    "base_branch": "dev",
+    "base_sha": "afda4fbb7d5175d23c50be2d3a8121f8032c6c86",
+    "head_branch": "feat/refactor-desktop-and-web"
+  },
+  "run": {
+    "id": 37647011099,
+    "url": "https://github.com/Hansespinosa2/elef/actions/runs/37647011099",
+    "event": "pull_request",
+    "attempt": 3,
+    "conclusion": "success",
+    "tested_merge_sha": "676a2a5d05489fb28ebb08f17f11ee7e86e7afc1",
+    "tested_merge_parents": [
+      "afda4fbb7d5175d23c50be2d3a8121f8032c6c86",
+      "a83c96ce0ef282c39bb76819857ac443e2896336"
+    ],
+    "attempt_history": [
+      {
+        "attempt": 1,
+        "conclusion": "failure",
+        "failed_job": "desktop",
+        "failure": "One Playwright web scenario (shared library create and delete flow) timed out waiting for a menu item; unrelated to the candidate, which touches only bin/check."
+      },
+      {
+        "attempt": 2,
+        "conclusion": "cancelled",
+        "failed_job": "desktop",
+        "failure": "Failed-job rerun was cancelled mid-e2e by an unknown cause (no infrastructure annotation); no source changes involved."
+      },
+      {
+        "attempt": 3,
+        "conclusion": "success",
+        "failed_jobs_rerun": true
+      }
+    ]
+  },
+  "jobs": [
+    {
+      "name": "desktop-fast",
+      "id": 112905169127,
+      "conclusion": "success",
+      "executed_attempt": 1,
+      "note": "Carried forward from attempt 1; reruns only re-executed failed jobs."
+    },
+    {
+      "name": "test",
+      "id": 112905101592,
+      "conclusion": "success",
+      "executed_attempt": 1,
+      "note": "Carried forward from attempt 1; reruns only re-executed failed jobs."
+    },
+    {
+      "name": "system-test",
+      "id": 112905145411,
+      "conclusion": "success",
+      "executed_attempt": 1,
+      "note": "Carried forward from attempt 1; reruns only re-executed failed jobs."
+    },
+    {
+      "name": "affected",
+      "id": 112905152962,
+      "conclusion": "success",
+      "executed_attempt": 1,
+      "note": "Carried forward from attempt 1; reruns only re-executed failed jobs. bin/check affected: PASS (41.3s warm, ceiling 420s)."
+    },
+    {
+      "name": "sqlite-test",
+      "id": 112905162862,
+      "conclusion": "success",
+      "executed_attempt": 1,
+      "note": "Carried forward from attempt 1; reruns only re-executed failed jobs."
+    },
+    {
+      "name": "desktop",
+      "id": 112905099757,
+      "conclusion": "success",
+      "executed_attempt": 3,
+      "tested_merge_sha": "676a2a5d05489fb28ebb08f17f11ee7e86e7afc1",
+      "shared_scenarios_step": "success"
+    },
+    {
+      "name": "desktop-macos",
+      "id": 112905102063,
+      "conclusion": "success",
+      "executed_attempt": 1,
+      "note": "Carried forward from attempt 1; reruns only re-executed failed jobs.",
+      "tested_merge_sha": "676a2a5d05489fb28ebb08f17f11ee7e86e7afc1",
+      "shared_scenarios_step": "success"
+    },
+    {
+      "name": "renderer-macos",
+      "id": 112905102100,
+      "conclusion": "success",
+      "executed_attempt": 1,
+      "note": "Carried forward from attempt 1; reruns only re-executed failed jobs."
+    },
+    {
+      "name": "production-smoke",
+      "id": 112905165983,
+      "conclusion": "success",
+      "executed_attempt": 1,
+      "note": "Carried forward from attempt 1; reruns only re-executed failed jobs."
+    },
+    {
+      "name": "development-smoke",
+      "id": 112905151954,
+      "conclusion": "success",
+      "executed_attempt": 1,
+      "note": "Carried forward from attempt 1; reruns only re-executed failed jobs."
+    },
+    {
+      "name": "record-ci-attestation",
+      "id": 112919392080,
+      "conclusion": "success",
+      "executed_attempt": 3
+    }
+  ],
+  "rails_conformance": {
+    "conclusion": "success",
+    "job": "system-test",
+    "job_id": 112905145411,
+    "command": "node tests/host-conformance/run-node.js rails",
+    "result": "conformance rails: 11 passed, 1 skipped, 0 failed (suite v12 cases)"
+  },
+  "tauri_conformance": {
+    "conclusion": "success",
+    "jobs": [
+      {
+        "name": "desktop",
+        "job_id": 112905099757,
+        "spec": "specs/contract-conformance.spec.js",
+        "result": "host contract conformance (desktop invoke): 1 passing"
+      },
+      {
+        "name": "desktop-macos",
+        "job_id": 112905102063,
+        "spec": "specs/contract-conformance.spec.js",
+        "result": "host contract conformance (desktop invoke): 1 passing"
+      }
+    ]
+  },
+  "artifacts": [
+    {
+      "name": "ci-attestation-pr136-run37647011099-attempt3",
+      "id": 11498499867,
+      "sha256": "a8a906e4b1e37f9e413eab619cc7b203bad49170689b74d2d62a3a13adff160d",
+      "size_bytes": 313
+    },
+    {
+      "name": "native-performance-linux",
+      "id": 11499002559,
+      "sha256": "d7dc4621c3d8df6469d5bd2b8d5be51f557a095a12a2aa34e9d99441bc7feb5c",
+      "size_bytes": 4574
+    },
+    {
+      "name": "native-performance-darwin",
+      "id": 11494524928,
+      "sha256": "68ec7cbea40bbc6b43c16fa3320b8902c315d0b6a7ad313b5b3d93f0698f9937",
+      "size_bytes": 5177
+    },
+    {
+      "name": "desktop-e2e-linux-diagnostics",
+      "id": 11495031655,
+      "sha256": "87f1bc87aba06c4b012146caeb3dd01fa15eb19cb5cd649578c0f79e78956411",
+      "size_bytes": 6681,
+      "attempt": 1,
+      "note": "Preserved Linux failure diagnostics from the attempt-1 web timing flake."
+    }
+  ]
+}
