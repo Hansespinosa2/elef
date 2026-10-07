@@ -1,0 +1,188 @@
+.elef-app .settings-card {
+  background: var(--oradia-slate-900);
+  border-color: var(--oradia-line);
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.16);
+  color: var(--oradia-ink);
+}
+.elef-app .settings-control {
+  background: var(--oradia-slate-950);
+  border-color: var(--oradia-slate-700);
+  color: var(--oradia-ink);
+  color-scheme: dark;
+  width: 100%;
+}
+.elef-app .settings-control:focus {
+  border-color: var(--oradia-green);
+  box-shadow: 0 0 0 3px rgba(159, 197, 169, 0.18);
+  outline: none;
+}
+.settings-navigation { border-bottom: 1px solid var(--oradia-line); padding-bottom: 0.8rem; }
+.settings-navigation-link,
+.snippet-category-link {
+  align-items: center;
+  border: 1px solid var(--oradia-slate-700);
+  border-radius: 999px;
+  color: var(--oradia-muted);
+  display: inline-flex;
+  font-size: 0.85rem;
+  font-weight: 700;
+  gap: 0.5rem;
+  padding: 0.45rem 0.8rem;
+  text-decoration: none;
+}
+.settings-navigation-link:hover,
+.settings-navigation-link.is-active,
+.snippet-category-link:hover,
+.snippet-category-link.is-active { background: var(--oradia-slate-800); border-color: var(--oradia-green); color: var(--oradia-ink); }
+.snippet-category-link span,
+.snippet-group-heading span {
+  align-items: center;
+  background: var(--oradia-slate-950);
+  border: 1px solid var(--oradia-slate-700);
+  border-radius: 999px;
+  color: var(--oradia-muted);
+  display: inline-flex;
+  font-size: 0.7rem;
+  height: 1.3rem;
+  justify-content: center;
+  min-width: 1.3rem;
+  padding: 0 0.3rem;
+}
+.snippet-group-heading { color: var(--oradia-ink); }
+.snippet-category-badge,
+.snippet-example-label {
+  color: var(--oradia-green);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  margin: 0;
+  text-transform: uppercase;
+}
+.snippet-origin-badge {
+  border: 1px solid var(--oradia-slate-700);
+  border-radius: 999px;
+  color: var(--oradia-muted);
+  flex: 0 0 auto;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.25rem 0.55rem;
+}
+.snippet-template,
+.snippet-example-preview,
+.snippet-search input[type="search"] {
+  background: var(--oradia-slate-950);
+  border: 1px solid var(--oradia-slate-700);
+  color: var(--oradia-ink);
+}
+.snippet-template { line-height: 1.45; margin: 0.45rem 0 0; }
+.snippet-example-preview { margin-top: 0.45rem; min-height: 3.5rem; overflow-x: auto; }
+.snippet-example-preview > :first-child { margin-top: 0; }
+.snippet-example-preview > :last-child { margin-bottom: 0; }
+.snippet-example-preview .katex-display { margin: 0.5rem 0; overflow-x: auto; overflow-y: hidden; }
+.snippet-search input[type="search"]::placeholder { color: var(--oradia-muted); }
+.snippet-search input[type="search"]:focus { border-color: var(--oradia-green); outline: 2px solid rgba(159, 197, 169, 0.18); }
+.math-shortcut-list { display: grid; gap: 0.8rem; grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr)); }
+.math-shortcut-card { min-width: 0; }
+.math-shortcut-alias { color: var(--oradia-green); font-size: 0.75rem; font-weight: 700; margin: 0; }
+.math-shortcut-alias code { overflow-wrap: anywhere; }
+.math-shortcut-flow {
+  align-items: start;
+  display: grid;
+  gap: 0.35rem;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.2fr) auto minmax(0, 0.8fr);
+}
+.math-shortcut-step { display: flex; flex-direction: column; gap: 0.35rem; min-width: 0; }
+.math-shortcut-step > span { color: var(--oradia-muted); font-size: 0.65rem; font-weight: 700; text-transform: uppercase; }
+.math-shortcut-step > code,
+.math-shortcut-result > div {
+  align-items: center;
+  background: var(--oradia-slate-950);
+  border: 1px solid var(--oradia-slate-700);
+  border-radius: 0.5rem;
+  color: var(--oradia-ink);
+  display: flex;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  min-height: 2.25rem;
+  overflow-wrap: anywhere;
+  padding: 0.4rem 0.5rem;
+}
+.math-shortcut-step > code { display: block; }
+.math-shortcut-arrow { color: var(--oradia-muted); font-size: 0.9rem; margin-top: 1.2rem; }
+.math-shortcut-result > div { overflow-x: auto; }
+.math-shortcut-result p { margin: 0; }
+.math-shortcut-result .katex { font-size: 0.9em; }
+.authoring-settings-dialog {
+  border: 1px solid var(--oradia-line);
+  border-radius: 1rem;
+  background: var(--oradia-slate-900);
+  color: var(--oradia-ink);
+  max-height: min(92vh, 960px);
+  max-width: min(1040px, calc(100vw - 2rem));
+  overflow: auto;
+  padding: 0;
+  width: 100%;
+}
+.authoring-settings-dialog::backdrop { background: rgb(10 14 16 / 64%); backdrop-filter: blur(4px); }
+.authoring-settings-panel { padding: clamp(1rem, 3vw, 2rem); }
+.authoring-settings-header,
+.authoring-settings-heading,
+.authoring-entry-card-heading,
+.authoring-entry-actions,
+.authoring-entry-form-actions { align-items: center; display: flex; gap: 0.75rem; }
+.authoring-settings-header,
+.authoring-settings-heading,
+.authoring-entry-card-heading { justify-content: space-between; }
+.authoring-settings-header h2 { margin: 0.25rem 0; }
+.authoring-settings-header .eyebrow { margin: 0; }
+.authoring-settings-close { background: transparent; border: 0; color: var(--oradia-muted); font-size: 1.75rem; line-height: 1; }
+.authoring-settings-copy,
+.authoring-settings-status,
+.authoring-settings-empty { color: var(--oradia-muted); font-size: 0.9rem; line-height: 1.5; }
+.authoring-settings-status { min-height: 1.5em; margin: 0.75rem 0; }
+.authoring-settings-tabs { border-bottom: 1px solid var(--oradia-line); display: flex; gap: 0.5rem; margin: 1rem 0; }
+.authoring-settings-tabs [aria-selected="true"] { border-color: var(--oradia-green); color: var(--oradia-green); }
+.authoring-settings-filters { align-items: end; display: flex; flex-wrap: wrap; gap: 0.75rem; margin: 1rem 0; }
+.authoring-settings-filters label { display: grid; flex: 1 1 14rem; gap: 0.35rem; }
+.authoring-settings-filters label > span { color: var(--oradia-muted); font-size: 0.75rem; font-weight: 700; }
+.authoring-settings-filters input,
+.authoring-settings-filters select,
+.authoring-entry-form input,
+.authoring-entry-form select,
+.authoring-entry-form textarea {
+  background: var(--oradia-slate-950);
+  border: 1px solid var(--oradia-slate-700);
+  border-radius: 0.65rem;
+  color: var(--oradia-ink);
+  min-height: 2.5rem;
+  padding: 0.55rem 0.75rem;
+  width: 100%;
+}
+.authoring-settings-filters :is(input, select):focus-visible,
+.authoring-entry-form :is(input, select, textarea):focus-visible { border-color: var(--oradia-green); outline: 2px solid rgba(159, 197, 169, 0.2); }
+.authoring-settings-heading { margin: 1rem 0; }
+.authoring-settings-heading p { margin: 0; }
+.authoring-settings-list { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(min(100%, 24rem), 1fr)); }
+.authoring-settings-list > [hidden] { display: none; }
+.authoring-entry-card { min-width: 0; padding: 1rem; }
+.authoring-entry-card h3 { margin: 0.25rem 0; }
+.authoring-entry-card .snippet-example { margin-top: 1rem; }
+.authoring-entry-badge { align-self: start; }
+.authoring-entry-actions { justify-content: flex-end; margin-top: 0.75rem; }
+.authoring-entry-actions .button { min-height: 2.25rem; padding: 0.35rem 0.75rem; }
+.authoring-delete { color: var(--presentation-danger); }
+.authoring-entry-form { border-top: 1px solid var(--oradia-line); margin-top: 1.25rem; padding-top: 1.25rem; }
+.authoring-entry-form[hidden],
+.authoring-snippet-fields[hidden],
+.authoring-math-fields[hidden] { display: none; }
+.authoring-entry-form h3 { margin: 0 0 1rem; }
+.authoring-entry-form fieldset { border: 0; display: grid; gap: 0.5rem; margin: 0; min-width: 0; padding: 0; }
+.authoring-entry-form fieldset label { color: var(--oradia-muted); font-size: 0.8rem; font-weight: 700; margin-top: 0.5rem; }
+.authoring-entry-form textarea { font-family: var(--oradia-mono); min-height: 7rem; resize: vertical; }
+.authoring-entry-form-actions { justify-content: flex-end; margin-top: 1rem; }
+.authoring-delete-dialog { max-width: min(32rem, calc(100vw - 2rem)); }
+.authoring-delete-dialog h2 { margin-top: 0; }
+.authoring-settings-dialog :is(button, input, select, textarea):focus-visible { outline-offset: 2px; }
+.settings-navigation :is(a, button):focus-visible,
+.math-shortcut-card :is(a, button):focus-visible,
+.snippet-card :is(a, button):focus-visible { outline: 2px solid var(--oradia-green); outline-offset: 3px; }

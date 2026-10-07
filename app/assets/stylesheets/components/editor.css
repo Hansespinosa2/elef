@@ -1,0 +1,282 @@
+.editor-toolbar { color: var(--oradia-muted); font-size: 0.78rem; min-height: 1.8rem; }
+.editor-mode { border: 1px solid var(--oradia-slate-700); border-radius: 999px; color: var(--oradia-vim-normal); font-weight: 800; padding: 0.28rem 0.65rem; }
+.editor-mode[data-mode="insert"] { color: var(--oradia-vim-insert); }
+.editor-mode[data-mode="visual"] { color: var(--oradia-vim-visual); }
+.visual-editor-form { display: grid; gap: 1rem; min-width: 0; max-width: 100%; overflow-x: clip; }
+/* Overrides KaTeX's unlayered display-math block alignment and margins in the visual editor. */
+.editor-live-math-display { display: inline-block !important; margin: 0 !important; text-align: left !important; vertical-align: baseline !important; }
+.editor-math-active {
+  background: rgba(159, 197, 169, 0.16);
+  border-radius: 0.25rem;
+  box-shadow: 0 0 0 1px rgba(159, 197, 169, 0.35);
+  color: inherit;
+  font-family: var(--oradia-mono);
+  outline: none;
+  padding: 0.05rem 0.25rem;
+  white-space: pre-wrap;
+}
+.editor-math-active.editor-live-math-display {
+  display: inline-block;
+  margin: 0.25rem 0;
+  text-align: left;
+}
+.editor-shell { background: var(--oradia-slate-900); border: 1px solid var(--oradia-line); border-radius: 1rem; box-shadow: 0 18px 45px rgba(0, 0, 0, 0.16); min-width: 0; max-width: 100%; overflow-x: clip; padding: clamp(1rem, 2.5vw, 1.5rem); }
+.editor-shell-header { align-items: flex-start; display: flex; gap: 1rem; justify-content: space-between; margin-bottom: 1rem; }
+.editor-title-field { flex: 1 1 auto; min-width: 0; }
+.editor-title-label { color: var(--oradia-muted); display: block; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.12em; margin-bottom: 0.35rem; text-transform: uppercase; }
+.editor-title-input { background: transparent; border: 0; border-bottom: 1px solid var(--oradia-slate-700); border-radius: 0; box-shadow: none; color: var(--oradia-ink); font-family: var(--oradia-serif); font-size: clamp(1.65rem, 4vw, 2.7rem); font-weight: 700; line-height: 1.1; outline: none; padding: 0.1rem 0 0.45rem; width: 100%; }
+.editor-title-input:focus { border-bottom-color: var(--oradia-green); box-shadow: 0 2px 0 var(--oradia-green); }
+.editor-kind-badge { border: 1px solid var(--oradia-slate-700); border-radius: 999px; color: var(--oradia-green); flex: 0 0 auto; font-size: 0.72rem; font-weight: 800; padding: 0.35rem 0.65rem; text-transform: uppercase; }
+.visual-editor-form[data-editor-mode="visual"] .source-field.is-source-hidden .editor-surface,
+.visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface { display: none; }
+.visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface { display: block; height: min(12rem, 30vh); min-height: 8rem; opacity: 1; }
+.visual-editor-form[data-editor-mode="visual"] .source-field.is-source-hidden .editor-surface { display: block; }
+.visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface { clip-path: inset(0); height: var(--editor-surface-height, 3.4rem); left: 0; min-height: 0; pointer-events: auto; position: absolute; right: 0; top: var(--editor-toolbar-height, 2.4rem); z-index: 6; }
+.visual-editor-form[data-editor-mode="visual"] .media-editor-controls { pointer-events: none; position: relative; z-index: 7; }
+.visual-editor-form[data-editor-mode="visual"] .media-editor-controls > * { pointer-events: auto; }
+/* Overrides CodeMirror's injected minimum heights in the hidden visual-mode source editor. */
+.visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-editor,
+.visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-scroller,
+.visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-content { min-height: 0 !important; }
+/* Defeats CodeMirror's injected backgrounds for the visually hidden source editor. */
+.visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-editor,
+.visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-scroller,
+.visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-content,
+.visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-line { background: transparent !important; }
+.visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-editor { border-color: transparent; box-shadow: none; }
+/* Overrides CodeMirror's injected text and caret colors hidden behind visual-mode widgets. */
+.visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-content { color: transparent !important; caret-color: transparent !important; }
+/* Defeats CodeMirror syntax colors on text hidden by visual-mode widgets. */
+.visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-line span { color: transparent !important; }
+/* Defeats CodeMirror token styling on the syntax text left visible in visual mode. */
+.visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-line .cm-live-active-syntax { color: var(--oradia-ink) !important; font-size: inherit !important; }
+/* Overrides CodeMirror's injected gutter colors and opacity in the hidden visual-mode editor. */
+.visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-gutters { color: transparent !important; opacity: 0 !important; }
+.visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-scroller { scrollbar-width: none; }
+.visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-scroller::-webkit-scrollbar { display: none; }
+.visual-editor-form[data-editor-mode="visual"][data-editor-vim-enabled="true"] .source-field .editor-surface { display: block; margin-top: 0.75rem; }
+.visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-cursorLayer { display: none; }
+.visual-editor-form[data-editor-mode="source"] .source-field .editor-surface { display: block; }
+.visual-editor-form[data-editor-mode="source"] .source-field.is-source-hidden { display: block; }
+.editor-layout, .source-pane, .preview-pane { min-width: 0; }
+.visual-editor-form[data-editor-mode="source"] .editor-layout { align-items: start; display: grid; gap: clamp(0.75rem, 1.5vw, 1.25rem); grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr); }
+.visual-editor-form[data-editor-mode="source"] .editor-projection { max-height: min(74vh, 58rem); min-height: 24rem; overflow: auto; }
+.visual-editor-form[data-editor-mode="source"] .document-editor-projection,
+.visual-editor-form[data-editor-mode="source"] .document-editor-projection .document-surface { min-width: 0; width: 100%; }
+.visual-editor-form[data-editor-mode="source"] .presentation-editor-slide-toolbar,
+.visual-editor-form[data-editor-mode="source"] .presentation-editor-block-controls { display: none; }
+.visual-editor-form[data-editor-mode="source"] .document-editor-block:hover,
+.visual-editor-form[data-editor-mode="source"] .document-editor-block:focus { background: transparent; outline-color: transparent; }
+.visual-editor-form[data-editor-mode="source"] .document-block-position-control { display: none; }
+@media (max-width: 900px) {
+  .visual-editor-form[data-editor-mode="source"] .editor-layout { grid-template-columns: minmax(0, 1fr); }
+  .visual-editor-form[data-editor-mode="source"] .editor-projection { max-height: 60vh; min-height: min(24rem, 60vh); }
+}
+.editor-toolbar { align-items: center; color: var(--oradia-muted); display: flex; flex-wrap: wrap; gap: 0.55rem; min-height: 2rem; position: relative; }
+.editor-mode-switch { align-items: center; display: inline-flex; gap: 0.15rem; }
+.editor-mode-button { background: transparent; border: 1px solid var(--oradia-slate-700); border-radius: 999px; color: var(--oradia-muted); cursor: pointer; font: inherit; font-size: 0.78rem; font-weight: 800; padding: 0.3rem 0.7rem; }
+.editor-mode-button:hover, .editor-mode-button[aria-pressed="true"] { background: var(--oradia-slate-800); border-color: var(--oradia-green); color: var(--oradia-ink); }
+.editor-editing-mode { color: var(--oradia-green); font-size: 0.72rem; font-weight: 800; margin-left: 0.3rem; text-transform: uppercase; }
+.editor-mode { border: 1px solid var(--oradia-slate-700); border-radius: 999px; color: var(--oradia-green); font-weight: 800; padding: 0.28rem 0.65rem; }
+.editor-mode[data-mode="insert"] { color: #f0d56b; }
+.editor-mode[data-mode="visual"] { color: #d5b4ff; }
+.editor-mode { color: var(--oradia-vim-normal); }
+.editor-mode[data-mode="insert"] { color: var(--oradia-vim-insert); }
+.editor-mode[data-mode="visual"] { color: var(--oradia-vim-visual); }
+.editor-command { color: var(--oradia-ink); font-family: var(--oradia-mono); min-width: 1rem; }
+.editor-projection { background: var(--oradia-paper-bright); border: 1px solid var(--oradia-paper-line); border-radius: 0.85rem; box-shadow: 0 14px 35px rgba(0, 0, 0, 0.14); color: var(--oradia-paper-ink); min-height: 22rem; overflow: hidden; padding: clamp(0.75rem, 2vw, 1.25rem); position: relative; z-index: 5; }
+.editor-projection.preview-pane { background: var(--oradia-paper-bright); border-color: var(--oradia-paper-line); box-shadow: 0 14px 35px rgba(0, 0, 0, 0.14); }
+.editor-projection .document-reader { container-type: inline-size; }
+.editor-projection .document-page-frame { width: min(794px, 100%); }
+.editor-projection .document-surface { border: 0; border-radius: 0; box-shadow: none; min-height: 20rem; padding: clamp(1rem, 4vw, 3.5rem); }
+.document-editor-block { border-radius: 0.45rem; outline: 1px solid transparent; outline-offset: 0.35rem; transition: background 120ms ease, outline-color 120ms ease; }
+.document-editor-block:hover, .document-editor-block:focus { background: rgba(159, 197, 169, 0.08); outline-color: rgba(79, 139, 104, 0.42); }
+.document-editor-block:focus { outline-width: 2px; }
+.document-editor-block-shell { position: relative; width: 100%; }
+.document-editor-block.position-left { text-align: left; }
+.document-editor-block.position-center { text-align: center; }
+.document-editor-block.position-right { text-align: right; }
+.document-block-position-control { align-items: center; background: rgba(24, 33, 38, 0.94); border: 1px solid rgba(48, 64, 71, 0.9); border-radius: 999px; color: #e9eee9; display: flex; font-size: 0.68rem; font-weight: 700; gap: 0.35rem; opacity: 0; padding: 0.25rem 0.4rem 0.25rem 0.55rem; pointer-events: none; position: absolute; right: 0.25rem; top: 0.15rem; transition: opacity 120ms ease; z-index: 4; }
+.document-editor-block-shell:hover .document-block-position-control,
+.document-editor-block-shell:focus-within .document-block-position-control,
+.document-block-position-control:focus-within,
+.document-block-position-control.is-open { opacity: 1; pointer-events: auto; }
+.document-block-position-control select { background: var(--oradia-slate-900); border: 1px solid rgba(48, 64, 71, 0.9); border-radius: 0.4rem; color: inherit; cursor: pointer; font: inherit; min-height: 1.65rem; outline-offset: 2px; padding: 0.2rem 1.4rem 0.2rem 0.45rem; }
+.document-block-position-control select:focus-visible { outline: 2px solid var(--oradia-green); }
+.document-block-position-control option { background: var(--oradia-slate-900); color: var(--oradia-ink); }
+.editor-media { margin: 0; }
+.editor-media-caption { border-top: 1px dashed var(--oradia-paper-line); color: var(--oradia-paper-muted); font-size: 0.78rem; margin-top: 0.4rem; padding-top: 0.25rem; }
+.presentation-editor-tools { align-items: center; display: flex; flex-wrap: wrap; gap: 0.75rem; justify-content: space-between; margin: 0.9rem 0; }
+.presentation-editor-help { color: var(--oradia-muted); font-size: 0.82rem; line-height: 1.4; }
+.presentation-typography-select { background: var(--oradia-slate-950); border: 1px solid var(--oradia-slate-700); border-radius: 999px; color: var(--oradia-ink); font-weight: 700; padding: 0.45rem 0.75rem; }
+.editor-footer { align-items: center; display: flex; flex-wrap: wrap; gap: 0.75rem; justify-content: space-between; margin-top: 1rem; }
+.editor-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 0.7rem; }
+.editor-actions .button { align-items: center; border-radius: 999px; display: inline-flex; font-weight: 800; min-height: 2.5rem; padding: 0.55rem 1rem; text-decoration: none; }
+.editor-actions .preview-retry { background: transparent; border: 1px solid var(--oradia-slate-700); border-radius: 999px; color: var(--oradia-green); cursor: pointer; font: inherit; font-size: 0.82rem; font-weight: 800; min-height: 2.5rem; padding: 0.45rem 0.8rem; }
+.editor-actions .preview-retry:hover { background: var(--oradia-slate-800); }
+.editor-actions .button:not(.primary) { background: var(--oradia-slate-800); border: 1px solid var(--oradia-slate-700); color: var(--oradia-ink); }
+.presentation-editor-status { color: var(--oradia-muted); font-size: 0.8rem; }
+.presentation-editor-projection { padding: clamp(0.35rem, 1vw, 0.75rem); }
+.presentation-editor-projection .slides { gap: 1.25rem; }
+.presentation-editor-projection .slide-frame { outline: 1px solid transparent; outline-offset: 0.25rem; }
+.presentation-editor-slide-toolbar { align-items: center; background: rgba(24, 33, 38, 0.9); border: 1px solid rgba(48, 64, 71, 0.9); border-radius: 999px; color: #e9eee9; display: flex; flex-wrap: wrap; gap: 0.35rem; left: 1.25rem; padding: 0.3rem 0.45rem; position: absolute; right: 1.25rem; top: 0.8rem; z-index: 3; }
+.presentation-editor-slide-label { font-size: 0.7rem; font-weight: 800; margin-right: auto; text-transform: uppercase; }
+.presentation-editor-slide-toolbar button, .presentation-editor-block-controls button, .presentation-editor-block-controls select { background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 999px; color: inherit; cursor: pointer; font: inherit; font-size: 0.68rem; font-weight: 700; padding: 0.25rem 0.5rem; }
+.presentation-editor-slide-toolbar button:hover, .presentation-editor-block-controls button:hover, .presentation-editor-block-controls select:hover { background: rgba(255, 255, 255, 0.18); }
+.presentation-editor-slide-toolbar button:disabled, .presentation-editor-block-controls button:disabled { cursor: not-allowed; opacity: 0.4; }
+.presentation-editor-projection .slide-title[contenteditable="true"], .presentation-editor-projection .slide-block[contenteditable="true"] { border-radius: 0.45rem; outline: 1px solid transparent; outline-offset: 0.35rem; transition: outline-color 120ms ease, background 120ms ease; }
+.presentation-editor-projection [contenteditable="true"]:hover, .presentation-editor-projection [contenteditable="true"]:focus { background: rgba(79, 139, 104, 0.08); outline-color: rgba(79, 139, 104, 0.5); }
+.presentation-editor-block-controls { align-items: center; display: flex; flex-wrap: wrap; gap: 0.25rem; margin: 0.15rem 0 0.45rem; }
+.presentation-editor-block-controls select { max-width: 8.5rem; }
+.editor-projection[hidden], .source-field[hidden] { display: none; }
+.source-field { padding-bottom: 0.75rem; }
+@media (max-width: 540px) {
+  .visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface { clip-path: inset(0); }
+}
+.field-hint { color: var(--oradia-muted); font-size: 0.82rem; line-height: 1.45; margin: 0.5rem 0 0; }
+.editor-settings { position: relative; }
+.editor-settings summary { border: 1px solid var(--oradia-slate-700); border-radius: 999px; color: var(--oradia-muted); cursor: pointer; padding: 0.28rem 0.7rem; }
+.editor-settings summary:hover, .editor-settings[open] summary { background: var(--oradia-slate-800); color: var(--oradia-ink); }
+.editor-settings-panel { background: var(--oradia-slate-900); border: 1px solid var(--oradia-slate-700); border-radius: 0.75rem; box-sizing: border-box; box-shadow: 0 18px 45px #0006; display: grid; gap: 0.7rem; left: 0; max-width: calc(100vw - 2rem); padding: 0.8rem; position: absolute; right: auto; top: calc(100% + 0.5rem); width: min(24rem, calc(100vw - 2rem)); z-index: 30; }
+.editor-settings:not([open]) .editor-settings-panel { display: none; }
+@media (max-width: 540px) {
+  .editor-settings { position: static; }
+  .editor-settings-panel { left: 0; right: 0; top: var(--editor-toolbar-height, 2.4rem); width: auto; max-width: none; }
+}
+.editor-reveal-metadata { background: transparent; border: 1px solid var(--oradia-slate-700); border-radius: 999px; color: var(--oradia-muted); cursor: pointer; padding: 0.28rem 0.7rem; }
+.editor-reveal-metadata:hover, .editor-reveal-metadata:focus-visible { background: var(--oradia-slate-800); color: var(--oradia-ink); }
+.editor-reveal-metadata[hidden],
+.appearance-fields [hidden] { display: none; }
+.appearance-fields:not(.editor-settings-panel) { background: transparent; border: 0; border-radius: 0; box-shadow: none; padding: 0; }
+.appearance-fields .appearance-label { color: var(--oradia-muted); }
+.appearance-select { background: var(--oradia-slate-950); border: 1px solid var(--oradia-slate-700); color: var(--oradia-ink); font: inherit; }
+.appearance-select:hover:not(:disabled) { border-color: var(--oradia-line); }
+.appearance-select:focus { border-color: var(--oradia-green); box-shadow: 0 0 0 3px rgba(159, 197, 169, 0.18); outline: none; }
+.appearance-select:disabled { color: var(--oradia-muted); cursor: not-allowed; opacity: 0.55; }
+.editor-surface { box-sizing: border-box; font-family: var(--oradia-mono); height: min(36rem, 60vh); line-height: 1.55; max-height: 70vh; min-height: 24rem; overflow: hidden; position: relative; resize: vertical; width: 100%; }
+.editor-surface .cm-editor { border: 1px solid var(--oradia-slate-700); border-radius: 0.75rem; height: 100%; min-height: 100%; overflow: hidden; }
+.editor-surface .cm-scroller { min-height: 0; }
+.editor-surface .cm-content { min-height: 0; }
+.editor-surface .cm-editor.cm-focused { border-color: var(--oradia-green); box-shadow: 0 0 0 3px rgba(159, 197, 169, 0.18); }
+.editor-surface .cm-vim-panel { background: var(--oradia-slate-950); border-top: 1px solid var(--oradia-slate-700); color: var(--oradia-ink); min-height: 1.7rem; padding: 0.25rem 0.65rem; }
+.editor-surface .cm-vim-panel input { color: var(--oradia-ink); }
+/* Defeats CodeMirror syntax styling on Elef's custom live syntax markers. */
+.cm-live-syntax-marker { color: #404740 !important; font-style: normal !important; opacity: 1 !important; }
+.visual-editor-form[data-editor-mode="visual"] .cm-live-syntax-marker { font-size: 0; }
+.visual-editor-form[data-editor-mode="visual"] .cm-live-widget-quote-marker::after { content: "❯"; font-size: 0.9rem; }
+.editor-input-proxy { background: transparent; border: 0; color: transparent; font-size: 1px; height: 1px; left: 0; line-height: 1px; overflow: hidden; padding: 0; pointer-events: auto; position: absolute; resize: none; top: 2.4rem; width: 1px; z-index: 7; }
+.snippet-palette {
+  position: fixed;
+  z-index: 20;
+  margin: 0;
+  width: min(20rem, calc(100vw - 1rem));
+  max-height: min(18rem, calc(100vh - 1rem));
+  overflow: auto;
+  border: 1px solid var(--oradia-slate-700);
+  border-radius: 0.6rem;
+  background: rgba(17, 22, 26, 0.96);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.32);
+}
+
+.snippet-option {
+  align-items: center;
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  gap: 0.7rem;
+  border: 0;
+  border-bottom: 1px solid var(--oradia-line);
+  background: transparent;
+  color: var(--oradia-ink);
+  cursor: pointer;
+  min-height: 2.15rem;
+  padding: 0.35rem 0.55rem;
+  text-align: left;
+}
+
+.snippet-option:last-child { border-bottom: 0; }
+.snippet-option strong { flex: 0 0 auto; font-size: 0.76rem; font-weight: 650; }
+.snippet-option span { color: var(--oradia-muted); font-size: 0.68rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.snippet-option.is-selected { background: var(--oradia-slate-700); }
+
+.cm-snippet-stop {
+  background: rgba(159, 197, 169, 0.16);
+  border-radius: 0.2rem;
+  box-shadow: inset 0 0 0 1px rgba(159, 197, 169, 0.55);
+}
+
+.cm-snippet-stop-active {
+  background: rgba(159, 197, 169, 0.3);
+  box-shadow: inset 0 0 0 1px var(--oradia-green), 0 0 0 1px rgba(159, 197, 169, 0.4);
+}
+
+.cm-snippet-stop-empty {
+  background: rgba(159, 197, 169, 0.6);
+  border-radius: 1px;
+  box-shadow: none;
+  display: inline-block;
+  height: 1.1em;
+  vertical-align: text-bottom;
+  width: 2px;
+}
+
+.cm-snippet-stop-empty.cm-snippet-stop-active {
+  background: var(--oradia-green);
+  width: 3px;
+}
+
+.math-shortcut-palette {
+  box-sizing: border-box;
+  width: min(24rem, calc(100vw - 1rem));
+  max-height: min(18rem, 52vh);
+  overflow: auto;
+  padding: 0.2rem;
+  background: var(--oradia-slate-950);
+  backdrop-filter: blur(10px);
+  scrollbar-color: var(--oradia-slate-700) var(--oradia-slate-950);
+  scrollbar-width: thin;
+}
+.math-shortcut-palette::-webkit-scrollbar { width: 0.55rem; }
+.math-shortcut-palette::-webkit-scrollbar-track { background: var(--oradia-slate-950); }
+.math-shortcut-palette::-webkit-scrollbar-thumb { background: var(--oradia-slate-700); border: 2px solid var(--oradia-slate-950); border-radius: 999px; }
+.math-shortcut-palette .snippet-option {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) max-content;
+  align-items: center;
+  justify-content: stretch;
+  gap: 0.6rem;
+  border: 1px solid transparent;
+  border-bottom-color: var(--oradia-line);
+  border-radius: 0.45rem;
+  min-height: 2.15rem;
+  padding: 0.3rem 0.4rem;
+}
+.math-shortcut-palette .snippet-option:last-child { border-bottom-color: transparent; }
+.math-shortcut-palette .snippet-option.is-selected { background: var(--oradia-slate-800); border-color: var(--oradia-green-deep); }
+.math-shortcut-trigger { background: var(--oradia-slate-800); border: 1px solid var(--oradia-slate-700); border-radius: 0.35rem; color: var(--oradia-green); flex: 0 0 auto; font-family: var(--oradia-mono); font-size: 0.7rem; padding: 0.2rem 0.35rem; }
+.math-shortcut-name { color: var(--oradia-ink); font-size: 0.78rem; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.math-shortcut-expansion { color: var(--oradia-muted); font-family: var(--oradia-mono); font-size: 0.68rem; max-width: 8.5rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 420px) {
+  .math-shortcut-palette .snippet-option { gap: 0.4rem; grid-template-columns: max-content minmax(0, 1fr); }
+  .math-shortcut-expansion { display: none; }
+}
+
+/* Defeats CodeMirror's gutter display when the editor's line numbers are disabled. */
+.editor-surface[data-line-numbers="off"] .cm-lineNumbers { display: none !important; }
+.editor-surface .cm-fat-cursor { background-color: var(--oradia-vim-normal); min-width: 1ch; }
+.editor-surface .cm-editor:not(.cm-focused) .cm-fat-cursor { background: none; outline: solid 1px var(--oradia-vim-normal); }
+/* Overrides CodeMirror's injected cursor color with Elef's Vim mode colors. */
+.editor-surface[data-mode-aware-cursor="true"][data-editor-mode="insert"] .cm-cursor { border-left-color: var(--oradia-vim-insert) !important; }
+/* Overrides CodeMirror's injected cursor color with Elef's Vim mode colors. */
+.editor-surface[data-mode-aware-cursor="true"][data-editor-mode="visual"] .cm-cursor { border-left-color: var(--oradia-vim-visual) !important; }
+.editor-surface[data-mode-aware-cursor="true"][data-editor-mode="visual"] .cm-fat-cursor { background-color: var(--oradia-vim-visual); }
+.editor-surface[data-mode-aware-cursor="true"][data-editor-mode="visual"] .cm-editor:not(.cm-focused) .cm-fat-cursor { background: none; outline-color: var(--oradia-vim-visual); }
+/* Overrides CodeMirror's injected cursor color with Elef's Vim mode colors. */
+.editor-surface[data-mode-aware-cursor="true"][data-editor-mode="normal"] .cm-cursor { border-left-color: var(--oradia-vim-normal) !important; }
+.editor-surface[data-mode-aware-cursor="true"][data-editor-mode="normal"] .cm-fat-cursor { background-color: var(--oradia-vim-normal); }
+.editor-surface[data-mode-aware-cursor="true"][data-editor-mode="normal"] .cm-editor:not(.cm-focused) .cm-fat-cursor { background: none; outline-color: var(--oradia-vim-normal); }
+/* Defeats CodeMirror's injected selection backgrounds in visual and Vim modes. */
+.editor-surface[data-editor-mode="visual"] .cm-selectionBackground,
+.editor-surface[data-editor-vim-enabled="true"] .cm-selectionBackground { background-color: var(--oradia-vim-selection) !important; }
+.editor-layout { grid-template-columns: minmax(0, 1.2fr) minmax(22rem, 0.8fr); }
