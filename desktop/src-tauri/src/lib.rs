@@ -148,7 +148,11 @@ impl From<CoreError> for CommandError {
             other => Self {
                 code: other.code(),
                 message: other.to_string(),
-                retryable: matches!(other, CoreError::Io(_)),
+                // A deck path that vanishes mid-session (sync tools, transient
+                // unmounts) must retry on the capped backoff like any IO
+                // failure instead of wedging the saver in a manual-retry
+                // state that quiet-save no longer offers.
+                retryable: matches!(other, CoreError::Io(_) | CoreError::NotFound),
                 details: None,
             },
         }
@@ -1568,6 +1572,16 @@ mod tests {
         assert!(reread.source.contains("# Transfer"));
         assert!(!staged.path.exists());
         assert!(take_pending_import(&state).is_none());
+    }
+
+    #[test]
+    fn transient_storage_errors_are_retryable_and_input_errors_are_not() {
+        let retryable = CommandError::from(CoreError::NotFound);
+        assert_eq!(retryable.code, "not_found");
+        assert!(retryable.retryable);
+        let fatal = CommandError::from(CoreError::InvalidInput);
+        assert_eq!(fatal.code, "invalid_input");
+        assert!(!fatal.retryable);
     }
 
     #[test]
