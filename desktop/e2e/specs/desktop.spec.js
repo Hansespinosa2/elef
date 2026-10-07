@@ -973,7 +973,7 @@ class DesktopEditorUi {
       ? "Snippet suggestions"
       : palette === "document-link" ? "Document link suggestions" : "Math shortcut suggestions"
     await this.waitForAuthoringOption(palette, name)
-    const selected = await browser.execute(({ label, name }) => {
+    const selected = await browser.execute(({ label, name, palette }) => {
       const field = document.querySelector("#desktop-editor-field")
       const editor = field?.editorController
       const listbox = [...document.querySelectorAll('.source-field [role="listbox"]')]
