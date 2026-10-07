@@ -17,7 +17,7 @@ if (!process.argv.includes("--binary") || !binary || !path.isAbsolute(binary)) {
 if (process.platform === "linux" && (!process.env.DISPLAY || process.env.WAYLAND_DISPLAY)) {
   throw new Error("Run the native benchmark on an isolated headless X display.")
 }
-const output = path.resolve(process.env.ELEF_PERFORMANCE_REPORT || `desktop/target/native-performance-${process.platform}.json`)
+const output = path.resolve(process.env.ELEF_PERFORMANCE_REPORT || `target/native-performance-${process.platform}.json`)
 const temporary = await mkdtemp(path.join(os.tmpdir(), "elef-performance-"))
 const library = path.join(temporary, "Elef")
 const deckId = randomUUID()

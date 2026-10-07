@@ -56,7 +56,7 @@ let updaterServer = null
 const env = {
   ...process.env,
   ELEF_E2E_LIBRARY_ROOT: libraryRoot,
-  ELEF_E2E_APP_BINARY: path.join(repoRoot, "desktop", "target", "debug", "elef-desktop"),
+  ELEF_E2E_APP_BINARY: path.join(repoRoot, "target", "debug", "elef-desktop"),
   ELEF_E2E_IMPORT_ARCHIVE: importArchive,
   ELEF_E2E_PORTABLE_GRAPH_ARCHIVE: portableGraphArchive,
   ELEF_E2E_EXPORT_PATH: exportArchive,
@@ -64,7 +64,7 @@ const env = {
 }
 
 if (process.env.ELEF_E2E_PACKAGED_UPDATES === "1") {
-  const packages = path.join(repoRoot, "desktop/target/e2e-packages")
+  const packages = path.join(repoRoot, "target/e2e-packages")
   const installed = path.join(temporaryRoot, "installed")
   await cp(path.join(packages, "n-1"), installed, { recursive: true, verbatimSymlinks: true })
   env.ELEF_E2E_PACKAGED_UPDATES = "1"

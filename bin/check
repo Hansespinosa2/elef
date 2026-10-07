@@ -499,6 +499,50 @@ def run_phase0(json_output: bool) -> int:
 
 
 D_E2E = DESKTOP_PATH_PREFIX + "e2e"
+
+def run_rails_adapter_conformance() -> float:
+    import socket
+    import time
+
+    pid_file = ROOT / "tmp" / "pids" / "tier-server.pid"
+    server = subprocess.Popen(
+        ["bin/rails", "server", "-e", "test", "-p", "3101", "-b", "127.0.0.1",
+         "-P", str(pid_file)],
+        cwd=ROOT,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    started = time.monotonic()
+    try:
+        deadline = started + 90
+        while True:
+            try:
+                socket.create_connection(("127.0.0.1", 3101), timeout=2).close()
+                break
+            except OSError:
+                if time.monotonic() > deadline or server.poll() is not None:
+                    fail("rails conformance server did not boot")
+                time.sleep(1)
+        node = subprocess.run(
+            ["node", "tests/host-conformance/run-node.js", "rails"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+            env={**os.environ, "ELEF_CONFORMANCE_RAILS_URL": "http://127.0.0.1:3101"},
+        )
+        if node.returncode:
+            tail = (node.stdout + node.stderr).strip().splitlines()[-20:]
+            fail("rails adapter conformance failed\n" + "\n".join(tail))
+    finally:
+        server.terminate()
+        try:
+            server.wait(timeout=20)
+        except subprocess.TimeoutExpired:
+            server.kill()
+    return time.monotonic() - started
+
+
 QUICK_CEILING_S = 180.0
 AFFECTED_CEILING_S = 420.0
 PHASE1_PLAN_PATH = ROOT / "docs" / "refactor" / "execution" / "phase-1-plan.md"
@@ -530,8 +574,7 @@ AFFECTED_COMMANDS_1 = (
     "git diff --exit-code -- app/assets/builds/tailwind.css",
     "bin/rails db:test:prepare",
     f"bin/rails test {AFFECTED_RAILS_TESTS}",
-    "ELEF_CONFORMANCE_RAILS_URL=${ELEF_CONFORMANCE_RAILS_URL:?rails server URL is required} "
-    "node tests/host-conformance/run-node.js rails",
+    ("rails adapter conformance (tier-booted test server)", run_rails_adapter_conformance),
     f"npm run build --prefix {DESKTOP_PATH_PREFIX}frontend",
     f"python3 {DESKTOP_PATH_PREFIX}scripts/check_architecture.py",
     "cargo fmt --manifest-path Cargo.toml --all -- --check",
@@ -588,8 +631,12 @@ def run_step(command: str) -> float:
 
 def run_tier(commands: tuple, ceiling: float, quiet: bool) -> dict:
     durations: dict = {}
-    for command in commands:
-        durations[command] = run_step(command)
+    for entry in commands:
+        if isinstance(entry, tuple):
+            label, step = entry
+            durations[label] = step()
+            continue
+        durations[entry] = run_step(entry)
     total = sum(durations.values())
     if total > ceiling:
         fail(f"tier total {total:.1f}s exceeds the {ceiling:.0f}s ceiling")

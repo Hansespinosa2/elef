@@ -339,13 +339,13 @@ jobs:
           ELEF_E2E_BUILD: "1"
         run: npm run tauri:build --prefix desktop/frontend -- --features webdriver --no-bundle --config src-tauri/tauri.e2e.conf.json --config src-tauri/tauri.performance.conf.json
       - name: Record hosted Linux release performance over 20 fresh processes
-        run: dbus-run-session -- xvfb-run --auto-servernum bash -c 'openbox --sm-disable >/tmp/elef-performance-openbox.log 2>&1 & sleep 1; node desktop/e2e/benchmark-native.mjs --binary "$PWD/desktop/target/release/elef-desktop" --report-runner'
+        run: dbus-run-session -- xvfb-run --auto-servernum bash -c 'openbox --sm-disable >/tmp/elef-performance-openbox.log 2>&1 & sleep 1; node desktop/e2e/benchmark-native.mjs --binary "$PWD/target/release/elef-desktop" --report-runner'
       - name: Preserve native Linux performance samples
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: native-performance-linux
-          path: desktop/target/native-performance-linux.json
+          path: target/native-performance-linux.json
           if-no-files-found: warn
       - name: Build Linux desktop package
         run: npm run tauri:build --prefix desktop/frontend
@@ -397,21 +397,6 @@ jobs:
           npm ci
           npm ci --prefix desktop/frontend
           npm ci --prefix desktop/e2e
-      - name: Boot the Rails test server for adapter conformance
-        env:
-          RAILS_ENV: test
-          PGHOST: 127.0.0.1
-          PGUSER: postgres
-          PGPASSWORD: postgres
-          PGTESTDATABASE: elef_test
-          ELEF_CONFORMANCE_RAILS_URL: http://127.0.0.1:3101
-        run: |
-          bin/rails server -e test -p 3101 -b 127.0.0.1 -P tmp/pids/affected-server.pid &
-          for attempt in $(seq 1 60); do
-            curl --silent --output /dev/null http://127.0.0.1:3101/ && break
-            sleep 2
-          done
-          curl --silent --output /dev/null http://127.0.0.1:3101/
       - name: Run the affected tier with its time ceiling
         env:
           RAILS_ENV: test
@@ -419,11 +404,7 @@ jobs:
           PGUSER: postgres
           PGPASSWORD: postgres
           PGTESTDATABASE: elef_test
-          ELEF_CONFORMANCE_RAILS_URL: http://127.0.0.1:3101
         run: bin/check affected
-      - name: Stop the Rails test server
-        if: always()
-        run: kill "$(cat tmp/pids/affected-server.pid)" || true
 
   desktop-macos:
     runs-on: macos-15
@@ -537,13 +518,13 @@ jobs:
       - name: Record hosted macOS release performance over 20 fresh processes
         env:
           ELEF_E2E_OFFLINE: "1"
-        run: node desktop/e2e/benchmark-native.mjs --binary "$PWD/desktop/target/release/elef-desktop" --report-runner
+        run: node desktop/e2e/benchmark-native.mjs --binary "$PWD/target/release/elef-desktop" --report-runner
       - name: Preserve native macOS performance samples
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: native-performance-darwin
-          path: desktop/target/native-performance-darwin.json
+          path: target/native-performance-darwin.json
           if-no-files-found: warn
       - name: Build Apple Silicon desktop package
         run: npm run tauri:build --prefix desktop/frontend -- --bundles app,dmg

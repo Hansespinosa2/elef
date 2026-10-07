@@ -36,11 +36,24 @@ export async function createRailsHost({ baseUrl, fetchImpl = fetch }) {
   }
 
   async function bootstrap() {
-    const response = await fetchImpl(`${base}/`, { headers: { "User-Agent": MODERN_UA } });
+    let response = await fetchImpl(`${base}/`, { headers: { "User-Agent": MODERN_UA } });
     storeCookies(response);
-    const html = await response.text();
-    const token = csrfToken(html);
-    if (!token) throw new Error("rails host did not expose a CSRF token");
+    let html = await response.text();
+    let token = csrfToken(html);
+    if (!token) {
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      response = await fetchImpl(`${base}/`, { headers: { "User-Agent": MODERN_UA } });
+      storeCookies(response);
+      html = await response.text();
+      token = csrfToken(html);
+    }
+    if (!token) {
+      throw new Error(
+        `rails host bootstrap failed: status ${response.status}, ` +
+          `content-type ${response.headers.get("content-type")}, ` +
+          `body head ${JSON.stringify(html.slice(0, 300))}`,
+      );
+    }
     return token;
   }
 
