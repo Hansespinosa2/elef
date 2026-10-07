@@ -727,21 +727,19 @@ class DesktopEditorUi {
   async typeEmptyDisplayMath(mode) {
     const delimiterInput = mode === "visual" ? "$$" : "$$$$"
     const expectedPairSource = `${await this.readSource()}${delimiterInput}`
+    focusDesktopWindow()
+    let target
     if (mode === "visual") {
-      const block = await $("#desktop-preview .document-editor-block[data-editor-empty-block='true']")
-      await block.waitForDisplayed()
-      await block.click()
+      target = await $("#desktop-preview .document-editor-block[data-editor-empty-block='true'][contenteditable='true']")
+      await target.waitForDisplayed()
+      await target.click()
     } else {
-      const editor = await $("#deck-source-editor .cm-content")
-      await editor.waitForDisplayed()
-      await editor.click()
-      sendNativeKey("ControlOrMeta+End")
+      target = await $("#deck-source-editor .cm-content")
+      await target.waitForDisplayed()
+      await target.click()
+      sendNativeKey("ControlOrMeta+End", { activate: false })
     }
 
-    focusDesktopWindow()
-    const target = mode === "visual"
-      ? await $("#desktop-preview .document-editor-block[data-editor-empty-block='true']")
-      : await $("#deck-source-editor .cm-content")
     await target.addValue("$")
     await target.addValue("$")
     await this.waitForSource(expectedPairSource)
