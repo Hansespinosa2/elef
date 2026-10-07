@@ -1,5 +1,5 @@
-import { buildAuthoringEntry, removeAuthoringEntry, upsertAuthoringEntry } from "./authoring_settings.js"
-import { writeAuthoringRegistry } from "./authoring_registry_write.js"
+import { buildAuthoringEntry, removeAuthoringEntry, upsertAuthoringEntry } from "#elef/authoring-settings"
+import { writeAuthoringRegistry } from "#elef/authoring-registry-write"
 import { installSanitizedPreview } from "#elef/preview-sanitizer"
 
 const CATEGORY_ORDER = new Map([["Markdown", 0], ["LaTeX", 1], ["Mermaid", 2], ["Elef DSL", 3]])

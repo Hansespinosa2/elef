@@ -97,20 +97,48 @@ math_modules = (
     ROOT / "app/javascript/controllers/editor_markdown.js",
 )
 
-# Rails controllers use import-map specifiers while the desktop esbuild alias
-# resolves the same app-owned modules directly. Keep every controller-to-lib
-# edge pinned so a desktop-only build cannot hide a broken Rails module graph.
-controller_lib_imports = {
-    specifier
-    for path in (app_frontend / "controllers").rglob("*.js")
-    for specifier in MODULE_SPECIFIER.findall(path.read_text())
-    if specifier.startswith("lib/")
-}
+# Rails browser imports resolve through importmap, while desktop esbuild resolves
+# the same app-owned modules directly. Walk the Rails controller dependency graph
+# so transitive app-owned modules cannot be missing from the importmap.
+pending_modules = list((app_frontend / "controllers").rglob("*.js"))
+visited_modules = set()
+frontend_lib_imports = set()
+while pending_modules:
+    module = pending_modules.pop().resolve()
+    if module in visited_modules:
+        continue
+    visited_modules.add(module)
+    for specifier in MODULE_SPECIFIER.findall(module.read_text()):
+        if specifier.startswith("lib/"):
+            dependency = app_frontend / f"{specifier}.js"
+            frontend_lib_imports.add(specifier)
+        elif specifier.startswith(("./", "../")):
+            dependency = (module.parent / specifier).resolve()
+            if dependency.suffix != ".js" or app_frontend / "lib" not in dependency.parents:
+                continue
+            frontend_lib_imports.add(f"lib/{dependency.relative_to(app_frontend / 'lib').with_suffix('').as_posix()}")
+        else:
+            continue
+        if dependency.is_file():
+            pending_modules.append(dependency)
+
 rails_lib_pins = set(re.findall(r'^pin "(lib/[^\"]+)"', importmap, re.MULTILINE))
-missing_controller_lib_pins = sorted(controller_lib_imports - rails_lib_pins)
-assert not missing_controller_lib_pins, (
-    "Every Rails controller's app-owned lib import must be pinned in the Rails importmap: "
-    + ", ".join(missing_controller_lib_pins)
+missing_frontend_imports = sorted(frontend_lib_imports - rails_lib_pins)
+assert not missing_frontend_imports, (
+    "Every Rails-owned frontend lib import must be pinned in the Rails importmap: "
+    + ", ".join(missing_frontend_imports)
+)
+frontend_shared_aliases = {
+    specifier
+    for path in app_frontend.rglob("*.js")
+    for specifier in MODULE_SPECIFIER.findall(path.read_text())
+    if specifier.startswith("#elef/")
+}
+rails_shared_alias_pins = set(re.findall(r'^pin "(#elef/[^\"]+)"', importmap, re.MULTILINE))
+missing_shared_alias_pins = sorted(frontend_shared_aliases - rails_shared_alias_pins)
+assert not missing_shared_alias_pins, (
+    "Every shared Elef module alias must be pinned in the Rails importmap: "
+    + ", ".join(missing_shared_alias_pins)
 )
 
 for module in math_modules:
@@ -294,7 +322,7 @@ assert "extractFirstMarkdownHeading" in (ROOT / "app/javascript/lib/document_lin
     "document graph labels must use the Rails-owned Markdown rules"
 )
 authoring_settings_dialog = (ROOT / "app/javascript/lib/authoring_settings_dialog.js").read_text()
-assert '"./authoring_registry_write.js"' in authoring_settings_dialog, "authoring UI must use the app-owned persistence flow"
+assert '"#elef/authoring-registry-write"' in authoring_settings_dialog, "authoring UI must use the app-owned persistence flow"
 assert '"controllers/presentation_controller"' in editor_runtime, (
     "the Rails-owned controller runtime must register the shared presentation controller"
 )

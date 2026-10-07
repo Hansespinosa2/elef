@@ -9,15 +9,22 @@ const sharedFrontendRoot = path.join(repoRoot, "app/javascript")
 const e2eBuild = process.env.ELEF_E2E_BUILD === "1"
 const output = path.join(frontendRoot, e2eBuild ? "dist-e2e" : "dist")
 const assets = path.join(output, "assets")
+const sharedModuleAliases = {
+  "#elef/preview-sanitizer": "lib/preview_sanitizer.js",
+  "#elef/authoring-settings": "lib/authoring_settings.js",
+  "#elef/authoring-registry-write": "lib/authoring_registry_write.js"
+}
 
 await rm(output, { recursive: true, force: true })
 await mkdir(assets, { recursive: true })
 const appSourceAlias = {
   name: "app-source-alias",
   setup(context) {
-    context.onResolve({ filter: /^#elef\/preview-sanitizer$/ }, () => ({
-      path: path.join(sharedFrontendRoot, "lib/preview_sanitizer.js")
-    }))
+    context.onResolve({ filter: /^#elef\// }, ({ path: importPath }) => {
+      const sharedModule = sharedModuleAliases[importPath]
+      if (!sharedModule) return
+      return { path: path.join(sharedFrontendRoot, sharedModule) }
+    })
     context.onResolve({ filter: /^(?:controllers|lib)\// }, ({ path: importPath }) => ({
       path: path.join(sharedFrontendRoot, `${importPath}.js`)
     }))
