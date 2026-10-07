@@ -15,6 +15,7 @@ import { PIXEL_PNG_DIGEST, PIXEL_PNG_MARKDOWN } from "../../../test/e2e/scenario
 import { presentationModeWorkflow } from "../../../test/e2e/scenarios/presentation-mode.js"
 import { vimRelativeLineNumbersWorkflow } from "../../../test/e2e/scenarios/vim-relative-line-numbers.js"
 import { documentPageAspectRatioWorkflow } from "../../../test/e2e/scenarios/document-page-aspect-ratio.js"
+import { displayMathEnterWorkflow } from "../../../test/e2e/scenarios/display-math-enter.js"
 import { createHash } from "node:crypto"
 import { answerMacNativeDialog } from "../mac-native-dialog.js"
 
@@ -713,6 +714,54 @@ class DesktopEditorUi {
     }, position), {
       timeout: 5_000,
       timeoutMsg: `The desktop editor did not restore its caret to source offset ${position}`
+    })
+  }
+
+  async typeEmptyDisplayMath(mode) {
+    if (mode === "visual") {
+      const block = await $("#desktop-preview .document-editor-block[data-editor-empty-block='true']")
+      await block.waitForDisplayed()
+      await block.click()
+    } else {
+      const editor = await $("#deck-source-editor .cm-content")
+      await editor.waitForDisplayed()
+      await editor.click()
+      sendNativeKey("End")
+    }
+
+    focusDesktopWindow()
+    typeNativeText("$", { activate: false })
+    typeNativeText("$", { activate: false })
+    sendNativeKey("Enter", { activate: false })
+  }
+
+  async assertDisplayMathCaret(expectedSource, expectedCaret, mode) {
+    const visual = mode === "visual"
+    await browser.waitUntil(async () => {
+      const state = await browser.execute(() => {
+        const form = document.querySelector("#desktop-editor-form")
+        const editor = document.querySelector("#desktop-editor-field")?.editorController
+        const selection = window.getSelection()
+        const focusElement = selection?.focusNode?.nodeType === Node.ELEMENT_NODE
+          ? selection.focusNode
+          : selection?.focusNode?.parentElement
+        const activeMath = focusElement?.closest?.(".editor-math-active")
+        return {
+          mode: editor?.editingMode,
+          value: editor?.value,
+          selectionStart: editor?.selectionStart,
+          selectionEnd: editor?.selectionEnd,
+          previewSource: form?.previewController?.pendingProjection?.source || null,
+          activeMathText: activeMath?.textContent || null,
+          visualOffset: selection?.focusOffset ?? null
+        }
+      })
+      return state?.mode === mode && state.value === expectedSource &&
+        state.selectionStart === expectedCaret && state.selectionEnd === expectedCaret &&
+        (!visual || (state.previewSource === expectedSource && state.activeMathText === "$$\n\n$$" && state.visualOffset === 3))
+    }, {
+      timeout: 10_000,
+      timeoutMsg: `The desktop ${mode} editor did not keep the caret on the empty display-math body line`
     })
   }
 
@@ -1871,6 +1920,10 @@ describe("desktop binary workflows and native boundaries", () => {
 
   it("runs the shared math input flow in the desktop binary", async () => {
     await mathInputWorkflow(new DesktopEditorUi())
+  })
+
+  it("keeps the empty display-math body caret in both desktop editor modes", async () => {
+    await displayMathEnterWorkflow(new DesktopEditorUi())
   })
 
   it("saves a manifestless deck with its new identity, original line endings, and isolated undo", async () => {

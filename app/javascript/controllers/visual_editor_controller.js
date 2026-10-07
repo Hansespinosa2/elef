@@ -154,6 +154,17 @@ export default class extends Controller {
     const region = this.regionForBlock(current.blockId)
     if (!region) return null
     const source = this.editorController.value.slice(region.content_range.start, region.content_range.end)
+    const focusElement = selection.focusNode.nodeType === Node.ELEMENT_NODE
+      ? selection.focusNode
+      : selection.focusNode.parentElement
+    const activeDisplayMath = focusElement?.closest?.(".editor-math-active.editor-live-math-display")
+    if (activeDisplayMath && source === activeDisplayMath.textContent) {
+      const offset = visibleOffsetAtPoint(activeDisplayMath, selection.focusNode, selection.focusOffset)
+      if (offset !== null) {
+        return { blockId: current.blockId, sourceOffset: region.content_range.start + offset }
+      }
+    }
+
     return {
       blockId: current.blockId,
       sourceOffset: region.content_range.start + sourceOffsetForVisibleOffset(source, current.visibleOffset)
@@ -805,12 +816,13 @@ export default class extends Controller {
     const textNode = activeMath.firstChild
     const offset = Math.min(openingLength + lineEnding.length, textNode.textContent.length)
     window.getSelection()?.setBaseAndExtent(textNode, offset, textNode, offset)
-    this.lastProjectionCaret = { blockId: blockElement.dataset.editorBlockId, visibleOffset: 0 }
+    this.lastProjectionCaret = { blockId: blockElement.dataset.editorBlockId, visibleOffset: offset }
 
     // Install the source after the active DOM and selection are ready. The
     // preview's stale-projection handler then preserves this focused block,
     // while the shifted map lets the first typed character round-trip safely.
     this.editorController.replaceRange(replacement, from, to)
+    this.editorController.setSelectionRange(from + offset)
   }
 
   continueStructuredBlock(blockElement, region, kind, markdown, source, emptyMarker) {

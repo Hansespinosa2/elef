@@ -1436,6 +1436,63 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_no_selector ".document-editor-block .editor-math-active"
   end
 
+  test "visual display math keystrokes keep the caret on the empty body line" do
+    visit new_document_path
+    find(".document-editor-block h1", text: "Untitled document").send_keys(:enter)
+
+    find(".document-editor-block[data-editor-block-id]:focus").send_keys("$")
+    find(".document-editor-block[data-editor-block-id]:focus").send_keys("$")
+    preview_request_before_enter = page.evaluate_script(
+      "document.querySelector('form.visual-editor-form').previewController.requestId"
+    )
+    find(".document-editor-block[data-editor-block-id]:focus").send_keys(:enter)
+
+    expected_source = "# Untitled document\n\n$$\n\n$$"
+    expected_caret = "# Untitled document\n\n".length + 3
+    assert_field "Markdown source", with: expected_source, wait: 5
+
+    preview_settled = page.evaluate_async_script(<<~JAVASCRIPT, preview_request_before_enter)
+      const before = arguments[0];
+      const done = arguments[arguments.length - 1];
+      const preview = document.querySelector("form.visual-editor-form")?.previewController;
+      const deadline = Date.now() + 8000;
+      const wait = () => {
+        if (preview?.requestId > before && preview.pendingProjection && !preview.timer && !preview.requestController) return done(true);
+        if (Date.now() >= deadline) return done(false);
+        window.setTimeout(wait, 20);
+      };
+      wait();
+    JAVASCRIPT
+    assert preview_settled, "preview response did not settle while display math remained focused"
+
+    caret = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const form = document.querySelector("form.visual-editor-form");
+        const editor = document.querySelector(".source-field").editorController;
+        const selection = window.getSelection();
+        const activeMath = selection.focusNode?.parentElement?.closest?.(".editor-math-active");
+        return {
+          value: editor.value,
+          selectionStart: editor.selectionStart,
+          capturedSourceOffset: form.visualEditorController.captureCaret()?.sourceOffset,
+          activeMathText: activeMath?.textContent || null,
+          visualOffset: selection.focusOffset
+        };
+      })()
+    JAVASCRIPT
+
+    assert_equal expected_source, caret["value"]
+    assert_equal expected_caret, caret["selectionStart"]
+    assert_equal expected_caret, caret["capturedSourceOffset"]
+    assert_equal "$$\n\n$$", caret["activeMathText"]
+    assert_equal 3, caret["visualOffset"]
+
+    click_on "Source"
+    page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(() => arguments[0]()))")
+    assert_equal expected_caret,
+      page.evaluate_script("document.querySelector('.source-field').editorController.selectionStart")
+  end
+
   test "new document renders inline and display math before its first save" do
     visit new_document_path
 
