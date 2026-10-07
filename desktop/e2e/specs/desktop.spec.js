@@ -79,9 +79,10 @@ function focusDesktopWindow() {
 
 function sendNativeKey(key, { activate = true } = {}) {
   const linuxKeys = {
-    Escape: "Escape", Enter: "Return", ArrowRight: "Right", ArrowLeft: "Left", Home: "Home", End: "End"
+    Escape: "Escape", Enter: "Return", ArrowRight: "Right", ArrowLeft: "Left", Home: "Home", End: "End",
+    "ControlOrMeta+End": "ctrl+End"
   }
-  const macKeyCodes = { Escape: 53, Enter: 36, ArrowRight: 124, ArrowLeft: 123, Home: 115, End: 119 }
+  const macKeyCodes = { Escape: 53, Enter: 36, ArrowRight: 124, ArrowLeft: 123, Home: 115, End: 119, "ControlOrMeta+End": 119 }
   if (process.platform === "linux") {
     if (activate) focusDesktopWindow()
     const nativeKey = linuxKeys[key]
@@ -93,7 +94,8 @@ function sendNativeKey(key, { activate = true } = {}) {
     if (activate) focusDesktopWindow()
     const keyCode = macKeyCodes[key]
     if (keyCode === undefined) throw new Error(`Unsupported native key ${key}`)
-    execFileSync("osascript", ["-e", `tell application "System Events" to key code ${keyCode}`], { timeout: 5_000 })
+    const modifier = key === "ControlOrMeta+End" ? " using {command down}" : ""
+    execFileSync("osascript", ["-e", `tell application "System Events" to key code ${keyCode}${modifier}`], { timeout: 5_000 })
     return
   }
   throw new Error(`Native keyboard input is unsupported on ${process.platform}`)
@@ -732,12 +734,15 @@ class DesktopEditorUi {
       const editor = await $("#deck-source-editor .cm-content")
       await editor.waitForDisplayed()
       await editor.click()
-      sendNativeKey("End")
+      sendNativeKey("ControlOrMeta+End")
     }
 
     focusDesktopWindow()
-    typeNativeText("$", { activate: false })
-    typeNativeText("$", { activate: false })
+    const target = mode === "visual"
+      ? await $("#desktop-preview .document-editor-block[data-editor-empty-block='true']")
+      : await $("#deck-source-editor .cm-content")
+    await target.addValue("$")
+    await target.addValue("$")
     await this.waitForSource(expectedPairSource)
     sendNativeKey("Enter", { activate: false })
   }
