@@ -146,6 +146,42 @@ def compare_close(actual: float, expected: float, label: str) -> None:
         fail(f"{label} is {actual}, expected {expected}")
 
 
+def read_gate_snapshot(status: dict, head: str, phase: int) -> dict:
+    snapshot_name = os.environ.get("ELEF_GATE_STATUS_PATH")
+    if not snapshot_name:
+        fail(
+            "status.head_sha is stale for this checkout; use the immutable "
+            "candidate snapshot or update state through the campaign protocol"
+        )
+    snapshot_path = Path(snapshot_name).resolve()
+    manifest_path = snapshot_path.with_name("started.json")
+    if not snapshot_path.is_file() or not manifest_path.is_file():
+        fail("ELEF_GATE_STATUS_PATH must name a prepared immutable gate snapshot")
+    snapshot = read_json(snapshot_path)
+    manifest = read_json(manifest_path)
+    if not isinstance(snapshot, dict) or not isinstance(manifest, dict):
+        fail("gate status and manifest must be JSON objects")
+    if digest_file(snapshot_path) != manifest.get("status_sha256"):
+        fail("immutable gate status snapshot hash differs from its manifest")
+    if manifest.get("phase") != phase or manifest.get("head") != head:
+        fail(f"gate manifest phase/head does not match Phase {phase:02d} checkout HEAD")
+    if Path(manifest.get("checkout", "")).resolve() != ROOT.resolve():
+        fail("gate manifest does not own this checkout")
+    if manifest.get("attempt_id") != snapshot_path.parent.name:
+        fail("gate manifest attempt identity does not match its directory")
+    if snapshot.get("current_phase") != phase or snapshot.get("phase_state") != "DO":
+        fail(f"immutable gate snapshot must capture Phase {phase:02d} in DO")
+    if snapshot.get("head_sha") != head:
+        fail("immutable gate snapshot head_sha differs from checked-out HEAD")
+    if any(snapshot.get(key) != status.get(key) for key in status if key != "head_sha"):
+        fail("immutable gate snapshot differs from the committed candidate status")
+    if manifest.get("frozen_plan_sha256") != status.get("frozen_plan_sha256"):
+        fail("gate manifest frozen plan hash differs from candidate status")
+    if manifest.get("phase_contract_sha256") != status.get("phase_contract_sha256"):
+        fail("gate manifest contract hash differs from candidate status")
+    return snapshot
+
+
 def check_identity(status: dict, baseline: dict, head: str) -> None:
     campaign = baseline["campaign"]
     if status.get("current_phase") != 0:
@@ -190,36 +226,8 @@ def check_identity(status: dict, baseline: dict, head: str) -> None:
     if not is_ancestor(campaign["phase_base_sha"], head):
         fail("checked-out HEAD is not descended from the Phase 00 base")
 
-    snapshot_name = os.environ.get("ELEF_GATE_STATUS_PATH")
-    if snapshot_name:
-        snapshot_path = Path(snapshot_name).resolve()
-        manifest_path = snapshot_path.with_name("started.json")
-        if not snapshot_path.is_file() or not manifest_path.is_file():
-            fail("ELEF_GATE_STATUS_PATH must name a prepared immutable gate snapshot")
-        snapshot = read_json(snapshot_path)
-        manifest = read_json(manifest_path)
-        if not isinstance(snapshot, dict) or not isinstance(manifest, dict):
-            fail("gate status and manifest must be JSON objects")
-        if digest_file(snapshot_path) != manifest.get("status_sha256"):
-            fail("immutable gate status snapshot hash differs from its manifest")
-        if manifest.get("phase") != 0 or manifest.get("head") != head:
-            fail("gate manifest phase/head does not match Phase 00 checkout HEAD")
-        if Path(manifest.get("checkout", "")).resolve() != ROOT.resolve():
-            fail("gate manifest does not own this checkout")
-        if manifest.get("attempt_id") != snapshot_path.parent.name:
-            fail("gate manifest attempt identity does not match its directory")
-        if snapshot.get("current_phase") != 0 or snapshot.get("phase_state") != "DO":
-            fail("immutable gate snapshot must capture Phase 00 in DO")
-        if snapshot.get("head_sha") != head:
-            fail("immutable gate snapshot head_sha differs from checked-out HEAD")
-        if any(snapshot.get(key) != status.get(key) for key in status if key != "head_sha"):
-            fail("immutable gate snapshot differs from the committed candidate status")
-        if manifest.get("frozen_plan_sha256") != status.get("frozen_plan_sha256"):
-            fail("gate manifest frozen plan hash differs from candidate status")
-        if manifest.get("phase_contract_sha256") != status.get("phase_contract_sha256"):
-            fail("gate manifest contract hash differs from candidate status")
-    elif status.get("head_sha") != head:
-        fail("status.head_sha is stale for this checkout; use the immutable candidate snapshot or update state through the campaign protocol")
+    if os.environ.get("ELEF_GATE_STATUS_PATH") or status.get("head_sha") != head:
+        read_gate_snapshot(status, head, 0)
 
     for ancestor_key in ("base_sha", "phase_base_sha"):
         if not is_ancestor(campaign[ancestor_key], head):
@@ -699,7 +707,11 @@ def check_remaining_stubs() -> None:
 
 
 def check_phase1_ci_evidence(status: dict, head: str) -> None:
-    evidence = read_json(PHASE1_CI_EVIDENCE_PATH)
+    external = os.environ.get("ELEF_GATE_EVIDENCE_DIR")
+    evidence_path = (
+        Path(external) / "phase-1-ci-evidence.json" if external else PHASE1_CI_EVIDENCE_PATH
+    )
+    evidence = read_json(evidence_path)
     if not isinstance(evidence, dict):
         fail("phase-1 CI evidence must be an object")
     run = evidence.get("run", {})
@@ -734,11 +746,11 @@ def check_phase1_ci_evidence(status: dict, head: str) -> None:
 def check_phase1(status: dict) -> str:
     if not isinstance(status, dict):
         fail("status.json must be an object")
+    head = git("rev-parse", "HEAD")
+    if os.environ.get("ELEF_GATE_STATUS_PATH") or status.get("head_sha") != head:
+        status = read_gate_snapshot(status, head, 1)
     if status.get("current_phase") != 1:
         fail("status.current_phase must be Phase 01")
-    head = git("rev-parse", "HEAD")
-    if status.get("head_sha") != head:
-        fail("status.head_sha must equal the checkout HEAD")
     base = status.get("phase_base_sha")
     if not base or not is_ancestor(base, head):
         fail("status.phase_base_sha must be an ancestor of HEAD")
