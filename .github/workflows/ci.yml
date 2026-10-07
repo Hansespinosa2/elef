@@ -30,7 +30,7 @@ jobs:
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: desktop -> target
+          workspaces: . -> target
       - name: Install frontend dependencies
         run: npm ci --prefix desktop/frontend
       - name: Install Rails-owned frontend dependencies
@@ -38,10 +38,14 @@ jobs:
       - name: Run the fast desktop unit tier
         run: |
           started=$SECONDS
+          ./node_modules/.bin/tsc -p packages/contracts/tsconfig.test.json
+          node --test tests/host-conformance/conformance-fake.test.js tests/host-conformance/shell.test.js
           npm run test:javascript
           npm test --prefix desktop/frontend
           npm run test:unit --prefix desktop/e2e
           python3 script/check_frontend_ownership.py
+          python3 tooling/check_boundaries.py
+          python3 tooling/check_boundaries.py --self-test
           cargo test --manifest-path Cargo.toml -p local-store --locked
           elapsed=$((SECONDS - started))
           echo "Fast desktop test tier: ${elapsed}s (budget: 300s)"
@@ -156,6 +160,14 @@ jobs:
           bundler-cache: true
       - name: Build Tailwind CSS
         run: bin/rails tailwindcss:build
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install Rails-owned frontend dependencies
+        run: npm ci
       - name: Run System Tests
         env:
           RAILS_ENV: test
@@ -167,6 +179,23 @@ jobs:
         run: |
           bin/rails db:test:prepare
           bin/rails test test/system
+      - name: Run rails-backed contract conformance
+        env:
+          RAILS_ENV: test
+          PGHOST: 127.0.0.1
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          PGTESTDATABASE: elef_test
+          ELEF_CONFORMANCE_RAILS_URL: http://127.0.0.1:3101
+        run: |
+          bin/rails server -e test -p 3101 -b 127.0.0.1 -P tmp/pids/conformance-server.pid &
+          for attempt in $(seq 1 60); do
+            curl --silent --output /dev/null http://127.0.0.1:3101/ && break
+            sleep 2
+          done
+          curl --silent --output /dev/null http://127.0.0.1:3101/
+          node tests/host-conformance/run-node.js rails
+          kill "$(cat tmp/pids/conformance-server.pid)"
       - name: Keep screenshots from failed system tests
         uses: actions/upload-artifact@v7
         if: failure()
@@ -202,7 +231,7 @@ jobs:
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: desktop -> target
+          workspaces: . -> target
       - name: Install Linux desktop build dependencies
         run: |
           sudo apt-get update
@@ -321,6 +350,81 @@ jobs:
       - name: Build Linux desktop package
         run: npm run tauri:build --prefix desktop/frontend
 
+  affected:
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: elef_test
+        ports:
+          - 5432:5432
+        options: --health-cmd "pg_isready -U postgres -d elef_test" --health-interval 10s --health-timeout 5s --health-retries 5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            desktop/frontend/package-lock.json
+            desktop/e2e/package-lock.json
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: .ruby-version
+          bundler-cache: true
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: . -> target
+      - name: Install Linux desktop build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes build-essential curl file libayatana-appindicator3-dev libdbus-1-dev libgtk-3-dev librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev patchelf unzip wget zip
+      - name: Install frontend dependencies
+        run: |
+          npm ci
+          npm ci --prefix desktop/frontend
+          npm ci --prefix desktop/e2e
+      - name: Boot the Rails test server for adapter conformance
+        env:
+          RAILS_ENV: test
+          PGHOST: 127.0.0.1
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          PGTESTDATABASE: elef_test
+          ELEF_CONFORMANCE_RAILS_URL: http://127.0.0.1:3101
+        run: |
+          bin/rails server -e test -p 3101 -b 127.0.0.1 -P tmp/pids/affected-server.pid &
+          for attempt in $(seq 1 60); do
+            curl --silent --output /dev/null http://127.0.0.1:3101/ && break
+            sleep 2
+          done
+          curl --silent --output /dev/null http://127.0.0.1:3101/
+      - name: Run the affected tier with its time ceiling
+        env:
+          RAILS_ENV: test
+          PGHOST: 127.0.0.1
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          PGTESTDATABASE: elef_test
+          ELEF_CONFORMANCE_RAILS_URL: http://127.0.0.1:3101
+        run: bin/check affected
+      - name: Stop the Rails test server
+        if: always()
+        run: kill "$(cat tmp/pids/affected-server.pid)" || true
+
   desktop-macos:
     runs-on: macos-15
     timeout-minutes: 45
@@ -348,7 +452,7 @@ jobs:
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: desktop -> target
+          workspaces: . -> target
       - name: Install frontend dependencies
         run: npm ci --prefix desktop/frontend
       - name: Install Rails-owned frontend dependencies
@@ -535,7 +639,7 @@ jobs:
 
   record-ci-attestation:
     if: github.event_name == 'pull_request'
-    needs: [ desktop-fast, scan_ruby, scan_js, test, sqlite-test, system-test, desktop, desktop-macos, renderer-macos, production-smoke, development-smoke ]
+    needs: [ desktop-fast, scan_ruby, scan_js, test, sqlite-test, system-test, affected, desktop, desktop-macos, renderer-macos, production-smoke, development-smoke ]
     runs-on: ubuntu-latest
     steps:
       - name: Check out the exact pull request test candidate

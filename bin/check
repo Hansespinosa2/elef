@@ -666,6 +666,7 @@ def check_phase1_ci_evidence(status: dict, head: str) -> None:
         "desktop-fast",
         "test",
         "system-test",
+        "affected",
         "sqlite-test",
         "desktop",
         "desktop-macos",

@@ -20,10 +20,12 @@ export async function createRailsHost({ baseUrl, fetchImpl = fetch }) {
   const base = baseUrl.replace(/\/$/, "");
 
   function storeCookies(response) {
-    const raw = response.headers.get("set-cookie");
-    if (!raw) return;
-    for (const part of raw.split(/,(?=[^;,]+=)/)) {
-      const pair = part.split(";")[0].trim();
+    const headers =
+      typeof response.headers.getSetCookie === "function"
+        ? response.headers.getSetCookie()
+        : [response.headers.get("set-cookie")].filter(Boolean);
+    for (const header of headers) {
+      const pair = header.split(";")[0].trim();
       const separator = pair.indexOf("=");
       if (separator > 0) cookies.set(pair.slice(0, separator), pair.slice(separator + 1));
     }
