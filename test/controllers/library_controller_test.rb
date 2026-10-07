@@ -86,7 +86,11 @@ class LibraryControllerTest < ActionDispatch::IntegrationTest
       assert_select "a.library-card-preview-button[href=?]", document_path(document)
       assert_select "summary.library-card-menu-trigger[aria-label=?]", "More actions for Quiet document"
       assert_select "form[action=?]", rename_document_path(document), 1
+      assert_select "form[action=?][method=post] input[name=_method][value=patch]", rename_document_path(document), 1
+      assert_select "form[action=?] input[name=authenticity_token]", rename_document_path(document), 1
+      assert_select "form[action=?] input[name=library_view]", rename_document_path(document), 1
       assert_select "form[action=?]", document_path(document), 1
+      assert_select "form[action=?][data-turbo-confirm=?] input[name=_method][value=delete]", document_path(document), "Delete Quiet document?", 1
       assert_select "form[action=?]", publish_presentation_path(document), 0
       assert_select "form[action=?]", fork_presentation_path(document), 0
       assert_select "h2.library-card-title a[href=?]", edit_document_path(document)
@@ -104,9 +108,15 @@ class LibraryControllerTest < ActionDispatch::IntegrationTest
       assert_select "a.library-card-preview-button[href=?]", presentation_path(presentation)
       assert_select "summary.library-card-menu-trigger[aria-label=?]", "More actions for Loud deck"
       assert_select "form[action=?]", rename_presentation_path(presentation), 1
+      assert_select "form[action=?] input[name=_method][value=patch]", rename_presentation_path(presentation), 1
+      assert_select "form[action=?] input[name=authenticity_token]", rename_presentation_path(presentation), 1
       assert_select "form[action=?]", presentation_path(presentation), 1
       assert_select "form[action=?]", publish_presentation_path(presentation), 1
       assert_select "form[action=?]", fork_presentation_path(presentation), 2
+      assert_select "form[action=?] input[name=fork_type][value=continuation]", fork_presentation_path(presentation), 1
+      assert_select "form[action=?] input[name=fork_type][value=inspiration]", fork_presentation_path(presentation), 1
+      assert_select "form[action=?][data-turbo=false]", publish_presentation_path(presentation), 1
+      assert_select "form[action=?][data-turbo-confirm=?] input[name=_method][value=delete]", presentation_path(presentation), "Delete Loud deck?", 1
       assert_select "h2.library-card-title a[href=?]", edit_presentation_path(presentation)
     end
   end

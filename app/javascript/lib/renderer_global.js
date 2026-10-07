@@ -1,6 +1,6 @@
 import { collectMediaReferences, renderMarkdownBlock, renderPreview } from "./renderer.js"
 import { buildEditorMap, buildEditorStructure, withAppearanceValue } from "./document_map.js"
-import { renderLibraryCard } from "./library_card.js"
+import { renderLibraryCard, renderLibraryCardControls } from "./library_card.js"
 import {
   buildDocumentGraph,
   extractDocumentLinkTokens,
@@ -15,6 +15,7 @@ globalThis.ElefRenderer = Object.freeze({
   buildEditorMap,
   buildEditorStructure,
   renderLibraryCard,
+  renderLibraryCardControls,
   buildDocumentGraph,
   extractDocumentLinkTokens,
   isLinkableDocumentTitle,

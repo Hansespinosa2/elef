@@ -20,6 +20,85 @@ function libraryMetadata(kind, updatedAt) {
   return `${description} · Updated ${formattedUpdateDate(updatedAt)}`
 }
 
+const PREVIEW_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M10.2 8.9 15.6 12l-5.4 3.1V8.9Z"/></svg>'
+const FORM_METHODS = new Set(["post", "patch", "delete"])
+
+function localUrl(value, label) {
+  const url = String(value ?? "")
+  if (!/^\/(?!\/)/.test(url)) throw new TypeError(`${label} must be a local URL`)
+  return url
+}
+
+function formFields(method, fields, authenticityToken) {
+  const hidden = []
+  if (authenticityToken) hidden.push({ name: "authenticity_token", value: authenticityToken })
+  if (method !== "post") hidden.push({ name: "_method", value: method })
+  hidden.push(...fields)
+  return hidden.map(({ name, value }) => `<input type="hidden" name="${escape(name)}" value="${escape(value)}">`).join("")
+}
+
+function serverForm({ url, method = "post", fields = [], authenticityToken, label, buttonClass = "deck-action", confirm, turbo }) {
+  const action = localUrl(url, "Library action")
+  const requestMethod = String(method).toLowerCase()
+  if (!FORM_METHODS.has(requestMethod)) throw new TypeError("Unsupported library form method")
+  const confirmation = confirm ? ` data-turbo-confirm="${escape(confirm)}"` : ""
+  const turboSetting = turbo === false ? ' data-turbo="false"' : ""
+  return `<form class="button_to" action="${escape(action)}" method="post"${confirmation}${turboSetting}>${formFields(requestMethod, fields, authenticityToken)}<button class="${escape(buttonClass)}" type="submit">${escape(label)}</button></form>`
+}
+
+function renderMenuAction(name, label, options = {}, authenticityToken, buttonClass = "deck-action") {
+  if (options.url) {
+    return serverForm({ ...options, authenticityToken, label, buttonClass })
+  }
+  return `<button class="${escape(buttonClass)}" type="button" data-library-card-action="${escape(name)}">${escape(label)}</button>`
+}
+
+function renderRename(title, options = {}, authenticityToken) {
+  const inputAttributes = [
+    'type="text"',
+    options.name ? `name="${escape(options.name)}"` : "",
+    options.id ? `id="${escape(options.id)}"` : "",
+    `value="${escape(title)}"`,
+    `aria-label="Rename ${escape(title)}"`,
+    "required"
+  ].filter(Boolean).join(" ")
+  const input = `<input ${inputAttributes}>`
+  const submit = '<button class="deck-action" type="submit">Save title</button>'
+  if (options.url) {
+    const action = localUrl(options.url, "Rename action")
+    const requestMethod = String(options.method || "post").toLowerCase()
+    if (!FORM_METHODS.has(requestMethod)) throw new TypeError("Unsupported rename method")
+    return `<form class="library-rename" action="${escape(action)}" method="post">${formFields(requestMethod, options.fields || [], authenticityToken)}${input}${submit}</form>`
+  }
+  return `<form class="library-rename" data-library-card-action="rename">${input}${submit}</form>`
+}
+
+// Hosts supply persistence details; the markup, labels, and control structure
+// stay shared. Desktop omits URLs and binds these controls to native actions.
+export function renderLibraryCardControls({ title, kind, previewUrl, rename, fork, present, remove, authenticityToken }) {
+  const previewLabel = `Preview ${String(title ?? "")}`
+  const previewAttributes = `class="library-card-preview-button" aria-label="${escape(previewLabel)}" title="${escape(previewLabel)}"`
+  const preview = previewUrl
+    ? `<a ${previewAttributes} href="${escape(localUrl(previewUrl, "Preview target"))}">${PREVIEW_ICON}<span class="sr-only">Preview</span></a>`
+    : `<button ${previewAttributes} type="button" data-library-card-action="preview">${PREVIEW_ICON}<span class="sr-only">Preview</span></button>`
+
+  const renameControl = `<details class="library-card-submenu rename-menu"><summary>Rename</summary>${renderRename(title, rename, authenticityToken)}</details>`
+  const forkChoices = Array.isArray(fork?.choices) ? fork.choices : []
+  const forkControl = forkChoices.length
+    ? `<details class="library-card-submenu fork-menu"><summary>Fork</summary><div class="fork-menu-options">${forkChoices.map(choice => renderMenuAction("fork", choice.label, choice, authenticityToken)).join("")}</div></details>`
+    : ""
+  const presentControl = kind === "presentation"
+    ? renderMenuAction("present", "Present", present, authenticityToken)
+    : ""
+  const deleteControl = renderMenuAction("delete", "Delete", remove, authenticityToken, "deck-action danger is-danger")
+
+  return `${preview}
+    <details class="library-card-menu">
+      <summary class="library-card-menu-trigger" aria-label="More actions for ${escape(title)}"><span aria-hidden="true">...</span></summary>
+      <div class="library-card-menu-options">${renameControl}${forkControl}${presentControl}${deleteControl}</div>
+    </details>`
+}
+
 // Preview and controls are trusted rendered slots supplied by the host. Never
 // pass Markdown or user strings into these slots; all metadata is escaped here.
 export function renderLibraryCard({ id, title, kind, updatedAt, editUrl, previewHtml = "", controlsHtml = "", note = "" }) {
@@ -44,7 +123,8 @@ export function createLibraryCard(document, deck, actions) {
   template.innerHTML = renderLibraryCard({
     id: deck.id, title: deck.name, kind: deck.kind,
     updatedAt: deck.modified_ms,
-    editUrl: "#" + encodeURIComponent(deck.id)
+    editUrl: "#" + encodeURIComponent(deck.id),
+    controlsHtml: renderLibraryCardControls({ title: deck.name, kind: deck.kind })
   })
   const card = template.content.firstElementChild
   const preview = card.querySelector(".library-card-preview")
@@ -58,80 +138,16 @@ export function createLibraryCard(document, deck, actions) {
     })
   }
 
-  const previewButton = document.createElement("button")
-  previewButton.className = "library-card-preview-button"
-  previewButton.type = "button"
-  previewButton.setAttribute("aria-label", `Preview ${deck.name}`)
-  previewButton.title = `Preview ${deck.name}`
-  const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg")
-  icon.setAttribute("viewBox", "0 0 24 24")
-  icon.setAttribute("fill", "none")
-  icon.setAttribute("stroke", "currentColor")
-  icon.setAttribute("stroke-width", "1.7")
-  icon.setAttribute("aria-hidden", "true")
-  const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle")
-  circle.setAttribute("cx", "12")
-  circle.setAttribute("cy", "12")
-  circle.setAttribute("r", "8.5")
-  const play = document.createElementNS("http://www.w3.org/2000/svg", "path")
-  play.setAttribute("d", "M10.2 8.9 15.6 12l-5.4 3.1V8.9Z")
-  icon.append(circle, play)
-  previewButton.append(icon)
-  previewButton.addEventListener("click", () => actions.preview(deck))
-  card.querySelector(".library-card-controls").prepend(previewButton)
-
-  const menu = document.createElement("details")
-  menu.className = "library-card-menu"
-  const trigger = document.createElement("summary")
-  trigger.className = "library-card-menu-trigger"
-  trigger.setAttribute("aria-label", `More actions for ${deck.name}`)
-  trigger.textContent = "..."
-  menu.append(trigger)
-
-  const options = document.createElement("div")
-  options.className = "library-card-menu-options"
-  const rename = document.createElement("details")
-  rename.className = "library-card-submenu rename-menu"
-  const label = document.createElement("summary")
-  label.textContent = "Rename"
-  rename.append(label)
-
-  const form = document.createElement("form")
-  form.className = "library-rename"
-  const name = document.createElement("input")
-  name.type = "text"
-  name.value = deck.name
-  name.setAttribute("aria-label", `Rename ${deck.name}`)
-  name.required = true
-  const save = document.createElement("button")
-  save.className = "deck-action"
-  save.type = "submit"
-  save.textContent = "Save title"
-  form.append(name, save)
-  form.addEventListener("submit", event => {
+  const controls = card.querySelector(".library-card-controls")
+  controls.querySelector("[data-library-card-action='rename']")?.addEventListener("submit", event => {
     event.preventDefault()
-    void actions.rename(deck, name.value)
+    const name = event.currentTarget.querySelector('input[type="text"]').value
+    void actions.rename(deck, name)
   })
-  rename.append(form)
-  options.append(rename)
-
-  if (deck.kind === "presentation") {
-    const present = document.createElement("button")
-    present.className = "deck-action"
-    present.type = "button"
-    present.textContent = "Present"
-    present.addEventListener("click", () => actions.present(deck))
-    options.append(present)
+  for (const button of controls.querySelectorAll("button[data-library-card-action]")) {
+    const name = button.dataset.libraryCardAction
+    button.addEventListener("click", () => actions[name]?.(deck))
   }
-
-  const remove = document.createElement("button")
-  remove.className = "deck-action danger is-danger"
-  remove.type = "button"
-  remove.textContent = "Delete"
-  remove.addEventListener("click", () => actions.delete(deck))
-  options.append(remove)
-  menu.append(options)
-  card.querySelector(".library-card-controls").append(menu)
 
   if (deck.warnings.length) {
     const warning = document.createElement("p")

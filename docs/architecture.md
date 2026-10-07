@@ -63,6 +63,8 @@ desktop/frontend/build.mjs resolves shared controllers and modules from app/java
 
 app/views/desktop_host.html is a static desktop host shell consumed by the build, not a Rails response. Shared editor, library, graph, and style behavior lives in Rails-owned application sources.
 
+Both library hosts use the card and action markup from `app/javascript/lib/library_card.js`. Rails supplies its routes and CSRF fields; desktop binds the same controls to local file operations.
+
 ## Important contracts
 
 - Deck layout, source selection, manifests, library settings, and archive contents: [desktop data format](desktop/data-format.md).

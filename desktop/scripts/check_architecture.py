@@ -108,8 +108,11 @@ graph_view = (REPO_ROOT / "app" / "javascript" / "lib" / "document_graph_view.js
 graph_controller = (REPO_ROOT / "app" / "javascript" / "controllers" / "document_graph_controller.js").read_text()
 graph_partial = (REPO_ROOT / "app" / "views" / "presentations" / "_document_graph.html.erb").read_text()
 assert "Source::JavascriptRenderer.library_card" in web_card, "Rails library cards must use the shared HTML producer"
+assert "Source::JavascriptRenderer.library_card_controls" in web_card, "Rails library actions must use the shared controls producer"
+assert not re.search(r"<(?:a|button|details|form|input)\b", web_card), "Rails library cards must not duplicate shared action markup"
 assert "ElefRenderer.renderLibraryCard" in javascript_renderer and "renderLibraryCard" in renderer_global
-assert "export function createLibraryCard" in desktop_card, "desktop card UI must be owned by app/javascript"
+assert "ElefRenderer.renderLibraryCardControls" in javascript_renderer and "renderLibraryCardControls" in renderer_global
+assert "export function createLibraryCard" in desktop_card and "renderLibraryCardControls" in desktop_card, "desktop cards must use app-owned card and action markup"
 assert "renderDocumentGraphView" in graph_controller and "renderDocumentGraphView" in graph_view, "both hosts must use the shared document graph view"
 assert "document-graph-node" not in graph_partial, "Rails must not keep a second document graph node template"
 assert "createElementNS" not in desktop_application and "document-graph-node" not in desktop_application, "desktop must not keep a second document graph node template"
