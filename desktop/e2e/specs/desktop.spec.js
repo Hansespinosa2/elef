@@ -911,8 +911,10 @@ class DesktopEditorUi {
   }
 
   async waitForAuthoringOption(palette, name) {
+    const label = palette === "snippet"
+      ? "Snippet suggestions"
+      : palette === "document-link" ? "Document link suggestions" : "Math shortcut suggestions"
     if (palette === "document-link") {
-      const label = "Document link suggestions"
       const visible = await browser.execute(({ label, name }) => {
         const field = document.querySelector("#desktop-editor-field")
         const controller = globalThis.Stimulus?.getControllerForElementAndIdentifier(field, "document-link-palette")
