@@ -19,6 +19,6 @@ Accepted decisions are stable records. Change one with a dated amendment or a ne
 
 ## Open acceptance work
 
-- [#126 — shared renderer, library, and editor parity](https://github.com/Hansespinosa2/elef/issues/126): remaining operation coverage, renderer consumer comparisons, soak, and Ruby rollback removal.
+- [#126 — shared renderer, library, and editor parity](https://github.com/Hansespinosa2/elef/issues/126): records the remaining gaps. In particular, web card Preview opens a saved read-only view while desktop opens the editable visual editor; web Present publishes and presents a release while desktop presents the local draft; and desktop omits web-only fork actions while lineage stays deferred. The issue tracks remaining renderer comparisons, workflow coverage, soak, and Ruby rollback removal.
 - [#128 — signed updates and real-device acceptance](https://github.com/Hansespinosa2/elef/issues/128): target-device performance and install checks, update failure recovery, explicit residual save-race acceptance, and week-long use.
 - [#129 — updater key ceremony](https://github.com/Hansespinosa2/elef/issues/129): production signing setup, offline key backups, and draft release verification.
