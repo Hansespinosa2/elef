@@ -43,6 +43,7 @@ test("library previews use the shared renderer and the non-interactive sanitizer
       calls.push(["render", input])
       return { html: '<div class="document-reader" data-controller="document-pages mermaid-diagrams"><div class="document-surface" data-document-pages-target="surface"><h1>Notes</h1></div></div>' }
     },
+    mediaBaseUrlForDeck: deck => `/media/${deck.id}`,
     install: (target, html, options) => calls.push(["install", target, html, options])
   })
 
@@ -55,11 +56,11 @@ test("library previews use the shared renderer and the non-interactive sanitizer
     kind: "document",
     title: "Notes",
     deckId: "doc-1",
-    mediaBaseUrl: "elefasset://localhost/doc-1",
+    mediaBaseUrl: "/media/doc-1",
     documentNodes: []
   })
   assert.match(calls[2][2], /document-reader/)
-  assert.deepEqual(calls[2][3], { interactive: false, documentPagination: true })
+  assert.deepEqual(calls[2][3], { interactive: false, documentPagination: true, mediaBaseUrl: "/media/doc-1" })
 })
 
 test("large sources show a bounded-preview message without invoking the renderer", async () => {

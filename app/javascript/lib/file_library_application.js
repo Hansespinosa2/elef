@@ -23,30 +23,22 @@ import { createLibraryPreviewLoader } from "lib/library_preview"
 export function startFileLibraryApplication(platform) {
   const {
     fileLibrary, listen, getCurrentWindow,
-    completeBootstrap, createCloseFlow, createTransportAdapter, createMediaFetch,
-    createPreviewFetch, checkForUpdate, createIdleUpdateCheck, installPendingUpdate,
+    completeBootstrap, createCloseFlow, createTransportAdapter, installFetchTransport,
+    mediaUrlsForDeck, checkForUpdate, createIdleUpdateCheck, installPendingUpdate,
     desktopAuthoringRegistry, loadDesktopAuthoringRegistry,
     loadEditorRuntime, loadLibraryRuntime
   } = platform
 
   applyDesktopFeatureFlags(document)
 
-  const networkFetch = globalThis.fetch.bind(globalThis)
   const renderer = createRendererClient()
-  const mediaFetch = createMediaFetch({ fetchImpl: networkFetch })
-  globalThis.fetch = createPreviewFetch({
+  const readPreviewTrace = installFetchTransport({
     renderer,
-    fetchImpl: mediaFetch,
-    onEvent: __ELEF_E2E__ ? event => {
-      const trace = globalThis.__elefPreviewTrace ||= []
-      trace.push(event)
-      if (trace.length > 512) trace.shift()
-    } : undefined,
     getContext: async source => ({
       kind: activeDeck?.source_file === "document.md" ? "document" : "presentation",
       title: document.querySelector("#desktop-editor-title")?.value.trim() || activeDeck?.name || "Untitled",
       deckId: activeDeck?.id || "",
-      mediaBaseUrl: activeDeck ? `elefasset://localhost/${encodeURIComponent(activeDeck.id)}` : "",
+      mediaBaseUrl: activeDeck ? mediaUrlsForDeck(activeDeck).assetBaseUrl : "",
       documentNodes: await previewDocumentNodes(source)
     })
   })
@@ -196,6 +188,7 @@ export function startFileLibraryApplication(platform) {
   const loadLibraryPreview = createLibraryPreviewLoader({
     readPreview: id => fileLibrary.readSourcePreview(id),
     render: input => renderer.render(input),
+    mediaBaseUrlForDeck: deck => mediaUrlsForDeck(deck).assetBaseUrl,
     install: installSanitizedPreview
   })
   saveFlow = createSaveFlow({
@@ -312,7 +305,7 @@ export function startFileLibraryApplication(platform) {
           previousInstallationsRemoved = removed
         },
         async open(id) {
-          const traceStart = globalThis.__elefPreviewTrace?.length || 0
+          const traceStart = readPreviewTrace?.().length || 0
           const openStageStart = openStageMeasurements.length
           const measured = await measurePaintedAction(async () => {
             await openDeck(id)
@@ -329,7 +322,7 @@ export function startFileLibraryApplication(platform) {
             ...measured,
             result: {
               ...measured.result,
-              previewTrace: globalThis.__elefPreviewTrace?.slice(traceStart) || [],
+              previewTrace: readPreviewTrace?.().slice(traceStart) || [],
               openTrace: openStageMeasurements.slice(openStageStart)
             }
           }
@@ -670,11 +663,12 @@ export function startFileLibraryApplication(platform) {
       document.querySelector("#deck-kind").textContent = deck.source_file === "document.md" ? "DOCUMENT" : "PRESENTATION"
       document.querySelector("#deck-source-name").textContent = deck.source_file
       elements.editorField.dataset.editorInitialSourceValue = JSON.stringify(deck.source)
-      elements.editorForm.dataset.previewUrlValue = `elef-preview://localhost/${encodeURIComponent(deck.id)}`
+      const mediaUrls = mediaUrlsForDeck(deck)
+      elements.editorForm.dataset.previewUrlValue = mediaUrls.previewUrl
       elements.editorForm.dataset.mediaEnabledValue = "true"
       elements.editorForm.dataset.mediaWorkKindValue = deck.source_file === "document.md" ? "document" : "presentation"
-      elements.editorForm.dataset.mediaUploadUrlValue = `elef-upload://localhost/${encodeURIComponent(deck.id)}`
-      elements.editorForm.dataset.mediaAssetBaseUrlValue = `elefasset://localhost/${encodeURIComponent(deck.id)}`
+      elements.editorForm.dataset.mediaUploadUrlValue = mediaUrls.uploadUrl
+      elements.editorForm.dataset.mediaAssetBaseUrlValue = mediaUrls.assetBaseUrl
       elements.editorField.dataset.documentLinkPaletteTitlesValue = JSON.stringify(documentTitles)
       const visualButton = document.querySelector("#visual-mode")
       visualButton.disabled = true

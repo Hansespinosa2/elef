@@ -6,7 +6,7 @@ const ALLOWED_ELEMENTS = new Set([
 ])
 const INTERACTIVE_ELEMENTS = new Set(["BUTTON", "LABEL", "OPTION", "SELECT"])
 const MATH_DELIMITERS = new Set(["$", "$$", "\\(", "\\)", "\\[", "\\]"])
-const SAFE_PROTOCOLS = /^(?:https?:|mailto:|tel:|elefasset:|#|\/|\.\.?\/|[^:]*$)/i
+const SAFE_PROTOCOLS = /^(?:https?:|mailto:|tel:|#|\/|\.\.?\/|[^:]*$)/i
 const ALLOWED_ACTIONS = new Set([
   "input->visual-editor#projectionInput focus->visual-editor#blockFocus blur->visual-editor#blockBlur",
   "input->presentation-editor#blockInput focus->presentation-editor#blockFocus blur->presentation-editor#blockBlur",
@@ -19,7 +19,8 @@ const ALLOWED_PRESENTATION_ACTIONS = new Set([
   "add-slide-after", "delete-slide", "move-slide-up", "move-slide-down", "add-block-after", "delete-block", "move-block-up", "move-block-down"
 ])
 
-export function installSanitizedPreview(container, html, { interactive = true, documentPagination = false } = {}) {
+export function installSanitizedPreview(container, html, { interactive = true, documentPagination = false, mediaBaseUrl = "" } = {}) {
+  const trustedMediaBaseUrl = mediaBaseUrl || container.closest?.("form")?.dataset.mediaAssetBaseUrlValue || ""
   const template = container.ownerDocument.createElement("template")
   template.innerHTML = typeof html === "string" ? html : ""
   const walker = container.ownerDocument.createTreeWalker(template.content, container.ownerDocument.defaultView?.NodeFilter?.SHOW_ELEMENT || 1)
@@ -32,13 +33,13 @@ export function installSanitizedPreview(container, html, { interactive = true, d
       continue
     }
     for (const attribute of [...element.attributes]) {
-      if (!safeAttribute(element, attribute.name, attribute.value, interactive, documentPagination)) element.removeAttribute(attribute.name)
+      if (!safeAttribute(element, attribute.name, attribute.value, interactive, documentPagination, trustedMediaBaseUrl)) element.removeAttribute(attribute.name)
     }
   }
   container.replaceChildren(template.content)
 }
 
-function safeAttribute(element, name, value, interactive, documentPagination) {
+function safeAttribute(element, name, value, interactive, documentPagination, mediaBaseUrl) {
   const lower = name.toLowerCase()
   if (lower.startsWith("on") || lower === "srcdoc" || lower === "formaction") return false
   if (["class", "role", "alt", "title", "aria-label", "aria-multiline", "aria-readonly", "aria-hidden", "spellcheck", "controls", "playsinline", "preload", "colspan", "rowspan"].includes(lower)) return true
@@ -73,7 +74,9 @@ function safeAttribute(element, name, value, interactive, documentPagination) {
     return (interactive || (documentPagination && reader?.parentNode?.nodeType === 11)) && value === "surface" && element.classList.contains("document-surface") && reader?.classList.contains("document-reader")
   }
   if (lower === "href" && element.tagName === "A") return safeUrl(value)
-  if (lower === "src" && ["IMG", "VIDEO"].includes(element.tagName)) return safeUrl(value) && !/^(?:https?:|data:|javascript:)/i.test(value)
+  if (lower === "src" && ["IMG", "VIDEO"].includes(element.tagName)) {
+    return (safeUrl(value) || isWithinMediaBase(value, mediaBaseUrl)) && !/^(?:https?:|data:|javascript:)/i.test(value)
+  }
   return false
 }
 
@@ -85,6 +88,23 @@ function safePreviewButton(element, interactive) {
 function safeUrl(value) {
   const trimmed = value.trim()
   return SAFE_PROTOCOLS.test(trimmed) && !/^(?:javascript|data|vbscript):/i.test(trimmed)
+}
+
+function isWithinMediaBase(value, mediaBaseUrl) {
+  if (!mediaBaseUrl) return false
+  try {
+    const media = new URL(value)
+    const base = new URL(mediaBaseUrl)
+    const basePath = base.pathname.replace(/\/+$/, "")
+    return media.protocol === base.protocol &&
+      media.hostname === base.hostname &&
+      media.port === base.port &&
+      !media.username && !media.password &&
+      !media.search && !media.hash &&
+      Boolean(basePath) && media.pathname.startsWith(`${basePath}/`)
+  } catch (_error) {
+    return false
+  }
 }
 
 function isSafeKatexStyle(element, value) {

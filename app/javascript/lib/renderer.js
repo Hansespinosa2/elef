@@ -209,9 +209,8 @@ export function renderPreview({
     ...(styleOverrides.typography ? { typography: styleOverrides.typography } : {})
   }
   const marginSettings = { ...structure.marginSettings, ...marginOverrides }
-  const mediaUrl = mediaBaseUrl || `elefasset://localhost/${encodeURIComponent(deckId)}`
   const env = {
-    mediaBaseUrl: mediaUrl,
+    mediaBaseUrl,
     mediaMap,
     allowRemoteMedia,
     documentNodes,
@@ -390,7 +389,7 @@ function resolveAssetSource(source, env = {}) {
   }
   if (env.allowRemoteMedia && /^https?:\/\//i.test(source)) return { src: source }
   if (env.allowRemoteMedia && SAFE_LINK.test(source)) return { src: source }
-  if (!base && SAFE_LINK.test(source) && !/^[a-z][a-z0-9+.-]*:/i.test(source)) return { src: source }
+  if (env.allowRemoteMedia && !base && SAFE_LINK.test(source) && !/^[a-z][a-z0-9+.-]*:/i.test(source)) return { src: source }
   return null
 }
 

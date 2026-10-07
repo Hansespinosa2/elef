@@ -4,7 +4,7 @@ import { parseHTML } from "linkedom"
 import { renderPreview } from "../../../app/javascript/lib/renderer.js"
 import { installSanitizedPreview } from "../../../app/javascript/lib/preview_sanitizer.js"
 
-test("preview sink strips executable markup and remote image sources while preserving editor controls", () => {
+test("preview sink strips executable markup and remote image sources while preserving deck-scoped media", () => {
   const { document } = parseHTML("<main id='preview'></main>")
   const container = document.querySelector("#preview")
   installSanitizedPreview(container, `
@@ -16,7 +16,7 @@ test("preview sink strips executable markup and remote image sources while prese
         <script>invoke('delete_deck')</script>
         <a href="javascript:alert(1)">bad</a>
       </div>
-    </section>`)
+    </section>`, { mediaBaseUrl: "elefasset://localhost/id" })
 
   const section = container.querySelector("section")
   const block = container.querySelector("[data-editor-block-id]")
@@ -120,7 +120,7 @@ test("preview sink keeps sanitized deck media inside editable figure captions", 
     <figure class="editor-media" onclick="invoke('delete_deck')">
       <img src="elefasset://localhost/id/sha" data-editor-image-source="true" onerror="invoke('delete_deck')">
       <figcaption class="editor-media-caption" aria-label="Editable image alt text">Diagram</figcaption>
-    </figure>`)
+    </figure>`, { mediaBaseUrl: "elefasset://localhost/id" })
 
   const figure = container.querySelector("figure")
   const image = figure?.querySelector("img")
@@ -130,6 +130,25 @@ test("preview sink keeps sanitized deck media inside editable figure captions", 
   assert.equal(image?.getAttribute("onerror"), null)
   assert.equal(caption?.textContent, "Diagram")
   assert.equal(caption?.getAttribute("aria-label"), "Editable image alt text")
+})
+
+test("desktop asset URLs are rejected unless they stay under the trusted deck base", () => {
+  const { document } = parseHTML("<main id='preview'></main>")
+  const container = document.querySelector("#preview")
+  installSanitizedPreview(container, `
+    <img class="expected" src="elefasset://localhost/deck/image.png">
+    <img class="other-deck" src="elefasset://localhost/other/image.png">
+    <img class="traversal" src="elefasset://localhost/deck/%2e%2e/other/image.png">`, {
+      mediaBaseUrl: "elefasset://localhost/deck"
+    })
+
+  assert.equal(container.querySelector(".expected").getAttribute("src"), "elefasset://localhost/deck/image.png")
+  for (const name of ["other-deck", "traversal"]) {
+    assert.equal(container.querySelector(`.${name}`).hasAttribute("src"), false)
+  }
+
+  installSanitizedPreview(container, '<img class="unscoped" src="elefasset://localhost/deck/image.png">')
+  assert.equal(container.querySelector(".unscoped").hasAttribute("src"), false)
 })
 
 test("non-interactive library previews remove controller and editing hooks", () => {

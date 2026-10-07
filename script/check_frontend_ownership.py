@@ -74,12 +74,26 @@ assert not frontend_import_violations, (
     + ", ".join(frontend_import_violations)
 )
 
+app_host_sources = [*app_frontend.rglob("*.js"), ROOT / "app/views/desktop_host.html"]
+desktop_protocol_violations = [
+    path.relative_to(ROOT).as_posix()
+    for path in app_host_sources
+    if re.search(r"\belef(?:-preview|-upload|asset)://", path.read_text())
+]
+assert not desktop_protocol_violations, (
+    "Desktop media URL schemes must stay in desktop transport adapters: "
+    + ", ".join(desktop_protocol_violations)
+)
+
 build = (ROOT / "desktop/frontend/build.mjs").read_text()
 desktop_main = (ROOT / "desktop/frontend/src/main.js").read_text()
 tauri_config = json.loads((ROOT / "desktop/src-tauri/tauri.conf.json").read_text())
 desktop_scripts = json.loads((ROOT / "desktop/frontend/package.json").read_text())["scripts"]
 desktop_application = (ROOT / "app/javascript/lib/file_library_application.js").read_text()
 desktop_shell_styles = (ROOT / "app/assets/stylesheets/file_library_host.css").read_text()
+assert "globalThis.fetch =" not in desktop_application, (
+    "The shared frontend must not replace the host fetch implementation"
+)
 shared_styles = (ROOT / "app/assets/stylesheets/application.css").read_text()
 presentation_controller = (ROOT / "app/javascript/controllers/presentation_controller.js").read_text()
 importmap = (ROOT / "config/importmap.rb").read_text()

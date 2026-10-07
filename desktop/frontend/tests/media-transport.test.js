@@ -1,8 +1,17 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { createMediaFetch } from "../src/media-transport.js"
+import { createMediaFetch, mediaUrlsForDeck } from "../src/media-transport.js"
 
 const deckId = "550e8400-e29b-41d4-a716-446655440000"
+
+test("desktop media URLs are owned by the native adapter and scoped to one deck", () => {
+  assert.deepEqual(mediaUrlsForDeck({ id: deckId }), {
+    previewUrl: `elef-preview://localhost/${deckId}`,
+    uploadUrl: `elef-upload://localhost/${deckId}`,
+    assetBaseUrl: `elefasset://localhost/${deckId}`
+  })
+  assert.throws(() => mediaUrlsForDeck({ id: "" }), /deck id is required/)
+})
 
 test("media fetch sends file bytes as a raw IPC body and preserves the Rails JSON result", async () => {
   const calls = []

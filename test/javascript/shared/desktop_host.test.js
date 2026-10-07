@@ -99,6 +99,17 @@ test("the native entry point only wires Tauri APIs into the Rails-owned applicat
   assert.match(fileLibraryTransport, /listDecks: \(\) => invoke\("list_decks"\)/)
 })
 
+test("desktop media URLs and fetch interception stay in native transport", async () => {
+  const mediaTransport = await read("desktop/frontend/src/media-transport.js")
+  assert.doesNotMatch(application, /elef(?:-preview|-upload|asset):\/\//)
+  assert.doesNotMatch(application, /globalThis\.fetch\s*=/)
+  assert.doesNotMatch(application, /__elefPreviewTrace/)
+  assert.equal(document.querySelector("#desktop-editor-form").dataset.previewUrlValue, "")
+  assert.match(mediaTransport, /export function mediaUrlsForDeck\(/)
+  assert.match(bootstrap, /globalThis\.fetch = createPreviewFetch/)
+  assert.match(bootstrap, /mediaUrlsForDeck,/)
+})
+
 test("Rails and desktop consume the same Rails-owned save state machine", () => {
   assert.match(autosaveController, /import \{ createSaveFlow \} from "lib\/save_flow"/)
   assert.match(application, /import \{ createSaveFlow \} from "lib\/save_flow"/)
@@ -112,7 +123,7 @@ test("Rails and desktop share one sanitized preview insertion path", () => {
   assert.match(importmap, /pin "#elef\/preview-sanitizer", to: "lib\/preview_sanitizer\.js"/)
   assert.equal(rootPackage.imports["#elef/preview-sanitizer"], "./app/javascript/lib/preview_sanitizer.js")
   assert.match(build, /preview-sanitizer/)
-  assert.match(editorView, /installSanitizedPreview\(container, html\)/)
+  assert.match(editorView, /installSanitizedPreview\(container, html, \{ mediaBaseUrl \}\)/)
   const previewInstaller = editorView.match(/export function installPreviewHtml\([\s\S]*?\n\}/)?.[0] || ""
   assert.doesNotMatch(previewInstaller, /elefInstallDesktopPreview|innerHTML/)
   assert.doesNotMatch(editorView, /elefInstallDesktopPreview/)

@@ -121,7 +121,8 @@ const EDITOR_VIEW = `
 const TARGET = "[data-editor-view-target]"
 
 export function installPreviewHtml(container, html) {
-  installSanitizedPreview(container, html)
+  const mediaBaseUrl = container.closest("form")?.dataset.mediaAssetBaseUrlValue || ""
+  installSanitizedPreview(container, html, { mediaBaseUrl })
 }
 
 export function mountEditorHosts(root = globalThis.document) {

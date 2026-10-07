@@ -63,6 +63,8 @@ desktop/frontend/build.mjs resolves shared controllers and modules from app/java
 
 The Rails-owned application calls named library services. Tauri command names and raw IPC stay inside `desktop/frontend/src` adapters; Rails-owned frontend code does not invoke Tauri commands.
 
+The desktop media adapter also owns its preview, upload, and deck-asset URL schemes and installs the webview fetch bridge. Shared frontend modules receive those URLs as opaque values; Rails-owned JavaScript does not name desktop protocols or replace `fetch`.
+
 app/views/desktop_host.html is a static desktop host shell consumed by the build, not a Rails response. Shared editor, library, graph, and style behavior lives in Rails-owned application sources.
 
 Both library hosts use the card and action markup from `app/javascript/lib/library_card.js`. Rails supplies its routes and CSRF fields; desktop binds the same controls to local file operations.

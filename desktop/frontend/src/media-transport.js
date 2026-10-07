@@ -1,5 +1,15 @@
 const MAX_MEDIA_BYTES = 50 * 1024 * 1024
 
+export function mediaUrlsForDeck(deck) {
+  const id = encodeURIComponent(typeof deck === "string" ? deck : deck?.id || "")
+  if (!id) throw new TypeError("A deck id is required to build media URLs.")
+  return {
+    previewUrl: `elef-preview://localhost/${id}`,
+    uploadUrl: `elef-upload://localhost/${id}`,
+    assetBaseUrl: `elefasset://localhost/${id}`
+  }
+}
+
 export function createMediaFetch({ invoke, fetchImpl = globalThis.fetch.bind(globalThis) }) {
   return async (input, init = {}) => {
     let url

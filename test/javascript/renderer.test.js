@@ -197,6 +197,16 @@ test("editable web projections preserve safe relative image paths and editable c
   assert.doesNotMatch(desktop.html, /src="\/diagram\.svg"/)
 })
 
+test("the shared renderer does not invent a desktop asset protocol when no media base is supplied", () => {
+  const digest = "a".repeat(64)
+  const preview = renderPreview({
+    source: `![Missing](elef-asset:${digest})`,
+    deckId: "deck-id"
+  })
+
+  assert.doesNotMatch(preview.html, /elefasset:\/\//)
+})
+
 test("shared Markdown block renderer supports both KaTeX delimiter families and autolinks", () => {
   const html = renderMarkdownBlock("Inline \\(\\bar{x}\\), display \\[x^2\\], and https://example.com")
   assert.match(html, /data-editor-math-open="\\\("/)

@@ -13,6 +13,8 @@ Rails app/ owns the shared product workflows and user interface. Desktop package
 
 The shared application never calls raw Tauri `invoke()` or names Rust commands. `desktop/frontend/src/file-library-transport.js` maps file-library operations to commands; editor saves, media, updater, and lifecycle stay in their corresponding desktop adapters.
 
+`desktop/frontend/src/media-transport.js` owns the desktop preview, upload, and deck-asset URL schemes. The desktop bootstrap installs the fetch bridge; shared modules receive deck-scoped media URLs as opaque values and do not patch `fetch` or parse desktop schemes.
+
 Desktop frontend edits belong in desktop/frontend/src only when they implement a native transport, lifecycle, window, media, close, or updater integration. If behavior can be expressed independently of Tauri, put it under app/ and make both hosts consume it.
 
 ## Handler categories
