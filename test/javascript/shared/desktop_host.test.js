@@ -25,6 +25,8 @@ const importmap = await read("config/importmap.rb")
 const rootPackage = JSON.parse(await read("package.json"))
 const appearanceController = await read("app/javascript/controllers/appearance_controller.js")
 const autosaveController = await read("app/javascript/controllers/autosave_controller.js")
+const workSession = await read("app/javascript/lib/work_session.js")
+const quietSavePolicy = await read("desktop/frontend/src/quiet_save_policy.js")
 const { document } = parseHTML(page)
 const emptyAction = page.match(/<template data-library-view-slot="empty-action">([\s\S]*?)<\/template>/)?.[1] || ""
 
@@ -112,10 +114,15 @@ test("desktop media URLs and fetch interception stay in native transport", async
 
 test("Rails and desktop consume the same Rails-owned save state machine", () => {
   assert.match(autosaveController, /import \{ createSaveFlow \} from "lib\/save_flow"/)
-  assert.match(application, /import \{ createSaveFlow \} from "lib\/save_flow"/)
+  assert.match(application, /import \{ createWorkSession \} from "lib\/work_session"/)
+  assert.match(workSession, /import \{ createSaveFlow \} from "\.\/save_flow\.js"/)
   assert.match(autosaveController, /import \{ presentConflictDialog \} from "lib\/conflict_dialog"/)
   assert.match(application, /import \{ presentConflictDialog \} from "lib\/conflict_dialog"/)
   assert.doesNotMatch(bootstrap, /createSaveFlow|conflict-dialog|autosave#schedule/)
+  assert.match(bootstrap, /quietSavePolicy: createQuietSavePolicy\(\)/)
+  assert.match(application, /quietSavePolicy\.saveDelay/)
+  assert.match(application, /quietSavePolicy\.externalPollMs/)
+  assert.match(quietSavePolicy, /saveDelay: 2000/)
 })
 
 test("Rails and desktop share one sanitized preview insertion path", () => {

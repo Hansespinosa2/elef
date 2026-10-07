@@ -31,6 +31,7 @@ fn main() {
         "resolve_import_conflict",
         "install_update",
         "confirm_app_ready",
+        "confirm_discard_unsaved_changes",
     ];
     let attributes = tauri_build::Attributes::new()
         .app_manifest(tauri_build::AppManifest::new().commands(app_commands));

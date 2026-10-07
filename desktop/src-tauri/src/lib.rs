@@ -504,6 +504,17 @@ async fn delete_deck(
 }
 
 #[tauri::command]
+async fn confirm_discard_unsaved_changes(app: AppHandle) -> Result<bool, CommandError> {
+    confirm_native_action(
+        &app,
+        "Elef could not save your latest edits. Quit without saving them?".into(),
+        "Quit Without Saving",
+        MessageDialogKind::Warning,
+    )
+    .await
+}
+
+#[tauri::command]
 fn read_library_config(state: State<'_, DesktopState>) -> Result<LibraryConfig, CommandError> {
     Ok(state.current_library()?.read_config()?)
 }
@@ -1389,6 +1400,7 @@ pub fn run() {
             resolve_import_conflict,
             install_update,
             confirm_app_ready,
+            confirm_discard_unsaved_changes,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Elef Desktop");

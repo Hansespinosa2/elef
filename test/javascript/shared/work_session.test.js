@@ -187,7 +187,10 @@ test("work session merges clean external changes silently", async () => {
   await timers.advance(100)
   await flush()
   assert.deepEqual(state.reads, ["deck-1"])
-  assert.deepEqual(state.snapshots, [["deck-1", "pre-merge", "ONE\ntwo\n"]])
+  assert.deepEqual(state.snapshots, [
+    ["deck-1", "pre-merge", "ONE\ntwo\n"],
+    ["deck-1", "external-change", undefined]
+  ])
   assert.deepEqual(state.merges, [["deck-1", "ONE\ntwo\n"]])
   assert.equal(fixture.getText(), "ONE\nTWO\n")
   assert.deepEqual(state.saves, [["deck-1", "ONE\nTWO\n", { snapshot: "ONE\nTWO\n" }]])
@@ -213,7 +216,10 @@ test("work session routes overlap to the conflict path after snapshotting", asyn
   state.pollQueue.push({ deck_id: "deck-1", kind: "SourceChanged" })
   await timers.advance(100)
   await flush()
-  assert.deepEqual(state.snapshots, [["deck-1", "pre-merge", "local"]])
+  assert.deepEqual(state.snapshots, [
+    ["deck-1", "pre-merge", "local"],
+    ["deck-1", "external-change", undefined]
+  ])
   assert.equal(conflicts.length, 1)
   assert.equal(fixture.getText(), "local")
   assert.equal(state.saves.length, 0)
@@ -230,7 +236,7 @@ test("work session never auto-loads suspicious changes", async () => {
   state.pollQueue.push({ deck_id: "deck-1", kind: "SourceChanged" })
   await timers.advance(100)
   await flush()
-  assert.equal(state.snapshots.length, 1)
+  assert.deepEqual(state.snapshots.map(entry => entry[1]), ["pre-merge", "external-change"])
   assert.equal(conflicts.length, 1)
   assert.equal(fixture.getText(), "local")
   assert.equal(state.saves.length, 0)
@@ -383,6 +389,61 @@ test("work session maps conflicts and failures through flush", async () => {
   assert.equal(failed.kind, "failed")
   assert.equal(failed.error.category, "permission_denied")
   blocked.session.dispose()
+})
+
+test("work session exposes host orchestration extras", async () => {
+  const { session, state, timers, conflicts, setDirectText } = setup()
+  const started = session.revision
+  setDirectText("changed")
+  session.noteChange()
+  assert.ok(session.revision > started)
+  assert.equal(session.dirty, true)
+  session.pause()
+  await timers.advance(500)
+  await flush()
+  assert.deepEqual(state.saves, [])
+  session.resume()
+  await timers.advance(500)
+  await flush()
+  assert.equal(state.saves.length, 1)
+  assert.equal(session.blocked, false)
+  assert.equal(session.saving, false)
+  assert.equal(session.canRestoreDraft, false)
+  assert.equal(session.discardedDraftCount, 0)
+  assert.equal(session.handleConflict({ id: "deck-1", details: { disk_hash: hash("c"), current: { source: "disk", source_file: "talk.md" } } }), true)
+  assert.equal(conflicts.length, 1)
+  session.keepLocalVersion()
+  await flush()
+  assert.equal(session.conflict, null)
+  session.dispose()
+})
+
+test("work session extras resolve conflicts and restore drafts", async () => {
+  const fixture = setup({ text: "local" })
+  const { session, state } = fixture
+  session.handleConflict({ id: "deck-1", details: { disk_hash: hash("c"), current: { source: "disk", source_file: "talk.md" } } })
+  assert.equal(await session.useDiskVersion(), true)
+  assert.equal(fixture.getText(), "disk")
+  assert.equal(session.canRestoreDraft, true)
+  assert.equal(session.discardedDraftCount, 1)
+  assert.equal(await session.restoreDraft(), true)
+  assert.equal(fixture.getText(), "local")
+  session.dispose()
+  void state
+})
+
+test("work session flush forces through blocked saves", async () => {
+  const { session, state, timers } = setup()
+  state.saveImpl = async () => { throw { code: "permission_denied", message: "nope", retryable: false } }
+  await session.replaceText("local")
+  await timers.advance(50)
+  await flush()
+  assert.equal(session.blocked, true)
+  state.saveImpl = null
+  const forced = await session.flush({ force: true })
+  assert.equal(forced.kind, "saved")
+  assert.equal(session.blocked, false)
+  session.dispose()
 })
 
 test("work session unsubscribes handlers", async () => {

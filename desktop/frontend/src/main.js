@@ -10,6 +10,7 @@ import { createMediaFetch, mediaUrlsForDeck } from "./media-transport.js"
 import { createPreviewFetch } from "./preview-transport.js"
 import { checkForDesktopUpdate, createIdleUpdateCheck, installDesktopUpdate } from "./update-flow.js"
 import { createFileLibraryTransport } from "./file-library-transport.js"
+import { createQuietSavePolicy } from "./quiet_save_policy.js"
 import { desktopAuthoringRegistry, loadDesktopAuthoringRegistry } from "./authoring-registry-loader.js"
 import { loadEditorRuntime, loadLibraryRuntime } from "lib/editor_runtime"
 import { startFileLibraryApplication } from "lib/file_library_application"
@@ -48,6 +49,7 @@ startFileLibraryApplication({
   installPendingUpdate: (update, options) => installDesktopUpdate(update, { ...options, relaunch }),
   desktopAuthoringRegistry,
   loadDesktopAuthoringRegistry,
+  quietSavePolicy: createQuietSavePolicy(),
   loadEditorRuntime,
   loadLibraryRuntime
 })

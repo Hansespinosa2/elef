@@ -69,3 +69,35 @@ test("first-open manifest creation and UUID repair save with the returned identi
     await assert.rejects(adapter.saveSource(requested, "stale"), error => error.code === "not_found")
   }
 })
+
+test("quiet-save transport drains watcher events and snapshots either side", async () => {
+  const calls = []
+  const events = [{ deck_id: "deck-1", kind: "SourceChanged" }]
+  const adapter = createTransportAdapter({ invoke: async (command, payload) => {
+    calls.push([command, payload])
+    if (command === "poll_file_events") return events
+    return { id: "snap-1" }
+  } })
+  assert.deepEqual(await adapter.pollFileEvents(), events)
+  await adapter.takeSnapshot("deck-1", "pre-merge", "local")
+  await adapter.takeSnapshot("deck-1", "external-change")
+  assert.deepEqual(calls, [
+    ["poll_file_events", {}],
+    ["take_snapshot", { id: "deck-1", reason: "pre-merge", source: "local" }],
+    ["take_snapshot", { id: "deck-1", reason: "external-change", source: null }]
+  ])
+})
+
+test("quiet-save transport normalizes merge outcomes and rejects unknown shapes", async () => {
+  let outcome = { Merged: "ONE\nTWO\n" }
+  const adapter = createTransportAdapter({ invoke: async () => outcome })
+  assert.deepEqual(await adapter.mergeExternalChange("deck-1", "local"), { kind: "merged", source: "ONE\nTWO\n" })
+  outcome = "Overlap"
+  assert.deepEqual(await adapter.mergeExternalChange("deck-1", "local"), { kind: "overlap" })
+  outcome = "Suspicious"
+  assert.deepEqual(await adapter.mergeExternalChange("deck-1", "local"), { kind: "suspicious" })
+  outcome = { Merged: 42 }
+  await assert.rejects(adapter.mergeExternalChange("deck-1", "local"), error => error.code === "invalid_response")
+  outcome = null
+  await assert.rejects(adapter.mergeExternalChange("deck-1", "local"), error => error.code === "invalid_response")
+})

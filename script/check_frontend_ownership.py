@@ -90,6 +90,7 @@ desktop_main = (ROOT / "desktop/frontend/src/main.js").read_text()
 tauri_config = json.loads((ROOT / "desktop/src-tauri/tauri.conf.json").read_text())
 desktop_scripts = json.loads((ROOT / "desktop/frontend/package.json").read_text())["scripts"]
 desktop_application = (ROOT / "app/javascript/lib/file_library_application.js").read_text()
+work_session = (ROOT / "app/javascript/lib/work_session.js").read_text()
 web_authoring_settings = (ROOT / "app/javascript/controllers/authoring_settings_controller.js").read_text()
 desktop_shell_styles = (ROOT / "app/assets/stylesheets/file_library_host.css").read_text()
 assert "globalThis.fetch =" not in desktop_application, (
@@ -337,8 +338,11 @@ assert "@tauri-apps/" not in desktop_application and "desktop/" not in desktop_a
     "the Rails-owned file-library application must depend on injected host services, not desktop code"
 )
 assert "script/build_renderer.mjs" not in build, "desktop must consume the renderer build, not own it"
-assert '"lib/save_flow"' in desktop_application and '"lib/preview_sanitizer"' in desktop_application, (
+assert '"lib/work_session"' in desktop_application and '"lib/preview_sanitizer"' in desktop_application, (
     "desktop save and preview behavior must import Rails-owned modules"
+)
+assert '"./save_flow.js"' in work_session, (
+    "the shared work-session factory must consume the Rails-owned save state machine"
 )
 assert '"lib/library_view"' in desktop_application and '"lib/library_filter"' in desktop_application, (
     "desktop library behavior must import Rails-owned components"
@@ -409,7 +413,7 @@ assert "write_authoring_registry" not in (ROOT / "app/javascript/lib/authoring_r
 for shared_module in (
     "deck_open_flow", "document_graph_cache", "editor_ready", "editor_source",
     "feature_flags", "library_preview", "performance_measurement", "renderer_worker_client",
-    "authoring_settings_dialog", "save_flow", "title_save_flow",
+    "authoring_settings_dialog", "work_session", "title_save_flow",
 ):
     assert f'"lib/{shared_module}"' in desktop_application, f"desktop application must consume app/javascript/lib/{shared_module}.js"
 assert '"lib/projection_editability"' in (ROOT / "app/javascript/controllers/presentation_editor_controller.js").read_text()
@@ -426,6 +430,7 @@ desktop_source_reasons = {
     "main.js": "boots the Rails-owned application with Tauri services and native lifecycle",
     "media-transport.js": "adapts browser media fetches to Tauri IPC and asset protocols",
     "preview-transport.js": "adapts the shared renderer to the desktop preview endpoint",
+    "quiet_save_policy.js": "declares desktop quiet-save timing injected into the shared session factory",
     "renderer-worker.js": "starts the packaged renderer bundle in a Web Worker",
     "transport-adapter.js": "maps Rails-shaped requests to native command calls",
     "update-flow.js": "drives the Tauri updater and native relaunch",

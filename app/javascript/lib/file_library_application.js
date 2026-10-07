@@ -7,7 +7,7 @@ import { createIncrementalList } from "lib/incremental_list"
 import { createDocumentGraphCache } from "lib/document_graph_cache"
 import { buildDocumentGraph } from "lib/document_links"
 import { waitForEditorController } from "lib/editor_ready"
-import { createSaveFlow } from "lib/save_flow"
+import { createWorkSession } from "lib/work_session"
 import { createTitleSaveFlow } from "lib/title_save_flow"
 import { presentConflictDialog } from "lib/conflict_dialog"
 import { createRendererClient } from "lib/renderer_worker_client"
@@ -25,7 +25,7 @@ export function startFileLibraryApplication(platform) {
     fileLibrary, listen, getCurrentWindow,
     completeBootstrap, createCloseFlow, createTransportAdapter, installFetchTransport,
     mediaUrlsForDeck, checkForUpdate, createIdleUpdateCheck, installPendingUpdate,
-    desktopAuthoringRegistry, loadDesktopAuthoringRegistry,
+    desktopAuthoringRegistry, loadDesktopAuthoringRegistry, quietSavePolicy,
     loadEditorRuntime, loadLibraryRuntime
   } = platform
 
@@ -185,13 +185,8 @@ export function startFileLibraryApplication(platform) {
   })
 
   const transport = createTransportAdapter({ onConflict: event => saveFlow?.handleConflict(event) })
-  const loadLibraryPreview = createLibraryPreviewLoader({
-    readPreview: id => fileLibrary.readSourcePreview(id),
-    render: input => renderer.render(input),
-    mediaBaseUrlForDeck: deck => mediaUrlsForDeck(deck).assetBaseUrl,
-    install: installSanitizedPreview
-  })
-  saveFlow = createSaveFlow({
+  const sessionTransport = {
+    ...transport,
     saveSource: async (id, source) => {
       const isDocument = decks.find(deck => deck.id === id)?.source_file === "document.md"
       if (__ELEF_E2E__ && e2eNextSaveDelayMs > 0) {
@@ -202,23 +197,52 @@ export function startFileLibraryApplication(platform) {
       const result = await transport.saveSource(id, source)
       if (isDocument) documentGraphCache.invalidate()
       return result
-    },
-    acceptDiskVersion: (id, contentHash) => transport.acceptDiskVersion(id, contentHash),
-    getSource: currentSource,
-    setSource: setEditorSource,
-    onState: (state, details) => {
+    }
+  }
+  const loadLibraryPreview = createLibraryPreviewLoader({
+    readPreview: id => fileLibrary.readSourcePreview(id),
+    render: input => renderer.render(input),
+    mediaBaseUrlForDeck: deck => mediaUrlsForDeck(deck).assetBaseUrl,
+    install: installSanitizedPreview
+  })
+  function openSession(deck) {
+    closeSession()
+    const session = createWorkSession({
+      transport: sessionTransport,
+      policy: {
+        workId: deck.id,
+        kind: deck.source_file === "document.md" ? "document" : "presentation",
+        deck,
+        getText: currentSource,
+        setText: (source, meta) => setEditorSource(source, meta),
+        saveDelay: quietSavePolicy.saveDelay,
+        externalPollMs: quietSavePolicy.externalPollMs,
+        materializeEdits: materializePendingVisualEdits,
+        onConflict: showConflict,
+        onError: showError
+      }
+    })
+    session.onStatus(status => {
+      const state = status.kind === "clean" ? "Saved"
+        : status.kind === "saving" ? "Saving…"
+        : status.kind === "error" ? "Save failed"
+        : "Unsaved changes"
       if (state !== "Saved" || !titleFlow?.isDirty()) setSaveState(state)
-      elements.restoreDraft.hidden = !details.canRestoreDraft
-      elements.retrySave.hidden = !details.blocked && !titleFlow?.isBlocked()
-      if (!details.dirty && openFilesWaitingForSave) {
+      elements.restoreDraft.hidden = !session.canRestoreDraft
+      elements.retrySave.hidden = !session.blocked && !titleFlow?.isBlocked()
+      if (status.kind === "clean" && openFilesWaitingForSave) {
         openFilesWaitingForSave = false
         queueMicrotask(() => void processOpenedFiles())
       }
-    },
-    onConflict: showConflict,
-    materializeEdits: materializePendingVisualEdits,
-    onError: showError
-  })
+    })
+    saveFlow = session
+  }
+
+  function closeSession() {
+    if (!saveFlow) return
+    saveFlow.dispose()
+    saveFlow = null
+  }
   titleFlow = createTitleSaveFlow({
     getDeck: () => activeDeck,
     getTitle: () => elements.titleInput.value,
@@ -368,12 +392,14 @@ export function startFileLibraryApplication(platform) {
     })
     Object.defineProperty(window, "__elefSaveTestHooks", {
       value: Object.freeze({
-        pause: () => saveFlow.pause(),
+        pause: () => saveFlow?.pause(),
         async flush() {
           try {
-            return await saveFlow.flush({ force: true })
+            if (!saveFlow) return true
+            const result = await saveFlow.flush({ force: true })
+            return result.kind === "clean" || result.kind === "saved"
           } finally {
-            saveFlow.resume()
+            saveFlow?.resume()
           }
         }
       })
@@ -600,7 +626,7 @@ export function startFileLibraryApplication(platform) {
         transition = await prepareDeckOpen(id, {
           read: target => measureOpenStage("readDeck", () => transport.readDeck(target)),
           isDirty: hasUnsavedChanges,
-          getRevision: () => saveFlow.revision,
+          getRevision: () => saveFlow?.revision ?? 0,
           flushSave,
           prepare: deck => measureOpenStage("prepareDeck", async () => {
             await loadEditorRuntime()
@@ -617,7 +643,7 @@ export function startFileLibraryApplication(platform) {
             return { documentTitles }
           })
         })
-      } while (transition && (hasUnsavedChanges() || saveFlow.revision !== transition.revision))
+      } while (transition && (hasUnsavedChanges() || (saveFlow?.revision ?? 0) !== transition.revision))
       if (!transition) {
         if (activeDeck) elements.editorForm.dataset.loadedDeckId = activeDeck.id
         return false
@@ -632,7 +658,7 @@ export function startFileLibraryApplication(platform) {
       // All asynchronous work is finished. Installing the buffer and changing
       // save ownership occur in one synchronous turn, with no stale A buffer
       // able to schedule a write for B during graph/controller preparation.
-      saveFlow.deactivate()
+      closeSession()
       activeDeck = null
       try {
         configureEditorKind(elements.editorField.closest(".editor-shell"), isDocument ? "document" : "presentation", {
@@ -656,7 +682,7 @@ export function startFileLibraryApplication(platform) {
     const viewSetupStartedAt = __ELEF_E2E__ ? performance.now() : null
       transport.activateDeck(deck, id)
       activeDeck = deck
-      saveFlow.activate(deck)
+      openSession(deck)
       elements.deckTitle.textContent = deck.name
       elements.deckTitle.hidden = !isDocument
       elements.titleInput.value = deck.name
@@ -709,7 +735,7 @@ export function startFileLibraryApplication(platform) {
       if (result.deleted) {
         if (activeDeck?.id === deck.id) {
           activeDeck = null
-          saveFlow.deactivate()
+          closeSession()
         }
         await refreshLibrary()
         setStatus(`Moved “${deck.name}” to Trash`)
@@ -729,7 +755,7 @@ export function startFileLibraryApplication(platform) {
   async function completeImport(imported) {
     if (imported.replaced && activeDeck?.id === imported.deck.id) {
       activeDeck = null
-      saveFlow.deactivate()
+      closeSession()
       showLibrary()
     }
     await refreshLibrary()
@@ -797,7 +823,19 @@ export function startFileLibraryApplication(platform) {
   async function flushSave(options) {
     hasUnsavedChanges()
     if (titleFlow && !(await titleFlow.flush(options))) return false
-    return saveFlow.flush(options)
+    if (!saveFlow) return true
+    const result = await saveFlow.flush(options)
+    return result.kind === "clean" || result.kind === "saved"
+  }
+
+  async function flushForClose() {
+    hasUnsavedChanges()
+    if (titleFlow && !(await titleFlow.flush())) return "failed"
+    if (!saveFlow) return "saved"
+    const result = await saveFlow.flush()
+    if (result.kind === "clean" || result.kind === "saved") return "saved"
+    if (result.kind === "conflict") return "conflict"
+    return "failed"
   }
 
   function showConflict(conflict) {
@@ -1122,21 +1160,18 @@ export function startFileLibraryApplication(platform) {
   elements.editorForm.querySelector("#keep-local-version").addEventListener("click", resolveConflictWithLocal)
   elements.editorForm.querySelector("#save-merged-version").addEventListener("click", resolveConflictWithMerge)
   elements.editorForm.querySelector("#conflict-dialog").addEventListener("cancel", event => {
-    if (saveFlow.conflict) event.preventDefault()
+    if (saveFlow?.conflict) event.preventDefault()
   })
   elements.restoreDraft.addEventListener("click", () => {
-    void saveFlow.restoreDraft()
+    void saveFlow?.restoreDraft()
   })
   elements.retrySave.addEventListener("click", () => void flushSave({ force: true }))
-  window.addEventListener("beforeunload", event => {
-    if (!hasUnsavedChanges()) return
-    event.preventDefault()
-    event.returnValue = ""
-  })
+  window.addEventListener("blur", () => void flushSave())
   void getCurrentWindow().onCloseRequested(createCloseFlow({
     isDirty: () => hasUnsavedChanges(),
-    flushSave,
+    flushForClose,
     close: () => getCurrentWindow().close(),
+    confirmDiscard: () => fileLibrary.confirmDiscardUnsavedChanges(),
     onError: showError
   }))
 

@@ -272,9 +272,9 @@ export function createWorkSession({ transport, policy }) {
     return replaceText(current.slice(0, from) + insert + current.slice(to))
   }
 
-  async function flush() {
+  async function flush(options) {
     const before = baseline
-    const ok = await flow.flush()
+    const ok = await flow.flush(options || {})
     if (disposed) {
       return { kind: "failed", error: { category: "cancelled", message: "Session is disposed.", retryable: false } }
     }
@@ -322,6 +322,24 @@ export function createWorkSession({ transport, policy }) {
     onExternalChange,
     onStatus,
     flush,
-    dispose
+    dispose,
+    // Pre-migration host orchestration seam. The desktop host still owns the
+    // editor buffer and conflict dialogs, so it drives these flow methods
+    // directly. Later phases move text ownership into the session and remove
+    // them one by one; new hosts must use the contract surface above.
+    get revision() { return flow.revision },
+    get blocked() { return flow.blocked },
+    get saving() { return flow.saving },
+    get canRestoreDraft() { return flow.canRestoreDraft },
+    get discardedDraftCount() { return flow.discardedDraftCount },
+    noteChange: (...args) => flow.noteChange(...args),
+    pause: () => flow.pause(),
+    resume: () => flow.resume(),
+    checkExternalChange: (...args) => flow.checkExternalChange(...args),
+    handleConflict: (...args) => flow.handleConflict(...args),
+    useDiskVersion: (...args) => flow.useDiskVersion(...args),
+    keepLocalVersion: (...args) => flow.keepLocalVersion(...args),
+    saveMergedVersion: (...args) => flow.saveMergedVersion(...args),
+    restoreDraft: (...args) => flow.restoreDraft(...args)
   }
 }

@@ -42,6 +42,7 @@
     "allow-pending-open-elef-count",
     "allow-resolve-import-conflict",
     "allow-install-update",
+    "allow-confirm-discard-unsaved-changes",
     "updater:allow-check",
     "process:allow-restart",
     "allow-confirm-app-ready"

@@ -186,6 +186,7 @@ export function createSaveFlow({
     const localSource = getSource()
     try {
       await takeSnapshot(id, "pre-merge", localSource)
+      await takeSnapshot(id, "external-change")
     } catch (error) {
       onError(error)
       return checkExternalChange(id, snapshot)
