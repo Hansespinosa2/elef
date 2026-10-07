@@ -3,12 +3,12 @@
   "campaign_branch": "feat/refactor-desktop-and-web",
   "campaign_base_sha": "88f61a7a8ffd7c276bafcf06eee09c36a8adf134",
   "current_phase": 1,
-  "phase_state": "PLAN",
+  "phase_state": "DO",
   "phase_base_sha": "64abf6ed087f1b1b2ff232f88123c76ca362a7d0",
   "head_sha": "64abf6ed087f1b1b2ff232f88123c76ca362a7d0",
   "review_round": 0,
   "phase_contract_sha256": "1bda595270159ae4cbdbb87b31951cdeeb9ef28ea5cadef2cb44b3fb530f80d0",
-  "frozen_plan_sha256": null,
+  "frozen_plan_sha256": "693703f42ded6fb2a32585896a4641b96c053b4a59c5e03cd4b056de3156d48b",
   "last_completed_phase": 0,
   "last_verified_checks": [
     {
@@ -100,5 +100,5 @@
   },
   "pending_human_gates": [],
   "blocker": null,
-  "next_action": "Re-freeze Phase 01 plan with seam additions (hosts lack programmatic media/transfer surfaces)."
+  "next_action": "Implement Phase 01 seams: local-store asset fns + Tauri commands, then HostApiController, adapters, suite."
 }
