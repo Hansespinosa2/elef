@@ -202,6 +202,7 @@ test("work session merges clean external changes silently", async () => {
     title: "",
     kind: "presentation",
     text: "one\nTWO\n",
+    sourceFile: "talk.md",
     baseline: { revision: hash("c") }
   }])
   assert.equal(session.dirty, false)
@@ -375,6 +376,7 @@ test("work session maps conflicts and failures through flush", async () => {
       title: "",
       kind: "presentation",
       text: "disk",
+      sourceFile: "talk.md",
       baseline: { revision: hash("c") }
     }
   })

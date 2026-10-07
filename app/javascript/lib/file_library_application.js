@@ -122,6 +122,7 @@ export function startFileLibraryApplication(platform) {
   let activeDeck = null
   let saveFlow = null
   let sessionStatusKind = "clean"
+  let lastSourceFile = null
   let e2eNextSaveDelayMs = 0
   const documentGraphCache = createDocumentGraphCache(async () => buildDocumentGraph(await fileLibrary.readDocumentGraph()))
   let libraryTab = "all"
@@ -134,8 +135,6 @@ export function startFileLibraryApplication(platform) {
   let processingOpenedFiles = false
   let openFilesRequested = false
   let openFilesWaitingForSave = false
-  let sourcePollBusy = false
-  let lastSourcePollError = null
   let titleFlow = null
   const startupUpdateCheck = createIdleUpdateCheck(
     () => checkForUpdates(false),
@@ -205,6 +204,7 @@ export function startFileLibraryApplication(platform) {
   })
   function openSession(deck) {
     closeSession()
+    lastSourceFile = deck.source_file
     const session = createWorkSession({
       transport: sessionTransport,
       policy: {
@@ -223,9 +223,20 @@ export function startFileLibraryApplication(platform) {
     session.onStatus(status => {
       sessionStatusKind = status.kind
       elements.restoreDraft.hidden = !session.canRestoreDraft
+      if (activeDeck && activeDeck.source_file !== lastSourceFile) {
+        lastSourceFile = activeDeck.source_file
+        syncSourceLabel()
+      }
       if (status.kind === "clean" && openFilesWaitingForSave) {
         openFilesWaitingForSave = false
         queueMicrotask(() => void processOpenedFiles())
+      }
+    })
+    session.onExternalChange(snapshot => {
+      if (snapshot.removed || !activeDeck) return
+      if (activeDeck.source_file === "document.md" &&
+          (snapshot.baseline.revision !== activeDeck.content_hash || snapshot.sourceFile !== activeDeck.source_file)) {
+        documentGraphCache.invalidate()
       }
     })
     saveFlow = session
@@ -1169,30 +1180,6 @@ export function startFileLibraryApplication(platform) {
       elements.search.focus()
     }
   })
-
-  window.setInterval(async () => {
-    if (!activeDeck || sourcePollBusy || document.hidden) return
-    sourcePollBusy = true
-    const id = activeDeck.id
-    try {
-      const snapshot = await transport.readSourceSnapshot(id)
-      lastSourcePollError = null
-      if (activeDeck?.id === id) {
-        if (activeDeck.source_file === "document.md" &&
-            (snapshot.content_hash !== activeDeck.content_hash || snapshot.source_file !== activeDeck.source_file)) {
-          documentGraphCache.invalidate()
-        }
-        const result = await saveFlow.checkExternalChange(id, snapshot)
-        if (result === "reloaded" || result === "source-file-changed") syncSourceLabel()
-      }
-    } catch (error) {
-      const key = error?.code || "unknown"
-      if (key !== lastSourcePollError) showError(error)
-      lastSourcePollError = key
-    } finally {
-      sourcePollBusy = false
-    }
-  }, 2_000)
 
   void listen("desktop-menu-action", event => void handleMenuAction(event.payload))
   const openedFileListener = listen("desktop-open-elef", () => void processOpenedFiles())

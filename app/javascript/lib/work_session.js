@@ -13,8 +13,10 @@
 // External changes arrive through transport.pollFileEvents() on the policy
 // cadence. SourceChanged events merge silently when the merge hook reports
 // a clean merge; overlap, suspicious, and hook failures take the conflict
-// path after a pre-merge snapshot. SourceRemoved events notify subscribers
-// with a removed-marked snapshot; the editor text is left untouched.
+// path after snapshots of both sides. SourceRemoved events notify
+// subscribers with a removed-marked snapshot; the editor text is left
+// untouched. Notifications carry two pre-migration extensions beyond the
+// contract WorkSnapshot: sourceFile (the disk source file name) and removed.
 import { createSaveFlow } from "./save_flow.js"
 
 const HASH_PATTERN = /^[a-f\d]{64}$/i
@@ -97,6 +99,7 @@ export function createWorkSession({ transport, policy }) {
       title,
       kind,
       text: getText(),
+      sourceFile: deck.source_file,
       baseline: { revision: baseline }
     }
   }
@@ -201,6 +204,7 @@ export function createWorkSession({ transport, policy }) {
       title,
       kind,
       text: snapshot.source,
+      sourceFile: snapshot.source_file,
       baseline: { revision: snapshot.content_hash }
     })
     await flow.resolveExternalChange(workId, snapshot)
@@ -288,6 +292,7 @@ export function createWorkSession({ transport, policy }) {
           title,
           kind,
           text: conflict.diskSource,
+          sourceFile: conflict.diskSourceFile,
           baseline: { revision: conflict.diskHash }
         }
       }
@@ -335,7 +340,6 @@ export function createWorkSession({ transport, policy }) {
     noteChange: (...args) => flow.noteChange(...args),
     pause: () => flow.pause(),
     resume: () => flow.resume(),
-    checkExternalChange: (...args) => flow.checkExternalChange(...args),
     handleConflict: (...args) => flow.handleConflict(...args),
     useDiskVersion: (...args) => flow.useDiskVersion(...args),
     keepLocalVersion: (...args) => flow.keepLocalVersion(...args),
