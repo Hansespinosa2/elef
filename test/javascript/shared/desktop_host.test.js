@@ -7,7 +7,7 @@ import { parseHTML } from "linkedom"
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..")
 const read = relative => readFile(path.join(root, relative), "utf8")
-const [hostTemplate, shellStyles, applicationStyles, application, bootstrap, editorRuntime, build, editorView, libraryView] = await Promise.all([
+const [hostTemplate, shellStyles, applicationStyles, application, bootstrap, editorRuntime, build, editorView, libraryView, fileLibraryTransport] = await Promise.all([
   read("app/views/desktop_host.html"),
   read("app/assets/stylesheets/file_library_host.css"),
   read("app/assets/stylesheets/application.css"),
@@ -16,7 +16,8 @@ const [hostTemplate, shellStyles, applicationStyles, application, bootstrap, edi
   read("app/javascript/lib/editor_runtime.js"),
   read("desktop/frontend/build.mjs"),
   read("app/javascript/lib/editor_view.js"),
-  read("app/javascript/lib/library_view.js")
+  read("app/javascript/lib/library_view.js"),
+  read("desktop/frontend/src/file-library-transport.js")
 ])
 const authoringMarkup = await read("app/views/shared/_authoring_settings_dialog.html.erb")
 const page = hostTemplate.replace("<!-- elef:shared-authoring-settings -->", authoringMarkup)
@@ -91,6 +92,11 @@ test("the native entry point only wires Tauri APIs into the Rails-owned applicat
   assert.match(bootstrap, /startFileLibraryApplication\(/)
   assert.doesNotMatch(bootstrap, /document\.querySelector|innerHTML|\.textContent|\.classList/)
   assert.doesNotMatch(bootstrap, /desktop-shell\.css|desktop-rendered-content\.css/)
+  assert.match(bootstrap, /createFileLibraryTransport\(\{ invoke \}\)/)
+  assert.match(application, /fileLibrary\.listDecks\(\)/)
+  assert.doesNotMatch(application, /\binvoke\s*\(/)
+  assert.doesNotMatch(application, /["'](?:get_library_status|list_decks|create_deck|save_source|install_update)["']/)
+  assert.match(fileLibraryTransport, /listDecks: \(\) => invoke\("list_decks"\)/)
 })
 
 test("Rails and desktop consume the same Rails-owned save state machine", () => {

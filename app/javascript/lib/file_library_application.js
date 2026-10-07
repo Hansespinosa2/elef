@@ -22,9 +22,9 @@ import { createLibraryPreviewLoader } from "lib/library_preview"
 
 export function startFileLibraryApplication(platform) {
   const {
-    Channel, invoke, listen, getCurrentWindow, relaunch, checkUpdater,
+    fileLibrary, listen, getCurrentWindow,
     completeBootstrap, createCloseFlow, createTransportAdapter, createMediaFetch,
-    createPreviewFetch, checkForDesktopUpdate, createIdleUpdateCheck, installDesktopUpdate,
+    createPreviewFetch, checkForUpdate, createIdleUpdateCheck, installPendingUpdate,
     desktopAuthoringRegistry, loadDesktopAuthoringRegistry,
     loadEditorRuntime, loadLibraryRuntime
   } = platform
@@ -33,7 +33,7 @@ export function startFileLibraryApplication(platform) {
 
   const networkFetch = globalThis.fetch.bind(globalThis)
   const renderer = createRendererClient()
-  const mediaFetch = createMediaFetch({ invoke, fetchImpl: networkFetch })
+  const mediaFetch = createMediaFetch({ fetchImpl: networkFetch })
   globalThis.fetch = createPreviewFetch({
     renderer,
     fetchImpl: mediaFetch,
@@ -133,7 +133,7 @@ export function startFileLibraryApplication(platform) {
   let activeDeck = null
   let saveFlow = null
   let e2eNextSaveDelayMs = 0
-  const documentGraphCache = createDocumentGraphCache(async () => buildDocumentGraph(await invoke("document_graph")))
+  const documentGraphCache = createDocumentGraphCache(async () => buildDocumentGraph(await fileLibrary.readDocumentGraph()))
   let libraryTab = "all"
   let cardPreviewObserver = null
   let libraryMoreObserver = null
@@ -155,7 +155,7 @@ export function startFileLibraryApplication(platform) {
   const authoringSettings = createAuthoringSettingsDialog({
     elements: authoringSettingsElements(document),
     readRegistries: async () => {
-      const result = await invoke("read_authoring_registries")
+      const result = await fileLibrary.readAuthoringRegistries()
       const entries = mergeAuthoringRegistryEntries(
         desktopAuthoringRegistry().filter(entry => entry.built_in),
         result.snippets,
@@ -184,7 +184,7 @@ export function startFileLibraryApplication(platform) {
       }
     },
     writeRegistry: async payload => {
-      const result = await invoke("write_authoring_registry", payload)
+      const result = await fileLibrary.writeAuthoringRegistry(payload)
       return { contentHash: result.content_hash }
     },
     reloadEditorRegistry: loadDesktopAuthoringRegistry,
@@ -192,9 +192,9 @@ export function startFileLibraryApplication(platform) {
     onSaved: setStatus
   })
 
-  const transport = createTransportAdapter({ invoke, onConflict: event => saveFlow?.handleConflict(event) })
+  const transport = createTransportAdapter({ onConflict: event => saveFlow?.handleConflict(event) })
   const loadLibraryPreview = createLibraryPreviewLoader({
-    readPreview: id => invoke("read_deck_preview", { id }),
+    readPreview: id => fileLibrary.readSourcePreview(id),
     render: input => renderer.render(input),
     install: installSanitizedPreview
   })
@@ -532,7 +532,7 @@ export function startFileLibraryApplication(platform) {
     if (!library) return
     try {
       const [listedDecks] = await Promise.all([
-        invoke("list_decks"),
+        fileLibrary.listDecks(),
         loadDesktopAuthoringRegistry()
       ])
       decks = listedDecks
@@ -551,7 +551,7 @@ export function startFileLibraryApplication(platform) {
     clearNotice()
     setStatus("Choose a folder for your library…")
     try {
-      const selected = await invoke("choose_library_root")
+      const selected = await fileLibrary.chooseLibraryRoot()
       if (!selected) {
         setStatus("Library selection cancelled")
         return
@@ -565,7 +565,7 @@ export function startFileLibraryApplication(platform) {
       showLibrary()
       if (selected.config_notice) showNotice(selected.config_notice, "error")
       setStatus(`${decks.length} ${decks.length === 1 ? "deck" : "decks"}`)
-      if (await invoke("pending_open_elef_count")) void processOpenedFiles()
+      if (await fileLibrary.pendingOpenedElefCount()) void processOpenedFiles()
     } catch (error) {
       showError(error)
     }
@@ -585,7 +585,7 @@ export function startFileLibraryApplication(platform) {
     if (!name) return
     elements.createDialog.close()
     try {
-      const opened = await invoke("create_deck", { name, kind })
+      const opened = await fileLibrary.createDeck(name, kind)
       await refreshLibrary()
       await openDeck(opened.id)
     } catch (error) {
@@ -702,7 +702,7 @@ export function startFileLibraryApplication(platform) {
 
   async function renameDeck(deck, name) {
     if (typeof name !== "string" || name.trim() === deck.name) return
-    const renamed = await invoke("rename_deck", { id: deck.id, name: name.trim() })
+    const renamed = await fileLibrary.renameDeck(deck.id, name.trim())
     if (activeDeck?.id === deck.id) Object.assign(activeDeck, renamed)
     decks = decks.map(item => item.id === deck.id ? { ...item, ...renamed } : item)
     renderDecks()
@@ -711,7 +711,7 @@ export function startFileLibraryApplication(platform) {
 
   async function deleteDeck(deck) {
     try {
-      const result = await invoke("delete_deck", { id: deck.id })
+      const result = await fileLibrary.deleteDeck(deck.id)
       if (result.deleted) {
         if (activeDeck?.id === deck.id) {
           activeDeck = null
@@ -759,7 +759,7 @@ export function startFileLibraryApplication(platform) {
         }
         while (true) {
           try {
-            const imported = await invoke("import_opened_elef")
+            const imported = await fileLibrary.importOpenedElef()
             if (!imported) break
             await completeImport(imported)
           } catch (error) {
@@ -832,7 +832,7 @@ export function startFileLibraryApplication(platform) {
 
   async function showSettings() {
     try {
-      libraryConfig = await invoke("read_library_config")
+      libraryConfig = await fileLibrary.readLibraryConfig()
       elements.libraryTheme.value = libraryConfig.theme
       elements.settingsDialog.showModal()
     } catch (error) {
@@ -845,7 +845,7 @@ export function startFileLibraryApplication(platform) {
     event.preventDefault()
     const next = { ...libraryConfig, schema_version: 1, theme: elements.libraryTheme.value }
     try {
-      await invoke("write_library_config", { config: next })
+      await fileLibrary.writeLibraryConfig(next)
       libraryConfig = next
       applyTheme(next.theme)
       elements.settingsDialog.close()
@@ -862,7 +862,7 @@ export function startFileLibraryApplication(platform) {
     }
     if (hasUnsavedChanges() && !(await flushSave({ force: true }))) return
     try {
-      if (await invoke("export_elef", { id: activeDeck.id })) setStatus("Deck exported")
+      if (await fileLibrary.exportElef(activeDeck.id)) setStatus("Deck exported")
     } catch (error) {
       showError(error)
     }
@@ -875,7 +875,7 @@ export function startFileLibraryApplication(platform) {
     }
     if (hasUnsavedChanges() && !(await flushSave())) return
     try {
-      const imported = await invoke("import_elef")
+      const imported = await fileLibrary.importElef()
       if (!imported) return
       await completeImport(imported)
     } catch (error) {
@@ -890,7 +890,7 @@ export function startFileLibraryApplication(platform) {
   async function resolveImportConflict(resolution) {
     elements.importConflictDialog.close()
     try {
-      const imported = await invoke("resolve_import_conflict", { resolution })
+      const imported = await fileLibrary.resolveImportConflict(resolution)
       if (imported) await completeImport(imported)
       void processOpenedFiles()
     } catch (error) {
@@ -902,8 +902,7 @@ export function startFileLibraryApplication(platform) {
     if (showNoUpdate) startupUpdateCheck.cancel()
     if (updateInstalling) return false
     try {
-      const update = await checkForDesktopUpdate(() => checkUpdater({ timeout: 10_000 }),
-        (version, onProgress) => invoke("install_update", { version, onProgress: new Channel(onProgress) }))
+      const update = await checkForUpdate()
       if (!update) {
         if (showNoUpdate) setStatus("Elef is up to date")
         return false
@@ -929,9 +928,8 @@ export function startFileLibraryApplication(platform) {
     button.disabled = true
     later.disabled = true
     try {
-      const installed = await installDesktopUpdate(pendingUpdate, {
+      const installed = await installPendingUpdate(pendingUpdate, {
         prepare: async () => !hasUnsavedChanges() || await flushSave({ force: true }),
-        relaunch,
         onProgress: event => {
           if (event.event === "Started" || event.event === "Progress") {
             elements.updateProgress.textContent = "Downloading update…"
@@ -1183,7 +1181,7 @@ export function startFileLibraryApplication(platform) {
   const openedFileListener = listen("desktop-open-elef", () => void processOpenedFiles())
   void completeBootstrap({
     initialize: async () => {
-      const [status] = await measureBootstrapStage("library-status", () => Promise.all([invoke("get_library_status"), openedFileListener]))
+      const [status] = await measureBootstrapStage("library-status", () => Promise.all([fileLibrary.getLibraryStatus(), openedFileListener]))
       library = status
       libraryConfig = status?.config || libraryConfig
       decks = status?.decks || []
@@ -1206,9 +1204,9 @@ export function startFileLibraryApplication(platform) {
       await measureBootstrapStage("editor-ready", () => waitForEditorController(elements.editorField, editorFor))
     },
     confirmReady: async () => {
-      const removed = await measureBootstrapStage("native-ready-ack", () => invoke("confirm_app_ready"))
+      const removed = await measureBootstrapStage("native-ready-ack", () => fileLibrary.confirmAppReady())
       if (__ELEF_E2E__) window.__elefPerformanceTestHooks.ready(removed)
-      void invoke("pending_open_elef_count")
+      void fileLibrary.pendingOpenedElefCount()
         .then(count => { if (count) void processOpenedFiles() })
         .catch(showError)
       startupUpdateCheck.schedule(10_000)

@@ -5,11 +5,13 @@ Rails app/ owns the shared product workflows and user interface. Desktop package
 ## Flow
 
 1. The shared application starts from app/javascript/lib/file_library_application.js.
-2. The web host supplies Rails routes and browser persistence. The desktop entry point in desktop/frontend/src/main.js injects Tauri services.
+2. The web host supplies Rails routes and browser persistence. The desktop entry point in desktop/frontend/src/main.js injects named file-library services and Tauri lifecycle services.
 3. Shared Stimulus controllers and modules call the same fetch-shaped interfaces in both hosts.
 4. Desktop adapters translate the relevant requests to named Tauri commands, a local rendering worker, or the asset protocol.
 5. Rust commands validate arguments and delegate filesystem operations to desktop/crates/elef-core.
 6. Shared workflows and scenarios remain in Rails-owned source and desktop/e2e/scenarios.
+
+The shared application never calls raw Tauri `invoke()` or names Rust commands. `desktop/frontend/src/file-library-transport.js` maps file-library operations to commands; editor saves, media, updater, and lifecycle stay in their corresponding desktop adapters.
 
 Desktop frontend edits belong in desktop/frontend/src only when they implement a native transport, lifecycle, window, media, close, or updater integration. If behavior can be expressed independently of Tauri, put it under app/ and make both hosts consume it.
 

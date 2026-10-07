@@ -54,12 +54,14 @@ Markdown is the authored source. Rendered HTML, editor projections, library card
 | config/routes.rb, config/importmap.rb, db/ | Web routes, frontend pins, and Rails database schema/migrations |
 | desktop/crates/elef-core | Tauri-independent deck discovery, manifests, safe writes, media, and .elef archives |
 | desktop/src-tauri | Tauri commands, capability boundary, native menu/window integration, and application lifecycle |
-| desktop/frontend/src | Desktop bootstrap and adapters for transport, preview, media, close handling, and updates |
+| desktop/frontend/src | Tauri bootstrap and native adapters for file-library commands, editor transport, media, lifecycle, and updates |
 | desktop/e2e/scenarios | User flows shared by the Playwright web runner and WebdriverIO Tauri runner |
 | test/ | Rails model, service, request, JavaScript, architecture, and browser system tests |
 | .github/workflows | CI, desktop release packaging, and deployment automation |
 
 desktop/frontend/build.mjs resolves shared controllers and modules from app/javascript, packages app/views/desktop_host.html and Rails-owned styles, and copies the renderer bundle built by script/build_renderer.mjs. Tauri's configured dev and build hooks use that same frontend build. No Rails server is started by the desktop shell.
+
+The Rails-owned application calls named library services. Tauri command names and raw IPC stay inside `desktop/frontend/src` adapters; Rails-owned frontend code does not invoke Tauri commands.
 
 app/views/desktop_host.html is a static desktop host shell consumed by the build, not a Rails response. Shared editor, library, graph, and style behavior lives in Rails-owned application sources.
 

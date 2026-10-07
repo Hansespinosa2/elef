@@ -118,6 +118,17 @@ assert "document-graph-node" not in graph_partial, "Rails must not keep a second
 assert "createElementNS" not in desktop_application and "document-graph-node" not in desktop_application, "desktop must not keep a second document graph node template"
 
 declared = command_names(build_source, r"let app_commands = &\[(.*?)\];")
+shared_command_references = sorted(
+    f"{source_file.relative_to(REPO_ROOT)} -> {command}"
+    for source_file in app_javascript_source.rglob("*.js")
+    for command in declared
+    if re.search(rf"(?<![\w])['\"]{re.escape(command)}['\"]", source_file.read_text())
+)
+assert not shared_command_references, (
+    "Rails-owned frontend must call named platform services; keep Tauri command names in desktop adapters: "
+    + ", ".join(shared_command_references)
+)
+assert not re.search(r"\binvoke\s*\(", desktop_application), "Rails-owned application logic must not call raw Tauri IPC"
 handler_match = re.search(
     r"\.invoke_handler\(tauri::generate_handler!\[(.*?)\]\)",
     app_source,

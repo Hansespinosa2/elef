@@ -9,26 +9,29 @@ import { createTransportAdapter } from "./transport-adapter.js"
 import { createMediaFetch } from "./media-transport.js"
 import { createPreviewFetch } from "./preview-transport.js"
 import { checkForDesktopUpdate, createIdleUpdateCheck, installDesktopUpdate } from "./update-flow.js"
+import { createFileLibraryTransport } from "./file-library-transport.js"
 import { desktopAuthoringRegistry, loadDesktopAuthoringRegistry } from "./authoring-registry-loader.js"
 import { loadEditorRuntime, loadLibraryRuntime } from "lib/editor_runtime"
 import { startFileLibraryApplication } from "lib/file_library_application"
 import "../../../app/assets/stylesheets/application.css"
 
+const fileLibrary = createFileLibraryTransport({ invoke })
+
 startFileLibraryApplication({
-  Channel,
-  invoke,
+  fileLibrary,
   listen,
   getCurrentWindow,
-  relaunch,
-  checkUpdater,
   completeBootstrap,
   createCloseFlow,
-  createTransportAdapter,
-  createMediaFetch,
+  createTransportAdapter: options => createTransportAdapter({ invoke, ...options }),
+  createMediaFetch: options => createMediaFetch({ invoke, ...options }),
   createPreviewFetch,
-  checkForDesktopUpdate,
+  checkForUpdate: () => checkForDesktopUpdate(
+    () => checkUpdater({ timeout: 10_000 }),
+    (version, onProgress) => invoke("install_update", { version, onProgress: new Channel(onProgress) })
+  ),
   createIdleUpdateCheck,
-  installDesktopUpdate,
+  installPendingUpdate: (update, options) => installDesktopUpdate(update, { ...options, relaunch }),
   desktopAuthoringRegistry,
   loadDesktopAuthoringRegistry,
   loadEditorRuntime,

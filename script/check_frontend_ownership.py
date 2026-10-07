@@ -373,6 +373,7 @@ desktop_source_reasons = {
     "authoring-registry-loader.js": "loads the library's native authoring-registry commands",
     "bootstrap-flow.js": "orders native app startup and its readiness handshake",
     "close-flow.js": "coordinates native window close with the save transport",
+    "file-library-transport.js": "maps named app operations to the native file-library command surface",
     "main.js": "boots the Rails-owned application with Tauri services and native lifecycle",
     "media-transport.js": "adapts browser media fetches to Tauri IPC and asset protocols",
     "preview-transport.js": "adapts the shared renderer to the desktop preview endpoint",
