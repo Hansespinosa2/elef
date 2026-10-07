@@ -90,6 +90,7 @@ desktop_main = (ROOT / "desktop/frontend/src/main.js").read_text()
 tauri_config = json.loads((ROOT / "desktop/src-tauri/tauri.conf.json").read_text())
 desktop_scripts = json.loads((ROOT / "desktop/frontend/package.json").read_text())["scripts"]
 desktop_application = (ROOT / "app/javascript/lib/file_library_application.js").read_text()
+web_authoring_settings = (ROOT / "app/javascript/controllers/authoring_settings_controller.js").read_text()
 desktop_shell_styles = (ROOT / "app/assets/stylesheets/file_library_host.css").read_text()
 assert "globalThis.fetch =" not in desktop_application, (
     "The shared frontend must not replace the host fetch implementation"
@@ -343,6 +344,15 @@ assert '"lib/library_view"' in desktop_application and '"lib/library_filter"' in
     "desktop library behavior must import Rails-owned components"
 )
 assert '"lib/authoring_settings_dialog"' in desktop_application, "desktop authoring settings UI must consume the Rails-owned dialog"
+assert '"lib/authoring_settings_dialog"' in web_authoring_settings and "createAuthoringSettingsDialog" in web_authoring_settings, (
+    "web authoring settings must use the same Rails-owned dialog as desktop"
+)
+assert 'render "shared/authoring_settings_dialog"' in (ROOT / "app/views/shared/_authoring_settings_page.html.erb").read_text(), (
+    "web authoring settings must render the same Rails-owned dialog markup packaged by desktop"
+)
+assert '"app/views/shared/_authoring_settings_dialog.html.erb"' in build, (
+    "desktop must package the same Rails-owned authoring settings markup used by the web app"
+)
 assert '"lib/library_card"' in desktop_application, "desktop library cards must be owned by app/javascript"
 assert '"lib/editor_controller_lookup"' in desktop_application, "desktop editor lookup must use the app-owned controller helper"
 assert '"lib/document_links"' in desktop_application and "buildDocumentGraph" in desktop_application, (
