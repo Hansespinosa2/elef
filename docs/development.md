@@ -53,7 +53,7 @@ cargo clippy --manifest-path desktop/Cargo.toml --workspace --all-targets -- -D 
 
 ## Web and desktop parity
 
-The user-flow definitions live once in desktop/e2e/scenarios/. Playwright runs those flows against Rails; WebdriverIO runs them against the real Tauri binary. The runners are different because the Tauri driver uses WebDriver, but the scenarios and expected behavior are shared.
+The user-flow definitions live once in `test/e2e/scenarios/` with the Rails test suite. Playwright and WebdriverIO adapters under `desktop/e2e/` run those flows against Rails and the real Tauri binary. The runners differ because the Tauri driver uses WebDriver, but the scenarios and expected behavior are shared.
 
 The full CI parity harness is npm test --prefix desktop/e2e. It seeds disposable Rails test records and a temporary desktop library, then runs web and native desktop scenarios, including offline and update paths. Its Rails test server uses port 3000; do not run this harness while the user's development server occupies that port. CI runs the native matrix on Linux and macOS. A unit test, frontend bundle, or browser-only run does not establish native WebKit behavior.
 

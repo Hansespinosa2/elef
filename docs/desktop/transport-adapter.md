@@ -9,7 +9,7 @@ Rails app/ owns the shared product workflows and user interface. Desktop package
 3. Shared Stimulus controllers and modules call the same fetch-shaped interfaces in both hosts.
 4. Desktop adapters translate the relevant requests to named Tauri commands, a local rendering worker, or the asset protocol.
 5. Rust commands validate arguments and delegate filesystem operations to desktop/crates/elef-core.
-6. Shared workflows and scenarios remain in Rails-owned source and desktop/e2e/scenarios.
+6. Shared workflows and scenarios remain in Rails-owned test source at `test/e2e/scenarios/`; desktop keeps only the Playwright and WebdriverIO runner adapters.
 
 The shared application never calls raw Tauri `invoke()` or names Rust commands. `desktop/frontend/src/file-library-transport.js` maps file-library operations to commands; editor saves, media, updater, and lifecycle stay in their corresponding desktop adapters.
 

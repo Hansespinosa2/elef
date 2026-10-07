@@ -55,7 +55,7 @@ Markdown is the authored source. Rendered HTML, editor projections, library card
 | desktop/crates/elef-core | Tauri-independent deck discovery, manifests, safe writes, media, and .elef archives |
 | desktop/src-tauri | Tauri commands, capability boundary, native menu/window integration, and application lifecycle |
 | desktop/frontend/src | Tauri bootstrap and native adapters for file-library commands, editor transport, media, lifecycle, and updates |
-| desktop/e2e/scenarios | User flows shared by the Playwright web runner and WebdriverIO Tauri runner |
+| test/e2e/scenarios | Rails-owned user flows shared by the Playwright web runner and WebdriverIO Tauri runner |
 | test/ | Rails model, service, request, JavaScript, architecture, and browser system tests |
 | .github/workflows | CI, desktop release packaging, and deployment automation |
 

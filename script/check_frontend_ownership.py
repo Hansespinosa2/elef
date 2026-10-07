@@ -264,16 +264,33 @@ shared_workflows = {
     "snippetInsertWorkflow",
     "vimRelativeLineNumbersWorkflow",
 }
+shared_scenario_root = (ROOT / "test/e2e/scenarios").resolve()
+assert shared_scenario_root.is_dir(), "shared web/desktop scenarios must live under Rails test/"
+assert not (ROOT / "desktop/e2e/scenarios").exists(), "desktop must not own shared scenario definitions"
+for scenario_path in shared_scenario_root.glob("*.js"):
+    for specifier in MODULE_SPECIFIER.findall(scenario_path.read_text()):
+        assert not specifier.startswith("@tauri-apps/"), (
+            f"shared scenario must not depend on Tauri: {scenario_path.relative_to(ROOT)}"
+        )
+        if specifier.startswith("."):
+            resolved = (scenario_path.parent / specifier).resolve()
+            assert resolved.is_relative_to(shared_scenario_root), (
+                f"shared scenario imports must stay within Rails test/e2e/scenarios: "
+                f"{scenario_path.relative_to(ROOT)} -> {specifier}"
+            )
 scenario_imports = {}
 scenario_calls = {}
 for runner in ("web", "desktop"):
     source = (ROOT / f"desktop/e2e/specs/{runner}.spec.js").read_text()
     imports = {}
     for clause, module in re.findall(
-        r'^import\s+\{([^}]+)\}\s+from\s+["\']\.\./scenarios/([^"\']+)["\']',
+        r'^import\s+\{([^}]+)\}\s+from\s+["\']\.\./\.\./\.\./test/e2e/scenarios/([^"\']+)["\']',
         source,
         re.MULTILINE,
     ):
+        assert (shared_scenario_root / module).is_file(), (
+            f"{runner} runner imports a missing Rails-owned scenario: {module}"
+        )
         imports[module] = set(re.findall(r"\b([A-Za-z_$][\w$]*Workflow)\b", clause))
     calls = Counter(re.findall(r"\bawait\s+([A-Za-z_$][\w$]*Workflow)\s*\(", source))
     imported_workflows = set().union(*imports.values()) if imports else set()
@@ -295,6 +312,13 @@ assert scenario_imports["web"] == scenario_imports["desktop"], (
 assert scenario_calls["web"] == scenario_calls["desktop"], (
     "Web and desktop must execute the same shared workflow scenarios with matching counts"
 )
+for runner_source in (ROOT / "desktop/e2e/run.mjs",):
+    for specifier in MODULE_SPECIFIER.findall(runner_source.read_text()):
+        if "scenarios/" in specifier:
+            resolved = (runner_source.parent / specifier).resolve()
+            assert resolved.is_relative_to(shared_scenario_root) and resolved.is_file(), (
+                f"desktop E2E helpers must consume Rails-owned scenarios: {specifier}"
+            )
 
 assert 'path.join(repoRoot, "app/views/desktop_host.html")' in build, "the Rails-owned host template must be packaged by the desktop build"
 assert 'path.join(repoRoot, "app/assets/stylesheets/file_library_host.css")' in build, "the Rails-owned host stylesheet must be packaged by the desktop build"
