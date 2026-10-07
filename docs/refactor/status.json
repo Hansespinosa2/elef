@@ -3,12 +3,12 @@
   "campaign_branch": "feat/refactor-desktop-and-web",
   "campaign_base_sha": "88f61a7a8ffd7c276bafcf06eee09c36a8adf134",
   "current_phase": 2,
-  "phase_state": "PLAN",
+  "phase_state": "DO",
   "phase_base_sha": "34d3ae80cefc58b3cf88b8eec1bad927f6666b4f",
   "head_sha": "34d3ae80cefc58b3cf88b8eec1bad927f6666b4f",
   "review_round": 0,
   "phase_contract_sha256": "93fa24de5b442039d1415f2e7c35b25c542779d6650750ad95907a02efb6d367",
-  "frozen_plan_sha256": null,
+  "frozen_plan_sha256": "b25e7df8a87b7abe44c455db6b7e988772cfcbe76b3df8d5e03df1df98e5a23e",
   "last_completed_phase": 1,
   "last_verified_checks": [
     {
@@ -124,5 +124,5 @@
   },
   "pending_human_gates": [],
   "blocker": null,
-  "next_action": "Freeze the Phase 02 plan via implementation-strategy."
+  "next_action": "DO step 1: local-store merge + suspicious-change mechanics."
 }
