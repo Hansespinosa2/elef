@@ -10,6 +10,7 @@ import { libraryCreateDeleteWorkflow } from "../scenarios/library-create-delete.
 import { externalEditConflictWorkflow, CONFLICT_EXTERNAL_SOURCE } from "../scenarios/external-edit-conflict.js"
 import { hostileDeckNeutralizedWorkflow } from "../scenarios/hostile-deck.js"
 import { mathInputWorkflow, snippetInsertWorkflow } from "../scenarios/authoring-palettes.js"
+import { authoringSettingsWorkflow } from "../scenarios/authoring-settings.js"
 import { PIXEL_PNG_DIGEST, PIXEL_PNG_MARKDOWN } from "../scenarios/media-fixture.js"
 import { presentationModeWorkflow } from "../scenarios/presentation-mode.js"
 import { vimRelativeLineNumbersWorkflow } from "../scenarios/vim-relative-line-numbers.js"
@@ -167,6 +168,111 @@ class DesktopEditorUi {
 
   async assertAppearance(theme, typography) {
     await $(`#desktop-editor-form .slides-theme-${theme}.slides-typography-${typography}`).waitForDisplayed()
+  }
+
+  async openAuthoringSettings() {
+    await openDesktopAuthoringSettings()
+  }
+
+  async closeAuthoringSettings() {
+    await $("#close-authoring-settings").click()
+    await $("#authoring-settings-dialog").waitForDisplayed({ reverse: true })
+  }
+
+  async selectAuthoringRegistry(registry) {
+    const tab = $(`[data-authoring-tab='${registry}']`)
+    await tab.click()
+    await browser.waitUntil(async () => (await tab.getAttribute("aria-selected")) === "true", {
+      timeout: 5_000,
+      timeoutMsg: `The ${registry} authoring settings tab did not open`
+    })
+  }
+
+  async findAuthoringEntryCard(searchText) {
+    for (const card of await $$(".authoring-entry-card")) {
+      if ((await card.getText()).includes(searchText)) return card
+    }
+    return null
+  }
+
+  async assertBuiltInAuthoringEntryReadOnly(name) {
+    const card = await this.findAuthoringEntryCard(name)
+    if (!card || !(await card.getText()).includes("Built-in")) {
+      throw new Error(`Built-in authoring entry ${name} was not visible`)
+    }
+    if ((await card.$$(".authoring-entry-actions")).length) {
+      throw new Error(`Built-in authoring entry ${name} exposed edit or delete actions`)
+    }
+  }
+
+  async createAuthoringEntry(registry, fields) {
+    await $("#new-authoring-entry").click()
+    await this.fillAuthoringEntryForm(registry, fields)
+    await $("#save-authoring-entry").click()
+    const label = registry === "snippets" ? "snippet" : "math shortcut"
+    await this.waitForAuthoringSettingsStatus(`New entry saved (${label}).`)
+  }
+
+  async editAuthoringEntry(registry, searchText, fields) {
+    const card = await this.findAuthoringEntryCard(searchText)
+    if (!card) throw new Error(`Could not find authoring entry ${searchText} to edit`)
+    const actions = await card.$$(".authoring-entry-actions button")
+    if (!actions.length) throw new Error(`Authoring entry ${searchText} has no edit action`)
+    await actions[0].click()
+    await this.fillAuthoringEntryForm(registry, fields)
+    await $("#save-authoring-entry").click()
+    const label = registry === "snippets" ? "snippet" : "math shortcut"
+    await this.waitForAuthoringSettingsStatus(`Changes saved (${label}).`)
+  }
+
+  async deleteAuthoringEntry(registry, searchText) {
+    const card = await this.findAuthoringEntryCard(searchText)
+    if (!card) throw new Error(`Could not find authoring entry ${searchText} to delete`)
+    await card.$(".authoring-delete").click()
+    const name = (await $("#delete-authoring-message").getText()).match(/“([^”]+)”/)?.[1]
+    if (!name) throw new Error("The authoring deletion confirmation did not name the entry")
+    await confirmAuthoringDeletion(name)
+    const label = registry === "snippets" ? "snippet" : "math shortcut"
+    await this.waitForAuthoringSettingsStatus(`Entry deletion saved (${label}).`)
+  }
+
+  async assertAuthoringEntryVisible(searchText) {
+    if (!await this.findAuthoringEntryCard(searchText)) throw new Error(`Authoring entry ${searchText} was not listed`)
+  }
+
+  async assertAuthoringEntryMissing(searchText) {
+    if (await this.findAuthoringEntryCard(searchText)) throw new Error(`Deleted authoring entry ${searchText} remains listed`)
+  }
+
+  async waitForAuthoringSettingsStatus(expected) {
+    await browser.waitUntil(async () => (await $("#authoring-settings-status").getText()) === expected, {
+      timeout: 10_000,
+      timeoutMsg: `Expected authoring settings status: ${expected}`
+    })
+  }
+
+  async fillAuthoringEntryForm(registry, fields) {
+    if (registry === "snippets") {
+      await $("#authoring-name").setValue(fields.name)
+      await $("#authoring-trigger").setValue(fields.trigger)
+      await $("#authoring-description").setValue(fields.description)
+      await $("#authoring-category").selectByVisibleText(fields.category)
+      await $("#authoring-body").setValue(fields.body)
+      return
+    }
+    await $("#authoring-math-name").setValue(fields.name)
+    await browser.execute(prefixValue => {
+      const prefix = document.querySelector("#authoring-prefix")
+      if (!prefix || ![...prefix.options].some(option => option.value === prefixValue)) {
+        throw new Error("The math shortcut prefix is unavailable")
+      }
+      prefix.value = prefixValue
+      prefix.dispatchEvent(new Event("input", { bubbles: true }))
+      prefix.dispatchEvent(new Event("change", { bubbles: true }))
+    }, fields.prefix)
+    await $("#authoring-aliases").setValue(fields.aliases)
+    await $("#authoring-math-description").setValue(fields.description)
+    await $("#authoring-expansion").setValue(fields.expansion)
   }
 
   constructor() {
@@ -1674,6 +1780,10 @@ describe("desktop binary workflows and native boundaries", () => {
 
   it("runs the shared snippet insertion flow in the desktop binary", async () => {
     await snippetInsertWorkflow(new DesktopEditorUi())
+  })
+
+  it("runs the shared authoring settings create, edit, and delete flow in the desktop binary", async () => {
+    await authoringSettingsWorkflow(new DesktopEditorUi())
   })
 
   it("runs the shared math input flow in the desktop binary", async () => {

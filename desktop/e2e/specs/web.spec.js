@@ -6,6 +6,7 @@ import { libraryCreateDeleteWorkflow } from "../scenarios/library-create-delete.
 import { externalEditConflictWorkflow, CONFLICT_EXTERNAL_SOURCE } from "../scenarios/external-edit-conflict.js"
 import { hostileDeckNeutralizedWorkflow } from "../scenarios/hostile-deck.js"
 import { mathInputWorkflow, snippetInsertWorkflow } from "../scenarios/authoring-palettes.js"
+import { authoringSettingsWorkflow } from "../scenarios/authoring-settings.js"
 import { PIXEL_PNG_MARKDOWN } from "../scenarios/media-fixture.js"
 import { presentationModeWorkflow } from "../scenarios/presentation-mode.js"
 import { vimRelativeLineNumbersWorkflow } from "../scenarios/vim-relative-line-numbers.js"
@@ -72,6 +73,80 @@ class WebEditorUi {
     const vimToggle = this.page.locator("[data-vim-settings-target='vimToggle']")
     if (!await vimToggle.isChecked()) await vimToggle.check()
     await this.page.locator("[data-vim-settings-target='lineNumbers']").selectOption("relative")
+  }
+
+  async openAuthoringSettings() {
+    await this.page.goto("/snippets")
+    await expect(this.page.locator("#authoring-settings-dialog")).toBeVisible()
+  }
+
+  async closeAuthoringSettings() {
+    await this.page.locator("#close-authoring-settings").click()
+    await expect(this.page.locator("#authoring-settings-dialog")).toBeHidden()
+  }
+
+  async selectAuthoringRegistry(registry) {
+    const tab = this.page.locator(`[data-authoring-tab='${registry}']`)
+    await tab.click()
+    await expect(tab).toHaveAttribute("aria-selected", "true")
+  }
+
+  async assertBuiltInAuthoringEntryReadOnly(name) {
+    const card = this.page.locator(".authoring-entry-card").filter({ hasText: name })
+    await expect(card).toContainText("Built-in")
+    await expect(card.locator(".authoring-entry-actions")).toHaveCount(0)
+  }
+
+  async createAuthoringEntry(registry, fields) {
+    await this.page.locator("#new-authoring-entry").click()
+    await this.fillAuthoringEntryForm(registry, fields)
+    await this.page.locator("#save-authoring-entry").click()
+    const label = registry === "snippets" ? "snippet" : "math shortcut"
+    await expect(this.page.locator("#authoring-settings-status")).toHaveText(`New entry saved (${label}).`)
+  }
+
+  async editAuthoringEntry(registry, searchText, fields) {
+    const card = this.page.locator(".authoring-entry-card").filter({ hasText: searchText })
+    await expect(card).toHaveCount(1)
+    await card.locator(".authoring-entry-actions button").filter({ hasText: "Edit" }).click()
+    await this.fillAuthoringEntryForm(registry, fields)
+    await this.page.locator("#save-authoring-entry").click()
+    const label = registry === "snippets" ? "snippet" : "math shortcut"
+    await expect(this.page.locator("#authoring-settings-status")).toHaveText(`Changes saved (${label}).`)
+  }
+
+  async deleteAuthoringEntry(registry, searchText) {
+    const card = this.page.locator(".authoring-entry-card").filter({ hasText: searchText })
+    await expect(card).toHaveCount(1)
+    await card.locator(".authoring-delete").click()
+    await expect(this.page.locator("#delete-authoring-dialog")).toBeVisible()
+    await this.page.locator("#confirm-authoring-delete").click()
+    const label = registry === "snippets" ? "snippet" : "math shortcut"
+    await expect(this.page.locator("#authoring-settings-status")).toHaveText(`Entry deletion saved (${label}).`)
+  }
+
+  async assertAuthoringEntryVisible(searchText) {
+    await expect(this.page.locator(".authoring-entry-card").filter({ hasText: searchText })).toHaveCount(1)
+  }
+
+  async assertAuthoringEntryMissing(searchText) {
+    await expect(this.page.locator(".authoring-entry-card").filter({ hasText: searchText })).toHaveCount(0)
+  }
+
+  async fillAuthoringEntryForm(registry, fields) {
+    if (registry === "snippets") {
+      await this.page.locator("#authoring-name").fill(fields.name)
+      await this.page.locator("#authoring-trigger").fill(fields.trigger)
+      await this.page.locator("#authoring-description").fill(fields.description)
+      await this.page.locator("#authoring-category").selectOption(fields.category)
+      await this.page.locator("#authoring-body").fill(fields.body)
+      return
+    }
+    await this.page.locator("#authoring-math-name").fill(fields.name)
+    await this.page.locator("#authoring-prefix").selectOption(fields.prefix)
+    await this.page.locator("#authoring-aliases").fill(fields.aliases)
+    await this.page.locator("#authoring-math-description").fill(fields.description)
+    await this.page.locator("#authoring-expansion").fill(fields.expansion)
   }
 
   async enterPresentationMode() {
@@ -774,6 +849,10 @@ test("shared external-edit conflict flow saves a merge in the web app", async ({
 
 test("shared snippet insertion flow works in the web app", async ({ page }) => {
   await snippetInsertWorkflow(new WebEditorUi(page))
+})
+
+test("shared authoring settings create, edit, and delete flow works in the web app", async ({ page }) => {
+  await authoringSettingsWorkflow(new WebEditorUi(page))
 })
 
 test("shared math input flow works in the web app", async ({ page }) => {
