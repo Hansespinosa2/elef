@@ -1,26 +1,22 @@
 # Elef Autonomous Refactor v9
 
-This bundle is the complete source set for the autonomous Elef refactor campaign and its repository-native agent bootstrap.
+## Authority and execution
 
-## What is authoritative
+- `CONSTITUTION.md` owns campaign-wide product intent, target architecture, staged invariant applicability and completion protocol.
+- `phases/00-*.md` through `phases/12-*.md` own phase criteria.
+- `status.json` records the current execution state; `status.template.json` supports recovery initialization.
+- Root `AGENTS.md` routes to the five installed workflow skills under `.agents/skills/`.
 
-- `docs/refactor/CONSTITUTION.md` — lean campaign-wide authority and architecture freeze.
-- `docs/refactor/phases/*.md` — phase-specific executable contracts.
-- `docs/refactor/status.template.json` — resumable machine-state template.
+## Start or resume
 
-## Bootstrap material
+Tell the agent `go`. It recovers from repository evidence, freezes the current plan, implements, checks a committed candidate, obtains a fresh independent review, records ACT and checkpoints PASS before advancing automatically.
 
-- `bootstrap/AUTONOMOUS-AGENT-BOOTSTRAP-PROMPT.md` — give this once to a capable coding agent after placing the bundle in the repository.
-- `bootstrap/templates/AGENTS.md` and `bootstrap/templates/skills/*` — reference implementations for the bootstrap agent to reconcile/install, not parallel sources of architectural truth.
+Only final technical PASS or a defined blocker ends the campaign. Human signing/device/deployment/soak gates remain explicit, and the owner merges the final draft PR into `dev`.
 
-The bootstrap agent should install skills under `.agents/skills/`, reconcile root `AGENTS.md`, validate that a fresh agent can respond correctly to `go`, commit the agent-system bootstrap separately, then continue the campaign.
+## Environment
 
-## Normal owner interaction after bootstrap
+The default execution machine is an approximately 8 GB Linux container. Record actual resources and toolchains; serialize heavyweight work. Warm feedback, cold bootstrap and product-performance budgets remain distinct. Real native evidence uses the required runner or verified CI for the exact candidate.
 
-`go`
+## Agent-system installation evidence
 
-The repository state, not chat history, must be sufficient to resume.
-
-## Execution environment
-
-The intended autonomous implementation machine is a Linux container with approximately 8 GB RAM. The constitution distinguishes warm fast-feedback budgets from cold bootstrap cost and from user-facing product-performance budgets. macOS/signing/owner-device checks remain explicit release gates rather than simulated PASSes.
+See `execution/bootstrap-report.md` and its independent review/acceptance evidence. The installed skill files are the sole workflow source. Setup prompts, copied templates, fallback skills and installers have been removed after installation.

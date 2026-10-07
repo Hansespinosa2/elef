@@ -1,7 +1,5 @@
 # Autonomous campaign kickoff
 
-Use the repository-native Elef agent system. If it is already installed, invoke `$elef-campaign` and continue from `docs/refactor/status.json`. If the agent system is not installed or is stale, use `bootstrap/AUTONOMOUS-AGENT-BOOTSTRAP-PROMPT.md` first.
+Say `go` to a fresh agent in this repository. Root `AGENTS.md` routes it to the installed `$elef-campaign` skill.
 
-Owner shorthand after bootstrap:
-
-> go
+The agent reads repository authority and resumes from `docs/refactor/status.json`. If state is missing or inconsistent, the skill reconstructs the earliest unproven phase from committed freezes, checks, independent reviews and ACT checkpoints. Chat history and installation prompts are unnecessary.

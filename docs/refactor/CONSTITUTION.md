@@ -25,7 +25,7 @@ Every phase follows exactly:
 
 `PLAN → DO → CHECK → ACT`
 
-- **PLAN:** verify relevant current facts; write `docs/refactor/execution/phase-N-plan.md`; freeze scope, target, risks, rollback triggers and validation before production edits. ACT records its SHA-256 in `status.json`; production edits are forbidden until then.
+- **PLAN:** verify relevant current facts; write `docs/refactor/execution/phase-N-plan.md`; freeze scope, target, risks, rollback triggers and validation before production edits. The orchestrator records its SHA-256 in `status.json` in a committed PLAN → DO freeze; production edits are forbidden until that checkpoint. Re-entering PLAN requires a new freeze checkpoint even when the plan bytes are unchanged.
 - **DO:** implement the frozen plan only.
 - **CHECK:** fresh-context, read-only verification against the frozen phase contract and all permanent invariants.
 - **ACT:** classify findings: implementation defect → DO; plan defect → PLAN; architecture/criteria conflict → BLOCKED; human gate → pending/BLOCKED; all green → PASS.
@@ -78,7 +78,9 @@ A fresh agent resumes by reading, in order: `AGENTS.md`, this file, `status.json
 
 and stdout must contain exactly one line `ELEF_PHASE_N=PASS`.
 
-A phase is not complete until a fresh reviewer also writes `docs/refactor/reviews/phase-N-round-K.md` with `Result: PASS`, and `status.json` is advanced by ACT. Automated checks alone cannot certify subjective architecture criteria; reviewer prose alone cannot substitute for automated criteria.
+An exact-candidate gate may consume an immutable DO status snapshot through `ELEF_GATE_STATUS_PATH`. Its base/phase/plan/contract must match campaign state and its `head_sha` must equal the detached checkout HEAD. The runner retains and hashes that snapshot; the later CHECK/ACT/PASS status names the same candidate. This supplies P00-01's actual-head proof without requiring a commit to embed its own SHA. With no supplied snapshot, the check reads `docs/refactor/status.json` and must reject a mismatched candidate rather than refreshing it or claiming PASS.
+
+A phase is not complete until a fresh reviewer also writes `docs/refactor/reviews/phase-N-round-K.md` with `Result: PASS`, and `status.json` is advanced by ACT. Automated checks alone cannot certify subjective architecture criteria; reviewer prose alone cannot substitute for automated criteria. Candidate checks precede ACT: an explicitly labeled ACT postcondition is verified after its authorized status checkpoint, never required as a precondition for the review that authorizes it. The final campaign cannot complete until both candidate criteria and ACT postconditions are actually verified.
 
 ---
 
@@ -303,6 +305,21 @@ Permanent invariants:
 17. client feature modules do not form import cycles or hidden cross-feature deep imports;
 18. a fresh agent can route unseen changes and identify proof commands from durable repo docs in ≤5 minutes.
 
+
+### Invariant applicability during the staged migration
+
+All eighteen invariants are mandatory at final technical completion. During earlier phases, the active contract introduces their target owners in numeric order; it does not authorize implementing later phases early merely to satisfy a future-owner check.
+
+- I01/I16/I17 apply to every new or changed boundary/package/feature immediately. Phase 00 locks existing violations; that inventory cannot grow, and each retained violation names its owner and the phase that removes it.
+- I02–I05/I08/I11/I12 apply as each relevant shared owner or migrated slice is introduced by Phases 01 and 03–09. Unchanged pre-migration code is reviewed against the locked baseline and its explicit removal phase. Once a feature is migrated, duplicate host implementations and forbidden dependencies are failures; the exemption cannot be used to reintroduce them.
+- I06/I07/I09/I13/I14 apply from the start: preserve current data safety and offline behavior, factual docs/state, named compatibility deletion conditions and existing proof strength. Phase 02's additional save/recovery criteria become mandatory when introduced and stay mandatory thereafter.
+- I10 applies to the comparable product baselines locked in Phase 00; warm quick/affected hard ceilings become mandatory in Phase 01. Cold bootstrap and unrelated hardware evidence remain distinct.
+- I15's two clean, identical `all` runs are a Phase 12 completion requirement. Phase 00 must instead prove unimplemented tiers fail nonzero, and Phase 01 implements the tiers; neither may fabricate early `all` success.
+- I18 requires usable ownership/proof routing throughout. The dedicated unseen, timed exercises are mandatory at Phases 10 and 12 as their contracts specify.
+
+A reviewer may mark an unintroduced target-owner check N.A. only with its exact introduction/removal phase and locked baseline evidence. Existing failures in an applicable requirement are not excused. Previously completed phase requirements remain protected. Phase 12's full architecture/validation audit admits no deferred technical invariant; only the five explicitly named human release gates may remain pending.
+
+
 ---
 
 ## 8. Reviewer and orchestration mechanics
@@ -375,4 +392,3 @@ An orchestrator given this repository must execute the following without a compa
 6. For each phase: freeze PLAN artifact; implement; run required checks; spawn fresh reviewer; ACT on findings until PASS or defined BLOCKED state; create a checkpoint commit; update status; continue.
 7. Do not merge to `dev`, publish a production release, alter signing keys or silently accept residual data-safety risk.
 8. Continue autonomously until the final phase is PASS or a defined blocker/human gate prevents progress.
-

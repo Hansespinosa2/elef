@@ -1,0 +1,26 @@
+{
+  "scope": "Read-only startup acceptance, not phase PASS or full implementation",
+  "mechanism": "codex exec --ephemeral --sandbox read-only in an isolated shared clone",
+  "identity": "01a1159c-0beb-78d3-8471-a7ea809d9fdd",
+  "conversation_inherited": false,
+  "user_prompt": "go",
+  "developer_boundary": "Read-only startup exercise; stop before writes, builds and phase implementation; no expected phase/state supplied.",
+  "fixture_head": "1095850fc5a5475fc8732d8ab523682d5815a689",
+  "source_parent": "7ea43d33c7abcedef25aaf1b9710fec9674a0690",
+  "report_sha256": "6c86ed9e9c0e4b39685dd5cc04824d1327b9d4a64039af3f46d5fe15f05c1ded",
+  "exit": 0,
+  "launch": "/home/andres/.local/share/mise/installs/codex/0.159.0/bin/codex exec --ephemeral --sandbox read-only --json -c developer_instructions=<read-only startup boundary> --cd <owned fixture> --output-last-message <report> go",
+  "input_sha256": {
+    "AGENTS.md": "c768ebe9381a682f13db5897cd1cbf01915bdb191ebc2cd7d31643d5f60bfd4e",
+    "docs/refactor/CONSTITUTION.md": "4f48141b525af7d3cd0c890c188d585fa2c2d7637cef55cdff34c819f3033d3d",
+    "docs/refactor/status.json": "0739ec8a1a9f37c4b6550c3d30f4b01fd95c23c4288e0e18a202fb0943b287b6",
+    "docs/refactor/phases/00-baseline.md": "57a5419cace79af009b9b2889cd0aa8cd481b1de561a582214d8adea883394ce",
+    ".agents/skills/elef-campaign/SKILL.md": "475fc101ad200db5b3cee4550f3c2170025c3c10e9c1ce6004ecf5359659089b",
+    ".agents/skills/independent-phase-review/SKILL.md": "35ecdf48df8ad727962e522bb0975d025d31bf6b87c63e9219befa942983a554",
+    ".agents/skills/implementation-strategy/SKILL.md": "b2ea4558051e95a71ca9d409f5f198351c34aebe26e8c5532ccdfe0f78a38e4d",
+    ".agents/skills/code-change-verification/SKILL.md": "a12962efb4199bd0647ed8ef61c25710ad4fa48d21913ad92db693c5a29855b8",
+    ".agents/skills/docs-sync/SKILL.md": "8a77519d472d44459d8d361fd50de52476628e4c20b49e0e062dd0734a228a3a"
+  },
+  "fixture_tree": "6f0a1babf4dcd126ca49b5589beff9dbf8b5795a",
+  "note": "The fixture reflects installed routing at acceptance launch. Later hardening is covered by independent source audits; this is not a full campaign execution."
+}

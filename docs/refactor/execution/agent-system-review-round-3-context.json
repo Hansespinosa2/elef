@@ -1,0 +1,11 @@
+{
+  "scope": "Final independent source audit of staged agent-system revision",
+  "mechanism": "codex exec --ephemeral --sandbox read-only",
+  "identity": "01a115b2-9270-7a53-a6df-e82936c026ba",
+  "conversation_inherited": false,
+  "state": "completed",
+  "terminal_evidence": "exec session 18239 completed with exit 0",
+  "staged_tree": "edf5fb5dbb1871229c878479f1d70405c8174998",
+  "prompt": "Independently audit the staged Elef agent-system revision. This is a final read-only review, not product migration. The staged tree is edf5fb5dbb1871229c878479f1d70405c8174998; confirm relevant working files match the index. Read root AGENTS, all five installed skill instructions and references, campaign_state.py, review_bundle.py, the fixture suite, constitution, Phase 00 and Phase 12 contracts, status and docs/development. Earlier audits read all phase contracts; this audit focuses on remaining mechanical correctness. Trace candidate identity/status evidence, PLAN/re-plan freezes, blocked phase positions, committed CHECK/ACT/PASS reconstruction, immutable attempts, process/session recovery and cleanup. Check actual code and source authority, not merely fixture names or prior report claims. Do not edit files, create disk fixtures, commit, push, or start phases. You may use read-only helpers/in-memory probes. Return concise prioritized concrete blocking defects with corrections, or explicitly state no remaining blocking findings. Do not invent hypothetical requirements outside the source authority.",
+  "report_sha256": "bbe3fb3b402ade21219d1954973004503f846aa74208da81e7566d2f08bc6218"
+}

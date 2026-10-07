@@ -1,39 +1,29 @@
 ---
 name: independent-phase-review
-description: Use only when an Elef refactor phase claims readiness for PASS (phase_state CHECK) and must be verified by a genuinely fresh-context, read-only reviewer. Never use it to self-certify.
+description: Verify a candidate Elef phase through a fresh read-only agent session, independent of the implementer conversation, before ACT may claim PASS.
 ---
 
 # Independent phase review
 
-Authority: reviewer inputs, output table, loop caps and the `BLOCKED(reviewer-unavailable)` rule are defined in `docs/refactor/CONSTITUTION.md` §8. This skill is only the mechanics.
+Constitution §8 owns reviewer independence, caps and output. The candidate must be committed; status names CHECK, its full head/base and current round; the immutable gate attempt stdout and actual exit metadata are captured (failed/unavailable evidence may be reviewed as BLOCKED). Validate the state before preparing inputs.
 
-## Preconditions (orchestrator)
+## Prepare or recover
 
-1. Candidate is committed; `status.json` has `phase_state: "CHECK"`, `head_sha` = candidate SHA, `review_round` = K (incremented for this round), and that status is committed.
-2. `bin/check phase N --json` stdout for the candidate is stored verbatim at `docs/refactor/execution/phase-N-gate.txt` (or the failing output, if a criterion is BLOCKED by environment).
-3. `python3 .agents/skills/elef-campaign/scripts/campaign_state.py validate` reports no errors other than the expected missing review.
-4. Release heavyweight implementation processes first: Rails test servers the agent started, browsers/WebDriver, `cargo`/`esbuild` watchers, Tauri dev processes. Never stop the owner's server on `https://127.0.0.1:3000/`.
+Run `.agents/skills/independent-phase-review/scripts/review_bundle.sh prepare N K`. It verifies phase/round/candidate and creates an owned bundle plus detached worktree under `tmp/reviews/phase-N-round-K/`. Repeated preparation accepts only matching inputs. Existing reports are collected, never overwritten or reused for a changed candidate. The bundle includes authority, phase, status, frozen plan, diff, machine evidence and prior reviews, without implementer reasoning.
 
-## Prepare the isolated input
+Release implementation-owned heavyweight processes before review, preserving the owner's server. Reviewers run sequentially.
 
-```sh
-.agents/skills/independent-phase-review/scripts/review_bundle.sh prepare N K
-```
+## Launch with fresh context
 
-This creates `tmp/reviews/phase-N-round-K/` (constitution, phase, status, plan, SHAs, diff, evidence, filled `REVIEWER-PROMPT.md`) and a detached worktree `../elef-review-pN-rK` at the candidate. Do not add anything else to the bundle — in particular no summary of what you did, no reasoning, no "areas to focus on".
+Use a native new agent session with its own conversation, or an installed noninteractive CLI process in the detached worktree. Its task is `Read <bundle>/REVIEWER-PROMPT.md and follow it exactly.` A fork that inherits implementer history is unsuitable. Give read access to inputs/repository, write access to its report and required build outputs, and no commit/push authority. Inspect the installed CLI's flags. Reserve the context receipt with state launching before invocation; immediately record returned identity and state running, with PID/process-start identity for CLI processes, before waiting. Follow the campaign reference's receipt lifecycle.
 
-## Launch a fresh reviewer (first available, in order)
+If no isolated mechanism is available, record BLOCKED(reviewer-unavailable) with resume_state CHECK and an exact unblock condition. A tool approval rejection or missing credential is recorded as evidence, never replaced with self-review.
 
-1. **Harness-native fresh subagent/worker** (e.g. a subagent with its own context, a new task/agent session). Its entire prompt is: `Read <bundle>/REVIEWER-PROMPT.md and follow it exactly.` Do not fork/inherit the implementer conversation.
-2. **Clean noninteractive agent process** started in the review worktree with only that same one-line prompt — e.g. `codex exec`, `claude -p`, or another installed agent CLI (check `<cli> --help` for noninteractive and permission flags; give it write access only as needed for build outputs).
-3. If neither can be created with a context that excludes the implementer conversation: set `phase_state: "BLOCKED"`, `blocker: {"code":"reviewer-unavailable", ...}`, commit, stop. Never review your own phase.
+## Collect and ACT
 
-Run reviewers sequentially, never in parallel with heavyweight implementation work.
+1. On restart, inspect the launch receipt and process/session state. Wait for an existing reviewer or recover its complete report; start another only after confirming the earlier attempt cannot finish, retaining the failed attempt record.
+2. Confirm the tool session/process actually terminated and retain its completion response or exit in terminal_evidence. Mark the receipt completed/failed/interrupted; a report appearing is insufficient. Inspect candidate/base/context and all criterion/invariant rows. Partial reports are incomplete even with Result: PASS. Copy a complete report verbatim into reviews and add its SHA-256 to the receipt.
+3. Inspect worktree source changes. A tracked source change invalidates that review; preserve the worktree and evidence, then prepare a new round. Cleanup refuses dirty worktrees; classify unexpected files before removing anything. Run cleanup only after collection is safe.
+4. Commit report/receipt and set ACT. Return PASS/FAIL/BLOCKED with the report's evidence to `$elef-campaign`. That skill applies fixes and loop caps; this skill never edits implementation or self-certifies.
 
-## Collect
-
-1. Wait for `tmp/reviews/phase-N-round-K/report.md`. Copy it **verbatim** to `docs/refactor/reviews/phase-N-round-K.md`. Do not edit, summarize, or reformat it.
-2. Run `review_bundle.sh cleanup N K`. If it reports reviewer source changes, the review is invalid: record that and repeat the round with a new reviewer.
-3. Return the `Result:` line to `$elef-campaign` ACT. ACT — not this skill — classifies findings, applies the loop caps (10 rounds; same finding failing 3 consecutive rounds → `BLOCKED(repeat-finding)`) and updates status.
-
-A `Result: PASS` is necessary but not sufficient: PASS also requires the exact machine marker and ACT's status transition.
+Fresh reviewer PASS, exact-candidate gate exit 0 and a committed ACT PASS transition are all required for phase completion.

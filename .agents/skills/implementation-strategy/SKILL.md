@@ -27,3 +27,5 @@ Decide from repository authority, not memory. Sources, in authority order: `docs
 - The phase contract or constitution cannot be satisfied as written, or two rules conflict → `BLOCKED(criteria-conflict)`; do not reinterpret criteria to fit.
 - During DO, reality invalidates the frozen plan → back to PLAN (re-plan section + re-freeze), not improvisation.
 - Never grow architecture allowlists, weaken tests/baselines, or move frozen boundaries to make a plan work.
+
+When re-planning, preserve completed legal DO changes and review-round history. Commit entry to PLAN before scope edits, clear the previous frozen-plan hash, and record the exact invalidated assumption, added/removed scope, proof changes and resolution. New production edits wait for the new freeze. A current phase dependency on later work is a sequencing question to resolve from authority, never permission to skip phases.

@@ -1,63 +1,35 @@
 ---
 name: elef-campaign
-description: Use when the owner says "go", continue, resume, finish the refactor, or run the campaign. Resumes the Elef v9 desktop+web refactor from repository state alone and drives PLAN → DO → CHECK → ACT phase after phase until final technical PASS or a constitution-defined BLOCKED/human gate.
+description: Resume and run the Elef v9 refactor when asked to go, continue, resume or finish the campaign. Reconstructs repository state and drives phases through independent review and committed PASS.
 ---
 
 # Elef campaign
 
-Architecture, phase criteria, the status schema, PASS marker, reviewer rules and human gates live in `docs/refactor/CONSTITUTION.md` and `docs/refactor/phases/NN-*.md`. This skill is the operating loop only. Mechanical conventions (status transitions, file names, commits, reconstruction) are in [references/state-protocol.md](references/state-protocol.md) — read it on first use in a session.
+Read [references/state-protocol.md](references/state-protocol.md) on first use. Constitution and current phase contracts own architecture and success criteria; this skill owns execution. A request to prepare or audit these skills retains that scope.
 
-Helper: `python3 .agents/skills/elef-campaign/scripts/campaign_state.py {validate|reconstruct|probe|set-env|init|sha256 PATH}`.
+Helper: `python3 .agents/skills/elef-campaign/scripts/campaign_state.py` with `validate [--prospective]`, `reconstruct`, `probe`, `set-env`, `sha256 PATH`, `prepare-gate N`, `run-gate N [--attempt ID]`, `cleanup-gate N ID`, or `init --base SHA`.
 
-## 1. Start / resume (every session, no chat history assumed)
+## Start or resume
 
-1. **Git safety.** `git status --porcelain`, `git branch --show-current`, `git worktree list`, `git fetch origin`.
-   - Must be on `feat/refactor-desktop-and-web` (constitution header). If it is checked out in another worktree, work there; never check it out twice.
-   - Unknown uncommitted changes that you did not make: do not discard, stash-drop, or commit them as yours. If they block the phase, `BLOCKED(unknown-local-changes)`.
-   - If `origin/feat/refactor-desktop-and-web` has commits not in local HEAD, fast-forward only. Diverged histories → `BLOCKED(branch-diverged)`; never pick a side silently.
-2. **State.** Run `campaign_state.py validate`.
-   - `STATUS_VALID` → continue.
-   - Missing/invalid/stale → follow *Reconstruction* in the reference, record evidence, commit the corrected status, then continue.
-   - Environment-drift warning → `set-env`, note the change in the current phase evidence, commit with the next status change.
-3. **Load only:** `AGENTS.md`, the constitution, `status.json`, the current phase contract, `docs/refactor/execution/phase-N-plan.md` if it exists, and `git diff --stat <phase_base_sha>..HEAD`. Do not read other phase contracts; open durable docs/code only as the current step requires.
-4. Execute `status.next_action`, then continue the loop below. Do not ask the owner whether to continue.
+1. Inspect branch, worktrees and committed/staged/unstaged/untracked changes. Preserve unknown changes and stage explicit paths. Use the campaign branch; if absent follow constitution §10's verified ancestry rule. Fetch when available and fast-forward only. If fetch fails, record that remote state is unverified; continue safe local work, retaining the failed push as a handoff action. Never silently resolve divergence.
+2. Read `AGENTS.md`, constitution, status, current phase, frozen plan, and the full phase diff including pending changes. Load other phase documents only when a current criterion requires them.
+3. Run helper `validate`. If inconsistent, inspect its errors and follow Reconstruction in the reference. A changed contract is a conflict to resolve, never a hash to refresh silently. Record actual environment drift; retain the original comparable baseline.
+4. Dispatch by the saved state below. Treat `next_action` as a suggested action subject to current authority and evidence.
 
-## 2. Phase loop
+## Execute the saved state
 
-**PLAN** (`phase_state: PLAN`, production edits forbidden)
-- Invoke `$implementation-strategy` to verify current facts and write `docs/refactor/execution/phase-N-plan.md`.
-- Freeze: record `frozen_plan_sha256` (helper `sha256`), set `phase_state: DO`, `next_action`, commit (`Freeze phase N plan`).
+- **PLAN:** use `$implementation-strategy`; verify facts and map all phase criteria to proof. Freeze the plan hash, set DO, use `validate --prospective`, commit the freeze, then use normal `validate` before production edits. Prospective validation never authorizes DO work. On re-plan, preserve legal earlier DO work, commit entry to PLAN, append the defect and resolution to the plan, then re-freeze before new production edits.
+- **DO:** implement the frozen scope in coherent commits; separate moves from behavior changes. Use `$code-change-verification` for quick iteration and affected checks before a behavior/build/contract checkpoint. Apply `$docs-sync` for state or enduring knowledge changes. Implementation defects remain DO; a plan defect returns through ACT to PLAN; an authority conflict is BLOCKED.
+- **CHECK preparation:** commit production changes, select that full candidate SHA, and use `prepare-gate N` to create an owned isolated checkout. Prepare locked dependencies there using the documented setup, then `run-gate N --attempt ID` under the required toolchain. It captures immutable stdout/stderr/exit/SHA/timing evidence and atomically selects the completed attempt. Root untracked files never enter that checkout. Preserve failed/interrupted attempts, release its heavy processes, and clean it only through `cleanup-gate` after inspecting changes. Copy its metadata into `last_verified_checks`. Set head_sha to that candidate, increment review_round (maximum 10), set CHECK, validate and commit the request. Evidence/status commits after the candidate must not alter production, its plan or contract.
+- **CHECK resume:** if the recorded round has a complete report for the same candidate, collect it and proceed to ACT. If a recorded reviewer is running, monitor it. Otherwise resume its owned input bundle or launch a fresh reviewer for that round through `$independent-phase-review`. Never treat an old report or a partial report as a new review; use a new round for a changed candidate. Record the reviewer session/process identity so a restart can recover it.
+- **ACT:** store the report verbatim, its launch receipt and report hash; commit ACT. Resolve every finding: implementation → DO; plan → PLAN; criteria conflict → BLOCKED; human release gate → pending unless it prevents all further technical progress. Record stable finding IDs to detect three consecutive failures; an unsuccessful tenth review blocks further rounds. Preserve review_round across fixes and re-plans.
+- **PASS:** validate linked evidence, set last_completed_phase=N and PASS, commit the status transition, then use `reconstruct` to prove that checkpoint. Push. For N<12, create PLAN(N+1) in a separate commit: base/head are the PASS checkpoint, new contract hash, no frozen plan, round 0, updated next action. For N=12, keep final PASS and produce the handoff.
+- **BLOCKED:** inspect blocker.resume_state, evidence and unblock condition. If unmet, preserve BLOCKED and report the required change. If met, record exact new evidence, restore the saved state, clear blocker, validate and commit. Preserve the candidate, plan and round unless that evidence requires DO or PLAN. Pending human release gates do not halt unrelated technical progress.
 
-**DO** (`phase_state: DO`)
-- Implement only the frozen plan, in small coherent commits. Structural moves and behavior changes go in separate commits.
-- After each behavior-affecting change use `$code-change-verification` (`quick`, then `affected`). Fix failures you caused before moving on.
-- If reality contradicts the plan: stop DO, return to PLAN (re-plan section in the plan, re-freeze, new hash, commit). If it contradicts the constitution/phase contract: `BLOCKED(criteria-conflict)`.
-- Use `$docs-sync` whenever an enduring rule, contract, path or command changes.
+## Completion and interrupted sessions
 
-**CHECK** (candidate ready)
-- Run the phase tier via `$code-change-verification`; save the exact stdout of `bin/check phase N --json` to `docs/refactor/execution/phase-N-gate.txt`.
-- Set `head_sha` = candidate commit, increment `review_round`, `phase_state: CHECK`, commit (`Request phase N review round K`).
-- Invoke `$independent-phase-review`. Never self-certify.
+A final PASS needs all thirteen committed phase checkpoints, Phase 12's clean reproducible checks, durable documentation and final architecture review. After committing final PASS, reconstruct all thirteen exact predecessor checkpoints and verify P12-11. The final handoff lists final state/HEAD, proof paths/CI runs, pending human gates and draft PR.
 
-**ACT** (`phase_state: ACT` after the report is stored)
-- Classify each finding: implementation defect → DO; plan defect → PLAN; architecture/criteria conflict → BLOCKED; human gate → add to `pending_human_gates` (BLOCKED only if it prevents all further technical progress); all green → PASS.
-- Caps: >10 rounds → `BLOCKED(review-cap)`; same finding failing 3 consecutive rounds → `BLOCKED(repeat-finding)`.
+Before an external session limit, checkpoint coherent work and an accurate next action. Interrupted DO work is resumed from repository facts; interrupted review is recovered from its bundle and session/process receipt. Commit/push failures are explicit outstanding actions. One completed phase is followed by the next phase without owner confirmation.
 
-**PASS** — requires all three: gate file with exactly one `ELEF_PHASE_N=PASS` and matching JSON head; latest review `Result: PASS` for that head; status transition.
-- Commit `Record phase N PASS` (status `PASS`, `last_completed_phase: N`, `last_verified_checks`).
-- Push the campaign branch (`git push origin feat/refactor-desktop-and-web`, never force).
-- Immediately open phase N+1: `current_phase`, `phase_state: PLAN`, `phase_base_sha` = the PASS commit, new `phase_contract_sha256`, `frozen_plan_sha256: null`, `review_round: 0`, `next_action`; commit `Start phase N+1`; continue.
-
-## 3. Resource discipline
-
-Probe before environment-dependent checks. Treat the constitution's ~8 GB container policy as the default even on larger machines: serialize heavyweight jobs, conservative workers, preserve caches, release processes before review, rerun after OOM before classifying. Never stop or reuse the owner's `https://127.0.0.1:3000/` server for test harnesses (see `$code-change-verification`).
-
-## 4. Stopping
-
-Stop only when:
-- Phase 12 is PASS and `status.json` is final `PASS` → produce the final handoff (reference §Final handoff); or
-- a constitution-defined BLOCKED state or human gate prevents *all* further technical progress → status `BLOCKED` with `blocker` and `next_action` that names exactly what the owner must do, committed and pushed.
-
-Finishing one phase, one attempt, or one session's budget is not a stopping condition: before a session ends for any external reason, commit work-in-progress with an accurate `next_action` and push, so the next agent resumes from the repository alone.
-
-Never: merge to `dev`, publish a production release, touch signing/updater keys, invent credentials, or mark a human gate passed.
+Follow constitution §6's resource policy. Release agent-owned heavy processes before review; preserve the owner's server and data. Signing, production release and merge remain owner actions.
