@@ -280,3 +280,6 @@
 .editor-surface[data-editor-mode="visual"] .cm-selectionBackground,
 .editor-surface[data-editor-vim-enabled="true"] .cm-selectionBackground { background-color: var(--oradia-vim-selection) !important; }
 .editor-layout { grid-template-columns: minmax(0, 1.2fr) minmax(22rem, 0.8fr); }
+@media (max-width: 920px) {
+  .editor-layout { display: flex; flex-direction: column; }
+}
