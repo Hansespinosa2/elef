@@ -322,7 +322,8 @@ class WebEditorUi {
   }
 
   async typeEmptyDisplayMath(mode) {
-    const expectedPairSource = `${await this.readSource()}$$`
+    const delimiterInput = mode === "visual" ? "$$" : "$$$$"
+    const expectedPairSource = `${await this.readSource()}${delimiterInput}`
     if (mode === "visual") {
       const block = this.page.locator(".document-editor-block[contenteditable='true']").last()
       await expect(block).toBeVisible()

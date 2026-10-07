@@ -722,7 +722,8 @@ class DesktopEditorUi {
   }
 
   async typeEmptyDisplayMath(mode) {
-    const expectedPairSource = `${await this.readSource()}$$`
+    const delimiterInput = mode === "visual" ? "$$" : "$$$$"
+    const expectedPairSource = `${await this.readSource()}${delimiterInput}`
     if (mode === "visual") {
       const block = await $("#desktop-preview .document-editor-block[data-editor-empty-block='true']")
       await block.waitForDisplayed()
