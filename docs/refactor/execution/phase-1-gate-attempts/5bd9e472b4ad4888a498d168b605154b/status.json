@@ -3,10 +3,10 @@
   "campaign_branch": "feat/refactor-desktop-and-web",
   "campaign_base_sha": "88f61a7a8ffd7c276bafcf06eee09c36a8adf134",
   "current_phase": 1,
-  "phase_state": "CHECK",
+  "phase_state": "DO",
   "phase_base_sha": "64abf6ed087f1b1b2ff232f88123c76ca362a7d0",
   "head_sha": "df6033fd2b92467f3ae0dcf0c2bc81f4e7eff325",
-  "review_round": 1,
+  "review_round": 0,
   "phase_contract_sha256": "1bda595270159ae4cbdbb87b31951cdeeb9ef28ea5cadef2cb44b3fb530f80d0",
   "frozen_plan_sha256": "693703f42ded6fb2a32585896a4641b96c053b4a59c5e03cd4b056de3156d48b",
   "last_completed_phase": 0,
@@ -86,30 +86,6 @@
       "snapshot_unchanged": true,
       "checkout_clean": true,
       "result_path": "docs/refactor/execution/phase-0-gate-attempts/575f9041a9cf4d899aa9f438220a44e9/rerun-result.json"
-    },
-    {
-      "attempt_id": "8e93e12cad5845b3bf6d76e5d29eb264",
-      "phase": 1,
-      "head": "df6033fd2b92467f3ae0dcf0c2bc81f4e7eff325",
-      "root": "/root/elef",
-      "checkout": "/root/elef/tmp/gates/phase-1-8e93e12cad5845b3bf6d76e5d29eb264",
-      "state": "completed",
-      "started_ns": 1791396571036813265,
-      "status_sha256": "211f7ba0ede4af06f53aa9e486e801fa690d2dc49dd0b42d5876011e2e67d1b4",
-      "frozen_plan_sha256": "693703f42ded6fb2a32585896a4641b96c053b4a59c5e03cd4b056de3156d48b",
-      "phase_contract_sha256": "1bda595270159ae4cbdbb87b31951cdeeb9ef28ea5cadef2cb44b3fb530f80d0",
-      "runner_pid": 3243,
-      "runner_start": "3874967",
-      "child_pid": 3249,
-      "child_start": "3874988",
-      "command": "bin/check phase 1 --json",
-      "exit": 0,
-      "duration_s": 10.309,
-      "tier": "phase",
-      "stdout_sha256": "cfb4c02a5cc94d73cc7990df389ef478d756bf65f6c189212735277cc635b5e5",
-      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "result_path": "docs/refactor/execution/phase-1-gate-attempts/8e93e12cad5845b3bf6d76e5d29eb264/result.json",
-      "selected_gate_path": "docs/refactor/execution/phase-1-gate.json"
     }
   ],
   "execution_environment": {
@@ -124,5 +100,5 @@
   },
   "pending_human_gates": [],
   "blocker": null,
-  "next_action": "Independent review round 1 for Phase 01 candidate df6033f (gate attempt 8e93e12c PASS)."
+  "next_action": "Implement Phase 01 seams: local-store asset fns + Tauri commands, then HostApiController, adapters, suite."
 }

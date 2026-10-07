@@ -1,129 +1,98 @@
 {
   "schema_version": 1,
-  "candidate_sha": "a83c96ce0ef282c39bb76819857ac443e2896336",
+  "candidate_sha": "df6033fd2b92467f3ae0dcf0c2bc81f4e7eff325",
   "pull_request": {
     "number": 136,
     "url": "https://github.com/Hansespinosa2/elef/pull/136",
     "base_branch": "dev",
-    "base_sha": "afda4fbb7d5175d23c50be2d3a8121f8032c6c86",
+    "base_sha": "73ba6afed637fbe4da261d58efcca0ffe2e23ae8",
     "head_branch": "feat/refactor-desktop-and-web"
   },
   "run": {
-    "id": 37647011099,
-    "url": "https://github.com/Hansespinosa2/elef/actions/runs/37647011099",
+    "id": 37660430068,
+    "url": "https://github.com/Hansespinosa2/elef/actions/runs/37660430068",
     "event": "pull_request",
-    "attempt": 3,
+    "attempt": 1,
     "conclusion": "success",
-    "tested_merge_sha": "676a2a5d05489fb28ebb08f17f11ee7e86e7afc1",
+    "tested_merge_sha": "754076a8d25a35e492c9a578c03f6ae6d6969866",
     "tested_merge_parents": [
-      "afda4fbb7d5175d23c50be2d3a8121f8032c6c86",
-      "a83c96ce0ef282c39bb76819857ac443e2896336"
+      "73ba6afed637fbe4da261d58efcca0ffe2e23ae8",
+      "df6033fd2b92467f3ae0dcf0c2bc81f4e7eff325"
     ],
     "attempt_history": [
       {
         "attempt": 1,
-        "conclusion": "failure",
-        "failed_job": "desktop",
-        "failure": "One Playwright web scenario (shared library create and delete flow) timed out waiting for a menu item; unrelated to the candidate, which touches only bin/check."
-      },
-      {
-        "attempt": 2,
-        "conclusion": "cancelled",
-        "failed_job": "desktop",
-        "failure": "Failed-job rerun was cancelled mid-e2e by an unknown cause (no infrastructure annotation); no source changes involved."
-      },
-      {
-        "attempt": 3,
-        "conclusion": "success",
-        "failed_jobs_rerun": true
+        "conclusion": "success"
       }
-    ]
+    ],
+    "note": "Candidate differs from a83c96c only by this evidence file (execution/, non-production); run 37647011099 proved the same production tree green on attempt 3."
   },
   "jobs": [
     {
       "name": "desktop-fast",
-      "id": 112905169127,
-      "conclusion": "success",
-      "executed_attempt": 1,
-      "note": "Carried forward from attempt 1; reruns only re-executed failed jobs."
+      "id": 112926250592,
+      "conclusion": "success"
     },
     {
       "name": "test",
-      "id": 112905101592,
-      "conclusion": "success",
-      "executed_attempt": 1,
-      "note": "Carried forward from attempt 1; reruns only re-executed failed jobs."
+      "id": 112926250744,
+      "conclusion": "success"
     },
     {
       "name": "system-test",
-      "id": 112905145411,
-      "conclusion": "success",
-      "executed_attempt": 1,
-      "note": "Carried forward from attempt 1; reruns only re-executed failed jobs."
+      "id": 112926250509,
+      "conclusion": "success"
     },
     {
       "name": "affected",
-      "id": 112905152962,
+      "id": 112926250203,
       "conclusion": "success",
-      "executed_attempt": 1,
-      "note": "Carried forward from attempt 1; reruns only re-executed failed jobs. bin/check affected: PASS (41.3s warm, ceiling 420s)."
+      "note": "bin/check affected: PASS (51.2s warm, ceiling 420s)."
     },
     {
       "name": "sqlite-test",
-      "id": 112905162862,
-      "conclusion": "success",
-      "executed_attempt": 1,
-      "note": "Carried forward from attempt 1; reruns only re-executed failed jobs."
+      "id": 112926250551,
+      "conclusion": "success"
     },
     {
       "name": "desktop",
-      "id": 112905099757,
+      "id": 112926250667,
       "conclusion": "success",
-      "executed_attempt": 3,
-      "tested_merge_sha": "676a2a5d05489fb28ebb08f17f11ee7e86e7afc1",
+      "tested_merge_sha": "754076a8d25a35e492c9a578c03f6ae6d6969866",
       "shared_scenarios_step": "success"
     },
     {
       "name": "desktop-macos",
-      "id": 112905102063,
+      "id": 112926250698,
       "conclusion": "success",
-      "executed_attempt": 1,
-      "note": "Carried forward from attempt 1; reruns only re-executed failed jobs.",
-      "tested_merge_sha": "676a2a5d05489fb28ebb08f17f11ee7e86e7afc1",
+      "tested_merge_sha": "754076a8d25a35e492c9a578c03f6ae6d6969866",
       "shared_scenarios_step": "success"
     },
     {
       "name": "renderer-macos",
-      "id": 112905102100,
-      "conclusion": "success",
-      "executed_attempt": 1,
-      "note": "Carried forward from attempt 1; reruns only re-executed failed jobs."
+      "id": 112926250545,
+      "conclusion": "success"
     },
     {
       "name": "production-smoke",
-      "id": 112905165983,
-      "conclusion": "success",
-      "executed_attempt": 1,
-      "note": "Carried forward from attempt 1; reruns only re-executed failed jobs."
+      "id": 112926250594,
+      "conclusion": "success"
     },
     {
       "name": "development-smoke",
-      "id": 112905151954,
-      "conclusion": "success",
-      "executed_attempt": 1,
-      "note": "Carried forward from attempt 1; reruns only re-executed failed jobs."
+      "id": 112926250802,
+      "conclusion": "success"
     },
     {
       "name": "record-ci-attestation",
-      "id": 112919392080,
-      "conclusion": "success",
-      "executed_attempt": 3
+      "id": 112932919129,
+      "conclusion": "success"
     }
   ],
   "rails_conformance": {
     "conclusion": "success",
     "job": "system-test",
-    "job_id": 112905145411,
+    "job_id": 112926250509,
     "command": "node tests/host-conformance/run-node.js rails",
     "result": "conformance rails: 11 passed, 1 skipped, 0 failed (suite v12 cases)"
   },
@@ -132,13 +101,13 @@
     "jobs": [
       {
         "name": "desktop",
-        "job_id": 112905099757,
+        "job_id": 112926250667,
         "spec": "specs/contract-conformance.spec.js",
         "result": "host contract conformance (desktop invoke): 1 passing"
       },
       {
         "name": "desktop-macos",
-        "job_id": 112905102063,
+        "job_id": 112926250698,
         "spec": "specs/contract-conformance.spec.js",
         "result": "host contract conformance (desktop invoke): 1 passing"
       }
@@ -146,30 +115,22 @@
   },
   "artifacts": [
     {
-      "name": "ci-attestation-pr136-run37647011099-attempt3",
-      "id": 11498499867,
-      "sha256": "a8a906e4b1e37f9e413eab619cc7b203bad49170689b74d2d62a3a13adff160d",
-      "size_bytes": 313
+      "name": "ci-attestation-pr136-run37660430068-attempt1",
+      "id": 11500539851,
+      "sha256": "b8d8629ceee4218c5bae34e3d52f51cb34cc26cffb2f22ab48c4bdb684d23908",
+      "size_bytes": 316
     },
     {
       "name": "native-performance-linux",
-      "id": 11499002559,
-      "sha256": "d7dc4621c3d8df6469d5bd2b8d5be51f557a095a12a2aa34e9d99441bc7feb5c",
-      "size_bytes": 4574
+      "id": 11500712378,
+      "sha256": "6165d6988a1b56e2a36ed3f9b81358a9377cdb91dce210f7eef11a7c1c4413b2",
+      "size_bytes": 4686
     },
     {
       "name": "native-performance-darwin",
-      "id": 11494524928,
-      "sha256": "68ec7cbea40bbc6b43c16fa3320b8902c315d0b6a7ad313b5b3d93f0698f9937",
-      "size_bytes": 5177
-    },
-    {
-      "name": "desktop-e2e-linux-diagnostics",
-      "id": 11495031655,
-      "sha256": "87f1bc87aba06c4b012146caeb3dd01fa15eb19cb5cd649578c0f79e78956411",
-      "size_bytes": 6681,
-      "attempt": 1,
-      "note": "Preserved Linux failure diagnostics from the attempt-1 web timing flake."
+      "id": 11501086808,
+      "sha256": "e1108fe5b1b9abbc8cae183291193ef771156631e5366a75eeafaec3a691b1f3",
+      "size_bytes": 5353
     }
   ]
 }
