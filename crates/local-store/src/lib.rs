@@ -2349,7 +2349,7 @@ fn conflict_error(disk_hash: String, disk_bytes: Vec<u8>, disk_source_file: Stri
 /// Outcome of a deterministic three-way line merge of local edits against an
 /// external disk change. `Overlap` and `Suspicious` never write: the caller
 /// snapshots first and routes to the conflict/recovery path instead.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum MergeOutcome {
     Merged(String),
     Overlap,

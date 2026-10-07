@@ -4,9 +4,9 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
 use local_store::{
-    AuthoringRegistries, CoreError, DeckPreview, DeckSummary, DocumentGraphDocument,
-    ImportResolution, ImportResult, Library, LibraryConfig, OpenDeck, SaveResult, SourceSnapshot,
-    StoredAsset, UploadedAsset,
+    AuthoringRegistries, CoreError, DeckPreview, DeckSummary, DocumentGraphDocument, FileEvent,
+    ImportResolution, ImportResult, Library, LibraryConfig, MergeOutcome, OpenDeck, RestoreOutcome,
+    SaveResult, SnapshotInfo, SourceSnapshot, StoredAsset, UploadedAsset,
 };
 use serde::Serialize;
 use tauri::RunEvent;
@@ -60,6 +60,7 @@ fn discard_pending_import(pending: &PendingImport) {
 impl DesktopState {
     fn use_library(&self, path: PathBuf) -> Result<LibraryStatus, CommandError> {
         let library = Arc::new(Library::open(path)?);
+        library.enable_watching()?;
         let root = library.root().to_path_buf();
         let status = library_status(&library, &root)?;
         *self.library.write().expect("library state lock poisoned") = Some(library);
@@ -813,6 +814,53 @@ fn save_source(
         .save_source(&id, &source, &base_hash)?)
 }
 
+#[tauri::command]
+fn poll_file_events(state: State<'_, DesktopState>) -> Result<Vec<FileEvent>, CommandError> {
+    Ok(state.current_library()?.poll_file_events())
+}
+
+#[tauri::command]
+fn take_snapshot(
+    state: State<'_, DesktopState>,
+    id: String,
+    reason: String,
+    source: Option<String>,
+) -> Result<SnapshotInfo, CommandError> {
+    Ok(state
+        .current_library()?
+        .take_snapshot(&id, &reason, source.as_deref())?)
+}
+
+#[tauri::command]
+fn list_snapshots(
+    state: State<'_, DesktopState>,
+    id: String,
+) -> Result<Vec<SnapshotInfo>, CommandError> {
+    Ok(state.current_library()?.list_snapshots(&id)?)
+}
+
+#[tauri::command]
+fn restore_snapshot(
+    state: State<'_, DesktopState>,
+    id: String,
+    snapshot_id: String,
+) -> Result<RestoreOutcome, CommandError> {
+    Ok(state
+        .current_library()?
+        .restore_snapshot(&id, &snapshot_id)?)
+}
+
+#[tauri::command]
+fn merge_external_change(
+    state: State<'_, DesktopState>,
+    id: String,
+    local_source: String,
+) -> Result<MergeOutcome, CommandError> {
+    Ok(state
+        .current_library()?
+        .merge_external_change(&id, &local_source)?)
+}
+
 fn asset_protocol_response(
     app: &AppHandle,
     request: &ProtocolRequest<Vec<u8>>,
@@ -1325,6 +1373,11 @@ pub fn run() {
             rename_deck,
             delete_deck,
             save_source,
+            poll_file_events,
+            take_snapshot,
+            list_snapshots,
+            restore_snapshot,
+            merge_external_change,
             upload_asset,
             list_media,
             remove_media,
