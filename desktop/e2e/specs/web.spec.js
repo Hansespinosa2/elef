@@ -328,8 +328,8 @@ class WebEditorUi {
       const block = this.page.locator(".document-editor-block[contenteditable='true']").last()
       await expect(block).toBeVisible()
       await block.click()
-      await block.press("Shift+4")
-      await block.press("Shift+4")
+      await block.pressSequentially("$")
+      await block.pressSequentially("$")
       await expect.poll(() => this.readSource()).toBe(expectedPairSource)
       await this.page.locator(".document-editor-block[contenteditable='true']").last().press("Enter")
       return
@@ -338,8 +338,8 @@ class WebEditorUi {
     const editor = this.page.locator(".source-field .cm-content")
     await editor.click()
     await editor.press("End")
-    await editor.press("Shift+4")
-    await editor.press("Shift+4")
+    await editor.pressSequentially("$")
+    await editor.pressSequentially("$")
     await expect.poll(() => this.readSource()).toBe(expectedPairSource)
     await editor.press("Enter")
   }
