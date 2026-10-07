@@ -552,6 +552,57 @@ class DesktopEditorUi {
     }
   }
 
+  async assertBackspaceDeletesEmptyDollarPair(expectedSource) {
+    const source = normalizeLineEndings(expectedSource)
+    const initialState = await browser.execute(expected => {
+      const controller = document.querySelector("#desktop-editor-field")?.editorController
+      if (!controller || controller.value !== `${expected}$$`) return null
+      controller.setSelectionRange(expected.length + 1)
+      controller.focus()
+      return { vimEnabled: controller.vimEnabled, insertMode: controller.insertMode }
+    }, source)
+    if (!initialState) throw new Error("The desktop editor did not contain the empty dollar pair")
+
+    const restoreNormalMode = initialState.vimEnabled && !initialState.insertMode
+    try {
+      if (restoreNormalMode) {
+        focusDesktopWindow()
+        typeNativeText("i", { activate: false })
+        await browser.waitUntil(async () => browser.execute(() =>
+          document.querySelector("#desktop-editor-field")?.editorController?.insertMode === true
+        ), {
+          timeout: 5_000,
+          timeoutMsg: "The desktop editor did not enter Vim insert mode for the Backspace scenario"
+        })
+      }
+
+      const outcome = await browser.execute(() => {
+        const controller = document.querySelector("#desktop-editor-field")?.editorController
+        const event = new KeyboardEvent("keydown", { key: "Backspace", bubbles: true, cancelable: true })
+        controller.dom.dispatchEvent(event)
+        return {
+          source: controller.value,
+          anchor: controller.selectionStart,
+          head: controller.selectionEnd,
+          prevented: event.defaultPrevented
+        }
+      })
+      if (outcome?.source !== source || outcome.anchor !== source.length || outcome.head !== source.length || !outcome.prevented) {
+        throw new Error(`Backspace did not delete both characters of the empty dollar pair: ${JSON.stringify(outcome)}`)
+      }
+    } finally {
+      if (restoreNormalMode) {
+        sendNativeKey("Escape")
+        await browser.waitUntil(async () => browser.execute(() =>
+          document.querySelector("#desktop-editor-field")?.editorController?.insertMode === false
+        ), {
+          timeout: 5_000,
+          timeoutMsg: "The desktop editor did not restore Vim normal mode after the Backspace scenario"
+        })
+      }
+    }
+  }
+
   async assertRelativeLineNumbers() {
     const result = await browser.executeAsync(done => {
       const editor = document.querySelector("#desktop-editor-field")?.editorController
