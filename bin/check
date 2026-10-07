@@ -498,8 +498,260 @@ def run_phase0(json_output: bool) -> int:
     return 0
 
 
+D_E2E = DESKTOP_PATH_PREFIX + "e2e"
+QUICK_CEILING_S = 180.0
+AFFECTED_CEILING_S = 420.0
+PHASE1_PLAN_PATH = ROOT / "docs" / "refactor" / "execution" / "phase-1-plan.md"
+PHASE1_PHASE_PATH = ROOT / "docs" / "refactor" / "phases" / "01-foundations.md"
+PHASE1_CI_EVIDENCE_PATH = ROOT / "docs" / "refactor" / "execution" / "phase-1-ci-evidence.json"
+REMAINING_STUBS_1 = ("all", "docs", "perf")
+QUICK_COMMANDS_1 = (
+    "./node_modules/.bin/tsc -p packages/contracts/tsconfig.test.json",
+    "node --test tests/host-conformance/conformance-fake.test.js tests/host-conformance/shell.test.js",
+    "npm run test:javascript",
+    f"npm test --prefix {DESKTOP_PATH_PREFIX}frontend",
+    f"npm run test:unit --prefix {D_E2E}",
+    "python3 script/check_frontend_ownership.py",
+    "python3 tooling/check_boundaries.py",
+    "python3 tooling/check_boundaries.py --self-test",
+    "cargo test --manifest-path Cargo.toml -p local-store --locked",
+)
+AFFECTED_RAILS_TESTS = (
+    "test/lib/source/renderer_test.rb test/lib/source/javascript_renderer_test.rb "
+    "test/lib/authoring_registry_test.rb test/models/presentation_test.rb "
+    "test/services/presentations/pptx_export_test.rb "
+    "test/controllers/host_api_controller_test.rb"
+)
+AFFECTED_COMMANDS_1 = (
+    *QUICK_COMMANDS_1,
+    "npm run renderer:build",
+    "git diff --exit-code -- vendor/javascript/elef-renderer.bundle.js",
+    "bin/rails tailwindcss:build",
+    "git diff --exit-code -- app/assets/builds/tailwind.css",
+    "bin/rails db:test:prepare",
+    f"bin/rails test {AFFECTED_RAILS_TESTS}",
+    "ELEF_CONFORMANCE_RAILS_URL=${ELEF_CONFORMANCE_RAILS_URL:?rails server URL is required} "
+    "node tests/host-conformance/run-node.js rails",
+    f"npm run build --prefix {DESKTOP_PATH_PREFIX}frontend",
+    f"python3 {DESKTOP_PATH_PREFIX}scripts/check_architecture.py",
+    "cargo fmt --manifest-path Cargo.toml --all -- --check",
+    "cargo clippy --manifest-path Cargo.toml --workspace --all-targets -- -D warnings",
+    "cargo test --manifest-path Cargo.toml --workspace --locked",
+)
+ARCH_COMMANDS_1 = (
+    "python3 script/check_frontend_ownership.py",
+    "python3 tooling/check_boundaries.py",
+    "python3 tooling/check_boundaries.py --self-test",
+    f"python3 {DESKTOP_PATH_PREFIX}scripts/check_architecture.py",
+)
+
+
+ENV_REQUIRED_PATTERN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*):\?([^}]*)\}")
+ENV_ASSIGN_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+
+
+def run_step(command: str) -> float:
+    import shlex
+    import time
+
+    def require(match: "re.Match") -> str:
+        name, message = match.group(1), match.group(2)
+        value = os.environ.get(name, "")
+        if not value:
+            fail(f"required environment for step is missing: {message}")
+        return value
+
+    expanded = ENV_REQUIRED_PATTERN.sub(require, command)
+    parts = shlex.split(expanded)
+    env = dict(os.environ)
+    while parts and ENV_ASSIGN_PATTERN.match(parts[0]):
+        key, value = parts[0].split("=", 1)
+        env[key] = value
+        parts = parts[1:]
+    if not parts:
+        fail(f"step has no command: {command}")
+    started = time.monotonic()
+    result = subprocess.run(
+        parts,
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+    )
+    elapsed = time.monotonic() - started
+    if result.returncode:
+        tail = (result.stdout + result.stderr).strip().splitlines()[-20:]
+        fail(f"step failed ({result.returncode}): {command}\n" + "\n".join(tail))
+    return elapsed
+
+
+def run_tier(commands: tuple, ceiling: float, quiet: bool) -> dict:
+    durations: dict = {}
+    for command in commands:
+        durations[command] = run_step(command)
+    total = sum(durations.values())
+    if total > ceiling:
+        fail(f"tier total {total:.1f}s exceeds the {ceiling:.0f}s ceiling")
+    if not quiet:
+        for command, elapsed in durations.items():
+            print(f"{elapsed:8.1f}s  {command}")
+        print(f"{total:8.1f}s  total (ceiling {ceiling:.0f}s)")
+    return durations
+
+
+def check_contracts_fresh() -> None:
+    import shutil
+    import tempfile
+
+    with tempfile.TemporaryDirectory(prefix="elef-contracts-a-") as first:
+        with tempfile.TemporaryDirectory(prefix="elef-contracts-b-") as second:
+            for out in (first, second):
+                result = subprocess.run(
+                    ["./node_modules/.bin/tsc", "-p", "packages/contracts/tsconfig.json",
+                     "--outDir", out],
+                    cwd=ROOT,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                if result.returncode:
+                    fail(f"contracts build failed:\n{(result.stdout + result.stderr).strip()[-2000:]}")
+            compare = subprocess.run(
+                ["diff", "-r", first, second],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if compare.returncode:
+                fail(f"contracts build is not deterministic:\n{compare.stdout.strip()[-2000:]}")
+
+
+def check_renderer_fresh() -> None:
+    run_step("npm run renderer:build")
+    run_step("git diff --exit-code -- vendor/javascript/elef-renderer.bundle.js")
+
+
+def run_fresh() -> None:
+    check_renderer_fresh()
+    check_contracts_fresh()
+
+
+def check_remaining_stubs() -> None:
+    for command in REMAINING_STUBS_1:
+        result = subprocess.run(
+            [str(CHECK), command],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        combined = result.stdout + result.stderr
+        if result.returncode == 0 or "not implemented in Phase 01" not in combined:
+            fail(f"bin/check {command} must fail nonzero as an unimplemented Phase 01 tier")
+
+
+def check_phase1_ci_evidence(status: dict, head: str) -> None:
+    evidence = read_json(PHASE1_CI_EVIDENCE_PATH)
+    if not isinstance(evidence, dict):
+        fail("phase-1 CI evidence must be an object")
+    run = evidence.get("run", {})
+    parents = run.get("tested_merge_parents", []) or []
+    if evidence.get("candidate_sha") != head and head not in parents:
+        fail("phase-1 CI evidence does not name the candidate")
+    if run.get("conclusion") != "success":
+        fail("phase-1 CI run did not succeed")
+    jobs = {job.get("name"): job.get("conclusion") for job in evidence.get("jobs", [])}
+    required = (
+        "desktop-fast",
+        "test",
+        "system-test",
+        "sqlite-test",
+        "desktop",
+        "desktop-macos",
+        "renderer-macos",
+        "record-ci-attestation",
+    )
+    missing = [name for name in required if jobs.get(name) != "success"]
+    if missing:
+        fail(f"phase-1 CI evidence lacks successful jobs: {', '.join(missing)}")
+    rail_steps = evidence.get("rails_conformance", {})
+    if rail_steps.get("conclusion") != "success":
+        fail("phase-1 CI evidence lacks the rails-backed conformance run")
+    tauri_steps = evidence.get("tauri_conformance", {})
+    if tauri_steps.get("conclusion") != "success":
+        fail("phase-1 CI evidence lacks the Tauri-backed conformance run")
+
+
+def check_phase1(status: dict) -> str:
+    if not isinstance(status, dict):
+        fail("status.json must be an object")
+    if status.get("current_phase") != 1:
+        fail("status.current_phase must be Phase 01")
+    head = git("rev-parse", "HEAD")
+    if status.get("head_sha") != head:
+        fail("status.head_sha must equal the checkout HEAD")
+    base = status.get("phase_base_sha")
+    if not base or not is_ancestor(base, head):
+        fail("status.phase_base_sha must be an ancestor of HEAD")
+    if digest_file(PHASE1_PHASE_PATH) != status.get("phase_contract_sha256"):
+        fail("phase contract hash differs from phases/01-foundations.md")
+    if digest_file(PHASE1_PLAN_PATH) != status.get("frozen_plan_sha256"):
+        fail("frozen plan hash differs from execution/phase-1-plan.md")
+    return head
+
+
+def run_phase1(json_output: bool) -> int:
+    before_status = git("status", "--porcelain", "--untracked-files=all")
+    errors: list[str] = []
+    head = "unknown"
+    try:
+        if before_status:
+            fail("Phase 01 verification requires a clean candidate checkout")
+        status = read_json(STATUS_PATH)
+        head = check_phase1(status)
+        run_tier(QUICK_COMMANDS_1, QUICK_CEILING_S, quiet=True)
+        for command in ARCH_COMMANDS_1:
+            run_step(command)
+        run_fresh()
+        check_remaining_stubs()
+        check_phase1_ci_evidence(status, head)
+        after_status = git("status", "--porcelain", "--untracked-files=all")
+        if after_status != before_status:
+            fail("Phase 01 verification changed the candidate working tree")
+    except (CheckFailure, KeyError, TypeError, ValueError, OSError, json.JSONDecodeError) as error:
+        errors.append(str(error))
+    if errors:
+        if json_output:
+            print(json.dumps({"phase": 1, "result": "FAIL", "head": head, "errors": errors}, separators=(",", ":")))
+        else:
+            for error in errors:
+                print(f"bin/check phase 1: {error}", file=sys.stderr)
+        return 1
+    if json_output:
+        print(json.dumps({"phase": 1, "result": "PASS", "head": head}, separators=(",", ":")))
+        print("ELEF_PHASE_1=PASS")
+    else:
+        print(f"Phase 01 foundation checks passed at {head}.")
+    return 0
+
+
 def print_usage() -> None:
     print("Usage: bin/check {quick|affected|phase N|all|arch|fresh|docs|perf}", file=sys.stderr)
+
+
+def run_tier_command(tier: str, commands: tuple, ceiling: float) -> int:
+    before_status = git("status", "--porcelain", "--untracked-files=all")
+    try:
+        durations = run_tier(commands, ceiling, quiet=False)
+        after_status = git("status", "--porcelain", "--untracked-files=all")
+        if after_status != before_status:
+            fail(f"bin/check {tier} changed the working tree")
+    except (CheckFailure, OSError, ValueError) as error:
+        print(f"bin/check {tier}: {error}", file=sys.stderr)
+        return 1
+    print(f"bin/check {tier}: PASS ({sum(durations.values()):.1f}s)")
+    return 0
 
 
 def main(argv: list[str]) -> int:
@@ -507,20 +759,52 @@ def main(argv: list[str]) -> int:
         print_usage()
         return 2
     command = argv[0]
+    if command == "quick":
+        if len(argv) != 1:
+            print_usage()
+            return 2
+        return run_tier_command("quick", QUICK_COMMANDS_1, QUICK_CEILING_S)
+    if command == "affected":
+        if len(argv) != 1:
+            print_usage()
+            return 2
+        return run_tier_command("affected", AFFECTED_COMMANDS_1, AFFECTED_CEILING_S)
+    if command == "arch":
+        if len(argv) != 1:
+            print_usage()
+            return 2
+        return run_tier_command("arch", ARCH_COMMANDS_1, QUICK_CEILING_S)
+    if command == "fresh":
+        if len(argv) != 1:
+            print_usage()
+            return 2
+        before_status = git("status", "--porcelain", "--untracked-files=all")
+        try:
+            run_fresh()
+            after_status = git("status", "--porcelain", "--untracked-files=all")
+            if after_status != before_status:
+                fail("bin/check fresh changed the working tree")
+        except (CheckFailure, OSError, ValueError) as error:
+            print(f"bin/check fresh: {error}", file=sys.stderr)
+            return 1
+        print("bin/check fresh: PASS")
+        return 0
     if command != "phase":
-        print(f"bin/check {command} is not implemented in Phase 00.", file=sys.stderr)
+        print(f"bin/check {command} is not implemented in Phase 01.", file=sys.stderr)
         return 2
     if len(argv) < 2:
         print_usage()
-        return 2
-    if argv[1] != "0":
-        print(f"bin/check phase {argv[1]} is not implemented in Phase 00.", file=sys.stderr)
         return 2
     extra = argv[2:]
     if any(item != "--json" for item in extra) or extra.count("--json") > 1:
         print_usage()
         return 2
-    return run_phase0("--json" in extra)
+    if argv[1] == "0":
+        return run_phase0("--json" in extra)
+    if argv[1] == "1":
+        return run_phase1("--json" in extra)
+    print(f"bin/check phase {argv[1]} is not implemented in Phase 01.", file=sys.stderr)
+    return 2
 
 
 if __name__ == "__main__":
