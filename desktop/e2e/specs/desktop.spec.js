@@ -1,7 +1,7 @@
 import { $, $$, browser } from "@wdio/globals"
 import { Key } from "webdriverio"
 import { execFileSync, spawn } from "node:child_process"
-import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises"
+import { copyFile, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises"
 import path from "node:path"
 import { editAndPreviewWorkflow } from "../../../test/e2e/scenarios/edit-and-preview.js"
 import { appearanceWorkflow } from "../../../test/e2e/scenarios/appearance.js"
@@ -2107,6 +2107,11 @@ describe("desktop binary workflows and native boundaries", () => {
       window.__TAURI__?.core?.invoke("export_elef", { id }),
     process.env.ELEF_E2E_SEED_DECK_ID)
     if (exported !== true) throw new Error("The desktop export command did not write the .elef archive")
+    // The conformance spec later exports other decks through the same
+    // harness file, so snapshot the seed bytes before they are replaced.
+    const exportPath = process.env.ELEF_E2E_EXPORT_PATH
+    if (!exportPath) throw new Error("ELEF_E2E_EXPORT_PATH is not set for the seed export snapshot")
+    await copyFile(exportPath, `${exportPath}.seed-bytes`)
   })
 
   it("opens and cancels the native .elef export dialog", async () => {

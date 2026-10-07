@@ -294,8 +294,9 @@ try {
     await readFile(path.join(libraryRoot, "E2E archive seed", "presentation.md"), "utf8"),
     "# Imported from Elef\n\nPortable archive fixture.\n"
   )
-  await access(exportArchive)
-  execFileSync("unzip", ["-q", "-o", exportArchive, "-d", exportContents])
+  const exportSnapshot = `${exportArchive}.seed-bytes`
+  await access(exportSnapshot)
+  execFileSync("unzip", ["-q", "-o", exportSnapshot, "-d", exportContents])
   await makeTreeAccessible(exportContents)
   assert.deepEqual(await hashTree(exportContents), await hashTree(seedDeck),
     "Exporting a deck must preserve every file byte, including its manifest and uploaded image")
