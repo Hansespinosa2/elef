@@ -1,7 +1,10 @@
-export function renderWorkerMessage(data, renderPreview) {
+export function renderWorkerMessage(data, renderPreview, renderMarkdownBlock = renderPreview) {
   const { id, input } = data || {}
   try {
-    return { id, result: renderPreview(input) }
+    const result = input?.kind === "markdown-block"
+      ? renderMarkdownBlock(input.source)
+      : renderPreview(input)
+    return { id, result }
   } catch (error) {
     return {
       id,

@@ -7,7 +7,7 @@ import { parseHTML } from "linkedom"
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..")
 const read = relative => readFile(path.join(root, relative), "utf8")
-const [page, shellStyles, applicationStyles, application, bootstrap, editorRuntime, build, editorView, libraryView] = await Promise.all([
+const [hostTemplate, shellStyles, applicationStyles, application, bootstrap, editorRuntime, build, editorView, libraryView] = await Promise.all([
   read("app/views/desktop_host.html"),
   read("app/assets/stylesheets/file_library_host.css"),
   read("app/assets/stylesheets/application.css"),
@@ -18,6 +18,8 @@ const [page, shellStyles, applicationStyles, application, bootstrap, editorRunti
   read("app/javascript/lib/editor_view.js"),
   read("app/javascript/lib/library_view.js")
 ])
+const authoringMarkup = await read("app/views/shared/_authoring_settings_dialog.html.erb")
+const page = hostTemplate.replace("<!-- elef:shared-authoring-settings -->", authoringMarkup)
 const importmap = await read("config/importmap.rb")
 const rootPackage = JSON.parse(await read("package.json"))
 const appearanceController = await read("app/javascript/controllers/appearance_controller.js")
@@ -40,6 +42,12 @@ test("the desktop packages Rails-owned host markup and styles", () => {
   assert.match(editorRuntime, /import\("controllers\/vim_settings_controller"\)/)
   assert.match(page, /data-controller="vim-settings" data-vim-settings-view/)
   assert.match(build, /app\/views\/desktop_host\.html/)
+  assert.match(build, /app\/views\/shared\/_authoring_settings_dialog\.html\.erb/)
+  assert.match(build, /desktopHost\.replace\(authoringSettingsMarker, sharedAuthoringSettings\)/)
+  assert.equal((hostTemplate.match(/<!-- elef:shared-authoring-settings -->/g) || []).length, 1)
+  assert.equal((page.match(/id="authoring-settings-dialog"/g) || []).length, 1)
+  assert.match(applicationStyles, /\.authoring-settings-dialog\s*\{/)
+  assert.doesNotMatch(shellStyles, /\.authoring-settings-dialog\s*\{/)
   assert.match(build, /app\/assets\/stylesheets\/file_library_host\.css/)
   assert.equal(document.querySelector("#library-view-mount").classList.contains("elef-app"), false)
   const sharedRules = new Map([

@@ -103,12 +103,4 @@ module ApplicationHelper
     category == "Elef DSL" ? "Elef directives" : category
   end
 
-  def math_shortcut_example_input(shortcut)
-    alias_name = shortcut.aliases.first
-    shortcut.prefix == "." ? "x.#{alias_name}" : "@#{alias_name}"
-  end
-
-  def math_shortcut_example_expansion(shortcut)
-    shortcut.expansion.to_s.gsub(MathShortcuts::Catalog::PLACEHOLDER, "x")
-  end
 end

@@ -107,17 +107,4 @@ class ApplicationHelperTest < ActionView::TestCase
     assert_nil snippet_category_label(nil)
   end
 
-  test "builds the math shortcut example input from its prefix and first alias" do
-    dotted = MathShortcut.create!(name: "Example bold", aliases: %w[b bb], prefix: ".", expansion: "\\mathbf{${1}}")
-    at_sign = MathShortcut.create!(name: "Example alpha", aliases: %w[a alpha], prefix: "@", expansion: "\\alpha")
-
-    assert_equal "x.b", math_shortcut_example_input(dotted)
-    assert_equal "@a", math_shortcut_example_input(at_sign)
-  end
-
-  test "expands every math shortcut placeholder to a concrete example symbol" do
-    shortcut = MathShortcut.create!(name: "Example transpose", aliases: %w[t T transpose], prefix: ".", expansion: "${1}^{\\mathsf{T}}")
-
-    assert_equal "x^{\\mathsf{T}}", math_shortcut_example_expansion(shortcut)
-  end
 end

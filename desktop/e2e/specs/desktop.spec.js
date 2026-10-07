@@ -1787,7 +1787,7 @@ describe("desktop binary workflows and native boundaries", () => {
     await $("#authoring-category").selectByVisibleText("Markdown")
     await $("#authoring-body").setValue("**${1:managed}**")
     await $("#save-authoring-entry").click()
-    await browser.waitUntil(async () => (await $("#authoring-settings-status").getText()).includes("saved to this library"), {
+    await browser.waitUntil(async () => (await $("#authoring-settings-status").getText()).includes("saved (snippet)"), {
       timeout: 10_000,
       timeoutMsg: "Saving the personal snippet did not finish"
     })
@@ -1807,7 +1807,7 @@ describe("desktop binary workflows and native boundaries", () => {
     await $("#authoring-name").setValue("Managed E2E snippet edited")
     await $("#authoring-description").setValue("Updated through desktop settings")
     await $("#save-authoring-entry").click()
-    await browser.waitUntil(async () => (await $("#authoring-settings-status").getText()).includes("Changes saved to this library"), {
+    await browser.waitUntil(async () => (await $("#authoring-settings-status").getText()).includes("Changes saved (snippet)"), {
       timeout: 10_000,
       timeoutMsg: "Editing the personal snippet did not finish"
     })
@@ -1841,7 +1841,7 @@ describe("desktop binary workflows and native boundaries", () => {
     if (!targetCard) throw new Error("The saved personal snippet was not listed for management")
     await targetCard.$(".authoring-delete").click()
     await confirmAuthoringDeletion("Managed E2E snippet edited")
-    await browser.waitUntil(async () => (await $("#authoring-settings-status").getText()).includes("saved to this library"), {
+    await browser.waitUntil(async () => (await $("#authoring-settings-status").getText()).includes("saved (snippet)"), {
       timeout: 10_000,
       timeoutMsg: "Deleting the personal snippet did not finish"
     })
@@ -1873,7 +1873,7 @@ describe("desktop binary workflows and native boundaries", () => {
     await $("#authoring-aliases").setValue(alias)
     await $("#authoring-expansion").setValue("\\mathbb{${1}}")
     await $("#save-authoring-entry").click()
-    await browser.waitUntil(async () => (await $("#authoring-settings-status").getText()).includes("saved to this library"), {
+    await browser.waitUntil(async () => (await $("#authoring-settings-status").getText()).includes("saved (math shortcut)"), {
       timeout: 10_000,
       timeoutMsg: "Saving the personal math shortcut did not finish"
     })
@@ -1891,7 +1891,7 @@ describe("desktop binary workflows and native boundaries", () => {
     if (!targetCard) throw new Error("The saved math shortcut was not listed for management")
     await targetCard.$(".authoring-delete").click()
     await confirmAuthoringDeletion("E2E math shortcut")
-    await browser.waitUntil(async () => (await $("#authoring-settings-status").getText()).includes("saved to this library"), {
+    await browser.waitUntil(async () => (await $("#authoring-settings-status").getText()).includes("saved (math shortcut)"), {
       timeout: 10_000,
       timeoutMsg: "Deleting the personal math shortcut did not finish"
     })

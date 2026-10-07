@@ -1,1 +1,2 @@
-<%= render "form", snippet: @snippet, heading: "New snippet" %>
+<% content_for :title, "New snippet" %>
+<%= render "shared/authoring_settings_page", registry: "snippets", open_new: true, entry_id: nil %>

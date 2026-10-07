@@ -15,7 +15,7 @@ export async function writeAuthoringRegistry({
       entries,
       baseHash
     })
-    updateLocal({ registry, entries, contentHash: result.contentHash })
+    updateLocal({ registry, entries: result.entries || entries, contentHash: result.contentHash })
     await reloadEditorRegistry()
     onSuccess({ registry, isSelected: isSelected(registry) })
     return true

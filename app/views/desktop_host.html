@@ -95,68 +95,8 @@
         <div class="dialog-actions"><button class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" value="cancel">Cancel</button><button class="button primary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" value="save">Save settings</button></div>
       </form>
     </dialog>
-    <dialog id="authoring-settings-dialog" class="app-dialog authoring-dialog" aria-labelledby="authoring-settings-title">
-      <div>
-        <p class="native-eyebrow">AUTHORING SETTINGS</p>
-        <h2 id="authoring-settings-title">Snippets</h2>
-        <p class="authoring-settings-copy">Personal entries are saved in this library’s <code>.elef/</code> folder and are available in the editor palettes. Built-in entries remain available and read-only.</p>
-        <div class="authoring-settings-tabs" role="group" aria-label="Authoring settings">
-          <button class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold is-active" type="button" data-authoring-tab="snippets" aria-pressed="true">Snippets</button>
-          <button class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" type="button" data-authoring-tab="math_shortcuts" aria-pressed="false">Math shortcuts</button>
-        </div>
-        <p id="authoring-settings-status" class="authoring-settings-status" role="status" aria-live="polite"></p>
-        <div class="authoring-settings-heading">
-          <p id="authoring-settings-count" class="dialog-copy"></p>
-          <button id="new-authoring-entry" class="button primary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" type="button">New snippet</button>
-        </div>
-        <div id="authoring-settings-list" class="authoring-settings-list"></div>
-        <p id="authoring-settings-empty" class="dialog-copy" hidden>No personal entries yet. Built-in entries remain available in the editor.</p>
-        <form id="authoring-entry-form" class="authoring-entry-form" hidden>
-          <h3 id="authoring-entry-heading">New snippet</h3>
-          <input name="id" type="hidden">
-          <fieldset class="authoring-snippet-fields" disabled>
-            <label for="authoring-name">Name</label>
-            <input id="authoring-name" name="name" maxlength="120" required>
-            <label for="authoring-trigger">Trigger</label>
-            <input id="authoring-trigger" name="trigger" maxlength="120" pattern="[a-z0-9][a-z0-9-]*" required>
-            <label for="authoring-description">Description</label>
-            <input id="authoring-description" name="description" maxlength="500">
-            <label for="authoring-category">Category</label>
-            <select id="authoring-category" name="category"><option>Markdown</option><option>LaTeX</option><option>Mermaid</option><option>Elef DSL</option></select>
-            <label for="authoring-body">Body</label>
-            <textarea id="authoring-body" name="body" maxlength="20000" rows="6" required></textarea>
-          </fieldset>
-          <fieldset class="authoring-math-fields" hidden disabled>
-            <label for="authoring-math-name">Name</label>
-            <input id="authoring-math-name" name="math-name" maxlength="120" required>
-            <label for="authoring-prefix">Prefix</label>
-            <select id="authoring-prefix" name="prefix"><option value=".">. transformation</option><option value="@">@ alias</option></select>
-            <label for="authoring-aliases">Aliases</label>
-            <input id="authoring-aliases" name="aliases" maxlength="1200" placeholder="lambda, l" required>
-            <label for="authoring-math-description">Description</label>
-            <input id="authoring-math-description" name="math-description" maxlength="500">
-            <label for="authoring-expansion">Expansion template</label>
-            <textarea id="authoring-expansion" name="expansion" maxlength="20000" rows="4" required></textarea>
-          </fieldset>
-          <div class="dialog-actions">
-            <button id="cancel-authoring-entry" class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" type="button">Cancel</button>
-            <button id="save-authoring-entry" class="button primary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" type="submit">Save snippet</button>
-          </div>
-        </form>
-        <div class="dialog-actions"><button id="close-authoring-settings" class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" type="button">Close</button></div>
-      </div>
-    </dialog>
-    <dialog id="delete-authoring-dialog" class="app-dialog" aria-labelledby="delete-authoring-title">
-      <div>
-        <p class="native-eyebrow">AUTHORING SETTINGS</p>
-        <h2 id="delete-authoring-title">Delete personal entry?</h2>
-        <p id="delete-authoring-message" class="dialog-copy"></p>
-        <div class="dialog-actions">
-          <button id="cancel-authoring-delete" class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" type="button">Cancel</button>
-          <button id="confirm-authoring-delete" class="button primary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" type="button">Delete entry</button>
-        </div>
-      </div>
-    </dialog>
+    <!-- Shared Rails-owned authoring settings markup is inserted by the desktop asset build. -->
+    <!-- elef:shared-authoring-settings -->
     <dialog id="import-conflict-dialog" class="app-dialog">
       <form method="dialog">
         <p class="native-eyebrow">DUPLICATE DECK</p>

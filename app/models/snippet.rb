@@ -25,10 +25,6 @@ class Snippet < ApplicationRecord
     [name, trigger, description, category].join(" ").downcase
   end
 
-  def display_body
-    body.gsub(/\$\{\d+(?::([^}]*))?\}/) { Regexp.last_match(1).presence || "example" }
-  end
-
   private
 
   def assign_workspace

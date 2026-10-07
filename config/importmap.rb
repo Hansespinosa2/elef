@@ -32,6 +32,7 @@ pin "crelt" # @1.0.7
 pin "style-mod" # @4.1.4
 pin "w3c-keyname" # @2.2.8
 pin "katex", to: "katex.js" # @0.18.7 Shared Rails and desktop browser runtime
+pin "elef-renderer", to: "elef-renderer.bundle.js"
 pin "mermaid", to: "mermaid.min.js" # @11.17.2 Vendored self-contained build; exposes globalThis.mermaid
 
 pin "lib/editor_document_state", to: "lib/editor_document_state.js"
@@ -49,5 +50,7 @@ pin "lib/preview_request_body", to: "lib/preview_request_body.js"
 pin "lib/vim_settings_view", to: "lib/vim_settings_view.js"
 pin "lib/save_flow", to: "lib/save_flow.js"
 pin "lib/editor_source", to: "lib/editor_source.js"
+pin "lib/authoring_settings_dialog", to: "lib/authoring_settings_dialog.js"
+pin "lib/rails_authoring_settings_transport", to: "lib/rails_authoring_settings_transport.js"
 pin "lib/editor_ready", to: "lib/editor_ready.js"
 pin "lib/conflict_dialog", to: "lib/conflict_dialog.js"

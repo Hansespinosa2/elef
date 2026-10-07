@@ -38,26 +38,33 @@ export function createRendererClient({
     return worker
   }
 
+  function request(input) {
+    const id = ++nextId
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        const request = pending.get(id)
+        pending.delete(id)
+        const error = Object.assign(new Error("Preview took too long and was stopped. Your source is safe."), { code: "render_timeout", retryable: true })
+        request?.reject(error)
+        failAll(error)
+      }, timeoutMs)
+      pending.set(id, { resolve, reject, timer })
+      try {
+        ensureWorker().postMessage({ id, input })
+      } catch (error) {
+        pending.delete(id)
+        clearTimeout(timer)
+        reject(error)
+      }
+    })
+  }
+
   return {
     render(input) {
-      const id = ++nextId
-      return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => {
-          const request = pending.get(id)
-          pending.delete(id)
-          const error = Object.assign(new Error("Preview took too long and was stopped. Your source is safe."), { code: "render_timeout", retryable: true })
-          request?.reject(error)
-          failAll(error)
-        }, timeoutMs)
-        pending.set(id, { resolve, reject, timer })
-        try {
-          ensureWorker().postMessage({ id, input })
-        } catch (error) {
-          pending.delete(id)
-          clearTimeout(timer)
-          reject(error)
-        }
-      })
+      return request(input)
+    },
+    renderMarkdownBlock(source) {
+      return request({ kind: "markdown-block", source })
     },
     terminate() {
       failAll(Object.assign(new Error("Preview renderer was closed."), { code: "render_cancelled", retryable: false }))

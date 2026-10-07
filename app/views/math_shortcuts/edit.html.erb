@@ -1,4 +1,2 @@
 <% content_for :title, "Edit #{@math_shortcut.name}" %>
-<%= render "layouts/settings_navigation" %>
-<h1 class="mb-8 text-4xl font-bold">Edit <%= @math_shortcut.name %></h1>
-<%= render "form", math_shortcut: @math_shortcut %>
+<%= render "shared/authoring_settings_page", registry: "math_shortcuts", open_new: false, entry_id: @math_shortcut.id %>

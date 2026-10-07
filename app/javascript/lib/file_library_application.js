@@ -12,7 +12,8 @@ import { createTitleSaveFlow } from "lib/title_save_flow"
 import { presentConflictDialog } from "lib/conflict_dialog"
 import { createRendererClient } from "lib/renderer_worker_client"
 import { installSanitizedPreview } from "lib/preview_sanitizer"
-import { createAuthoringSettingsDialog } from "lib/authoring_settings_dialog"
+import { authoringSettingsElements, createAuthoringSettingsDialog } from "lib/authoring_settings_dialog"
+import { mergeAuthoringRegistryEntries } from "lib/authoring_registry_merge"
 import { applyDesktopFeatureFlags } from "lib/feature_flags"
 import { configureEditorKind, renderEditorView } from "lib/editor_view"
 import { renderLibraryView, setLibraryViewTab, updateLibraryEmptyState } from "lib/library_view"
@@ -108,23 +109,6 @@ export function startFileLibraryApplication(platform) {
     settingsDialog: document.querySelector("#settings-dialog"),
     settingsForm: document.querySelector("#settings-form"),
     libraryTheme: document.querySelector("#library-theme"),
-    authoringDialog: document.querySelector("#authoring-settings-dialog"),
-    authoringTitle: document.querySelector("#authoring-settings-title"),
-    authoringTabs: document.querySelectorAll("[data-authoring-tab]"),
-    authoringStatus: document.querySelector("#authoring-settings-status"),
-    authoringCount: document.querySelector("#authoring-settings-count"),
-    authoringList: document.querySelector("#authoring-settings-list"),
-    authoringEmpty: document.querySelector("#authoring-settings-empty"),
-    authoringNew: document.querySelector("#new-authoring-entry"),
-    authoringForm: document.querySelector("#authoring-entry-form"),
-    authoringFormHeading: document.querySelector("#authoring-entry-heading"),
-    authoringSnippetFields: document.querySelector(".authoring-snippet-fields"),
-    authoringMathFields: document.querySelector(".authoring-math-fields"),
-    authoringSave: document.querySelector("#save-authoring-entry"),
-    deleteAuthoringDialog: document.querySelector("#delete-authoring-dialog"),
-    deleteAuthoringMessage: document.querySelector("#delete-authoring-message"),
-    confirmAuthoringDelete: document.querySelector("#confirm-authoring-delete"),
-    cancelAuthoringDelete: document.querySelector("#cancel-authoring-delete"),
     createForm: document.querySelector("#create-form"),
     aboutDialog: document.querySelector("#about-dialog"),
     editorField: document.querySelector("#desktop-editor-field"),
@@ -169,32 +153,33 @@ export function startFileLibraryApplication(platform) {
   )
 
   const authoringSettings = createAuthoringSettingsDialog({
-    elements: {
-      dialog: elements.authoringDialog,
-      title: elements.authoringTitle,
-      tabs: elements.authoringTabs,
-      status: elements.authoringStatus,
-      count: elements.authoringCount,
-      list: elements.authoringList,
-      empty: elements.authoringEmpty,
-      newButton: elements.authoringNew,
-      form: elements.authoringForm,
-      formHeading: elements.authoringFormHeading,
-      snippetFields: elements.authoringSnippetFields,
-      mathFields: elements.authoringMathFields,
-      saveButton: elements.authoringSave,
-      deleteDialog: elements.deleteAuthoringDialog,
-      deleteMessage: elements.deleteAuthoringMessage,
-      confirmDelete: elements.confirmAuthoringDelete,
-      cancelDelete: elements.cancelAuthoringDelete,
-      cancelEntryButton: document.querySelector("#cancel-authoring-entry"),
-      closeButton: document.querySelector("#close-authoring-settings")
-    },
+    elements: authoringSettingsElements(document),
     readRegistries: async () => {
       const result = await invoke("read_authoring_registries")
+      const entries = mergeAuthoringRegistryEntries(
+        desktopAuthoringRegistry().filter(entry => entry.built_in),
+        result.snippets,
+        result.math_shortcuts
+      )
       return {
-        snippets: result.snippets,
-        math_shortcuts: result.math_shortcuts,
+        snippets: entries.filter(entry => typeof entry.body === "string" && typeof entry.trigger === "string").map(entry => ({
+          id: entry.id,
+          name: entry.name,
+          trigger: entry.trigger,
+          description: entry.description,
+          category: entry.category,
+          body: entry.body,
+          built_in: entry.built_in === true
+        })),
+        math_shortcuts: entries.filter(entry => typeof entry.expansion === "string" && Array.isArray(entry.aliases)).map(entry => ({
+          id: entry.id,
+          name: entry.name,
+          aliases: entry.aliases,
+          description: entry.description,
+          prefix: entry.prefix,
+          expansion: entry.expansion,
+          built_in: entry.built_in === true
+        })),
         hashes: result.hashes
       }
     },
@@ -203,6 +188,7 @@ export function startFileLibraryApplication(platform) {
       return { contentHash: result.content_hash }
     },
     reloadEditorRegistry: loadDesktopAuthoringRegistry,
+    renderMarkdownBlock: source => renderer.renderMarkdownBlock(source),
     onSaved: setStatus
   })
 
