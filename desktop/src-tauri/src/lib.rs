@@ -3,7 +3,7 @@ use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
-use elef_core::{
+use local_store::{
     AuthoringRegistries, CoreError, DeckPreview, DeckSummary, DocumentGraphDocument,
     ImportResolution, ImportResult, Library, LibraryConfig, OpenDeck, SaveResult, SourceSnapshot,
     UploadedAsset,
@@ -150,7 +150,7 @@ async fn confirm_app_ready(
         // Readiness is acknowledged only after successful frontend/editor boot.
         // Failure leaves the previous complete installation available.
         match tauri::async_runtime::spawn_blocking(move || {
-            elef_core::update_install::cleanup_previous_installation(&live)
+            local_store::update_install::cleanup_previous_installation(&live)
         })
         .await
         {
@@ -283,7 +283,7 @@ async fn install_update(
         return Ok(false);
     }
     let stage = tauri::async_runtime::spawn_blocking(move || {
-        elef_core::update_install::UpdateStage::new(&live)
+        local_store::update_install::UpdateStage::new(&live)
     })
     .await
     .map_err(|_| update_install_error())?

@@ -361,10 +361,10 @@ assert '"lib/document_links"' in desktop_application and "buildDocumentGraph" in
 assert '"ElefRenderer.buildDocumentGraph"' in (ROOT / "app/lib/source/javascript_renderer.rb").read_text(), (
     "Rails graph construction must use the same app-owned resolver"
 )
-assert "markdown_document_links" not in (ROOT / "desktop/crates/elef-core/src/lib.rs").read_text(), (
+assert "markdown_document_links" not in (ROOT / "crates/local-store/src/lib.rs").read_text(), (
     "desktop core must not keep a parallel document-link parser"
 )
-assert "markdown_document_title" not in (ROOT / "desktop/crates/elef-core/src/lib.rs").read_text(), (
+assert "markdown_document_title" not in (ROOT / "crates/local-store/src/lib.rs").read_text(), (
     "desktop core must return source and folder name; Rails-owned JavaScript derives Markdown graph labels"
 )
 assert "extractFirstMarkdownHeading" in (ROOT / "app/javascript/lib/document_links.js").read_text(), (

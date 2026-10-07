@@ -18,6 +18,7 @@
 
 # Ignore old/local JavaScript dependency installs.
 /node_modules
+/target
 /desktop/target
 /desktop/frontend/node_modules
 /desktop/e2e/node_modules
