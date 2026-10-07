@@ -1,0 +1,525 @@
+#!/usr/bin/env python3
+"""Phase-aware, read-only repository check interface."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import math
+import os
+import re
+import statistics
+import subprocess
+import sys
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+CHECK = ROOT / "bin" / "check"
+STATUS_PATH = ROOT / "docs" / "refactor" / "status.json"
+BASELINE_PATH = ROOT / "docs" / "refactor" / "baseline.json"
+PLAN_PATH = ROOT / "docs" / "refactor" / "execution" / "phase-0-plan.md"
+PHASE_PATH = ROOT / "docs" / "refactor" / "phases" / "00-baseline.md"
+COMMANDS = ("quick", "affected", "phase", "all", "arch", "fresh", "docs", "perf")
+STUB_COMMANDS = ("quick", "affected", "all", "arch", "fresh", "docs", "perf")
+HTML_PATTERN = re.compile(r"innerHTML|insertAdjacentHTML|dangerouslySetInnerHTML")
+EXPECTED_INPUT_SHA256 = "f4e96603b40eb2f5a6c92791827aab59e5979f3d5ccc52babcfe913911bdbfe2"
+EXPECTED_OUTPUT_SHA256 = "0ada6d346642d7d27007d4fa1cb81295af45bf36ad29727715b489cd11957e62"
+EXPECTED_DESKTOP_TREE_SHA256 = "f0df9ca169611ae308fd912f594c829f3a07a56982b2dffe4c71433cc1f5d913"
+EXPECTED_DESKTOP_MANIFEST_SHA256 = "095d9fcd9d736c324d472a3ffcc4a4060460b8cceb0fa1e13ed8d59d264e1fdb"
+EXPECTED_SCENARIOS = (
+    "appearance",
+    "authoring-palettes",
+    "authoring-settings",
+    "document-page-aspect-ratio",
+    "edit-and-preview",
+    "external-edit-conflict",
+    "hostile-deck",
+    "insert-image",
+    "library-and-graph",
+    "library-create-delete",
+    "media-fixture",
+    "presentation-mode",
+    "undo-redo-session",
+    "vim-relative-line-numbers",
+)
+EXPECTED_QUICK_COMMANDS = (
+    "npm run test:javascript",
+    "npm test --prefix desktop/frontend",
+    "npm run test:unit --prefix desktop/e2e",
+    "python3 script/check_frontend_ownership.py",
+    "cargo test --manifest-path desktop/Cargo.toml -p elef-core --locked",
+)
+EXPECTED_AFFECTED_COMMANDS = (
+    "bin/rails tailwindcss:build",
+    "npm run renderer:build",
+    "git diff --exit-code -- vendor/javascript/elef-renderer.bundle.js app/assets/builds/tailwind.css",
+    "npm run test:javascript",
+    "bin/rails db:test:prepare",
+    "bin/rails test test/lib/source/renderer_test.rb test/lib/source/javascript_renderer_test.rb test/lib/authoring_registry_test.rb test/models/presentation_test.rb test/services/presentations/pptx_export_test.rb",
+    "npm test --prefix desktop/frontend",
+    "npm run build --prefix desktop/frontend",
+    "python3 desktop/scripts/check_architecture.py",
+    "python3 script/check_frontend_ownership.py",
+    "cargo fmt --manifest-path desktop/Cargo.toml --all -- --check",
+    "cargo clippy --manifest-path desktop/Cargo.toml -p elef-core --all-targets -- -D warnings",
+    "cargo test --manifest-path desktop/Cargo.toml -p elef-core --locked",
+)
+EXPECTED_PERFORMANCE_ARTIFACTS = {
+    "linux": "68469707acd1317d804930e96c022049ce46b3865d2154e3762062f425e6ad59",
+    "darwin": "c4ffd9ed89cc85c6741aeafb2541cf9e9b52fdc593c6663d55ab8ad460792885",
+}
+EXPECTED_INVENTORY_BOUNDARIES = {
+    "host roots",
+    "contracts and workspaces",
+    "local persistence engine",
+    "Work semantics and renderer",
+    "host-neutral interactive client",
+    "generated artifacts",
+    "cross-host tests",
+    "renderer HTML insertion",
+    "tooling and operations",
+}
+PLANNING_PATHS = ("docs/", ".agents/", "AGENTS.md", "README.md", "bootstrap/", "DROP-IN.md", "CLAUDE.md", ".claude/")
+
+
+class CheckFailure(Exception):
+    pass
+
+
+def fail(message: str) -> None:
+    raise CheckFailure(message)
+
+
+def digest_bytes(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def digest_file(path: Path) -> str:
+    return digest_bytes(path.read_bytes())
+
+
+def read_json(path: Path) -> dict | list:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        try:
+            label = path.relative_to(ROOT)
+        except ValueError:
+            label = path
+        fail(f"cannot read JSON {label}: {error}")
+
+
+def git(*args: str, check: bool = True) -> str:
+    result = subprocess.run(
+        ["git", "-C", str(ROOT), *args],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if check and result.returncode:
+        fail(f"git {' '.join(args)} failed: {result.stderr.strip()}")
+    return result.stdout.strip()
+
+
+def is_ancestor(ancestor: str, descendant: str) -> bool:
+    return subprocess.run(
+        ["git", "-C", str(ROOT), "merge-base", "--is-ancestor", ancestor, descendant],
+        capture_output=True,
+        check=False,
+    ).returncode == 0
+
+
+def relative_path(value: str) -> Path:
+    candidate = (ROOT / value).resolve()
+    try:
+        candidate.relative_to(ROOT.resolve())
+    except ValueError:
+        fail(f"baseline path escapes the repository: {value}")
+    return candidate
+
+
+def compare_close(actual: float, expected: float, label: str) -> None:
+    if not math.isclose(float(actual), float(expected), rel_tol=0, abs_tol=1e-6):
+        fail(f"{label} is {actual}, expected {expected}")
+
+
+def check_identity(status: dict, baseline: dict, head: str) -> None:
+    campaign = baseline["campaign"]
+    if status.get("current_phase") != 0:
+        fail("status.current_phase must be Phase 00")
+    if status.get("phase_state") not in {"DO", "CHECK", "ACT", "PASS"}:
+        fail("Phase 00 verification requires a frozen DO/CHECK/ACT/PASS state")
+    for key, expected in (
+        ("campaign_branch", campaign["branch"]),
+        ("campaign_base_sha", campaign["base_sha"]),
+        ("phase_base_sha", campaign["phase_base_sha"]),
+        ("phase_contract_sha256", campaign["phase_contract_sha256"]),
+        ("frozen_plan_sha256", campaign["frozen_plan_sha256"]),
+    ):
+        if status.get(key) != expected:
+            fail(f"status.{key} differs from the Phase 00 baseline")
+    if campaign["base_sha"] != campaign["phase_base_sha"]:
+        fail("Phase 00 phase base must equal the verified campaign base")
+    if digest_file(PHASE_PATH) != status["phase_contract_sha256"]:
+        fail("Phase 00 contract hash differs from its frozen status hash")
+    if digest_file(PLAN_PATH) != status["frozen_plan_sha256"]:
+        fail("Phase 00 frozen plan hash differs from status.json")
+
+    for commit_key in ("base_sha", "phase_base_sha", "rollback_source_sha", "local_measurement_checkout_sha"):
+        commit = campaign[commit_key]
+        if not re.fullmatch(r"[0-9a-f]{40}", commit):
+            fail(f"baseline campaign.{commit_key} is not a full commit SHA")
+        if subprocess.run(
+            ["git", "-C", str(ROOT), "cat-file", "-e", f"{commit}^{{commit}}"],
+            capture_output=True,
+            check=False,
+        ).returncode:
+            fail(f"baseline campaign.{commit_key} is not a commit in this repository")
+        if not is_ancestor(commit, head):
+            fail(f"baseline campaign.{commit_key} is not an ancestor of checked-out HEAD")
+
+    if not is_ancestor(campaign["base_sha"], campaign["rollback_source_sha"]):
+        fail("rollback source is not descended from the campaign base")
+    if campaign.get("desktop_feature_branch_tip_is_ancestor") and not is_ancestor(
+        campaign["desktop_feature_branch_merged_sha"], campaign["base_sha"]
+    ):
+        fail("merged desktop feature tip is not an ancestor of the campaign base")
+    if not is_ancestor(campaign["phase_base_sha"], head):
+        fail("checked-out HEAD is not descended from the Phase 00 base")
+
+    snapshot_name = os.environ.get("ELEF_GATE_STATUS_PATH")
+    if snapshot_name:
+        snapshot_path = Path(snapshot_name).resolve()
+        manifest_path = snapshot_path.with_name("started.json")
+        if not snapshot_path.is_file() or not manifest_path.is_file():
+            fail("ELEF_GATE_STATUS_PATH must name a prepared immutable gate snapshot")
+        snapshot = read_json(snapshot_path)
+        manifest = read_json(manifest_path)
+        if not isinstance(snapshot, dict) or not isinstance(manifest, dict):
+            fail("gate status and manifest must be JSON objects")
+        if digest_file(snapshot_path) != manifest.get("status_sha256"):
+            fail("immutable gate status snapshot hash differs from its manifest")
+        if manifest.get("phase") != 0 or manifest.get("head") != head:
+            fail("gate manifest phase/head does not match Phase 00 checkout HEAD")
+        if Path(manifest.get("checkout", "")).resolve() != ROOT.resolve():
+            fail("gate manifest does not own this checkout")
+        if manifest.get("attempt_id") != snapshot_path.parent.name:
+            fail("gate manifest attempt identity does not match its directory")
+        if snapshot.get("current_phase") != 0 or snapshot.get("phase_state") != "DO":
+            fail("immutable gate snapshot must capture Phase 00 in DO")
+        if snapshot.get("head_sha") != head:
+            fail("immutable gate snapshot head_sha differs from checked-out HEAD")
+        if any(snapshot.get(key) != status.get(key) for key in status if key != "head_sha"):
+            fail("immutable gate snapshot differs from the committed candidate status")
+        if manifest.get("frozen_plan_sha256") != status.get("frozen_plan_sha256"):
+            fail("gate manifest frozen plan hash differs from candidate status")
+        if manifest.get("phase_contract_sha256") != status.get("phase_contract_sha256"):
+            fail("gate manifest contract hash differs from candidate status")
+    elif status.get("head_sha") != head:
+        fail("status.head_sha is stale for this checkout; use the immutable candidate snapshot or update state through the campaign protocol")
+
+    for ancestor_key in ("base_sha", "phase_base_sha"):
+        if not is_ancestor(campaign[ancestor_key], head):
+            fail(f"status {ancestor_key} is not an ancestor of checked-out HEAD")
+
+
+def check_fixtures(baseline: dict) -> None:
+    fixtures = baseline["renderer_fixtures"]
+    for key in ("inputs", "outputs"):
+        path = relative_path(fixtures[f"{key}_path"])
+        rows = read_json(path)
+        if not isinstance(rows, list):
+            fail(f"renderer {key} fixture must be a JSON list")
+        if len(rows) != fixtures[f"{key[:-1] if key == 'outputs' else 'input'}_count"]:
+            fail(f"renderer {key} fixture count differs from baseline")
+        if digest_file(path) != fixtures[f"{key[:-1] if key == 'outputs' else 'input'}_sha256"]:
+            fail(f"renderer {key} fixture hash differs from baseline")
+    if fixtures["input_count"] != 14 or fixtures["input_sha256"] != EXPECTED_INPUT_SHA256:
+        fail("renderer input fixture differs from the frozen Phase 00 corpus")
+    if fixtures["output_count"] != 14 or fixtures["output_sha256"] != EXPECTED_OUTPUT_SHA256:
+        fail("renderer output fixture differs from the frozen Phase 00 corpus")
+    if fixtures["input_count"] != fixtures["output_count"]:
+        fail("renderer input and output fixture counts differ")
+
+
+def check_scenarios(baseline: dict) -> None:
+    record = baseline["shared_scenarios"]
+    directory = relative_path(record["directory"])
+    actual = sorted(path.stem for path in directory.glob("*.js"))
+    if actual != record["names"] or actual != list(EXPECTED_SCENARIOS) or len(actual) != record["count"]:
+        fail("shared E2E scenario names/count differ from the Phase 00 baseline")
+
+
+def html_occurrences() -> list[dict]:
+    occurrences = []
+    for root_name in ("app/javascript", "desktop/frontend/src", "app/views"):
+        directory = relative_path(root_name)
+        for path in sorted(directory.rglob("*")):
+            if not path.is_file():
+                continue
+            try:
+                lines = path.read_text(encoding="utf-8").splitlines()
+            except (UnicodeDecodeError, OSError):
+                continue
+            for line_number, line in enumerate(lines, 1):
+                terms = sorted(set(HTML_PATTERN.findall(line)))
+                if terms:
+                    occurrences.append({
+                        "path": path.relative_to(ROOT).as_posix(),
+                        "line": line_number,
+                        "terms": terms,
+                        "source": line.strip(),
+                    })
+    return occurrences
+
+
+def check_architecture_inventory(baseline: dict) -> None:
+    layout = baseline["root_layout"]
+    for name, expected in layout["target_directories"].items():
+        if (ROOT / name).is_dir() != expected:
+            fail(f"top-level directory {name!r} differs from the recorded baseline")
+    if layout["root_cargo_workspace"]:
+        fail("Phase 00 baseline unexpectedly claims a root Cargo workspace")
+    for record in baseline["architecture_checks"]:
+        if not relative_path(record["path"]).is_file():
+            fail(f"recorded architecture check is missing: {record['path']}")
+    for record in baseline["architecture_inventory"]:
+        if not record.get("boundary") or not record.get("current") or not record.get("target_owner"):
+            fail("architecture inventory entry is missing its current owner/target facts")
+        phases = record.get("removal_phases")
+        if not isinstance(phases, list) or not phases or any(type(number) is not int or not 1 <= number <= 12 for number in phases):
+            fail(f"architecture inventory entry lacks a valid removal phase: {record['boundary']}")
+    if {record["boundary"] for record in baseline["architecture_inventory"]} != EXPECTED_INVENTORY_BOUNDARIES:
+        fail("architecture violation inventory differs from the frozen Phase 00 list")
+    phase_base = baseline["campaign"]["phase_base_sha"]
+    changed_paths = git("diff", "--name-only", f"{phase_base}..HEAD").splitlines()
+    product_changes = [
+        path for path in changed_paths
+        if path != "bin/check" and not any(path == prefix or path.startswith(prefix) for prefix in PLANNING_PATHS)
+    ]
+    if product_changes:
+        fail(f"Phase 00 changed paths outside its docs/checker scope: {product_changes[:8]}")
+    html = baseline["html_boundary"]
+    if html_occurrences() != html["occurrences"]:
+        fail("raw HTML insertion occurrence inventory differs from the Phase 00 baseline")
+    if len(html["occurrences"]) != html["occurrence_count"]:
+        fail("raw HTML insertion occurrence count differs from baseline")
+    if html["occurrence_count"] != 13:
+        fail("raw HTML insertion inventory differs from the frozen Phase 00 count")
+    if html["dangerously_set_inner_html_present"]:
+        fail("baseline currently records a dangerouslySetInnerHTML site")
+    if any("dangerouslySetInnerHTML" in item["terms"] for item in html["occurrences"]):
+        fail("dangerouslySetInnerHTML appeared in the locked Phase 00 source inventory")
+
+
+def check_ci_and_performance(baseline: dict) -> None:
+    ci = baseline["ci"]
+    if ci["run_id"] != 37601674921 or ci["conclusion"] != "success" or ci["total_duration_seconds"] != 960:
+        fail("exact-source CI run summary is invalid")
+    if ci["source_sha"] != baseline["campaign"]["rollback_source_sha"]:
+        fail("CI evidence is not for the exact rollback source SHA")
+    if re.search(r"(?m)^\s+paths(?:-ignore)?:", relative_path(ci["workflow"]).read_text(encoding="utf-8")):
+        fail("CI path filters appeared after the Phase 00 baseline")
+    jobs = {job["name"]: job for job in ci["jobs"]}
+    if len(jobs) != len(ci["jobs"]):
+        fail("CI baseline contains duplicate job names")
+    for job in ci["jobs"]:
+        if job["conclusion"] == "success" and (type(job["duration_seconds"]) is not int or job["duration_seconds"] <= 0):
+            fail(f"successful CI job lacks a positive measured duration: {job['name']}")
+        if job["conclusion"] == "skipped" and job["duration_seconds"] is not None:
+            fail(f"skipped CI job must not claim a duration: {job['name']}")
+    for required in ("desktop-fast", "test", "system-test", "desktop", "desktop-macos", "renderer-macos"):
+        if required not in jobs or jobs[required]["conclusion"] != "success":
+            fail(f"required baseline CI job did not succeed: {required}")
+    for required in baseline["build_references"]["ci_success_jobs"]:
+        if required not in jobs or jobs[required]["conclusion"] != "success":
+            fail(f"rollback build CI job did not succeed: {required}")
+
+    perf = baseline["product_performance"]
+    if perf["budgets_ms"] != {"coldStart": 1500, "open100Slides": 300, "warmLibrary": 500}:
+        fail("product performance budgets differ from the frozen Phase 00 ceilings")
+    for record in perf["artifacts"]:
+        path = relative_path(record["artifact_path"])
+        if digest_file(path) != record["artifact_sha256"]:
+            fail(f"native performance artifact hash differs from baseline: {record['artifact_path']}")
+        if record["artifact_sha256"] != EXPECTED_PERFORMANCE_ARTIFACTS.get(record["platform"]):
+            fail(f"native performance artifact is not the frozen exact-source CI artifact: {record['platform']}")
+        artifact = read_json(path)
+        if artifact.get("platform") != record["platform"] or artifact.get("architecture") != record["architecture"]:
+            fail(f"native performance artifact platform differs from baseline: {record['artifact_path']}")
+        if artifact.get("inputPreservedRuns") != record["samples_per_operation"]:
+            fail(f"native performance sample count differs from baseline: {record['artifact_path']}")
+        if record["samples_per_operation"] != 20:
+            fail("native performance protocol must retain all twenty samples")
+        if any(len(samples) != 20 for samples in artifact["samples"].values()):
+            fail(f"native performance artifact has an incomplete sample series: {record['artifact_path']}")
+        medians = {name: statistics.median(samples) for name, samples in artifact["samples"].items()}
+        for name, expected in record["median_ms"].items():
+            compare_close(medians[name], expected, f"{record['platform']} {name} median")
+        for field, artifact_key in (("p95_ms", "p95Milliseconds"), ("budgets_ms", "budgetsMilliseconds"), ("misses", "misses"), ("budget_mode", "budgetMode")):
+            if record[field] != artifact[artifact_key]:
+                fail(f"native performance {field} differs from artifact: {record['artifact_path']}")
+    for proxy_name in ("quick", "affected"):
+        proxy = baseline["fast_feedback"][proxy_name]
+        expected_commands = EXPECTED_QUICK_COMMANDS if proxy_name == "quick" else EXPECTED_AFFECTED_COMMANDS
+        if proxy["expected_commands"] != list(expected_commands):
+            fail(f"{proxy_name} proxy command set differs from the frozen Phase 00 command list")
+        runs = read_json(relative_path(proxy["result_path"]))
+        if len(runs) != proxy["repetitions"] or len(runs) != len(proxy["runs_seconds"]):
+            fail(f"{proxy_name} proxy repetition count differs from its timing record")
+        actual_seconds = []
+        for index, run in enumerate(runs):
+            if run.get("exit_code") != 0 or any(command.get("exit_code") != 0 for command in run.get("commands", [])):
+                fail(f"{proxy_name} proxy repetition {index + 1} did not pass")
+            commands = [item["command"] for item in run["commands"]]
+            if commands != proxy["expected_commands"]:
+                fail(f"{proxy_name} proxy command set differs from its recorded definition")
+            actual_seconds.append(float(run["seconds"]))
+        if actual_seconds != proxy["runs_seconds"]:
+            fail(f"{proxy_name} proxy timings differ from the retained run record")
+        compare_close(statistics.median(actual_seconds), proxy["median_seconds"], f"{proxy_name} proxy median")
+    if baseline["fast_feedback"].get("canonical_tiers_implemented") is not False:
+        fail("Phase 00 must not claim that canonical quick/affected tiers are implemented")
+
+    bootstrap = baseline["bootstrap"]
+    bootstrap_total = sum(float(step["seconds"]) for step in bootstrap["commands"])
+    compare_close(bootstrap_total, bootstrap["measured_total_seconds_including_failed_attempt_and_resume"], "bootstrap total")
+    if not any(step["exit_code"] != 0 and "BUNDLE_PATH=/tmp/" in step["command"] for step in bootstrap["commands"]):
+        fail("bootstrap record must retain the initial tmpfs failure")
+    if not any(step["exit_code"] == 0 and "BUNDLE_PATH=/root/.cache/" in step["command"] for step in bootstrap["commands"]):
+        fail("bootstrap record must retain the successful bundle resume")
+
+
+def check_build_references(baseline: dict) -> None:
+    builds = baseline["build_references"]
+    for key in ("renderer", "tailwind"):
+        record = builds[key]
+        if digest_file(relative_path(record["path"])) != record["sha256"]:
+            fail(f"tracked {key} rollback artifact hash differs from baseline")
+    desktop = builds["desktop_frontend"]
+    if desktop["file_count"] <= 0 or not desktop["identical_trees"]:
+        fail("desktop frontend rollback build lacks repeated identical output evidence")
+    if desktop["tree_sha256"] != EXPECTED_DESKTOP_TREE_SHA256:
+        fail("desktop frontend output tree hash differs from the repeated local build")
+    clean_repro = desktop.get("clean_detached_checkout", {})
+    if (
+        clean_repro.get("source_sha") != baseline["campaign"]["local_measurement_checkout_sha"]
+        or clean_repro.get("identical_trees") is not True
+        or clean_repro.get("clean_git_status_after_build") is not True
+        or len(clean_repro.get("build_seconds", [])) != 3
+    ):
+        fail("desktop frontend lacks three clean detached-checkout reproducibility runs")
+    manifest_path = relative_path(desktop["tree_manifest_path"])
+    if digest_file(manifest_path) != desktop["tree_manifest_sha256"] or desktop["tree_manifest_sha256"] != EXPECTED_DESKTOP_MANIFEST_SHA256:
+        fail("desktop frontend per-file build manifest hash differs from baseline")
+    manifest = read_json(manifest_path)
+    files = manifest.get("files") if isinstance(manifest, dict) else None
+    if not isinstance(files, list) or len(files) != desktop["file_count"] or manifest.get("file_count") != desktop["file_count"]:
+        fail("desktop frontend per-file build manifest count differs from baseline")
+    tree = hashlib.sha256()
+    file_hashes = {}
+    for item in files:
+        if not isinstance(item, dict) or not re.fullmatch(r"[0-9a-f]{64}", item.get("sha256", "")):
+            fail("desktop frontend file manifest contains an invalid file/hash")
+        file_hashes[item["path"]] = item["sha256"]
+        tree.update((item["sha256"] + "  " + item["path"] + "\n").encode("utf-8"))
+    if list(file_hashes) != sorted(file_hashes) or tree.hexdigest() != desktop["tree_sha256"] or manifest.get("tree_sha256") != desktop["tree_sha256"]:
+        fail("desktop frontend per-file manifest does not reproduce its tree hash")
+    if file_hashes.get("assets/renderer.bundle.js") != builds["renderer"]["sha256"]:
+        fail("desktop frontend manifest renderer bundle differs from the Rails artifact")
+    if file_hashes.get("assets/tailwind.css") != builds["tailwind"]["sha256"]:
+        fail("desktop frontend manifest Tailwind artifact differs from the Rails artifact")
+    if "desktop" not in builds["ci_success_jobs"] or "desktop-macos" not in builds["ci_success_jobs"]:
+        fail("rollback build evidence must include Linux and macOS desktop CI jobs")
+
+
+def check_baseline(status: dict) -> str:
+    baseline = read_json(BASELINE_PATH)
+    if not isinstance(baseline, dict) or baseline.get("schema_version") != 1:
+        fail("baseline.json must use schema_version 1")
+    head = git("rev-parse", "HEAD")
+    check_identity(status, baseline, head)
+    if baseline["execution_environment"]["machine"] != status["execution_environment"]:
+        fail("baseline environment fingerprint differs from Phase 00 status")
+    check_fixtures(baseline)
+    check_scenarios(baseline)
+    check_architecture_inventory(baseline)
+    check_ci_and_performance(baseline)
+    check_build_references(baseline)
+    return head
+
+
+def check_stubs() -> None:
+    for command in STUB_COMMANDS:
+        result = subprocess.run(
+            [str(CHECK), command],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        combined = result.stdout + result.stderr
+        if result.returncode == 0 or "not implemented in Phase 00" not in combined:
+            fail(f"bin/check {command} must fail nonzero with an explicit Phase 00 message")
+
+
+def run_phase0(json_output: bool) -> int:
+    before_status = git("status", "--porcelain", "--untracked-files=all")
+    errors: list[str] = []
+    head = "unknown"
+    try:
+        if before_status:
+            fail("Phase 00 verification requires a clean candidate checkout")
+        status = read_json(STATUS_PATH)
+        if not isinstance(status, dict):
+            fail("status.json must be an object")
+        head = check_baseline(status)
+        check_stubs()
+        after_status = git("status", "--porcelain", "--untracked-files=all")
+        if after_status != before_status:
+            fail("Phase 00 verification changed the candidate working tree")
+    except (CheckFailure, KeyError, TypeError, ValueError, OSError, json.JSONDecodeError) as error:
+        errors.append(str(error))
+    if errors:
+        if json_output:
+            print(json.dumps({"phase": 0, "result": "FAIL", "head": head, "errors": errors}, separators=(",", ":")))
+        else:
+            for error in errors:
+                print(f"bin/check phase 0: {error}", file=sys.stderr)
+        return 1
+    if json_output:
+        print(json.dumps({"phase": 0, "result": "PASS", "head": head}, separators=(",", ":")))
+        print("ELEF_PHASE_0=PASS")
+    else:
+        print(f"Phase 00 baseline checks passed at {head}.")
+    return 0
+
+
+def print_usage() -> None:
+    print("Usage: bin/check {quick|affected|phase N|all|arch|fresh|docs|perf}", file=sys.stderr)
+
+
+def main(argv: list[str]) -> int:
+    if not argv or argv[0] not in COMMANDS:
+        print_usage()
+        return 2
+    command = argv[0]
+    if command != "phase":
+        print(f"bin/check {command} is not implemented in Phase 00.", file=sys.stderr)
+        return 2
+    if len(argv) < 2:
+        print_usage()
+        return 2
+    if argv[1] != "0":
+        print(f"bin/check phase {argv[1]} is not implemented in Phase 00.", file=sys.stderr)
+        return 2
+    extra = argv[2:]
+    if any(item != "--json" for item in extra) or extra.count("--json") > 1:
+        print_usage()
+        return 2
+    return run_phase0("--json" in extra)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))

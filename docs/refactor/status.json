@@ -23,5 +23,5 @@
   },
   "pending_human_gates": [],
   "blocker": null,
-  "next_action": "Implement the read-only Phase 00 bin/check verifier for the committed baseline records."
+  "next_action": "Commit the read-only Phase 00 checker, run its immutable gate twice, then request an independent review."
 }
