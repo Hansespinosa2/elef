@@ -3,7 +3,7 @@
   "campaign_branch": "feat/refactor-desktop-and-web",
   "campaign_base_sha": "88f61a7a8ffd7c276bafcf06eee09c36a8adf134",
   "current_phase": 1,
-  "phase_state": "CHECK",
+  "phase_state": "ACT",
   "phase_base_sha": "64abf6ed087f1b1b2ff232f88123c76ca362a7d0",
   "head_sha": "df6033fd2b92467f3ae0dcf0c2bc81f4e7eff325",
   "review_round": 1,
@@ -124,5 +124,5 @@
   },
   "pending_human_gates": [],
   "blocker": null,
-  "next_action": "Independent review round 1 for Phase 01 candidate df6033f (gate attempt 8e93e12c PASS)."
+  "next_action": "Round-1 review PASS with zero findings; commit PASS transition for Phase 01."
 }
