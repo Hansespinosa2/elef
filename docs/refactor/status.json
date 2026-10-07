@@ -3,7 +3,7 @@
   "campaign_branch": "feat/refactor-desktop-and-web",
   "campaign_base_sha": "88f61a7a8ffd7c276bafcf06eee09c36a8adf134",
   "current_phase": 0,
-  "phase_state": "ACT",
+  "phase_state": "DO",
   "phase_base_sha": "88f61a7a8ffd7c276bafcf06eee09c36a8adf134",
   "head_sha": "26a6b0f155c4354b8649cdc82219d728836081b7",
   "review_round": 1,
@@ -62,5 +62,5 @@
   },
   "pending_human_gates": [],
   "blocker": null,
-  "next_action": "Transition ACT to DO for P00-CI-OWNERSHIP-001, then rerun exact-candidate desktop CI to clear P00-CI-NATIVE-001."
+  "next_action": "Remove bin/check source literals matching the desktop/ ownership scan while preserving Phase 00 command outputs; run the ownership checker and affected verification."
 }
