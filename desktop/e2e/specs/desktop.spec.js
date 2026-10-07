@@ -736,6 +736,7 @@ class DesktopEditorUi {
   async typeEmptyDisplayMath(mode) {
     const delimiterInput = mode === "visual" ? "$$" : "$$$$"
     const expectedPairSource = `${await this.readSource()}${delimiterInput}`
+    await browser.execute(() => window.focus())
     focusDesktopWindow()
     let target
     if (mode === "visual") {
@@ -749,8 +750,8 @@ class DesktopEditorUi {
       sendNativeKey("ControlOrMeta+End", { activate: false })
     }
 
-    await target.addValue("$")
-    await target.addValue("$")
+    typeNativeText("$", { activate: false })
+    typeNativeText("$", { activate: false })
     await this.waitForSource(expectedPairSource)
     sendNativeKey("Enter", { activate: false })
   }
