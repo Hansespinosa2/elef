@@ -5,7 +5,7 @@ import { libraryAndGraphWorkflow } from "../../../test/e2e/scenarios/library-and
 import { libraryCreateDeleteWorkflow } from "../../../test/e2e/scenarios/library-create-delete.js"
 import { externalEditConflictWorkflow, CONFLICT_EXTERNAL_SOURCE } from "../../../test/e2e/scenarios/external-edit-conflict.js"
 import { hostileDeckNeutralizedWorkflow } from "../../../test/e2e/scenarios/hostile-deck.js"
-import { mathInputWorkflow, snippetInsertWorkflow } from "../../../test/e2e/scenarios/authoring-palettes.js"
+import { documentLinkCompletionWorkflow, mathInputWorkflow, snippetInsertWorkflow } from "../../../test/e2e/scenarios/authoring-palettes.js"
 import { authoringSettingsWorkflow } from "../../../test/e2e/scenarios/authoring-settings.js"
 import { PIXEL_PNG_MARKDOWN } from "../../../test/e2e/scenarios/media-fixture.js"
 import { presentationModeWorkflow } from "../../../test/e2e/scenarios/presentation-mode.js"
@@ -464,15 +464,27 @@ class WebEditorUi {
   }
 
   async waitForAuthoringOption(palette, name) {
-    const label = palette === "snippet" ? "Snippet suggestions" : "Math shortcut suggestions"
+    const label = palette === "snippet"
+      ? "Snippet suggestions"
+      : palette === "document-link" ? "Document link suggestions" : "Math shortcut suggestions"
     const option = this.page.locator(`.source-field [role="listbox"][aria-label="${label}"] [role="option"]`).filter({ hasText: name }).first()
     await expect(option).toBeVisible()
   }
 
   async selectAuthoringOption(palette, name) {
-    const label = palette === "snippet" ? "Snippet suggestions" : "Math shortcut suggestions"
+    const label = palette === "snippet"
+      ? "Snippet suggestions"
+      : palette === "document-link" ? "Document link suggestions" : "Math shortcut suggestions"
     const option = this.page.locator(`.source-field [role="listbox"][aria-label="${label}"] [role="option"]`).filter({ hasText: name }).first()
     await option.click()
+  }
+
+  async refreshDocumentLinkPalette() {
+    await this.page.locator(".source-field").evaluate(field => {
+      const controller = globalThis.Stimulus?.getControllerForElementAndIdentifier(field, "document-link-palette")
+      if (!controller) throw new Error("The document-link palette controller is unavailable")
+      controller.refresh()
+    })
   }
 
   async editVisualText(currentText, replacementText) {
@@ -895,6 +907,10 @@ test("shared external-edit conflict flow saves a merge in the web app", async ({
 
 test("shared snippet insertion flow works in the web app", async ({ page }) => {
   await snippetInsertWorkflow(new WebEditorUi(page))
+})
+
+test("shared document-link completion replaces auto-paired closers in the web app", async ({ page }) => {
+  await documentLinkCompletionWorkflow(new WebEditorUi(page))
 })
 
 test("shared authoring settings create, edit, and delete flow works in the web app", async ({ page }) => {

@@ -9,7 +9,7 @@ import { libraryAndGraphWorkflow } from "../../../test/e2e/scenarios/library-and
 import { libraryCreateDeleteWorkflow } from "../../../test/e2e/scenarios/library-create-delete.js"
 import { externalEditConflictWorkflow, CONFLICT_EXTERNAL_SOURCE } from "../../../test/e2e/scenarios/external-edit-conflict.js"
 import { hostileDeckNeutralizedWorkflow } from "../../../test/e2e/scenarios/hostile-deck.js"
-import { mathInputWorkflow, snippetInsertWorkflow } from "../../../test/e2e/scenarios/authoring-palettes.js"
+import { documentLinkCompletionWorkflow, mathInputWorkflow, snippetInsertWorkflow } from "../../../test/e2e/scenarios/authoring-palettes.js"
 import { authoringSettingsWorkflow } from "../../../test/e2e/scenarios/authoring-settings.js"
 import { PIXEL_PNG_DIGEST, PIXEL_PNG_MARKDOWN } from "../../../test/e2e/scenarios/media-fixture.js"
 import { presentationModeWorkflow } from "../../../test/e2e/scenarios/presentation-mode.js"
@@ -962,7 +962,22 @@ class DesktopEditorUi {
   }
 
   async waitForAuthoringOption(palette, name) {
-    const label = palette === "snippet" ? "Snippet suggestions" : "Math shortcut suggestions"
+    const label = palette === "snippet"
+      ? "Snippet suggestions"
+      : palette === "document-link" ? "Document link suggestions" : "Math shortcut suggestions"
+    if (palette === "document-link") {
+      const visible = await browser.execute(({ label, name }) => {
+        const field = document.querySelector("#desktop-editor-field")
+        const controller = globalThis.Stimulus?.getControllerForElementAndIdentifier(field, "document-link-palette")
+        const listbox = [...(field?.querySelectorAll('[role="listbox"]') || [])]
+          .find(element => element.getAttribute("aria-label") === label)
+        const option = [...(listbox?.querySelectorAll('[role="option"]') || [])]
+          .find(element => element.textContent.includes(name))
+        return Boolean(controller && listbox && !listbox.hidden && controller.matches.includes(name) && option)
+      }, { label, name })
+      if (!visible) throw new Error(`The document-link palette did not show ${name}`)
+      return
+    }
     const controllerId = palette === "snippet" ? "snippet-palette" : "math-shortcut-palette"
     const inspect = async () => browser.execute(({ label, name, palette, controllerId }) => {
       const field = document.querySelector("#desktop-editor-field")
@@ -1007,9 +1022,11 @@ class DesktopEditorUi {
   }
 
   async selectAuthoringOption(palette, name) {
-    const label = palette === "snippet" ? "Snippet suggestions" : "Math shortcut suggestions"
+    const label = palette === "snippet"
+      ? "Snippet suggestions"
+      : palette === "document-link" ? "Document link suggestions" : "Math shortcut suggestions"
     await this.waitForAuthoringOption(palette, name)
-    const selected = await browser.execute(({ label, name }) => {
+    const selected = await browser.execute(({ label, name, palette }) => {
       const field = document.querySelector("#desktop-editor-field")
       const editor = field?.editorController
       const listbox = [...document.querySelectorAll('.source-field [role="listbox"]')]
@@ -1018,11 +1035,22 @@ class DesktopEditorUi {
         .find(element => element.textContent.includes(name))
       if (!editor || !listbox || listbox.hidden || !item) return false
       const sourceBefore = editor.sourceValue
-      editor.setSelectionRange(sourceBefore.length)
+      if (palette !== "document-link") editor.setSelectionRange(sourceBefore.length)
       item.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true, view: window }))
       return editor.sourceValue !== sourceBefore && listbox.hidden
-    }, { label, name })
+    }, { label, name, palette })
     if (!selected) throw new Error(`The ${palette} palette did not insert ${name} into the editor source`)
+  }
+
+  async refreshDocumentLinkPalette() {
+    const visible = await browser.execute(() => {
+      const field = document.querySelector("#desktop-editor-field")
+      const controller = globalThis.Stimulus?.getControllerForElementAndIdentifier(field, "document-link-palette")
+      if (!controller) return false
+      controller.refresh()
+      return !controller.paletteTarget.hidden
+    })
+    if (!visible) throw new Error("The document-link palette did not open")
   }
 
   async editVisualText(currentText, replacementText) {
@@ -1831,6 +1859,10 @@ describe("desktop binary workflows and native boundaries", () => {
 
   it("runs the shared snippet insertion flow in the desktop binary", async () => {
     await snippetInsertWorkflow(new DesktopEditorUi())
+  })
+
+  it("runs the shared document-link completion flow in the desktop binary", async () => {
+    await documentLinkCompletionWorkflow(new DesktopEditorUi())
   })
 
   it("runs the shared authoring settings create, edit, and delete flow in the desktop binary", async () => {
