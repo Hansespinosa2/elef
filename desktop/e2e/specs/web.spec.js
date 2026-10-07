@@ -337,7 +337,7 @@ class WebEditorUi {
 
     const editor = this.page.locator(".source-field .cm-content")
     await editor.click()
-    await editor.press("End")
+    await editor.press("ControlOrMeta+End")
     await editor.pressSequentially("$")
     await editor.pressSequentially("$")
     await expect.poll(() => this.readSource()).toBe(expectedPairSource)
