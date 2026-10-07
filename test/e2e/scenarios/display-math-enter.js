@@ -28,7 +28,7 @@ export async function displayMathEnterWorkflow(ui) {
     await ui.waitForSaved(expectedSource)
   } finally {
     if (await ui.readSource() !== originalSource) {
-      await ui.replaceSource(originalSource)
+      await ui.restoreSource(originalSource)
       await ui.flushLocalSave()
       await ui.waitForSaved(originalSource)
     }

@@ -208,6 +208,18 @@ class WebEditorUi {
     await this.page.keyboard.insertText(source)
   }
 
+  async restoreSource(source) {
+    await this.showSourceMode()
+    const restoredSource = await this.page.locator(".source-field").evaluate((field, nextSource) => {
+      const controller = field.editorController
+      if (!controller) return null
+      controller.replaceRange(nextSource, 0, controller.view.state.doc.length)
+      controller.setSelectionRange(nextSource.length)
+      return controller.sourceValue
+    }, source)
+    expect(restoredSource).toBe(source)
+  }
+
   async readSource() {
     return this.page.locator(".source-field").evaluate(field => field.editorController?.sourceValue ?? "")
   }

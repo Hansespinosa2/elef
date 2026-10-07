@@ -531,6 +531,10 @@ class DesktopEditorUi {
     }
   }
 
+  async restoreSource(source) {
+    await this.replaceSource(source)
+  }
+
   async waitForEditorModeTransition() {
     await browser.executeAsync(done => {
       requestAnimationFrame(() => requestAnimationFrame(() => done(true)))
