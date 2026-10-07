@@ -21,10 +21,40 @@ use tauri_plugin_updater::UpdaterExt;
 struct DesktopState {
     library: RwLock<Option<Arc<Library>>>,
     root: RwLock<Option<PathBuf>>,
-    pending_import: std::sync::Mutex<Option<PathBuf>>,
+    pending_import: std::sync::Mutex<Option<PendingImport>>,
     open_files: std::sync::Mutex<VecDeque<PathBuf>>,
     update_installing: std::sync::atomic::AtomicBool,
     app_ready: std::sync::atomic::AtomicBool,
+}
+
+/// An archive waiting for an import-conflict choice. Byte imports stage the
+/// archive in a temp file owned by the app; dialog imports reference the
+/// user's file, which the app must never delete.
+#[derive(Debug)]
+struct PendingImport {
+    path: PathBuf,
+    staged: bool,
+}
+
+fn store_pending_import(state: &DesktopState, path: PathBuf, staged: bool) {
+    *state
+        .pending_import
+        .lock()
+        .expect("pending import lock poisoned") = Some(PendingImport { path, staged });
+}
+
+fn take_pending_import(state: &DesktopState) -> Option<PendingImport> {
+    state
+        .pending_import
+        .lock()
+        .expect("pending import lock poisoned")
+        .take()
+}
+
+fn discard_pending_import(pending: &PendingImport) {
+    if pending.staged {
+        let _ = fs::remove_file(&pending.path);
+    }
 }
 
 impl DesktopState {
@@ -599,7 +629,7 @@ async fn import_elef(
         .into_path()
         .map_err(|_| CommandError::new("invalid_input", "Choose a local file.", false))?;
     let library = state.current_library()?;
-    import_archive(&state, &library, archive_path)
+    import_archive(&state, &library, archive_path, false)
 }
 
 #[tauri::command]
@@ -636,7 +666,7 @@ fn import_opened_elef(
             .push_front(archive_path);
         return Ok(None);
     }
-    import_archive(&state, &library, archive_path)
+    import_archive(&state, &library, archive_path, false)
 }
 
 #[tauri::command]
@@ -652,18 +682,26 @@ fn import_archive(
     state: &DesktopState,
     library: &Library,
     archive_path: PathBuf,
+    staged: bool,
 ) -> Result<Option<ImportResult>, CommandError> {
     match library.import_elef(&archive_path, None) {
         Ok(result) => Ok(Some(result)),
         Err(error @ CoreError::ImportConflict { .. }) => {
-            *state
-                .pending_import
-                .lock()
-                .expect("pending import lock poisoned") = Some(archive_path);
+            store_pending_import(state, archive_path, staged);
             Err(error.into())
         }
         Err(error) => Err(error.into()),
     }
+}
+
+fn complete_pending_import(
+    library: &Library,
+    pending: &PendingImport,
+    choice: ImportResolution,
+) -> Result<Option<ImportResult>, CommandError> {
+    let result = library.import_elef(&pending.path, Some(choice))?;
+    discard_pending_import(pending);
+    Ok(Some(result))
 }
 
 #[tauri::command]
@@ -673,11 +711,9 @@ async fn resolve_import_conflict(
     resolution: String,
 ) -> Result<Option<ImportResult>, CommandError> {
     if resolution == "cancel" {
-        state
-            .pending_import
-            .lock()
-            .expect("pending import lock poisoned")
-            .take();
+        if let Some(pending) = take_pending_import(&state) {
+            discard_pending_import(&pending);
+        }
         return Ok(None);
     }
     let choice = match resolution.as_str() {
@@ -691,21 +727,16 @@ async fn resolve_import_conflict(
             ));
         }
     };
-    let archive_path = state
-        .pending_import
-        .lock()
-        .expect("pending import lock poisoned")
-        .take()
-        .ok_or_else(|| {
-            CommandError::new(
-                "not_found",
-                "There is no import waiting for a choice.",
-                false,
-            )
-        })?;
+    let pending = take_pending_import(&state).ok_or_else(|| {
+        CommandError::new(
+            "not_found",
+            "There is no import waiting for a choice.",
+            false,
+        )
+    })?;
     let library = state.current_library()?;
     if choice == ImportResolution::Replace {
-        let preview = match library.import_elef(&archive_path, None) {
+        let preview = match library.import_elef(&pending.path, None) {
             Err(CoreError::ImportConflict { existing_name, .. }) => existing_name,
             Ok(_) => {
                 return Err(CommandError::new(
@@ -724,10 +755,11 @@ async fn resolve_import_conflict(
         )
         .await?;
         if !confirmed {
+            discard_pending_import(&pending);
             return Ok(None);
         }
     }
-    Ok(Some(library.import_elef(&archive_path, Some(choice))?))
+    complete_pending_import(&library, &pending, choice)
 }
 
 fn write_elef_archive(
@@ -962,6 +994,13 @@ fn import_elef_bytes(
     state: State<'_, DesktopState>,
     bytes: Vec<u8>,
 ) -> Result<Option<ImportResult>, CommandError> {
+    import_elef_bytes_impl(&state, &bytes)
+}
+
+fn import_elef_bytes_impl(
+    state: &DesktopState,
+    bytes: &[u8],
+) -> Result<Option<ImportResult>, CommandError> {
     if bytes.is_empty() {
         return Err(CommandError::new(
             "invalid_input",
@@ -974,15 +1013,25 @@ fn import_elef_bytes(
         .suffix(".elef")
         .tempfile()
         .map_err(|_| CommandError::new("io_error", "The archive could not be staged.", true))?;
-    std::io::Write::write_all(&mut &staged, &bytes)
+    std::io::Write::write_all(&mut &staged, bytes)
         .map_err(|_| CommandError::new("io_error", "The archive could not be staged.", true))?;
     let path = staged
         .into_temp_path()
         .keep()
         .map_err(|_| CommandError::new("io_error", "The archive could not be staged.", true))?;
     let library = state.current_library()?;
-    let result = import_archive(&state, &library, path.clone());
-    let _ = fs::remove_file(&path);
+    let result = import_archive(state, &library, path.clone(), true);
+    // A conflict stores the staged archive as the pending import, so the
+    // file must survive until the conflict is resolved or cancelled.
+    let pending_mine = state
+        .pending_import
+        .lock()
+        .expect("pending import lock poisoned")
+        .as_ref()
+        .is_some_and(|pending| pending.path == path);
+    if !pending_mine {
+        let _ = fs::remove_file(&path);
+    }
     result
 }
 
@@ -1417,6 +1466,43 @@ mod tests {
                 ))
             })
         );
+    }
+
+    #[test]
+    fn staged_bytes_import_survives_conflict_until_keep_both_resolution() {
+        use std::io::Cursor;
+        let temp = tempfile::TempDir::new().unwrap();
+        let root = temp.path().join("library");
+        fs::create_dir(&root).unwrap();
+        let state = DesktopState::default();
+        state.use_library(root).unwrap();
+        let library = state.current_library().unwrap();
+        let deck = library.create_deck("Transfer", "document").unwrap();
+        let mut archive = Cursor::new(Vec::new());
+        library.export_elef(&deck.id, &mut archive).unwrap();
+        let bytes = archive.into_inner();
+        assert!(!bytes.is_empty());
+
+        // The deck is still present, so the byte import conflicts and the
+        // staged archive becomes the pending import.
+        let error = import_elef_bytes_impl(&state, &bytes).unwrap_err();
+        assert_eq!(error.code, "import_conflict");
+        let staged = take_pending_import(&state).expect("conflict stays pending");
+        assert!(staged.staged);
+        assert!(staged.path.exists());
+
+        // Resolving through the real completion path re-imports the staged
+        // archive instead of failing on the deleted file, then cleans up.
+        // Byte imports carry no deck-name metadata, so keep_both mints a
+        // fresh identity under the staged file's stem, not a name collision.
+        let resolved = complete_pending_import(&library, &staged, ImportResolution::KeepBoth)
+            .unwrap()
+            .unwrap();
+        assert_ne!(resolved.deck.id, deck.id);
+        let reread = library.open_deck(&resolved.deck.id).unwrap();
+        assert!(reread.source.contains("# Transfer"));
+        assert!(!staged.path.exists());
+        assert!(take_pending_import(&state).is_none());
     }
 
     #[test]
