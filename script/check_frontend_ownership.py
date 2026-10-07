@@ -3,6 +3,7 @@
 
 import hashlib
 import json
+import os
 import re
 from collections import Counter
 from pathlib import Path
@@ -33,6 +34,28 @@ assert not violations, (
 
 app_frontend = ROOT / "app" / "javascript"
 desktop_root = (ROOT / "desktop").resolve()
+
+# Desktop packages the canonical host template and styles from app/. Do not
+# allow a second authored view or stylesheet to appear under desktop/, even if
+# its JavaScript happens to import shared modules. Native menus and dialogs
+# are implemented with Tauri APIs and do not need frontend markup or CSS.
+desktop_ui_extensions = {
+    ".html", ".htm", ".css", ".scss", ".sass", ".less",
+    ".jsx", ".tsx", ".vue", ".svelte",
+}
+generated_directories = {"node_modules", "dist", "dist-e2e", "target"}
+desktop_ui_files = []
+for directory, subdirectories, filenames in os.walk(desktop_root):
+    subdirectories[:] = [name for name in subdirectories if name not in generated_directories]
+    for filename in filenames:
+        path = Path(directory) / filename
+        if path.suffix.lower() in desktop_ui_extensions:
+            desktop_ui_files.append(path.relative_to(ROOT).as_posix())
+assert not desktop_ui_files, (
+    "Desktop must consume Rails-owned UI markup and styles; move authored UI files under app/: "
+    + ", ".join(sorted(desktop_ui_files))
+)
+
 frontend_import_violations = []
 for path in app_frontend.rglob("*.js"):
     source = path.read_text()

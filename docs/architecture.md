@@ -31,6 +31,8 @@ Operating system and user-selected library
 
 Rails code must not import desktop files or Tauri APIs. The desktop must not duplicate shareable views, styles, controllers, or product workflows. The ownership checker enforces this boundary: [script/check_frontend_ownership.py](../script/check_frontend_ownership.py).
 
+Authored HTML, CSS, and frontend view components belong under `app/`; `desktop/` may not add parallel markup or stylesheets. The desktop packages the Rails-owned static host template and shared styles. Native menus, window chrome, dialogs, and filesystem pickers use Tauri APIs where the platform requires them.
+
 ## Product boundaries
 
 | Area | Web app | Desktop app |
