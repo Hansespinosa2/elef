@@ -17,3 +17,4 @@ unicode-normalization = "0.1"
 caseless = "=0.2.2"
 uuid = { version = "1", features = ["v4", "serde"] }
 zip = { version = "=2.4.2", default-features = false, features = ["deflate-miniz"] }
+notify = "8.2.0"

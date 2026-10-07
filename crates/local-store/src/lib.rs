@@ -6,6 +6,7 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use caseless::default_case_fold_str;
+use notify::{RecursiveMode, Watcher as NotifyWatcher};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tempfile::Builder as TempFileBuilder;
@@ -35,6 +36,7 @@ const MAX_ARCHIVE_RATIO_CHECK_BYTES: u64 = 1024 * 1024;
 const LIBRARY_CONFIG_DIR: &str = ".elef";
 const SNAPSHOT_DIR: &str = ".elef-history";
 const SNAPSHOT_RETENTION_MS: u128 = 7 * 24 * 60 * 60 * 1000;
+const WATCH_DEBOUNCE_MS: u128 = 500;
 const LIBRARY_CONFIG_FILE: &str = "config.json";
 const LIBRARY_CONFIG_SCHEMA_VERSION: u32 = 1;
 const AUTHORING_REGISTRY_SCHEMA_VERSION: u32 = 1;
@@ -280,6 +282,32 @@ pub struct Library {
     root: PathBuf,
     records: RwLock<HashMap<String, DeckRecord>>,
     write_locks: Mutex<HashMap<String, Arc<Mutex<()>>>>,
+    file_watcher: Mutex<Option<WatchState>>,
+}
+
+/// A coalesced external filesystem change affecting one deck's source file.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct FileEvent {
+    pub deck_id: String,
+    pub kind: FileEventKind,
+}
+
+/// Source content changed (create/modify/rename-over) or the source vanished.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum FileEventKind {
+    SourceChanged,
+    SourceRemoved,
+}
+
+struct WatchHit {
+    removed: bool,
+    last_ms: u128,
+}
+
+struct WatchState {
+    _watcher: notify::RecommendedWatcher,
+    events: std::sync::mpsc::Receiver<Result<notify::Event, notify::Error>>,
+    pending: HashMap<PathBuf, WatchHit>,
 }
 
 impl Library {
@@ -293,6 +321,7 @@ impl Library {
             root,
             records: RwLock::new(HashMap::new()),
             write_locks: Mutex::new(HashMap::new()),
+            file_watcher: Mutex::new(None),
         })
     }
 
@@ -1021,6 +1050,110 @@ impl Library {
             }
         }
         Ok(())
+    }
+
+    /// Starts recursive filesystem watching of the library root. Idempotent.
+    /// Events are coalesced per path and drained with
+    /// [`Library::poll_file_events`]; nothing is delivered before then.
+    pub fn enable_watching(&self) -> Result<(), CoreError> {
+        let mut slot = self.file_watcher.lock().expect("watcher lock poisoned");
+        if slot.is_some() {
+            return Ok(());
+        }
+        let (sender, events) = std::sync::mpsc::channel();
+        let mut watcher = notify::RecommendedWatcher::new(
+            move |event| {
+                let _ = sender.send(event);
+            },
+            notify::Config::default(),
+        )
+        .map_err(|error| CoreError::Io(std::io::Error::other(error.to_string())))?;
+        watcher
+            .watch(&self.root, RecursiveMode::Recursive)
+            .map_err(|error| CoreError::Io(std::io::Error::other(error.to_string())))?;
+        *slot = Some(WatchState {
+            _watcher: watcher,
+            events,
+            pending: HashMap::new(),
+        });
+        Ok(())
+    }
+
+    /// Drains coalesced external filesystem events for deck source files.
+    /// A path is reported once it has been quiet for the debounce window, so
+    /// rapid successive writes surface as a single event. Dot-files, history,
+    /// temp files, and non-source deck files never produce events. Returns an
+    /// empty list while watching is disabled. Sorted by deck id.
+    pub fn poll_file_events(&self) -> Vec<FileEvent> {
+        let mut slot = self.file_watcher.lock().expect("watcher lock poisoned");
+        let Some(state) = slot.as_mut() else {
+            return Vec::new();
+        };
+        while let Ok(result) = state.events.try_recv() {
+            let Ok(event) = result else { continue };
+            let removed = event.kind.is_remove();
+            for path in event.paths {
+                match canonical_event_path(&path) {
+                    Some(canonical) => {
+                        state.pending.insert(
+                            canonical,
+                            WatchHit {
+                                removed,
+                                last_ms: now_ms(),
+                            },
+                        );
+                    }
+                    None => continue,
+                }
+            }
+        }
+        let now = now_ms();
+        let mut quiet = Vec::new();
+        state.pending.retain(|path, hit| {
+            if now.saturating_sub(hit.last_ms) >= WATCH_DEBOUNCE_MS {
+                quiet.push((path.clone(), hit.removed));
+                false
+            } else {
+                true
+            }
+        });
+        drop(slot);
+        let records = self.records.read().expect("deck index lock poisoned");
+        let mut events = Vec::new();
+        for (path, removed) in quiet {
+            let Some(record) = records
+                .values()
+                .find(|record| path.starts_with(&record.path))
+            else {
+                continue;
+            };
+            if is_ignored_watch_path(&self.root, &path) {
+                continue;
+            }
+            let kind = if path == record.source_path {
+                if record.source_path.exists() {
+                    FileEventKind::SourceChanged
+                } else {
+                    FileEventKind::SourceRemoved
+                }
+            } else if removed && path == record.path {
+                FileEventKind::SourceRemoved
+            } else {
+                continue;
+            };
+            events.push(FileEvent {
+                deck_id: record.id.clone(),
+                kind,
+            });
+        }
+        // Removal is terminal: it wins when one drain holds both kinds.
+        events.sort_by(|a, b| {
+            a.deck_id
+                .cmp(&b.deck_id)
+                .then_with(|| event_kind_rank(&a.kind).cmp(&event_kind_rank(&b.kind)))
+        });
+        events.dedup_by(|a, b| a.deck_id == b.deck_id);
+        events
     }
 
     pub fn upload_asset(
@@ -2520,6 +2653,31 @@ fn unique_snapshot_name(dir: &Path, reason: &str) -> (u128, String) {
         }
         stamp += 1;
     }
+}
+
+fn event_kind_rank(kind: &FileEventKind) -> u8 {
+    match kind {
+        FileEventKind::SourceRemoved => 0,
+        FileEventKind::SourceChanged => 1,
+    }
+}
+
+fn canonical_event_path(path: &Path) -> Option<PathBuf> {
+    if let Ok(canonical) = fs::canonicalize(path) {
+        return Some(canonical);
+    }
+    let parent = path.parent()?;
+    let canonical_parent = fs::canonicalize(parent).ok()?;
+    Some(canonical_parent.join(file_name(path)))
+}
+
+fn is_ignored_watch_path(root: &Path, path: &Path) -> bool {
+    let Ok(relative) = path.strip_prefix(root) else {
+        return true;
+    };
+    relative.components().any(
+        |part| matches!(part, Component::Normal(name) if name.to_string_lossy().starts_with('.')),
+    )
 }
 
 fn validate_snapshot_id(id: &str) -> Result<(), CoreError> {
@@ -4173,5 +4331,135 @@ mod tests {
             .take_snapshot(&deck.id, "interval", Some(&huge))
             .unwrap_err();
         assert!(matches!(error, CoreError::TooLarge));
+    }
+
+    fn poll_until(
+        library: &Library,
+        deck_id: &str,
+        kind: FileEventKind,
+        what: &str,
+    ) -> Vec<FileEvent> {
+        let deadline = Instant::now() + std::time::Duration::from_secs(20);
+        loop {
+            let events = library.poll_file_events();
+            if events
+                .iter()
+                .any(|event| event.deck_id == deck_id && event.kind == kind)
+            {
+                return events;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "timed out waiting for {what} after 20s"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+    }
+
+    #[test]
+    fn watcher_drains_empty_while_disabled_and_enables_idempotently() {
+        let (_temp, library) = library();
+        let deck = library.create_deck("Watch Disabled", "document").unwrap();
+        assert!(library.poll_file_events().is_empty());
+        library.enable_watching().unwrap();
+        library.enable_watching().unwrap();
+        let path = library.root().join("Watch Disabled").join("document.md");
+        fs::write(&path, "changed\n").unwrap();
+        let events = poll_until(
+            &library,
+            &deck.id,
+            FileEventKind::SourceChanged,
+            "direct write",
+        );
+        assert_eq!(events.len(), 1);
+    }
+
+    #[test]
+    fn watcher_reports_git_style_rename_over_temp() {
+        let (_temp, library) = library();
+        let deck = library.create_deck("Watch Rename", "document").unwrap();
+        library.enable_watching().unwrap();
+        let dir = library.root().join("Watch Rename");
+        let temp = dir.join(".git-tmp-write");
+        fs::write(&temp, "renamed over\n").unwrap();
+        fs::rename(&temp, dir.join("document.md")).unwrap();
+        poll_until(
+            &library,
+            &deck.id,
+            FileEventKind::SourceChanged,
+            "rename-over-temp",
+        );
+    }
+
+    #[test]
+    fn watcher_reports_atomic_replace_and_delete_recreate() {
+        let (_temp, library) = library();
+        let deck = library.create_deck("Watch Atomic", "document").unwrap();
+        library.enable_watching().unwrap();
+        // Sync-tool style: delete then recreate with new bytes.
+        let path = library.root().join("Watch Atomic").join("document.md");
+        fs::remove_file(&path).unwrap();
+        poll_until(
+            &library,
+            &deck.id,
+            FileEventKind::SourceRemoved,
+            "source removal",
+        );
+        fs::write(&path, "recreated\n").unwrap();
+        poll_until(
+            &library,
+            &deck.id,
+            FileEventKind::SourceChanged,
+            "recreate after removal",
+        );
+    }
+
+    #[test]
+    fn watcher_coalesces_rapid_successive_writes() {
+        let (_temp, library) = library();
+        let deck = library.create_deck("Watch Coalesce", "document").unwrap();
+        library.enable_watching().unwrap();
+        let path = library.root().join("Watch Coalesce").join("document.md");
+        for i in 0..5 {
+            fs::write(&path, format!("revision {i}\n")).unwrap();
+        }
+        let events = poll_until(
+            &library,
+            &deck.id,
+            FileEventKind::SourceChanged,
+            "coalesced writes",
+        );
+        assert_eq!(events.len(), 1);
+        // Nothing further arrives after the quiet drain.
+        std::thread::sleep(std::time::Duration::from_millis(700));
+        assert!(library.poll_file_events().is_empty());
+    }
+
+    #[test]
+    fn watcher_ignores_history_temp_and_dot_files() {
+        let (_temp, library) = library();
+        let deck = library.create_deck("Watch Ignored", "document").unwrap();
+        library.enable_watching().unwrap();
+        library.take_snapshot(&deck.id, "interval", None).unwrap();
+        let dir = library.root().join("Watch Ignored");
+        fs::write(dir.join(".elef-save-1.tmp"), b"temp").unwrap();
+        fs::write(dir.join(".DS_Store"), b"junk").unwrap();
+        // Snapshot and temp activity must stay silent past the debounce window.
+        std::thread::sleep(std::time::Duration::from_millis(900));
+        assert!(library.poll_file_events().is_empty());
+    }
+
+    #[test]
+    fn watcher_reports_deck_directory_removal() {
+        let (_temp, library) = library();
+        let deck = library.create_deck("Watch Rmdir", "document").unwrap();
+        library.enable_watching().unwrap();
+        fs::remove_dir_all(library.root().join("Watch Rmdir")).unwrap();
+        poll_until(
+            &library,
+            &deck.id,
+            FileEventKind::SourceRemoved,
+            "deck directory removal",
+        );
     }
 }
