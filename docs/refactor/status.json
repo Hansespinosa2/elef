@@ -17,11 +17,11 @@
     "ram_mb": 7966,
     "swap_mb": 0,
     "cpu_count": 4,
-    "free_disk_mb": 35339,
+    "free_disk_mb": 33520,
     "display_mode": "none",
     "tauri_native_runner": "unavailable"
   },
   "pending_human_gates": [],
   "blocker": null,
-  "next_action": "Implement the frozen Phase 00 baseline records, dependency and timing measurements, and read-only bin/check skeleton."
+  "next_action": "Implement the read-only Phase 00 bin/check verifier for the committed baseline records."
 }

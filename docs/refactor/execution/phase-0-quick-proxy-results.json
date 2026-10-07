@@ -1,0 +1,98 @@
+[
+  {
+    "run": 1,
+    "exit_code": 0,
+    "seconds": 6.479,
+    "commands": [
+      {
+        "command": "npm run test:javascript",
+        "exit_code": 0,
+        "seconds": 3.01
+      },
+      {
+        "command": "npm test --prefix desktop/frontend",
+        "exit_code": 0,
+        "seconds": 0.471
+      },
+      {
+        "command": "npm run test:unit --prefix desktop/e2e",
+        "exit_code": 0,
+        "seconds": 0.288
+      },
+      {
+        "command": "python3 script/check_frontend_ownership.py",
+        "exit_code": 0,
+        "seconds": 0.188
+      },
+      {
+        "command": "cargo test --manifest-path desktop/Cargo.toml -p elef-core --locked",
+        "exit_code": 0,
+        "seconds": 2.522
+      }
+    ]
+  },
+  {
+    "run": 2,
+    "exit_code": 0,
+    "seconds": 6.419,
+    "commands": [
+      {
+        "command": "npm run test:javascript",
+        "exit_code": 0,
+        "seconds": 2.977
+      },
+      {
+        "command": "npm test --prefix desktop/frontend",
+        "exit_code": 0,
+        "seconds": 0.468
+      },
+      {
+        "command": "npm run test:unit --prefix desktop/e2e",
+        "exit_code": 0,
+        "seconds": 0.285
+      },
+      {
+        "command": "python3 script/check_frontend_ownership.py",
+        "exit_code": 0,
+        "seconds": 0.182
+      },
+      {
+        "command": "cargo test --manifest-path desktop/Cargo.toml -p elef-core --locked",
+        "exit_code": 0,
+        "seconds": 2.507
+      }
+    ]
+  },
+  {
+    "run": 3,
+    "exit_code": 0,
+    "seconds": 6.54,
+    "commands": [
+      {
+        "command": "npm run test:javascript",
+        "exit_code": 0,
+        "seconds": 3.074
+      },
+      {
+        "command": "npm test --prefix desktop/frontend",
+        "exit_code": 0,
+        "seconds": 0.48
+      },
+      {
+        "command": "npm run test:unit --prefix desktop/e2e",
+        "exit_code": 0,
+        "seconds": 0.283
+      },
+      {
+        "command": "python3 script/check_frontend_ownership.py",
+        "exit_code": 0,
+        "seconds": 0.182
+      },
+      {
+        "command": "cargo test --manifest-path desktop/Cargo.toml -p elef-core --locked",
+        "exit_code": 0,
+        "seconds": 2.521
+      }
+    ]
+  }
+]
