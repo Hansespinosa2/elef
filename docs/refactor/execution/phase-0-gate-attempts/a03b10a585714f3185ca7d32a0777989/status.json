@@ -1,0 +1,27 @@
+{
+  "campaign_version": 9,
+  "campaign_branch": "feat/refactor-desktop-and-web",
+  "campaign_base_sha": "88f61a7a8ffd7c276bafcf06eee09c36a8adf134",
+  "current_phase": 0,
+  "phase_state": "DO",
+  "phase_base_sha": "88f61a7a8ffd7c276bafcf06eee09c36a8adf134",
+  "head_sha": "26a6b0f155c4354b8649cdc82219d728836081b7",
+  "review_round": 0,
+  "phase_contract_sha256": "57a5419cace79af009b9b2889cd0aa8cd481b1de561a582214d8adea883394ce",
+  "frozen_plan_sha256": "fc6d3f6595a8e90bd92e91826bbed8044687e18c89d4c4acc3d8b08405c0b93c",
+  "last_completed_phase": null,
+  "last_verified_checks": [],
+  "execution_environment": {
+    "os": "linux",
+    "arch": "x86_64",
+    "ram_mb": 7966,
+    "swap_mb": 0,
+    "cpu_count": 4,
+    "free_disk_mb": 33520,
+    "display_mode": "none",
+    "tauri_native_runner": "unavailable"
+  },
+  "pending_human_gates": [],
+  "blocker": null,
+  "next_action": "Commit the read-only Phase 00 checker, run its immutable gate twice, then request an independent review."
+}
