@@ -552,6 +552,25 @@ class DesktopEditorUi {
     }
   }
 
+  async assertBackspaceDeletesEmptyDollarPair(expectedSource) {
+    const outcome = await browser.execute(source => {
+      const controller = document.querySelector("#desktop-editor-field")?.editorController
+      if (!controller || controller.value !== `${source}$$`) return null
+      controller.setSelectionRange(source.length + 1)
+      const event = new KeyboardEvent("keydown", { key: "Backspace", bubbles: true, cancelable: true })
+      controller.dom.dispatchEvent(event)
+      return {
+        source: controller.value,
+        anchor: controller.selectionStart,
+        head: controller.selectionEnd,
+        prevented: event.defaultPrevented
+      }
+    }, expectedSource)
+    if (outcome?.source !== expectedSource || outcome.anchor !== expectedSource.length || outcome.head !== expectedSource.length || !outcome.prevented) {
+      throw new Error(`Backspace did not delete both characters of the empty dollar pair: ${JSON.stringify(outcome)}`)
+    }
+  }
+
   async assertRelativeLineNumbers() {
     const result = await browser.executeAsync(done => {
       const editor = document.querySelector("#desktop-editor-field")?.editorController

@@ -2060,6 +2060,58 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_selector '[data-autosave-target="status"]', text: "Saved", wait: 5
   end
 
+  test "backspace deletes empty dollar pairs and keeps other edits single-character" do
+    document = Document.create!(title: "Math pair deletion", source: "# Math")
+    visit edit_document_path(document)
+    click_on "Source"
+    source = find_field("Markdown source")
+    editor = find(".cm-content")
+
+    editor.send_keys(:end)
+    editor.send_keys("$")
+    assert_field "Markdown source", with: "# Math$$"
+    assert_equal 7, page.evaluate_script("document.querySelector('.source-field').editorController.selectionStart")
+    editor.send_keys(:backspace)
+    assert_field "Markdown source", with: "# Math"
+    assert_equal 6, page.evaluate_script("document.querySelector('.source-field').editorController.selectionStart")
+
+    editor.send_keys("((")
+    assert_field "Markdown source", with: "# Math(())"
+    assert_equal 8, page.evaluate_script("document.querySelector('.source-field').editorController.selectionStart")
+    editor.send_keys(:backspace)
+    assert_field "Markdown source", with: "# Math()"
+
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector(".source-field").editorController;
+      const newline = String.fromCharCode(10);
+      const escapedDollarPair = String.fromCharCode(92) + "$$";
+      editor.replaceServerSource(["# Math", "", escapedDollarPair].join(newline));
+      editor.setSelectionRange(editor.value.length - 1);
+      editor.focus();
+    JAVASCRIPT
+    editor.send_keys(:backspace)
+    assert_field "Markdown source", with: "# Math\n\n\\$"
+
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector(".source-field").editorController;
+      editor.replaceServerSource(["# Math", "", "$x$"].join(String.fromCharCode(10)));
+      editor.setSelectionRange(editor.value.indexOf("$x$") + 2);
+      editor.focus();
+    JAVASCRIPT
+    editor.send_keys(:backspace)
+    assert_field "Markdown source", with: "# Math\n\n$$"
+    assert_equal 9, page.evaluate_script("document.querySelector('.source-field').editorController.selectionStart")
+
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector(".source-field").editorController;
+      editor.replaceServerSource(["# Math", "", "a$b"].join(String.fromCharCode(10)));
+      editor.setSelectionRange(editor.value.length);
+      editor.focus();
+    JAVASCRIPT
+    editor.send_keys(:backspace)
+    assert_field "Markdown source", with: "# Math\n\na$"
+  end
+
   test "supports editing an active math chain before committing it" do
     document = Document.create!(title: "Editable math chain", source: "# Math")
     visit edit_document_path(document)

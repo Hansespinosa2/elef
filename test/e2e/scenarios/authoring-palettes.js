@@ -17,6 +17,12 @@ export async function mathInputWorkflow(ui) {
   await ui.openDeck()
   await ui.showSourceMode()
   const prefix = (await ui.readSource()).trimEnd()
+  const pairPrefix = `${prefix}\n\n`
+  await ui.replaceSource(`${pairPrefix}$$`)
+  await ui.assertBackspaceDeletesEmptyDollarPair(pairPrefix)
+  await ui.waitForSource(pairPrefix)
+  await ui.waitForSaved(pairPrefix)
+
   const query = `${prefix}\n\n$$\n@a`
 
   await ui.replaceSource(query)

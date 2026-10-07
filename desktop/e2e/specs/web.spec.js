@@ -221,6 +221,28 @@ class WebEditorUi {
     expect(selection).toEqual([position, position])
   }
 
+  async assertBackspaceDeletesEmptyDollarPair(expectedSource) {
+    const outcome = await this.page.locator(".source-field").evaluate((field, source) => {
+      const controller = field.editorController
+      if (!controller || controller.value !== `${source}$$`) return null
+      controller.setSelectionRange(source.length + 1)
+      const event = new KeyboardEvent("keydown", { key: "Backspace", bubbles: true, cancelable: true })
+      controller.dom.dispatchEvent(event)
+      return {
+        source: controller.value,
+        anchor: controller.selectionStart,
+        head: controller.selectionEnd,
+        prevented: event.defaultPrevented
+      }
+    }, expectedSource)
+    expect(outcome).toEqual({
+      source: expectedSource,
+      anchor: expectedSource.length,
+      head: expectedSource.length,
+      prevented: true
+    })
+  }
+
   async assertRelativeLineNumbers() {
     const result = await this.page.locator(".source-field").evaluate(async field => {
       const editor = field.editorController
