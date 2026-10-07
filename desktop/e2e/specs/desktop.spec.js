@@ -1888,6 +1888,11 @@ describe("desktop binary workflows and native boundaries", () => {
 
   it("manages personal snippets through the desktop authoring settings", async () => {
     await openDesktopAuthoringSettings()
+    await $('[data-authoring-tab="snippets"]').click()
+    await browser.waitUntil(async () => (await $('[data-authoring-tab="snippets"]').getAttribute("aria-selected")) === "true", {
+      timeout: 5_000,
+      timeoutMsg: "The snippets authoring settings tab did not open"
+    })
     await $("#new-authoring-entry").click()
 
     const trigger = `managed${Date.now()}`
