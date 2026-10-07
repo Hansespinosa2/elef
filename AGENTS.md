@@ -1,65 +1,73 @@
-# Repository Instructions
+# Elef Agent Instructions
 
-## Architecture and ownership
+Elef is one product hosted by Rails web and standalone Tauri desktop. Shared product behavior has one canonical implementation; host-specific behavior stays in host/native adapters.
 
-- Elef is a Rails application for authoring and presenting Markdown decks. Raw Markdown is canonical; in the desktop app, each deck is a folder on disk. The desktop app has no Postgres dependency or bundled database server.
-- Rails `app/` owns platform-neutral product behavior and UI: shared editor/library workflows, Stimulus controllers and modules, host markup, styles, and rendering code. Reuse these sources in both products. Do not add desktop-only copies of shareable HTML, CSS, or UI/UX logic.
-- `desktop/` consumes Rails-owned frontend sources and owns only the Tauri bootstrap and transport, Rust file operations, native menus/dialogs/windows, lifecycle, updater, and UI that cannot be shared. Keep the dependency one-way: Rails never imports or depends on desktop code or Tauri APIs.
-- Prefer changing an existing shared implementation and deleting redundant code over adding a new abstraction or parallel implementation. Keep Rails importmap and desktop package versions/build outputs in sync.
-- Preserve the product boundaries: web persistence remains Rails-owned; desktop deck files are the source of truth. Do not add a database server to desktop.
-- Use [ELEF-DOCTRINE.md](ELEF-DOCTRINE.md) for product principles, [docs/architecture.md](docs/architecture.md) for the current code map, and [docs/development.md](docs/development.md) for setup and validation paths.
+## Start here
 
-## Development environment
+For the active refactor campaign, authority is:
 
-- Work natively on the user's Omarchy device in the current checkout.
-- Reuse the existing web app at `https://127.0.0.1:3000/`. Do not start a competing Rails server or change its port. If the URL is unavailable, inspect and repair the existing server/proxy/database setup; do not launch `bin/dev` or `rails server` as a workaround because those commands do not necessarily provide this HTTPS endpoint. Restart only for boot-time changes.
-- The desktop app loads a built static frontend and does not need the Rails development server. Start it with `npm run tauri:dev --prefix desktop/frontend`; Tauri's configured pre-dev hook builds the Rails-owned frontend. If testing changes in the running app, rebuild with `npm run build --prefix desktop/frontend` and relaunch it.
-- Rails request/system tests and the desktop E2E harness use test data and a test database. Never point tests at personal, production, or user deck data. Diagnose a local database connection failure against the existing Rails setup; do not work around it by changing ports or starting a competing server.
-- The full desktop E2E harness can start its own Rails test server on port 3000 and mutates disposable test fixtures. Do not run it while the user's development server occupies that port. Prefer the fastest relevant unit/build check first, then run the isolated parity harness when the environment is available.
-- Do not use the retired `scripts/elef-agent` Apple Container/worktree workflow.
+1. `docs/refactor/CONSTITUTION.md`
+2. `docs/refactor/status.json`
+3. the current `docs/refactor/phases/NN-*.md`
+4. the frozen phase plan named by status
+5. durable repository docs and code: [ELEF-DOCTRINE.md](ELEF-DOCTRINE.md), [docs/architecture.md](docs/architecture.md), [docs/development.md](docs/development.md)
 
-## Testing and parity
+Do not duplicate architecture or phase rules here.
 
-Choose the smallest test that exercises the change, then add the cross-product leg when shared behavior is affected. Do not weaken, skip, or disable tests to get a green result.
+## Skill routing
 
-Useful checks:
+- If the user says **go**, continue, resume, finish, or run the refactor campaign: use `$elef-campaign`.
+- Before a new campaign phase or nontrivial architecture/runtime/product change: use `$implementation-strategy`.
+- After code, build, test, contract, or runtime behavior changes: use `$code-change-verification`.
+- Before any campaign phase may be marked PASS: use `$independent-phase-review`.
+- When durable docs or campaign state may change: use `$docs-sync`.
 
-```sh
-# Rails-owned shared frontend behavior
-npm run test:javascript
+Do not invoke every skill for every trivial edit.
 
-# Desktop adapter tests and fast E2E harness unit tests
-npm test --prefix desktop/frontend
-npm run test:unit --prefix desktop/e2e
+## Autonomy
 
-# Check one-way ownership and Tauri capability/CSP contracts
-python3 script/check_frontend_ownership.py
-python3 desktop/scripts/check_architecture.py
+Within campaign scope, agents may autonomously:
 
-# Build the desktop consumer of Rails-owned frontend assets
-npm run build --prefix desktop/frontend
+- inspect the repository and history;
+- edit implementation/tests/docs;
+- run deterministic local checks;
+- fix failures caused by their work;
+- create safe temporary worktrees;
+- create checkpoint commits;
+- advance between verified phases;
+- resume from `docs/refactor/status.json`.
 
-# Rust file core / native backend
-cargo test --manifest-path desktop/Cargo.toml -p elef-core --locked
-cargo fmt --manifest-path desktop/Cargo.toml --all -- --check
-cargo clippy --manifest-path desktop/Cargo.toml --workspace --all-targets -- -D warnings
-```
+Do not ask for routine implementation decisions already resolved by repository authority.
 
-- For Rails behavior, run the focused `bin/rails test <path>` first; use `bin/rails test test/system` for complete Rails browser workflows. System/browser automation must be headless. Use the configured test database, not the live development database.
-- Shared user flows are defined once under `test/e2e/scenarios/`, owned alongside the Rails test suite. Playwright and WebdriverIO adapters under `desktop/e2e/` consume them for the web app and real Tauri binary on macOS and Linux. When changing shared editor, library, renderer, or save/conflict behavior, update/reuse those scenarios and verify both runners. The combined `npm test --prefix desktop/e2e` harness is the parity gate; follow `.github/workflows/ci.yml` for its isolated database, frontend/binary builds, fixtures, and platform setup. It is not safe to run alongside the live server on port 3000.
-- Renderer or shared-style changes should also rebuild the relevant artifact (`npm run renderer:build` for the renderer; `bin/rails tailwindcss:build` for Tailwind; the desktop frontend build for its consumer) and check the resulting diff. Use the ownership/architecture checks after moving code across `app/` and `desktop/`.
-- Treat CI as authoritative for native macOS/Linux behavior. A unit test, Chromium run, or static build does not establish real Tauri/WebKit behavior.
-- Re-run the relevant test after the final code change. Report only what the performed checks establish, including platform and test tier.
+## Safety and environment prohibitions
 
-## UI verification
+Never:
 
-- Browser automation must be headless.
-- Distinguish DOM assertions, exact reproduction of user state, and an inspected screenshot. Do not claim screenshot or visual verification unless an image was actually inspected.
+- discard unknown user changes or reset unrelated work;
+- weaken criteria, tests, baselines, fixtures, or allowlists to obtain PASS;
+- silently alter a frozen phase contract;
+- invent credentials or commit them to `.env` or history;
+- claim unrun or unavailable tests passed;
+- merge the campaign branch into `dev` or perform human-only release gates;
+- stop, restart, or re-port the user's running dev server at `https://127.0.0.1:3000/`;
+- point test suites at personal or live development data;
+- use the retired `scripts/elef-agent` Apple Container/worktree workflow.
 
-## Git and GitHub
+## Development and verification
 
-- For new PR work, branch from the latest `dev` and target `dev`, unless the user specifies another base. If an open PR exists for the task branch, continue on that branch and use that PR as the merge boundary.
-- Use the available GitHub integration for PR details, reviews, issues, and check status. Never print, request, save, or commit credentials; do not copy credentials into `.env` files.
-- Commit coherent changes with concise imperative subjects. Never add co-author trailers, rewrite history, or revert unrelated changes.
-- Do not merge unless explicitly asked. If asked to merge an open PR, merge it through GitHub rather than creating a substitute local merge commit. After merge, fetch the target branch and verify the merge commit is reachable from it; do not trust stale `origin/*` refs.
-- PR descriptions must use the repository template, explain validation and database/migration impact, and must not record current merge status.
+- Use the repository's canonical `bin/check` entry point (or `docs/development.md` commands prior to its completion) via `$code-change-verification`.
+- Ordinary edit loop: `quick` then `affected`. Phase/full validation belongs at phase gates.
+- Default execution environment is a resource-constrained Linux container (~8 GB RAM). Serialize heavyweight jobs, keep caches, and reduce concurrency under memory pressure.
+- Real Linux Tauri runs require headless `xvfb-run` + `tauri-driver` + `WebKitWebDriver`; if unavailable, record the missing prerequisite or rely on CI rather than faking a PASS.
+- Browser automation must be headless. Do not claim visual or screenshot verification unless an image was actually inspected.
+
+## Git and PR workflow
+
+- Work on `feat/refactor-desktop-and-web`.
+- Commit coherent changes with concise imperative subjects. Never add co-author trailers or rewrite history.
+- The campaign PR targets `dev`. Open it as a draft if missing; use `.github/pull_request_template.md` without recording merge status.
+- Push the campaign branch after status-changing commits and before stopping.
+
+## Campaign completion
+
+A phase is complete only when its exact machine PASS marker, fresh independent reviewer PASS, and status transition all exist. If status and reality disagree, reconstruct from evidence and resume from the earliest unproven phase. Continue through final technical PASS without asking for confirmation.

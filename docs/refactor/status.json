@@ -1,0 +1,27 @@
+{
+  "campaign_version": 9,
+  "campaign_branch": "feat/refactor-desktop-and-web",
+  "campaign_base_sha": "88f61a7a8ffd7c276bafcf06eee09c36a8adf134",
+  "current_phase": 0,
+  "phase_state": "PLAN",
+  "phase_base_sha": "88f61a7a8ffd7c276bafcf06eee09c36a8adf134",
+  "head_sha": "88f61a7a8ffd7c276bafcf06eee09c36a8adf134",
+  "review_round": 0,
+  "phase_contract_sha256": "57a5419cace79af009b9b2889cd0aa8cd481b1de561a582214d8adea883394ce",
+  "frozen_plan_sha256": null,
+  "last_completed_phase": null,
+  "last_verified_checks": [],
+  "execution_environment": {
+    "os": "linux",
+    "arch": "x86_64",
+    "ram_mb": 27831,
+    "swap_mb": 55657,
+    "cpu_count": 16,
+    "free_disk_mb": 234187,
+    "display_mode": "none",
+    "tauri_native_runner": "unavailable"
+  },
+  "pending_human_gates": [],
+  "blocker": null,
+  "next_action": "Verify Phase 00 branch/environment/baseline facts and freeze the Phase 00 plan."
+}
