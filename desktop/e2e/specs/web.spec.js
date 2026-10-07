@@ -222,25 +222,46 @@ class WebEditorUi {
   }
 
   async assertBackspaceDeletesEmptyDollarPair(expectedSource) {
-    const outcome = await this.page.locator(".source-field").evaluate((field, source) => {
+    const source = normalizeLineEndings(expectedSource)
+    const initialState = await this.page.locator(".source-field").evaluate((field, expected) => {
       const controller = field.editorController
-      if (!controller || controller.value !== `${source}$$`) return null
-      controller.setSelectionRange(source.length + 1)
-      const event = new KeyboardEvent("keydown", { key: "Backspace", bubbles: true, cancelable: true })
-      controller.dom.dispatchEvent(event)
-      return {
-        source: controller.value,
-        anchor: controller.selectionStart,
-        head: controller.selectionEnd,
-        prevented: event.defaultPrevented
+      if (!controller || controller.value !== `${expected}$$`) return null
+      controller.setSelectionRange(expected.length + 1)
+      controller.focus()
+      return { vimEnabled: controller.vimEnabled, insertMode: controller.insertMode }
+    }, source)
+    expect(initialState).not.toBeNull()
+
+    const restoreNormalMode = initialState.vimEnabled && !initialState.insertMode
+    try {
+      if (restoreNormalMode) {
+        await this.page.keyboard.press("i")
+        await expect.poll(() => this.page.locator(".source-field").evaluate(field => field.editorController.insertMode)).toBe(true)
       }
-    }, expectedSource)
-    expect(outcome).toEqual({
-      source: expectedSource,
-      anchor: expectedSource.length,
-      head: expectedSource.length,
-      prevented: true
-    })
+
+      const outcome = await this.page.locator(".source-field").evaluate(field => {
+        const controller = field.editorController
+        const event = new KeyboardEvent("keydown", { key: "Backspace", bubbles: true, cancelable: true })
+        controller.dom.dispatchEvent(event)
+        return {
+          source: controller.value,
+          anchor: controller.selectionStart,
+          head: controller.selectionEnd,
+          prevented: event.defaultPrevented
+        }
+      })
+      expect(outcome).toEqual({
+        source,
+        anchor: source.length,
+        head: source.length,
+        prevented: true
+      })
+    } finally {
+      if (restoreNormalMode) {
+        await this.page.keyboard.press("Escape")
+        await expect.poll(() => this.page.locator(".source-field").evaluate(field => field.editorController.insertMode)).toBe(false)
+      }
+    }
   }
 
   async assertRelativeLineNumbers() {
