@@ -3,13 +3,13 @@
   "campaign_branch": "feat/refactor-desktop-and-web",
   "campaign_base_sha": "88f61a7a8ffd7c276bafcf06eee09c36a8adf134",
   "current_phase": 1,
-  "phase_state": "PASS",
+  "phase_state": "CHECK",
   "phase_base_sha": "64abf6ed087f1b1b2ff232f88123c76ca362a7d0",
   "head_sha": "df6033fd2b92467f3ae0dcf0c2bc81f4e7eff325",
   "review_round": 1,
   "phase_contract_sha256": "1bda595270159ae4cbdbb87b31951cdeeb9ef28ea5cadef2cb44b3fb530f80d0",
   "frozen_plan_sha256": "693703f42ded6fb2a32585896a4641b96c053b4a59c5e03cd4b056de3156d48b",
-  "last_completed_phase": 1,
+  "last_completed_phase": 0,
   "last_verified_checks": [
     {
       "attempt_id": "a03b10a585714f3185ca7d32a0777989",
@@ -124,5 +124,5 @@
   },
   "pending_human_gates": [],
   "blocker": null,
-  "next_action": "Open Phase 02 PLAN."
+  "next_action": "Re-request round-1 review decision after receipt-identity correction (same candidate df6033f, same report)."
 }
