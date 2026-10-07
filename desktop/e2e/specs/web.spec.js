@@ -322,21 +322,24 @@ class WebEditorUi {
   }
 
   async typeEmptyDisplayMath(mode) {
+    const expectedPairSource = `${await this.readSource()}$$`
     if (mode === "visual") {
-      const block = this.page.locator(".document-editor-block[data-editor-empty-block='true']").last()
+      const block = this.page.locator(".document-editor-block[contenteditable='true']").last()
       await expect(block).toBeVisible()
       await block.click()
-      await block.pressSequentially("$")
-      await block.pressSequentially("$")
-      await block.press("Enter")
+      await block.press("Shift+4")
+      await block.press("Shift+4")
+      await expect.poll(() => this.readSource()).toBe(expectedPairSource)
+      await this.page.locator(".document-editor-block[contenteditable='true']").last().press("Enter")
       return
     }
 
     const editor = this.page.locator(".source-field .cm-content")
     await editor.click()
     await editor.press("End")
-    await editor.pressSequentially("$")
-    await editor.pressSequentially("$")
+    await editor.press("Shift+4")
+    await editor.press("Shift+4")
+    await expect.poll(() => this.readSource()).toBe(expectedPairSource)
     await editor.press("Enter")
   }
 

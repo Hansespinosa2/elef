@@ -722,6 +722,7 @@ class DesktopEditorUi {
   }
 
   async typeEmptyDisplayMath(mode) {
+    const expectedPairSource = `${await this.readSource()}$$`
     if (mode === "visual") {
       const block = await $("#desktop-preview .document-editor-block[data-editor-empty-block='true']")
       await block.waitForDisplayed()
@@ -736,6 +737,7 @@ class DesktopEditorUi {
     focusDesktopWindow()
     typeNativeText("$", { activate: false })
     typeNativeText("$", { activate: false })
+    await this.waitForSource(expectedPairSource)
     sendNativeKey("Enter", { activate: false })
   }
 
