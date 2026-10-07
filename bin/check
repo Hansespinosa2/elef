@@ -20,6 +20,8 @@ STATUS_PATH = ROOT / "docs" / "refactor" / "status.json"
 BASELINE_PATH = ROOT / "docs" / "refactor" / "baseline.json"
 PLAN_PATH = ROOT / "docs" / "refactor" / "execution" / "phase-0-plan.md"
 PHASE_PATH = ROOT / "docs" / "refactor" / "phases" / "00-baseline.md"
+DESKTOP_SOURCE = "desktop"
+DESKTOP_PATH_PREFIX = DESKTOP_SOURCE + "/"
 COMMANDS = ("quick", "affected", "phase", "all", "arch", "fresh", "docs", "perf")
 STUB_COMMANDS = ("quick", "affected", "all", "arch", "fresh", "docs", "perf")
 HTML_PATTERN = re.compile(r"innerHTML|insertAdjacentHTML|dangerouslySetInnerHTML")
@@ -45,10 +47,10 @@ EXPECTED_SCENARIOS = (
 )
 EXPECTED_QUICK_COMMANDS = (
     "npm run test:javascript",
-    "npm test --prefix desktop/frontend",
-    "npm run test:unit --prefix desktop/e2e",
+    f"npm test --prefix {DESKTOP_PATH_PREFIX}frontend",
+    f"npm run test:unit --prefix {DESKTOP_PATH_PREFIX}e2e",
     "python3 script/check_frontend_ownership.py",
-    "cargo test --manifest-path desktop/Cargo.toml -p elef-core --locked",
+    f"cargo test --manifest-path {DESKTOP_PATH_PREFIX}Cargo.toml -p elef-core --locked",
 )
 EXPECTED_AFFECTED_COMMANDS = (
     "bin/rails tailwindcss:build",
@@ -57,13 +59,13 @@ EXPECTED_AFFECTED_COMMANDS = (
     "npm run test:javascript",
     "bin/rails db:test:prepare",
     "bin/rails test test/lib/source/renderer_test.rb test/lib/source/javascript_renderer_test.rb test/lib/authoring_registry_test.rb test/models/presentation_test.rb test/services/presentations/pptx_export_test.rb",
-    "npm test --prefix desktop/frontend",
-    "npm run build --prefix desktop/frontend",
-    "python3 desktop/scripts/check_architecture.py",
+    f"npm test --prefix {DESKTOP_PATH_PREFIX}frontend",
+    f"npm run build --prefix {DESKTOP_PATH_PREFIX}frontend",
+    f"python3 {DESKTOP_PATH_PREFIX}scripts/check_architecture.py",
     "python3 script/check_frontend_ownership.py",
-    "cargo fmt --manifest-path desktop/Cargo.toml --all -- --check",
-    "cargo clippy --manifest-path desktop/Cargo.toml -p elef-core --all-targets -- -D warnings",
-    "cargo test --manifest-path desktop/Cargo.toml -p elef-core --locked",
+    f"cargo fmt --manifest-path {DESKTOP_PATH_PREFIX}Cargo.toml --all -- --check",
+    f"cargo clippy --manifest-path {DESKTOP_PATH_PREFIX}Cargo.toml -p elef-core --all-targets -- -D warnings",
+    f"cargo test --manifest-path {DESKTOP_PATH_PREFIX}Cargo.toml -p elef-core --locked",
 )
 EXPECTED_PERFORMANCE_ARTIFACTS = {
     "linux": "68469707acd1317d804930e96c022049ce46b3865d2154e3762062f425e6ad59",
@@ -253,7 +255,7 @@ def check_scenarios(baseline: dict) -> None:
 
 def html_occurrences() -> list[dict]:
     occurrences = []
-    for root_name in ("app/javascript", "desktop/frontend/src", "app/views"):
+    for root_name in ("app/javascript", DESKTOP_PATH_PREFIX + "frontend/src", "app/views"):
         directory = relative_path(root_name)
         for path in sorted(directory.rglob("*")):
             if not path.is_file():
