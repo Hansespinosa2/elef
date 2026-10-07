@@ -1035,10 +1035,17 @@ impl Library {
         let cutoff = now_ms().saturating_sub(SNAPSHOT_RETENTION_MS);
         for entry in entries {
             let entry = entry?;
-            if !entry.file_type()?.is_file() {
+            let file_type = entry.file_type()?;
+            if !file_type.is_file() {
                 continue;
             }
             let name = file_name(&entry.path());
+            if name.starts_with(".elef-snapshot-") && name.ends_with(".tmp") {
+                if !file_type.is_symlink() {
+                    let _ = fs::remove_file(entry.path());
+                }
+                continue;
+            }
             let keep = name
                 .strip_suffix(".snap")
                 .and_then(|stem| stem.split_once('-'))
@@ -2575,7 +2582,9 @@ fn remove_stale_temps(deck_path: &Path) -> Result<(), CoreError> {
     for entry in fs::read_dir(deck_path)? {
         let entry = entry?;
         let name = entry.file_name().to_string_lossy().into_owned();
-        if !name.starts_with(".elef-save-") || !name.ends_with(".tmp") {
+        if (!name.starts_with(".elef-save-") && !name.starts_with(".elef-restore-"))
+            || !name.ends_with(".tmp")
+        {
             continue;
         }
         let metadata = entry.file_type()?;
@@ -3840,6 +3849,236 @@ mod tests {
                     expected
                 );
 
+                let library = Library::open(temp.path()).unwrap();
+                let deck = library
+                    .list_decks()
+                    .unwrap()
+                    .into_iter()
+                    .find(|summary| summary.name == "Crash fixture")
+                    .unwrap();
+                library.open_deck(&deck.id).unwrap();
+                assert!(fs::read_dir(&deck_path).unwrap().all(|entry| {
+                    !entry
+                        .unwrap()
+                        .file_name()
+                        .to_string_lossy()
+                        .starts_with(".elef-save-")
+                }));
+            }
+        }
+    }
+
+    #[test]
+    fn snapshot_crash_worker() {
+        let Ok(root) = std::env::var("ELEF_CORE_TEST_STORE_ROOT") else {
+            return;
+        };
+        let mode = std::env::var("ELEF_CORE_TEST_STORE_MODE").unwrap();
+        let library = Library::open(root).unwrap();
+        let deck = library.list_decks().unwrap().into_iter().next().unwrap();
+        let opened = library.open_deck(&deck.id).unwrap();
+        match mode.as_str() {
+            "take" => {
+                library
+                    .take_snapshot(
+                        &opened.id,
+                        "killprobe",
+                        Some(&"# Snapshot source\n".repeat(4096)),
+                    )
+                    .unwrap();
+            }
+            "restore" => {
+                library
+                    .take_snapshot(
+                        &opened.id,
+                        "killprobe",
+                        Some(&"# Snapshot source\n".repeat(4096)),
+                    )
+                    .unwrap();
+                let snapshots = library.list_snapshots(&opened.id).unwrap();
+                library
+                    .restore_snapshot(&opened.id, &snapshots[0].id)
+                    .unwrap();
+            }
+            _ => panic!("unknown store crash mode: {mode}"),
+        }
+    }
+
+    #[test]
+    fn merge_crash_worker() {
+        let Ok(root) = std::env::var("ELEF_CORE_TEST_SAVE_ROOT") else {
+            return;
+        };
+        if std::env::var("ELEF_CORE_TEST_MERGE_MODE").is_err() {
+            return;
+        }
+        let library = Library::open(&root).unwrap();
+        let deck = library.list_decks().unwrap().into_iter().next().unwrap();
+        let opened = library.open_deck(&deck.id).unwrap();
+        let source_path = PathBuf::from(&root)
+            .join("Crash fixture")
+            .join("presentation.md");
+        fs::write(&source_path, MERGE_EXTERNAL).unwrap();
+        let MergeOutcome::Merged(merged) = library
+            .merge_external_change(&opened.id, MERGE_LOCAL)
+            .unwrap()
+        else {
+            panic!("merge fixture must merge cleanly");
+        };
+        let fresh = library.open_deck(&opened.id).unwrap();
+        library
+            .save_source(&opened.id, &merged, &fresh.content_hash)
+            .unwrap();
+    }
+
+    const MERGE_OLD: &str = "one\ntwo\n";
+    const MERGE_LOCAL: &str = "ONE\ntwo\n";
+    const MERGE_EXTERNAL: &str = "one\nTWO\n";
+
+    fn wait_for_pause_marker(marker: &Path, child: &mut std::process::Child, point: &str) {
+        for _ in 0..500 {
+            if marker.exists() {
+                return;
+            }
+            if let Some(status) = child.try_wait().unwrap() {
+                panic!("crash worker exited before {point}: {status}");
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        panic!("crash worker did not reach {point}");
+    }
+
+    #[test]
+    fn killing_a_process_at_snapshot_points_preserves_deck_and_history() {
+        const CASES: [(&str, &str); 2] = [
+            ("take", "before_snapshot_persist"),
+            ("restore", "before_snapshot_restore"),
+        ];
+        const RUNS_PER_POINT: usize = 50;
+        const OLD: &str = "# Old source\n";
+        let executable = std::env::current_exe().unwrap();
+
+        for (mode, point) in CASES {
+            for _ in 0..RUNS_PER_POINT {
+                let temp = TempDir::new().unwrap();
+                let deck_path =
+                    write_deck(temp.path(), "Crash fixture", &[("presentation.md", OLD)]);
+                let marker = temp.path().join("store-paused");
+                let mut child = Command::new(&executable)
+                    .args(["--exact", "tests::snapshot_crash_worker", "--nocapture"])
+                    .env("ELEF_CORE_TEST_STORE_ROOT", temp.path())
+                    .env("ELEF_CORE_TEST_STORE_MODE", mode)
+                    .env("ELEF_CORE_TEST_STORE_PAUSE", point)
+                    .env("ELEF_CORE_TEST_STORE_MARKER", &marker)
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .spawn()
+                    .unwrap();
+
+                wait_for_pause_marker(&marker, &mut child, point);
+                child.kill().unwrap();
+                assert!(!child.wait().unwrap().success());
+
+                assert_eq!(
+                    fs::read_to_string(deck_path.join("presentation.md")).unwrap(),
+                    OLD
+                );
+                let library = Library::open(temp.path()).unwrap();
+                let deck = library
+                    .list_decks()
+                    .unwrap()
+                    .into_iter()
+                    .find(|summary| summary.name == "Crash fixture")
+                    .unwrap();
+                library.open_deck(&deck.id).unwrap();
+
+                let history = temp.path().join(SNAPSHOT_DIR).join(&deck.id);
+                if mode == "take" {
+                    assert!(library.list_snapshots(&deck.id).unwrap().is_empty());
+                    let taken = library
+                        .take_snapshot(&deck.id, "afterkill", Some("recovered"))
+                        .unwrap();
+                    assert_eq!(taken.byte_len, "recovered".len());
+                    assert!(fs::read_dir(&history).unwrap().all(|entry| {
+                        !entry
+                            .unwrap()
+                            .file_name()
+                            .to_string_lossy()
+                            .starts_with(".elef-snapshot-")
+                    }));
+                } else {
+                    let pre = fs::read_dir(&history)
+                        .unwrap()
+                        .filter_map(|entry| entry.ok())
+                        .map(|entry| entry.path())
+                        .find(|path| {
+                            path.file_name().is_some_and(|name| {
+                                name.to_string_lossy().ends_with("-pre-restore.snap")
+                            })
+                        })
+                        .expect("pre-restore snapshot must survive the kill");
+                    assert_eq!(fs::read_to_string(pre).unwrap(), OLD);
+                    assert!(fs::read_dir(&deck_path).unwrap().all(|entry| {
+                        !entry
+                            .unwrap()
+                            .file_name()
+                            .to_string_lossy()
+                            .starts_with(".elef-restore-")
+                    }));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn killing_a_process_at_each_merge_save_point_preserves_complete_bytes() {
+        const POINTS: [&str; 4] = [
+            "before_temp_write",
+            "mid_temp_write",
+            "after_flush_before_rename",
+            "after_rename",
+        ];
+        const RUNS_PER_POINT: usize = 50;
+        let MergeOutcome::Merged(expected_merged) =
+            merge_sources(MERGE_OLD, MERGE_LOCAL, MERGE_EXTERNAL)
+        else {
+            panic!("merge fixture must merge cleanly");
+        };
+        let executable = std::env::current_exe().unwrap();
+
+        for point in POINTS {
+            for _ in 0..RUNS_PER_POINT {
+                let temp = TempDir::new().unwrap();
+                let deck_path = write_deck(
+                    temp.path(),
+                    "Crash fixture",
+                    &[("presentation.md", MERGE_OLD)],
+                );
+                let marker = temp.path().join("merge-paused");
+                let mut child = Command::new(&executable)
+                    .args(["--exact", "tests::merge_crash_worker", "--nocapture"])
+                    .env("ELEF_CORE_TEST_SAVE_ROOT", temp.path())
+                    .env("ELEF_CORE_TEST_MERGE_MODE", "1")
+                    .env("ELEF_CORE_TEST_SAVE_PAUSE", point)
+                    .env("ELEF_CORE_TEST_SAVE_MARKER", &marker)
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .spawn()
+                    .unwrap();
+
+                wait_for_pause_marker(&marker, &mut child, point);
+                child.kill().unwrap();
+                assert!(!child.wait().unwrap().success());
+
+                let expected = if point == "after_rename" {
+                    expected_merged.as_str()
+                } else {
+                    MERGE_EXTERNAL
+                };
+                assert_eq!(
+                    fs::read_to_string(deck_path.join("presentation.md")).unwrap(),
+                    expected
+                );
                 let library = Library::open(temp.path()).unwrap();
                 let deck = library
                     .list_decks()
