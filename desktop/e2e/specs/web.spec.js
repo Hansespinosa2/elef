@@ -20,6 +20,24 @@ import { editorChrome } from "../../../app/javascript/lib/preview_chrome.js"
 
 const renderPreview = input => renderPreviewCore(input, { chrome: editorChrome })
 
+async function readApplicationStylesheet() {
+  const index = await readFile(new URL("../../../app/assets/stylesheets/application.css", import.meta.url), "utf8")
+  const layerOrder = index.match(/^\s*@layer [^;]+;/m)?.[0]
+  const imports = [...index.matchAll(/^\s*@import url\("\.\/([^"\n]+\.css)"\) layer\(([^)]+)\);\s*$/gm)]
+  const partials = await Promise.all(imports.map(([, path]) =>
+    readFile(new URL(`../../../app/assets/stylesheets/${path}`, import.meta.url), "utf8")
+  ))
+
+  if (!layerOrder || imports.length === 0) throw new Error("Could not resolve the layered application stylesheet")
+
+  return [
+    layerOrder,
+    ...imports.map(([, , layer], index) => `@layer ${layer} {\n${partials[index]}\n}`)
+  ].join("\n")
+}
+
+const applicationStylesheet = await readApplicationStylesheet()
+
 function normalizeLineEndings(source) {
   return source.replace(/\r\n|\r/g, "\n")
 }
@@ -949,7 +967,7 @@ test("appearance persists through the shared editing flow", async ({ page }) => 
 test("shared rendering styles preserve slide layouts and document typography", async ({ page }) => {
   const styles = {
     web: (await readFile(new URL("../../../app/assets/builds/tailwind.css", import.meta.url), "utf8")) +
-      (await readFile(new URL("../../../app/assets/stylesheets/application.css", import.meta.url), "utf8")),
+      applicationStylesheet,
     desktop: (await readFile(new URL("../../../app/assets/stylesheets/file_library_host.css", import.meta.url), "utf8")) +
       (await readFile(new URL("../../frontend/dist/assets/tailwind.css", import.meta.url), "utf8")) +
       (await readFile(new URL("../../frontend/dist/assets/app.css", import.meta.url), "utf8"))
@@ -997,7 +1015,7 @@ test("the source editor has matching styles in Rails and the desktop asset bundl
   const codeMirrorStyles = await page.locator("head style").evaluateAll(styles => styles.map(style => style.textContent).join("\n"))
   const stylesheets = {
     web: (await readFile(new URL("../../../app/assets/builds/tailwind.css", import.meta.url), "utf8")) +
-      (await readFile(new URL("../../../app/assets/stylesheets/application.css", import.meta.url), "utf8")),
+      applicationStylesheet,
     desktop: (await readFile(new URL("../../../app/assets/stylesheets/file_library_host.css", import.meta.url), "utf8")) +
       (await readFile(new URL("../../frontend/dist/assets/tailwind.css", import.meta.url), "utf8")) +
       (await readFile(new URL("../../frontend/dist/assets/app.css", import.meta.url), "utf8"))

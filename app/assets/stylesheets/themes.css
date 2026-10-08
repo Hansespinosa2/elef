@@ -1,0 +1,47 @@
+.work-theme-dark {
+  --work-surface-background: linear-gradient(135deg, var(--oradia-slate-800), var(--oradia-slate-950));
+  --work-surface-border: var(--oradia-slate-700);
+  --work-surface-ink: var(--oradia-ink);
+  --work-heading-ink: var(--oradia-ink);
+  --work-editor-slide-border: var(--oradia-slate-700);
+}
+
+.work-theme-light {
+  --work-surface-background: linear-gradient(135deg, #fffdf8, #f5f0e7);
+  --work-surface-border: var(--oradia-paper-line);
+  --work-surface-ink: var(--oradia-paper-ink);
+  --work-heading-ink: var(--oradia-paper-ink);
+  --work-editor-slide-border: #cfc4b2;
+}
+
+.work-theme-match {
+  --work-surface-background: linear-gradient(135deg, var(--oradia-paper-bright), var(--oradia-paper));
+  --work-surface-border: var(--oradia-paper-line);
+  --work-surface-ink: var(--oradia-paper-ink);
+  --work-heading-ink: var(--oradia-paper-ink);
+  --work-editor-slide-border: #cfc4b2;
+}
+
+.document-theme-dark {
+  --document-page-background: linear-gradient(135deg, var(--oradia-slate-800), var(--oradia-slate-900));
+  --document-page-border: var(--oradia-slate-700);
+  --document-page-ink: var(--oradia-ink);
+  --document-heading-ink: var(--oradia-ink);
+  --document-blockquote-ink: var(--oradia-muted);
+}
+
+.document-theme-light {
+  --document-page-background: #fffdf8;
+  --document-page-border: var(--oradia-paper-line);
+  --document-page-ink: var(--oradia-paper-ink);
+  --document-heading-ink: var(--oradia-paper-ink);
+  --document-blockquote-ink: var(--oradia-paper-muted);
+}
+
+.document-theme-match {
+  --document-page-background: linear-gradient(135deg, var(--oradia-paper-bright), var(--oradia-paper));
+  --document-page-border: var(--oradia-paper-line);
+  --document-page-ink: var(--oradia-paper-ink);
+  --document-heading-ink: var(--oradia-paper-ink);
+  --document-blockquote-ink: var(--oradia-paper-muted);
+}

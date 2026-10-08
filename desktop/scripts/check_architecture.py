@@ -11,6 +11,13 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 TAURI_ROOT = REPO_ROOT / "desktop" / "src-tauri"
 
 
+def application_stylesheet_sources() -> str:
+    stylesheet_root = REPO_ROOT / "app" / "assets" / "stylesheets"
+    index = (stylesheet_root / "application.css").read_text()
+    imports = re.findall(r'(?m)^\s*@import url\("\.\/([^"\n]+\.css)"\) layer\([^)]+\);\s*$', index)
+    return "\n".join((stylesheet_root / path).read_text() for path in imports)
+
+
 def command_names(source: str, pattern: str) -> set[str]:
     match = re.search(pattern, source, re.DOTALL)
     if not match:
@@ -41,7 +48,7 @@ renderer_worker = (REPO_ROOT / "desktop" / "frontend" / "src" / "renderer-worker
 desktop_main = (REPO_ROOT / "desktop" / "frontend" / "src" / "main.js").read_text()
 desktop_application = (REPO_ROOT / "app" / "javascript" / "lib" / "file_library_application.js").read_text()
 native_render_styles = (REPO_ROOT / "app" / "assets" / "stylesheets" / "file_library_host.css").read_text()
-shared_application_styles = (REPO_ROOT / "app" / "assets" / "stylesheets" / "application.css").read_text()
+shared_application_styles = application_stylesheet_sources()
 desktop_frontend_source = REPO_ROOT / "desktop" / "frontend" / "src"
 desktop_frontend_files = list(desktop_frontend_source.rglob("*"))
 assert not any(path.suffix.lower() in {".html", ".css"} for path in desktop_frontend_files), "desktop frontend must consume Rails-owned markup and styles, not own UI files"

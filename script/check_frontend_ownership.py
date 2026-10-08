@@ -15,6 +15,13 @@ DESKTOP_SOURCE_REFERENCE = re.compile(r"desktop/")
 MODULE_SPECIFIER = re.compile(r"(?:\bfrom\s*|\bimport\s*(?:\(\s*)?|\brequire\s*\(\s*)[\"']([^\"']+)[\"']")
 checker = Path(__file__).resolve()
 
+
+def application_stylesheet_sources() -> str:
+    stylesheet_root = ROOT / "app" / "assets" / "stylesheets"
+    index = (stylesheet_root / "application.css").read_text()
+    imports = re.findall(r'(?m)^\s*@import url\("\.\/([^"\n]+\.css)"\) layer\([^)]+\);\s*$', index)
+    return "\n".join((stylesheet_root / path).read_text() for path in imports)
+
 violations = []
 for directory in SHARED_RAILS_PATHS:
     for path in (ROOT / directory).rglob("*"):
@@ -99,7 +106,7 @@ desktop_shell_styles = (ROOT / "app/assets/stylesheets/file_library_host.css").r
 assert "globalThis.fetch =" not in desktop_application, (
     "The shared frontend must not replace the host fetch implementation"
 )
-shared_styles = (ROOT / "app/assets/stylesheets/application.css").read_text()
+shared_styles = application_stylesheet_sources()
 presentation_controller = (ROOT / "app/javascript/controllers/presentation_controller.js").read_text()
 importmap = (ROOT / "config/importmap.rb").read_text()
 renderer_build = (ROOT / "script/build_renderer.mjs").read_text()
