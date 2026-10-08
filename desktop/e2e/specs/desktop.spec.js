@@ -773,10 +773,30 @@ class DesktopEditorUi {
       sendNativeKey("ControlOrMeta+End", { activate: false })
     }
 
-    typeNativeText("$", { activate: false })
-    typeNativeText("$", { activate: false })
+    await browser.execute(() => {
+      const events = []
+      const record = event => events.push({
+        type: event.type,
+        key: event.key,
+        data: event.data,
+        inputType: event.inputType,
+        trusted: event.isTrusted,
+        target: event.target?.nodeName,
+        contentEditable: event.target?.isContentEditable
+      })
+      for (const name of ["keydown", "beforeinput", "input"]) document.addEventListener(name, record, true)
+      window.__displayMathInputDiagnostics = { events, record }
+    })
+    await browser.keys("$")
+    await browser.keys("$")
     await this.waitForSource(expectedPairSource)
     sendNativeKey("Enter", { activate: false })
+    await browser.execute(() => {
+      const diagnostics = window.__displayMathInputDiagnostics
+      if (!diagnostics) return
+      for (const name of ["keydown", "beforeinput", "input"]) document.removeEventListener(name, diagnostics.record, true)
+      delete window.__displayMathInputDiagnostics
+    })
   }
 
   async assertDisplayMathCaret(expectedSource, expectedCaret, mode) {
@@ -845,7 +865,8 @@ class DesktopEditorUi {
           mode: editor?.editingMode,
           paletteQuery: palette?.query,
           paletteMatches: palette?.matches?.map(entry => entry.name || entry.snippet?.name),
-          paletteHidden: document.querySelector('[aria-label="Snippet suggestions"]')?.hidden
+          paletteHidden: document.querySelector('[aria-label="Snippet suggestions"]')?.hidden,
+          displayMathInputEvents: window.__displayMathInputDiagnostics?.events || []
         }
       }).catch(diagnosticError => ({ diagnosticError: diagnosticError.message }))
       throw new Error(`${error.message}; desktop editor state: ${JSON.stringify(state)}`)
