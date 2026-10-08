@@ -775,6 +775,7 @@ class DesktopEditorUi {
 
     await browser.execute(() => {
       const events = []
+      const projectionCalls = []
       const record = event => events.push({
         type: event.type,
         key: event.key,
@@ -785,8 +786,34 @@ class DesktopEditorUi {
         contentEditable: event.target?.isContentEditable,
         defaultPrevented: event.defaultPrevented
       })
+      const controller = document.querySelector("#desktop-editor-form")?.visualEditorController
+      const originalProjectionInput = controller?.projectionInput
+      if (controller && originalProjectionInput) {
+        controller.projectionInput = function(event) {
+          const block = event.target?.closest?.("[data-editor-block-id]")
+          const blockId = block?.dataset.editorBlockId
+          const mapBlock = this.map?.slides?.flatMap(slide => slide.blocks || []).find(candidate => candidate.id === blockId)
+          const region = this.map?.editable_regions?.find(candidate => candidate.block_id === blockId)
+          const call = {
+            mode: this.element.dataset.editorMode,
+            previewFresh: this.element.previewController?.projectionFresh,
+            blockId,
+            blockAction: block?.getAttribute("data-action"),
+            activeBlock: this.focusedProjectionBlock() === block,
+            canEdit: this.canEditBlock(block),
+            mapAvailable: Boolean(this.map),
+            mapBlock: Boolean(mapBlock),
+            mapRegion: Boolean(region),
+            editorAvailable: Boolean(this.editorController)
+          }
+          projectionCalls.push(call)
+          const result = originalProjectionInput.call(this, event)
+          call.pendingSize = this.pendingProjectionEdits?.size || 0
+          return result
+        }
+      }
       for (const name of ["keydown", "beforeinput", "input"]) document.addEventListener(name, record, true)
-      window.__displayMathInputDiagnostics = { events, record }
+      window.__displayMathInputDiagnostics = { events, projectionCalls, record, controller, originalProjectionInput }
     })
     typeNativeText("$")
     typeNativeText("$")
@@ -796,6 +823,7 @@ class DesktopEditorUi {
       const diagnostics = window.__displayMathInputDiagnostics
       if (!diagnostics) return
       for (const name of ["keydown", "beforeinput", "input"]) document.removeEventListener(name, diagnostics.record, true)
+      if (diagnostics.controller && diagnostics.originalProjectionInput) delete diagnostics.controller.projectionInput
       delete window.__displayMathInputDiagnostics
     })
   }
@@ -869,15 +897,20 @@ class DesktopEditorUi {
           activeElement: document.activeElement?.outerHTML?.slice(0, 240) || null,
           blockHTML: block?.innerHTML || null,
           blockIsFocused: document.activeElement === block,
+          blockAction: block?.getAttribute("data-action") || null,
           previewFresh: document.querySelector("#desktop-editor-form")?.previewController?.projectionFresh,
           visualHasEditor: Boolean(visual?.editorController),
+          visualMapLoaded: Boolean(visual?.map),
+          visualMapBlocks: visual?.map?.slides?.flatMap(slide => slide.blocks || []).map(candidate => candidate.id) || [],
+          visualMapRegions: visual?.map?.editable_regions?.map(region => region.block_id) || [],
           pendingProjectionEdits: [...(visual?.pendingProjectionEdits?.values() || [])].map(edit => ({
             from: edit.from, to: edit.to, source: edit.source, blockId: edit.blockId
           })),
           paletteQuery: palette?.query,
           paletteMatches: palette?.matches?.map(entry => entry.name || entry.snippet?.name),
           paletteHidden: document.querySelector('[aria-label="Snippet suggestions"]')?.hidden,
-          displayMathInputEvents: window.__displayMathInputDiagnostics?.events || []
+          displayMathInputEvents: window.__displayMathInputDiagnostics?.events || [],
+          projectionInputCalls: window.__displayMathInputDiagnostics?.projectionCalls || []
         }
       }).catch(diagnosticError => ({ diagnosticError: diagnosticError.message }))
       throw new Error(`${error.message}; desktop editor state: ${JSON.stringify(state)}`)
