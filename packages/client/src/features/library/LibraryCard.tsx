@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import type { FormEvent, JSX, MouseEvent, RefObject } from "react";
 import type { ElefHost, WorkKind, WorkSummary } from "@elef/contracts";
 import { renderPreviewCore } from "@elef/renderer";
@@ -55,7 +55,22 @@ function previewMessage(error: unknown): string {
     : "Preview unavailable.";
 }
 
-export function LibraryCard({ host, work, documentNodes, options, onChanged }: LibraryCardProps): JSX.Element {
+// Preview loads wait for the list to paint first: a large deck renders on
+// the main thread, and starting it mid-commit would freeze the paint that
+// carries the cards. Environments without a frame scheduler start at once.
+function afterPaint(): Promise<void> {
+  const frame = globalThis.requestAnimationFrame;
+  if (typeof frame !== "function") return Promise.resolve();
+  return new Promise((resolve) => {
+    frame(() => {
+      frame(() => {
+        setTimeout(resolve, 0);
+      });
+    });
+  });
+}
+
+function LibraryCardView({ host, work, documentNodes, options, onChanged }: LibraryCardProps): JSX.Element {
   const navigate = options.navigate;
   const editUrl = localTarget(
     options.resolveWorkUrl?.(work) ?? `#${encodeURIComponent(work.id)}`,
@@ -118,6 +133,11 @@ export function LibraryCard({ host, work, documentNodes, options, onChanged }: L
     </article>
   );
 }
+
+// Cards re-render only when their own props turn over: the list passes
+// referentially stable callbacks and node arrays, so typing in the search
+// box or an identical reload never re-diffs all forty-eight cards.
+export const LibraryCard = memo(LibraryCardView);
 
 const PREVIEW_ICON = (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
@@ -366,6 +386,8 @@ function CardPreview({
       function commit(next: PreviewState): void {
         if (mounted.current && loadKey.current === key) setState(next);
       }
+      await afterPaint();
+      if (!mounted.current || loadKey.current !== key) return;
       try {
         const snapshot = await host.works.getWork(work.id);
         const rendered = renderPreviewCore({

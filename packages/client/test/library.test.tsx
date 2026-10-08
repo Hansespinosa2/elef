@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { act } from "react";
 import type { ElefHost, WorkId, WorkSummary } from "@elef/contracts";
 import { CREATE_WORK_EVENT } from "../src/features/library/LibraryApp.js";
 import type { ElefMountOptions } from "../src/index.js";
@@ -414,5 +415,49 @@ test("deleted event forwards host-defined refresh detail opaquely", async () => 
     assert.deepEqual(event.detail, notes);
   } finally {
     shell.unmount();
+  }
+});
+
+test("card previews wait for two frames before loading when a scheduler exists", async () => {
+  const scope = globalThis as unknown as Record<string, unknown>;
+  assert.equal(
+    typeof scope["requestAnimationFrame"],
+    "undefined",
+    "linkedom must not schedule frames or every preview test needs flushing",
+  );
+  const frames: Array<(time: number) => void> = [];
+  scope["requestAnimationFrame"] = (callback: (time: number) => void): number => {
+    frames.push(callback);
+    return frames.length;
+  };
+  const host = typedHost();
+  await seed(host);
+  const seen: string[] = [];
+  const works = host.works as unknown as { getWork: (id: string) => Promise<unknown> };
+  const originalGetWork = works.getWork.bind(works);
+  works.getWork = async (id: string): Promise<unknown> => {
+    seen.push(id);
+    return originalGetWork(id);
+  };
+  try {
+    const { shell } = await mountInto(host);
+    try {
+      await settled();
+      assert.deepEqual(seen, [], "no preview fetch before the paint gate releases");
+      await act(async () => {
+        frames.splice(0).forEach((run) => run(16));
+      });
+      assert.deepEqual(seen, [], "one frame is not enough");
+      await act(async () => {
+        frames.splice(0).forEach((run) => run(32));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      await settled();
+      assert.equal(seen.length, 2, "both card previews fetch after two frames");
+    } finally {
+      shell.unmount();
+    }
+  } finally {
+    delete scope["requestAnimationFrame"];
   }
 });

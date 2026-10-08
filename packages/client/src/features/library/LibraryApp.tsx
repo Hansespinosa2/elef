@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent, JSX, MouseEvent } from "react";
 import type { ElefHost, WorkKind, WorkSummary } from "@elef/contracts";
 import type { ElefMountOptions, LibraryFilter, NoticeTone } from "../../application/types.js";
 import { parseLibraryRoute } from "../../application/router.js";
-import { filterWorks } from "./filtering.js";
+import { filterWorks, sameWorks } from "./filtering.js";
 import { LibraryCard } from "./LibraryCard.js";
 
 export interface LibraryControl {
@@ -69,7 +69,9 @@ export function LibraryApp({ host, initialFilter, options, registerControl }: Li
         for (const space of spaces) {
           loaded.push(...(await host.library.listWorks(space.id)));
         }
-        setWorks(loaded);
+        // Bail out on identical data: returning the current array skips the
+        // commit, so a no-change refresh costs the fetch but no render.
+        setWorks((current) => (sameWorks(current, loaded) ? current : loaded));
         setReady(true);
         showNotice(notice, tone);
       } catch (error) {
@@ -152,7 +154,13 @@ export function LibraryApp({ host, initialFilter, options, registerControl }: Li
     query.trim() !== "" ? ` · ${visible.length} shown` : ""
   }`;
   const isEmptyState = visible.length === 0 && query.trim() === "";
-  const nodes = works.map((work) => ({ id: work.id, title: work.title }));
+  const nodes = useMemo(() => works.map((work) => ({ id: work.id, title: work.title })), [works]);
+  const handleChanged = useCallback(
+    (notice: string | null, tone?: NoticeTone) => {
+      void reload(notice, tone);
+    },
+    [reload],
+  );
 
   useEffect(() => {
     const button = loadMoreRef.current;
@@ -305,7 +313,7 @@ export function LibraryApp({ host, initialFilter, options, registerControl }: Li
               work={work}
               documentNodes={nodes}
               options={options}
-              onChanged={(notice, tone) => void reload(notice, tone)}
+              onChanged={handleChanged}
             />
           ))}
         </section>
