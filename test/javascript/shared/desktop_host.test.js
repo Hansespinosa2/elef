@@ -122,7 +122,9 @@ test("Rails and desktop consume the same Rails-owned save state machine", () => 
   assert.match(bootstrap, /quietSavePolicy: createQuietSavePolicy\(\)/)
   assert.match(application, /quietSavePolicy\.saveDelay/)
   assert.match(application, /quietSavePolicy\.externalPollMs/)
+  assert.match(application, /quietSavePolicy\.snapshotIntervalMs/)
   assert.match(quietSavePolicy, /saveDelay: 2000/)
+  assert.match(quietSavePolicy, /QUIET_SAVE_SNAPSHOT_INTERVAL_MS = 5 \* 60 \* 1000/)
 })
 
 test("Rails and desktop share one sanitized preview insertion path", () => {

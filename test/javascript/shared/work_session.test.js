@@ -465,3 +465,65 @@ test("work session unsubscribes handlers", async () => {
   assert.ok(externals.length >= 0)
   session.dispose()
 })
+
+test("periodic snapshots fire while the session is dirty and stop once saved", async () => {
+  const { session, state, timers } = setup({ policy: { externalPollMs: 0, saveDelay: 5000, snapshotIntervalMs: 1000 } })
+  await timers.advance(3000)
+  await flush()
+  assert.deepEqual(state.snapshots, [])
+  await session.applyLocalChange({ from: 0, to: 3, insert: "NEW" })
+  await timers.advance(1000)
+  await flush()
+  await timers.advance(1000)
+  await flush()
+  assert.deepEqual(state.snapshots, [["deck-1", "periodic", "NEW"], ["deck-1", "periodic", "NEW"]])
+  await timers.advance(5000)
+  await flush()
+  assert.equal(session.dirty, false)
+  const taken = state.snapshots.length
+  await timers.advance(5000)
+  await flush()
+  assert.equal(state.snapshots.length, taken)
+  session.dispose()
+})
+
+test("a disabled snapshot cadence schedules no timer", async () => {
+  const { session, state, timers } = setup({ policy: { externalPollMs: 0 } })
+  assert.equal(timers.count(), 0)
+  await session.applyLocalChange({ from: 0, to: 3, insert: "NEW" })
+  await timers.advance(60 * 60 * 1000)
+  await flush()
+  assert.deepEqual(state.snapshots, [])
+  session.dispose()
+})
+
+test("the snapshot cadence stops at dispose", async () => {
+  const { session, state, timers } = setup({ policy: { externalPollMs: 0, saveDelay: 5000, snapshotIntervalMs: 1000 } })
+  await session.applyLocalChange({ from: 0, to: 3, insert: "NEW" })
+  session.dispose()
+  assert.equal(timers.count(), 0)
+  await timers.advance(5000)
+  await flush()
+  assert.deepEqual(state.snapshots, [])
+  assert.equal(await session.runSnapshotCadence(), null)
+})
+
+test("snapshot cadence failures report once and keep the cadence alive", async () => {
+  const { session, state, timers, transport, errors } = setup({ policy: { externalPollMs: 0, saveDelay: 5000, snapshotIntervalMs: 1000 } })
+  await session.applyLocalChange({ from: 0, to: 3, insert: "NEW" })
+  transport.takeSnapshot = async () => { throw Object.assign(new Error("disk busy"), { code: "storage_unavailable" }) }
+  await timers.advance(1000)
+  await flush()
+  await timers.advance(1000)
+  await flush()
+  assert.equal(errors.length, 1)
+  assert.equal(errors[0].code, "storage_unavailable")
+  transport.takeSnapshot = async (id, reason, source) => {
+    state.snapshots.push([id, reason, source])
+    return { id: "snap-2" }
+  }
+  await timers.advance(1000)
+  await flush()
+  assert.deepEqual(state.snapshots, [["deck-1", "periodic", "NEW"]])
+  session.dispose()
+})

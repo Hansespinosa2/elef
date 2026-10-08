@@ -40,7 +40,8 @@ function fakeTimers() {
 }
 
 function setup(overrides = {}) {
-  let source = "old"
+  const { initialSource, ...flowOverrides } = overrides
+  let source = initialSource ?? "old"
   const deck = { id: "deck-1", source, source_file: "talk.md", content_hash: hash("a") }
   const calls = []
   const accepted = []
@@ -58,7 +59,7 @@ function setup(overrides = {}) {
     onState: state => states.push(state),
     onConflict: conflict => conflicts.push(conflict),
     onError: error => errors.push(error),
-    ...overrides
+    ...flowOverrides
   })
   flow.activate(deck)
   return { deck, flow, calls, accepted, conflicts, states, errors, setSource: value => { source = value }, getSource: () => source }
@@ -184,6 +185,105 @@ test("external edits reload clean buffers and surface conflicts when local edits
   assert.equal(second, "conflict")
   assert.equal(context.getSource(), "local unsaved edit")
   assert.equal(context.conflicts.at(-1).diskSource, "external concurrent edit")
+})
+
+function mergeSetup(outcome, local = "old") {
+  const snapshots = []
+  const merges = []
+  const context = setup({
+    initialSource: local,
+    takeSnapshot: async (id, reason, source) => { snapshots.push([id, reason, source]) },
+    mergeExternalChange: async (id, localSource) => {
+      merges.push([id, localSource])
+      if (outcome instanceof Error) throw outcome
+      return outcome
+    }
+  })
+  return { ...context, snapshots, merges }
+}
+
+test("a suspicious external rewrite conflicts on a clean buffer instead of reloading silently", async () => {
+  const context = mergeSetup({ kind: "suspicious" })
+  const result = await context.flow.resolveExternalChange("deck-1", {
+    content_hash: hash("d"),
+    source: ""
+  })
+  assert.equal(result, "conflict")
+  assert.deepEqual(context.merges, [["deck-1", "old"]])
+  assert.deepEqual(context.snapshots, [["deck-1", "pre-merge", "old"], ["deck-1", "external-change", undefined]])
+  assert.equal(context.getSource(), "old")
+  assert.equal(context.conflicts.length, 1)
+  assert.equal(context.conflicts[0].diskSource, "")
+})
+
+test("an overlapping external rewrite conflicts on a clean buffer", async () => {
+  const local = "x".repeat(275)
+  const context = mergeSetup({ kind: "overlap" }, local)
+  const result = await context.flow.resolveExternalChange("deck-1", {
+    content_hash: hash("d"),
+    source: "external rewrite"
+  })
+  assert.equal(result, "conflict")
+  assert.deepEqual(context.merges, [["deck-1", local]])
+  assert.deepEqual(context.snapshots, [["deck-1", "pre-merge", local], ["deck-1", "external-change", undefined]])
+  assert.equal(context.getSource(), local)
+})
+
+test("a clean merge result still reloads a clean buffer silently", async () => {
+  const local = "x".repeat(275)
+  const context = mergeSetup({ kind: "merged", source: "external clean edit" }, local)
+  const result = await context.flow.resolveExternalChange("deck-1", {
+    content_hash: hash("d"),
+    source: "external clean edit"
+  })
+  assert.equal(result, "reloaded")
+  assert.equal(context.getSource(), "external clean edit")
+  assert.equal(context.conflicts.length, 0)
+})
+
+test("a merge failure on a clean buffer conflicts instead of reloading silently", async () => {
+  const local = "x".repeat(275)
+  const context = mergeSetup(Object.assign(new Error("merge unavailable"), { code: "storage_unavailable", retryable: true }), local)
+  const result = await context.flow.resolveExternalChange("deck-1", {
+    content_hash: hash("d"),
+    source: "external rewrite"
+  })
+  assert.equal(result, "conflict")
+  assert.equal(context.getSource(), local)
+  assert.equal(context.errors.length, 1)
+})
+
+test("an ordinary external edit reloads a clean buffer without consulting merge", async () => {
+  const context = mergeSetup({ kind: "overlap" })
+  const result = await context.flow.resolveExternalChange("deck-1", {
+    content_hash: hash("d"),
+    source: "external clean edit"
+  })
+  assert.equal(result, "reloaded")
+  assert.deepEqual(context.merges, [])
+  assert.deepEqual(context.snapshots, [])
+  assert.equal(context.getSource(), "external clean edit")
+  assert.equal(context.conflicts.length, 0)
+})
+
+test("the clean pre-gate trips on the exact suspicious boundaries", async () => {
+  const cases = [
+    ["x".repeat(199), "", "conflict"],
+    ["x".repeat(199), "y", "reloaded"],
+    ["x".repeat(200), "y".repeat(99), "conflict"],
+    ["x".repeat(200), "y".repeat(100), "reloaded"],
+    ["x".repeat(201), "y".repeat(100), "conflict"],
+    ["x".repeat(201), "y".repeat(101), "reloaded"]
+  ]
+  for (const [local, external, expected] of cases) {
+    const context = mergeSetup({ kind: "overlap" }, local)
+    const result = await context.flow.resolveExternalChange("deck-1", {
+      content_hash: hash("d"),
+      source: external
+    })
+    assert.equal(result, expected, `local ${local.length} chars vs external ${external.length} chars`)
+    assert.equal(context.merges.length, expected === "conflict" ? 1 : 0)
+  }
 })
 
 test("external snapshots for a closed or inactive deck are ignored", async () => {

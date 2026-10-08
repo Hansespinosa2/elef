@@ -160,6 +160,8 @@ describe("desktop quiet save", () => {
     await seedDeck("E2E quiet merge", "alpha\nbeta\n")
     await seedDeck("E2E quiet conflict", "same\nlines\nhere\n")
     await seedDeck("E2E quiet failure", "# Quiet failure\n\nSeed paragraph.\n")
+    await seedDeck("E2E quiet clean suspicious", `${"Clean suspicious line.\n".repeat(15)}`)
+    await seedDeck("E2E quiet periodic", "# Quiet periodic\n\nSeed paragraph.\n")
   })
 
   it("shows no save button, status, unsaved marker, or retry on desktop", async () => {
@@ -313,6 +315,42 @@ describe("desktop quiet save", () => {
     await $("#keep-local-version").click()
     await waitForQuiescent()
     assert.equal(await readDisk("E2E quiet conflict"), local)
+  })
+
+  it("never silently reloads a suspicious change into a clean editor", async () => {
+    await openDeck("E2E quiet clean suspicious")
+    const local = await readEditorSource()
+    assert.ok(local.length >= 200, `Seeded editor should hold a long clean buffer (got ${local.length} chars)`)
+    await waitForQuiescent()
+    await writeDirect("E2E quiet clean suspicious", "x\n")
+    await $("#conflict-dialog").waitForDisplayed({ timeout: 10_000 })
+    assert.equal(await readEditorSource(), local)
+    assert.equal(await $("#conflict-disk").getText(), "x\n")
+    const snapshots = await historySnapshots("E2E quiet clean suspicious")
+    const reasons = snapshots.map(entry => entry.file.slice(entry.file.indexOf("-") + 1, -".snap".length))
+    assert.ok(reasons.includes("pre-merge"), `Expected a pre-merge snapshot, saw ${reasons}`)
+    assert.ok(reasons.includes("external-change"), `Expected an external-change snapshot, saw ${reasons}`)
+    await $("#keep-local-version").click()
+    await waitForQuiescent()
+    assert.equal(await readDisk("E2E quiet clean suspicious"), local)
+  })
+
+  it("takes periodic snapshots while edits stay unsaved", async () => {
+    await openDeck("E2E quiet periodic")
+    await waitForQuiescent()
+    await browser.execute(() => window.__elefSaveTestHooks?.pause())
+    const edited = "# Quiet periodic\n\nAn unsaved line.\n"
+    await replaceSource(edited)
+    const taken = await browser.execute(() => window.__elefSaveTestHooks?.runSnapshotCadence())
+    assert.ok(taken, "The snapshot cadence run should take a snapshot while edits are unsaved")
+    const snapshots = await historySnapshots("E2E quiet periodic")
+    const periodic = snapshots.find(entry => entry.file.endsWith("-periodic.snap"))
+    assert.ok(periodic, `Expected a periodic snapshot, saw ${snapshots.map(entry => entry.file)}`)
+    assert.equal(periodic.bytes, edited)
+    const flushed = await browser.execute(() => window.__elefSaveTestHooks?.flush())
+    assert.equal(flushed, true)
+    await waitForQuiescent()
+    assert.equal(await readDisk("E2E quiet periodic"), edited)
   })
 
   it("retries failed saves automatically without a modal dialog", async () => {

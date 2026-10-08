@@ -65,6 +65,7 @@ export function createWorkSession({ transport, policy }) {
     setText = null,
     saveDelay = 650,
     externalPollMs = 0,
+    snapshotIntervalMs = 0,
     workspaceId = "",
     title = "",
     materializeEdits = () => {},
@@ -89,6 +90,9 @@ export function createWorkSession({ transport, policy }) {
   let disposed = false
   let pollTimer = null
   let pollBusy = false
+  let snapshotTimer = null
+  let snapshotBusy = false
+  let lastSnapshotErrorKey = null
   const externalHandlers = new Set()
   const statusHandlers = new Set()
 
@@ -239,6 +243,42 @@ export function createWorkSession({ transport, policy }) {
   }
   schedulePoll()
 
+  function hasUnsavedEdits() {
+    try {
+      return Boolean(flow.dirty)
+    } catch {
+      return false
+    }
+  }
+
+  async function runSnapshotCadence() {
+    if (disposed || snapshotBusy) return null
+    snapshotBusy = true
+    try {
+      if (typeof transport.takeSnapshot !== "function") return null
+      if (!hasUnsavedEdits()) return null
+      return await transport.takeSnapshot(workId, "periodic", getText())
+    } catch (error) {
+      const key = error?.code || "unknown"
+      if (key !== lastSnapshotErrorKey) {
+        lastSnapshotErrorKey = key
+        reportError(error)
+      }
+      return null
+    } finally {
+      snapshotBusy = false
+    }
+  }
+
+  function scheduleSnapshots() {
+    if (disposed || !snapshotIntervalMs || typeof transport.takeSnapshot !== "function") return
+    snapshotTimer = setTimer(() => {
+      snapshotTimer = null
+      void runSnapshotCadence().finally(scheduleSnapshots)
+    }, snapshotIntervalMs)
+  }
+  scheduleSnapshots()
+
   function onExternalChange(handler) {
     if (typeof handler !== "function") throw new TypeError("onExternalChange requires a handler.")
     externalHandlers.add(handler)
@@ -311,6 +351,8 @@ export function createWorkSession({ transport, policy }) {
     disposed = true
     clearTimer(pollTimer)
     pollTimer = null
+    clearTimer(snapshotTimer)
+    snapshotTimer = null
     externalHandlers.clear()
     statusHandlers.clear()
     flow.deactivate()
@@ -344,6 +386,9 @@ export function createWorkSession({ transport, policy }) {
     useDiskVersion: (...args) => flow.useDiskVersion(...args),
     keepLocalVersion: (...args) => flow.keepLocalVersion(...args),
     saveMergedVersion: (...args) => flow.saveMergedVersion(...args),
-    restoreDraft: (...args) => flow.restoreDraft(...args)
+    restoreDraft: (...args) => flow.restoreDraft(...args),
+    // Test seam: lets e2e prove the periodic-snapshot run path without
+    // waiting out the five-minute cadence in real time.
+    runSnapshotCadence
   }
 }

@@ -215,6 +215,7 @@ export function startFileLibraryApplication(platform) {
         setText: (source, meta) => setEditorSource(source, meta),
         saveDelay: quietSavePolicy.saveDelay,
         externalPollMs: quietSavePolicy.externalPollMs,
+        snapshotIntervalMs: quietSavePolicy.snapshotIntervalMs,
         materializeEdits: materializePendingVisualEdits,
         onConflict: showConflict,
         onError: showError
@@ -407,7 +408,8 @@ export function startFileLibraryApplication(platform) {
           } finally {
             saveFlow?.resume()
           }
-        }
+        },
+        runSnapshotCadence: () => saveFlow?.runSnapshotCadence?.() ?? null
       })
     })
   }
