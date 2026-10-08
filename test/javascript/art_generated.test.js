@@ -1,6 +1,9 @@
 import test from "node:test"
 import assert from "node:assert/strict"
+import { parseHTML } from "linkedom"
 import { analyzeArtList, resolveArtBindings } from "../../app/javascript/lib/art_source.js"
+import { sequenceHorizontalEligible } from "../../app/javascript/lib/art_layout.js"
+import { renderArtBlock, renderPreview } from "../../app/javascript/lib/renderer.js"
 
 const SAMPLE_LIMIT = 400
 const ROOT_TYPES = ["unordered", "ordered"]
@@ -11,6 +14,10 @@ const DEPTHS = [0, 1, 2, 3, 4]
 const DELIMITERS = [".", ")"]
 const STARTS = [0, 1, 3]
 const LOOSE = [false, true]
+const HOST_WIDTHS = [220, 280, 341, 536, 673, 800, 1120]
+const HOST_HEIGHTS = [140, 240, 360, 560]
+const THEMES = ["light", "dark", "paper"]
+const TYPOGRAPHY = ["book", "modern", "technical"]
 
 function seeded(seed) {
   let state = seed >>> 0
@@ -34,7 +41,11 @@ function generatedCases() {
     depth: pick(random, DEPTHS),
     delimiter: pick(random, DELIMITERS),
     start: pick(random, STARTS),
-    loose: pick(random, LOOSE)
+    loose: pick(random, LOOSE),
+    hostWidth: pick(random, HOST_WIDTHS),
+    hostHeight: pick(random, HOST_HEIGHTS),
+    theme: pick(random, THEMES),
+    typography: pick(random, TYPOGRAPHY)
   }))
 }
 
@@ -90,10 +101,39 @@ test(`ART-TEST-001..008: seeded semantic and metamorphic matrix (${SAMPLE_LIMIT}
     assert.equal(binding.bindings[0].analysis.itemCount, testCase.itemCount, `case ${index}: binding counts direct root items`)
     assert.deepEqual(binding.diagnostics, [], `case ${index}: generated supported list has no diagnostic`)
 
+    const { document } = parseHTML(renderArtBlock(markdown))
+    const root = document.querySelector("[data-elef-art-root]")
+    const list = root.firstElementChild
+    assert.equal(list.tagName, testCase.rootType === "ordered" ? "OL" : "UL", `case ${index}: rendered root list stays native`)
+    assert.equal([...list.children].filter(item => item.tagName === "LI").length, testCase.itemCount, `case ${index}: rendered direct item count matches source`)
+    assert.equal(root.dataset.artMode, expectedMode, `case ${index}: geometry metadata cannot change mode`)
+    assert.ok([testCase.hostWidth, testCase.hostHeight, testCase.theme, testCase.typography].every(Boolean), `case ${index}: host/theme/typography axes are sampled`)
+
+    const themedPreview = renderPreview({
+      kind: "document",
+      source: `:::art\n${markdown}`,
+      style: { theme: testCase.theme, typography: testCase.typography }
+    })
+    assert.equal(themedPreview.style.theme, testCase.theme, `case ${index}: sampled theme is applied`)
+    assert.equal(themedPreview.style.typography, testCase.typography, `case ${index}: sampled typography is applied`)
+    assert.match(themedPreview.html, new RegExp(`document-theme-${testCase.theme} document-typography-${testCase.typography}`), `case ${index}: theme and typography reach rendered document`)
+
+    const eligible = sequenceHorizontalEligible({ width: testCase.hostWidth, itemCount: testCase.itemCount, density: analysis.density, gap: 16, sequenceMinInline: 200 })
+    const expectedEligible = analysis.density === "compact" && testCase.itemCount >= 2 && (testCase.hostWidth - 16 * (testCase.itemCount - 1)) / testCase.itemCount >= 200
+    assert.equal(eligible, expectedEligible, `case ${index}: sampled fixed geometry affects only layout eligibility`)
+
     const alternateNestedType = testCase.body === "ordered" ? "unordered" : "ordered"
     const changedNesting = analyzeArtList(renderList(testCase, alternateNestedType))
     assert.equal(changedNesting?.mode, expectedMode, `case ${index}: nested orderedness cannot change mode`)
     assert.equal(changedNesting?.itemCount, testCase.itemCount, `case ${index}: nested lists cannot add Art items`)
+    if (["unordered", "ordered", "mixed"].includes(testCase.body)) {
+      const lowerDepth = Math.min(testCase.depth, 3)
+      const higherDepth = lowerDepth + 1
+      const lower = analyzeArtList(renderList({ ...testCase, depth: lowerDepth }))
+      const higher = analyzeArtList(renderList({ ...testCase, depth: higherDepth }))
+      assert.equal(higher?.mode, lower?.mode, `case ${index}: increased nested depth cannot change root mode`)
+      assert.equal(higher?.itemCount, lower?.itemCount, `case ${index}: increased nested depth cannot create Art items`)
+    }
   }
 })
 

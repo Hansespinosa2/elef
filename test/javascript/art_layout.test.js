@@ -24,6 +24,23 @@ test("ART-LAY-006: sequence horizontal eligibility uses the exact computed-width
   assert.equal(sequenceHorizontalEligible({ width: 1120, itemCount: 1, density: "compact", gap, sequenceMinInline: minimum }), false)
 })
 
+test("ART-TEST-006: compact Sequence horizontal eligibility is monotonic as host width increases", () => {
+  for (const itemCount of [2, 3, 4, 5, 6, 8, 12]) {
+    let eligibleBefore = false
+    for (let width = 0; width <= 1400; width += 1) {
+      const eligible = sequenceHorizontalEligible({
+        width,
+        itemCount,
+        density: "compact",
+        gap: 16,
+        sequenceMinInline: 200
+      })
+      assert.equal(eligibleBefore && !eligible, false, `${itemCount} items became ineligible again at ${width}px`)
+      eligibleBefore ||= eligible
+    }
+  }
+})
+
 test("ART-FIT-OFFSET: offsetWithin sums layout offsets only through the positioned host", () => {
   const host = {}
   const parent = { offsetLeft: 7, offsetTop: 9, offsetParent: host }

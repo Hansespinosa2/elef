@@ -150,6 +150,35 @@ test("Art derives Peers or Sequence from the native root list and preserves nest
   assert.doesNotMatch(peers.html, /:::art/)
 })
 
+test("ART-FIX-10: inline image content selects whole-list fallback and remains rendered", () => {
+  const preview = renderPreview({
+    kind: "document",
+    source: ":::art\n- Research\n  - Review evidence\n- Prototype\n  ![mockup](images/mockup.png)",
+    mediaMap: { "images/mockup.png": { src: "/media/mockup.png", contentType: "image/png" } }
+  })
+
+  assert.match(preview.html, /data-art-status="fallback-unsupported" data-art-layout="plain-list"/)
+  assert.match(preview.html, /data-art-diagnostic="ART_UNSUPPORTED_CONTENT"/)
+  assert.match(preview.html, /<ul class="elef-art-list" role="list">/)
+  assert.equal((preview.html.match(/<li>/g) || []).length, 3)
+  assert.match(preview.html, /src="\/media\/mockup\.png" alt="mockup"/)
+  assert.match(preview.html, /Prototype/)
+  assert.deepEqual(preview.editor_map.art_diagnostics.map(diagnostic => diagnostic.code), ["ART_UNSUPPORTED_CONTENT"])
+})
+
+test("ART-TEST-005: identical parsed Art and render inputs produce identical previews", () => {
+  const options = {
+    source: ":::art\n1. Discover\n2. Design\n3. Build\n4. Launch",
+    style: { theme: "dark", typography: "technical" }
+  }
+  const first = renderPreview(options)
+  const second = renderPreview(options)
+  assert.equal(second.html, first.html)
+  assert.deepEqual(second.warnings, first.warnings)
+  assert.deepEqual(second.editor_map, first.editor_map)
+  assert.deepEqual(second.style, first.style)
+})
+
 test("Art has a complete server-rendered fixed-host default and unsupported content falls back as a whole list", () => {
   const pending = renderPreview({ source: ":::art\n1. Discover\n2. Design\n3. Build\n4. Launch" })
   const unsupported = renderPreview({
