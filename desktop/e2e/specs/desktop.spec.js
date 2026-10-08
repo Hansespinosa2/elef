@@ -744,7 +744,7 @@ class DesktopEditorUi {
       await target.waitForDisplayed()
       await target.click()
       const focus = await browser.execute(() => {
-        const block = document.querySelector("#desktop-preview .document-editor-block[data-editor-empty-block='true'][contenteditable='true']")
+        const block = document.querySelector("#desktop-preview .document-editor-block[data-editor-empty-block='true']")
         block?.focus({ preventScroll: true })
         const selection = window.getSelection()
         return {
@@ -782,7 +782,8 @@ class DesktopEditorUi {
         inputType: event.inputType,
         trusted: event.isTrusted,
         target: event.target?.nodeName,
-        contentEditable: event.target?.isContentEditable
+        contentEditable: event.target?.isContentEditable,
+        defaultPrevented: event.defaultPrevented
       })
       for (const name of ["keydown", "beforeinput", "input"]) document.addEventListener(name, record, true)
       window.__displayMathInputDiagnostics = { events, record }
@@ -859,10 +860,20 @@ class DesktopEditorUi {
         const field = document.querySelector("#desktop-editor-field")
         const editor = field?.editorController
         const palette = globalThis.Stimulus?.getControllerForElementAndIdentifier(field, "snippet-palette")
+        const visual = document.querySelector("#desktop-editor-form")?.visualEditorController
+        const block = document.querySelector("#desktop-preview .document-editor-block[data-editor-empty-block='true'][contenteditable='true']")
         return {
           source: editor?.sourceValue,
           selection: [editor?.selectionStart, editor?.selectionEnd],
           mode: editor?.editingMode,
+          activeElement: document.activeElement?.outerHTML?.slice(0, 240) || null,
+          blockHTML: block?.innerHTML || null,
+          blockIsFocused: document.activeElement === block,
+          previewFresh: document.querySelector("#desktop-editor-form")?.previewController?.projectionFresh,
+          visualHasEditor: Boolean(visual?.editorController),
+          pendingProjectionEdits: [...(visual?.pendingProjectionEdits?.values() || [])].map(edit => ({
+            from: edit.from, to: edit.to, source: edit.source, blockId: edit.blockId
+          })),
           paletteQuery: palette?.query,
           paletteMatches: palette?.matches?.map(entry => entry.name || entry.snippet?.name),
           paletteHidden: document.querySelector('[aria-label="Snippet suggestions"]')?.hidden,
