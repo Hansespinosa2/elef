@@ -295,6 +295,38 @@ describe("authoring dialog", () => {
     assert.equal(document.querySelectorAll(".authoring-entry-card").length, 1);
   });
 
+  it("moves focus to the name field when the entry form opens", async () => {
+    const { document } = await mountDialog({
+      transport: memoryTransport({ snippets: [], math: [], hashes: { snippets: null, math_shortcuts: null } }),
+      initialRegistry: "snippets",
+      openNew: true,
+    });
+
+    const input = document.querySelector("#authoring-name") as unknown as object;
+    assert.ok(input, "entry form renders the name field");
+    // linkedom never updates document.activeElement, so observe the focus
+    // call itself through the element prototype instead.
+    let proto: object | null = Object.getPrototypeOf(input);
+    while (proto !== null && !Object.getOwnPropertyDescriptor(proto, "focus")) {
+      proto = Object.getPrototypeOf(proto);
+    }
+    assert.ok(proto, "linkedom element prototype exposes focus");
+    const original = (proto as Record<string, unknown>)["focus"] as (...args: unknown[]) => unknown;
+    let focusCalls = 0;
+    (proto as Record<string, unknown>)["focus"] = function (this: unknown, ...args: unknown[]) {
+      focusCalls += 1;
+      return original.apply(this, args);
+    };
+    try {
+      await click(document.querySelector("#cancel-authoring-entry") as unknown);
+      assert.equal(focusCalls, 0);
+      await click(document.querySelector("#new-authoring-entry") as unknown);
+      assert.equal(focusCalls, 1);
+    } finally {
+      (proto as Record<string, unknown>)["focus"] = original;
+    }
+  });
+
   it("sanitizes renderer output in example previews", async () => {
     const { document } = await mountDialog({
       transport: memoryTransport({

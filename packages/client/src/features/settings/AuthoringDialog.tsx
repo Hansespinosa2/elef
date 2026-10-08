@@ -112,6 +112,12 @@ export function AuthoringDialog({
   const [writeInProgress, setWriteInProgress] = useState(false);
   const writeRef = useRef(false);
   const stateRef = useRef({ registries, hashes, activeRegistry });
+  // The pre-migration dialog moved focus to the entry form on open so
+  // keyboard flows start in the name field; keep that contract.
+  const nameRef = useRef<HTMLInputElement | null>(null);
+  useEffect(() => {
+    if (formOpen) nameRef.current?.focus();
+  }, [formOpen]);
   stateRef.current = { registries, hashes, activeRegistry };
 
   const load = useCallback(async () => {
@@ -386,7 +392,7 @@ export function AuthoringDialog({
           <input name="id" type="hidden" value={editingId || ""} readOnly />
           <fieldset className="authoring-snippet-fields" hidden={!isSnippet} disabled={!isSnippet}>
             <label htmlFor="authoring-name">Name</label>
-            <input id="authoring-name" name="name" maxLength={120} required type="text" value={fields.name} onInput={(event) => setFields({ ...fields, name: event.currentTarget.value })} />
+            <input ref={nameRef} id="authoring-name" name="name" maxLength={120} required type="text" value={fields.name} onInput={(event) => setFields({ ...fields, name: event.currentTarget.value })} />
             <label htmlFor="authoring-trigger">Trigger</label>
             <input id="authoring-trigger" name="trigger" maxLength={120} pattern="[a-z0-9][a-z0-9-]*" required type="text" value={fields.trigger} onInput={(event) => setFields({ ...fields, trigger: event.currentTarget.value })} />
             <label htmlFor="authoring-description">Description</label>
