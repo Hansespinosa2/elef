@@ -309,7 +309,7 @@ def check_settings_styles() -> list[str]:
     found = sorted(
         str(path.relative_to(ROOT))
         for path in ROOT.rglob("*settings*.css")
-        if path.is_file() and SETTINGS_STYLE_EXCLUDED_PARTS.isdisjoint(path.parts)
+        if path.is_file() and SETTINGS_STYLE_EXCLUDED_PARTS.isdisjoint(path.relative_to(ROOT).parts)
     )
     if found != [SETTINGS_STYLESHEET_OWNER.as_posix()]:
         violations.append(
@@ -442,6 +442,16 @@ def self_test() -> int:
     if missing:
         print(f"canary NOT rejected for: {sorted(missing)}", file=sys.stderr)
         for line in found:
+            print(f"  {line}", file=sys.stderr)
+        return 1
+    r11 = [line for line in found if line.startswith("R11")]
+    if not any("settings-duplicate" in line for line in r11):
+        # The staged tree holds the owner plus the canary duplicate; an
+        # R11 finding that names neither proves the rule scanned an empty
+        # set (e.g. the checkout path itself was excluded) instead of
+        # rejecting the duplicate.
+        print("R11 did not name the staged duplicate owner:", file=sys.stderr)
+        for line in r11:
             print(f"  {line}", file=sys.stderr)
         return 1
     print(f"canary rejected as required: {sorted(seen)}")
