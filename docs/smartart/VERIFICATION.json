@@ -91,7 +91,8 @@
     "ART-INV-014": {
       "status": "VERIFIED",
       "verification": [
-        "static:script/check_art_static.py#SHARED_RENDERER_EXPORTS_ART_API"
+        "static:script/check_art_static.py#SHARED_RENDERER_EXPORTS_ART_API",
+        "test:test/e2e/scenarios/art-rendering.js#ART-PARITY-SEMANTICS"
       ]
     },
     "ART-INV-015": {
@@ -734,7 +735,7 @@
       "density": "rich",
       "layout": "peers-wrap",
       "status_dom": "ready",
-      "containment": "flowing document; canonical content width 673px \u00b12; 4 items wrap 2+2",
+      "containment": "flowing document; canonical content width 673px ±2; 4 items wrap 2+2",
       "verification": [
         "test:test/system/art_test.rb#canonical document Peers wrap at the preferred basis and remain reflowable in RTL"
       ]
@@ -760,7 +761,7 @@
       "density": "compact",
       "layout": "sequence-horizontal",
       "status_dom": "ready",
-      "containment": "fixed full-slide host measured at 1120px \u00b12; exact containment oracle passes",
+      "containment": "fixed full-slide host measured at 1120px ±2; exact containment oracle passes",
       "verification": [
         "test:test/system/art_test.rb#compact fixed Sequence uses the canonical width rule and the containment oracle"
       ]
@@ -773,7 +774,7 @@
       "density": "rich",
       "layout": "sequence-vertical",
       "status_dom": "ready",
-      "containment": "fixed full-slide host measured at 1120px \u00b12 by 560px \u00b12; exact containment oracle passes after shared token tuning",
+      "containment": "fixed full-slide host measured at 1120px ±2 by 560px ±2; exact containment oracle passes after shared token tuning",
       "verification": [
         "test:test/system/art_test.rb#rich fixed Sequence stays vertical and eight compact items show no-fit"
       ]
@@ -828,7 +829,7 @@
       "density": "compact",
       "layout": "peers-wrap",
       "status_dom": "ready",
-      "containment": "flowing document at canonical width 673px \u00b12; preferred width 200px; partial final row centered in RTL",
+      "containment": "flowing document at canonical width 673px ±2; preferred width 200px; partial final row centered in RTL",
       "verification": [
         "test:test/system/art_test.rb#canonical document Peers wrap at the preferred basis and remain reflowable in RTL"
       ]
