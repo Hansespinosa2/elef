@@ -265,6 +265,13 @@ test("card previews render sanitized renderer output", async () => {
     assert.match(hostile, /Hostile/, "safe content survives");
     assert.doesNotMatch(hostile, /javascript:/, "javascript URLs are stripped");
     assert.doesNotMatch(hostile, /example\.com/, "remote media is stripped without a media base");
+    for (const preview of previews) {
+      assert.equal(
+        (preview as unknown as { dataset: { previewState?: string } }).dataset.previewState,
+        "ready",
+        "rendered previews report ready on the card preview node",
+      );
+    }
   } finally {
     shell.unmount();
   }

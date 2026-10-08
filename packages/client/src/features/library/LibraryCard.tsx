@@ -383,7 +383,13 @@ function CardPreview({
 
   if (state.phase !== "ready" || state.html === undefined) {
     return (
-      <div ref={containerRef} className="library-card-preview" aria-hidden="true" inert>
+      <div
+        ref={containerRef}
+        className="library-card-preview"
+        aria-hidden="true"
+        inert
+        data-preview-state={state.phase === "unavailable" ? "unavailable" : "loading"}
+      >
         {state.phase === "unavailable" ? (state.message ?? "Preview unavailable.") : "Loading preview…"}
       </div>
     );
@@ -397,8 +403,8 @@ function CardPreview({
   const kind = work.kind;
   const mediaBaseUrl = options.resolveMediaBaseUrl?.(work) ?? "";
   return (
-    <div ref={containerRef} className="library-preview" data-preview-state="ready">
-      <div className="library-card-preview" aria-hidden="true" inert>
+    <div ref={containerRef} className="library-preview">
+      <div className="library-card-preview" aria-hidden="true" inert data-preview-state="ready">
         <SafeHtml
           className={stageClass}
           html={state.html}

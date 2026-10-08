@@ -3,6 +3,7 @@ import { editAndPreviewWorkflow, SAVED_SOURCE } from "../../../test/e2e/scenario
 import { appearanceWorkflow } from "../../../test/e2e/scenarios/appearance.js"
 import { libraryAndGraphWorkflow } from "../../../test/e2e/scenarios/library-and-graph.js"
 import { libraryCreateDeleteWorkflow } from "../../../test/e2e/scenarios/library-create-delete.js"
+import { libraryDeepLinksWorkflow } from "../../../test/e2e/scenarios/library-deep-links.js"
 import { externalEditConflictWorkflow, CONFLICT_EXTERNAL_SOURCE } from "../../../test/e2e/scenarios/external-edit-conflict.js"
 import { hostileDeckNeutralizedWorkflow } from "../../../test/e2e/scenarios/hostile-deck.js"
 import { documentLinkCompletionWorkflow, mathInputWorkflow, snippetInsertWorkflow } from "../../../test/e2e/scenarios/authoring-palettes.js"
@@ -843,6 +844,15 @@ class WebLibraryUi {
     await this.page.goto("/documents")
   }
 
+  async openLibraryDeepLink(filter) {
+    await this.page.goto(filter === "all" ? "/" : `/${filter}`, { waitUntil: "domcontentloaded" })
+    await expect(this.page.locator("#deck-list")).toBeVisible()
+  }
+
+  async setLibraryHash(filter) {
+    await this.page.evaluate(name => { window.location.hash = `#library/${name}` }, filter)
+  }
+
   async assertDocumentsOnly(documentTitle) {
     await expect(this.page.getByRole("heading", { name: documentTitle, exact: true })).toBeVisible()
     await expect(this.page.locator("article.library-card")).toHaveCount(2)
@@ -892,6 +902,10 @@ test("shared library and document graph flow works in the web app", async ({ pag
 
 test("shared library create and delete flow works in the web app", async ({ page }) => {
   await libraryCreateDeleteWorkflow(new WebLibraryUi(page))
+})
+
+test("shared library deep links land on the requested filter in the web app", async ({ page }) => {
+  await libraryDeepLinksWorkflow(new WebLibraryUi(page))
 })
 
 test("shared external-edit conflict flow preserves the disk version in the web app", async ({ page }) => {

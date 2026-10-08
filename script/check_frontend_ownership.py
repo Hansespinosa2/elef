@@ -290,6 +290,7 @@ shared_workflows = {
     "hostileDeckNeutralizedWorkflow",
     "libraryAndGraphWorkflow",
     "libraryCreateDeleteWorkflow",
+    "libraryDeepLinksWorkflow",
     "mathInputWorkflow",
     "presentationModeWorkflow",
     "snippetInsertWorkflow",

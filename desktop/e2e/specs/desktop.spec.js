@@ -7,6 +7,7 @@ import { editAndPreviewWorkflow } from "../../../test/e2e/scenarios/edit-and-pre
 import { appearanceWorkflow } from "../../../test/e2e/scenarios/appearance.js"
 import { libraryAndGraphWorkflow } from "../../../test/e2e/scenarios/library-and-graph.js"
 import { libraryCreateDeleteWorkflow } from "../../../test/e2e/scenarios/library-create-delete.js"
+import { libraryDeepLinksWorkflow } from "../../../test/e2e/scenarios/library-deep-links.js"
 import { externalEditConflictWorkflow, CONFLICT_EXTERNAL_SOURCE } from "../../../test/e2e/scenarios/external-edit-conflict.js"
 import { hostileDeckNeutralizedWorkflow } from "../../../test/e2e/scenarios/hostile-deck.js"
 import { documentLinkCompletionWorkflow, mathInputWorkflow, snippetInsertWorkflow } from "../../../test/e2e/scenarios/authoring-palettes.js"
@@ -1540,6 +1541,20 @@ class DesktopLibraryUi {
     await $("#show-documents").click()
   }
 
+  async openLibraryDeepLink(filter) {
+    await browser.execute(name => { window.location.hash = `#library/${name}` }, filter)
+    await browser.refresh()
+    await $("#library-view").waitForDisplayed({ timeout: 20_000 })
+    await browser.waitUntil(async () => (await $$(".library-card")).length > 0, {
+      timeout: 20_000,
+      timeoutMsg: "The library did not render any cards after a deep-link reload"
+    })
+  }
+
+  async setLibraryHash(filter) {
+    await browser.execute(name => { window.location.hash = `#library/${name}` }, filter)
+  }
+
   async assertDocumentsOnly(documentTitle) {
     await browser.waitUntil(async () => (await $(`[aria-label='Edit ${documentTitle}']`).isDisplayed()), {
       timeout: 10_000,
@@ -1883,6 +1898,10 @@ describe("desktop binary workflows and native boundaries", () => {
 
   it("runs the shared library create and delete flow", async () => {
     await libraryCreateDeleteWorkflow(new DesktopLibraryUi())
+  })
+
+  it("runs the shared library deep links flow", async () => {
+    await libraryDeepLinksWorkflow(new DesktopLibraryUi())
   })
 
   it("persists appearance through the shared editing flow", async () => {

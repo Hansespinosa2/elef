@@ -414,6 +414,7 @@ export function startFileLibraryApplication(platform) {
     showNotice(message, "error")
   }
 
+  let libraryShown = false
   function showLibrary() {
     elements.editorForm.previewController?.finishEditing()
     document.body.dataset.desktopView = "library"
@@ -424,7 +425,10 @@ export function startFileLibraryApplication(platform) {
     document.querySelector("#new-deck").disabled = !library
     document.querySelector("#import-elef").disabled = !library
     document.querySelector("#breadcrumb-current").textContent = "Decks"
-    shell.setFilter("all")
+    // The first show preserves the boot filter (a deep-linked tab); every
+    // return home resets to All.
+    if (libraryShown) shell.setFilter("all")
+    else libraryShown = true
     void startupUpdateCheck.resume()
   }
 
@@ -1079,7 +1083,10 @@ export function startFileLibraryApplication(platform) {
   void listen("desktop-menu-action", event => void handleMenuAction(event.payload))
   const openedFileListener = listen("desktop-open-elef", () => void processOpenedFiles())
   async function mountLibrary() {
+    // The desktop writes #library/<filter> hashes on tab switches; boot from
+    // the live URL so a reload restores the same filter.
     shell = await mountElef(mount, createLibraryHost(), {
+      initialUrl: location.href,
       // The desktop has no URL routing: work targets open in the embedded
       // editor, tab targets only move the location hash for deep-linking.
       navigate: target => {
