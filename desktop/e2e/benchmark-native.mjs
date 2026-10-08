@@ -7,7 +7,17 @@ import { randomUUID } from "node:crypto"
 import { desktopCommand } from "./offline-macos.js"
 import { readWebdriverValue, reserveWebdriverPort, webdriverElementPath } from "./webdriver-port.js"
 import { percentile95 } from "../../app/javascript/lib/performance_measurement.js"
-import { LIBRARY_RENDER_BATCH_SIZE } from "../../app/javascript/lib/incremental_list.js"
+import { readFileSync } from "node:fs"
+
+// The render batch is owned by the shared client (LibraryApp); the plain-node
+// benchmark cannot import TS source, so it pins the value here and asserts
+// parity with the client source at startup.
+const LIBRARY_RENDER_BATCH_SIZE = 48
+const clientBatch = Number(
+  readFileSync(new URL("../../packages/client/src/features/library/LibraryApp.tsx", import.meta.url), "utf8")
+    .match(/export const LIBRARY_RENDER_BATCH_SIZE = (\d+);/)?.[1]
+)
+assert.equal(clientBatch, LIBRARY_RENDER_BATCH_SIZE, "benchmark batch size drifted from the shared client")
 
 const binary = process.argv[process.argv.indexOf("--binary") + 1]
 const reportOnly = process.argv.includes("--report-runner")

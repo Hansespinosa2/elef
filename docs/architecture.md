@@ -51,6 +51,7 @@ Markdown is the authored source. Rendered HTML, editor projections, library card
 | app/controllers, app/models, app/services, app/lib | Rails request handling, persistence, domain services, and server-side integrations |
 | app/views, app/javascript, app/assets | Product markup, shared editor/library/graph behavior, controllers, styles, and desktop host template |
 | app/lib/source, packages/work-model, packages/renderer | Rails renderer bridge, shared Work semantics, and shared Markdown-to-HTML projection |
+| packages/client | Host-neutral interactive UI (React): the sole renderer of library UI, mounted by both hosts via `mountElef` with a host adapter |
 | config/routes.rb, config/importmap.rb, db/ | Web routes, frontend pins, and Rails database schema/migrations |
 | desktop/crates/elef-core | Tauri-independent deck discovery, manifests, safe writes, media, and .elef archives |
 | desktop/src-tauri | Tauri commands, capability boundary, native menu/window integration, and application lifecycle |
@@ -67,7 +68,7 @@ The desktop media adapter also owns its preview, upload, and deck-asset URL sche
 
 app/views/desktop_host.html is a static desktop host shell consumed by the build, not a Rails response. Shared editor, library, graph, and style behavior lives in Rails-owned application sources.
 
-Both library hosts use the card and action markup from `app/javascript/lib/library_card.js`. Rails supplies its routes and CSRF fields; desktop binds the same controls to local file operations.
+Both library hosts mount the same `packages/client` bundle: Rails through a Stimulus controller with the HTTP host adapter, desktop through `file_library_application.js` with the Tauri host adapter. Host differences (routes vs in-app views, native dialogs, server templates) ride the documented mount seams; the client carries no host knowledge (boundary R9).
 
 ## Important contracts
 
