@@ -3,7 +3,7 @@
   "campaign_branch": "feat/refactor-desktop-and-web",
   "campaign_base_sha": "88f61a7a8ffd7c276bafcf06eee09c36a8adf134",
   "current_phase": 4,
-  "phase_state": "ACT",
+  "phase_state": "DO",
   "phase_base_sha": "2bdfa86d6c6651b692a9c3bf11988309d52b27be",
   "head_sha": "df7580eedbb1effc4850805d02266aba09b3ac94",
   "review_round": 2,
@@ -228,5 +228,5 @@
   },
   "pending_human_gates": [],
   "blocker": null,
-  "next_action": "Phase 04 ACT round 3: root-cause cold/open boot cost (reviewer found zero distribution overlap on linux cold/open) and shrink/defer client-bundle cost on cold/open paths."
+  "next_action": "Phase 04 DO: ACT round-3 fixes done; re-gate new candidate, review round 3."
 }
