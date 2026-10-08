@@ -3,12 +3,12 @@
   "campaign_branch": "feat/refactor-desktop-and-web",
   "campaign_base_sha": "88f61a7a8ffd7c276bafcf06eee09c36a8adf134",
   "current_phase": 4,
-  "phase_state": "PLAN",
+  "phase_state": "DO",
   "phase_base_sha": "2bdfa86d6c6651b692a9c3bf11988309d52b27be",
   "head_sha": "ddbc69599fb9caf9d8ca82d79a7acf35494a3e50",
   "review_round": 1,
   "phase_contract_sha256": "1c172f31ad0e9a4d511767a10c9439d6bff12b0fca7a4fc8b188f4fee0a0fd55",
-  "frozen_plan_sha256": "c3ed1d505e974898c2c8fb35249995c20f2642f7f7446a78ca88bdee5078289e",
+  "frozen_plan_sha256": "e197cf4e4051f72f77261f92373182859f43cd5b88ecd13d958816e25d11846a",
   "last_completed_phase": 3,
   "last_verified_checks": [
     {
@@ -220,5 +220,5 @@
   },
   "pending_human_gates": [],
   "blocker": null,
-  "next_action": "Phase 04 re-plan: name additive updatedAt/warnings contract fields (OBS-P4R1-01); re-freeze, then re-gate."
+  "next_action": "Phase 04 DO: ACT fixes + re-freeze done; push, re-gate, review round 2."
 }
