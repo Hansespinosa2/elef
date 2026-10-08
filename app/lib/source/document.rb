@@ -15,150 +15,69 @@ module Source
 
     module_function
 
+    # All Work syntax (slides, blocks, directives, front matter, links) is
+    # interpreted once by @elef/work-model through the shared renderer bundle.
+    # This module keeps the Rails-facing signatures and data structs, mapping
+    # JavaScript structures back onto them.
     def parse(source, source_name: "Untitled presentation", mode: :presentation)
       raise ArgumentError, "The selected file did not contain readable text." unless source.is_a?(String)
 
       mode = mode.to_sym
       raise ArgumentError, "Unsupported document mode" unless %i[presentation document].include?(mode)
 
-      theme = theme_from_source(source)
-      typography = typography_from_source(source)
-      margin_settings = margin_settings_from_source(source)
-      content = content_without_front_matter(source)
-      sections = mode == :document ? [content] : split_sections(content)
-      context = { section: nil, subsection: nil }
-      slides = sections.map.with_index do |section, index|
-        metadata = slide_metadata(section, context, mode: mode)
+      structure = Source::JavascriptRenderer.work_structure(source, source_name: source_name, mode: mode)
+      slides = structure[:slides].map.with_index do |slide, index|
+        blocks = slide[:blocks].map do |block|
+          Block.new(markdown: block[:markdown], position: position_from(block[:position]))
+        end
         Slide.new(
           id: "#{source_name}-#{index + 1}",
           index: index,
-          markdown: metadata[:content],
-          layout: metadata[:layout],
-          blocks: metadata[:blocks],
-          title: metadata[:title],
-          regions: metadata[:regions],
-          section: metadata[:section],
-          subsection: metadata[:subsection],
-          footnote: metadata[:footnote],
-          warnings: metadata[:warnings]
+          markdown: blocks.map(&:markdown).join("\n\n"),
+          layout: slide[:layout],
+          blocks: blocks,
+          title: slide[:title],
+          regions: slide[:regions].map do |region|
+            Region.new(blocks: region.map do |block|
+              Block.new(markdown: block[:markdown], position: position_from(block[:position]))
+            end)
+          end,
+          section: slide[:section],
+          subsection: slide[:subsection],
+          footnote: slide[:footnote],
+          warnings: slide[:warnings]
         )
       end
       Parsed.new(
         source_name: source_name,
         mode: mode,
-        theme: theme,
-        typography: typography,
-        margin_settings: margin_settings,
+        theme: structure[:style][:theme],
+        typography: structure[:style][:typography],
+        margin_settings: MarginSettings.new(**structure[:marginSettings].slice(:section, :subsection, :footnote, :slide_count)),
         slides: slides,
-        warnings: slides.flat_map { |slide| slide_warnings(slide) }
+        warnings: structure[:warnings]
       )
     end
 
-    def split_sections(content)
-      normalized = content.gsub(/\r\n?/, "\n")
-      sections = []
-      section = []
-      fence = nil
-      math_fence = nil
-
-      normalized.split("\n", -1).each do |line|
-        next_fence = fence_marker(line)
-        fence = toggle_fence(fence, next_fence) if next_fence
-
-        if fence.nil? && math_fence
-          math_fence = nil if display_math_fence_marker(line) == math_fence
-          section << line
-          next
-        elsif fence.nil? && (opening_math_fence = display_math_fence_opener(line))
-          math_fence = opening_math_fence
-          section << line
-          next
-        end
-
-        if fence.nil? && line.match?(/\A---[ \t]*\z/)
-          sections << normalize_section(section.join("\n"))
-          section = []
-        else
-          section << line
-        end
-      end
-
-      sections << normalize_section(section.join("\n"))
-      sections
-    end
-
     def theme_from_source(source)
-      normalized_override(source, "theme", method(:normalize_theme_value)) || "match"
+      Source::JavascriptRenderer.read_style(source.to_s)[:theme]
     end
 
     def typography_from_source(source)
-      normalized_override(source, "typography", method(:normalize_typography_value)) || "book"
+      Source::JavascriptRenderer.read_style(source.to_s)[:typography]
     end
 
     def style_overrides(source)
-      {
-        theme: normalized_override(source, "theme", method(:normalize_theme_value)),
-        typography: normalized_override(source, "typography", method(:normalize_typography_value))
-      }
-    end
-
-    def margin_settings_from_source(source)
-      settings = { section: true, subsection: true, footnote: true, slide_count: true }
-      front_matter = initial_front_matter(source)
-      return MarginSettings.new(**settings) unless front_matter
-
-      in_margin_settings = false
-      front_matter.lines[1...front_matter.closing_line].each do |line|
-        if line.text.match?(/\Ashow-in-margin\s*:\s*\z/)
-          in_margin_settings = true
-        elsif in_margin_settings && (match = line.text.match(/\A\s+([A-Za-z][\w-]*)\s*:\s*(true|false)\s*\z/))
-          key = match[1].tr("-", "_").gsub(/([A-Z])/, '_\\1').downcase.sub(/\A_/, "")
-          settings[key.to_sym] = match[2] == "true" if settings.key?(key.to_sym)
-        elsif line.text.match?(/\A\S/)
-          in_margin_settings = false
-        end
-      end
-
-      MarginSettings.new(**settings)
+      Source::JavascriptRenderer.style_overrides(source.to_s)
     end
 
     def with_front_matter_value(source, key, value)
-      return remove_front_matter_value(source, key) if value.nil?
-
-      normalized_source = source.to_s
-      front_matter = initial_front_matter(normalized_source)
-      eol = front_matter&.eol || (normalized_source.include?("\r\n") ? "\r\n" : "\n")
-      replacement = "#{key}: #{value}"
-
-      unless front_matter
-        prefix = "---#{eol}#{replacement}#{eol}---#{eol}"
-        return prefix + normalized_source
-      end
-
-      lines = source_lines(normalized_source)
-      metadata_range = 1...front_matter.closing_line
-      matching_line = metadata_range.find { |index| lines[index].text.match?(/\A\s*#{Regexp.escape(key)}\s*:/) }
-
-      if matching_line
-        line = lines[matching_line]
-        normalized_source.dup.tap do |updated|
-          updated[line.start...line.end_pos] = "#{replacement}#{line.ending}"
-        end
-      else
-        closing = lines[front_matter.closing_line]
-        normalized_source.dup.tap do |updated|
-          updated.insert(closing.start, "#{replacement}#{eol}")
-        end
-      end
+      Source::JavascriptRenderer.with_front_matter_value(source.to_s, key.to_s, value)
     end
 
     def portable_document_link_metadata(source)
-      key = parse_front_matter_json(source, PORTABLE_DOCUMENT_KEY)
-      aliases = parse_front_matter_json(source, PORTABLE_DOCUMENT_ALIASES)
-      {
-        document_key: key.is_a?(String) && key.present? ? key : nil,
-        aliases: aliases.is_a?(Array) ? aliases.select { |value| value.is_a?(String) && value.present? }.map(&:strip).uniq : []
-      }
+      metadata = Source::JavascriptRenderer.portable_document_link_metadata(source.to_s)
+      { document_key: metadata[:documentKey], aliases: metadata[:aliases] }
     end
 
     def with_portable_document_link_metadata(source, document_key:, aliases:)
@@ -176,83 +95,12 @@ module Source
       )
     end
 
-    def remove_front_matter_value(source, key)
-      normalized_source = source.to_s
-      front_matter = initial_front_matter(normalized_source)
-      return normalized_source unless front_matter
-
-      lines = source_lines(normalized_source)
-      matching_line = (1...front_matter.closing_line).find do |index|
-        lines[index].text.match?(/\A\s*#{Regexp.escape(key)}\s*:/)
-      end
-      return normalized_source unless matching_line
-
-      line = lines[matching_line]
-      updated = normalized_source.dup
-      updated[line.start...line.end_pos] = ""
-      remaining = updated.lines
-      if remaining.length >= 2 && remaining.first.to_s.strip == "---" && remaining[1].to_s.strip == "---"
-        closing = remaining[1]
-        return updated[(remaining.first.length + closing.length)..].to_s.sub(/\A\r?\n/, "")
-      end
-      updated
-    end
-
     def extract_first_h1(source)
-      content = content_without_front_matter(source)
-      fence = nil
-      content.gsub(/\r\n?/, "\n").split("\n").each do |line|
-        next_fence = fence_marker(line)
-        if next_fence
-          fence = toggle_fence(fence, next_fence)
-          next
-        end
-        next unless fence.nil?
-
-        match = line.match(/\A\s{0,3}#(?!#)\s+(.+?)\s*#*\s*\z/)
-        return match[1].strip if match
-      end
-      nil
+      Source::JavascriptRenderer.first_heading(source.to_s)
     end
 
     def replace_first_h1(source, title)
-      normalized_source = source.to_s
-      normalized_title = title.to_s.tr("\r\n", " ").squish
-      front_matter = initial_front_matter(normalized_source)
-      body_start = front_matter&.body_start || 0
-      fence = nil
-
-      source_lines(normalized_source).each do |line|
-        next if line.end_pos <= body_start
-
-        incoming_fence = fence_marker(line.text)
-        if fence
-          fence = toggle_fence(fence, incoming_fence) if incoming_fence
-          next
-        elsif incoming_fence
-          fence = incoming_fence
-          next
-        end
-
-        heading = line.text.match(/\A([ \t]{0,3}#)(?:[ \t]+|(?=\z)).*\z/)
-        next unless heading
-
-        updated = normalized_source.dup
-        updated[line.start...line.end_pos] = "#{heading[1]} #{normalized_title}#{line.ending}"
-        return updated
-      end
-
-      body = normalized_source[body_start..].to_s
-      prefix = normalized_source[0...body_start].to_s
-      eol = if normalized_source.include?("\r\n")
-        "\r\n"
-      elsif normalized_source.include?("\r")
-        "\r"
-      else
-        "\n"
-      end
-      separator = body.blank? ? "" : eol * 2
-      "#{prefix}# #{normalized_title}#{separator}#{body}"
+      Source::JavascriptRenderer.replace_first_heading(source.to_s, title.to_s)
     end
 
     def normalize_folder_name(title, fallback: "Untitled presentation")
@@ -264,35 +112,20 @@ module Source
     end
 
     def slide_source_ranges(source)
-      front_matter = initial_front_matter(source)
-      body_start = front_matter&.body_start || 0
-      ranges = []
-      slide_start = body_start
-      fence = nil
-      math_fence = nil
-
-      source_lines(source).each do |line|
-        next if line.end_pos <= body_start
-
-        next_fence = fence_marker(line.text)
-        fence = toggle_fence(fence, next_fence) if next_fence
-
-        if fence.nil? && math_fence
-          math_fence = nil if display_math_fence_marker(line.text) == math_fence
-          next
-        elsif fence.nil? && (opening_math_fence = display_math_fence_opener(line.text))
-          math_fence = opening_math_fence
-          next
-        end
-
-        if fence.nil? && line.text.match?(/\A---[ \t]*\z/)
-          ranges << { index: ranges.length, start: slide_start, end: line.start, delimiter_start: line.start, delimiter_end: line.end_pos }
-          slide_start = line.end_pos
-        end
+      normalized = source.to_s
+      map = Source::JavascriptRenderer.editor_map(normalized, source_name: "ranges", mode: :presentation)
+      utf16 = normalized.encode("UTF-16LE")
+      map[:slides].map.with_index do |slide, index|
+        range = slide[:source_range]
+        delimiter = slide[:delimiter_range]
+        {
+          index: index,
+          start: char_offset(utf16, range[:start]),
+          end: char_offset(utf16, range[:end]),
+          delimiter_start: delimiter && char_offset(utf16, delimiter[:start]),
+          delimiter_end: delimiter && char_offset(utf16, delimiter[:end])
+        }
       end
-
-      ranges << { index: ranges.length, start: slide_start, end: source.length, delimiter_start: nil, delimiter_end: nil }
-      ranges
     end
 
     # Build the short-lived source projection used by the visual editor. The
@@ -303,409 +136,30 @@ module Source
       Source::JavascriptRenderer.editor_map(source, source_name: source_name, mode: mode)
     end
 
-    def content_without_front_matter(source)
-      front_matter = initial_front_matter(source)
-      front_matter ? source[front_matter.body_start..] || "" : source
-    end
-
-    def initial_front_matter(source)
-      lines = source_lines(source)
-      return nil if lines.empty? || lines.first.text.sub(/\A\uFEFF/, "").rstrip != "---"
-
-      closing_line = lines.find_index.with_index { |line, index| index.positive? && line.text.rstrip == "---" }
-      return nil unless closing_line
-
-      metadata_lines = lines[1...closing_line]
-      return nil unless metadata_lines.any? { |line| line.text.match?(/\A[A-Za-z_][\w-]*\s*:/) }
-
-      eol = lines.find { |line| !line.ending.empty? }&.ending || "\n"
-      FrontMatter.new(lines: lines, closing_line: closing_line, body_start: lines[closing_line].end_pos, eol: eol)
-    end
-
-    def source_lines(source)
-      lines = []
-      source.to_enum(:scan, /([^\r\n]*)(\r\n|\n|\r|\z)/).each do
-        full = Regexp.last_match(0)
-        next if full.empty?
-
-        lines << SourceLine.new(
-          start: Regexp.last_match.begin(0),
-          end_pos: Regexp.last_match.end(0),
-          text: Regexp.last_match(1),
-          ending: Regexp.last_match(2)
-        )
-      end
-      lines
-    end
-
     def normalize_theme_value(value)
-      without_comment = value.strip.sub(/\s+#.*\z/, "").strip
-      unquoted = without_comment.match(/\A(['"])(.*)\1\z/)&.[](2) || without_comment
-      %w[light dark match].include?(unquoted) ? unquoted : "match"
+      Source::JavascriptRenderer.normalize_theme_value(value.to_s)
     end
 
     def normalize_typography_value(value)
-      without_comment = value.to_s.strip.sub(/\s+#.*\z/, "").strip
-      unquoted = without_comment.match(/\A(['"])(.*)\1\z/)&.[](2) || without_comment
-      %w[book modern technical].include?(unquoted) ? unquoted : "book"
+      Source::JavascriptRenderer.normalize_typography_value(value.to_s)
     end
 
-    def normalized_override(source, key, normalizer)
-      value = front_matter_value(source, key, default: nil) { |raw| raw }
-      return unless value
+    def position_from(position)
+      return nil unless position
 
-      normalized = normalizer.call(value)
-      return normalized if normalized == value.to_s.strip.sub(/\s+#.*\z/, "").strip.sub(/\A(['"])(.*)\1\z/, '\2')
-
-      nil
+      Position.new(
+        horizontal: position[:horizontal],
+        vertical: position[:vertical],
+        vertical_explicit: position[:vertical_explicit]
+      )
     end
 
-    def front_matter_value(source, key, default:)
-      front_matter = initial_front_matter(source)
-      return default unless front_matter
+    # JavaScript string offsets are UTF-16 code units; Ruby slices characters.
+    # Convert each shared-parser offset back to a character offset.
+    def char_offset(utf16_source, utf16_offset)
+      return 0 if utf16_offset.zero?
 
-      front_matter.lines[1...front_matter.closing_line].each do |line|
-        match = line.text.match(/\A#{Regexp.escape(key)}\s*:\s*(.*)\z/)
-        return yield(match[1]) if match
-      end
-      default
-    end
-
-    def parse_front_matter_json(source, key)
-      raw = front_matter_value(source, key, default: nil) { |value| value }
-      JSON.parse(raw) if raw.present?
-    rescue JSON::ParserError
-      nil
-    end
-
-    def front_matter_has_key?(source, key)
-      front_matter = initial_front_matter(source)
-      front_matter && front_matter.lines[1...front_matter.closing_line].any? do |line|
-        line.text.match?( /\A\s*#{Regexp.escape(key)}\s*:/ )
-      end
-    end
-
-    def normalize_section(value)
-      value.sub(/\A\n/, "").sub(/\n\z/, "")
-    end
-
-    def fence_marker(line)
-      match = line.match(/\A\s{0,3}(`{3,}|~{3,})(.*)\z/)
-      return unless match
-
-      { marker: match[1][0], length: match[1].length, closing: match[2].match?(/\A[ \t]*\z/) }
-    end
-
-    def display_math_fence_marker(line)
-      line.match(/\A[ \t]{0,3}(\$\$|\\\[|\\\])[ \t]*\z/)&.[](1)
-    end
-
-    def display_math_fence_opener(line)
-      case display_math_fence_marker(line)
-      when "$$" then "$$"
-      when "\\[" then "\\]"
-      end
-    end
-
-    def display_math_fence_source?(markdown)
-      lines = markdown.to_s.split(/\r\n|\r|\n/, -1)
-      opener = display_math_fence_opener(lines.first.to_s)
-      return false unless opener
-      return true if lines.length == 1
-
-      display_math_fence_marker(lines.last.to_s) == opener
-    end
-
-    def toggle_fence(current, incoming)
-      return incoming unless current
-      return nil if current[:marker] == incoming[:marker] &&
-        incoming[:length] >= current[:length] && incoming[:closing]
-
-      current
-    end
-
-    def slide_metadata(markdown, context, mode: :presentation)
-      normalized = markdown.gsub(/\r\n?/, "\n")
-      margin = if mode == :presentation
-        parse_margin_directives(normalized, context)
-      else
-        { content: normalized, section: nil, subsection: nil, footnote: nil, warnings: [] }
-      end
-      normalized = margin[:content]
-      parsed = parse_blocks(normalized)
-      content = parsed[:blocks].map(&:markdown).join("\n\n")
-      layout = infer_layout(parsed[:blocks])
-      title = column_title(parsed[:blocks], layout)
-      regions = column_regions(parsed[:blocks], layout)
-      {
-        layout: layout,
-        content: content,
-        blocks: parsed[:blocks],
-        title: title,
-        regions: regions,
-        section: margin[:section],
-        subsection: margin[:subsection],
-        footnote: margin[:footnote],
-        warnings: margin[:warnings] + parsed[:warnings]
-      }
-    end
-
-    def parse_margin_directives(markdown, context)
-      lines = markdown.split("\n", -1)
-      content = []
-      warnings = []
-      leading = true
-      fence = nil
-      math_fence = nil
-      footnote = nil
-
-      lines.each_with_index do |line, index|
-        incoming_fence = fence_marker(line)
-        if fence
-          content << line
-          fence = toggle_fence(fence, incoming_fence) if incoming_fence
-          next
-        elsif incoming_fence
-          content << line
-          fence = incoming_fence
-          leading = false
-          next
-        elsif math_fence
-          math_fence = nil if display_math_fence_marker(line) == math_fence
-          content << line
-          next
-        elsif (opening_math_fence = display_math_fence_opener(line))
-          math_fence = opening_math_fence
-          content << line
-          leading = false
-          next
-        end
-
-        directive = margin_directive_from_line(line)
-        if directive
-          if directive[:malformed]
-            warnings << "Malformed #{directive[:type]} margin directive was removed."
-          elsif directive[:type] == "footnote"
-            if lines[(index + 1)..].to_a.all?(&:blank?)
-              footnote = directive[:value]
-            else
-              warnings << "Footnote margin directive must appear at the end of a slide."
-            end
-          elsif leading
-            context[directive[:type].to_sym] = directive[:value]
-          else
-            warnings << "#{directive[:type].capitalize} margin directive must appear at the beginning of a slide."
-          end
-          next
-        end
-
-        leading = false unless line.blank?
-        content << line
-      end
-
-      {
-        content: content.join("\n"),
-        section: context[:section],
-        subsection: context[:subsection],
-        footnote: footnote,
-        warnings: warnings
-      }
-    end
-
-    def margin_directive_from_line(line)
-      match = line.match(/\A\s*:::(section|subsection|footnote)\{/)
-      return unless match
-
-      characters = line[match.end(0)..].to_s.chars
-      value = []
-      depth = 1
-      index = 0
-
-      while index < characters.length
-        character = characters[index]
-        if character == "\\" && characters[index + 1] && %w[{ } \\].include?(characters[index + 1])
-          value << characters[index + 1]
-          index += 2
-          next
-        elsif character == "{"
-          depth += 1
-          value << character
-        elsif character == "}"
-          depth -= 1
-          if depth.zero?
-            return { type: match[1], value: value.join.strip } if characters[(index + 1)..].join.strip.blank?
-
-            return { type: match[1], malformed: true }
-          end
-          value << character
-        else
-          value << character
-        end
-        index += 1
-      end
-
-      { type: match[1], malformed: true }
-    end
-
-    def slide_warnings(slide)
-      slide.warnings
-    end
-
-    def parse_blocks(markdown)
-      raw_blocks = markdown_blocks(markdown)
-      blocks = []
-      warnings = []
-      index = 0
-
-      while index < raw_blocks.length
-        block = raw_blocks[index]
-        position = position_from_block(block)
-        if position
-          closing_index = raw_blocks[(index + 1)..]&.index(":::")
-          if closing_index
-            closing_index += index + 1
-            grouped = raw_blocks[(index + 1)...closing_index]
-            grouped.each { |group| blocks << Block.new(group, position) unless group == "" }
-            index = closing_index + 1
-          elsif raw_blocks[index + 1]
-            blocks << Block.new(raw_blocks[index + 1], position)
-            index += 2
-          else
-            warnings << "Alignment directive has no following Markdown block."
-            index += 1
-          end
-        elsif block == ":::" || block.start_with?(":::")
-          warnings << "Unknown or malformed presentation directive was removed."
-          index += 1
-        else
-          blocks << Block.new(block, nil)
-          index += 1
-        end
-      end
-
-      { blocks: blocks, warnings: warnings }
-    end
-
-    def markdown_blocks(markdown)
-      blocks = []
-      current = []
-      fence = nil
-      math_fence = nil
-
-      markdown.split("\n", -1).each do |line|
-        next_fence = fence_marker(line)
-        fence = toggle_fence(fence, next_fence) if next_fence
-
-        if fence.nil? && math_fence
-          math_fence = nil if display_math_fence_marker(line) == math_fence
-          current << line
-          next
-        elsif fence.nil? && (opening_math_fence = display_math_fence_opener(line))
-          math_fence = opening_math_fence
-          current << line
-          next
-        end
-
-        if fence.nil? && line.match?(/\A\s*:::/)
-          blocks << current.join("\n") if current.any?
-          blocks << line.strip
-          current = []
-        elsif line.blank? && fence.nil?
-          blocks << current.join("\n") if current.any?
-          current = []
-        else
-          current << line
-        end
-      end
-      blocks << current.join("\n") if current.any?
-      blocks
-    end
-
-    def position_from_block(block)
-      match = block.match(/\A\s*:::(align|position)[ \t]*\{([^}]*)\}\s*\z/)
-      return unless match
-
-      directive = match[1]
-      values = match[2].split.map(&:downcase)
-      horizontal = values.find { |value| %w[left center right].include?(value) }
-      vertical = values.find { |value| %w[top middle bottom].include?(value) }
-      if directive == "align" && values.length == 2 && %w[top center middle bottom].include?(values.first) && %w[left center right].include?(values.last)
-        horizontal = values.last
-        vertical = values.first == "center" ? "middle" : values.first
-      end
-      return unless horizontal || vertical
-
-      Position.new(horizontal || "left", vertical || "top", vertical.present?)
-    end
-
-    def infer_layout(blocks)
-      meaningful = blocks.reject { |block| block.markdown.blank? }
-      return "body" if meaningful.empty?
-      return "image" if meaningful.length == 1 && image_block?(meaningful.first.markdown)
-
-      if heading_for(meaningful.first.markdown)&.fetch(:level, nil) == 1
-        section_blocks = meaningful.drop(1).select { |block| heading_for(block.markdown) }
-        section_levels = section_blocks.map { |block| heading_for(block.markdown)[:level] }
-        first_section_index = meaningful.drop(1).index { |block| heading_for(block.markdown) }
-        if section_blocks.length.between?(2, 3) && first_section_index == 0 && section_levels.uniq.one? && section_levels.first > 1
-          return section_blocks.length == 2 ? "two-column" : "three-column"
-        end
-      end
-
-      content_blocks = meaningful.drop(1) if heading_for(meaningful.first.markdown)&.fetch(:level, nil) == 1
-      if content_blocks&.length == 1
-        content = content_blocks.first.markdown
-        return "image" if image_block?(content)
-        return "table" if table_block?(content)
-        return "code" if code_block?(content)
-        return "statement" if prose_block?(content)
-      end
-      "body"
-    end
-
-    def column_title(blocks, layout)
-      return unless %w[two-column three-column].include?(layout)
-
-      blocks.first.markdown
-    end
-
-    def column_regions(blocks, layout)
-      return [Region.new(blocks)] unless %w[two-column three-column].include?(layout)
-
-      regions = []
-      blocks.drop(1).each do |block|
-        if heading_for(block.markdown)
-          regions << Region.new([])
-        end
-        next if regions.empty?
-
-        regions[-1].blocks << block
-      end
-      regions
-    end
-
-    def heading_for(markdown)
-      first_line = markdown.lines.first.to_s
-      match = first_line.match(/\A\s{0,3}(#+)\s+(.+?)\s*#*\s*\z/)
-      match && { level: match[1].length, text: match[2].strip }
-    end
-
-    def image_block?(markdown)
-      markdown.match?(/\A\s*!\[[^\]]*\]\([^\)]+\)\s*\z/m)
-    end
-
-    def table_block?(markdown)
-      markdown.lines.length >= 2 && markdown.lines[0].include?("|") && markdown.lines[1].match?(/\A\s*\|?\s*:?-{3,}/)
-    end
-
-    def code_block?(markdown)
-      opening = markdown.lines.first.to_s.match(/\A\s*([`~]{3,})/)
-      closing = markdown.lines.last.to_s.match(/\A\s*([`~]{3,})\s*\z/)
-      opening && closing && opening[1][0] == closing[1][0] && closing[1].length >= opening[1].length
-    end
-
-    def prose_block?(markdown)
-      !markdown.match?(/\A\s*(?:[-*+] |\d+[.)] |> |!\[|\||`{3,}|~{3,})/)
+      utf16_source.byteslice(0, utf16_offset * 2).encode("UTF-8").length
     end
   end
 end
