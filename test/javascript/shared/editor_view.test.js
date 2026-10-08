@@ -153,6 +153,7 @@ test("switching deck kinds updates the shared editor controls and controller tar
     formControllers: "preview visual-editor presentation-editor slide-overview media presentation"
   })
 
+  assert.equal(form.dataset.visualEditorKindValue, "document")
   const sourceField = root.querySelector(".source-field")
   const sourceInput = root.querySelector("[data-editor-target='input']")
   assert.equal(root.getAttribute("aria-label"), "Visual document editor")
@@ -171,6 +172,7 @@ test("switching deck kinds updates the shared editor controls and controller tar
 
   configureEditorKind(root, "presentation", { showTitle: true })
 
+  assert.equal(form.dataset.visualEditorKindValue, "presentation")
   assert.equal(root.getAttribute("aria-label"), "Visual presentation editor")
   assert.equal(root.querySelector("[data-editor-view-target='kindBadge']").textContent, "Presentation")
   assert.equal(root.querySelector("[data-editor-view-target='titleField']").hidden, false)

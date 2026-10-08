@@ -296,9 +296,10 @@ export function configureEditorKind(root, kind, { documentTitles = [], sourceNam
   root.querySelector('[data-editor-view-target="slideOverview"]').hidden = isDocument
   root.querySelector("[data-presentation-editor-target='status']").hidden = isDocument
 
-  if (formControllers !== undefined) {
-    const form = root.closest("form")
-    if (form) form.dataset.controller = formControllers
+  const form = root.closest("form")
+  if (form) {
+    form.dataset.visualEditorKindValue = kind
+    if (formControllers !== undefined) form.dataset.controller = formControllers
   }
   return root
 }

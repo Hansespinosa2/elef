@@ -773,59 +773,10 @@ class DesktopEditorUi {
       sendNativeKey("ControlOrMeta+End", { activate: false })
     }
 
-    await browser.execute(() => {
-      const events = []
-      const projectionCalls = []
-      const record = event => events.push({
-        type: event.type,
-        key: event.key,
-        data: event.data,
-        inputType: event.inputType,
-        trusted: event.isTrusted,
-        target: event.target?.nodeName,
-        contentEditable: event.target?.isContentEditable,
-        defaultPrevented: event.defaultPrevented
-      })
-      const controller = document.querySelector("#desktop-editor-form")?.visualEditorController
-      const originalProjectionInput = controller?.projectionInput
-      if (controller && originalProjectionInput) {
-        controller.projectionInput = function(event) {
-          const block = event.target?.closest?.("[data-editor-block-id]")
-          const blockId = block?.dataset.editorBlockId
-          const mapBlock = this.map?.slides?.flatMap(slide => slide.blocks || []).find(candidate => candidate.id === blockId)
-          const region = this.map?.editable_regions?.find(candidate => candidate.block_id === blockId)
-          const call = {
-            mode: this.element.dataset.editorMode,
-            previewFresh: this.element.previewController?.projectionFresh,
-            blockId,
-            blockAction: block?.getAttribute("data-action"),
-            activeBlock: this.focusedProjectionBlock() === block,
-            canEdit: this.canEditBlock(block),
-            mapAvailable: Boolean(this.map),
-            mapBlock: Boolean(mapBlock),
-            mapRegion: Boolean(region),
-            editorAvailable: Boolean(this.editorController)
-          }
-          projectionCalls.push(call)
-          const result = originalProjectionInput.call(this, event)
-          call.pendingSize = this.pendingProjectionEdits?.size || 0
-          return result
-        }
-      }
-      for (const name of ["keydown", "beforeinput", "input"]) document.addEventListener(name, record, true)
-      window.__displayMathInputDiagnostics = { events, projectionCalls, record, controller, originalProjectionInput }
-    })
     typeNativeText("$")
     typeNativeText("$")
     await this.waitForSource(expectedPairSource)
     sendNativeKey("Enter", { activate: false })
-    await browser.execute(() => {
-      const diagnostics = window.__displayMathInputDiagnostics
-      if (!diagnostics) return
-      for (const name of ["keydown", "beforeinput", "input"]) document.removeEventListener(name, diagnostics.record, true)
-      if (diagnostics.controller && diagnostics.originalProjectionInput) delete diagnostics.controller.projectionInput
-      delete window.__displayMathInputDiagnostics
-    })
   }
 
   async assertDisplayMathCaret(expectedSource, expectedCaret, mode) {
@@ -888,29 +839,13 @@ class DesktopEditorUi {
         const field = document.querySelector("#desktop-editor-field")
         const editor = field?.editorController
         const palette = globalThis.Stimulus?.getControllerForElementAndIdentifier(field, "snippet-palette")
-        const visual = document.querySelector("#desktop-editor-form")?.visualEditorController
-        const block = document.querySelector("#desktop-preview .document-editor-block[data-editor-empty-block='true'][contenteditable='true']")
         return {
           source: editor?.sourceValue,
           selection: [editor?.selectionStart, editor?.selectionEnd],
           mode: editor?.editingMode,
-          activeElement: document.activeElement?.outerHTML?.slice(0, 240) || null,
-          blockHTML: block?.innerHTML || null,
-          blockIsFocused: document.activeElement === block,
-          blockAction: block?.getAttribute("data-action") || null,
-          previewFresh: document.querySelector("#desktop-editor-form")?.previewController?.projectionFresh,
-          visualHasEditor: Boolean(visual?.editorController),
-          visualMapLoaded: Boolean(visual?.map),
-          visualMapBlocks: visual?.map?.slides?.flatMap(slide => slide.blocks || []).map(candidate => candidate.id) || [],
-          visualMapRegions: visual?.map?.editable_regions?.map(region => region.block_id) || [],
-          pendingProjectionEdits: [...(visual?.pendingProjectionEdits?.values() || [])].map(edit => ({
-            from: edit.from, to: edit.to, source: edit.source, blockId: edit.blockId
-          })),
           paletteQuery: palette?.query,
           paletteMatches: palette?.matches?.map(entry => entry.name || entry.snippet?.name),
-          paletteHidden: document.querySelector('[aria-label="Snippet suggestions"]')?.hidden,
-          displayMathInputEvents: window.__displayMathInputDiagnostics?.events || [],
-          projectionInputCalls: window.__displayMathInputDiagnostics?.projectionCalls || []
+          paletteHidden: document.querySelector('[aria-label="Snippet suggestions"]')?.hidden
         }
       }).catch(diagnosticError => ({ diagnosticError: diagnosticError.message }))
       throw new Error(`${error.message}; desktop editor state: ${JSON.stringify(state)}`)
