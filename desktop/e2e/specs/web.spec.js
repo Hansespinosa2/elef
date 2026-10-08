@@ -633,7 +633,8 @@ class WebEditorUi {
           return parts.join(" ").replace(/\s+/g, " ").trim()
         }),
         nestedListTag: items[0]?.querySelector(":scope > ol, :scope > ul")?.tagName || null,
-        start: list?.hasAttribute("start") ? list.getAttribute("start") : null
+        start: list?.hasAttribute("start") ? list.getAttribute("start") : null,
+        blockClass: root.closest(".slide-block")?.className || ""
       }
     }))
   }

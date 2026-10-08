@@ -339,8 +339,14 @@ function renderPresentation(source, slides, style, margin, env) {
     const contentOffset = slide.title ? 1 : 0
    const slideContent = slide.title
       ? `<div class="slide-regions">${slide.regions.map(region => {
-        const hostAttribute = region.some(block => block.art) ? ` data-art-host="fixed" data-art-overfull="false"` : ""
-        return `<div class="slide-region"${hostAttribute}>${region.map(block => renderBlock(block, blocks.indexOf(block))).join("")}</div>`
+        const artHost = region.some(block => block.art)
+        const hostAttribute = artHost ? ` data-art-host="fixed" data-art-overfull="false"` : ""
+        const regionBlocks = region.map(block => {
+          const rendered = renderBlock(block, blocks.indexOf(block))
+          const position = positionClasses(block.position)
+          return artHost ? `<div class="slide-region-block${position ? ` ${position}` : ""}">${rendered}</div>` : rendered
+        }).join("")
+        return `<div class="slide-region"${hostAttribute}>${regionBlocks}</div>`
       }).join("")}</div>`
       : contentBlocks.map((block, blockIndex) => renderBlock(block, blockIndex + contentOffset)).join("")
     const empty = blocks.length === 0

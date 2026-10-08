@@ -1,8 +1,10 @@
 import assert from "node:assert/strict"
 
 // ART-PARITY-SEMANTICS: exercise shared source, mode, item order, and nested list semantics in both products.
+// ART-SRC-008: the position modifier before Art must remain attached to the same root list in both products.
 export const ART_PARITY_SOURCE = `# Peer parity
 
+:::position{middle right}
 :::art
 - Research
   1. Interview users
@@ -59,6 +61,8 @@ export async function artRenderingWorkflow(ui) {
         start: "3"
       }
     ])
+    assert.match(roots[0].blockClass, /position-right/)
+    assert.match(roots[0].blockClass, /position-middle/)
     assert.equal(roots.every(root => ["ready", "pending", "fallback-unsupported", "fallback-no-fit", "error"].includes(root.status)), true)
     assert.equal(roots.every(root => ["peers-wrap", "sequence-horizontal", "sequence-vertical", "plain-list"].includes(root.layout)), true)
   } finally {

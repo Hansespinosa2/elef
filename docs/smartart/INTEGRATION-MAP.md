@@ -33,8 +33,8 @@ Phase 0 audit and current implementation map for [Constitution v6.0](CONSTITUTIO
 
 ## Baseline failures and external environment
 
-- Configured PostgreSQL tests could not start because nothing listened on `127.0.0.1:5432`; baseline Rails tests were run with the repository's isolated SQLite compatibility mode.
-- The full desktop E2E parity harness starts its own Rails test server on port 3000. Repository instructions prohibit running it alongside the existing user server. The local port-3000 listener did not complete the required HTTPS handshake at baseline; current endpoint/process evidence is recorded in `VERIFICATION.json` after the final environment check.
+- The configured PostgreSQL endpoint at `127.0.0.1:5432` was unavailable at baseline. A disposable PostgreSQL instance and `elef_test` database were later started on `127.0.0.1:55432` and used for Rails validation.
+- The existing port-3000 listener was left untouched. The E2E harness now accepts `ELEF_E2E_WEB_PORT`; its Rails test server ran on 43127 and embedded Tauri WebDriver on 4457. Linux Tauri/WebKit parity completed against the real desktop binary.
 
 ## Implementation commits
 
@@ -50,21 +50,25 @@ Phase 0 audit and current implementation map for [Constitution v6.0](CONSTITUTIO
 - `494f5b5` Keep Art checks within shared frontend ownership
 - `f8afbf5` Tighten Art binding and fixture coverage
 - `aafc6a9` Update Art integration audit trail
+- `8f65eaa` Allow E2E services on alternate ports
+- `7a1bffb` Bundle shared Art parser for Rails
+- `e86bb61` Verify Art semantics across web and desktop
+- `e9dc9be` Read Art item text across tight lists
 
-The canonical two- and three-column fixture measurements reveal conflicts between FIX-06/FIX-07's expected `ready` state and the mandatory whole-host containment rule. The implementation preserves the host oracle and reports explicit no-fit; details are in `VERIFICATION.json` and the fixture tests.
+FIX-06 and FIX-07 now pass the mandatory whole-host containment oracle at the measured 535×416 and 341×416 CSS-pixel regions. In inferred-column Art hosts, `.slide-region-block` retains the block's position classes and editor controls are overlays, so editor chrome does not consume authored slide height or create false no-fit warnings. Authored headings, Art roots, and all slide-region siblings remain part of the host measurement.
 
-FIX-04 required tuning the single-source Art tokens. Current values are `--art-gap: 9px`, `--art-card-padding: 4px`, and `--art-presentation-body-size: 17px`; the remaining Art tokens retain their Constitution v6 initial values. These shared values let the titled 4-item rich Sequence settle inside its full-slide host while the titled 8-item compact Sequence remains explicit no-fit. The CSS token source is `app/assets/stylesheets/tokens.css`, and fixed layout reads the computed gap/minimum values.
+FIX-04, FIX-06, and FIX-07 required tuning the single-source Art tokens. Current values include `--art-gap: 16px`, compact/rich fixed vertical Sequence gaps of 20px/4px, `--art-card-padding: 2px`, and presentation lead/body sizes of 22px/15px. The same values keep the eight-item compact Sequence in explicit no-fit. The CSS token source is `app/assets/stylesheets/tokens.css`; fixed-layout eligibility still reads the computed `--art-gap` and `--art-sequence-min-inline` values.
 
 The existing stylesheet-index architecture test intentionally changes its expected import count from 12 to 13 and asserts the new `components/art.css` import. This is the only baseline assertion changed to account for the new shared component partial.
 
 ## Final verification snapshot
 
-- `npm run test:javascript`: 391 passed.
-- `ELEF_USE_SQLITE=1 PARALLEL_WORKERS=1 bin/rails test`: 351 tests, 2,796 assertions, no failures/errors/skips. The PostgreSQL endpoint was unavailable, so this verifies the isolated SQLite compatibility tier.
-- `ELEF_USE_SQLITE=1 PARALLEL_WORKERS=1 bin/rails test test/lib/source/art_integration_test.rb`: 8 tests, 65 assertions passed.
-- `ELEF_USE_SQLITE=1 PARALLEL_WORKERS=1 bin/rails test test/system/art_test.rb`: 11 tests, 145 assertions passed, including pagination, 100-root lifecycle bounds, print, and reflow.
-- Focused presentation block ownership/media tests: 2 tests, 16 assertions passed.
-- Desktop frontend tests: 26 passed; desktop E2E unit tests: 7 passed; Rust core: 40 passed; Rust formatting and Clippy passed.
-- Renderer build, Tailwind build, desktop frontend build, frontend ownership, Tauri architecture, Art static assertions, and Art traceability checks passed (97 unique normative IDs).
-- FIX-06 and FIX-07 remain failed acceptance fixtures: the measured bounded column hosts overflow, so no-fit is required by the whole-host containment oracle. Measurements and exact conflicts are in `VERIFICATION.json`.
-- Real Tauri/WebKit parity remains `BLOCKED_EXTERNAL`: the existing 127.0.0.1:3000 listener does not complete TLS, and repository instructions prohibit starting the E2E harness while that port is occupied. `VERIFICATION.json` records the command evidence.
+- `npm run test:javascript`: 392 passed.
+- `RAILS_ENV=test PARALLEL_WORKERS=1 PGHOST=127.0.0.1 PGPORT=55432 PGUSER=postgres PGTESTDATABASE=elef_test bin/rails test`: 351 tests, 2,796 assertions, no failures/errors/skips, against isolated PostgreSQL 18.6.
+- `RAILS_ENV=test PARALLEL_WORKERS=1 PGHOST=127.0.0.1 PGPORT=55432 PGUSER=postgres PGTESTDATABASE=elef_test bin/rails test test/system/art_test.rb`: 12 tests, 160 assertions passed, covering canonical fixtures, pagination, 100-root lifecycle bounds, print, reflow, and Art position modifiers.
+- `npm test --prefix desktop/frontend`: 26 passed; `npm run test:unit --prefix desktop/e2e`: 10 passed.
+- Full Linux E2E: 18 Playwright web scenarios and 35 real Tauri/WebKitGTK 605.1.15 scenarios passed, including shared Art semantics in both products. The harness used Rails port 43127, Tauri WebDriver port 4457, PostgreSQL port 55432, Xvfb, and Openbox; it left the existing port-3000 service untouched.
+- `npm run renderer:build`, `bin/rails tailwindcss:build`, `npm run build --prefix desktop/frontend`, and the test-only Tauri build completed successfully.
+- Art static assertions (12), traceability (97 unique normative IDs), frontend ownership, Tauri architecture, and `git diff --check` passed.
+- FIX-01 through FIX-10 and PAG-FIX-01 through PAG-FIX-04 are verified in the browser/system tier. FIX-06/FIX-07 pass at 535×416 and 341×416 CSS-pixel hosts with whole-host containment; FIX-05 still reports explicit no-fit.
+- Rust core tests (40), formatting, and Clippy passed during initial implementation validation; no Rust files changed in the later integration fixes.

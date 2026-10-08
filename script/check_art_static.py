@@ -17,16 +17,18 @@ GLOBAL_RENDERER_JS = ROOT / "app/javascript/lib/renderer_global.js"
 AUTHORING_REGISTRY = ROOT / "app/javascript/data/default_authoring_registry.json"
 
 required_tokens = {
-    "--art-gap": "9px",
+    "--art-gap": "16px",
+    "--art-presentation-sequence-compact-gap": "20px",
+    "--art-presentation-sequence-rich-gap": "4px",
     "--art-peer-basis-compact": "200px",
     "--art-peer-basis-rich": "280px",
     "--art-sequence-min-inline": "200px",
-    "--art-card-padding": "4px",
+    "--art-card-padding": "2px",
     "--art-radius": "10px",
     "--art-document-lead-size": "18px",
     "--art-document-body-size": "16px",
-    "--art-presentation-lead-size": "24px",
-    "--art-presentation-body-size": "17px",
+    "--art-presentation-lead-size": "22px",
+    "--art-presentation-body-size": "15px",
 }
 
 token_css = TOKEN_CSS.read_text()

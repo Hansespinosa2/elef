@@ -166,7 +166,9 @@
         "test:test/javascript/art_source.test.js#ART-BIND-ALIGN-AFTER",
         "test:test/javascript/art_source.test.js#ART-BIND-POSITION-AFTER",
         "test:test/javascript/art_source.test.js#ART-BIND-ALIGN-BEFORE",
-        "test:test/javascript/art_source.test.js#ART-BIND-POSITION-BEFORE"
+        "test:test/javascript/art_source.test.js#ART-BIND-POSITION-BEFORE",
+        "test:test/e2e/scenarios/art-rendering.js#ART-SRC-008",
+        "test:test/system/art_test.rb#ART-SRC-008 position modifiers stay on an Art block in Rails presentation rendering"
       ]
     },
     "ART-SRC-009": {
@@ -640,7 +642,7 @@
   "acceptance_gates": [
     {
       "id": "FIX-06",
-      "status": "FAILED",
+      "status": "VERIFIED",
       "expected": "sequence-vertical / ready at an inferred 536px two-column host",
       "observed": {
         "viewport_css_px": [
@@ -653,31 +655,30 @@
         ],
         "host_scroll_css_px": [
           535,
-          555
+          416
         ],
         "root_layout_css_px": [
           535,
-          535,
-          334,
-          334,
-          180,
-          334
+          276
+        ],
+        "root_offset_within_host_css_px": [
+          0,
+          132
         ],
         "root_item_heights_css_px": [
-          86,
-          86,
-          63,
-          63
+          74,
+          74,
+          54,
+          54
         ],
-        "root_bottom_exceeds_host": true,
-        "status": "fallback-no-fit",
-        "diagnostic": "ART_NO_FIT"
-      },
-      "conflict": "The root starts at 180px and is 334px tall, ending at 514px in a 416px host; host scroll height is 555px. Declaring ready would violate ART-FIT-003 and ART-FIT-006."
+        "status": "ready",
+        "diagnostic": null,
+        "containment": true
+      }
     },
     {
       "id": "FIX-07",
-      "status": "FAILED",
+      "status": "VERIFIED",
       "expected": "sequence-vertical / ready at an inferred 341px three-column host",
       "observed": {
         "viewport_css_px": [
@@ -690,39 +691,44 @@
         ],
         "host_scroll_css_px": [
           341,
-          469
+          416
         ],
         "root_layout_css_px": [
           341,
-          341,
-          248,
-          248,
-          180,
-          248
+          258
         ],
-        "root_bottom_exceeds_host": true,
-        "status": "fallback-no-fit",
-        "diagnostic": "ART_NO_FIT"
-      },
-      "conflict": "The root starts at 180px and is 248px tall, ending at 428px in a 416px host; host scroll height is 469px. Declaring ready would violate ART-FIT-003 and ART-FIT-006."
+        "root_offset_within_host_css_px": [
+          0,
+          132
+        ],
+        "root_item_heights_css_px": [
+          34,
+          34,
+          34,
+          34,
+          34
+        ],
+        "status": "ready",
+        "diagnostic": null,
+        "containment": true
+      }
     }
   ],
   "external_checks": [
     {
       "id": "TAURI_WEBKIT_PARITY",
-      "status": "BLOCKED_EXTERNAL",
-      "evidence": "The repository's existing port 3000 listener is occupied; `ss -ltnp 'sport = :3000'` showed a listener on 127.0.0.1:3000. `curl --max-time 3 -kvsS https://127.0.0.1:3000/` failed TLS with `unexpected eof while reading`. Repository AGENTS.md says the desktop E2E harness starts its own Rails server on port 3000 and must not run while the user's development server occupies that port.",
-      "verification_not_claimed": [
-        "real Tauri/WebKit runtime parity",
-        "cross-engine print/geometry"
+      "status": "VERIFIED",
+      "evidence": "Linux Tauri E2E used the rebuilt real app binary with WebKitGTK 605.1.15 and its embedded WebDriver; the shared harness passed 18 Playwright web scenarios and 35 WebKit/Tauri scenarios. It ran the Rails test server on 127.0.0.1:43127, the native driver on 4457, and left the existing port-3000 listener untouched.",
+      "verification": [
+        "npm test --prefix desktop/e2e (Linux WebKitGTK 605.1.15, 18 web + 35 Tauri scenarios passed)"
       ]
     },
     {
       "id": "RAILS_POSTGRES_TEST_DATABASE",
-      "status": "BLOCKED_EXTERNAL",
-      "evidence": "`ss -ltnp 'sport = :5432'` reported no listener at final verification. The full Rails suite therefore ran with the repository's isolated SQLite compatibility mode.",
-      "verification_not_claimed": [
-        "PostgreSQL-backed Rails suite"
+      "status": "VERIFIED",
+      "evidence": "The full Rails suite passed against an isolated PostgreSQL 18.6 instance at 127.0.0.1:55432 and disposable database elef_test. The suite completed 351 tests and 2,796 assertions with no failures, errors, or skips.",
+      "verification": [
+        "RAILS_ENV=test PARALLEL_WORKERS=1 PGHOST=127.0.0.1 PGPORT=55432 PGUSER=postgres PGTESTDATABASE=elef_test bin/rails test"
       ]
     }
   ],
@@ -795,28 +801,87 @@
     },
     {
       "id": "FIX-06",
-      "status": "FAILED",
+      "status": "VERIFIED",
       "root_type": "ordered",
       "mode": "sequence",
       "density": "rich",
       "layout": "sequence-vertical",
-      "status_dom": "fallback-no-fit",
-      "containment": "host width 535px, height 416px, scrollHeight 555px; root bottom exceeds host; ART_NO_FIT",
-      "conflict": "The required host-level oracle correctly rejects the fixture because preceding slide content and the Art sequence exceed the 416px bounded column host. Reporting ready would violate ART-FIT-003 and ART-FIT-006.",
+      "status_dom": "ready",
+      "containment": {
+        "viewport_css_px": [
+          1600,
+          1000
+        ],
+        "host_layout_css_px": [
+          535,
+          416
+        ],
+        "host_scroll_css_px": [
+          535,
+          416
+        ],
+        "root_layout_css_px": [
+          535,
+          276
+        ],
+        "root_offset_within_host_css_px": [
+          0,
+          132
+        ],
+        "root_item_heights_css_px": [
+          74,
+          74,
+          54,
+          54
+        ],
+        "status": "ready",
+        "diagnostic": null,
+        "containment": true
+      },
       "verification": [
         "test:test/system/art_test.rb#inferred two and three column Art hosts use their actual bounded geometry"
       ]
     },
     {
       "id": "FIX-07",
-      "status": "FAILED",
+      "status": "VERIFIED",
       "root_type": "ordered",
       "mode": "sequence",
       "density": "compact",
       "layout": "sequence-vertical",
-      "status_dom": "fallback-no-fit",
-      "containment": "host width 341px, height 416px, scrollHeight 469px; root bottom exceeds host; ART_NO_FIT",
-      "conflict": "The required host-level oracle correctly rejects the fixture because preceding slide content and the five-item Sequence exceed the 416px bounded column host. Reporting ready would violate ART-FIT-003 and ART-FIT-006.",
+      "status_dom": "ready",
+      "containment": {
+        "viewport_css_px": [
+          1600,
+          1000
+        ],
+        "host_layout_css_px": [
+          341,
+          416
+        ],
+        "host_scroll_css_px": [
+          341,
+          416
+        ],
+        "root_layout_css_px": [
+          341,
+          258
+        ],
+        "root_offset_within_host_css_px": [
+          0,
+          132
+        ],
+        "root_item_heights_css_px": [
+          34,
+          34,
+          34,
+          34,
+          34
+        ],
+        "status": "ready",
+        "diagnostic": null,
+        "containment": true
+      },
       "verification": [
         "test:test/system/art_test.rb#inferred two and three column Art hosts use their actual bounded geometry"
       ]
@@ -913,16 +978,21 @@
     }
   ],
   "token_tuning": {
-    "reason": "FIX-04 initially exceeded the full-slide host with the initial token values. Only the single-source CSS Art tokens were tuned.",
+    "reason": "Fixed-host acceptance fixtures required fitting authored Art content within inferred columns while keeping editor controls out of the measured authored-content flow. Shared CSS tokens were tuned; the fit controller remains non-iterative and never changes font size.",
     "values": {
-      "--art-gap": "9px",
-      "--art-card-padding": "4px",
-      "--art-presentation-body-size": "17px"
+      "--art-gap": "16px",
+      "--art-presentation-sequence-compact-gap": "20px",
+      "--art-presentation-sequence-rich-gap": "4px",
+      "--art-card-padding": "2px",
+      "--art-presentation-lead-size": "22px",
+      "--art-presentation-body-size": "15px"
     },
     "verified_targets": [
       "FIX-03",
       "FIX-04",
-      "FIX-05"
+      "FIX-05",
+      "FIX-06",
+      "FIX-07"
     ],
     "other_art_tokens": "Constitution v6 initial values"
   }

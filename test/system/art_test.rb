@@ -303,7 +303,9 @@ class ArtTest < ApplicationSystemTestCase
         const slide = document.querySelector(".presentation-surface[data-controller~='art-layout'] .slide");
         const root = slide.querySelector("[data-elef-art-root]");
         const host = root.closest('[data-art-host="fixed"]');
-        return {layout: slide.className, width: host.clientWidth, host: [host.scrollWidth, host.clientWidth, host.scrollHeight, host.clientHeight], root: [root.scrollWidth, root.clientWidth, root.scrollHeight, root.clientHeight, root.offsetTop, root.offsetHeight], mode: root.dataset.artMode, density: root.dataset.artDensity, artLayout: root.dataset.artLayout, status: root.dataset.artStatus, items: [...root.querySelector('.elef-art-list').children].map((item) => [item.scrollWidth, item.clientWidth, item.scrollHeight, item.clientHeight]), children: [...host.children].map((child) => [child.className, child.offsetHeight, child.scrollHeight, child.clientHeight, child.textContent.trim().slice(0, 35)])};
+        let left = 0, top = 0, node = root;
+        while (node && node !== host) { left += node.offsetLeft; top += node.offsetTop; node = node.offsetParent; }
+        return {layout: slide.className, width: host.clientWidth, host: [host.scrollWidth, host.clientWidth, host.scrollHeight, host.clientHeight], root: [root.scrollWidth, root.clientWidth, root.scrollHeight, root.clientHeight, root.offsetTop, root.offsetHeight], offsetWithin: [left, top, node === host], mode: root.dataset.artMode, density: root.dataset.artDensity, artLayout: root.dataset.artLayout, status: root.dataset.artStatus, items: [...root.querySelector('.elef-art-list').children].map((item) => [item.scrollWidth, item.clientWidth, item.scrollHeight, item.clientHeight]), children: [...host.children].map((child) => [child.className, child.offsetHeight, child.scrollHeight, child.clientHeight, child.textContent.trim().slice(0, 35)])};
       })()
     JAVASCRIPT
     assert_includes two.fetch("layout"), "slide-two-column"
@@ -311,15 +313,14 @@ class ArtTest < ApplicationSystemTestCase
     assert_equal "sequence", two.fetch("mode")
     assert_equal "rich", two.fetch("density")
     assert_equal "sequence-vertical", two.fetch("artLayout")
-    # Constitution FIX-06 says this host is ready, but ART-FIT-003 requires
-    # whole-host containment. The fixture's preceding heading/content and Art
-    # root exceed the actual 416px slide-region height, so the honest result is
-    # an explicit no-fit state until the product geometry decision is resolved.
-    assert_equal "fallback-no-fit", two.fetch("status"), two.inspect
-    assert_equal [535, 535, 555, 416], two.fetch("host")
-    assert_operator two.fetch("root")[4] + two.fetch("root")[5], :>, two.fetch("host")[3]
-    assert_equal "true", page.find(".presentation-surface [data-art-host='fixed']")["data-art-overfull"]
-    assert_equal "ART_NO_FIT", page.find(".presentation-surface [data-elef-art-root]")["data-art-diagnostic"]
+    assert_equal "ready", two.fetch("status"), two.inspect
+    assert_operator two.fetch("host")[0], :<=, two.fetch("host")[1] + 1
+    assert_operator two.fetch("host")[2], :<=, two.fetch("host")[3] + 1
+    assert_operator two.fetch("root")[0], :<=, two.fetch("root")[1] + 1
+    assert_operator two.fetch("root")[2], :<=, two.fetch("root")[3] + 1
+    assert_equal true, two.fetch("offsetWithin")[2], two.inspect
+    assert_operator two.fetch("offsetWithin")[1] + two.fetch("root")[5], :<=, two.fetch("host")[3] + 1
+    assert two.fetch("items").all? { |width, client_width, height, client_height| width <= client_width + 1 && height <= client_height + 1 }, two.inspect
 
     three_column_source = <<~MARKDOWN
       # Operating model
@@ -351,7 +352,10 @@ class ArtTest < ApplicationSystemTestCase
         const slide = document.querySelector(".presentation-surface[data-controller~='art-layout'] .slide");
         const root = slide.querySelector("[data-elef-art-root]");
         const host = root.closest('[data-art-host="fixed"]');
-        return {layout: slide.className, width: host.clientWidth, host: [host.scrollWidth, host.clientWidth, host.scrollHeight, host.clientHeight], root: [root.scrollWidth, root.clientWidth, root.scrollHeight, root.clientHeight, root.offsetTop, root.offsetHeight], mode: root.dataset.artMode, density: root.dataset.artDensity, artLayout: root.dataset.artLayout, status: root.dataset.artStatus};
+        const items = [...root.querySelector('.elef-art-list').children];
+        let left = 0, top = 0, node = root;
+        while (node && node !== host) { left += node.offsetLeft; top += node.offsetTop; node = node.offsetParent; }
+        return {layout: slide.className, width: host.clientWidth, host: [host.scrollWidth, host.clientWidth, host.scrollHeight, host.clientHeight], root: [root.scrollWidth, root.clientWidth, root.scrollHeight, root.clientHeight, root.offsetTop, root.offsetHeight], offsetWithin: [left, top, node === host], items: items.map((item) => [item.scrollWidth, item.clientWidth, item.scrollHeight, item.clientHeight]), mode: root.dataset.artMode, density: root.dataset.artDensity, artLayout: root.dataset.artLayout, status: root.dataset.artStatus};
       })()
     JAVASCRIPT
     assert_includes three.fetch("layout"), "slide-three-column"
@@ -359,14 +363,25 @@ class ArtTest < ApplicationSystemTestCase
     assert_equal "sequence", three.fetch("mode")
     assert_equal "compact", three.fetch("density")
     assert_equal "sequence-vertical", three.fetch("artLayout")
-    # FIX-07's source and inferred three-column width produce a real 341px
-    # host, but the current theme/title and five-item Sequence exceed its
-    # bounded height. Keep the whole-host oracle honest and surface no-fit.
-    assert_equal "fallback-no-fit", three.fetch("status"), three.inspect
-    assert_equal [341, 341, 469, 416], three.fetch("host")
-    assert_operator three.fetch("root")[4] + three.fetch("root")[5], :>, three.fetch("host")[3]
-    assert_equal "true", page.find(".presentation-surface [data-art-host='fixed']")["data-art-overfull"]
-    assert_equal "ART_NO_FIT", page.find(".presentation-surface [data-elef-art-root]")["data-art-diagnostic"]
+    assert_equal "ready", three.fetch("status"), three.inspect
+    assert_operator three.fetch("host")[0], :<=, three.fetch("host")[1] + 1
+    assert_operator three.fetch("host")[2], :<=, three.fetch("host")[3] + 1
+    assert_operator three.fetch("root")[0], :<=, three.fetch("root")[1] + 1
+    assert_operator three.fetch("root")[2], :<=, three.fetch("root")[3] + 1
+    assert_equal true, three.fetch("offsetWithin")[2], three.inspect
+    assert_operator three.fetch("offsetWithin")[1] + three.fetch("root")[5], :<=, three.fetch("host")[3] + 1
+    assert three.fetch("items").all? { |width, client_width, height, client_height| width <= client_width + 1 && height <= client_height + 1 }, three.inspect
+  end
+
+  test "ART-SRC-008 position modifiers stay on an Art block in Rails presentation rendering" do
+    presentation = Presentation.create!(
+      title: "Positioned Art",
+      source: "# Positioned Art\n\n## Context\n\n- One input\n\n## Art block\n\n:::position{middle right}\n:::art\n- Alpha\n- Beta"
+    )
+
+    visit present_presentation_path(presentation)
+
+    assert_selector ".slide-region[data-art-host='fixed'] > .slide-region-block.position-right.position-middle > .slide-block.position-right.position-middle [data-elef-art-root][data-art-mode='peers']", wait: 10
   end
 
   test "a hidden fixed Art host stays pending until it becomes measurable" do

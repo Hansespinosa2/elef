@@ -157,6 +157,14 @@
   font-size: var(--art-presentation-lead-size);
 }
 
+.presentation-surface .elef-art[data-art-mode="sequence"][data-art-layout="sequence-vertical"][data-art-density="compact"] > .elef-art-list {
+  gap: var(--art-presentation-sequence-compact-gap);
+}
+
+.presentation-surface .elef-art[data-art-mode="sequence"][data-art-layout="sequence-vertical"][data-art-density="rich"] > .elef-art-list {
+  gap: var(--art-presentation-sequence-rich-gap);
+}
+
 .presentation-surface .elef-art[data-art-mode="sequence"][data-art-layout="sequence-vertical"][data-art-density="rich"] > .elef-art-list > li > :is(p, ul, ol):not(:first-child),
 .presentation-surface .elef-art[data-art-mode="sequence"][data-art-layout="sequence-vertical"][data-art-density="rich"] > .elef-art-list > li > :is(ul, ol) {
   font-size: var(--art-presentation-body-size);

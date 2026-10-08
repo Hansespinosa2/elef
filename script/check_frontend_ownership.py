@@ -259,6 +259,7 @@ assert "mermaid@11.17.2" in (ROOT / "vendor/javascript/mermaid.min.js").read_tex
 # Both runners need the same shared workflow imports and executions. Explicit
 # required exports make removing a flow from both adapters fail this check too.
 shared_workflows = {
+    "artRenderingWorkflow",
     "appearanceWorkflow",
     "authoringSettingsWorkflow",
     "displayMathEnterWorkflow",

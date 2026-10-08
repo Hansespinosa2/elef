@@ -47,8 +47,10 @@
       <% end %>
       <div class="slide-regions">
         <% slide.regions.each do |region| %>
-          <div class="slide-region"<% if region.blocks.any? { |block| block.art } %> data-art-host="fixed" data-art-overfull="false"<% end %>>
+          <% art_host = region.blocks.any? { |block| block.art } %>
+          <div class="slide-region"<% if art_host %> data-art-host="fixed" data-art-overfull="false"<% end %>>
             <% region.blocks.each do |block| %>
+              <% if art_host %><div class="slide-region-block<%= " #{position_classes(block.position)}" if block.position %>"><% end %>
               <% block_index = slide.blocks.index(block) %>
               <% editor_block = editor_blocks[block_index] %>
               <% editor_region = editor_block && editor_regions.find { |candidate| candidate[:block_id] == editor_block[:id] } %>
@@ -71,6 +73,7 @@
                   </select></label>
                 </div>
               <% end %>
+              <% if art_host %></div><% end %>
             <% end %>
           </div>
         <% end %>
