@@ -2,13 +2,13 @@
   "campaign_version": 9,
   "campaign_branch": "feat/refactor-desktop-and-web",
   "campaign_base_sha": "88f61a7a8ffd7c276bafcf06eee09c36a8adf134",
-  "current_phase": 5,
-  "phase_state": "PASS",
-  "phase_base_sha": "0f62a074ee5783cc6510801be2e39074264bc4ab",
-  "head_sha": "20f9e6e68da778a614570c369c48ae7b8ee77c74",
-  "review_round": 2,
-  "phase_contract_sha256": "94bb77f5e36623c4dc29f559ac7f24edeb753d9f2589cae62343090fa40fd19e",
-  "frozen_plan_sha256": "7476c2d4b9210760d8576059701e506d920b4c51c2d41cb5943c27db05267751",
+  "current_phase": 6,
+  "phase_state": "PLAN",
+  "phase_base_sha": "dff371c49ced594eb228123ec0d28cd753007f6e",
+  "head_sha": "dff371c49ced594eb228123ec0d28cd753007f6e",
+  "review_round": 0,
+  "phase_contract_sha256": "b1d5bf64b406f60d80f745606da3c73ffc504c09f83eaa53a1bb2f796c374bd9",
+  "frozen_plan_sha256": null,
   "last_completed_phase": 5,
   "last_verified_checks": [
     {
@@ -265,5 +265,5 @@
   },
   "pending_human_gates": [],
   "blocker": null,
-  "next_action": "Phase 05 PASS: shared client settings/appearance complete (round-2 review PASS, residual vim UI removed). Open Phase 06 PLAN."
+  "next_action": "Phase 06 PLAN: open work links and graph (plan drafted, unfrozen); freeze before DO production edits."
 }
