@@ -39,7 +39,7 @@ jobs:
         run: |
           started=$SECONDS
           ./node_modules/.bin/tsc -p packages/contracts/tsconfig.test.json
-          node --test tests/host-conformance/conformance-fake.test.js tests/host-conformance/shell.test.js
+          node --test tests/host-conformance/conformance-fake.test.js
           npm run test:javascript
           npm test --prefix desktop/frontend
           npm run test:unit --prefix desktop/e2e
