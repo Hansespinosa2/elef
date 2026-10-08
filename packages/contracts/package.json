@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "description": "Public host/client contract: branded IDs, error taxonomy, capabilities, WorkSession and ElefHost ports. Types only; documented by code.",
-  "types": "./dist/index.d.ts",
+  "types": "./src/index.ts",
   "files": [
     "dist"
   ],

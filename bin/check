@@ -563,6 +563,8 @@ QUICK_COMMANDS_1 = (
     "npm run test:javascript",
     "npm test --prefix packages/work-model",
     "npm test --prefix packages/renderer",
+    "./node_modules/.bin/tsc --noEmit -p packages/client/tsconfig.test.json",
+    "npm test --prefix packages/client",
     f"npm test --prefix {DESKTOP_PATH_PREFIX}frontend",
     f"npm run test:unit --prefix {D_E2E}",
     "python3 script/check_frontend_ownership.py",
