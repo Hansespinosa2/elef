@@ -139,8 +139,13 @@ try {
       assert.equal(await readFile(path.join(folder, "presentation.md"), "utf8"), typed)
       report.inputPreservedRuns += 1
       await execute("return window.__elefPerformanceTestHooks.close()")
-      const quitDeadline = Date.now() + 10_000
+      const quitStart = Date.now()
+      // Cold runners with degraded graphics stacks (EGL/portal fallback)
+      // need longer than 10s for native window teardown on the first run;
+      // a real close-flow hang still fails, just after a longer margin.
+      const quitDeadline = quitStart + 30_000
       while (!exitResult && Date.now() < quitDeadline) await pause(50)
+      process.stdout.write(`Native release performance run ${run + 1}/20 closed after ${Date.now() - quitStart}ms.\n`)
       assert.deepEqual(exitResult, { code: 0, signal: null }, "The measured process must exit through its native window-close guard")
       process.stdout.write(`Native release performance run ${run + 1}/20 completed.\n`)
     } catch (error) {
