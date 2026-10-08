@@ -14,17 +14,15 @@ export default class extends Controller {
     this.active = true
     this.roots = []
     this.observedElements = new Set()
+    this.dirtyRoots = new Set()
+    this.globalDirty = true
     this.frame = null
     this.readFrame = null
-    this.dirty = false
     this.resizeObserver = typeof ResizeObserver === "function"
-      ? new ResizeObserver(() => this.schedule())
+      ? new ResizeObserver(entries => this.scheduleHosts(entries.map(entry => entry.target)))
       : null
     this.mutationObserver = typeof MutationObserver === "function"
-      ? new MutationObserver(() => {
-          this.syncRoots()
-          this.schedule()
-        })
+      ? new MutationObserver(records => this.handleMutations(records))
       : null
     this.mutationObserver?.observe(this.element, {
       subtree: true,
@@ -70,19 +68,76 @@ export default class extends Controller {
     this.observedElements = nextObserved
   }
 
-  schedule = () => {
+  handleMutations(records) {
+    this.syncRoots()
+    const changedRoots = new Set()
+    const changedHosts = new Set()
+    let globalChange = false
+
+    for (const record of records) {
+      if (record.type === "attributes" && record.target === this.element) {
+        globalChange = true
+        continue
+      }
+
+      const target = record.target.nodeType === 1 ? record.target : record.target.parentElement
+      const root = target?.closest?.("[data-elef-art-root]")
+      if (root) {
+        const host = root.closest('[data-art-host="fixed"]')
+        if (host) changedHosts.add(host)
+        else changedRoots.add(root)
+      } else {
+        const host = target?.closest?.('[data-art-host="fixed"]')
+        if (host) changedHosts.add(host)
+      }
+
+      for (const node of [...(record.addedNodes || []), ...(record.removedNodes || [])]) {
+        if (node.nodeType !== 1) continue
+        const roots = [
+          ...(node.matches?.("[data-elef-art-root]") ? [node] : []),
+          ...node.querySelectorAll?.("[data-elef-art-root]") || []
+        ]
+        for (const changedRoot of roots) {
+          if (!this.roots.includes(changedRoot)) continue
+          const host = changedRoot.closest('[data-art-host="fixed"]')
+          if (host) changedHosts.add(host)
+          else changedRoots.add(changedRoot)
+        }
+      }
+    }
+
+    for (const host of changedHosts) {
+      for (const root of this.roots) {
+        if (root.closest('[data-art-host="fixed"]') === host) changedRoots.add(root)
+      }
+    }
+    if (globalChange) this.schedule()
+    else if (changedRoots.size) this.schedule(changedRoots)
+  }
+
+  scheduleHosts(hosts) {
+    const changedHosts = new Set(hosts)
+    const changedRoots = this.roots.filter(root => changedHosts.has(root.closest('[data-art-host="fixed"]')))
+    if (changedRoots.length) this.schedule(changedRoots)
+  }
+
+  schedule = (roots = null) => {
     if (!this.active) return
-    this.dirty = true
+    if (roots === null) this.globalDirty = true
+    else for (const root of roots) this.dirtyRoots.add(root)
     if (this.frame !== null) return
     this.frame = requestAnimationFrame(() => this.runDecisionPass())
   }
 
   runDecisionPass() {
     this.frame = null
-    if (!this.active || !this.dirty) return
-    this.dirty = false
+    if (!this.active || (!this.globalDirty && !this.dirtyRoots.size)) return
     this.syncRoots()
-    const roots = this.roots.filter(root => DYNAMIC_STATUSES.has(root.dataset.artStatus))
+    const rootsToEvaluate = this.globalDirty ? new Set(this.roots) : this.dirtyRoots
+    this.globalDirty = false
+    this.dirtyRoots = new Set()
+    const roots = this.roots.filter(root => rootsToEvaluate.has(root) && DYNAMIC_STATUSES.has(root.dataset.artStatus))
+    if (!roots.length) return
     const hostWidths = new Map()
     const decisions = roots.map(root => {
       const host = root.closest('[data-art-host="fixed"]')

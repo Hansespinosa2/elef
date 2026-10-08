@@ -128,11 +128,15 @@ class ArtTest < ApplicationSystemTestCase
         [...document.querySelectorAll(".document-page-frame")].map((frame) => {
           const list = frame.querySelector(".elef-art-list");
           const content = frame.querySelector(".document-page-content");
-          return list ? { count: list.children.length, start: list.hasAttribute("start") ? Number(list.getAttribute("start")) : 1, clientHeight: content.clientHeight, scrollHeight: content.scrollHeight, blocks: [...content.children].map((block) => ({height: block.offsetHeight, styleHeight: block.style.height, text: block.textContent.slice(0, 40)})) } : null;
+          return list ? { count: list.children.length, connectors: [...list.children].map((item) => getComputedStyle(item, "::before").content), start: list.hasAttribute("start") ? Number(list.getAttribute("start")) : 1, clientHeight: content.clientHeight, scrollHeight: content.scrollHeight, blocks: [...content.children].map((block) => ({height: block.offsetHeight, styleHeight: block.style.height, text: block.textContent.slice(0, 40)})) } : null;
         }).filter(Boolean)
       JAVASCRIPT
       assert_equal [2, count - 2], fragments.map { |fragment| fragment.fetch("count") }, { initial: initial, fragments: fragments }.inspect
       assert_equal [start, expected_start], fragments.map { |fragment| fragment.fetch("start") }
+      fragments.each do |fragment|
+        assert_equal "none", fragment.fetch("connectors").first, fragment.inspect
+        assert fragment.fetch("connectors").drop(1).all? { |connector| connector != "none" }, fragment.inspect
+      end
 
       page.execute_script("window.Stimulus.getControllerForElementAndIdentifier(document.querySelector('.document-editor-projection'), 'document-pages').paginate()")
       assert_selector ".document-surface[data-document-pages-settled='true']", wait: 10
@@ -141,6 +145,20 @@ class ArtTest < ApplicationSystemTestCase
       JAVASCRIPT
       assert_equal fragments.map { |fragment| [fragment.fetch("count"), fragment.fetch("start")] }, repeated
     end
+  end
+
+  test "a one-item Sequence has no connector" do
+    document = Document.create!(title: "Single Art item", source: ":::art\n1. One step")
+    visit edit_document_path(document)
+    assert_selector ".document-editor-projection [data-elef-art-root]", wait: 10
+
+    connector = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const item = document.querySelector(".document-editor-projection [data-elef-art-root] .elef-art-list > li");
+        return getComputedStyle(item, "::before").content;
+      })()
+    JAVASCRIPT
+    assert_equal "none", connector
   end
 
   test "a single oversized Art item stays atomic and surfaces its diagnostic" do
@@ -464,8 +482,11 @@ class ArtTest < ApplicationSystemTestCase
             width,
             mode: root.dataset.artMode,
             direction: getComputedStyle(root).direction,
-            nativeList: list.tagName === "OL" && getComputedStyle(list).listStyleType === "decimal",
-            connectorPosition: getComputedStyle(list).backgroundPosition,
+          nativeList: list.tagName === "OL" && getComputedStyle(list).listStyleType === "decimal",
+            connectors: items.map((item) => {
+              const connector = getComputedStyle(item, "::before");
+              return {content: connector.content, inlineStart: Number.parseFloat(connector.insetInlineStart), inlineCenter: item.clientWidth / 2 - 0.5, blockSize: connector.blockSize};
+            }),
             order: items.map((item) => item.textContent.trim()),
             hostFits: root.scrollWidth <= root.clientWidth && list.scrollWidth <= list.clientWidth && items.every((item) => item.scrollWidth <= item.clientWidth)
           };
@@ -477,7 +498,11 @@ class ArtTest < ApplicationSystemTestCase
       assert_equal "sequence", measurement.fetch("mode")
       assert_equal "rtl", measurement.fetch("direction")
       assert measurement.fetch("nativeList"), measurement.inspect
-      assert_includes measurement.fetch("connectorPosition"), "50%"
+      connectors = measurement.fetch("connectors")
+      assert_equal "none", connectors.first.fetch("content"), measurement.inspect
+      assert connectors.drop(1).all? { |connector| connector.fetch("content") != "none" }, measurement.inspect
+      assert connectors.drop(1).all? { |connector| (connector.fetch("inlineCenter") - connector.fetch("inlineStart")).abs <= 1 }, measurement.inspect
+      assert connectors.drop(1).all? { |connector| connector.fetch("blockSize") == "16px" }, measurement.inspect
       assert_equal measurement.fetch("expectedOrder"), measurement.fetch("order")
       assert measurement.fetch("hostFits"), measurement.inspect
     end
@@ -516,6 +541,22 @@ class ArtTest < ApplicationSystemTestCase
     assert_equal 100, stats.fetch("measuredRoots"), stats.inspect
     assert_equal 0, stats.fetch("fallbackPasses"), stats.inspect
     assert_equal 0, stats.fetch("layoutWrites"), stats.inspect
+
+    page.execute_script(<<~JAVASCRIPT)
+      const surface = document.querySelector(".presentation-surface[data-controller~='art-layout']");
+      const controller = window.Stimulus.getControllerForElementAndIdentifier(surface, "art-layout");
+      const stats = window.__artLifecycleStats;
+      Object.keys(stats).forEach((key) => { if (key !== "rootCount") stats[key] = 0; });
+      const first = surface.querySelector("[data-elef-art-root]");
+      first.querySelector(".elef-art-list > li").firstChild.data += " changed";
+    JAVASCRIPT
+    incremental_stats = page.evaluate_async_script(<<~JAVASCRIPT)
+      const done = arguments[0];
+      setTimeout(() => done({...window.__artLifecycleStats}), 700);
+    JAVASCRIPT
+    assert_equal 1, incremental_stats.fetch("decisions"), incremental_stats.inspect
+    assert_equal 1, incremental_stats.fetch("measurementPasses"), incremental_stats.inspect
+    assert_equal 1, incremental_stats.fetch("measuredRoots"), incremental_stats.inspect
   end
 
   test "print views preserve document pagination and settled presentation Sequence states" do

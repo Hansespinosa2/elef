@@ -75,7 +75,12 @@ def peer_wrap_and_preferred_basis():
 
 
 def native_sequence_markers_and_decoration():
-    return "list-style: decimal" in art_css and "background-image: linear-gradient(currentColor, currentColor)" in art_css and "list-style: none" not in re.search(r'\.elef-art\[data-art-mode="sequence"\][^{]*\{[^}]*', art_css, re.DOTALL).group(0)
+    sequence_rule = re.search(r'\.elef-art\[data-art-mode="sequence"\][^{]*\{[^}]*', art_css, re.DOTALL)
+    return (
+        "list-style: decimal" in art_css
+        and ".elef-art-list > li:not(:first-child)::before" in art_css
+        and "list-style: none" not in (sequence_rule.group(0) if sequence_rule else "")
+    )
 
 
 def fixed_host_positioned():
@@ -113,7 +118,8 @@ def no_explicit_layout_dsl_or_deferred_decoration():
         and not any(entry.get("namespace") == "/" and entry.get("trigger") == "art" for entry in authoring_entries)
         and not re.search(r'"(?:art-flow|art-sequence|art-peer|art-snake|art-grid)"', authoring_registry)
         and not re.search(r"art-(?:snake|chevron|arrow)", art_css + source_js, re.IGNORECASE)
-        and not re.search(r"::(?:before|after)|<svg|icon", art_css, re.IGNORECASE)
+        and not re.search(r"::after|<svg|icon", art_css, re.IGNORECASE)
+        and ".elef-art-list > li:not(:first-child)::before" in art_css
     )
 
 
@@ -132,7 +138,7 @@ def forced_colors_keep_art_boundaries():
     return all(fragment in art_css for fragment in (
         "@media (forced-colors: active)",
         ".elef-art-list > li { border: 1px solid CanvasText; }",
-        ".elef-art[data-art-mode=\"sequence\"] > .elef-art-list { background-image: linear-gradient(CanvasText, CanvasText); }"
+        ".elef-art[data-art-mode=\"sequence\"] > .elef-art-list > li:not(:first-child)::before { background: CanvasText; }"
     ))
 
 

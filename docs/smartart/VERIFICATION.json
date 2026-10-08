@@ -145,7 +145,12 @@
         "test:test/javascript/art_source.test.js#ART-BIND-FENCED-CODE-BARRIER",
         "test:test/javascript/art_source.test.js#ART-BIND-DISPLAY-MATH-BARRIER",
         "test:test/javascript/art_source.test.js#ART-BIND-HEADING-BARRIER",
-        "test:test/javascript/art_source.test.js#ART-BIND-TABLE-BARRIER"
+        "test:test/javascript/art_source.test.js#ART-BIND-TABLE-BARRIER",
+        "test:test/javascript/art_source.test.js#ART-BOUNDARY-HEADING",
+        "test:test/javascript/art_source.test.js#ART-BOUNDARY-THEMATIC",
+        "test:test/javascript/art_source.test.js#ART-BOUNDARY-NESTED-NOTE",
+        "test:test/javascript/art_source.test.js#ART-BOUNDARY-NESTED-ART",
+        "test:test/javascript/art_source.test.js#ART-BOUNDARY-NESTED-MARGIN"
       ]
     },
     "ART-SRC-006": {
@@ -191,6 +196,10 @@
       "status": "VERIFIED",
       "verification": [
         "test:test/javascript/art_source.test.js#ART-ARCH-SHARED-MAP",
+        "test:test/javascript/art_source.test.js#ART-ARCH-RESOLUTION-ONCE",
+        "test:test/javascript/art_source.test.js#ART-BOUNDARY-NESTED-MARGIN",
+        "test:test/lib/source/art_integration_test.rb#Ruby and JavaScript block maps agree at adjacent Markdown and nested directive boundaries",
+        "test:test/lib/source/art_integration_test.rb#indented margin directives stay in Art item content in both render paths",
         "static:script/check_art_static.py#SHARED_RENDERER_EXPORTS_ART_API"
       ]
     },
@@ -218,6 +227,8 @@
       "status": "VERIFIED",
       "verification": [
         "test:test/javascript/art_source.test.js#ART-BIND-SUPERSEDED",
+        "test:test/javascript/art_source.test.js#ART-SRC-INVALID-PARITY",
+        "test:test/lib/source/art_integration_test.rb#invalid Art syntax is consumed with the same diagnostic in Ruby and JavaScript paths",
         "test:test/javascript/renderer.test.js#ART-DIAG-002"
       ]
     },
@@ -426,7 +437,8 @@
     "ART-PERF-002": {
       "status": "VERIFIED",
       "verification": [
-        "test:test/system/art_test.rb#compact horizontal Sequence with an unbreakable lead falls back to wrapped vertical Sequence"
+        "test:test/system/art_test.rb#compact horizontal Sequence with an unbreakable lead falls back to wrapped vertical Sequence",
+        "test:test/system/art_test.rb#100 fixed Art roots share one bounded lifecycle pass without observer oscillation"
       ]
     },
     "ART-PERF-003": {
@@ -489,6 +501,7 @@
       "status": "VERIFIED",
       "verification": [
         "test:test/system/art_test.rb#forced Art pagination splits at direct items and resumes ordered starts including zero",
+        "test:test/system/art_test.rb#a one-item Sequence has no connector",
         "static:script/check_art_static.py#NATIVE_SEQUENCE_MARKERS_AND_DECORATION"
       ]
     },
@@ -560,7 +573,9 @@
     "ART-TEST-001": {
       "status": "VERIFIED",
       "verification": [
-        "test:test/javascript/art_generated.test.js#ART-TEST-001..008"
+        "test:test/javascript/art_generated.test.js#ART-TEST-001..008",
+        "test:test/javascript/art_source.test.js#ART-BOUNDARY-NESTED-NOTE",
+        "test:test/javascript/art_source.test.js#ART-BOUNDARY-NESTED-ART"
       ]
     },
     "ART-TEST-002": {

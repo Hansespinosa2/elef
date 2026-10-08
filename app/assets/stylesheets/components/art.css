@@ -69,6 +69,7 @@
   gap: var(--art-gap);
   list-style: decimal;
   padding-inline-start: 2.5em;
+  --art-connector-gap: var(--art-gap);
 }
 
 .elef-art[data-art-mode="sequence"][data-art-layout="sequence-horizontal"] > .elef-art-list {
@@ -77,10 +78,6 @@
   list-style: decimal;
   list-style-position: inside;
   padding-inline-start: 0;
-  background-image: linear-gradient(currentColor, currentColor);
-  background-position: center;
-  background-repeat: no-repeat;
-  background-size: 100% 1px;
 }
 
 .elef-art[data-art-mode="sequence"][data-art-layout="sequence-horizontal"] > .elef-art-list > li {
@@ -100,11 +97,25 @@
   font-size: var(--art-document-lead-size);
 }
 
-.elef-art[data-art-mode="sequence"][data-art-layout="sequence-vertical"] > .elef-art-list {
-  background-image: linear-gradient(currentColor, currentColor);
-  background-position: center;
-  background-repeat: no-repeat;
-  background-size: 1px 100%;
+.elef-art[data-art-mode="sequence"][data-art-layout="sequence-horizontal"] > .elef-art-list > li:not(:first-child)::before,
+.elef-art[data-art-mode="sequence"][data-art-layout="sequence-vertical"] > .elef-art-list > li:not(:first-child)::before {
+  background: currentColor;
+  content: "";
+  position: absolute;
+}
+
+.elef-art[data-art-mode="sequence"][data-art-layout="sequence-horizontal"] > .elef-art-list > li:not(:first-child)::before {
+  block-size: 1px;
+  inline-size: var(--art-gap);
+  inset-block-start: calc(50% - 0.5px);
+  inset-inline-start: calc(-1 * var(--art-gap));
+}
+
+.elef-art[data-art-mode="sequence"][data-art-layout="sequence-vertical"] > .elef-art-list > li:not(:first-child)::before {
+  block-size: var(--art-connector-gap, var(--art-gap));
+  inline-size: 1px;
+  inset-block-start: calc(-1 * var(--art-connector-gap, var(--art-gap)));
+  inset-inline-start: calc(50% - 0.5px);
 }
 
 .elef-art[data-art-mode="sequence"][data-art-density="rich"] > .elef-art-list > li {
@@ -159,10 +170,12 @@
 
 .presentation-surface .elef-art[data-art-mode="sequence"][data-art-layout="sequence-vertical"][data-art-density="compact"] > .elef-art-list {
   gap: var(--art-presentation-sequence-compact-gap);
+  --art-connector-gap: var(--art-presentation-sequence-compact-gap);
 }
 
 .presentation-surface .elef-art[data-art-mode="sequence"][data-art-layout="sequence-vertical"][data-art-density="rich"] > .elef-art-list {
   gap: var(--art-presentation-sequence-rich-gap);
+  --art-connector-gap: var(--art-presentation-sequence-rich-gap);
 }
 
 .presentation-surface .elef-art[data-art-mode="sequence"][data-art-layout="sequence-vertical"][data-art-density="rich"] > .elef-art-list > li > :is(p, ul, ol):not(:first-child),
@@ -174,5 +187,5 @@
 
 @media (forced-colors: active) {
   .elef-art-list > li { border: 1px solid CanvasText; }
-  .elef-art[data-art-mode="sequence"] > .elef-art-list { background-image: linear-gradient(CanvasText, CanvasText); }
+  .elef-art[data-art-mode="sequence"] > .elef-art-list > li:not(:first-child)::before { background: CanvasText; }
 }
