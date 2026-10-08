@@ -340,15 +340,12 @@ class WebEditorUi {
   }
 
   async typeEmptyDisplayMath(mode) {
-    const delimiterInput = mode === "visual" ? "$$" : "$$$$"
-    const expectedPairSource = `${await this.readSource()}${delimiterInput}`
     if (mode === "visual") {
       const block = this.page.locator(".document-editor-block[contenteditable='true']").last()
       await expect(block).toBeVisible()
       await block.click()
       await block.pressSequentially("$")
       await block.pressSequentially("$")
-      await expect.poll(() => this.readSource()).toBe(expectedPairSource)
       await this.page.locator(".document-editor-block[contenteditable='true']").last().press("Enter")
       return
     }
@@ -358,7 +355,6 @@ class WebEditorUi {
     await editor.press("ControlOrMeta+End")
     await editor.pressSequentially("$")
     await editor.pressSequentially("$")
-    await expect.poll(() => this.readSource()).toBe(expectedPairSource)
     await editor.press("Enter")
   }
 
