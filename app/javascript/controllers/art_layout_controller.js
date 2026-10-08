@@ -29,6 +29,7 @@ export default class extends Controller {
     this.mutationObserver?.observe(this.element, {
       subtree: true,
       childList: true,
+      characterData: true,
       attributes: true,
       attributeFilter: ["class", "style"]
     })
@@ -57,7 +58,6 @@ export default class extends Controller {
     for (const root of next) {
       const host = root.closest('[data-art-host="fixed"]')
       if (host) nextObserved.add(host)
-      nextObserved.add(root)
     }
     if (this.resizeObserver) {
       for (const element of this.observedElements) {

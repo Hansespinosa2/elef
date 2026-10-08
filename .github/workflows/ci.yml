@@ -42,6 +42,7 @@ jobs:
           npm test --prefix desktop/frontend
           npm run test:unit --prefix desktop/e2e
           python3 script/check_frontend_ownership.py
+          python3 script/check_art_static.py
           cargo test --manifest-path desktop/Cargo.toml -p elef-core --locked
           elapsed=$((SECONDS - started))
           echo "Fast desktop test tier: ${elapsed}s (budget: 300s)"

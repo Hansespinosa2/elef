@@ -31,6 +31,9 @@
   position: relative;
 }
 
+.elef-art-list > li > :is(p, ul, ol) { margin-block: 0; }
+.elef-art-list > li > :is(p, ul, ol) + :is(p, ul, ol) { margin-block-start: 0.5em; }
+
 .elef-art[data-art-mode="peers"][data-art-layout="peers-wrap"] > .elef-art-list {
   display: flex;
   flex-wrap: wrap;
@@ -74,6 +77,10 @@
   list-style: decimal;
   list-style-position: inside;
   padding-inline-start: 0;
+  background-image: linear-gradient(currentColor, currentColor);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 100% 1px;
 }
 
 .elef-art[data-art-mode="sequence"][data-art-layout="sequence-horizontal"] > .elef-art-list > li {
@@ -93,28 +100,11 @@
   font-size: var(--art-document-lead-size);
 }
 
-.elef-art[data-art-mode="sequence"][data-art-layout="sequence-horizontal"] > .elef-art-list > li:not(:last-child)::after {
-  background: currentColor;
-  block-size: 1px;
-  content: "";
-  inline-size: var(--art-gap);
-  inset-block-start: 50%;
-  inset-inline-end: calc(-1 * var(--art-gap));
-  opacity: 0.55;
-  pointer-events: none;
-  position: absolute;
-}
-
-.elef-art[data-art-mode="sequence"][data-art-layout="sequence-vertical"] > .elef-art-list > li:not(:last-child)::after {
-  background: currentColor;
-  block-size: var(--art-gap);
-  content: "";
-  inline-size: 1px;
-  inset-block-end: calc(-1 * var(--art-gap));
-  inset-inline-start: 50%;
-  opacity: 0.55;
-  pointer-events: none;
-  position: absolute;
+.elef-art[data-art-mode="sequence"][data-art-layout="sequence-vertical"] > .elef-art-list {
+  background-image: linear-gradient(currentColor, currentColor);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 1px 100%;
 }
 
 .elef-art[data-art-mode="sequence"][data-art-density="rich"] > .elef-art-list > li {
@@ -146,12 +136,6 @@
   padding-inline-start: 1.5em;
 }
 
-.document-surface .elef-art,
-.document-page-content .elef-art {
-  --art-document-lead-size: 18px;
-  --art-document-body-size: 16px;
-}
-
 .presentation-surface .elef-art[data-art-mode="peers"][data-art-layout="peers-wrap"][data-art-density="compact"] > .elef-art-list > li,
 .presentation-surface .elef-art[data-art-mode="peers"][data-art-layout="peers-wrap"][data-art-density="rich"] > .elef-art-list > li,
 .presentation-surface .elef-art[data-art-mode="sequence"][data-art-density="rich"] > .elef-art-list > li {
@@ -162,6 +146,10 @@
 .presentation-surface .elef-art[data-art-mode="peers"][data-art-layout="peers-wrap"][data-art-density="rich"] > .elef-art-list > li > :is(ul, ol),
 .presentation-surface .elef-art[data-art-mode="sequence"][data-art-density="rich"] > .elef-art-list > li > :is(p, ul, ol):not(:first-child),
 .presentation-surface .elef-art[data-art-mode="sequence"][data-art-density="rich"] > .elef-art-list > li > :is(ul, ol) {
+  font-size: var(--art-presentation-body-size);
+}
+
+.presentation-surface .elef-art[data-art-density="rich"] > .elef-art-list > li > :is(ul, ol) li {
   font-size: var(--art-presentation-body-size);
 }
 
@@ -178,5 +166,5 @@
 
 @media (forced-colors: active) {
   .elef-art-list > li { border: 1px solid CanvasText; }
-  .elef-art[data-art-mode="sequence"] > .elef-art-list > li::after { background: CanvasText; }
+  .elef-art[data-art-mode="sequence"] > .elef-art-list { background-image: linear-gradient(CanvasText, CanvasText); }
 }

@@ -243,11 +243,6 @@
 .slide .slide-block.position-middle { margin-bottom: auto; margin-top: auto; }
 .slide .slide-block.position-bottom { margin-top: auto; }
 
-.presentation-surface .elef-art {
-  --art-lead-size: var(--art-presentation-lead-size);
-  --art-body-size: var(--art-presentation-body-size);
-}
-
 .slide h1 { font-size: 7rem; line-height: 0.95; }
 .slide h2 { font-size: 5rem; }
 .presentation-surface pre {

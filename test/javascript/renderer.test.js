@@ -140,11 +140,12 @@ test("Art derives Peers or Sequence from the native root list and preserves nest
   })
 
   assert.match(peers.html, /<section class="elef-art"[^>]*data-art-mode="peers"[^>]*data-art-density="rich"/)
-  assert.match(peers.html, /<ul class="elef-art-list">/)
+  assert.match(peers.html, /<ul class="elef-art-list" role="list">/)
   assert.match(peers.html, /<ol>\s*<li>Interview users<\/li>/)
   assert.match(peers.html, /<ul>\s*<li>Prototype<\/li>/)
   assert.match(sequence.html, /<section class="elef-art"[^>]*data-art-mode="sequence"[^>]*data-art-density="rich"/)
   assert.match(sequence.html, /<ol class="elef-art-list" start="3">/)
+  assert.doesNotMatch(sequence.html, /<ol class="elef-art-list"[^>]*role=/)
   assert.match(sequence.html, /data-art-layout="sequence-vertical" data-art-settled="true"/)
   assert.doesNotMatch(peers.html, /:::art/)
 })

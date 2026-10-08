@@ -379,8 +379,14 @@ export function renderArtBlock(source, env = {}, hostMode = "flowing") {
 
   let content = renderMarkdownBlock(source, env)
   content = content.replace(/<(ul|ol)(?=\s|>)/, (opening, tag) => {
-    if (/\bclass=/.test(opening)) return opening.replace(/\bclass=(['"])(.*?)\1/, (_match, quote, value) => `class=${quote}${value} elef-art-list${quote}`)
-    return `<${tag} class="elef-art-list"`
+    let decorated = /\bclass=/.test(opening)
+      ? opening.replace(/\bclass=(['"])(.*?)\1/, (_match, quote, value) => `class=${quote}${value} elef-art-list${quote}`)
+      : `<${tag} class="elef-art-list"`
+    if (tag === "ul" && !/\brole=/.test(decorated)) {
+      const complete = decorated.endsWith(">")
+      decorated = `${complete ? decorated.slice(0, -1) : decorated} role="list"${complete ? ">" : ""}`
+    }
+    return decorated
   })
   const modeAttribute = analysis ? ` data-art-mode="${analysis.mode}"` : ""
   const densityAttribute = analysis ? ` data-art-density="${analysis.density}"` : ""

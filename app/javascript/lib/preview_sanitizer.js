@@ -49,6 +49,7 @@ function safeAttribute(element, name, value, interactive, documentPagination, me
   if (lower === "value") return element.tagName === "OPTION" && /^(?:left|center|right|top left|top center|top right|center left|center center|center right|bottom left|bottom center|bottom right)$/.test(value)
   if (lower === "contenteditable") return interactive && (value === "true" || value === "false")
   if (["xmlns", "display", "encoding"].includes(lower) && ["MATH", "ANNOTATION"].includes(element.tagName)) return true
+  if (lower === "start") return element.tagName === "OL" && /^(?:0|[1-9]\d*)$/.test(value)
   if (lower === "style") return isSafeKatexStyle(element, value)
   if (lower.startsWith("aria-") && /^[a-z-]+$/.test(lower)) return true
   if (lower === "data-action") return interactive && ALLOWED_ACTIONS.has(value)
