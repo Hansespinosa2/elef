@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import type { WorkSummary } from "@elef/contracts";
+import type { ElefHost, WorkId, WorkSummary } from "@elef/contracts";
 import { CREATE_WORK_EVENT } from "../src/features/library/LibraryApp.js";
 import type { ElefMountOptions } from "../src/index.js";
 import {
@@ -280,6 +280,15 @@ test("card previews render sanitized renderer output", async () => {
         "rendered previews report ready on the card preview node",
       );
     }
+    const docMount = previews[0]?.querySelector(
+      '[data-controller="document-pages mermaid-diagrams"] > [data-document-pages-target="surface"]',
+    );
+    assert.ok(docMount, "document previews mount the shared pagination pass");
+    assert.equal(
+      previews[1]?.querySelector("[data-controller]"),
+      null,
+      "presentation previews carry no Stimulus mount",
+    );
   } finally {
     shell.unmount();
   }
@@ -371,6 +380,38 @@ test("present button and host extras appear only when the host provides them", a
     assert.ok(forkMenu, "host submenu renders with its menu class");
     assert.match(forkMenu?.textContent ?? "", /As continuation/);
     assert.match(forkMenu?.textContent ?? "", /As inspiration/);
+  } finally {
+    shell.unmount();
+  }
+});
+
+test("deleted event forwards host-defined refresh detail opaquely", async () => {
+  const host = typedHost();
+  await seed(host);
+  const notes = { card_notes: { "999": "Parent no longer available · inspiration" } };
+  const answering = {
+    ...host,
+    library: {
+      ...host.library,
+      deleteWork: async (workId: WorkId) => {
+        await host.library.deleteWork(workId);
+        return notes;
+      },
+    },
+  };
+  const events: unknown[] = [];
+  // The Rails adapter is untyped JS and answers refresh info beyond the
+  // void contract; reproduce that runtime shape past the static type.
+  const { element, shell } = await mountInto(answering as unknown as ElefHost, {
+    onLibraryEvent: (event) => events.push(event),
+  });
+  try {
+    await click(element.querySelector("article.library-card .deck-action.danger"));
+    assert.equal(events.length, 1);
+    const event = events[0] as { type: string; work: WorkSummary; detail: unknown };
+    assert.equal(event.type, "deleted");
+    assert.equal(event.work.title, "Alpha doc");
+    assert.deepEqual(event.detail, notes);
   } finally {
     shell.unmount();
   }

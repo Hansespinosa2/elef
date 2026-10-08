@@ -282,8 +282,11 @@ function DeleteControl({
     try {
       const confirmed = (await options.confirmDelete?.(work)) ?? true;
       if (!confirmed) return;
-      await host.library.deleteWork(work.id);
-      options.onLibraryEvent?.({ type: "deleted", work });
+      // The contract types the answer void, but adapters may answer
+      // host-defined refresh info at runtime; forward it opaquely.
+      const detail: unknown = (await host.library.deleteWork(work.id)) as unknown;
+      if (detail === undefined) options.onLibraryEvent?.({ type: "deleted", work });
+      else options.onLibraryEvent?.({ type: "deleted", work, detail });
       onChanged(options.operationNotice?.("deleted", work) ?? null);
     } catch (error) {
       // A cancelled delete (dismissed native confirmation) is a no-op, not
@@ -402,20 +405,35 @@ function CardPreview({
       : `library-preview-page document-reader document-theme-${theme} document-typography-${typography} work-theme-${theme} work-typography-${typography}`;
   const kind = work.kind;
   const mediaBaseUrl = options.resolveMediaBaseUrl?.(work) ?? "";
+  const sanitized = (
+    <SafeHtml
+      {...(kind === "document" ? {} : { className: stageClass })}
+      html={state.html}
+      sanitize={(container, html) =>
+        sanitizePreview(container, html, {
+          interactive: false,
+          documentPagination: kind === "document",
+          mediaBaseUrl,
+        })
+      }
+    />
+  );
   return (
     <div ref={containerRef} className="library-preview">
       <div className="library-card-preview" aria-hidden="true" inert data-preview-state="ready">
-        <SafeHtml
-          className={stageClass}
-          html={state.html}
-          sanitize={(container, html) =>
-            sanitizePreview(container, html, {
-              interactive: false,
-              documentPagination: kind === "document",
-              mediaBaseUrl,
-            })
-          }
-        />
+        {kind === "document" ? (
+          // Document cards reuse the single document-pages pagination
+          // implementation: the host boots these Stimulus mounts (a
+          // MutationObserver repaginates when lazy content lands) while
+          // Stimulus-less hosts render the same content unpaginated.
+          <div className={stageClass} data-controller="document-pages mermaid-diagrams">
+            <div className="document-surface" data-document-pages-target="surface">
+              {sanitized}
+            </div>
+          </div>
+        ) : (
+          sanitized
+        )}
       </div>
     </div>
   );

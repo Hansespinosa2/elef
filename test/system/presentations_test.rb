@@ -276,6 +276,12 @@ class PresentationsTest < ApplicationSystemTestCase
 
     visit root_path
 
+    # The client shell renders previews asynchronously (fetch, then the
+    # shared pagination pass for documents): wait for settled DOM before
+    # measuring geometry, the same readiness the suite asserts elsewhere.
+    assert_selector ".library-card .slide", wait: 10
+    assert_selector '.library-card .library-preview-page [data-document-pages-settled="true"]', wait: 10
+
     geometry = page.evaluate_script(<<~JAVASCRIPT)
       (() => {
         const box = selector => document.querySelector(selector).getBoundingClientRect();
