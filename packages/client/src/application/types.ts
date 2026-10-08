@@ -16,6 +16,21 @@ export type LibraryOperation = "renamed" | "deleted" | "created";
 
 export type NoticeTone = "info" | "warning" | "error";
 
+export interface UpdaterStatus {
+  readonly available: boolean;
+  readonly version?: string;
+}
+
+// Optional host contribution for the shared updater affordance. Present only
+// on hosts with an update mechanism; the client renders the affordance iff
+// `capabilities.updater` is true and this seam is provided — never by host
+// name. Install/restart stays in host menus; the client only surfaces
+// availability and offers a re-check.
+export interface UpdaterSeam {
+  status(): Promise<UpdaterStatus>;
+  checkForUpdate(): Promise<UpdaterStatus>;
+}
+
 export interface ElefMountOptions {
   readonly initialUrl?: string;
   readonly navigate?: (
@@ -30,6 +45,7 @@ export interface ElefMountOptions {
   readonly cardNote?: (work: WorkSummary) => string | null;
   readonly extraCardActions?: (work: WorkSummary) => readonly CardAction[];
   readonly operationNotice?: (operation: LibraryOperation, work: WorkSummary) => string | null;
+  readonly updater?: UpdaterSeam;
   readonly onLibraryEvent?: (event: {
     readonly type: LibraryOperation;
     readonly work: WorkSummary;

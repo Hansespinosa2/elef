@@ -10,6 +10,18 @@ const FILTER_PATHS: Readonly<Record<string, LibraryFilter>> = {
   "/presentations": "presentations",
 };
 
+export function isSettingsRoute(url: string): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(url, "elef://localhost");
+  } catch {
+    return false;
+  }
+  if (/^#settings\/?$/.exec(parsed.hash) !== null) return true;
+  const path = parsed.pathname.replace(/\/+$/, "") || "/";
+  return path === "/settings";
+}
+
 export function parseLibraryRoute(url: string): LibraryRoute | null {
   let parsed: URL;
   try {

@@ -4,9 +4,11 @@ import { createRoot } from "react-dom/client";
 import type { Root } from "react-dom/client";
 import type { ElefHost } from "@elef/contracts";
 import type { ElefMountOptions, ElefShell, LibraryFilter, NoticeTone } from "./types.js";
-import { parseLibraryRoute } from "./router.js";
+import { isSettingsRoute, parseLibraryRoute } from "./router.js";
 import type { LibraryControl } from "../features/library/LibraryApp.js";
 import { LibraryApp } from "../features/library/LibraryApp.js";
+import type { SettingsControl } from "../features/settings/SettingsApp.js";
+import { SettingsApp } from "../features/settings/SettingsApp.js";
 
 export async function mountElef(
   hostElement: HTMLElement,
@@ -18,23 +20,33 @@ export async function mountElef(
   container.setAttribute("data-elef-shell", "true");
   hostElement.appendChild(container);
   const root: Root = createRoot(container);
+  const settings = options.initialUrl !== undefined && isSettingsRoute(options.initialUrl);
   const route =
-    options.initialUrl === undefined ? null : parseLibraryRoute(options.initialUrl);
+    options.initialUrl === undefined || settings ? null : parseLibraryRoute(options.initialUrl);
 
   let control: LibraryControl | null = null;
+  let settingsControl: SettingsControl | null = null;
   function render(): void {
     // Synchronous commit: slot adoption below and host paint measurements
     // need the committed DOM, not a scheduled render.
     flushSync(() => {
       root.render(
-        createElement(LibraryApp, {
-          host,
-          initialFilter: route?.filter ?? "all",
-          options,
-          registerControl: (next) => {
-            control = next;
-          },
-        }),
+        settings
+          ? createElement(SettingsApp, {
+              host,
+              options,
+              registerControl: (next) => {
+                settingsControl = next;
+              },
+            })
+          : createElement(LibraryApp, {
+              host,
+              initialFilter: route?.filter ?? "all",
+              options,
+              registerControl: (next) => {
+                control = next;
+              },
+            }),
       );
     });
   }
@@ -45,16 +57,24 @@ export async function mountElef(
     // Data reload preserving UI state (filter, search, adopted slots):
     // matches the desktop refreshLibrary semantics the E2E probe measures.
     async refresh(): Promise<void> {
+      if (settingsControl !== null) await settingsControl.reload();
       if (control !== null) await control.reload();
     },
     // Synchronous commits: hosts call these from their own event flows
     // (view switches, error surfaces) and read the DOM right after.
     notify(message: string | null, tone: NoticeTone = "info"): void {
+      if (settingsControl !== null) {
+        const active = settingsControl;
+        flushSync(() => active.notify(message, tone));
+        return;
+      }
       if (control === null) return;
       const active = control;
       flushSync(() => active.notify(message, tone));
     },
     setFilter(filter: LibraryFilter): void {
+      // The settings route has no filter; the call is a no-op there so
+      // hosts can share one shell handle across views.
       if (control === null) return;
       const active = control;
       flushSync(() => active.setFilter(filter));
