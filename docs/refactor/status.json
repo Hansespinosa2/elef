@@ -3,7 +3,7 @@
   "campaign_branch": "feat/refactor-desktop-and-web",
   "campaign_base_sha": "88f61a7a8ffd7c276bafcf06eee09c36a8adf134",
   "current_phase": 6,
-  "phase_state": "PLAN",
+  "phase_state": "DO",
   "phase_base_sha": "dff371c49ced594eb228123ec0d28cd753007f6e",
   "head_sha": "dff371c49ced594eb228123ec0d28cd753007f6e",
   "review_round": 0,
@@ -265,5 +265,5 @@
   },
   "pending_human_gates": [],
   "blocker": null,
-  "next_action": "Phase 06 PLAN freeze: graph semantics to work-model, visualization to client features/graph, no new package; frozen, ready for DO."
+  "next_action": "Phase 06 DO step 1: differential probe Ruby-vs-work-model, baseline fixtures, async inventory."
 }
