@@ -1,7 +1,9 @@
 import { memo, useEffect, useRef, useState } from "react";
 import type { FormEvent, JSX, MouseEvent, RefObject } from "react";
 import type { ElefHost, WorkKind, WorkSummary } from "@elef/contracts";
-import { renderPreviewCore } from "@elef/renderer";
+// The preview renderer (KaTeX, highlight.js, markdown-it) stays out of the
+// boot bundle: CardPreview loads "@elef/client/preview-core" beside the work
+// snapshot, so hosts serve it as a separate deferred file.
 import type { CardAction, ElefMountOptions, NoticeTone } from "../../application/types.js";
 import { SafeHtml } from "../../ui/SafeHtml.js";
 import { sanitizePreview } from "../../ui/sanitize.js";
@@ -395,27 +397,36 @@ function CardPreview({
     if (loadKey.current === key) return;
     loadKey.current = key;
     setState({ phase: "loading" });
+    // Standing down while hidden keeps editor opens (and tab hides) from
+    // spending fetches or main-thread renders on cards out of view. With an
+    // observer the visibility effect resubscribes and restarts the load on
+    // return; without one the key stays clear so the next parent render
+    // retries, and no state churns while hidden.
+    function standDown(): boolean {
+      const preview = containerRef.current;
+      if (preview === null) return true;
+      if (preview.closest("[hidden]") === null) return false;
+      loadKey.current = null;
+      if (typeof IntersectionObserver !== "undefined") setStarted(false);
+      return true;
+    }
     async function load(): Promise<void> {
       function commit(next: PreviewState): void {
         if (mounted.current && loadKey.current === key) setState(next);
       }
       await afterIdle();
       if (!mounted.current || loadKey.current !== key) return;
-      const preview = containerRef.current;
-      if (preview === null) return;
-      if (preview.closest("[hidden]") !== null) {
-        // The library hid (the editor opened) while this load waited: stand
-        // down so cards out of view never spend fetches or main-thread
-        // renders. With an observer the visibility effect resubscribes and
-        // restarts the load on return; without one the key stays clear so
-        // the next parent render retries, and no state churns while hidden.
-        loadKey.current = null;
-        if (typeof IntersectionObserver !== "undefined") setStarted(false);
-        return;
-      }
+      if (standDown()) return;
       try {
-        const snapshot = await host.works.getWork(work.id);
-        const rendered = renderPreviewCore({
+        const [snapshot, previewCore] = await Promise.all([
+          host.works.getWork(work.id),
+          import("@elef/client/preview-core"),
+        ]);
+        if (!mounted.current || loadKey.current !== key) return;
+        // The library may have hidden (the editor opened) while the snapshot
+        // and renderer loaded: re-check before spending the render.
+        if (standDown()) return;
+        const rendered = previewCore.renderPreviewCore({
           source: snapshot.text,
           kind: work.kind,
           title: work.title,

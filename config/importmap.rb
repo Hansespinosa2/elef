@@ -39,6 +39,7 @@ pin "lib/editor_document_state", to: "lib/editor_document_state.js"
 pin "lib/vim_line_numbers", to: "lib/vim_line_numbers.js"
 pin "lib/document_graph_view", to: "lib/document_graph_view.js"
 pin "@elef/client", to: "client/dist/elef-client.js"
+pin "@elef/client/preview-core", to: "client/dist/preview-core.js" # deferred card-preview renderer (KaTeX, highlight.js)
 pin "@elef/client/sanitize", to: "client/dist/sanitize.js"
 pin "host/rails-http-host", to: "host/rails-http-host.js"
 pin "@elef/work-model", to: "work-model/src/index.js"

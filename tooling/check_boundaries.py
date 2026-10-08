@@ -104,6 +104,7 @@ WORK_MODEL_ENV_PATTERN = re.compile(
 CLIENT_ALLOWED_BARE = (
     "react",
     "react-dom",
+    "@elef/client",
     "@elef/contracts",
     "@elef/renderer",
     "@elef/work-model",

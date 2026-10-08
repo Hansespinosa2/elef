@@ -13,6 +13,10 @@
   },
   "exports": {
     ".": "./src/index.ts",
+    "./preview-core": {
+      "types": "./src/features/library/preview-core.ts",
+      "default": "./src/features/library/preview-core.ts"
+    },
     "./sanitize": {
       "types": "./src/ui/sanitize.ts",
       "default": "./dist/sanitize.js"

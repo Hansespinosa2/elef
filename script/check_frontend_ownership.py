@@ -463,8 +463,15 @@ for shared_module in (
     "authoring_settings_dialog", "work_session", "title_save_flow",
 ):
     assert f'"lib/{shared_module}"' in desktop_application, f"desktop application must consume app/javascript/lib/{shared_module}.js"
-assert "renderPreviewCore" in client_library_card and '"@elef/renderer"' in client_library_card, (
+assert "renderPreviewCore" in client_library_card and '"@elef/client/preview-core"' in client_library_card, (
     "desktop library previews must render through the shared renderer core"
+)
+preview_core_entry = (ROOT / "packages/client/src/features/library/preview-core.ts").read_text()
+assert '"@elef/renderer"' in preview_core_entry and "renderPreviewCore" in preview_core_entry, (
+    "the deferred preview entry must re-export the shared renderer core, not fork it"
+)
+assert 'pin "@elef/client/preview-core", to: "client/dist/preview-core.js"' in importmap, (
+    "Rails must serve the deferred preview renderer entry"
 )
 assert '"lib/projection_editability"' in (ROOT / "app/javascript/controllers/presentation_editor_controller.js").read_text()
 assert '"lib/projection_editability"' in (ROOT / "app/javascript/controllers/visual_editor_controller.js").read_text()
