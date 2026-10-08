@@ -1,0 +1,16 @@
+{
+  "attempt_id": "64091b1323a44ebb8a541e29d735cd95",
+  "phase": 5,
+  "head": "27070f59d3ec7591a615fda02fa06503fd0ca432",
+  "root": "/root/elef",
+  "checkout": "/root/elef/tmp/gates/phase-5-64091b1323a44ebb8a541e29d735cd95",
+  "state": "running",
+  "started_ns": 1791499137057204263,
+  "status_sha256": "83e93d272da25737c69b541254fbe8d7bba64c730f805fbfb2dbd1ecc20b34a4",
+  "frozen_plan_sha256": "7476c2d4b9210760d8576059701e506d920b4c51c2d41cb5943c27db05267751",
+  "phase_contract_sha256": "94bb77f5e36623c4dc29f559ac7f24edeb753d9f2589cae62343090fa40fd19e",
+  "runner_pid": 3025,
+  "runner_start": "14245625",
+  "child_pid": 3031,
+  "child_start": "14245651"
+}
