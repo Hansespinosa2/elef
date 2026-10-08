@@ -3,12 +3,12 @@
   "campaign_branch": "feat/refactor-desktop-and-web",
   "campaign_base_sha": "88f61a7a8ffd7c276bafcf06eee09c36a8adf134",
   "current_phase": 5,
-  "phase_state": "DO",
+  "phase_state": "PLAN",
   "phase_base_sha": "0f62a074ee5783cc6510801be2e39074264bc4ab",
   "head_sha": "0f62a074ee5783cc6510801be2e39074264bc4ab",
   "review_round": 0,
   "phase_contract_sha256": "94bb77f5e36623c4dc29f559ac7f24edeb753d9f2589cae62343090fa40fd19e",
-  "frozen_plan_sha256": "5339299a12519680fd2521928fd1ebe482dae72f2edf05c8070cae66d0eff2a6",
+  "frozen_plan_sha256": null,
   "last_completed_phase": 4,
   "last_verified_checks": [
     {
@@ -235,5 +235,5 @@
   },
   "pending_human_gates": [],
   "blocker": null,
-  "next_action": "Phase 05 DO: implement frozen settings/appearance plan starting with features/settings scaffold."
+  "next_action": "Phase 05 PLAN: re-freeze after step-3 stylesheet defect (dual-host application.css bundling invalidates the move)."
 }
