@@ -4,6 +4,7 @@ import type { ElefHost, WorkKind, WorkSummary } from "@elef/contracts";
 import { renderPreviewCore } from "@elef/renderer";
 import type { ElefMountOptions } from "../../application/types.js";
 import { SafeHtml } from "../../ui/SafeHtml.js";
+import { sanitizePreview } from "../../ui/sanitize.js";
 import { useSlideScale } from "./useSlideScale.js";
 
 export interface LibraryCardProps {
@@ -306,11 +307,6 @@ function CardPreview({
     const key = `${work.id}:${work.updatedAt ?? ""}`;
     if (loadKey.current === key) return;
     loadKey.current = key;
-    const sanitize = options.sanitizeHtml;
-    if (sanitize === undefined) {
-      setState({ phase: "unavailable", message: "Preview unavailable." });
-      return;
-    }
     setState({ phase: "loading" });
     async function load(): Promise<void> {
       function commit(next: PreviewState): void {
@@ -347,11 +343,22 @@ function CardPreview({
     work.kind === "presentation"
       ? `library-preview-stage presentation-surface work-surface slides slides-theme-${theme} slides-typography-${typography} work-theme-${theme} work-typography-${typography}`
       : `library-preview-page document-reader document-theme-${theme} document-typography-${typography} work-theme-${theme} work-typography-${typography}`;
-  const sanitize = options.sanitizeHtml as (html: string, context: { readonly kind: WorkKind }) => string;
+  const kind = work.kind;
+  const mediaBaseUrl = options.resolveMediaBaseUrl?.(work) ?? "";
   return (
     <div ref={containerRef} className="library-preview" data-preview-state="ready">
       <div className="library-card-preview" aria-hidden="true" inert>
-        <SafeHtml className={stageClass} html={state.html} sanitize={(html) => sanitize(html, { kind: work.kind })} />
+        <SafeHtml
+          className={stageClass}
+          html={state.html}
+          sanitize={(container, html) =>
+            sanitizePreview(container, html, {
+              interactive: false,
+              documentPagination: kind === "document",
+              mediaBaseUrl,
+            })
+          }
+        />
       </div>
     </div>
   );

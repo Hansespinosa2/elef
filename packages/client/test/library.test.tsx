@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import type { WorkKind, WorkSummary } from "@elef/contracts";
+import type { WorkSummary } from "@elef/contracts";
 import { CREATE_WORK_EVENT } from "../src/features/library/LibraryApp.js";
 import type { ElefMountOptions } from "../src/index.js";
 import {
@@ -145,44 +145,27 @@ test("delete honors the host confirm seam before calling the port", async () => 
   }
 });
 
-test("card previews render through the renderer and the host sanitizer", async () => {
+test("card previews render sanitized renderer output", async () => {
   const host = typedHost();
   await seed(host);
-  const sanitized: { html: string; kind: WorkKind }[] = [];
-  const options: ElefMountOptions = {
-    sanitizeHtml: (html, context) => {
-      sanitized.push({ html, kind: context.kind });
-      return html;
-    },
-  };
-  const { element, shell } = await mountInto(host, options);
-  try {
-    await settled();
-    const previews = element.querySelectorAll(".library-card-preview");
-    assert.equal(previews.length, 2);
-    assert.match(previews[0]?.textContent ?? "", /Alpha/, "document preview renders the source");
-    assert.match(previews[1]?.textContent ?? "", /Beta/, "presentation preview renders the source");
-    assert.equal(sanitized.length, 2, "every preview passes the host sanitizer");
-    assert.deepEqual(
-      sanitized.map((entry) => entry.kind).sort(),
-      ["document", "presentation"],
-    );
-  } finally {
-    shell.unmount();
-  }
-});
-
-test("cards without a host sanitizer never mount raw preview HTML", async () => {
-  const host = typedHost();
-  await seed(host);
+  await host.library.createWork({
+    workspaceId: ws("ws-1"),
+    title: "Hostile doc",
+    kind: "document",
+    text: "# Hostile\n\n<script>evil()</script>\n\n[bad](javascript:evil())\n\n![remote](https://example.com/remote.png)\n",
+  });
   const { element, shell } = await mountInto(host);
   try {
     await settled();
     const previews = element.querySelectorAll(".library-card-preview");
-    assert.equal(previews.length, 2);
-    for (const preview of previews) {
-      assert.match(preview.textContent ?? "", /Preview unavailable/);
-    }
+    assert.equal(previews.length, 3);
+    assert.match(previews[0]?.textContent ?? "", /Alpha/, "document preview renders the source");
+    assert.match(previews[1]?.textContent ?? "", /Beta/, "presentation preview renders the source");
+    const hostile = previews[2]?.innerHTML ?? "";
+    assert.equal(previews[2]?.querySelector("script"), null, "scripts never reach the card DOM");
+    assert.match(hostile, /Hostile/, "safe content survives");
+    assert.doesNotMatch(hostile, /javascript:/, "javascript URLs are stripped");
+    assert.doesNotMatch(hostile, /example\.com/, "remote media is stripped without a media base");
   } finally {
     shell.unmount();
   }

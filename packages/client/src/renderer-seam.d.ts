@@ -22,5 +22,5 @@ declare module "@elef/renderer" {
     readonly style: ClientPreviewStyle;
   }
 
-  export function renderPreviewCore(input?: ClientPreviewInput): ClientPreviewOutput;
+  export function renderPreviewCore(input?: ClientPreviewInput, options?: { chrome?: unknown }): ClientPreviewOutput;
 }

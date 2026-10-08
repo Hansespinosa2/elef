@@ -11,7 +11,6 @@ export interface CardAction {
 export interface ElefMountOptions {
   readonly initialUrl?: string;
   readonly navigate?: (target: { readonly workId: string } | { readonly url: string }) => void;
-  readonly sanitizeHtml?: (html: string, context: { readonly kind: WorkKind }) => string;
   readonly resolveWorkUrl?: (work: WorkSummary) => string;
   readonly resolveLibraryUrl?: (filter: LibraryFilter) => string;
   readonly resolvePreviewUrl?: (work: WorkSummary) => string | null;
