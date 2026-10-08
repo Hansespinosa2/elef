@@ -309,7 +309,8 @@ class ArtTest < ApplicationSystemTestCase
     # root exceed the actual 416px slide-region height, so the honest result is
     # an explicit no-fit state until the product geometry decision is resolved.
     assert_equal "fallback-no-fit", two.fetch("status"), two.inspect
-    assert_equal [680, 416], two.fetch("host").values_at(2, 3)
+    assert_equal [535, 535, 680, 416], two.fetch("host")
+    assert_equal [535, 535, 459, 459, 180, 459], two.fetch("root")
     assert_equal "true", page.find(".presentation-surface [data-art-host='fixed']")["data-art-overfull"]
     assert_equal "ART_NO_FIT", page.find(".presentation-surface [data-elef-art-root]")["data-art-diagnostic"]
 

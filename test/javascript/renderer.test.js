@@ -179,6 +179,18 @@ test("ART-TEST-005: identical parsed Art and render inputs produce identical pre
   assert.deepEqual(second.style, first.style)
 })
 
+test("ART-DIAG-002: malformed directive payloads never enter diagnostic attributes or executable markup", () => {
+  const payload = ':::art{flow" data-probe="owned onload="alert(1)"}'
+  const preview = renderPreview({ kind: "document", source: `${payload}\n- Safe text` })
+
+  assert.deepEqual(preview.editor_map.art_diagnostics.map(diagnostic => diagnostic.code), ["ART_INVALID_SYNTAX"])
+  assert.doesNotMatch(preview.html, /data-probe|onload=|<script\b/)
+  assert.doesNotMatch(preview.html, /:::art\{flow/)
+  for (const [, value] of preview.html.matchAll(/\bdata-[\w-]+="([^"]*)"/g)) {
+    assert.doesNotMatch(value, /ART_INVALID_SYNTAX|flow|data-probe|alert/)
+  }
+})
+
 test("Art has a complete server-rendered fixed-host default and unsupported content falls back as a whole list", () => {
   const pending = renderPreview({ source: ":::art\n1. Discover\n2. Design\n3. Build\n4. Launch" })
   const unsupported = renderPreview({
