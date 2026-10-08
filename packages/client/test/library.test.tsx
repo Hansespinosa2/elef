@@ -163,6 +163,73 @@ test("delete honors the host confirm seam before calling the port", async () => 
   }
 });
 
+test("a cancelled delete is silent and keeps the work", async () => {
+  const host = typedHost();
+  await seed(host);
+  const events: string[] = [];
+  const rejecting = {
+    ...host,
+    library: {
+      ...host.library,
+      deleteWork: async () => {
+        throw { code: "cancelled", message: "The deletion was cancelled.", retryable: false };
+      },
+    },
+  };
+  const { element, shell } = await mountInto(rejecting, {
+    onLibraryEvent: (event) => events.push(event.type),
+  });
+  try {
+    await click(element.querySelector("article.library-card .deck-action.danger"));
+    assert.deepEqual(titles(element), ["Alpha doc", "Beta deck"], "cancelled delete keeps the work");
+    assert.deepEqual(events, [], "no library event fires for a cancellation");
+    const notice = element.querySelector("#notice") as unknown as { hidden: boolean };
+    assert.equal(notice.hidden, true, "no notice is shown for a cancellation");
+  } finally {
+    shell.unmount();
+  }
+});
+
+test("shell notify surfaces host notices with tone on #notice", async () => {
+  const host = typedHost();
+  await seed(host);
+  const { element, shell } = await mountInto(host);
+  try {
+    const notice = () => element.querySelector("#notice") as unknown as {
+      hidden: boolean;
+      textContent: string | null;
+      dataset: { tone?: string };
+    };
+    assert.equal(notice().hidden, true);
+    shell.notify("The operation could not be completed.", "error");
+    assert.equal(notice().hidden, false);
+    assert.equal(notice().textContent, "The operation could not be completed.");
+    assert.equal(notice().dataset.tone, "error");
+    shell.notify(null);
+    assert.equal(notice().hidden, true);
+  } finally {
+    shell.unmount();
+  }
+});
+
+test("shell setFilter switches tabs synchronously", async () => {
+  const host = typedHost();
+  await seed(host);
+  const { element, shell } = await mountInto(host);
+  try {
+    shell.setFilter("documents");
+    assert.deepEqual(titles(element), ["Alpha doc"]);
+    const active = element.querySelector("#show-documents") as unknown as {
+      classList: { contains(name: string): boolean };
+      getAttribute(name: string): string | null;
+    };
+    assert.equal(active.classList.contains("is-active"), true);
+    assert.equal(active.getAttribute("aria-current"), "page");
+  } finally {
+    shell.unmount();
+  }
+});
+
 test("shell refresh reloads data while preserving UI state", async () => {
   const host = typedHost();
   await seed(host);

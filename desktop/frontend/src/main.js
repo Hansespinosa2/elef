@@ -10,6 +10,7 @@ import { createMediaFetch, mediaUrlsForDeck } from "./media-transport.js"
 import { createPreviewFetch } from "./preview-transport.js"
 import { checkForDesktopUpdate, createIdleUpdateCheck, installDesktopUpdate } from "./update-flow.js"
 import { createFileLibraryTransport } from "./file-library-transport.js"
+import { createTauriHost } from "./tauri-host.js"
 import { createQuietSavePolicy } from "./quiet_save_policy.js"
 import { desktopAuthoringRegistry, loadDesktopAuthoringRegistry } from "./authoring-registry-loader.js"
 import { loadEditorRuntime, loadLibraryRuntime } from "lib/editor_runtime"
@@ -21,6 +22,7 @@ const nativeFetch = globalThis.fetch.bind(globalThis)
 
 startFileLibraryApplication({
   fileLibrary,
+  createLibraryHost: () => createTauriHost({ invoke }),
   listen,
   getCurrentWindow,
   completeBootstrap,

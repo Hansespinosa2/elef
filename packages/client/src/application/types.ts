@@ -14,6 +14,8 @@ export interface CardAction {
 
 export type LibraryOperation = "renamed" | "deleted" | "created";
 
+export type NoticeTone = "info" | "warning" | "error";
+
 export interface ElefMountOptions {
   readonly initialUrl?: string;
   readonly navigate?: (
@@ -36,6 +38,11 @@ export interface ElefMountOptions {
 
 export interface ElefShell {
   refresh(): Promise<void>;
+  // Host-to-client control, mirroring the onLibraryEvent client-to-host
+  // reports: the host owns view-level state (which tab is showing, which
+  // notice is visible) while the client owns the pixels.
+  notify(message: string | null, tone?: NoticeTone): void;
+  setFilter(filter: LibraryFilter): void;
   unmount(): void;
 }
 

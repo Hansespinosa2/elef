@@ -91,6 +91,9 @@ tauri_config = json.loads((ROOT / "desktop/src-tauri/tauri.conf.json").read_text
 desktop_scripts = json.loads((ROOT / "desktop/frontend/package.json").read_text())["scripts"]
 desktop_application = (ROOT / "app/javascript/lib/file_library_application.js").read_text()
 work_session = (ROOT / "app/javascript/lib/work_session.js").read_text()
+client_library_app = (ROOT / "packages/client/src/features/library/LibraryApp.tsx").read_text()
+client_library_card = (ROOT / "packages/client/src/features/library/LibraryCard.tsx").read_text()
+client_library_filtering = (ROOT / "packages/client/src/features/library/filtering.ts").read_text()
 web_authoring_settings = (ROOT / "app/javascript/controllers/authoring_settings_controller.js").read_text()
 desktop_shell_styles = (ROOT / "app/assets/stylesheets/file_library_host.css").read_text()
 assert "globalThis.fetch =" not in desktop_application, (
@@ -364,14 +367,20 @@ assert "@tauri-apps/" not in desktop_application and "desktop/" not in desktop_a
     "the Rails-owned file-library application must depend on injected host services, not desktop code"
 )
 assert "script/build_renderer.mjs" not in build, "desktop must consume the renderer build, not own it"
-assert '"lib/work_session"' in desktop_application and '"lib/preview_sanitizer"' in desktop_application, (
-    "desktop save and preview behavior must import Rails-owned modules"
+assert '"lib/work_session"' in desktop_application, (
+    "desktop save behavior must import the Rails-owned session factory"
+)
+assert "sanitizePreview" in client_library_card and '"../../ui/sanitize.js"' in client_library_card, (
+    "desktop library previews must sanitize through the shared client module"
 )
 assert '"./save_flow.js"' in work_session, (
     "the shared work-session factory must consume the Rails-owned save state machine"
 )
-assert '"lib/library_view"' in desktop_application and '"lib/library_filter"' in desktop_application, (
-    "desktop library behavior must import Rails-owned components"
+assert 'from "@elef/client"' in desktop_application, (
+    "desktop library behavior must mount the shared client"
+)
+assert "export function filterWorks" in client_library_filtering, (
+    "desktop library filtering must use the shared client rules"
 )
 assert '"lib/authoring_settings_dialog"' in desktop_application, "desktop authoring settings UI must consume the Rails-owned dialog"
 assert '"lib/authoring_settings_dialog"' in web_authoring_settings and "createAuthoringSettingsDialog" in web_authoring_settings, (
@@ -383,7 +392,8 @@ assert 'render "shared/authoring_settings_dialog"' in (ROOT / "app/views/shared/
 assert '"app/views/shared/_authoring_settings_dialog.html.erb"' in build, (
     "desktop must package the same Rails-owned authoring settings markup used by the web app"
 )
-assert '"lib/library_card"' in desktop_application, "desktop library cards must be owned by app/javascript"
+assert '"lib/library_card"' not in desktop_application, "desktop must not keep the retired card renderer"
+assert "export function cardDomId" in client_library_card, "desktop library cards must be owned by the shared client"
 assert '"lib/editor_controller_lookup"' in desktop_application, "desktop editor lookup must use the app-owned controller helper"
 assert '"@elef/work-model"' in desktop_application and "buildDocumentGraph" in desktop_application, (
     "desktop graph construction must consume the shared work-model resolver"
@@ -423,7 +433,10 @@ assert '"presentation"' in desktop_application and "getControllerForElementAndId
 assert "createPresentationNavigation" not in desktop_application and "presentationActionForKey" not in desktop_application, (
     "desktop must not maintain its own slide navigation behavior"
 )
-assert "setLibraryViewTab" in desktop_application, "desktop library tabs must use the Rails-owned shared view behavior"
+assert "setLibraryViewTab" not in desktop_application, "desktop must not keep the retired tab helper"
+assert "data-library-tab={name}" in client_library_app and "shell.setFilter" in desktop_application, (
+    "desktop library tabs must use the shared client view behavior"
+)
 assert "elements.description.textContent" not in desktop_application, "library tab descriptions belong to the Rails-owned view"
 assert "elements.graphView.hidden = libraryTab" not in desktop_application, "shared library graph visibility belongs to the Rails-owned view"
 assert 'pin "lib/presentation_navigation", to: "lib/presentation_navigation.js"' in importmap, (
@@ -438,10 +451,13 @@ assert "write_authoring_registry" not in (ROOT / "app/javascript/lib/authoring_r
 )
 for shared_module in (
     "deck_open_flow", "document_graph_cache", "editor_ready", "editor_source",
-    "feature_flags", "library_preview", "performance_measurement", "renderer_worker_client",
+    "feature_flags", "performance_measurement", "renderer_worker_client",
     "authoring_settings_dialog", "work_session", "title_save_flow",
 ):
     assert f'"lib/{shared_module}"' in desktop_application, f"desktop application must consume app/javascript/lib/{shared_module}.js"
+assert "renderPreviewCore" in client_library_card and '"@elef/renderer"' in client_library_card, (
+    "desktop library previews must render through the shared renderer core"
+)
 assert '"lib/projection_editability"' in (ROOT / "app/javascript/controllers/presentation_editor_controller.js").read_text()
 assert '"lib/projection_editability"' in (ROOT / "app/javascript/controllers/visual_editor_controller.js").read_text()
 assert 'pin "lib/projection_editability", to: "lib/projection_editability.js"' in importmap

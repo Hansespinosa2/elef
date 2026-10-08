@@ -2,8 +2,6 @@ import { createDeckOpenFlow, prepareDeckOpen } from "lib/deck_open_flow"
 import { applyEditorSource } from "lib/editor_source"
 import { measurePaintedAction } from "lib/performance_measurement"
 import { editorFor } from "lib/editor_controller_lookup"
-import { createLibraryCard } from "lib/library_card"
-import { createIncrementalList } from "lib/incremental_list"
 import { createDocumentGraphCache } from "lib/document_graph_cache"
 import { buildDocumentGraph } from "@elef/work-model"
 import { waitForEditorController } from "lib/editor_ready"
@@ -11,18 +9,15 @@ import { createWorkSession } from "lib/work_session"
 import { createTitleSaveFlow } from "lib/title_save_flow"
 import { presentConflictDialog } from "lib/conflict_dialog"
 import { createRendererClient } from "lib/renderer_worker_client"
-import { installSanitizedPreview } from "lib/preview_sanitizer"
 import { authoringSettingsElements, createAuthoringSettingsDialog } from "lib/authoring_settings_dialog"
 import { mergeAuthoringRegistryEntries } from "lib/authoring_registry_merge"
 import { applyDesktopFeatureFlags } from "lib/feature_flags"
 import { configureEditorKind, renderEditorView } from "lib/editor_view"
-import { renderLibraryView, setLibraryViewTab, updateLibraryEmptyState } from "lib/library_view"
-import { filterDecks } from "lib/library_filter"
-import { createLibraryPreviewLoader } from "lib/library_preview"
+import { CREATE_WORK_EVENT, mountElef, parseLibraryRoute } from "@elef/client"
 
 export function startFileLibraryApplication(platform) {
   const {
-    fileLibrary, listen, getCurrentWindow,
+    fileLibrary, createLibraryHost, listen, getCurrentWindow,
     completeBootstrap, createCloseFlow, createTransportAdapter, installFetchTransport,
     mediaUrlsForDeck, checkForUpdate, createIdleUpdateCheck, installPendingUpdate,
     desktopAuthoringRegistry, loadDesktopAuthoringRegistry, quietSavePolicy,
@@ -75,11 +70,12 @@ export function startFileLibraryApplication(platform) {
   editorFormHost.removeAttribute("data-controller")
   editorFormHost.dataset.presentationActiveValue = "false"
 
-  renderLibraryView(document.querySelector("#library-view-mount"), {
-    filter: "all",
-    countLabel: "0 works",
-    description: "One home for your documents, presentations, and source."
-  })
+  // The shared client renders the library markup (tabs, cards, notice,
+  // graph panel) into #library-view-mount during bootstrap initialize; the
+  // host queries those client-owned nodes fresh at each use site instead of
+  // caching them here.
+  const mount = document.querySelector("#library-view-mount")
+  let shell = null
 
   const elements = {
     libraryName: document.querySelector("#library-name"),
@@ -87,20 +83,10 @@ export function startFileLibraryApplication(platform) {
     library: document.querySelector("#library-view"),
     deckView: document.querySelector("#deck-view"),
     deckTitle: document.querySelector("#deck-title"),
-    list: document.querySelector("#deck-list"),
-    loadMore: document.querySelector("#library-load-more"),
-    graphView: document.querySelector("#document-graph-view"),
-    count: document.querySelector("#library-count"),
-    empty: document.querySelector("#empty-library"),
-    noResults: document.querySelector("#library-no-results"),
-    search: document.querySelector("#library-search"),
     status: document.querySelector("#status-text"),
-    notice: document.querySelector("#notice"),
-    createDialog: document.querySelector("#create-dialog"),
     settingsDialog: document.querySelector("#settings-dialog"),
     settingsForm: document.querySelector("#settings-form"),
     libraryTheme: document.querySelector("#library-theme"),
-    createForm: document.querySelector("#create-form"),
     aboutDialog: document.querySelector("#about-dialog"),
     editorField: document.querySelector("#desktop-editor-field"),
     editorForm: document.querySelector("#desktop-editor-form"),
@@ -125,10 +111,6 @@ export function startFileLibraryApplication(platform) {
   let lastSourceFile = null
   let e2eNextSaveDelayMs = 0
   const documentGraphCache = createDocumentGraphCache(async () => buildDocumentGraph(await fileLibrary.readDocumentGraph()))
-  let libraryTab = "all"
-  let cardPreviewObserver = null
-  let libraryMoreObserver = null
-  const libraryListRenderer = createIncrementalList(elements.list)
   let pendingUpdate = null
   let updateInstalling = false
   let libraryStatusLoaded = false
@@ -196,12 +178,6 @@ export function startFileLibraryApplication(platform) {
       return result
     }
   }
-  const loadLibraryPreview = createLibraryPreviewLoader({
-    readPreview: id => fileLibrary.readSourcePreview(id),
-    render: input => renderer.render(input),
-    mediaBaseUrlForDeck: deck => mediaUrlsForDeck(deck).assetBaseUrl,
-    install: installSanitizedPreview
-  })
   function openSession(deck) {
     closeSession()
     lastSourceFile = deck.source_file
@@ -357,8 +333,9 @@ export function startFileLibraryApplication(platform) {
         async list() {
           return measurePaintedAction(async () => {
             await refreshLibrary()
-            if (!elements.notice.hidden && elements.notice.dataset.tone === "error") throw new Error("The measured library refresh failed.")
-            return { total: decks.length, rendered: libraryListRenderer.renderedCount }
+            const notice = document.querySelector("#notice")
+            if (notice && !notice.hidden && notice.dataset.tone === "error") throw new Error("The measured library refresh failed.")
+            return { total: decks.length, rendered: document.querySelectorAll("#deck-list .library-card").length }
           })
         },
         typingValue: () => currentSource(),
@@ -420,14 +397,11 @@ export function startFileLibraryApplication(platform) {
   }
 
   function showNotice(message, tone = "info") {
-    elements.notice.textContent = message
-    elements.notice.dataset.tone = tone
-    elements.notice.hidden = false
+    shell?.notify(message, tone)
   }
 
   function clearNotice() {
-    elements.notice.hidden = true
-    elements.notice.textContent = ""
+    shell?.notify(null)
   }
 
   function applyTheme(theme) {
@@ -450,14 +424,14 @@ export function startFileLibraryApplication(platform) {
     document.querySelector("#new-deck").disabled = !library
     document.querySelector("#import-elef").disabled = !library
     document.querySelector("#breadcrumb-current").textContent = "Decks"
-    showLibraryTab("all")
+    shell.setFilter("all")
     void startupUpdateCheck.resume()
   }
 
-  function showLibraryTab(tab) {
-    libraryTab = setLibraryViewTab(document.querySelector("#library-view-mount"), tab)
-    renderDecks()
-    if (libraryTab === "documents") void showDocumentGraph()
+  // The client owns the active tab; the host reads it back from the settled
+  // DOM whenever a refresh or library event needs the graph decision.
+  function currentFilter() {
+    return mount.querySelector("[data-library-tab][aria-current='page']")?.dataset.libraryTab ?? "all"
   }
 
   async function documentGraphData() {
@@ -478,7 +452,8 @@ export function startFileLibraryApplication(platform) {
     try {
       await loadLibraryRuntime()
       const graph = await documentGraphData()
-      const previous = elements.graphView
+      const previous = mount.querySelector("#document-graph-view")
+      if (!previous) return
       const graphView = previous.cloneNode(false)
       graphView.dataset.documentGraphDataValue = JSON.stringify(graph)
       graphView.setAttribute("data-controller", "document-graph")
@@ -489,71 +464,13 @@ export function startFileLibraryApplication(platform) {
         void openDeck(link.dataset.deckId)
       })
       previous.replaceWith(graphView)
-      elements.graphView = graphView
-      setLibraryViewTab(document.querySelector("#library-view-mount"), libraryTab)
+      // The client hides the panel when the filter leaves documents; the host
+      // unhides it once populated. Re-read the settled filter here so a slow
+      // load racing a tab switch lands in the correct state.
+      graphView.hidden = currentFilter() !== "documents"
     } catch (error) {
       showError(error)
     }
-  }
-
-  function renderDecks() {
-    const query = elements.search.value.trim()
-    const filtered = filterDecks(decks, libraryTab, query)
-    const totalForFilter = filterDecks(decks, libraryTab).length
-    cardPreviewObserver?.disconnect()
-    libraryMoreObserver?.disconnect()
-    const decksById = new Map(filtered.map(deck => [deck.id, deck]))
-    const startPreview = target => {
-      const deck = decksById.get(target.dataset.deckId)
-      if (deck) void loadLibraryPreview(target, deck)
-    }
-    if (typeof IntersectionObserver === "function") {
-      cardPreviewObserver = new IntersectionObserver(entries => {
-        for (const entry of entries) {
-          if (!entry.isIntersecting) continue
-          cardPreviewObserver.unobserve(entry.target)
-          startPreview(entry.target)
-        }
-      }, { rootMargin: "180px" })
-    } else {
-      cardPreviewObserver = null
-    }
-    libraryListRenderer.render(filtered, deck => createLibraryCard(document, deck, {
-      open: id => void openDeck(id),
-      preview: deck => void openDeck(deck.id),
-      present: deck => {
-        void openDeck(deck.id).then(opened => {
-          if (opened) void startPresentation()
-        })
-      },
-      rename: (item, name) => void renameDeck(item, name).catch(showError),
-      delete: item => void deleteDeck(item)
-    }), { onAppend: cards => {
-      const previewTargets = cards.flatMap(card => [...card.querySelectorAll(".library-card-preview[data-deck-id]")])
-      if (cardPreviewObserver) previewTargets.forEach(target => cardPreviewObserver.observe(target))
-      else previewTargets.forEach(startPreview)
-    } })
-    elements.loadMore.hidden = !libraryListRenderer.hasMore
-    if (libraryListRenderer.hasMore && typeof IntersectionObserver === "function") {
-      libraryMoreObserver = new IntersectionObserver(entries => {
-        if (entries.some(entry => entry.target === elements.loadMore && entry.isIntersecting)) appendLibraryDeckBatch()
-      }, { rootMargin: "300px" })
-      libraryMoreObserver.observe(elements.loadMore)
-    }
-    const kindLabel = libraryTab === "all" ? "work" : libraryTab === "documents" ? "document" : "presentation"
-    elements.count.textContent = `${totalForFilter} ${totalForFilter === 1 ? kindLabel : `${kindLabel}s`}${query ? ` · ${filtered.length} shown` : ""}`
-    const isEmptyState = filtered.length === 0 && !query
-    elements.empty.hidden = !isEmptyState
-    elements.list.hidden = filtered.length === 0 && !isEmptyState
-    elements.noResults.hidden = !query || filtered.length > 0
-    updateLibraryEmptyState(elements.empty, libraryTab)
-    if (filtered.length === 0 && query) {
-      elements.list.hidden = false
-    }
-  }
-
-  function appendLibraryDeckBatch() {
-    elements.loadMore.hidden = !libraryListRenderer.appendNext()
   }
 
   async function refreshLibrary() {
@@ -565,8 +482,8 @@ export function startFileLibraryApplication(platform) {
       ])
       decks = listedDecks
       documentGraphCache.invalidate()
-      renderDecks()
-      if (libraryTab === "documents") await showDocumentGraph()
+      await shell.refresh()
+      if (currentFilter() === "documents") await showDocumentGraph()
       setStatus(`${decks.length} ${decks.length === 1 ? "deck" : "decks"}`)
       clearNotice()
     } catch (error) {
@@ -599,26 +516,13 @@ export function startFileLibraryApplication(platform) {
     }
   }
 
+  // The create dialog is client-owned; the host only requests it. Creation
+  // itself flows through the host adapter, then the navigate seam opens the
+  // new work, matching the old create-then-open sequence.
   function showCreateDialog(kind = "presentation") {
-    document.querySelector("#new-deck-kind").value = kind
-    elements.createDialog.showModal()
-    document.querySelector("#new-deck-name").focus()
-  }
-
-  async function createDeck(event) {
-    event.preventDefault()
-    const form = new FormData(elements.createForm)
-    const name = String(form.get("name") || "").trim()
-    const kind = String(form.get("kind") || "presentation")
-    if (!name) return
-    elements.createDialog.close()
-    try {
-      const opened = await fileLibrary.createDeck(name, kind)
-      await refreshLibrary()
-      await openDeck(opened.id)
-    } catch (error) {
-      showError(error)
-    }
+    mount.querySelector(".library-shared-view")?.dispatchEvent(
+      new CustomEvent(CREATE_WORK_EVENT, { detail: { kind } })
+    )
   }
 
   const openDeck = createDeckOpenFlow(openDeckNow)
@@ -662,7 +566,7 @@ export function startFileLibraryApplication(platform) {
       if (deck.id !== id) {
         decks = decks.map(item => item.id === id ? { ...item, id: deck.id } : item)
         documentGraphCache.invalidate()
-        renderDecks()
+        void shell.refresh()
       }
       // All asynchronous work is finished. Installing the buffer and changing
       // save ownership occur in one synchronous turn, with no stale A buffer
@@ -733,24 +637,26 @@ export function startFileLibraryApplication(platform) {
     const renamed = await fileLibrary.renameDeck(deck.id, name.trim())
     if (activeDeck?.id === deck.id) Object.assign(activeDeck, renamed)
     decks = decks.map(item => item.id === deck.id ? { ...item, ...renamed } : item)
-    renderDecks()
+    await shell.refresh()
     return renamed
   }
 
-  async function deleteDeck(deck) {
-    try {
-      const result = await fileLibrary.deleteDeck(deck.id)
-      if (result.deleted) {
-        if (activeDeck?.id === deck.id) {
-          activeDeck = null
-          closeSession()
-        }
-        await refreshLibrary()
-        setStatus(`Moved “${deck.name}” to Trash`)
-      }
-    } catch (error) {
-      showError(error)
+  // Card rename/delete run inside the client through the host adapter; the
+  // host only keeps its editor-side caches consistent and reports status.
+  function handleLibraryEvent(event) {
+    if (event.type === "renamed") {
+      if (activeDeck?.id === event.work.id) Object.assign(activeDeck, { name: event.work.title })
+      decks = decks.map(item => item.id === event.work.id ? { ...item, name: event.work.title } : item)
     }
+    if (event.type === "deleted") {
+      if (activeDeck?.id === event.work.id) {
+        activeDeck = null
+        closeSession()
+      }
+      decks = decks.filter(item => item.id !== event.work.id)
+      setStatus(`Moved “${event.work.title}” to Trash`)
+    }
+    if (currentFilter() === "documents") void showDocumentGraph()
   }
 
   function showImportConflict(error) {
@@ -1084,7 +990,7 @@ export function startFileLibraryApplication(platform) {
       if (!library) return chooseLibrary()
       if (hasUnsavedChanges() && !(await flushSave())) return
       showLibrary()
-      elements.search.focus()
+      mount.querySelector("#library-search")?.focus()
       return
     }
     if (action === "new-presentation") return showCreateDialog("presentation")
@@ -1107,10 +1013,9 @@ export function startFileLibraryApplication(platform) {
   })
   document.querySelector("#open-settings").addEventListener("click", () => void showSettings())
   document.querySelector("#new-deck").addEventListener("click", () => {
-    showCreateDialog(libraryTab === "documents" ? "document" : "presentation")
+    showCreateDialog(currentFilter() === "documents" ? "document" : "presentation")
   })
   document.querySelector("#refresh-library").addEventListener("click", () => void refreshLibrary())
-  elements.loadMore.addEventListener("click", appendLibraryDeckBatch)
   document.querySelector("#import-elef").addEventListener("click", () => void importDeck())
   document.querySelector("#back-to-library").addEventListener("click", () => {
     if (hasUnsavedChanges()) {
@@ -1123,9 +1028,6 @@ export function startFileLibraryApplication(platform) {
     }
     showLibrary()
     setStatus("Library")
-  })
-  document.querySelector("#create-form").addEventListener("submit", event => {
-    if (event.submitter?.value === "create") void createDeck(event)
   })
   elements.settingsForm.addEventListener("submit", event => void saveSettings(event))
   document.querySelector("#manage-authoring").addEventListener("click", () => {
@@ -1147,16 +1049,6 @@ export function startFileLibraryApplication(platform) {
   document.querySelector("#import-conflict-replace").addEventListener("click", () => void resolveImportConflict("replace"))
   document.querySelector("#import-conflict-keep-both").addEventListener("click", () => void resolveImportConflict("keep_both"))
   document.querySelector("#import-conflict-cancel").addEventListener("click", () => void resolveImportConflict("cancel"))
-  document.querySelector("#library-search").addEventListener("input", renderDecks)
-  document.querySelectorAll("[data-library-tab]").forEach(link => {
-    link.addEventListener("click", event => {
-      event.preventDefault()
-      showLibraryTab(link.dataset.libraryTab)
-    })
-  })
-  document.querySelector("#empty-library [data-action='create-presentation']").addEventListener("click", event => {
-    showCreateDialog(event.currentTarget.dataset.kind || "presentation")
-  })
   elements.editorField.addEventListener("input", () => scheduleSave())
   elements.titleInput.addEventListener("input", () => titleFlow.noteChange())
   elements.editorForm.querySelector("#use-disk-version").addEventListener("click", resolveConflictWithDisk)
@@ -1180,14 +1072,37 @@ export function startFileLibraryApplication(platform) {
   window.addEventListener("keydown", event => {
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
       event.preventDefault()
-      elements.search.focus()
+      mount.querySelector("#library-search")?.focus()
     }
   })
 
   void listen("desktop-menu-action", event => void handleMenuAction(event.payload))
   const openedFileListener = listen("desktop-open-elef", () => void processOpenedFiles())
+  async function mountLibrary() {
+    shell = await mountElef(mount, createLibraryHost(), {
+      // The desktop has no URL routing: work targets open in the embedded
+      // editor, tab targets only move the location hash for deep-linking.
+      navigate: target => {
+        if (target.url === undefined) {
+          void openDeck(target.workId)
+          return
+        }
+        if (target.url.startsWith("#")) location.hash = target.url
+        if (parseLibraryRoute(target.url)?.filter === "documents") void showDocumentGraph()
+      },
+      resolveMediaBaseUrl: work => mediaUrlsForDeck(work.id).assetBaseUrl,
+      presentWork: work => {
+        void openDeck(work.id).then(opened => {
+          if (opened) void startPresentation()
+        })
+      },
+      onLibraryEvent: handleLibraryEvent
+    })
+  }
+
   void completeBootstrap({
     initialize: async () => {
+      await mountLibrary()
       const [status] = await measureBootstrapStage("library-status", () => Promise.all([fileLibrary.getLibraryStatus(), openedFileListener]))
       library = status
       libraryConfig = status?.config || libraryConfig

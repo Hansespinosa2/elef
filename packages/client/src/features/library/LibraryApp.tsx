@@ -1,16 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { FormEvent, JSX, MouseEvent } from "react";
 import type { ElefHost, WorkKind, WorkSummary } from "@elef/contracts";
-import type { ElefMountOptions, LibraryFilter } from "../../application/types.js";
+import type { ElefMountOptions, LibraryFilter, NoticeTone } from "../../application/types.js";
 import { parseLibraryRoute } from "../../application/router.js";
 import { filterWorks } from "./filtering.js";
 import { LibraryCard } from "./LibraryCard.js";
+
+export interface LibraryControl {
+  reload(): Promise<void>;
+  notify(message: string | null, tone?: NoticeTone): void;
+  setFilter(filter: LibraryFilter): void;
+}
 
 export interface LibraryAppProps {
   readonly host: ElefHost;
   readonly initialFilter: LibraryFilter;
   readonly options: ElefMountOptions;
-  readonly registerReloader?: (reload: () => Promise<void>) => void;
+  readonly registerControl?: (control: LibraryControl) => void;
 }
 
 export const LIBRARY_RENDER_BATCH_SIZE = 48;
@@ -33,12 +39,13 @@ function localTarget(value: string, label: string): string {
   return value;
 }
 
-export function LibraryApp({ host, initialFilter, options, registerReloader }: LibraryAppProps): JSX.Element {
+export function LibraryApp({ host, initialFilter, options, registerControl }: LibraryAppProps): JSX.Element {
   const [works, setWorks] = useState<readonly WorkSummary[]>([]);
   const [filter, setFilter] = useState<LibraryFilter>(initialFilter);
   const [query, setQuery] = useState("");
   const [ready, setReady] = useState(false);
   const [notice, setNotice] = useState("");
+  const [noticeTone, setNoticeTone] = useState<NoticeTone>("info");
   const [visibleCount, setVisibleCount] = useState(LIBRARY_RENDER_BATCH_SIZE);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogKind, setDialogKind] = useState<WorkKind>("presentation");
@@ -49,8 +56,13 @@ export function LibraryApp({ host, initialFilter, options, registerReloader }: L
   const filterRef = useRef(filter);
   filterRef.current = filter;
 
+  const showNotice = useCallback((message: string | null, tone: NoticeTone = "info") => {
+    setNotice(message ?? "");
+    setNoticeTone(tone);
+  }, []);
+
   const reload = useCallback(
-    async (notice: string | null = null): Promise<void> => {
+    async (notice: string | null = null, tone: NoticeTone = "info"): Promise<void> => {
       try {
         const spaces = await host.library.listWorkspaces();
         const loaded: WorkSummary[] = [];
@@ -59,12 +71,12 @@ export function LibraryApp({ host, initialFilter, options, registerReloader }: L
         }
         setWorks(loaded);
         setReady(true);
-        setNotice(notice ?? "");
+        showNotice(notice, tone);
       } catch (error) {
-        setNotice(error instanceof Error ? error.message : String(error));
+        showNotice(error instanceof Error ? error.message : String(error), "error");
       }
     },
-    [host],
+    [host, showNotice],
   );
 
   useEffect(() => {
@@ -72,8 +84,15 @@ export function LibraryApp({ host, initialFilter, options, registerReloader }: L
   }, [reload]);
 
   useEffect(() => {
-    registerReloader?.(() => reload());
-  }, [registerReloader, reload]);
+    registerControl?.({
+      reload: () => reload(),
+      notify: (message, tone) => showNotice(message, tone),
+      setFilter: (next) => {
+        setFilter(next);
+        setVisibleCount(LIBRARY_RENDER_BATCH_SIZE);
+      },
+    });
+  }, [registerControl, reload, showNotice]);
 
   useEffect(() => {
     function onRouteChange(): void {
@@ -116,6 +135,7 @@ export function LibraryApp({ host, initialFilter, options, registerReloader }: L
     if (dialogOpen) {
       if (typeof dialog.showModal === "function") dialog.showModal();
       else dialog.setAttribute("open", "");
+      (dialog.querySelector("#new-deck-name") as HTMLElement | null)?.focus?.();
     } else if (typeof dialog.close === "function") {
       if (dialog.open) dialog.close();
     } else {
@@ -190,7 +210,7 @@ export function LibraryApp({ host, initialFilter, options, registerReloader }: L
       await reload();
       options.navigate?.({ workId: created.id, kind: created.kind });
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : String(error));
+      showNotice(error instanceof Error ? error.message : String(error), "error");
     }
   }
 
@@ -253,7 +273,14 @@ export function LibraryApp({ host, initialFilter, options, registerReloader }: L
             </a>
           ))}
         </nav>
-        <div id="notice" className="notice" role="status" aria-live="polite" hidden={notice === ""}>
+        <div
+          id="notice"
+          className="notice"
+          role="status"
+          aria-live="polite"
+          data-tone={noticeTone}
+          hidden={notice === ""}
+        >
           {notice}
         </div>
         <section
@@ -278,7 +305,7 @@ export function LibraryApp({ host, initialFilter, options, registerReloader }: L
               work={work}
               documentNodes={nodes}
               options={options}
-              onChanged={(notice) => void reload(notice)}
+              onChanged={(notice, tone) => void reload(notice, tone)}
             />
           ))}
         </section>
@@ -343,7 +370,9 @@ export function LibraryApp({ host, initialFilter, options, registerReloader }: L
             <option value="presentation">Presentation</option>
             <option value="document">Document</option>
           </select>
-          <button type="submit">Create</button>
+          <button id="create-submit" type="submit">
+            Create
+          </button>
           <button type="button" onClick={() => setDialogOpen(false)}>
             Cancel
           </button>

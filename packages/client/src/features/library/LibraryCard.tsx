@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { FormEvent, JSX, MouseEvent, RefObject } from "react";
 import type { ElefHost, WorkKind, WorkSummary } from "@elef/contracts";
 import { renderPreviewCore } from "@elef/renderer";
-import type { CardAction, ElefMountOptions } from "../../application/types.js";
+import type { CardAction, ElefMountOptions, NoticeTone } from "../../application/types.js";
 import { SafeHtml } from "../../ui/SafeHtml.js";
 import { sanitizePreview } from "../../ui/sanitize.js";
 import { useSlideScale } from "./useSlideScale.js";
@@ -12,7 +12,7 @@ export interface LibraryCardProps {
   readonly work: WorkSummary;
   readonly documentNodes: readonly unknown[];
   readonly options: ElefMountOptions;
-  readonly onChanged: (notice: string | null) => void;
+  readonly onChanged: (notice: string | null, tone?: NoticeTone) => void;
 }
 
 export function cardDomId(work: WorkSummary): string {
@@ -173,7 +173,7 @@ function RenameControl({
   readonly host: ElefHost;
   readonly work: WorkSummary;
   readonly options: ElefMountOptions;
-  readonly onChanged: (notice: string | null) => void;
+  readonly onChanged: (notice: string | null, tone?: NoticeTone) => void;
 }): JSX.Element {
   const [title, setTitle] = useState(work.title);
 
@@ -186,7 +186,7 @@ function RenameControl({
       options.onLibraryEvent?.({ type: "renamed", work: renamed });
       onChanged(options.operationNotice?.("renamed", renamed) ?? null);
     } catch (error) {
-      onChanged(error instanceof Error ? error.message : String(error));
+      onChanged(error instanceof Error ? error.message : String(error), "error");
     }
   }
 
@@ -262,6 +262,11 @@ function CardActionItem({
   );
 }
 
+function isCancelled(error: unknown): boolean {
+  const code = (error as { readonly code?: unknown; readonly category?: unknown } | null);
+  return code?.code === "cancelled" || code?.category === "cancelled";
+}
+
 function DeleteControl({
   host,
   work,
@@ -271,7 +276,7 @@ function DeleteControl({
   readonly host: ElefHost;
   readonly work: WorkSummary;
   readonly options: ElefMountOptions;
-  readonly onChanged: (notice: string | null) => void;
+  readonly onChanged: (notice: string | null, tone?: NoticeTone) => void;
 }): JSX.Element {
   async function remove(): Promise<void> {
     try {
@@ -281,7 +286,10 @@ function DeleteControl({
       options.onLibraryEvent?.({ type: "deleted", work });
       onChanged(options.operationNotice?.("deleted", work) ?? null);
     } catch (error) {
-      onChanged(error instanceof Error ? error.message : String(error));
+      // A cancelled delete (dismissed native confirmation) is a no-op, not
+      // a failure: the work is untouched and no notice is shown.
+      if (isCancelled(error)) return;
+      onChanged(error instanceof Error ? error.message : String(error), "error");
     }
   }
 

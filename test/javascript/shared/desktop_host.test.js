@@ -7,7 +7,7 @@ import { parseHTML } from "linkedom"
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..")
 const read = relative => readFile(path.join(root, relative), "utf8")
-const [hostTemplate, shellStyles, applicationStyles, application, bootstrap, editorRuntime, build, editorView, libraryView, fileLibraryTransport] = await Promise.all([
+const [hostTemplate, shellStyles, applicationStyles, application, bootstrap, editorRuntime, build, editorView, clientLibrary, fileLibraryTransport] = await Promise.all([
   read("app/views/desktop_host.html"),
   read("app/assets/stylesheets/file_library_host.css"),
   read("app/assets/stylesheets/application.css"),
@@ -16,7 +16,7 @@ const [hostTemplate, shellStyles, applicationStyles, application, bootstrap, edi
   read("app/javascript/lib/editor_runtime.js"),
   read("desktop/frontend/build.mjs"),
   read("app/javascript/lib/editor_view.js"),
-  read("app/javascript/lib/library_view.js"),
+  read("packages/client/src/features/library/LibraryApp.tsx"),
   read("desktop/frontend/src/file-library-transport.js")
 ])
 const authoringMarkup = await read("app/views/shared/_authoring_settings_dialog.html.erb")
@@ -28,7 +28,10 @@ const autosaveController = await read("app/javascript/controllers/autosave_contr
 const workSession = await read("app/javascript/lib/work_session.js")
 const quietSavePolicy = await read("desktop/frontend/src/quiet_save_policy.js")
 const { document } = parseHTML(page)
-const emptyAction = page.match(/<template data-library-view-slot="empty-action">([\s\S]*?)<\/template>/)?.[1] || ""
+// The empty-library call to action is client-owned now; the host template
+// carries no empty-action slot. Assert the shared button classes in the
+// client source that renders them.
+const emptyAction = clientLibrary.match(/id="empty-library"([\s\S]*?)<\/div>\s*<p id="library-no-results"/)?.[0] || ""
 
 test("the desktop packages Rails-owned host markup and styles", () => {
   assert.deepEqual(
@@ -73,7 +76,7 @@ test("the desktop packages Rails-owned host markup and styles", () => {
   assert.match(applicationStyles, /\.library-shared-view \.library-card:hover\s*\{[^}]*border-color:.*!important/)
   assert.match(applicationStyles, /\.library-shared-view h1,\s*\.library-shared-view h2,\s*\.library-shared-view h3\s*\{[^}]*font-family: var\(--oradia-serif\)/)
   assert.match(applicationStyles, /\.library-shared-view \.button:not\(\.primary\)\s*\{[^}]*var\(--sidebar, var\(--oradia-slate-800\)\)/)
-  assert.match(emptyAction, /class="button primary inline-flex[^\"]+"/)
+  assert.match(emptyAction, /class(Name)?="button primary inline-flex[^\"]+"/)
   assert.match(applicationStyles, /\.library-shared-view \.button\.primary\s*\{/)
 })
 
@@ -165,8 +168,8 @@ test("the desktop host defaults to Rails' Visual mode and gates it until preview
   const editorController = await read("app/javascript/controllers/editor_controller.js")
   assert.match(editorController, /this\.form\?\.dispatchEvent\(new CustomEvent\("elef:editor-mode-change"/)
   assert.match(application, /theme: "dark"/)
-  assert.match(application, /preview: deck => void openDeck\(deck\.id\)/)
-  assert.match(application, /present: deck =>\s*\{[\s\S]*?startPresentation\(\)/)
+  assert.match(application, /void openDeck\(target\.workId\)/)
+  assert.match(application, /presentWork: work => \{[\s\S]*?startPresentation\(\)/)
   assert.match(application, /configureEditorKind\(elements\.editorField\.closest\("\.editor-shell"\), isDocument \? "document" : "presentation"/)
   assert.doesNotMatch(application, /elements\.editorInput\.name = isDocument/)
   assert.match(editorView, /export function configureEditorKind\(root, kind/)
@@ -197,14 +200,15 @@ test("the editor host uses the shared editor markup rather than a second copy", 
 
 test("the file-backed host mounts the shared library view and graph", () => {
   assert.ok(document.querySelector("#library-view-mount"))
-  assert.match(application, /renderLibraryView\(document\.querySelector\("#library-view-mount"\)/)
-  assert.match(application, /setLibraryViewTab\(document\.querySelector\("#library-view-mount"\)/)
-  assert.doesNotMatch(application, /elements\.description\.textContent|elements\.graphView\.hidden = libraryTab/)
-  assert.match(libraryView, /id="show-deck-list" class="library-tab" data-library-tab="all"/)
-  assert.match(libraryView, /id="show-documents" class="library-tab" data-library-tab="documents"/)
-  assert.match(libraryView, /id="show-presentations" class="library-tab" data-library-tab="presentations"/)
-  assert.match(libraryView, /id="document-graph-view"/)
-  assert.doesNotMatch(libraryView, /show-document-graph/)
+  assert.match(application, /shell = await mountElef\(mount, createLibraryHost\(\), \{/)
+  assert.match(application, /onLibraryEvent: handleLibraryEvent/)
+  assert.doesNotMatch(application, /renderLibraryView|setLibraryViewTab|renderDecks/)
+  assert.match(clientLibrary, /show-deck-list/)
+  assert.match(clientLibrary, /show-documents/)
+  assert.match(clientLibrary, /show-presentations/)
+  assert.match(clientLibrary, /data-library-tab=\{name\}/)
+  assert.match(clientLibrary, /id="document-graph-view"/)
+  assert.match(application, /mount\.querySelector\("#document-graph-view"\)/)
 })
 
 test("the Rails-owned application loads shared editor and graph controllers on demand", () => {

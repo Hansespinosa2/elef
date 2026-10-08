@@ -85,7 +85,13 @@ export function createTauriHost({ invoke, readExportFile }) {
       return summary(deck);
     },
     async deleteWork(workId) {
-      await call("delete_deck", { id: workId });
+      const result = await call("delete_deck", { id: workId });
+      // The backend mediates deletion with a native Trash confirmation; a
+      // dismissed dialog resolves instead of rejecting, so translate the
+      // negative ack into the port-level cancellation the client swallows.
+      if (result && result.deleted === false) {
+        throw { code: "cancelled", message: "The deletion was cancelled.", retryable: false };
+      }
       baseHashes.delete(workId);
     },
   };

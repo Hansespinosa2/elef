@@ -34,9 +34,16 @@ const appSourceAlias = {
       // resolve the package barrel directly so Rails and desktop share one copy.
       const workspaceMatch = /^@elef\/([^/]+)(\/[^/]+)?$/.exec(args.path)
       if (workspaceMatch) {
+        // The client ships a committed self-contained dist (React included)
+        // that both hosts consume byte-identically, following the renderer
+        // precedent; the desktop never re-bundles client source.
+        if (workspaceMatch[1] === "client" && !workspaceMatch[2]) {
+          return { path: path.join(repoRoot, "packages", "client", "dist", "elef-client.mjs") }
+        }
         const manifest = JSON.parse(await readFile(path.join(repoRoot, "packages", workspaceMatch[1], "package.json"), "utf8"))
         const subpath = workspaceMatch[2] ? `.${workspaceMatch[2]}` : "."
-        const entry = manifest.exports?.[subpath]
+        const exported = manifest.exports?.[subpath]
+        const entry = typeof exported === "string" ? exported : exported?.default
         if (!entry) throw new Error(`Workspace package @elef/${workspaceMatch[1]} has no export ${subpath}.`)
         return { path: path.join(repoRoot, "packages", workspaceMatch[1], entry) }
       }
