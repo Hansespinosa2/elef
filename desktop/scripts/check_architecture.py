@@ -111,6 +111,35 @@ for shared_selector in (
     ".app-dialog",
 ):
     assert shared_selector in shared_application_styles, f"shared library styles must be owned by application.css: {shared_selector}"
+shared_settings_sources = [
+    (REPO_ROOT / "packages" / "client" / "src" / "features" / "settings" / name).read_text()
+    for name in ("SettingsApp.tsx", "AuthoringDialog.tsx")
+]
+shared_settings_classes = set()
+for source in shared_settings_sources:
+    for class_list in re.findall(r"""\bclass(?:Name)?\s*=\s*['"]([^'"]*)['"]""", source):
+        shared_settings_classes.update(class_list.split())
+duplicate_settings_styles = shared_settings_classes & host_styled_classes
+# dialog-copy is generic across unrelated native dialogs and shared views,
+# like is-active above; the component classes themselves must stay off the
+# native host stylesheet.
+duplicate_settings_styles.discard("dialog-copy")
+assert not duplicate_settings_styles, f"shared settings UI classes must not be styled by the host stylesheet: {sorted(duplicate_settings_styles)}"
+for shared_selector in (
+    ".settings-card",
+    ".settings-control",
+    ".authoring-entry-card",
+    ".authoring-entry-actions",
+    ".authoring-entry-form",
+    ".snippet-card",
+    ".snippet-example-preview",
+    ".snippet-template",
+    ".math-shortcut-card",
+    ".math-shortcut-alias",
+    ".authoring-settings-status",
+    ".authoring-settings-list",
+):
+    assert shared_selector in shared_application_styles, f"shared settings styles must be owned by application.css: {shared_selector}"
 web_shell = (REPO_ROOT / "app" / "views" / "library" / "shell.html.erb").read_text()
 web_controller = (REPO_ROOT / "app" / "javascript" / "controllers" / "client_shell_controller.js").read_text()
 client_index = (REPO_ROOT / "packages" / "client" / "src" / "index.ts").read_text()

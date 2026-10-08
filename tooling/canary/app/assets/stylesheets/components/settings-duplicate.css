@@ -1,0 +1,4 @@
+/* Deliberate R11 canary: a second settings stylesheet must be rejected as a
+   duplicate styles owner. Staged over a copy of app/assets/stylesheets, so
+   the self-test sees two *settings*.css files and fails closed. */
+.elef-app .settings-card { outline: 5px solid red; }

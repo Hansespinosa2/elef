@@ -30,6 +30,10 @@ Rules (constitution section 4, Phase 01 plan section 8):
   R10 client features stay isolated and acyclic (P04-06): no imports
       across features/ subdirectories, ui/ imports neither features/ nor
       application/, and the relative-import graph has no cycle.
+  R11 product settings styles have one owner (P05-04): exactly one
+      *settings*.css exists outside generated, vendored, staged and
+      review checkouts (the shared application.css partial both hosts
+      compile); a second settings stylesheet is a duplicate owner.
 
 Usage:
   tooling/check_boundaries.py                 enforce R1-R5 on the repo
@@ -290,6 +294,31 @@ def check_client_isolation() -> list[str]:
     return violations
 
 
+SETTINGS_STYLESHEET_OWNER = Path("app/assets/stylesheets/components/settings.css")
+
+# Directory names that never hold a styles owner: generated bundles,
+# vendored code, staged canary fixtures, and disposable review/gate
+# checkouts (which duplicate the whole tree, owner included).
+SETTINGS_STYLE_EXCLUDED_PARTS = frozenset(
+    {"node_modules", "dist", "dist-e2e", "builds", "tmp", ".git", "canary"}
+)
+
+
+def check_settings_styles() -> list[str]:
+    violations = []
+    found = sorted(
+        str(path.relative_to(ROOT))
+        for path in ROOT.rglob("*settings*.css")
+        if path.is_file() and SETTINGS_STYLE_EXCLUDED_PARTS.isdisjoint(path.parts)
+    )
+    if found != [SETTINGS_STYLESHEET_OWNER.as_posix()]:
+        violations.append(
+            "R11 settings styles must live only in "
+            f"{SETTINGS_STYLESHEET_OWNER.as_posix()}: found {found}"
+        )
+    return violations
+
+
 def check_no_reinterpretation() -> list[str]:
     violations = []
     scopes = [ROOT / "app" / "lib", ROOT / "crates", ROOT / "desktop" / "src-tauri"]
@@ -371,6 +400,7 @@ def run_all() -> list[str]:
         + check_no_reinterpretation()
         + check_client_host_free()
         + check_client_isolation()
+        + check_settings_styles()
     )
 
 
@@ -390,6 +420,10 @@ def self_test() -> int:
         shutil.copytree(ROOT / "crates", stage / "crates")
         shutil.copytree(ROOT / "tests", stage / "tests")
         shutil.copytree(ROOT / "app" / "lib", stage / "app" / "lib")
+        shutil.copytree(
+            ROOT / "app" / "assets" / "stylesheets",
+            stage / "app" / "assets" / "stylesheets",
+        )
         for fixture in sorted(CANARY.rglob("*")):
             if not fixture.is_file():
                 continue
@@ -402,7 +436,7 @@ def self_test() -> int:
             found = run_all()
         finally:
             ROOT, PACKAGES = old_root, old_packages
-    expected = {"R1", "R2", "R4", "R6", "R7", "R8", "R9", "R10"}
+    expected = {"R1", "R2", "R4", "R6", "R7", "R8", "R9", "R10", "R11"}
     seen = {line.split()[0] for line in found}
     missing = expected - seen
     if missing:
@@ -422,7 +456,7 @@ def main(argv: list[str]) -> int:
         print(violation, file=sys.stderr)
     if violations:
         return 1
-    print("Architecture boundaries hold: contracts pure, no deep imports, local-store Tauri-free, adapters transport-injected, packages directed and pure, no Work reinterpretation, client host-free and isolated.")
+    print("Architecture boundaries hold: contracts pure, no deep imports, local-store Tauri-free, adapters transport-injected, packages directed and pure, no Work reinterpretation, client host-free and isolated, settings styles single-owned.")
     return 0
 
 
