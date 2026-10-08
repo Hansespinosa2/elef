@@ -405,7 +405,7 @@ function CardPreview({
       if (preview === null) return;
       if (preview.closest("[hidden]") !== null) {
         // The library hid (the editor opened) while this load waited: stand
-        // down so invisible cards never spend fetches or main-thread
+        // down so cards out of view never spend fetches or main-thread
         // renders. With an observer the visibility effect resubscribes and
         // restarts the load on return; without one the key stays clear so
         // the next parent render retries, and no state churns while hidden.
