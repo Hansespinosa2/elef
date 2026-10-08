@@ -85,6 +85,30 @@ export function LibraryApp({ host, initialFilter, options, registerControl }: Li
     void reload();
   }, [reload]);
 
+  // Prefetch the deferred preview renderer on the first post-mount idle
+  // turn: the first card preview would otherwise parse ~600KB of KaTeX,
+  // highlight.js and markdown-it beside its snapshot, and a deck open that
+  // follows the list would share that parse. Best effort; a failed prefetch
+  // is retried by the preview load itself and degrades as usual.
+  useEffect(() => {
+    let cancelled = false;
+    const idle = globalThis.requestIdleCallback;
+    const schedule =
+      typeof idle === "function"
+        ? (callback: () => void): void => {
+            idle(() => callback(), { timeout: 2000 });
+          }
+        : (callback: () => void): void => {
+            setTimeout(callback, 0);
+          };
+    schedule(() => {
+      if (!cancelled) void import("@elef/client/preview-core").catch(() => {});
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   useEffect(() => {
     registerControl?.({
       reload: () => reload(),

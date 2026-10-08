@@ -490,7 +490,7 @@ test("card previews wait for an idle turn when a scheduler exists", async () => 
     try {
       await settled();
       assert.deepEqual(seen, [], "no preview fetch before the idle turn");
-      assert.deepEqual(seenOptions, [{ timeout: 1000 }, { timeout: 1000 }]);
+      assert.deepEqual(seenOptions, [{ timeout: 2000 }, { timeout: 1000 }, { timeout: 1000 }]);
       await act(async () => {
         idles.splice(0).forEach((run) => run());
       });
