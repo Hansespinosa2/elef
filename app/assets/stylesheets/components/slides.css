@@ -59,7 +59,11 @@
 .presentation-editor-projection .slide { border-color: var(--work-editor-slide-border); }
 
 .slide-content {
-  display: contents;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  width: 100%;
 }
 
 .slide-margin {
@@ -137,6 +141,7 @@
   flex-direction: column;
   gap: 0.75rem;
   min-height: 0;
+  position: relative;
 }
 
 .slide-region .slide-block {
@@ -237,6 +242,11 @@
 
 .slide .slide-block.position-middle { margin-bottom: auto; margin-top: auto; }
 .slide .slide-block.position-bottom { margin-top: auto; }
+
+.presentation-surface .elef-art {
+  --art-lead-size: var(--art-presentation-lead-size);
+  --art-body-size: var(--art-presentation-body-size);
+}
 
 .slide h1 { font-size: 7rem; line-height: 0.95; }
 .slide h2 { font-size: 5rem; }

@@ -22,6 +22,7 @@ export default class extends Controller {
     this.projectionFresh = true
     this.serverWarnings = [...this.warningsTarget.querySelectorAll("li")].map((item) => item.textContent)
     this.localWarnings = []
+    this.artWarnings = new Map()
     this.focusoutHandler = (event) => {
       // A block's blur handler may mark it read-only before this bubbling
       // listener runs, so identify the editor block independently of its
@@ -37,9 +38,11 @@ export default class extends Controller {
     }
     this.localPreviewError = (event) => this.handleLocalPreviewError(event)
     this.localPreviewRecovered = () => this.handleLocalPreviewRecovered()
+    this.artDiagnostic = (event) => this.handleArtDiagnostic(event)
     this.element.addEventListener("focusout", this.focusoutHandler)
     this.element.addEventListener("elef:live-preview-error", this.localPreviewError)
     this.element.addEventListener("elef:live-preview-recovered", this.localPreviewRecovered)
+    this.element.addEventListener("elef:art-diagnostic", this.artDiagnostic)
   }
 
   disconnect() {
@@ -51,6 +54,7 @@ export default class extends Controller {
     this.element.removeEventListener("focusout", this.focusoutHandler)
     this.element.removeEventListener("elef:live-preview-error", this.localPreviewError)
     this.element.removeEventListener("elef:live-preview-recovered", this.localPreviewRecovered)
+    this.element.removeEventListener("elef:art-diagnostic", this.artDiagnostic)
     if (this.element.previewController === this) delete this.element.previewController
   }
 
@@ -229,6 +233,8 @@ export default class extends Controller {
 
     const scrollLeft = this.containerTarget.scrollLeft
     const scrollTop = this.containerTarget.scrollTop
+    this.artWarnings.clear()
+    this.renderWarnings(this.serverWarnings)
     recordPreviewTrace("preview-install-start")
     installPreviewHtml(this.containerTarget, payload.html)
     recordPreviewTrace("preview-install-ready")
@@ -266,7 +272,7 @@ export default class extends Controller {
 
   renderWarnings(warnings) {
     this.serverWarnings = Array.isArray(warnings) ? warnings : []
-    const visibleWarnings = [...this.localWarnings, ...this.serverWarnings]
+    const visibleWarnings = [...this.localWarnings, ...this.artWarnings.values(), ...this.serverWarnings]
     const list = this.warningsTarget.querySelector("ul")
     list.replaceChildren()
     visibleWarnings.forEach((warning) => {
@@ -275,6 +281,15 @@ export default class extends Controller {
       list.append(item)
     })
     this.warningsTarget.hidden = visibleWarnings.length === 0
+  }
+
+  handleArtDiagnostic(event) {
+    const root = event.target?.closest?.("[data-elef-art-root]")
+    if (!root) return
+    const code = event.detail?.code
+    if (code && event.detail?.message) this.artWarnings.set(root, event.detail.message)
+    else this.artWarnings.delete(root)
+    this.renderWarnings(this.serverWarnings)
   }
 
   handleLocalPreviewError(event) {

@@ -1,3 +1,5 @@
+import { ART_DIAGNOSTICS, resolveArtBindings } from "./art_source.js"
+
 const THEMES = new Set(["light", "dark", "match"])
 const TYPOGRAPHIES = new Set(["book", "modern", "technical"])
 
@@ -32,9 +34,12 @@ export function buildEditorStructure(source, { sourceName = "Untitled presentati
   const warnings = []
 
   ranges.forEach((range, index) => {
-    const normalizedSection = normalizeSection(source.slice(range.start, range.end).replace(/\r\n?/g, "\n"))
-    const metadata = slideMetadata(normalizedSection, context, mode)
-    const result = editorBlocks(source, range.start, range.end, metadata, index, mode)
+    const sectionSource = source.slice(range.start, range.end)
+    const normalizedSection = normalizeSection(sectionSource.replace(/\r\n?/g, "\n"))
+    const idPrefix = `slide-${index + 1}-art`
+    const artResolution = resolveArtBindings(sectionSource, { idPrefix })
+    const metadata = slideMetadata(normalizedSection, context, mode, idPrefix)
+    const result = editorBlocks(source, range.start, range.end, metadata, index, mode, artResolution)
     let blocks = result.blocks
     let regions = result.regions
     if (mode === "document") {
@@ -53,13 +58,27 @@ export function buildEditorStructure(source, { sourceName = "Untitled presentati
         : { start: range.delimiterStart, end: range.delimiterEnd },
       blocks,
       directives: result.directives,
+      art_diagnostics: artResolution.diagnostics.map(diagnostic => ({
+        ...diagnostic,
+        slide_id: `slide-${index + 1}`,
+        source_range: {
+          start: range.start + diagnostic.source_range.start,
+          end: range.start + diagnostic.source_range.end
+        }
+      })),
       editable_regions: regions
     }
     map.slides.push(slideMap)
     map.directives.push(...result.directives)
+    if (slideMap.art_diagnostics.length) {
+      map.art_diagnostics ||= []
+      map.art_diagnostics.push(...slideMap.art_diagnostics)
+    }
     map.editable_regions.push(...regions)
     parsedSlides.push({ ...metadata, map: slideMap })
     warnings.push(...metadata.warnings)
+    for (const diagnostic of slideMap.art_diagnostics) warnings.push(artDiagnosticMessage(diagnostic.code))
+    if (!slideMap.art_diagnostics.length) delete slideMap.art_diagnostics
   })
 
   return {
@@ -181,7 +200,7 @@ function slideSourceRanges(source, bodyStart) {
   return ranges
 }
 
-function editorBlocks(source, start, end, slide, slideIndex, mode) {
+function editorBlocks(source, start, end, slide, slideIndex, mode, artResolution) {
   const lines = sourceLines(source, start, end)
   const blocks = []
   const directives = []
@@ -215,6 +234,16 @@ function editorBlocks(source, start, end, slide, slideIndex, mode) {
       source_range: { ...range },
       content_range: contentRange
     }
+    const artBinding = artResolution.bindings.find(binding => start + binding.target_range.start === blockStart)
+    if (artBinding) {
+      block.art = {
+        directive_id: artBinding.directive_id,
+        source_range: {
+          start: start + artBinding.directive_range.start,
+          end: start + artBinding.directive_range.end
+        }
+      }
+    }
     const region = editableRegion(markdown, blockStart, id, slideIndex, blockIndex, kind, slide, mode)
     block.editable_region_id = region.id
     blocks.push(block)
@@ -247,13 +276,21 @@ function editorBlocks(source, start, end, slide, slideIndex, mode) {
       return
     }
     if (!line.text.trim()) {
-      flush()
+      const inArtList = artResolution.bindings.some(binding => lineIndex >= binding.target_lines.start && lineIndex < binding.target_lines.end)
+      if (inArtList) current.push(line)
+      else flush()
       return
     }
     if (/^\s*:::/.test(line.text)) {
       flush()
       const text = line.text.trim()
+      const artDirective = artResolution.directives.find(directive => directive.line === lineIndex)
       const directive = editorDirective(line, text, slideIndex, directives.length)
+      if (artDirective) {
+        directive.id = artDirective.id
+        directive.type = artDirective.type === "art" ? "art" : "art_invalid"
+        directive.art_diagnostic = artDirective.type === "art_invalid" ? ART_DIAGNOSTICS.INVALID_SYNTAX : null
+      }
       directives.push(directive)
       const position = positionFromBlock(text)
       if (position) {
@@ -493,13 +530,18 @@ function unsupportedEscapedPunctuation(markdown) {
   return false
 }
 
-function slideMetadata(markdown, context, mode) {
+function slideMetadata(markdown, context, mode, artIdPrefix) {
   let normalized = markdown.replace(/\r\n?/g, "\n")
   const margin = mode === "presentation"
     ? parseMarginDirectives(normalized, context)
     : { content: normalized, section: null, subsection: null, footnote: null, warnings: [] }
   normalized = margin.content
-  const parsed = parseBlocks(normalized)
+  const artResolution = resolveArtBindings(normalized, { idPrefix: artIdPrefix })
+  const lines = normalized.split("\n")
+  for (const directive of artResolution.directives) {
+    if (directive.type === "art") lines[directive.line] = ""
+  }
+  const parsed = parseBlocks(lines.join("\n"), artResolution)
   const layout = inferLayout(parsed.blocks)
   const title = ["two-column", "three-column"].includes(layout) ? parsed.blocks[0]?.markdown ?? null : null
   const regions = columnRegions(parsed.blocks, layout)
@@ -593,21 +635,22 @@ function marginDirective(line) {
   return { type: match[1], malformed: true }
 }
 
-function parseBlocks(markdown) {
-  const rawBlocks = markdownBlocks(markdown)
+function parseBlocks(markdown, artResolution) {
+  const rawBlocks = markdownBlocks(markdown, artResolution)
   const blocks = []
   const warnings = []
   for (let index = 0; index < rawBlocks.length;) {
-    const block = rawBlocks[index]
+    const record = rawBlocks[index]
+    const block = record.markdown
     const position = positionFromBlock(block)
     if (position) {
-      const closingOffset = rawBlocks.slice(index + 1).indexOf(":::")
+      const closingOffset = rawBlocks.slice(index + 1).findIndex(candidate => candidate.markdown === ":::")
       if (closingOffset >= 0) {
         const closing = index + 1 + closingOffset
-        for (const grouped of rawBlocks.slice(index + 1, closing)) if (grouped) blocks.push({ markdown: grouped, position })
+        for (const grouped of rawBlocks.slice(index + 1, closing)) if (grouped.markdown) blocks.push(parsedBlock(grouped, position, artResolution))
         index = closing + 1
       } else if (rawBlocks[index + 1] !== undefined) {
-        blocks.push({ markdown: rawBlocks[index + 1], position })
+        blocks.push(parsedBlock(rawBlocks[index + 1], position, artResolution))
         index += 2
       } else {
         warnings.push("Alignment directive has no following Markdown block.")
@@ -617,19 +660,41 @@ function parseBlocks(markdown) {
       warnings.push("Unknown or malformed presentation directive was removed.")
       index += 1
     } else {
-      blocks.push({ markdown: block, position: null })
+      blocks.push(parsedBlock(record, null, artResolution))
       index += 1
     }
   }
   return { blocks, warnings }
 }
 
-function markdownBlocks(markdown) {
+function parsedBlock(record, position, artResolution) {
+  const block = { markdown: record.markdown, position }
+  const binding = artResolution.bindings.find(candidate => candidate.target_lines.start === record.startLine && candidate.target_lines.end === record.endLine)
+  if (binding) block.art = { directive_id: binding.directive_id }
+  return block
+}
+
+function markdownBlocks(markdown, artResolution) {
   const blocks = []
   let current = []
+  let currentStartLine = null
+  let currentEndLine = null
+  const flush = () => {
+    if (!current.length) return
+    blocks.push({ markdown: current.join("\n"), startLine: currentStartLine, endLine: currentEndLine })
+    current = []
+    currentStartLine = null
+    currentEndLine = null
+  }
+  const pushLine = (line, index) => {
+    if (!current.length) currentStartLine = index
+    current.push(line)
+    currentEndLine = index + 1
+  }
+  const artTargetLine = index => artResolution.bindings.some(binding => index >= binding.target_lines.start && index < binding.target_lines.end)
   let fence = null
   let mathFence = null
-  for (const line of markdown.split("\n")) {
+  for (const [index, line] of markdown.split("\n").entries()) {
     const incoming = fenceMarker(line)
     if (fence) fence = toggleFence(fence, incoming)
     else if (incoming) fence = incoming
@@ -643,17 +708,16 @@ function markdownBlocks(markdown) {
       if (opening) mathFence = opening
     }
     if (!fence && !mathFence && /^\s*:::/.test(line)) {
-      if (current.length) blocks.push(current.join("\n"))
-      blocks.push(line.trim())
-      current = []
+      flush()
+      blocks.push({ markdown: line.trim(), startLine: index, endLine: index + 1 })
     } else if (!line.trim() && !fence && !mathFence) {
-      if (current.length) blocks.push(current.join("\n"))
-      current = []
+      if (artTargetLine(index)) pushLine(line, index)
+      else flush()
     } else {
-      current.push(line)
+      pushLine(line, index)
     }
   }
-  if (current.length) blocks.push(current.join("\n"))
+  flush()
   return blocks
 }
 
@@ -669,6 +733,18 @@ function positionFromBlock(block) {
   }
   if (!horizontal && !vertical) return null
   return { horizontal: horizontal || "left", vertical: vertical || "top", vertical_explicit: Boolean(vertical) }
+}
+
+function artDiagnosticMessage(code) {
+  const messages = {
+    [ART_DIAGNOSTICS.NO_LIST_TARGET]: "Art needs a root Markdown list immediately after its directive.",
+    [ART_DIAGNOSTICS.INVALID_SYNTAX]: "Art directive syntax is invalid. Use :::art with no arguments.",
+    [ART_DIAGNOSTICS.UNSUPPORTED_CONTENT]: "Art contains unsupported content; the complete Markdown list is shown.",
+    [ART_DIAGNOSTICS.NO_FIT]: "Art does not fit the fixed slide; all authored content remains available.",
+    [ART_DIAGNOSTICS.ITEM_TOO_TALL]: "An Art item is taller than a document page and remains intact.",
+    [ART_DIAGNOSTICS.INTERNAL_ERROR]: "Art could not be laid out; the complete Markdown list remains available."
+  }
+  return messages[code] || "Art reported an unknown diagnostic."
 }
 
 function inferLayout(blocks) {

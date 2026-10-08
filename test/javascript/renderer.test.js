@@ -129,6 +129,52 @@ test("presentation editor projection exposes Stimulus canvas targets to host con
   assert.match(preview.html, /data-presentation-canvas-target="canvas"/)
 })
 
+test("Art derives Peers or Sequence from the native root list and preserves nested list semantics", () => {
+  const peers = renderPreview({
+    kind: "document",
+    source: ":::art\n- Research\n  1. Interview users\n  2. Review competitors\n- Design\n  - Prototype"
+  })
+  const sequence = renderPreview({
+    kind: "document",
+    source: ":::art\n3. Alpha\n4. Beta\n   - detail"
+  })
+
+  assert.match(peers.html, /<section class="elef-art"[^>]*data-art-mode="peers"[^>]*data-art-density="rich"/)
+  assert.match(peers.html, /<ul class="elef-art-list">/)
+  assert.match(peers.html, /<ol>\s*<li>Interview users<\/li>/)
+  assert.match(peers.html, /<ul>\s*<li>Prototype<\/li>/)
+  assert.match(sequence.html, /<section class="elef-art"[^>]*data-art-mode="sequence"[^>]*data-art-density="rich"/)
+  assert.match(sequence.html, /<ol class="elef-art-list" start="3">/)
+  assert.match(sequence.html, /data-art-layout="sequence-vertical" data-art-settled="true"/)
+  assert.doesNotMatch(peers.html, /:::art/)
+})
+
+test("Art has a complete server-rendered fixed-host default and unsupported content falls back as a whole list", () => {
+  const pending = renderPreview({ source: ":::art\n1. Discover\n2. Design\n3. Build\n4. Launch" })
+  const unsupported = renderPreview({
+    kind: "document",
+    source: ":::art\n- Research\n  - Review evidence\n\n  ~~~js\n  const answer = 42\n  ~~~"
+  })
+
+  assert.match(pending.html, /data-art-host="fixed" data-art-overfull="false"/)
+  assert.match(pending.html, /data-art-status="pending" data-art-layout="sequence-vertical" data-art-settled="false" data-art-mode="sequence" data-art-density="compact"/)
+  assert.match(unsupported.html, /data-art-status="fallback-unsupported" data-art-layout="plain-list"/)
+  assert.match(unsupported.html, /data-art-diagnostic="ART_UNSUPPORTED_CONTENT"/)
+  assert.match(unsupported.html, /answer =/)
+  assert.deepEqual(unsupported.editor_map.art_diagnostics.map(diagnostic => diagnostic.code), ["ART_UNSUPPORTED_CONTENT"])
+})
+
+test("Art CRLF source remains editable and uses the original Art directive range", () => {
+  const source = ":::art\r\n0. Zero\r\n1. One"
+  const preview = renderPreview({ kind: "document", source })
+  const block = preview.editor_map.slides[0].blocks.find(candidate => candidate.art)
+
+  assert.equal(block.markdown, "0. Zero\r\n1. One")
+  assert.deepEqual(block.art.source_range, { start: 0, end: 8 })
+  assert.match(preview.html, /contenteditable="true"/)
+  assert.match(preview.html, /<ol class="elef-art-list" start="0">/)
+})
+
 test("document projection keeps trailing list and quote lines editable", () => {
   const list = renderPreview({ kind: "document", source: "# Notes\n\n- First item\n- " }).html
   const quote = renderPreview({ kind: "document", source: "# Notes\n\n> First line\n> " }).html

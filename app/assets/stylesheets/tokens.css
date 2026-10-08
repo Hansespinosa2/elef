@@ -33,5 +33,15 @@
   --document-page-ink: var(--oradia-paper-ink);
   --document-heading-ink: var(--oradia-paper-ink);
   --document-blockquote-ink: var(--oradia-paper-muted);
+  --art-gap: 16px;
+  --art-peer-basis-compact: 200px;
+  --art-peer-basis-rich: 280px;
+  --art-sequence-min-inline: 200px;
+  --art-card-padding: 16px;
+  --art-radius: 10px;
+  --art-document-lead-size: 18px;
+  --art-document-body-size: 16px;
+  --art-presentation-lead-size: 24px;
+  --art-presentation-body-size: 18px;
   font-family: var(--oradia-sans);
 }

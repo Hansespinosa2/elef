@@ -3,6 +3,7 @@ import hljs from "highlight.js/lib/common"
 import katex from "katex"
 import { buildEditorStructure } from "./document_map.js"
 import { createDocumentLinkResolver, parseDocumentLinkAt } from "./document_links.js"
+import { analyzeArtList, ART_DIAGNOSTICS } from "./art_source.js"
 
 const SAFE_LINK = /^(?:https?:|mailto:|tel:|#|\/|\.\.?\/|[^:]*$)/i
 
@@ -242,15 +243,20 @@ function renderDocument(source, slide, style, env) {
       emptyIndex += 1
     }
     const region = mapped && regions.get(mapped.id)
-    const valid = Boolean(mapped && region?.editable && mapped.markdown === block.markdown && mapped.editable_region_id === region.id && region.block_id === mapped.id)
+    const sourceMatches = mapped?.art ? equivalentMarkdown(mapped.markdown, block.markdown) : mapped?.markdown === block.markdown
+    const valid = Boolean(mapped && region?.editable && sourceMatches && mapped.editable_region_id === region.id && region.block_id === mapped.id)
     const classes = ["document-editor-block", positionClasses(block.position)].filter(Boolean).join(" ")
     const attributes = valid
       ? `class="${classes}" data-editor-region-id="${mapped.editable_region_id}" data-editor-block-id="${mapped.id}" contenteditable="true" role="textbox" aria-label="Editable Markdown block" aria-multiline="true" spellcheck="true" data-action="input-&gt;visual-editor#projectionInput focus-&gt;visual-editor#blockFocus blur-&gt;visual-editor#blockBlur"`
       : `class="${classes}" contenteditable="false" aria-readonly="true"`
-    const structured = valid && ["list", "quote"].includes(mapped.kind)
+    const structured = valid && !mapped.art && ["list", "quote"].includes(mapped.kind)
       ? editableStructuredSource(block.markdown, mapped.kind)
       : { source: block.markdown, caretToken: null }
-    let rendered = region?.empty_heading ? "<h1><br></h1>" : renderMarkdownBlock(structured.source, env)
+    let rendered = region?.empty_heading
+      ? "<h1><br></h1>"
+      : mapped?.art
+        ? renderArtBlock(block.markdown, env, "flowing")
+        : renderMarkdownBlock(structured.source, env)
     if (valid && structured.caretToken) {
       rendered = emptyStructuredLine(rendered, structured.caretToken, mapped.kind)
     }
@@ -312,13 +318,16 @@ function renderPresentation(source, slides, style, margin, env) {
     const renderBlock = (block, blockIndex, title = false) => {
       const mapped = mappedBlocks[blockIndex]
       const region = mapped && regions.get(mapped.id)
-      const valid = Boolean(mapped && region && mapped.markdown === block.markdown && mapped.editable_region_id === region.id && region.block_id === mapped.id)
+      const sourceMatches = mapped?.art ? equivalentMarkdown(mapped.markdown, block.markdown) : mapped?.markdown === block.markdown
+      const valid = Boolean(mapped && region && sourceMatches && mapped.editable_region_id === region.id && region.block_id === mapped.id)
       const className = [title ? "slide-title" : "", "slide-block", positionClasses(block.position)].filter(Boolean).join(" ")
       const label = title ? "Editable slide title" : "Editable slide block"
       const attributes = valid
         ? `data-editor-block-id="${mapped.id}" data-editor-region-id="${region.id}" data-editor-source-editable="${region.editable}"${region.editable ? ` contenteditable="true" role="textbox" aria-label="${label}" aria-multiline="true" spellcheck="true" data-action="input-&gt;presentation-editor#blockInput focus-&gt;presentation-editor#blockFocus blur-&gt;presentation-editor#blockBlur"` : " contenteditable=\"false\" aria-readonly=\"true\""}`
         : "contenteditable=\"false\" aria-readonly=\"true\""
-      const rendered = renderMarkdownBlock(block.markdown, env)
+      const rendered = mapped?.art
+        ? renderArtBlock(block.markdown, env, "fixed")
+        : renderMarkdownBlock(block.markdown, env)
       const content = valid && mapped.kind === "image"
         ? editableMedia(rendered, block.markdown)
         : rendered
@@ -328,8 +337,11 @@ function renderPresentation(source, slides, style, margin, env) {
     const titleMarkup = slide.title ? renderBlock(blocks[0], 0, true) : ""
     const contentBlocks = slide.title ? blocks.slice(1) : blocks
     const contentOffset = slide.title ? 1 : 0
-    const slideContent = slide.title
-      ? `<div class="slide-regions">${slide.regions.map(region => `<div class="slide-region">${region.map(block => renderBlock(block, blocks.indexOf(block))).join("")}</div>`).join("")}</div>`
+   const slideContent = slide.title
+      ? `<div class="slide-regions">${slide.regions.map(region => {
+        const hostAttribute = region.some(block => block.art) ? ` data-art-host="fixed" data-art-overfull="false"` : ""
+        return `<div class="slide-region"${hostAttribute}>${region.map(block => renderBlock(block, blocks.indexOf(block))).join("")}</div>`
+      }).join("")}</div>`
       : contentBlocks.map((block, blockIndex) => renderBlock(block, blockIndex + contentOffset)).join("")
     const empty = blocks.length === 0
       ? `<div class="empty-slide"><p>Empty slide</p><button type="button" class="button secondary empty-slide-add-image" data-action="click-&gt;media#chooseForSlide" data-slide-index="${index}">Add image</button></div>`
@@ -341,9 +353,40 @@ function renderPresentation(source, slides, style, margin, env) {
     const bottomMargin = margin.slide_count || margin.footnote
       ? `<div class="slide-margin slide-margin-bottom" aria-hidden="true">${margin.slide_count ? `<span class="slide-margin-count">${index + 1} / ${slides.length}</span>` : ""}${margin.footnote && slide.footnote ? `<span class="slide-margin-footnote" aria-label="Footnote"><span class="slide-margin-footnote-marker">*</span><span class="slide-margin-footnote-text">${renderMarkdownBlock(slide.footnote, env)}</span></span>` : ""}</div>`
       : ""
-    return `<div class="slide-frame" data-controller="presentation-canvas"><section class="slide slide-${slide.layout}" data-presentation-canvas-target="canvas" aria-label="Slide ${index + 1}" data-editor-slide-id="slide-${index + 1}" data-slide-index="${index}">${toolbar}${topMargin}<div class="slide-content">${titleMarkup}${slideContent}${empty}</div>${bottomMargin}</section></div>`
+    const hostAttribute = !slide.title && contentBlocks.some(block => block.art)
+      ? " data-art-host=\"fixed\" data-art-overfull=\"false\""
+      : ""
+    return `<div class="slide-frame" data-controller="presentation-canvas"><section class="slide slide-${slide.layout}" data-presentation-canvas-target="canvas" aria-label="Slide ${index + 1}" data-editor-slide-id="slide-${index + 1}" data-slide-index="${index}">${toolbar}${topMargin}<div class="slide-content"${hostAttribute}>${titleMarkup}${slideContent}${empty}</div>${bottomMargin}</section></div>`
   }).join("")
-  return `<div class="presentation-surface work-surface slides slides-theme-${style.theme} slides-typography-${style.typography} work-theme-${style.theme} work-typography-${style.typography} presentation-editor-projection" data-controller="mermaid-diagrams" data-presentation-editor-target="canvas">${frames}</div>`
+  const artController = slides.some(slide => slide.blocks.some(block => block.art)) ? " art-layout" : ""
+  return `<div class="presentation-surface work-surface slides slides-theme-${style.theme} slides-typography-${style.typography} work-theme-${style.theme} work-typography-${style.typography} presentation-editor-projection" data-controller="mermaid-diagrams${artController}" data-presentation-editor-target="canvas">${frames}</div>`
+}
+
+function renderArtBlock(source, env, hostMode) {
+  const analysis = analyzeArtList(source)
+  let status = hostMode === "fixed" ? "pending" : "ready"
+  let layout = analysis?.mode === "sequence" ? "sequence-vertical" : "peers-wrap"
+  let diagnostic = ""
+  if (!analysis) {
+    status = "error"
+    layout = "plain-list"
+    diagnostic = ART_DIAGNOSTICS.INTERNAL_ERROR
+  } else if (!analysis.supported) {
+    status = "fallback-unsupported"
+    layout = "plain-list"
+    diagnostic = ART_DIAGNOSTICS.UNSUPPORTED_CONTENT
+  }
+
+  let content = renderMarkdownBlock(source, env)
+  content = content.replace(/<(ul|ol)(?=\s|>)/, (opening, tag) => {
+    if (/\bclass=/.test(opening)) return opening.replace(/\bclass=(['"])(.*?)\1/, (_match, quote, value) => `class=${quote}${value} elef-art-list${quote}`)
+    return `<${tag} class="elef-art-list"`
+  })
+  const modeAttribute = analysis ? ` data-art-mode="${analysis.mode}"` : ""
+  const densityAttribute = analysis ? ` data-art-density="${analysis.density}"` : ""
+  const diagnosticAttribute = diagnostic ? ` data-art-diagnostic="${diagnostic}"` : ""
+  const settled = status === "pending" ? "false" : "true"
+  return `<section class="elef-art" data-elef-art-root data-art-status="${status}" data-art-layout="${layout}" data-art-settled="${settled}"${modeAttribute}${densityAttribute}${diagnosticAttribute}>${content}</section>`
 }
 
 function editableMedia(rendered, markdown) {
@@ -369,6 +412,10 @@ function renderPositionControl(block, controller) {
 function positionClasses(position) {
   if (!position) return ""
   return [`position-${position.horizontal}`, `position-${position.vertical}`, position.vertical_explicit ? "position-vertical" : ""].filter(Boolean).join(" ")
+}
+
+function equivalentMarkdown(left, right) {
+  return String(left).replace(/\r\n?/g, "\n") === String(right).replace(/\r\n?/g, "\n")
 }
 
 function resolveAssetSource(source, env = {}) {
