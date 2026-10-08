@@ -968,7 +968,7 @@ class DesktopEditorUi {
 
   async showSourceMode() {
     const sourceMode = await $("#source-mode")
-    if ((await sourceMode.getAttribute("aria-pressed")) !== "true") await sourceMode.click()
+    if ((await $("#desktop-editor-form").getAttribute("data-editor-mode")) !== "source") await sourceMode.click()
     await browser.waitUntil(async () => (await $("#desktop-editor-form").getAttribute("data-editor-mode")) === "source", {
       timeout: 5_000,
       timeoutMsg: "The source editor did not activate after checking the rendered document link"
