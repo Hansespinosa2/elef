@@ -3,13 +3,13 @@
   "campaign_branch": "feat/refactor-desktop-and-web",
   "campaign_base_sha": "88f61a7a8ffd7c276bafcf06eee09c36a8adf134",
   "current_phase": 4,
-  "phase_state": "CHECK",
+  "phase_state": "ACT",
   "phase_base_sha": "2bdfa86d6c6651b692a9c3bf11988309d52b27be",
   "head_sha": "454880c41d2dd1c1298d51bd9de01f6d93652087",
   "review_round": 3,
   "phase_contract_sha256": "1c172f31ad0e9a4d511767a10c9439d6bff12b0fca7a4fc8b188f4fee0a0fd55",
   "frozen_plan_sha256": "e197cf4e4051f72f77261f92373182859f43cd5b88ecd13d958816e25d11846a",
-  "last_completed_phase": 3,
+  "last_completed_phase": 4,
   "last_verified_checks": [
     {
       "attempt_id": "a03b10a585714f3185ca7d32a0777989",
@@ -235,5 +235,5 @@
   },
   "pending_human_gates": [],
   "blocker": null,
-  "next_action": "Phase 04 CHECK: candidate 454880c gated PASS; independent review round 3."
+  "next_action": "Phase 04 ACT: collect round-3 PASS report."
 }
