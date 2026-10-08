@@ -8,7 +8,7 @@ class PresentationsController < ApplicationController
 
   def index
     @filter = "presentations"
-    @works = Presentation.includes(:presentation_detail, :parent).recent_first
+    @works = Presentation.includes(:presentation_detail).recent_first
     @lineage_presentations = @works.select(&:presentation?)
     @card_notes = @works.filter_map do |work|
       note = card_note(work)
