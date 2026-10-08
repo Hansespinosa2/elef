@@ -1,8 +1,10 @@
 export { mountElef } from "./application/shell.js";
-export { isSettingsRoute, parseLibraryRoute } from "./application/router.js";
+export { isSettingsRoute, parseLibraryRoute, parseSettingsRoute } from "./application/router.js";
+export type { SettingsRoute } from "./application/router.js";
 export { CREATE_WORK_EVENT } from "./features/library/LibraryApp.js";
 export { SettingsApp } from "./features/settings/SettingsApp.js";
 export type {
+  AuthoringSeam,
   CardAction,
   ElefMountOptions,
   ElefShell,

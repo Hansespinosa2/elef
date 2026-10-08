@@ -1,8 +1,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { act } from "react";
-import type { ElefHost, UpdaterSeam } from "../src/index.js";
-import { isSettingsRoute } from "../src/index.js";
+import type { AuthoringSeam, ElefHost, UpdaterSeam } from "../src/index.js";
+import { isSettingsRoute, parseSettingsRoute } from "../src/index.js";
 import type { DeviceStorage } from "../src/features/settings/vimPreferences.js";
 import {
   ENABLED_STORAGE_KEY,
@@ -72,13 +72,63 @@ function updaterHost(available: boolean, version?: string): { host: ElefHost; se
 }
 
 describe("settings route", () => {
-  it("matches /settings paths and hashes, not library routes", () => {
+  it("matches settings paths and hashes, not library routes", () => {
     assert.equal(isSettingsRoute("/settings"), true);
     assert.equal(isSettingsRoute("https://example.test/settings"), true);
     assert.equal(isSettingsRoute("/#settings"), true);
+    assert.equal(isSettingsRoute("/snippets"), true);
+    assert.equal(isSettingsRoute("/math_shortcuts/abc/edit"), true);
     assert.equal(isSettingsRoute("/"), false);
     assert.equal(isSettingsRoute("/documents"), false);
+    assert.equal(isSettingsRoute("/snippets/abc"), false);
     assert.equal(isSettingsRoute("not a url %%%"), false);
+  });
+
+  it("parses the authoring pages into registry, new, and edit targets", () => {
+    assert.deepEqual(parseSettingsRoute("/settings"), { kind: "defaults" });
+    assert.deepEqual(parseSettingsRoute("/snippets"), {
+      kind: "authoring",
+      registry: "snippets",
+      openNew: false,
+      entryId: null,
+    });
+    assert.deepEqual(parseSettingsRoute("/snippets/new"), {
+      kind: "authoring",
+      registry: "snippets",
+      openNew: true,
+      entryId: null,
+    });
+    assert.deepEqual(parseSettingsRoute("/math_shortcuts/abc/edit"), {
+      kind: "authoring",
+      registry: "math_shortcuts",
+      openNew: false,
+      entryId: "abc",
+    });
+    assert.equal(parseSettingsRoute("/documents"), null);
+  });
+
+  it("mounts the shared dialog on authoring routes with the host seam", async () => {
+    const host = typedHost();
+    const seam: AuthoringSeam = {
+      transport: {
+        readRegistries: async () => ({
+          snippets: [{ id: "s1", name: "Note", trigger: "note", category: "Markdown", body: "x" }],
+          math_shortcuts: [],
+          hashes: {},
+        }),
+        writeRegistry: async () => ({ contentHash: null }),
+      },
+    };
+    const { document } = await mountInto(host, { initialUrl: "/snippets", authoring: seam });
+    assert.notEqual(document.querySelector('section[aria-label="Authoring settings"]'), null);
+    assert.equal(document.querySelector("#authoring-settings-count")?.textContent, "1 snippet · 1 personal");
+  });
+
+  it("reports honestly when an authoring route has no host seam", async () => {
+    const host = typedHost();
+    const { document } = await mountInto(host, { initialUrl: "/snippets" });
+    assert.equal(document.querySelector('section[aria-label="Authoring settings"]'), null);
+    assert.match(document.querySelector('[role="status"]')?.textContent ?? "", /registry transport/);
   });
 
   it("round-trips workspace defaults through host.settings", async () => {

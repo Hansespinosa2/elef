@@ -1,14 +1,17 @@
 import { createElement } from "react";
+import type { ReactElement } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import type { Root } from "react-dom/client";
 import type { ElefHost } from "@elef/contracts";
 import type { ElefMountOptions, ElefShell, LibraryFilter, NoticeTone } from "./types.js";
-import { isSettingsRoute, parseLibraryRoute } from "./router.js";
+import { parseLibraryRoute, parseSettingsRoute } from "./router.js";
+import type { SettingsRoute } from "./router.js";
 import type { LibraryControl } from "../features/library/LibraryApp.js";
 import { LibraryApp } from "../features/library/LibraryApp.js";
 import type { SettingsControl } from "../features/settings/SettingsApp.js";
 import { SettingsApp } from "../features/settings/SettingsApp.js";
+import { AuthoringDialog } from "../features/settings/AuthoringDialog.js";
 
 export async function mountElef(
   hostElement: HTMLElement,
@@ -20,34 +23,62 @@ export async function mountElef(
   container.setAttribute("data-elef-shell", "true");
   hostElement.appendChild(container);
   const root: Root = createRoot(container);
-  const settings = options.initialUrl !== undefined && isSettingsRoute(options.initialUrl);
+  const settingsRoute: SettingsRoute | null =
+    options.initialUrl === undefined ? null : parseSettingsRoute(options.initialUrl);
   const route =
-    options.initialUrl === undefined || settings ? null : parseLibraryRoute(options.initialUrl);
+    options.initialUrl === undefined || settingsRoute !== null
+      ? null
+      : parseLibraryRoute(options.initialUrl);
 
   let control: LibraryControl | null = null;
   let settingsControl: SettingsControl | null = null;
+  function renderRoute(): ReactElement {
+    if (settingsRoute?.kind === "authoring") {
+      const authoring = options.authoring;
+      // The dialog UI lives in the client, but persistence is a host
+      // contribution: without the seam the route honestly reports that
+      // instead of rendering a dead form.
+      if (!authoring) {
+        return createElement(
+          "p",
+          { role: "status", className: "settings-notice" },
+          "Authoring settings need a host registry transport.",
+        );
+      }
+      return createElement(AuthoringDialog, {
+        transport: authoring.transport,
+        initialRegistry: settingsRoute.registry,
+        openNew: settingsRoute.openNew,
+        entryId: settingsRoute.entryId,
+        ...(authoring.renderExample === undefined ? {} : { renderExample: authoring.renderExample }),
+        ...(authoring.reloadEditorRegistry === undefined
+          ? {}
+          : { reloadEditorRegistry: authoring.reloadEditorRegistry }),
+      });
+    }
+    if (settingsRoute !== null) {
+      return createElement(SettingsApp, {
+        host,
+        options,
+        registerControl: (next) => {
+          settingsControl = next;
+        },
+      });
+    }
+    return createElement(LibraryApp, {
+      host,
+      initialFilter: route?.filter ?? "all",
+      options,
+      registerControl: (next) => {
+        control = next;
+      },
+    });
+  }
   function render(): void {
     // Synchronous commit: slot adoption below and host paint measurements
     // need the committed DOM, not a scheduled render.
     flushSync(() => {
-      root.render(
-        settings
-          ? createElement(SettingsApp, {
-              host,
-              options,
-              registerControl: (next) => {
-                settingsControl = next;
-              },
-            })
-          : createElement(LibraryApp, {
-              host,
-              initialFilter: route?.filter ?? "all",
-              options,
-              registerControl: (next) => {
-                control = next;
-              },
-            }),
-      );
+      root.render(renderRoute());
     });
   }
 

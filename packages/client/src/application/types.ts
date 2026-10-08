@@ -1,4 +1,5 @@
 import type { ElefHost, WorkKind, WorkSummary } from "@elef/contracts";
+import type { AuthoringRegistryTransport } from "../features/settings/authoringRegistry.js";
 
 export type { WorkKind };
 
@@ -31,6 +32,16 @@ export interface UpdaterSeam {
   checkForUpdate(): Promise<UpdaterStatus>;
 }
 
+// Optional host contribution for the shared authoring dialog. The dialog UI
+// and registry semantics live in the client; only persistence (plus the
+// editor-registry reload and markdown example rendering) differs per host,
+// so hosts inject their transport instead of the client branching on hosts.
+export interface AuthoringSeam {
+  readonly transport: AuthoringRegistryTransport;
+  readonly renderExample?: (source: string) => string | Promise<string>;
+  readonly reloadEditorRegistry?: () => Promise<void>;
+}
+
 export interface ElefMountOptions {
   readonly initialUrl?: string;
   readonly navigate?: (
@@ -46,6 +57,7 @@ export interface ElefMountOptions {
   readonly extraCardActions?: (work: WorkSummary) => readonly CardAction[];
   readonly operationNotice?: (operation: LibraryOperation, work: WorkSummary) => string | null;
   readonly updater?: UpdaterSeam;
+  readonly authoring?: AuthoringSeam;
   readonly onLibraryEvent?: (event: {
     readonly type: LibraryOperation;
     readonly work: WorkSummary;
