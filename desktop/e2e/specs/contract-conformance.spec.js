@@ -1,7 +1,7 @@
 import { browser } from "@wdio/globals"
 import { readFile } from "node:fs/promises"
 import { runSuite } from "../../../tests/host-conformance/suite.js"
-import { createTauriHost, tauriPolicy } from "../../../tests/host-conformance/adapters/tauri-invoke-host.js"
+import { createTauriHost, tauriPolicy } from "../../frontend/src/tauri-host.js"
 
 // Contract conformance against the real desktop backend: every suite case
 // drives Tauri invoke inside the app webview. Dialog-mediated delete stays
