@@ -762,17 +762,42 @@ class DesktopEditorUi {
         editor?.view.focus()
         return {
           editorHasFocus: Boolean(editor?.view.hasFocus),
-          contentDomActive: document.activeElement === editor?.view.contentDOM
+          contentDomActive: document.activeElement === editor?.view.contentDOM,
+          selectionStart: editor?.selectionStart,
+          valueLength: editor?.value.length
         }
       })
       if (!focus?.editorHasFocus || !focus.contentDomActive) {
         throw new Error(`CodeMirror did not receive focus before native typing: ${JSON.stringify(focus)}`)
       }
+      if (focus.selectionStart !== focus.valueLength) {
+        throw new Error(`CodeMirror did not retain the end-of-source caret before native typing: ${JSON.stringify(focus)}`)
+      }
     }
 
-    typeNativeText("$")
-    typeNativeText("$")
-    sendNativeKey("Enter", { activate: false })
+    await browser.execute(() => {
+      const events = []
+      const handler = event => events.push({ key: event.key, trusted: event.isTrusted })
+      document.addEventListener("keydown", handler, true)
+      window.__elefDisplayMathKeys = { events, handler }
+    })
+    let keys
+    try {
+      typeNativeText("$")
+      typeNativeText("$")
+      sendNativeKey("Enter", { activate: false })
+    } finally {
+      keys = await browser.execute(() => {
+        const capture = window.__elefDisplayMathKeys
+        document.removeEventListener("keydown", capture?.handler, true)
+        delete window.__elefDisplayMathKeys
+        return capture?.events || []
+      })
+    }
+    const expectedKeys = ["$", "$", "Enter"]
+    if (JSON.stringify(keys.map(({ key }) => key)) !== JSON.stringify(expectedKeys) || keys.some(({ trusted }) => !trusted)) {
+      throw new Error(`Display-math input did not arrive as the expected trusted keys: ${JSON.stringify(keys)}`)
+    }
   }
 
   async assertDisplayMathCaret(expectedSource, expectedCaret, mode) {
