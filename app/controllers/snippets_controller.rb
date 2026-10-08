@@ -1,7 +1,7 @@
 class SnippetsController < ApplicationController
   def index
     respond_to do |format|
-      format.html
+      format.html { render template: "shared/settings_page", locals: { settings_page_title: "Snippets" } }
       format.json do
         records = Snippet.all.index_by { |snippet| snippet.id.to_s }
         entries = Snippets::Catalog.for_editor.map do |attributes|
@@ -16,6 +16,7 @@ class SnippetsController < ApplicationController
 
   def new
     @snippet = Snippet.new(category: "Markdown")
+    render template: "shared/settings_page", locals: { settings_page_title: "New snippet" }
   end
 
   def create
@@ -35,6 +36,7 @@ class SnippetsController < ApplicationController
 
   def edit
     @snippet = personal_snippet
+    render template: "shared/settings_page", locals: { settings_page_title: "Edit #{@snippet.name}" }
   end
 
   def update

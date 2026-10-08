@@ -400,9 +400,22 @@ assert "authoringTransport" in desktop_application and "platform.authoringTransp
 assert "createRailsAuthoringSettingsTransport" in web_authoring_settings, (
     "web authoring settings must persist through the same registry transport seam as desktop"
 )
-assert 'render "shared/client_settings_mount"' in (ROOT / "app/views/snippets/index.html.erb").read_text(), (
-    "web authoring settings must mount the shared client instead of server-rendered dialog markup"
+settings_page = (ROOT / "app/views/shared/settings_page.html.erb").read_text()
+assert 'render "shared/client_settings_mount"' in settings_page, (
+    "web settings routes must mount the shared client instead of server-rendered settings markup"
 )
+for view_dir in ("app/views/snippets", "app/views/math_shortcuts", "app/views/workspace_settings"):
+    assert not list((ROOT / view_dir).glob("*.html.erb")), (
+        f"{view_dir} must not keep per-route settings shells; routes render the single shared settings page"
+    )
+for controller in (
+    "app/controllers/snippets_controller.rb",
+    "app/controllers/math_shortcuts_controller.rb",
+    "app/controllers/workspace_settings_controller.rb",
+):
+    assert 'render template: "shared/settings_page"' in (ROOT / controller).read_text(), (
+        f"{controller} must render the single shared settings page for HTML settings routes"
+    )
 assert 'id="authoring-settings-dialog"' in client_authoring_dialog, (
     "the shared client dialog must own the authoring DOM contract both hosts assert"
 )

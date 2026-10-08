@@ -1,0 +1,6 @@
+<%# Single HTML shell for every settings route (/settings, /snippets/*,
+    /math_shortcuts/*). The client parses request.path itself, so pages only
+    supply the mount point plus host seam inputs; no settings UI lives here. %>
+<% content_for :title, settings_page_title %>
+<%= render "layouts/settings_navigation" %>
+<%= render "shared/client_settings_mount" %>
