@@ -172,22 +172,6 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "# First", document.reload.source
   end
 
-  test "document library is separate from the combined library" do
-    document = Document.create!(title: "Notes", source: "# Notes")
-
-    get documents_path
-    assert_response :success
-    assert_select "h1", "Library"
-    assert_select "##{ActionView::RecordIdentifier.dom_id(document)}"
-    assert_select "#presentation_#{presentations(:one).id}", count: 0
-
-    get root_path
-    assert_response :success
-    assert_select "h1", "Library"
-    assert_select "#document_#{document.id}"
-    assert_select "#presentation_#{presentations(:one).id}"
-  end
-
   test "loads sample documents idempotently from the document library" do
     unrelated = Document.create!(title: "Personal notes", source: "# Keep me")
     expected_seed_records = Documents::SampleData::SAMPLES.length
@@ -262,14 +246,12 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
     assert_select ".lineage-panel", count: 0
 
     get root_path
-    assert_select ".document-graph", count: 0
-    assert_select ".lineage-panel", count: 0
-    assert_select "#document_#{source.id}"
-    assert_select "#presentation_#{presentations(:one).id}"
+    assert_select "template[data-client-slot='graph'] .document-graph-panel", count: 0
+    assert_select "template[data-client-slot='lineage'] .lineage-panel", count: 0
 
     get presentations_path
-    assert_select ".document-graph", count: 0
-    assert_select ".lineage-panel"
+    assert_select "template[data-client-slot='graph'] .document-graph-panel", count: 0
+    assert_select "template[data-client-slot='lineage'] .lineage-panel"
   end
 
   test "duplicate document titles are rejected" do
@@ -283,11 +265,6 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
   test "renaming a document preserves incoming links through aliases" do
     target = Document.create!(title: "Old title", source: "# Old title")
     incoming = Document.create!(title: "Incoming", source: "[[Old title]]\n\n`[[Old title]]`\n\n```\n[[Old title]]\n```")
-
-    get documents_path
-    assert_select "##{ActionView::RecordIdentifier.dom_id(target)} form[action='#{rename_document_path(target)}']" do
-      assert_select 'input[name="document[title]"]'
-    end
 
     patch rename_document_path(target), params: { document: { title: "New title" } }
 

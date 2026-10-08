@@ -9,8 +9,13 @@ class LibraryControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :success
     assert_shell_boot(path: root_path)
-    assert_select "template[data-client-slot='actions'] input[value='Load sample presentations']", 1
+    assert_select "template[data-client-slot='actions'] form[action='#{load_samples_presentations_path}']" do
+      assert_select "button", text: "Load sample presentations"
+    end
+    assert_select "template[data-client-slot='graph']", 1
     assert_select "template[data-client-slot='graph'] .document-graph-panel", count: 0
+    assert_select "template[data-client-slot='lineage']", 1
+    assert_select "template[data-client-slot='lineage'] .lineage-panel", count: 0
     assert_select "article.library-card", count: 0
     assert_select "a.app-nav-link[href='#{root_path}']", text: "Library"
   end
@@ -22,8 +27,11 @@ class LibraryControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :success
     assert_shell_boot(path: documents_path)
-    assert_select "template[data-client-slot='actions'] input[value='Load sample documents']", 1
+    assert_select "template[data-client-slot='actions'] form[action='#{load_samples_documents_path}']" do
+      assert_select "button", text: "Load sample documents"
+    end
     assert_select "template[data-client-slot='graph'] .document-graph-panel", 1
+    assert_select "template[data-client-slot='lineage'] .lineage-panel", count: 0
     assert_select "article.library-card", count: 0
   end
 
@@ -36,8 +44,11 @@ class LibraryControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :success
     assert_shell_boot(path: presentations_path)
-    assert_select "template[data-client-slot='actions'] input[value='Load sample presentations']", 1
+    assert_select "template[data-client-slot='actions'] form[action='#{load_samples_presentations_path}']" do
+      assert_select "button", text: "Load sample presentations"
+    end
     assert_select "template[data-client-slot='lineage'] .lineage-panel", 1
+    assert_select "template[data-client-slot='graph'] .document-graph-panel", count: 0
     notes = JSON.parse(css_select("#client-shell-mount").first["data-client-shell-card-notes-value"])
     assert_equal "Forked from Demo Deck · continuation", notes.fetch(fork.id.to_s)
     assert_select "article.library-card", count: 0
