@@ -62,6 +62,15 @@ class SourceArtIntegrationTest < ActiveSupport::TestCase
     assert_includes unbound.warnings.join(" "), "root Markdown list"
   end
 
+  test "saved document blocks stop at the Art root list and retain following content" do
+    source = ":::art\n- Alpha\n- Beta\n\nAfter\n\nTail"
+    parsed = Source::Document.parse(source, mode: :document)
+
+    assert_equal ["- Alpha\n- Beta", "After", "Tail"], parsed.slides.first.blocks.map(&:markdown)
+    assert_equal "peers", parsed.slides.first.blocks.first.art[:mode]
+    assert_nil parsed.slides.first.blocks[1].art
+  end
+
   test "Art-looking text in a protected fence remains ordinary code" do
     parsed = Source::Document.parse("```md\n:::art\n- A\n```", mode: :document)
 

@@ -1365,6 +1365,29 @@ class PresentationsTest < ApplicationSystemTestCase
     wait_for_fresh_projection
   end
 
+  test "Art block move and delete operations keep the directive with its root list" do
+    original = "# Keep\n\nBefore\n\n:::art\n- Alpha\n- Beta\n\nAfter\n\nTail"
+    presentation = Presentation.create!(title: "Art block ownership", source: original)
+
+    visit edit_presentation_path(presentation)
+    assert_selector ".presentation-editor-projection [data-elef-art-root] .elef-art-list > li", count: 2
+    find("[data-presentation-editor-action='move-block-up'][data-block-index='2']").click
+    assert_field "Markdown source", with: "# Keep\n\n:::art\n- Alpha\n- Beta\n\nBefore\n\nAfter\n\nTail", wait: 5
+    wait_for_fresh_projection
+    moved_source = find_field("Markdown source").value
+    assert_equal ":::art\n- Alpha\n- Beta", moved_source.lines[2, 3].join.strip
+    assert_includes moved_source, "\n\nAfter\n\nTail"
+    refute_includes moved_source, "data-elef-art-root"
+
+    accept_confirm do
+      find("[data-presentation-editor-action='delete-block'][data-block-index='1']").click
+    end
+    assert_field "Markdown source", with: "# Keep\n\nBefore\n\nAfter\n\nTail", wait: 5
+    wait_for_fresh_projection
+    refute_includes find_field("Markdown source").value, ":::art"
+    refute_selector ".presentation-editor-projection [data-elef-art-root]"
+  end
+
   test "keeps the last good presentation projection when preview is unavailable and offers retry" do
     presentation = Presentation.create!(title: "Stable deck", source: "# Stable\n\nLast good slide")
     visit edit_presentation_path(presentation)

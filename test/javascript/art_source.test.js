@@ -94,6 +94,20 @@ test("ART-ARCH-SHARED-MAP: Art source ownership and loose-list block mapping sha
   assert.deepEqual(slide.art_diagnostics || [], [])
 })
 
+test("ART-SRC-005: content after the target root list remains a separate Markdown block", () => {
+  const source = "# Keep\n\nBefore\n\n:::art\n- Alpha\n- Beta\n\nAfter\n\nTail"
+  const slide = buildEditorStructure(source, { mode: "presentation" }).editorMap.slides[0]
+
+  assert.deepEqual(slide.blocks.map(block => block.markdown), [
+    "# Keep",
+    "Before",
+    "- Alpha\n- Beta",
+    "After",
+    "Tail"
+  ])
+  assert.deepEqual(slide.blocks[2].art.source_range, { start: 16, end: 23 })
+})
+
 test("ART-EDIT-ORPHAN: Art stays unbound after a barrier and cannot jump to a later list", () => {
   const structure = buildEditorStructure(":::art\nA paragraph.\n\n- Later", { mode: "document" })
   assert.equal(structure.editorMap.slides[0].blocks.length, 2)

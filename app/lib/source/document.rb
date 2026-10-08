@@ -607,8 +607,7 @@ module Source
 
     def parsed_block(record, position, art_resolution)
       binding = art_resolution[:bindings].find do |candidate|
-        candidate[:target_lines][:start] == record[:start_line] &&
-          candidate[:target_lines][:end] == record[:end_line]
+        candidate[:target_lines][:start] == record[:start_line]
       end
       art = if binding
         {
@@ -641,12 +640,6 @@ module Source
         current << line
         current_end_line = line_index + 1
       end
-      art_target_line = lambda do |line_index|
-        art_resolution[:bindings].any? do |binding|
-          line_index >= binding[:target_lines][:start] && line_index < binding[:target_lines][:end]
-        end
-      end
-
       markdown.split("\n", -1).each_with_index do |line, line_index|
         next_fence = fence_marker(line)
         fence = toggle_fence(fence, next_fence) if next_fence
@@ -667,8 +660,11 @@ module Source
           flush.call
           blocks << { markdown: line.strip, start_line: line_index, end_line: line_index + 1 }
         elsif line.blank? && fence.nil?
-          push_line.call(line, line_index) if art_target_line.call(line_index)
-          flush.call unless art_target_line.call(line_index)
+          art_binding = art_resolution[:bindings].find do |binding|
+            line_index >= binding[:target_lines][:start] && line_index < binding[:target_lines][:end]
+          end
+          push_line.call(line, line_index) if art_binding && line_index + 1 < art_binding[:target_lines][:end]
+          flush.call unless art_binding && line_index + 1 < art_binding[:target_lines][:end]
         else
           push_line.call(line, line_index)
         end

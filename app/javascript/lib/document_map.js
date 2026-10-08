@@ -276,8 +276,8 @@ function editorBlocks(source, start, end, slide, slideIndex, mode, artResolution
       return
     }
     if (!line.text.trim()) {
-      const inArtList = artResolution.bindings.some(binding => lineIndex >= binding.target_lines.start && lineIndex < binding.target_lines.end)
-      if (inArtList) current.push(line)
+      const artBinding = artResolution.bindings.find(binding => lineIndex >= binding.target_lines.start && lineIndex < binding.target_lines.end)
+      if (artBinding && lineIndex + 1 < artBinding.target_lines.end) current.push(line)
       else flush()
       return
     }
@@ -669,7 +669,7 @@ function parseBlocks(markdown, artResolution) {
 
 function parsedBlock(record, position, artResolution) {
   const block = { markdown: record.markdown, position }
-  const binding = artResolution.bindings.find(candidate => candidate.target_lines.start === record.startLine && candidate.target_lines.end === record.endLine)
+  const binding = artResolution.bindings.find(candidate => candidate.target_lines.start === record.startLine)
   if (binding) block.art = { directive_id: binding.directive_id }
   return block
 }
@@ -691,7 +691,6 @@ function markdownBlocks(markdown, artResolution) {
     current.push(line)
     currentEndLine = index + 1
   }
-  const artTargetLine = index => artResolution.bindings.some(binding => index >= binding.target_lines.start && index < binding.target_lines.end)
   let fence = null
   let mathFence = null
   for (const [index, line] of markdown.split("\n").entries()) {
@@ -711,7 +710,8 @@ function markdownBlocks(markdown, artResolution) {
       flush()
       blocks.push({ markdown: line.trim(), startLine: index, endLine: index + 1 })
     } else if (!line.trim() && !fence && !mathFence) {
-      if (artTargetLine(index)) pushLine(line, index)
+      const artBinding = artResolution.bindings.find(binding => index >= binding.target_lines.start && index < binding.target_lines.end)
+      if (artBinding && index + 1 < artBinding.target_lines.end) pushLine(line, index)
       else flush()
     } else {
       pushLine(line, index)
