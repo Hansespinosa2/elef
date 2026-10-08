@@ -437,6 +437,17 @@ assert '"lib/projection_editability"' in (ROOT / "app/javascript/controllers/vis
 assert 'pin "lib/projection_editability", to: "lib/projection_editability.js"' in importmap
 assert all(path.is_file() for path in renderer_sources), "renderer sources must stay in shared app/javascript or packages"
 assert "desktop/" not in renderer_build, "Rails renderer generation must not reference desktop files"
+bundle_entry = (ROOT / "app/javascript/lib/renderer_global.js").read_text()
+assert (ROOT / "app/javascript/lib/preview_chrome.js").is_file(), "editor chrome must live in the app-side preview_chrome module"
+assert '"./preview_chrome.js"' in bundle_entry and "editorChrome" in bundle_entry, (
+    "the bundle entry must compose bare projection with editor chrome"
+)
+for bridge_function in (
+    "parsePortableDocumentLinks", "extractFirstMarkdownHeading", "readStyle",
+    "readStyleOverrides", "normalizeThemeValue", "normalizeTypographyValue",
+    "withFrontMatterValue", "replaceFirstHeading", "sourceAnchorLines",
+):
+    assert bridge_function in bundle_entry, f"the bundle must export the work-model bridge function {bridge_function}"
 desktop_sources = ROOT / "desktop/frontend/src"
 desktop_source_reasons = {
     "authoring-registry-loader.js": "loads the library's native authoring-registry commands",

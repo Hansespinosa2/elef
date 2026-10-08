@@ -561,6 +561,8 @@ QUICK_COMMANDS_1 = (
     "./node_modules/.bin/tsc -p packages/contracts/tsconfig.test.json",
     "node --test tests/host-conformance/conformance-fake.test.js tests/host-conformance/shell.test.js",
     "npm run test:javascript",
+    "npm test --prefix packages/work-model",
+    "npm test --prefix packages/renderer",
     f"npm test --prefix {DESKTOP_PATH_PREFIX}frontend",
     f"npm run test:unit --prefix {D_E2E}",
     "python3 script/check_frontend_ownership.py",
@@ -570,7 +572,9 @@ QUICK_COMMANDS_1 = (
 )
 AFFECTED_RAILS_TESTS = (
     "test/lib/source/renderer_test.rb test/lib/source/javascript_renderer_test.rb "
+    "test/lib/source/document_test.rb test/lib/source/block_renderer_test.rb "
     "test/lib/authoring_registry_test.rb test/models/presentation_test.rb "
+    "test/models/document_links_test.rb test/models/work_test.rb "
     "test/services/presentations/pptx_export_test.rb "
     "test/controllers/host_api_controller_test.rb"
 )
@@ -891,6 +895,101 @@ def run_phase2(json_output: bool) -> int:
     return 0
 
 
+PHASE3_PLAN_PATH = ROOT / "docs" / "refactor" / "execution" / "phase-3-plan.md"
+PHASE3_PHASE_PATH = ROOT / "docs" / "refactor" / "phases" / "03-work-model-renderer.md"
+PHASE3_CI_EVIDENCE_PATH = ROOT / "docs" / "refactor" / "execution" / "phase-3-ci-evidence.json"
+
+
+def check_phase3_ci_evidence(status: dict, head: str) -> None:
+    external = os.environ.get("ELEF_GATE_EVIDENCE_DIR")
+    evidence_path = (
+        Path(external) / "phase-3-ci-evidence.json" if external else PHASE3_CI_EVIDENCE_PATH
+    )
+    evidence = read_json(evidence_path)
+    if not isinstance(evidence, dict):
+        fail("phase-3 CI evidence must be an object")
+    run = evidence.get("run", {})
+    parents = run.get("tested_merge_parents", []) or []
+    if evidence.get("candidate_sha") != head and head not in parents:
+        fail("phase-3 CI evidence does not name the candidate")
+    if run.get("conclusion") != "success":
+        fail("phase-3 CI run did not succeed")
+    jobs = {job.get("name"): job.get("conclusion") for job in evidence.get("jobs", [])}
+    required = (
+        "desktop-fast",
+        "test",
+        "system-test",
+        "affected",
+        "sqlite-test",
+        "desktop",
+        "desktop-macos",
+        "renderer-macos",
+        "record-ci-attestation",
+    )
+    missing = [name for name in required if jobs.get(name) != "success"]
+    if missing:
+        fail(f"phase-3 CI evidence lacks successful jobs: {', '.join(missing)}")
+    rail_steps = evidence.get("rails_conformance", {})
+    if rail_steps.get("conclusion") != "success":
+        fail("phase-3 CI evidence lacks the rails-backed conformance run")
+    tauri_steps = evidence.get("tauri_conformance", {})
+    if tauri_steps.get("conclusion") != "success":
+        fail("phase-3 CI evidence lacks the Tauri-backed conformance run")
+
+
+def check_phase3(status: dict) -> str:
+    if not isinstance(status, dict):
+        fail("status.json must be an object")
+    head = git("rev-parse", "HEAD")
+    if os.environ.get("ELEF_GATE_STATUS_PATH") or status.get("head_sha") != head:
+        status = read_gate_snapshot(status, head, 3)
+    if status.get("current_phase") != 3:
+        fail("status.current_phase must be Phase 03")
+    base = status.get("phase_base_sha")
+    if not base or not is_ancestor(base, head):
+        fail("status.phase_base_sha must be an ancestor of HEAD")
+    if digest_file(PHASE3_PHASE_PATH) != status.get("phase_contract_sha256"):
+        fail("phase contract hash differs from phases/03-work-model-renderer.md")
+    if digest_file(PHASE3_PLAN_PATH) != status.get("frozen_plan_sha256"):
+        fail("frozen plan hash differs from execution/phase-3-plan.md")
+    return head
+
+
+def run_phase3(json_output: bool) -> int:
+    before_status = git("status", "--porcelain", "--untracked-files=all")
+    errors: list[str] = []
+    head = "unknown"
+    try:
+        if before_status:
+            fail("Phase 03 verification requires a clean candidate checkout")
+        status = read_json(STATUS_PATH)
+        head = check_phase3(status)
+        run_tier(QUICK_COMMANDS_1, QUICK_CEILING_S, quiet=True)
+        for command in ARCH_COMMANDS_1:
+            run_step(command)
+        run_fresh()
+        check_remaining_stubs()
+        check_phase3_ci_evidence(status, head)
+        after_status = git("status", "--porcelain", "--untracked-files=all")
+        if after_status != before_status:
+            fail("Phase 03 verification changed the candidate working tree")
+    except (CheckFailure, KeyError, TypeError, ValueError, OSError, json.JSONDecodeError) as error:
+        errors.append(str(error))
+    if errors:
+        if json_output:
+            print(json.dumps({"phase": 3, "result": "FAIL", "head": head, "errors": errors}, separators=(",", ":")))
+        else:
+            for error in errors:
+                print(f"bin/check phase 3: {error}", file=sys.stderr)
+        return 1
+    if json_output:
+        print(json.dumps({"phase": 3, "result": "PASS", "head": head}, separators=(",", ":")))
+        print("ELEF_PHASE_3=PASS")
+    else:
+        print(f"Phase 03 work-model-renderer checks passed at {head}.")
+    return 0
+
+
 def print_usage() -> None:
     print("Usage: bin/check {quick|affected|phase N|all|arch|fresh|docs|perf}", file=sys.stderr)
 
@@ -960,6 +1059,8 @@ def main(argv: list[str]) -> int:
         return run_phase1("--json" in extra)
     if argv[1] == "2":
         return run_phase2("--json" in extra)
+    if argv[1] == "3":
+        return run_phase3("--json" in extra)
     print(f"bin/check phase {argv[1]} is not implemented in Phase 01.", file=sys.stderr)
     return 2
 

@@ -13,6 +13,14 @@ Rules (constitution section 4, Phase 01 plan section 8):
       @tauri-apps imports and no __TAURI__ globals in tests/host-conformance.
   R5  every directory directly under packages/ is a real package: it carries
       package.json (private) and a frozen public entry (types field).
+  R6  package dependencies point one way and stay host-free: work-model
+      imports nothing executable; renderer imports only relative sources,
+      @elef/work-model, and its pinned markdown vendor modules.
+  R7  package sources stay pure: no DOM/host-environment tokens in
+      work-model, no editor-chrome tokens in renderer.
+  R8  Ruby and Rust do not reinterpret Work syntax: no renderer, parser or
+      fence-scan literals in app/lib, crates or desktop/src-tauri, except
+      the single delegating slide-range wrapper.
 
 Usage:
   tooling/check_boundaries.py                 enforce R1-R5 on the repo
@@ -74,6 +82,110 @@ def check_deep_imports() -> list[str]:
     return violations
 
 
+RENDERER_ALLOWED_BARE = (
+    "@elef/work-model",
+    "markdown-it",
+    "highlight.js",
+    "katex",
+)
+
+WORK_MODEL_ENV_PATTERN = re.compile(
+    r"document\.|window\.|from \"react\"|__TAURI__|node:|process\.env|MiniRacer"
+)
+RENDERER_CHROME_PATTERN = re.compile(
+    r"data-action|data-controller|contenteditable|<button|<select|Stimulus"
+    r"|presentation-editor|visual-editor|media#"
+)
+REINTERPRET_PATTERN = re.compile(
+    r"Redcarpet|Rouge|ELEF_RENDERER|parse_margin|parse_blocks|protect_math"
+    r"|fence_marker|toggle_fence|display_math_fence|markdown_blocks|split_sections"
+)
+RANGE_WRAPPER_ALLOW = re.compile(r"^\s*def slide_source_ranges")
+
+
+def package_sources(package: str) -> list[Path]:
+    root = PACKAGES / package / "src"
+    if not root.is_dir():
+        return []
+    return sorted(p for p in root.rglob("*.js") if "node_modules" not in p.parts)
+
+
+def check_package_direction() -> list[str]:
+    violations = []
+    for source in package_sources("work-model"):
+        for specifier in specifiers(source):
+            if specifier.startswith("."):
+                target = (source.parent / specifier).resolve()
+                try:
+                    target.relative_to(PACKAGES / "work-model")
+                except ValueError:
+                    violations.append(
+                        f"R6 work-model escapes its package: {source.relative_to(ROOT)} -> {specifier}"
+                    )
+                continue
+            violations.append(
+                f"R6 work-model imports executable {specifier!r}: {source.relative_to(ROOT)}"
+            )
+    for source in package_sources("renderer"):
+        for specifier in specifiers(source):
+            if specifier.startswith("."):
+                target = (source.parent / specifier).resolve()
+                try:
+                    target.relative_to(PACKAGES / "renderer")
+                except ValueError:
+                    violations.append(
+                        f"R6 renderer escapes its package: {source.relative_to(ROOT)} -> {specifier}"
+                    )
+                continue
+            if specifier == "@elef/work-model" or any(
+                specifier == allowed or specifier.startswith(f"{allowed}/")
+                for allowed in RENDERER_ALLOWED_BARE[1:]
+            ):
+                continue
+            violations.append(
+                f"R6 renderer imports non-vendor {specifier!r}: {source.relative_to(ROOT)}"
+            )
+    return violations
+
+
+def check_package_purity() -> list[str]:
+    violations = []
+    for source in package_sources("work-model"):
+        if WORK_MODEL_ENV_PATTERN.search(source.read_text()):
+            violations.append(f"R7 work-model binds a host environment: {source.relative_to(ROOT)}")
+    for source in package_sources("renderer"):
+        if RENDERER_CHROME_PATTERN.search(source.read_text()):
+            violations.append(f"R7 renderer carries editor chrome: {source.relative_to(ROOT)}")
+    return violations
+
+
+def check_no_reinterpretation() -> list[str]:
+    violations = []
+    scopes = [ROOT / "app" / "lib", ROOT / "crates", ROOT / "desktop" / "src-tauri"]
+    for scope in scopes:
+        if not scope.is_dir():
+            continue
+        for source in sorted(scope.rglob("*")):
+            if not source.is_file() or source.suffix not in {".rb", ".rs", ".js", ".ts"}:
+                continue
+            try:
+                text = source.read_text()
+            except (OSError, UnicodeDecodeError):
+                continue
+            for number, line in enumerate(text.splitlines(), start=1):
+                if not REINTERPRET_PATTERN.search(line):
+                    continue
+                if (
+                    source == ROOT / "app" / "lib" / "source" / "document.rb"
+                    and RANGE_WRAPPER_ALLOW.match(line)
+                ):
+                    continue
+                violations.append(
+                    f"R8 Work syntax reinterpreted: {source.relative_to(ROOT)}:{number}"
+                )
+    return violations
+
+
 def check_local_store() -> list[str]:
     violations = []
     store = ROOT / "crates" / "local-store"
@@ -123,6 +235,9 @@ def run_all() -> list[str]:
         + check_local_store()
         + check_adapters()
         + check_package_shape()
+        + check_package_direction()
+        + check_package_purity()
+        + check_no_reinterpretation()
     )
 
 
@@ -141,6 +256,7 @@ def self_test() -> int:
         shutil.copytree(PACKAGES, stage / "packages")
         shutil.copytree(ROOT / "crates", stage / "crates")
         shutil.copytree(ROOT / "tests", stage / "tests")
+        shutil.copytree(ROOT / "app" / "lib", stage / "app" / "lib")
         for fixture in sorted(CANARY.rglob("*")):
             if not fixture.is_file():
                 continue
@@ -153,7 +269,7 @@ def self_test() -> int:
             found = run_all()
         finally:
             ROOT, PACKAGES = old_root, old_packages
-    expected = {"R1", "R2", "R4"}
+    expected = {"R1", "R2", "R4", "R6", "R7", "R8"}
     seen = {line.split()[0] for line in found}
     missing = expected - seen
     if missing:
@@ -173,7 +289,7 @@ def main(argv: list[str]) -> int:
         print(violation, file=sys.stderr)
     if violations:
         return 1
-    print("Architecture boundaries hold: contracts pure, no deep imports, local-store Tauri-free, adapters transport-injected.")
+    print("Architecture boundaries hold: contracts pure, no deep imports, local-store Tauri-free, adapters transport-injected, packages directed and pure, no Work reinterpretation.")
     return 0
 
 
