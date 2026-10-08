@@ -3,12 +3,12 @@
   "campaign_branch": "feat/refactor-desktop-and-web",
   "campaign_base_sha": "88f61a7a8ffd7c276bafcf06eee09c36a8adf134",
   "current_phase": 5,
-  "phase_state": "PLAN",
+  "phase_state": "DO",
   "phase_base_sha": "0f62a074ee5783cc6510801be2e39074264bc4ab",
   "head_sha": "0f62a074ee5783cc6510801be2e39074264bc4ab",
   "review_round": 0,
   "phase_contract_sha256": "94bb77f5e36623c4dc29f559ac7f24edeb753d9f2589cae62343090fa40fd19e",
-  "frozen_plan_sha256": null,
+  "frozen_plan_sha256": "7476c2d4b9210760d8576059701e506d920b4c51c2d41cb5943c27db05267751",
   "last_completed_phase": 4,
   "last_verified_checks": [
     {
@@ -235,5 +235,5 @@
   },
   "pending_human_gates": [],
   "blocker": null,
-  "next_action": "Phase 05 PLAN: re-freeze after step-3 stylesheet defect (dual-host application.css bundling invalidates the move)."
+  "next_action": "Phase 05 DO: implement re-frozen plan (routing seam, P05-04 assertions, host seam impls, switch-overs)."
 }
