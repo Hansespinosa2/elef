@@ -11,6 +11,7 @@ import { PIXEL_PNG_MARKDOWN } from "../../../test/e2e/scenarios/media-fixture.js
 import { presentationModeWorkflow } from "../../../test/e2e/scenarios/presentation-mode.js"
 import { vimRelativeLineNumbersWorkflow } from "../../../test/e2e/scenarios/vim-relative-line-numbers.js"
 import { documentPageAspectRatioWorkflow } from "../../../test/e2e/scenarios/document-page-aspect-ratio.js"
+import { displayMathEnterWorkflow } from "../../../test/e2e/scenarios/display-math-enter.js"
 import { execFileSync } from "node:child_process"
 import path from "node:path"
 import { readFile } from "node:fs/promises"
@@ -225,6 +226,18 @@ class WebEditorUi {
     await this.page.keyboard.insertText(source)
   }
 
+  async restoreSource(source) {
+    await this.showSourceMode()
+    const restoredSource = await this.page.locator(".source-field").evaluate((field, nextSource) => {
+      const controller = field.editorController
+      if (!controller) return null
+      controller.replaceRange(nextSource, 0, controller.view.state.doc.length)
+      controller.setSelectionRange(nextSource.length)
+      return controller.sourceValue
+    }, source)
+    expect(restoredSource).toBe(source)
+  }
+
   async readSource() {
     return this.page.locator(".source-field").evaluate(field => field.editorController?.sourceValue ?? "")
   }
@@ -324,6 +337,53 @@ class WebEditorUi {
       field.editorController?.selectionStart,
       field.editorController?.selectionEnd
     ])).toEqual([position, position])
+  }
+
+  async typeEmptyDisplayMath(mode) {
+    if (mode === "visual") {
+      const block = this.page.locator(".document-editor-block[contenteditable='true']").last()
+      await expect(block).toBeVisible()
+      await block.click()
+      await block.pressSequentially("$")
+      await block.pressSequentially("$")
+      await this.page.locator(".document-editor-block[contenteditable='true']").last().press("Enter")
+      return
+    }
+
+    const editor = this.page.locator(".source-field .cm-content")
+    await editor.click()
+    await editor.press("ControlOrMeta+End")
+    await editor.pressSequentially("$")
+    await editor.pressSequentially("$")
+    await editor.press("Enter")
+  }
+
+  async assertDisplayMathCaret(expectedSource, expectedCaret, mode) {
+    const visual = mode === "visual"
+    await expect.poll(() => this.page.locator(".source-field").evaluate((field, expected) => {
+      const form = field.closest("form")
+      const editor = field.editorController
+      const selection = window.getSelection()
+      const focusElement = selection?.focusNode?.nodeType === Node.ELEMENT_NODE
+        ? selection.focusNode
+        : selection?.focusNode?.parentElement
+      const activeMath = focusElement?.closest?.(".editor-math-active")
+      return {
+        value: editor?.value,
+        selectionStart: editor?.selectionStart,
+        selectionEnd: editor?.selectionEnd,
+        previewSource: expected.visual ? form?.previewController?.pendingProjection?.source || null : null,
+        activeMathText: expected.visual ? activeMath?.textContent || null : null,
+        visualOffset: expected.visual ? selection?.focusOffset ?? null : null
+      }
+    }, { visual, expectedSource, expectedCaret })).toEqual({
+      value: expectedSource,
+      selectionStart: expectedCaret,
+      selectionEnd: expectedCaret,
+      previewSource: visual ? expectedSource : null,
+      activeMathText: visual ? "$$\n\n$$" : null,
+      visualOffset: visual ? 3 : null
+    })
   }
 
   async assertModeSwitchRespectsNewCaret() {
@@ -937,6 +997,10 @@ test("shared authoring settings create, edit, and delete flow works in the web a
 
 test("shared math input flow works in the web app", async ({ page }) => {
   await mathInputWorkflow(new WebEditorUi(page))
+})
+
+test("empty display math keeps its body caret in both web editor modes", async ({ page }) => {
+  await displayMathEnterWorkflow(new WebEditorUi(page))
 })
 
 test("shared hostile-deck security flow works in the web app", async ({ page }) => {

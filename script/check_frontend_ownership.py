@@ -261,6 +261,7 @@ assert "mermaid@11.17.2" in (ROOT / "vendor/javascript/mermaid.min.js").read_tex
 shared_workflows = {
     "appearanceWorkflow",
     "authoringSettingsWorkflow",
+    "displayMathEnterWorkflow",
     "documentLinkCompletionWorkflow",
     "documentPageAspectRatioWorkflow",
     "editAndPreviewWorkflow",

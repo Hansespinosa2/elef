@@ -296,9 +296,15 @@ export function configureEditorKind(root, kind, { documentTitles = [], sourceNam
   root.querySelector('[data-editor-view-target="slideOverview"]').hidden = isDocument
   root.querySelector("[data-presentation-editor-target='status']").hidden = isDocument
 
-  if (formControllers !== undefined) {
-    const form = root.closest("form")
-    if (form) form.dataset.controller = formControllers
+  const form = root.closest("form")
+  if (form) {
+    form.dataset.visualEditorKindValue = kind
+    const formActions = new Set((form.dataset.action || "").split(/\s+/).filter(Boolean))
+    const projectionKeydown = "keydown->visual-editor#projectionKeydown"
+    formActions.delete(projectionKeydown)
+    if (isDocument) formActions.add(projectionKeydown)
+    form.dataset.action = [...formActions].join(" ")
+    if (formControllers !== undefined) form.dataset.controller = formControllers
   }
   return root
 }

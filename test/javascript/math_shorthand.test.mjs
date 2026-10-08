@@ -177,7 +177,7 @@ function transformQuery(text, base) {
   return { prefix: ".", text, start: 0, base, baseStart: 0 }
 }
 
-function createMathEditor(value, caret) {
+function createMathEditor(value, caret, lineSeparator = "\n") {
   const listeners = new Map()
   const editor = {
     value,
@@ -185,15 +185,17 @@ function createMathEditor(value, caret) {
     selectionEnd: caret,
     editingMode: "source",
     insertMode: true,
-    lineSeparator: "\n",
+    lineSeparator,
+    normalizeLineEndings(value) { return value.replace(/\r\n?/g, "\n") },
     dom: {
       addEventListener(name, listener) { listeners.set(name, listener) },
       removeEventListener() {}
     },
     form: null,
     replaceRange(insert, from, to = from) {
-      this.value = this.value.slice(0, from) + insert + this.value.slice(to)
-      this.selectionStart = this.selectionEnd = from + insert.length
+      const normalizedInsert = this.normalizeLineEndings(insert)
+      this.value = this.value.slice(0, from) + normalizedInsert + this.value.slice(to)
+      this.selectionStart = this.selectionEnd = from + normalizedInsert.length
     },
     replaceRanges(changes) {
       let cursor = 0
@@ -685,6 +687,7 @@ test("Enter in an empty paired display-math delimiter creates a blank body line"
     editingMode: "source",
     insertMode: true,
     lineSeparator: "\n",
+    normalizeLineEndings(value) { return value.replace(/\r\n?/g, "\n") },
     dom: {
       addEventListener: (name, listener) => listeners.set(name, listener),
       removeEventListener: () => {}
@@ -743,6 +746,16 @@ test("Enter in an empty paired display-math delimiter creates a blank body line"
   listeners.get("keydown")(codeEnter)
   assert.equal(codeEnter.defaultPrevented, false)
   assert.equal(editor.value, "```\n$$$$\n```")
+})
+
+test("Enter in an empty paired display-math delimiter keeps its caret offset with CRLF documents", () => {
+  const { editor, listeners } = createMathEditor("$$$$", 2, "\r\n")
+  const event = pressMathKey({ editor, listeners }, "Enter")
+
+  assert.equal(event.defaultPrevented, true)
+  assert.equal(editor.value, "$$\n\n$$")
+  assert.equal(editor.selectionStart, 3)
+  assert.equal(editor.selectionEnd, 3)
 })
 
 test("keeps a chain active while the author inserts another operation", () => {
