@@ -116,4 +116,3 @@ version:"2.3.1",
 	 * @type Object
 	 */
 ucs2:{decode:ucs2decode,encode:ucs2encode},decode:decode,encode:encode,toASCII:toASCII,toUnicode:toUnicode};export{decode,w as default,encode,toASCII,toUnicode,ucs2decode,ucs2encode};
-
