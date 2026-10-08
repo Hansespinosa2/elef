@@ -94,6 +94,86 @@ export function analyzeArtList(source) {
   }
 }
 
+export function markdownBoundaryMap(source, { bindings = [] } = {}) {
+  const lines = source.split(/\r\n|\r|\n/)
+  const mathRanges = displayMathRanges(lines)
+  const blocks = listParser.parse(source, {}).filter(token =>
+    token.level === 0 && token.map && token.type !== "inline" && token.nesting !== -1
+  ).map(token => ({
+    type: token.type,
+    startLine: token.map[0],
+    endLine: token.map[1]
+  }))
+  const protectedTypes = new Set([
+    "bullet_list_open", "ordered_list_open", "blockquote_open", "code_block", "fence", "html_block", "table_open"
+  ])
+  const protectedRanges = blocks.filter(block => protectedTypes.has(block.type))
+  protectedRanges.push(...mathRanges)
+  for (const binding of bindings) {
+    if (binding.target_lines) protectedRanges.push({
+      type: "art_target",
+      startLine: binding.target_lines.start,
+      endLine: binding.target_lines.end
+    })
+  }
+
+  const directiveLines = new Set()
+  for (let index = 0; index < lines.length; index += 1) {
+    const isDirective = /^\s*:::/.test(lines[index])
+    const isProtected = protectedRanges.some(range => index >= range.startLine && index < range.endLine)
+    if (isDirective && !isProtected && (blocks.some(block => block.startLine === index) || directiveLines.has(index - 1))) {
+      directiveLines.add(index)
+    }
+  }
+
+  const maskedSource = lines.map((line, index) =>
+    directiveLines.has(index) || mathRanges.some(range => index >= range.startLine && index < range.endLine) ? "" : line
+  ).join("\n")
+  const markdownBlocks = listParser.parse(maskedSource, {}).filter(token =>
+    token.level === 0 && token.map && token.type !== "inline" && token.nesting !== -1
+  ).map(token => ({
+    startLine: token.map[0],
+    endLine: token.map[1]
+  }))
+  const topLevelMathRanges = mathRanges.filter(range =>
+    !protectedRanges.some(protectedRange => protectedRange !== range && indexRangesOverlap(range, protectedRange))
+  )
+  markdownBlocks.push(...topLevelMathRanges.map(range => ({ startLine: range.startLine, endLine: range.endLine })))
+
+  return {
+    blockStarts: markdownBlocks.map(block => block.startLine),
+    blockEnds: markdownBlocks.map(block => block.endLine),
+    directiveLines: [...directiveLines]
+  }
+}
+
+function displayMathRanges(lines) {
+  const ranges = []
+  let mathFence = null
+  let startLine = null
+  lines.forEach((line, index) => {
+    if (mathFence) {
+      if (mathFenceMarker(line) === mathFence) {
+        ranges.push({ type: "display_math", startLine, endLine: index + 1 })
+        mathFence = null
+        startLine = null
+      }
+      return
+    }
+    const opener = mathFenceOpener(line)
+    if (opener) {
+      mathFence = opener
+      startLine = index
+    }
+  })
+  if (mathFence) ranges.push({ type: "display_math", startLine, endLine: lines.length })
+  return ranges
+}
+
+function indexRangesOverlap(left, right) {
+  return left.startLine < right.endLine && right.startLine < left.endLine
+}
+
 function findItemClose(tokens, start, end, level) {
   for (let index = start; index < end; index += 1) {
     if (tokens[index].type === "list_item_close" && tokens[index].level === level) return index
@@ -104,6 +184,8 @@ function findItemClose(tokens, start, end, level) {
 export function resolveArtBindings(source, { idPrefix = "art-directive" } = {}) {
   if (typeof source !== "string") throw new TypeError("Markdown source must be text")
   const lines = sourceLines(source)
+  const boundaryMap = markdownBoundaryMap(source)
+  const directiveLines = new Set(boundaryMap.directiveLines)
   const directives = []
   const bindings = []
   const diagnostics = []
@@ -146,13 +228,13 @@ export function resolveArtBindings(source, { idPrefix = "art-directive" } = {}) 
       continue
     }
 
-    if (validArtLine(line.text)) {
+    if (validArtLine(line.text) && directiveLines.has(index)) {
       if (pending) reportNoTarget(pending)
       pending = makeDirective(line, directives.length, "art", idPrefix)
       directives.push(pending)
       continue
     }
-    if (invalidArtLine(line.text)) {
+    if (invalidArtLine(line.text) && directiveLines.has(index)) {
       if (pending) reportNoTarget(pending)
       pending = null
       const directive = makeDirective(line, directives.length, "art_invalid", idPrefix)
@@ -167,9 +249,9 @@ export function resolveArtBindings(source, { idPrefix = "art-directive" } = {}) 
 
     if (!pending) continue
     if (!line.text.trim()) continue
-    if (validPositionLine(line.text)) continue
+    if (validPositionLine(line.text) && directiveLines.has(index)) continue
 
-    if (/^:::\s*$/.test(line.text) || /^:::/.test(line.text)) {
+    if (directiveLines.has(index) && (/^:::\s*$/.test(line.text) || /^:::/.test(line.text))) {
       reportNoTarget(pending)
       pending = null
       continue
@@ -224,7 +306,12 @@ export function resolveArtBindings(source, { idPrefix = "art-directive" } = {}) 
   }
 
   if (pending) reportNoTarget(pending)
-  return { directives, bindings, diagnostics }
+  return {
+    directives,
+    bindings,
+    diagnostics,
+    boundary_map: markdownBoundaryMap(source, { bindings })
+  }
 }
 
 function makeDirective(line, index, type, idPrefix) {

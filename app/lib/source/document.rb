@@ -1,4 +1,5 @@
 require "json"
+require "set"
 
 module Source
   module Document
@@ -36,7 +37,10 @@ module Source
       sections = mode == :document ? [content] : split_sections(content)
       context = { section: nil, subsection: nil }
       slides = sections.map.with_index do |section, index|
-        metadata = slide_metadata(section, context, mode: mode)
+        # The shared resolver owns both directive bindings and Markdown block
+        # boundaries. Reuse its result in margin parsing and block splitting.
+        art_resolution = Source::JavascriptRenderer.resolve_art_bindings(section)
+        metadata = slide_metadata(section, context, mode: mode, art_resolution: art_resolution)
         Slide.new(
           id: "#{source_name}-#{index + 1}",
           index: index,
@@ -433,19 +437,14 @@ module Source
       current
     end
 
-    def slide_metadata(markdown, context, mode: :presentation)
+    def slide_metadata(markdown, context, mode: :presentation, art_resolution: { directives: [], bindings: [], diagnostics: [] })
       normalized = markdown.gsub(/\r\n?/, "\n")
       margin = if mode == :presentation
-        parse_margin_directives(normalized, context)
+        parse_margin_directives(normalized, context, art_resolution)
       else
         { content: normalized, section: nil, subsection: nil, footnote: nil, warnings: [] }
       end
       normalized = margin[:content]
-      art_resolution = if normalized.include?(":::art")
-        Source::JavascriptRenderer.resolve_art_bindings(normalized)
-      else
-        { directives: [], bindings: [], diagnostics: [] }
-      end
       lines = normalized.split("\n", -1)
       art_resolution[:directives].each { |directive| lines[directive[:line]] = "" }
       parsed = parse_blocks(lines.join("\n"), art_resolution)
@@ -468,8 +467,9 @@ module Source
       }
     end
 
-    def parse_margin_directives(markdown, context)
+    def parse_margin_directives(markdown, context, art_resolution)
       lines = markdown.split("\n", -1)
+      directive_lines = art_resolution.dig(:boundary_map, :directiveLines).to_set
       content = []
       warnings = []
       leading = true
@@ -499,8 +499,9 @@ module Source
           next
         end
 
-        directive = margin_directive_from_line(line)
+        directive = directive_lines.include?(index) ? margin_directive_from_line(line) : nil
         if directive
+          content << ""
           if directive[:malformed]
             warnings << "Malformed #{directive[:type]} margin directive was removed."
           elsif directive[:type] == "footnote"
@@ -621,6 +622,10 @@ module Source
 
     def markdown_blocks(markdown, art_resolution = { bindings: [] })
       blocks = []
+      boundary = art_resolution.fetch(:boundary_map)
+      block_starts = boundary[:blockStarts].to_set
+      block_ends = boundary[:blockEnds].to_set
+      directive_lines = boundary[:directiveLines].to_set
       current = []
       current_start_line = nil
       current_end_line = nil
@@ -641,12 +646,16 @@ module Source
         current_end_line = line_index + 1
       end
       markdown.split("\n", -1).each_with_index do |line, line_index|
+        flush.call if block_starts.include?(line_index) && current.any?
         next_fence = fence_marker(line)
         fence = toggle_fence(fence, next_fence) if next_fence
 
         if fence.nil? && math_fence
-          math_fence = nil if display_math_fence_marker(line) == math_fence
           push_line.call(line, line_index)
+          if display_math_fence_marker(line) == math_fence
+            math_fence = nil
+            flush.call if block_ends.include?(line_index + 1)
+          end
           next
         elsif fence.nil? && (opening_math_fence = display_math_fence_opener(line))
           math_fence = opening_math_fence
@@ -654,9 +663,11 @@ module Source
           next
         end
 
-        if fence.nil? && line.match?(/\A[ \t]+:::art[ \t]*\z/)
-          push_line.call(line, line_index)
-        elsif fence.nil? && line.match?(/\A\s*:::/)
+        if line.blank? && directive_lines.include?(line_index)
+          # Art and margin directives were consumed as metadata before this
+          # pass. Their blank placeholders preserve source line ownership.
+          flush.call
+        elsif fence.nil? && directive_lines.include?(line_index)
           flush.call
           blocks << { markdown: line.strip, start_line: line_index, end_line: line_index + 1 }
         elsif line.blank? && fence.nil?
@@ -668,6 +679,7 @@ module Source
         else
           push_line.call(line, line_index)
         end
+        flush.call if block_ends.include?(line_index + 1) && current.any?
       end
       flush.call
       blocks

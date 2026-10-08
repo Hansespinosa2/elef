@@ -35,11 +35,12 @@ export function buildEditorStructure(source, { sourceName = "Untitled presentati
 
   ranges.forEach((range, index) => {
     const sectionSource = source.slice(range.start, range.end)
-    const normalizedSection = normalizeSection(sectionSource.replace(/\r\n?/g, "\n"))
+    const normalizedSection = sectionSource.replace(/\r\n?/g, "\n")
     const idPrefix = `slide-${index + 1}-art`
     const artResolution = resolveArtBindings(sectionSource, { idPrefix })
-    const metadata = slideMetadata(normalizedSection, context, mode, idPrefix)
-    const result = editorBlocks(source, range.start, range.end, metadata, index, mode, artResolution)
+    const boundaryMap = artResolution.boundary_map
+    const metadata = slideMetadata(normalizedSection, context, mode, artResolution, boundaryMap)
+    const result = editorBlocks(source, range.start, range.end, metadata, index, mode, artResolution, boundaryMap)
     let blocks = result.blocks
     let regions = result.regions
     if (mode === "document") {
@@ -200,8 +201,13 @@ function slideSourceRanges(source, bodyStart) {
   return ranges
 }
 
-function editorBlocks(source, start, end, slide, slideIndex, mode, artResolution) {
+function editorBlocks(source, start, end, slide, slideIndex, mode, artResolution, sourceBoundaryMap) {
   const lines = sourceLines(source, start, end)
+  const boundaryMap = {
+    blockStarts: new Set(sourceBoundaryMap.blockStarts),
+    blockEnds: new Set(sourceBoundaryMap.blockEnds),
+    directiveLines: new Set(sourceBoundaryMap.directiveLines)
+  }
   const blocks = []
   const directives = []
   const regions = []
@@ -253,6 +259,7 @@ function editorBlocks(source, start, end, slide, slideIndex, mode, artResolution
   }
 
   lines.forEach((line, lineIndex) => {
+    if (boundaryMap.blockStarts.has(lineIndex) && current.length) flush()
     const incomingFence = fenceMarker(line.text)
     if (fence) {
       current.push(line)
@@ -266,7 +273,10 @@ function editorBlocks(source, start, end, slide, slideIndex, mode, artResolution
     }
     if (mathFence) {
       current.push(line)
-      if (displayMathFenceMarker(line.text) === mathFence) mathFence = null
+      if (displayMathFenceMarker(line.text) === mathFence) {
+        mathFence = null
+        if (boundaryMap.blockEnds.has(lineIndex + 1)) flush()
+      }
       return
     }
     const openingMathFence = displayMathFenceOpener(line.text)
@@ -281,7 +291,7 @@ function editorBlocks(source, start, end, slide, slideIndex, mode, artResolution
       else flush()
       return
     }
-    if (/^\s*:::/.test(line.text)) {
+    if (boundaryMap.directiveLines.has(lineIndex)) {
       flush()
       const text = line.text.trim()
       const artDirective = artResolution.directives.find(directive => directive.line === lineIndex)
@@ -305,6 +315,7 @@ function editorBlocks(source, start, end, slide, slideIndex, mode, artResolution
       return
     }
     current.push(line)
+    if (boundaryMap.blockEnds.has(lineIndex + 1)) flush()
   })
   flush()
   if (mode === "document") directives.forEach(directive => { directive.scope = "document" })
@@ -530,18 +541,17 @@ function unsupportedEscapedPunctuation(markdown) {
   return false
 }
 
-function slideMetadata(markdown, context, mode, artIdPrefix) {
+function slideMetadata(markdown, context, mode, artResolution, sourceBoundaryMap) {
   let normalized = markdown.replace(/\r\n?/g, "\n")
   const margin = mode === "presentation"
-    ? parseMarginDirectives(normalized, context)
+    ? parseMarginDirectives(normalized, context, sourceBoundaryMap)
     : { content: normalized, section: null, subsection: null, footnote: null, warnings: [] }
   normalized = margin.content
-  const artResolution = resolveArtBindings(normalized, { idPrefix: artIdPrefix })
   const lines = normalized.split("\n")
   for (const directive of artResolution.directives) {
-    if (directive.type === "art") lines[directive.line] = ""
+    if (directive.type === "art" || directive.type === "art_invalid") lines[directive.line] = ""
   }
-  const parsed = parseBlocks(lines.join("\n"), artResolution)
+  const parsed = parseBlocks(lines.join("\n"), artResolution, sourceBoundaryMap)
   const layout = inferLayout(parsed.blocks)
   const title = ["two-column", "three-column"].includes(layout) ? parsed.blocks[0]?.markdown ?? null : null
   const regions = columnRegions(parsed.blocks, layout)
@@ -557,8 +567,9 @@ function slideMetadata(markdown, context, mode, artIdPrefix) {
   }
 }
 
-function parseMarginDirectives(markdown, context) {
+function parseMarginDirectives(markdown, context, sourceBoundaryMap) {
   const lines = markdown.split("\n")
+  const directiveLines = new Set(sourceBoundaryMap.directiveLines)
   const content = []
   const warnings = []
   let leading = true
@@ -590,8 +601,9 @@ function parseMarginDirectives(markdown, context) {
       leading = false
       return
     }
-    const directive = marginDirective(line)
+    const directive = directiveLines.has(index) ? marginDirective(line) : null
     if (directive) {
+      content.push("")
       if (directive.malformed) {
         warnings.push(`Malformed ${directive.type} margin directive was removed.`)
       } else if (directive.type === "footnote") {
@@ -635,8 +647,8 @@ function marginDirective(line) {
   return { type: match[1], malformed: true }
 }
 
-function parseBlocks(markdown, artResolution) {
-  const rawBlocks = markdownBlocks(markdown, artResolution)
+function parseBlocks(markdown, artResolution, sourceBoundaryMap) {
+  const rawBlocks = markdownBlocks(markdown, artResolution, sourceBoundaryMap)
   const blocks = []
   const warnings = []
   for (let index = 0; index < rawBlocks.length;) {
@@ -674,8 +686,13 @@ function parsedBlock(record, position, artResolution) {
   return block
 }
 
-function markdownBlocks(markdown, artResolution) {
+function markdownBlocks(markdown, artResolution, sourceBoundaryMap) {
   const blocks = []
+  const boundaryMap = {
+    blockStarts: new Set(sourceBoundaryMap.blockStarts),
+    blockEnds: new Set(sourceBoundaryMap.blockEnds),
+    directiveLines: new Set(sourceBoundaryMap.directiveLines)
+  }
   let current = []
   let currentStartLine = null
   let currentEndLine = null
@@ -694,19 +711,28 @@ function markdownBlocks(markdown, artResolution) {
   let fence = null
   let mathFence = null
   for (const [index, line] of markdown.split("\n").entries()) {
+    if (boundaryMap.blockStarts.has(index) && current.length) flush()
     const incoming = fenceMarker(line)
     if (fence) fence = toggleFence(fence, incoming)
     else if (incoming) fence = incoming
     if (!fence && mathFence) {
-      if (displayMathFenceMarker(line) === mathFence) mathFence = null
       current.push(line)
+      if (displayMathFenceMarker(line) === mathFence) {
+        mathFence = null
+        if (boundaryMap.blockEnds.has(index + 1)) flush()
+      }
       continue
     }
     if (!fence) {
       const opening = displayMathFenceOpener(line)
       if (opening) mathFence = opening
     }
-    if (!fence && !mathFence && /^\s*:::/.test(line)) {
+    if (!line.trim() && boundaryMap.directiveLines.has(index)) {
+      // Source resolution has already consumed this directive as metadata.
+      // Its blank placeholder preserves line ownership without creating an
+      // empty rendered block or a second directive interpretation.
+      flush()
+    } else if (!fence && !mathFence && boundaryMap.directiveLines.has(index)) {
       flush()
       blocks.push({ markdown: line.trim(), startLine: index, endLine: index + 1 })
     } else if (!line.trim() && !fence && !mathFence) {
@@ -716,6 +742,7 @@ function markdownBlocks(markdown, artResolution) {
     } else {
       pushLine(line, index)
     }
+    if (boundaryMap.blockEnds.has(index + 1)) flush()
   }
   flush()
   return blocks
@@ -831,10 +858,6 @@ function toggleFence(current, incoming) {
   if (!current) return incoming
   if (incoming && incoming.marker === current.marker && incoming.length >= current.length && incoming.closing) return null
   return current
-}
-
-function normalizeSection(value) {
-  return value.replace(/^\n/, "").replace(/\n$/, "")
 }
 
 function sourceLines(source, start = 0, end = source.length) {

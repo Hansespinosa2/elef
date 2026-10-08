@@ -1,7 +1,9 @@
 import test from "node:test"
 import assert from "node:assert/strict"
+import { parseHTML } from "linkedom"
 import { analyzeArtList, resolveArtBindings } from "../../app/javascript/lib/art_source.js"
 import { buildEditorStructure } from "../../app/javascript/lib/document_map.js"
+import { renderPreview } from "../../app/javascript/lib/renderer.js"
 
 const bindingCases = [
   { id: "ART-BIND-EXACT", source: ":::art\n- A\n- B", binding: true, mode: "peers", items: 2 },
@@ -35,7 +37,8 @@ const bindingCases = [
   { id: "ART-BIND-TABLE-BARRIER", source: ":::art\n| A |\n|---|\n| B |\n- A", binding: false, diagnostic: "ART_NO_LIST_TARGET" },
   { id: "ART-BIND-UNKNOWN-DIRECTIVE", source: ":::art\n:::unknown{value}\n- A", binding: false, diagnostic: "ART_NO_LIST_TARGET" },
   { id: "ART-BIND-SUPERSEDED", source: ":::art\n:::art\n- A", binding: true, mode: "peers", items: 1, diagnostics: ["ART_NO_LIST_TARGET"] },
-  { id: "ART-BIND-PARAGRAPH-BARRIER", source: ":::art\nParagraph.\n\n- A", binding: false, diagnostic: "ART_NO_LIST_TARGET" }
+  { id: "ART-BIND-PARAGRAPH-BARRIER", source: ":::art\nParagraph.\n\n- A", binding: false, diagnostic: "ART_NO_LIST_TARGET" },
+  { id: "ART-BIND-ART-IN-PARAGRAPH", source: "Paragraph\n:::art\n- A", binding: false, diagnostic: null }
 ]
 
 for (const fixture of bindingCases) {
@@ -121,4 +124,104 @@ test("ART-EDIT-ORPHAN: Art stays unbound after a barrier and cannot jump to a la
   assert.equal(structure.editorMap.slides[0].blocks.length, 2)
   assert.ok(structure.editorMap.slides[0].blocks.every(block => !block.art))
   assert.deepEqual(structure.editorMap.art_diagnostics.map(diagnostic => diagnostic.code), ["ART_NO_LIST_TARGET"])
+})
+
+test("ART-BOUNDARY-HEADING: adjacent heading ends the Art list in editor mapping and preview", () => {
+  const source = ":::art\n- Alpha\n- Beta\n## After"
+  const structure = buildEditorStructure(source, { mode: "document" })
+  const preview = renderPreview({ kind: "document", source })
+  const { document } = parseHTML(preview.html)
+  const slide = structure.editorMap.slides[0]
+
+  assert.deepEqual(slide.blocks.map(block => block.markdown), ["- Alpha\n- Beta", "## After"])
+  assert.ok(slide.blocks[0].art)
+  assert.equal(slide.blocks[1].art, undefined)
+  assert.equal(document.querySelectorAll("[data-elef-art-root] .elef-art-list > li").length, 2)
+  assert.equal(document.querySelector("h2")?.textContent, "After")
+  assert.equal(document.querySelector("[data-elef-art-root]")?.closest(".document-editor-block-shell")?.nextElementSibling?.querySelector("h2")?.textContent, "After")
+})
+
+test("ART-BOUNDARY-THEMATIC: adjacent thematic break stays outside the Art list", () => {
+  const source = ":::art\n- Alpha\n- Beta\n***\nAfter"
+  const structure = buildEditorStructure(source, { mode: "document" })
+  const preview = renderPreview({ kind: "document", source })
+  const { document } = parseHTML(preview.html)
+  const slide = structure.editorMap.slides[0]
+
+  assert.deepEqual(slide.blocks.map(block => block.markdown), ["- Alpha\n- Beta", "***", "After"])
+  assert.ok(slide.blocks[0].art)
+  assert.equal(slide.blocks.slice(1).filter(block => block.art).length, 0)
+  assert.equal(document.querySelectorAll("[data-elef-art-root] .elef-art-list > li").length, 2)
+  assert.ok(document.querySelector("hr"))
+  const renderedBlocks = [...document.querySelectorAll(".document-editor-block-shell")]
+  assert.equal(renderedBlocks.length, 3)
+  assert.equal(renderedBlocks[2].querySelector("p")?.textContent, "After")
+})
+
+for (const [testId, directive] of [
+  ["ART-BOUNDARY-NESTED-NOTE", ":::note"],
+  ["ART-BOUNDARY-NESTED-ART", ":::art"]
+]) {
+  test(`${testId}: indented directive-looking list text remains in the bound list`, () => {
+    const source = `:::art\n- Item one\n  ${directive}\n- Item two`
+    const structure = buildEditorStructure(source, { mode: "document" })
+    const preview = renderPreview({ kind: "document", source })
+    const { document } = parseHTML(preview.html)
+    const slide = structure.editorMap.slides[0]
+    const root = document.querySelector("[data-elef-art-root]")
+
+    assert.equal(slide.blocks.length, 1)
+    assert.equal(slide.blocks[0].markdown, `- Item one\n  ${directive}\n- Item two`)
+    assert.ok(slide.blocks[0].art)
+    assert.deepEqual(slide.directives.map(item => item.type), ["art"])
+    assert.deepEqual(slide.art_diagnostics || [], [])
+    assert.equal(root?.querySelectorAll(":scope > .elef-art-list > li").length, 2)
+    assert.match(root?.querySelector(":scope > .elef-art-list > li")?.textContent || "", new RegExp(directive.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")))
+    assert.match(root?.textContent || "", /Item two/)
+  })
+}
+
+test("ART-BOUNDARY-NESTED-MARGIN: indented margin directives remain in the bound Art list", () => {
+  const source = ":::art\n- Item one\n  :::section{Nested}\n- Item two"
+  const structure = buildEditorStructure(source, { mode: "presentation" })
+  const preview = renderPreview({ source, kind: "presentation" })
+  const { document } = parseHTML(preview.html)
+  const slide = structure.editorMap.slides[0]
+  const root = document.querySelector("[data-elef-art-root]")
+
+  assert.equal(slide.blocks.length, 1)
+  assert.ok(slide.blocks[0].art)
+  assert.equal(structure.slides[0].section, null)
+  assert.equal(root?.querySelectorAll(":scope > .elef-art-list > li").length, 2)
+  assert.match(root?.querySelector(":scope > .elef-art-list > li")?.textContent || "", /:::section\{Nested\}/)
+  assert.equal(document.querySelector(".slide-margin-section")?.textContent, "")
+})
+
+test("ART-ARCH-RESOLUTION-ONCE: margin directive barriers resolve identically for editor and renderer", () => {
+  const source = ":::art\n:::section{Intro}\n- A"
+  const structure = buildEditorStructure(source, { mode: "presentation" })
+  const preview = renderPreview({ source, kind: "presentation" })
+  const { document } = parseHTML(preview.html)
+  const slide = structure.editorMap.slides[0]
+
+  assert.equal(slide.blocks.length, 1)
+  assert.equal(slide.blocks[0].art, undefined)
+  assert.deepEqual(slide.art_diagnostics.map(diagnostic => diagnostic.code), ["ART_NO_LIST_TARGET"])
+  assert.equal(document.querySelectorAll("[data-elef-art-root]").length, 0)
+  assert.deepEqual(preview.editor_map.art_diagnostics.map(diagnostic => diagnostic.code), ["ART_NO_LIST_TARGET"])
+  assert.equal(document.querySelector("li")?.textContent, "A")
+})
+
+test("ART-SRC-INVALID-PARITY: invalid Art is consumed with only its stable Art diagnostic", () => {
+  const source = ":::art{flow}\n- A"
+  const structure = buildEditorStructure(source, { mode: "document" })
+  const preview = renderPreview({ kind: "document", source })
+  const { document } = parseHTML(preview.html)
+
+  assert.equal(structure.editorMap.slides[0].directives[0].type, "art_invalid")
+  assert.deepEqual(structure.editorMap.art_diagnostics.map(diagnostic => diagnostic.code), ["ART_INVALID_SYNTAX"])
+  assert.ok(structure.warnings.some(warning => warning.includes("syntax is invalid")))
+  assert.ok(structure.warnings.every(warning => !warning.includes("Unknown or malformed presentation directive")))
+  assert.doesNotMatch(document.body.textContent, /:::art\{flow\}/)
+  assert.equal(document.querySelectorAll("[data-elef-art-root]").length, 0)
 })

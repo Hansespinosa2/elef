@@ -82,6 +82,20 @@ class SourceArtIntegrationTest < ActiveSupport::TestCase
     assert_includes parsed.warnings.join(" "), "unsupported content"
   end
 
+  test "invalid Art syntax is consumed with the same diagnostic in Ruby and JavaScript paths" do
+    source = ":::art{flow}\n- A"
+    parsed = Source::Document.parse(source, mode: :document)
+    preview = Source::JavascriptRenderer.editor_preview(source, kind: :document, title: "Invalid Art")
+
+    assert_equal ["ART_INVALID_SYNTAX"], parsed.slides.first.art_diagnostics.map { |diagnostic| diagnostic[:code] }
+    assert_equal ["ART_INVALID_SYNTAX"], preview[:editor_map][:art_diagnostics].map { |diagnostic| diagnostic[:code] }
+    assert parsed.warnings.any? { |warning| warning.include?("syntax is invalid") }
+    assert preview[:warnings].any? { |warning| warning.include?("syntax is invalid") }
+    refute parsed.warnings.any? { |warning| warning.include?("Unknown or malformed presentation directive") }
+    refute preview[:warnings].any? { |warning| warning.include?("Unknown or malformed presentation directive") }
+    refute_includes Nokogiri::HTML.fragment(preview[:html]).text, ":::art{flow}"
+  end
+
   test "Art composes with a block alignment and does not bind across a barrier" do
     aligned = Source::Document.parse(":::align{center}\n:::art\n- One", mode: :document)
     aligned_block = aligned.slides.first.blocks.first
@@ -101,6 +115,57 @@ class SourceArtIntegrationTest < ActiveSupport::TestCase
     assert_equal ["- Alpha\n- Beta", "After", "Tail"], parsed.slides.first.blocks.map(&:markdown)
     assert_equal "peers", parsed.slides.first.blocks.first.art[:mode]
     assert_nil parsed.slides.first.blocks[1].art
+  end
+
+  test "Ruby and JavaScript block maps agree at adjacent Markdown and nested directive boundaries" do
+    fixtures = [
+      [":::art\n- Alpha\n- Beta\n## After", ["- Alpha\n- Beta", "## After"]],
+      [":::art\n- Alpha\n- Beta\n***\nAfter", ["- Alpha\n- Beta", "***", "After"]],
+      [":::art\n- Item one\n  :::note\n- Item two", ["- Item one\n  :::note\n- Item two"]],
+      [":::art\n- Item one\n  :::art\n- Item two", ["- Item one\n  :::art\n- Item two"]]
+    ]
+
+    fixtures.each do |source, expected_blocks|
+      ruby = Source::Document.parse(source, mode: :document)
+      javascript = Source::JavascriptRenderer.editor_preview(source, kind: :document, title: "Boundary parity")
+      ruby_blocks = ruby.slides.first.blocks
+      js_blocks = javascript[:editor_map][:slides].first[:blocks]
+
+      assert_equal expected_blocks, ruby_blocks.map(&:markdown), source.inspect
+      assert_equal ruby_blocks.map(&:markdown), js_blocks.map { |block| block[:markdown] }, source.inspect
+      assert_equal ruby_blocks.map { |block| !block.art.nil? }, js_blocks.map { |block| !block[:art].nil? }, source.inspect
+      assert_equal 1, ruby_blocks.count { |block| block.art }, source.inspect
+    end
+  end
+
+  test "Art resolution remains unbound across a margin directive barrier in both render paths" do
+    source = ":::art\n:::section{Intro}\n- A"
+    ruby = Source::Document.parse(source, mode: :presentation)
+    javascript = Source::JavascriptRenderer.editor_preview(source, kind: :presentation, title: "Margin barrier")
+
+    assert_equal ["ART_NO_LIST_TARGET"], ruby.slides.first.art_diagnostics.map { |diagnostic| diagnostic[:code] }
+    assert_equal ["ART_NO_LIST_TARGET"], javascript[:editor_map][:slides].first[:art_diagnostics].map { |diagnostic| diagnostic[:code] }
+    assert ruby.slides.first.blocks.all? { |block| block.art.nil? }
+    assert javascript[:editor_map][:slides].first[:blocks].all? { |block| block[:art].nil? }
+    refute_includes javascript[:html], "data-elef-art-root"
+  end
+
+  test "indented margin directives stay in Art item content in both render paths" do
+    source = ":::art\n- Item one\n  :::section{Nested}\n- Item two"
+    ruby = Source::Document.parse(source, mode: :presentation)
+    javascript = Source::JavascriptRenderer.editor_preview(source, kind: :presentation, title: "Nested margin")
+    ruby_art = ruby.slides.first.blocks.first.art
+    fragment = Nokogiri::HTML.fragment(javascript[:html])
+    root = fragment.at_css("[data-elef-art-root]")
+
+    assert_nil ruby.slides.first.section
+    assert_equal "peers", ruby_art[:mode]
+    assert_equal "peers", root["data-art-mode"]
+    root_list = root.at_xpath("./ul")
+    assert_equal ruby_art[:itemCount], root_list.xpath("./li").length
+    assert_equal 2, root_list.xpath("./li").length
+    assert_includes root_list.at_xpath("./li[1]").text, ":::section{Nested}"
+    assert_equal "", fragment.at_css(".slide-margin-section")&.text
   end
 
   test "Art-looking text in a protected fence remains ordinary code" do
