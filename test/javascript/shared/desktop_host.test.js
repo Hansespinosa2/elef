@@ -47,7 +47,7 @@ test("the desktop packages Rails-owned host markup and styles", () => {
   assert.match(shellStyles, /\.desktop-app-shell\s*\{[^}]*max-width: 1440px/)
   assert.doesNotMatch(shellStyles, /^h1\s*\{/m)
   assert.match(bootstrap, /app\/assets\/stylesheets\/application\.css/)
-  assert.match(editorRuntime, /import\("controllers\/vim_settings_controller"\)/)
+  assert.doesNotMatch(editorRuntime, /vim_settings_controller/)
   assert.match(page, /id="vim-settings-mount"/)
   assert.match(build, /app\/views\/desktop_host\.html/)
   assert.match(build, /authoring-settings-mount/)

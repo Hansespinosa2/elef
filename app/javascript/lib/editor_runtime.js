@@ -40,12 +40,11 @@ export function loadEditorRuntime() {
       import("controllers/slide_overview_controller"),
       import("controllers/document_pages_controller"),
       import("controllers/mermaid_diagrams_controller"),
-      import("controllers/snippet_palette_controller"),
-      import("controllers/vim_settings_controller")
+      import("controllers/snippet_palette_controller")
     ])
       .then(([editor, appearance, documentLinks, mathPalette, mathShorthand, mermaidAssist, media, preview,
         presentationCanvas, presentation, visualEditor, presentationEditor, slideOverview, documentPages,
-        mermaidDiagrams, snippetPalette, vimSettings]) => {
+        mermaidDiagrams, snippetPalette]) => {
         register("editor", editor.default)
         register("appearance", appearance.default)
         register("document-link-palette", documentLinks.default)
@@ -62,7 +61,6 @@ export function loadEditorRuntime() {
         register("document-pages", documentPages.default)
         register("mermaid-diagrams", mermaidDiagrams.default)
         register("snippet-palette", snippetPalette.default)
-        register("vim-settings", vimSettings.default)
       })
       .catch(error => {
         editorRuntime = null
