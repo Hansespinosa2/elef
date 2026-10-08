@@ -718,9 +718,9 @@
     {
       "id": "TAURI_WEBKIT_PARITY",
       "status": "VERIFIED",
-      "evidence": "Linux Tauri E2E used the rebuilt real app binary with WebKitGTK 605.1.15 and its embedded WebDriver; the shared harness passed 18 Playwright web scenarios and 35 WebKit/Tauri scenarios. It ran the Rails test server on 127.0.0.1:43127, the native driver on 4457, and left the existing port-3000 listener untouched.",
+      "evidence": "Linux Tauri E2E used the rebuilt real app binary with WebKitGTK 605.1.15 and its embedded WebDriver; the shared harness passed 19 Playwright web scenarios and 36 WebKit/Tauri scenarios, including updater verification. The release-mode test config permits HTTP only for the 127.0.0.1:8888 updater fixture; production and performance configs remain HTTPS-only. It ran the Rails test server on 127.0.0.1:43127, the native driver on 4457, and left the existing port-3000 listener untouched.",
       "verification": [
-        "npm test --prefix desktop/e2e (Linux WebKitGTK 605.1.15, 18 web + 35 Tauri scenarios passed)"
+        "npm test --prefix desktop/e2e (Linux WebKitGTK 605.1.15, 19 web + 36 Tauri scenarios passed)"
       ]
     },
     {

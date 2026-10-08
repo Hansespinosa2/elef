@@ -4,7 +4,7 @@ Phase 0 audit and current implementation map for [Constitution v6.0](CONSTITUTIO
 
 ## Baseline and repository audit
 
-- Branch: `feat/list-smartart-v1`, based on `dev` at `26d6ad247e5b55dfa63589d16af9a8f250f2c51c` before Art implementation.
+- Initial implementation audit started from `dev` at `26d6ad247e5b55dfa63589d16af9a8f250f2c51c`; the final `feat/list-smartart-v1` PR branch is based on latest `dev` at `3ce290e`.
 - Agent instructions and doctrine reviewed: repository `AGENTS.md`, `ELEF-DOCTRINE.md`, `docs/architecture.md`, and `docs/development.md`.
 - Initial search across `app/`, `desktop/`, `test/`, `script/`, and docs found no existing Art renderer, `data-elef-art` state, `art{flow}` syntax, snake layout, or SmartArt feature. `.new-work-chevron` is unrelated.
 - Baseline JavaScript suite: 334 passed.
@@ -38,23 +38,27 @@ Phase 0 audit and current implementation map for [Constitution v6.0](CONSTITUTIO
 
 ## Implementation commits
 
-- `b8ed9cb` Add shared Elef Art source and rendering
-- `6c77635` Integrate Elef Art with saved content and authoring
-- `c213a12` Harden Art fit and pagination diagnostics
-- `f2e5dad` Keep Art ownership scoped to its root list
-- `55d6184` Add Elef Art geometry and parity coverage
-- `564102f` Verify bounded Art fallback lifecycle
-- `a582131` Preserve attached media in Art fallbacks
-- `f4ccf49` Assert Art fit diagnostics and safe fallbacks
-- `0ed62ea` Document Art verification and architecture map
-- `494f5b5` Keep Art checks within shared frontend ownership
-- `f8afbf5` Tighten Art binding and fixture coverage
-- `aafc6a9` Update Art integration audit trail
-- `8f65eaa` Allow E2E services on alternate ports
-- `7a1bffb` Bundle shared Art parser for Rails
-- `e86bb61` Verify Art semantics across web and desktop
-- `e9dc9be` Read Art item text across tight lists
-- `9e2ce72` Contain Art within inferred slide regions
+- `6aec412` Add shared Elef Art source and rendering
+- `439b048` Integrate Elef Art with saved content and authoring
+- `c686397` Harden Art fit and pagination diagnostics
+- `1b844ae` Keep Art ownership scoped to its root list
+- `32e44e9` Add Elef Art geometry and parity coverage
+- `52e7ccb` Verify bounded Art fallback lifecycle
+- `08ff39e` Preserve attached media in Art fallbacks
+- `fee52f9` Assert Art fit diagnostics and safe fallbacks
+- `801f47f` Document Art verification and architecture map
+- `f4902e0` Keep Art checks within shared frontend ownership
+- `9cfdca9` Tighten Art binding and fixture coverage
+- `bed0ab8` Update Art integration audit trail
+- `1e0a924` Record final Art verification snapshot
+- `548b624` Allow E2E services on alternate ports
+- `422a09c` Bundle shared Art parser for Rails
+- `dbb9890` Verify Art semantics across web and desktop
+- `6763fa4` Read Art item text across tight lists
+- `2e6bc8d` Contain Art within inferred slide regions
+- `3046166` Record final Art verification results
+- `ec232ed` Fix release-mode updater E2E config
+- `48848ac` Trim vendored JavaScript EOF whitespace
 
 FIX-06 and FIX-07 now pass the mandatory whole-host containment oracle at the measured 535×416 and 341×416 CSS-pixel regions. In inferred-column Art hosts, `.slide-region-block` retains the block's position classes and editor controls are overlays, so editor chrome does not consume authored slide height or create false no-fit warnings. Authored headings, Art roots, and all slide-region siblings remain part of the host measurement.
 
@@ -64,12 +68,12 @@ The existing stylesheet-index architecture test intentionally changes its expect
 
 ## Final verification snapshot
 
-- `npm run test:javascript`: 392 passed.
+- `npm run test:javascript`: 393 passed on latest `dev`.
 - `RAILS_ENV=test PARALLEL_WORKERS=1 PGHOST=127.0.0.1 PGPORT=55432 PGUSER=postgres PGTESTDATABASE=elef_test bin/rails test`: 351 tests, 2,796 assertions, no failures/errors/skips, against isolated PostgreSQL 18.6.
 - `RAILS_ENV=test PARALLEL_WORKERS=1 PGHOST=127.0.0.1 PGPORT=55432 PGUSER=postgres PGTESTDATABASE=elef_test bin/rails test test/system/art_test.rb`: 12 tests, 160 assertions passed, covering canonical fixtures, pagination, 100-root lifecycle bounds, print, reflow, and Art position modifiers.
 - `npm test --prefix desktop/frontend`: 26 passed; `npm run test:unit --prefix desktop/e2e`: 10 passed.
-- Full Linux E2E: 18 Playwright web scenarios and 35 real Tauri/WebKitGTK 605.1.15 scenarios passed, including shared Art semantics in both products. The harness used Rails port 43127, Tauri WebDriver port 4457, PostgreSQL port 55432, Xvfb, and Openbox; it left the existing port-3000 service untouched.
-- `npm run renderer:build`, `bin/rails tailwindcss:build`, `npm run build --prefix desktop/frontend`, and the test-only Tauri build completed successfully.
+- Full Linux E2E on latest `dev`: 19 Playwright web scenarios and 36 real Tauri/WebKitGTK 605.1.15 scenarios passed, including shared Art semantics and updater verification. The release-mode E2E updater config opts into HTTP only for its `127.0.0.1:8888` fixture; the architecture check keeps production and performance updater configs HTTPS-only. The harness used Rails port 43127, Tauri WebDriver port 4457, PostgreSQL port 55432, Xvfb, and Openbox; it left the existing port-3000 service untouched.
+- `npm run renderer:build`, `bin/rails tailwindcss:build`, `npm run build --prefix desktop/frontend`, and the release-mode test-only Tauri build completed successfully with `tauri.e2e.conf.json`.
 - Art static assertions (12), traceability (97 unique normative IDs), frontend ownership, Tauri architecture, and `git diff --check` passed.
 - FIX-01 through FIX-10 and PAG-FIX-01 through PAG-FIX-04 are verified in the browser/system tier. FIX-06/FIX-07 pass at 535×416 and 341×416 CSS-pixel hosts with whole-host containment; FIX-05 still reports explicit no-fit.
 - Rust core tests (40), formatting, and Clippy passed during initial implementation validation; no Rust files changed in the later integration fixes.
