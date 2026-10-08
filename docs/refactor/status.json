@@ -3,7 +3,7 @@
   "campaign_branch": "feat/refactor-desktop-and-web",
   "campaign_base_sha": "88f61a7a8ffd7c276bafcf06eee09c36a8adf134",
   "current_phase": 3,
-  "phase_state": "DO",
+  "phase_state": "PLAN",
   "phase_base_sha": "2931ae48b52a3553ac82845fa20f2308310e5312",
   "head_sha": "2931ae48b52a3553ac82845fa20f2308310e5312",
   "review_round": 0,
