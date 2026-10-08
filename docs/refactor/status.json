@@ -3,12 +3,12 @@
   "campaign_branch": "feat/refactor-desktop-and-web",
   "campaign_base_sha": "88f61a7a8ffd7c276bafcf06eee09c36a8adf134",
   "current_phase": 5,
-  "phase_state": "ACT",
+  "phase_state": "DO",
   "phase_base_sha": "0f62a074ee5783cc6510801be2e39074264bc4ab",
   "head_sha": "27070f59d3ec7591a615fda02fa06503fd0ca432",
   "review_round": 1,
   "phase_contract_sha256": "94bb77f5e36623c4dc29f559ac7f24edeb753d9f2589cae62343090fa40fd19e",
-  "frozen_plan_sha256": "7476c2d4b9210760d8576059701e506d920b4c51c2d41cb5943c27db05267751",
+  "frozen_plan_sha256": "e5598ed2eb1b816981e4365d86b53c77ed5f426c8b00f1820f358b511b4109bb",
   "last_completed_phase": 4,
   "last_verified_checks": [
     {
@@ -229,6 +229,20 @@
       "duration_s": 29.826,
       "tier": "phase",
       "attempt_id": "64091b1323a44ebb8a541e29d735cd95"
+    },
+    {
+      "command": "bin/check quick",
+      "exit": 0,
+      "head": "c3b765f",
+      "duration_s": 16.9,
+      "tier": "quick"
+    },
+    {
+      "command": "bin/check affected",
+      "exit": 0,
+      "head": "c3b765f",
+      "duration_s": 42.4,
+      "tier": "affected"
     }
   ],
   "execution_environment": {
@@ -243,5 +257,5 @@
   },
   "pending_human_gates": [],
   "blocker": null,
-  "next_action": "Phase 05 ACT round 1: review FAIL on P05R1-RESIDUAL-VIM-UI (residual Stimulus vim-settings UI fails P05-01/I02); resolving in DO by deleting the residual files, pin, and registration per the frozen plan."
+  "next_action": "Phase 05 DO round-1 fix: residual vim UI deleted (c3b765f), retention logged; re-gate new candidate and request review round 2."
 }
