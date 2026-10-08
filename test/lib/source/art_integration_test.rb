@@ -1,6 +1,38 @@
 require "test_helper"
 
 class SourceArtIntegrationTest < ActiveSupport::TestCase
+  test "FIX-02 mixed recursive Peers preserve nested ordered and unordered lists" do
+    source = <<~MARKDOWN
+      :::art
+      - Research
+        1. Interview users
+        2. Review competitors
+           - Enterprise
+           - Consumer
+      - Design
+        - Prototype
+        - Validate
+    MARKDOWN
+    parsed = Source::Document.parse(source, mode: :document)
+    block = parsed.slides.first.blocks.first
+    fragment = Nokogiri::HTML.fragment(Source::BlockRenderer.render(
+      source,
+      parsed: parsed,
+      documents: [],
+      workspace: Workspace.default
+    ))
+    art = fragment.at_css("[data-elef-art-root]")
+    root_list = art.at_xpath("./ul")
+
+    assert_equal "peers", block.art[:mode]
+    assert_equal "rich", block.art[:density]
+    assert_equal 2, block.art[:itemCount]
+    assert_equal 2, root_list.xpath("./li").length
+    assert_equal 2, root_list.at_xpath("./li[1]/ol").xpath("./li").length
+    assert_equal ["Enterprise", "Consumer"], root_list.xpath("./li[1]/ol/li[2]/ul/li").map(&:text)
+    assert_equal ["Prototype", "Validate"], root_list.xpath("./li[2]/ul/li").map(&:text)
+  end
+
   test "saved document resolution and rendering use shared recursive Art semantics" do
     source = <<~MARKDOWN
       :::art
@@ -78,6 +110,15 @@ class SourceArtIntegrationTest < ActiveSupport::TestCase
     assert_empty parsed.warnings
     refute parsed.slides.first.blocks.any?(&:art)
     assert_includes parsed.slides.first.blocks.first.markdown, ":::art"
+  end
+
+  test "a fenced code block is a barrier for pending Art binding" do
+    source = ":::art\n```js\nconst value = 1\n```\n- Later list"
+    parsed = Source::Document.parse(source, mode: :document)
+
+    assert_equal "ART_NO_LIST_TARGET", parsed.slides.first.art_diagnostics.first[:code]
+    assert parsed.slides.first.blocks.none?(&:art)
+    assert_includes parsed.warnings.join(" "), "root Markdown list"
   end
 
   test "indented Art-looking text stays inside ordinary list and code content" do

@@ -125,6 +125,10 @@ export function resolveArtBindings(source, { idPrefix = "art-directive" } = {}) 
       continue
     }
     if (incomingFence) {
+      if (pending) {
+        reportNoTarget(pending)
+        pending = null
+      }
       fence = incomingFence
       continue
     }
@@ -134,6 +138,10 @@ export function resolveArtBindings(source, { idPrefix = "art-directive" } = {}) 
     }
     const openingMathFence = mathFenceOpener(line.text)
     if (openingMathFence) {
+      if (pending) {
+        reportNoTarget(pending)
+        pending = null
+      }
       mathFence = openingMathFence
       continue
     }

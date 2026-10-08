@@ -140,7 +140,11 @@
       "status": "VERIFIED",
       "verification": [
         "test:test/javascript/art_source.test.js#ART-SRC-005",
-        "test:test/javascript/art_source.test.js#ART-BIND-PARAGRAPH-BARRIER"
+        "test:test/javascript/art_source.test.js#ART-BIND-PARAGRAPH-BARRIER",
+        "test:test/javascript/art_source.test.js#ART-BIND-FENCED-CODE-BARRIER",
+        "test:test/javascript/art_source.test.js#ART-BIND-DISPLAY-MATH-BARRIER",
+        "test:test/javascript/art_source.test.js#ART-BIND-HEADING-BARRIER",
+        "test:test/javascript/art_source.test.js#ART-BIND-TABLE-BARRIER"
       ]
     },
     "ART-SRC-006": {
@@ -264,7 +268,8 @@
     "ART-SEM-006": {
       "status": "VERIFIED",
       "verification": [
-        "test:test/javascript/art_source.test.js#ART-SEM-EMPTY"
+        "test:test/javascript/art_source.test.js#ART-SEM-EMPTY",
+        "test:test/javascript/renderer.test.js#ART-SEM-006"
       ]
     },
     "ART-SEM-007": {
@@ -596,6 +601,39 @@
       "verification": [
         "test:test/javascript/renderer.test.js#ART-FIX-10"
       ]
+    },
+    "ART-A11Y-001": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/renderer.test.js#Art derives Peers or Sequence from the native root list and preserves nested list semantics"
+      ]
+    },
+    "ART-A11Y-002": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/renderer.test.js#FIX-09",
+        "static:script/check_art_static.py#NATIVE_SEQUENCE_MARKERS_AND_DECORATION"
+      ]
+    },
+    "ART-A11Y-003": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/art_generated.test.js#ART-TEST-001..008",
+        "test:test/system/art_test.rb#document Sequence preserves order and reflows at 320, 640, and 320 CSS pixels in RTL"
+      ]
+    },
+    "ART-A11Y-004": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/system/art_test.rb#document Sequence preserves order and reflows at 320, 640, and 320 CSS pixels in RTL",
+        "static:script/check_art_static.py#PEER_WRAP_AND_PREFERRED_BASIS"
+      ]
+    },
+    "ART-A11Y-005": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/system/art_test.rb#document Sequence preserves order and reflows at 320, 640, and 320 CSS pixels in RTL"
+      ]
     }
   },
   "acceptance_gates": [
@@ -614,14 +652,13 @@
         ],
         "host_scroll_css_px": [
           535,
-          680
+          555
         ],
-        "root_height_css_px": 459,
-        "root_offset_top_css_px": 180,
+        "root_bottom_exceeds_host": true,
         "status": "fallback-no-fit",
         "diagnostic": "ART_NO_FIT"
       },
-      "conflict": "The root ends at 639px from the host origin and the whole host scroll height is 680px, while the host is 416px high. Declaring ready would violate ART-FIT-003 and ART-FIT-006."
+      "conflict": "The root extends beyond the 416px bounded host and host scroll height is 555px. Declaring ready would violate ART-FIT-003 and ART-FIT-006."
     },
     {
       "id": "FIX-07",
@@ -638,18 +675,13 @@
         ],
         "host_scroll_css_px": [
           341,
-          617
+          469
         ],
-        "root_geometry_css_px": [
-          341,
-          396,
-          180,
-          396
-        ],
+        "root_bottom_exceeds_host": true,
         "status": "fallback-no-fit",
         "diagnostic": "ART_NO_FIT"
       },
-      "conflict": "The root begins at 180px and ends at 576px within a 416px host; whole-host scroll height is 617px. Declaring ready would violate ART-FIT-003 and ART-FIT-006."
+      "conflict": "The root extends beyond the 416px bounded host and host scroll height is 469px. Declaring ready would violate ART-FIT-003 and ART-FIT-006."
     }
   ],
   "external_checks": [
@@ -662,5 +694,205 @@
         "cross-engine print/geometry"
       ]
     }
-  ]
+  ],
+  "canonical_fixtures": [
+    {
+      "id": "FIX-01",
+      "status": "VERIFIED",
+      "root_type": "unordered",
+      "mode": "peers",
+      "density": "rich",
+      "layout": "peers-wrap",
+      "status_dom": "ready",
+      "containment": "flowing document; canonical content width 673px \u00b12; 4 items wrap 2+2",
+      "verification": [
+        "test:test/system/art_test.rb#canonical document Peers wrap at the preferred basis and remain reflowable in RTL"
+      ]
+    },
+    {
+      "id": "FIX-02",
+      "status": "VERIFIED",
+      "root_type": "unordered",
+      "mode": "peers",
+      "density": "rich",
+      "layout": "peers-wrap",
+      "status_dom": "ready",
+      "containment": "flowing recursive Markdown; exactly 2 root items and nested ol/ul structure preserved",
+      "verification": [
+        "test:test/lib/source/art_integration_test.rb#FIX-02 mixed recursive Peers preserve nested ordered and unordered lists"
+      ]
+    },
+    {
+      "id": "FIX-03",
+      "status": "VERIFIED",
+      "root_type": "ordered",
+      "mode": "sequence",
+      "density": "compact",
+      "layout": "sequence-horizontal",
+      "status_dom": "ready",
+      "containment": "fixed full-slide host measured at 1120px \u00b12; exact containment oracle passes",
+      "verification": [
+        "test:test/system/art_test.rb#compact fixed Sequence uses the canonical width rule and the containment oracle"
+      ]
+    },
+    {
+      "id": "FIX-04",
+      "status": "VERIFIED",
+      "root_type": "ordered",
+      "mode": "sequence",
+      "density": "rich",
+      "layout": "sequence-vertical",
+      "status_dom": "ready",
+      "containment": "fixed full-slide host measured at 1120px \u00b12 by 560px \u00b12; exact containment oracle passes after shared token tuning",
+      "verification": [
+        "test:test/system/art_test.rb#rich fixed Sequence stays vertical and eight compact items show no-fit"
+      ]
+    },
+    {
+      "id": "FIX-05",
+      "status": "VERIFIED",
+      "root_type": "ordered",
+      "mode": "sequence",
+      "density": "compact",
+      "layout": "sequence-vertical",
+      "status_dom": "fallback-no-fit",
+      "containment": "overfull explicit; ART_NO_FIT; all 8 authored items remain in DOM; print state retained",
+      "verification": [
+        "test:test/system/art_test.rb#rich fixed Sequence stays vertical and eight compact items show no-fit",
+        "test:test/system/art_test.rb#print views preserve document pagination and settled presentation Sequence states"
+      ]
+    },
+    {
+      "id": "FIX-06",
+      "status": "FAILED",
+      "root_type": "ordered",
+      "mode": "sequence",
+      "density": "rich",
+      "layout": "sequence-vertical",
+      "status_dom": "fallback-no-fit",
+      "containment": "host width 535px, height 416px, scrollHeight 555px; root bottom exceeds host; ART_NO_FIT",
+      "conflict": "The required host-level oracle correctly rejects the fixture because preceding slide content and the Art sequence exceed the 416px bounded column host. Reporting ready would violate ART-FIT-003 and ART-FIT-006.",
+      "verification": [
+        "test:test/system/art_test.rb#inferred two and three column Art hosts use their actual bounded geometry"
+      ]
+    },
+    {
+      "id": "FIX-07",
+      "status": "FAILED",
+      "root_type": "ordered",
+      "mode": "sequence",
+      "density": "compact",
+      "layout": "sequence-vertical",
+      "status_dom": "fallback-no-fit",
+      "containment": "host width 341px, height 416px, scrollHeight 469px; root bottom exceeds host; ART_NO_FIT",
+      "conflict": "The required host-level oracle correctly rejects the fixture because preceding slide content and the five-item Sequence exceed the 416px bounded column host. Reporting ready would violate ART-FIT-003 and ART-FIT-006.",
+      "verification": [
+        "test:test/system/art_test.rb#inferred two and three column Art hosts use their actual bounded geometry"
+      ]
+    },
+    {
+      "id": "FIX-08",
+      "status": "VERIFIED",
+      "root_type": "unordered",
+      "mode": "peers",
+      "density": "compact",
+      "layout": "peers-wrap",
+      "status_dom": "ready",
+      "containment": "flowing document at canonical width 673px \u00b12; preferred width 200px; partial final row centered in RTL",
+      "verification": [
+        "test:test/system/art_test.rb#canonical document Peers wrap at the preferred basis and remain reflowable in RTL"
+      ]
+    },
+    {
+      "id": "FIX-09",
+      "status": "VERIFIED",
+      "root_type": "ordered",
+      "mode": "sequence",
+      "density": "compact",
+      "layout": "sequence-vertical",
+      "status_dom": "ready",
+      "containment": "flowing document; native ordered numbering retained",
+      "verification": [
+        "test:test/javascript/renderer.test.js#FIX-09"
+      ]
+    },
+    {
+      "id": "FIX-10",
+      "status": "VERIFIED",
+      "root_type": "unordered",
+      "mode": "peers",
+      "density": "rich",
+      "layout": "plain-list",
+      "status_dom": "fallback-unsupported",
+      "containment": "whole-list fallback retains image and all list content; ART_UNSUPPORTED_CONTENT",
+      "verification": [
+        "test:test/javascript/renderer.test.js#ART-FIX-10",
+        "test:test/lib/source/art_integration_test.rb#saved document fallback preserves unsupported media and stable diagnostics"
+      ]
+    }
+  ],
+  "pagination_fixtures": [
+    {
+      "id": "PAG-FIX-01",
+      "status": "VERIFIED",
+      "start": 3,
+      "fragment_item_counts": [
+        2,
+        4
+      ],
+      "fragment_starts": [
+        3,
+        5
+      ],
+      "verification": [
+        "test:test/system/art_test.rb#forced Art pagination splits at direct items and resumes ordered starts including zero"
+      ]
+    },
+    {
+      "id": "PAG-FIX-02",
+      "status": "VERIFIED",
+      "start": 0,
+      "fragment_item_counts": [
+        2,
+        2
+      ],
+      "fragment_starts": [
+        0,
+        2
+      ],
+      "verification": [
+        "test:test/system/art_test.rb#forced Art pagination splits at direct items and resumes ordered starts including zero"
+      ]
+    },
+    {
+      "id": "PAG-FIX-03",
+      "status": "VERIFIED",
+      "result": "single root item remains atomic, overflows page, emits ART_ITEM_TOO_TALL and editor warning",
+      "verification": [
+        "test:test/system/art_test.rb#a single oversized Art item stays atomic and surfaces its diagnostic"
+      ]
+    },
+    {
+      "id": "PAG-FIX-04",
+      "status": "VERIFIED",
+      "result": "repeated paginate merges logical flow fragments and reproduces root item sequence, boundaries, and starts",
+      "verification": [
+        "test:test/system/art_test.rb#forced Art pagination splits at direct items and resumes ordered starts including zero"
+      ]
+    }
+  ],
+  "token_tuning": {
+    "reason": "FIX-04 initially exceeded the full-slide host with the initial token values. Only the single-source CSS Art tokens were tuned.",
+    "values": {
+      "--art-gap": "9px",
+      "--art-card-padding": "4px",
+      "--art-presentation-body-size": "17px"
+    },
+    "verified_targets": [
+      "FIX-03",
+      "FIX-04",
+      "FIX-05"
+    ],
+    "other_art_tokens": "Constitution v6 initial values"
+  }
 }

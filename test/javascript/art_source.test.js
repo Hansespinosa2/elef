@@ -29,6 +29,10 @@ const bindingCases = [
   { id: "ART-BIND-ALIGN-BEFORE", source: ":::align{center}\n:::art\n- A", binding: true, mode: "peers", items: 1 },
   { id: "ART-BIND-POSITION-BEFORE", source: ":::position{middle right}\n:::art\n- A", binding: true, mode: "peers", items: 1 },
   { id: "ART-BIND-CLOSING-BARRIER", source: ":::art\n:::\n- A", binding: false, diagnostic: "ART_NO_LIST_TARGET" },
+  { id: "ART-BIND-FENCED-CODE-BARRIER", source: ":::art\n```js\nconst value = 1\n```\n- A", binding: false, diagnostic: "ART_NO_LIST_TARGET" },
+  { id: "ART-BIND-DISPLAY-MATH-BARRIER", source: ":::art\n$$\nx^2\n$$\n- A", binding: false, diagnostic: "ART_NO_LIST_TARGET" },
+  { id: "ART-BIND-HEADING-BARRIER", source: ":::art\n# Heading\n- A", binding: false, diagnostic: "ART_NO_LIST_TARGET" },
+  { id: "ART-BIND-TABLE-BARRIER", source: ":::art\n| A |\n|---|\n| B |\n- A", binding: false, diagnostic: "ART_NO_LIST_TARGET" },
   { id: "ART-BIND-UNKNOWN-DIRECTIVE", source: ":::art\n:::unknown{value}\n- A", binding: false, diagnostic: "ART_NO_LIST_TARGET" },
   { id: "ART-BIND-SUPERSEDED", source: ":::art\n:::art\n- A", binding: true, mode: "peers", items: 1, diagnostics: ["ART_NO_LIST_TARGET"] },
   { id: "ART-BIND-PARAGRAPH-BARRIER", source: ":::art\nParagraph.\n\n- A", binding: false, diagnostic: "ART_NO_LIST_TARGET" }

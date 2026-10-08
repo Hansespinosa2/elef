@@ -12,7 +12,7 @@ CONSTITUTION = ROOT / "docs/smartart/CONSTITUTION.md"
 MANIFEST = ROOT / "docs/smartart/VERIFICATION.json"
 STATIC_CHECKS = ROOT / "script/check_art_static.py"
 
-requirement_pattern = re.compile(r"^\| (ART-[A-Z]+-\d{3}) \|")
+requirement_pattern = re.compile(r"^\| (ART-[A-Z0-9]+-\d{3}) \|")
 constitution_ids = [
     match.group(1)
     for line in CONSTITUTION.read_text().splitlines()

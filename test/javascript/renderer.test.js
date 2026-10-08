@@ -132,7 +132,7 @@ test("presentation editor projection exposes Stimulus canvas targets to host con
 test("Art derives Peers or Sequence from the native root list and preserves nested list semantics", () => {
   const peers = renderPreview({
     kind: "document",
-    source: ":::art\n- Research\n  1. Interview users\n  2. Review competitors\n- Design\n  - Prototype"
+    source: ":::art\n- Research\n  1. Interview users\n  2. Review competitors\n     - Enterprise\n     - Consumer\n- Design\n  - Prototype\n  - Validate"
   })
   const sequence = renderPreview({
     kind: "document",
@@ -142,12 +142,33 @@ test("Art derives Peers or Sequence from the native root list and preserves nest
   assert.match(peers.html, /<section class="elef-art"[^>]*data-art-mode="peers"[^>]*data-art-density="rich"/)
   assert.match(peers.html, /<ul class="elef-art-list" role="list">/)
   assert.match(peers.html, /<ol>\s*<li>Interview users<\/li>/)
+  assert.match(peers.html, /<li>Review competitors\s*<ul>\s*<li>Enterprise<\/li>\s*<li>Consumer<\/li>/)
   assert.match(peers.html, /<ul>\s*<li>Prototype<\/li>/)
   assert.match(sequence.html, /<section class="elef-art"[^>]*data-art-mode="sequence"[^>]*data-art-density="rich"/)
   assert.match(sequence.html, /<ol class="elef-art-list" start="3">/)
   assert.doesNotMatch(sequence.html, /<ol class="elef-art-list"[^>]*role=/)
   assert.match(sequence.html, /data-art-layout="sequence-vertical" data-art-settled="true"/)
   assert.doesNotMatch(peers.html, /:::art/)
+})
+
+test("ART-SEM-006: an empty root Art item remains an empty compact native list item", () => {
+  const preview = renderPreview({ kind: "document", source: ":::art\n-\n- Filled" })
+
+  assert.match(preview.html, /data-art-mode="peers" data-art-density="compact"/)
+  assert.match(preview.html, /<ul class="elef-art-list" role="list">/)
+  assert.equal((preview.html.match(/<li>/g) || []).length, 2)
+  assert.match(preview.html, /<li><\/li>/)
+  assert.match(preview.html, /<li>Filled<\/li>/)
+})
+
+test("FIX-09: document ranking keeps native ordered semantics and vertical Sequence layout", () => {
+  const source = ":::art\n1. Reliability\n2. Simplicity\n3. Performance\n4. Portability\n5. Transparency\n6. Extensibility"
+  const preview = renderPreview({ kind: "document", source })
+
+  assert.match(preview.html, /data-art-mode="sequence" data-art-density="compact"/)
+  assert.match(preview.html, /<ol class="elef-art-list">/)
+  assert.match(preview.html, /data-art-layout="sequence-vertical" data-art-settled="true"/)
+  assert.equal((preview.html.match(/<li>/g) || []).length, 6)
 })
 
 test("ART-FIX-10: inline image content selects whole-list fallback and remains rendered", () => {

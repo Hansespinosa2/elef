@@ -62,7 +62,7 @@ class ArtTest < ApplicationSystemTestCase
   test "compact fixed Sequence uses the canonical width rule and the containment oracle" do
     presentation = Presentation.create!(
       title: "Art horizontal Sequence",
-      source: ":::art\n1. Discover\n2. Design\n3. Build\n4. Launch"
+      source: "# Launch workflow\n\n:::art\n1. Discover\n2. Design\n3. Build\n4. Launch"
     )
 
     visit edit_presentation_path(presentation)
@@ -105,7 +105,7 @@ class ArtTest < ApplicationSystemTestCase
 
     assert_equal "sequence", data.fetch("mode")
     assert_equal "compact", data.fetch("density")
-    assert_operator data.fetch("width"), :>, 0
+    assert_in_delta 1120, data.fetch("width"), 2
     assert_operator data.fetch("height"), :>, 0
     assert data.fetch("eligible"), "the host must satisfy the formula before expecting horizontal Sequence"
     assert_equal "sequence-horizontal", data.fetch("layout"), data.inspect
@@ -161,21 +161,25 @@ class ArtTest < ApplicationSystemTestCase
   test "rich fixed Sequence stays vertical and eight compact items show no-fit" do
     rich = Presentation.create!(
       title: "Art rich Sequence",
-      source: ":::art\n1. Discovery\n   - Interview users\n   - Map the current process\n2. Design\n   - Prioritize constraints\n   - Produce a prototype\n3. Delivery\n   - Build the system\n   - Validate with teams\n4. Adoption\n   - Train users\n   - Measure outcomes"
+      source: "# Implementation roadmap\n\n:::art\n1. Discovery\n   - Interview users\n   - Map the current process\n2. Design\n   - Prioritize constraints\n   - Produce a prototype\n3. Delivery\n   - Build the system\n   - Validate with teams\n4. Adoption\n   - Train users\n   - Measure outcomes"
     )
     visit edit_presentation_path(rich)
     wait_for_art_settled
     assert_selector "[data-elef-art-root][data-art-mode='sequence'][data-art-density='rich']", wait: 10
-    rich_state = page.evaluate_script("(() => { const root = document.querySelector('.presentation-surface[data-controller~=\"art-layout\"] [data-elef-art-root]'); const host = root.closest('[data-art-host=\"fixed\"]'); const items = [...root.querySelector('.elef-art-list').children]; return {layout: root.dataset.artLayout, status: root.dataset.artStatus, diagnostic: root.dataset.artDiagnostic || null, root: [root.scrollWidth, root.clientWidth, root.scrollHeight, root.clientHeight], host: [host.scrollWidth, host.clientWidth, host.scrollHeight, host.clientHeight], items: items.map((item) => [item.scrollWidth, item.clientWidth, item.scrollHeight, item.clientHeight])} })()")
+    rich_state = page.evaluate_script("(() => { const root = document.querySelector('.presentation-surface[data-controller~=\"art-layout\"] [data-elef-art-root]'); const host = root.closest('[data-art-host=\"fixed\"]'); const items = [...root.querySelector('.elef-art-list').children]; let top = 0, left = 0, node = root; while (node && node !== host) { top += node.offsetTop; left += node.offsetLeft; node = node.offsetParent; } const contains = element => element.scrollWidth <= element.clientWidth + 1 && element.scrollHeight <= element.clientHeight + 1; return {layout: root.dataset.artLayout, status: root.dataset.artStatus, diagnostic: root.dataset.artDiagnostic || null, offset: [left, top], root: [root.scrollWidth, root.clientWidth, root.scrollHeight, root.clientHeight], host: [host.scrollWidth, host.clientWidth, host.scrollHeight, host.clientHeight], hostChildren: [...host.children].map(child => [child.className, child.offsetTop, child.offsetHeight]), items: items.map((item) => [item.scrollWidth, item.clientWidth, item.scrollHeight, item.clientHeight]), containment: contains(host) && contains(root) && items.every(contains) && node === host && left + root.offsetWidth <= host.clientWidth + 1 && top + root.offsetHeight <= host.clientHeight + 1} })()")
     assert_equal("sequence-vertical", rich_state.fetch("layout"), rich_state.inspect)
     assert_equal("ready", rich_state.fetch("status"), rich_state.inspect)
     assert_nil rich_state.fetch("diagnostic"), rich_state.inspect
+    assert_in_delta 1120, rich_state.fetch("host")[1], 2
+    assert_in_delta 560, rich_state.fetch("host")[3], 2
+    assert rich_state.fetch("containment"), rich_state.inspect
 
-    many = Presentation.create!(title: "Art no-fit", source: ":::art\n#{(1..8).map { |index| "#{index}. Step #{index}" }.join("\n")}")
+    many = Presentation.create!(title: "Art no-fit", source: "# Hiring pipeline\n\n:::art\n#{(1..8).map { |index| "#{index}. Step #{index}" }.join("\n")}")
     visit edit_presentation_path(many)
     wait_for_art_settled
     art = find(".presentation-surface[data-controller~='art-layout'] [data-elef-art-root]")
-    assert_equal "fallback-no-fit", art["data-art-status"]
+    many_geometry = page.evaluate_script("(() => { const root = document.querySelector('.presentation-surface[data-controller~=\"art-layout\"] [data-elef-art-root]'); const host = root.closest('[data-art-host=\"fixed\"]'); let top = 0, node = root; while (node && node !== host) { top += node.offsetTop; node = node.offsetParent; } return {status: root.dataset.artStatus, layout: root.dataset.artLayout, root: [root.scrollHeight, root.clientHeight, root.offsetHeight], host: [host.scrollHeight, host.clientHeight], top, children: [...host.children].map(child => [child.offsetTop, child.offsetHeight])} })()")
+    assert_equal "fallback-no-fit", art["data-art-status"], many_geometry.inspect
     assert_equal "ART_NO_FIT", art["data-art-diagnostic"]
     assert_equal 8, art.all(".elef-art-list > li").length
     assert_equal "true", art.find(:xpath, "ancestor::*[@data-art-host='fixed']")["data-art-overfull"]
@@ -207,6 +211,7 @@ class ArtTest < ApplicationSystemTestCase
           density: root.dataset.artDensity,
           status: root.dataset.artStatus,
           layout: root.dataset.artLayout,
+          width: root.clientWidth,
           count: items.length,
           rows: [...new Set(items.map((item) => item.offsetTop))].length,
           widths: [...new Set(items.map((item) => item.offsetWidth))],
@@ -218,6 +223,7 @@ class ArtTest < ApplicationSystemTestCase
     assert_equal "rich", rich.fetch("density")
     assert_equal "ready", rich.fetch("status")
     assert_equal "peers-wrap", rich.fetch("layout")
+    assert_in_delta 673, rich.fetch("width"), 2
     assert_equal 4, rich.fetch("count")
     assert_equal 2, rich.fetch("rows")
     assert_equal [280], rich.fetch("widths")
@@ -248,12 +254,13 @@ class ArtTest < ApplicationSystemTestCase
         const direction = getComputedStyle(root).direction;
         const centeredLast = Math.abs(last.offsetLeft - (hostWidth - last.offsetWidth) / 2) <= 2;
         const preferredWidths = [...new Set(items.map((item) => item.offsetWidth))];
-        return {mode: root.dataset.artMode, density: root.dataset.artDensity, layout: root.dataset.artLayout, count: items.length, direction, order: items.map((item) => item.textContent.trim()), rtlBefore, centeredLast, preferredWidths, noHorizontalOverflow};
+        return {mode: root.dataset.artMode, density: root.dataset.artDensity, layout: root.dataset.artLayout, width: root.clientWidth, count: items.length, direction, order: items.map((item) => item.textContent.trim()), rtlBefore, centeredLast, preferredWidths, noHorizontalOverflow};
       })()
     JAVASCRIPT
     assert_equal "peers", compact.fetch("mode")
     assert_equal "compact", compact.fetch("density")
     assert_equal "peers-wrap", compact.fetch("layout")
+    assert_in_delta 673, compact.fetch("width"), 2
     assert_equal 7, compact.fetch("count")
     assert_equal "rtl", compact.fetch("direction")
     assert_equal compact.fetch("rtlBefore"), compact.fetch("order")
@@ -309,8 +316,8 @@ class ArtTest < ApplicationSystemTestCase
     # root exceed the actual 416px slide-region height, so the honest result is
     # an explicit no-fit state until the product geometry decision is resolved.
     assert_equal "fallback-no-fit", two.fetch("status"), two.inspect
-    assert_equal [535, 535, 680, 416], two.fetch("host")
-    assert_equal [535, 535, 459, 459, 180, 459], two.fetch("root")
+    assert_equal [535, 535, 555, 416], two.fetch("host")
+    assert_operator two.fetch("root")[4] + two.fetch("root")[5], :>, two.fetch("host")[3]
     assert_equal "true", page.find(".presentation-surface [data-art-host='fixed']")["data-art-overfull"]
     assert_equal "ART_NO_FIT", page.find(".presentation-surface [data-elef-art-root]")["data-art-diagnostic"]
 
@@ -356,8 +363,8 @@ class ArtTest < ApplicationSystemTestCase
     # host, but the current theme/title and five-item Sequence exceed its
     # bounded height. Keep the whole-host oracle honest and surface no-fit.
     assert_equal "fallback-no-fit", three.fetch("status"), three.inspect
-    assert_equal [341, 341, 617, 416], three.fetch("host")
-    assert_equal [341, 341, 396, 396, 180, 396], three.fetch("root")
+    assert_equal [341, 341, 469, 416], three.fetch("host")
+    assert_operator three.fetch("root")[4] + three.fetch("root")[5], :>, three.fetch("host")[3]
     assert_equal "true", page.find(".presentation-surface [data-art-host='fixed']")["data-art-overfull"]
     assert_equal "ART_NO_FIT", page.find(".presentation-surface [data-elef-art-root]")["data-art-diagnostic"]
   end
@@ -443,6 +450,7 @@ class ArtTest < ApplicationSystemTestCase
             mode: root.dataset.artMode,
             direction: getComputedStyle(root).direction,
             nativeList: list.tagName === "OL" && getComputedStyle(list).listStyleType === "decimal",
+            connectorPosition: getComputedStyle(list).backgroundPosition,
             order: items.map((item) => item.textContent.trim()),
             hostFits: root.scrollWidth <= root.clientWidth && list.scrollWidth <= list.clientWidth && items.every((item) => item.scrollWidth <= item.clientWidth)
           };
@@ -454,6 +462,7 @@ class ArtTest < ApplicationSystemTestCase
       assert_equal "sequence", measurement.fetch("mode")
       assert_equal "rtl", measurement.fetch("direction")
       assert measurement.fetch("nativeList"), measurement.inspect
+      assert_includes measurement.fetch("connectorPosition"), "50%"
       assert_equal measurement.fetch("expectedOrder"), measurement.fetch("order")
       assert measurement.fetch("hostFits"), measurement.inspect
     end
@@ -495,7 +504,8 @@ class ArtTest < ApplicationSystemTestCase
   end
 
   test "print views preserve document pagination and settled presentation Sequence states" do
-    sequence_items = (3..22).map { |number| "#{number}. Step #{number}" }.join("\n")
+    continuation = "supports cross-platform delivery and helps teams measure success " * 4
+    sequence_items = (3..22).map { |number| "#{number}. Step #{number} #{continuation}" }.join("\n")
     document = Document.create!(title: "Printable Art Sequence", source: ":::art\n#{sequence_items}")
     visit print_document_path(document)
     assert_selector ".document-surface[data-document-pages-settled='true']", wait: 15
@@ -515,8 +525,14 @@ class ArtTest < ApplicationSystemTestCase
     assert_selector ".presentation-print [data-elef-art-root][data-art-settled='true']", wait: 15
     assert_equal "sequence-horizontal", find(".presentation-print [data-elef-art-root]")["data-art-layout"]
     assert_equal "ready", find(".presentation-print [data-elef-art-root]")["data-art-status"]
+    page.driver.browser.execute_cdp("Emulation.setEmulatedMedia", media: "print")
+    page.evaluate_async_script("const done = arguments[0]; requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(done, 300))); ")
+    assert_equal "sequence-horizontal", find(".presentation-print [data-elef-art-root]")["data-art-layout"]
+    print_state = page.evaluate_script("(() => { const root = document.querySelector('.presentation-print [data-elef-art-root]'); const host = root.closest('[data-art-host=\"fixed\"]'); return {status: root.dataset.artStatus, settled: root.dataset.artSettled, layout: root.dataset.artLayout, host: host && [host.clientWidth, host.clientHeight, host.scrollWidth, host.scrollHeight], root: [root.clientWidth, root.clientHeight, root.scrollWidth, root.scrollHeight], print: matchMedia('print').matches} })()")
+    assert_equal "ready", print_state.fetch("status"), print_state.inspect
+    page.driver.browser.execute_cdp("Emulation.setEmulatedMedia", media: "screen")
 
-    overfull = Presentation.create!(title: "Printable Art no-fit", source: ":::art\n#{(1..8).map { |number| "#{number}. Step #{number}" }.join("\n")}")
+    overfull = Presentation.create!(title: "Printable Art no-fit", source: "# Hiring pipeline\n\n:::art\n#{(1..8).map { |number| "#{number}. Step #{number}" }.join("\n")}")
     visit print_presentation_path(overfull)
     assert_selector ".presentation-print [data-elef-art-root][data-art-settled='true']", wait: 15
     no_fit = find(".presentation-print [data-elef-art-root]")
@@ -524,5 +540,11 @@ class ArtTest < ApplicationSystemTestCase
     assert_equal "ART_NO_FIT", no_fit["data-art-diagnostic"]
     assert_equal "true", no_fit.find(:xpath, "ancestor::*[@data-art-host='fixed']")["data-art-overfull"]
     assert_equal 8, no_fit.all(".elef-art-list > li").length
+    page.driver.browser.execute_cdp("Emulation.setEmulatedMedia", media: "print")
+    page.evaluate_async_script("const done = arguments[0]; requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(done, 300))); ")
+    no_fit_print = page.evaluate_script("(() => { const root = document.querySelector('.presentation-print [data-elef-art-root]'); const host = root.closest('[data-art-host=\"fixed\"]'); return {status: root.dataset.artStatus, settled: root.dataset.artSettled, layout: root.dataset.artLayout, host: host && [host.clientWidth, host.clientHeight, host.scrollWidth, host.scrollHeight], root: [root.clientWidth, root.clientHeight, root.scrollWidth, root.scrollHeight], print: matchMedia('print').matches} })()")
+    assert_equal "fallback-no-fit", no_fit_print.fetch("status"), no_fit_print.inspect
+    assert_equal 8, find(".presentation-print [data-elef-art-root]").all(".elef-art-list > li").length
+    page.driver.browser.execute_cdp("Emulation.setEmulatedMedia", media: "screen")
   end
 end

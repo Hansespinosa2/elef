@@ -3,6 +3,7 @@
 
 from pathlib import Path
 import re
+import json
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -16,16 +17,16 @@ GLOBAL_RENDERER_JS = ROOT / "app/javascript/lib/renderer_global.js"
 AUTHORING_REGISTRY = ROOT / "app/javascript/data/default_authoring_registry.json"
 
 required_tokens = {
-    "--art-gap": "16px",
+    "--art-gap": "9px",
     "--art-peer-basis-compact": "200px",
     "--art-peer-basis-rich": "280px",
     "--art-sequence-min-inline": "200px",
-    "--art-card-padding": "16px",
+    "--art-card-padding": "4px",
     "--art-radius": "10px",
     "--art-document-lead-size": "18px",
     "--art-document-body-size": "16px",
     "--art-presentation-lead-size": "24px",
-    "--art-presentation-body-size": "18px",
+    "--art-presentation-body-size": "17px",
 }
 
 token_css = TOKEN_CSS.read_text()
@@ -37,6 +38,7 @@ source_js = SOURCE_JS.read_text()
 renderer_js = RENDERER_JS.read_text()
 global_renderer_js = GLOBAL_RENDERER_JS.read_text()
 authoring_registry = AUTHORING_REGISTRY.read_text()
+authoring_entries = json.loads(authoring_registry)
 
 
 def tokens_single_source():
@@ -100,7 +102,17 @@ def lifecycle_is_batched_and_cleaned_up():
 
 
 def no_explicit_layout_dsl_or_deferred_decoration():
-    return not re.search(r'"(?:art-flow|art-sequence|art-peer|art-snake|art-grid)"', authoring_registry) and not re.search(r"art-(?:snake|chevron|arrow)", art_css + source_js, re.IGNORECASE)
+    art_commands = [entry for entry in authoring_entries if entry.get("trigger") == "art"]
+    return (
+        len(art_commands) == 1
+        and art_commands[0].get("namespace") == ":"
+        and art_commands[0].get("argument_schema", {}).get("argument_count") == 0
+        and art_commands[0].get("behavior", {}).get("template") == ":::art"
+        and not any(entry.get("namespace") == "/" and entry.get("trigger") == "art" for entry in authoring_entries)
+        and not re.search(r'"(?:art-flow|art-sequence|art-peer|art-snake|art-grid)"', authoring_registry)
+        and not re.search(r"art-(?:snake|chevron|arrow)", art_css + source_js, re.IGNORECASE)
+        and not re.search(r"::(?:before|after)|<svg|icon", art_css, re.IGNORECASE)
+    )
 
 
 def dom_enums_and_stable_diagnostics():
@@ -112,6 +124,14 @@ def dom_enums_and_stable_diagnostics():
         'ART_NO_LIST_TARGET', 'ART_INVALID_SYNTAX', 'ART_UNSUPPORTED_CONTENT', 'ART_NO_FIT',
         'ART_ITEM_TOO_TALL', 'ART_INTERNAL_ERROR'
     )) and "data-art-diagnostic=\"${diagnostic}\"" in renderer_js
+
+
+def forced_colors_keep_art_boundaries():
+    return all(fragment in art_css for fragment in (
+        "@media (forced-colors: active)",
+        ".elef-art-list > li { border: 1px solid CanvasText; }",
+        ".elef-art[data-art-mode=\"sequence\"] > .elef-art-list { background-image: linear-gradient(CanvasText, CanvasText); }"
+    ))
 
 
 STATIC_ASSERTIONS = {
@@ -126,6 +146,7 @@ STATIC_ASSERTIONS = {
     "LIFECYCLE_BATCHED_AND_CLEANED_UP": lifecycle_is_batched_and_cleaned_up,
     "NO_EXPLICIT_LAYOUT_DSL_OR_DEFERRED_DECORATION": no_explicit_layout_dsl_or_deferred_decoration,
     "DOM_ENUMS_AND_STABLE_DIAGNOSTICS": dom_enums_and_stable_diagnostics,
+    "FORCED_COLORS_KEEP_ART_BOUNDARIES": forced_colors_keep_art_boundaries,
 }
 
 for assertion_name, assertion in STATIC_ASSERTIONS.items():
