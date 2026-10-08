@@ -20,6 +20,7 @@ export async function mountElef(
   const route =
     options.initialUrl === undefined ? null : parseLibraryRoute(options.initialUrl);
 
+  let reloader: (() => Promise<void>) | null = null;
   function render(): void {
     // Synchronous commit: slot adoption below and host paint measurements
     // need the committed DOM, not a scheduled render.
@@ -29,6 +30,9 @@ export async function mountElef(
           host,
           initialFilter: route?.filter ?? "all",
           options,
+          registerReloader: (reload) => {
+            reloader = reload;
+          },
         }),
       );
     });
@@ -37,8 +41,10 @@ export async function mountElef(
   render();
   adoptHostSlots(hostElement, container, route?.filter ?? "all");
   return {
+    // Data reload preserving UI state (filter, search, adopted slots):
+    // matches the desktop refreshLibrary semantics the E2E probe measures.
     async refresh(): Promise<void> {
-      render();
+      if (reloader !== null) await reloader();
     },
     unmount(): void {
       root.unmount();

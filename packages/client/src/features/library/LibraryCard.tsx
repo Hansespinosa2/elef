@@ -181,8 +181,13 @@ function RenameControl({
     event.preventDefault();
     const next = title.trim();
     if (next === "" || next === work.title) return;
-    const renamed = await host.library.renameWork(work.id, next);
-    onChanged(options.operationNotice?.("renamed", renamed) ?? null);
+    try {
+      const renamed = await host.library.renameWork(work.id, next);
+      options.onLibraryEvent?.({ type: "renamed", work: renamed });
+      onChanged(options.operationNotice?.("renamed", renamed) ?? null);
+    } catch (error) {
+      onChanged(error instanceof Error ? error.message : String(error));
+    }
   }
 
   return (
@@ -269,10 +274,15 @@ function DeleteControl({
   readonly onChanged: (notice: string | null) => void;
 }): JSX.Element {
   async function remove(): Promise<void> {
-    const confirmed = (await options.confirmDelete?.(work)) ?? true;
-    if (!confirmed) return;
-    await host.library.deleteWork(work.id);
-    onChanged(options.operationNotice?.("deleted", work) ?? null);
+    try {
+      const confirmed = (await options.confirmDelete?.(work)) ?? true;
+      if (!confirmed) return;
+      await host.library.deleteWork(work.id);
+      options.onLibraryEvent?.({ type: "deleted", work });
+      onChanged(options.operationNotice?.("deleted", work) ?? null);
+    } catch (error) {
+      onChanged(error instanceof Error ? error.message : String(error));
+    }
   }
 
   return (

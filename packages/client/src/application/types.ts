@@ -28,6 +28,10 @@ export interface ElefMountOptions {
   readonly cardNote?: (work: WorkSummary) => string | null;
   readonly extraCardActions?: (work: WorkSummary) => readonly CardAction[];
   readonly operationNotice?: (operation: LibraryOperation, work: WorkSummary) => string | null;
+  readonly onLibraryEvent?: (event: {
+    readonly type: LibraryOperation;
+    readonly work: WorkSummary;
+  }) => void;
 }
 
 export interface ElefShell {

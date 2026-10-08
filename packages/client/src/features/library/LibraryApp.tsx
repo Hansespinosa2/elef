@@ -10,6 +10,7 @@ export interface LibraryAppProps {
   readonly host: ElefHost;
   readonly initialFilter: LibraryFilter;
   readonly options: ElefMountOptions;
+  readonly registerReloader?: (reload: () => Promise<void>) => void;
 }
 
 export const LIBRARY_RENDER_BATCH_SIZE = 48;
@@ -32,7 +33,7 @@ function localTarget(value: string, label: string): string {
   return value;
 }
 
-export function LibraryApp({ host, initialFilter, options }: LibraryAppProps): JSX.Element {
+export function LibraryApp({ host, initialFilter, options, registerReloader }: LibraryAppProps): JSX.Element {
   const [works, setWorks] = useState<readonly WorkSummary[]>([]);
   const [filter, setFilter] = useState<LibraryFilter>(initialFilter);
   const [query, setQuery] = useState("");
@@ -69,6 +70,10 @@ export function LibraryApp({ host, initialFilter, options }: LibraryAppProps): J
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  useEffect(() => {
+    registerReloader?.(() => reload());
+  }, [registerReloader, reload]);
 
   useEffect(() => {
     function onRouteChange(): void {
@@ -171,17 +176,22 @@ export function LibraryApp({ host, initialFilter, options }: LibraryAppProps): J
     event.preventDefault();
     const name = dialogName.trim();
     if (name === "") return;
-    const spaces = await host.library.listWorkspaces();
-    const space = spaces[0];
-    if (space === undefined) return;
-    setDialogOpen(false);
-    const created = await host.library.createWork({
-      workspaceId: space.id,
-      title: name,
-      kind: dialogKind,
-    });
-    await reload();
-    options.navigate?.({ workId: created.id, kind: created.kind });
+    try {
+      const spaces = await host.library.listWorkspaces();
+      const space = spaces[0];
+      if (space === undefined) return;
+      setDialogOpen(false);
+      const created = await host.library.createWork({
+        workspaceId: space.id,
+        title: name,
+        kind: dialogKind,
+      });
+      options.onLibraryEvent?.({ type: "created", work: created });
+      await reload();
+      options.navigate?.({ workId: created.id, kind: created.kind });
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : String(error));
+    }
   }
 
   const emptyKindLabel = filter === "all" ? "work" : filter === "documents" ? "document" : "presentation";
@@ -232,6 +242,7 @@ export function LibraryApp({ host, initialFilter, options }: LibraryAppProps): J
           {(Object.keys(KIND_LABELS) as LibraryFilter[]).map((name) => (
             <a
               key={name}
+              id={name === "all" ? "show-deck-list" : name === "documents" ? "show-documents" : "show-presentations"}
               className={`library-tab${name === filter ? " is-active" : ""}`}
               data-library-tab={name}
               href={libraryHref(name)}

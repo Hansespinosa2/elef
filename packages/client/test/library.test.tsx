@@ -141,11 +141,13 @@ test("delete honors the host confirm seam before calling the port", async () => 
   const host = typedHost();
   await seed(host);
   let confirmations = 0;
+  const events: { type: string; title: string }[] = [];
   const options: ElefMountOptions = {
     confirmDelete: () => {
       confirmations += 1;
       return confirmations > 1;
     },
+    onLibraryEvent: (event) => events.push({ type: event.type, title: event.work.title }),
   };
   const { element, shell } = await mountInto(host, options);
   try {
@@ -155,6 +157,21 @@ test("delete honors the host confirm seam before calling the port", async () => 
     assert.deepEqual(titles(element), ["Beta deck"], "confirmed delete removes the work");
     const works = await host.library.listWorks(ws("ws-1"));
     assert.equal(works.length, 1);
+    assert.deepEqual(events, [{ type: "deleted", title: "Alpha doc" }], "host observes the delete");
+  } finally {
+    shell.unmount();
+  }
+});
+
+test("shell refresh reloads data while preserving UI state", async () => {
+  const host = typedHost();
+  await seed(host);
+  const { element, shell } = await mountInto(host, { initialUrl: "https://host.test/#library/documents" });
+  try {
+    await host.library.createWork({ workspaceId: ws("ws-1"), title: "Late doc", kind: "document" });
+    await shell.refresh();
+    await settled();
+    assert.deepEqual(titles(element), ["Alpha doc", "Late doc"], "refresh picks up new works");
   } finally {
     shell.unmount();
   }
