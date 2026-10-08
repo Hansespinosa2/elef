@@ -1444,9 +1444,13 @@ class DesktopLibraryUi {
       const diagnostic = await browser.execute(async (deckTitle, previewText) => {
         const button = [...document.querySelectorAll(".library-card-open")]
           .find(element => element.getAttribute("aria-label") === `Edit ${deckTitle}`)
-        const preview = button?.closest(".library-card")?.querySelector(".library-card-preview")
+        const card = button?.closest(".library-card")
+        const preview = card?.querySelector(".library-card-preview")
+        // Card DOM ids are `<kind>_<work id>`; the preview node itself no
+        // longer carries the retired data-deck-id attribute.
+        const workId = card?.id?.replace(/^(?:presentation|document)_/, "")
         try {
-          const deck = await window.__TAURI__.core.invoke("read_deck_preview", { id: preview?.dataset.deckId })
+          const deck = await window.__TAURI__.core.invoke("read_deck_preview", { id: workId })
           return {
             previewState: preview?.dataset.previewState ?? null,
             previewMissing: !preview,

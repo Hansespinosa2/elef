@@ -426,9 +426,14 @@ export function startFileLibraryApplication(platform) {
     document.querySelector("#import-elef").disabled = !library
     document.querySelector("#breadcrumb-current").textContent = "Decks"
     // The first show preserves the boot filter (a deep-linked tab); every
-    // return home resets to All.
-    if (libraryShown) shell.setFilter("all")
-    else libraryShown = true
+    // return home resets to All and reloads, so cards and previews reflect
+    // saves made in the editor (the pre-client card pass re-read preview
+    // sources on every return; the client caches by revision and needs
+    // the explicit reload to see them).
+    if (libraryShown) {
+      shell.setFilter("all")
+      void refreshLibrary()
+    } else libraryShown = true
     void startupUpdateCheck.resume()
   }
 

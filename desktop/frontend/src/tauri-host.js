@@ -17,6 +17,17 @@ function commandError(error) {
 export function createTauriHost({ invoke, readExportFile }) {
   const baseHashes = new Map();
   const sessions = new Set();
+  // Latest listed summaries by work id. Snapshots join fresh preview text
+  // onto the cached summary so getWork stays read-only: it must never call
+  // open_deck, which repairs manifestless identities and would invalidate
+  // the listed id the caller is holding.
+  const summaries = new Map();
+
+  function remember(deck) {
+    const work = summary(deck);
+    summaries.set(work.id, work);
+    return work;
+  }
 
   function summary(deck) {
     // DeckSummary carries kind; OpenDeck (create/open) does not, so derive it
@@ -50,10 +61,18 @@ export function createTauriHost({ invoke, readExportFile }) {
 
   async function snapshotOf(deckId) {
     const snapshot = await call("read_source_snapshot", { id: deckId });
-    const deck = await call("open_deck", { id: deckId });
-    baseHashes.set(deck.id, deck.content_hash);
+    let work = summaries.get(String(deckId));
+    if (!work) {
+      const decks = await call("list_decks");
+      work = decks.map(summary).find(entry => entry.id === String(deckId)) ?? null;
+    }
+    if (!work) {
+      throw { code: "not_found", message: "The deck could not be found.", retryable: false };
+    }
+    summaries.set(work.id, work);
+    baseHashes.set(work.id, snapshot.content_hash);
     return {
-      ...summary(deck),
+      ...work,
       text: snapshot.source,
       baseline: { revision: String(snapshot.content_hash) },
     };
@@ -66,7 +85,8 @@ export function createTauriHost({ invoke, readExportFile }) {
     },
     async listWorks() {
       const decks = await call("list_decks");
-      return decks.map(summary);
+      summaries.clear();
+      return decks.map(remember);
     },
     async createWork(input) {
       const deck = await call("create_deck", { name: input.title, kind: input.kind });
@@ -78,11 +98,11 @@ export function createTauriHost({ invoke, readExportFile }) {
       }
       const opened = await call("open_deck", { id: deck.id });
       baseHashes.set(opened.id, opened.content_hash);
-      return summary(opened);
+      return remember(opened);
     },
     async renameWork(workId, title) {
       const deck = await call("rename_deck", { id: workId, name: title });
-      return summary(deck);
+      return remember(deck);
     },
     async deleteWork(workId) {
       const result = await call("delete_deck", { id: workId });
@@ -93,6 +113,7 @@ export function createTauriHost({ invoke, readExportFile }) {
         throw { code: "cancelled", message: "The deletion was cancelled.", retryable: false };
       }
       baseHashes.delete(workId);
+      summaries.delete(String(workId));
     },
   };
 
