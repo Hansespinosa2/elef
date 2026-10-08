@@ -1,101 +1,101 @@
 {
   "schema_version": 1,
-  "candidate_sha": "df7580eedbb1effc4850805d02266aba09b3ac94",
+  "candidate_sha": "454880c41d2dd1c1298d51bd9de01f6d93652087",
   "run": {
-    "id": 37788950740,
+    "id": 37807308240,
     "attempt": 1,
     "conclusion": "success",
     "event": "pull_request",
-    "tested_merge_sha": "01a61c923a1461378d709b08a9fc8a8aa846662e",
+    "tested_merge_sha": "b323b56f9e26a45fa094ad36c38b9b1146dc0c33",
     "tested_merge_parents": [
       "26d6ad247e5b55dfa63589d16af9a8f250f2c51c",
-      "df7580eedbb1effc4850805d02266aba09b3ac94"
+      "454880c41d2dd1c1298d51bd9de01f6d93652087"
     ],
-    "url": "https://github.com/Hansespinosa2/elef/actions/runs/37788950740",
-    "note": "Full green on the candidate. Candidate = phase-04 ACT round-2 tip (1fcc4c9) plus CI-only tooling (df7580e: PR-run concurrency cancel + Playwright browser cache; no product, plan, or contract change)."
+    "url": "https://github.com/Hansespinosa2/elef/actions/runs/37807308240",
+    "note": "Full green on the candidate, single attempt. Candidate = phase-04 ACT round-3 tip plus a status-only DO return (product tree identical to 4c545aa): lazy preview-core split + early library hide on open + post-mount prefetch (no product behavior, plan, or contract change)."
   },
   "jobs": [
     {
       "name": "desktop-fast",
-      "id": 113350881309,
+      "id": 113414840354,
       "conclusion": "success",
       "note": "Node suites 12 + 335 + 43 + 7 passing, 0 failures."
     },
     {
       "name": "test",
-      "id": 113350881529,
+      "id": 113414840590,
       "conclusion": "success",
       "note": "346 runs, 2618 assertions, 0 failures, 0 errors, 0 skips (postgres)."
     },
     {
       "name": "system-test",
-      "id": 113350881368,
+      "id": 113414840692,
       "conclusion": "success",
       "note": "224 runs, 6051 assertions, 0 failures, 0 errors, 0 skips; rails-backed host conformance 11 passed, 1 skipped (suite v12)."
     },
     {
       "name": "affected",
-      "id": 113350881326,
+      "id": 113414840894,
       "conclusion": "success",
       "note": "bin/check affected success within its ceiling."
     },
     {
       "name": "sqlite-test",
-      "id": 113350881272,
+      "id": 113414840897,
       "conclusion": "success",
       "note": "346 runs, 2618 assertions, 0 failures, 0 errors, 0 skips (sqlite)."
     },
     {
       "name": "desktop",
-      "id": 113350881498,
+      "id": 113414840857,
       "conclusion": "success",
       "note": "Shared scenarios 36+1+13+39 passing per shard (linux); contract-conformance.spec.js PASSED (desktop invoke shard); native benchmark artifacts produced."
     },
     {
       "name": "desktop-macos",
-      "id": 113350881535,
+      "id": 113414841211,
       "conclusion": "success",
-      "note": "Shared scenarios 36+1+13+39 passing (macos); contract-conformance.spec.js PASSED (desktop invoke shard); native benchmark artifacts produced."
+      "note": "Shared scenarios 36+1+13+39 passing per shard (macos); contract-conformance.spec.js PASSED (desktop invoke shard); native benchmark artifacts produced."
     },
     {
       "name": "renderer-macos",
-      "id": 113350881357,
+      "id": 113414840914,
       "conclusion": "success",
       "note": "102 runs, 767 assertions, 0 failures, 0 errors, 0 skips."
     },
     {
       "name": "scan_js",
-      "id": 113350881210,
+      "id": 113414840564,
       "conclusion": "success",
       "note": "Job conclusion success."
     },
     {
       "name": "scan_ruby",
-      "id": 113350881488,
+      "id": 113414840728,
       "conclusion": "success",
       "note": "Job conclusion success."
     },
     {
       "name": "production-smoke",
-      "id": 113350881669,
+      "id": 113414841632,
       "conclusion": "success",
       "note": "Job conclusion success."
     },
     {
       "name": "development-smoke",
-      "id": 113350881346,
+      "id": 113414840825,
       "conclusion": "success",
       "note": "Job conclusion success."
     },
     {
       "name": "Authorize deployment after CI",
-      "id": 113350883759,
+      "id": 113414842406,
       "conclusion": "skipped",
       "note": "Expected skip on a pull_request run."
     },
     {
       "name": "record-ci-attestation",
-      "id": 113360653685,
+      "id": 113422450775,
       "conclusion": "success",
       "note": "Attestation artifact recorded below."
     }
@@ -104,20 +104,20 @@
     "command": "node tests/host-conformance/run-node.js rails",
     "conclusion": "success",
     "job": "system-test",
-    "job_id": 113350881368,
+    "job_id": 113414840692,
     "result": "conformance rails: 11 passed, 1 skipped, 0 failed (suite v12 cases)"
   },
   "tauri_conformance": {
     "conclusion": "success",
     "jobs": [
       {
-        "job_id": 113350881498,
+        "job_id": 113414840857,
         "name": "desktop",
         "spec": "specs/contract-conformance.spec.js",
         "result": "spec file PASSED (desktop invoke shard)"
       },
       {
-        "job_id": 113350881535,
+        "job_id": 113414841211,
         "name": "desktop-macos",
         "spec": "specs/contract-conformance.spec.js",
         "result": "spec file PASSED (desktop invoke shard)"
@@ -126,23 +126,23 @@
   },
   "artifacts": [
     {
-      "id": 11557180393,
-      "name": "ci-attestation-pr136-run37788950740-attempt1",
-      "sha256": "d3ec9f6ce39d526e2685913790bdcc2181f904afdc5bcb937b70a16403d7acbd",
+      "id": 11563987739,
+      "name": "ci-attestation-pr136-run37807308240-attempt1",
+      "sha256": "f2c0d2eeee03864bae3b03917329e939b280ab152b9d2e860ceb135a4d055d4e",
       "size_bytes": 198,
-      "note": "Attests run_attempt 1, tested_sha 01a61c923a1461378d709b08a9fc8a8aa846662e (merge of dev 26d6ad24 + candidate)."
+      "note": "Attests run_attempt 1, tested_sha b323b56f9e26a45fa094ad36c38b9b1146dc0c33 (merge of dev 26d6ad24 + candidate)."
     },
     {
-      "id": 11556622261,
+      "id": 11563838073,
       "name": "native-performance-linux",
-      "sha256": "5b5de8b4d24374b63d0de6872c5c9c08879f3366506a6b737d8e4d79809409a9",
-      "size_bytes": 65950
+      "sha256": "03f74348d4edfddfb8c51dd797352f14f4c87cbaf4b7a495503862b4259b6c2a",
+      "size_bytes": 65714
     },
     {
-      "id": 11555644749,
+      "id": 11564805810,
       "name": "native-performance-darwin",
-      "sha256": "21b587be4760e9f3d70250aa4076b47ca35254651ecdc9c97aff0d04468e2a0d",
-      "size_bytes": 69864
+      "sha256": "9f7e52b7169cee02a98bbd0f8bd65fb0ba0f0bd8f327b667081d4dcc16ec055b",
+      "size_bytes": 70923
     }
   ],
   "pull_request": {
