@@ -540,11 +540,19 @@ export function startFileLibraryApplication(platform) {
   const openDeck = createDeckOpenFlow(openDeckNow)
 
   async function openDeckNow(id) {
+    // Hide the library before the first await: pending card-preview idle
+    // callbacks would otherwise spend fetches and main-thread renders
+    // through the whole open. Every early exit below restores visibility;
+    // the success path leaves the editor swap in charge and failures return
+    // through showLibrary.
+    const libraryWasHidden = elements.library.hidden
+    elements.library.hidden = true
+    const restoreLibrary = () => { elements.library.hidden = libraryWasHidden }
     try {
       if (document.body.classList.contains("presenting-deck")) await exitPresentation()
       elements.editorForm.previewController?.finishEditing()
       await Promise.resolve()
-      if (activeDeck && hasUnsavedChanges() && !(await flushSave())) return false
+      if (activeDeck && hasUnsavedChanges() && !(await flushSave())) { restoreLibrary(); return false }
       delete elements.editorForm.dataset.loadedDeckId
       let transition
       do {
@@ -571,6 +579,7 @@ export function startFileLibraryApplication(platform) {
       } while (transition && (hasUnsavedChanges() || (saveFlow?.revision ?? 0) !== transition.revision))
       if (!transition) {
         if (activeDeck) elements.editorForm.dataset.loadedDeckId = activeDeck.id
+        restoreLibrary()
         return false
       }
       const { deck, prepared: { documentTitles } } = transition

@@ -36,9 +36,13 @@ const appSourceAlias = {
       if (workspaceMatch) {
         // The client ships a committed self-contained dist (React included)
         // that both hosts consume byte-identically, following the renderer
-        // precedent; the desktop never re-bundles client source.
+        // precedent; the desktop never re-bundles client source. The deferred
+        // preview renderer ships the same way as its own committed file.
         if (workspaceMatch[1] === "client" && !workspaceMatch[2]) {
           return { path: path.join(repoRoot, "packages", "client", "dist", "elef-client.js") }
+        }
+        if (workspaceMatch[1] === "client" && workspaceMatch[2] === "/preview-core") {
+          return { path: path.join(repoRoot, "packages", "client", "dist", "preview-core.js") }
         }
         const manifest = JSON.parse(await readFile(path.join(repoRoot, "packages", workspaceMatch[1], "package.json"), "utf8"))
         const subpath = workspaceMatch[2] ? `.${workspaceMatch[2]}` : "."
