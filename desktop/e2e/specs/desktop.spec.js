@@ -787,8 +787,8 @@ class DesktopEditorUi {
       for (const name of ["keydown", "beforeinput", "input"]) document.addEventListener(name, record, true)
       window.__displayMathInputDiagnostics = { events, record }
     })
-    await browser.keys("$")
-    await browser.keys("$")
+    typeNativeText("$")
+    typeNativeText("$")
     await this.waitForSource(expectedPairSource)
     sendNativeKey("Enter", { activate: false })
     await browser.execute(() => {
