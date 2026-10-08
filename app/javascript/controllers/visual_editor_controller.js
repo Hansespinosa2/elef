@@ -2,6 +2,7 @@ import { Controller } from "@hotwired/stimulus"
 import { editorFor } from "lib/editor_controller_lookup"
 import { enableVisualModeAfterPreview, enableVisualModeFromInstalledPreview } from "lib/editor_view"
 import { setProjectionBlockEditable } from "lib/projection_editability"
+import { blockOperationStart } from "lib/editor_block_ranges"
 import { markdownForVisibleText, renderInlineMath, sourceOffsetForVisiblePosition } from "controllers/editor_markdown"
 import {
   moveCaretBetweenBlocks,
@@ -317,7 +318,7 @@ export default class extends Controller {
 
   blockSourceRange(block) {
     const slide = this.map?.slides?.find((candidate) => candidate.blocks?.some((item) => item.id === block.id))
-    let from = block.range.start
+    let from = slide ? blockOperationStart(slide, block) : block.range.start
     let to = block.range.end
     if (!slide || !block.position_directive_id) return { from, to }
 

@@ -362,7 +362,7 @@ function renderPresentation(source, slides, style, margin, env) {
   return `<div class="presentation-surface work-surface slides slides-theme-${style.theme} slides-typography-${style.typography} work-theme-${style.theme} work-typography-${style.typography} presentation-editor-projection" data-controller="mermaid-diagrams${artController}" data-presentation-editor-target="canvas">${frames}</div>`
 }
 
-function renderArtBlock(source, env, hostMode) {
+export function renderArtBlock(source, env = {}, hostMode = "flowing") {
   const analysis = analyzeArtList(source)
   let status = hostMode === "fixed" ? "pending" : "ready"
   let layout = analysis?.mode === "sequence" ? "sequence-vertical" : "peers-wrap"

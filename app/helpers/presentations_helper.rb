@@ -1,5 +1,6 @@
 module PresentationsHelper
-  def render_markdown(markdown, work: @presentation)
+  def render_markdown(markdown, work: @presentation, art: false, host_mode: "fixed")
+    return Source::Renderer.render_art_block(markdown, host_mode: host_mode) if art
     return Source::Renderer.render(markdown) unless work&.id
 
     @media_resolvers ||= {}
@@ -8,7 +9,7 @@ module PresentationsHelper
   end
 
   def render_editor_block(markdown, editor_block, work: @presentation)
-    rendered = render_markdown(markdown, work: work)
+    rendered = render_markdown(markdown, work: work, art: !!editor_block&.dig(:art))
     return rendered unless editor_block&.dig(:kind) == "image"
 
     alt = markdown.to_s.match(/\A\s*!\[([^\]]*)\]/)&.[](1).to_s

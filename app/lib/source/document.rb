@@ -5,10 +5,18 @@ module Source
     PORTABLE_DOCUMENT_KEY = "elef_document_key".freeze
     PORTABLE_DOCUMENT_ALIASES = "elef_aliases".freeze
     Position = Data.define(:horizontal, :vertical, :vertical_explicit)
-    Block = Data.define(:markdown, :position)
+    Block = Data.define(:markdown, :position, :art) do
+      def initialize(attributes)
+        super(**{ art: nil, **attributes })
+      end
+    end
     Region = Data.define(:blocks)
     MarginSettings = Data.define(:section, :subsection, :footnote, :slide_count)
-    Slide = Data.define(:id, :index, :markdown, :layout, :blocks, :title, :regions, :section, :subsection, :footnote, :warnings)
+    Slide = Data.define(:id, :index, :markdown, :layout, :blocks, :title, :regions, :section, :subsection, :footnote, :warnings, :art_diagnostics) do
+      def initialize(attributes)
+        super(**{ art_diagnostics: [], **attributes })
+      end
+    end
     Parsed = Data.define(:source_name, :mode, :theme, :typography, :margin_settings, :slides, :warnings)
     SourceLine = Data.define(:start, :end_pos, :text, :ending)
     FrontMatter = Data.define(:lines, :closing_line, :body_start, :eol)
@@ -40,7 +48,8 @@ module Source
           section: metadata[:section],
           subsection: metadata[:subsection],
           footnote: metadata[:footnote],
-          warnings: metadata[:warnings]
+          warnings: metadata[:warnings],
+          art_diagnostics: metadata[:art_diagnostics]
         )
       end
       Parsed.new(
@@ -432,7 +441,15 @@ module Source
         { content: normalized, section: nil, subsection: nil, footnote: nil, warnings: [] }
       end
       normalized = margin[:content]
-      parsed = parse_blocks(normalized)
+      art_resolution = if normalized.include?(":::art")
+        Source::JavascriptRenderer.resolve_art_bindings(normalized)
+      else
+        { directives: [], bindings: [], diagnostics: [] }
+      end
+      lines = normalized.split("\n", -1)
+      art_resolution[:directives].each { |directive| lines[directive[:line]] = "" }
+      parsed = parse_blocks(lines.join("\n"), art_resolution)
+      art_warnings = art_resolution[:diagnostics].map { |diagnostic| art_diagnostic_message(diagnostic[:code]) }
       content = parsed[:blocks].map(&:markdown).join("\n\n")
       layout = infer_layout(parsed[:blocks])
       title = column_title(parsed[:blocks], layout)
@@ -446,7 +463,8 @@ module Source
         section: margin[:section],
         subsection: margin[:subsection],
         footnote: margin[:footnote],
-        warnings: margin[:warnings] + parsed[:warnings]
+        warnings: margin[:warnings] + parsed[:warnings] + art_warnings,
+        art_diagnostics: art_resolution[:diagnostics]
       }
     end
 
@@ -551,24 +569,25 @@ module Source
       slide.warnings
     end
 
-    def parse_blocks(markdown)
-      raw_blocks = markdown_blocks(markdown)
+    def parse_blocks(markdown, art_resolution = { bindings: [] })
+      raw_blocks = markdown_blocks(markdown, art_resolution)
       blocks = []
       warnings = []
       index = 0
 
       while index < raw_blocks.length
-        block = raw_blocks[index]
+        record = raw_blocks[index]
+        block = record[:markdown]
         position = position_from_block(block)
         if position
-          closing_index = raw_blocks[(index + 1)..]&.index(":::")
+          closing_index = raw_blocks[(index + 1)..]&.index { |candidate| candidate[:markdown] == ":::" }
           if closing_index
             closing_index += index + 1
             grouped = raw_blocks[(index + 1)...closing_index]
-            grouped.each { |group| blocks << Block.new(group, position) unless group == "" }
+            grouped.each { |group| blocks << parsed_block(group, position, art_resolution) unless group[:markdown] == "" }
             index = closing_index + 1
           elsif raw_blocks[index + 1]
-            blocks << Block.new(raw_blocks[index + 1], position)
+            blocks << parsed_block(raw_blocks[index + 1], position, art_resolution)
             index += 2
           else
             warnings << "Alignment directive has no following Markdown block."
@@ -578,7 +597,7 @@ module Source
           warnings << "Unknown or malformed presentation directive was removed."
           index += 1
         else
-          blocks << Block.new(block, nil)
+          blocks << parsed_block(record, nil, art_resolution)
           index += 1
         end
       end
@@ -586,39 +605,84 @@ module Source
       { blocks: blocks, warnings: warnings }
     end
 
-    def markdown_blocks(markdown)
+    def parsed_block(record, position, art_resolution)
+      binding = art_resolution[:bindings].find do |candidate|
+        candidate[:target_lines][:start] == record[:start_line] &&
+          candidate[:target_lines][:end] == record[:end_line]
+      end
+      art = if binding
+        {
+          directive_id: binding[:directive_id],
+          source_range: binding[:directive_range],
+          **binding[:analysis]
+        }
+      end
+      Block.new(record[:markdown], position, art)
+    end
+
+    def markdown_blocks(markdown, art_resolution = { bindings: [] })
       blocks = []
       current = []
+      current_start_line = nil
+      current_end_line = nil
       fence = nil
       math_fence = nil
 
-      markdown.split("\n", -1).each do |line|
+      flush = lambda do
+        unless current.empty?
+          blocks << { markdown: current.join("\n"), start_line: current_start_line, end_line: current_end_line }
+          current = []
+          current_start_line = nil
+          current_end_line = nil
+        end
+      end
+      push_line = lambda do |line, line_index|
+        current_start_line ||= line_index
+        current << line
+        current_end_line = line_index + 1
+      end
+      art_target_line = lambda do |line_index|
+        art_resolution[:bindings].any? do |binding|
+          line_index >= binding[:target_lines][:start] && line_index < binding[:target_lines][:end]
+        end
+      end
+
+      markdown.split("\n", -1).each_with_index do |line, line_index|
         next_fence = fence_marker(line)
         fence = toggle_fence(fence, next_fence) if next_fence
 
         if fence.nil? && math_fence
           math_fence = nil if display_math_fence_marker(line) == math_fence
-          current << line
+          push_line.call(line, line_index)
           next
         elsif fence.nil? && (opening_math_fence = display_math_fence_opener(line))
           math_fence = opening_math_fence
-          current << line
+          push_line.call(line, line_index)
           next
         end
 
-        if fence.nil? && line.match?(/\A\s*:::/)
-          blocks << current.join("\n") if current.any?
-          blocks << line.strip
-          current = []
+        if fence.nil? && line.match?(/\A[ \t]+:::art[ \t]*\z/)
+          push_line.call(line, line_index)
+        elsif fence.nil? && line.match?(/\A\s*:::/)
+          flush.call
+          blocks << { markdown: line.strip, start_line: line_index, end_line: line_index + 1 }
         elsif line.blank? && fence.nil?
-          blocks << current.join("\n") if current.any?
-          current = []
+          push_line.call(line, line_index) if art_target_line.call(line_index)
+          flush.call unless art_target_line.call(line_index)
         else
-          current << line
+          push_line.call(line, line_index)
         end
       end
-      blocks << current.join("\n") if current.any?
+      flush.call
       blocks
+    end
+
+    def art_diagnostic_message(code)
+      {
+        "ART_NO_LIST_TARGET" => "Art needs a root Markdown list immediately after its directive.",
+        "ART_INVALID_SYNTAX" => "Art directive syntax is invalid. Use :::art with no arguments.",
+        "ART_UNSUPPORTED_CONTENT" => "Art contains unsupported content; the complete Markdown list is shown."
+      }.fetch(code, "Art reported a layout diagnostic.")
     end
 
     def position_from_block(block)

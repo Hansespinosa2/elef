@@ -46,11 +46,13 @@ module Source
           end
           rendered = if region&.dig(:empty_heading)
             "<h1><br></h1>"
+          elsif block.art
+            render_art(block.markdown, documents: documents, media_resolver: media_resolver, host_mode: "flowing")
           else
             DocumentLinks::Renderer.render(render_source, documents: documents, workspace: workspace, media_resolver: media_resolver)
           end
           rendered = editable_media(rendered, block.markdown) if valid_mapping && mapped[:kind] == "image"
-          if valid_mapping && %w[list quote].include?(mapped[:kind])
+          if valid_mapping && !mapped[:art] && %w[list quote].include?(mapped[:kind])
             rendered = editable_trailing_structured_line(rendered, mapped[:markdown], mapped[:kind], caret_token)
           end
           html << %(<div class="document-editor-block-shell"><div#{attributes}>#{rendered}</div>#{position_control(mapped)}</div>)
@@ -62,14 +64,19 @@ module Source
         return html.html_safe
       end
 
-      if slide.blocks.any? { |block| block.position }
+      if slide.blocks.any? { |block| block.position || block.art }
         lines_by_content = {}
         source.to_s.lines.each_with_index { |line, line_index| lines_by_content[line.strip] ||= line_index + 1 }
         anchor_lines = source_anchor_lines(source)
         rendered = slide.blocks.map.with_index do |block, index|
           classes = position_classes(block.position)
           line = lines_by_content[block.markdown.to_s.lines.first.to_s.strip] || anchor_lines[index] || 1
-          %(<div class="document-block #{classes}" data-source-anchor="line-#{line}" data-source-line="#{line}">#{DocumentLinks::Renderer.render(block.markdown, documents: documents, workspace: workspace, media_resolver: media_resolver)}</div>)
+          content = if block.art
+            render_art(block.markdown, documents: documents, media_resolver: media_resolver, host_mode: "flowing")
+          else
+            DocumentLinks::Renderer.render(block.markdown, documents: documents, workspace: workspace, media_resolver: media_resolver)
+          end
+          %(<div class="document-block #{classes}" data-source-anchor="line-#{line}" data-source-line="#{line}">#{content}</div>)
         end.join.html_safe
       else
         annotate_source_anchors(
@@ -125,6 +132,15 @@ module Source
       classes = ["position-#{position.horizontal}", "position-#{position.vertical}"]
       classes << "position-vertical" if position.vertical_explicit
       classes.join(" ")
+    end
+
+    def render_art(markdown, documents:, media_resolver:, host_mode:)
+      Source::Renderer.render_art_block(
+        markdown,
+        host_mode: host_mode,
+        media_resolver: media_resolver,
+        document_nodes: DocumentLinks::Renderer.javascript_document_nodes(Array(documents))
+      )
     end
 
     def position_control(mapped)

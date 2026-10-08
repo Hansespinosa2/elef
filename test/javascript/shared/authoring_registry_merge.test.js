@@ -19,6 +19,9 @@ test("default authoring entries with the same ID in different namespaces both su
   assert.equal(find("@", "sqrt")?.namespace, "@")
   assert.equal(find("/", "sup")?.namespace, "/")
   assert.equal(find("@", "sup")?.namespace, "@")
+  const art = find(":", "art")
+  assert.equal(art?.behavior.template, ":::art")
+  assert.deepEqual(art?.argument_schema, { grammar: [], argument_count: 0, values: [] })
 })
 
 test("custom entries replace only a matching namespace and identity", () => {

@@ -53,7 +53,7 @@ function safeAttribute(element, name, value, interactive, documentPagination, me
   if (lower.startsWith("aria-") && /^[a-z-]+$/.test(lower)) return true
   if (lower === "data-action") return interactive && ALLOWED_ACTIONS.has(value)
   if (lower === "data-controller") {
-    if (interactive) return value.split(/\s+/).every((controller) => ["mermaid-diagrams", "presentation-canvas", "document-pages"].includes(controller))
+    if (interactive) return value.split(/\s+/).every((controller) => ["mermaid-diagrams", "presentation-canvas", "document-pages", "art-layout"].includes(controller))
     return documentPagination && element.parentNode?.nodeType === 11 && element.classList.contains("document-reader") && value === "document-pages mermaid-diagrams"
   }
   if (lower === "data-presentation-editor-action") return interactive && element.tagName === "BUTTON" && ALLOWED_PRESENTATION_ACTIONS.has(value)
@@ -65,6 +65,14 @@ function safeAttribute(element, name, value, interactive, documentPagination, me
   if (lower === "data-editor-empty-block") return value === "true"
   if (lower === "data-editor-source-editable") return value === "true" || value === "false"
   if (lower === "data-editor-slide-id") return /^slide-\d+$/.test(value)
+  if (lower === "data-elef-art-root") return value === ""
+  if (lower === "data-art-mode") return ["peers", "sequence"].includes(value)
+  if (lower === "data-art-density") return ["compact", "rich"].includes(value)
+  if (lower === "data-art-status") return ["ready", "pending", "fallback-unsupported", "fallback-no-fit", "error"].includes(value)
+  if (lower === "data-art-layout") return ["peers-wrap", "sequence-horizontal", "sequence-vertical", "plain-list"].includes(value)
+  if (lower === "data-art-settled" || lower === "data-art-overfull") return value === "true" || value === "false"
+  if (lower === "data-art-host") return value === "fixed"
+  if (lower === "data-art-diagnostic") return ["ART_NO_LIST_TARGET", "ART_INVALID_SYNTAX", "ART_UNSUPPORTED_CONTENT", "ART_NO_FIT", "ART_ITEM_TOO_TALL", "ART_INTERNAL_ERROR"].includes(value)
   if (lower === "data-editor-math-source") return element.tagName === "SPAN" && ["katex", "katex-display", "math-error"].some(className => element.classList.contains(className))
   if (lower === "data-editor-math-open" || lower === "data-editor-math-close") return MATH_DELIMITERS.has(value)
   if (lower === "data-presentation-canvas-target") return interactive && element.tagName === "SECTION" && value === "canvas"
