@@ -1,12 +1,14 @@
 import { collectMediaReferences, renderMarkdownBlock, renderPreview } from "./renderer.js"
-import { buildEditorMap, buildEditorStructure, withAppearanceValue } from "./document_map.js"
 import { renderLibraryCard, renderLibraryCardControls } from "./library_card.js"
 import {
   buildDocumentGraph,
+  buildEditorMap,
+  buildEditorStructure,
   extractDocumentLinkTokens,
   isLinkableDocumentTitle,
-  linkableDocumentTitles
-} from "./document_links.js"
+  linkableDocumentTitles,
+  withAppearanceValue
+} from "@elef/work-model"
 
 globalThis.ElefRenderer = Object.freeze({
   collectMediaReferences,

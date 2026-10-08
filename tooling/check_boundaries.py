@@ -51,7 +51,7 @@ def check_contracts() -> list[str]:
 
 def check_deep_imports() -> list[str]:
     violations = []
-    public = {path.parent.parent.name for path in PACKAGES.glob("*/src/index.ts")}
+    public = {path.parent.parent.name for path in PACKAGES.glob("*/src/index.*")}
     for package in sorted(PACKAGES.iterdir()):
         if not package.is_dir():
             continue

@@ -10,7 +10,7 @@ import {
   isLinkableDocumentTitle,
   linkableDocumentTitles,
   parsePortableDocumentLinks
-} from "../../../app/javascript/lib/document_links.js"
+} from "../src/document_links.js"
 
 test("document link extraction ignores escaped, inline, fenced, and indented code", () => {
   const source = [

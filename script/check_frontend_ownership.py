@@ -102,8 +102,8 @@ importmap = (ROOT / "config/importmap.rb").read_text()
 renderer_build = (ROOT / "script/build_renderer.mjs").read_text()
 renderer_sources = (
     ROOT / "app/javascript/lib/renderer.js",
-    ROOT / "app/javascript/lib/document_links.js",
-    ROOT / "app/javascript/lib/document_map.js",
+    ROOT / "packages/work-model/src/document_links.js",
+    ROOT / "packages/work-model/src/document_map.js",
     ROOT / "app/javascript/lib/renderer_global.js",
 )
 editor_runtime = (ROOT / "app/javascript/lib/editor_runtime.js").read_text()
@@ -155,6 +155,18 @@ missing_shared_alias_pins = sorted(frontend_shared_aliases - rails_shared_alias_
 assert not missing_shared_alias_pins, (
     "Every shared Elef module alias must be pinned in the Rails importmap: "
     + ", ".join(missing_shared_alias_pins)
+)
+frontend_package_imports = {
+    specifier
+    for path in app_frontend.rglob("*.js")
+    for specifier in MODULE_SPECIFIER.findall(path.read_text())
+    if specifier.startswith("@elef/")
+}
+rails_package_pins = set(re.findall(r'^pin "(@elef/[^\"]+)"', importmap, re.MULTILINE))
+missing_package_pins = sorted(frontend_package_imports - rails_package_pins)
+assert not missing_package_pins, (
+    "Every shared Elef package import must be pinned in the Rails importmap: "
+    + ", ".join(missing_package_pins)
 )
 
 for module in math_modules:
@@ -359,8 +371,8 @@ assert '"app/views/shared/_authoring_settings_dialog.html.erb"' in build, (
 )
 assert '"lib/library_card"' in desktop_application, "desktop library cards must be owned by app/javascript"
 assert '"lib/editor_controller_lookup"' in desktop_application, "desktop editor lookup must use the app-owned controller helper"
-assert '"lib/document_links"' in desktop_application and "buildDocumentGraph" in desktop_application, (
-    "desktop graph construction must consume the Rails-owned resolver"
+assert '"@elef/work-model"' in desktop_application and "buildDocumentGraph" in desktop_application, (
+    "desktop graph construction must consume the shared work-model resolver"
 )
 assert '"ElefRenderer.buildDocumentGraph"' in (ROOT / "app/lib/source/javascript_renderer.rb").read_text(), (
     "Rails graph construction must use the same app-owned resolver"
@@ -371,8 +383,8 @@ assert "markdown_document_links" not in (ROOT / "crates/local-store/src/lib.rs")
 assert "markdown_document_title" not in (ROOT / "crates/local-store/src/lib.rs").read_text(), (
     "desktop core must return source and folder name; Rails-owned JavaScript derives Markdown graph labels"
 )
-assert "extractFirstMarkdownHeading" in (ROOT / "app/javascript/lib/document_links.js").read_text(), (
-    "document graph labels must use the Rails-owned Markdown rules"
+assert "extractFirstMarkdownHeading" in (ROOT / "packages/work-model/src/document_links.js").read_text(), (
+    "document graph labels must use the shared work-model Markdown rules"
 )
 authoring_settings_dialog = (ROOT / "app/javascript/lib/authoring_settings_dialog.js").read_text()
 assert '"#elef/authoring-registry-write"' in authoring_settings_dialog, "authoring UI must use the app-owned persistence flow"
@@ -419,7 +431,7 @@ for shared_module in (
 assert '"lib/projection_editability"' in (ROOT / "app/javascript/controllers/presentation_editor_controller.js").read_text()
 assert '"lib/projection_editability"' in (ROOT / "app/javascript/controllers/visual_editor_controller.js").read_text()
 assert 'pin "lib/projection_editability", to: "lib/projection_editability.js"' in importmap
-assert all(path.is_file() for path in renderer_sources), "renderer source must stay under app/javascript"
+assert all(path.is_file() for path in renderer_sources), "renderer sources must stay in shared app/javascript or packages"
 assert "desktop/" not in renderer_build, "Rails renderer generation must not reference desktop files"
 desktop_sources = ROOT / "desktop/frontend/src"
 desktop_source_reasons = {

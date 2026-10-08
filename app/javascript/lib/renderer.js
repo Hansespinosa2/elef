@@ -1,8 +1,7 @@
 import MarkdownIt from "markdown-it"
 import hljs from "highlight.js/lib/common"
 import katex from "katex"
-import { buildEditorStructure } from "./document_map.js"
-import { createDocumentLinkResolver, parseDocumentLinkAt } from "./document_links.js"
+import { buildEditorStructure, createDocumentLinkResolver, parseDocumentLinkAt } from "@elef/work-model"
 
 const SAFE_LINK = /^(?:https?:|mailto:|tel:|#|\/|\.\.?\/|[^:]*$)/i
 
