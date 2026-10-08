@@ -1,6 +1,6 @@
 # Phase 6 plan — Work links and graph
 
-Status: DRAFT (unfrozen; freeze records hash in `docs/refactor/status.json`)
+Status: FROZEN at 2026-10-08 (hash recorded in `docs/refactor/status.json`)
 Phase contract: `docs/refactor/phases/06-graph.md` (sha256 `b1d5bf64b406f60d80f745606da3c73ffc504c09f83eaa53a1bb2f796c374bd9`)
 Phase base: `dff371c49ced594eb228123ec0d28cd753007f6e`
 
