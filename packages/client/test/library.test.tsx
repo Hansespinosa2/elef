@@ -425,6 +425,11 @@ test("card previews wait for two frames before loading when a scheduler exists",
     "undefined",
     "linkedom must not schedule frames or every preview test needs flushing",
   );
+  assert.equal(
+    typeof scope["requestIdleCallback"],
+    "undefined",
+    "linkedom must not schedule idle turns either",
+  );
   const frames: Array<(time: number) => void> = [];
   scope["requestAnimationFrame"] = (callback: (time: number) => void): number => {
     frames.push(callback);
@@ -459,5 +464,116 @@ test("card previews wait for two frames before loading when a scheduler exists",
     }
   } finally {
     delete scope["requestAnimationFrame"];
+  }
+});
+
+test("card previews wait for an idle turn when a scheduler exists", async () => {
+  const scope = globalThis as unknown as Record<string, unknown>;
+  const idles: Array<() => void> = [];
+  const seenOptions: unknown[] = [];
+  scope["requestIdleCallback"] = (callback: () => void, options?: unknown): number => {
+    idles.push(callback);
+    seenOptions.push(options);
+    return idles.length;
+  };
+  const host = typedHost();
+  await seed(host);
+  const seen: string[] = [];
+  const works = host.works as unknown as { getWork: (id: string) => Promise<unknown> };
+  const originalGetWork = works.getWork.bind(works);
+  works.getWork = async (id: string): Promise<unknown> => {
+    seen.push(id);
+    return originalGetWork(id);
+  };
+  try {
+    const { shell } = await mountInto(host);
+    try {
+      await settled();
+      assert.deepEqual(seen, [], "no preview fetch before the idle turn");
+      assert.deepEqual(seenOptions, [{ timeout: 1000 }, { timeout: 1000 }]);
+      await act(async () => {
+        idles.splice(0).forEach((run) => run());
+      });
+      await settled();
+      assert.equal(seen.length, 2, "both card previews fetch after the idle turn");
+    } finally {
+      shell.unmount();
+    }
+  } finally {
+    delete scope["requestIdleCallback"];
+  }
+});
+
+test("card previews stand down while hidden and resume on return", async () => {
+  const scope = globalThis as unknown as Record<string, unknown>;
+  type IOCallback = (entries: ReadonlyArray<{ target: Element; isIntersecting: boolean }>) => void;
+  class FakeObserver {
+    static instances: FakeObserver[] = [];
+    target: Element | null = null;
+    disconnected = false;
+    private callback: IOCallback;
+    constructor(callback: IOCallback) {
+      this.callback = callback;
+      FakeObserver.instances.push(this);
+    }
+    observe(target: Element): void {
+      this.target = target;
+    }
+    unobserve(): void {
+      this.target = null;
+    }
+    disconnect(): void {
+      this.disconnected = true;
+    }
+    fire(intersecting: boolean): void {
+      if (this.target !== null) this.callback([{ target: this.target, isIntersecting: intersecting }]);
+    }
+  }
+  scope["IntersectionObserver"] = FakeObserver;
+  const idles: Array<() => void> = [];
+  scope["requestIdleCallback"] = (callback: () => void): number => {
+    idles.push(callback);
+    return idles.length;
+  };
+  const host = typedHost();
+  await seed(host);
+  const seen: string[] = [];
+  const works = host.works as unknown as { getWork: (id: string) => Promise<unknown> };
+  const originalGetWork = works.getWork.bind(works);
+  works.getWork = async (id: string): Promise<unknown> => {
+    seen.push(id);
+    return originalGetWork(id);
+  };
+  try {
+    const { element, shell } = await mountInto(host);
+    try {
+      assert.equal(FakeObserver.instances.length, 2, "both cards observe visibility");
+      await act(async () => {
+        FakeObserver.instances.forEach((observer) => observer.fire(true));
+      });
+      await act(async () => {
+        element.setAttribute("hidden", "");
+      });
+      await act(async () => {
+        idles.splice(0).forEach((run) => run());
+      });
+      await settled();
+      assert.deepEqual(seen, [], "hidden cards never fetch");
+      assert.equal(FakeObserver.instances.length, 4, "paused cards resubscribe");
+      await act(async () => {
+        element.removeAttribute("hidden");
+        FakeObserver.instances.slice(2).forEach((observer) => observer.fire(true));
+      });
+      await act(async () => {
+        idles.splice(0).forEach((run) => run());
+      });
+      await settled();
+      assert.equal(seen.length, 2, "both card previews fetch after return");
+    } finally {
+      shell.unmount();
+    }
+  } finally {
+    delete scope["IntersectionObserver"];
+    delete scope["requestIdleCallback"];
   }
 });

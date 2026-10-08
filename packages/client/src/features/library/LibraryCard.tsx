@@ -70,6 +70,18 @@ function afterPaint(): Promise<void> {
   });
 }
 
+// Preview loads additionally wait for an idle turn so the boot storm of
+// dozens of fetches and main-thread renders does not overlap boot or the
+// first deck open; the timeout caps the wait on a busy thread. Falls back
+// to the paint gate where no idle scheduler exists.
+function afterIdle(): Promise<void> {
+  const idle = globalThis.requestIdleCallback;
+  if (typeof idle !== "function") return afterPaint();
+  return new Promise((resolve) => {
+    idle(() => resolve(), { timeout: 1000 });
+  });
+}
+
 function LibraryCardView({ host, work, documentNodes, options, onChanged }: LibraryCardProps): JSX.Element {
   const navigate = options.navigate;
   const editUrl = localTarget(
@@ -344,6 +356,7 @@ function CardPreview({
   useSlideScale(containerRef as RefObject<HTMLElement | null>, work.kind === "document" ? { width: 794, height: 1123 } : {});
 
   useEffect(() => {
+    if (started) return;
     const container = containerRef.current;
     if (container === null || typeof IntersectionObserver === "undefined") {
       setStarted(true);
@@ -361,7 +374,7 @@ function CardPreview({
     );
     observer.observe(container);
     return () => observer.disconnect();
-  }, []);
+  }, [started]);
 
   // Keyed ref-guard instead of a dep array: listing `state` in deps would
   // re-run (and cancel) the in-flight load on every phase transition. The
@@ -386,8 +399,20 @@ function CardPreview({
       function commit(next: PreviewState): void {
         if (mounted.current && loadKey.current === key) setState(next);
       }
-      await afterPaint();
+      await afterIdle();
       if (!mounted.current || loadKey.current !== key) return;
+      const preview = containerRef.current;
+      if (preview === null) return;
+      if (preview.closest("[hidden]") !== null) {
+        // The library hid (the editor opened) while this load waited: stand
+        // down so invisible cards never spend fetches or main-thread
+        // renders. With an observer the visibility effect resubscribes and
+        // restarts the load on return; without one the key stays clear so
+        // the next parent render retries, and no state churns while hidden.
+        loadKey.current = null;
+        if (typeof IntersectionObserver !== "undefined") setStarted(false);
+        return;
+      }
       try {
         const snapshot = await host.works.getWork(work.id);
         const rendered = renderPreviewCore({
