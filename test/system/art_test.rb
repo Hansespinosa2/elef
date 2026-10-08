@@ -391,6 +391,33 @@ class ArtTest < ApplicationSystemTestCase
     assert_equal "sequence-vertical", art["data-art-layout"]
     assert_equal "ready", art["data-art-status"]
     assert_equal long_word, art.all(".elef-art-list > li").first.text
+
+    page.execute_script(<<~JAVASCRIPT)
+      const surface = document.querySelector(".presentation-surface[data-controller~='art-layout']");
+      const controller = window.Stimulus.getControllerForElementAndIdentifier(surface, "art-layout");
+      const root = surface.querySelector("[data-elef-art-root]");
+      const stats = window.__artFallbackStats = {decisions: 0, measurements: 0, fallbackMeasurements: 0, layoutWrites: 0};
+      const decision = controller.runDecisionPass.bind(controller);
+      const measurement = controller.runMeasurementPass.bind(controller);
+      const fallback = controller.runFallbackMeasurement.bind(controller);
+      controller.runDecisionPass = (...args) => { stats.decisions += 1; return decision(...args); };
+      controller.runMeasurementPass = (roots) => { stats.measurements += 1; return measurement(roots); };
+      controller.runFallbackMeasurement = (roots) => { stats.fallbackMeasurements += 1; return fallback(roots); };
+      root.dataset.artLayout = "sequence-vertical";
+      root.dataset.artStatus = "pending";
+      root.dataset.artSettled = "false";
+      new MutationObserver((records) => { stats.layoutWrites += records.length; }).observe(root, {attributes: true, attributeFilter: ["data-art-layout"]});
+      controller.schedule();
+    JAVASCRIPT
+    fallback_stats = page.evaluate_async_script(<<~JAVASCRIPT)
+      const done = arguments[0];
+      setTimeout(() => done({...window.__artFallbackStats, layout: document.querySelector(".presentation-surface [data-elef-art-root]").dataset.artLayout}), 500);
+    JAVASCRIPT
+    assert_equal "sequence-vertical", fallback_stats.fetch("layout")
+    assert_equal 1, fallback_stats.fetch("decisions"), fallback_stats.inspect
+    assert_equal 1, fallback_stats.fetch("measurements"), fallback_stats.inspect
+    assert_equal 1, fallback_stats.fetch("fallbackMeasurements"), fallback_stats.inspect
+    assert_equal 2, fallback_stats.fetch("layoutWrites"), fallback_stats.inspect
   end
 
   test "document Sequence preserves order and reflows at 320, 640, and 320 CSS pixels in RTL" do
