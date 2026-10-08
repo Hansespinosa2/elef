@@ -776,14 +776,12 @@ class DesktopEditorUi {
     typeNativeText("$")
     typeNativeText("$")
     await this.waitForSource(expectedPairSource)
-    sendNativeKey("Enter", { activate: false })
+    sendNativeKey("Enter")
   }
 
   async assertDisplayMathCaret(expectedSource, expectedCaret, mode) {
     const visual = mode === "visual"
-    let lastState
-    try {
-      await browser.waitUntil(async () => {
+    await browser.waitUntil(async () => {
       const state = await browser.execute(() => {
         const form = document.querySelector("#desktop-editor-form")
         const editor = document.querySelector("#desktop-editor-field")?.editorController
@@ -802,17 +800,13 @@ class DesktopEditorUi {
           visualOffset: selection?.focusOffset ?? null
         }
       })
-      lastState = state
       return state?.mode === mode && state.value === expectedSource &&
         state.selectionStart === expectedCaret && state.selectionEnd === expectedCaret &&
         (!visual || (state.previewSource === expectedSource && state.activeMathText === "$$\n\n$$" && state.visualOffset === 3))
-      }, {
-        timeout: 10_000,
-        timeoutMsg: `The desktop ${mode} editor did not keep the caret on the empty display-math body line`
-      })
-    } catch (error) {
-      throw new Error(`${error.message}; last editor state: ${JSON.stringify(lastState)}`)
-    }
+    }, {
+      timeout: 10_000,
+      timeoutMsg: `The desktop ${mode} editor did not keep the caret on the empty display-math body line`
+    })
   }
 
   async assertModeSwitchRespectsNewCaret() {
