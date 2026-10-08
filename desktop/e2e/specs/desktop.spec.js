@@ -734,6 +734,22 @@ class DesktopEditorUi {
   }
 
   async typeEmptyDisplayMath(mode) {
+    await browser.execute(() => {
+      const captureEnter = event => {
+        if (event.key !== "Enter") return
+        window.__displayMathEnterEvent = {
+          trusted: event.isTrusted,
+          defaultPrevented: event.defaultPrevented,
+          target: event.target?.nodeName,
+          targetClass: String(event.target?.className || ""),
+          activeElement: document.activeElement?.id || document.activeElement?.nodeName
+        }
+        window.removeEventListener("keydown", captureEnter)
+        delete window.__displayMathEnterCapture
+      }
+      window.__displayMathEnterCapture = captureEnter
+      window.addEventListener("keydown", captureEnter)
+    })
     await browser.execute(() => window.focus())
     focusDesktopWindow()
     let target
@@ -791,12 +807,16 @@ class DesktopEditorUi {
         const activeMath = focusElement?.closest?.(".editor-math-active")
         return {
           mode: editor?.editingMode,
+          visualKind: form?.visualEditorController?.kindValue ?? null,
           value: editor?.value,
           selectionStart: editor?.selectionStart,
           selectionEnd: editor?.selectionEnd,
           previewSource: form?.previewController?.pendingProjection?.source || null,
           activeMathText: activeMath?.textContent || null,
-          visualOffset: selection?.focusOffset ?? null
+          visualOffset: selection?.focusOffset ?? null,
+          activeElement: document.activeElement?.id || document.activeElement?.nodeName,
+          activeElementClass: String(document.activeElement?.className || ""),
+          nativeEnterEvent: window.__displayMathEnterEvent || null
         }
       })
       lastState = state
@@ -809,6 +829,12 @@ class DesktopEditorUi {
       })
     } catch (error) {
       throw new Error(`${error.message}; last editor state: ${JSON.stringify(lastState)}`)
+    } finally {
+      await browser.execute(() => {
+        if (window.__displayMathEnterCapture) window.removeEventListener("keydown", window.__displayMathEnterCapture)
+        delete window.__displayMathEnterCapture
+        delete window.__displayMathEnterEvent
+      }).catch(() => {})
     }
   }
 
