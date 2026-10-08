@@ -8,7 +8,7 @@
   "head_sha": "27070f59d3ec7591a615fda02fa06503fd0ca432",
   "review_round": 1,
   "phase_contract_sha256": "94bb77f5e36623c4dc29f559ac7f24edeb753d9f2589cae62343090fa40fd19e",
-  "frozen_plan_sha256": "e5598ed2eb1b816981e4365d86b53c77ed5f426c8b00f1820f358b511b4109bb",
+  "frozen_plan_sha256": "7476c2d4b9210760d8576059701e506d920b4c51c2d41cb5943c27db05267751",
   "last_completed_phase": 4,
   "last_verified_checks": [
     {
@@ -257,5 +257,5 @@
   },
   "pending_human_gates": [],
   "blocker": null,
-  "next_action": "Phase 05 DO round-1 fix: residual vim UI deleted (c3b765f), retention logged; re-gate new candidate and request review round 2."
+  "next_action": "Phase 05 DO round-1 fix: residual vim UI deleted (c3b765f); built-in retention logged in review record instead of frozen plan (plan edit after production is not re-freezable); re-gate new candidate and request review round 2."
 }
