@@ -91,7 +91,7 @@
     "ART-INV-014": {
       "status": "VERIFIED",
       "verification": [
-        "static:script/check_art_static.py#SHARED_RENDERER_CONSUMED_BY_DESKTOP"
+        "static:script/check_art_static.py#SHARED_RENDERER_EXPORTS_ART_API"
       ]
     },
     "ART-INV-015": {
@@ -184,7 +184,7 @@
       "status": "VERIFIED",
       "verification": [
         "test:test/javascript/art_source.test.js#ART-ARCH-SHARED-MAP",
-        "static:script/check_art_static.py#SHARED_RENDERER_CONSUMED_BY_DESKTOP"
+        "static:script/check_art_static.py#SHARED_RENDERER_EXPORTS_ART_API"
       ]
     },
     "ART-ARCH-002": {
@@ -198,7 +198,7 @@
       "status": "VERIFIED",
       "verification": [
         "doc:docs/smartart/INTEGRATION-MAP.md#Current integration points",
-        "static:script/check_art_static.py#SHARED_RENDERER_CONSUMED_BY_DESKTOP"
+        "static:script/check_art_static.py#SHARED_RENDERER_EXPORTS_ART_API"
       ]
     },
     "ART-ARCH-004": {

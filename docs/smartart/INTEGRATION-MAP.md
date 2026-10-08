@@ -46,3 +46,5 @@ Phase 0 audit and current implementation map for [Constitution v6.0](CONSTITUTIO
 - `564102f` Verify bounded Art fallback lifecycle
 
 The canonical two- and three-column fixture measurements reveal conflicts between FIX-06/FIX-07's expected `ready` state and the mandatory whole-host containment rule. The implementation preserves the host oracle and reports explicit no-fit; details are in `VERIFICATION.json` and the fixture tests.
+
+The existing stylesheet-index architecture test intentionally changes its expected import count from 12 to 13 and asserts the new `components/art.css` import. This is the only baseline assertion changed to account for the new shared component partial.

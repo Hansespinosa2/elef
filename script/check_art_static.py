@@ -13,7 +13,6 @@ CONTROLLER_JS = ROOT / "app/javascript/controllers/art_layout_controller.js"
 SOURCE_JS = ROOT / "app/javascript/lib/art_source.js"
 RENDERER_JS = ROOT / "app/javascript/lib/renderer.js"
 GLOBAL_RENDERER_JS = ROOT / "app/javascript/lib/renderer_global.js"
-DESKTOP_BUILD_JS = ROOT / "desktop/frontend/build.mjs"
 AUTHORING_REGISTRY = ROOT / "app/javascript/data/default_authoring_registry.json"
 
 required_tokens = {
@@ -37,7 +36,6 @@ controller_js = CONTROLLER_JS.read_text()
 source_js = SOURCE_JS.read_text()
 renderer_js = RENDERER_JS.read_text()
 global_renderer_js = GLOBAL_RENDERER_JS.read_text()
-desktop_build_js = DESKTOP_BUILD_JS.read_text()
 authoring_registry = AUTHORING_REGISTRY.read_text()
 
 
@@ -85,11 +83,11 @@ def fixed_geometry_uses_layout_space_and_css_tokens():
     return "getBoundingClientRect" not in layout_js + controller_js and "offsetParent" in layout_js and "clientWidth" in controller_js and tokens_single_source()
 
 
-def shared_renderer_consumed_by_desktop():
+def shared_renderer_exports_art_api():
     return (
         "analyzeArtList" in renderer_js
         and "renderArtBlock" in global_renderer_js
-        and "vendor/javascript/elef-renderer.bundle.js" in desktop_build_js
+        and "resolveArtBindings" in global_renderer_js
     )
 
 
@@ -124,7 +122,7 @@ STATIC_ASSERTIONS = {
     "NATIVE_SEQUENCE_MARKERS_AND_DECORATION": native_sequence_markers_and_decoration,
     "FIXED_HOST_POSITIONED": fixed_host_positioned,
     "FIXED_GEOMETRY_LAYOUT_SPACE_AND_CSS_TOKENS": fixed_geometry_uses_layout_space_and_css_tokens,
-    "SHARED_RENDERER_CONSUMED_BY_DESKTOP": shared_renderer_consumed_by_desktop,
+    "SHARED_RENDERER_EXPORTS_ART_API": shared_renderer_exports_art_api,
     "LIFECYCLE_BATCHED_AND_CLEANED_UP": lifecycle_is_batched_and_cleaned_up,
     "NO_EXPLICIT_LAYOUT_DSL_OR_DEFERRED_DECORATION": no_explicit_layout_dsl_or_deferred_decoration,
     "DOM_ENUMS_AND_STABLE_DIAGNOSTICS": dom_enums_and_stable_diagnostics,
