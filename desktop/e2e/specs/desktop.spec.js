@@ -773,14 +773,37 @@ class DesktopEditorUi {
       if (focus.selectionStart !== focus.valueLength) {
         throw new Error(`CodeMirror did not retain the end-of-source caret before native typing: ${JSON.stringify(focus)}`)
       }
+      const vimState = await browser.execute(() => {
+        const editor = document.querySelector("#desktop-editor-field")?.editorController
+        return {
+          enabled: editor?.vimEnabled === true,
+          insertMode: editor?.vimMode?.startsWith("insert") === true
+        }
+      })
+      if (vimState.enabled && !vimState.insertMode) {
+        typeNativeText("i", { activate: false })
+        await browser.waitUntil(async () => browser.execute(() =>
+          document.querySelector("#desktop-editor-field")?.editorController?.vimMode?.startsWith("insert") === true
+        ), {
+          timeout: 5_000,
+          timeoutMsg: "The source editor did not enter Vim insert mode before display-math input"
+        })
+      }
     }
 
-    await browser.execute(() => {
+    await browser.execute(mode => {
       const events = []
-      const handler = event => events.push({ key: event.key, trusted: event.isTrusted })
+      const editor = mode === "source"
+        ? document.querySelector("#desktop-editor-field .cm-content")
+        : document.querySelector("#desktop-preview .document-editor-block[data-editor-empty-block='true']")
+      const handler = event => events.push({
+        key: event.key,
+        trusted: event.isTrusted,
+        inEditor: Boolean(editor && (event.target === editor || editor.contains(event.target)))
+      })
       document.addEventListener("keydown", handler, true)
       window.__elefDisplayMathKeys = { events, handler }
-    })
+    }, mode)
     let keys
     try {
       typeNativeText("$")
@@ -795,8 +818,9 @@ class DesktopEditorUi {
       })
     }
     const expectedKeys = ["$", "$", "Enter"]
-    if (JSON.stringify(keys.map(({ key }) => key)) !== JSON.stringify(expectedKeys) || keys.some(({ trusted }) => !trusted)) {
-      throw new Error(`Display-math input did not arrive as the expected trusted keys: ${JSON.stringify(keys)}`)
+    if (JSON.stringify(keys.map(({ key }) => key)) !== JSON.stringify(expectedKeys) ||
+      keys.some(({ trusted, inEditor }) => !trusted || !inEditor)) {
+      throw new Error(`Display-math input did not reach the editor as the expected trusted keys: ${JSON.stringify(keys)}`)
     }
   }
 
