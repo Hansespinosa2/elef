@@ -3,7 +3,7 @@
   "campaign_branch": "feat/refactor-desktop-and-web",
   "campaign_base_sha": "88f61a7a8ffd7c276bafcf06eee09c36a8adf134",
   "current_phase": 4,
-  "phase_state": "DO",
+  "phase_state": "PLAN",
   "phase_base_sha": "2bdfa86d6c6651b692a9c3bf11988309d52b27be",
   "head_sha": "ddbc69599fb9caf9d8ca82d79a7acf35494a3e50",
   "review_round": 1,
@@ -220,5 +220,5 @@
   },
   "pending_human_gates": [],
   "blocker": null,
-  "next_action": "DO: fix P4R1-PERF-01 (worker warmup, refresh dedup, post-paint previews, reload bailout) + OBS-P4R1-02; OBS-P4R1-01 via later PLAN re-freeze; re-verify, re-gate, review round 2."
+  "next_action": "Phase 04 re-plan: name additive updatedAt/warnings contract fields (OBS-P4R1-01); re-freeze, then re-gate."
 }
