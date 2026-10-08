@@ -11,9 +11,18 @@ import {
   buildEditorMap,
   buildEditorStructure,
   extractDocumentLinkTokens,
+  extractFirstMarkdownHeading,
   isLinkableDocumentTitle,
   linkableDocumentTitles,
-  withAppearanceValue
+  normalizeThemeValue,
+  normalizeTypographyValue,
+  parsePortableDocumentLinks,
+  readStyle,
+  readStyleOverrides,
+  replaceFirstHeading,
+  sourceAnchorLines,
+  withAppearanceValue,
+  withFrontMatterValue
 } from "@elef/work-model"
 
 globalThis.ElefRenderer = Object.freeze({
@@ -26,7 +35,16 @@ globalThis.ElefRenderer = Object.freeze({
   renderLibraryCardControls,
   buildDocumentGraph,
   extractDocumentLinkTokens,
+  extractFirstMarkdownHeading,
   isLinkableDocumentTitle,
   linkableDocumentTitles,
-  withAppearanceValue
+  normalizeThemeValue,
+  normalizeTypographyValue,
+  parsePortableDocumentLinks,
+  readStyle,
+  readStyleOverrides,
+  replaceFirstHeading,
+  sourceAnchorLines,
+  withAppearanceValue,
+  withFrontMatterValue
 })

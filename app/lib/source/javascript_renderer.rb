@@ -62,6 +62,55 @@ module Source
       ).deep_symbolize_keys
     end
 
+    def work_structure(source, source_name:, mode:)
+      raise ArgumentError, "The selected file did not contain readable text." unless source.is_a?(String)
+
+      normalized_mode = mode.to_sym
+      raise ArgumentError, "Unsupported document mode" unless %i[presentation document].include?(normalized_mode)
+
+      context.call(
+        "ElefRenderer.buildEditorStructure",
+        source,
+        { sourceName: source_name.to_s, mode: normalized_mode.to_s }
+      ).deep_symbolize_keys
+    end
+
+    def read_style(source)
+      context.call("ElefRenderer.readStyle", source.to_s).deep_symbolize_keys
+    end
+
+    def style_overrides(source)
+      context.call("ElefRenderer.readStyleOverrides", source.to_s).deep_symbolize_keys
+    end
+
+    def normalize_theme_value(value)
+      context.call("ElefRenderer.normalizeThemeValue", value.to_s)
+    end
+
+    def normalize_typography_value(value)
+      context.call("ElefRenderer.normalizeTypographyValue", value.to_s)
+    end
+
+    def with_front_matter_value(source, key, value)
+      context.call("ElefRenderer.withFrontMatterValue", source.to_s, key.to_s, value)
+    end
+
+    def portable_document_link_metadata(source)
+      context.call("ElefRenderer.parsePortableDocumentLinks", source.to_s).deep_symbolize_keys
+    end
+
+    def first_heading(source)
+      context.call("ElefRenderer.extractFirstMarkdownHeading", source.to_s)
+    end
+
+    def replace_first_heading(source, title)
+      context.call("ElefRenderer.replaceFirstHeading", source.to_s, title.to_s)
+    end
+
+    def source_anchor_lines(source)
+      context.call("ElefRenderer.sourceAnchorLines", source.to_s)
+    end
+
     def editor_preview(
       source,
       kind:,
