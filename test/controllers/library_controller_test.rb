@@ -28,7 +28,7 @@ class LibraryControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "presentations collection boots the shell with lineage slot and card notes" do
-    parent = Presentation.create!(title: "Shell parent", source: "# Shell parent")
+    parent = presentations(:one)
     fork = parent.fork_as("continuation")
     fork.save!
 
@@ -39,7 +39,7 @@ class LibraryControllerTest < ActionDispatch::IntegrationTest
     assert_select "template[data-client-slot='actions'] input[value='Load sample presentations']", 1
     assert_select "template[data-client-slot='lineage'] .lineage-panel", 1
     notes = JSON.parse(css_select("#client-shell-mount").first["data-client-shell-card-notes-value"])
-    assert_equal "Forked from Shell parent · continuation", notes.fetch(fork.id.to_s)
+    assert_equal "Forked from Demo Deck · continuation", notes.fetch(fork.id.to_s)
     assert_select "article.library-card", count: 0
   end
 
