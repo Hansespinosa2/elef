@@ -133,6 +133,35 @@ test("duplicate portable keys and aliases stay unresolved instead of selecting t
   ]).edges, [])
 })
 
+test("duplicate plain titles resolve to the last document instead of staying unresolved", () => {
+  const graph = buildDocumentGraph([
+    { id: "source", title: "Source", source: "[[Repeated]]" },
+    { id: "first", title: "Repeated", source: "" },
+    { id: "second", title: "Repeated", source: "" }
+  ])
+
+  assert.deepEqual(graph.edges, [{ source: "source", target: "second" }])
+})
+
+test("self links produce a self edge instead of being dropped", () => {
+  const graph = buildDocumentGraph([
+    { id: "solo", title: "Solo", source: "[[Solo]]" }
+  ])
+
+  assert.deepEqual(graph.edges, [{ source: "solo", target: "solo" }])
+})
+
+test("explicit id and document key forms escape ambiguous aliases at graph level", () => {
+  const source = `---\nelef_aliases: ["Shared"]\n---\n`
+  const graph = buildDocumentGraph([
+    { id: "source", title: "Source", source: "[[Shared]] [[id:second]] [[document:second]]" },
+    { id: "first", title: "First", source },
+    { id: "second", title: "Second", source }
+  ])
+
+  assert.deepEqual(graph.edges, [{ source: "source", target: "second" }])
+})
+
 test("malformed portable Markdown metadata safely falls back to the deck identity", () => {
   assert.deepEqual(parsePortableDocumentLinks("---\nelef_document_key: [bad\nelef_aliases: nope\n---\n# Notes"), {
     documentKey: null,
