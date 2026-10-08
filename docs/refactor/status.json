@@ -3,7 +3,7 @@
   "campaign_branch": "feat/refactor-desktop-and-web",
   "campaign_base_sha": "88f61a7a8ffd7c276bafcf06eee09c36a8adf134",
   "current_phase": 4,
-  "phase_state": "PLAN",
+  "phase_state": "DO",
   "phase_base_sha": "2bdfa86d6c6651b692a9c3bf11988309d52b27be",
   "head_sha": "2bdfa86d6c6651b692a9c3bf11988309d52b27be",
   "review_round": 0,
@@ -196,5 +196,5 @@
   },
   "pending_human_gates": [],
   "blocker": null,
-  "next_action": "Phase 04 re-plan: .js dist naming recorded; re-freeze, then CHECK prep."
+  "next_action": "Phase 04 CHECK prep: prepare-gate 4 on the committed candidate."
 }
