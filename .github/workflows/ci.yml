@@ -234,7 +234,7 @@ jobs:
       - name: Build the Rails-owned renderer
         run: npm run renderer:build
       - name: Verify the Rails renderer bundle is current
-        run: git diff --exit-code -- vendor/javascript/elef-renderer.bundle.js
+        run: git diff --exit-code -- vendor/javascript/elef-renderer.bundle.js vendor/javascript/art_source.bundle.js
       - name: Test Rails-owned frontend modules
         run: npm run test:javascript
       - name: Test desktop frontend adapters
@@ -369,7 +369,7 @@ jobs:
       - name: Build the Rails-owned renderer
         run: npm run renderer:build
       - name: Verify the Rails renderer bundle is current
-        run: git diff --exit-code -- vendor/javascript/elef-renderer.bundle.js
+        run: git diff --exit-code -- vendor/javascript/elef-renderer.bundle.js vendor/javascript/art_source.bundle.js
       - name: Test Rails-owned frontend modules
         run: npm run test:javascript
       - name: Test desktop frontend adapters
@@ -469,7 +469,7 @@ jobs:
         run: |
           npm run renderer:build
       - name: Verify the Rails renderer bundle is current
-        run: git diff --exit-code -- vendor/javascript/elef-renderer.bundle.js
+        run: git diff --exit-code -- vendor/javascript/elef-renderer.bundle.js vendor/javascript/art_source.bundle.js
       - name: Exercise Rails rendering on Apple Silicon macOS
         env:
           RAILS_ENV: test

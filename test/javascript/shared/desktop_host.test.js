@@ -25,6 +25,7 @@ const authoringMarkup = await read("app/views/shared/_authoring_settings_dialog.
 const page = hostTemplate.replace("<!-- elef:shared-authoring-settings -->", authoringMarkup)
 const importmap = await read("config/importmap.rb")
 const rootPackage = JSON.parse(await read("package.json"))
+const documentMap = await read("app/javascript/lib/document_map.js")
 const appearanceController = await read("app/javascript/controllers/appearance_controller.js")
 const autosaveController = await read("app/javascript/controllers/autosave_controller.js")
 const { document } = parseHTML(page)
@@ -131,6 +132,13 @@ test("Rails and desktop share one sanitized preview insertion path", () => {
   assert.doesNotMatch(previewInstaller, /elefInstallDesktopPreview|innerHTML/)
   assert.doesNotMatch(editorView, /elefInstallDesktopPreview/)
   assert.doesNotMatch(application, /elefInstallDesktopPreview/)
+})
+
+test("Rails and desktop resolve the same Art source semantics", () => {
+  assert.match(documentMap, /from "#elef\/art-source"/)
+  assert.match(importmap, /pin "#elef\/art-source", to: "art_source\.bundle\.js"/)
+  assert.equal(rootPackage.imports["#elef/art-source"], "./app/javascript/lib/art_source.js")
+  assert.match(build, /#elef\/art-source/)
 })
 
 test("the Rails-owned application references elements present in its host template", () => {

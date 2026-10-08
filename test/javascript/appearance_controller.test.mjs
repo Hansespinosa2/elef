@@ -17,6 +17,7 @@ const appearance = await import(`data:text/javascript;base64,${Buffer.from(sourc
 test("Rails importmap pins the shared appearance source mapper", async () => {
   const importmap = await readFile(importmapPath, "utf8")
   assert.match(importmap, /pin "lib\/document_map", to: "lib\/document_map\.js"/)
+  assert.match(importmap, /pin "#elef\/art-source", to: "art_source\.bundle\.js"/)
 })
 
 test("the shared appearance controller commits selected styles to Markdown", () => {

@@ -73,7 +73,7 @@ When changing the renderer or styles, rebuild the relevant artifact and inspect 
 ~~~sh
 npm run renderer:build
 bin/rails tailwindcss:build
-git diff -- app/assets/builds/tailwind.css vendor/javascript/elef-renderer.bundle.js
+git diff -- app/assets/builds/tailwind.css vendor/javascript/elef-renderer.bundle.js vendor/javascript/art_source.bundle.js
 ~~~
 
 CI checks that these generated files match their sources, checks the one-way frontend ownership and Tauri capability/CSP contracts, runs Rails tests with PostgreSQL and SQLite, runs Rails system tests, and builds/tests desktop on Linux and macOS. Re-run the smallest relevant check after the final edit; report the exact tier and platform actually exercised.

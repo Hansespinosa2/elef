@@ -1,4 +1,4 @@
-import { ART_DIAGNOSTICS, resolveArtBindings } from "./art_source.js"
+import { ART_DIAGNOSTICS, resolveArtBindings } from "#elef/art-source"
 
 const THEMES = new Set(["light", "dark", "match"])
 const TYPOGRAPHIES = new Set(["book", "modern", "technical"])
