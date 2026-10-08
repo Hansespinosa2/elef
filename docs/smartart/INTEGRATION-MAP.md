@@ -54,6 +54,7 @@ Phase 0 audit and current implementation map for [Constitution v6.0](CONSTITUTIO
 - `7a1bffb` Bundle shared Art parser for Rails
 - `e86bb61` Verify Art semantics across web and desktop
 - `e9dc9be` Read Art item text across tight lists
+- `9e2ce72` Contain Art within inferred slide regions
 
 FIX-06 and FIX-07 now pass the mandatory whole-host containment oracle at the measured 535×416 and 341×416 CSS-pixel regions. In inferred-column Art hosts, `.slide-region-block` retains the block's position classes and editor controls are overlays, so editor chrome does not consume authored slide height or create false no-fit warnings. Authored headings, Art roots, and all slide-region siblings remain part of the host measurement.
 
