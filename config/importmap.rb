@@ -42,6 +42,7 @@ pin "@elef/client", to: "client/dist/elef-client.js"
 pin "@elef/client/preview-core", to: "client/dist/preview-core.js" # deferred card-preview renderer (KaTeX, highlight.js)
 pin "@elef/client/sanitize", to: "client/dist/sanitize.js"
 pin "host/rails-http-host", to: "host/rails-http-host.js"
+pin "host/rails-authoring-settings-transport", to: "host/rails-authoring-settings-transport.js"
 pin "@elef/work-model", to: "work-model/src/index.js"
 pin "@elef/work-model/document-map", to: "work-model/src/document_map.js"
 pin "@elef/work-model/document-links", to: "work-model/src/document_links.js"

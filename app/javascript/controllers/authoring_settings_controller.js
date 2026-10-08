@@ -1,7 +1,7 @@
 import { Controller } from "@hotwired/stimulus"
 import "elef-renderer"
 import { authoringSettingsElements, createAuthoringSettingsDialog } from "lib/authoring_settings_dialog"
-import { createRailsAuthoringSettingsTransport } from "lib/rails_authoring_settings_transport"
+import { createRailsAuthoringSettingsTransport } from "host/rails-authoring-settings-transport"
 
 export default class extends Controller {
   static values = {

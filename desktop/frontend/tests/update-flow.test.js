@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { checkForDesktopUpdate, createIdleUpdateCheck, installDesktopUpdate } from "../src/update-flow.js"
+import { checkForDesktopUpdate, createDesktopUpdaterSeam, createIdleUpdateCheck, installDesktopUpdate } from "../src/update-flow.js"
 
 test("update checks distinguish no update from an announced available update", async () => {
   assert.equal(await checkForDesktopUpdate(async () => null), null)
@@ -79,6 +79,25 @@ test("startup update checks wait until the editor is idle and run once", async (
   assert.equal(await updateCheck.resume(), true)
   assert.equal(await updateCheck.resume(), false)
   assert.equal(checks, 1)
+})
+
+test("the client updater seam reports availability and releases the native update", async () => {
+  let released = 0
+  const seam = createDesktopUpdaterSeam({
+    check: async () => ({ version: "9.1.0", close: async () => { released += 1 } })
+  })
+  // The seam speaks the plugin shape through the desktop check wrapper:
+  // checkForDesktopUpdate adapts it to { version, dispose }.
+  const checking = createDesktopUpdaterSeam({
+    check: () => checkForDesktopUpdate(async () => ({ version: "9.1.0" }))
+  })
+  assert.deepEqual(await checking.status(), { available: true, version: "9.1.0" })
+  assert.deepEqual(await checking.checkForUpdate(), { available: true, version: "9.1.0" })
+  assert.deepEqual(await seam.status(), { available: true, version: "9.1.0" })
+  assert.equal(released, 1)
+  const quiet = createDesktopUpdaterSeam({ check: async () => null })
+  assert.deepEqual(await quiet.status(), { available: false })
+  assert.throws(() => createDesktopUpdaterSeam({}), /check function/)
 })
 
 test("manual update checks cancel a pending startup check", () => {

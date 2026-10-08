@@ -500,6 +500,7 @@ desktop_source_reasons = {
     "preview-transport.js": "adapts the shared renderer to the desktop preview endpoint",
     "quiet_save_policy.js": "declares desktop quiet-save timing injected into the shared session factory",
     "renderer-worker.js": "starts the packaged renderer bundle in a Web Worker",
+    "tauri-authoring-transport.js": "implements the shared authoring-registry seam over native registry commands",
     "tauri-host.js": "implements the ElefHost contract over Tauri invoke for the desktop shell",
     "transport-adapter.js": "maps Rails-shaped requests to native command calls",
     "update-flow.js": "drives the Tauri updater and native relaunch",

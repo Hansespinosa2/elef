@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { createRailsAuthoringSettingsTransport } from "../../../app/javascript/lib/rails_authoring_settings_transport.js"
+import { createRailsAuthoringSettingsTransport } from "../../../app/javascript/host/rails-authoring-settings-transport.js"
 
 function jsonResponse(status, body = null) {
   return {

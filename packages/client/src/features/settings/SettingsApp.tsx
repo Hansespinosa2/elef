@@ -63,16 +63,17 @@ export function SettingsApp({ host, options, storage, registerControl }: Setting
       setEscapeKey(vim.escapeKey);
       setLineNumberMode(vim.lineNumberMode);
       setModeAwareCursor(vim.modeAwareCursor);
+      setUpdaterStatus(null);
+      setReady(true);
+      // The updater endpoint can take seconds; it must never delay the
+      // settings form. Load availability in the background after first paint.
       if (host.capabilities.updater && options.updater) {
         try {
           setUpdaterStatus(await options.updater.status());
         } catch {
           setUpdaterStatus(null);
         }
-      } else {
-        setUpdaterStatus(null);
       }
-      setReady(true);
     } catch {
       showNotice("Settings could not be loaded.", "error");
     }
