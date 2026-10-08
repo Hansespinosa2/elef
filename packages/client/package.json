@@ -15,7 +15,7 @@
     ".": "./src/index.ts",
     "./sanitize": {
       "types": "./src/ui/sanitize.ts",
-      "default": "./dist/sanitize.mjs"
+      "default": "./dist/sanitize.js"
     }
   },
   "files": [

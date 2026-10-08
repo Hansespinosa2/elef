@@ -8,7 +8,7 @@
   "head_sha": "2bdfa86d6c6651b692a9c3bf11988309d52b27be",
   "review_round": 0,
   "phase_contract_sha256": "1c172f31ad0e9a4d511767a10c9439d6bff12b0fca7a4fc8b188f4fee0a0fd55",
-  "frozen_plan_sha256": "3f87a7c26a53c8fed4603d591b7214b642fdbc0b4e208adb98c598e68f4477b6",
+  "frozen_plan_sha256": "c3ed1d505e974898c2c8fb35249995c20f2642f7f7446a78ca88bdee5078289e",
   "last_completed_phase": 3,
   "last_verified_checks": [
     {

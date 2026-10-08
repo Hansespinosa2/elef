@@ -38,7 +38,7 @@ Open questions / unknowns (each is a blocker or has a resolution step): none. Ju
 ## 2. Scope
 In scope:
 - `packages/client` (React 19 + TS strict, ESM): `application/` (mountElef, library-link router, orchestration), `features/library/` (list/search/filter/create/open/rename/delete), `ui/` (primitives + SafeHtml sole raw-HTML boundary). P04-03's seven behaviors are the phase's "product library behavior" line.
-- `dist/elef-client.mjs`: single-file esbuild bundle (React included, JS only; visual classes reuse the existing shared stylesheet both hosts load today). Hosts consume dist; freshness check extended.
+- `dist/elef-client.js`: single-file esbuild bundle (React included, JS only; visual classes reuse the existing shared stylesheet both hosts load today). Hosts consume dist; freshness check extended. (`.js`, not `.mjs`: Propshaft serves unknown `.mjs` with an empty MIME so module scripts fail to load.)
 - Host switch-over: Rails library routes (`/`, `/documents`, `/presentations`) serve a shell page mounting the same client with the Rails adapter + `initialUrl`; desktop `main.js` boots mountElef with the Tauri adapter (editor boot stays).
 - Production adapters move to their hosts: Rails adapter → `app/javascript/host/rails-http-host.js`; Tauri adapter → `desktop/frontend/src/tauri-host.js`; conformance + e2e import the production implementations; fake host stays a `tests/` fixture.
 - One documented host-contribution seam on `mountElef` options (`navigate`/`onOpenWork`, extra card actions, extra HTML slots): carries web-only fork/present/publish/load-samples, graph/lineage panels (to Phase 06), and host navigation. No new contract ports this phase.

@@ -2,6 +2,7 @@ require "application_system_test_case"
 
 class ClientLibraryTest < ApplicationSystemTestCase
   test "library deep links resolve through the client shell" do
+    Presentation.delete_all
     Document.create!(title: "Shell document", source: "# Shell document")
     Presentation.create!(title: "Shell deck", source: "# Shell deck")
 
@@ -25,6 +26,7 @@ class ClientLibraryTest < ApplicationSystemTestCase
   end
 
   test "library tabs switch filters through the client shell without reloads" do
+    Presentation.delete_all
     Document.create!(title: "Tab document", source: "# Tab document")
     Presentation.create!(title: "Tab deck", source: "# Tab deck")
 

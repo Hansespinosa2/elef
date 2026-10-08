@@ -38,7 +38,7 @@ const appSourceAlias = {
         // that both hosts consume byte-identically, following the renderer
         // precedent; the desktop never re-bundles client source.
         if (workspaceMatch[1] === "client" && !workspaceMatch[2]) {
-          return { path: path.join(repoRoot, "packages", "client", "dist", "elef-client.mjs") }
+          return { path: path.join(repoRoot, "packages", "client", "dist", "elef-client.js") }
         }
         const manifest = JSON.parse(await readFile(path.join(repoRoot, "packages", workspaceMatch[1], "package.json"), "utf8"))
         const subpath = workspaceMatch[2] ? `.${workspaceMatch[2]}` : "."

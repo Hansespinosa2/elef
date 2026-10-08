@@ -25,11 +25,11 @@ const shared = {
 esbuild.buildSync({
   ...shared,
   entryPoints: [join(here, "src", "index.ts")],
-  outfile: join(here, "dist", "elef-client.mjs"),
+  outfile: join(here, "dist", "elef-client.js"),
 });
 esbuild.buildSync({
   ...shared,
   entryPoints: [join(here, "src", "ui", "sanitize.ts")],
-  outfile: join(here, "dist", "sanitize.mjs"),
+  outfile: join(here, "dist", "sanitize.js"),
 });
-console.log("packages/client: dist/elef-client.mjs + dist/sanitize.mjs built");
+console.log("packages/client: dist/elef-client.js + dist/sanitize.js built");

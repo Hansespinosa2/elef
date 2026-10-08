@@ -1,6 +1,6 @@
 import { Controller } from "@hotwired/stimulus"
 import { mountElef } from "@elef/client"
-import { createRailsHost } from "../host/rails-http-host.js"
+import { createRailsHost } from "host/rails-http-host"
 
 // Mounts the shared Elef client on the Rails library routes with the Rails
 // HTTP host adapter. Stimulus connect/disconnect gives the Turbo navigation
