@@ -258,8 +258,9 @@ export function SettingsApp({ host, options, storage, registerControl }: Setting
               </select>
             </div>
             <div className="field">
-              <label className="flex items-center gap-3 font-extrabold cursor-pointer">
+              <label htmlFor="vim-mode-aware-cursor" className="flex items-center gap-3 font-extrabold cursor-pointer">
                 <input
+                  id="vim-mode-aware-cursor"
                   type="checkbox"
                   checked={modeAwareCursor}
                   onChange={(event) => toggleModeAwareCursor(event.target.checked)}

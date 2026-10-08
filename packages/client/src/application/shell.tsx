@@ -54,6 +54,7 @@ export async function mountElef(
         ...(authoring.reloadEditorRegistry === undefined
           ? {}
           : { reloadEditorRegistry: authoring.reloadEditorRegistry }),
+        ...(authoring.onClose === undefined ? {} : { onClose: authoring.onClose }),
       });
     }
     if (settingsRoute !== null) {

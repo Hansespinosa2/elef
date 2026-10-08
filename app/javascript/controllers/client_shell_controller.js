@@ -1,6 +1,8 @@
 import { Controller } from "@hotwired/stimulus"
+import "elef-renderer"
 import { mountElef } from "@elef/client"
 import { createRailsHost } from "host/rails-http-host"
+import { createRailsAuthoringSettingsTransport } from "host/rails-authoring-settings-transport"
 
 // Mounts the shared Elef client on the Rails library routes with the Rails
 // HTTP host adapter. Stimulus connect/disconnect gives the Turbo navigation
@@ -42,12 +44,31 @@ function submitPostForm(url, fields = {}) {
 }
 
 export default class extends Controller {
-  static values = { initialUrl: String, cardNotes: Object }
+  static values = { initialUrl: String, cardNotes: Object, snippetsUrl: String, mathShortcutsUrl: String, closeUrl: String }
 
   async connect() {
     const host = await createRailsHost({ baseUrl: "", csrfToken: csrfToken() })
+    // The settings routes (/settings, /snippets/*, /math_shortcuts/*) carry
+    // registry endpoints plus a close target; every other shell page leaves
+    // them empty and mounts without the authoring seam.
+    const authoringSeam = this.snippetsUrlValue && this.mathShortcutsUrlValue
+      ? {
+          transport: createRailsAuthoringSettingsTransport({
+            snippetsUrl: this.snippetsUrlValue,
+            mathShortcutsUrl: this.mathShortcutsUrlValue
+          }),
+          renderExample: source => globalThis.ElefRenderer.renderMarkdownBlock(source),
+          reloadEditorRegistry: async () => {},
+          onClose: () => {
+            if (!this.closeUrlValue) return
+            if (window.Turbo) window.Turbo.visit(this.closeUrlValue)
+            else window.location.assign(this.closeUrlValue)
+          }
+        }
+      : undefined
     this.shell = await mountElef(this.element, host, {
       initialUrl: this.initialUrlValue,
+      ...(authoringSeam === undefined ? {} : { authoring: authoringSeam }),
       navigate: target => {
         if (target.url !== undefined) {
           window.history.pushState({}, "", target.url)

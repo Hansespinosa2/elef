@@ -55,8 +55,6 @@ const EMPTY_FORM: FormFields = {
   expansion: "",
 };
 
-const SNIPPET_CATEGORIES = ["Markdown", "LaTeX", "Mermaid", "Elef DSL"];
-
 function sanitizeExample(container: Element, html: string): void {
   sanitizePreview(container, html, { interactive: false });
 }
@@ -295,137 +293,149 @@ export function AuthoringDialog({
     );
   }
 
+  // The section keeps the pre-migration dialog's ids, classes, roles and copy:
+  // the shared e2e scenarios assert that contract on both hosts, so the port
+  // preserves it instead of inventing new hooks.
   return (
-    <section aria-label="Authoring settings" className="authoring-settings">
-      <p id="authoring-settings-status" className="authoring-settings-status" role="status" aria-live="polite">
-        {status}
-      </p>
-      <div role="tablist" aria-label="Authoring registries">
-        {(["snippets", "math_shortcuts"] as const).map((registry) => (
-          <button
-            key={registry}
-            type="button"
-            role="tab"
-            aria-selected={registry === activeRegistry}
-            data-authoring-tab={registry}
-            className={registry === activeRegistry ? "is-active" : ""}
-            onClick={() => {
-              setActiveRegistry(registry);
-              setFormOpen(false);
-              setStatus("");
-            }}
-          >
-            {registry === "snippets" ? "Snippets" : "Math shortcuts"}
+    <section id="authoring-settings-dialog" aria-label="Authoring settings" className="authoring-settings-dialog">
+      <div className="authoring-settings-panel">
+        <header className="authoring-settings-header">
+          <div>
+            <p className="eyebrow">AUTHORING SETTINGS</p>
+            <h2 id="authoring-settings-title">{isSnippet ? "Snippets" : "Math shortcuts"}</h2>
+            <p className="authoring-settings-copy">Reusable snippets and math shortcuts for your editor palettes. Built-in entries are read-only.</p>
+          </div>
+          <button id="close-authoring-settings" className="authoring-settings-close" type="button" aria-label="Close authoring settings" onClick={onClose}>
+            ×
           </button>
-        ))}
-      </div>
-      <h2 id="authoring-settings-title">{isSnippet ? "Snippets" : "Math shortcuts"}</h2>
-      <p id="authoring-settings-count" className="dialog-copy">
-        {`${allEntries.length} ${label}${allEntries.length === 1 ? "" : "s"} · ${personalCount} personal`}
-      </p>
-      <button type="button" onClick={() => beginEntryForm(null, activeRegistry)}>
-        {isSnippet ? "New snippet" : "New shortcut"}
-      </button>
-      <input
-        id="authoring-settings-search"
-        type="search"
-        value={query}
-        onInput={(event) => setQuery(event.currentTarget.value)}
-        aria-label="Search entries"
-      />
-      {isSnippet ? (
-        <select id="authoring-settings-category" value={category} onChange={(event) => setCategory(event.target.value)}>
-          <option value="">All categories</option>
-          {SNIPPET_CATEGORIES.map((name) => (
-            <option key={name} value={name}>
-              {name}
-            </option>
+        </header>
+
+        <div className="authoring-settings-tabs" role="tablist" aria-label="Authoring settings">
+          {(["snippets", "math_shortcuts"] as const).map((registry) => (
+            <button
+              key={registry}
+              className={registry === activeRegistry ? "button is-active" : "button"}
+              type="button"
+              role="tab"
+              data-authoring-tab={registry}
+              aria-selected={registry === activeRegistry}
+              tabIndex={registry === activeRegistry ? 0 : -1}
+              onClick={() => {
+                setActiveRegistry(registry);
+                setFormOpen(false);
+                setStatus("");
+              }}
+            >
+              {registry === "snippets" ? "Snippets" : "Math shortcuts"}
+            </button>
           ))}
-        </select>
-      ) : null}
-      <div id="authoring-settings-list" className="authoring-settings-list" aria-live="polite">
-        {visible.length === 0 ? (
-          <p id="authoring-settings-empty">{query || category ? "No entries match this search." : "No entries are available."}</p>
-        ) : null}
-        {visible.map(renderCard)}
+        </div>
+
+        <div className="authoring-settings-filters">
+          <label className="authoring-settings-search" htmlFor="authoring-settings-search">
+            <span>Search</span>
+            <input
+              id="authoring-settings-search"
+              type="search"
+              autoComplete="off"
+              placeholder="Name, trigger, or content"
+              value={query}
+              onInput={(event) => setQuery(event.currentTarget.value)}
+            />
+          </label>
+          <label id="authoring-settings-category-field" htmlFor="authoring-settings-category" hidden={!isSnippet}>
+            <span>Type</span>
+            <select id="authoring-settings-category" value={category} onChange={(event) => setCategory(event.target.value)}>
+              <option value="">All types</option>
+              <option value="Markdown">Markdown</option>
+              <option value="LaTeX">LaTeX</option>
+              <option value="Mermaid">Mermaid</option>
+              <option value="Elef DSL">Elef directives</option>
+            </select>
+          </label>
+        </div>
+
+        <p id="authoring-settings-status" className="authoring-settings-status" role="status" aria-live="polite">
+          {status}
+        </p>
+        <div className="authoring-settings-heading">
+          <p id="authoring-settings-count" className="dialog-copy">
+            {`${allEntries.length} ${label}${allEntries.length === 1 ? "" : "s"} · ${personalCount} personal`}
+          </p>
+          <button id="new-authoring-entry" className="button primary" type="button" onClick={() => beginEntryForm(null, activeRegistry)}>
+            {isSnippet ? "New snippet" : "New shortcut"}
+          </button>
+        </div>
+        <div id="authoring-settings-list" className="authoring-settings-list" aria-live="polite">
+          {visible.map(renderCard)}
+        </div>
+        <p id="authoring-settings-empty" className="authoring-settings-empty" hidden={visible.length > 0}>
+          {query || category ? "No entries match this search." : "No entries are available."}
+        </p>
       </div>
       {formOpen ? (
         <form id="authoring-entry-form" className="authoring-entry-form" onSubmit={(event) => void saveEntry(event)}>
-          <h3>{editingId ? `Edit ${isSnippet ? "snippet" : "shortcut"}` : `New ${isSnippet ? "snippet" : "shortcut"}`}</h3>
-          <input type="hidden" name="id" value={editingId || ""} />
-          <label>
-            Name
-            <input type="text" name={isSnippet ? "name" : "math-name"} value={fields.name} onInput={(event) => setFields({ ...fields, name: event.currentTarget.value })} />
-          </label>
-          <label>
-            Description
-            <input
-              type="text"
-              name={isSnippet ? "description" : "math-description"}
-              value={fields.description}
-              onInput={(event) => setFields({ ...fields, description: event.currentTarget.value })}
-            />
-          </label>
-          {isSnippet ? (
-            <>
-              <label>
-                Trigger
-                <input type="text" name="trigger" value={fields.trigger} onInput={(event) => setFields({ ...fields, trigger: event.currentTarget.value })} />
-              </label>
-              <label>
-                Category
-                <select name="category" value={fields.category} onChange={(event) => setFields({ ...fields, category: event.target.value })}>
-                  {SNIPPET_CATEGORIES.map((name) => (
-                    <option key={name} value={name}>
-                      {name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Template
-                <textarea name="body" value={fields.body} onInput={(event) => setFields({ ...fields, body: event.currentTarget.value })} />
-              </label>
-            </>
-          ) : (
-            <>
-              <label>
-                Prefix
-                <select name="prefix" value={fields.prefix} onChange={(event) => setFields({ ...fields, prefix: event.target.value })}>
-                  <option value=".">.</option>
-                  <option value="@">@</option>
-                </select>
-              </label>
-              <label>
-                Aliases
-                <input type="text" name="aliases" value={fields.aliases} onInput={(event) => setFields({ ...fields, aliases: event.currentTarget.value })} />
-              </label>
-              <label>
-                Expansion
-                <textarea name="expansion" value={fields.expansion} onInput={(event) => setFields({ ...fields, expansion: event.currentTarget.value })} />
-              </label>
-            </>
-          )}
-          <button id="save-authoring-entry" type="submit" disabled={writeInProgress}>
-            Save {isSnippet ? "snippet" : "shortcut"}
-          </button>
-          <button type="button" onClick={() => setFormOpen(false)}>
-            Cancel
-          </button>
+          <h3 id="authoring-entry-heading">{editingId ? `Edit ${isSnippet ? "snippet" : "shortcut"}` : `New ${isSnippet ? "snippet" : "shortcut"}`}</h3>
+          <input name="id" type="hidden" value={editingId || ""} readOnly />
+          <fieldset className="authoring-snippet-fields" hidden={!isSnippet} disabled={!isSnippet}>
+            <label htmlFor="authoring-name">Name</label>
+            <input id="authoring-name" name="name" maxLength={120} required type="text" value={fields.name} onInput={(event) => setFields({ ...fields, name: event.currentTarget.value })} />
+            <label htmlFor="authoring-trigger">Trigger</label>
+            <input id="authoring-trigger" name="trigger" maxLength={120} pattern="[a-z0-9][a-z0-9-]*" required type="text" value={fields.trigger} onInput={(event) => setFields({ ...fields, trigger: event.currentTarget.value })} />
+            <label htmlFor="authoring-description">Description</label>
+            <input id="authoring-description" name="description" maxLength={500} type="text" value={fields.description} onInput={(event) => setFields({ ...fields, description: event.currentTarget.value })} />
+            <label htmlFor="authoring-category">Category</label>
+            <select id="authoring-category" name="category" value={fields.category} onChange={(event) => setFields({ ...fields, category: event.target.value })}>
+              <option>Markdown</option>
+              <option>LaTeX</option>
+              <option>Mermaid</option>
+              <option>Elef DSL</option>
+            </select>
+            <label htmlFor="authoring-body">Body</label>
+            <textarea id="authoring-body" name="body" maxLength={20000} rows={6} required value={fields.body} onInput={(event) => setFields({ ...fields, body: event.currentTarget.value })} />
+          </fieldset>
+          <fieldset className="authoring-math-fields" hidden={isSnippet} disabled={isSnippet}>
+            <label htmlFor="authoring-math-name">Name</label>
+            <input id="authoring-math-name" name="math-name" maxLength={120} required type="text" value={fields.name} onInput={(event) => setFields({ ...fields, name: event.currentTarget.value })} />
+            <label htmlFor="authoring-prefix">Prefix</label>
+            <select id="authoring-prefix" name="prefix" value={fields.prefix} onChange={(event) => setFields({ ...fields, prefix: event.target.value })}>
+              <option value=".">. transformation</option>
+              <option value="@">@ alias</option>
+            </select>
+            <label htmlFor="authoring-aliases">Aliases</label>
+            <input id="authoring-aliases" name="aliases" maxLength={1200} placeholder="lambda, l" required type="text" value={fields.aliases} onInput={(event) => setFields({ ...fields, aliases: event.currentTarget.value })} />
+            <label htmlFor="authoring-math-description">Description</label>
+            <input id="authoring-math-description" name="math-description" maxLength={500} type="text" value={fields.description} onInput={(event) => setFields({ ...fields, description: event.currentTarget.value })} />
+            <label htmlFor="authoring-expansion">Expansion template</label>
+            <textarea id="authoring-expansion" name="expansion" maxLength={20000} rows={4} required value={fields.expansion} onInput={(event) => setFields({ ...fields, expansion: event.currentTarget.value })} />
+          </fieldset>
+          <div className="authoring-entry-form-actions">
+            <button id="cancel-authoring-entry" className="button" type="button" onClick={() => setFormOpen(false)}>
+              Cancel
+            </button>
+            <button id="save-authoring-entry" className="button primary" type="submit" disabled={writeInProgress}>
+              Save {isSnippet ? "snippet" : "shortcut"}
+            </button>
+          </div>
         </form>
       ) : null}
       {pendingDeletion ? (
-        <div role="alertdialog" aria-labelledby="delete-authoring-title">
-          <h2 id="delete-authoring-title">Delete personal entry?</h2>
-          <p id="delete-authoring-message" className="dialog-copy">
-            {`Delete “${String(pendingDeletion.entry.name || "this entry")}” from your authoring settings?`}
-          </p>
-          <button id="confirm-authoring-delete" type="button" onClick={() => void confirmDeletion()}>
-            Delete
-          </button>
-          <button id="cancel-authoring-delete" type="button" onClick={() => setPendingDeletion(null)}>
-            Cancel
-          </button>
+        <div id="delete-authoring-dialog" className="authoring-settings-dialog authoring-delete-dialog" role="alertdialog" aria-labelledby="delete-authoring-title">
+          <div className="authoring-settings-panel">
+            <p className="eyebrow">AUTHORING SETTINGS</p>
+            <h2 id="delete-authoring-title">Delete personal entry?</h2>
+            <p id="delete-authoring-message" className="dialog-copy">
+              {`Delete “${String(pendingDeletion.entry.name || "this entry")}” from your authoring settings?`}
+            </p>
+            <div className="authoring-entry-form-actions">
+              <button id="cancel-authoring-delete" className="button" type="button" onClick={() => setPendingDeletion(null)}>
+                Cancel
+              </button>
+              <button id="confirm-authoring-delete" className="button primary" type="button" onClick={() => void confirmDeletion()}>
+                Delete entry
+              </button>
+            </div>
+          </div>
         </div>
       ) : null}
     </section>

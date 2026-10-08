@@ -10,9 +10,10 @@ class SnippetsControllerTest < ActionDispatch::IntegrationTest
     get snippets_path
 
     assert_response :success
-    assert_select '[data-controller="authoring-settings"]'
-    assert_select '[data-authoring-settings-registry-value="snippets"]'
-    assert_select "#authoring-settings-dialog"
+    assert_select '[data-controller="client-shell"]'
+    assert_select '[data-client-shell-initial-url-value="/snippets"]'
+    assert_select '[data-client-shell-snippets-url-value="/snippets.json"]'
+    assert_select '[data-client-shell-math-shortcuts-url-value="/math_shortcuts.json"]'
 
     get snippets_path(format: :json), as: :json
     assert_response :success

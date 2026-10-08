@@ -40,6 +40,9 @@ export interface AuthoringSeam {
   readonly transport: AuthoringRegistryTransport;
   readonly renderExample?: (source: string) => string | Promise<string>;
   readonly reloadEditorRegistry?: () => Promise<void>;
+  // Host-owned close navigation (one host revisits the settings page,
+  // the other switches views): the dialog only reports the intent.
+  readonly onClose?: () => void;
 }
 
 export interface ElefMountOptions {

@@ -184,7 +184,10 @@ describe("authoring dialog", () => {
     const tabs = [...document.querySelectorAll('[data-authoring-tab]')];
     await click(tabs.find((tab) => tab.getAttribute("data-authoring-tab") === "math_shortcuts"));
     assert.equal(document.querySelector("#authoring-settings-title")?.textContent, "Math shortcuts");
-    assert.equal(document.querySelector("#authoring-settings-category"), null);
+    assert.equal(
+      (document.querySelector("#authoring-settings-category-field") as unknown as { hidden: boolean }).hidden,
+      true,
+    );
   });
 
   it("edits and deletes through the injected transport with the hash handshake", async () => {

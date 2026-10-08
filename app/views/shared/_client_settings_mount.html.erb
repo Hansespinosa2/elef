@@ -1,0 +1,13 @@
+<%# Shared client mount for the settings routes (/settings, /snippets/*,
+    /math_shortcuts/*). The client parses request.path itself to decide
+    between the workspace-defaults form and the authoring dialog, so pages
+    only supply the mount point plus the host seam inputs: the registry JSON
+    endpoints for the authoring transport and the close target for the
+    dialog's close button. %>
+<div id="client-shell-mount"
+     data-controller="client-shell"
+     data-client-shell-initial-url-value="<%= request.path %>"
+     data-client-shell-snippets-url-value="<%= snippets_path(format: :json) %>"
+     data-client-shell-math-shortcuts-url-value="<%= math_shortcuts_path(format: :json) %>"
+     data-client-shell-close-url-value="<%= settings_path %>">
+</div>

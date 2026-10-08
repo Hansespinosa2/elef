@@ -6,8 +6,13 @@ import { isSettingsRoute, parseSettingsRoute } from "../src/index.js";
 import type { DeviceStorage } from "../src/features/settings/vimPreferences.js";
 import {
   ENABLED_STORAGE_KEY,
+  ESCAPE_KEY_STORAGE_KEY,
   LINE_NUMBERS_STORAGE_KEY,
+  MODE_AWARE_CURSOR_STORAGE_KEY,
+  escapeKeyDisplay,
+  normalizeEscapeKey,
   readVimPreferences,
+  vimKeyFromEvent,
 } from "../src/features/settings/vimPreferences.js";
 import { click, mountInto, submitForm, settled, typedHost } from "./helpers.js";
 
@@ -148,9 +153,23 @@ describe("settings route", () => {
     assert.equal(notice?.textContent, "Workspace appearance saved.");
   });
 
+  it("names vim keys the way the editor and settings surfaces agree on", () => {
+    const plain = { key: "j", ctrlKey: false, shiftKey: false, altKey: false, metaKey: false };
+    assert.equal(vimKeyFromEvent(plain), "j");
+    assert.equal(vimKeyFromEvent({ ...plain, key: "Shift" }), "");
+    assert.equal(vimKeyFromEvent({ ...plain, key: "Escape" }), "<Esc>");
+    assert.equal(vimKeyFromEvent({ ...plain, ctrlKey: true }), "<C-j>");
+    assert.equal(vimKeyFromEvent({ ...plain, key: "J", shiftKey: true }), "<S-j>");
+    assert.equal(escapeKeyDisplay("<C-j>"), "Ctrl+j");
+    assert.equal(escapeKeyDisplay("j"), "j");
+    assert.equal(normalizeEscapeKey("<C-j>"), "<C-j>");
+    assert.equal(normalizeEscapeKey("<bogus key>"), "");
+    assert.equal(normalizeEscapeKey("ab"), "");
+  });
+
   it("persists vim preferences to device storage", async () => {
     const host = typedHost();
-    const storage = memoryStorage();
+    const storage = memoryStorage({ [ESCAPE_KEY_STORAGE_KEY]: "j" });
     const scope = globalThis as Record<string, unknown>;
     const previous = scope["localStorage"];
     scope["localStorage"] = storage;
@@ -165,6 +184,20 @@ describe("settings route", () => {
       const prefs = readVimPreferences(storage);
       assert.equal(prefs.vimEnabled, true);
       assert.equal(prefs.lineNumberMode, "relative");
+
+      // The seeded escape key displays through the shared formatter; the
+      // Clear button persists the reset like any other preference write.
+      const escapeField = document.getElementById("vim-escape-key") as unknown as { value: string };
+      assert.equal(escapeField.value, "j");
+      const clearButton = [...document.querySelectorAll('section[aria-label="Vim settings"] button')].find(
+        (button) => button.textContent === "Clear",
+      );
+      await click(clearButton);
+      assert.equal(storage.getItem(ESCAPE_KEY_STORAGE_KEY), "");
+
+      const cursorToggle = document.getElementById("vim-mode-aware-cursor");
+      await setCheckbox(cursorToggle, true);
+      assert.equal(storage.getItem(MODE_AWARE_CURSOR_STORAGE_KEY), "true");
     } finally {
       scope["localStorage"] = previous;
     }
