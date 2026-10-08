@@ -3,7 +3,7 @@
   "campaign_branch": "feat/refactor-desktop-and-web",
   "campaign_base_sha": "88f61a7a8ffd7c276bafcf06eee09c36a8adf134",
   "current_phase": 5,
-  "phase_state": "CHECK",
+  "phase_state": "ACT",
   "phase_base_sha": "0f62a074ee5783cc6510801be2e39074264bc4ab",
   "head_sha": "27070f59d3ec7591a615fda02fa06503fd0ca432",
   "review_round": 1,
@@ -243,5 +243,5 @@
   },
   "pending_human_gates": [],
   "blocker": null,
-  "next_action": "Phase 05 CHECK: candidate 27070f5 gated exit 0 (attempt 64091b13) with full CI green; independent review round 1 requested."
+  "next_action": "Phase 05 ACT round 1: review FAIL on P05R1-RESIDUAL-VIM-UI (residual Stimulus vim-settings UI fails P05-01/I02); resolving in DO by deleting the residual files, pin, and registration per the frozen plan."
 }
