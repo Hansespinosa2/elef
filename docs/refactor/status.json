@@ -3,7 +3,7 @@
   "campaign_branch": "feat/refactor-desktop-and-web",
   "campaign_base_sha": "88f61a7a8ffd7c276bafcf06eee09c36a8adf134",
   "current_phase": 2,
-  "phase_state": "CHECK",
+  "phase_state": "ACT",
   "phase_base_sha": "34d3ae80cefc58b3cf88b8eec1bad927f6666b4f",
   "head_sha": "699f2be323f125dc77e165b7918714630f967b23",
   "review_round": 1,
@@ -148,5 +148,5 @@
   },
   "pending_human_gates": [],
   "blocker": null,
-  "next_action": "Independent review round 1 for Phase 02 candidate 699f2be (gate attempt 32f6e681 PASS)."
+  "next_action": "ACT round 1: fix P02-07-R1-clean-suspicious-silent-reload + P02-08-R1-missing-five-minute-cadence in DO, re-gate, review round 2."
 }
