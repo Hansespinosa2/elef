@@ -818,7 +818,8 @@ class DesktopEditorUi {
       })
     }
     const expectedKeys = ["$", "$", "Enter"]
-    if (JSON.stringify(keys.map(({ key }) => key)) !== JSON.stringify(expectedKeys) ||
+    const inputKeys = keys.filter(({ key }) => key !== "Shift")
+    if (JSON.stringify(inputKeys.map(({ key }) => key)) !== JSON.stringify(expectedKeys) ||
       keys.some(({ trusted, inEditor }) => !trusted || !inEditor)) {
       throw new Error(`Display-math input did not reach the editor as the expected trusted keys: ${JSON.stringify(keys)}`)
     }
