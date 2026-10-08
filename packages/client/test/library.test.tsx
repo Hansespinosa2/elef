@@ -110,13 +110,28 @@ test("create dialog creates through the port and opens the new work", async () =
 test("rename form renames through the port and refreshes the card", async () => {
   const host = typedHost();
   await seed(host);
-  const { element, shell } = await mountInto(host);
+  const options: ElefMountOptions = {
+    operationNotice: (operation, work) =>
+      `${work.kind === "document" ? "Document" : "Presentation"} ${operation}.`,
+  };
+  const { element, shell } = await mountInto(host, options);
   try {
     await setInputValue(element.querySelector(".library-rename input"), "Renamed doc");
     await submitForm(element.querySelector(".library-rename"));
     assert.deepEqual(titles(element), ["Renamed doc", "Beta deck"]);
     const works = await host.library.listWorks(ws("ws-1"));
     assert.ok(works.some((work) => work.title === "Renamed doc"));
+    assert.equal(
+      element.querySelector("#notice")?.textContent,
+      "Document renamed.",
+      "host notice renders after rename",
+    );
+    const card = element.querySelector("article.library-card");
+    assert.match(
+      card?.getAttribute("id") ?? "",
+      /^document_/,
+      "card keeps the kind-prefixed DOM id",
+    );
   } finally {
     shell.unmount();
   }
@@ -229,7 +244,18 @@ test("present button and host extras appear only when the host provides them", a
     presentWork: (work) => presented.push(work),
     cardNote: (work) => (work.kind === "presentation" ? "Forked from Outline" : null),
     extraCardActions: (work) =>
-      work.kind === "presentation" ? [{ label: "Fork", run: () => {} }] : [],
+      work.kind === "presentation"
+        ? [
+            {
+              label: "Fork",
+              menuClass: "library-card-submenu fork-menu",
+              children: [
+                { label: "As continuation", run: () => {} },
+                { label: "As inspiration", run: () => {} },
+              ],
+            },
+          ]
+        : [],
   };
   const { element, shell } = await mountInto(host, options);
   try {
@@ -242,7 +268,10 @@ test("present button and host extras appear only when the host provides them", a
     await click(presentButtons[0]);
     assert.equal(presented.length, 1);
     assert.match(element.textContent ?? "", /Forked from Outline/, "host card note renders");
-    assert.match(element.textContent ?? "", /Fork/, "host extra action renders");
+    const forkMenu = element.querySelector(".fork-menu");
+    assert.ok(forkMenu, "host submenu renders with its menu class");
+    assert.match(forkMenu?.textContent ?? "", /As continuation/);
+    assert.match(forkMenu?.textContent ?? "", /As inspiration/);
   } finally {
     shell.unmount();
   }

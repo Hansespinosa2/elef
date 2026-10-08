@@ -38,6 +38,8 @@ pin "mermaid", to: "mermaid.min.js" # @11.17.2 Vendored self-contained build; ex
 pin "lib/editor_document_state", to: "lib/editor_document_state.js"
 pin "lib/vim_line_numbers", to: "lib/vim_line_numbers.js"
 pin "lib/document_graph_view", to: "lib/document_graph_view.js"
+pin "@elef/client", to: "client/dist/elef-client.mjs"
+pin "@elef/client/sanitize", to: "client/dist/sanitize.mjs"
 pin "@elef/work-model", to: "work-model/src/index.js"
 pin "@elef/work-model/document-map", to: "work-model/src/document_map.js"
 pin "@elef/work-model/document-links", to: "work-model/src/document_links.js"

@@ -10,14 +10,6 @@ module Source
 
     module_function
 
-    def library_card(properties)
-      context.call("ElefRenderer.renderLibraryCard", properties)
-    end
-
-    def library_card_controls(properties)
-      context.call("ElefRenderer.renderLibraryCardControls", properties)
-    end
-
     def document_graph(documents)
       context.call("ElefRenderer.buildDocumentGraph", documents).deep_symbolize_keys
     end

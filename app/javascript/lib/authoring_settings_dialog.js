@@ -97,7 +97,10 @@ export function createAuthoringSettingsDialog({
     }
     Promise.resolve(renderMarkdownBlock(source)).then(html => {
       if (!container.isConnected) return
-      installSanitizedPreview(container, html, { interactive: false })
+      installSanitizedPreview(container, html, {
+        interactive: false,
+        mediaBaseUrl: container.closest("form")?.dataset.mediaAssetBaseUrlValue ?? "",
+      })
     }).catch(() => {
       if (container.isConnected) container.textContent = source
     })

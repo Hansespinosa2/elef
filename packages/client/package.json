@@ -12,10 +12,15 @@
     "@types/react-dom": "19.3.0"
   },
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./sanitize": {
+      "types": "./src/ui/sanitize.ts",
+      "default": "./dist/sanitize.mjs"
+    }
   },
   "files": [
-    "dist"
+    "dist",
+    "src"
   ],
   "name": "@elef/client",
   "private": true,

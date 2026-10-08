@@ -56,7 +56,33 @@ test("opening a work calls the host navigate seam with the work id", async () =>
   try {
     const link = element.querySelector(".library-card-title a");
     await click(link);
-    assert.deepEqual(seen, [{ workId: created.id }]);
+    assert.deepEqual(seen, [{ workId: created.id, kind: "document" }]);
+  } finally {
+    shell.unmount();
+  }
+});
+
+test("shell adopts host slot templates and gates the graph panel on the documents filter", async () => {
+  const host = typedHost();
+  const slots =
+    '<template data-client-slot="actions"><button id="host-action">Load samples</button></template>' +
+    '<template data-client-slot="graph"><div id="host-graph">Graph</div></template>';
+  const { element, shell } = await mountInto(host, { initialUrl: "/documents" }, slots);
+  try {
+    assert.ok(
+      element.querySelector('[data-client-slot-target="actions"] #host-action'),
+      "actions slot content is adopted",
+    );
+    const graph = element.querySelector("#document-graph-view") as unknown as {
+      hidden: boolean;
+    };
+    assert.ok(element.querySelector("#document-graph-view #host-graph"), "graph content is adopted");
+    assert.equal(graph.hidden, false, "graph panel shows on the documents filter");
+    assert.equal(
+      element.querySelector("template[data-client-slot]"),
+      null,
+      "adopted templates are removed",
+    );
   } finally {
     shell.unmount();
   }

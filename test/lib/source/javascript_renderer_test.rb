@@ -18,41 +18,6 @@ class SourceJavascriptRendererTest < ActiveSupport::TestCase
     end
   end
 
-  test "library cards escape metadata and preserve trusted view slots" do
-    title = '<img src=x onerror="run()">'
-    html = Source::JavascriptRenderer.library_card({
-      id: "document-42", title: title, kind: "document", metadata: "Continuous Markdown",
-      editUrl: "/documents/42/edit", previewHtml: "<p>Safe preview</p>", controlsHtml: "<button>Action</button>"
-    })
-    fragment = Nokogiri::HTML5.fragment(html)
-    assert_empty fragment.css("img, script, [onclick], [onerror]")
-    assert_equal title, fragment.at_css(".library-card-title").text
-    assert_equal "Safe preview", fragment.at_css(".library-card-preview p").text
-    assert_equal "Action", fragment.at_css(".library-card-controls button").text
-  end
-
-  test "library card controls preserve host routes, request methods, and CSRF fields" do
-    html = Source::JavascriptRenderer.library_card_controls({
-      title: "Shared card", kind: "presentation",
-      previewUrl: "/presentations/42", authenticityToken: "test-token",
-      rename: {
-        url: "/presentations/42/rename", method: "patch", name: "presentation[title]",
-        fields: [{ name: "library_view", value: "presentations" }]
-      },
-      present: { url: "/presentations/42/publish", turbo: false },
-      remove: { url: "/presentations/42", method: "delete", confirm: "Delete Shared card?" }
-    })
-    fragment = Nokogiri::HTML5.fragment(html)
-
-    assert_equal "/presentations/42", fragment.at_css(".library-card-preview-button")[:href]
-    assert_equal "patch", fragment.at_css('.library-rename input[name="_method"]')[:value]
-    assert_equal "test-token", fragment.at_css('.library-rename input[name="authenticity_token"]')[:value]
-    assert_equal "presentations", fragment.at_css('.library-rename input[name="library_view"]')[:value]
-    assert_equal "false", fragment.at_css('form[action="/presentations/42/publish"]')[:"data-turbo"]
-    assert_equal "Delete Shared card?", fragment.at_css('form[action="/presentations/42"]')[:"data-turbo-confirm"]
-    assert_equal "delete", fragment.at_css('form[action="/presentations/42"] input[name="_method"]')[:value]
-  end
-
   INPUTS = JSON.parse(Rails.root.join("test/javascript/fixtures/renderer-inputs.json").read).freeze
   OUTPUTS = JSON.parse(Rails.root.join("test/javascript/fixtures/renderer-outputs.json").read).freeze
 

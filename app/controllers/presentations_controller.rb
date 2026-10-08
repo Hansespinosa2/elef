@@ -8,9 +8,13 @@ class PresentationsController < ApplicationController
 
   def index
     @filter = "presentations"
-    @works = Presentation.includes(:presentation_detail).recent_first
+    @works = Presentation.includes(:presentation_detail, :parent).recent_first
     @lineage_presentations = @works.select(&:presentation?)
-    render "library/index"
+    @card_notes = @works.filter_map do |work|
+      note = card_note(work)
+      [work.id.to_s, note] if note
+    end.to_h
+    render "library/shell"
   end
 
   def load_samples
@@ -237,5 +241,13 @@ class PresentationsController < ApplicationController
 
   def pptx_params
     params.require(:presentation).permit(:title, :source, :theme, :typography)
+  end
+
+  def card_note(work)
+    if work.parent
+      "Forked from #{work.parent.title} · #{work.fork_type}"
+    elsif work.fork_parent_title.present?
+      "Parent no longer available · #{work.fork_type}"
+    end
   end
 end

@@ -48,20 +48,23 @@ export function LibraryApp({ host, initialFilter, options }: LibraryAppProps): J
   const filterRef = useRef(filter);
   filterRef.current = filter;
 
-  const reload = useCallback(async (): Promise<void> => {
-    try {
-      const spaces = await host.library.listWorkspaces();
-      const loaded: WorkSummary[] = [];
-      for (const space of spaces) {
-        loaded.push(...(await host.library.listWorks(space.id)));
+  const reload = useCallback(
+    async (notice: string | null = null): Promise<void> => {
+      try {
+        const spaces = await host.library.listWorkspaces();
+        const loaded: WorkSummary[] = [];
+        for (const space of spaces) {
+          loaded.push(...(await host.library.listWorks(space.id)));
+        }
+        setWorks(loaded);
+        setReady(true);
+        setNotice(notice ?? "");
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : String(error));
       }
-      setWorks(loaded);
-      setReady(true);
-      setNotice("");
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : String(error));
-    }
-  }, [host]);
+    },
+    [host],
+  );
 
   useEffect(() => {
     void reload();
@@ -81,6 +84,13 @@ export function LibraryApp({ host, initialFilter, options }: LibraryAppProps): J
       globalThis.window?.removeEventListener?.("hashchange", onRouteChange);
     };
   }, []);
+
+  useEffect(() => {
+    const graph = rootRef.current?.querySelector("#document-graph-view");
+    if (graph !== null && graph !== undefined && graph.childElementCount > 0) {
+      (graph as unknown as { hidden: boolean }).hidden = filter !== "documents";
+    }
+  }, [filter]);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -171,7 +181,7 @@ export function LibraryApp({ host, initialFilter, options }: LibraryAppProps): J
       kind: dialogKind,
     });
     await reload();
-    options.navigate?.({ workId: created.id });
+    options.navigate?.({ workId: created.id, kind: created.kind });
   }
 
   const emptyKindLabel = filter === "all" ? "work" : filter === "documents" ? "document" : "presentation";
@@ -198,6 +208,7 @@ export function LibraryApp({ host, initialFilter, options }: LibraryAppProps): J
             {FILTER_DESCRIPTIONS[filter]}
           </p>
         </div>
+        <div className="library-actions" data-client-slot-target="actions" />
         <label className="search-box" htmlFor="library-search">
           <span aria-hidden="true">⌕</span>
           <input
@@ -237,9 +248,11 @@ export function LibraryApp({ host, initialFilter, options }: LibraryAppProps): J
         <section
           id="document-graph-view"
           className="document-graph-panel mt-8 rounded-2xl border border-[#ddd5c8] bg-[#fffdf8] p-5"
+          data-client-slot-target="graph"
           hidden
           aria-labelledby="document-graph-heading"
         />
+        <div data-client-slot-target="lineage" />
         <section
           id="deck-list"
           className="library-list mt-8 grid gap-4"
@@ -254,7 +267,7 @@ export function LibraryApp({ host, initialFilter, options }: LibraryAppProps): J
               work={work}
               documentNodes={nodes}
               options={options}
-              onChanged={() => void reload()}
+              onChanged={(notice) => void reload(notice)}
             />
           ))}
         </section>

@@ -22,8 +22,8 @@ export async function settled(): Promise<void> {
   });
 }
 
-export async function mountInto(host: ElefHost, options: ElefMountOptions = {}) {
-  const { document } = parseHTML('<html><body><div id="app"></div></body></html>');
+export async function mountInto(host: ElefHost, options: ElefMountOptions = {}, innerHtml = "") {
+  const { document } = parseHTML(`<html><body><div id="app">${innerHtml}</div></body></html>`);
   const view = (document as unknown as { defaultView?: unknown }).defaultView;
   (globalThis as Record<string, unknown>)["window"] = view ?? { document };
   (globalThis as Record<string, unknown>)["document"] = document;

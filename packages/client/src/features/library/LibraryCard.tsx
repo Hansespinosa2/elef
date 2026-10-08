@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { FormEvent, JSX, MouseEvent, RefObject } from "react";
 import type { ElefHost, WorkKind, WorkSummary } from "@elef/contracts";
 import { renderPreviewCore } from "@elef/renderer";
-import type { ElefMountOptions } from "../../application/types.js";
+import type { CardAction, ElefMountOptions } from "../../application/types.js";
 import { SafeHtml } from "../../ui/SafeHtml.js";
 import { sanitizePreview } from "../../ui/sanitize.js";
 import { useSlideScale } from "./useSlideScale.js";
@@ -12,7 +12,11 @@ export interface LibraryCardProps {
   readonly work: WorkSummary;
   readonly documentNodes: readonly unknown[];
   readonly options: ElefMountOptions;
-  readonly onChanged: () => void;
+  readonly onChanged: (notice: string | null) => void;
+}
+
+export function cardDomId(work: WorkSummary): string {
+  return `${work.kind === "presentation" ? "presentation" : "document"}_${work.id}`;
 }
 
 function localTarget(value: string, label: string): string {
@@ -61,11 +65,11 @@ export function LibraryCard({ host, work, documentNodes, options, onChanged }: L
   function open(event: MouseEvent): void {
     if (navigate === undefined) return;
     event.preventDefault();
-    navigate({ workId: work.id });
+    navigate({ workId: work.id, kind: work.kind });
   }
 
   return (
-    <article id={work.id} className="library-card rounded-2xl border border-[#ddd5c8] bg-[#fffdf8]" role="listitem">
+    <article id={cardDomId(work)} className="library-card rounded-2xl border border-[#ddd5c8] bg-[#fffdf8]" role="listitem">
       <div className="library-card-media">
         <CardPreview host={host} work={work} documentNodes={documentNodes} options={options} />
         <a className="library-card-open" href={editUrl} aria-label={`Edit ${work.title}`} onClick={open} />
@@ -76,7 +80,7 @@ export function LibraryCard({ host, work, documentNodes, options, onChanged }: L
               <span aria-hidden="true">...</span>
             </summary>
             <div className="library-card-menu-options">
-              <RenameControl host={host} work={work} onChanged={onChanged} />
+              <RenameControl host={host} work={work} options={options} onChanged={onChanged} />
               <ExtraActions work={work} options={options} />
               {work.kind === "presentation" && options.presentWork !== undefined ? (
                 <button
@@ -163,11 +167,13 @@ function PreviewControl({
 function RenameControl({
   host,
   work,
+  options,
   onChanged,
 }: {
   readonly host: ElefHost;
   readonly work: WorkSummary;
-  readonly onChanged: () => void;
+  readonly options: ElefMountOptions;
+  readonly onChanged: (notice: string | null) => void;
 }): JSX.Element {
   const [title, setTitle] = useState(work.title);
 
@@ -175,8 +181,8 @@ function RenameControl({
     event.preventDefault();
     const next = title.trim();
     if (next === "" || next === work.title) return;
-    await host.library.renameWork(work.id, next);
-    onChanged();
+    const renamed = await host.library.renameWork(work.id, next);
+    onChanged(options.operationNotice?.("renamed", renamed) ?? null);
   }
 
   return (
@@ -184,6 +190,7 @@ function RenameControl({
       <summary>Rename</summary>
       <form className="library-rename" onSubmit={(event) => void submit(event)}>
         <input
+          id={`${cardDomId(work)}_rename_title`}
           type="text"
           value={title}
           aria-label={`Rename ${work.title}`}
@@ -209,18 +216,44 @@ function ExtraActions({
   if (actions.length === 0) return null;
   return (
     <>
-      {actions.map((action, index) =>
-        action.href !== undefined ? (
-          <a key={index} className="deck-action" href={localTarget(action.href, "Library action")}>
-            {action.label}
-          </a>
-        ) : (
-          <button key={index} className="deck-action" type="button" onClick={() => action.run?.(work)}>
-            {action.label}
-          </button>
-        ),
-      )}
+      {actions.map((action, index) => (
+        <CardActionItem key={index} work={work} action={action} />
+      ))}
     </>
+  );
+}
+
+function CardActionItem({
+  work,
+  action,
+}: {
+  readonly work: WorkSummary;
+  readonly action: CardAction;
+}): JSX.Element {
+  if (action.children !== undefined && action.children.length > 0) {
+    const menuClass = action.menuClass ?? "library-card-submenu";
+    return (
+      <details className={menuClass}>
+        <summary>{action.label}</summary>
+        <div className={`${menuClass}-options`}>
+          {action.children.map((child, index) => (
+            <CardActionItem key={index} work={work} action={child} />
+          ))}
+        </div>
+      </details>
+    );
+  }
+  if (action.href !== undefined) {
+    return (
+      <a className="deck-action" href={localTarget(action.href, "Library action")}>
+        {action.label}
+      </a>
+    );
+  }
+  return (
+    <button className="deck-action" type="button" onClick={() => action.run?.(work)}>
+      {action.label}
+    </button>
   );
 }
 
@@ -233,13 +266,13 @@ function DeleteControl({
   readonly host: ElefHost;
   readonly work: WorkSummary;
   readonly options: ElefMountOptions;
-  readonly onChanged: () => void;
+  readonly onChanged: (notice: string | null) => void;
 }): JSX.Element {
   async function remove(): Promise<void> {
     const confirmed = (await options.confirmDelete?.(work)) ?? true;
     if (!confirmed) return;
     await host.library.deleteWork(work.id);
-    onChanged();
+    onChanged(options.operationNotice?.("deleted", work) ?? null);
   }
 
   return (

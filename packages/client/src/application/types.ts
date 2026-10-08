@@ -1,16 +1,24 @@
 import type { ElefHost, WorkKind, WorkSummary } from "@elef/contracts";
 
+export type { WorkKind };
+
 export type LibraryFilter = "all" | "documents" | "presentations";
 
 export interface CardAction {
   readonly label: string;
   readonly href?: string;
   readonly run?: (work: WorkSummary) => void;
+  readonly children?: readonly CardAction[];
+  readonly menuClass?: string;
 }
+
+export type LibraryOperation = "renamed" | "deleted" | "created";
 
 export interface ElefMountOptions {
   readonly initialUrl?: string;
-  readonly navigate?: (target: { readonly workId: string } | { readonly url: string }) => void;
+  readonly navigate?: (
+    target: { readonly workId: string; readonly kind: WorkKind } | { readonly url: string },
+  ) => void;
   readonly resolveWorkUrl?: (work: WorkSummary) => string;
   readonly resolveLibraryUrl?: (filter: LibraryFilter) => string;
   readonly resolvePreviewUrl?: (work: WorkSummary) => string | null;
@@ -19,6 +27,7 @@ export interface ElefMountOptions {
   readonly presentWork?: (work: WorkSummary) => void;
   readonly cardNote?: (work: WorkSummary) => string | null;
   readonly extraCardActions?: (work: WorkSummary) => readonly CardAction[];
+  readonly operationNotice?: (operation: LibraryOperation, work: WorkSummary) => string | null;
 }
 
 export interface ElefShell {

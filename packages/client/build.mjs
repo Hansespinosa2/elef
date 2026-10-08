@@ -1,6 +1,8 @@
-// Canonical producer of packages/client/dist/elef-client.mjs: one ESM file
-// both hosts consume. React, react-dom and the Elef runtime deps are
-// bundled in; contract types erase at compile time.
+// Canonical producer of the committed packages/client/dist/ artifacts: the
+// single-file ESM bundle both hosts consume, plus the dependency-free
+// sanitizer module the editor/settings hosts import until their slices
+// migrate. React, react-dom and the Elef runtime deps are bundled in;
+// contract types erase at compile time.
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
@@ -9,9 +11,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 const esbuild = require("esbuild");
 
-esbuild.buildSync({
-  entryPoints: [join(here, "src", "index.ts")],
-  outfile: join(here, "dist", "elef-client.mjs"),
+const shared = {
   bundle: true,
   format: "esm",
   platform: "browser",
@@ -20,5 +20,16 @@ esbuild.buildSync({
   minify: true,
   define: { "process.env.NODE_ENV": '"production"' },
   logLevel: "warning",
+};
+
+esbuild.buildSync({
+  ...shared,
+  entryPoints: [join(here, "src", "index.ts")],
+  outfile: join(here, "dist", "elef-client.mjs"),
 });
-console.log("packages/client: dist/elef-client.mjs built");
+esbuild.buildSync({
+  ...shared,
+  entryPoints: [join(here, "src", "ui", "sanitize.ts")],
+  outfile: join(here, "dist", "sanitize.mjs"),
+});
+console.log("packages/client: dist/elef-client.mjs + dist/sanitize.mjs built");

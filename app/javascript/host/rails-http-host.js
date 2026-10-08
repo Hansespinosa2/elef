@@ -15,7 +15,7 @@ function csrfToken(html) {
   return match ? match[1] : null;
 }
 
-export async function createRailsHost({ baseUrl, fetchImpl = fetch }) {
+export async function createRailsHost({ baseUrl, fetchImpl = fetch, csrfToken: providedToken }) {
   const cookies = new Map();
   const base = baseUrl.replace(/\/$/, "");
 
@@ -36,6 +36,9 @@ export async function createRailsHost({ baseUrl, fetchImpl = fetch }) {
   }
 
   async function bootstrap() {
+    // Browser mounts pass the token (or explicit null) from the page meta
+    // tags and skip the bootstrap fetch; Node drivers bootstrap as before.
+    if (providedToken !== undefined) return providedToken;
     // The test environment disables forgery protection, so csrf_meta_tags
     // renders nothing there; the token is required only when present.
     // Anything that is not the app page is still a hard failure.
