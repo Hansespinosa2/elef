@@ -49,8 +49,5 @@ group :test do
   gem "selenium-webdriver"
 end
 
-gem "redcarpet", "~> 3.6"
-gem "rouge", "~> 5.1"
-gem "katex", "~> 0.11.0"
 gem "mini_racer", "= 0.22.1", require: false
 gem "libv8-node", "= 24.12.0.1", require: false

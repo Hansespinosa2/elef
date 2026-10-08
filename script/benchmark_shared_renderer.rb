@@ -20,14 +20,6 @@ end
 cold = measure { Source::JavascriptRenderer.editor_preview(source, kind: :presentation, title: "100 slides") }
 blocks = 20.times.map { measure { Source::JavascriptRenderer.render(source) } }
 previews = 20.times.map { measure { Source::JavascriptRenderer.editor_preview(source, kind: :presentation, title: "100 slides") } }
-original_flag = ENV["ELEF_RENDERER"]
-begin
-  ENV["ELEF_RENDERER"] = "ruby"
-  Source::Renderer.render(source)
-  fallback = 20.times.map { measure { Source::Renderer.render(source) } }
-ensure
-  original_flag ? ENV["ELEF_RENDERER"] = original_flag : ENV.delete("ELEF_RENDERER")
-end
 puts JSON.pretty_generate(
   source_bytes: source.bytesize,
   slides: 100,
@@ -36,6 +28,5 @@ puts JSON.pretty_generate(
   platform: RUBY_PLATFORM,
   cold_preview_ms: cold.round(2),
   javascript_block_p95_ms: p95(blocks),
-  javascript_projection_p95_ms: p95(previews),
-  ruby_fallback_block_p95_ms: p95(fallback)
+  javascript_projection_p95_ms: p95(previews)
 )

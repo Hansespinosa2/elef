@@ -50,7 +50,7 @@ Markdown is the authored source. Rendered HTML, editor projections, library card
 |---|---|
 | app/controllers, app/models, app/services, app/lib | Rails request handling, persistence, domain services, and server-side integrations |
 | app/views, app/javascript, app/assets | Product markup, shared editor/library/graph behavior, controllers, styles, and desktop host template |
-| app/lib/source, app/javascript/lib/renderer.js | Rails renderer bridge and shared Markdown-to-HTML renderer |
+| app/lib/source, packages/work-model, packages/renderer | Rails renderer bridge, shared Work semantics, and shared Markdown-to-HTML projection |
 | config/routes.rb, config/importmap.rb, db/ | Web routes, frontend pins, and Rails database schema/migrations |
 | desktop/crates/elef-core | Tauri-independent deck discovery, manifests, safe writes, media, and .elef archives |
 | desktop/src-tauri | Tauri commands, capability boundary, native menu/window integration, and application lifecycle |
