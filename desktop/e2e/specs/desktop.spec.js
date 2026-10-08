@@ -304,6 +304,9 @@ class DesktopEditorUi {
 
   async openDeck(title = "E2E seed") {
     if (!(await $("#library-view").isDisplayed())) {
+      if ((await $("#desktop-editor-form").getAttribute("data-editor-mode")) === "visual") {
+        await this.showSourceMode()
+      }
       await $("#back-to-library").click()
       await $("#library-view").waitForDisplayed()
     }
