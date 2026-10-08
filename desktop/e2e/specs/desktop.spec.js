@@ -79,10 +79,9 @@ function focusDesktopWindow() {
 
 function sendNativeKey(key, { activate = true } = {}) {
   const linuxKeys = {
-    Escape: "Escape", Enter: "Return", ArrowRight: "Right", ArrowLeft: "Left", Home: "Home", End: "End",
-    "ControlOrMeta+End": "ctrl+End"
+    Escape: "Escape", Enter: "Return", ArrowRight: "Right", ArrowLeft: "Left", Home: "Home", End: "End"
   }
-  const macKeyCodes = { Escape: 53, Enter: 36, ArrowRight: 124, ArrowLeft: 123, Home: 115, End: 119, "ControlOrMeta+End": 119 }
+  const macKeyCodes = { Escape: 53, Enter: 36, ArrowRight: 124, ArrowLeft: 123, Home: 115, End: 119 }
   if (process.platform === "linux") {
     if (activate) focusDesktopWindow()
     const nativeKey = linuxKeys[key]
@@ -94,8 +93,7 @@ function sendNativeKey(key, { activate = true } = {}) {
     if (activate) focusDesktopWindow()
     const keyCode = macKeyCodes[key]
     if (keyCode === undefined) throw new Error(`Unsupported native key ${key}`)
-    const modifier = key === "ControlOrMeta+End" ? " using {command down}" : ""
-    execFileSync("osascript", ["-e", `tell application "System Events" to key code ${keyCode}${modifier}`], { timeout: 5_000 })
+    execFileSync("osascript", ["-e", `tell application "System Events" to key code ${keyCode}`], { timeout: 5_000 })
     return
   }
   throw new Error(`Native keyboard input is unsupported on ${process.platform}`)
@@ -759,7 +757,6 @@ class DesktopEditorUi {
     } else {
       target = await $("#deck-source-editor .cm-content")
       await target.waitForDisplayed()
-      await target.click()
       const focus = await browser.execute(() => {
         const editor = document.querySelector("#desktop-editor-field")?.editorController
         editor?.view.focus()
@@ -771,7 +768,6 @@ class DesktopEditorUi {
       if (!focus?.editorHasFocus || !focus.contentDomActive) {
         throw new Error(`CodeMirror did not receive focus before native typing: ${JSON.stringify(focus)}`)
       }
-      sendNativeKey("ControlOrMeta+End", { activate: false })
     }
 
     typeNativeText("$")
@@ -781,32 +777,37 @@ class DesktopEditorUi {
 
   async assertDisplayMathCaret(expectedSource, expectedCaret, mode) {
     const visual = mode === "visual"
-    await browser.waitUntil(async () => {
-      const state = await browser.execute(() => {
-        const form = document.querySelector("#desktop-editor-form")
-        const editor = document.querySelector("#desktop-editor-field")?.editorController
-        const selection = window.getSelection()
-        const focusElement = selection?.focusNode?.nodeType === Node.ELEMENT_NODE
-          ? selection.focusNode
-          : selection?.focusNode?.parentElement
-        const activeMath = focusElement?.closest?.(".editor-math-active")
-        return {
-          mode: editor?.editingMode,
-          value: editor?.value,
-          selectionStart: editor?.selectionStart,
-          selectionEnd: editor?.selectionEnd,
-          previewSource: form?.previewController?.pendingProjection?.source || null,
-          activeMathText: activeMath?.textContent || null,
-          visualOffset: selection?.focusOffset ?? null
-        }
+    let actualState
+    try {
+      await browser.waitUntil(async () => {
+        actualState = await browser.execute(() => {
+          const form = document.querySelector("#desktop-editor-form")
+          const editor = document.querySelector("#desktop-editor-field")?.editorController
+          const selection = window.getSelection()
+          const focusElement = selection?.focusNode?.nodeType === Node.ELEMENT_NODE
+            ? selection.focusNode
+            : selection?.focusNode?.parentElement
+          const activeMath = focusElement?.closest?.(".editor-math-active")
+          return {
+            mode: editor?.editingMode,
+            value: editor?.value,
+            selectionStart: editor?.selectionStart,
+            selectionEnd: editor?.selectionEnd,
+            previewSource: form?.previewController?.pendingProjection?.source || null,
+            activeMathText: activeMath?.textContent || null,
+            visualOffset: selection?.focusOffset ?? null
+          }
+        })
+        return actualState?.mode === mode && actualState.value === expectedSource &&
+          actualState.selectionStart === expectedCaret && actualState.selectionEnd === expectedCaret &&
+          (!visual || (actualState.previewSource === expectedSource && actualState.activeMathText === "$$\n\n$$" && actualState.visualOffset === 3))
+      }, {
+        timeout: 10_000,
+        timeoutMsg: `The desktop ${mode} editor did not keep the caret on the empty display-math body line`
       })
-      return state?.mode === mode && state.value === expectedSource &&
-        state.selectionStart === expectedCaret && state.selectionEnd === expectedCaret &&
-        (!visual || (state.previewSource === expectedSource && state.activeMathText === "$$\n\n$$" && state.visualOffset === 3))
-    }, {
-      timeout: 10_000,
-      timeoutMsg: `The desktop ${mode} editor did not keep the caret on the empty display-math body line`
-    })
+    } catch (error) {
+      throw new Error(`${error.message}; actual state: ${JSON.stringify(actualState)}`)
+    }
   }
 
   async assertModeSwitchRespectsNewCaret() {
