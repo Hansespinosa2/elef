@@ -7,7 +7,7 @@ import { parseHTML } from "linkedom"
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..")
 const read = relative => readFile(path.join(root, relative), "utf8")
-const [hostTemplate, shellStyles, applicationStyles, application, bootstrap, editorRuntime, build, editorView, libraryView, fileLibraryTransport] = await Promise.all([
+const [hostTemplate, shellStyles, applicationStylesheetIndex, application, bootstrap, editorRuntime, build, editorView, libraryView, fileLibraryTransport] = await Promise.all([
   read("app/views/desktop_host.html"),
   read("app/assets/stylesheets/file_library_host.css"),
   read("app/assets/stylesheets/application.css"),
@@ -19,6 +19,8 @@ const [hostTemplate, shellStyles, applicationStyles, application, bootstrap, edi
   read("app/javascript/lib/library_view.js"),
   read("desktop/frontend/src/file-library-transport.js")
 ])
+const applicationPartialPaths = [...applicationStylesheetIndex.matchAll(/@import url\("\.\/([^\"]+)"\) layer\([^\)]+\);/g)]
+const applicationStyles = (await Promise.all(applicationPartialPaths.map(([, path]) => read(`app/assets/stylesheets/${path}`)))).join("\n")
 const authoringMarkup = await read("app/views/shared/_authoring_settings_dialog.html.erb")
 const page = hostTemplate.replace("<!-- elef:shared-authoring-settings -->", authoringMarkup)
 const importmap = await read("config/importmap.rb")
@@ -68,7 +70,8 @@ test("the desktop packages Rails-owned host markup and styles", () => {
   }
   assert.match(applicationStyles, /\.library-shared-view \.search-box\s*\{[^}]*var\(--panel, var\(--oradia-slate-900\)\)/)
   assert.match(applicationStyles, /\.library-shared-view \.library-card\s*\{[^}]*background: var\(--panel,/)
-  assert.match(applicationStyles, /\.library-shared-view \.library-card:hover\s*\{[^}]*border-color:.*!important/)
+  assert.match(applicationStyles, /\.library-shared-view \.library-card:hover\s*\{[^}]*border-color: color-mix/)
+  assert.doesNotMatch(applicationStyles, /\.library-shared-view \.library-card:hover\s*\{[^}]*!important/)
   assert.match(applicationStyles, /\.library-shared-view h1,\s*\.library-shared-view h2,\s*\.library-shared-view h3\s*\{[^}]*font-family: var\(--oradia-serif\)/)
   assert.match(applicationStyles, /\.library-shared-view \.button:not\(\.primary\)\s*\{[^}]*var\(--sidebar, var\(--oradia-slate-800\)\)/)
   assert.match(emptyAction, /class="button primary inline-flex[^\"]+"/)

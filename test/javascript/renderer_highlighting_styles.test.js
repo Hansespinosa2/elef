@@ -3,7 +3,11 @@ import assert from "node:assert/strict"
 import { readFile } from "node:fs/promises"
 
 const outputs = JSON.parse(await readFile(new URL("./fixtures/renderer-outputs.json", import.meta.url)))
-const stylesheet = (await readFile(new URL("../../app/assets/stylesheets/application.css", import.meta.url), "utf8"))
+const stylesheetIndex = await readFile(new URL("../../app/assets/stylesheets/application.css", import.meta.url), "utf8")
+const partials = [...stylesheetIndex.matchAll(/@import url\("\.\/([^\"]+)"\) layer\([^\)]+\);/g)]
+const stylesheet = (await Promise.all(partials.map(([_, path]) =>
+  readFile(new URL(`../../app/assets/stylesheets/${path}`, import.meta.url), "utf8")
+))).join("\n")
   .replace(/\/\*[\s\S]*?\*\//g, "")
 const styleRules = [...stylesheet.matchAll(/([^{}]+)\{[^{}]*\}/g)]
 const highlightedClasses = new Set(outputs.flatMap(({ blockHtml }) => {
