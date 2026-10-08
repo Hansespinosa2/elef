@@ -14,9 +14,21 @@ function commandError(error) {
   return { code: "internal", message: String(error), retryable: false };
 }
 
-export function createTauriHost({ invoke, readExportFile }) {
+export function createTauriHost({ invoke, readExportFile, initialStatus }) {
   const baseHashes = new Map();
   const sessions = new Set();
+  // Boot snapshot reuse: the host already fetched get_library_status at
+  // boot, so the client's first list serves it instead of paying two more
+  // full-list IPCs racing boot. Single-use: any mutation drops it and the
+  // next list re-fetches, so a served list is never older than its fetch.
+  let bootStatus = initialStatus ?? null;
+  // Same-tick refresh note: refreshLibrary lists decks through the raw
+  // transport and hands the result over, so the client's reload in the same
+  // refresh consumes it instead of listing a second time. Single-use.
+  let notedDecks = null;
+  // The root name only changes via chooseLibrary, which invalidates this;
+  // every other list serves the cached workspace without a status IPC.
+  let cachedWorkspaces = null;
   // Latest listed summaries by work id. Snapshots join fresh preview text
   // onto the cached summary so getWork stays read-only: it must never call
   // open_deck, which repairs manifestless identities and would invalidate
@@ -78,17 +90,43 @@ export function createTauriHost({ invoke, readExportFile }) {
     };
   }
 
+  function workspaceOf(status) {
+    return [{ id: "local", name: status?.root ? String(status.root) : "Local library" }];
+  }
+
+  function dropListCaches() {
+    bootStatus = null;
+    notedDecks = null;
+  }
+
   const library = {
     async listWorkspaces() {
-      const status = await call("get_library_status");
-      return [{ id: "local", name: status?.root ? String(status.root) : "Local library" }];
+      if (cachedWorkspaces) return cachedWorkspaces;
+      // Read the boot snapshot without consuming it: listWorks consumes it
+      // below, and the workspace cache means this path runs once per root.
+      const status = bootStatus ?? (await call("get_library_status"));
+      cachedWorkspaces = workspaceOf(status);
+      return cachedWorkspaces;
     },
     async listWorks() {
+      const noted = notedDecks;
+      notedDecks = null;
+      if (noted) {
+        summaries.clear();
+        return noted.map(remember);
+      }
+      const status = bootStatus;
+      bootStatus = null;
+      if (status?.decks) {
+        summaries.clear();
+        return status.decks.map(remember);
+      }
       const decks = await call("list_decks");
       summaries.clear();
       return decks.map(remember);
     },
     async createWork(input) {
+      dropListCaches();
       const deck = await call("create_deck", { name: input.title, kind: input.kind });
       baseHashes.set(deck.id, deck.content_hash);
       if (input.text !== undefined && input.text !== null) {
@@ -101,10 +139,12 @@ export function createTauriHost({ invoke, readExportFile }) {
       return remember(opened);
     },
     async renameWork(workId, title) {
+      dropListCaches();
       const deck = await call("rename_deck", { id: workId, name: title });
       return remember(deck);
     },
     async deleteWork(workId) {
+      dropListCaches();
       const result = await call("delete_deck", { id: workId });
       // The backend mediates deletion with a native Trash confirmation; a
       // dismissed dialog resolves instead of rejecting, so translate the
@@ -122,6 +162,10 @@ export function createTauriHost({ invoke, readExportFile }) {
       return snapshotOf(workId);
     },
     async saveWork(workId, text, baseline) {
+      // A save bumps the work mtime, so the next list must re-fetch rather
+      // than serve the noted decks, or card keys would not turn over and
+      // previews would stay stale after the save that changed them.
+      dropListCaches();
       try {
         const result = await call("save_source", {
           id: workId,
@@ -310,6 +354,7 @@ export function createTauriHost({ invoke, readExportFile }) {
       return readExportFile();
     },
     async importElef(bytes) {
+      dropListCaches();
       try {
         const result = await call("import_elef_bytes", { bytes: Array.from(bytes) });
         if (!result) throw new Error("import produced no deck");
@@ -343,6 +388,16 @@ export function createTauriHost({ invoke, readExportFile }) {
     settings: settingsPort,
     search: searchPort,
     transfer: transferPort,
+    // Desktop-internal list coordination, not part of the ElefHost ports:
+    // the application hands its same-tick list over so the client's reload
+    // in the same refresh consumes it instead of listing twice.
+    noteListedDecks(decks) {
+      notedDecks = decks;
+    },
+    noteRootChanged() {
+      cachedWorkspaces = null;
+      dropListCaches();
+    },
     async createWorkSession(workId) {
       const session = createSession(workId);
       await session.ensure();

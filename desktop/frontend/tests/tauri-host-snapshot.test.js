@@ -72,6 +72,88 @@ test("rename refreshes the cached summary snapshots join onto", async () => {
   assert.ok(!calls.includes("list_decks", 1))
 })
 
+test("first list serves the boot status without listing IPCs", async () => {
+  const calls = []
+  const host = createTauriHost({
+    invoke: async (command) => {
+      calls.push(command)
+      throw new Error(`unexpected command ${command}`)
+    },
+    initialStatus: { root: "/lib", decks: [deckSummary()] },
+  })
+  assert.deepEqual(await host.library.listWorkspaces(), [{ id: "local", name: "/lib" }])
+  const works = await host.library.listWorks()
+  assert.equal(works.length, 1)
+  assert.equal(works[0].id, MANIFESTLESS_ID)
+  assert.deepEqual(calls, [])
+  await assert.rejects(() => host.library.listWorks(), /unexpected command list_decks/)
+  assert.deepEqual(await host.library.listWorkspaces(), [{ id: "local", name: "/lib" }])
+})
+
+test("noted decks serve the next list once", async () => {
+  const calls = []
+  const host = hostWith(calls)
+  host.noteListedDecks([deckSummary({ name: "Noted" })])
+  const works = await host.library.listWorks()
+  assert.equal(works[0].title, "Noted")
+  assert.deepEqual(calls.map(([command]) => command), [])
+  const again = await host.library.listWorks()
+  assert.equal(again[0].title, "Manifestless")
+  assert.deepEqual(calls.map(([command]) => command), ["list_decks"])
+})
+
+test("mutations drop the noted decks", async () => {
+  const calls = []
+  const host = createTauriHost({
+    invoke: async (command) => {
+      calls.push(command)
+      if (command === "list_decks") return [deckSummary()]
+      if (command === "rename_deck") return deckSummary({ name: "Renamed" })
+      throw new Error(`unexpected command ${command}`)
+    },
+  })
+  host.noteListedDecks([deckSummary({ name: "Stale" })])
+  await host.library.renameWork(MANIFESTLESS_ID, "Renamed")
+  const works = await host.library.listWorks()
+  assert.equal(works[0].title, "Manifestless")
+  assert.deepEqual(calls, ["rename_deck", "list_decks"])
+})
+
+test("save drops the noted decks so the next list sees the new mtime", async () => {
+  const calls = []
+  const host = createTauriHost({
+    invoke: async (command) => {
+      calls.push(command)
+      if (command === "list_decks") return [deckSummary({ modified_ms: 2_000 })]
+      if (command === "save_source") return { content_hash: "h2" }
+      throw new Error(`unexpected command ${command}`)
+    },
+  })
+  host.noteListedDecks([deckSummary({ modified_ms: 1_000 })])
+  await host.works.saveWork(MANIFESTLESS_ID, "# new", { revision: "h1" })
+  const [work] = await host.library.listWorks()
+  assert.equal(work.updatedAt, new Date(2_000).toISOString())
+  assert.deepEqual(calls, ["save_source", "list_decks"])
+})
+
+test("root change invalidates the cached workspace", async () => {
+  const calls = []
+  let root = "/one"
+  const host = createTauriHost({
+    invoke: async (command) => {
+      calls.push(command)
+      if (command === "get_library_status") return { root, decks: [] }
+      throw new Error(`unexpected command ${command}`)
+    },
+  })
+  assert.deepEqual(await host.library.listWorkspaces(), [{ id: "local", name: "/one" }])
+  assert.deepEqual(await host.library.listWorkspaces(), [{ id: "local", name: "/one" }])
+  root = "/two"
+  host.noteRootChanged()
+  assert.deepEqual(await host.library.listWorkspaces(), [{ id: "local", name: "/two" }])
+  assert.deepEqual(calls, ["get_library_status", "get_library_status"])
+})
+
 test("delete evicts the cached summary", async () => {
   let deleted = false
   const host = createTauriHost({

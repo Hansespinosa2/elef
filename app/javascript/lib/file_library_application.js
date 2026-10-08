@@ -76,6 +76,7 @@ export function startFileLibraryApplication(platform) {
   // caching them here.
   const mount = document.querySelector("#library-view-mount")
   let shell = null
+  let libraryHost = null
 
   const elements = {
     libraryName: document.querySelector("#library-name"),
@@ -491,6 +492,7 @@ export function startFileLibraryApplication(platform) {
       ])
       decks = listedDecks
       documentGraphCache.invalidate()
+      libraryHost?.noteListedDecks(listedDecks)
       await shell.refresh()
       if (currentFilter() === "documents") await showDocumentGraph()
       setStatus(`${decks.length} ${decks.length === 1 ? "deck" : "decks"}`)
@@ -511,6 +513,7 @@ export function startFileLibraryApplication(platform) {
         return
       }
       library = selected
+      libraryHost?.noteRootChanged()
       await loadDesktopAuthoringRegistry()
       documentGraphCache.invalidate()
       libraryConfig = selected.config || libraryConfig
@@ -1087,10 +1090,11 @@ export function startFileLibraryApplication(platform) {
 
   void listen("desktop-menu-action", event => void handleMenuAction(event.payload))
   const openedFileListener = listen("desktop-open-elef", () => void processOpenedFiles())
-  async function mountLibrary() {
+  async function mountLibrary(status) {
     // The desktop writes #library/<filter> hashes on tab switches; boot from
     // the live URL so a reload restores the same filter.
-    shell = await mountElef(mount, createLibraryHost(), {
+    libraryHost = createLibraryHost(status)
+    shell = await mountElef(mount, libraryHost, {
       initialUrl: location.href,
       // The desktop has no URL routing: work targets open in the embedded
       // editor, tab targets only move the location hash for deep-linking.
@@ -1114,11 +1118,15 @@ export function startFileLibraryApplication(platform) {
 
   void completeBootstrap({
     initialize: async () => {
-      await mountLibrary()
+      // Status first: the client's mount fires its own initial load, and
+      // racing that listing against this one serialized both on the native
+      // side. Mounting on the measured status hands the client its first
+      // list with zero extra IPC.
       const [status] = await measureBootstrapStage("library-status", () => Promise.all([fileLibrary.getLibraryStatus(), openedFileListener]))
       library = status
       libraryConfig = status?.config || libraryConfig
       decks = status?.decks || []
+      await mountLibrary(status)
       applyTheme(libraryConfig.theme)
       measureBootstrapStage("initial-library-render", showLibrary)
       if (status?.config_notice) showNotice(status.config_notice, "error")
@@ -1130,6 +1138,10 @@ export function startFileLibraryApplication(platform) {
       if (__ELEF_E2E__) window.__elefPerformanceTestHooks.interactive()
     },
     waitForEditor: async () => {
+      // Prewarm the preview worker off the interactive path: the library no
+      // longer renders card previews through it, so without this the first
+      // deck open pays the cold-worker spawn and bundle parse.
+      void renderer.warmup()
       await measureBootstrapStage("editor-runtime", () => loadEditorRuntime())
       configureEditorKind(elements.editorField.closest(".editor-shell"), "presentation", {
         showTitle: true,

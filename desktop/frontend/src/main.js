@@ -22,7 +22,7 @@ const nativeFetch = globalThis.fetch.bind(globalThis)
 
 startFileLibraryApplication({
   fileLibrary,
-  createLibraryHost: () => createTauriHost({ invoke }),
+  createLibraryHost: (initialStatus) => createTauriHost({ invoke, initialStatus }),
   listen,
   getCurrentWindow,
   completeBootstrap,
