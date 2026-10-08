@@ -5,7 +5,7 @@ import { libraryAndGraphWorkflow } from "../../../test/e2e/scenarios/library-and
 import { libraryCreateDeleteWorkflow } from "../../../test/e2e/scenarios/library-create-delete.js"
 import { externalEditConflictWorkflow, CONFLICT_EXTERNAL_SOURCE } from "../../../test/e2e/scenarios/external-edit-conflict.js"
 import { hostileDeckNeutralizedWorkflow } from "../../../test/e2e/scenarios/hostile-deck.js"
-import { mathInputWorkflow, snippetInsertWorkflow } from "../../../test/e2e/scenarios/authoring-palettes.js"
+import { documentLinkCompletionWorkflow, mathInputWorkflow, snippetInsertWorkflow } from "../../../test/e2e/scenarios/authoring-palettes.js"
 import { authoringSettingsWorkflow } from "../../../test/e2e/scenarios/authoring-settings.js"
 import { PIXEL_PNG_MARKDOWN } from "../../../test/e2e/scenarios/media-fixture.js"
 import { presentationModeWorkflow } from "../../../test/e2e/scenarios/presentation-mode.js"
@@ -224,6 +224,49 @@ class WebEditorUi {
     expect(selection).toEqual([position, position])
   }
 
+  async assertBackspaceDeletesEmptyDollarPair(expectedSource) {
+    const source = normalizeLineEndings(expectedSource)
+    const initialState = await this.page.locator(".source-field").evaluate((field, expected) => {
+      const controller = field.editorController
+      if (!controller || controller.value !== `${expected}$$`) return null
+      controller.setSelectionRange(expected.length + 1)
+      controller.focus()
+      return { vimEnabled: controller.vimEnabled, insertMode: controller.insertMode }
+    }, source)
+    expect(initialState).not.toBeNull()
+
+    const restoreNormalMode = initialState.vimEnabled && !initialState.insertMode
+    try {
+      if (restoreNormalMode) {
+        await this.page.keyboard.press("i")
+        await expect.poll(() => this.page.locator(".source-field").evaluate(field => field.editorController.insertMode)).toBe(true)
+      }
+
+      const outcome = await this.page.locator(".source-field").evaluate(field => {
+        const controller = field.editorController
+        const event = new KeyboardEvent("keydown", { key: "Backspace", bubbles: true, cancelable: true })
+        controller.dom.dispatchEvent(event)
+        return {
+          source: controller.value,
+          anchor: controller.selectionStart,
+          head: controller.selectionEnd,
+          prevented: event.defaultPrevented
+        }
+      })
+      expect(outcome).toEqual({
+        source,
+        anchor: source.length,
+        head: source.length,
+        prevented: true
+      })
+    } finally {
+      if (restoreNormalMode) {
+        await this.page.keyboard.press("Escape")
+        await expect.poll(() => this.page.locator(".source-field").evaluate(field => field.editorController.insertMode)).toBe(false)
+      }
+    }
+  }
+
   async assertRelativeLineNumbers() {
     const result = await this.page.locator(".source-field").evaluate(async field => {
       const editor = field.editorController
@@ -424,15 +467,27 @@ class WebEditorUi {
   }
 
   async waitForAuthoringOption(palette, name) {
-    const label = palette === "snippet" ? "Snippet suggestions" : "Math shortcut suggestions"
+    const label = palette === "snippet"
+      ? "Snippet suggestions"
+      : palette === "document-link" ? "Document link suggestions" : "Math shortcut suggestions"
     const option = this.page.locator(`.source-field [role="listbox"][aria-label="${label}"] [role="option"]`).filter({ hasText: name }).first()
     await expect(option).toBeVisible()
   }
 
   async selectAuthoringOption(palette, name) {
-    const label = palette === "snippet" ? "Snippet suggestions" : "Math shortcut suggestions"
+    const label = palette === "snippet"
+      ? "Snippet suggestions"
+      : palette === "document-link" ? "Document link suggestions" : "Math shortcut suggestions"
     const option = this.page.locator(`.source-field [role="listbox"][aria-label="${label}"] [role="option"]`).filter({ hasText: name }).first()
     await option.click()
+  }
+
+  async refreshDocumentLinkPalette() {
+    await this.page.locator(".source-field").evaluate(field => {
+      const controller = globalThis.Stimulus?.getControllerForElementAndIdentifier(field, "document-link-palette")
+      if (!controller) throw new Error("The document-link palette controller is unavailable")
+      controller.refresh()
+    })
   }
 
   async editVisualText(currentText, replacementText) {
@@ -855,6 +910,10 @@ test("shared external-edit conflict flow saves a merge in the web app", async ({
 
 test("shared snippet insertion flow works in the web app", async ({ page }) => {
   await snippetInsertWorkflow(new WebEditorUi(page))
+})
+
+test("shared document-link completion replaces auto-paired closers in the web app", async ({ page }) => {
+  await documentLinkCompletionWorkflow(new WebEditorUi(page))
 })
 
 test("shared authoring settings create, edit, and delete flow works in the web app", async ({ page }) => {

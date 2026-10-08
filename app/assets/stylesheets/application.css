@@ -1037,6 +1037,40 @@ body.elef-app {
 .presentation-surface .highlight .p {
   color: #f2eee6;
 }
+/* highlight.js token colors — Oradia dark-code theme */
+.presentation-surface .highlight .hljs-keyword,
+.presentation-surface .highlight .hljs-type,
+.presentation-surface .highlight .hljs-selector-tag,
+.presentation-surface .highlight .hljs-template-tag,
+.document-surface .highlight .hljs-keyword,
+.document-surface .highlight .hljs-type,
+.document-surface .highlight .hljs-selector-tag,
+.document-surface .highlight .hljs-template-tag {
+  color: var(--oradia-green);
+}
+.presentation-surface .highlight .hljs-string,
+.presentation-surface .highlight .hljs-regexp,
+.presentation-surface .highlight .hljs-quote,
+.document-surface .highlight .hljs-string,
+.document-surface .highlight .hljs-regexp,
+.document-surface .highlight .hljs-quote {
+  color: var(--oradia-vim-insert);
+}
+.presentation-surface .highlight .hljs-comment,
+.document-surface .highlight .hljs-comment {
+  color: var(--oradia-muted);
+  font-style: italic;
+}
+.presentation-surface .highlight .hljs-title,
+.presentation-surface .highlight .hljs-built_in,
+.presentation-surface .highlight .hljs-number,
+.presentation-surface .highlight .hljs-literal,
+.document-surface .highlight .hljs-title,
+.document-surface .highlight .hljs-built_in,
+.document-surface .highlight .hljs-number,
+.document-surface .highlight .hljs-literal {
+  color: var(--oradia-ink);
+}
 .slide img { max-height: 70%; max-width: 100%; object-fit: contain; }
 .slide table { border-collapse: collapse; width: 100%; }
 .slide th,

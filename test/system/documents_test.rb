@@ -586,20 +586,20 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "suggests document links in the Markdown editor" do
     Document.create!(title: "Research target", source: "# Target")
-    document = Document.create!(title: "Research source", source: "# Source")
+    document = Document.create!(title: "Research source", source: "")
 
     visit edit_document_path(document)
     editor = find_field("Markdown source")
-    fill_in "Markdown source", with: "# Source\n\n    [[Not a link]]\n\n[[Research ta"
+    fill_in "Markdown source", with: "[[Research ta"
 
     assert_selector ".document-link-option", text: "Research target", wait: 5
-    editor.send_keys(:enter)
-    assert_includes editor.value, "[[Research target]]"
+    editor.send_keys(:tab)
+    assert_equal "[[Research target]]", editor.value
   end
 
   test "suggests document links from the visible CodeMirror editor" do
     Document.create!(title: "Research target", source: "# Target")
-    document = Document.create!(title: "Research source", source: "# Source")
+    document = Document.create!(title: "Research source", source: "")
 
     visit settings_path
     find("[data-vim-settings-target='vimToggle']").check
@@ -612,8 +612,25 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_selector ".document-link-option", text: "Research target", wait: 5
     assert_selector ".document-link-option[aria-selected='true']", text: "Research target"
     assert_equal "true", page.evaluate_script("document.querySelector('.cm-editor').getAttribute('aria-expanded')")
-    editor.send_keys(:enter)
-    assert_includes find_field("Markdown source").value, "[[Research target]]"
+    editor.send_keys(:tab)
+    assert_equal "[[Research target]]", find_field("Markdown source").value
+  end
+
+  test "suggests document links from CodeMirror when accepting with a mouse click" do
+    Document.create!(title: "Research target", source: "# Target")
+    document = Document.create!(title: "Research source", source: "")
+
+    visit settings_path
+    find("[data-vim-settings-target='vimToggle']").check
+    visit edit_document_path(document)
+
+    editor = find(".cm-content")
+    editor.click
+    editor.send_keys("i", "[[Research ta")
+
+    assert_selector ".document-link-option", text: "Research target", wait: 5
+    find(".document-link-option", text: "Research target").click
+    assert_equal "[[Research target]]", find_field("Markdown source").value
   end
 
   test "navigates resolved document links to previews" do
@@ -2058,6 +2075,58 @@ class DocumentsTest < ApplicationSystemTestCase
     editor.send_keys([:control, "z"])
     assert_includes source.value, "$x.b.vec.t$"
     assert_selector '[data-autosave-target="status"]', text: "Saved", wait: 5
+  end
+
+  test "backspace deletes empty dollar pairs and keeps other edits single-character" do
+    document = Document.create!(title: "Math pair deletion", source: "# Math")
+    visit edit_document_path(document)
+    click_on "Source"
+    source = find_field("Markdown source")
+    editor = find(".cm-content")
+
+    editor.send_keys(:end)
+    editor.send_keys("$")
+    assert_field "Markdown source", with: "# Math$$"
+    assert_equal 7, page.evaluate_script("document.querySelector('.source-field').editorController.selectionStart")
+    editor.send_keys(:backspace)
+    assert_field "Markdown source", with: "# Math"
+    assert_equal 6, page.evaluate_script("document.querySelector('.source-field').editorController.selectionStart")
+
+    editor.send_keys("((")
+    assert_field "Markdown source", with: "# Math(())"
+    assert_equal 8, page.evaluate_script("document.querySelector('.source-field').editorController.selectionStart")
+    editor.send_keys(:backspace)
+    assert_field "Markdown source", with: "# Math()"
+
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector(".source-field").editorController;
+      const newline = String.fromCharCode(10);
+      const escapedDollarPair = String.fromCharCode(92) + "$$";
+      editor.replaceServerSource(["# Math", "", escapedDollarPair].join(newline));
+      editor.setSelectionRange(editor.value.length - 1);
+      editor.focus();
+    JAVASCRIPT
+    editor.send_keys(:backspace)
+    assert_field "Markdown source", with: "# Math\n\n\\$"
+
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector(".source-field").editorController;
+      editor.replaceServerSource(["# Math", "", "$x$"].join(String.fromCharCode(10)));
+      editor.setSelectionRange(editor.value.indexOf("$x$") + 2);
+      editor.focus();
+    JAVASCRIPT
+    editor.send_keys(:backspace)
+    assert_field "Markdown source", with: "# Math\n\n$$"
+    assert_equal 9, page.evaluate_script("document.querySelector('.source-field').editorController.selectionStart")
+
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector(".source-field").editorController;
+      editor.replaceServerSource(["# Math", "", "a$b"].join(String.fromCharCode(10)));
+      editor.setSelectionRange(editor.value.length);
+      editor.focus();
+    JAVASCRIPT
+    editor.send_keys(:backspace)
+    assert_field "Markdown source", with: "# Math\n\na$"
   end
 
   test "supports editing an active math chain before committing it" do

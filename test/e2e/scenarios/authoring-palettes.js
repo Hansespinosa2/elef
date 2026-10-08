@@ -17,6 +17,12 @@ export async function mathInputWorkflow(ui) {
   await ui.openDeck()
   await ui.showSourceMode()
   const prefix = (await ui.readSource()).trimEnd()
+  const pairPrefix = `${prefix}\n\n`
+  await ui.replaceSource(`${pairPrefix}$$`)
+  await ui.assertBackspaceDeletesEmptyDollarPair(pairPrefix)
+  await ui.waitForSource(pairPrefix)
+  await ui.waitForSaved(pairPrefix)
+
   const query = `${prefix}\n\n$$\n@a`
 
   await ui.replaceSource(query)
@@ -30,4 +36,28 @@ export async function mathInputWorkflow(ui) {
   await ui.waitForSaved(complete)
   await ui.showVisualMode()
   await ui.waitForPreview("α")
+}
+
+export async function documentLinkCompletionWorkflow(ui) {
+  await ui.openDeck("E2E document")
+  await ui.showSourceMode()
+  const original = await ui.readSource()
+  const query = "[[E2E li"
+  const pairedSource = `${query}]]`
+  const completedSource = "[[E2E linked]]"
+
+  try {
+    await ui.replaceSource(pairedSource)
+    await ui.setCaretPosition(query.length)
+    await ui.refreshDocumentLinkPalette()
+    await ui.waitForAuthoringOption("document-link", "E2E linked")
+    await ui.selectAuthoringOption("document-link", "E2E linked")
+    await ui.waitForSource(completedSource)
+    await ui.waitForSaved(completedSource)
+  } finally {
+    if (await ui.readSource() !== original) {
+      await ui.replaceSource(original)
+      await ui.waitForSaved(original)
+    }
+  }
 }

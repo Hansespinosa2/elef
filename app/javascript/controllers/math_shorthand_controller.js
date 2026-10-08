@@ -737,6 +737,21 @@ export default class extends Controller {
       }
     }
 
+    if (
+      event.key === "Backspace" &&
+      collapsed &&
+      editor.value[caret - 1] === "$" &&
+      editor.value[caret] === "$" &&
+      !editorInsideCode(editor, caret) &&
+      !escapedAt(editor.value, caret - 1)
+    ) {
+      event.preventDefault()
+      editor.replaceRange("", caret - 1, caret + 1)
+      editor.setSelectionRange(caret - 1)
+      this.pendingChain = mathShorthandAtEditor(editor, caret - 1)
+      return
+    }
+
     this.pendingChain = mathShorthandAtEditor(editor, caret)
     const chain = this.pendingChain
     const mathContext = editorMathContextAt(editor, caret)
