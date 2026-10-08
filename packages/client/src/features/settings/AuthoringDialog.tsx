@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { FormEvent, JSX } from "react";
 import { SafeHtml } from "../../ui/SafeHtml.js";
 import { sanitizePreview } from "../../ui/sanitize.js";
+import type { UpdaterSeam } from "../../application/types.js";
+import { UpdaterSection } from "./UpdaterSection.js";
 import type {
   AuthoringEntry,
   AuthoringRegistries,
@@ -31,6 +33,10 @@ export interface AuthoringDialogProps {
   readonly reloadEditorRegistry?: () => Promise<void>;
   readonly onSaved?: (message: string) => void;
   readonly onClose?: () => void;
+  // Update availability for hosts with an updater capability. The shell
+  // passes the seam only when HostCapabilities.updater holds, so the dialog
+  // never inspects host identity itself.
+  readonly updaterSeam?: UpdaterSeam | null;
 }
 
 interface FormFields {
@@ -91,6 +97,7 @@ export function AuthoringDialog({
   reloadEditorRegistry = async () => {},
   onSaved = () => {},
   onClose = () => {},
+  updaterSeam = null,
 }: AuthoringDialogProps): JSX.Element {
   const [registries, setRegistries] = useState<AuthoringRegistries>({ snippets: [], math_shortcuts: [] });
   const [hashes, setHashes] = useState<{ snippets?: string | null; math_shortcuts?: string | null }>({});
@@ -419,6 +426,7 @@ export function AuthoringDialog({
           </div>
         </form>
       ) : null}
+      {updaterSeam !== null ? <UpdaterSection seam={updaterSeam} /> : null}
       {pendingDeletion ? (
         <div id="delete-authoring-dialog" className="authoring-settings-dialog authoring-delete-dialog" role="alertdialog" aria-labelledby="delete-authoring-title">
           <div className="authoring-settings-panel">

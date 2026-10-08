@@ -2,16 +2,24 @@
 // client AuthoringDialog consumes. Invoke stays injected (desktop test
 // convention); backend error codes (conflict, invalid_input, ...) pass
 // through untouched because the Rust side already speaks the dialog's
-// failure language.
+// failure language. Reads merge the backend custom entries over the same
+// built-in catalog the editor palettes use, exactly like the server does
+// for the web transport, so built-ins render read-only on both hosts.
 
-export function createTauriAuthoringTransport({ invoke }) {
+export function createTauriAuthoringTransport({ invoke, builtInEntries = [], mergeEntries }) {
   if (typeof invoke !== "function") throw new TypeError("A Tauri invoke function is required.")
+  if (typeof mergeEntries !== "function") throw new TypeError("A registry merge function is required.")
   return {
     async readRegistries() {
       const result = await invoke("read_authoring_registries")
+      const merged = mergeEntries(
+        builtInEntries,
+        result?.snippets || [],
+        result?.math_shortcuts || []
+      )
       return {
-        snippets: result?.snippets || [],
-        math_shortcuts: result?.math_shortcuts || [],
+        snippets: merged.filter(entry => typeof entry.body === "string" && typeof entry.trigger === "string"),
+        math_shortcuts: merged.filter(entry => typeof entry.expansion === "string" && Array.isArray(entry.aliases)),
         hashes: result?.hashes || { snippets: null, math_shortcuts: null }
       }
     },

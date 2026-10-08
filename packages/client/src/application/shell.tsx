@@ -45,6 +45,10 @@ export async function mountElef(
           "Authoring settings need a host registry transport.",
         );
       }
+      // Update availability is capability-gated here, once, for every settings
+      // surface: the dialog itself only renders a passed seam, never host
+      // identity.
+      const updaterSeam = host.capabilities.updater ? (options.updater ?? null) : null;
       return createElement(AuthoringDialog, {
         transport: authoring.transport,
         initialRegistry: settingsRoute.registry,
@@ -55,6 +59,8 @@ export async function mountElef(
           ? {}
           : { reloadEditorRegistry: authoring.reloadEditorRegistry }),
         ...(authoring.onClose === undefined ? {} : { onClose: authoring.onClose }),
+        ...(authoring.onSaved === undefined ? {} : { onSaved: authoring.onSaved }),
+        ...(updaterSeam === null ? {} : { updaterSeam }),
       });
     }
     if (settingsRoute !== null) {

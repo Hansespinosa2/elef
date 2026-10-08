@@ -952,6 +952,13 @@ test("shared authoring settings create, edit, and delete flow works in the web a
   await authoringSettingsWorkflow(new WebEditorUi(page))
 })
 
+test("the web app without an updater capability shows no updater affordance", async ({ page }) => {
+  const ui = new WebEditorUi(page)
+  await ui.openAuthoringSettings()
+  await expect(page.locator('section[aria-label="Updates"]')).toHaveCount(0)
+  await ui.closeAuthoringSettings()
+})
+
 test("shared math input flow works in the web app", async ({ page }) => {
   await mathInputWorkflow(new WebEditorUi(page))
 })

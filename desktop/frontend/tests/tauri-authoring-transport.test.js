@@ -5,30 +5,42 @@ import { createTauriAuthoringTransport } from "../src/tauri-authoring-transport.
 
 const HASH = "a".repeat(64)
 
-function recordingTransport(handlers) {
+function recordingTransport(handlers, builtInEntries = []) {
   const calls = []
   const transport = createTauriAuthoringTransport({
     invoke: async (command, payload) => {
       calls.push([command, payload])
       return handlers[command](payload)
-    }
+    },
+    builtInEntries,
+    mergeEntries: (builtIns, snippets, mathShortcuts) => [
+      ...builtIns.map(entry => ({ ...entry, built_in: true })),
+      ...snippets,
+      ...mathShortcuts
+    ]
   })
   return { calls, transport }
 }
 
 test("the Tauri authoring transport maps the registry read onto the shared seam shape", async () => {
-  const { calls, transport } = recordingTransport({
-    read_authoring_registries: () => ({
-      snippets: [{ id: "s1" }],
-      math_shortcuts: [{ id: "m1" }],
-      hashes: { snippets: HASH, math_shortcuts: HASH }
-    })
-  })
+  const { calls, transport } = recordingTransport(
+    {
+      read_authoring_registries: () => ({
+        snippets: [{ id: "s1", body: "x", trigger: "x" }],
+        math_shortcuts: [{ id: "m1", expansion: "x", aliases: ["x"] }],
+        hashes: { snippets: HASH, math_shortcuts: HASH }
+      })
+    },
+    [{ id: "builtin", body: "b", trigger: "b", built_in: true }]
+  )
   const result = await transport.readRegistries()
   assert.deepEqual(calls, [["read_authoring_registries", undefined]])
   assert.deepEqual(result, {
-    snippets: [{ id: "s1" }],
-    math_shortcuts: [{ id: "m1" }],
+    snippets: [
+      { id: "builtin", body: "b", trigger: "b", built_in: true },
+      { id: "s1", body: "x", trigger: "x" }
+    ],
+    math_shortcuts: [{ id: "m1", expansion: "x", aliases: ["x"] }],
     hashes: { snippets: HASH, math_shortcuts: HASH }
   })
 })

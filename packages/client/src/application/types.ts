@@ -43,6 +43,9 @@ export interface AuthoringSeam {
   // Host-owned close navigation (one host revisits the settings page,
   // the other switches views): the dialog only reports the intent.
   readonly onClose?: () => void;
+  // Host status feedback for saves (desktop statusbar): the dialog always
+  // reports inside its own status region as well.
+  readonly onSaved?: (message: string) => void;
 }
 
 export interface ElefMountOptions {

@@ -1,20 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import type { FormEvent, JSX, KeyboardEvent } from "react";
+import type { FormEvent, JSX } from "react";
 import type { ElefHost } from "@elef/contracts";
-import type { ElefMountOptions, NoticeTone, UpdaterStatus } from "../../application/types.js";
-import type { DeviceStorage, LineNumberMode } from "./vimPreferences.js";
-import {
-  ENABLED_STORAGE_KEY,
-  ESCAPE_KEY_STORAGE_KEY,
-  LINE_NUMBERS_STORAGE_KEY,
-  MODE_AWARE_CURSOR_STORAGE_KEY,
-  escapeKeyDisplay,
-  normalizeLineNumberMode,
-  readVimPreferences,
-  vimKeyFromEvent,
-  writeBoolean,
-  writeValue,
-} from "./vimPreferences.js";
+import type { ElefMountOptions, NoticeTone } from "../../application/types.js";
+import type { DeviceStorage } from "./vimPreferences.js";
+import { UpdaterSection } from "./UpdaterSection.js";
+import { VimSettings } from "./VimSettings.js";
 
 export interface SettingsControl {
   reload(): Promise<void>;
@@ -41,11 +31,6 @@ export function SettingsApp({ host, options, storage, registerControl }: Setting
   const [ready, setReady] = useState(false);
   const [notice, setNotice] = useState("");
   const [noticeTone, setNoticeTone] = useState<NoticeTone>("info");
-  const [vimEnabled, setVimEnabled] = useState(false);
-  const [escapeKey, setEscapeKey] = useState("");
-  const [lineNumberMode, setLineNumberMode] = useState<LineNumberMode>("absolute");
-  const [modeAwareCursor, setModeAwareCursor] = useState(false);
-  const [updaterStatus, setUpdaterStatus] = useState<UpdaterStatus | null>(null);
 
   const showNotice = useCallback((message: string | null, tone: NoticeTone = "info") => {
     setNotice(message ?? "");
@@ -58,22 +43,7 @@ export function SettingsApp({ host, options, storage, registerControl }: Setting
       const current = await host.settings.getSettings();
       setTheme(settingText(current["theme"], "dark"));
       setTypography(settingText(current["typography"], "book"));
-      const vim = readVimPreferences(storage);
-      setVimEnabled(vim.vimEnabled);
-      setEscapeKey(vim.escapeKey);
-      setLineNumberMode(vim.lineNumberMode);
-      setModeAwareCursor(vim.modeAwareCursor);
-      setUpdaterStatus(null);
       setReady(true);
-      // The updater endpoint can take seconds; it must never delay the
-      // settings form. Load availability in the background after first paint.
-      if (host.capabilities.updater && options.updater) {
-        try {
-          setUpdaterStatus(await options.updater.status());
-        } catch {
-          setUpdaterStatus(null);
-        }
-      }
     } catch {
       showNotice("Settings could not be loaded.", "error");
     }
@@ -99,51 +69,6 @@ export function SettingsApp({ host, options, storage, registerControl }: Setting
       showNotice("Workspace appearance saved.");
     } catch {
       showNotice("Workspace appearance could not be saved.", "error");
-    }
-  }
-
-  function toggleVim(enabled: boolean): void {
-    setVimEnabled(enabled);
-    writeBoolean(ENABLED_STORAGE_KEY, enabled, storage);
-  }
-
-  function captureEscapeKey(event: KeyboardEvent<HTMLInputElement>): void {
-    const key = vimKeyFromEvent({
-      key: event.key,
-      ctrlKey: event.ctrlKey,
-      shiftKey: event.shiftKey,
-      altKey: event.altKey,
-      metaKey: event.metaKey,
-    });
-    if (!key) return;
-    event.preventDefault();
-    event.stopPropagation();
-    setEscapeKey(key);
-    writeValue(ESCAPE_KEY_STORAGE_KEY, key, storage);
-  }
-
-  function clearEscapeKey(): void {
-    setEscapeKey("");
-    writeValue(ESCAPE_KEY_STORAGE_KEY, "", storage);
-  }
-
-  function changeLineNumbers(mode: string): void {
-    const normalized = normalizeLineNumberMode(mode);
-    setLineNumberMode(normalized);
-    writeValue(LINE_NUMBERS_STORAGE_KEY, normalized, storage);
-  }
-
-  function toggleModeAwareCursor(enabled: boolean): void {
-    setModeAwareCursor(enabled);
-    writeBoolean(MODE_AWARE_CURSOR_STORAGE_KEY, enabled, storage);
-  }
-
-  async function recheckUpdates(): Promise<void> {
-    if (!options.updater) return;
-    try {
-      setUpdaterStatus(await options.updater.checkForUpdate());
-    } catch {
-      showNotice("Could not check for updates.", "error");
     }
   }
 
@@ -208,84 +133,9 @@ export function SettingsApp({ host, options, storage, registerControl }: Setting
             </button>
           </form>
 
-          <section aria-label="Vim settings" className="settings-card max-w-2xl rounded-2xl border p-6 mb-8">
-            <h2 className="text-xl font-bold">Vim settings</h2>
-            <p className="text-sm">Configure Vim mode and source editor preferences for this device.</p>
-            <div className="field mb-5">
-              <label className="flex items-center gap-3 font-extrabold cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={vimEnabled}
-                  onChange={(event) => toggleVim(event.target.checked)}
-                  className="rounded"
-                />
-                <span>Enable Vim mode</span>
-              </label>
-            </div>
-            <div className="field mb-5">
-              <label htmlFor="vim-escape-key" className="mb-1 block font-extrabold">
-                Remap Vim Escape
-              </label>
-              <div className="flex items-center gap-2">
-                <input
-                  id="vim-escape-key"
-                  type="text"
-                  readOnly
-                  placeholder="Escape (default)"
-                  value={escapeKeyDisplay(escapeKey)}
-                  onKeyDown={(event) => captureEscapeKey(event)}
-                  aria-label="Choose a key to remap Vim Escape"
-                  className="settings-control rounded-xl border p-3 max-w-xs"
-                />
-                <button type="button" onClick={clearEscapeKey} className="button">
-                  Clear
-                </button>
-              </div>
-            </div>
-            <div className="field mb-5">
-              <label htmlFor="vim-line-numbers" className="mb-1 block font-extrabold">
-                Line numbers
-              </label>
-              <select
-                id="vim-line-numbers"
-                value={lineNumberMode}
-                onChange={(event) => changeLineNumbers(event.target.value)}
-                className="settings-control rounded-xl border p-3 max-w-xs"
-              >
-                <option value="absolute">Absolute</option>
-                <option value="relative">Relative</option>
-                <option value="off">Hidden</option>
-              </select>
-            </div>
-            <div className="field">
-              <label htmlFor="vim-mode-aware-cursor" className="flex items-center gap-3 font-extrabold cursor-pointer">
-                <input
-                  id="vim-mode-aware-cursor"
-                  type="checkbox"
-                  checked={modeAwareCursor}
-                  onChange={(event) => toggleModeAwareCursor(event.target.checked)}
-                  className="rounded"
-                />
-                <span>Mode-aware cursor styling</span>
-              </label>
-            </div>
-          </section>
+          <VimSettings {...(storage === undefined ? {} : { storage })} />
 
-          {showUpdater ? (
-            <section aria-label="Updates" className="settings-card max-w-2xl rounded-2xl border p-6 mb-8">
-              <h2 className="text-xl font-bold">Updates</h2>
-              <p className="text-sm">
-                {updaterStatus === null
-                  ? "Update status is unavailable."
-                  : updaterStatus.available
-                    ? `An update is available${updaterStatus.version ? ` (${updaterStatus.version})` : ""}.`
-                    : "This copy is up to date."}
-              </p>
-              <button type="button" onClick={() => void recheckUpdates()} className="button">
-                Check for updates
-              </button>
-            </section>
-          ) : null}
+          {showUpdater && options.updater ? <UpdaterSection seam={options.updater} /> : null}
         </>
       )}
     </div>

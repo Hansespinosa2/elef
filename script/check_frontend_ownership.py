@@ -101,7 +101,8 @@ work_session = (ROOT / "app/javascript/lib/work_session.js").read_text()
 client_library_app = (ROOT / "packages/client/src/features/library/LibraryApp.tsx").read_text()
 client_library_card = (ROOT / "packages/client/src/features/library/LibraryCard.tsx").read_text()
 client_library_filtering = (ROOT / "packages/client/src/features/library/filtering.ts").read_text()
-web_authoring_settings = (ROOT / "app/javascript/controllers/authoring_settings_controller.js").read_text()
+web_authoring_settings = (ROOT / "app/javascript/controllers/client_shell_controller.js").read_text()
+client_authoring_dialog = (ROOT / "packages/client/src/features/settings/AuthoringDialog.tsx").read_text()
 desktop_shell_styles = (ROOT / "app/assets/stylesheets/file_library_host.css").read_text()
 assert "globalThis.fetch =" not in desktop_application, (
     "The shared frontend must not replace the host fetch implementation"
@@ -390,15 +391,23 @@ assert 'from "@elef/client"' in desktop_application, (
 assert "export function filterWorks" in client_library_filtering, (
     "desktop library filtering must use the shared client rules"
 )
-assert '"lib/authoring_settings_dialog"' in desktop_application, "desktop authoring settings UI must consume the Rails-owned dialog"
-assert '"lib/authoring_settings_dialog"' in web_authoring_settings and "createAuthoringSettingsDialog" in web_authoring_settings, (
-    "web authoring settings must use the same Rails-owned dialog as desktop"
+assert "openAuthoringSettings" in desktop_application and "mountElef" in desktop_application, (
+    "desktop authoring settings UI must mount the shared client"
 )
-assert 'render "shared/authoring_settings_dialog"' in (ROOT / "app/views/shared/_authoring_settings_page.html.erb").read_text(), (
-    "web authoring settings must render the same Rails-owned dialog markup packaged by desktop"
+assert "authoringTransport" in desktop_application and "platform.authoringTransport" in desktop_application, (
+    "desktop authoring settings must persist through the injected registry transport seam"
 )
-assert '"app/views/shared/_authoring_settings_dialog.html.erb"' in build, (
-    "desktop must package the same Rails-owned authoring settings markup used by the web app"
+assert "createRailsAuthoringSettingsTransport" in web_authoring_settings, (
+    "web authoring settings must persist through the same registry transport seam as desktop"
+)
+assert 'render "shared/client_settings_mount"' in (ROOT / "app/views/snippets/index.html.erb").read_text(), (
+    "web authoring settings must mount the shared client instead of server-rendered dialog markup"
+)
+assert 'id="authoring-settings-dialog"' in client_authoring_dialog, (
+    "the shared client dialog must own the authoring DOM contract both hosts assert"
+)
+assert '"app/views/shared/_authoring_settings_dialog.html.erb"' not in build, (
+    "desktop must not package the retired server-rendered authoring dialog"
 )
 assert '"lib/library_card"' not in desktop_application, "desktop must not keep the retired card renderer"
 assert "export function cardDomId" in client_library_card, "desktop library cards must be owned by the shared client"
@@ -418,8 +427,15 @@ assert "markdown_document_title" not in (ROOT / "crates/local-store/src/lib.rs")
 assert "extractFirstMarkdownHeading" in (ROOT / "packages/work-model/src/document_links.js").read_text(), (
     "document graph labels must use the shared work-model Markdown rules"
 )
-authoring_settings_dialog = (ROOT / "app/javascript/lib/authoring_settings_dialog.js").read_text()
-assert '"#elef/authoring-registry-write"' in authoring_settings_dialog, "authoring UI must use the app-owned persistence flow"
+assert "transport.readRegistries" in client_authoring_dialog, (
+    "authoring UI must load through the injected transport seam"
+)
+assert "writeRegistry" in client_authoring_dialog, (
+    "authoring UI must persist through the injected transport seam"
+)
+assert "globalThis.fetch(" not in client_authoring_dialog and "invoke(" not in client_authoring_dialog, (
+    "authoring UI must not reach a network or native layer past its transport seam"
+)
 assert '"controllers/presentation_controller"' in editor_runtime, (
     "the Rails-owned controller runtime must register the shared presentation controller"
 )
@@ -454,13 +470,10 @@ assert 'pin "lib/editor_controller_lookup", to: "lib/editor_controller_lookup.js
     "Rails must resolve the shared editor controller lookup"
 )
 assert '"lib/presentation_navigation"' in presentation_controller, "the shared controller must own presentation key mapping"
-assert "write_authoring_registry" not in (ROOT / "app/javascript/lib/authoring_registry_write.js").read_text(), (
-    "Rails-owned authoring flow must receive persistence through a host transport callback"
-)
 for shared_module in (
     "deck_open_flow", "document_graph_cache", "editor_ready", "editor_source",
     "feature_flags", "performance_measurement", "renderer_worker_client",
-    "authoring_settings_dialog", "work_session", "title_save_flow",
+    "work_session", "title_save_flow",
 ):
     assert f'"lib/{shared_module}"' in desktop_application, f"desktop application must consume app/javascript/lib/{shared_module}.js"
 assert "renderPreviewCore" in client_library_card and '"@elef/client/preview-core"' in client_library_card, (

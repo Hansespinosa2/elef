@@ -11,6 +11,10 @@ import { createPreviewFetch } from "./preview-transport.js"
 import { checkForDesktopUpdate, createIdleUpdateCheck, installDesktopUpdate } from "./update-flow.js"
 import { createFileLibraryTransport } from "./file-library-transport.js"
 import { createTauriHost } from "./tauri-host.js"
+import { createTauriAuthoringTransport } from "./tauri-authoring-transport.js"
+import { createDesktopUpdaterSeam } from "./update-flow.js"
+import builtInRegistry from "../../../app/javascript/data/default_authoring_registry.json"
+import { mergeAuthoringRegistryEntries } from "lib/authoring_registry_merge"
 import { createQuietSavePolicy } from "./quiet_save_policy.js"
 import { desktopAuthoringRegistry, loadDesktopAuthoringRegistry } from "./authoring-registry-loader.js"
 import { loadEditorRuntime, loadLibraryRuntime } from "lib/editor_runtime"
@@ -51,6 +55,12 @@ startFileLibraryApplication({
   installPendingUpdate: (update, options) => installDesktopUpdate(update, { ...options, relaunch }),
   desktopAuthoringRegistry,
   loadDesktopAuthoringRegistry,
+  authoringTransport: createTauriAuthoringTransport({
+    invoke,
+    builtInEntries: builtInRegistry,
+    mergeEntries: mergeAuthoringRegistryEntries
+  }),
+  updaterSeam: createDesktopUpdaterSeam({ check: () => checkUpdater({ timeout: 10_000 }) }),
   quietSavePolicy: createQuietSavePolicy(),
   loadEditorRuntime,
   loadLibraryRuntime

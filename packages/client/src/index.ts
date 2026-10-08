@@ -3,6 +3,8 @@ export { isSettingsRoute, parseLibraryRoute, parseSettingsRoute } from "./applic
 export type { SettingsRoute } from "./application/router.js";
 export { CREATE_WORK_EVENT } from "./features/library/LibraryApp.js";
 export { SettingsApp } from "./features/settings/SettingsApp.js";
+export { VimSettings, mountVimSettings } from "./features/settings/VimSettings.js";
+export type { VimEditorBridge, VimSettingsProps } from "./features/settings/VimSettings.js";
 export type {
   AuthoringSeam,
   CardAction,

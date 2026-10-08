@@ -366,12 +366,14 @@ class DesktopEditorUi {
 
   async enableVimRelativeLineNumbers() {
     await openDesktopSettings()
-    const vimToggle = $("[data-vim-settings-target='vimToggle']")
+    // Vim preferences render through the shared client UI now (same device
+    // storage keys, same editor bridge); drive its stable hooks.
+    const vimToggle = $("#vim-enabled")
     if (!(await vimToggle.isSelected())) await vimToggle.click()
     // The embedded driver's option click does not update native <select>s.
     // Exercise the same input/change seam as a browser selection.
     await browser.execute(() => {
-      const select = document.querySelector("[data-vim-settings-target='lineNumbers']")
+      const select = document.querySelector("#vim-line-numbers")
       select.value = "relative"
       select.dispatchEvent(new Event("input", { bubbles: true }))
       select.dispatchEvent(new Event("change", { bubbles: true }))
@@ -1938,6 +1940,17 @@ describe("desktop binary workflows and native boundaries", () => {
 
   it("runs the shared authoring settings create, edit, and delete flow in the desktop binary", async () => {
     await authoringSettingsWorkflow(new DesktopEditorUi())
+  })
+
+  it("shows the updater affordance on the updater-capable desktop settings", async () => {
+    await openDesktopAuthoringSettings()
+    const updates = $("section[aria-label='Updates']")
+    await updates.waitForDisplayed({ timeout: 10_000 })
+    // Presence is capability-driven; the status line itself may still be
+    // resolving the updater endpoint in the background.
+    await $("section[aria-label='Updates'] button").waitForDisplayed()
+    await $("#close-authoring-settings").click()
+    await $("#authoring-settings-dialog").waitForDisplayed({ reverse: true })
   })
 
   it("runs the shared math input flow in the desktop binary", async () => {

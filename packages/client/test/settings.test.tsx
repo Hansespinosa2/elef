@@ -136,6 +136,26 @@ describe("settings route", () => {
     assert.match(document.querySelector('[role="status"]')?.textContent ?? "", /registry transport/);
   });
 
+  it("gates the dialog updater section on the updater capability, not the seam alone", async () => {
+    const seam: AuthoringSeam = {
+      transport: {
+        readRegistries: async () => ({ snippets: [], math_shortcuts: [], hashes: {} }),
+        writeRegistry: async () => ({ contentHash: null }),
+      },
+    };
+    const updater: UpdaterSeam = {
+      status: async () => ({ available: false }),
+      checkForUpdate: async () => ({ available: false }),
+    };
+    // Capable host plus seam: the shared section renders.
+    const { host: capable } = updaterHost(true);
+    const shown = await mountInto(capable, { initialUrl: "/snippets", authoring: seam, updater });
+    assert.notEqual(shown.document.querySelector('section[aria-label="Updates"]'), null);
+    // Seam without the capability: no section (web authoring pages).
+    const hidden = await mountInto(typedHost(), { initialUrl: "/snippets", authoring: seam, updater });
+    assert.equal(hidden.document.querySelector('section[aria-label="Updates"]'), null);
+  });
+
   it("round-trips workspace defaults through host.settings", async () => {
     const host = typedHost();
     const { document } = await mountInto(host, { initialUrl: "/settings" });
@@ -201,6 +221,36 @@ describe("settings route", () => {
     } finally {
       scope["localStorage"] = previous;
     }
+  });
+
+  it("pushes preference changes to an embedded editor bridge", async () => {
+    const { VimSettings } = await import("../src/index.js");
+    const { createElement } = await import("react");
+    const { createRoot } = await import("react-dom/client");
+    const { parseHTML } = await import("linkedom");
+    const { document } = parseHTML("<html><body><div id=\"app\"></div></body></html>");
+    const view = (document as unknown as { defaultView?: unknown }).defaultView;
+    (globalThis as Record<string, unknown>)["window"] = view ?? { document };
+    (globalThis as Record<string, unknown>)["document"] = document;
+    const calls: [string, unknown][] = [];
+    const bridge = {
+      setVimEnabled: (v: unknown) => calls.push(["setVimEnabled", v]),
+      setEscapeKey: (v: unknown) => calls.push(["setEscapeKey", v]),
+      clearEscapeKey: () => calls.push(["clearEscapeKey", null]),
+      setLineNumberMode: (v: unknown) => calls.push(["setLineNumberMode", v]),
+      setModeAwareCursor: (v: unknown) => calls.push(["setModeAwareCursor", v]),
+    };
+    const element = document.getElementById("app") as unknown as HTMLElement;
+    await act(async () => {
+      createRoot(element).render(createElement(VimSettings, { storage: memoryStorage(), editorBridge: bridge }));
+    });
+    await settled();
+    await setCheckbox(document.getElementById("vim-enabled"), true);
+    await setSelectValue(document.getElementById("vim-line-numbers"), "off");
+    assert.deepEqual(calls, [
+      ["setVimEnabled", true],
+      ["setLineNumberMode", "off"],
+    ]);
   });
 
   it("hides the updater affordance when the host has no updater", async () => {

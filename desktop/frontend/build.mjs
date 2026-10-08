@@ -10,9 +10,7 @@ const e2eBuild = process.env.ELEF_E2E_BUILD === "1"
 const output = path.join(frontendRoot, e2eBuild ? "dist-e2e" : "dist")
 const assets = path.join(output, "assets")
 const sharedModuleAliases = {
-  "#elef/preview-sanitizer": "lib/preview_sanitizer.js",
-  "#elef/authoring-settings": "lib/authoring_settings.js",
-  "#elef/authoring-registry-write": "lib/authoring_registry_write.js"
+  "#elef/preview-sanitizer": "lib/preview_sanitizer.js"
 }
 
 await rm(output, { recursive: true, force: true })
@@ -142,15 +140,13 @@ await build({
 })
 
 const desktopHost = await readFile(path.join(repoRoot, "app/views/desktop_host.html"), "utf8")
-const sharedAuthoringSettings = await readFile(path.join(repoRoot, "app/views/shared/_authoring_settings_dialog.html.erb"), "utf8")
-const authoringSettingsMarker = "<!-- elef:shared-authoring-settings -->"
-if (desktopHost.split(authoringSettingsMarker).length !== 2) {
-  throw new Error("The Rails-owned authoring settings partial must have exactly one desktop host slot.")
+// The authoring dialog renders through the shared client now (same DOM
+// contract the web pages use), so the host ships a mount point instead of
+// inlining server-rendered dialog markup.
+const indexHtml = desktopHost
+if (!indexHtml.includes('id="authoring-settings-mount"')) {
+  throw new Error("The desktop host must provide the shared authoring dialog mount point.")
 }
-if (/<%[=#-]?/.test(sharedAuthoringSettings)) {
-  throw new Error("The shared authoring settings partial must remain static so the offline desktop can consume it verbatim.")
-}
-const indexHtml = desktopHost.replace(authoringSettingsMarker, sharedAuthoringSettings)
 if (e2eBuild) {
   await build({
     entryPoints: [path.join(frontendRoot, "../e2e/wdio-init.js")],

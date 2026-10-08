@@ -9,11 +9,9 @@ import { createWorkSession } from "lib/work_session"
 import { createTitleSaveFlow } from "lib/title_save_flow"
 import { presentConflictDialog } from "lib/conflict_dialog"
 import { createRendererClient } from "lib/renderer_worker_client"
-import { authoringSettingsElements, createAuthoringSettingsDialog } from "lib/authoring_settings_dialog"
-import { mergeAuthoringRegistryEntries } from "lib/authoring_registry_merge"
 import { applyDesktopFeatureFlags } from "lib/feature_flags"
 import { configureEditorKind, renderEditorView } from "lib/editor_view"
-import { CREATE_WORK_EVENT, mountElef, parseLibraryRoute } from "@elef/client"
+import { CREATE_WORK_EVENT, mountElef, mountVimSettings, parseLibraryRoute } from "@elef/client"
 
 export function startFileLibraryApplication(platform) {
   const {
@@ -124,45 +122,52 @@ export function startFileLibraryApplication(platform) {
     () => !elements.deckView.hidden
   )
 
-  const authoringSettings = createAuthoringSettingsDialog({
-    elements: authoringSettingsElements(document),
-    readRegistries: async () => {
-      const result = await fileLibrary.readAuthoringRegistries()
-      const entries = mergeAuthoringRegistryEntries(
-        desktopAuthoringRegistry().filter(entry => entry.built_in),
-        result.snippets,
-        result.math_shortcuts
-      )
-      return {
-        snippets: entries.filter(entry => typeof entry.body === "string" && typeof entry.trigger === "string").map(entry => ({
-          id: entry.id,
-          name: entry.name,
-          trigger: entry.trigger,
-          description: entry.description,
-          category: entry.category,
-          body: entry.body,
-          built_in: entry.built_in === true
-        })),
-        math_shortcuts: entries.filter(entry => typeof entry.expansion === "string" && Array.isArray(entry.aliases)).map(entry => ({
-          id: entry.id,
-          name: entry.name,
-          aliases: entry.aliases,
-          description: entry.description,
-          prefix: entry.prefix,
-          expansion: entry.expansion,
-          built_in: entry.built_in === true
-        })),
-        hashes: result.hashes
+  // The shared client renders the authoring dialog (the same DOM contract as
+  // the web settings pages, so the shared scenarios cover both hosts).
+  // Remount on every open so the dialog loads fresh registries, matching the
+  // previous dialog's open-time load.
+  const authoringHostDialog = document.querySelector("#authoring-dialog")
+  const authoringMount = document.querySelector("#authoring-settings-mount")
+  let authoringShell = null
+  function closeAuthoringSettings() {
+    if (authoringShell) {
+      authoringShell.unmount()
+      authoringShell = null
+    }
+    if (authoringHostDialog.open) authoringHostDialog.close()
+  }
+  async function openAuthoringSettings() {
+    closeAuthoringSettings()
+    authoringShell = await mountElef(authoringMount, libraryHost, {
+      initialUrl: "/snippets",
+      authoring: {
+        transport: platform.authoringTransport,
+        renderExample: source => renderer.renderMarkdownBlock(source),
+        reloadEditorRegistry: loadDesktopAuthoringRegistry,
+        onClose: closeAuthoringSettings,
+        onSaved: setStatus
+      },
+      updater: platform.updaterSeam
+    })
+    authoringHostDialog.showModal()
+  }
+
+  // Device-local vim preferences render through the shared client UI with a
+  // bridge that live-syncs the open editor, preserving the previous
+  // controller's behavior (same storage keys, same editor push).
+  const vimMount = document.querySelector("#vim-settings-mount")
+  if (vimMount) {
+    const editorForVim = () => document.querySelector(".source-field")?.editorController || null
+    mountVimSettings(vimMount, {
+      editorBridge: {
+        setVimEnabled: enabled => editorForVim()?.setVimEnabled(enabled),
+        setEscapeKey: key => editorForVim()?.setEscapeKey(key),
+        clearEscapeKey: () => editorForVim()?.clearEscapeKey(),
+        setLineNumberMode: mode => editorForVim()?.setLineNumberMode(mode),
+        setModeAwareCursor: enabled => editorForVim()?.setModeAwareCursor(enabled)
       }
-    },
-    writeRegistry: async payload => {
-      const result = await fileLibrary.writeAuthoringRegistry(payload)
-      return { contentHash: result.content_hash }
-    },
-    reloadEditorRegistry: loadDesktopAuthoringRegistry,
-    renderMarkdownBlock: source => renderer.renderMarkdownBlock(source),
-    onSaved: setStatus
-  })
+    })
+  }
 
   const transport = createTransportAdapter({ onConflict: event => saveFlow?.handleConflict(event) })
   const sessionTransport = {
@@ -1053,7 +1058,7 @@ export function startFileLibraryApplication(platform) {
   elements.settingsForm.addEventListener("submit", event => void saveSettings(event))
   document.querySelector("#manage-authoring").addEventListener("click", () => {
     elements.settingsDialog.close()
-    void authoringSettings.open()
+    void openAuthoringSettings()
   })
   document.querySelector("#check-for-updates").addEventListener("click", () => void checkForUpdates(true))
   document.querySelector("#install-update").addEventListener("click", () => void installUpdate())
