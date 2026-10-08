@@ -9,7 +9,7 @@ const port = Number(process.env.TAURI_WEBDRIVER_PORT || "4445")
 
 export const config = {
   runner: "local",
-  specs: [process.env.ELEF_E2E_VERIFY_UPGRADED === "1" ? "./specs/upgraded.spec.js" : "./specs/desktop.spec.js", "./specs/contract-conformance.spec.js", "./specs/quiet-save.spec.js"],
+  specs: [process.env.ELEF_E2E_VERIFY_UPGRADED === "1" ? "./specs/upgraded.spec.js" : "./specs/desktop.spec.js", "./specs/contract-conformance.spec.js", "./specs/quiet-save.spec.js", "./specs/renderer-worker-corpus.spec.js"],
   maxInstances: 1,
   capabilities: [{
     browserName: "tauri",
