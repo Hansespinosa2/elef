@@ -1,52 +1,48 @@
 # Elef Art v1 Integration Map
 
-Phase 0 audit for Constitution v6.0. The branch was clean before the constitution copy was added.
+Phase 0 audit and current implementation map for [Constitution v6.0](CONSTITUTION.md).
 
-## Repository baseline
+## Baseline and repository audit
 
-- Branch: `feat/list-smartart-v1`, tracking `origin/dev`.
-- HEAD: `26d6ad247e5b55dfa63589d16af9a8f250f2c51c`.
-- Initial legacy search: no existing `:::art`, `art{flow}`, `art-flow`, `data-elef-art`, or SmartArt implementation under `app/`, `desktop/`, `test/`, `script/`, or existing docs. Matches for `.new-work-chevron` belong to the unrelated new-work menu.
+- Branch: `feat/list-smartart-v1`, based on `dev` at `26d6ad247e5b55dfa63589d16af9a8f250f2c51c` before Art implementation.
+- Agent instructions and doctrine reviewed: repository `AGENTS.md`, `ELEF-DOCTRINE.md`, `docs/architecture.md`, and `docs/development.md`.
+- Initial search across `app/`, `desktop/`, `test/`, `script/`, and docs found no existing Art renderer, `data-elef-art` state, `art{flow}` syntax, snake layout, or SmartArt feature. `.new-work-chevron` is unrelated.
+- Baseline JavaScript suite: 334 passed.
+- Baseline Rails suite using isolated SQLite compatibility mode: 343 tests, 2,725 assertions, no failures/errors/skips. The configured PostgreSQL test endpoint was unavailable at `127.0.0.1:5432`.
+- Baseline desktop frontend: 26 tests passed; desktop E2E unit tier: 7 passed; Rust core: 40 passed; frontend ownership check passed.
 
 ## Current integration points
 
-| Concern | Current implementation | Art integration point |
+| Concern | Current implementation | Art integration |
 |---|---|---|
-| Shared source map and editor ownership | `app/javascript/lib/document_map.js`: `buildEditorStructure`, `editorBlocks`, `slideMetadata`, `markdownBlocks`; `app/javascript/lib/editor_block_ranges.js`: `blockOperationStart` | `resolveArtBindings` supplies directive/target ranges to both editor mapping and rendering. Art IDs and diagnostics remain in the editor map, not Markdown. |
-| Canonical Markdown tokenization and HTML | `app/javascript/lib/art_source.js`: `analyzeArtList`; `app/javascript/lib/renderer.js`: `renderArtBlock`, `renderMarkdownBlock`, `renderPreview` | markdown-it token output determines root mode, direct item count, density, and unsupported content. One Rails-owned `renderArtBlock` is used in document and presentation projections. |
-| Rails editor preview | `app/helpers/application_helper.rb#shared_editor_projection` → `Source::JavascriptRenderer.editor_preview` → `vendor/javascript/elef-renderer.bundle.js` | The bundle calls the same `renderPreview` and map implementation used by desktop. |
-| Desktop frontend renderer | `app/javascript/lib/renderer_global.js`; built by `script/build_renderer.mjs` and consumed by `desktop/frontend/build.mjs` | Reuse Rails-owned JS. Do not add a desktop renderer copy. |
-| Rails editor preview | `app/helpers/application_helper.rb#shared_editor_projection` → `Source::JavascriptRenderer.editor_preview` → `vendor/javascript/elef-renderer.bundle.js` | The bundle calls the same `renderPreview` and source map implementation as the desktop build. Art is implemented in this path. |
-| Desktop frontend renderer | `app/javascript/lib/renderer_global.js`; `script/build_renderer.mjs`; `desktop/frontend/build.mjs` | Reuses Rails-owned renderer sources and the exact `markdown-it@14.3.2` dependency. No Art-specific desktop source copy. |
-| Saved document source model | `app/lib/source/document.rb`: `parse`, `slide_metadata`, `parse_blocks`, `markdown_blocks`; called by `Work#parsed_document` | Still needs Art integration so server-rendered saved-document and print paths use canonical Art semantics and diagnostics. |
-| Saved document HTML and editing projection | `app/lib/source/block_renderer.rb`; `Document#preview_html`; `app/views/documents/_content.html.erb` | Still needs shared Art rendering for saved, editable, and print document paths. |
-| Saved presentation HTML and print | `app/views/presentations/_slide.html.erb`, `PresentationsHelper#render_markdown`, `Source::Renderer` | Still needs shared Art rendering and fixed-host state in saved and print paths. |
-| Presentation editor projection | `renderer.js#renderPresentation`; `app/javascript/controllers/art_layout_controller.js` | The shared projection marks `.slide-region` or `.slide-content` hosts and uses one presentation-level controller for the batched fixed-layout lifecycle. |
-| Document pagination | `app/javascript/controllers/document_pages_controller.js`: `pageUnits`, `flowBlock`, `splitArtBlock`, `artFragments`, `childFragment`, `mergeFlowFragment` | Art bypasses generic text splitting, splits at direct root `<li>` nodes, and continues ordered numbering. Forced geometry tests and idempotence checks remain to be added. |
-| Visual block operations | `app/javascript/lib/editor_block_ranges.js#blockOperationStart`; `visual_editor_controller.js#blockSourceRange`; `presentation_editor_controller.js#deleteBlock` / `moveBlock` | Art source range now participates in existing block operation boundaries; integration tests for actual editor delete/move transactions remain. |
-| `:` authoring palette | `app/lib/authoring_registry.rb`, `app/lib/snippets/catalog.rb`, `app/javascript/data/default_authoring_registry.json`, `app/javascript/controllers/snippet_palette_controller.js` | The built-in `:art` entry inserts exactly `:::art` with a zero-argument schema. |
-| Editor warnings | `document_map.js#artDiagnosticMessage`, `PreviewController` warning rendering, `art_layout_controller.js#setDiagnostic`, `document_pages_controller.js#markArtItemTooTall` | Source and runtime Art warnings use stable diagnostic codes and the existing editor warning list. |
-| Parity tests | `test/e2e/scenarios/`; adapters in `desktop/e2e/`; JavaScript unit tests in `test/javascript/` | Source, layout, rendering, and authoring unit coverage is in progress; browser parity and canonical geometry fixtures remain. |
+| Source grammar and binding | `app/javascript/lib/art_source.js#resolveArtBindings` | A shared line/context resolver recognizes exact root Art directives, barriers, modifiers, diagnostics, and source ranges. `analyzeArtList` derives meaning from markdown-it tokens. |
+| Editor source map | `app/javascript/lib/document_map.js#buildEditorStructure`, `editorBlocks`, `markdownBlocks` | Both visual editing and preview projections consume the resolver's binding result. Art source ranges stay metadata; only target Markdown is sent to Markdown parsing. |
+| Canonical Markdown parser and semantic renderer | `app/javascript/lib/renderer.js#renderArtBlock`, `renderMarkdownBlock`, `renderPreview` | One Rails-owned renderer preserves native root/nested lists, derives root mode/density, detects unsupported content, and emits the DOM state enums. |
+| Rails editor preview | `app/helpers/application_helper.rb#shared_editor_projection` → `app/lib/source/javascript_renderer.rb#editor_preview` → `vendor/javascript/elef-renderer.bundle.js` | Calls the shared renderer and editor map. The vendor bundle is generated from Rails-owned sources. |
+| Saved document model/rendering | `app/lib/source/document.rb#parse_blocks`, `markdown_blocks`, `parsed_block`; `app/lib/source/block_renderer.rb#render` | Ruby model obtains binding metadata from `Source::JavascriptRenderer`; saved, editable, and print paths use shared Art rendering. |
+| Saved presentation and print | `app/helpers/presentations_helper.rb#render_markdown`; `app/views/presentations/_slide.html.erb`; `app/lib/source/renderer.rb` | Shared Art rendering supplies complete fallback/status markup. Presentation content host is marked fixed and positioned. |
+| Desktop consumer | `app/javascript/lib/renderer_global.js`; `script/build_renderer.mjs`; `desktop/frontend/build.mjs` | Tauri bundles Rails-owned JS and the pinned `markdown-it@14.3.2`; no desktop-specific Art renderer or CSS copy. |
+| Document pagination | `app/javascript/controllers/document_pages_controller.js#splitBlock`, `splitArtBlock`, `artFragments`, `childFragment`, `mergeFlowFragment` | Art is an atomic pagination unit split only between direct root items. Remainder numbering uses explicit `start`, including zero. Oversized single items remain intact and emit `ART_ITEM_TOO_TALL`. |
+| Fixed presentation lifecycle | `app/javascript/controllers/art_layout_controller.js`; `app/javascript/lib/art_layout.js` | One presentation-level controller batches decisions and reads, uses CSS custom properties for the width decision, applies the containment oracle, and performs at most one horizontal-to-vertical fallback pass. |
+| Shared CSS tokens/layout | `app/assets/stylesheets/tokens.css`; `app/assets/stylesheets/components/art.css` | One token source drives Peer basis, Sequence eligibility, spacing, radius, padding, and typography. CSS supplies Peer wrapping, native Sequence markers, and logical/decorative connectors. |
+| Block ownership | `app/javascript/lib/editor_block_ranges.js#blockOperationStart`; `visual_editor_controller.js#blockSourceRange`; `presentation_editor_controller.js#deleteBlock`, `moveBlock` | Existing source-range operations include the Art directive with its root list. Visual move/delete integration is covered by a browser system test. |
+| `:` authoring | `app/lib/authoring_registry.rb`; `app/lib/snippets/catalog.rb`; `app/javascript/data/default_authoring_registry.json` | `:art` inserts only `:::art`; its argument schema is empty. |
+| Diagnostics | `app/javascript/lib/document_map.js#artDiagnosticMessage`; `app/javascript/controllers/preview_controller.js`; `art_layout_controller.js#setDiagnostic`; `document_pages_controller.js#markArtItemTooTall` | Stable codes are exposed in rendered DOM and hydrated into the existing editor warning list. |
+| Tests and parity harness | `test/javascript/art_source.test.js`, `art_generated.test.js`, `art_layout.test.js`, `renderer.test.js`; `test/system/art_test.rb`, `test/system/presentations_test.rb`; `desktop/e2e/` | Binding corpus, 400 seeded cases, layout/renderer checks, pagination and lifecycle browser checks, block operations, and Rails/Tauri adapter harness locations are identified. |
+| Traceability | `docs/smartart/VERIFICATION.json`; `script/check_art_traceability.py` | Every numbered constitution requirement maps to a test or named static assertion; CI rejects duplicate/missing IDs and stale verification references. |
 
-## Baseline checks before feature changes
+## Baseline failures and external environment
 
-- `npm run test:javascript` after `npm ci`: **334 passed, 0 failed** (Node v26.10.0; the repository documentation names Node 22 for CI).
-- `ELEF_USE_SQLITE=1 bin/rails test`: **343 runs, 2,725 assertions, 0 failures, 0 errors, 0 skips**. This used the documented isolated Rails test database compatibility mode after PostgreSQL was found unavailable at `127.0.0.1:5432`.
-- `bin/rails test` with the configured PostgreSQL adapter: **blocked before test execution**; Active Record could not connect to `127.0.0.1:5432`; `pg_isready` reported no response and no listener was present.
-- `npm test --prefix desktop/frontend`: **26 passed, 0 failed**.
-- `npm run test:unit --prefix desktop/e2e`: **7 passed, 0 failed**.
-- `cargo test --manifest-path desktop/Cargo.toml -p elef-core --locked`: **40 passed, 0 failed**.
-- `python3 script/check_frontend_ownership.py`: **passed**.
-- `python3 desktop/scripts/check_architecture.py`: baseline was blocked by an incomplete local frontend dependency tree; see current validation below.
-- Full `npm test --prefix desktop/e2e` is not safe to run in this checkout: port 3000 already has a listener, and the endpoint check failed the TLS handshake. The harness starts its own Rails test server on that port.
+- Configured PostgreSQL tests could not start because nothing listened on `127.0.0.1:5432`; baseline Rails tests were run with the repository's isolated SQLite compatibility mode.
+- The full desktop E2E parity harness starts its own Rails test server on port 3000. Repository instructions prohibit running it alongside the existing user server. The local port-3000 listener did not complete the required HTTPS handshake at baseline; current endpoint/process evidence is recorded in `VERIFICATION.json` after the final environment check.
 
-## Current validation after the first implementation milestone
+## Implementation commits
 
-- `npm run renderer:build && npm run test:javascript`: **369 passed, 0 failed** before authoring/ownership changes.
-- `npm run test:javascript`: **372 passed, 0 failed** after `:art` authoring and range-helper tests.
-- `ELEF_USE_SQLITE=1 bin/rails test test/lib/authoring_registry_test.rb`: **5 runs, 23 assertions, 0 failures, 0 errors, 0 skips**.
-- `npm run build --prefix desktop/frontend`: **passed** after adding the pinned shared `markdown-it@14.3.2` dependency.
-- `npm test --prefix desktop/frontend`: **26 passed, 0 failed**.
-- `npm run test:unit --prefix desktop/e2e`: **7 passed, 0 failed**.
-- `python3 script/check_frontend_ownership.py`: **passed**.
-- `python3 desktop/scripts/check_architecture.py`: **passed** after installing the locked desktop frontend dependencies and building the static bundle.
+- `b8ed9cb` Add shared Elef Art source and rendering
+- `6c77635` Integrate Elef Art with saved content and authoring
+- `c213a12` Harden Art fit and pagination diagnostics
+- `f2e5dad` Keep Art ownership scoped to its root list
+- `55d6184` Add Elef Art geometry and parity coverage
+- `564102f` Verify bounded Art fallback lifecycle
+
+The canonical two- and three-column fixture measurements reveal conflicts between FIX-06/FIX-07's expected `ready` state and the mandatory whole-host containment rule. The implementation preserves the host oracle and reports explicit no-fit; details are in `VERIFICATION.json` and the fixture tests.
