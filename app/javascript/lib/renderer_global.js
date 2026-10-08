@@ -1,4 +1,4 @@
-import { collectMediaReferences, renderMarkdownBlock, renderPreview } from "./renderer.js"
+import { collectMediaReferences, renderMarkdownBlock, renderPreview } from "@elef/renderer"
 import { renderLibraryCard, renderLibraryCardControls } from "./library_card.js"
 import {
   buildDocumentGraph,

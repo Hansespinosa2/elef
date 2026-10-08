@@ -14,7 +14,7 @@ import { documentPageAspectRatioWorkflow } from "../../../test/e2e/scenarios/doc
 import { execFileSync } from "node:child_process"
 import path from "node:path"
 import { readFile } from "node:fs/promises"
-import { renderPreview } from "../../../app/javascript/lib/renderer.js"
+import { renderPreview } from "@elef/renderer"
 
 function normalizeLineEndings(source) {
   return source.replace(/\r\n|\r/g, "\n")

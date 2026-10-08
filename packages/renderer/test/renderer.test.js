@@ -1,6 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { collectMediaReferences, renderMarkdownBlock, renderPreview } from "../../app/javascript/lib/renderer.js"
+import { collectMediaReferences, renderMarkdownBlock, renderPreview } from "../src/index.js"
 import { buildEditorMap } from "@elef/work-model"
 
 test("presentation preview builds editable source ranges and ignores slide delimiters in code fences", () => {

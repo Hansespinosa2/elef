@@ -30,8 +30,19 @@ const appSourceAlias = {
     }))
     context.onResolve({ filter: /^[^./]/ }, async (args) => {
       if (args.pluginData?.desktopSharedDependencyResolution) return
+      // Monorepo packages are first-party source, not declared dependencies:
+      // resolve the package barrel directly so Rails and desktop share one copy.
+      const workspaceMatch = /^@elef\/([^/]+)$/.exec(args.path)
+      if (workspaceMatch) {
+        const manifest = JSON.parse(await readFile(path.join(repoRoot, "packages", workspaceMatch[1], "package.json"), "utf8"))
+        const entry = manifest.exports?.["."] ?? "./src/index.js"
+        return { path: path.join(repoRoot, "packages", workspaceMatch[1], entry) }
+      }
       const relativeImporter = path.relative(sharedFrontendRoot, args.importer)
-      if (relativeImporter.startsWith("..") || path.isAbsolute(relativeImporter)) return
+      const relativePackageImporter = path.relative(path.join(repoRoot, "packages"), args.importer)
+      const sharedImporter = !(relativeImporter.startsWith("..") || path.isAbsolute(relativeImporter))
+        || !(relativePackageImporter.startsWith("..") || path.isAbsolute(relativePackageImporter))
+      if (!sharedImporter) return
       if (args.path.startsWith("controllers/") || args.path.startsWith("lib/")) return
 
       const result = await context.resolve(args.path, {

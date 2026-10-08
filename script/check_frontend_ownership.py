@@ -101,7 +101,7 @@ presentation_controller = (ROOT / "app/javascript/controllers/presentation_contr
 importmap = (ROOT / "config/importmap.rb").read_text()
 renderer_build = (ROOT / "script/build_renderer.mjs").read_text()
 renderer_sources = (
-    ROOT / "app/javascript/lib/renderer.js",
+    ROOT / "packages/renderer/src/renderer.js",
     ROOT / "packages/work-model/src/document_links.js",
     ROOT / "packages/work-model/src/document_map.js",
     ROOT / "app/javascript/lib/renderer_global.js",
@@ -156,9 +156,13 @@ assert not missing_shared_alias_pins, (
     "Every shared Elef module alias must be pinned in the Rails importmap: "
     + ", ".join(missing_shared_alias_pins)
 )
+# renderer_global.js is the esbuild bundle entry (script/build_renderer.mjs), never
+# served through the importmap, so its package imports resolve via node_modules.
+BUNDLED_ONLY = {app_frontend / "lib/renderer_global.js"}
 frontend_package_imports = {
     specifier
     for path in app_frontend.rglob("*.js")
+    if path not in BUNDLED_ONLY
     for specifier in MODULE_SPECIFIER.findall(path.read_text())
     if specifier.startswith("@elef/")
 }
