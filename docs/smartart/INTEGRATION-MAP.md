@@ -44,7 +44,14 @@ Phase 0 audit and current implementation map for [Constitution v6.0](CONSTITUTIO
 - `f2e5dad` Keep Art ownership scoped to its root list
 - `55d6184` Add Elef Art geometry and parity coverage
 - `564102f` Verify bounded Art fallback lifecycle
+- `a582131` Preserve attached media in Art fallbacks
+- `f4ccf49` Assert Art fit diagnostics and safe fallbacks
+- `0ed62ea` Document Art verification and architecture map
+- `494f5b5` Keep Art checks within shared frontend ownership
+- `f8afbf5` Tighten Art binding and fixture coverage
 
 The canonical two- and three-column fixture measurements reveal conflicts between FIX-06/FIX-07's expected `ready` state and the mandatory whole-host containment rule. The implementation preserves the host oracle and reports explicit no-fit; details are in `VERIFICATION.json` and the fixture tests.
+
+FIX-04 required tuning the single-source Art tokens. Current values are `--art-gap: 9px`, `--art-card-padding: 4px`, and `--art-presentation-body-size: 17px`; the remaining Art tokens retain their Constitution v6 initial values. These shared values let the titled 4-item rich Sequence settle inside its full-slide host while the titled 8-item compact Sequence remains explicit no-fit. The CSS token source is `app/assets/stylesheets/tokens.css`, and fixed layout reads the computed gap/minimum values.
 
 The existing stylesheet-index architecture test intentionally changes its expected import count from 12 to 13 and asserts the new `components/art.css` import. This is the only baseline assertion changed to account for the new shared component partial.
