@@ -2078,21 +2078,6 @@ describe("desktop binary workflows and native boundaries", () => {
       const diagnostic = await browser.execute(async () => {
         const form = document.querySelector("#authoring-entry-form")
         const fields = ["authoring-name", "authoring-trigger", "authoring-description", "authoring-category", "authoring-body"]
-        const { invoke } = window.__TAURI__.core
-        const registries = await invoke("read_authoring_registries")
-        // Probe the write path directly with a no-op write of the loaded
-        // entries so a save failure reports the raw backend error.
-        let directWrite
-        try {
-          const roundTrip = await invoke("write_authoring_registry", {
-            registry: "snippets",
-            entries: (registries.snippets || []).filter(entry => !entry.built_in),
-            base_hash: registries.hashes.snippets
-          })
-          directWrite = { ok: true, contentHash: roundTrip?.content_hash ?? null }
-        } catch (error) {
-          directWrite = { ok: false, error: error && typeof error === "object" ? { ...error, message: error.message } : String(error) }
-        }
         return {
           status: document.querySelector("#authoring-settings-status")?.textContent || "",
           formVisible: form ? !form.hidden : null,
@@ -2101,8 +2086,7 @@ describe("desktop binary workflows and native boundaries", () => {
             const field = document.getElementById(id)
             return [id, { value: field?.value, disabled: field?.disabled, valid: field?.validity?.valid, validationMessage: field?.validationMessage }]
           })),
-          registries,
-          directWrite
+          registries: await window.__TAURI__.core.invoke("read_authoring_registries")
         }
       })
       throw new Error(`${error.message}; authoring save diagnostic: ${JSON.stringify(diagnostic)}`)

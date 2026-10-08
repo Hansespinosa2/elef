@@ -45,15 +45,18 @@ test("the Tauri authoring transport maps the registry read onto the shared seam 
   })
 })
 
-test("the Tauri authoring transport sends snake_case writes and returns the content hash", async () => {
+test("the Tauri authoring transport sends camelCase writes and returns the content hash", async () => {
   const entries = [{ id: "s1", name: "Note" }]
   const { calls, transport } = recordingTransport({
     write_authoring_registry: () => ({ content_hash: "b".repeat(64) })
   })
   const result = await transport.writeRegistry({ registry: "snippets", entries, baseHash: HASH })
+  // Tauri maps camelCase argument keys onto the Rust snake_case params, so
+  // the transport must send baseHash (a base_hash key arrives unmapped and
+  // the backend rejects the write as missing its baseline).
   assert.deepEqual(calls, [[
     "write_authoring_registry",
-    { registry: "snippets", entries, base_hash: HASH }
+    { registry: "snippets", entries, baseHash: HASH }
   ]])
   assert.deepEqual(result, { contentHash: "b".repeat(64) })
 })

@@ -32,10 +32,12 @@ export function createTauriAuthoringTransport({ invoke, builtInEntries = [], mer
       if (typeof baseHash !== "string" || !/^[0-9a-f]{64}$/i.test(baseHash)) {
         throw Object.assign(new Error("Authoring settings changed outside Elef. Close and reopen settings to load the latest entries before saving."), { code: "conflict" })
       }
+      // Tauri maps camelCase argument keys onto the Rust snake_case
+      // params; sending base_hash would leave baseHash missing.
       const result = await invoke("write_authoring_registry", {
         registry,
         entries: [...entries],
-        base_hash: baseHash
+        baseHash
       })
       return { contentHash: result?.content_hash ?? null }
     }
