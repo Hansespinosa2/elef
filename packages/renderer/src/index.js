@@ -1,5 +1,5 @@
 export {
   collectMediaReferences,
   renderMarkdownBlock,
-  renderPreview
+  renderPreviewCore
 } from "./renderer.js"

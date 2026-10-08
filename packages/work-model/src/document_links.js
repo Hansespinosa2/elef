@@ -132,13 +132,13 @@ export function createDocumentLinkResolver(documents = []) {
   const byId = new Map()
 
   for (const input of documents) {
-    const document = withPortableDocumentLinks(input)
-    if (document?.title != null) byTitle.set(String(document.title), document)
-    if (document?.id != null) byId.set(String(document.id), document)
-    const key = document?.documentKey ?? document?.document_key ?? document?.id
-    if (key != null) addUniqueIndex(byKey, ambiguousKeys, key, document)
-    for (const alias of Array.isArray(document?.aliases) ? document.aliases : []) {
-      if (typeof alias === "string") addUniqueIndex(byAlias, ambiguousAliases, alias, document)
+    const doc = withPortableDocumentLinks(input)
+    if (doc?.title != null) byTitle.set(String(doc.title), doc)
+    if (doc?.id != null) byId.set(String(doc.id), doc)
+    const key = doc?.documentKey ?? doc?.document_key ?? doc?.id
+    if (key != null) addUniqueIndex(byKey, ambiguousKeys, key, doc)
+    for (const alias of Array.isArray(doc?.aliases) ? doc.aliases : []) {
+      if (typeof alias === "string") addUniqueIndex(byAlias, ambiguousAliases, alias, doc)
     }
   }
 
@@ -156,57 +156,57 @@ export function createDocumentLinkResolver(documents = []) {
 export function buildDocumentGraph(documents = []) {
   if (!Array.isArray(documents)) throw new TypeError("Document graph input must be a list.")
   const entries = documents
-    .filter(document => document && document.id != null && (typeof document.title === "string" || typeof document.name === "string"))
-    .map(document => withPortableDocumentLinks({
-      ...document,
-      title: document.title || extractFirstMarkdownHeading(document.source || "") || document.name
+    .filter(doc => doc && doc.id != null && (typeof doc.title === "string" || typeof doc.name === "string"))
+    .map(doc => withPortableDocumentLinks({
+      ...doc,
+      title: doc.title || extractFirstMarkdownHeading(doc.source || "") || doc.name
     }))
   const resolve = createDocumentLinkResolver(entries)
-  const nodes = entries.map((document, index) => ({
-    id: document.id,
-    title: document.title,
-    url: document.url || document.href || `#deck/${encodeURIComponent(String(document.id))}`,
-    documentKey: document.documentKey,
-    aliases: document.aliases,
+  const nodes = entries.map((doc, index) => ({
+    id: doc.id,
+    title: doc.title,
+    url: doc.url || doc.href || `#deck/${encodeURIComponent(String(doc.id))}`,
+    documentKey: doc.documentKey,
+    aliases: doc.aliases,
     x: 120 + (index % 4) * 220,
     y: 100 + Math.floor(index / 4) * 150
   }))
   const edges = []
   const seen = new Set()
 
-  for (const document of entries) {
-    for (const title of extractDocumentLinkTitles(document.source || "")) {
+  for (const doc of entries) {
+    for (const title of extractDocumentLinkTitles(doc.source || "")) {
       const target = resolve(title)
       if (!target) continue
-      const key = JSON.stringify([String(document.id), String(target.id)])
+      const key = JSON.stringify([String(doc.id), String(target.id)])
       if (seen.has(key)) continue
       seen.add(key)
-      edges.push({ source: document.id, target: target.id })
+      edges.push({ source: doc.id, target: target.id })
     }
   }
   return { nodes, edges }
 }
 
-function withPortableDocumentLinks(document) {
-  if (!document || typeof document !== "object") return document
-  const portable = parsePortableDocumentLinks(document.source || "")
-  const aliases = Array.isArray(document.aliases) ? document.aliases : []
+function withPortableDocumentLinks(doc) {
+  if (!doc || typeof doc !== "object") return doc
+  const portable = parsePortableDocumentLinks(doc.source || "")
+  const aliases = Array.isArray(doc.aliases) ? doc.aliases : []
   return {
-    ...document,
-    documentKey: portable.documentKey || document.documentKey || document.document_key || String(document.id ?? ""),
+    ...doc,
+    documentKey: portable.documentKey || doc.documentKey || doc.document_key || String(doc.id ?? ""),
     aliases: [...new Set([...aliases, ...portable.aliases])]
   }
 }
 
-function addUniqueIndex(index, ambiguous, value, document) {
+function addUniqueIndex(index, ambiguous, value, doc) {
   const key = String(value).trim()
   if (!key || ambiguous.has(key)) return
   const existing = index.get(key)
-  if (existing && String(existing.id) !== String(document.id)) {
+  if (existing && String(existing.id) !== String(doc.id)) {
     index.delete(key)
     ambiguous.add(key)
   } else if (!existing) {
-    index.set(key, document)
+    index.set(key, doc)
   }
 }
 

@@ -14,7 +14,10 @@ import { documentPageAspectRatioWorkflow } from "../../../test/e2e/scenarios/doc
 import { execFileSync } from "node:child_process"
 import path from "node:path"
 import { readFile } from "node:fs/promises"
-import { renderPreview } from "@elef/renderer"
+import { renderPreviewCore } from "@elef/renderer"
+import { editorChrome } from "../../../app/javascript/lib/preview_chrome.js"
+
+const renderPreview = input => renderPreviewCore(input, { chrome: editorChrome })
 
 function normalizeLineEndings(source) {
   return source.replace(/\r\n|\r/g, "\n")

@@ -1,7 +1,10 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { parseHTML } from "linkedom"
-import { renderPreview } from "@elef/renderer"
+import { renderPreviewCore } from "@elef/renderer"
+import { editorChrome } from "../../../app/javascript/lib/preview_chrome.js"
+
+const renderPreview = input => renderPreviewCore(input, { chrome: editorChrome })
 import { installSanitizedPreview } from "../../../app/javascript/lib/preview_sanitizer.js"
 
 test("preview sink strips executable markup and remote image sources while preserving deck-scoped media", () => {
