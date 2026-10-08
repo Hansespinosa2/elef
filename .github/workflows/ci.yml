@@ -10,6 +10,13 @@ on:
 permissions:
   contents: read
 
+# A newer push supersedes older runs on the same PR branch: cancel the stale
+# run so rapid gate iteration does not stack multiple ~20 min desktop suites.
+# Pushes to dev/main never cancel (deployment authorization consumes them).
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   desktop-fast:
     runs-on: ubuntu-latest
@@ -283,6 +290,15 @@ jobs:
           RAILS_ENV: test
           ELEF_USE_SQLITE: "1"
         run: bin/rails db:test:prepare
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          # Playwright browsers are pinned by @playwright/test in
+          # desktop/e2e/package-lock.json; the lockfile hash is the key.
+          path: |
+            ~/.cache/ms-playwright
+            ~/Library/Caches/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('desktop/e2e/package-lock.json') }}
       - name: Install headless browser and system dependencies
         run: npx --prefix desktop/e2e playwright install --with-deps chromium
       - name: Build test-only N-1 and N desktop updater packages
@@ -474,6 +490,15 @@ jobs:
           RAILS_ENV: test
           ELEF_USE_SQLITE: "1"
         run: bin/rails db:test:prepare
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          # Playwright browsers are pinned by @playwright/test in
+          # desktop/e2e/package-lock.json; the lockfile hash is the key.
+          path: |
+            ~/.cache/ms-playwright
+            ~/Library/Caches/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('desktop/e2e/package-lock.json') }}
       - name: Install headless web browser
         run: npx --prefix desktop/e2e playwright install chromium
       - name: Build test-only N-1 and N desktop updater packages
