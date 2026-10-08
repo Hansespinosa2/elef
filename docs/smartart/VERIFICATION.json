@@ -654,11 +654,25 @@
           535,
           555
         ],
+        "root_layout_css_px": [
+          535,
+          535,
+          334,
+          334,
+          180,
+          334
+        ],
+        "root_item_heights_css_px": [
+          86,
+          86,
+          63,
+          63
+        ],
         "root_bottom_exceeds_host": true,
         "status": "fallback-no-fit",
         "diagnostic": "ART_NO_FIT"
       },
-      "conflict": "The root extends beyond the 416px bounded host and host scroll height is 555px. Declaring ready would violate ART-FIT-003 and ART-FIT-006."
+      "conflict": "The root starts at 180px and is 334px tall, ending at 514px in a 416px host; host scroll height is 555px. Declaring ready would violate ART-FIT-003 and ART-FIT-006."
     },
     {
       "id": "FIX-07",
@@ -677,11 +691,19 @@
           341,
           469
         ],
+        "root_layout_css_px": [
+          341,
+          341,
+          248,
+          248,
+          180,
+          248
+        ],
         "root_bottom_exceeds_host": true,
         "status": "fallback-no-fit",
         "diagnostic": "ART_NO_FIT"
       },
-      "conflict": "The root extends beyond the 416px bounded host and host scroll height is 469px. Declaring ready would violate ART-FIT-003 and ART-FIT-006."
+      "conflict": "The root starts at 180px and is 248px tall, ending at 428px in a 416px host; host scroll height is 469px. Declaring ready would violate ART-FIT-003 and ART-FIT-006."
     }
   ],
   "external_checks": [
@@ -692,6 +714,14 @@
       "verification_not_claimed": [
         "real Tauri/WebKit runtime parity",
         "cross-engine print/geometry"
+      ]
+    },
+    {
+      "id": "RAILS_POSTGRES_TEST_DATABASE",
+      "status": "BLOCKED_EXTERNAL",
+      "evidence": "`ss -ltnp 'sport = :5432'` reported no listener at final verification. The full Rails suite therefore ran with the repository's isolated SQLite compatibility mode.",
+      "verification_not_claimed": [
+        "PostgreSQL-backed Rails suite"
       ]
     }
   ],
