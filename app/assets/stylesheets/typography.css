@@ -1,0 +1,47 @@
+.presentation-surface h1,
+.presentation-surface h2,
+.presentation-surface h3,
+.presentation-surface h4,
+.presentation-surface h5,
+.presentation-surface h6 { font-family: var(--oradia-serif); }
+
+.slides-typography-book h1,
+.slides-typography-book h2,
+.slides-typography-book h3,
+.slides-typography-book h4,
+.slides-typography-book h5,
+.slides-typography-book h6 { font-family: var(--oradia-serif); }
+
+.slides-typography-modern h1,
+.slides-typography-modern h2,
+.slides-typography-modern h3,
+.slides-typography-modern h4,
+.slides-typography-modern h5,
+.slides-typography-modern h6 { font-family: Baskerville, "Iowan Old Style", Georgia, serif; font-weight: 600; }
+
+.slides-typography-technical h1,
+.slides-typography-technical h2,
+.slides-typography-technical h3,
+.slides-typography-technical h4,
+.slides-typography-technical h5,
+.slides-typography-technical h6 { font-family: var(--oradia-sans); font-weight: 750; letter-spacing: -0.04em; }
+
+.slide p,
+.slide li,
+.slide blockquote,
+.slide td,
+.slide th { font-size: 2.4rem; }
+
+.slides-typography-technical .slide p,
+.slides-typography-technical .slide li { font-size: 0.96em; }
+
+.document-surface h1,
+.document-surface h2,
+.document-surface h3,
+.document-surface h4,
+.document-surface h5,
+.document-surface h6 { font-family: var(--oradia-serif); letter-spacing: -0.025em; }
+
+.document-reader.document-typography-book .document-surface :is(h1, h2, h3, h4, h5, h6) { font-family: var(--oradia-serif); }
+.document-reader.document-typography-modern .document-surface :is(h1, h2, h3, h4, h5, h6) { font-family: Baskerville, "Iowan Old Style", Georgia, serif; font-weight: 600; }
+.document-reader.document-typography-technical .document-surface :is(h1, h2, h3, h4, h5, h6) { font-family: var(--oradia-sans); font-weight: 750; letter-spacing: -0.04em; }
