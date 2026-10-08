@@ -30,7 +30,14 @@ export function createFakeHost() {
   const sessions = new Set();
 
   function summary(work) {
-    return { id: work.id, workspaceId: work.workspaceId, title: work.title, kind: work.kind };
+    return {
+      id: work.id,
+      workspaceId: work.workspaceId,
+      title: work.title,
+      kind: work.kind,
+      updatedAt: work.updatedAt,
+      warnings: [],
+    };
   }
 
   function snapshot(work) {
@@ -63,6 +70,7 @@ export function createFakeHost() {
         kind: input.kind,
         text: input.text ?? `# ${input.title}\n`,
         revision: id("rev"),
+        updatedAt: new Date().toISOString(),
       };
       works.set(work.id, work);
       return summary(work);
@@ -70,6 +78,7 @@ export function createFakeHost() {
     async renameWork(workId, title) {
       const work = works.get(workId) ?? notFound("work");
       work.title = title;
+      work.updatedAt = new Date().toISOString();
       return summary(work);
     },
     async deleteWork(workId) {

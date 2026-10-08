@@ -104,7 +104,14 @@ export async function createRailsHost({ baseUrl, fetchImpl = fetch }) {
   const sessions = new Map();
 
   function toSummary(payload) {
-    return { id: String(payload.id), workspaceId: String(payload.workspace_id), title: payload.title, kind: payload.kind };
+    return {
+      id: String(payload.id),
+      workspaceId: String(payload.workspace_id),
+      title: payload.title,
+      kind: payload.kind,
+      updatedAt: String(payload.updated_at),
+      warnings: Array.isArray(payload.warnings) ? payload.warnings.map(String) : [],
+    };
   }
 
   function toSnapshot(payload) {

@@ -10,6 +10,14 @@ export interface WorkSummary {
   workspaceId: WorkspaceId;
   title: string;
   kind: WorkKind;
+  // ISO-8601 last-modified timestamp for library card metadata. Optional in
+  // the type for backward compatibility; every adapter populates it and the
+  // conformance suite asserts its presence.
+  updatedAt?: string;
+  // Non-blocking library notices for the card (name/path notices). Optional
+  // in the type; every adapter populates it (possibly empty) and the
+  // conformance suite asserts its presence.
+  warnings?: readonly string[];
 }
 
 export interface WorkSnapshot extends WorkSummary {

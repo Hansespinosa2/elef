@@ -118,7 +118,9 @@ class HostApiController < ApplicationController
       id: work.id.to_s,
       workspace_id: work.workspace_id.to_s,
       title: work.title,
-      kind: work.kind
+      kind: work.kind,
+      updated_at: work.updated_at.iso8601(3),
+      warnings: work.preview_warnings
     }
   end
 

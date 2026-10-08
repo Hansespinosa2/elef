@@ -23,11 +23,17 @@ export function createTauriHost({ invoke, readExportFile }) {
     // from the kind-specific source file for those shapes.
     const kind =
       deck.kind ?? (deck.source_file === "presentation.md" ? "presentation" : "document");
+    const modifiedMs = deck.modified_ms ?? deck.fingerprint?.modified_ms;
     return {
       id: String(deck.id),
       workspaceId: "local",
       title: deck.name,
       kind: kind === "presentation" ? "presentation" : "document",
+      updatedAt:
+        modifiedMs === null || modifiedMs === undefined
+          ? new Date().toISOString()
+          : new Date(Number(modifiedMs)).toISOString(),
+      warnings: [...(deck.warnings ?? []), ...(deck.notices ?? [])].map(String),
     };
   }
 

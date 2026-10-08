@@ -53,15 +53,25 @@ export const CASES = [
       });
       a.equal(doc.title, prefixName(prefix, "doc"), "created document title");
       a.equal(doc.kind, "document", "created document kind");
+      function checkCardMetadata(item) {
+        a.equal(typeof item.updatedAt, "string", "summary carries an updatedAt timestamp");
+        a.ok(!Number.isNaN(Date.parse(item.updatedAt)), "updatedAt parses as a date");
+        a.ok(Array.isArray(item.warnings), "summary carries a warnings array");
+      }
+      checkCardMetadata(doc);
       const deck = await host.library.createWork({
         workspaceId,
         title: prefixName(prefix, "slides"),
         kind: "presentation",
       });
       a.equal(deck.kind, "presentation", "created presentation kind");
+      checkCardMetadata(deck);
       const works = await host.library.listWorks(workspaceId);
       const ids = new Set(works.map((work) => work.id));
       a.ok(ids.has(doc.id) && ids.has(deck.id), "list contains created works");
+      for (const item of works.filter((work) => work.id === doc.id || work.id === deck.id)) {
+        checkCardMetadata(item);
+      }
       const renamed = await host.library.renameWork(deck.id, prefixName(prefix, "renamed"));
       a.equal(renamed.title, prefixName(prefix, "renamed"), "rename applies");
       if (policy.deleteProgrammatic === false) {
