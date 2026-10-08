@@ -623,9 +623,15 @@ class WebEditorUi {
         layout: root.dataset.artLayout,
         rootTag: list?.tagName,
         itemCount: items.length,
-        itemText: items.map(item => [...item.children]
-          .map(child => child.innerText || child.textContent)
-          .join(" ").replace(/\s+/g, " ").trim()),
+        itemText: items.map(item => {
+          const walker = document.createTreeWalker(item, NodeFilter.SHOW_TEXT)
+          const parts = []
+          while (walker.nextNode()) {
+            const text = walker.currentNode.textContent.trim()
+            if (text) parts.push(text)
+          }
+          return parts.join(" ").replace(/\s+/g, " ").trim()
+        }),
         nestedListTag: items[0]?.querySelector(":scope > ol, :scope > ul")?.tagName || null,
         start: list?.hasAttribute("start") ? list.getAttribute("start") : null
       }
