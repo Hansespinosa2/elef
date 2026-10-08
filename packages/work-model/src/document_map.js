@@ -152,6 +152,16 @@ function normalizeStyleValue(value, vocabulary, fallback) {
   return vocabulary.has(unquoted) ? unquoted : fallback
 }
 
+export function frontMatterHasKey(source, key) {
+  if (typeof source !== "string" || typeof key !== "string" || !key) {
+    throw new TypeError("Front matter key lookup needs source text and a key.")
+  }
+  const front = initialFrontMatter(source)
+  if (!front) return null
+  const pattern = new RegExp(`^\\s*${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*:`)
+  return front.lines.slice(1, front.closingLine).some(line => pattern.test(line.text))
+}
+
 export function readStyleOverrides(source) {
   const frontMatter = initialFrontMatter(source)
   const read = (key, normalizer) => {

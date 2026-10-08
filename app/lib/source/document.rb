@@ -99,6 +99,10 @@ module Source
       Source::JavascriptRenderer.first_heading(source.to_s)
     end
 
+    def front_matter_has_key?(source, key)
+      Source::JavascriptRenderer.front_matter_has_key?(source.to_s, key.to_s)
+    end
+
     def replace_first_h1(source, title)
       Source::JavascriptRenderer.replace_first_heading(source.to_s, title.to_s)
     end

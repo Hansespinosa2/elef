@@ -32,10 +32,12 @@ const appSourceAlias = {
       if (args.pluginData?.desktopSharedDependencyResolution) return
       // Monorepo packages are first-party source, not declared dependencies:
       // resolve the package barrel directly so Rails and desktop share one copy.
-      const workspaceMatch = /^@elef\/([^/]+)$/.exec(args.path)
+      const workspaceMatch = /^@elef\/([^/]+)(\/[^/]+)?$/.exec(args.path)
       if (workspaceMatch) {
         const manifest = JSON.parse(await readFile(path.join(repoRoot, "packages", workspaceMatch[1], "package.json"), "utf8"))
-        const entry = manifest.exports?.["."] ?? "./src/index.js"
+        const subpath = workspaceMatch[2] ? `.${workspaceMatch[2]}` : "."
+        const entry = manifest.exports?.[subpath]
+        if (!entry) throw new Error(`Workspace package @elef/${workspaceMatch[1]} has no export ${subpath}.`)
         return { path: path.join(repoRoot, "packages", workspaceMatch[1], entry) }
       }
       const relativeImporter = path.relative(sharedFrontendRoot, args.importer)

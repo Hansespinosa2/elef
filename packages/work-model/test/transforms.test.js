@@ -1,6 +1,7 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 import {
+  frontMatterHasKey,
   normalizeThemeValue,
   normalizeTypographyValue,
   readStyleOverrides,
@@ -49,6 +50,19 @@ test("style overrides report explicit valid values and null otherwise", () => {
   assert.deepEqual(readStyleOverrides("---\r\ntheme: dark\r\n---\r\n# T"), { theme: "dark", typography: null })
   assert.deepEqual(readStyleOverrides("\uFEFF---\ntheme: dark\n---\n# T"), { theme: "dark", typography: null })
   assert.deepEqual(readStyleOverrides("---\n theme: dark\ntitle: x\n---\n# T"), { theme: null, typography: null })
+})
+
+test("front matter key lookup matches whole keys at line start", () => {
+  const source = "---\ntheme: dark\ntypography: modern\n---\n# T"
+  assert.equal(frontMatterHasKey(source, "theme"), true)
+  assert.equal(frontMatterHasKey(source, "typography"), true)
+  assert.equal(frontMatterHasKey(source, "missing"), false)
+  assert.equal(frontMatterHasKey(source, "the"), false)
+  assert.equal(frontMatterHasKey("# T\n\ntheme: dark\n", "theme"), null)
+  assert.equal(frontMatterHasKey("---\n theme: dark\ntitle: x\n---\n# T", "theme"), true)
+  assert.equal(frontMatterHasKey("---\ntitle: x\n---\n# T", "a.b"), false)
+  assert.equal(frontMatterHasKey("---\na.b: 1\ntitle: x\n---\n# T", "a.b"), true)
+  assert.throws(() => frontMatterHasKey(null, "theme"), TypeError)
 })
 
 test("front matter writes create, replace, and remove values", () => {

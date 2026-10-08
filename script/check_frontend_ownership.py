@@ -167,6 +167,15 @@ frontend_package_imports = {
     if specifier.startswith("@elef/")
 }
 rails_package_pins = set(re.findall(r'^pin "(@elef/[^\"]+)"', importmap, re.MULTILINE))
+# The work-model barrel is browser-loaded through the importmap, which does
+# not rewrite relative specifiers: the barrel must use self-referential bare
+# imports, and every barrel subpath must be pinned.
+work_model_barrel = (ROOT / "packages/work-model/src/index.js").read_text()
+assert '"./' not in work_model_barrel and '"../' not in work_model_barrel, (
+    "packages/work-model/src/index.js must not use relative imports (browser-loaded)"
+)
+for subpath in ("@elef/work-model/document-map", "@elef/work-model/document-links"):
+    assert subpath in rails_package_pins, f"work-model barrel subpath must be pinned: {subpath}"
 missing_package_pins = sorted(frontend_package_imports - rails_package_pins)
 assert not missing_package_pins, (
     "Every shared Elef package import must be pinned in the Rails importmap: "
@@ -443,8 +452,8 @@ assert '"./preview_chrome.js"' in bundle_entry and "editorChrome" in bundle_entr
     "the bundle entry must compose bare projection with editor chrome"
 )
 for bridge_function in (
-    "parsePortableDocumentLinks", "extractFirstMarkdownHeading", "readStyle",
-    "readStyleOverrides", "normalizeThemeValue", "normalizeTypographyValue",
+    "parsePortableDocumentLinks", "extractFirstMarkdownHeading", "frontMatterHasKey",
+    "readStyle", "readStyleOverrides", "normalizeThemeValue", "normalizeTypographyValue",
     "withFrontMatterValue", "replaceFirstHeading", "sourceAnchorLines",
 ):
     assert bridge_function in bundle_entry, f"the bundle must export the work-model bridge function {bridge_function}"

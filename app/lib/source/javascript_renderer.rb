@@ -103,6 +103,10 @@ module Source
       context.call("ElefRenderer.extractFirstMarkdownHeading", source.to_s)
     end
 
+    def front_matter_has_key?(source, key)
+      context.call("ElefRenderer.frontMatterHasKey", source.to_s, key.to_s)
+    end
+
     def replace_first_heading(source, title)
       context.call("ElefRenderer.replaceFirstHeading", source.to_s, title.to_s)
     end

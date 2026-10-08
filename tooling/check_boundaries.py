@@ -14,8 +14,10 @@ Rules (constitution section 4, Phase 01 plan section 8):
   R5  every directory directly under packages/ is a real package: it carries
       package.json (private) and a frozen public entry (types field).
   R6  package dependencies point one way and stay host-free: work-model
-      imports nothing executable; renderer imports only relative sources,
-      @elef/work-model, and its pinned markdown vendor modules.
+      imports only its own barrel subpaths (bare self-reference keeps the
+      browser-loaded barrel free of relative imports); renderer imports
+      only relative sources, @elef/work-model, and its pinned markdown
+      vendor modules.
   R7  package sources stay pure: no DOM/host-environment tokens in
       work-model, no editor-chrome tokens in renderer.
   R8  Ruby and Rust do not reinterpret Work syntax: no renderer, parser or
@@ -122,6 +124,8 @@ def check_package_direction() -> list[str]:
                     violations.append(
                         f"R6 work-model escapes its package: {source.relative_to(ROOT)} -> {specifier}"
                     )
+                continue
+            if specifier.startswith("@elef/work-model/"):
                 continue
             violations.append(
                 f"R6 work-model imports executable {specifier!r}: {source.relative_to(ROOT)}"
