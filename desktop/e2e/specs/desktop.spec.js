@@ -972,30 +972,11 @@ class DesktopEditorUi {
   async showSourceMode() {
     const sourceMode = await $("#source-mode")
     await sourceMode.waitForDisplayed()
-    if ((await $("#desktop-editor-form").getAttribute("data-editor-mode")) !== "source") {
-      await browser.execute(() => document.querySelector("#source-mode")?.click())
-    }
-    try {
-      await browser.waitUntil(async () => (await $("#desktop-editor-form").getAttribute("data-editor-mode")) === "source", {
-        timeout: 5_000,
-        timeoutMsg: "The source editor did not activate after checking the rendered document link"
-      })
-    } catch (error) {
-      const state = await browser.execute(() => {
-        const form = document.querySelector("#desktop-editor-form")
-        const field = document.querySelector("#desktop-editor-field")
-        const button = document.querySelector("#source-mode")
-        return {
-          mode: form?.dataset.editorMode,
-          editorMode: field?.editorController?.editingMode,
-          sourcePressed: button?.getAttribute("aria-pressed"),
-          sourceAction: button?.dataset.action,
-          activeElement: document.activeElement?.outerHTML?.slice(0, 160),
-          controllerErrors: window.__elefE2EControllerErrors?.slice(-5) || []
-        }
-      })
-      throw new Error(`${error.message}; source mode diagnostic: ${JSON.stringify(state)}`)
-    }
+    if ((await $("#desktop-editor-form").getAttribute("data-editor-mode")) !== "source") await sourceMode.click()
+    await browser.waitUntil(async () => (await $("#desktop-editor-form").getAttribute("data-editor-mode")) === "source", {
+      timeout: 5_000,
+      timeoutMsg: "The source editor did not activate after checking the rendered document link"
+    })
     await this.waitForEditorModeTransition()
   }
 

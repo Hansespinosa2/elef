@@ -327,7 +327,9 @@ export default class extends Controller {
   }
 
   projectionController() {
-    return this.form?.presentationEditorController || this.form?.visualEditorController || null
+    const visualEditor = this.form?.visualEditorController
+    if (this.form?.dataset.visualEditorKindValue === "document") return visualEditor || null
+    return this.form?.presentationEditorController || visualEditor || null
   }
 
   syncVisualSurfaceGeometry() {
