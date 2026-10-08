@@ -361,6 +361,7 @@ export function startFileLibraryApplication(platform) {
             return { total: decks.length, rendered: libraryListRenderer.renderedCount }
           })
         },
+        typingValue: () => currentSource(),
         startTypingDuringSave(text) {
           const editor = editorFor(elements.editorField)
           if (!editor) throw new Error("The measured source editor is not ready.")
