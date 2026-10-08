@@ -155,3 +155,13 @@ Note on P03-05 environments: Chromium Playwright specs need the Rails test serve
 
 ## 9. Re-plan log
 <!-- Append dated entries: defect found, what changed, new hash. Never rewrite earlier sections silently. -->
+- 2026-10-08: P03-07 proof-grep defect. The frozen grep demands zero hits for
+  `slide_source_ranges` in `app/lib`, but `test/models/presentation_test.rb:53`
+  (frozen unmodified by §4) calls `Source::Document.slide_source_ranges`, so the
+  delegating wrapper must keep that literal name. Amended proof: the
+  `Redcarpet|Rouge|ELEF_RENDERER|parse_margin|parse_blocks|protect_math` grep
+  reads zero in `app/lib crates desktop/src-tauri`, and
+  `slide_source_ranges|fence_marker|toggle_fence|display_math_fence|
+  markdown_blocks|split_sections` reads zero EXCEPT the delegating wrapper
+  (`def slide_source_ranges` + editor_map call + UTF-16 conversion, 12 lines),
+  which the reviewer verifies by reading. No behavior or scope change.
