@@ -1388,6 +1388,23 @@ class PresentationsTest < ApplicationSystemTestCase
     refute_selector ".presentation-editor-projection [data-elef-art-root]"
   end
 
+  test "saved presentation Art fallback preserves attached media" do
+    media_bytes = Base64.decode64("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+i9MwAAAAASUVORK5CYII=")
+    media_digest = Digest::SHA256.hexdigest(media_bytes)
+    presentation = Presentation.create!(
+      title: "Art unsupported media",
+      source: ":::art\n- Research\n  ![Mockup](elef-asset:#{media_digest})"
+    )
+    presentation.assets.attach(io: StringIO.new(media_bytes), filename: "mockup.png", content_type: "image/png")
+    presentation.assets.blobs.last.update!(metadata: presentation.assets.blobs.last.metadata.merge("elef_sha256" => media_digest))
+
+    visit print_presentation_path(presentation)
+
+    assert_selector ".presentation-print [data-elef-art-root][data-art-status='fallback-unsupported'][data-art-layout='plain-list']"
+    assert_selector ".presentation-print [data-elef-art-root] img.presentation-media[src='/presentations/#{presentation.id}/assets/#{media_digest}'][alt='Mockup']"
+    assert_selector ".presentation-print [data-elef-art-root] .elef-art-list > li", text: "Research"
+  end
+
   test "keeps the last good presentation projection when preview is unavailable and offers retry" do
     presentation = Presentation.create!(title: "Stable deck", source: "# Stable\n\nLast good slide")
     visit edit_presentation_path(presentation)
