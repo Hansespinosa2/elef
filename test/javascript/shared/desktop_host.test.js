@@ -203,7 +203,8 @@ test("the editor host uses the shared editor markup rather than a second copy", 
 
 test("the file-backed host mounts the shared library view and graph", () => {
   assert.ok(document.querySelector("#library-view-mount"))
-  assert.match(application, /shell = await mountElef\(mount, createLibraryHost\(\), \{/)
+  assert.match(application, /libraryHost = createLibraryHost\(status\)/)
+  assert.match(application, /shell = await mountElef\(mount, libraryHost, \{/)
   assert.match(application, /onLibraryEvent: handleLibraryEvent/)
   assert.doesNotMatch(application, /renderLibraryView|setLibraryViewTab|renderDecks/)
   assert.match(clientLibrary, /show-deck-list/)
