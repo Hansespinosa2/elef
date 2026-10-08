@@ -7,8 +7,6 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
 
   test "rename preserves the all-library view and rejects arbitrary destinations" do
     work = Document.create!(source: "# Before")
-    get root_path
-    assert_select "form[action='#{rename_document_path(work)}'] input[name='library_view'][value='all']"
     patch rename_document_path(work), params: { library_view: "all", document: { title: "Renamed" } }
     assert_redirected_to root_path
     patch rename_document_path(work), params: { library_view: "https://example.invalid/", document: { title: "Again" } }

@@ -584,6 +584,8 @@ AFFECTED_COMMANDS_1 = (
     *QUICK_COMMANDS_1,
     "npm run renderer:build",
     "git diff --exit-code -- vendor/javascript/elef-renderer.bundle.js",
+    "npm run build --prefix packages/client",
+    "git diff --exit-code -- packages/client/dist/",
     "bin/rails tailwindcss:build",
     "git diff --exit-code -- app/assets/builds/tailwind.css",
     "bin/rails db:test:prepare",

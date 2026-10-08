@@ -145,3 +145,4 @@ Human gates touched (constitution §8): none (no signing/device/deployment/soak 
 
 ## 9. Re-plan log
 <!-- Append dated entries: defect found, what changed, new hash. Never rewrite earlier sections silently. -->
+- 2026-10-08: the fixed host-seam surface note in §8 (§6 rows: navigate, extra card actions, extra slots) understated the permanent control plane the desktop switch-over needed. Implemented surface, all permanent: navigation (`navigate`), host→client control (`notify`, `setFilter`), client→host reports (`onLibraryEvent`), content resolution (`resolveWorkUrl`, `resolveLibraryUrl`, `resolvePreviewUrl`, `resolveMediaBaseUrl`, `cardNote`, `operationNotice`, `confirmDelete`, `presentWork`, `extraCardActions`), and adopted HTML slots. No §6 deletion condition changes; the §6 rows still govern the temporary seams.

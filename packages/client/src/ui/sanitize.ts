@@ -2,7 +2,7 @@
 // the SafeHtml insertion boundary. Faithful port of the retired
 // app/javascript lib (parity-proven by sanitize-parity.test.ts); the only
 // deliberate difference is that mediaBaseUrl is an explicit option — the old
-// Rails-form dataset fallback stays with the host-side re-export until the
+// host-form dataset fallback stays with the host-side re-export until the
 // editor (Phase 08) and settings (Phase 05) slices migrate.
 
 const ALLOWED_ELEMENTS = new Set([

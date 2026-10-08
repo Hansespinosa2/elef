@@ -18,7 +18,7 @@ export function parseLibraryRoute(url: string): LibraryRoute | null {
     return null;
   }
   // The client's own tab hrefs are hash routes; hosts with real paths
-  // (Rails) match on the pathname instead.
+  // match on the pathname instead.
   const hash = /^#library\/([a-z]+)\/?$/.exec(parsed.hash);
   if (hash !== null) {
     const viaHash = FILTER_PATHS[`/${hash[1]}`];

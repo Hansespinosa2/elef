@@ -56,13 +56,21 @@ test("library tabs filter by kind and navigate through the host seam", async () 
 test("search box filters cards client-side with a no-results state", async () => {
   const host = typedHost();
   await seed(host);
+  await host.library.createWork({
+    workspaceId: ws("ws-1"),
+    title: "Café Deck",
+    kind: "presentation",
+    text: "# Café Deck\n",
+  });
   const { element, shell } = await mountInto(host);
   try {
     await setSearchInput(element.querySelector("#library-search"), "BETA");
     assert.deepEqual(titles(element), ["Beta deck"]);
+    await setSearchInput(element.querySelector("#library-search"), "CAFÉ");
+    assert.deepEqual(titles(element), ["Café Deck"], "search ignores case and canonical Unicode differences");
     assert.match(
       element.querySelector("#library-count")?.textContent ?? "",
-      /2 works · 1 shown/,
+      /3 works · 1 shown/,
       "count names the filter total and the shown subset",
     );
     await setSearchInput(element.querySelector("#library-search"), "zzz-no-match");

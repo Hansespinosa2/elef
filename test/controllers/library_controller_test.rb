@@ -1,137 +1,46 @@
 require "test_helper"
 
 class LibraryControllerTest < ActionDispatch::IntegrationTest
-  test "root renders the combined library at canonical paths" do
-    document = Document.create!(title: "Root notes", source: "# Root notes")
+  test "root mounts the client shell with presentation actions" do
+    Document.create!(title: "Root notes", source: "# Root notes")
+    Presentation.create!(title: "Root deck", source: "# Root deck")
 
     get root_path
 
     assert_response :success
-    config = library_view_config
-    assert_equal "Library", config.fetch("title")
-    assert_equal "all", config.fetch("filter")
-    assert_select "template[data-library-view-slot='cards'] #document_#{document.id}"
-    assert_select "template[data-library-view-slot='cards'] #presentation_#{presentations(:one).id}"
-    assert_select "template[data-library-view-slot='graph'] .document-graph-panel", count: 0
-    assert_select "template[data-library-view-slot='lineage'] .lineage-panel", count: 0
+    assert_shell_boot(path: root_path)
+    assert_select "template[data-client-slot='actions'] input[value='Load sample presentations']", 1
+    assert_select "template[data-client-slot='graph'] .document-graph-panel", count: 0
+    assert_select "article.library-card", count: 0
     assert_select "a.app-nav-link[href='#{root_path}']", text: "Library"
-    assert_equal({ "all" => root_path, "documents" => documents_path, "presentations" => presentations_path }, config.fetch("routes"))
-    assert_select "a[href*='type=']", count: 0
   end
 
-  test "library search is available on every collection view" do
-    [root_path, documents_path, presentations_path].each do |path|
-      get path
-
-      assert_response :success
-      assert_equal true, library_view_config.fetch("searchController")
-      assert_select "#library-view-mount[data-library-view-config]", 1
-      assert_select "template[data-library-view-slot='cards'] section.library-list", 1
-    end
-  end
-
-  test "canonical library tabs link to all, documents, and presentations collection paths" do
-    [[root_path, "all"], [documents_path, "documents"], [presentations_path, "presentations"]].each do |path, filter|
-      get path
-      assert_response :success
-      config = library_view_config
-      assert_equal filter, config.fetch("filter")
-      assert_equal({ "all" => root_path, "documents" => documents_path, "presentations" => presentations_path }, config.fetch("routes"))
-    end
-  end
-
-  test "every library view renders work as a preview card" do
-    document = Document.create!(title: "Card document", source: "# Card document\n\nFirst page body.")
-    presentation = Presentation.create!(title: "Card deck", source: "# Card deck\n\n---\n\n## Later slide")
-
-    [root_path, documents_path, presentations_path].each do |path|
-      get path
-
-      assert_response :success
-      assert_select "section.library-list article.library-card", minimum: 1
-      assert_select ".library-card .library-preview", minimum: 1
-      assert_select ".library-card .library-card-controls", minimum: 1
-    end
-
-    [root_path, documents_path].each do |path|
-      get path
-
-      assert_select "article#document_#{document.id}" do
-        assert_select ".library-preview .document-reader[data-controller~='document-pages'] .document-surface", 1
-        assert_select ".library-preview .document-surface h1", text: "Card document"
-        assert_select ".library-preview .slide", 0
-      end
-    end
-
-    [root_path, presentations_path].each do |path|
-      get path
-
-      assert_select "article#presentation_#{presentation.id}" do
-        assert_select ".library-preview .slide", 1
-        assert_select ".library-preview .slide h1", "Card deck"
-        assert_select ".library-preview .slide h2", count: 0
-        assert_select ".library-preview .document-page", 0
-      end
-    end
-  end
-
-  test "document cards open Edit from the preview, open Preview, and offer only Delete in the menu" do
-    document = Document.create!(title: "Quiet document", source: "# Quiet document")
+  test "documents collection boots the shell with document actions and the graph slot" do
+    Document.create!(title: "Shell document", source: "# Shell document")
 
     get documents_path
 
-    assert_select "article#document_#{document.id}" do
-      assert_select "a.library-card-open[href=?][aria-label=?]", edit_document_path(document), "Edit Quiet document", 1
-      assert_select ".library-card-preview[aria-hidden='true'][inert]", 1
-      assert_select "a.library-card-preview-button[href=?]", document_path(document)
-      assert_select "summary.library-card-menu-trigger[aria-label=?]", "More actions for Quiet document"
-      assert_select "form[action=?]", rename_document_path(document), 1
-      assert_select "form[action=?][method=post] input[name=_method][value=patch]", rename_document_path(document), 1
-      assert_select "form[action=?] input[name=authenticity_token]", rename_document_path(document), 1
-      assert_select "form[action=?] input[name=library_view]", rename_document_path(document), 1
-      assert_select "form[action=?]", document_path(document), 1
-      assert_select "form[action=?][data-turbo-confirm=?] input[name=_method][value=delete]", document_path(document), "Delete Quiet document?", 1
-      assert_select "form[action=?]", publish_presentation_path(document), 0
-      assert_select "form[action=?]", fork_presentation_path(document), 0
-      assert_select "h2.library-card-title a[href=?]", edit_document_path(document)
-    end
+    assert_response :success
+    assert_shell_boot(path: documents_path)
+    assert_select "template[data-client-slot='actions'] input[value='Load sample documents']", 1
+    assert_select "template[data-client-slot='graph'] .document-graph-panel", 1
+    assert_select "article.library-card", count: 0
   end
 
-  test "presentation cards open Edit from the preview and offer Delete, Fork, and Present" do
-    presentation = Presentation.create!(title: "Loud deck", source: "# Loud deck")
+  test "presentations collection boots the shell with lineage slot and card notes" do
+    parent = Presentation.create!(title: "Shell parent", source: "# Shell parent")
+    fork = parent.fork_as("continuation")
+    fork.save!
 
     get presentations_path
 
-    assert_select "article#presentation_#{presentation.id}" do
-      assert_select "a.library-card-open[href=?][aria-label=?]", edit_presentation_path(presentation), "Edit Loud deck", 1
-      assert_select ".library-card-preview[aria-hidden='true'][inert]", 1
-      assert_select "a.library-card-preview-button[href=?]", presentation_path(presentation)
-      assert_select "summary.library-card-menu-trigger[aria-label=?]", "More actions for Loud deck"
-      assert_select "form[action=?]", rename_presentation_path(presentation), 1
-      assert_select "form[action=?] input[name=_method][value=patch]", rename_presentation_path(presentation), 1
-      assert_select "form[action=?] input[name=authenticity_token]", rename_presentation_path(presentation), 1
-      assert_select "form[action=?]", presentation_path(presentation), 1
-      assert_select "form[action=?]", publish_presentation_path(presentation), 1
-      assert_select "form[action=?]", fork_presentation_path(presentation), 2
-      assert_select "form[action=?] input[name=fork_type][value=continuation]", fork_presentation_path(presentation), 1
-      assert_select "form[action=?] input[name=fork_type][value=inspiration]", fork_presentation_path(presentation), 1
-      assert_select "form[action=?][data-turbo=false]", publish_presentation_path(presentation), 1
-      assert_select "form[action=?][data-turbo-confirm=?] input[name=_method][value=delete]", presentation_path(presentation), "Delete Loud deck?", 1
-      assert_select "h2.library-card-title a[href=?]", edit_presentation_path(presentation)
-    end
-  end
-
-  test "card previews are scaled from their design size by the presentation canvas controller" do
-    Document.create!(title: "Scaled document", source: "# Scaled document")
-    Presentation.create!(title: "Scaled deck", source: "# Scaled deck")
-
-    get root_path
-
-    assert_select ".library-preview[data-controller='presentation-canvas']"
-    assert_select ".library-preview-stage > .slide", minimum: 1
-    assert_select ".library-preview[data-presentation-canvas-design-width-value='794'][data-presentation-canvas-design-height-value='1123']",
-      minimum: 1
-    assert_select ".library-preview-page[data-presentation-canvas-target='canvas']", minimum: 1
+    assert_response :success
+    assert_shell_boot(path: presentations_path)
+    assert_select "template[data-client-slot='actions'] input[value='Load sample presentations']", 1
+    assert_select "template[data-client-slot='lineage'] .lineage-panel", 1
+    notes = JSON.parse(css_select("#client-shell-mount").first["data-client-shell-card-notes-value"])
+    assert_equal "Forked from Shell parent · continuation", notes.fetch(fork.id.to_s)
+    assert_select "article.library-card", count: 0
   end
 
   test "search endpoint returns JSON results with type filtering and fallback" do
@@ -164,7 +73,11 @@ class LibraryControllerTest < ActionDispatch::IntegrationTest
 
   private
 
-  def library_view_config
-    JSON.parse(css_select("#library-view-mount").first["data-library-view-config"])
+  def assert_shell_boot(path:)
+    mount = css_select("#client-shell-mount")
+    assert_equal 1, mount.length
+    assert_equal "client-shell", mount.first["data-controller"]
+    assert_equal path, mount.first["data-client-shell-initial-url-value"]
+    assert_instance_of Hash, JSON.parse(mount.first["data-client-shell-card-notes-value"])
   end
 end

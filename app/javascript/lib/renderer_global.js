@@ -1,6 +1,5 @@
 import { collectMediaReferences, renderMarkdownBlock as renderMarkdownBlockCore, renderPreviewCore } from "@elef/renderer"
 import { editorChrome } from "./preview_chrome.js"
-import { renderLibraryCard, renderLibraryCardControls } from "./library_card.js"
 
 // The shipped bundle composes bare projection with editor chrome so every
 // consumer (MiniRacer, workers, importmap) keeps byte-identical output.
@@ -32,8 +31,6 @@ globalThis.ElefRenderer = Object.freeze({
   renderPreview,
   buildEditorMap,
   buildEditorStructure,
-  renderLibraryCard,
-  renderLibraryCardControls,
   buildDocumentGraph,
   extractDocumentLinkTokens,
   extractFirstMarkdownHeading,
