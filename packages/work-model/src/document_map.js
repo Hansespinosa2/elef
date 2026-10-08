@@ -111,22 +111,107 @@ export function withAppearanceValue(source, key, value) {
   if (typeof source !== "string" || !vocabulary || (value !== "" && !vocabulary.has(value))) {
     throw new TypeError("Unsupported appearance value")
   }
+  return withFrontMatterValue(source, key, value)
+}
+
+export function withFrontMatterValue(source, key, value) {
+  if (typeof source !== "string" || typeof key !== "string" || !key) {
+    throw new TypeError("Front matter updates need source text and a key.")
+  }
+  const remove = value === null || value === undefined || value === ""
   const front = initialFrontMatter(source)
   const ending = line => source.slice(line.start + line.text.length, line.end)
   const eol = front?.lines.map(ending).find(Boolean) || (source.includes("\r\n") ? "\r\n" : "\n")
-  if (!front) return value === "" ? source : `---${eol}${key}: ${value}${eol}---${eol}${source}`
-  const matching = front.lines.slice(1, front.closingLine).find(line => new RegExp(`^\\s*${key}\\s*:`).test(line.text))
+  if (!front) return remove ? source : `---${eol}${key}: ${value}${eol}---${eol}${source}`
+  const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  const matching = front.lines.slice(1, front.closingLine).find(line => new RegExp(`^\\s*${escapedKey}\\s*:`).test(line.text))
   if (matching) {
-    const replacement = value === "" ? "" : `${key}: ${value}${ending(matching)}`
+    const replacement = remove ? "" : `${key}: ${value}${ending(matching)}`
     const updated = source.slice(0, matching.start) + replacement + source.slice(matching.end)
-    if (value === "" && front.closingLine === 2) {
+    if (remove && front.closingLine === 2) {
       return source.slice(front.bodyStart).replace(/^\r?\n/, "")
     }
     return updated
   }
-  if (value === "") return source
+  if (remove) return source
   const closing = front.lines[front.closingLine]
   return source.slice(0, closing.start) + `${key}: ${value}${eol}` + source.slice(closing.start)
+}
+
+export function normalizeThemeValue(value) {
+  return normalizeStyleValue(value, THEMES, "match")
+}
+
+export function normalizeTypographyValue(value) {
+  return normalizeStyleValue(value, TYPOGRAPHIES, "book")
+}
+
+function normalizeStyleValue(value, vocabulary, fallback) {
+  const withoutComment = String(value ?? "").trim().replace(/\s+#.*$/, "").trim()
+  const unquoted = withoutComment.match(/^(['"])(.*)\1$/)?.[2] ?? withoutComment
+  return vocabulary.has(unquoted) ? unquoted : fallback
+}
+
+export function readStyleOverrides(source) {
+  const frontMatter = initialFrontMatter(source)
+  const read = (key, normalizer) => {
+    if (!frontMatter) return null
+    for (const line of frontMatter.lines.slice(1, frontMatter.closingLine)) {
+      const match = new RegExp(`^${key}\\s*:\\s*(.*)$`).exec(line.text)
+      if (!match) continue
+      const normalized = normalizer(match[1])
+      const cleaned = match[1].trim().replace(/\s+#.*$/, "").trim().replace(/^(['"])(.*)\1$/, "$2")
+      return normalized === cleaned ? normalized : null
+    }
+    return null
+  }
+  return {
+    theme: read("theme", normalizeThemeValue),
+    typography: read("typography", normalizeTypographyValue)
+  }
+}
+
+export function replaceFirstHeading(source, title) {
+  if (typeof source !== "string") throw new TypeError("The selected file did not contain readable text.")
+  const normalizedTitle = String(title ?? "").replace(/[\r\n]/g, " ").trim().replace(/\s+/g, " ")
+  const front = initialFrontMatter(source)
+  const bodyStart = front?.bodyStart ?? 0
+  let fence = null
+  for (const line of sourceLines(source)) {
+    if (line.end <= bodyStart) continue
+    const incoming = fenceMarker(line.text)
+    if (fence) {
+      if (incoming) fence = toggleFence(fence, incoming)
+      continue
+    }
+    if (incoming) {
+      fence = incoming
+      continue
+    }
+    const heading = /^([ \t]{0,3}#)(?:[ \t]+|$)/.exec(line.text)
+    if (!heading) continue
+    const ending = source.slice(line.start + line.text.length, line.end)
+    return source.slice(0, line.start) + `${heading[1]} ${normalizedTitle}${ending}` + source.slice(line.end)
+  }
+  const body = source.slice(bodyStart)
+  const prefix = source.slice(0, bodyStart)
+  const eol = source.includes("\r\n") ? "\r\n" : source.includes("\r") ? "\r" : "\n"
+  const separator = body.trim() ? eol + eol : ""
+  return `${prefix}# ${normalizedTitle}${separator}${body}`
+}
+
+export function sourceAnchorLines(source) {
+  if (typeof source !== "string") throw new TypeError("The selected file did not contain readable text.")
+  const front = initialFrontMatter(source)
+  const bodyLine = front ? source.slice(0, front.bodyStart).split("\n").length : 1
+  const rawLines = source.match(/[^\n]*\n?/g).filter(part => part !== "")
+  const anchors = []
+  rawLines.forEach((raw, index) => {
+    const text = raw.replace(/[\r\n]+$/, "")
+    if (index + 1 < bodyLine || !text.trim() || /^\s*:::/.test(raw)) return
+    anchors.push(index + 1)
+  })
+  return anchors.length ? anchors : [bodyLine]
 }
 
 function marginSettings(source) {

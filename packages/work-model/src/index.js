@@ -2,8 +2,14 @@ export {
   buildEditorMap,
   buildEditorStructure,
   initialFrontMatter,
+  normalizeThemeValue,
+  normalizeTypographyValue,
   readStyle,
-  withAppearanceValue
+  readStyleOverrides,
+  replaceFirstHeading,
+  sourceAnchorLines,
+  withAppearanceValue,
+  withFrontMatterValue
 } from "./document_map.js"
 export {
   buildDocumentGraph,
