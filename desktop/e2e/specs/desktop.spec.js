@@ -773,7 +773,7 @@ class DesktopEditorUi {
 
     typeNativeText("$")
     typeNativeText("$")
-    sendNativeKey("Enter")
+    sendNativeKey("Enter", { activate: false })
   }
 
   async assertDisplayMathCaret(expectedSource, expectedCaret, mode) {
