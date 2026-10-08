@@ -34,8 +34,23 @@ class HostApiControllerTest < ActionDispatch::IntegrationTest
     assert_equal "Renamed doc", response.parsed_body["title"]
 
     delete "/api/host/works/#{created["id"]}", as: :json
-    assert_response :no_content
+    assert_response :ok
+    assert_equal({}, response.parsed_body["card_notes"])
     assert_nil Document.find_by(id: created["id"])
+  end
+
+  test "destroy answers recomputed card notes for orphaned forks" do
+    parent = Presentation.create!(title: "Note parent", source: "# Parent\n")
+    child = parent.fork_as("inspiration")
+    child.save!
+    assert_equal "Forked from Note parent · inspiration", child.reload.library_card_note
+
+    delete "/api/host/works/#{parent.id}", as: :json
+    assert_response :ok
+    assert_equal(
+      { child.id.to_s => "Parent no longer available · inspiration" },
+      response.parsed_body["card_notes"]
+    )
   end
 
   test "stale baselines conflict with the current snapshot" do

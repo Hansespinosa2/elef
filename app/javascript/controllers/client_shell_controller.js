@@ -79,6 +79,15 @@ export default class extends Controller {
         ]
       },
       operationNotice: (operation, work) => `${kindLabel(work)} ${operation}.`,
+      onLibraryEvent: event => {
+        // Deleting a parent orphans its forks: merge the recomputed card
+        // notes the API answered so the surviving cards read fresh. The
+        // notice re-render that follows picks the merged notes up.
+        const notes = event.type === "deleted" ? event.detail?.card_notes : null
+        if (notes !== null && typeof notes === "object") {
+          this.cardNotesValue = { ...this.cardNotesValue, ...notes }
+        }
+      },
     })
   }
 

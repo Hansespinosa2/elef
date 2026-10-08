@@ -11,7 +11,7 @@ class PresentationsController < ApplicationController
     @works = Presentation.includes(:presentation_detail).recent_first
     @lineage_presentations = @works.select(&:presentation?)
     @card_notes = @works.filter_map do |work|
-      note = card_note(work)
+      note = work.library_card_note
       [work.id.to_s, note] if note
     end.to_h
     render "library/shell"
@@ -243,11 +243,4 @@ class PresentationsController < ApplicationController
     params.require(:presentation).permit(:title, :source, :theme, :typography)
   end
 
-  def card_note(work)
-    if work.parent
-      "Forked from #{work.parent.title} · #{work.fork_type}"
-    elsif work.fork_parent_title.present?
-      "Parent no longer available · #{work.fork_type}"
-    end
-  end
 end

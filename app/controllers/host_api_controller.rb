@@ -58,8 +58,13 @@ class HostApiController < ApplicationController
   end
 
   def destroy
+    orphan_ids = @work.presentation? ? PresentationLineageEdge.where(parent_work_id: @work.id).pluck(:child_work_id) : []
     @work.destroy!
-    head :no_content
+    notes = Presentation.where(id: orphan_ids).filter_map do |orphan|
+      note = orphan.library_card_note
+      [orphan.id.to_s, note] if note
+    end.to_h
+    render json: { card_notes: notes }
   end
 
   def media_index

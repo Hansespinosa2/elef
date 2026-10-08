@@ -33,6 +33,11 @@ export interface ElefMountOptions {
   readonly onLibraryEvent?: (event: {
     readonly type: LibraryOperation;
     readonly work: WorkSummary;
+    // Opaque host-defined refresh info. The deleted event carries whatever
+    // the host adapter answered beyond the void contract (one adapter
+    // answers recomputed card notes for orphaned forks); hosts ignore
+    // shapes they do not recognize.
+    readonly detail?: unknown;
   }) => void;
 }
 

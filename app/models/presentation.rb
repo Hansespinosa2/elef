@@ -138,6 +138,16 @@ class Presentation < Work
     lineage_edge&.parent_title_snapshot || lineage_edge&.parent_work&.title
   end
 
+  # Card note for library listings, shared by the shell page and the host
+  # API delete response so orphaned forks read identically everywhere.
+  def library_card_note
+    if parent
+      "Forked from #{parent.title} · #{fork_type}"
+    elsif fork_parent_title.present?
+      "Parent no longer available · #{fork_type}"
+    end
+  end
+
   def forked?
     parent_id.present? || @pending_lineage_parent.present?
   end

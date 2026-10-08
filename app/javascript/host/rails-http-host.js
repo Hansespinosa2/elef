@@ -149,7 +149,10 @@ export async function createRailsHost({ baseUrl, fetchImpl = fetch, csrfToken: p
       return toSummary(payload);
     },
     async deleteWork(workId) {
-      await request(`/api/host/works/${encodeURIComponent(workId)}`, { method: "DELETE" });
+      // The contract returns void; Rails additionally answers recomputed
+      // card notes for orphaned forks, which the client forwards opaquely
+      // to the host through the deleted event detail.
+      return request(`/api/host/works/${encodeURIComponent(workId)}`, { method: "DELETE" });
     },
   };
 
