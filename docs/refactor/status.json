@@ -3,7 +3,7 @@
   "campaign_branch": "feat/refactor-desktop-and-web",
   "campaign_base_sha": "88f61a7a8ffd7c276bafcf06eee09c36a8adf134",
   "current_phase": 2,
-  "phase_state": "CHECK",
+  "phase_state": "ACT",
   "phase_base_sha": "34d3ae80cefc58b3cf88b8eec1bad927f6666b4f",
   "head_sha": "899422f88498dd8034d7f00f31a5592cf5ecd16b",
   "review_round": 2,
@@ -172,5 +172,5 @@
   },
   "pending_human_gates": [],
   "blocker": null,
-  "next_action": "DO: fix P02-07 clean-editor suspicious reload + P02-08 5-minute snapshot cadence; re-verify, re-gate, review round 2."
+  "next_action": "ACT on round-2 review PASS (zero findings), then PASS."
 }
