@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "candidate_sha": "3d1a1fb5ff97f85979f31b2c17f6a1287ebaf942",
+  "candidate_sha": "699f2be323f125dc77e165b7918714630f967b23",
   "pull_request": {
     "number": 136,
     "url": "https://github.com/Hansespinosa2/elef/pull/136",
@@ -9,98 +9,93 @@
     "head_branch": "feat/refactor-desktop-and-web"
   },
   "run": {
-    "id": 37692902433,
-    "url": "https://github.com/Hansespinosa2/elef/actions/runs/37692902433",
+    "id": 37705823443,
+    "url": "https://github.com/Hansespinosa2/elef/actions/runs/37705823443",
     "event": "pull_request",
-    "attempt": 2,
+    "attempt": 1,
     "conclusion": "success",
-    "tested_merge_sha": "76debe1d56c04ee8c362d451c6fce96d1574fecf",
+    "tested_merge_sha": "9c3754086edfc672a05ef0c78c7c19e69f3e6949",
     "tested_merge_parents": [
       "73ba6afed637fbe4da261d58efcca0ffe2e23ae8",
-      "3d1a1fb5ff97f85979f31b2c17f6a1287ebaf942"
+      "699f2be323f125dc77e165b7918714630f967b23"
     ],
     "attempt_history": [
       {
         "attempt": 1,
-        "conclusion": "cancelled",
-        "note": "desktop job silently killed by the runner mid-e2e (orphan reap, no error, no test failure); all other jobs green."
-      },
-      {
-        "attempt": 2,
         "conclusion": "success",
-        "note": "desktop job rerun on the same commit: green including benchmark."
+        "note": "All required jobs green on the first attempt."
       }
     ],
-    "note": "Candidate differs from c9bdaeb only by steps 12-13 (desktop/e2e/specs/desktop.spec.js, test-only); production tree identical. Prior runs: 37679462923 on c9bdaeb (macOS trusted-keys flakes x3), 37690357888 on f9fbd46 (macOS single-char keydown-without-text drop + Linux benchmark close-timeout flake; Linux rerun green)."
+    "note": "Candidate holds steps 1-14 (production) plus the v1 evidence file. Prior runs: 37692902433 on 3d1a1fb (green on attempt 2 after silent runner cancellation of desktop), 37690357888 on f9fbd46 (macOS trusted-keys drop + Linux benchmark close-timeout flake; Linux rerun green), 37679462923 on c9bdaeb (macOS trusted-keys flakes x3)."
   },
   "jobs": [
     {
       "name": "desktop-fast",
-      "id": 113044885418,
+      "id": 113079818785,
       "conclusion": "success"
     },
     {
       "name": "test",
-      "id": 113044884306,
+      "id": 113079818753,
       "conclusion": "success"
     },
     {
       "name": "system-test",
-      "id": 113044844249,
+      "id": 113079818529,
       "conclusion": "success"
     },
     {
       "name": "affected",
-      "id": 113044878178,
+      "id": 113079818918,
       "conclusion": "success",
-      "note": "bin/check affected: PASS (53.2s warm, ceiling 420s)."
+      "note": "bin/check affected: PASS (46.1s warm, ceiling 420s)."
     },
     {
       "name": "sqlite-test",
-      "id": 113044893809,
+      "id": 113079818974,
       "conclusion": "success"
     },
     {
       "name": "desktop",
-      "id": 113044841873,
+      "id": 113079818719,
       "conclusion": "success",
-      "tested_merge_sha": "76debe1d56c04ee8c362d451c6fce96d1574fecf",
+      "tested_merge_sha": "9c3754086edfc672a05ef0c78c7c19e69f3e6949",
       "shared_scenarios_step": "success",
-      "note": "Rerun job after attempt-1 runner cancellation. e2e: desktop.spec 35 passing, contract-conformance 1 passing, quiet-save 11 passing. Release benchmark 20/20 runs, inputPreservedRuns 20."
+      "note": "e2e: desktop.spec 35 passing, contract-conformance 1 passing, quiet-save 11 passing. Release benchmark 20/20 runs, inputPreservedRuns 20, close latencies 151-552ms (30s margin unused this run)."
     },
     {
       "name": "desktop-macos",
-      "id": 113044902677,
+      "id": 113079818938,
       "conclusion": "success",
-      "tested_merge_sha": "76debe1d56c04ee8c362d451c6fce96d1574fecf",
+      "tested_merge_sha": "9c3754086edfc672a05ef0c78c7c19e69f3e6949",
       "shared_scenarios_step": "success",
-      "note": "e2e: desktop.spec 35 passing, contract-conformance 1 passing, quiet-save 11 passing. Trusted-keys test passed clean (no E2E-RETRY taken); retype fallback logic proven against all three observed drop shapes via span probe, e2e-exercised on the happy path only."
+      "note": "e2e: desktop.spec 35 passing, contract-conformance 1 passing, quiet-save 11 passing. E2E-RETRY fired once (3 dropped chars at offset 224, retyped natively) and the suite went green: the retype fallback is now e2e-proven."
     },
     {
       "name": "renderer-macos",
-      "id": 113044886471,
+      "id": 113079818828,
       "conclusion": "success"
     },
     {
       "name": "production-smoke",
-      "id": 113044903579,
+      "id": 113079818748,
       "conclusion": "success"
     },
     {
       "name": "development-smoke",
-      "id": 113044896807,
+      "id": 113079818653,
       "conclusion": "success"
     },
     {
       "name": "record-ci-attestation",
-      "id": 113050703914,
+      "id": 113084475094,
       "conclusion": "success"
     }
   ],
   "rails_conformance": {
     "conclusion": "success",
     "job": "system-test",
-    "job_id": 113044844249,
+    "job_id": 113079818529,
     "command": "node tests/host-conformance/run-node.js rails",
     "result": "conformance rails: 11 passed, 1 skipped, 0 failed (suite v12 cases)"
   },
@@ -109,13 +104,13 @@
     "jobs": [
       {
         "name": "desktop",
-        "job_id": 113044841873,
+        "job_id": 113079818719,
         "spec": "specs/contract-conformance.spec.js",
         "result": "host contract conformance (desktop invoke): 1 passing"
       },
       {
         "name": "desktop-macos",
-        "job_id": 113044902677,
+        "job_id": 113079818938,
         "spec": "specs/contract-conformance.spec.js",
         "result": "host contract conformance (desktop invoke): 1 passing"
       }
@@ -123,24 +118,23 @@
   },
   "artifacts": [
     {
-      "name": "ci-attestation-pr136-run37692902433-attempt2",
-      "id": 11515522566,
-      "sha256": "658bd503fae62ac875aabeb98082fb6b6cf957bd49be9a007f8b340d9c8a6dcf",
+      "name": "ci-attestation-pr136-run37705823443-attempt1",
+      "id": 11520103374,
+      "sha256": "d75ec69a4e1df7cad6cb6368fae7dadafa558129984c8e449bebfb8d80787710",
       "size_bytes": 198,
-      "note": "Attests run_attempt 2, tested_sha 76debe1d56c04ee8c362d451c6fce96d1574fecf (matches tested_merge_sha)."
+      "note": "Attests run_attempt 1, tested_sha 9c3754086edfc672a05ef0c78c7c19e69f3e6949 (matches tested_merge_sha)."
     },
     {
       "name": "native-performance-linux",
-      "id": 11515851958,
-      "sha256": "3767f854fdbc8dc3c7e93d394440fd46a06213741c4d61afc4803837c9c7cb37",
-      "size_bytes": 65431,
-      "note": "20/20 runs; p95 coldStart 892ms, open100Slides 1051ms, warmLibrary 397ms; misses 1 in runner-report-only budgetMode (job green)."
+      "id": 11520331324,
+      "sha256": "721ff45046f084c8b025a1339d5ac50ef9fada9e8f9343f43003249d90f75730",
+      "size_bytes": 65594
     },
     {
       "name": "native-performance-darwin",
-      "id": 11515475161,
-      "sha256": "0d8d32547dc1c3ad033dda929401cbddc91fa505e388bae4619f2730bae69dc7",
-      "size_bytes": 70167
+      "id": 11520082613,
+      "sha256": "13deb2a5233c94d87d4a0435ca3dcf80bb3d3f6f2329f2e8b0fd1feb0fc7e939",
+      "size_bytes": 66673
     }
   ]
 }

@@ -3,10 +3,10 @@
   "campaign_branch": "feat/refactor-desktop-and-web",
   "campaign_base_sha": "88f61a7a8ffd7c276bafcf06eee09c36a8adf134",
   "current_phase": 2,
-  "phase_state": "CHECK",
+  "phase_state": "DO",
   "phase_base_sha": "34d3ae80cefc58b3cf88b8eec1bad927f6666b4f",
-  "head_sha": "699f2be323f125dc77e165b7918714630f967b23",
-  "review_round": 1,
+  "head_sha": "4d5dbbcd54f96da34d2f0341aa88880bf3add210",
+  "review_round": 0,
   "phase_contract_sha256": "93fa24de5b442039d1415f2e7c35b25c542779d6650750ad95907a02efb6d367",
   "frozen_plan_sha256": "b25e7df8a87b7abe44c455db6b7e988772cfcbe76b3df8d5e03df1df98e5a23e",
   "last_completed_phase": 1,
@@ -110,30 +110,6 @@
       "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "result_path": "docs/refactor/execution/phase-1-gate-attempts/8e93e12cad5845b3bf6d76e5d29eb264/result.json",
       "selected_gate_path": "docs/refactor/execution/phase-1-gate.json"
-    },
-    {
-      "attempt_id": "32f6e681fa3148ceaeeb7ddcf03dd6e5",
-      "phase": 2,
-      "head": "699f2be323f125dc77e165b7918714630f967b23",
-      "root": "/root/elef",
-      "checkout": "/root/elef/tmp/gates/phase-2-32f6e681fa3148ceaeeb7ddcf03dd6e5",
-      "state": "completed",
-      "started_ns": 1791419125163531688,
-      "status_sha256": "cdc1fc55cdebcf350ca578e346a0bfc82346c7cc82f07a8b578e7e2dd05ae155",
-      "frozen_plan_sha256": "b25e7df8a87b7abe44c455db6b7e988772cfcbe76b3df8d5e03df1df98e5a23e",
-      "phase_contract_sha256": "93fa24de5b442039d1415f2e7c35b25c542779d6650750ad95907a02efb6d367",
-      "runner_pid": 3603,
-      "runner_start": "6136693",
-      "child_pid": 3609,
-      "child_start": "6136720",
-      "command": "bin/check phase 2 --json",
-      "exit": 0,
-      "duration_s": 11.431,
-      "tier": "phase",
-      "stdout_sha256": "c67fc731914a8b73759c4d1695e0fbaa8e8e39fc3385bedb52a356e808b59de6",
-      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "result_path": "docs/refactor/execution/phase-2-gate-attempts/32f6e681fa3148ceaeeb7ddcf03dd6e5/result.json",
-      "selected_gate_path": "docs/refactor/execution/phase-2-gate.json"
     }
   ],
   "execution_environment": {
@@ -148,5 +124,5 @@
   },
   "pending_human_gates": [],
   "blocker": null,
-  "next_action": "Independent review round 1 for Phase 02 candidate 699f2be (gate attempt 32f6e681 PASS)."
+  "next_action": "DO step 1: local-store merge + suspicious-change mechanics."
 }
