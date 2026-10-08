@@ -56,7 +56,7 @@ class VimEditorTest < ApplicationSystemTestCase
   test "Vim mode transitions and edits synchronize the Rails source" do
     document = Document.create!(title: "Vim notes", source: "# First\n# Second\n# Third")
     visit settings_path
-    find("[data-vim-settings-target='vimToggle']").check
+    find("#vim-enabled").check
     visit edit_document_path(document)
 
     assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal"
@@ -123,7 +123,7 @@ class VimEditorTest < ApplicationSystemTestCase
   test "Vim visual mode highlights horizontal selections with the Aradia palette" do
     document = Document.create!(title: "Visual selection", source: "abcdef\nsecond line")
     visit settings_path
-    find("[data-vim-settings-target='vimToggle']").check
+    find("#vim-enabled").check
     visit edit_document_path(document)
 
     editor = find(".cm-content")
@@ -171,13 +171,13 @@ class VimEditorTest < ApplicationSystemTestCase
     document = Document.create!(title: "Vim settings", source: "# Settings")
     visit settings_path
 
-    find("[data-vim-settings-target='vimToggle']").check
+    find("#vim-enabled").check
     visit edit_document_path(document)
 
     assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal"
 
     visit settings_path
-    assert_selector "[data-vim-settings-target='vimToggle']:checked"
+    assert_selector "#vim-enabled:checked"
     assert_no_selector "[data-editor-target='mapping']"
   end
 
@@ -216,7 +216,7 @@ class VimEditorTest < ApplicationSystemTestCase
     page.execute_script("localStorage.clear()")
     page.refresh
 
-    escape_key = find("[data-vim-settings-target='escapeKey']")
+    escape_key = find("#vim-escape-key")
     escape_key.click
     escape_key.send_keys([:shift, :space])
     assert_equal "Shift+Space", escape_key.value
@@ -267,9 +267,9 @@ class VimEditorTest < ApplicationSystemTestCase
     assert_equal source_before_normal_escape, find_field("Markdown source").value
 
     visit settings_path
-    assert_equal "relative", find("[data-vim-settings-target='lineNumbers']").value
-    assert_selector "[data-vim-settings-target='modeAwareCursor']:checked"
-    assert_equal "Shift+Space", find("[data-vim-settings-target='escapeKey']").value
+    assert_equal "relative", find("#vim-line-numbers").value
+    assert_selector "#vim-mode-aware-cursor:checked"
+    assert_equal "Shift+Space", find("#vim-escape-key").value
   ensure
     page.execute_script("localStorage.clear()")
   end
@@ -390,7 +390,7 @@ class VimEditorTest < ApplicationSystemTestCase
   test "Vim edits update a presentation preview and autosave" do
     presentation = Presentation.create!(title: "Vim deck", source: "# Original")
     visit settings_path
-    find("[data-vim-settings-target='vimToggle']").check
+    find("#vim-enabled").check
 
     visit edit_presentation_path(presentation)
 
@@ -409,8 +409,8 @@ class VimEditorTest < ApplicationSystemTestCase
   test "turning Vim off restores ordinary editing" do
     document = Document.create!(title: "Standard editing", source: "# Standard")
     visit settings_path
-    find("[data-vim-settings-target='vimToggle']").check
-    find("[data-vim-settings-target='vimToggle']").uncheck
+    find("#vim-enabled").check
+    find("#vim-enabled").uncheck
 
     visit edit_document_path(document)
     assert_selector "[data-editor-target='mode'][data-mode='standard']", text: "Standard"
@@ -426,7 +426,7 @@ class VimEditorTest < ApplicationSystemTestCase
   test "Vim cursor is visible on empty lines in normal and visual mode" do
     document = Document.create!(title: "Empty line cursor", source: "# First\n\n# Third\n")
     visit settings_path
-    find("[data-vim-settings-target='vimToggle']").check
+    find("#vim-enabled").check
 
     visit edit_document_path(document, editor_mode: "source")
 
@@ -506,7 +506,7 @@ class VimEditorTest < ApplicationSystemTestCase
   test "Vim selection highlight is visible on active lines for visual mode and mouse drag" do
     document = Document.create!(title: "Visual selection visibility", source: "First line of text\nSecond line of text")
     visit settings_path
-    find("[data-vim-settings-target='vimToggle']").check
+    find("#vim-enabled").check
 
     visit edit_document_path(document, editor_mode: "source")
 

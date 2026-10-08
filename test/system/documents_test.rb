@@ -602,7 +602,7 @@ class DocumentsTest < ApplicationSystemTestCase
     document = Document.create!(title: "Research source", source: "")
 
     visit settings_path
-    find("[data-vim-settings-target='vimToggle']").check
+    find("#vim-enabled").check
     visit edit_document_path(document)
 
     editor = find(".cm-content")
@@ -621,7 +621,7 @@ class DocumentsTest < ApplicationSystemTestCase
     document = Document.create!(title: "Research source", source: "")
 
     visit settings_path
-    find("[data-vim-settings-target='vimToggle']").check
+    find("#vim-enabled").check
     visit edit_document_path(document)
 
     editor = find(".cm-content")

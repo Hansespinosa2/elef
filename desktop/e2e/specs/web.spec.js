@@ -92,9 +92,11 @@ class WebEditorUi {
 
   async enableVimRelativeLineNumbers() {
     await this.page.goto("/settings")
-    const vimToggle = this.page.locator("[data-vim-settings-target='vimToggle']")
+    // Vim preferences render through the shared client UI (same hooks as
+    // the desktop settings flow); drive its stable element ids.
+    const vimToggle = this.page.locator("#vim-enabled")
     if (!await vimToggle.isChecked()) await vimToggle.check()
-    await this.page.locator("[data-vim-settings-target='lineNumbers']").selectOption("relative")
+    await this.page.locator("#vim-line-numbers").selectOption("relative")
   }
 
   async openAuthoringSettings() {
