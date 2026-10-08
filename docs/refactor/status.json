@@ -3,12 +3,12 @@
   "campaign_branch": "feat/refactor-desktop-and-web",
   "campaign_base_sha": "88f61a7a8ffd7c276bafcf06eee09c36a8adf134",
   "current_phase": 3,
-  "phase_state": "PLAN",
+  "phase_state": "DO",
   "phase_base_sha": "2931ae48b52a3553ac82845fa20f2308310e5312",
   "head_sha": "2931ae48b52a3553ac82845fa20f2308310e5312",
   "review_round": 0,
   "phase_contract_sha256": "32f4bc7c3942c7e39d78ca700ccf55ae0a8c9bc196618c455607bb84e7d9be90",
-  "frozen_plan_sha256": null,
+  "frozen_plan_sha256": "57c6d31aa51116959e9a626741fb1eb0fe1b59ae055b5d6394ec168877516145",
   "last_completed_phase": 2,
   "last_verified_checks": [
     {
@@ -172,5 +172,5 @@
   },
   "pending_human_gates": [],
   "blocker": null,
-  "next_action": "Freeze the Phase 03 plan via implementation-strategy."
+  "next_action": "Phase 03 DO step 1: scaffold packages/work-model."
 }
