@@ -1,1 +1,143 @@
-{"artifacts": [{"id": 11583972375, "name": "ci-attestation-pr136-run37854356792-attempt1", "note": "Attests run_attempt 1, tested_sha a038c63dd7c35eea0e47362896d3cb2c3e8ed591 (merge of dev 3ce290e5 + candidate 27070f5)."}, {"id": 11584456362, "name": "native-performance-linux"}, {"id": 11583942592, "name": "native-performance-darwin"}], "candidate_sha": "27070f59d3ec7591a615fda02fa06503fd0ca432", "jobs": [{"conclusion": "success", "id": 113574857577, "name": "desktop-fast"}, {"conclusion": "success", "id": 113574857522, "name": "test"}, {"conclusion": "success", "id": 113574857649, "name": "system-test"}, {"conclusion": "success", "id": 113574857553, "name": "affected"}, {"conclusion": "success", "id": 113574857666, "name": "sqlite-test"}, {"conclusion": "success", "id": 113574857680, "name": "desktop", "shared_scenarios": "success", "shared_scenarios_note": "All three previously failing authoring specs pass in the Linux binary: shared authoring settings create/edit/delete flow, manages personal snippets, creates/deletes personal math shortcut."}, {"conclusion": "success", "id": 113574857648, "name": "desktop-macos", "shared_scenarios": "success", "shared_scenarios_note": "Same three authoring specs pass in the macOS binary."}, {"conclusion": "success", "id": 113574857741, "name": "renderer-macos"}, {"conclusion": "success", "id": 113574857637, "name": "scan_js"}, {"conclusion": "success", "id": 113574857671, "name": "scan_ruby"}, {"conclusion": "success", "id": 113574857497, "name": "production-smoke"}, {"conclusion": "success", "id": 113574857546, "name": "development-smoke"}, {"conclusion": "skipped", "id": 113574859027, "name": "Authorize deployment after CI"}, {"conclusion": "success", "id": 113581673183, "name": "record-ci-attestation"}], "pull_request": {"base_branch": "dev", "base_sha": "3ce290e539f8e4a57e5a6dc0ba994073e53f3a6a", "head_branch": "feat/refactor-desktop-and-web", "number": 136, "url": "https://github.com/Hansespinosa2/elef/pull/136"}, "rails_conformance": {"command": "node tests/host-conformance/run-node.js rails", "conclusion": "success", "job": "system-test", "job_id": 113574857649, "result": "conformance rails: 11 passed, 1 skipped, 0 failed (suite v12 cases)"}, "run": {"attempt": 1, "conclusion": "success", "event": "pull_request", "id": 37854356792, "note": "First run on the baseHash-fix candidate; no reruns needed. Prior probe run 37852816113 on ab668ad captured the raw Tauri error that diagnosed this fix.", "tested_merge_parents": ["3ce290e539f8e4a57e5a6dc0ba994073e53f3a6a", "27070f59d3ec7591a615fda02fa06503fd0ca432"], "tested_merge_sha": "a038c63dd7c35eea0e47362896d3cb2c3e8ed591", "url": "https://github.com/Hansespinosa2/elef/actions/runs/37854356792"}, "schema_version": 1, "tauri_conformance": {"conclusion": "success", "jobs": [{"job_id": 113574857680, "name": "desktop", "result": "spec file PASSED (desktop invoke shard, both shards)", "spec": "specs/contract-conformance.spec.js"}, {"job_id": 113574857648, "name": "desktop-macos", "result": "spec file PASSED (desktop invoke shard, both shards)", "spec": "specs/contract-conformance.spec.js"}]}}
+{
+ "artifacts": [
+  {
+   "id": 11586020590,
+   "name": "native-performance-darwin"
+  },
+  {
+   "id": 11585921278,
+   "name": "native-performance-linux"
+  },
+  {
+   "id": 11585502311,
+   "name": "ci-attestation-pr136-run37858163598-attempt1",
+   "note": "Attests run_attempt 1 on candidate 20f9e6e68da778a614570c369c48ae7b8ee77c74."
+  }
+ ],
+ "candidate_sha": "20f9e6e68da778a614570c369c48ae7b8ee77c74",
+ "jobs": [
+  {
+   "conclusion": "success",
+   "id": 113587694814,
+   "name": "desktop-fast"
+  },
+  {
+   "conclusion": "success",
+   "id": 113587694712,
+   "name": "test"
+  },
+  {
+   "conclusion": "success",
+   "id": 113587694653,
+   "name": "system-test"
+  },
+  {
+   "conclusion": "success",
+   "id": 113587694753,
+   "name": "affected"
+  },
+  {
+   "conclusion": "success",
+   "id": 113587694417,
+   "name": "sqlite-test"
+  },
+  {
+   "conclusion": "success",
+   "id": 113587694666,
+   "name": "desktop",
+   "shared_scenarios": "success",
+   "shared_scenarios_note": "All three previously failing authoring specs pass in the Linux binary: shared authoring settings create/edit/delete flow, manages personal snippets, creates/deletes personal math shortcut."
+  },
+  {
+   "conclusion": "success",
+   "id": 113587694802,
+   "name": "desktop-macos",
+   "shared_scenarios": "success",
+   "shared_scenarios_note": "Same three authoring specs pass in the macOS binary."
+  },
+  {
+   "conclusion": "success",
+   "id": 113587694970,
+   "name": "renderer-macos"
+  },
+  {
+   "conclusion": "success",
+   "id": 113587694595,
+   "name": "scan_js"
+  },
+  {
+   "conclusion": "success",
+   "id": 113587694921,
+   "name": "scan_ruby"
+  },
+  {
+   "conclusion": "success",
+   "id": 113587694738,
+   "name": "production-smoke"
+  },
+  {
+   "conclusion": "success",
+   "id": 113587694695,
+   "name": "development-smoke"
+  },
+  {
+   "conclusion": "skipped",
+   "id": 113587695677,
+   "name": "Authorize deployment after CI"
+  },
+  {
+   "conclusion": "success",
+   "id": 113593859421,
+   "name": "record-ci-attestation"
+  }
+ ],
+ "pull_request": {
+  "base_branch": "dev",
+  "base_sha": "3ce290e539f8e4a57e5a6dc0ba994073e53f3a6a",
+  "head_branch": "feat/refactor-desktop-and-web",
+  "number": 136,
+  "url": "https://github.com/Hansespinosa2/elef/pull/136"
+ },
+ "rails_conformance": {
+  "command": "node tests/host-conformance/run-node.js rails",
+  "conclusion": "success",
+  "job": "system-test",
+  "job_id": 113587694653,
+  "result": "conformance rails: 11 passed, 1 skipped, 0 failed (suite v12 cases)"
+ },
+ "run": {
+  "attempt": 1,
+  "conclusion": "success",
+  "event": "pull_request",
+  "id": 37858163598,
+  "note": "Round-2 run on the residual-vim-UI-deletion candidate (c3b765f + plan-restore 20f9e6e); no reruns needed. Run API head_sha equals the exact candidate. Run payload base.sha 26d6ad2 equals the locally computed merge-base of dev tip and the candidate (branch fork point), not the dev tip; origin dev tip independently verified as 3ce290e via git protocol and REST at evidence time. Live refs/pull/136/merge 4cb61a24 has parents (3ce290e, 20f9e6e), confirming the candidate merges cleanly with current dev.",
+  "tested_merge_parents": [
+   "3ce290e539f8e4a57e5a6dc0ba994073e53f3a6a",
+   "20f9e6e68da778a614570c369c48ae7b8ee77c74"
+  ],
+  "url": "https://github.com/Hansespinosa2/elef/actions/runs/37858163598",
+  "merge_ref": "4cb61a24f8c1d76cabd9897d36af34a78ab6e963",
+  "merge_ref_parents": [
+   "3ce290e539f8e4a57e5a6dc0ba994073e53f3a6a",
+   "20f9e6e68da778a614570c369c48ae7b8ee77c74"
+  ]
+ },
+ "schema_version": 1,
+ "tauri_conformance": {
+  "conclusion": "success",
+  "jobs": [
+   {
+    "job_id": 113587694666,
+    "name": "desktop",
+    "result": "spec file PASSED (desktop invoke shard, both shards)",
+    "spec": "specs/contract-conformance.spec.js"
+   },
+   {
+    "job_id": 113587694802,
+    "name": "desktop-macos",
+    "result": "spec file PASSED (desktop invoke shard, both shards)",
+    "spec": "specs/contract-conformance.spec.js"
+   }
+  ]
+ }
+}

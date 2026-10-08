@@ -3,10 +3,10 @@
   "campaign_branch": "feat/refactor-desktop-and-web",
   "campaign_base_sha": "88f61a7a8ffd7c276bafcf06eee09c36a8adf134",
   "current_phase": 5,
-  "phase_state": "CHECK",
+  "phase_state": "DO",
   "phase_base_sha": "0f62a074ee5783cc6510801be2e39074264bc4ab",
   "head_sha": "20f9e6e68da778a614570c369c48ae7b8ee77c74",
-  "review_round": 2,
+  "review_round": 1,
   "phase_contract_sha256": "94bb77f5e36623c4dc29f559ac7f24edeb753d9f2589cae62343090fa40fd19e",
   "frozen_plan_sha256": "7476c2d4b9210760d8576059701e506d920b4c51c2d41cb5943c27db05267751",
   "last_completed_phase": 4,
@@ -243,14 +243,6 @@
       "head": "c3b765f",
       "duration_s": 42.4,
       "tier": "affected"
-    },
-    {
-      "command": "bin/check phase 5 --json",
-      "exit": 0,
-      "head": "20f9e6e68da778a614570c369c48ae7b8ee77c74",
-      "duration_s": 31.687,
-      "tier": "phase",
-      "attempt_id": "1eb1345b615841bbb9d7514642c4a797"
     }
   ],
   "execution_environment": {
@@ -265,5 +257,5 @@
   },
   "pending_human_gates": [],
   "blocker": null,
-  "next_action": "Phase 05 CHECK: candidate 20f9e6e (residual vim-UI deletion + plan restore) gated exit 0 (attempt 1eb1345b, 31.7s) with full CI green (run 37858163598); independent review round 2 requested."
+  "next_action": "Phase 05 DO round-1 fix: residual vim UI deleted (c3b765f); built-in retention logged in review record instead of frozen plan (plan edit after production is not re-freezable); re-gate new candidate and request review round 2."
 }
