@@ -1,0 +1,22 @@
+{
+  "attempt_id": "cc637a3737494fdabe237e67892b180b",
+  "phase": 4,
+  "head": "ddbc69599fb9caf9d8ca82d79a7acf35494a3e50",
+  "root": "/root/elef",
+  "checkout": "/root/elef/tmp/gates/phase-4-cc637a3737494fdabe237e67892b180b",
+  "state": "completed",
+  "started_ns": 1791455649838086935,
+  "status_sha256": "9b6cdce2755c817e337d27673e303a099055b390618e196db95c770cac91d62c",
+  "frozen_plan_sha256": "c3ed1d505e974898c2c8fb35249995c20f2642f7f7446a78ca88bdee5078289e",
+  "phase_contract_sha256": "1c172f31ad0e9a4d511767a10c9439d6bff12b0fca7a4fc8b188f4fee0a0fd55",
+  "runner_pid": 552,
+  "runner_start": "10027936",
+  "child_pid": 559,
+  "child_start": "10027960",
+  "command": "bin/check phase 4 --json",
+  "exit": 0,
+  "duration_s": 29.579,
+  "tier": "phase",
+  "stdout_sha256": "4ee7910666f75b749de512328871ac1c876146aabf2cdeb005185d75afbca89c",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}
