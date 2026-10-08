@@ -106,7 +106,7 @@ export function parsePortableDocumentLinks(source = "") {
     const value = values.get("elef_document_key")
     if (value) {
       const parsed = JSON.parse(value)
-      if (typeof parsed === "string" && parsed.trim()) documentKey = parsed.trim()
+      if (typeof parsed === "string" && parsed.trim()) documentKey = parsed
     }
   } catch (_error) {
     // Invalid optional portable metadata behaves like an absent value.

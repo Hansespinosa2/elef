@@ -111,14 +111,14 @@ export function withAppearanceValue(source, key, value) {
   if (typeof source !== "string" || !vocabulary || (value !== "" && !vocabulary.has(value))) {
     throw new TypeError("Unsupported appearance value")
   }
-  return withFrontMatterValue(source, key, value)
+  return withFrontMatterValue(source, key, value === "" ? null : value)
 }
 
 export function withFrontMatterValue(source, key, value) {
   if (typeof source !== "string" || typeof key !== "string" || !key) {
     throw new TypeError("Front matter updates need source text and a key.")
   }
-  const remove = value === null || value === undefined || value === ""
+  const remove = value === null || value === undefined
   const front = initialFrontMatter(source)
   const ending = line => source.slice(line.start + line.text.length, line.end)
   const eol = front?.lines.map(ending).find(Boolean) || (source.includes("\r\n") ? "\r\n" : "\n")
@@ -257,7 +257,7 @@ function slideSourceRanges(source, bodyStart) {
       mathFence = openingMathFence
       continue
     }
-    if (/^[ \t]*---[ \t]*$/.test(line.text)) {
+    if (/^---[ \t]*$/.test(line.text)) {
       ranges.push({ start, end: line.start, delimiterStart: line.start, delimiterEnd: line.end })
       start = line.end
     }

@@ -66,12 +66,12 @@ test("front matter writes create, replace, and remove values", () => {
     "---\ntitle: A\n---\n# T\n"
   )
   assert.equal(
-    withFrontMatterValue("---\ntheme: light\ntitle: A\n---\n# T\n", "theme", ""),
+    withFrontMatterValue("---\ntheme: light\ntitle: A\n---\n# T\n", "theme", undefined),
     "---\ntitle: A\n---\n# T\n"
   )
   assert.equal(
-    withFrontMatterValue("---\ntheme: light\ntitle: A\n---\n# T\n", "theme", undefined),
-    "---\ntitle: A\n---\n# T\n"
+    withFrontMatterValue("---\ntheme: light\ntitle: A\n---\n# T\n", "theme", ""),
+    "---\ntheme: \ntitle: A\n---\n# T\n"
   )
 })
 
