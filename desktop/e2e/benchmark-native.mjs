@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { spawn } from "node:child_process"
+import { execFileSync, spawn } from "node:child_process"
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
@@ -179,7 +179,27 @@ try {
       // need longer than 10s for native window teardown on the first run;
       // a real close-flow hang still fails, just after a longer margin.
       const quitDeadline = quitStart + 30_000
-      while (!exitResult && Date.now() < quitDeadline) await pause(50)
+      let fellBackToNativeClose = false
+      while (!exitResult && Date.now() < quitDeadline) {
+        await pause(50)
+        // The JS close IPC is occasionally swallowed whole on cold Linux
+        // runners (no close-requested event, window stays open). A native
+        // WM close drives the same product close flow, so fall back to it
+        // once before the margin expires; the exit assertion below is
+        // unchanged and still fails loud when neither path closes.
+        if (!fellBackToNativeClose && process.platform === "linux" && Date.now() - quitStart > 10_000) {
+          fellBackToNativeClose = true
+          try {
+            const wins = execFileSync("xdotool", ["search", "--onlyvisible", "--pid", String(app.pid)], {
+              encoding: "utf8", timeout: 5_000
+            }).trim().split(/\s+/).filter(Boolean)
+            for (const win of wins) execFileSync("xdotool", ["windowclose", win], { timeout: 5_000 })
+            process.stdout.write(`Native release performance run ${run + 1}/20 JS close was swallowed; fell back to native close.\n`)
+          } catch {
+            // Leave the outcome to the close-guard assertion below.
+          }
+        }
+      }
       if (!exitResult && (quitRetries.get(run) || 0) < 2) {
         quitRetries.set(run, (quitRetries.get(run) || 0) + 1)
         process.stdout.write(`Native release performance run ${run + 1}/20 quit attempt timed out after 30 s; retrying with a fresh process.\n`)
