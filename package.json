@@ -13,6 +13,7 @@
     "check:desktop-profiles": "node desktop/scripts/check_release_profiles.mjs",
     "check:release-fixtures": "node desktop/scripts/check_release_fixture_manifest.mjs",
     "check:release-ci": "node desktop/scripts/check_release_ci.mjs",
+    "test:release-ledger": "node --test desktop/release/ledger.test.mjs",
     "test:javascript": "node --test test/javascript/*.test.js test/javascript/*.test.mjs test/javascript/shared/*.test.js"
   },
   "devDependencies": {

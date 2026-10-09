@@ -34,6 +34,7 @@ const needs = releaseGate.match(/^    needs: \[([^\]]+)\]$/m)?.[1]
 assert.ok(needs, "the exact-SHA release gate must depend on all required checks")
 assert.deepEqual(needs.split(",").map(value => value.trim()), requiredGateJobs)
 assert.match(releaseGate, /SOURCE_SHA: \$\{\{ github\.sha \}\}/, "release evidence must name the pushed main SHA")
+assert.match(jobBlock(workflow, "desktop-fast"), /npm run test:release-ledger/, "publication transition tests must run in the required fast CI tier")
 
 for (const jobName of ["desktop", "desktop-macos"]) {
   const block = jobBlock(workflow, jobName)

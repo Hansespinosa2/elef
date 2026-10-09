@@ -39,6 +39,7 @@ jobs:
         run: |
           started=$SECONDS
           npm run test:javascript
+          npm run test:release-ledger
           npm test --prefix desktop/frontend
           npm run test:unit --prefix desktop/e2e
           python3 script/check_frontend_ownership.py
