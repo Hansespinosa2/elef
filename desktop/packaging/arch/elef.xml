@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/vnd.elef.deck">
+    <comment>Elef deck archive</comment>
+    <glob pattern="*.elef"/>
+  </mime-type>
+</mime-info>

@@ -16,6 +16,7 @@ const requiredGateJobs = [
   "sqlite-test",
   "system-test",
   "desktop",
+  "arch-package",
   "desktop-macos",
   "renderer-macos",
   "production-smoke",
@@ -36,6 +37,7 @@ assert.ok(needs, "the exact-SHA release gate must depend on all required checks"
 assert.deepEqual(needs.split(",").map(value => value.trim()), requiredGateJobs)
 assert.match(releaseGate, /SOURCE_SHA: \$\{\{ github\.sha \}\}/, "release evidence must name the pushed main SHA")
 assert.match(jobBlock(workflow, "desktop-fast"), /npm run test:release-ledger/, "publication transition tests must run in the required fast CI tier")
+assert.match(jobBlock(workflow, "desktop-fast"), /npm run test:arch-package/, "Arch package metadata tests must run in the required fast CI tier")
 
 assert.match(releaseWorkflow, /push:\n\s+branches: \[ main \]/, "release coordination must run after main pushes")
 assert.match(releaseWorkflow, /schedule:\n\s+- cron: "\*\/15 \* \* \* \*"/, "periodic reconciliation must repair missed pushes")
@@ -56,6 +58,9 @@ for (const jobName of ["desktop", "desktop-macos"]) {
   assert.match(block, /npm run check:desktop-profiles/, `${jobName} must validate profile build graphs`)
   assert.match(block, /npm run check:release-fixtures/, `${jobName} must validate required release fixtures`)
 }
+const archPackageJob = jobBlock(workflow, "arch-package")
+assert.match(archPackageJob, /docker run --rm --pull=always/, "the native package gate must use an Arch container")
+assert.match(archPackageJob, /desktop\/scripts\/arch_package_ci\.sh/, "the Arch build/install/upgrade gate must run from its checked-in script")
 
 process.stdout.write(`Release CI/coordinator contract passed: ${rerunJobs.length} skipped jobs now run on main; exact-SHA gate depends on ${requiredGateJobs.length} jobs; main-history Pages reconciliation is serialized.\n`)
 

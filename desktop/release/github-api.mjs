@@ -8,6 +8,7 @@ export const RELEASE_GATE_JOB_NAMES = Object.freeze([
   "sqlite-test",
   "system-test",
   "desktop",
+  "arch-package",
   "desktop-macos",
   "renderer-macos",
   "production-smoke",

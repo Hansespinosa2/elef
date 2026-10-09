@@ -1,0 +1,28 @@
+pkgname=elef-bin
+pkgver=@PKGVER@
+pkgrel=1
+pkgdesc="Offline-first desktop authoring for Elef decks"
+arch=('x86_64')
+url="https://github.com/Hansespinosa2/elef"
+license=('MIT')
+depends=(
+  'cairo'
+  'desktop-file-utils'
+  'gdk-pixbuf2'
+  'glib2'
+  'gtk3'
+  'hicolor-icon-theme'
+  'libsoup3'
+  'pango'
+  'shared-mime-info'
+  'webkit2gtk-4.1'
+)
+makedepends=('zstd')
+options=('!strip' '!emptydirs')
+install=elef-bin.install
+source=("elef-${pkgver}-x86_64.tar.zst::@SOURCE_URL@")
+sha256sums=('@SHA256@')
+
+package() {
+  tar --zstd -xf "${srcdir}/elef-${pkgver}-x86_64.tar.zst" -C "${pkgdir}"
+}

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Elef
+Comment=Write notes and presentations in Markdown
+Exec=elef %U
+Icon=elef
+Terminal=false
+Categories=Office;Utility;
+MimeType=application/vnd.elef.deck;
+StartupWMClass=elef

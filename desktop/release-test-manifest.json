@@ -44,6 +44,15 @@
       "note": "The Mac-only packaged smoke exercises the test-only app bundle: stage signed N, kill and restart N-1 with the verified cache, withdraw feed eligibility, restore it, simulate an unavailable feed during safe quit and verify the cache survives, defer quit during a dirty-save conflict, interrupt installation after modifying only the disposable staged copy, then verify N relaunch and source preservation. The interruption failpoint compiles only with the WebDriver feature. Hosted macOS execution is pending; production Stable DMG proof remains. Linux runs download verification only and has no self-installer."
     },
     {
+      "id": "arch_native_package_install_upgrade",
+      "command": "docker run --rm --pull=always --volume \"$GITHUB_WORKSPACE:/workspace\" --workdir /workspace --env ELEF_BUILD_SHA archlinux:base-devel bash desktop/scripts/arch_package_ci.sh",
+      "expected_exit_code": 0,
+      "observed_exit_code": null,
+      "status": "IN_PROGRESS",
+      "platform": "Arch Linux x86-64 container",
+      "note": "Builds the native executable and versioned tar.zst archive in Arch, serves the exact asset locally to an unprivileged makepkg run, checks ELF dependencies and Arch package ownership, then installs, launches/quits, performs a pkgrel upgrade, verifies package-owned file hashes, and uninstalls. Hosted execution is pending."
+    },
+    {
       "id": "diagnostics_privacy",
       "command": "cargo test --manifest-path desktop/Cargo.toml -p elef-core diagnostics::tests --locked",
       "expected_exit_code": 0,
@@ -65,7 +74,7 @@
     ],
     "status": "TODO",
     "observed_exit_code": null,
-    "limitation": "The generator creates test-only WebDriver bundles (app bundle on macOS, AppImage on Linux); it is not proof of the supported Stable DMG or Arch package transition. Replace/extend it for production Stable DMG and Arch package tests."
+    "limitation": "The generator creates test-only WebDriver bundles (app bundle on macOS, AppImage on Linux); it is not proof of the supported Stable DMG transition. The Arch package path is exercised separately by arch_native_package_install_upgrade."
   },
   "fixtures": [
     {

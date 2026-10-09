@@ -22,6 +22,7 @@ const requiredCheckIds = [
   "source_storage_fixture_round_trip",
   "full_web_desktop_parity",
   "packaged_n_minus_1_to_n_update",
+  "arch_native_package_install_upgrade",
   "diagnostics_privacy"
 ]
 
