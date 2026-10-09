@@ -67,8 +67,8 @@ describe("Stable profile exclusions", () => {
 
     await browser.waitUntil(async () => browser.execute(() => {
       const preview = document.querySelector("#desktop-preview")
-      return preview?.textContent.includes("Unknown syntax stays literal: [[E2E linked]].") &&
-        Boolean(preview.querySelector("a[href='https://example.com']"))
+      return preview?.textContent.includes("This literal document link remains source text in Stable: [[Future Release Notes]].") &&
+        Boolean(preview.querySelector("a[href='https://example.com/docs']"))
     }), { timeout: 10_000, timeoutMsg: "Stable preview changed literal brackets or ordinary Markdown links" })
 
     const graphCommandReachable = await browser.executeAsync(done => {
@@ -116,6 +116,17 @@ describe("Stable profile exclusions", () => {
       timeout: 15_000,
       timeoutMsg: "Stable did not reopen the exact saved source"
     })
+    const exported = await browser.executeAsync(done => {
+      const id = document.querySelector("#deck-id")?.textContent
+      if (!id) return done({ error: "The Stable fixture deck ID is unavailable" })
+      window.__TAURI__.core.invoke("export_elef", { id }).then(
+        exported => done({ exported }),
+        error => done({ error: error?.message || String(error) })
+      )
+    })
+    if (exported.error || exported.exported !== true) {
+      throw new Error(exported.error || "Stable did not export the unsupported-source fixture")
+    }
     await exportAndVerifyDiagnostics(browser, "stable")
   })
 })

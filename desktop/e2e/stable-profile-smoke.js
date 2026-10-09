@@ -10,6 +10,7 @@ import { STABLE_PROFILE_DECK_TITLE, STABLE_PROFILE_KEYBOARD_SOURCE, STABLE_PROFI
 
 export async function runStableProfileSmoke({ e2eRoot, repoRoot, libraryRoot, env, isolatedDirectories }) {
   const deckRoot = path.join(libraryRoot, STABLE_PROFILE_DECK_TITLE)
+  const stableArchive = path.join(path.dirname(libraryRoot), "stable-unknown-directives.elef")
   await mkdir(deckRoot, { recursive: true })
   await writeFile(path.join(deckRoot, "document.md"), STABLE_PROFILE_SOURCE)
   await writeFile(path.join(deckRoot, "elef.json"), JSON.stringify({ id: randomUUID(), schema_version: 1 }))
@@ -25,7 +26,8 @@ export async function runStableProfileSmoke({ e2eRoot, repoRoot, libraryRoot, en
   const stableEnv = createDesktopAppEnvironment({
     ...env,
     ELEF_E2E_APP_BINARY: applicationBinary,
-    ELEF_E2E_PROFILE: "stable"
+    ELEF_E2E_PROFILE: "stable",
+    ELEF_E2E_EXPORT_PATH: stableArchive
   }, isolatedDirectories)
   delete stableEnv.ELEF_E2E_PACKAGED_UPDATES
   delete stableEnv.ELEF_E2E_VERIFY_UPGRADED
@@ -47,4 +49,6 @@ export async function runStableProfileSmoke({ e2eRoot, repoRoot, libraryRoot, en
 
   assert.equal(await readFile(path.join(deckRoot, "document.md"), "utf8"), STABLE_PROFILE_KEYBOARD_SOURCE,
     "Stable must round-trip unsupported directives through an edit, save, close and reopen")
+  assert.equal(execFileSync("unzip", ["-p", stableArchive, "document.md"], { encoding: "utf8" }), STABLE_PROFILE_KEYBOARD_SOURCE,
+    "Stable .elef export must preserve unsupported source bytes")
 }

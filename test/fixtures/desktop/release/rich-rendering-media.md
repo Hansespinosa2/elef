@@ -19,7 +19,10 @@ flowchart LR
   Source --> Preview
 ```
 
+---
+
+# Art sample
+
 :::art
-- Preserve the original source
-- Render the retained structure
-  - Keep nested Markdown
+- Keep the source editable
+- Render the same semantics in preview and presentation

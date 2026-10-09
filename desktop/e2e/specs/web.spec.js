@@ -13,6 +13,7 @@ import { vimRelativeLineNumbersWorkflow } from "../../../test/e2e/scenarios/vim-
 import { documentPageAspectRatioWorkflow } from "../../../test/e2e/scenarios/document-page-aspect-ratio.js"
 import { displayMathEnterWorkflow } from "../../../test/e2e/scenarios/display-math-enter.js"
 import { artRenderingWorkflow } from "../../../test/e2e/scenarios/art-rendering.js"
+import { richRenderingMediaWorkflow, RICH_RENDERING_TITLE } from "../../../test/e2e/scenarios/rich-rendering-media.js"
 import { execFileSync } from "node:child_process"
 import path from "node:path"
 import { readFile } from "node:fs/promises"
@@ -77,6 +78,8 @@ class WebEditorUi {
       ? process.env.ELEF_E2E_DOCUMENT_ID
       : title === CONFLICT_DECK_NAME
       ? process.env.ELEF_E2E_CONFLICT_PRESENTATION_ID
+      : title === RICH_RENDERING_TITLE
+        ? process.env.ELEF_E2E_RICH_PRESENTATION_ID
       : title === "E2E hostile"
         ? process.env.ELEF_E2E_HOSTILE_PRESENTATION_ID
         : process.env.ELEF_E2E_PRESENTATION_ID
@@ -602,6 +605,17 @@ class WebEditorUi {
     )).toBe(true)
   }
 
+  async assertRichRenderingMedia() {
+    const preview = this.page.locator(".editor-projection.preview-pane")
+    await expect(preview.locator(".slides-theme-dark.slides-typography-technical")).toBeVisible()
+    await expect.poll(() => preview.locator(".katex").count()).toBeGreaterThan(0)
+    await expect.poll(() => preview.locator("pre.mermaid svg").count()).toBe(1)
+    await expect.poll(() => preview.locator("[data-elef-art-root]").count()).toBe(1)
+    await expect.poll(() => preview.locator("img").evaluateAll(images =>
+      images.some(image => image.complete && image.naturalWidth > 0)
+    )).toBe(true)
+  }
+
   async waitForPreview(text) {
     await expect.poll(() => renderedTextWithoutEditorControls(
       this.page.locator(".editor-projection.preview-pane")
@@ -1045,6 +1059,10 @@ test("appearance persists through the shared editing flow", async ({ page }) => 
 
 test("shared Art semantics render consistently in the web app", async ({ page }) => {
   await artRenderingWorkflow(new WebEditorUi(page))
+})
+
+test("the rich release fixture renders, presents, saves, and reopens in the web app", async ({ page }) => {
+  await richRenderingMediaWorkflow(new WebEditorUi(page))
 })
 
 test("shared rendering styles preserve slide layouts and document typography", async ({ page }) => {

@@ -9,6 +9,9 @@ import {
   CONFLICT_LOCAL_SOURCE,
   CONFLICT_SOURCE_FILE
 } from "../../test/e2e/scenarios/external-edit-conflict.js"
+import { PIXEL_PNG_BYTES } from "../../test/e2e/scenarios/media-fixture.js"
+import { RICH_RENDERING_SOURCE } from "../../test/e2e/scenarios/rich-rendering-media.js"
+import { STABLE_PROFILE_SOURCE } from "../e2e/stable-profile-fixture.js"
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const manifestPath = path.join(repoRoot, "desktop/release-test-manifest.json")
@@ -88,9 +91,29 @@ assert.match(richSample, /^theme: dark$/m)
 assert.match(richSample, /```mermaid\n/)
 assert.match(richSample, /^:::art$/m)
 assert.match(richSample, /images\/release-pixel\.png/)
-assert.deepEqual((await readFile(resolveFixturePath("rich_rendering_media", 1))).subarray(0, 8), Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+assert.equal(RICH_RENDERING_SOURCE, richSample, "the web/native runtime scenario must load the manifested rich source fixture")
+const richImage = await readFile(resolveFixturePath("rich_rendering_media", 1))
+assert.deepEqual(richImage.subarray(0, 8), Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+assert.deepEqual(PIXEL_PNG_BYTES, richImage, "runtime media uploads must use the manifested image bytes")
 assert.match(unknownSource, /\[\[Future Release Notes\]\]/)
 assert.match(unknownSource, /^:::future-directive/m)
+assert.equal(STABLE_PROFILE_SOURCE, unknownSource, "Stable profile runtime smoke must use the manifested unsupported-source fixture")
+assert.match(unknownSource, /\[Elef documentation\]\(https:\/\/example\.com\/docs\)/)
+
+const [runtimeRunner, webSpec, desktopSpec, stableSpec, stableSmoke] = await Promise.all([
+  readFile(path.join(repoRoot, "desktop/e2e/run.mjs"), "utf8"),
+  readFile(path.join(repoRoot, "desktop/e2e/specs/web.spec.js"), "utf8"),
+  readFile(path.join(repoRoot, "desktop/e2e/specs/desktop.spec.js"), "utf8"),
+  readFile(path.join(repoRoot, "desktop/e2e/stable-exclusions.spec.js"), "utf8"),
+  readFile(path.join(repoRoot, "desktop/e2e/stable-profile-smoke.js"), "utf8")
+])
+assert.match(runtimeRunner, /rich\.assets\.attach/, "Rails rich fixture must attach the checked-in local image")
+assert.match(runtimeRunner, /RICH_RENDERING_SOURCE/, "native rich fixture must be seeded from its checked-in source")
+assert.match(webSpec, /richRenderingMediaWorkflow\(new WebEditorUi\(page\)\)/)
+assert.match(desktopSpec, /richRenderingMediaWorkflow\(new DesktopEditorUi\(\)\)/)
+assert.match(stableSpec, /STABLE_PROFILE_SOURCE/)
+assert.match(stableSpec, /export_elef/, "Stable runtime must export the unsupported-source fixture as .elef")
+assert.match(stableSmoke, /unzip/, "the Stable archive must be checked after native export")
 
 const historicalPath = resolveFixturePath("historical_file_format", 0)
 await assert.rejects(stat(path.join(path.dirname(historicalPath), "elef.json")), { code: "ENOENT" }, "historical sample must remain a pre-manifest deck")

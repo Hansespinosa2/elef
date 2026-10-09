@@ -142,7 +142,8 @@
       "acceptance_command": "npm test --prefix desktop/e2e",
       "expected_exit_code": 0,
       "observed_exit_code": null,
-      "invariants": ["Preview and presentation retain theme, typography, math, Mermaid, Art, and local media.", "Export/import preserves source and media bytes."]
+      "invariants": ["Preview and presentation retain theme, typography, math, Mermaid, Art, and local media.", "Export/import preserves source and media bytes."],
+      "note": "The web and native desktop scenarios seed this exact source and image, inspect preview/presentation rendering, and compare raw source after successful save and reopen. The Rust archive fixture test separately verifies the original source and image bytes through .elef export/import. Hosted runtime validation remains pending."
     },
     {
       "id": "historical_file_format",
@@ -160,7 +161,8 @@
       "acceptance_command": "npm test --prefix desktop/e2e",
       "expected_exit_code": 0,
       "observed_exit_code": null,
-      "invariants": ["Stable does not activate excluded document linking for [[...]].", "Unsupported directive text survives compatible save and .elef round-trip byte-for-byte."]
+      "invariants": ["Stable does not activate excluded document linking for [[...]].", "Unsupported directive text survives compatible save and .elef round-trip byte-for-byte."],
+      "note": "Stable runtime loads this exact fixture, verifies literal [[...]] and ordinary Markdown links, edits/saves/reopens it, exports .elef, and compares the archive source bytes. The Rust archive fixture test verifies import/export of the original unknown-directive source. Hosted Stable execution remains pending."
     },
     {
       "id": "pre_release_app_state",
