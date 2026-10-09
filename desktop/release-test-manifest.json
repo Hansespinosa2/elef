@@ -31,26 +31,59 @@
       "id": "full_web_desktop_parity",
       "command": "npm test --prefix desktop/e2e",
       "expected_exit_code": 0,
-      "observed_exit_code": null,
-      "status": "TODO",
-      "note": "Use the isolated CI harness; this can start Rails on port 3000 and must not run against the user's occupied development endpoint."
+      "observed_exit_code": 1,
+      "status": "IN_PROGRESS",
+      "evidence": [
+        {
+          "run_id": 37994705135,
+          "sha": "722a5b366f3d0bf2330b5bdc543c835436959cdf",
+          "jobs": ["desktop", "desktop-macos"],
+          "result": "Both jobs failed raw presentation source equality after the source-readiness wait."
+        },
+        {
+          "run_id": 37996131959,
+          "sha": "4796c591fd8a081e622ec5715bb6e7963a109bba",
+          "jobs": ["desktop-macos"],
+          "result": "The expected source contained mixed LF/CRLF separators; after reopen the same source content was all CRLF. Commit 97237a9 changes the round-trip baseline to the raw saved source before close."
+        }
+      ],
+      "note": "Use the isolated CI harness; this can start Rails on port 3000 and must not run against the user's occupied development endpoint. A failed run records observed_exit_code=1 but remains unverified until all shared scenarios pass."
     },
     {
       "id": "packaged_n_minus_1_to_n_update",
       "command": "ELEF_E2E_PACKAGED_UPDATES=1 npm test --prefix desktop/e2e",
       "expected_exit_code": 0,
-      "observed_exit_code": null,
+      "observed_exit_code": 1,
       "status": "IN_PROGRESS",
+      "evidence": [
+        {
+          "run_id": 37994705135,
+          "sha": "722a5b366f3d0bf2330b5bdc543c835436959cdf",
+          "jobs": ["desktop-macos"],
+          "result": "The packaged-update scenario was not reached because an earlier shared source round-trip scenario failed."
+        },
+        {
+          "run_id": 37996131959,
+          "sha": "4796c591fd8a081e622ec5715bb6e7963a109bba",
+          "jobs": ["desktop-macos"],
+          "result": "The packaged-update scenario remained unreachable because the earlier shared web source assertion failed."
+        }
+      ],
       "note": "On macOS, the harness mounts and verifies a test-only Stable-profile N-1 DMG using the production com.elef.desktop identifier, installs the app under a disposable test directory, then stages signed N and exercises cache persistence, feed block/outage, unsafe-save deferral, interrupted installation, safe quit/relaunch and source preservation. The loopback feed uses an ephemeral key and is not a public release test. The test-only WebDriver feature is required for its interruption failpoint. Linux runs download verification only and has no self-installer."
     },
     {
       "id": "arch_native_package_install_upgrade",
-      "command": "docker run --rm --pull=always --volume \"$GITHUB_WORKSPACE:/workspace\" --workdir /workspace --env ELEF_BUILD_SHA archlinux:base-devel bash desktop/scripts/arch_package_ci.sh",
+      "command": "set -o pipefail\nmkdir -p desktop/target\ndocker run --rm --pull=always \\\n  --platform linux/amd64 \\\n  --volume \"$GITHUB_WORKSPACE:/workspace\" \\\n  --workdir /workspace \\\n  --env ELEF_BUILD_SHA \\\n  ghcr.io/archlinux/archlinux@sha256:ed261ac99d13e9636940e88df26ccd22b0d8d1c2139699870f0427c765352689 \\\n  bash desktop/scripts/arch_package_ci.sh 2>&1 | tee desktop/target/arch-package-gate.log",
       "expected_exit_code": 0,
-      "observed_exit_code": null,
-      "status": "IN_PROGRESS",
+      "observed_exit_code": 0,
+      "status": "VERIFIED",
       "platform": "Arch Linux x86-64 container",
-      "note": "Builds the native executable and versioned tar.zst archive in Arch, serves the exact asset locally to an unprivileged makepkg run, checks ELF dependencies and Arch package ownership, then installs, launches/quits, performs a pkgrel upgrade, verifies package-owned file hashes, and uninstalls. Hosted execution is pending."
+      "evidence": {
+        "run_id": 37994705135,
+        "job_id": 114037659813,
+        "sha": "722a5b366f3d0bf2330b5bdc543c835436959cdf"
+      },
+      "note": "Builds the native executable and versioned tar.zst archive in Arch, serves the exact asset locally to an unprivileged makepkg run, checks ELF dependencies and Arch package ownership, then installs, launches/quits, performs a pkgrel upgrade, verifies package-owned file hashes, and uninstalls. Hosted Arch execution passed; actual Omarchy acceptance remains separate."
     },
     {
       "id": "diagnostics_privacy",
@@ -74,8 +107,13 @@
       "desktop/target/e2e-packages/stable-update.tar.gz",
       "desktop/target/e2e-packages/update.AppImage"
     ],
-    "status": "TODO",
-    "observed_exit_code": null,
+    "status": "VERIFIED",
+    "observed_exit_code": 0,
+    "evidence": {
+      "run_id": 37994705135,
+      "sha": "722a5b366f3d0bf2330b5bdc543c835436959cdf",
+      "jobs": ["desktop", "desktop-macos"]
+    },
     "limitation": "On macOS the generator also creates a Stable-profile test DMG and updater archive; those use the production Stable identifier but an ephemeral updater key and loopback feed. They do not establish that production signing secrets, public publication or a physical Mac rehearsal are available. Linux creates the Dev AppImage only for internal update-download checks; the Arch package lifecycle is exercised separately by arch_native_package_install_upgrade."
   },
   "fixtures": [

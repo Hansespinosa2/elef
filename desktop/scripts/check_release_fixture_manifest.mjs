@@ -34,6 +34,12 @@ assert.ok(manifest.validation.observed_exit_code === null || Number.isInteger(ma
 assert.deepEqual(manifest.fixtures.map(fixture => fixture.id), requiredIds, "required release fixtures must be named exactly once and in order")
 assert.deepEqual(manifest.checks.map(check => check.id), requiredCheckIds, "required fixture acceptance checks must be named exactly once and in order")
 assert.equal(manifest.package_pair_generator.command, "node desktop/e2e/build-update-fixtures.mjs")
+assert.equal(manifest.package_pair_generator.expected_exit_code, 0, "package-pair generation must expect success")
+assert.ok(manifest.package_pair_generator.observed_exit_code === null || Number.isInteger(manifest.package_pair_generator.observed_exit_code), "package-pair generation observed exit code must be null or an integer")
+assert.ok(["TODO", "IN_PROGRESS", "VERIFIED"].includes(manifest.package_pair_generator.status), "package-pair generator has an invalid status")
+if (manifest.package_pair_generator.status === "VERIFIED") {
+  assert.equal(manifest.package_pair_generator.observed_exit_code, manifest.package_pair_generator.expected_exit_code, "package-pair generation cannot be VERIFIED without a passing result")
+}
 await assertRepoFile("desktop/e2e/build-update-fixtures.mjs")
 
 for (const check of manifest.checks) {
