@@ -80,5 +80,6 @@ This file is the persistent requirement-to-evidence map for [the approved releas
 |---|---|---|
 | `56151d2` | Captured the supplied constitution and initial requirement map. | `git diff --check` and a Python document check passed (9 numbered sections, 46 mapped requirement rows; exit 0). The initial build attempt failed before dependencies were installed. |
 | `1b56e5c` | Recorded the baseline branch and external checks. | After locked `npm ci` at root and `desktop/frontend`, `npm run build --prefix desktop/frontend` passed; `python3 desktop/scripts/check_architecture.py` and `python3 script/check_frontend_ownership.py` passed (exit 0). |
+| `b2a789a` | Added the pre-implementation Stable exclusion inventory. | `git diff --check` and JSON/path/exception validation passed (5 features, 6 controllers, 4 documented shared dependencies; exit 0). |
 
 Update this file after each coherent milestone. Record exact commit, command, exit status, and evidence location. Do not change a status to `VERIFIED` without a passing acceptance result on the stated source SHA and platform.
