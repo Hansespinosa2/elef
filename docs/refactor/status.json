@@ -14,7 +14,7 @@
   "swap_mb": 0,
   "tauri_native_runner": "available"
  },
- "frozen_plan_sha256": null,
+ "frozen_plan_sha256": "cff3e49e0a977b82bce2a8aacdd83b02171533aee76cb42a162e19da6c5642c5",
  "head_sha": "15e95a91d8683d32459cfff82b88caa812ff2a22",
  "last_completed_phase": 11,
  "last_verified_checks": [
@@ -390,7 +390,7 @@
    "selected_gate_path": "docs/refactor/execution/phase-11-gate.json"
   }
  ],
- "next_action": "Phase 12 PLAN: draft and freeze phase-12-plan.md (implementation-strategy).",
+ "next_action": "Phase 12 DO-1: implement bin/check all.",
  "pending_human_gates": [
   {
    "gate": 4,
@@ -399,6 +399,6 @@
  ],
  "phase_base_sha": "15e95a91d8683d32459cfff82b88caa812ff2a22",
  "phase_contract_sha256": "626b04626484ffda893825753e01de5bf4dcd4fe5c7f3b93ca44554ba3311386",
- "phase_state": "PLAN",
+ "phase_state": "DO",
  "review_round": 0
 }
