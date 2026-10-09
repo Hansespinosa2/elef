@@ -1,0 +1,424 @@
+[
+  {
+    "name": "canonical columns reuse numbered events",
+    "mode": "presentation",
+    "source": "# La Génération Perdue\n\n## Fitzgerald\n\n:::step{01}\nHis life\n\n:::step{2}\nHis books\n\n## Hemingway\n\n:::step{1}\nHis life\n\n:::step{2}\nHis books\n\n:::step\nTheir connection",
+    "expected_slide_blocks": [
+      [
+        {
+          "markdown": "# La Génération Perdue",
+          "reveal_event": null,
+          "position": null
+        },
+        {
+          "markdown": "## Fitzgerald",
+          "reveal_event": null,
+          "position": null
+        },
+        {
+          "markdown": "His life",
+          "reveal_event": 0,
+          "position": null
+        },
+        {
+          "markdown": "His books",
+          "reveal_event": 1,
+          "position": null
+        },
+        {
+          "markdown": "## Hemingway",
+          "reveal_event": null,
+          "position": null
+        },
+        {
+          "markdown": "His life",
+          "reveal_event": 0,
+          "position": null
+        },
+        {
+          "markdown": "His books",
+          "reveal_event": 1,
+          "position": null
+        },
+        {
+          "markdown": "Their connection",
+          "reveal_event": 2,
+          "position": null
+        }
+      ]
+    ],
+    "event_counts": [
+      3
+    ],
+    "warnings": []
+  },
+  {
+    "name": "event order follows first effective source occurrence",
+    "mode": "presentation",
+    "source": "# Ordering\n\n:::step{20}\nFirst reveal\n\n:::step\nSecond reveal\n\n:::step{10}\nThird reveal\n\n:::step{20}\nAlso first\n\n:::step{000}\nZero label\n\n:::step{0}\nAlso zero",
+    "expected_slide_blocks": [
+      [
+        {
+          "markdown": "# Ordering",
+          "reveal_event": null,
+          "position": null
+        },
+        {
+          "markdown": "First reveal",
+          "reveal_event": 0,
+          "position": null
+        },
+        {
+          "markdown": "Second reveal",
+          "reveal_event": 1,
+          "position": null
+        },
+        {
+          "markdown": "Third reveal",
+          "reveal_event": 2,
+          "position": null
+        },
+        {
+          "markdown": "Also first",
+          "reveal_event": 0,
+          "position": null
+        },
+        {
+          "markdown": "Zero label",
+          "reveal_event": 3,
+          "position": null
+        },
+        {
+          "markdown": "Also zero",
+          "reveal_event": 3,
+          "position": null
+        }
+      ]
+    ],
+    "event_counts": [
+      4
+    ],
+    "warnings": []
+  },
+  {
+    "name": "step and alignment directive stacks retain last alignment",
+    "mode": "presentation",
+    "source": "# Stacks\n\n:::step\n:::align{left}\n:::align{center}\n- stacked\ncontinued\n\n:::align{right}\n:::step{0001}\n- reverse\n:::\nOutside",
+    "expected_slide_blocks": [
+      [
+        {
+          "markdown": "# Stacks",
+          "reveal_event": null,
+          "position": null
+        },
+        {
+          "markdown": "- stacked\ncontinued",
+          "reveal_event": 0,
+          "position": [
+            "center",
+            "top"
+          ]
+        },
+        {
+          "markdown": "- reverse",
+          "reveal_event": 1,
+          "position": [
+            "right",
+            "top"
+          ]
+        },
+        {
+          "markdown": "Outside",
+          "reveal_event": null,
+          "position": null
+        }
+      ]
+    ],
+    "event_counts": [
+      2
+    ],
+    "warnings": []
+  },
+  {
+    "name": "blank boundaries malformed markers and conflicts are isolated",
+    "mode": "presentation",
+    "source": "# Boundaries\n\n:::step\n\n- visible after blank\n\n:::step\n:::step{3}\n- stacked winner\n\n:::step{bad}\nVisible after malformed\n\n:::step{2}\n\n:::step{4}\n:::step{5}\n- conflicting stack",
+    "expected_slide_blocks": [
+      [
+        {
+          "markdown": "# Boundaries",
+          "reveal_event": null,
+          "position": null
+        },
+        {
+          "markdown": "- visible after blank",
+          "reveal_event": null,
+          "position": null
+        },
+        {
+          "markdown": "- stacked winner",
+          "reveal_event": 0,
+          "position": null
+        },
+        {
+          "markdown": "Visible after malformed",
+          "reveal_event": null,
+          "position": null
+        },
+        {
+          "markdown": "- conflicting stack",
+          "reveal_event": 1,
+          "position": null
+        }
+      ]
+    ],
+    "event_counts": [
+      2
+    ],
+    "warnings": [
+      "Step directive has no following contiguous Markdown group; place content immediately below it without a blank line.",
+      "Conflicting step directives in one stack; the last valid step directive takes effect.",
+      "Malformed step directive was removed; use :::step or :::step{N} on its own line.",
+      "Step directive has no following contiguous Markdown group; place content immediately below it without a blank line.",
+      "Conflicting step directives in one stack; the last valid step directive takes effect."
+    ]
+  },
+  {
+    "name": "fenced math and four-space code are not directives with CRLF source",
+    "mode": "presentation",
+    "source": "# Protected\r\n\r\n    :::step\r\n\r\n```md\r\n:::step{99}\r\n```\r\n\r\n$$\r\n:::step\r\n$$\r\n\r\n  :::step{000} \t\r\n  stepped\r\n  continues\r\n\r\nafter",
+    "expected_slide_blocks": [
+      [
+        {
+          "markdown": "# Protected",
+          "reveal_event": null,
+          "position": null
+        },
+        {
+          "markdown": "    :::step",
+          "reveal_event": null,
+          "position": null
+        },
+        {
+          "markdown": "```md\n:::step{99}\n```",
+          "reveal_event": null,
+          "position": null
+        },
+        {
+          "markdown": "$$\n:::step\n$$",
+          "reveal_event": null,
+          "position": null
+        },
+        {
+          "markdown": "  stepped\n  continues",
+          "reveal_event": 0,
+          "position": null
+        },
+        {
+          "markdown": "after",
+          "reveal_event": null,
+          "position": null
+        }
+      ]
+    ],
+    "event_counts": [
+      1
+    ],
+    "warnings": []
+  },
+  {
+    "name": "labels are slide-local",
+    "mode": "presentation",
+    "source": "# First\n\n:::step{7}\nOne\n\n---\n# Second\n\n:::step{7}\nTwo",
+    "expected_slide_blocks": [
+      [
+        {
+          "markdown": "# First",
+          "reveal_event": null,
+          "position": null
+        },
+        {
+          "markdown": "One",
+          "reveal_event": 0,
+          "position": null
+        }
+      ],
+      [
+        {
+          "markdown": "# Second",
+          "reveal_event": null,
+          "position": null
+        },
+        {
+          "markdown": "Two",
+          "reveal_event": 0,
+          "position": null
+        }
+      ]
+    ],
+    "event_counts": [
+      1,
+      1
+    ],
+    "warnings": []
+  },
+  {
+    "name": "document mode keeps the existing unknown-directive behavior",
+    "mode": "document",
+    "source": "# Notes\n\n:::step{1}\n- item",
+    "expected_slide_blocks": [
+      [
+        {
+          "markdown": "# Notes",
+          "reveal_event": null,
+          "position": null
+        },
+        {
+          "markdown": "- item",
+          "reveal_event": null,
+          "position": null
+        }
+      ]
+    ],
+    "event_counts": [
+      0
+    ],
+    "warnings": [
+      "Unknown or malformed presentation directive was removed."
+    ]
+  },
+  {
+    "name": "arbitrary-length labels remain exact strings",
+    "mode": "presentation",
+    "source": "# Long labels\n\n:::step{000}\nZero\n\n:::step{@LONG_LABEL@}\nVery long\n\n:::step{000000}\nAlso zero\n\n:::step{@LONG_LABEL@}\nAlso very long",
+    "long_label_digits": 256,
+    "expected_slide_blocks": [
+      [
+        {
+          "markdown": "# Long labels",
+          "reveal_event": null,
+          "position": null
+        },
+        {
+          "markdown": "Zero",
+          "reveal_event": 0,
+          "position": null
+        },
+        {
+          "markdown": "Very long",
+          "reveal_event": 1,
+          "position": null
+        },
+        {
+          "markdown": "Also zero",
+          "reveal_event": 0,
+          "position": null
+        },
+        {
+          "markdown": "Also very long",
+          "reveal_event": 1,
+          "position": null
+        }
+      ]
+    ],
+    "event_counts": [
+      2
+    ],
+    "warnings": []
+  },
+  {
+    "name": "no-step source keeps every block unmarked",
+    "mode": "presentation",
+    "source": "# Plain\n\nVisible from entry\n\n- also visible",
+    "expected_slide_blocks": [
+      [
+        {
+          "markdown": "# Plain",
+          "reveal_event": null,
+          "position": null
+        },
+        {
+          "markdown": "Visible from entry",
+          "reveal_event": null,
+          "position": null
+        },
+        {
+          "markdown": "- also visible",
+          "reveal_event": null,
+          "position": null
+        }
+      ]
+    ],
+    "event_counts": [
+      0
+    ],
+    "warnings": []
+  },
+  {
+    "name": "escaped directive text and three-space markers retain source meaning",
+    "mode": "presentation",
+    "source": "# Escaped\n\n\\:::step{9}\nLiteral marker\n\n   :::step\nThree space step",
+    "expected_slide_blocks": [
+      [
+        {
+          "markdown": "# Escaped",
+          "reveal_event": null,
+          "position": null
+        },
+        {
+          "markdown": "\\:::step{9}\nLiteral marker",
+          "reveal_event": null,
+          "position": null
+        },
+        {
+          "markdown": "Three space step",
+          "reveal_event": 0,
+          "position": null
+        }
+      ]
+    ],
+    "event_counts": [
+      1
+    ],
+    "warnings": []
+  },
+  {
+    "name": "margin metadata remains ordered around steps and malformed markers warn",
+    "mode": "presentation",
+    "source": ":::section{Opening}\n:::subsection{Context}\n# Metadata\n\n:::step\nIntro\n\n:::footnote{Closing}\n\n---\n# Invalid ordering\n\n:::step!\nVisible after malformed\n\n:::section{Late}",
+    "expected_slide_blocks": [
+      [
+        {
+          "markdown": "# Metadata",
+          "reveal_event": null,
+          "position": null
+        },
+        {
+          "markdown": "Intro",
+          "reveal_event": 0,
+          "position": null
+        }
+      ],
+      [
+        {
+          "markdown": "# Invalid ordering",
+          "reveal_event": null,
+          "position": null
+        },
+        {
+          "markdown": "Visible after malformed",
+          "reveal_event": null,
+          "position": null
+        }
+      ]
+    ],
+    "event_counts": [
+      1,
+      0
+    ],
+    "warnings": [
+      "Section margin directive must appear at the beginning of a slide.",
+      "Malformed step directive was removed; use :::step or :::step{N} on its own line."
+    ]
+  }
+]

@@ -5,7 +5,7 @@
 <% editor_slide_map = editor_map&.dig(:slides, slide.index) %>
 <% editor_blocks = editor_slide_map&.fetch(:blocks, []) || [] %>
 <% editor_regions = editor_slide_map&.fetch(:editable_regions, []) || [] %>
-<section class="slide <%= 'presentation-slide ' if presentation_slide %>slide-<%= slide.layout %>" data-presentation-canvas-target="canvas" aria-label="Slide <%= slide.index + 1 %>"<% if editable %> data-editor-slide-id="slide-<%= slide.index + 1 %>" data-slide-index="<%= slide.index %>"<% end %>>
+<section class="slide <%= 'presentation-slide ' if presentation_slide %>slide-<%= slide.layout %>" data-presentation-canvas-target="canvas" aria-label="Slide <%= slide.index + 1 %>"<% unless slide.reveal_event_count.zero? %> data-elef-reveal-event-count="<%= slide.reveal_event_count %>"<% end %><% if editable %> data-editor-slide-id="slide-<%= slide.index + 1 %>" data-slide-index="<%= slide.index %>"<% end %>>
   <% if editable %>
     <div class="presentation-editor-slide-toolbar" aria-label="Slide <%= slide.index + 1 %> controls">
       <span class="presentation-editor-slide-label">Slide <%= slide.index + 1 %></span>
@@ -26,7 +26,7 @@
     <% if slide.title.present? %>
       <% title_block = editor_blocks.first %>
       <% title_region = title_block && editor_regions.find { |region| region[:block_id] == title_block[:id] } %>
-      <div class="slide-title slide-block <%= position_classes(slide.blocks.first&.position) %>"<% if editable && title_block %> data-editor-block-id="<%= title_block[:id] %>" data-editor-region-id="<%= title_region&.dig(:id) %>" data-editor-source-editable="<%= title_region&.dig(:editable) ? "true" : "false" %>"<% if title_region&.dig(:editable) %> contenteditable="true" role="textbox" aria-label="Editable slide title" aria-multiline="true" spellcheck="true" data-action="input->presentation-editor#blockInput focus->presentation-editor#blockFocus blur->presentation-editor#blockBlur"<% else %> contenteditable="false" aria-readonly="true"<% end %><% end %>>
+      <div class="slide-title slide-block <%= position_classes(slide.blocks.first&.position) %>"<% unless slide.blocks.first&.reveal_event.nil? %> data-elef-reveal-event="<%= slide.blocks.first.reveal_event %>"<% end %><% if editable && title_block %> data-editor-block-id="<%= title_block[:id] %>" data-editor-region-id="<%= title_region&.dig(:id) %>" data-editor-source-editable="<%= title_region&.dig(:editable) ? "true" : "false" %>"<% if title_region&.dig(:editable) %> contenteditable="true" role="textbox" aria-label="Editable slide title" aria-multiline="true" spellcheck="true" data-action="input->presentation-editor#blockInput focus->presentation-editor#blockFocus blur->presentation-editor#blockBlur"<% else %> contenteditable="false" aria-readonly="true"<% end %><% end %>>
         <%= render_markdown(slide.title, work: presentation) %>
       </div>
       <% if editable && title_block %>
@@ -49,10 +49,10 @@
         <% slide.regions.each do |region| %>
           <div class="slide-region">
             <% region.blocks.each do |block| %>
-              <% block_index = slide.blocks.index(block) %>
+              <% block_index = slide.blocks.index { |candidate| candidate.equal?(block) } %>
               <% editor_block = editor_blocks[block_index] %>
               <% editor_region = editor_block && editor_regions.find { |candidate| candidate[:block_id] == editor_block[:id] } %>
-              <div class="slide-block <%= position_classes(block.position) %>"<% if editable && editor_block %> data-editor-block-id="<%= editor_block[:id] %>" data-editor-region-id="<%= editor_region&.dig(:id) %>" data-editor-source-editable="<%= editor_region&.dig(:editable) ? "true" : "false" %>"<% if editor_region&.dig(:editable) %> contenteditable="true" role="textbox" aria-label="Editable slide block" aria-multiline="true" spellcheck="true" data-action="input->presentation-editor#blockInput focus->presentation-editor#blockFocus blur->presentation-editor#blockBlur"<% else %> contenteditable="false" aria-readonly="true"<% end %><% end %>>
+              <div class="slide-block <%= position_classes(block.position) %>"<% unless block.reveal_event.nil? %> data-elef-reveal-event="<%= block.reveal_event %>"<% end %><% if editable && editor_block %> data-editor-block-id="<%= editor_block[:id] %>" data-editor-region-id="<%= editor_region&.dig(:id) %>" data-editor-source-editable="<%= editor_region&.dig(:editable) ? "true" : "false" %>"<% if editor_region&.dig(:editable) %> contenteditable="true" role="textbox" aria-label="Editable slide block" aria-multiline="true" spellcheck="true" data-action="input->presentation-editor#blockInput focus->presentation-editor#blockFocus blur->presentation-editor#blockBlur"<% else %> contenteditable="false" aria-readonly="true"<% end %><% end %>>
                 <%= editable ? render_editor_block(block.markdown, editor_block, work: presentation) : render_markdown(block.markdown, work: presentation) %>
               </div>
               <% if editable && editor_block %>
@@ -86,7 +86,7 @@
       <% slide.blocks.each_with_index do |block, block_index| %>
         <% editor_block = editor_blocks[block_index] %>
         <% editor_region = editor_block && editor_regions.find { |candidate| candidate[:block_id] == editor_block[:id] } %>
-        <div class="slide-block <%= position_classes(block.position) %>"<% if editable && editor_block %> data-editor-block-id="<%= editor_block[:id] %>" data-editor-region-id="<%= editor_region&.dig(:id) %>" data-editor-source-editable="<%= editor_region&.dig(:editable) ? "true" : "false" %>"<% if editor_region&.dig(:editable) %> contenteditable="true" role="textbox" aria-label="Editable slide block" aria-multiline="true" spellcheck="true" data-action="input->presentation-editor#blockInput focus->presentation-editor#blockFocus blur->presentation-editor#blockBlur"<% else %> contenteditable="false" aria-readonly="true"<% end %><% end %>>
+          <div class="slide-block <%= position_classes(block.position) %>"<% unless block.reveal_event.nil? %> data-elef-reveal-event="<%= block.reveal_event %>"<% end %><% if editable && editor_block %> data-editor-block-id="<%= editor_block[:id] %>" data-editor-region-id="<%= editor_region&.dig(:id) %>" data-editor-source-editable="<%= editor_region&.dig(:editable) ? "true" : "false" %>"<% if editor_region&.dig(:editable) %> contenteditable="true" role="textbox" aria-label="Editable slide block" aria-multiline="true" spellcheck="true" data-action="input->presentation-editor#blockInput focus->presentation-editor#blockFocus blur->presentation-editor#blockBlur"<% else %> contenteditable="false" aria-readonly="true"<% end %><% end %>>
           <%= editable ? render_editor_block(block.markdown, editor_block, work: presentation) : render_markdown(block.markdown, work: presentation) %>
         </div>
         <% if editable && editor_block %>

@@ -438,6 +438,25 @@ class DesktopEditorUi {
     if (!other.hidden || other.active) throw new Error(`Another desktop slide remained visible: ${JSON.stringify(states)}`)
   }
 
+  async assertPresentationText(index, text, visible) {
+    const state = await browser.execute((slideIndex, content) => {
+      const frame = document.querySelectorAll("#desktop-preview .slide-frame")[slideIndex]
+      const block = [...(frame?.querySelectorAll(".slide-block[data-elef-reveal-event]") || [])]
+        .find(element => element.textContent.includes(content))
+      if (!block) return null
+      return {
+        visibility: getComputedStyle(block).visibility,
+        ariaHidden: block.getAttribute("aria-hidden"),
+        inert: block.hasAttribute("inert")
+      }
+    }, index, text)
+    if (!state) throw new Error(`Could not find reveal block ${JSON.stringify(text)} on slide ${index + 1}`)
+    const expectedVisibility = visible ? "visible" : "hidden"
+    if (state.visibility !== expectedVisibility || state.ariaHidden !== (visible ? null : "true") || state.inert !== !visible) {
+      throw new Error(`Unexpected reveal state for ${JSON.stringify(text)}: ${JSON.stringify(state)}`)
+    }
+  }
+
   async movePresentation(key) {
     await sendPresentationKey(key)
   }

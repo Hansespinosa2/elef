@@ -55,6 +55,7 @@ export function buildEditorStructure(source, { sourceName = "Untitled presentati
       directives: result.directives,
       editable_regions: regions
     }
+    if (metadata.reveal_event_count > 0) slideMap.reveal_event_count = metadata.reveal_event_count
     map.slides.push(slideMap)
     map.directives.push(...result.directives)
     map.editable_regions.push(...regions)
@@ -215,6 +216,8 @@ function editorBlocks(source, start, end, slide, slideIndex, mode) {
       source_range: { ...range },
       content_range: contentRange
     }
+    const revealEvent = slide.blocks[blockIndex]?.reveal_event
+    if (revealEvent !== undefined) block.reveal_event = revealEvent
     const region = editableRegion(markdown, blockStart, id, slideIndex, blockIndex, kind, slide, mode)
     block.editable_region_id = region.id
     blocks.push(block)
@@ -250,10 +253,14 @@ function editorBlocks(source, start, end, slide, slideIndex, mode) {
       flush()
       return
     }
+    if (mode === "presentation" && indentedStepCode(line.text)) {
+      current.push(line)
+      return
+    }
     if (/^\s*:::/.test(line.text)) {
       flush()
       const text = line.text.trim()
-      const directive = editorDirective(line, text, slideIndex, directives.length)
+      const directive = editorDirective(line, text, slideIndex, directives.length, mode)
       directives.push(directive)
       const position = positionFromBlock(text)
       if (position) {
@@ -274,15 +281,16 @@ function editorBlocks(source, start, end, slide, slideIndex, mode) {
   return { blocks, directives, regions }
 }
 
-function editorDirective(line, text, slideIndex, directiveIndex) {
+function editorDirective(line, text, slideIndex, directiveIndex, mode) {
+  const step = mode === "presentation" ? stepDirective(line.text) : null
   const position = /^:::(align|position)[ \t]*\{([^}]*)\}/.exec(text)
   const margin = /^:::(section|subsection|footnote)\{/.exec(text)
-  const type = text === ":::" ? "position_close" : position ? "position" : margin?.[1] ?? "unknown"
+  const type = text === ":::" ? "position_close" : step?.kind === "step" ? "step" : step?.kind === "malformed" ? "malformed_step" : position ? "position" : margin?.[1] ?? "unknown"
   const range = { start: line.start, end: line.end }
   return {
     id: `slide-${slideIndex + 1}-directive-${directiveIndex + 1}`,
     type,
-    value: position?.[2].trim() ?? null,
+    value: step?.kind === "step" ? step.label : position?.[2].trim() ?? null,
     text,
     range,
     source_range: { ...range },
@@ -293,7 +301,8 @@ function editorDirective(line, text, slideIndex, directiveIndex) {
 function positionScopeCloses(lines, startIndex) {
   let fence = null
   for (const line of lines.slice(startIndex + 1)) {
-    const incoming = fenceMarker(line.text)
+    const text = typeof line === "string" ? line : line.text
+    const incoming = fenceMarker(text)
     if (fence) {
       fence = toggleFence(fence, incoming)
       continue
@@ -302,8 +311,8 @@ function positionScopeCloses(lines, startIndex) {
       fence = incoming
       continue
     }
-    if (line.text.trim() === ":::") return true
-    if (/^\s*:::(?:align|position)[ \t]*\{/.test(line.text)) return false
+    if (text.trim() === ":::") return true
+    if (/^\s*:::(?:align|position)[ \t]*\{/.test(text)) return false
   }
   return false
 }
@@ -499,7 +508,7 @@ function slideMetadata(markdown, context, mode) {
     ? parseMarginDirectives(normalized, context)
     : { content: normalized, section: null, subsection: null, footnote: null, warnings: [] }
   normalized = margin.content
-  const parsed = parseBlocks(normalized)
+  const parsed = parseBlocks(normalized, mode)
   const layout = inferLayout(parsed.blocks)
   const title = ["two-column", "three-column"].includes(layout) ? parsed.blocks[0]?.markdown ?? null : null
   const regions = columnRegions(parsed.blocks, layout)
@@ -507,6 +516,7 @@ function slideMetadata(markdown, context, mode) {
     layout,
     title,
     blocks: parsed.blocks,
+    reveal_event_count: parsed.reveal_event_count,
     regions,
     section: margin.section,
     subsection: margin.subsection,
@@ -593,7 +603,15 @@ function marginDirective(line) {
   return { type: match[1], malformed: true }
 }
 
-function parseBlocks(markdown) {
+function parseBlocks(markdown, mode = "presentation") {
+  if (mode === "presentation" && hasStepDirectiveCandidate(markdown)) {
+    return parsePresentationBlocksWithSteps(markdown)
+  }
+
+  return { ...parseBlocksLegacy(markdown), reveal_event_count: 0 }
+}
+
+function parseBlocksLegacy(markdown) {
   const rawBlocks = markdownBlocks(markdown)
   const blocks = []
   const warnings = []
@@ -622,6 +640,180 @@ function parseBlocks(markdown) {
     }
   }
   return { blocks, warnings }
+}
+
+function hasStepDirectiveCandidate(markdown) {
+  let fence = null
+  let mathFence = null
+  for (const line of markdown.split("\n")) {
+    const incoming = fenceMarker(line)
+    if (fence) {
+      fence = toggleFence(fence, incoming)
+      continue
+    }
+    if (incoming) {
+      fence = incoming
+      continue
+    }
+    if (mathFence) {
+      if (displayMathFenceMarker(line) === mathFence) mathFence = null
+      continue
+    }
+    const opening = displayMathFenceOpener(line)
+    if (opening) {
+      mathFence = opening
+      continue
+    }
+    if (stepDirective(line)) return true
+  }
+  return false
+}
+
+function indentedStepCode(line) {
+  return /^ {4,}:::step(?=$|[^A-Za-z0-9_-])/i.test(line)
+}
+
+function stepDirective(line) {
+  if (indentedStepCode(line)) return { kind: "indented_code" }
+  if (!/^[ \t]*:::step(?=$|[^A-Za-z0-9_-])/i.test(line)) return null
+  const valid = /^ {0,3}:::step(?:\{([0-9]+)\})?[ \t]*$/.exec(line)
+  return valid
+    ? { kind: "step", label: valid[1] ?? null }
+    : { kind: "malformed" }
+}
+
+function canonicalStepLabel(label) {
+  return label.replace(/^0+/, "") || "0"
+}
+
+function parsePresentationBlocksWithSteps(markdown) {
+  const lines = markdown.split("\n")
+  const blocks = []
+  const warnings = []
+  let current = []
+  let pendingSteps = []
+  let pendingPosition = null
+  let scopedPosition = null
+  let stepSequence = 0
+  let fence = null
+  let mathFence = null
+
+  const warnConflictingSteps = () => {
+    const choices = new Set(pendingSteps.map(step => step.label === null ? "plain" : `label:${canonicalStepLabel(step.label)}`))
+    if (choices.size > 1) warnings.push("Conflicting step directives in one stack; the last valid step directive takes effect.")
+  }
+  const orphanSteps = () => {
+    if (!pendingSteps.length) return
+    warnConflictingSteps()
+    warnings.push("Step directive has no following contiguous Markdown group; place content immediately below it without a blank line.")
+    pendingSteps = []
+  }
+  const flush = () => {
+    if (!current.length) return
+    warnConflictingSteps()
+    const block = {
+      markdown: current.join("\n"),
+      position: pendingPosition ?? scopedPosition
+    }
+    const step = pendingSteps.at(-1)
+    if (step) block._reveal_identity = step.label === null
+      ? `plain:${step.sequence}`
+      : `label:${canonicalStepLabel(step.label)}`
+    blocks.push(block)
+    current = []
+    pendingSteps = []
+    pendingPosition = null
+  }
+
+  lines.forEach((line, lineIndex) => {
+    const incoming = fenceMarker(line)
+    if (fence) {
+      current.push(line)
+      fence = toggleFence(fence, incoming)
+      return
+    }
+    if (incoming) {
+      current.push(line)
+      fence = incoming
+      return
+    }
+    if (mathFence) {
+      current.push(line)
+      if (displayMathFenceMarker(line) === mathFence) mathFence = null
+      return
+    }
+    const opening = displayMathFenceOpener(line)
+    if (opening) {
+      current.push(line)
+      mathFence = opening
+      return
+    }
+
+    const step = stepDirective(line)
+    if (step?.kind === "indented_code") {
+      current.push(line)
+      return
+    }
+    if (!line.trim()) {
+      flush()
+      orphanSteps()
+      return
+    }
+
+    if (/^\s*:::\s*$/.test(line)) {
+      flush()
+      orphanSteps()
+      if (!scopedPosition) warnings.push("Unknown or malformed presentation directive was removed.")
+      pendingPosition = null
+      scopedPosition = null
+      return
+    }
+    if (step?.kind === "step") {
+      flush()
+      pendingSteps.push({ ...step, sequence: ++stepSequence })
+      return
+    }
+    if (step?.kind === "malformed") {
+      flush()
+      warnings.push("Malformed step directive was removed; use :::step or :::step{N} on its own line.")
+      return
+    }
+
+    const position = positionFromBlock(line)
+    if (position) {
+      flush()
+      const scoped = positionScopeCloses(lines, lineIndex)
+      if (scoped) {
+        scopedPosition = position
+        pendingPosition = null
+      } else {
+        scopedPosition = null
+        pendingPosition = position
+      }
+      return
+    }
+    if (/^\s*:::/.test(line)) {
+      flush()
+      orphanSteps()
+      warnings.push("Unknown or malformed presentation directive was removed.")
+      return
+    }
+
+    current.push(line)
+  })
+  flush()
+  orphanSteps()
+  if (pendingPosition) warnings.push("Alignment directive has no following Markdown block.")
+
+  const eventOrdinals = new Map()
+  let eventCount = 0
+  for (const block of blocks) {
+    if (!block._reveal_identity) continue
+    if (!eventOrdinals.has(block._reveal_identity)) eventOrdinals.set(block._reveal_identity, eventCount++)
+    block.reveal_event = eventOrdinals.get(block._reveal_identity)
+    delete block._reveal_identity
+  }
+  return { blocks, warnings, reveal_event_count: eventCount }
 }
 
 function markdownBlocks(markdown) {

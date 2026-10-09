@@ -185,6 +185,20 @@ class WebEditorUi {
     await expect(slides.nth(1 - index)).toBeHidden()
   }
 
+  async assertPresentationText(index, text, visible) {
+    const block = this.page.locator(".presentation-stage > .slide-frame").nth(index)
+      .locator(".slide-block[data-elef-reveal-event]").filter({ hasText: text })
+    await expect(block).toHaveCount(1)
+    const state = await block.evaluate(element => ({
+      visibility: getComputedStyle(element).visibility,
+      ariaHidden: element.getAttribute("aria-hidden"),
+      inert: element.hasAttribute("inert")
+    }))
+    expect(state.visibility).toBe(visible ? "visible" : "hidden")
+    expect(state.ariaHidden).toBe(visible ? null : "true")
+    expect(state.inert).toBe(!visible)
+  }
+
   async movePresentation(key) {
     await this.page.keyboard.press(key)
   }

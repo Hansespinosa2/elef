@@ -323,7 +323,8 @@ function renderPresentation(source, slides, style, margin, env) {
         ? editableMedia(rendered, block.markdown)
         : rendered
       const controls = valid ? renderPresentationBlockControls(index, blockIndex, blocks.length, block.position) : ""
-      return `<div class="${className}" ${attributes}>${content}</div>${controls}`
+      const revealAttribute = block.reveal_event === undefined ? "" : ` data-elef-reveal-event="${block.reveal_event}"`
+      return `<div class="${className}" ${attributes}${revealAttribute}>${content}</div>${controls}`
     }
     const titleMarkup = slide.title ? renderBlock(blocks[0], 0, true) : ""
     const contentBlocks = slide.title ? blocks.slice(1) : blocks
@@ -341,7 +342,8 @@ function renderPresentation(source, slides, style, margin, env) {
     const bottomMargin = margin.slide_count || margin.footnote
       ? `<div class="slide-margin slide-margin-bottom" aria-hidden="true">${margin.slide_count ? `<span class="slide-margin-count">${index + 1} / ${slides.length}</span>` : ""}${margin.footnote && slide.footnote ? `<span class="slide-margin-footnote" aria-label="Footnote"><span class="slide-margin-footnote-marker">*</span><span class="slide-margin-footnote-text">${renderMarkdownBlock(slide.footnote, env)}</span></span>` : ""}</div>`
       : ""
-    return `<div class="slide-frame" data-controller="presentation-canvas"><section class="slide slide-${slide.layout}" data-presentation-canvas-target="canvas" aria-label="Slide ${index + 1}" data-editor-slide-id="slide-${index + 1}" data-slide-index="${index}">${toolbar}${topMargin}<div class="slide-content">${titleMarkup}${slideContent}${empty}</div>${bottomMargin}</section></div>`
+    const revealCountAttribute = slide.reveal_event_count > 0 ? ` data-elef-reveal-event-count="${slide.reveal_event_count}"` : ""
+    return `<div class="slide-frame" data-controller="presentation-canvas"><section class="slide slide-${slide.layout}" data-presentation-canvas-target="canvas" aria-label="Slide ${index + 1}" data-editor-slide-id="slide-${index + 1}" data-slide-index="${index}"${revealCountAttribute}>${toolbar}${topMargin}<div class="slide-content">${titleMarkup}${slideContent}${empty}</div>${bottomMargin}</section></div>`
   }).join("")
   return `<div class="presentation-surface work-surface slides slides-theme-${style.theme} slides-typography-${style.typography} work-theme-${style.theme} work-typography-${style.typography} presentation-editor-projection" data-controller="mermaid-diagrams" data-presentation-editor-target="canvas">${frames}</div>`
 }

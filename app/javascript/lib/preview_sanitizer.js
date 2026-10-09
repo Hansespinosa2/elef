@@ -68,6 +68,8 @@ function safeAttribute(element, name, value, interactive, documentPagination, me
   if (lower === "data-editor-math-source") return element.tagName === "SPAN" && ["katex", "katex-display", "math-error"].some(className => element.classList.contains(className))
   if (lower === "data-editor-math-open" || lower === "data-editor-math-close") return MATH_DELIMITERS.has(value)
   if (lower === "data-presentation-canvas-target") return interactive && element.tagName === "SECTION" && value === "canvas"
+  if (lower === "data-elef-reveal-event") return element.tagName === "DIV" && element.classList.contains("slide-block") && /^(?:0|[1-9]\d*)$/.test(value)
+  if (lower === "data-elef-reveal-event-count") return element.tagName === "SECTION" && element.classList.contains("slide") && /^[1-9]\d*$/.test(value)
   if (lower === "data-presentation-editor-target") return interactive && element.tagName === "DIV" && element.classList.contains("presentation-surface") && value === "canvas"
   if (lower === "data-document-pages-target") {
     const reader = element.parentElement

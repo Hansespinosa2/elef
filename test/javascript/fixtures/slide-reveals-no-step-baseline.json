@@ -1,0 +1,554 @@
+{
+  "baseline_commit": "3ce290e539f8e4a57e5a6dc0ba994073e53f3a6a",
+  "source": "# Baseline visual contract\n\n## Left\n\nA paragraph with **formatting**.\n\n## Right\n\n- first\n- second\n\n---\n# Baseline export\n\nUse [links](https://example.test).\n\n| Name | Count |\n| --- | ---: |\n| Alpha | 2 |",
+  "first_slide_html": "<!-- BEGIN app/views/presentations/_slide.html.erb\n--><section class=\"slide presentation-slide slide-two-column\" data-presentation-canvas-target=\"canvas\" aria-label=\"Slide 1\">\n    <div class=\"slide-margin slide-margin-top\" aria-hidden=\"true\">\n      <span class=\"slide-margin-subsection\"></span>\n      <span class=\"slide-margin-section\"></span>\n    </div>\n  <div class=\"slide-content\">\n      <div class=\"slide-title slide-block \">\n        <h1>Baseline visual contract</h1>\n\n      </div>\n      <div class=\"slide-regions\">\n          <div class=\"slide-region\">\n              <div class=\"slide-block \">\n                <h2>Left</h2>\n\n              </div>\n              <div class=\"slide-block \">\n                <p>A paragraph with <strong>formatting</strong>.</p>\n\n              </div>\n          </div>\n          <div class=\"slide-region\">\n              <div class=\"slide-block \">\n                <h2>Right</h2>\n\n              </div>\n              <div class=\"slide-block \">\n                <ul>\n<li>first</li>\n<li>second</li>\n</ul>\n\n              </div>\n          </div>\n      </div>\n  </div>\n    <div class=\"slide-margin slide-margin-bottom\" aria-hidden=\"true\">\n      <span class=\"slide-margin-count\">1 / 2</span>\n    </div>\n</section>\n<!-- END app/views/presentations/_slide.html.erb -->",
+  "editor_map": {
+    "version": 1,
+    "source_name": "Reveal baseline",
+    "mode": "presentation",
+    "source_length": 203,
+    "front_matter": null,
+    "slides": [
+      {
+        "id": "slide-1",
+        "index": 0,
+        "layout": "two-column",
+        "range": {
+          "start": 0,
+          "end": 99
+        },
+        "source_range": {
+          "start": 0,
+          "end": 99
+        },
+        "delimiter_range": {
+          "start": 99,
+          "end": 103
+        },
+        "blocks": [
+          {
+            "id": "slide-1-block-1",
+            "index": 0,
+            "kind": "heading",
+            "markdown": "# Baseline visual contract",
+            "position": null,
+            "position_directive_id": null,
+            "position_scope": null,
+            "range": {
+              "start": 0,
+              "end": 27
+            },
+            "source_range": {
+              "start": 0,
+              "end": 27
+            },
+            "content_range": {
+              "start": 0,
+              "end": 26
+            },
+            "editable_region_id": "slide-1-region-1"
+          },
+          {
+            "id": "slide-1-block-2",
+            "index": 1,
+            "kind": "heading",
+            "markdown": "## Left",
+            "position": null,
+            "position_directive_id": null,
+            "position_scope": null,
+            "range": {
+              "start": 28,
+              "end": 36
+            },
+            "source_range": {
+              "start": 28,
+              "end": 36
+            },
+            "content_range": {
+              "start": 28,
+              "end": 35
+            },
+            "editable_region_id": "slide-1-region-2"
+          },
+          {
+            "id": "slide-1-block-3",
+            "index": 2,
+            "kind": "paragraph",
+            "markdown": "A paragraph with **formatting**.",
+            "position": null,
+            "position_directive_id": null,
+            "position_scope": null,
+            "range": {
+              "start": 37,
+              "end": 70
+            },
+            "source_range": {
+              "start": 37,
+              "end": 70
+            },
+            "content_range": {
+              "start": 37,
+              "end": 69
+            },
+            "editable_region_id": "slide-1-region-3"
+          },
+          {
+            "id": "slide-1-block-4",
+            "index": 3,
+            "kind": "heading",
+            "markdown": "## Right",
+            "position": null,
+            "position_directive_id": null,
+            "position_scope": null,
+            "range": {
+              "start": 71,
+              "end": 80
+            },
+            "source_range": {
+              "start": 71,
+              "end": 80
+            },
+            "content_range": {
+              "start": 71,
+              "end": 79
+            },
+            "editable_region_id": "slide-1-region-4"
+          },
+          {
+            "id": "slide-1-block-5",
+            "index": 4,
+            "kind": "list",
+            "markdown": "- first\n- second",
+            "position": null,
+            "position_directive_id": null,
+            "position_scope": null,
+            "range": {
+              "start": 81,
+              "end": 98
+            },
+            "source_range": {
+              "start": 81,
+              "end": 98
+            },
+            "content_range": {
+              "start": 81,
+              "end": 97
+            },
+            "editable_region_id": "slide-1-region-5"
+          }
+        ],
+        "directives": [],
+        "editable_regions": [
+          {
+            "id": "slide-1-region-1",
+            "block_id": "slide-1-block-1",
+            "role": "title",
+            "kind": "heading",
+            "text": "Baseline visual contract",
+            "range": {
+              "start": 0,
+              "end": 26
+            },
+            "source_range": {
+              "start": 0,
+              "end": 26
+            },
+            "content_range": {
+              "start": 2,
+              "end": 26
+            },
+            "editable": true
+          },
+          {
+            "id": "slide-1-region-2",
+            "block_id": "slide-1-block-2",
+            "role": "heading",
+            "kind": "heading",
+            "text": "Left",
+            "range": {
+              "start": 28,
+              "end": 35
+            },
+            "source_range": {
+              "start": 28,
+              "end": 35
+            },
+            "content_range": {
+              "start": 31,
+              "end": 35
+            },
+            "editable": true
+          },
+          {
+            "id": "slide-1-region-3",
+            "block_id": "slide-1-block-3",
+            "role": "block",
+            "kind": "paragraph",
+            "text": "A paragraph with **formatting**.",
+            "range": {
+              "start": 37,
+              "end": 69
+            },
+            "source_range": {
+              "start": 37,
+              "end": 69
+            },
+            "content_range": {
+              "start": 37,
+              "end": 69
+            },
+            "editable": true
+          },
+          {
+            "id": "slide-1-region-4",
+            "block_id": "slide-1-block-4",
+            "role": "heading",
+            "kind": "heading",
+            "text": "Right",
+            "range": {
+              "start": 71,
+              "end": 79
+            },
+            "source_range": {
+              "start": 71,
+              "end": 79
+            },
+            "content_range": {
+              "start": 74,
+              "end": 79
+            },
+            "editable": true
+          },
+          {
+            "id": "slide-1-region-5",
+            "block_id": "slide-1-block-5",
+            "role": "block",
+            "kind": "list",
+            "text": "- first\n- second",
+            "range": {
+              "start": 81,
+              "end": 97
+            },
+            "source_range": {
+              "start": 81,
+              "end": 97
+            },
+            "content_range": {
+              "start": 81,
+              "end": 97
+            },
+            "editable": true
+          }
+        ]
+      },
+      {
+        "id": "slide-2",
+        "index": 1,
+        "layout": "body",
+        "range": {
+          "start": 103,
+          "end": 203
+        },
+        "source_range": {
+          "start": 103,
+          "end": 203
+        },
+        "delimiter_range": null,
+        "blocks": [
+          {
+            "id": "slide-2-block-1",
+            "index": 0,
+            "kind": "heading",
+            "markdown": "# Baseline export",
+            "position": null,
+            "position_directive_id": null,
+            "position_scope": null,
+            "range": {
+              "start": 103,
+              "end": 121
+            },
+            "source_range": {
+              "start": 103,
+              "end": 121
+            },
+            "content_range": {
+              "start": 103,
+              "end": 120
+            },
+            "editable_region_id": "slide-2-region-1"
+          },
+          {
+            "id": "slide-2-block-2",
+            "index": 1,
+            "kind": "paragraph",
+            "markdown": "Use [links](https://example.test).",
+            "position": null,
+            "position_directive_id": null,
+            "position_scope": null,
+            "range": {
+              "start": 122,
+              "end": 157
+            },
+            "source_range": {
+              "start": 122,
+              "end": 157
+            },
+            "content_range": {
+              "start": 122,
+              "end": 156
+            },
+            "editable_region_id": "slide-2-region-2"
+          },
+          {
+            "id": "slide-2-block-3",
+            "index": 2,
+            "kind": "table",
+            "markdown": "| Name | Count |\n| --- | ---: |\n| Alpha | 2 |",
+            "position": null,
+            "position_directive_id": null,
+            "position_scope": null,
+            "range": {
+              "start": 158,
+              "end": 203
+            },
+            "source_range": {
+              "start": 158,
+              "end": 203
+            },
+            "content_range": {
+              "start": 158,
+              "end": 203
+            },
+            "editable_region_id": "slide-2-region-3"
+          }
+        ],
+        "directives": [],
+        "editable_regions": [
+          {
+            "id": "slide-2-region-1",
+            "block_id": "slide-2-block-1",
+            "role": "heading",
+            "kind": "heading",
+            "text": "Baseline export",
+            "range": {
+              "start": 103,
+              "end": 120
+            },
+            "source_range": {
+              "start": 103,
+              "end": 120
+            },
+            "content_range": {
+              "start": 105,
+              "end": 120
+            },
+            "editable": true
+          },
+          {
+            "id": "slide-2-region-2",
+            "block_id": "slide-2-block-2",
+            "role": "block",
+            "kind": "paragraph",
+            "text": "Use [links](https://example.test).",
+            "range": {
+              "start": 122,
+              "end": 156
+            },
+            "source_range": {
+              "start": 122,
+              "end": 156
+            },
+            "content_range": {
+              "start": 122,
+              "end": 156
+            },
+            "editable": true
+          },
+          {
+            "id": "slide-2-region-3",
+            "block_id": "slide-2-block-3",
+            "role": "block",
+            "kind": "table",
+            "text": "| Name | Count |\n| --- | ---: |\n| Alpha | 2 |",
+            "range": {
+              "start": 158,
+              "end": 203
+            },
+            "source_range": {
+              "start": 158,
+              "end": 203
+            },
+            "content_range": {
+              "start": 158,
+              "end": 203
+            },
+            "editable": true
+          }
+        ]
+      }
+    ],
+    "directives": [],
+    "editable_regions": [
+      {
+        "id": "slide-1-region-1",
+        "block_id": "slide-1-block-1",
+        "role": "title",
+        "kind": "heading",
+        "text": "Baseline visual contract",
+        "range": {
+          "start": 0,
+          "end": 26
+        },
+        "source_range": {
+          "start": 0,
+          "end": 26
+        },
+        "content_range": {
+          "start": 2,
+          "end": 26
+        },
+        "editable": true
+      },
+      {
+        "id": "slide-1-region-2",
+        "block_id": "slide-1-block-2",
+        "role": "heading",
+        "kind": "heading",
+        "text": "Left",
+        "range": {
+          "start": 28,
+          "end": 35
+        },
+        "source_range": {
+          "start": 28,
+          "end": 35
+        },
+        "content_range": {
+          "start": 31,
+          "end": 35
+        },
+        "editable": true
+      },
+      {
+        "id": "slide-1-region-3",
+        "block_id": "slide-1-block-3",
+        "role": "block",
+        "kind": "paragraph",
+        "text": "A paragraph with **formatting**.",
+        "range": {
+          "start": 37,
+          "end": 69
+        },
+        "source_range": {
+          "start": 37,
+          "end": 69
+        },
+        "content_range": {
+          "start": 37,
+          "end": 69
+        },
+        "editable": true
+      },
+      {
+        "id": "slide-1-region-4",
+        "block_id": "slide-1-block-4",
+        "role": "heading",
+        "kind": "heading",
+        "text": "Right",
+        "range": {
+          "start": 71,
+          "end": 79
+        },
+        "source_range": {
+          "start": 71,
+          "end": 79
+        },
+        "content_range": {
+          "start": 74,
+          "end": 79
+        },
+        "editable": true
+      },
+      {
+        "id": "slide-1-region-5",
+        "block_id": "slide-1-block-5",
+        "role": "block",
+        "kind": "list",
+        "text": "- first\n- second",
+        "range": {
+          "start": 81,
+          "end": 97
+        },
+        "source_range": {
+          "start": 81,
+          "end": 97
+        },
+        "content_range": {
+          "start": 81,
+          "end": 97
+        },
+        "editable": true
+      },
+      {
+        "id": "slide-2-region-1",
+        "block_id": "slide-2-block-1",
+        "role": "heading",
+        "kind": "heading",
+        "text": "Baseline export",
+        "range": {
+          "start": 103,
+          "end": 120
+        },
+        "source_range": {
+          "start": 103,
+          "end": 120
+        },
+        "content_range": {
+          "start": 105,
+          "end": 120
+        },
+        "editable": true
+      },
+      {
+        "id": "slide-2-region-2",
+        "block_id": "slide-2-block-2",
+        "role": "block",
+        "kind": "paragraph",
+        "text": "Use [links](https://example.test).",
+        "range": {
+          "start": 122,
+          "end": 156
+        },
+        "source_range": {
+          "start": 122,
+          "end": 156
+        },
+        "content_range": {
+          "start": 122,
+          "end": 156
+        },
+        "editable": true
+      },
+      {
+        "id": "slide-2-region-3",
+        "block_id": "slide-2-block-3",
+        "role": "block",
+        "kind": "table",
+        "text": "| Name | Count |\n| --- | ---: |\n| Alpha | 2 |",
+        "range": {
+          "start": 158,
+          "end": 203
+        },
+        "source_range": {
+          "start": 158,
+          "end": 203
+        },
+        "content_range": {
+          "start": 158,
+          "end": 203
+        },
+        "editable": true
+      }
+    ]
+  }
+}

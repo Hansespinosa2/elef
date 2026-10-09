@@ -241,6 +241,23 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_select ".presentation-print .slide h1", text: "Latest draft", count: 0
   end
 
+  test "Present receives reveal counts while print keeps every event on one slide" do
+    presentation = Presentation.create!(title: "Reveal print", source: "# One slide\n\n:::step{1}\nFirst event\n\n:::step{1}\nTogether\n\n:::step{2}\nLast event")
+
+    get present_presentation_path(presentation)
+    assert_response :success
+    assert_select ".presentation-slide[data-elef-reveal-event-count='2']"
+    assert_select ".presentation-slide .slide-block[data-elef-reveal-event='0']", count: 2
+    assert_select ".presentation-slide .slide-block[data-elef-reveal-event='1']", count: 1
+
+    get print_presentation_path(presentation)
+    assert_response :success
+    assert_select ".presentation-print-slides > .slide-frame", count: 1
+    assert_select ".presentation-print .slide-block.is-presentation-reveal-hidden, .presentation-print .slide-block[inert], .presentation-print .slide-block[aria-hidden='true']", count: 0
+    assert_select ".presentation-print .slide-block[data-elef-reveal-event='0']", count: 2
+    assert_select ".presentation-print .slide-block[data-elef-reveal-event='1']", count: 1
+  end
+
   test "PPTX JSON describes the latest draft with slide geometry inputs and typography" do
     presentation = presentations(:one)
 
