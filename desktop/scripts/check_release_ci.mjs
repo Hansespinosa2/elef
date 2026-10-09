@@ -74,9 +74,21 @@ assert.match(releaseWorkflow, /actions: read[\s\S]*contents: write[\s\S]*pull-re
 assert.match(releaseWorkflow, /publish_desktop_release_state\.mjs pages source/, "the workflow must use the tested CAS publisher")
 assert.match(releaseWorkflow, /steps\.publish\.outputs\.failed_gate_count/, "terminal Gate A failures must produce an owner-visible workflow failure")
 assert.match(releaseWorkflow, /options: \[ reconcile, minor \]/, "ordinary release workflow must leave emergency controls to the unqueued control path")
+const pagesCheckouts = releaseWorkflow.split("ref: gh-pages").slice(1)
+assert.equal(pagesCheckouts.length, 6, "each release workflow Pages checkout must be explicit")
+assert.ok(pagesCheckouts.every(block => block.slice(0, 180).includes("persist-credentials: false")), "Pages checkouts must not persist the general Actions token")
+const appTokenAction = "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1"
+assert.equal((releaseWorkflow.match(new RegExp(escapeRegExp(`uses: ${appTokenAction}`), "g")) ?? []).length, 7, "every Pages ledger writer and failure recorder must mint a dedicated App token")
+assert.match(releaseWorkflow, /repositories: elef\n\s+permission-contents: write/, "the writer App token must be scoped to the Elef repository contents")
+for (const jobName of ["reconcile", "linux-release", "macos-release", "aur-release"]) {
+  assert.match(jobBlock(releaseWorkflow, jobName), /ELEF_RELEASE_STATE_PUSH_TOKEN:/, `${jobName} must pass the dedicated App token only to its Pages writer`)
+}
 assert.match(releaseControls, /options: \[ block, unblock \]/, "emergency block and unblock must have a dedicated dispatch path")
 assert.match(releaseControls, /if: github\.ref == 'refs\/heads\/main'/, "emergency controls must run only from trusted main code")
 assert.match(releaseControls, /environment: desktop-release-state/, "emergency controls must use the protected release-state environment")
+assert.equal((releaseControls.match(new RegExp(escapeRegExp(`uses: ${appTokenAction}`), "g")) ?? []).length, 1, "emergency controls must mint the dedicated release-state App token")
+assert.match(releaseControls, /ELEF_RELEASE_STATE_PUSH_TOKEN: \$\{\{ steps\.pages-writer-token\.outputs\.token \}\}/, "emergency ledger writes must use the dedicated App token")
+assert.match(releaseControls, /ref: gh-pages\n\s+path: pages\n\s+fetch-depth: 1\n\s+persist-credentials: false/, "emergency control checkout must not retain the general Actions token")
 assert.match(releaseControls, /actions: write/, "emergency blocks must be able to cancel a stale publisher after committing block state")
 assert.match(releaseControls, /publish_desktop_release_state\.mjs pages source/, "emergency controls must use the CAS ledger writer")
 assert.match(releaseControls, /cancel_desktop_release_runs\.mjs/, "emergency blocks must stop any active release coordinator after the ledger update")

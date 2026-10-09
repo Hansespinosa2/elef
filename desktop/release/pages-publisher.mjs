@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises"
+import { Buffer } from "node:buffer"
 import { spawnSync } from "node:child_process"
 import path from "node:path"
 
@@ -78,9 +79,23 @@ function resultFor(before, after, reconciliation) {
 }
 
 function runGitCommand(root, args) {
-  const result = spawnSync("git", ["-C", root, ...args], { encoding: "utf8", maxBuffer: 1024 * 1024 })
+  const result = spawnSync("git", gitCommandArguments(root, args, process.env.ELEF_RELEASE_STATE_PUSH_TOKEN), {
+    encoding: "utf8",
+    maxBuffer: 1024 * 1024
+  })
   if (result.error) throw new Error("could not run Git for Pages state publication")
   return { status: result.status ?? 1, stdout: result.stdout || "", stderr: result.stderr || "" }
+}
+
+export function gitPushAuthenticationOptions(token) {
+  if (typeof token !== "string" || !token) throw new Error("release-state writer token is missing")
+  const authorization = Buffer.from(`x-access-token:${token}`, "utf8").toString("base64")
+  return ["-c", `http.https://github.com/.extraheader=AUTHORIZATION: basic ${authorization}`]
+}
+
+export function gitCommandArguments(root, args, pushToken) {
+  const pushOptions = args[0] === "push" ? gitPushAuthenticationOptions(pushToken) : []
+  return ["-C", root, ...pushOptions, ...args]
 }
 
 function runChecked(result, action) {

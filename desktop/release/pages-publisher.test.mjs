@@ -1,7 +1,21 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 
-import { publishPagesStateWithRetry } from "./pages-publisher.mjs"
+import { gitCommandArguments, gitPushAuthenticationOptions, publishPagesStateWithRetry } from "./pages-publisher.mjs"
+
+test("Pages pushes use only the short-lived dedicated writer token", () => {
+  const options = gitPushAuthenticationOptions("fixture-token")
+  assert.equal(options[0], "-c")
+  assert.match(options[1], /^http\.https:\/\/github\.com\/.extraheader=AUTHORIZATION: basic /)
+  assert.equal(Buffer.from(options[1].split("basic ")[1], "base64").toString("utf8"), "x-access-token:fixture-token")
+  assert.doesNotMatch(options[1], /fixture-token/)
+  assert.throws(() => gitPushAuthenticationOptions(""), /token is missing/)
+  assert.deepEqual(gitCommandArguments("/tmp/pages", ["fetch", "origin"], undefined), ["-C", "/tmp/pages", "fetch", "origin"])
+  assert.deepEqual(gitCommandArguments("/tmp/pages", ["push", "origin", "HEAD:refs/heads/gh-pages"], "fixture-token"), [
+    "-C", "/tmp/pages", ...options, "push", "origin", "HEAD:refs/heads/gh-pages"
+  ])
+  assert.throws(() => gitCommandArguments("/tmp/pages", ["push", "origin"], undefined), /token is missing/)
+})
 
 test("a competing Pages update causes a fresh reconciliation before the retry push", async () => {
   const remote = { sha: "a".repeat(40), fetchSha: "", localSha: "" }

@@ -45,6 +45,7 @@ jobs:
           ref: gh-pages
           path: pages
           fetch-depth: 1
+          persist-credentials: false
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -61,6 +62,16 @@ jobs:
           test -n "$DESKTOP_RELEASE_VERSIONS"
           test -n "$DESKTOP_RELEASE_REASON"
 
+      - name: Create the short-lived Pages writer token
+        id: pages-writer-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          client-id: ${{ vars.ELEF_RELEASE_STATE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.ELEF_RELEASE_STATE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: elef
+          permission-contents: write
+
       - name: Compare-and-swap the block ledger and safe feed
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -71,6 +82,7 @@ jobs:
           DESKTOP_RELEASE_ACTION: ${{ inputs.action }}
           DESKTOP_RELEASE_VERSIONS: ${{ inputs.versions }}
           DESKTOP_RELEASE_REASON: ${{ inputs.reason }}
+          ELEF_RELEASE_STATE_PUSH_TOKEN: ${{ steps.pages-writer-token.outputs.token }}
         run: node source/desktop/scripts/publish_desktop_release_state.mjs pages source
 
       - name: Cancel an active coordinator after recording the block

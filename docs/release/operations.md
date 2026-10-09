@@ -8,6 +8,19 @@ For a PR from another author, the latest owner approval must target the final PR
 
 The workflow reconciles the actual first-parent `main` history, reruns the exact-SHA gate evidence, and updates `desktop/stable/state.json` and its derived `latest.json` projection in one compare-and-swap commit on `gh-pages`. A reserved version or a successful build is not a public release or an installation result.
 
+## One-time Pages writer setup
+
+The Pages branch accepts ledger updates only from a dedicated `elef-release-state-writer` GitHub App. The App must be installed on the Elef repository only and have repository **Contents: read and write** permission. Do not use the GitHub Actions integration as the branch bypass actor: any same-repository workflow with a write token would otherwise be able to change the ledger. The workflows use a short-lived installation token only for the Pages `git push`; `GITHUB_TOKEN` credentials are not persisted in Pages checkouts.
+
+After creating and installing the App:
+
+1. Add the App's Client ID as repository Actions variable `ELEF_RELEASE_STATE_APP_CLIENT_ID`.
+2. Add the same generated App private key as environment secret `ELEF_RELEASE_STATE_APP_PRIVATE_KEY` in `desktop-release-state`, `desktop-release-signing`, and `desktop-aur-publishing`. Keep all three environments restricted to `main`; their other release secrets remain scoped to their existing environment.
+3. From an authenticated repository-admin checkout, run `node desktop/scripts/configure_release_state_ruleset.mjs <APP_ID> --apply`. This creates or updates a separate active rule that matches only `refs/heads/gh-pages`, blocks ordinary updates, and lets only that App bypass the update rule. It leaves the existing deletion and non-fast-forward protection ruleset unchanged, so the App cannot use its bypass to delete or force-push the branch.
+4. Run `node desktop/scripts/configure_release_state_ruleset.mjs <APP_ID>` without `--apply`; it must report the active matching rule and exactly one App bypass actor. The first successful workflow CAS push is still required to prove the credential path end to end.
+
+The App ID passed to the setup command is its numeric integration ID, not its Client ID. The workflow's repository variable is the Client ID. Until the App is installed, the environment secrets are configured, and the ruleset is verified, GitHub Pages hosting is available but automatic ledger publication remains **BLOCKED_EXTERNAL**. The scripts fail closed when the dedicated push token is missing.
+
 ## Emergency block or unblock
 
 Use `Desktop Release Emergency Controls` on the protected `main` ref. Select `block` or `unblock`, list one or more semantic versions such as `0.1.0`, and give the reason. The workflow checks that the actor is the repository owner, writes the ledger and safe feed through the Pages compare-and-swap publisher, and updates the corresponding GitHub Release notes.
