@@ -11,12 +11,13 @@ export class ReleaseLedgerError extends Error {
   }
 }
 
-export function createLedger({ currentMinor = "0.1" } = {}) {
+export function createLedger({ currentMinor = "0.1", lastReconciledMain = null } = {}) {
   parseMinor(currentMinor)
+  assert(lastReconciledMain === null || SHA_PATTERN.test(lastReconciledMain), "initial main watermark must be a commit SHA")
   return {
     schema_version: LEDGER_SCHEMA_VERSION,
     revision: 0,
-    last_reconciled_main: null,
+    last_reconciled_main: lastReconciledMain,
     current_minor: currentMinor,
     minor_changes: [],
     reserved_versions: [],
