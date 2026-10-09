@@ -403,25 +403,15 @@ class ArtTest < ApplicationSystemTestCase
   end
 
   test "grouped Art controls stay anchored across Rails and JavaScript renderers" do
-    left_region = [
-      ":::align{middle left}\n:::art\n- Stack left",
-      "Left marker.",
-      ":::align{middle center}\n:::art\n- Stack center",
-      "Center marker.",
-      ":::align{middle right}\n:::art\n- Stack right",
-      "Middle footer separator.",
-      ":::align{bottom left}\n:::art\n- Footer left",
-      ":::align{bottom center}\nFooter marker.",
-      ":::align{bottom center}\n:::art\n- Footer center",
-      ":::align{bottom right}\nFooter marker.",
-      ":::align{bottom right}\n:::art\n- Footer right"
-    ].join("\n\n")
-    source = [
-      "# Deck",
-      "## Left\n\n#{left_region}",
-      "## Right\n\nRight column text.",
-      "## Third\n\nThird column text."
-    ].join("\n\n")
+    source = ["# Deck", *%w[left center right].map do |horizontal|
+      title = horizontal.titleize
+      [
+        "## #{title}",
+        ":::align{middle #{horizontal}}\n:::art\n- Stack #{horizontal}",
+        "x",
+        ":::align{bottom #{horizontal}}\n:::art\n- Footer #{horizontal}"
+      ].join("\n\n")
+    end].join("\n\n")
     presentation = Presentation.create!(title: "Grouped Art controls", source: source)
 
     visit edit_presentation_path(presentation)
@@ -431,7 +421,7 @@ class ArtTest < ApplicationSystemTestCase
     javascript_geometry = grouped_art_control_geometry
     assert_grouped_art_control_geometry(javascript_geometry)
     first_art_index = javascript_geometry.first.fetch("blockIndex")
-    first_footer_index = javascript_geometry[3].fetch("blockIndex")
+    first_footer_index = javascript_geometry[1].fetch("blockIndex")
 
     editor_map = Source::Document.editor_map(source, source_name: presentation.title, mode: :presentation)
     rails_html = PresentationsController.renderer.render(
@@ -485,7 +475,7 @@ class ArtTest < ApplicationSystemTestCase
     assert_equal "middle right", first("select[data-presentation-editor-align][data-slide-index='0'][data-block-index='#{first_art_index}']", visible: :all)["value"]
     assert_selector "form.visual-editor-form:not([data-preview-projection-stale='true'])", wait: 10
 
-    all(".slide-region[data-art-host='fixed'] [data-elef-art-root]")[3].hover
+    all(".slide-region[data-art-host='fixed'] [data-elef-art-root]")[1].hover
     first_footer_alignment = first("select[data-presentation-editor-align][data-slide-index='0'][data-block-index='#{first_footer_index}']")
     first_footer_alignment.select("Bottom Center")
     assert_field "Markdown source", with: /:::align\{bottom center\}/, wait: 5
@@ -498,7 +488,7 @@ class ArtTest < ApplicationSystemTestCase
     assert_equal "middle right", first("select[data-presentation-editor-align][data-slide-index='0'][data-block-index='#{first_art_index}']", visible: :all)["value"]
     assert_equal "bottom center", first("select[data-presentation-editor-align][data-slide-index='0'][data-block-index='#{first_footer_index}']", visible: :all)["value"]
     first_art_block_id = javascript_geometry.first.fetch("blockId")
-    first_footer_block_id = javascript_geometry[3].fetch("blockId")
+    first_footer_block_id = javascript_geometry[1].fetch("blockId")
     assert_includes find(".slide-block[data-editor-block-id='#{first_art_block_id}']")["class"], "position-right"
     assert_includes find(".slide-block[data-editor-block-id='#{first_footer_block_id}']")["class"], "position-center"
   end
@@ -619,8 +609,8 @@ class ArtTest < ApplicationSystemTestCase
   def assert_grouped_art_control_geometry(geometry)
     assert_equal 6, geometry.length
     geometry.each_with_index do |entry, index|
-      expected_horizontal = %w[left center right][index % 3]
-      expected_vertical = index < 3 ? "middle" : "bottom"
+      expected_horizontal = %w[left center right][index / 2]
+      expected_vertical = index.even? ? "middle" : "bottom"
       assert_includes entry.fetch("classes"), "position-#{expected_horizontal}"
       assert_includes entry.fetch("classes"), "position-#{expected_vertical}"
       assert entry.fetch("controlsDirect"), "Art controls must be direct children of their Art region: #{entry.inspect}"
