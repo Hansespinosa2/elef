@@ -10,7 +10,7 @@ This file is the persistent requirement-to-evidence map for [the approved releas
 - **Physical Mac:** this session runs on Omarchy Linux x86-64, not Apple Silicon macOS. **BLOCKED_EXTERNAL:** Gate B Mac install/update/rollback needs an actual Apple Silicon Mac. Hosted ARM64 CI can satisfy Gate A only.
 - **Local build:** `npm run build --prefix desktop/frontend` was attempted before edits and stopped because `desktop/frontend/node_modules/esbuild` is absent. No test or build has passed in this session yet; install locked dependencies and rerun.
 - **Observed implementation:** Stable already uses Tauri ID `com.elef.desktop` and app-data `library-root.json`; native update staging/recovery exists. Current production updater points to GitHub `releases/latest`, Linux targets AppImage, the desktop runtime imports visual editor/document-link/document-graph controllers, and several required CI jobs skip `push` events.
-- **Current commit:** `56151d2c2cd5b73e10b23c51b1aa876c76958d0f` (`Record desktop release constitution baseline`). PR target: `main`, subject to owner review. No merge will be performed by this work.
+- **Initial documentation commit:** `56151d2c2cd5b73e10b23c51b1aa876c76958d0f` (`Record desktop release constitution baseline`). Subsequent status and implementation changes remain on this feature branch. PR target: `main`, subject to owner review. No merge will be performed by this work.
 
 ## Requirement map
 
