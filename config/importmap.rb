@@ -47,6 +47,7 @@ pin "host/rails-authoring-settings-transport", to: "host/rails-authoring-setting
 pin "@elef/work-model", to: "work-model/src/index.js"
 pin "@elef/work-model/document-map", to: "work-model/src/document_map.js"
 pin "@elef/work-model/document-links", to: "work-model/src/document_links.js"
+pin "@elef/work-model/document-transforms", to: "work-model/src/document_transforms.js"
 pin "lib/editor_controller_lookup", to: "lib/editor_controller_lookup.js"
 pin "lib/editor_view", to: "lib/editor_view.js"
 pin "#elef/preview-sanitizer", to: "lib/preview_sanitizer.js"

@@ -1,6 +1,7 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 import {
+  exciseRange,
   addSlide,
   blockOperationStart,
   buildEditorMap,
@@ -129,11 +130,24 @@ test("directive line spans absorb the line ending or synthesize one", () => {
 test("directive insertion doubles the line ending after the inner markup", () => {
   assert.deepEqual(insertAlignDirective("Body\n", 0, ":::align{right}"), {
     updated: ":::align{right}\n\nBody\n",
-    replacement: ":::align{right}\n\n"
+    replacement: ":::align{right}\n\n",
+    lineEnding: "\n"
   })
   assert.deepEqual(insertAlignDirective("Body\r\n", 0, ":::align{right}"), {
     updated: ":::align{right}\r\n\r\nBody\r\n",
-    replacement: ":::align{right}\r\n\r\n"
+    replacement: ":::align{right}\r\n\r\n",
+    lineEnding: "\r\n"
+  })
+})
+
+test("single-span excision reports the absorbed end offset", () => {
+  assert.deepEqual(exciseRange(":::align{right}\n\nBody\n", { start: 0, end: 16 }), {
+    updated: "\nBody\n",
+    to: 16
+  })
+  assert.deepEqual(exciseRange(":::align{right}# T\n", { start: 0, end: 15 }), {
+    updated: "# T\n",
+    to: 15
   })
 })
 

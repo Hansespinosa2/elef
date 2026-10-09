@@ -12,6 +12,7 @@ import {
   visibleOffsetForSourceOffset
 } from "controllers/editor_caret"
 import { createActiveMathSpan, deRenderMath, finishMathBeforeEnter, handleMathClick, handleMathKeydown, syncActiveMath } from "controllers/editor_math"
+import { directiveLineSpan, exciseRange, insertAlignDirective } from "@elef/work-model/document-transforms"
 
 export default class extends Controller {
   static targets = ["projection"]
@@ -451,18 +452,10 @@ export default class extends Controller {
         : (region?.content_range.start ?? block.range.start)
       let updated = source
       ranges.sort((left, right) => right.start - left.start).forEach((range) => {
-        let rangeEnd = range.end
-        const before = updated.slice(0, range.start)
-        const lineEnding = updated.slice(range.start, rangeEnd).match(/(?:\r\n|\r|\n)$/)?.[0]
-        if (!lineEnding) {
-          const restMatch = updated.slice(rangeEnd).match(/^(?:\r\n|\r|\n)/)?.[0]
-          if (restMatch) rangeEnd += restMatch.length
-        }
-        let after = updated.slice(rangeEnd)
-        if (before.endsWith("\n\n") && after.startsWith("\n")) after = after.slice(1)
-        const next = `${before}${after}`
+        const excised = exciseRange(updated, range)
+        const next = excised.updated
         if (range.start < sourceOffset) sourceOffset += next.length - updated.length
-        this.shiftMapAfterEdit(range.start, rangeEnd, 0)
+        this.shiftMapAfterEdit(range.start, excised.to, 0)
         updated = next
       })
 
@@ -490,24 +483,17 @@ export default class extends Controller {
     if (directive) {
       from = directive.range.start
       to = directive.range.end
-      let lineEnding = source.slice(from, to).match(/(?:\r\n|\r|\n)$/)?.[0]
-      if (!lineEnding) {
-        const restMatch = source.slice(to).match(/^(?:\r\n|\r|\n)/)?.[0]
-        if (restMatch) {
-          to += restMatch.length
-          lineEnding = restMatch
-        } else {
-          lineEnding = "\n"
-        }
-      }
+      const span = directiveLineSpan(source, from, to)
+      to = span.to
+      const lineEnding = span.lineEnding
       const vertical = block.position?.vertical_explicit ? block.position.vertical : null
       const verticalAlignment = vertical === "middle" ? "center" : vertical
       replacement = `:::align{${verticalAlignment ? `${verticalAlignment} ` : ""}${horizontal}}${lineEnding}`
     } else {
       from = block.range.start
       to = from
-      const lineEnding = source.match(/\r\n|\r|\n/)?.[0] || "\n"
-      replacement = `:::align{${horizontal}}${lineEnding}${lineEnding}`
+      const inserted = insertAlignDirective(source, from, `:::align{${horizontal}}`)
+      replacement = inserted.replacement
     }
 
     const delta = replacement.length - (to - from)

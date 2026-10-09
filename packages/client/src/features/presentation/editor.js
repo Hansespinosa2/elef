@@ -12,6 +12,19 @@
 // Host interop: the mount publishes itself as
 // form.presentationEditorController (the CodeMirror editor host calls
 // restoreCaret after mode changes) and clears it on destroy.
+import {
+  addSlide as addSlideToSource,
+  blockOperationStart as blockOperationStartInSource,
+  deleteSlide as deleteSlideFromSource,
+  directiveLineSpan,
+  exciseRanges,
+  insertAlignDirective,
+  insertBlock as insertBlockInSource,
+  moveBlock as moveBlockInSource,
+  moveSlide as moveSlideInSource,
+  parseAlignment,
+  removeBlock as removeBlockFromSource
+} from "@elef/work-model/document-transforms"
 
 function defaultEnv(form) {
   const doc = form?.ownerDocument ?? globalThis.document
@@ -332,21 +345,6 @@ export class PresentationEditor {
     const alignment = select.value
     let updated
 
-    const parseAlignment = (value) => {
-      if (!value) return { horizontal: "left", vertical: "top", verticalExplicit: false }
-      const parts = value.trim().split(/\s+/)
-      let vertical = "top"
-      let horizontal = "left"
-      if (parts.length === 1) {
-        if (["left", "center", "right"].includes(parts[0])) horizontal = parts[0]
-        else if (["top", "middle", "bottom"].includes(parts[0])) vertical = parts[0]
-      } else if (parts.length >= 2) {
-        vertical = parts[0] === "center" ? "middle" : parts[0]
-        horizontal = parts[1]
-      }
-      return { horizontal, vertical, verticalExplicit: vertical !== "top" }
-    }
-
     const { horizontal, vertical, verticalExplicit } = parseAlignment(alignment)
 
     const caret = this.captureCaret()
@@ -363,17 +361,9 @@ export class PresentationEditor {
       from = directive.range.start
       to = directive.range.end
       if (alignment) {
-        let lineEnding = source.slice(from, to).match(/(?:\r\n|\r|\n)$/)?.[0]
-        if (!lineEnding) {
-          const restMatch = source.slice(to).match(/^(?:\r\n|\r|\n)/)?.[0]
-          if (restMatch) {
-            to += restMatch.length
-            lineEnding = restMatch
-          } else {
-            lineEnding = "\n"
-          }
-        }
-        replacement = `:::align{${alignment}}${lineEnding}`
+        const span = directiveLineSpan(source, from, to)
+        to = span.to
+        replacement = `:::align{${alignment}}${span.lineEnding}`
         updated = `${source.slice(0, from)}${replacement}${source.slice(to)}`
         const delta = replacement.length - (to - from)
         this.shiftMapAfterEdit(from, to, replacement.length)
@@ -401,14 +391,15 @@ export class PresentationEditor {
         delete block.position_directive_id
         delete block.position
         slide.directives = slide.directives.filter((candidate) => !ranges.includes(candidate))
-        updated = this.removePositionDirectives(source, slide, directive)
+        updated = exciseRanges(source, ranges.map((candidate) => candidate.range))
       }
     } else if (alignment) {
       from = block.range.start
       to = from
-      const lineEnding = source.match(/\r\n|\r|\n/)?.[0] || "\n"
-      replacement = `:::align{${alignment}}${lineEnding}${lineEnding}`
-      updated = `${source.slice(0, from)}${replacement}${source.slice(from)}`
+      const inserted = insertAlignDirective(source, from, `:::align{${alignment}}`)
+      const lineEnding = inserted.lineEnding
+      replacement = inserted.replacement
+      updated = inserted.updated
       this.shiftMapAfterEdit(from, to, replacement.length)
       const affected = [block, region].filter(Boolean)
       affected.forEach((object) => {
@@ -504,138 +495,38 @@ export class PresentationEditor {
   }
 
   addSlide(index) {
-    const source = this.sourceValue()
-    const markdown = "# New slide\n\nStart writing here."
-    const slides = this.map?.slides || []
-    let updated
-    if (index >= slides.length) {
-      updated = source.trim() === ""
-        ? markdown
-        : `${source}${source.endsWith("\n") ? "" : "\n"}---\n${markdown}`
-    } else {
-      const from = slides[index].range.start
-      updated = `${source.slice(0, from)}${markdown}\n---\n${source.slice(from)}`
-    }
-    this.replaceSource(updated)
+    this.replaceSource(addSlideToSource(this.sourceValue(), this.map?.slides || [], index))
   }
 
   deleteSlide(index) {
-    const slides = this.map?.slides || []
-    const slide = slides[index]
-    if (!slide || slides.length < 2) return
-    let from
-    let to
-    if (index === 0) {
-      from = slide.range.start
-      to = slide.delimiter_range?.end || slide.range.end
-    } else if (index === slides.length - 1) {
-      from = slides[index - 1].delimiter_range.start
-      to = slide.range.end
-    } else {
-      from = slide.range.start
-      to = slide.delimiter_range?.end || slide.range.end
-    }
-    const source = this.sourceValue()
-    this.replaceSource(`${source.slice(0, from)}${source.slice(to)}`)
+    const updated = deleteSlideFromSource(this.sourceValue(), this.map?.slides || [], index)
+    if (updated === null) return
+    this.replaceSource(updated)
   }
 
   moveSlide(index, target) {
-    const slides = this.map?.slides || []
-    if (!slides[index] || target < 0 || target >= slides.length) return
-    const source = this.sourceValue()
-    const bodyStart = this.map.front_matter?.range.end || 0
-    const sections = slides.map((slide) => {
-      const body = source.slice(slide.range.start, slide.range.end)
-      const trailing = body.match(/\s*$/)?.[0] || ""
-      return { body: body.slice(0, body.length - trailing.length), trailing }
-    })
-    const separators = slides.slice(0, -1).map((slide, slideIndex) =>
-      `${sections[slideIndex].trailing}${source.slice(slide.delimiter_range.start, slide.delimiter_range.end)}`
-    )
-    const finalTrailing = sections.at(-1).trailing
-    const moved = sections.splice(index, 1)[0]
-    sections.splice(target, 0, moved)
-    const body = sections.map((section, sectionIndex) => `${section.body}${separators[sectionIndex] || ""}`).join("")
-    this.replaceSource(`${source.slice(0, bodyStart)}${body}${finalTrailing}`)
+    const updated = moveSlideInSource(this.sourceValue(), this.map, index, target)
+    if (updated === null) return
+    this.replaceSource(updated)
   }
 
   addBlock(slideIndex, index) {
-    const slide = this.map?.slides?.[slideIndex]
-    if (!slide) return
-    const source = this.sourceValue()
-    const insertion = index < slide.blocks.length
-      ? this.blockOperationStart(slide, slide.blocks[index])
-      : slide.range.end
-    if (index < slide.blocks.length) {
-      this.replaceSource(`${source.slice(0, insertion)}New block\n\n${source.slice(insertion)}`)
-      return
-    }
-
-    const before = source.slice(0, insertion)
-    const prefix = before.trim() === "" ? "" : before.endsWith("\n") ? "\n" : "\n\n"
-    const suffix = slide.delimiter_range ? "\n" : ""
-    this.replaceSource(`${source.slice(0, insertion)}${prefix}New block${suffix}${source.slice(insertion)}`)
+    const updated = insertBlockInSource(this.sourceValue(), this.map?.slides?.[slideIndex], index)
+    if (updated === null) return
+    this.replaceSource(updated)
   }
 
   deleteBlock(slideIndex, blockIndex) {
     const slide = this.map?.slides?.[slideIndex]
     const block = slide?.blocks?.[blockIndex]
     if (!slide || !block) return
-    const source = this.sourceValue()
-    let from = this.blockOperationStart(slide, block)
-    let to = block.range.end
-
-    if (block.position_scope === "group") {
-      const groupMembers = slide.blocks.filter((candidate) => candidate.position_directive_id === block.position_directive_id)
-      if (groupMembers.length === 1) {
-        const directiveIndex = slide.directives.findIndex((candidate) => candidate.id === block.position_directive_id)
-        const closing = slide.directives.slice(directiveIndex + 1).find((candidate) => candidate.type === "position_close")
-        if (closing) {
-          from = slide.directives[directiveIndex].range.start
-          to = closing.range.end
-        }
-      }
-    }
-
-    const before = source.slice(0, from)
-    let after = source.slice(to)
-    if (before.trim() === "" && after.startsWith("\n")) after = after.slice(1)
-    else if (after.startsWith("\n") && before.endsWith("\n\n")) after = after.slice(1)
-    this.replaceSource(`${before}${after}`)
+    this.replaceSource(removeBlockFromSource(this.sourceValue(), slide, block))
   }
 
   moveBlock(slideIndex, index, target) {
-    const slide = this.map?.slides?.[slideIndex]
-    if (!slide || target < 0 || target >= slide.blocks.length) return
-    const movingGroupId = slide.blocks[index]?.position_scope === "group"
-      ? slide.blocks[index].position_directive_id
-      : null
-    const low = Math.min(index, target)
-    const high = Math.max(index, target)
-    if (slide.blocks.slice(low, high + 1).some((block) =>
-      block.position_scope === "group" && block.position_directive_id !== movingGroupId
-    )) return
-    if (movingGroupId && slide.blocks.slice(low, high + 1).some((block) =>
-      block.position_scope !== "group" || block.position_directive_id !== movingGroupId
-    )) return
-
-    const source = this.sourceValue()
-    const contentEnd = (block) => {
-      const raw = source.slice(block.range.start, block.range.end)
-      const ending = raw.match(/\r\n|\n|\r$/)?.[0] || ""
-      return block.range.end - ending.length
-    }
-    const starts = slide.blocks.map((block) => this.blockOperationStart(slide, block))
-    const blocks = slide.blocks.map((block, blockIndex) => source.slice(starts[blockIndex], contentEnd(block)))
-    const separators = slide.blocks.slice(0, -1).map((block, blockIndex) =>
-      source.slice(contentEnd(block), starts[blockIndex + 1])
-    )
-    const trailing = source.slice(contentEnd(slide.blocks.at(-1)), slide.range.end)
-    const leading = source.slice(slide.range.start, starts[0])
-    const moved = blocks.splice(index, 1)[0]
-    blocks.splice(target, 0, moved)
-    const body = `${leading}${blocks.map((block, blockIndex) => `${block}${separators[blockIndex] || ""}`).join("")}${trailing}`
-    this.replaceSource(`${source.slice(0, slide.range.start)}${body}${source.slice(slide.range.end)}`)
+    const updated = moveBlockInSource(this.sourceValue(), this.map?.slides?.[slideIndex], index, target)
+    if (updated === null) return
+    this.replaceSource(updated)
   }
 
   previewUpdated(payload) {
@@ -790,9 +681,7 @@ export class PresentationEditor {
   }
 
   blockOperationStart(slide, block) {
-    if (block.position_scope !== "block" || !block.position_directive_id) return block.range.start
-    const directive = slide.directives.find((candidate) => candidate.id === block.position_directive_id)
-    return directive?.range.start ?? block.range.start
+    return blockOperationStartInSource(slide, block)
   }
 
   updateBlockBoundaries() {
@@ -817,27 +706,6 @@ export class PresentationEditor {
         if (control.disabled) control.disabled = false
       }
     })
-  }
-
-  removePositionDirectives(source, slide, directive) {
-    const directiveIndex = slide.directives.findIndex((candidate) => candidate.id === directive.id)
-    const closing = slide.directives[directiveIndex + 1]
-    const ranges = [directive]
-    if (closing?.type === "position_close") ranges.push(closing)
-    return ranges
-      .sort((left, right) => right.range.start - left.range.start)
-      .reduce((updated, candidate) => {
-        let rangeEnd = candidate.range.end
-        const before = updated.slice(0, candidate.range.start)
-        const lineEnding = updated.slice(candidate.range.start, rangeEnd).match(/(?:\r\n|\r|\n)$/)?.[0]
-        if (!lineEnding) {
-          const restMatch = updated.slice(rangeEnd).match(/^(?:\r\n|\r|\n)/)?.[0]
-          if (restMatch) rangeEnd += restMatch.length
-        }
-        let after = updated.slice(rangeEnd)
-        if (before.endsWith("\n\n") && after.startsWith("\n")) after = after.slice(1)
-        return `${before}${after}`
-      }, source)
   }
 
   editableText(element) {

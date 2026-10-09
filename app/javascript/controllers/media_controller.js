@@ -1,4 +1,5 @@
 import { Controller } from "@hotwired/stimulus"
+import { mediaInsertText } from "@elef/work-model/document-transforms"
 
 const IMAGE_TYPES_BY_EXTENSION = {
   avif: "image/avif",
@@ -491,7 +492,7 @@ export default class extends Controller {
       const trackedRange = rangeId === null ? null : editor.consumeMediaRange(rangeId)
       if (rangeId !== null && !trackedRange) throw new Error("The source editor changed before the image finished uploading.")
       const insertionPoint = trackedRange || range || { from: editor.selectionStart, to: editor.selectionEnd }
-      const markdown = this.withSpacing(editor.value, insertionPoint, result.source)
+      const markdown = mediaInsertText(editor.value, insertionPoint, result.source)
       editor.replaceRange(markdown, insertionPoint.from, insertionPoint.to)
       editor.focus()
       this.setStatus(`${fileName} added to the Markdown source.`)
@@ -500,14 +501,6 @@ export default class extends Controller {
     } finally {
       if (rangeId !== null) this.editor?.releaseMediaRange(rangeId)
     }
-  }
-
-  withSpacing(source, range, markdown) {
-    const before = source.slice(0, range.from)
-    const after = source.slice(range.to)
-    const prefix = before.length === 0 || /\n\n$/.test(before) ? "" : /\n$/.test(before) ? "\n" : "\n\n"
-    const suffix = after.length === 0 || /^\n\n/.test(after) ? "" : /^\n/.test(after) ? "\n" : "\n\n"
-    return `${prefix}${markdown}${suffix}`
   }
 
   rangeForTargetSlide() {

@@ -3,6 +3,7 @@ import { editorFor } from "lib/editor_controller_lookup"
 import { editorInsideCode, editorInsideMath } from "controllers/math_shorthand_controller"
 import { authoringRegistryFor } from "controllers/authoring_registry"
 import { snippetStopsEffect } from "controllers/snippet_stops"
+import { expandSnippet } from "@elef/work-model/document-transforms"
 
 export default class extends Controller {
   static targets = ["editor", "palette"]
@@ -348,7 +349,7 @@ export default class extends Controller {
       return
     }
     const before = editor.value.slice(0, this.queryStart)
-    const expansion = this.expand(snippet.body)
+    const expansion = expandSnippet(snippet.body)
     const base = before.length
     this.stops = expansion.stops.map((stop) => ({
       ...stop,
@@ -361,16 +362,6 @@ export default class extends Controller {
     editor.focus()
     this.selectStop(this.stops[0])
     queueMicrotask(() => this.refresh())
-  }
-
-  expand(body) {
-    const stops = []
-    const text = body.replace(/\$\{(\d+)(?::([^}]*))?\}/g, (_, number, value = "") => {
-      const start = textLengthBefore(body, stops)
-      stops.push({ number: Number(number), start, length: value.length })
-      return value
-    })
-    return { text, stops: stops.sort((a, b) => (a.number === 0 ? 1 : b.number === 0 ? -1 : a.number - b.number)) }
   }
 
   nextStop() {
@@ -446,11 +437,3 @@ export default class extends Controller {
   }
 }
 
-function textLengthBefore(body, stops) {
-  const markers = [...body.matchAll(/\$\{\d+(?::[^}]*)?\}/g)]
-  const marker = markers[stops.length]
-  if (!marker) return body.length
-
-  return marker.index - stops.reduce((position, stop, index) =>
-    position + markers[index][0].length - stop.length, 0)
-}

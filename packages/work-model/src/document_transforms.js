@@ -172,7 +172,23 @@ export function directiveLineSpan(source, from, to) {
 export function insertAlignDirective(source, from, inner) {
   const lineEnding = source.match(/\r\n|\r|\n/)?.[0] || "\n"
   const replacement = `${inner}${lineEnding}${lineEnding}`
-  return { updated: `${source.slice(0, from)}${replacement}${source.slice(from)}`, replacement }
+  return { updated: `${source.slice(0, from)}${replacement}${source.slice(from)}`, replacement, lineEnding }
+}
+
+// Single-span excision for `:::align{…}` (+ `:::`) directive ranges. Returns
+// the absorbed end offset alongside the updated source so hosts can keep
+// offset-tracking and map bookkeeping exact.
+export function exciseRange(source, range) {
+  let rangeEnd = range.end
+  const before = source.slice(0, range.start)
+  const lineEnding = source.slice(range.start, rangeEnd).match(/(?:\r\n|\r|\n)$/)?.[0]
+  if (!lineEnding) {
+    const restMatch = source.slice(rangeEnd).match(/^(?:\r\n|\r|\n)/)?.[0]
+    if (restMatch) rangeEnd += restMatch.length
+  }
+  let after = source.slice(rangeEnd)
+  if (before.endsWith("\n\n") && after.startsWith("\n")) after = after.slice(1)
+  return { updated: `${before}${after}`, to: rangeEnd }
 }
 
 // Shared removal math for `:::align{…}` (+ `:::`) directive ranges: excises
@@ -180,18 +196,7 @@ export function insertAlignDirective(source, from, inner) {
 export function exciseRanges(source, ranges) {
   return [...ranges]
     .sort((left, right) => right.start - left.start)
-    .reduce((updated, range) => {
-      let rangeEnd = range.end
-      const before = updated.slice(0, range.start)
-      const lineEnding = updated.slice(range.start, rangeEnd).match(/(?:\r\n|\r|\n)$/)?.[0]
-      if (!lineEnding) {
-        const restMatch = updated.slice(rangeEnd).match(/^(?:\r\n|\r|\n)/)?.[0]
-        if (restMatch) rangeEnd += restMatch.length
-      }
-      let after = updated.slice(rangeEnd)
-      if (before.endsWith("\n\n") && after.startsWith("\n")) after = after.slice(1)
-      return `${before}${after}`
-    }, source)
+    .reduce((updated, range) => exciseRange(updated, range).updated, source)
 }
 
 // Pure snippet-template expansion: `${n:default}` stops resolve to their

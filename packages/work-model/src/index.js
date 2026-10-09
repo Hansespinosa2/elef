@@ -21,6 +21,7 @@ export {
   blockOperationStart,
   deleteSlide,
   directiveLineSpan,
+  exciseRange,
   exciseRanges,
   expandSnippet,
   insertAlignDirective,
