@@ -24,6 +24,15 @@ import {
 } from "controllers/vim_preferences"
 import { snippetStopsField } from "controllers/snippet_stops"
 import { formatLineNumber } from "lib/vim_line_numbers"
+import {
+  caretAfterInsert,
+  clampSelection,
+  detectLineSeparator,
+  diffSource,
+  frontmatterRangeFor,
+  normalizeLineEndings,
+  offsetSelection
+} from "@elef/client"
 
 const VIM_ESCAPE_MODES = ["normal", "insert", "visual", "operatorPending"]
 let activeEscapeKey = ""
@@ -85,7 +94,7 @@ export default class extends Controller {
     this.lineNumberMode = readLineNumberMode()
     this.modeAwareCursor = readBoolean(MODE_AWARE_CURSOR_STORAGE_KEY)
     this.initialSource = this.readInitialSource()
-    this.lineSeparator = this.initialSource.match(/\r\n|\r|\n/)?.[0] || "\n"
+    this.lineSeparator = detectLineSeparator(this.initialSource)
     this.vimCompartment = new Compartment()
     this.lineNumbersCompartment = new Compartment()
     this.updateVisualSurfaceGeometry = () => this.syncVisualSurfaceGeometry()
@@ -377,9 +386,7 @@ export default class extends Controller {
 
   setSelectionRange(anchor, head = anchor) {
     if (this.destroyed || !this.view) return
-    const length = this.view.state.doc.length
-    const safeAnchor = Math.max(0, Math.min(anchor, length))
-    const safeHead = Math.max(0, Math.min(head, length))
+    const { anchor: safeAnchor, head: safeHead } = clampSelection(anchor, head, this.view.state.doc.length)
     this.view.dispatch({ selection: { anchor: safeAnchor, head: safeHead } })
     this.syncInput()
   }
@@ -388,22 +395,11 @@ export default class extends Controller {
     if (typeof source !== "string") return
 
     const current = this.value
-    const normalizedSource = this.normalizeLineEndings(source)
-    if (normalizedSource === current) return
-
-    let from = 0
-    const sharedLength = Math.min(current.length, normalizedSource.length)
-    while (from < sharedLength && current.charCodeAt(from) === normalizedSource.charCodeAt(from)) from += 1
-
-    let currentEnd = current.length
-    let sourceEnd = normalizedSource.length
-    while (currentEnd > from && sourceEnd > from && current.charCodeAt(currentEnd - 1) === normalizedSource.charCodeAt(sourceEnd - 1)) {
-      currentEnd -= 1
-      sourceEnd -= 1
-    }
+    const change = diffSource(current, source, this.lineSeparator)
+    if (!change) return
 
     const frontmatterWasFolded = this.frontmatterIsFolded()
-    this.view.dispatch({ changes: { from, to: currentEnd, insert: this.toEditorLineEndings(normalizedSource.slice(from, sourceEnd)) } })
+    this.view.dispatch({ changes: change })
 
     if (frontmatterWasFolded && this.frontmatterRange && !this.frontmatterIsFolded()) {
       this.view.dispatch({ effects: foldEffect.of(this.frontmatterRange) })
@@ -413,7 +409,7 @@ export default class extends Controller {
   replaceRange(insert, from, to = from) {
     if (this.destroyed || !this.view) return
     const editorInsert = typeof insert === "string" ? this.toEditorLineEndings(insert) : insert
-    const end = from + this.normalizeLineEndings(editorInsert).length
+    const end = caretAfterInsert(from, editorInsert)
     this.view.dispatch({
       changes: { from, to, insert: editorInsert },
       selection: { anchor: end },
@@ -424,8 +420,7 @@ export default class extends Controller {
   replaceRangeWithSelection(insert, from, to, selection) {
     if (this.destroyed || !this.view) return
     const editorInsert = typeof insert === "string" ? this.toEditorLineEndings(insert) : insert
-    const anchor = from + selection.from
-    const head = from + selection.to
+    const { anchor, head } = offsetSelection(from, selection)
     this.view.dispatch({
       changes: { from, to, insert: editorInsert },
       selection: { anchor, head },
@@ -568,7 +563,7 @@ export default class extends Controller {
   }
 
   normalizeLineEndings(value) {
-    return value.replace(/\r\n|\r/g, "\n")
+    return normalizeLineEndings(value)
   }
 
   toEditorLineEndings(value) {
@@ -698,8 +693,7 @@ export default class extends Controller {
   }
 
   refreshFrontmatterRange() {
-    const match = this.value.match(/^---\r?\n[\s\S]*?\r?\n---(?=\r?\n|$)/)
-    this.frontmatterRange = match && match[0].length > 4 ? { from: 0, to: match[0].length } : null
+    this.frontmatterRange = frontmatterRangeFor(this.value)
     this.syncMetadataToggle()
   }
 

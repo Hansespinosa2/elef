@@ -1,6 +1,16 @@
 export { createSaveFlow } from "./session/save_flow.js";
 export { createTitleSaveFlow } from "./session/title_save_flow.js";
 export { createWorkSession } from "./session/work_session.js";
+export {
+  caretAfterInsert,
+  clampSelection,
+  detectLineSeparator,
+  diffSource,
+  frontmatterRangeFor,
+  normalizeLineEndings,
+  offsetSelection,
+  toEditorLineEndings,
+} from "./session/source_ops.js";
 export { mountElef } from "./application/shell.js";
 export { isSettingsRoute, parseLibraryRoute, parseSettingsRoute } from "./application/router.js";
 export type { SettingsRoute } from "./application/router.js";
