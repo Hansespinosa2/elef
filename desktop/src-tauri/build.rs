@@ -23,6 +23,7 @@ fn main() {
                 "pending_open_elef_count",
                 "resolve_import_conflict",
                 "confirm_app_ready",
+                "export_diagnostics",
                 $($extra),*
             ]
         };

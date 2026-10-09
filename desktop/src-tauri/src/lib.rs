@@ -5,6 +5,7 @@ use std::sync::{Arc, RwLock};
 
 #[cfg(feature = "desktop-dev")]
 use elef_core::DocumentGraphDocument;
+use elef_core::diagnostics::{DiagnosticEvent, EventCode, EventProfile, EventResult};
 use elef_core::{
     AuthoringRegistries, CoreError, DeckPreview, DeckSummary, ImportResolution, ImportResult,
     Library, LibraryConfig, OpenDeck, SaveResult, SourceSnapshot, UploadedAsset,
@@ -127,16 +128,74 @@ impl From<CoreError> for CommandError {
     }
 }
 
+fn record_diagnostic(
+    app: &AppHandle,
+    event_code: EventCode,
+    result: EventResult,
+    error_code: Option<&str>,
+) {
+    let Ok(data_dir) = app.path().app_data_dir() else {
+        return;
+    };
+    let profile = if cfg!(feature = "desktop-dev") {
+        EventProfile::Dev
+    } else {
+        EventProfile::Stable
+    };
+    let event = DiagnosticEvent::new(event_code, result, error_code, profile);
+    let _ = elef_core::diagnostics::append_event(&data_dir.join("logs"), &event);
+}
+
+fn record_command_result<T>(
+    app: &AppHandle,
+    event_code: EventCode,
+    result: &Result<T, CommandError>,
+) {
+    match result {
+        Ok(_) => record_diagnostic(app, event_code, EventResult::Success, None),
+        Err(error) => record_diagnostic(app, event_code, EventResult::Failure, Some(error.code)),
+    }
+}
+
+fn record_bool_command_result(
+    app: &AppHandle,
+    event_code: EventCode,
+    result: &Result<bool, CommandError>,
+) {
+    match result {
+        Ok(true) => record_diagnostic(app, event_code, EventResult::Success, None),
+        Ok(false) => record_diagnostic(app, event_code, EventResult::Deferred, None),
+        Err(error) => record_diagnostic(app, event_code, EventResult::Failure, Some(error.code)),
+    }
+}
+
 #[tauri::command]
 async fn confirm_app_ready(
-    _app: AppHandle,
+    app: AppHandle,
     window: tauri::WebviewWindow,
     state: State<'_, DesktopState>,
 ) -> Result<usize, CommandError> {
-    let url = window.url().map_err(|_| update_install_error())?;
+    let url = match window.url() {
+        Ok(url) => url,
+        Err(_) => {
+            record_diagnostic(
+                &app,
+                EventCode::Startup,
+                EventResult::Failure,
+                Some("internal"),
+            );
+            return Err(update_install_error());
+        }
+    };
     let local_origin = url.scheme() == "tauri" && url.host_str() == Some("localhost")
         || matches!(url.scheme(), "http" | "https") && url.host_str() == Some("tauri.localhost");
     if window.label() != "main" || !local_origin {
+        record_diagnostic(
+            &app,
+            EventCode::Startup,
+            EventResult::Failure,
+            Some("unsupported"),
+        );
         return Err(CommandError::new(
             "unsupported",
             "Application readiness was rejected.",
@@ -150,7 +209,7 @@ async fn confirm_app_ready(
         return Ok(0);
     }
     #[cfg(any(target_os = "macos", feature = "webdriver"))]
-    let removed = if let Ok((live, _)) = installed_application(&_app) {
+    let removed = if let Ok((live, _)) = installed_application(&app) {
         // Readiness is acknowledged only after successful frontend/editor boot.
         // Failure leaves the previous complete installation available.
         match tauri::async_runtime::spawn_blocking(move || {
@@ -166,6 +225,7 @@ async fn confirm_app_ready(
     };
     #[cfg(not(any(target_os = "macos", feature = "webdriver")))]
     let removed = 0;
+    record_diagnostic(&app, EventCode::Startup, EventResult::Success, None);
     Ok(removed)
 }
 
@@ -247,6 +307,18 @@ async fn confirm_native_action(
 #[cfg(any(target_os = "macos", feature = "webdriver"))]
 #[tauri::command]
 async fn install_update(
+    app: AppHandle,
+    state: State<'_, DesktopState>,
+    version: String,
+    on_progress: tauri::ipc::Channel<serde_json::Value>,
+) -> Result<bool, CommandError> {
+    let result = install_update_inner(app.clone(), state, version, on_progress).await;
+    record_bool_command_result(&app, EventCode::UpdateActivation, &result);
+    result
+}
+
+#[cfg(any(target_os = "macos", feature = "webdriver"))]
+async fn install_update_inner(
     app: AppHandle,
     state: State<'_, DesktopState>,
     version: String,
@@ -432,16 +504,29 @@ fn create_deck(
 }
 
 #[tauri::command]
-fn open_deck(state: State<'_, DesktopState>, id: String) -> Result<OpenDeck, CommandError> {
-    Ok(state.current_library()?.open_deck(&id)?)
+fn open_deck(
+    app: AppHandle,
+    state: State<'_, DesktopState>,
+    id: String,
+) -> Result<OpenDeck, CommandError> {
+    let result = state
+        .current_library()
+        .and_then(|library| library.open_deck(&id).map_err(CommandError::from));
+    record_command_result(&app, EventCode::Open, &result);
+    result
 }
 
 #[tauri::command]
 fn read_deck_preview(
+    app: AppHandle,
     state: State<'_, DesktopState>,
     id: String,
 ) -> Result<DeckPreview, CommandError> {
-    Ok(state.current_library()?.read_deck_preview(&id)?)
+    let result = state
+        .current_library()
+        .and_then(|library| library.read_deck_preview(&id).map_err(CommandError::from));
+    record_command_result(&app, EventCode::Render, &result);
+    result
 }
 
 #[tauri::command]
@@ -519,6 +604,17 @@ fn write_authoring_registry(
 
 async fn export_elef_impl(
     app: AppHandle,
+    state: State<'_, DesktopState>,
+    id: String,
+    use_native_dialog: bool,
+) -> Result<bool, CommandError> {
+    let result = export_elef_inner(&app, state, id, use_native_dialog).await;
+    record_bool_command_result(&app, EventCode::Export, &result);
+    result
+}
+
+async fn export_elef_inner(
+    app: &AppHandle,
     state: State<'_, DesktopState>,
     id: String,
     use_native_dialog: bool,
@@ -782,14 +878,54 @@ fn write_elef_archive(
 
 #[tauri::command]
 fn save_source(
+    app: AppHandle,
     state: State<'_, DesktopState>,
     id: String,
     source: String,
     base_hash: String,
 ) -> Result<SaveResult, CommandError> {
-    Ok(state
-        .current_library()?
-        .save_source(&id, &source, &base_hash)?)
+    let result = state.current_library().and_then(|library| {
+        library
+            .save_source(&id, &source, &base_hash)
+            .map_err(CommandError::from)
+    });
+    record_command_result(&app, EventCode::Save, &result);
+    result
+}
+
+#[tauri::command]
+async fn export_diagnostics(app: AppHandle) -> Result<bool, CommandError> {
+    let result = export_diagnostics_inner(&app).await;
+    record_bool_command_result(&app, EventCode::DiagnosticsExport, &result);
+    result
+}
+
+async fn export_diagnostics_inner(app: &AppHandle) -> Result<bool, CommandError> {
+    let Some(selection) = app
+        .dialog()
+        .file()
+        .set_title("Export Elef Diagnostics")
+        .set_file_name("elef-diagnostics.zip")
+        .add_filter("ZIP archive", &["zip"])
+        .blocking_save_file()
+    else {
+        return Ok(false);
+    };
+    let destination = selection
+        .into_path()
+        .map_err(|_| CommandError::new("invalid_input", "Choose a local file.", false))?;
+    let log_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| CommandError::new("io_error", "Diagnostics are unavailable.", true))?
+        .join("logs");
+    tauri::async_runtime::spawn_blocking(move || {
+        elef_core::diagnostics::export_diagnostics(&log_dir, &destination)
+            .map_err(|_| CommandError::new("io_error", "Diagnostics could not be exported.", true))
+    })
+    .await
+    .map_err(|_| CommandError::new("internal", "Diagnostics could not be exported.", true))??;
+    Ok(true)
 }
 
 fn asset_protocol_response(
@@ -1118,10 +1254,28 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
         true,
         None::<&str>,
     )?;
+    let export_diagnostics = MenuItem::with_id(
+        app,
+        "export-diagnostics",
+        "Export Diagnostics…",
+        true,
+        None::<&str>,
+    )?;
+    let help_separator = PredefinedMenuItem::separator(app)?;
     #[cfg(all(target_os = "macos", not(feature = "desktop-dev")))]
-    let help = Submenu::with_items(app, "Help", true, &[&check_updates])?;
+    let help = Submenu::with_items(
+        app,
+        "Help",
+        true,
+        &[&check_updates, &help_separator, &export_diagnostics],
+    )?;
     #[cfg(not(all(target_os = "macos", not(feature = "desktop-dev"))))]
-    let help = Submenu::with_items(app, "Help", true, &[&about, &settings])?;
+    let help = Submenu::with_items(
+        app,
+        "Help",
+        true,
+        &[&about, &settings, &help_separator, &export_diagnostics],
+    )?;
 
     let menu = if cfg!(target_os = "macos") {
         Menu::with_items(
@@ -1166,6 +1320,7 @@ macro_rules! app_commands {
             pending_open_elef_count,
             resolve_import_conflict,
             confirm_app_ready,
+            export_diagnostics,
             $($extra),*
         ]
     };
@@ -1234,7 +1389,7 @@ pub fn run() {
             let id = event.id().as_ref();
             match id {
                 "open-deck" | "refresh-library" | "save" | "export-elef" | "import-elef"
-                | "print" | "settings" => {
+                | "print" | "settings" | "export-diagnostics" => {
                     let _ = app.emit("desktop-menu-action", id);
                 }
                 #[cfg(all(target_os = "macos", not(feature = "desktop-dev")))]

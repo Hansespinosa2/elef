@@ -42,6 +42,16 @@
       "observed_exit_code": null,
       "status": "TODO",
       "note": "Current generated fixtures are WebDriver test bundles and do not establish production Stable DMG or Arch package acceptance."
+    },
+    {
+      "id": "diagnostics_privacy",
+      "command": "cargo test --manifest-path desktop/Cargo.toml -p elef-core diagnostics::tests --locked",
+      "expected_exit_code": 0,
+      "observed_exit_code": 0,
+      "platform": "Linux x86-64",
+      "observed_tests_passed": 4,
+      "status": "IN_PROGRESS",
+      "note": "Core tests cover all eight checked-in sentinel values, failure-category sanitization, hostile fields during ZIP export, and bounded rotation. Native menu/export runtime smoke remains."
     }
   ],
   "package_pair_generator": {
@@ -135,11 +145,11 @@
     {
       "id": "redaction_sentinels",
       "paths": ["test/fixtures/desktop/release/redaction-sentinels.json"],
-      "status": "TODO",
-      "acceptance_command": "npm test --prefix desktop/e2e",
+      "status": "IN_PROGRESS",
+      "acceptance_command": "cargo test --manifest-path desktop/Cargo.toml -p elef-core diagnostics::tests --locked",
       "expected_exit_code": 0,
-      "observed_exit_code": null,
-      "invariants": ["No sentinel value appears in default logs or exported diagnostics ZIP, including failures and arbitrary exception inputs."]
+      "observed_exit_code": 0,
+      "invariants": ["No sentinel value appears in structured logs or exported diagnostics ZIP, including failure-category inputs and tampered exception, source, title, filename, path, token, secret, and IPC fields.", "Native menu and dialog integration still needs runtime smoke coverage."]
     }
   ],
   "environment_notes": [

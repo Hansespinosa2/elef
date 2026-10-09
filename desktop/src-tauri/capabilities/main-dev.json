@@ -31,6 +31,7 @@
     "allow-import-opened-elef",
     "allow-pending-open-elef-count",
     "allow-resolve-import-conflict",
-    "allow-confirm-app-ready"
+    "allow-confirm-app-ready",
+    "allow-export-diagnostics"
   ]
 }

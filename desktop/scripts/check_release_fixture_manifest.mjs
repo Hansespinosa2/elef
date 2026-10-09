@@ -21,7 +21,8 @@ const requiredCheckIds = [
   "manifest_integrity",
   "source_storage_fixture_round_trip",
   "full_web_desktop_parity",
-  "packaged_n_minus_1_to_n_update"
+  "packaged_n_minus_1_to_n_update",
+  "diagnostics_privacy"
 ]
 
 assert.equal(manifest.schema_version, 1, "unsupported release fixture manifest schema")

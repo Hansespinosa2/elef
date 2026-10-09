@@ -181,6 +181,8 @@ jobs:
   desktop:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      ELEF_BUILD_SHA: ${{ github.sha }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -334,6 +336,8 @@ jobs:
   desktop-macos:
     runs-on: macos-15
     timeout-minutes: 45
+    env:
+      ELEF_BUILD_SHA: ${{ github.sha }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v7

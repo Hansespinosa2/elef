@@ -16,6 +16,7 @@ export function createBaseFileLibraryTransport({ invoke }) {
     importOpenedElef: () => invoke("import_opened_elef"),
     resolveImportConflict: resolution => invoke("resolve_import_conflict", { resolution }),
     pendingOpenedElefCount: () => invoke("pending_open_elef_count"),
-    confirmAppReady: () => invoke("confirm_app_ready")
+    confirmAppReady: () => invoke("confirm_app_ready"),
+    exportDiagnostics: () => invoke("export_diagnostics")
   }
 }

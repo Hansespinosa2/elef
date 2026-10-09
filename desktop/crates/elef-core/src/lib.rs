@@ -15,6 +15,7 @@ use uuid::Uuid;
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, DateTime, ZipArchive, ZipWriter};
 
+pub mod diagnostics;
 pub mod update_install;
 
 #[cfg(unix)]

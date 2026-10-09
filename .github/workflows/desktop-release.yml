@@ -10,6 +10,8 @@ permissions:
 jobs:
   macos:
     runs-on: macos-15
+    env:
+      ELEF_BUILD_SHA: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
@@ -56,6 +58,8 @@ jobs:
   linux:
     needs: macos
     runs-on: ubuntu-22.04
+    env:
+      ELEF_BUILD_SHA: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v4

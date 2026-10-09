@@ -1078,6 +1078,14 @@ export function startFileLibraryApplication(platform) {
     if (action === "import-elef") return importDeck()
     if (action === "settings") return showSettings()
     if (action === "check-for-updates") return checkForUpdates(true)
+    if (action === "export-diagnostics") {
+      try {
+        if (await fileLibrary.exportDiagnostics()) showNotice("Diagnostics exported.")
+      } catch {
+        showNotice("Diagnostics could not be exported.", "error")
+      }
+      return
+    }
     if (action === "about") return elements.aboutDialog.showModal()
     if (action === "start-presentation") return startPresentation()
     if (action === "print") return printCurrentDeck()
