@@ -3,7 +3,7 @@
  "campaign_base_sha": "88f61a7a8ffd7c276bafcf06eee09c36a8adf134",
  "campaign_branch": "feat/refactor-desktop-and-web",
  "campaign_version": 9,
- "current_phase": 8,
+ "current_phase": 9,
  "execution_environment": {
   "arch": "x86_64",
   "cpu_count": 4,
@@ -14,8 +14,8 @@
   "swap_mb": 0,
   "tauri_native_runner": "available"
  },
- "frozen_plan_sha256": "d1926b7fe64fa662591dabd8c5ad1969b16758c1f0e550e280173fdd5e3da125",
- "head_sha": "8e28af71ef6d8cce4ce9bb4a6f71e6c9b8d218dc",
+ "frozen_plan_sha256": null,
+ "head_sha": "e5df421d15332a2e25b4ee045ef9bcf154699e2b",
  "last_completed_phase": 8,
  "last_verified_checks": [
   {
@@ -290,10 +290,10 @@
    "attempt": "52e72590d3c1407488f60b0949767a09"
   }
  ],
- "next_action": "Phase 08 PASS. Create PLAN(09).",
+ "next_action": "Phase 09 PLAN: draft visual-editor plan, freeze, enter DO.",
  "pending_human_gates": [],
- "phase_base_sha": "c5456e79e4007f70ab41b9877baabe4bd51aa4a1",
- "phase_contract_sha256": "da19b3dbe4512ffc8c94cb46c51fbb3767bab21a7c0a21f9d113bcc425d74490",
- "phase_state": "PASS",
- "review_round": 1
+ "phase_base_sha": "e5df421d15332a2e25b4ee045ef9bcf154699e2b",
+ "phase_contract_sha256": "e39bba95d6d5a8fd8db65de9a221cf2b37333fe18737ab13c9b8080e39c04ba0",
+ "phase_state": "PLAN",
+ "review_round": 0
 }
