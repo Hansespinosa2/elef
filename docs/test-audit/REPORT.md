@@ -402,7 +402,7 @@ Before the two-worker diagnostic, I checked shared databases, files, service sta
 ## Commit map
 
 - **Phase 0:** `8298ff5` records the audited baseline metrics and inventory.
-- **Phase 1:** `dba6a44` removes verified repeated PR test invocations while preserving required jobs.
+- **Phase 1:** `dba6a44` removes verified repeated PR test invocations while preserving required jobs; `229cad5` makes the non-gating SQLite and performance workflows run on `dev` pushes after the adversarial scheduling finding.
 - **Phase 2:** `18063aa` corrects vacuous and overclaimed assertions; `0a845c1` removes a transient upload-status race while retaining final-state checks.
 - **Phase 3:** `777c20b` moves browser assertions to cheaper layers; `efb091e` demotes folder checks and replaces fixed autosave sleeps; `3d4bde2` reduces a large geometry fixture; `5b2422c` namespaces shared PDF artifacts; `4ace9f0` splits the multi-claim library-card system test.
 - **Phase 4:** `1836c06` covers SSRF boundaries; `cf024aa` covers archive and updater guards; `2fa433f` adds Rails and native persistence coverage; `e294505` makes host media policy explicit; `16b32d4` verifies source/visual persistence parity; `3b3b437` and `747a68d` add controller logic tests.
@@ -420,6 +420,8 @@ The maintainer approved the following workflow decisions in this session, and th
 The adversarial review caught that GitHub's `schedule` and `workflow_dispatch` triggers only activate when the workflow file exists on the repository's default branch, and schedules run only on that branch. This repository's default branch is `main`, while this PR targets `dev`. I verified the default branch from the GitHub PR/repository metadata and the trigger behavior in [GitHub's Actions event documentation](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows). To ensure these runs cover the merged development tree without waiting for the workflows to reach `main`, both non-gating workflows now also trigger on pushes to `dev`; weekly schedules remain for `main`, and the manual trigger remains. The CI contract asserts the `dev` push scope. These triggers do not add or alter required PR jobs or deployment authorization.
 
 No removal of the `ELEF_RENDERER=ruby` path is proposed; it remains live code and must be tested before any future removal request. Release packaging and updater signature checks remain unchanged.
+
+No further maintainer approval is pending for the choices listed above: the run-once topology, PR SQLite scope, and benchmark relocation were approved in this session. Removal of the Ruby renderer path and changes to release packaging were not proposed.
 
 Cross-job artifact reuse was evaluated and not implemented. The common renderer build took 0.316s locally, and Tauri build outputs are OS-specific. Transferring the renderer bundle would require adding a producer dependency to required desktop jobs, delaying their start by more than the measured build time. This is not a useful trade for the PR path.
 
