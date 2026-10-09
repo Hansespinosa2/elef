@@ -25,6 +25,7 @@ class DocumentsController < ApplicationController
 
   def new
     @document = Document.new(source: Document.available_default_source)
+    render "works/shell"
   end
 
   def start
@@ -47,7 +48,7 @@ class DocumentsController < ApplicationController
           }, status: :created
         end
       else
-        format.html { render :new, status: :unprocessable_content }
+        format.html { render "works/shell", status: :unprocessable_content }
         format.json { render json: { errors: @document.errors.full_messages }, status: :unprocessable_content }
       end
     end
@@ -61,6 +62,7 @@ class DocumentsController < ApplicationController
   end
 
   def edit
+    render "works/shell"
   end
 
   def update

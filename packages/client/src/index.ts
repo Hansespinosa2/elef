@@ -13,8 +13,8 @@ export {
   toEditorLineEndings,
 } from "./session/source_ops.js";
 export { mountElef } from "./application/shell.js";
-export { isSettingsRoute, parseLibraryRoute, parseSettingsRoute } from "./application/router.js";
-export type { SettingsRoute } from "./application/router.js";
+export { isSettingsRoute, isWorkRoute, parseLibraryRoute, parseSettingsRoute, parseWorkRoute } from "./application/router.js";
+export type { SettingsRoute, WorkRoute, WorkView } from "./application/router.js";
 export { CREATE_WORK_EVENT } from "./features/library/LibraryApp.js";
 export { createPresentationNavigation, presentationActionForKey } from "./features/presentation/navigation.js";
 export { attachCanvasScaling, PresentationController, mountPresentation } from "./features/presentation/presentation.js";

@@ -23,7 +23,7 @@ module WorkPersistence
       end
     else
       respond_to do |format|
-        format.html { render :edit, status: :unprocessable_content }
+        format.html { render "works/shell", status: :unprocessable_content }
         format.json { render json: { errors: result.errors, current: draft_payload(result) }, status: :unprocessable_content }
       end
     end

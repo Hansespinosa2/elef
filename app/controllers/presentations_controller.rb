@@ -28,6 +28,7 @@ class PresentationsController < ApplicationController
 
   def new
     @presentation = Presentation.new(source: Presentation::DEFAULT_SOURCE)
+    render "works/shell"
   end
 
   def start
@@ -50,13 +51,14 @@ class PresentationsController < ApplicationController
           }, status: :created
         end
       else
-        format.html { render :new, status: :unprocessable_content }
+        format.html { render "works/shell", status: :unprocessable_content }
         format.json { render json: { errors: @presentation.errors.full_messages }, status: :unprocessable_content }
       end
     end
   end
 
   def edit
+    render "works/shell"
   end
 
   def update

@@ -1,4 +1,5 @@
 import type { LibraryFilter } from "./types.js";
+import type { WorkKind } from "@elef/contracts";
 
 export interface LibraryRoute {
   readonly filter: LibraryFilter;
@@ -52,6 +53,58 @@ export function parseSettingsRoute(url: string): SettingsRoute | null {
 
 export function isSettingsRoute(url: string): boolean {
   return parseSettingsRoute(url) !== null;
+}
+
+export type WorkView = "new" | "edit" | "show" | "present" | "print" | "history";
+
+export interface WorkRoute {
+  readonly kind: WorkKind;
+  readonly id: string | null;
+  readonly view: WorkView;
+}
+
+const WORK_SEGMENTS: Readonly<Record<string, WorkKind>> = {
+  documents: "document",
+  presentations: "presentation",
+};
+
+// Product work links: authoring entries (new/edit) resolve through the
+// shell/editor stack on both hosts, while read/publish entries (show,
+// present, print, history) are web-only pages. Desktop maps work targets to
+// openDeck instead of URLs.
+export function parseWorkRoute(url: string): WorkRoute | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(url, "elef://localhost");
+  } catch {
+    return null;
+  }
+  const segments = parsed.pathname.replace(/\/+$/, "").split("/").filter(Boolean);
+  if (segments.length === 0) return null;
+  const kind = WORK_SEGMENTS[segments[0] ?? ""];
+  if (kind === undefined) return null;
+  if (segments.length === 2 && segments[1] === "new") {
+    return { kind, id: null, view: "new" };
+  }
+  if (segments.length < 2 || segments[1] === "") return null;
+  const id = segments[1] as string;
+  if (segments.length === 2) return { kind, id, view: "show" };
+  if (segments.length === 3) {
+    const view = segments[2];
+    if (
+      view === "edit" ||
+      view === "present" ||
+      view === "print" ||
+      view === "history"
+    ) {
+      return { kind, id, view };
+    }
+  }
+  return null;
+}
+
+export function isWorkRoute(url: string): boolean {
+  return parseWorkRoute(url) !== null;
 }
 
 export function parseLibraryRoute(url: string): LibraryRoute | null {
