@@ -7,7 +7,7 @@
   </div>
   <div class="slides presentation-print-slides">
     <% @presentation.slides.each do |slide| %>
-      <div class="slide-frame" data-controller="presentation-canvas">
+      <div class="slide-frame">
         <%= render "slide", slide: slide, presentation: @presentation, margin_settings: @presentation.document.margin_settings %>
       </div>
     <% end %>

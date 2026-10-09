@@ -458,6 +458,12 @@ assert not (ROOT / "app/javascript/controllers/presentation_controller.js").is_f
 assert not (ROOT / "test/javascript/shared/presentation_controller.test.js").is_file(), (
     "the retired Stimulus presentation controller test must be absent"
 )
+assert not (ROOT / "app/javascript/controllers/presentation_canvas_controller.js").is_file(), (
+    "the retired Stimulus presentation canvas controller must be absent"
+)
+assert '"controllers/presentation_canvas_controller"' not in editor_runtime, (
+    "the retired Stimulus presentation canvas controller must not load on demand"
+)
 assert "splitting: true" in build, "desktop must emit lazy ESM chunks instead of parsing every editor controller at launch"
 assert 'import("controllers/editor_controller")' in editor_runtime, "the heavy shared editor controller must load on demand"
 assert 'import("controllers/document_graph_controller")' not in editor_runtime, "the retired Stimulus graph controller must not load on demand"

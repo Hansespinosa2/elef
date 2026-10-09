@@ -46,11 +46,12 @@ test("composed projection carries style roots and region hooks", () => {
   assert.match(preview.html, /data-editor-region-id=/)
 })
 
-test("composed presentation projection exposes Stimulus canvas targets to host controllers", () => {
+test("composed presentation projection exposes client mount hooks without Stimulus controllers", () => {
   const preview = renderPreview({ source: "# One\\n\\nBody", kind: "presentation" })
 
   assert.match(preview.html, /data-presentation-editor-target="canvas"/)
-  assert.match(preview.html, /data-presentation-canvas-target="canvas"/)
+  assert.match(preview.html, /class="slide-frame"/)
+  assert.doesNotMatch(preview.html, /presentation-canvas/)
 })
 
 test("composed wiki math keeps edit-roundtrip source attributes", () => {

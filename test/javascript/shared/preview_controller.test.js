@@ -15,6 +15,10 @@ const source = (await readFile(path.join(root, "app/javascript/controllers/previ
     'import { buildPreviewRequestBody } from "lib/preview_request_body"',
     `import { buildPreviewRequestBody } from "${pathToFileURL(path.join(root, "app/javascript/lib/preview_request_body.js")).href}"`
   )
+  .replace(
+    'import { attachCanvasScaling } from "@elef/client"',
+    `import { attachCanvasScaling } from "${pathToFileURL(path.join(root, "packages/client/src/features/presentation/presentation.js")).href}"`
+  )
 const preview = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`)
 
 test("preview timeout also bounds reading the JSON response body", async () => {

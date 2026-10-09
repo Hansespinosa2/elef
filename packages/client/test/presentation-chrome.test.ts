@@ -25,7 +25,7 @@ test("client presentation toolbar disables edge actions and keeps editor hooks",
   assert.doesNotMatch(last, /disabled[^>]*>Move up</);
 });
 
-test("client presentation frame keeps canvas controller mount and labels", () => {
+test("client presentation frame keeps labels without Stimulus canvas hooks", () => {
   const frame = presentationSlideFrame({
     index: 1,
     layout: "statement",
@@ -34,7 +34,7 @@ test("client presentation frame keeps canvas controller mount and labels", () =>
     content: "<content/>",
     bottomMargin: "",
   });
-  assert.match(frame, /data-controller="presentation-canvas"/);
+  assert.doesNotMatch(frame, /presentation-canvas/);
   assert.match(frame, /aria-label="Slide 2"/);
   assert.match(frame, /data-editor-slide-id="slide-2"/);
   assert.match(frame, /<toolbar\/>/);

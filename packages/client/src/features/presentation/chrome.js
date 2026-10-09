@@ -14,7 +14,7 @@ export function presentationSlideToolbar({ index, slideCount }) {
 }
 
 export function presentationSlideFrame({ index, layout, toolbar, topMargin, content, bottomMargin }) {
-  return `<div class="slide-frame" data-controller="presentation-canvas"><section class="slide slide-${layout}" data-presentation-canvas-target="canvas" aria-label="Slide ${index + 1}" data-editor-slide-id="slide-${index + 1}" data-slide-index="${index}">${toolbar}${topMargin}<div class="slide-content">${content}</div>${bottomMargin}</section></div>`
+  return `<div class="slide-frame"><section class="slide slide-${layout}" aria-label="Slide ${index + 1}" data-editor-slide-id="slide-${index + 1}" data-slide-index="${index}">${toolbar}${topMargin}<div class="slide-content">${content}</div>${bottomMargin}</section></div>`
 }
 
 export function presentationBlockAttributes({ valid, mapped, region, label }) {

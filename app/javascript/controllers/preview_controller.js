@@ -1,6 +1,7 @@
 import { Controller } from "@hotwired/stimulus"
 import { installPreviewHtml } from "lib/editor_view"
 import { buildPreviewRequestBody } from "lib/preview_request_body"
+import { attachCanvasScaling } from "@elef/client"
 
 export default class extends Controller {
   static targets = ["container", "warnings", "status", "retry"]
@@ -42,11 +43,24 @@ export default class extends Controller {
     this.element.addEventListener("elef:live-preview-recovered", this.localPreviewRecovered)
   }
 
+  // Slide frames carry no Stimulus hooks since the presentation canvas
+  // controller retired; the shared client scaling helper keeps
+  // --slide-scale in sync per rendered frame instead.
+  syncSlideScaling() {
+    this.canvasDetachers = [...this.containerTarget.querySelectorAll(".slide-frame")]
+      .map((frame) => attachCanvasScaling(frame))
+  }
+
+  clearSlideScaling() {
+    this.canvasDetachers?.splice(0).forEach((detach) => detach())
+  }
+
   disconnect() {
     this.active = false
     clearTimeout(this.timer)
     this.timer = null
     this.abortActiveRequest()
+    this.clearSlideScaling()
     this.queuedRequestId = null
     this.element.removeEventListener("focusout", this.focusoutHandler)
     this.element.removeEventListener("elef:live-preview-error", this.localPreviewError)
@@ -230,7 +244,9 @@ export default class extends Controller {
     const scrollLeft = this.containerTarget.scrollLeft
     const scrollTop = this.containerTarget.scrollTop
     recordPreviewTrace("preview-install-start")
+    this.clearSlideScaling()
     installPreviewHtml(this.containerTarget, payload.html)
+    this.syncSlideScaling()
     recordPreviewTrace("preview-install-ready")
     this.containerTarget.scrollLeft = scrollLeft
     this.containerTarget.scrollTop = scrollTop

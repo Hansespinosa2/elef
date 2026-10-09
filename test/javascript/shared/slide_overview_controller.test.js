@@ -21,7 +21,7 @@ test("slide overview thumbnails clone only inert slide content", () => {
     <html><body>
       <form>
         <div class="presentation-editor-projection">
-          <div class="slide-frame" data-controller="presentation-canvas">
+          <div class="slide-frame">
             <section class="slide" data-controller="visual-editor" data-editor-slide-id="slide-1">
               <div class="presentation-editor-slide-toolbar">Toolbar controls</div>
               <h1>Visible heading</h1>
