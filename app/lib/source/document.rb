@@ -462,8 +462,12 @@ module Source
       layout = infer_layout(parsed[:blocks])
       title = column_title(parsed[:blocks], layout)
       regions = column_regions(parsed[:blocks], layout)
-      placement_contexts = %w[two-column three-column].include?(layout) ? regions.map(&:blocks) : [parsed[:blocks]]
-      placement_warnings = placement_contexts.flat_map { |blocks| position_layout(blocks)[:warnings] }
+      placement_warnings = if mode == :presentation
+        placement_contexts = %w[two-column three-column].include?(layout) ? regions.map(&:blocks) : [parsed[:blocks]]
+        placement_contexts.flat_map { |blocks| position_layout(blocks)[:warnings] }
+      else
+        []
+      end
       {
         layout: layout,
         content: content,
@@ -924,13 +928,23 @@ module Source
       source_verticals = blocks.map { |block| block.position&.vertical || "top" }
       absorbed_bottoms = Set.new
 
-      source_verticals.each_with_index do |vertical, index|
-        next unless vertical == "middle"
+      index = 0
+      while index < source_verticals.length
+        unless %w[bottom middle].include?(source_verticals[index])
+          index += 1
+          next
+        end
 
-        previous = index - 1
-        while previous >= 0 && %w[bottom middle].include?(source_verticals[previous])
-          absorbed_bottoms << previous if source_verticals[previous] == "bottom"
-          previous -= 1
+        start = index
+        last_middle = nil
+        while index < source_verticals.length && %w[bottom middle].include?(source_verticals[index])
+          last_middle = index if source_verticals[index] == "middle"
+          index += 1
+        end
+        if last_middle
+          (start...last_middle).each do |candidate|
+            absorbed_bottoms << candidate if source_verticals[candidate] == "bottom"
+          end
         end
       end
 
@@ -948,18 +962,20 @@ module Source
 
       verticals = source_verticals.each_with_index.map { |vertical, index| demoted.include?(index) ? "top" : vertical }
       intervals = []
+      starts = Array.new(verticals.length)
+      ends = Array.new(verticals.length)
+      verticals.each_index do |index|
+        starts[index] = index.positive? && %w[bottom middle].include?(verticals[index - 1]) ? starts[index - 1] : index
+      end
+      (verticals.length - 1).downto(0) do |index|
+        ends[index] = index + 1 < verticals.length && %w[top middle].include?(verticals[index + 1]) ? ends[index + 1] : index + 1
+      end
+
       verticals.each_with_index do |vertical, index|
         next unless vertical == "middle"
 
-        start = index
-        finish = index + 1
-        start -= 1 while start.positive? && %w[bottom middle].include?(verticals[start - 1])
-        finish += 1 while finish < verticals.length && %w[top middle].include?(verticals[finish])
-
-        # F-10 explicitly groups the top block between a demoted bottom and
-        # the following middle anchor. This narrowly scopes its conflict with
-        # Q1a's general preceding-top rule.
-        start -= 1 if start > 1 && verticals[start - 1] == "top" && demoted.include?(start - 2)
+        start = starts[index]
+        finish = ends[index]
 
         previous = intervals.last
         if previous && start <= previous[:end]
@@ -971,11 +987,13 @@ module Source
 
       entries = []
       index = 0
+      interval_index = 0
       while index < blocks.length
-        middle = intervals.find { |interval| interval[:start] == index }
-        if middle
+        middle = intervals[interval_index]
+        if middle && middle[:start] == index
           entries << { type: :middle, **middle, flush_bottom: bottom_lane && middle[:end] == bottom_lane[:start] }
           index = middle[:end]
+          interval_index += 1
         elsif bottom_lane && bottom_lane[:start] == index
           entries << { type: :bottom, **bottom_lane }
           index = bottom_lane[:end]

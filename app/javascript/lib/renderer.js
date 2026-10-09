@@ -343,7 +343,7 @@ function renderPresentation(source, slides, style, margin, env) {
     const titleMarkup = slide.title ? renderBlock(blocks[0], 0, true, "top") : ""
     const contentBlocks = slide.title ? blocks.slice(1) : blocks
     const contentOffset = slide.title ? 1 : 0
-    const renderPlacedBlocks = (placedBlocks, globalIndex, { artHost = false } = {}) => {
+    const renderPlacedBlocks = (placedBlocks, globalIndex, { artHost = false, wrapArtBlocksInGroupsOnly = false } = {}) => {
       const placement = slidePositionLayout(placedBlocks)
       return placement.entries.map(entry => {
         const grouped = entry.type !== "block"
@@ -352,7 +352,7 @@ function renderPresentation(source, slides, style, margin, env) {
           const blockIndex = globalIndex(block, localIndex)
           return renderBlock(block, blockIndex, false, placement.verticals[localIndex], {
             wrapInItem: grouped,
-            wrapInArtRegion: artHost
+            wrapInArtRegion: artHost && (!wrapArtBlocksInGroupsOnly || (grouped && block.art))
           })
         }).join("")
         if (entry.type === "middle") return `<div class="slide-middle-group${entry.flushBottom ? " flush-bottom" : ""}">${inner}</div>`
@@ -367,7 +367,10 @@ function renderPresentation(source, slides, style, margin, env) {
         const regionBlocks = renderPlacedBlocks(region, block => blocks.indexOf(block), { artHost })
         return `<div class="slide-region"${hostAttribute}>${regionBlocks}</div>`
       }).join("")}</div>`
-      : renderPlacedBlocks(contentBlocks, (_block, localIndex) => localIndex + contentOffset)
+      : renderPlacedBlocks(contentBlocks, (_block, localIndex) => localIndex + contentOffset, {
+        artHost: contentBlocks.some(block => block.art),
+        wrapArtBlocksInGroupsOnly: true
+      })
     const empty = blocks.length === 0
       ? `<div class="empty-slide"><p>Empty slide</p><button type="button" class="button secondary empty-slide-add-image" data-action="click-&gt;media#chooseForSlide" data-slide-index="${index}">Add image</button></div>`
       : ""

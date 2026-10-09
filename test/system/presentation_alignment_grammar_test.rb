@@ -117,4 +117,50 @@ class PresentationAlignmentGrammarTest < ApplicationSystemTestCase
       end
     end
   end
+
+  test "print output docks the footer lane below a snug middle stack" do
+    source = <<~MARKDOWN
+      :::align{middle center}
+      # Title
+
+      :::align{center}
+      Subtitle
+
+      :::align{bottom center}
+      Footer
+    MARKDOWN
+    presentation = Presentation.create!(title: "Printed alignment", source: source)
+
+    visit print_presentation_path(presentation)
+    assert_selector ".presentation-print .slide-middle-group.flush-bottom .slide-block", count: 2
+    assert_selector ".presentation-print .slide-bottom-lane .slide-block", count: 1
+
+    browser = page.driver.browser
+    browser.execute_cdp("Emulation.setEmulatedMedia", media: "print")
+    geometry = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const slide = document.querySelector(".presentation-print .slide");
+        const content = slide.querySelector(".slide-content");
+        const group = content.querySelector(".slide-middle-group");
+        const lane = content.querySelector(".slide-bottom-lane");
+        const blocks = [...group.querySelectorAll(".slide-block")];
+        const rect = (element) => element.getBoundingClientRect();
+        return {
+          print: matchMedia("print").matches,
+          stackGap: rect(blocks[1]).top - rect(blocks[0]).bottom,
+          dockGap: rect(lane).top - rect(group).bottom,
+          laneBottomGap: rect(content).bottom - rect(lane).bottom,
+          slideHeight: rect(slide).height
+        };
+      })()
+    JAVASCRIPT
+
+    assert geometry.fetch("print"), geometry.inspect
+    assert_operator geometry.fetch("stackGap"), :<, 8, geometry.inspect
+    assert_operator geometry.fetch("dockGap"), :<, 8, geometry.inspect
+    assert_in_delta 0, geometry.fetch("laneBottomGap"), 1, geometry.inspect
+    assert_in_delta 720, geometry.fetch("slideHeight"), 2, geometry.inspect
+  ensure
+    page&.driver&.browser&.execute_cdp("Emulation.setEmulatedMedia", media: "screen")
+  end
 end

@@ -555,8 +555,10 @@ function slideMetadata(markdown, context, mode, artResolution, sourceBoundaryMap
   const layout = inferLayout(parsed.blocks)
   const title = ["two-column", "three-column"].includes(layout) ? parsed.blocks[0]?.markdown ?? null : null
   const regions = columnRegions(parsed.blocks, layout)
-  const placementContexts = ["two-column", "three-column"].includes(layout) ? regions : [parsed.blocks]
-  const placementWarnings = placementContexts.flatMap(blocks => slidePositionLayout(blocks).warnings)
+  const placementWarnings = mode === "presentation"
+    ? (["two-column", "three-column"].includes(layout) ? regions : [parsed.blocks])
+      .flatMap(blocks => slidePositionLayout(blocks).warnings)
+    : []
   return {
     layout,
     title,

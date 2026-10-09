@@ -1,5 +1,6 @@
 import assert from "node:assert/strict"
 import { readFile } from "node:fs/promises"
+import { performance } from "node:perf_hooks"
 import test from "node:test"
 import { parseHTML } from "linkedom"
 import { renderPreview } from "../../app/javascript/lib/renderer.js"
@@ -68,4 +69,71 @@ test("placement computation demotes non-trailing bottoms and docks a preceding s
     { type: "middle", start: 0, end: 1, flushBottom: true },
     { type: "bottom", start: 1, end: 2 }
   ])
+})
+
+test("document mode does not report slide-only trailing-bottom placement warnings", () => {
+  const source = ":::align{bottom}\nFirst paragraph\n\nSecond paragraph"
+  const documentPreview = renderPreview({ source, kind: "document" })
+  const presentationPreview = renderPreview({ source, kind: "presentation" })
+
+  assert.equal(documentPreview.warnings.filter(warning => warning.includes("trailing bottom")).length, 0)
+  assert.equal(presentationPreview.warnings.filter(warning => warning.includes("trailing bottom")).length, 1)
+})
+
+test("grouped Art controls remain inside their aligned block wrappers", () => {
+  const leftRegion = [
+    [
+      ":::align{middle left}\n:::art\n- Stack left",
+      "Left marker.",
+      ":::align{middle center}\n:::art\n- Stack center",
+      "Center marker.",
+      ":::align{middle right}\n:::art\n- Stack right",
+      "Middle footer separator.",
+      ":::align{bottom left}\n:::art\n- Footer left",
+      ":::align{bottom center}\nFooter marker.",
+      ":::align{bottom center}\n:::art\n- Footer center",
+      ":::align{bottom right}\nFooter marker.",
+      ":::align{bottom right}\n:::art\n- Footer right"
+    ].join("\n\n")
+  ].join("")
+  const source = [
+    "# Deck",
+    "## Left\n\n" + leftRegion,
+    "## Right\n\nRight column text.",
+    "## Third\n\nThird column text."
+  ].join("\n\n")
+  const preview = renderPreview({ source, title: "Grouped Art controls" })
+  const { document } = parseHTML(`<html><body>${preview.html}</body></html>`)
+  const slides = [...document.querySelectorAll(".slide")]
+  const groupedArt = [...document.querySelectorAll(".slide-region-block")]
+    .filter(region => region.querySelector("[data-elef-art-root]"))
+
+  assert.equal(slides.length, 1)
+  assert.equal(slides[0].querySelectorAll(".slide-region").length, 3)
+  assert.equal(slides[0].querySelector(".slide-region[data-art-host='fixed']").querySelectorAll(".slide-middle-group").length, 1)
+  assert.equal(slides[0].querySelectorAll(".slide-bottom-lane").length, 1)
+  assert.equal(groupedArt.length, 6)
+  for (const [index, artBlock] of groupedArt.entries()) {
+    const controls = artBlock.querySelector(":scope > .presentation-editor-block-controls")
+    const block = artBlock.querySelector(":scope > .slide-block[data-editor-block-id]")
+    const select = controls?.querySelector("select[data-presentation-editor-align]")
+    const sourceIndex = Number(block?.getAttribute("data-editor-block-id").match(/block-(\d+)$/)?.[1]) - 1
+
+    assert.ok(controls, `Art block ${index} has controls as a direct child`)
+    assert.ok(select, `Art block ${index} has an alignment control`)
+    assert.equal(artBlock.parentElement.classList.contains("slide-block-item"), true)
+    assert.equal(select.getAttribute("data-block-index"), String(sourceIndex))
+    assert.ok(artBlock.classList.contains(`position-${["left", "center", "right"][index % 3]}`))
+  }
+})
+
+test("placement stays linear for a long run of middle blocks", () => {
+  const count = 30_000
+  const blocks = Array.from({ length: count }, () => ({ position: { horizontal: "center", vertical: "middle" } }))
+  const startedAt = performance.now()
+  const layout = slidePositionLayout(blocks)
+  const elapsed = performance.now() - startedAt
+
+  assert.deepEqual(layout.entries, [{ type: "middle", start: 0, end: count, flushBottom: false }])
+  assert.ok(elapsed < 1_500, `placing ${count} middle blocks took ${Math.round(elapsed)}ms`)
 })

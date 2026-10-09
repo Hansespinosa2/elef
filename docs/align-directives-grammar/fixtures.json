@@ -58,7 +58,7 @@
     {
       "id": "F-10",
       "source": ":::align{bottom center}\nBottom line\n\n:::align{center}\nMiddle text\n\n:::align{middle center}\n# Title",
-      "expected": { "layout": "body", "middleGroups": [["Middle text", "Title"]], "bottomLanes": [], "warningPatterns": ["trailing bottom"], "blockClasses": { "Bottom line": ["position-center", "position-top"] } },
+      "expected": { "layout": "body", "middleGroups": [["Title"]], "bottomLanes": [], "warningPatterns": ["trailing bottom"], "blockClasses": { "Bottom line": ["position-center", "position-top"], "Middle text": ["position-center", "position-top"] } },
       "geometry": []
     },
     {

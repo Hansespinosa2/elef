@@ -323,9 +323,14 @@ expect:
   dom:
     - "exactly 1 warning mentioning trailing bottom"
     - "block[0] classes: [position-center, position-top]  # demoted"
-    - ".slide-middle-group contains [Middle text, Title]"
+    - "Middle text stays outside .slide-middle-group in top flow"
+    - ".slide-middle-group contains [Title]"
     - "no .slide-bottom-lane"
 ```
+
+F-10 follows §3.1's preceding-top rule: `Middle text` remains in the top flow even
+though the earlier invalid bottom block is demoted. The middle group contains only
+the `Title` anchor.
 
 ### F-11 docking: stack + footer (A5) [DECIDED]
 

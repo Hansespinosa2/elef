@@ -66,6 +66,25 @@ class SourceSlidePositionLayoutTest < ActiveSupport::TestCase
     assert_empty placement[:warnings]
   end
 
+  test "document mode does not report slide-only trailing-bottom placement warnings" do
+    source = ":::align{bottom}\nFirst paragraph\n\nSecond paragraph"
+    document = Source::Document.parse(source, mode: :document)
+    presentation = Source::Document.parse(source, mode: :presentation)
+
+    assert_empty document.warnings.grep(/trailing bottom/)
+    assert_equal 1, presentation.warnings.grep(/trailing bottom/).length
+  end
+
+  test "position layout handles a long run of middle blocks in one group" do
+    position = Source::Document::Position.new(horizontal: "center", vertical: "middle", vertical_explicit: true)
+    blocks = Array.new(30_000) { Source::Document::Block.new(markdown: "Text", position: position) }
+
+    placement = Source::Document.position_layout(blocks)
+
+    assert_equal [{ type: :middle, start: 0, end: blocks.length, flush_bottom: nil }], placement[:entries]
+    assert_empty placement[:warnings]
+  end
+
   private
 
   def block_label(markdown)

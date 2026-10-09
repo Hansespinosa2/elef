@@ -182,7 +182,7 @@
   margin-block-start: auto;
 }
 
-[data-art-host="fixed"] > .slide-region-block {
+[data-art-host="fixed"] .slide-region-block {
   min-inline-size: 0;
   position: relative;
 }

@@ -79,7 +79,7 @@
           <% block = slide.blocks[block_index] %>
           <% editor_block = editor_blocks[block_index] %>
           <% editor_region = editor_block && editor_regions.find { |candidate| candidate[:block_id] == editor_block[:id] } %>
-          <%= render "presentations/slide_block", block: block, block_index: block_index, editor_block: editor_block, editor_region: editor_region, slide: slide, presentation: presentation, editable: editable, art_host: false, grouped_item: entry[:type] != :block, position_vertical: placement[:verticals][block_index] %>
+          <%= render "presentations/slide_block", block: block, block_index: block_index, editor_block: editor_block, editor_region: editor_region, slide: slide, presentation: presentation, editable: editable, art_host: block.art && entry[:type] != :block, grouped_item: entry[:type] != :block, position_vertical: placement[:verticals][block_index] %>
         <% end %>
         <% if entry[:type] == :middle || entry[:type] == :bottom %></div><% end %>
       <% end %>

@@ -4,7 +4,6 @@
 <div class="slide-block <%= block_classes %>"<% if block.reveal_event %> data-elef-reveal-event="<%= block.reveal_event %>"<% end %><% if editable && editor_block %> data-editor-block-id="<%= editor_block[:id] %>" data-editor-region-id="<%= editor_region&.dig(:id) %>" data-editor-source-editable="<%= editor_region&.dig(:editable) ? "true" : "false" %>"<% if editor_region&.dig(:editable) %> contenteditable="true" role="textbox" aria-label="Editable slide block" aria-multiline="true" spellcheck="true" data-action="input->presentation-editor#blockInput focus->presentation-editor#blockFocus blur->presentation-editor#blockBlur"<% else %> contenteditable="false" aria-readonly="true"<% end %><% end %>>
   <%= editable ? render_editor_block(block.markdown, editor_block, work: presentation) : render_markdown(block.markdown, work: presentation, art: !!block.art) %>
 </div>
-<% if art_host %></div><% end %>
 <% if editable && editor_block %>
   <div class="presentation-editor-block-controls" aria-label="Block controls">
     <button type="button" data-presentation-editor-action="add-block-after" data-slide-index="<%= slide.index %>" data-block-index="<%= block_index %>">Add block</button>
@@ -21,4 +20,5 @@
     </select></label>
   </div>
 <% end %>
+<% if art_host %></div><% end %>
 <% if grouped_item %></div><% end %>
