@@ -707,7 +707,7 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
       ---
       # Positioned
 
-      :::align{center center}
+      :::align{middle center}
 
       Center this message.
     MARKDOWN

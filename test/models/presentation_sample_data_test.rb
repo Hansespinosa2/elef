@@ -25,8 +25,7 @@ class PresentationSampleDataTest < ActiveSupport::TestCase
     assert_includes layouts.slides.map(&:layout), "statement"
     assert_equal 5, layouts.slides.count { |slide| slide.layout == "three-column" }
     %w[left center right].product(%w[top middle bottom]).each do |horizontal, vertical|
-      vertical_value = vertical == "middle" ? "center" : vertical
-      assert_includes layouts.source, ":::align{#{vertical_value} #{horizontal}}"
+      assert_includes layouts.source, ":::align{#{vertical} #{horizontal}}"
     end
     assert layouts.slides.any? { |slide| slide.blocks.any? { |block| block.position&.horizontal == "center" && block.position.vertical == "middle" } }
     assert layouts.slides.any? { |slide| slide.blocks.any? { |block| block.position&.horizontal == "right" && block.position.vertical == "bottom" } }
