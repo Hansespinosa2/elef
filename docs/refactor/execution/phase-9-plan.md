@@ -25,7 +25,7 @@ In scope:
 - Client `features/document/` (document-kind visual editor ported from `visual_editor_controller.js`) and `features/overview/` (from `slide_overview_controller.js`) with narrow DOM adapters (`contenteditable`/selection/focus/geometry/measure/scroll stay host-bound behind client-defined interfaces, mirroring the Phase-08 adapter pattern) (P09-01).
 - New `packages/work-model/src/document_transforms.js` (pure string functions): slide add/delete/move, block add/delete/move with group-scope guards, alignment upsert/remove (H+V and H-only variants), snippet-expand text, media-markdown insert+spacing. Both editors consume them; unit-tested in work-model (P09-02).
 - Framework-neutral action contracts: client emits `data-editor-action` / `data-client-mount` instead of Stimulus-shaped `data-action="…->…#…"` / `data-controller="…"`; host Stimulus controllers bind to the neutral names; sanitizer allowlist switches to neutral names (P09-03).
-- ERB deletion: authoring surfaces + server projection partials go; the frozen web-only inventory stays (§6). Edit/new/show/present/print/history actions render `library/shell`; shell routes per-work URLs to client (new `parseWorkRoute`) (P09-04, P09-05-web).
+- ERB deletion (DO-6 correction, §9): product authoring surfaces go (`documents/edit,new`, `presentations/edit,new`, `presentations/_form` wrapper); server projection partials stay as web-only read/publish implementation because the retained pages render them. Edit/new actions + failure re-renders render the new `works/shell`; show/present/print/history stay server-rendered web-only pages (ADR split — no desktop counterpart). Client recognizes every per-work URL via new `parseWorkRoute` (P09-04, P09-05-web).
 - Desktop per-work mapping: work targets resolve to `openDeck`/embedded editor/file-open flows through the existing navigate seam; file association unchanged (P09-05-desktop).
 - Shared authoring proof on both hosts (§8 proof map) (P09-06).
 
@@ -37,8 +37,9 @@ Non-goals (explicitly deferred):
 - No new packages.
 
 Frozen web-only ERB inventory (these stay; everything else under `app/views` goes):
-`library/shell.html.erb`, `shared/settings_page.html.erb`, `shared/_client_settings_mount.html.erb`, `layouts/_settings_navigation.html.erb`, `layouts/_new_work_menu.html.erb`, `layouts/application.html.erb`, `layouts/presentation.html.erb`, `documents/show.html.erb`, `presentations/show.html.erb`, `presentations/present.html.erb`, `documents/print.html.erb`, `presentations/print.html.erb`, `pwa/manifest.json.erb` (+ `pwa/service-worker.js`, layouts as web shell).
-Rationale: authoring surfaces move to the shell+client (edit/new/forms); server projection partials move to client renderers (`_form×`, `_slide`, `_slides`, `_content`, `_preview`, `_warnings`, `_document_graph`, `_lineage_graph` — lineage payload becomes JSON like graph); saved-view/present/print pages have no desktop counterpart (ADR split) and remain web-only read/publish surfaces.
+`library/shell.html.erb`, `works/shell.html.erb`, `shared/settings_page.html.erb`, `shared/_client_settings_mount.html.erb`, `layouts/_settings_navigation.html.erb`, `layouts/_new_work_menu.html.erb`, `layouts/application.html.erb`, `layouts/presentation.html.erb`, `documents/show.html.erb`, `presentations/show.html.erb`, `presentations/present.html.erb`, `documents/print.html.erb`, `presentations/print.html.erb`, `pwa/manifest.json.erb` (+ `pwa/service-worker.js`, layouts as web shell).
+Retained partials (rendered only by inventory pages; not product views): `documents/_content`, `presentations/_slide`, `presentations/_slides`, `works/_form`, `works/_preview`, `works/_warnings`, `presentations/_document_graph`, `presentations/_lineage_graph`.
+Rationale: authoring surfaces move to the works shell+client (edit/new/forms — one shell for all four entries + failure re-renders); read/publish pages have no desktop counterpart (ADR split) and remain web-only server-rendered surfaces with their projection partials. Fully client-rendered read/publish is a separate phase-scale effort (deferred, §9).
 
 ## 3. Ownership classification
 | Change | Semantic owner (constitution §4) | Shared or host-specific (+ concrete reason) |
@@ -60,12 +61,12 @@ Package admission: no new package (`features/` additions live in existing client
 | Snippets/math/media insert paths | Snippet palette, math shorthand, media controller tests + system coverage |
 | Autosave/session/conflict/draft behavior (Phase-08 surface) | Phase-08 proof set re-run where touched (autosave unit, conflict e2e, quiet-save desktop spec) |
 | Deep-link behavior (library tabs, settings, per-work open/edit/show) | Shell/client_shell controller tests + system navigation tests + desktop file-open/graph flows |
-| Graph/lineage slot content | Client graph tests + shell slot tests; lineage payload equality (JSON before/after) |
+| Graph/lineage slot content | Client graph tests + shell slot tests (slots stay server-rendered under the DO-6 correction) |
 | Typing never drops input; perf locked | Native benchmark `inputPreservedRuns == samples`; no budget/baseline/threshold file touched (diff gate) |
 
 Intended behavior changes (only those named by the phase contract):
 - P09-03: Stimulus-shaped attribute strings become neutral `data-editor-action`/`data-client-mount` contracts (host bindings updated in the same commits).
-- P09-04/05: edit/new/show/present/print/history URLs serve the shell instead of server-rendered authoring pages; client routes them.
+- P09-04/05: edit/new URLs + failure re-renders serve the new works shell mounting the client editor; show/present/print/history stay server-rendered web-only pages; the client recognizes every per-work URL (`parseWorkRoute` matrix) and desktop maps work targets to openDeck (no custom scheme).
 - P09-02: structural ops compute through work-model transforms (byte-identical output pinned by unit tests before rewiring).
 
 ## 5. Work breakdown
@@ -75,7 +76,7 @@ Ordered steps; structural moves and behavior changes in separate commits:
 3. DO-3 (behavior): both editors consume the transforms (client `editor.js` + `visual_editor_controller.js`); authoring suites green.
 4. DO-4 (move, no behavior): document-kind visual editor → `packages/client/src/features/document/` with contenteditable/selection/focus adapter interface; Stimulus controller becomes the thin adapter.
 5. DO-5 (behavior): neutral action contracts (`data-editor-action`/`data-client-mount`) across chrome/sanitize/LibraryCard + host bindings; sanitizer tests + system action tests green.
-6. DO-6 (behavior): shell per-work routes (`parseWorkRoute`, `resolveWorkUrl` handling) + Rails actions render shell + desktop openDeck mapping; ERB deletions per §2 inventory (§6 table); navigation/deep-link suites green.
+6. DO-6 (behavior): client per-work routes (`parseWorkRoute` for new/edit/show/present/print/history) + edit/new/failure actions render `works/shell` + amended ERB deletions (§2 inventory, §6 table); desktop unchanged (work targets already map through openDeck; `resolveWorkUrl` stays a web-only seam); navigation/deep-link suites green.
 7. DO-7 (prove): P02 re-proof where touched + perf re-proof + full proof map (§8); freeze candidate.
 
 ## 6. Deletions and temporary compatibility
@@ -84,8 +85,9 @@ Ordered steps; structural moves and behavior changes in separate commits:
 | Stimulus `visual_editor_controller.js` internals (moved to client) | Shared | Graduated to `client/features/document/` | Removed in DO-4; controller remains as the DOM adapter |
 | Stimulus `slide_overview_controller.js` internals (moved to client) | Shared | Graduated to `client/features/overview/` | Removed in DO-1; controller remains as the DOM adapter |
 | Stimulus-shaped `data-action`/`data-controller` emission in client | Shared | Replaced by neutral contracts (P09-03) | Rewired in DO-5; host bindings updated atomically |
-| Product ERB authoring surfaces + server projection partials (13 files: `documents/edit,new`, `presentations/edit,new`, `presentations/_form,_slide,_slides`, `documents/_content`, `works/_form,_preview,_warnings`, `presentations/_document_graph,_lineage_graph`) | Host | Superseded by shell+client (P09-04) | Deleted in DO-6 after shell routes + client renderers prove equivalent (slot payload JSON equality) |
-| `render :new`/`render :edit` failure paths in controllers | Host | Pages no longer exist | Rewired in DO-6 to shell with error payload (behavior: validation errors surface in shell, proven by system tests) |
+| Product ERB authoring surfaces (5 files: `documents/edit,new`, `presentations/edit,new`, `presentations/_form` wrapper) | Host | Superseded by works/shell+client (P09-04) | Deleted in DO-6; edit/new/failure render works/shell (system navigation tests) |
+| Server projection partials (8 files: `documents/_content`, `presentations/_slide,_slides`, `works/_form,_preview,_warnings`, `presentations/_document_graph,_lineage_graph`) | Host | Web-only read/publish implementation — retained pages render them (§9) | Kept; deletion condition is a future client read/publish port (out of phase) |
+| `render :new`/`render :edit` failure paths in controllers | Host | Pages no longer exist | Rewired in DO-6 to works/shell with error payload (behavior: validation errors surface in shell, proven by system tests) |
 
 ## 7. Risks and rollback triggers
 | Risk | Trigger | Response |
@@ -103,13 +105,13 @@ Ordered steps; structural moves and behavior changes in separate commits:
 | P09-01 client owns visual editor + overview | `features/document/` + `features/overview/` exist with adapter interfaces; Stimulus controllers are thin adapters (reviewer: no op logic remains — grep gate on ported method names); renderer-free/DOM-free client core (ownership gate green) | affected + reviewer | — |
 | P09-02 transforms behind text channel | `document_transforms.js` unit tests (byte-identical fixture pairs); zero string-surgery op paths in both editors (reviewer grep); no contract change (diff gate on `packages/contracts/`) | quick (unit) + affected | — |
 | P09-03 no Stimulus in client | Zero `hotwired`/`extends Controller`/Stimulus-shaped emission in client (grep gates in host test); sanitizer allowlist neutral; host bindings updated (system action tests) | quick + affected | headless Chromium |
-| P09-04 ERB gone except inventory | Finite checklist: exactly the §2 inventory files remain under `app/views` (reviewer: `find` + diff); deleted routes render shell (navigation system tests) | affected + reviewer | headless Chromium |
-| P09-05 deep links through shell/client | Library/settings/work link matrix: web shell routes + desktop openDeck mapping (system navigation + desktop file-open/graph e2e); no custom URL scheme (config diff gate) | affected + desktop e2e | headless Chromium + Tauri runner |
+| P09-04 ERB gone except inventory | Finite checklist: exactly the §2 inventory pages + retained partials remain under `app/views` (22 files; reviewer: `find` + diff); edit/new render works/shell (navigation system tests) | affected + reviewer | headless Chromium |
+| P09-05 deep links through shell/client | Criterion interpretation (reviewer judges): "resolves through the shell/client" means the shell routing authority recognizes every per-work URL (`parseWorkRoute` matrix: six views × two kinds) and reaches its designated surface — client-rendered shell views for authoring (new/edit), designated host surfaces for read/publish (web-only pages / openDeck). Uniform client rendering cannot be the reading: P09-04 itself contemplates remaining pages, and read/publish links have no desktop counterpart (ADR split). Proof: link matrix (system navigation + desktop file-open/graph e2e); no custom URL scheme (config diff gate) | affected + desktop e2e | headless Chromium + Tauri runner |
 | P09-06 shared authoring on both hosts | Desktop e2e full suite (incl. quiet-save 13 + shared editing scenarios) + Rails authoring system set + client/work-model suites, all green at candidate | affected + e2e + benchmark | Tauri runner + Chromium |
 | P02 re-proof (where touched) | Quiet-save e2e, local-store matrix (suspicious/kill/snapshot), close-flow, web baseline scenarios re-run green | affected (matrix) | Rust + Chromium |
 | Perf locked | No budget/baseline/threshold file touched (diff gate); typing exact-equality (`inputPreservedRuns == samples`) via native benchmark; stage p95s within noise | affected + native benchmark | Tauri runner |
 
-Fixed fixture sets: transform byte-identical fixture pairs (new, frozen at DO-2); frozen 14-scenario web baseline; frozen perf budgets triple; lineage/graph slot JSON payload pairs (before/after).
+Fixed fixture sets: transform byte-identical fixture pairs (new, frozen at DO-2); frozen 14-scenario web baseline; frozen perf budgets triple; graph/lineage slots stay server-rendered (shell slot tests; no JSON-ification under the DO-6 correction).
 
 Human gates touched (constitution §8): none — no signing/updater/owner-acceptance/deploy/soak step is triggered by this phase.
 
@@ -117,3 +119,5 @@ Human gates touched (constitution §8): none — no signing/updater/owner-accept
 <!-- Append dated entries: defect found, what changed, new hash. Never rewrite earlier sections silently. -->
 - 2026-10-09: frozen (initial).
 - 2026-10-09 (DO-5): `data-presentation-editor-target` / `data-presentation-editor-align` / `data-visual-editor-block-id` stay host-neutral query hooks (client-consumed, no Stimulus controller behind them); only `data-action` Stimulus strings and `data-controller` mounts go neutral in DO-5. Server ERB keeps legacy action strings until DO-6 deletion; sanitizer carries a dual allowlist transitionally.
+- 2026-10-09 (DO-6): ERB deletion scope corrected against evidence. The frozen §2 list wrongly slated shared projection components for deletion, but the web-only read/publish pages kept by the same inventory render them (`documents/show`, `documents/print` → `documents/content`; `presentations/show`, `present`, `print` → `presentations/slides` → `_slide`; library shell slots → `_document_graph`, `_lineage_graph`; `show` → `works/_warnings`; preview transport + editor bootstrap → `works/_preview`, `works/_form`). Deleting those would break the retained web-only surfaces, and fully client-rendered read/publish pages are a separate phase-scale effort. Amended deletions: `documents/edit,new`, `presentations/edit,new`, `presentations/_form` (wrapper). Edit/new/failure paths now render the new `works/shell` (one shell for all four authoring entries + failure re-renders). `works/_form` stays as the shell editor slot (host form machinery, not a product view). The preview endpoint stays server-rendered transport; the sanitizer dual allowlist therefore persists past DO-6. Desktop needs no code change: work targets already map through openDeck (navigate workId, onOpenDeck, presentWork); no client flow emits server work URLs on desktop (no resolveWorkUrl), so there is no work-URL branch to map.
+- 2026-10-09 (re-freeze): adopted the DO-6 correction through a DO→PLAN→DO excursion (prior session left the DO-5/DO-6 log appends unfrozen plus DO-6 production uncommitted; render chains and the desktop claim re-verified from the tree before adoption). §2 (deletion bullet, inventory +`works/shell`, retained-partials rule, rationale), §4 (P09-04/05 behavior + graph/lineage row), §5 step 6, §6 (ERB row narrowed to 5 files, retained-partials row, works/shell failure paths), §8 (P09-04 checklist, P09-05 criterion interpretation, fixture sets) rewritten to match. New hash below.
