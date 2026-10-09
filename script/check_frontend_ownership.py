@@ -108,7 +108,7 @@ assert "globalThis.fetch =" not in desktop_application, (
     "The shared frontend must not replace the host fetch implementation"
 )
 shared_styles = application_stylesheet_sources()
-presentation_controller = (ROOT / "app/javascript/controllers/presentation_controller.js").read_text()
+client_presentation = (ROOT / "packages/client/src/features/presentation/presentation.js").read_text()
 importmap = (ROOT / "config/importmap.rb").read_text()
 renderer_build = (ROOT / "script/build_renderer.mjs").read_text()
 renderer_sources = (
@@ -449,8 +449,14 @@ assert "writeRegistry" in client_authoring_dialog, (
 assert "globalThis.fetch(" not in client_authoring_dialog and "invoke(" not in client_authoring_dialog, (
     "authoring UI must not reach a network or native layer past its transport seam"
 )
-assert '"controllers/presentation_controller"' in editor_runtime, (
-    "the Rails-owned controller runtime must register the shared presentation controller"
+assert '"controllers/presentation_controller"' not in editor_runtime, (
+    "the retired Stimulus presentation controller must not load on demand"
+)
+assert not (ROOT / "app/javascript/controllers/presentation_controller.js").is_file(), (
+    "the retired Stimulus presentation controller must be absent"
+)
+assert not (ROOT / "test/javascript/shared/presentation_controller.test.js").is_file(), (
+    "the retired Stimulus presentation controller test must be absent"
 )
 assert "splitting: true" in build, "desktop must emit lazy ESM chunks instead of parsing every editor controller at launch"
 assert 'import("controllers/editor_controller")' in editor_runtime, "the heavy shared editor controller must load on demand"
@@ -486,13 +492,13 @@ assert "elements.graphView.hidden = libraryTab" not in desktop_application, "sha
 assert 'lib/presentation_navigation' not in importmap, (
     "Rails must not pin the retired host-owned navigation module"
 )
-assert '"@elef/client"' in presentation_controller, (
-    "the presentation controller must consume key mapping from the shared client"
+assert '"./navigation.js"' in client_presentation, (
+    "the client presentation controller must consume key mapping from the shared navigation module"
 )
 assert 'pin "lib/editor_controller_lookup", to: "lib/editor_controller_lookup.js"' in importmap, (
     "Rails must resolve the shared editor controller lookup"
 )
-assert '"lib/presentation_navigation"' not in presentation_controller, "the shared controller must not keep host-owned key mapping"
+assert '"lib/presentation_navigation"' not in client_presentation, "the shared controller must not keep host-owned key mapping"
 for shared_module in (
     "deck_open_flow", "document_graph_cache", "editor_ready", "editor_source",
     "feature_flags", "performance_measurement", "renderer_worker_client",
