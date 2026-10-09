@@ -48,10 +48,12 @@ export async function editAndPreviewWorkflow(ui) {
   await ui.showVisualMode()
   await ui.assertDocumentLinkPreview("E2E linked")
   await ui.openDeck()
+  await ui.waitForSource(visualSource)
   if (await ui.readSource() !== visualSource) {
     throw new Error("The presentation source changed after closing and reopening it")
   }
   await ui.openDeck("E2E document")
+  await ui.waitForSource(updatedDocument)
   if (await ui.readSource() !== updatedDocument) {
     throw new Error("The document source changed after closing and reopening it")
   }
