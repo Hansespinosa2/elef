@@ -49,13 +49,15 @@ export async function editAndPreviewWorkflow(ui) {
   await ui.assertDocumentLinkPreview("E2E linked")
   await ui.openDeck()
   await ui.waitForSource(visualSource)
-  if (await ui.readSource() !== visualSource) {
-    throw new Error("The presentation source changed after closing and reopening it")
+  const reopenedPresentation = await ui.readSource()
+  if (reopenedPresentation !== visualSource) {
+    throw new Error(`The presentation source changed after closing and reopening it: expected ${JSON.stringify(visualSource)}, got ${JSON.stringify(reopenedPresentation)}`)
   }
   await ui.openDeck("E2E document")
   await ui.waitForSource(updatedDocument)
-  if (await ui.readSource() !== updatedDocument) {
-    throw new Error("The document source changed after closing and reopening it")
+  const reopenedDocument = await ui.readSource()
+  if (reopenedDocument !== updatedDocument) {
+    throw new Error(`The document source changed after closing and reopening it: expected ${JSON.stringify(updatedDocument)}, got ${JSON.stringify(reopenedDocument)}`)
   }
   await ui.openDeck()
 }
