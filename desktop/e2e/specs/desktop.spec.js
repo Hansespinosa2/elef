@@ -2418,6 +2418,41 @@ describe("desktop binary workflows and native boundaries", () => {
     const cancelled = await browser.execute(async () => await window.__elefExportDialog)
     if (cancelled !== false) throw new Error("Cancelling the native export dialog should leave the archive unwritten")
   })
+
+  it("opens and cancels the native diagnostics export dialog", async () => {
+    await browser.execute(() => window.focus())
+    const started = await browser.execute(() => {
+      if (!window.__TAURI__?.core?.invoke) return false
+      window.__elefDiagnosticsExport = window.__TAURI__.core.invoke("export_diagnostics")
+      return true
+    })
+    if (!started) throw new Error("The diagnostics export command could not be started")
+
+    if (process.platform === "darwin") {
+      answerMacNativeDialog("Cancel")
+    } else if (process.platform === "linux") {
+      let dialogId
+      await browser.waitUntil(async () => {
+        try {
+          dialogId = execFileSync("xdotool", ["search", "--onlyvisible", "--name", "Export Elef Diagnostics"], { encoding: "utf8" })
+            .trim().split(/\s+/).at(-1)
+          return Boolean(dialogId)
+        } catch (_error) {
+          return false
+        }
+      }, {
+        timeout: 5_000,
+        timeoutMsg: "The native diagnostics export dialog did not open"
+      })
+      execFileSync("xdotool", ["windowactivate", "--sync", dialogId], { timeout: 5_000 })
+      execFileSync("xdotool", ["key", "--clearmodifiers", "Escape"], { timeout: 5_000 })
+    } else {
+      throw new Error(`Native diagnostics dialog smoke is unsupported on ${process.platform}`)
+    }
+
+    const cancelled = await browser.execute(async () => await window.__elefDiagnosticsExport)
+    if (cancelled !== false) throw new Error("Cancelling the diagnostics dialog should leave the export unwritten")
+  })
 })
 
 describe("native updater verification", () => {
