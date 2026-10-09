@@ -15,7 +15,7 @@
   "tauri_native_runner": "available"
  },
  "frozen_plan_sha256": "e65063e355c578cc2f368968292d93db9b576a48d5dfcf00b6f60b348db1f16f",
- "head_sha": "7556161a411bb211063b7a362814c43fd79f7926",
+ "head_sha": "bb40ef616387ef4226f5be69404c1257dcfc1636",
  "last_completed_phase": 9,
  "last_verified_checks": [
   {
@@ -326,12 +326,50 @@
    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
    "result_path": "docs/refactor/execution/phase-9-gate-attempts/869e14c179d24af48cbd1493c020955e/result.json",
    "selected_gate_path": "docs/refactor/execution/phase-9-gate.json"
+  },
+  {
+   "command": "bin/check quick",
+   "duration_s": 17.9,
+   "exit": 0,
+   "head": "bb40ef616387ef4226f5be69404c1257dcfc1636",
+   "tier": "quick"
+  },
+  {
+   "command": "PGPASSWORD=postgres bin/check affected",
+   "duration_s": 41.4,
+   "exit": 0,
+   "head": "bb40ef616387ef4226f5be69404c1257dcfc1636",
+   "tier": "affected"
+  },
+  {
+   "attempt_id": "524cd4a0571b48aaa7e749409da69c85",
+   "phase": 10,
+   "head": "bb40ef616387ef4226f5be69404c1257dcfc1636",
+   "root": "/root/elef",
+   "checkout": "/root/elef/tmp/gates/phase-10-524cd4a0571b48aaa7e749409da69c85",
+   "state": "completed",
+   "started_ns": 1791565735105474194,
+   "status_sha256": "f906bc57125a31b31a9e524f85e32588332a090f1fdde10a06e787b3f69bd699",
+   "frozen_plan_sha256": "e65063e355c578cc2f368968292d93db9b576a48d5dfcf00b6f60b348db1f16f",
+   "phase_contract_sha256": "181dbe440cf7b66ee058fbc5fbce9b0de26886c1ce5a0973d4186a706fb247fc",
+   "runner_pid": 714,
+   "runner_start": "20800164",
+   "child_pid": 720,
+   "child_start": "20800186",
+   "command": "bin/check phase 10 --json",
+   "exit": 0,
+   "duration_s": 30.704,
+   "tier": "phase",
+   "stdout_sha256": "d3cb3740702fabff71388204ff883882cf41831472e2b468b8453f5b5768016f",
+   "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "result_path": "docs/refactor/execution/phase-10-gate-attempts/524cd4a0571b48aaa7e749409da69c85/result.json",
+   "selected_gate_path": "docs/refactor/execution/phase-10-gate.json"
   }
  ],
- "next_action": "Phase 10 DO: host-differences inventory, export scenario, capability assertions.",
+ "next_action": "Phase 10 CHECK round 1: launch fresh reviewer for candidate bb40ef616387ef4226f5be69404c1257dcfc1636 via independent-phase-review.",
  "pending_human_gates": [],
  "phase_base_sha": "7556161a411bb211063b7a362814c43fd79f7926",
  "phase_contract_sha256": "181dbe440cf7b66ee058fbc5fbce9b0de26886c1ce5a0973d4186a706fb247fc",
- "phase_state": "DO",
- "review_round": 0
+ "phase_state": "CHECK",
+ "review_round": 1
 }
