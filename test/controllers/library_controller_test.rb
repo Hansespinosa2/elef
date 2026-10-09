@@ -30,7 +30,8 @@ class LibraryControllerTest < ActionDispatch::IntegrationTest
     assert_select "template[data-client-slot='actions'] form[action='#{load_samples_documents_path}']" do
       assert_select "button", text: "Load sample documents"
     end
-    assert_select "template[data-client-slot='graph'] .document-graph-panel", 1
+    assert_select "template[data-client-slot='graph'] [data-graph-data]", 1
+    assert_select "template[data-client-slot='graph'] .document-graph-panel", count: 0
     assert_select "template[data-client-slot='lineage'] .lineage-panel", count: 0
     assert_select "article.library-card", count: 0
   end
