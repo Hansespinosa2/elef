@@ -34,14 +34,13 @@ export function loadEditorRuntime() {
       import("controllers/preview_controller"),
       import("controllers/presentation_canvas_controller"),
       import("controllers/visual_editor_controller"),
-      import("controllers/presentation_editor_controller"),
       import("controllers/slide_overview_controller"),
       import("controllers/document_pages_controller"),
       import("controllers/mermaid_diagrams_controller"),
       import("controllers/snippet_palette_controller")
     ])
       .then(([editor, appearance, documentLinks, mathPalette, mathShorthand, mermaidAssist, media, preview,
-        presentationCanvas, visualEditor, presentationEditor, slideOverview, documentPages,
+        presentationCanvas, visualEditor, slideOverview, documentPages,
         mermaidDiagrams, snippetPalette]) => {
         register("editor", editor.default)
         register("appearance", appearance.default)
@@ -53,7 +52,6 @@ export function loadEditorRuntime() {
         register("preview", preview.default)
         register("presentation-canvas", presentationCanvas.default)
         register("visual-editor", visualEditor.default)
-        register("presentation-editor", presentationEditor.default)
         register("slide-overview", slideOverview.default)
         register("document-pages", documentPages.default)
         register("mermaid-diagrams", mermaidDiagrams.default)

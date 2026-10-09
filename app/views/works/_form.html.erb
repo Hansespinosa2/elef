@@ -7,7 +7,7 @@
 ) %>
 <% visual_mode = params[:editor_mode] != "source" %>
 <% controllers = %w[dirty preview autosave visual-editor media] %>
-<% controllers << "presentation-editor" if work.presentation? %>
+<% controllers << "presentation-host" if work.presentation? %>
 <% controllers << "slide-overview" if work.presentation? %>
 <% actions = ["submit->dirty#allowSubmit", "input->dirty#markDirty"] %>
 <% actions += ["input->preview#schedule", "change->preview#schedule"] %>

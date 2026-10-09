@@ -4,6 +4,7 @@ export type { SettingsRoute } from "./application/router.js";
 export { CREATE_WORK_EVENT } from "./features/library/LibraryApp.js";
 export { createPresentationNavigation, presentationActionForKey } from "./features/presentation/navigation.js";
 export { attachCanvasScaling, PresentationController, mountPresentation } from "./features/presentation/presentation.js";
+export { PresentationEditor, mountPresentationEditor } from "./features/presentation/editor.js";
 export {
   presentationBlockAttributes,
   presentationBlockControls,

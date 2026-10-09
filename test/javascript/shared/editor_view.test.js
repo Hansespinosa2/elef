@@ -170,7 +170,7 @@ test("switching deck kinds updates the shared editor controls and controller tar
   configureEditorKind(root, "document", {
     documentTitles: ["Meeting notes"],
     showTitle: true,
-    formControllers: "preview visual-editor presentation-editor slide-overview media presentation"
+    formControllers: "preview visual-editor presentation-host slide-overview media"
   })
 
   const sourceField = root.querySelector(".source-field")
@@ -187,7 +187,7 @@ test("switching deck kinds updates the shared editor controls and controller tar
   assert.equal(root.querySelector("[data-editor-view-target='mediaInput']").getAttribute("accept"), "image/*")
   assert.equal(root.querySelector("[data-editor-view-target='slideOverview']").hidden, true)
   assert.equal(root.querySelector("[data-presentation-editor-target='status']").hidden, true)
-  assert.match(form.dataset.controller, /presentation/)
+  assert.equal(form.dataset.controller, "preview visual-editor presentation-host slide-overview media")
 
   configureEditorKind(root, "presentation", { showTitle: true })
 

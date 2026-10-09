@@ -2,6 +2,7 @@ import { createDeckOpenFlow, prepareDeckOpen } from "lib/deck_open_flow"
 import { applyEditorSource } from "lib/editor_source"
 import { measurePaintedAction } from "lib/performance_measurement"
 import { editorFor } from "lib/editor_controller_lookup"
+import { mountHostPresentationEditor } from "lib/presentation_editor_host"
 import { createDocumentGraphCache } from "lib/document_graph_cache"
 import { createRequestGuard } from "lib/request_identity"
 import { buildDocumentGraph } from "@elef/work-model"
@@ -606,7 +607,7 @@ export function startFileLibraryApplication(platform) {
           documentTitles,
           sourceName: isDocument ? "document[source]" : "presentation[source]",
           showTitle: true,
-          formControllers: "preview visual-editor presentation-editor slide-overview media"
+          formControllers: "preview visual-editor slide-overview media"
         })
         const editor = await measureOpenStage("editorReady", () => editorFor(elements.editorField)?.editorReady
           ? editorFor(elements.editorField)
@@ -619,6 +620,13 @@ export function startFileLibraryApplication(platform) {
         elements.editorInput.disabled = true
         showLibrary()
         throw error
+      }
+      // The shared client presentation editor lives on the form for the app
+      // lifetime (it resolves the projection canvas lazily, like the retired
+      // Stimulus controller did); presentation decks mount it once here while
+      // document decks leave it unmounted.
+      if (!isDocument && !elements.editorForm.presentationEditorController) {
+        mountHostPresentationEditor(elements.editorForm)
       }
     const viewSetupStartedAt = __ELEF_E2E__ ? performance.now() : null
       transport.activateDeck(deck, id)
@@ -1193,7 +1201,7 @@ export function startFileLibraryApplication(platform) {
       await measureBootstrapStage("editor-runtime", () => loadEditorRuntime())
       configureEditorKind(elements.editorField.closest(".editor-shell"), "presentation", {
         showTitle: true,
-        formControllers: "preview visual-editor presentation-editor slide-overview media"
+        formControllers: "preview visual-editor slide-overview media"
       })
       await measureBootstrapStage("editor-ready", () => waitForEditorController(elements.editorField, editorFor))
     },

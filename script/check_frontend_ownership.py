@@ -515,7 +515,19 @@ assert '"@elef/renderer"' in preview_core_entry and "renderPreviewCore" in previ
 assert 'pin "@elef/client/preview-core", to: "client/dist/preview-core.js"' in importmap, (
     "Rails must serve the deferred preview renderer entry"
 )
-assert '"lib/projection_editability"' in (ROOT / "app/javascript/controllers/presentation_editor_controller.js").read_text()
+client_presentation_editor = (ROOT / "packages/client/src/features/presentation/editor.js").read_text()
+assert '"lib/projection_editability"' not in client_presentation_editor, (
+    "the client presentation editor must receive editing utilities through injection, not host imports"
+)
+assert not (ROOT / "app/javascript/controllers/presentation_editor_controller.js").is_file(), (
+    "the retired Stimulus presentation editor must be absent"
+)
+assert '"controllers/presentation_editor_controller"' not in editor_runtime, (
+    "the retired Stimulus presentation editor must not load on demand"
+)
+assert "mountHostPresentationEditor" in (ROOT / "app/javascript/lib/presentation_editor_host.js").read_text(), (
+    "both hosts must mount the client presentation editor through the shared host seam"
+)
 assert '"lib/projection_editability"' in (ROOT / "app/javascript/controllers/visual_editor_controller.js").read_text()
 assert 'pin "lib/projection_editability", to: "lib/projection_editability.js"' in importmap
 assert all(path.is_file() for path in renderer_sources), "renderer sources must stay in shared app/javascript or packages"

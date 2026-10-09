@@ -1,79 +1,131 @@
-import { Controller } from "@hotwired/stimulus"
-import { editorFor } from "lib/editor_controller_lookup"
-import { markdownForVisibleText, renderInlineMath } from "controllers/editor_markdown"
-import { setProjectionBlockEditable } from "lib/projection_editability"
-import {
-  moveCaretBetweenBlocks,
-  pointAtVisibleOffset,
-  removeEmptyBlockSource,
-  sourceOffsetForVisibleOffset,
-  visibleOffsetAtPoint,
-  visibleOffsetForSourceOffset
-} from "controllers/editor_caret"
-import { handleMathClick, handleMathKeydown, syncActiveMath } from "controllers/editor_math"
+// Shared presentation visual editor: slide/block toolbar operations, alignment
+// directives, projection typing flush, and caret preservation. Ported from the
+// Stimulus-era presentation_editor_controller.js without behavior change.
+// Framework-free: hosts mount it on their editor form and inject the editor
+// seam plus editing utilities (caret math, markdown mapping, live math,
+// projection editability stay host-owned until Phase 09; they are used here
+// only through the injected deps object so this module never imports host
+// paths). Slide visibility/scaling/present-mode travel live in
+// presentation.js; renderer chrome markup stays byte-identical so the frozen
+// fixtures keep matching.
+//
+// Host interop: the mount publishes itself as
+// form.presentationEditorController (the CodeMirror editor host calls
+// restoreCaret after mode changes) and clears it on destroy.
 
-export default class extends Controller {
-  static targets = ["canvas", "source", "status"]
+function defaultEnv(form) {
+  const doc = form?.ownerDocument ?? globalThis.document
+  const view = doc?.defaultView ?? globalThis
+  return {
+    confirm: (message) => globalThis.window?.confirm?.(message) ?? view?.confirm?.(message) ?? false,
+    scheduleFrame: (callback) => (view?.requestAnimationFrame ?? globalThis.requestAnimationFrame)?.(callback),
+    cancelFrame: (handle) => (view?.cancelAnimationFrame ?? globalThis.cancelAnimationFrame)?.(handle),
+    getSelection: () => view?.getSelection?.() ?? doc?.getSelection?.() ?? null,
+    activeElement: () => doc?.activeElement ?? null,
+    Node: view?.Node ?? globalThis.Node,
+  }
+}
 
-  connect() {
-    this.element.presentationEditorController = this
-    this.map = this.readMap()
-    this.editorController = editorFor(this.sourceTarget)
-    this.editorReady = (event) => {
-      this.editorController = event.detail.editor
-      this.applyMode(this.element.getAttribute("data-editor-mode") || "visual")
+export class PresentationEditor {
+  constructor(form, options = {}) {
+    this.element = form
+    this.deps = options.deps ?? {}
+    const env = { ...defaultEnv(form), ...(options.env ?? {}) }
+    this.confirm = env.confirm
+    this.scheduleFrame = env.scheduleFrame
+    this.cancelFrame = env.cancelFrame
+    this.getSelection = env.getSelection
+    this.activeElement = env.activeElement
+    this.Node = env.Node
+    this.canvasElement = options.canvasElement ?? null
+    this.statusElement = options.statusElement ?? null
+    this.sourceElement = options.sourceElement ?? null
+    this.getEditor = options.getEditor ?? (() => null)
+    this.isProjectionFresh =
+      options.isProjectionFresh ?? (() => form?.previewController?.projectionFresh !== false)
+    this.editorController = null
+    this.map = options.editorMap ?? this.readMap()
+    this.disposers = []
+    this.operationPending = false
+    this.updatingSource = false
+
+    const on = (target, type, handler, capture) => {
+      target?.addEventListener?.(type, handler, capture)
+      this.disposers.push(() => target?.removeEventListener?.(type, handler, capture))
     }
-    this.element.addEventListener("elef:editor-ready", this.editorReady)
-    this.sourceInputHandler = (event) => this.sourceInput(event)
-    this.element.addEventListener("input", this.sourceInputHandler)
-    this.modeChangedHandler = (event) => this.applyMode(event.detail.mode)
-    this.element.addEventListener("elef:editor-mode-change", this.modeChangedHandler)
-    this.previewHandler = (event) => this.previewUpdated(event.detail.payload)
-    this.element.addEventListener("elef:preview-updated", this.previewHandler)
-    this.previewStaleHandler = (event) => this.previewStale(event.detail)
-    this.element.addEventListener("elef:preview-stale", this.previewStaleHandler)
-    this.clickHandler = (event) => this.handleAction(event)
-    this.element.addEventListener("click", this.clickHandler)
-    this.projectionLinkHandler = (event) => this.projectionLinkClicked(event)
-    this.element.addEventListener("click", this.projectionLinkHandler)
-    this.blockKeydownHandler = (event) => this.blockKeydown(event)
-    this.element.addEventListener("keydown", this.blockKeydownHandler, true)
-    this.selectionChangeHandler = () => this.rememberProjectionCaret()
-    document.addEventListener("selectionchange", this.selectionChangeHandler)
-    this.applyMode(this.element.getAttribute("data-editor-mode") || "visual")
+    on(form, "elef:editor-ready", (event) => {
+      this.editorController = event.detail.editor
+      this.applyMode(form.getAttribute("data-editor-mode") || "visual")
+    })
+    on(form, "input", (event) => {
+      this.sourceInput(event)
+      this.blockInput(event)
+    })
+    on(form, "elef:editor-mode-change", (event) => this.applyMode(event.detail.mode))
+    on(form, "elef:preview-updated", (event) => this.previewUpdated(event.detail.payload))
+    on(form, "elef:preview-stale", (event) => this.previewStale(event.detail))
+    on(form, "click", (event) => this.handleAction(event))
+    on(form, "click", (event) => this.projectionLinkClicked(event))
+    on(form, "change", (event) => {
+      if (event.target?.closest?.("[data-presentation-editor-align]")) this.alignmentChanged(event)
+    })
+    on(form, "focusin", (event) => {
+      if (event.target?.closest?.("[data-editor-block-id]")) this.blockFocus(event)
+    })
+    on(form, "focusout", (event) => {
+      if (event.target?.closest?.("[data-editor-block-id]")) this.blockBlur(event)
+    })
+    on(form, "keydown", (event) => this.blockKeydown(event), true)
+    const doc = form?.ownerDocument
+    on(doc, "selectionchange", () => this.rememberProjectionCaret())
+
+    this.editorController = this.getEditor()
+    this.applyMode(form.getAttribute("data-editor-mode") || "visual")
     this.updateBlockBoundaries()
   }
 
-  disconnect() {
-    this.element.removeEventListener("elef:editor-ready", this.editorReady)
-    this.element.removeEventListener("input", this.sourceInputHandler)
-    this.element.removeEventListener("elef:editor-mode-change", this.modeChangedHandler)
-    this.element.removeEventListener("elef:preview-updated", this.previewHandler)
-    this.element.removeEventListener("elef:preview-stale", this.previewStaleHandler)
-    this.element.removeEventListener("click", this.clickHandler)
-    this.element.removeEventListener("click", this.projectionLinkHandler)
-    this.element.removeEventListener("keydown", this.blockKeydownHandler, true)
-    document.removeEventListener("selectionchange", this.selectionChangeHandler)
-    if (this.pendingProjectionFrame) cancelAnimationFrame(this.pendingProjectionFrame)
+  destroy() {
+    if (this.pendingProjectionFrame) this.cancelFrame(this.pendingProjectionFrame)
     this.flushPendingProjectionEdits()
-    if (this.element.presentationEditorController === this) delete this.element.presentationEditorController
+    this.disposers.splice(0).forEach((dispose) => dispose())
+  }
+
+  canvas() {
+    return (
+      this.canvasElement ??
+      this.element.querySelector('[data-presentation-editor-target="canvas"]')
+    )
+  }
+
+  status() {
+    return (
+      this.statusElement ??
+      this.element.querySelector('[data-presentation-editor-target="status"]')
+    )
+  }
+
+  source() {
+    return (
+      this.sourceElement ??
+      this.element.querySelector('[data-presentation-editor-target="source"]')
+    )
   }
 
   applyMode(mode) {
     const visual = mode !== "source"
     this.element.dataset.editorMode = visual ? "visual" : "source"
     if (!visual) this.pendingCaretRestore = null
-    if (this.hasSourceTarget) this.sourceTarget.classList.toggle("is-source-hidden", visual)
+    this.source()?.classList.toggle("is-source-hidden", visual)
     this.syncProjectionEditability()
   }
 
   blockFocus(event) {
-    this.activeProjectionBlock = event.currentTarget
+    this.activeProjectionBlock = event.target.closest("[data-editor-block-id]")
     this.element.dataset.editorProjectionActive = "true"
   }
 
-  blockBlur() {
-    syncActiveMath(this.canvasTarget, () => this.flushPendingProjectionEdits())
+  blockBlur(_event) {
+    this.deps.syncActiveMath(this.canvas(), () => this.flushPendingProjectionEdits())
     this.flushPendingProjectionEdits()
     this.activeProjectionBlock = null
     delete this.element.dataset.editorProjectionActive
@@ -81,8 +133,8 @@ export default class extends Controller {
   }
 
   projectionLinkClicked(event) {
-    if (handleMathClick(event, this.canvasTarget)) return
-    syncActiveMath(this.canvasTarget, () => this.flushPendingProjectionEdits())
+    if (this.deps.handleMathClick(event, this.canvas())) return
+    this.deps.syncActiveMath(this.canvas(), () => this.flushPendingProjectionEdits())
     const link = event.target.closest?.(".editor-projection [contenteditable='true'] a")
     if (!link) return
 
@@ -113,12 +165,13 @@ export default class extends Controller {
   }
 
   captureCaret() {
-    const selection = window.getSelection()
+    const selection = this.getSelection()
     const block = selection?.focusNode
-      ? (selection.focusNode.nodeType === Node.ELEMENT_NODE ? selection.focusNode : selection.focusNode.parentElement)?.closest?.("[data-editor-block-id]")
+      ? (selection.focusNode.nodeType === this.Node.ELEMENT_NODE ? selection.focusNode : selection.focusNode.parentElement)?.closest?.("[data-editor-block-id]")
       : null
-    const current = block && this.canvasTarget?.contains(block)
-      ? { blockId: block.dataset.editorBlockId, visibleOffset: visibleOffsetAtPoint(block, selection.focusNode, selection.focusOffset) }
+    const canvas = this.canvas()
+    const current = block && canvas?.contains(block)
+      ? { blockId: block.dataset.editorBlockId, visibleOffset: this.deps.visibleOffsetAtPoint(block, selection.focusNode, selection.focusOffset) }
       : this.lastProjectionCaret
     if (!current || current.visibleOffset === null || current.visibleOffset === undefined) return null
 
@@ -127,12 +180,13 @@ export default class extends Controller {
     const source = this.editorController.value.slice(region.content_range.start, region.content_range.end)
     return {
       blockId: current.blockId,
-      sourceOffset: region.content_range.start + sourceOffsetForVisibleOffset(source, current.visibleOffset)
+      sourceOffset: region.content_range.start + this.deps.sourceOffsetForVisibleOffset(source, current.visibleOffset)
     }
   }
 
   restoreCaret(sourceOffset, preferredBlockId = null) {
-    if (!this.hasCanvasTarget || !this.editorController) return false
+    const canvas = this.canvas()
+    if (!canvas || !this.editorController) return false
     const regions = this.allRegions().filter((region) => region.editable)
     const region = regions.find((candidate) => candidate.block_id === preferredBlockId) ||
       regions.find((candidate) => sourceOffset >= candidate.content_range.start && sourceOffset <= candidate.content_range.end) ||
@@ -144,34 +198,34 @@ export default class extends Controller {
       }, null)
     if (!region) return false
 
-    const block = [...this.canvasTarget.querySelectorAll("[data-editor-block-id]")]
+    const block = [...canvas.querySelectorAll("[data-editor-block-id]")]
       .find((candidate) => candidate.dataset.editorBlockId === region.block_id)
     if (!block) return false
     if (block.contentEditable !== "true") {
-      if (this.element.previewController?.projectionFresh === false) this.pendingCaretRestore = { sourceOffset, preferredBlockId }
+      if (this.isProjectionFresh() === false) this.pendingCaretRestore = { sourceOffset, preferredBlockId }
       return false
     }
     const source = this.editorController.value.slice(region.content_range.start, region.content_range.end)
-    const visibleOffset = visibleOffsetForSourceOffset(source, sourceOffset - region.content_range.start)
-    const point = pointAtVisibleOffset(block, visibleOffset)
+    const visibleOffset = this.deps.visibleOffsetForSourceOffset(source, sourceOffset - region.content_range.start)
+    const point = this.deps.pointAtVisibleOffset(block, visibleOffset)
     block.focus({ preventScroll: true })
-    window.getSelection()?.setPosition(point[0], point[1])
+    this.getSelection()?.setPosition(point[0], point[1])
     this.lastProjectionCaret = { blockId: region.block_id, visibleOffset }
     return true
   }
 
   flushPendingProjectionEdits() {
-    if (this.pendingProjectionFrame) cancelAnimationFrame(this.pendingProjectionFrame)
+    if (this.pendingProjectionFrame) this.cancelFrame(this.pendingProjectionFrame)
     this.pendingProjectionFrame = null
     if (!this.pendingProjectionEdits?.size || !this.editorController) return
 
     const edits = [...this.pendingProjectionEdits.values()].map((edit) => ({
       ...edit,
-      replacement: markdownForVisibleText(edit.source, this.editableText(edit.blockElement), edit.kind, edit.blockElement)
+      replacement: this.deps.markdownForVisibleText(edit.source, this.editableText(edit.blockElement), edit.kind, edit.blockElement)
     })).filter((edit) => edit.replacement !== edit.source)
     this.pendingProjectionEdits.clear()
     if (edits.length === 0) {
-      if (this.operationPending && this.element.previewController?.projectionFresh !== false) {
+      if (this.operationPending && this.isProjectionFresh() !== false) {
         this.operationPending = false
         this.setControlsDisabled(false)
         this.setStatus("")
@@ -180,7 +234,7 @@ export default class extends Controller {
     }
 
     edits.forEach((edit) => {
-      if (edit.kind !== "code") renderInlineMath(edit.blockElement)
+      if (edit.kind !== "code") this.deps.renderInlineMath(edit.blockElement)
     })
     const changes = edits.map((edit) => ({ from: edit.from, to: edit.to, insert: edit.replacement }))
       .sort((left, right) => left.from - right.from)
@@ -192,20 +246,21 @@ export default class extends Controller {
 
   scheduleProjectionFlush() {
     if (this.pendingProjectionFrame) return
-    this.pendingProjectionFrame = requestAnimationFrame(() => {
+    this.pendingProjectionFrame = this.scheduleFrame(() => {
       this.pendingProjectionFrame = null
       this.flushPendingProjectionEdits()
     })
   }
 
   rememberProjectionCaret() {
-    syncActiveMath(this.canvasTarget, () => this.flushPendingProjectionEdits())
-    const selection = window.getSelection()
+    this.deps.syncActiveMath(this.canvas(), () => this.flushPendingProjectionEdits())
+    const selection = this.getSelection()
     if (!selection?.focusNode) return
-    const node = selection.focusNode.nodeType === Node.ELEMENT_NODE ? selection.focusNode : selection.focusNode.parentElement
+    const node = selection.focusNode.nodeType === this.Node.ELEMENT_NODE ? selection.focusNode : selection.focusNode.parentElement
     const block = node?.closest?.("[data-editor-block-id]")
-    if (!block || !this.canvasTarget?.contains(block)) return
-    const visibleOffset = visibleOffsetAtPoint(block, selection.focusNode, selection.focusOffset)
+    const canvas = this.canvas()
+    if (!block || !canvas?.contains(block)) return
+    const visibleOffset = this.deps.visibleOffsetAtPoint(block, selection.focusNode, selection.focusOffset)
     if (visibleOffset !== null) this.lastProjectionCaret = { blockId: block.dataset.editorBlockId, visibleOffset }
   }
 
@@ -213,15 +268,16 @@ export default class extends Controller {
     if (this.pendingProjectionFrame || this.pendingProjectionEdits?.size) {
       this.flushPendingProjectionEdits()
     }
-    if (handleMathKeydown(event, this.canvasTarget, () => this.flushPendingProjectionEdits())) return
-    if (moveCaretBetweenBlocks(event, this.canvasTarget)) return
+    if (this.deps.handleMathKeydown(event, this.canvas(), () => this.flushPendingProjectionEdits())) return
+    if (this.deps.moveCaretBetweenBlocks(event, this.canvas())) return
     if (!["Backspace", "Delete"].includes(event.key)) return
 
-    const selection = window.getSelection()
+    const selection = this.getSelection()
     if (!selection?.isCollapsed) return
-    const node = selection.focusNode?.nodeType === Node.ELEMENT_NODE ? selection.focusNode : selection.focusNode?.parentElement
+    const node = selection.focusNode?.nodeType === this.Node.ELEMENT_NODE ? selection.focusNode : selection.focusNode?.parentElement
     const blockElement = node?.closest?.("[data-editor-block-id][contenteditable='true']")
-    if (!blockElement || !this.canvasTarget?.contains(blockElement) || this.editableText(blockElement).trim() !== "") return
+    const canvas = this.canvas()
+    if (!blockElement || !canvas?.contains(blockElement) || this.editableText(blockElement).trim() !== "") return
     if (blockElement.querySelector("img, video, iframe, [data-editor-math-source]")) return
 
     const located = this.locateBlock(blockElement.dataset.editorBlockId)
@@ -245,16 +301,16 @@ export default class extends Controller {
         }
       }
     }
-    const updated = removeEmptyBlockSource(source, from, to)
+    const updated = this.deps.removeEmptyBlockSource(source, from, to)
     if (updated !== source) this.replaceSource(updated)
   }
 
   alignmentChanged(event) {
     if (this.element.dataset.editorMode === "source") return
-    const select = event.target
+    const select = event.target.closest("[data-presentation-editor-align]")
     if (!this.editorController || !this.map) return
 
-    syncActiveMath(this.canvasTarget, () => this.flushPendingProjectionEdits())
+    this.deps.syncActiveMath(this.canvas(), () => this.flushPendingProjectionEdits())
     this.flushPendingProjectionEdits()
 
     const source = this.sourceValue()
@@ -379,7 +435,7 @@ export default class extends Controller {
     }
 
     // Immediately update visual block in presentation DOM
-    const blockElement = this.canvasTarget?.querySelector(`[data-editor-block-id="${block.id}"]`)
+    const blockElement = this.canvas()?.querySelector(`[data-editor-block-id="${block.id}"]`)
     if (blockElement) {
       blockElement.classList.remove(
         "position-left", "position-center", "position-right",
@@ -405,8 +461,8 @@ export default class extends Controller {
     const slideIndex = Number(control.dataset.slideIndex)
     const blockIndex = Number(control.dataset.blockIndex)
 
-    if (action === "delete-slide" && !window.confirm("Delete this slide?")) return
-    if (action === "delete-block" && !window.confirm("Delete this block?")) return
+    if (action === "delete-slide" && !this.confirm("Delete this slide?")) return
+    if (action === "delete-block" && !this.confirm("Delete this block?")) return
 
     switch (action) {
       case "add-slide-after":
@@ -608,26 +664,26 @@ export default class extends Controller {
   canOperateOnProjection() {
     if (this.element.dataset.editorMode === "source") return false
     if (this.operationPending) return false
-    return this.isMapSynchronized() || this.element.previewController?.projectionFresh !== false
+    return this.isMapSynchronized() || this.isProjectionFresh() !== false
   }
 
   canEditBlock(blockElement) {
     if (this.element.dataset.editorMode === "source" || blockElement.dataset.editorSourceEditable === "false") return false
-    if (this.element.previewController?.projectionFresh !== false) return true
+    if (this.isProjectionFresh() !== false) return true
 
     return this.activeProjectionBlock === blockElement &&
-      document.activeElement?.closest?.("[contenteditable='true']") === blockElement
+      this.activeElement()?.closest?.("[contenteditable='true']") === blockElement
   }
 
   syncProjectionEditability({ preserveActive = false } = {}) {
     const visual = this.element.dataset.editorMode !== "source"
-    const fresh = this.element.previewController?.projectionFresh !== false
-    const active = preserveActive ? document.activeElement?.closest?.("[data-editor-block-id]") : null
+    const fresh = this.isProjectionFresh() !== false
+    const active = preserveActive ? this.activeElement()?.closest?.("[data-editor-block-id]") : null
     this.element.querySelectorAll("[data-editor-block-id][data-editor-source-editable]").forEach((block) => {
       const sourceEditable = block.dataset.editorSourceEditable !== "false"
       const editable = sourceEditable && visual && (fresh || (preserveActive && block === active))
       const label = block.classList.contains("slide-title") ? "Editable slide title" : "Editable slide block"
-      setProjectionBlockEditable(block, editable, label)
+      this.deps.setProjectionBlockEditable(block, editable, label)
     })
     this.element.querySelectorAll("[data-presentation-editor-align]").forEach((control) => {
       const disabled = !visual || !this.map
@@ -638,7 +694,7 @@ export default class extends Controller {
   sourceInput(event) {
     if (this.updatingSource || !this.editorController) return
     if (event.target !== this.editorController.inputTarget) return
-    if (document.activeElement?.closest?.(".editor-projection")) return
+    if (this.activeElement()?.closest?.(".editor-projection")) return
 
     this.operationPending = true
     this.setControlsDisabled(true)
@@ -688,7 +744,7 @@ export default class extends Controller {
   }
 
   sourceValue() {
-    return this.editorController?.value || this.sourceTarget?.querySelector("textarea")?.value || ""
+    return this.editorController?.value || this.source()?.querySelector("textarea")?.value || ""
   }
 
   findBlock(id) {
@@ -715,7 +771,7 @@ export default class extends Controller {
     const pending = this.pendingCaretRestore
     if (!pending || this.element.dataset.editorMode !== "visual") return
     this.pendingCaretRestore = null
-    requestAnimationFrame(() => this.restoreCaret(pending.sourceOffset, pending.preferredBlockId))
+    this.scheduleFrame(() => this.restoreCaret(pending.sourceOffset, pending.preferredBlockId))
   }
 
   blockOperationStart(slide, block) {
@@ -770,7 +826,7 @@ export default class extends Controller {
   }
 
   editableText(element) {
-    return (element.innerText || element.textContent || "").replace(/\u00a0/g, " ").replace(/\n+$/, "")
+    return (element.innerText || element.textContent || "").replace(/ /g, " ").replace(/\n+$/, "")
   }
 
   readMap() {
@@ -784,7 +840,8 @@ export default class extends Controller {
   }
 
   setStatus(text) {
-    if (this.hasStatusTarget) this.statusTarget.textContent = text
+    const status = this.status()
+    if (status) status.textContent = text
   }
 
   setControlsDisabled(disabled) {
@@ -801,5 +858,26 @@ export default class extends Controller {
         delete control.dataset.editorOriginalDisabled
       }
     })
+  }
+}
+
+// Mounts the shared presentation editor on a host editor form. Hosts pass
+// their editor seam (getEditor), freshness probe, environment overrides, and
+// the editing utility deps. The mount publishes itself as
+// form.presentationEditorController for the CodeMirror editor host (caret
+// restore after mode changes) and clears it on destroy.
+export function mountPresentationEditor(form, options = {}) {
+  const editor = new PresentationEditor(form, options)
+  const previous = form.presentationEditorController
+  form.presentationEditorController = editor
+  return {
+    editor,
+    destroy() {
+      editor.destroy()
+      if (form.presentationEditorController === editor) {
+        if (previous) form.presentationEditorController = previous
+        else delete form.presentationEditorController
+      }
+    },
   }
 }
