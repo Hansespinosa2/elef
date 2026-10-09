@@ -1,25 +1,43 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { readFile } from "node:fs/promises"
-import path from "node:path"
-import { fileURLToPath } from "node:url"
 import { parseHTML } from "linkedom"
+import { SlideOverview } from "../../../packages/client/src/features/overview/overview.js"
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..")
-const sourceOpsUrl = new URL("../../../packages/client/src/session/source_ops.js", import.meta.url).href
-const source = (await readFile(path.join(root, "app/javascript/controllers/slide_overview_controller.js"), "utf8"))
-  .replace('import { Controller } from "@hotwired/stimulus"', "class Controller {}")
-  .replace('import { caretAfterInsert } from "@elef/client"', `import { caretAfterInsert } from "${sourceOpsUrl}"`)
-const slideOverview = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`)
-
-test("slide overview thumbnails clone only inert slide content", () => {
+function withDocument(html, run) {
   const previous = {
     document: globalThis.document,
     requestAnimationFrame: globalThis.requestAnimationFrame,
     htmlVideoElement: globalThis.HTMLVideoElement,
     intersectionObserver: globalThis.IntersectionObserver
   }
-  const { document } = parseHTML(`
+  const { document } = parseHTML(html)
+  globalThis.document = document
+  globalThis.requestAnimationFrame = () => 1
+  globalThis.HTMLVideoElement = class HTMLVideoElement {}
+  try {
+    return run(document)
+  } finally {
+    globalThis.document = previous.document
+    globalThis.requestAnimationFrame = previous.requestAnimationFrame
+    globalThis.HTMLVideoElement = previous.htmlVideoElement
+    globalThis.IntersectionObserver = previous.intersectionObserver
+  }
+}
+
+function buildOverview(document) {
+  return new SlideOverview({
+    element: document.querySelector("form"),
+    targets: {
+      grid: document.querySelector(".slide-overview-grid"),
+      count: document.querySelector("output"),
+      warnings: document.querySelector(".slide-overview-warnings")
+    },
+    preview: document.querySelector(".presentation-editor-projection")
+  })
+}
+
+test("slide overview thumbnails clone only inert slide content", () => {
+  withDocument(`
     <html><body>
       <form>
         <div class="presentation-editor-projection">
@@ -34,32 +52,19 @@ test("slide overview thumbnails clone only inert slide content", () => {
           </div>
         </div>
         <div class="slide-overview-grid"></div>
+        <div class="slide-overview-actions"><button></button><button></button><button></button><button></button><button></button></div>
+        <div class="slide-overview-warnings"><ul></ul></div>
         <output></output>
       </form>
     </body></html>
-  `)
-  globalThis.document = document
-  globalThis.requestAnimationFrame = () => 1
-  globalThis.HTMLVideoElement = class HTMLVideoElement {}
-
-  try {
-    const form = document.querySelector("form")
+  `, (document) => {
     const grid = document.querySelector(".slide-overview-grid")
     const originalSlide = document.querySelector(".presentation-editor-projection .slide")
-    const controller = new slideOverview.default()
-    Object.assign(controller, {
-      element: form,
-      gridTarget: grid,
-      hasGridTarget: true,
-      countTarget: document.querySelector("output"),
-      preview: document.querySelector(".presentation-editor-projection"),
-      selectedIndex: 0,
-      projectionPending: false,
-      sourceRanges: () => [{ start: 0, end: 1 }],
-      updateActionAvailability: () => {}
-    })
+    const overview = buildOverview(document)
+    overview.selectedIndex = 0
+    overview.projectionPending = false
 
-    controller.renderOverview()
+    overview.renderOverview()
 
     const card = grid.querySelector(".slide-overview-card")
     const thumbnailSlide = card.querySelector(".slide-overview-thumbnail > .slide-frame > .slide")
@@ -72,64 +77,43 @@ test("slide overview thumbnails clone only inert slide content", () => {
     assert.equal(card.querySelector(".slide-overview-label").textContent, "1. Visible heading")
     assert.equal(document.querySelector(".presentation-editor-projection .slide").hasAttribute("data-controller"), true)
     assert.equal(document.querySelector(".presentation-editor-projection .slide [contenteditable]").hasAttribute("data-action"), true)
-  } finally {
-    globalThis.document = previous.document
-    globalThis.requestAnimationFrame = previous.requestAnimationFrame
-    globalThis.HTMLVideoElement = previous.htmlVideoElement
-    globalThis.IntersectionObserver = previous.intersectionObserver
-  }
+  })
 })
 
 test("large slide overviews clone thumbnails only near the visible scroll area", () => {
-  const previous = {
-    document: globalThis.document,
-    requestAnimationFrame: globalThis.requestAnimationFrame,
-    htmlVideoElement: globalThis.HTMLVideoElement,
-    intersectionObserver: globalThis.IntersectionObserver
-  }
-  const { document } = parseHTML(`
+  withDocument(`
     <html><body><form>
       <div class="presentation-editor-projection">
         <div class="slide-frame"><section class="slide"><h1>One</h1></section></div>
         <div class="slide-frame"><section class="slide"><h1>Two</h1></section></div>
         <div class="slide-frame"><section class="slide"><h1>Three</h1></section></div>
       </div>
-      <div class="slide-overview-grid"></div><output></output>
+      <div class="slide-overview-grid"></div>
+      <div class="slide-overview-actions"><button></button><button></button><button></button><button></button><button></button></div>
+      <div class="slide-overview-warnings"><ul></ul></div>
+      <output></output>
+      <input type="hidden" name="presentation[source]" value="One&#10;---&#10;Two&#10;---&#10;Three">
     </form></body></html>
-  `)
-  let observer
-  globalThis.document = document
-  globalThis.requestAnimationFrame = () => 1
-  globalThis.HTMLVideoElement = class HTMLVideoElement {}
-  globalThis.IntersectionObserver = class {
-    constructor(callback, options) {
-      this.callback = callback
-      this.options = options
-      this.observed = []
-      observer = this
+  `, (document) => {
+    let observer
+    globalThis.IntersectionObserver = class {
+      constructor(callback, options) {
+        this.callback = callback
+        this.options = options
+        this.observed = []
+        observer = this
+      }
+      observe(target) { this.observed.push(target) }
+      unobserve(target) { this.observed = this.observed.filter(card => card !== target) }
+      disconnect() { this.observed = [] }
     }
-    observe(target) { this.observed.push(target) }
-    unobserve(target) { this.observed = this.observed.filter(card => card !== target) }
-    disconnect() { this.observed = [] }
-  }
 
-  try {
-    const form = document.querySelector("form")
     const grid = document.querySelector(".slide-overview-grid")
-    const controller = new slideOverview.default()
-    Object.assign(controller, {
-      element: form,
-      gridTarget: grid,
-      hasGridTarget: true,
-      countTarget: document.querySelector("output"),
-      preview: document.querySelector(".presentation-editor-projection"),
-      selectedIndex: 0,
-      projectionPending: false,
-      sourceRanges: () => [{}, {}, {}],
-      updateActionAvailability: () => {}
-    })
+    const overview = buildOverview(document)
+    overview.selectedIndex = 0
+    overview.projectionPending = false
 
-    controller.renderOverview()
+    overview.renderOverview()
 
     const cards = [...grid.querySelectorAll(".slide-overview-card")]
     assert.equal(cards.length, 3)
@@ -141,10 +125,39 @@ test("large slide overviews clone thumbnails only near the visible scroll area",
     assert.equal(cards[1].querySelector(".slide-frame"), null)
     assert.equal(observer.observed.includes(cards[0]), false)
     assert.equal(observer.observed.includes(cards[1]), true)
-  } finally {
-    globalThis.document = previous.document
-    globalThis.requestAnimationFrame = previous.requestAnimationFrame
-    globalThis.HTMLVideoElement = previous.htmlVideoElement
-    globalThis.IntersectionObserver = previous.intersectionObserver
+  })
+})
+
+test("slide overview operations rewrite the source through the editor seam", () => {
+  const committed = []
+  const editor = {
+    value: "One\n---\nTwo",
+    commitSource(source, options) { committed.push({ source, options }) },
+    focus() {}
   }
+  const overview = new SlideOverview({ editorProvider: () => editor })
+  overview.selectedIndex = 0
+
+  overview.duplicate()
+
+  assert.equal(committed.length, 1)
+  assert.equal(committed[0].source, "One\n---\nOne\n---\nTwo")
+  assert.equal(overview.selectedIndex, 1)
+  assert.equal(committed[0].options.caret, committed[0].source.length)
+
+  editor.value = committed[0].source
+  overview.delete()
+
+  assert.equal(committed.length, 2)
+  assert.equal(committed[1].source, "One\n---\nTwo")
+  assert.equal(overview.selectedIndex, 1)
+})
+
+test("slide overview source ranges skip front matter and fenced dividers", () => {
+  const overview = new SlideOverview({})
+  const source = "---\ntitle: Deck\n---\nOne\n```\n---\n```\n---\nTwo"
+  const ranges = overview.sourceRanges(source)
+  assert.equal(ranges.length, 2)
+  assert.equal(source.slice(ranges[0].start, ranges[0].end).includes("One"), true)
+  assert.equal(source.slice(ranges[1].start, ranges[1].end), "Two")
 })
