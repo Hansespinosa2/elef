@@ -225,17 +225,26 @@ The full system suite, full desktop E2E harness, macOS-native leg, and CI after-
 | GitHub issue URL and API behavior | `GithubIssueCreator` tests now cover the HTTPS/host/repository path allowlist, 401/404/500/503 mappings, and both timeout and socket-error fallback messages. |
 | Shared editor data projection | Added a helper test that captures the `editor_preview` call and checks the source/title overrides, presentation mode/id, theme/typography, margin flags, media resolver, remote-media policy, and same-workspace linkable documents/aliases. |
 | New-work endpoints | Added request tests for `POST /documents/start` and `POST /presentations/start`, including record creation, redirect target, notice, and default source. |
+| Archive import hardening | The audited tree already rejected traversal, Unix symlink entries, and extreme compression ratios. Added tests for malformed `elef.json`, a declared extraction size above 500 MiB, and Windows drive, backslash traversal, absolute, and control-character member names. The oversize case mutates a tiny ZIP's central-directory size so the guard is exercised without creating or extracting a huge file. |
+| Updater guard logic | Extracted the existing version syntax check, exact requested/offered version comparison, and atomic install lease acquisition into helpers used by `install_update`. Added tests for safe, malformed, and overlong versions; a changed offered version; concurrent install rejection; and lease release after scope exit. No updater signature, prompt, staging, or release behavior changed. |
+| Tauri IPC capability enforcement | Added a Tauri `MockRuntime` IPC test built from the production `tauri.conf.json` and capability manifest. It invokes the registered `pending_open_elef_count` command successfully from Elef's local origin and verifies rejection from `https://untrusted.example`. This exercises Tauri's runtime ACL resolution with production capability data; it does not substitute for native WebView checks on each OS. |
 
 ### Phase 4 validation and mutation evidence
 
 | Command / check | Result |
 | --- | --- |
 | Focused Rails controllers, helper, GitHub issue, PPTX export, and remote image fetcher suites on disposable SQLite | 110 tests, 1,171 assertions, passed |
+| `cargo test --manifest-path desktop/Cargo.toml -p elef-core --locked` | 43 tests passed (the audited baseline had 40 `elef-core` tests). |
+| `cargo test --manifest-path desktop/Cargo.toml -p elef-desktop --lib --locked` | 7 tests passed, including the remote-origin IPC rejection and updater guard tests. |
+| `cargo fmt --manifest-path desktop/Cargo.toml --all -- --check` and `python3 desktop/scripts/check_architecture.py` | Passed after the Rust changes; the capability/architecture check still found 23 commands. |
 | Manual mutant: private-address filter always returns false | Detected by the redirect-to-private and alternate-IP assertions. |
 | Manual mutant: protocol/port/userinfo guard removed | Detected by the disallowed URL test before any real network access. |
 | Manual mutant: vetted `ipaddr` assignment removed | Detected by direct and redirect tests that assert the selected public address is pinned into the HTTP client. |
+| Manual mutant: allow an explicit remote URL in the production `main-capability` | The IPC runtime test failed because the remote command became invokable. The capability file was restored after the experiment. |
+| Manual mutant: accept every offered updater version | The exact-version unit test failed on `0.2.0` versus `0.2.1`; the source was restored after the experiment. |
+| Manual mutant: accept ZIP member names containing backslashes | The malicious-filename test failed on `nested\\..\\outside.md`; the source was restored after the experiment. |
 
-The new fetcher seam is only used by focused unit tests; the default production path remains `Addrinfo.getaddrinfo` followed by a `Net::HTTP` connection pinned to the checked address. This phase remains incomplete; archive import, updater, IPC permissions, document persistence, release staleness/fork branches, FolderSync cleanup, renderer fallback, bug-report environment matrix/429 UI, and the other listed gaps remain open.
+The new fetcher seam is only used by focused unit tests; the default production path remains `Addrinfo.getaddrinfo` followed by a `Net::HTTP` connection pinned to the checked address. Archive import path/manifest/size guards, updater version/install locking, and production-capability IPC checks now have the coverage described above. The native IPC test uses Tauri's `MockRuntime` with production capability data; Linux Wry/WebKit and macOS native WebView execution still require CI. Remaining Phase 4 work includes Rails document persistence/start/import/export/release/fork/FolderSync paths, renderer fallback, bug-report environment matrix and 429 UI, remaining PPTX fetcher edge cases, and the other listed coverage gaps.
 
 ## Maintainer approval required before workflow changes
 
