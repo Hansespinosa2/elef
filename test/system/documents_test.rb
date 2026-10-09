@@ -699,7 +699,7 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_operator edge_geometry["sourceGap"], :>=, 12
 
     find("[aria-label='Zoom in']").click
-    assert_selector "[data-document-graph-target='scaleLabel']", text: "120%"
+    assert_selector "[aria-label='Reset graph view']", text: "120%"
     assert_operator page.evaluate_script("document.documentElement.scrollWidth"), :<=, page.evaluate_script("window.innerWidth")
 
     find("[aria-label='Reset graph view']").click
