@@ -69,6 +69,8 @@ before any merge.
   candidate `7f3f6c7` went fully green via dispatch
   ([run 37882870249](https://github.com/Hansespinosa2/elef/actions/runs/37882870249))
   while pull-request CI stayed silent. Isolated gate at that candidate passed
-  everything except the unattainable attestation job. Owner approved deferral
+  everything except the unattainable attestation job. A follow-up dispatch
+  run on the correction tree ([run 37912725505](https://github.com/Hansespinosa2/elef/actions/runs/37912725505))
+  also completed fully green. Owner approved deferral
   and the equivalence above; the gate correction landed in the same commit
   as this file.
