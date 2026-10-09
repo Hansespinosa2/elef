@@ -490,7 +490,7 @@ assert '"lib/presentation_navigation"' in presentation_controller, "the shared c
 for shared_module in (
     "deck_open_flow", "document_graph_cache", "editor_ready", "editor_source",
     "feature_flags", "performance_measurement", "renderer_worker_client",
-    "work_session", "title_save_flow",
+    "request_identity", "work_session", "title_save_flow",
 ):
     assert f'"lib/{shared_module}"' in desktop_application, f"desktop application must consume app/javascript/lib/{shared_module}.js"
 assert "renderPreviewCore" in client_library_card and '"@elef/client/preview-core"' in client_library_card, (

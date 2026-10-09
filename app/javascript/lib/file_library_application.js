@@ -3,6 +3,7 @@ import { applyEditorSource } from "lib/editor_source"
 import { measurePaintedAction } from "lib/performance_measurement"
 import { editorFor } from "lib/editor_controller_lookup"
 import { createDocumentGraphCache } from "lib/document_graph_cache"
+import { createRequestGuard } from "lib/request_identity"
 import { buildDocumentGraph } from "@elef/work-model"
 import { waitForEditorController } from "lib/editor_ready"
 import { createWorkSession } from "lib/work_session"
@@ -466,16 +467,16 @@ export function startFileLibraryApplication(platform) {
   // navigated away (library hidden) or after a newer request started must
   // not render into the stale slot. The previous Stimulus mount had no such
   // guard; the panel re-read the filter but still applied late payloads.
-  let graphRequestId = 0
+  const graphRequests = createRequestGuard()
   let graphController = null
   async function showDocumentGraph() {
     if (!library) return
-    const request = ++graphRequestId
+    const request = graphRequests.request()
     try {
       const graph = await documentGraphData()
       // Reject stale results: navigation away from the library or a newer
       // graph request supersedes this payload.
-      if (request !== graphRequestId || !libraryShown) return
+      if (!graphRequests.isCurrent(request) || !libraryShown) return
       const slot = mount.querySelector("#document-graph-view")
       if (!slot) return
       graphController?.destroy()
