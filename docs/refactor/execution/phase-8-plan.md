@@ -1,7 +1,7 @@
 # Phase 8 plan — Source editor
 
 Status: FROZEN at 2026-10-09 (hash recorded in `docs/refactor/status.json`)
-Phase contract: `docs/refactor/phases/08-source-editor.md` (sha256 `da19b3dbe451ac9193aee7771166b9ae4c8cef0e16fe2e063d85b630fc29e0f`)
+Phase contract: `docs/refactor/phases/08-source-editor.md` (sha256 `da19b3dbe4512ffc8c94cb46c51fbb3767bab21a7c0a21f9d113bcc425d74490`)
 Phase base: `c5456e79e4007f70ab41b9877baabe4bd51aa4a1`
 
 ## 1. Verified facts

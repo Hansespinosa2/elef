@@ -14,7 +14,7 @@
   "swap_mb": 0,
   "tauri_native_runner": "available"
  },
- "frozen_plan_sha256": "f00d62f15cc4417376d2fd5cfbd6fcd633051a5e62fb65b947f74aff51276edf",
+ "frozen_plan_sha256": "d1926b7fe64fa662591dabd8c5ad1969b16758c1f0e550e280173fdd5e3da125",
  "head_sha": "c5456e79e4007f70ab41b9877baabe4bd51aa4a1",
  "last_completed_phase": 7,
  "last_verified_checks": [
