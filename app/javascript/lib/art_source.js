@@ -118,11 +118,16 @@ export function markdownBoundaryMap(source, { bindings = [] } = {}) {
   }
 
   const directiveLines = new Set()
+  const artDirectiveLines = new Set()
   for (let index = 0; index < lines.length; index += 1) {
     const isDirective = /^\s*:::/.test(lines[index])
+    const isArtCandidate = validArtLine(lines[index]) || invalidArtLine(lines[index])
+    const isLegacyMarginDirective = /^\s*:::(section|subsection|footnote)\{/.test(lines[index])
     const isProtected = protectedRanges.some(range => index >= range.startLine && index < range.endLine)
-    if (isDirective && !isProtected && (blocks.some(block => block.startLine === index) || directiveLines.has(index - 1))) {
+    const isBlockBoundary = blocks.some(block => block.startLine === index) || directiveLines.has(index - 1)
+    if (isDirective && !isProtected && (isBlockBoundary || isLegacyMarginDirective)) {
       directiveLines.add(index)
+      if (isArtCandidate && isBlockBoundary) artDirectiveLines.add(index)
     }
   }
 
@@ -143,7 +148,8 @@ export function markdownBoundaryMap(source, { bindings = [] } = {}) {
   return {
     blockStarts: markdownBlocks.map(block => block.startLine),
     blockEnds: markdownBlocks.map(block => block.endLine),
-    directiveLines: [...directiveLines]
+    directiveLines: [...directiveLines],
+    artDirectiveLines: [...artDirectiveLines]
   }
 }
 
@@ -186,6 +192,7 @@ export function resolveArtBindings(source, { idPrefix = "art-directive" } = {}) 
   const lines = sourceLines(source)
   const boundaryMap = markdownBoundaryMap(source)
   const directiveLines = new Set(boundaryMap.directiveLines)
+  const artDirectiveLines = new Set(boundaryMap.artDirectiveLines)
   const directives = []
   const bindings = []
   const diagnostics = []
@@ -228,13 +235,13 @@ export function resolveArtBindings(source, { idPrefix = "art-directive" } = {}) 
       continue
     }
 
-    if (validArtLine(line.text) && directiveLines.has(index)) {
+    if (validArtLine(line.text) && artDirectiveLines.has(index)) {
       if (pending) reportNoTarget(pending)
       pending = makeDirective(line, directives.length, "art", idPrefix)
       directives.push(pending)
       continue
     }
-    if (invalidArtLine(line.text) && directiveLines.has(index)) {
+    if (invalidArtLine(line.text) && artDirectiveLines.has(index)) {
       if (pending) reportNoTarget(pending)
       pending = null
       const directive = makeDirective(line, directives.length, "art_invalid", idPrefix)
@@ -377,5 +384,8 @@ function mathFenceMarker(line) {
 
 function mathFenceOpener(line) {
   const marker = mathFenceMarker(line)
-  return marker === "$$" ? "$$" : marker === "\\[" ? "\\]" : null
+  if (marker === "$$") return "$$"
+  if (marker === "\\[") return "\\]"
+  const inlineDisplayOpener = /^[ \t]{0,3}\$\$[ \t]*(\S.*)$/.exec(line)
+  return inlineDisplayOpener && !inlineDisplayOpener[1].includes("$$") ? "$$" : null
 }

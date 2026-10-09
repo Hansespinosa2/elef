@@ -414,10 +414,12 @@ module Source
     end
 
     def display_math_fence_opener(line)
-      case display_math_fence_marker(line)
-      when "$$" then "$$"
-      when "\\[" then "\\]"
-      end
+      marker = display_math_fence_marker(line)
+      return "$$" if marker == "$$"
+      return "\\]" if marker == "\\["
+
+      inline_display_opener = line.match(/\A[ \t]{0,3}\$\$[ \t]*(\S.*)\z/)
+      "$$" if inline_display_opener && !inline_display_opener[1].include?("$$")
     end
 
     def display_math_fence_source?(markdown)

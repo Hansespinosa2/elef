@@ -158,6 +158,25 @@ test("ART-BOUNDARY-THEMATIC: adjacent thematic break stays outside the Art list"
   assert.equal(renderedBlocks[2].querySelector("p")?.textContent, "After")
 })
 
+test("ART-BOUNDARY-LEGACY-MARGIN: a footnote after paragraph text remains metadata", () => {
+  const source = "# Review\n\nThe baseline is ready.\n:::footnote{Source: May operating review}"
+  const structure = buildEditorStructure(source, { mode: "presentation" })
+  const preview = renderPreview({ kind: "presentation", source })
+  const { document } = parseHTML(preview.html)
+
+  assert.equal(structure.slides[0].footnote, "Source: May operating review")
+  assert.equal(document.querySelector(".slide-margin-footnote-text")?.textContent.trim(), "Source: May operating review")
+})
+
+test("ART-ARCH-MATH-BOUNDARY: multiline dollar math remains one rendered block", () => {
+  const source = "# Math\n\n$$x^2\n$$"
+  const structure = buildEditorStructure(source, { mode: "document" })
+  const preview = renderPreview({ kind: "document", source })
+
+  assert.deepEqual(structure.slides[0].blocks.map(block => block.markdown), ["# Math", "$$x^2\n$$"])
+  assert.match(preview.html, /class="katex-display"/)
+})
+
 for (const [testId, directive] of [
   ["ART-BOUNDARY-NESTED-NOTE", ":::note"],
   ["ART-BOUNDARY-NESTED-ART", ":::art"]

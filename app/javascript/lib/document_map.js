@@ -840,7 +840,10 @@ function displayMathFenceMarker(line) {
 
 function displayMathFenceOpener(line) {
   const marker = displayMathFenceMarker(line)
-  return marker === "$$" ? "$$" : marker === "\\[" ? "\\]" : null
+  if (marker === "$$") return "$$"
+  if (marker === "\\[") return "\\]"
+  const inlineDisplayOpener = /^[ \t]{0,3}\$\$[ \t]*(\S.*)$/.exec(line)
+  return inlineDisplayOpener && !inlineDisplayOpener[1].includes("$$") ? "$$" : null
 }
 
 function displayMathFenceSource(markdown) {

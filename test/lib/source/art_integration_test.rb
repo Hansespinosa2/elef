@@ -150,6 +150,29 @@ class SourceArtIntegrationTest < ActiveSupport::TestCase
     refute_includes javascript[:html], "data-elef-art-root"
   end
 
+  test "legacy footnote directives after paragraph text remain metadata in both render paths" do
+    source = "# Review\n\nThe baseline is ready.\n:::footnote{Source: May operating review}"
+    ruby = Source::Document.parse(source, mode: :presentation)
+    javascript = Source::JavascriptRenderer.editor_preview(source, kind: :presentation, title: "Margin parity")
+    fragment = Nokogiri::HTML.fragment(javascript[:html])
+
+    assert_equal "Source: May operating review", ruby.slides.first.footnote
+    assert_equal "Source: May operating review", fragment.at_css(".slide-margin-footnote-text")&.text&.strip
+  end
+
+  test "shared token boundaries keep multiline dollar math atomic in both render paths" do
+    source = "# Math\n\n$$x^2\n$$"
+    ruby = Source::Document.parse(source, mode: :document)
+    javascript = Source::JavascriptRenderer.editor_preview(source, kind: :document, title: "Math boundaries")
+    javascript_blocks = javascript[:editor_map][:slides].first[:blocks].map { |block| block[:markdown] }
+    html = Source::BlockRenderer.render(source, parsed: ruby, documents: [], workspace: Workspace.default)
+
+    assert_equal ["# Math", "$$x^2\n$$"], ruby.slides.first.blocks.map(&:markdown)
+    assert_equal ruby.slides.first.blocks.map(&:markdown), javascript_blocks
+    assert_includes html, "katex-display"
+    assert_includes javascript[:html], "katex-display"
+  end
+
   test "indented margin directives stay in Art item content in both render paths" do
     source = ":::art\n- Item one\n  :::section{Nested}\n- Item two"
     ruby = Source::Document.parse(source, mode: :presentation)
