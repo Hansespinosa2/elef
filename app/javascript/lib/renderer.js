@@ -4,6 +4,7 @@ import katex from "katex"
 import { buildEditorStructure } from "./document_map.js"
 import { createDocumentLinkResolver, parseDocumentLinkAt } from "./document_links.js"
 import { analyzeArtList, ART_DIAGNOSTICS } from "./art_source.js"
+import { slidePositionClasses, slidePositionLayout } from "#elef/slide-position-layout"
 
 const SAFE_LINK = /^(?:https?:|mailto:|tel:|#|\/|\.\.?\/|[^:]*$)/i
 
@@ -315,12 +316,12 @@ function renderPresentation(source, slides, style, margin, env) {
     const mappedBlocks = slide.blocks
     const regions = new Map(slide.editable_regions.map(region => [region.block_id, region]))
     const blocks = slide.parsed_blocks
-    const renderBlock = (block, blockIndex, title = false) => {
+    const renderBlock = (block, blockIndex, title = false, vertical = null, { wrapInItem = false, wrapInArtRegion = false } = {}) => {
       const mapped = mappedBlocks[blockIndex]
       const region = mapped && regions.get(mapped.id)
       const sourceMatches = mapped?.art ? equivalentMarkdown(mapped.markdown, block.markdown) : mapped?.markdown === block.markdown
       const valid = Boolean(mapped && region && sourceMatches && mapped.editable_region_id === region.id && region.block_id === mapped.id)
-      const className = [title ? "slide-title" : "", "slide-block", positionClasses(block.position)].filter(Boolean).join(" ")
+      const className = [title ? "slide-title" : "", "slide-block", slidePositionClasses(block.position, vertical)].filter(Boolean).join(" ")
       const label = title ? "Editable slide title" : "Editable slide block"
       const attributes = valid
         ? `data-editor-block-id="${mapped.id}" data-editor-region-id="${region.id}" data-editor-source-editable="${region.editable}"${region.editable ? ` contenteditable="true" role="textbox" aria-label="${label}" aria-multiline="true" spellcheck="true" data-action="input-&gt;presentation-editor#blockInput focus-&gt;presentation-editor#blockFocus blur-&gt;presentation-editor#blockBlur"` : " contenteditable=\"false\" aria-readonly=\"true\""}`
@@ -333,23 +334,40 @@ function renderPresentation(source, slides, style, margin, env) {
         : rendered
       const controls = valid ? renderPresentationBlockControls(index, blockIndex, blocks.length, block.position) : ""
       const revealAttribute = block.reveal_event === undefined ? "" : ` data-elef-reveal-event="${block.reveal_event}"`
-      return `<div class="${className}" ${attributes}${revealAttribute}>${content}</div>${controls}`
+      const blockMarkup = `<div class="${className}" ${attributes}${revealAttribute}>${content}</div>`
+      const markup = wrapInArtRegion
+        ? `<div class="slide-region-block ${slidePositionClasses(block.position, vertical)}">${blockMarkup}${controls}</div>`
+        : `${blockMarkup}${controls}`
+      return wrapInItem ? `<div class="slide-block-item">${markup}</div>` : markup
     }
-    const titleMarkup = slide.title ? renderBlock(blocks[0], 0, true) : ""
+    const titleMarkup = slide.title ? renderBlock(blocks[0], 0, true, "top") : ""
     const contentBlocks = slide.title ? blocks.slice(1) : blocks
     const contentOffset = slide.title ? 1 : 0
-   const slideContent = slide.title
+    const renderPlacedBlocks = (placedBlocks, globalIndex, { artHost = false } = {}) => {
+      const placement = slidePositionLayout(placedBlocks)
+      return placement.entries.map(entry => {
+        const grouped = entry.type !== "block"
+        const inner = placedBlocks.slice(entry.start, entry.end).map((block, offset) => {
+          const localIndex = entry.start + offset
+          const blockIndex = globalIndex(block, localIndex)
+          return renderBlock(block, blockIndex, false, placement.verticals[localIndex], {
+            wrapInItem: grouped,
+            wrapInArtRegion: artHost
+          })
+        }).join("")
+        if (entry.type === "middle") return `<div class="slide-middle-group${entry.flushBottom ? " flush-bottom" : ""}">${inner}</div>`
+        if (entry.type === "bottom") return `<div class="slide-bottom-lane">${inner}</div>`
+        return inner
+      }).join("")
+    }
+    const slideContent = slide.title
       ? `<div class="slide-regions">${slide.regions.map(region => {
         const artHost = region.some(block => block.art)
         const hostAttribute = artHost ? ` data-art-host="fixed" data-art-overfull="false"` : ""
-        const regionBlocks = region.map(block => {
-          const rendered = renderBlock(block, blocks.indexOf(block))
-          const position = positionClasses(block.position)
-          return artHost ? `<div class="slide-region-block${position ? ` ${position}` : ""}">${rendered}</div>` : rendered
-        }).join("")
+        const regionBlocks = renderPlacedBlocks(region, block => blocks.indexOf(block), { artHost })
         return `<div class="slide-region"${hostAttribute}>${regionBlocks}</div>`
       }).join("")}</div>`
-      : contentBlocks.map((block, blockIndex) => renderBlock(block, blockIndex + contentOffset)).join("")
+      : renderPlacedBlocks(contentBlocks, (_block, localIndex) => localIndex + contentOffset)
     const empty = blocks.length === 0
       ? `<div class="empty-slide"><p>Empty slide</p><button type="button" class="button secondary empty-slide-add-image" data-action="click-&gt;media#chooseForSlide" data-slide-index="${index}">Add image</button></div>`
       : ""

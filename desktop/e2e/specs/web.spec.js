@@ -9,6 +9,7 @@ import { documentLinkCompletionWorkflow, mathInputWorkflow, snippetInsertWorkflo
 import { authoringSettingsWorkflow } from "../../../test/e2e/scenarios/authoring-settings.js"
 import { PIXEL_PNG_MARKDOWN } from "../../../test/e2e/scenarios/media-fixture.js"
 import { presentationModeWorkflow } from "../../../test/e2e/scenarios/presentation-mode.js"
+import { slidePositionGrammarWorkflow } from "../../../test/e2e/scenarios/slide-position-grammar.js"
 import { vimRelativeLineNumbersWorkflow } from "../../../test/e2e/scenarios/vim-relative-line-numbers.js"
 import { documentPageAspectRatioWorkflow } from "../../../test/e2e/scenarios/document-page-aspect-ratio.js"
 import { displayMathEnterWorkflow } from "../../../test/e2e/scenarios/display-math-enter.js"
@@ -198,6 +199,38 @@ class WebEditorUi {
     expect(state.visibility).toBe(visible ? "visible" : "hidden")
     expect(state.ariaHidden).toBe(visible ? null : "true")
     expect(state.inert).toBe(!visible)
+  }
+
+  async assertSlidePositionGrammar() {
+    const preview = this.page.locator(".editor-projection.preview-pane")
+    const inspect = () => preview.evaluate(root => {
+      const slide = root.querySelector(".slide")
+      const content = slide?.querySelector(".slide-content")
+      const group = slide?.querySelector(".slide-middle-group")
+      const lane = slide?.querySelector(".slide-bottom-lane")
+      const blocks = element => [...(element?.querySelectorAll(".slide-block") || [])]
+      const rect = element => element.getBoundingClientRect()
+      return {
+        groups: [...(slide?.querySelectorAll(".slide-middle-group") || [])].map(group => blocks(group).map(block => block.textContent.trim())),
+        lanes: [...(slide?.querySelectorAll(".slide-bottom-lane") || [])].map(lane => blocks(lane).map(block => block.textContent.trim())),
+        flushBottom: group?.classList.contains("flush-bottom") || false,
+        blockGap: blocks(group).length > 1 ? rect(blocks(group)[1]).top - rect(blocks(group)[0]).bottom : null,
+        laneBottomGap: content && lane ? rect(content).bottom - rect(lane).bottom : null,
+        classes: blocks(slide).map(block => block.className)
+      }
+    })
+
+    await expect.poll(inspect).toMatchObject({
+      groups: [["Alignment stack", "Subtitle"]],
+      lanes: [["Footer"]],
+      flushBottom: true
+    })
+    const measurements = await inspect()
+    expect(measurements.blockGap).toBeLessThan(8)
+    expect(Math.abs(measurements.laneBottomGap)).toBeLessThanOrEqual(1)
+    expect(measurements.classes[0]).toContain("position-center position-middle")
+    expect(measurements.classes[1]).toContain("position-center position-top")
+    expect(measurements.classes[2]).toContain("position-right position-bottom")
   }
 
   async movePresentation(key) {
@@ -997,6 +1030,10 @@ test("shared editing flow works in the web app", async ({ page }) => {
 
 test("shared presentation navigation works in the web app", async ({ page }) => {
   await presentationModeWorkflow(new WebEditorUi(page))
+})
+
+test("slide position grammar keeps aligned blocks grouped in the web preview", async ({ page }) => {
+  await slidePositionGrammarWorkflow(new WebEditorUi(page))
 })
 
 test("Vim relative line numbers update from CodeMirror cursor positions", async ({ page }) => {

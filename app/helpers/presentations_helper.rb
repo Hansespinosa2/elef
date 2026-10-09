@@ -32,10 +32,10 @@ module PresentationsHelper
     @media_resolvers[work.object_id] ||= WorkAssets.resolver_for(work)
   end
 
-  def position_classes(position)
-    return "" unless position
-
-    "position-#{position.horizontal} position-#{position.vertical}"
+  def position_classes(position, vertical: nil)
+    horizontal = position&.horizontal || "left"
+    vertical ||= position&.vertical || "top"
+    "position-#{horizontal} position-#{vertical}"
   end
 
   def alignment_value(position)

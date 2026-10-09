@@ -26,7 +26,7 @@
     <% if slide.title.present? %>
       <% title_block = editor_blocks.first %>
       <% title_region = title_block && editor_regions.find { |region| region[:block_id] == title_block[:id] } %>
-      <div class="slide-title slide-block <%= position_classes(slide.blocks.first&.position) %>"<% if slide.blocks.first&.reveal_event %> data-elef-reveal-event="<%= slide.blocks.first.reveal_event %>"<% end %><% if editable && title_block %> data-editor-block-id="<%= title_block[:id] %>" data-editor-region-id="<%= title_region&.dig(:id) %>" data-editor-source-editable="<%= title_region&.dig(:editable) ? "true" : "false" %>"<% if title_region&.dig(:editable) %> contenteditable="true" role="textbox" aria-label="Editable slide title" aria-multiline="true" spellcheck="true" data-action="input->presentation-editor#blockInput focus->presentation-editor#blockFocus blur->presentation-editor#blockBlur"<% else %> contenteditable="false" aria-readonly="true"<% end %><% end %>>
+      <div class="slide-title slide-block <%= position_classes(slide.blocks.first&.position, vertical: "top") %>"<% if slide.blocks.first&.reveal_event %> data-elef-reveal-event="<%= slide.blocks.first.reveal_event %>"<% end %><% if editable && title_block %> data-editor-block-id="<%= title_block[:id] %>" data-editor-region-id="<%= title_region&.dig(:id) %>" data-editor-source-editable="<%= title_region&.dig(:editable) ? "true" : "false" %>"<% if title_region&.dig(:editable) %> contenteditable="true" role="textbox" aria-label="Editable slide title" aria-multiline="true" spellcheck="true" data-action="input->presentation-editor#blockInput focus->presentation-editor#blockFocus blur->presentation-editor#blockBlur"<% else %> contenteditable="false" aria-readonly="true"<% end %><% end %>>
         <%= render_markdown(slide.title, work: presentation) %>
       </div>
       <% if editable && title_block %>
@@ -48,32 +48,18 @@
       <div class="slide-regions">
         <% slide.regions.each do |region| %>
           <% art_host = region.blocks.any? { |block| block.art } %>
+          <% placement = Source::Document.position_layout(region.blocks) %>
           <div class="slide-region"<% if art_host %> data-art-host="fixed" data-art-overfull="false"<% end %>>
-            <% region.blocks.each do |block| %>
-              <%- if art_host -%><div class="slide-region-block<%= " #{position_classes(block.position)}" if block.position %>"><% end -%>
-              <% block_index = slide.blocks.find_index { |candidate| candidate.equal?(block) } %>
-              <% editor_block = editor_blocks[block_index] %>
-              <% editor_region = editor_block && editor_regions.find { |candidate| candidate[:block_id] == editor_block[:id] } %>
-              <div class="slide-block <%= position_classes(block.position) %>"<% if block.reveal_event %> data-elef-reveal-event="<%= block.reveal_event %>"<% end %><% if editable && editor_block %> data-editor-block-id="<%= editor_block[:id] %>" data-editor-region-id="<%= editor_region&.dig(:id) %>" data-editor-source-editable="<%= editor_region&.dig(:editable) ? "true" : "false" %>"<% if editor_region&.dig(:editable) %> contenteditable="true" role="textbox" aria-label="Editable slide block" aria-multiline="true" spellcheck="true" data-action="input->presentation-editor#blockInput focus->presentation-editor#blockFocus blur->presentation-editor#blockBlur"<% else %> contenteditable="false" aria-readonly="true"<% end %><% end %>>
-                <%= editable ? render_editor_block(block.markdown, editor_block, work: presentation) : render_markdown(block.markdown, work: presentation, art: !!block.art) %>
-              </div>
-              <% if editable && editor_block %>
-                <div class="presentation-editor-block-controls" aria-label="Block controls">
-                  <button type="button" data-presentation-editor-action="add-block-after" data-slide-index="<%= slide.index %>" data-block-index="<%= block_index %>">Add block</button>
-                  <button type="button" data-presentation-editor-action="delete-block" data-slide-index="<%= slide.index %>" data-block-index="<%= block_index %>"<%= " disabled" if slide.blocks.length == 1 %>>Delete</button>
-                  <button type="button" aria-label="Move block up" data-presentation-editor-action="move-block-up" data-slide-index="<%= slide.index %>" data-block-index="<%= block_index %>"<%= " disabled" if block_index.zero? %>>↑</button>
-                  <button type="button" aria-label="Move block down" data-presentation-editor-action="move-block-down" data-slide-index="<%= slide.index %>" data-block-index="<%= block_index %>"<%= " disabled" if block_index == slide.blocks.length - 1 %>>↓</button>
-                  <label>Align <select aria-label="Block alignment" data-presentation-editor-align data-presentation-editor-block-id="<%= editor_block[:id] %>" data-slide-index="<%= slide.index %>" data-block-index="<%= block_index %>" data-action="change->presentation-editor#alignmentChanged">
-                    <% %w[top middle bottom].each do |vertical| %>
-                      <% %w[left center right].each do |horizontal| %>
-                        <% value = vertical == "top" ? horizontal : "#{vertical == "middle" ? "center" : vertical} #{horizontal}" %>
-                        <option value="<%= value %>"<%= " selected" if alignment_value(block.position) == value %>><%= value.titleize %></option>
-                      <% end %>
-                    <% end %>
-                  </select></label>
-                </div>
+            <% placement[:entries].each do |entry| %>
+              <% if entry[:type] == :middle %><div class="slide-middle-group<%= " flush-bottom" if entry[:flush_bottom] %>"><% elsif entry[:type] == :bottom %><div class="slide-bottom-lane"><% end %>
+              <% (entry[:start]...entry[:end]).each do |region_index| %>
+                <% block = region.blocks[region_index] %>
+                <% block_index = slide.blocks.find_index { |candidate| candidate.equal?(block) } %>
+                <% editor_block = editor_blocks[block_index] %>
+                <% editor_region = editor_block && editor_regions.find { |candidate| candidate[:block_id] == editor_block[:id] } %>
+                <%= render "presentations/slide_block", block: block, block_index: block_index, editor_block: editor_block, editor_region: editor_region, slide: slide, presentation: presentation, editable: editable, art_host: art_host, grouped_item: entry[:type] != :block, position_vertical: placement[:verticals][region_index] %>
               <% end %>
-              <%- if art_host -%></div><% end -%>
+              <% if entry[:type] == :middle || entry[:type] == :bottom %></div><% end %>
             <% end %>
           </div>
         <% end %>
@@ -86,32 +72,20 @@
         <% end %>
       </div>
     <% else %>
-      <% slide.blocks.each_with_index do |block, block_index| %>
-        <% editor_block = editor_blocks[block_index] %>
-        <% editor_region = editor_block && editor_regions.find { |candidate| candidate[:block_id] == editor_block[:id] } %>
-        <div class="slide-block <%= position_classes(block.position) %>"<% if block.reveal_event %> data-elef-reveal-event="<%= block.reveal_event %>"<% end %><% if editable && editor_block %> data-editor-block-id="<%= editor_block[:id] %>" data-editor-region-id="<%= editor_region&.dig(:id) %>" data-editor-source-editable="<%= editor_region&.dig(:editable) ? "true" : "false" %>"<% if editor_region&.dig(:editable) %> contenteditable="true" role="textbox" aria-label="Editable slide block" aria-multiline="true" spellcheck="true" data-action="input->presentation-editor#blockInput focus->presentation-editor#blockFocus blur->presentation-editor#blockBlur"<% else %> contenteditable="false" aria-readonly="true"<% end %><% end %>>
-          <%= editable ? render_editor_block(block.markdown, editor_block, work: presentation) : render_markdown(block.markdown, work: presentation, art: !!block.art) %>
-        </div>
-        <% if editable && editor_block %>
-          <div class="presentation-editor-block-controls" aria-label="Block controls">
-            <button type="button" data-presentation-editor-action="add-block-after" data-slide-index="<%= slide.index %>" data-block-index="<%= block_index %>">Add block</button>
-            <button type="button" data-presentation-editor-action="delete-block" data-slide-index="<%= slide.index %>" data-block-index="<%= block_index %>"<%= " disabled" if slide.blocks.length == 1 %>>Delete</button>
-            <button type="button" aria-label="Move block up" data-presentation-editor-action="move-block-up" data-slide-index="<%= slide.index %>" data-block-index="<%= block_index %>"<%= " disabled" if block_index.zero? %>>↑</button>
-            <button type="button" aria-label="Move block down" data-presentation-editor-action="move-block-down" data-slide-index="<%= slide.index %>" data-block-index="<%= block_index %>"<%= " disabled" if block_index == slide.blocks.length - 1 %>>↓</button>
-            <label>Align <select aria-label="Block alignment" data-presentation-editor-align data-presentation-editor-block-id="<%= editor_block[:id] %>" data-slide-index="<%= slide.index %>" data-block-index="<%= block_index %>" data-action="change->presentation-editor#alignmentChanged">
-              <% %w[top middle bottom].each do |vertical| %>
-                <% %w[left center right].each do |horizontal| %>
-                  <% value = vertical == "top" ? horizontal : "#{vertical == "middle" ? "center" : vertical} #{horizontal}" %>
-                  <option value="<%= value %>"<%= " selected" if alignment_value(block.position) == value %>><%= value.titleize %></option>
-                <% end %>
-              <% end %>
-            </select></label>
-          </div>
+      <% placement = Source::Document.position_layout(slide.blocks) %>
+      <% placement[:entries].each do |entry| %>
+        <% if entry[:type] == :middle %><div class="slide-middle-group<%= " flush-bottom" if entry[:flush_bottom] %>"><% elsif entry[:type] == :bottom %><div class="slide-bottom-lane"><% end %>
+        <% (entry[:start]...entry[:end]).each do |block_index| %>
+          <% block = slide.blocks[block_index] %>
+          <% editor_block = editor_blocks[block_index] %>
+          <% editor_region = editor_block && editor_regions.find { |candidate| candidate[:block_id] == editor_block[:id] } %>
+          <%= render "presentations/slide_block", block: block, block_index: block_index, editor_block: editor_block, editor_region: editor_region, slide: slide, presentation: presentation, editable: editable, art_host: false, grouped_item: entry[:type] != :block, position_vertical: placement[:verticals][block_index] %>
         <% end %>
+        <% if entry[:type] == :middle || entry[:type] == :bottom %></div><% end %>
       <% end %>
     <% end %>
   </div>
-      <% if margin_settings.slide_count || margin_settings.footnote %>
+  <% if margin_settings.slide_count || margin_settings.footnote %>
     <div class="slide-margin slide-margin-bottom" aria-hidden="true">
       <% if margin_settings.slide_count %><span class="slide-margin-count"><%= slide.index + 1 %> / <%= total_slides(presentation) %></span><% end %>
       <% if margin_settings.footnote && slide.footnote.present? %>

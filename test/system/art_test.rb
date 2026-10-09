@@ -399,7 +399,7 @@ class ArtTest < ApplicationSystemTestCase
 
     visit present_presentation_path(presentation)
 
-    assert_selector ".slide-region[data-art-host='fixed'] > .slide-region-block.position-right.position-middle > .slide-block.position-right.position-middle [data-elef-art-root][data-art-mode='peers']", wait: 10
+    assert_selector ".slide-region[data-art-host='fixed'] > .slide-middle-group > .slide-block-item > .slide-region-block.position-right.position-middle > .slide-block.position-right.position-middle [data-elef-art-root][data-art-mode='peers']", wait: 10
   end
 
   test "a hidden fixed Art host stays pending until it becomes measurable" do

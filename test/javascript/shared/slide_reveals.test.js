@@ -50,12 +50,17 @@ for (const fixture of fixtures) {
   })
 }
 
-test("a no-step nested-colon deck stays byte-identical to the dev renderer golden", () => {
+test("a no-step nested-colon deck preserves block binding with explicit position defaults", () => {
   assert.equal(nestedColonBaseline.baseline_commit, "2dc9ba70746ef94a03b1db1f258ead3da19c8f0b")
   const rendered = renderPreview({ source: nestedColonBaseline.source })
+  const { document } = parseHTML(`<html><body>${rendered.html}</body></html>`)
+  const blocks = [...document.querySelectorAll(".slide-block")]
 
-  assert.equal(rendered.html, nestedColonBaseline.html)
   assert.deepEqual(rendered.editor_map, nestedColonBaseline.editor_map)
+  assert.equal(blocks.length, 2)
+  assert.ok(blocks.every(block => block.classList.contains("position-left") && block.classList.contains("position-top")))
+  assert.equal(blocks[0].querySelector("h1")?.textContent, "Literal colons")
+  assert.match(blocks[1].querySelector("li")?.textContent ?? "", /parent\s*:::\s*keep this line/)
 })
 
 test("presentation HTML annotates stepped titles, blocks, media, and invalid editability projections", () => {

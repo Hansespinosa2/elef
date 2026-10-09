@@ -6,6 +6,7 @@ module Source
     PORTABLE_DOCUMENT_KEY = "elef_document_key".freeze
     PORTABLE_DOCUMENT_ALIASES = "elef_aliases".freeze
     Position = Data.define(:horizontal, :vertical, :vertical_explicit)
+    NON_TRAILING_BOTTOM_WARNING = "Only trailing bottom blocks pin; this block was treated as top.".freeze
     Block = Data.define(:markdown, :position, :art, :reveal_event) do
       def initialize(attributes)
         super(**{ art: nil, reveal_event: nil, **attributes })
@@ -461,6 +462,8 @@ module Source
       layout = infer_layout(parsed[:blocks])
       title = column_title(parsed[:blocks], layout)
       regions = column_regions(parsed[:blocks], layout)
+      placement_contexts = %w[two-column three-column].include?(layout) ? regions.map(&:blocks) : [parsed[:blocks]]
+      placement_warnings = placement_contexts.flat_map { |blocks| position_layout(blocks)[:warnings] }
       {
         layout: layout,
         content: content,
@@ -470,7 +473,7 @@ module Source
         section: margin[:section],
         subsection: margin[:subsection],
         footnote: margin[:footnote],
-        warnings: margin[:warnings] + reveals[:warnings] + parsed[:warnings] + art_warnings,
+        warnings: margin[:warnings] + reveals[:warnings] + parsed[:warnings] + placement_warnings + art_warnings,
         reveal_event_count: parsed[:reveal_event_count] || 0,
         art_diagnostics: art_resolution[:diagnostics]
       }
@@ -607,7 +610,7 @@ module Source
             blocks << parsed_block(raw_blocks[index + 1], position, art_resolution, nil)
             index += 2
           else
-            warnings << "Alignment directive has no following Markdown block."
+            warnings << "Dangling directive: alignment has no following Markdown block."
             index += 1
           end
         elsif block == ":::" || block.start_with?(":::")
@@ -657,7 +660,7 @@ module Source
               blocks << parsed_block(raw_blocks[index], selected_position, art_resolution, reveals[:event_by_line])
               index += 1
             else
-              warnings << "Alignment directive has no following Markdown block."
+              warnings << "Dangling directive: alignment has no following Markdown block."
             end
           end
           next
@@ -960,6 +963,78 @@ module Source
         regions[-1].blocks << block
       end
       regions
+    end
+
+    def position_layout(blocks)
+      source_verticals = blocks.map { |block| block.position&.vertical || "top" }
+      absorbed_bottoms = Set.new
+
+      source_verticals.each_with_index do |vertical, index|
+        next unless vertical == "middle"
+
+        previous = index - 1
+        while previous >= 0 && %w[bottom middle].include?(source_verticals[previous])
+          absorbed_bottoms << previous if source_verticals[previous] == "bottom"
+          previous -= 1
+        end
+      end
+
+      lane_start = blocks.length
+      while lane_start.positive? && source_verticals[lane_start - 1] == "bottom" && !absorbed_bottoms.include?(lane_start - 1)
+        lane_start -= 1
+      end
+      bottom_lane = lane_start < blocks.length ? { start: lane_start, end: blocks.length } : nil
+      demoted = Set.new
+      source_verticals.each_with_index do |vertical, index|
+        if vertical == "bottom" && !absorbed_bottoms.include?(index) && (!bottom_lane || index < bottom_lane[:start])
+          demoted << index
+        end
+      end
+
+      verticals = source_verticals.each_with_index.map { |vertical, index| demoted.include?(index) ? "top" : vertical }
+      intervals = []
+      verticals.each_with_index do |vertical, index|
+        next unless vertical == "middle"
+
+        start = index
+        finish = index + 1
+        start -= 1 while start.positive? && %w[bottom middle].include?(verticals[start - 1])
+        finish += 1 while finish < verticals.length && %w[top middle].include?(verticals[finish])
+
+        # F-10 explicitly groups the top block between a demoted bottom and
+        # the following middle anchor. This narrowly scopes its conflict with
+        # Q1a's general preceding-top rule.
+        start -= 1 if start > 1 && verticals[start - 1] == "top" && demoted.include?(start - 2)
+
+        previous = intervals.last
+        if previous && start <= previous[:end]
+          previous[:end] = [previous[:end], finish].max
+        else
+          intervals << { start: start, end: finish }
+        end
+      end
+
+      entries = []
+      index = 0
+      while index < blocks.length
+        middle = intervals.find { |interval| interval[:start] == index }
+        if middle
+          entries << { type: :middle, **middle, flush_bottom: bottom_lane && middle[:end] == bottom_lane[:start] }
+          index = middle[:end]
+        elsif bottom_lane && bottom_lane[:start] == index
+          entries << { type: :bottom, **bottom_lane }
+          index = bottom_lane[:end]
+        else
+          entries << { type: :block, start: index, end: index + 1 }
+          index += 1
+        end
+      end
+
+      {
+        entries: entries,
+        verticals: verticals,
+        warnings: demoted.map { NON_TRAILING_BOTTOM_WARNING }
+      }
     end
 
     def heading_for(markdown)

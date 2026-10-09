@@ -127,7 +127,7 @@ module Source
     end
 
     def position_classes(position)
-      return "" unless position
+      return "position-left position-top" unless position
 
       classes = ["position-#{position.horizontal}", "position-#{position.vertical}"]
       classes << "position-vertical" if position.vertical_explicit
