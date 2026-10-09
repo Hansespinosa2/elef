@@ -259,6 +259,7 @@ The presentation print system test was renamed to `published presentation print 
 | Removed two `any?` authoring registry spot checks. | Exact comparison with generated canonical entries and remaining schema/alias tests cover the same entries more strongly. |
 | Reduced repeated KaTeX renders in the math shortcut catalog test. | Every alias-to-expansion mapping is still asserted; six representative Greek expressions and one variant render through KaTeX. |
 | Reduced the Rake import task tests to CLI/env wiring, exit/output, and count delta. | Stable identity, source round-trip, workspace, and revision behavior remains covered by `persistence_services_test.rb`. |
+| Reduced `navigates a large same-day timeline without overlapping slides` from 84 generated presentations to 56 (8 families × 7 nodes). | Both viewport geometry passes, all remaining per-node overlap checks, search, locate, and open assertions remain. The focused test passed before and after; local test time changed from 4.67s to 4.12s, while geometry assertions scaled from 1,712 to 1,144. |
 
 ### Phase 3 validation
 
@@ -362,7 +363,7 @@ No removal of the `ELEF_RENDERER=ruby` path is proposed; it remains live code an
 
 ## Not yet verified
 
-- Remaining Phase 3 runtime work: shared system-test projection caching, reducing the 84-presentation geometry fixture, splitting the repeated root visits, worker isolation/parallelism experiments, and artifact reuse.
+- Remaining Phase 3 runtime work: shared system-test projection caching, splitting the repeated root visits, worker isolation/parallelism experiments, and artifact reuse.
 - The changed GitHub workflows have not executed yet. Local contract tests verify their job names, invocation ownership, required job manifest, attestation policy, and schedule placement, but only CI can validate hosted runner installation and native execution.
 - Phase 4 still has the offline guarantee on every OS and several editor/service gaps from the original inventory. The new hostile-media policy assertions passed as unit tests, but the actual web/native host scenarios require a hosted E2E run.
 - Phase 5 mutations were detected for SSRF address/protocol/pinning decisions, remote-origin IPC, updater version matching, archive filename validation, GitHub issue URL hostname validation, bug-report 429 handling, and both external-media host policies. The full security mutation campaign is incomplete; unmutated trust-boundary branches remain open work.

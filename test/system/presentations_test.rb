@@ -2011,7 +2011,9 @@ class PresentationsTest < ApplicationSystemTestCase
   test "navigates a large same-day timeline without overlapping slides" do
     Presentation.delete_all
     created = Time.utc(2026, 9, 1, 10)
-    12.times do |family|
+    family_count = 8
+    nodes_per_family = 7
+    family_count.times do |family|
       parent = Presentation.create!(title: "Family #{family}", source: "# Family #{family}", created_at: created)
       5.times do |generation|
         child = parent.fork_as("continuation")
@@ -2028,16 +2030,17 @@ class PresentationsTest < ApplicationSystemTestCase
       end
     end
     visit presentations_path
-    assert_selector ".lineage-node", count: 84
+    assert_selector ".lineage-node", count: family_count * nodes_per_family
     assert_selector ".lineage-date-tick", count: 1
     assert_timeline_geometry
-    find('input[aria-label="Find a presentation"]').set("Family 11 revision 4")
-    find(".lineage-search-results button", text: "Family 11 revision 4").click
+    target = "Family #{family_count - 1} revision 4"
+    find('input[aria-label="Find a presentation"]').set(target)
+    find(".lineage-search-results button", text: target).click
     assert_selector ".lineage-node.is-located"
     page.driver.browser.manage.window.resize_to(780, 900)
     assert_timeline_geometry
-    find('a[aria-label="Open Family 11 revision 4"]').click
-    assert_field "Title", with: "Family 11 revision 4"
+    find("a[aria-label='Open #{target}']").click
+    assert_field "Title", with: target
   ensure
     page.driver.browser.manage.window.resize_to(1400, 1000)
   end
