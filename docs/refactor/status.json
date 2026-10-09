@@ -258,6 +258,13 @@
       "head": "512f454",
       "duration_s": 43.2,
       "tier": "affected"
+    },
+    {
+      "command": "bin/check affected",
+      "exit": 0,
+      "head": "daa818f",
+      "duration_s": 43.5,
+      "tier": "affected"
     }
   ],
   "execution_environment": {
@@ -272,5 +279,5 @@
   },
   "pending_human_gates": [],
   "blocker": null,
-  "next_action": "Phase 06 DO-3 pushed (switch-over + checker updates); affected PASS; awaiting CI on candidate for gate evidence."
+  "next_action": "Phase 06 DO-4 pushed (request guard + tests); affected PASS; CI run 37863713242 underway for gate evidence."
 }
