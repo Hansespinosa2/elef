@@ -1,5 +1,5 @@
 import { Controller } from "@hotwired/stimulus"
-import { createSaveFlow } from "@elef/client"
+import { createWorkSession } from "@elef/client"
 import { editorFor } from "lib/editor_controller_lookup"
 import { applyEditorSource } from "lib/editor_source"
 import { waitForEditorController } from "lib/editor_ready"
@@ -47,13 +47,9 @@ export default class extends Controller {
       : `${workKind}:new:${window.location.pathname}`
     this.database = this.openDatabase()
     this.flowDeckId = this.hasWorkIdValue ? String(this.workIdValue) : this.localDraftKey
-    this.flow = this.createSaveFlow()
-    this.flow.activate({
-      id: this.flowDeckId,
-      source: this.currentSource(),
-      source_file: "",
-      content_hash: this.currentRevisionBaseline()
-    })
+    // The web editor persists through the shared session (constructed
+    // activated: one session per edited work, disposed on disconnect).
+    this.flow = this.createSession()
     this.restoreLocalDraft()
   }
 
@@ -64,7 +60,7 @@ export default class extends Controller {
       this.conflictTarget.removeEventListener("click", this.resolveConflictClick)
     }
     this.editorReadyCleanup?.()
-    this.flow?.deactivate()
+    this.flow?.dispose?.()
     clearTimeout(this.requestTimeout)
     this.requestTimeout = null
     this.requestController?.abort()
@@ -82,8 +78,8 @@ export default class extends Controller {
     event.preventDefault()
     event.stopImmediatePropagation()
     this.pendingSubmit = event.submitter
-    void this.flow.flush({ force: true }).then(saved => {
-      if (saved) this.releasePendingSubmit()
+    void this.flow.flush({ force: true }).then(result => {
+      if (result && (result.kind === "clean" || result.kind === "saved")) this.releasePendingSubmit()
     })
   }
 
@@ -147,24 +143,36 @@ export default class extends Controller {
     return this.flow?.flush({ force: true })
   }
 
-  createSaveFlow() {
-    return createSaveFlow({
-      saveDelay: this.delayValue,
-      saveSource: (_id, source, { snapshot }) => this.saveToRails(source, snapshot),
-      acceptDiskVersion: (_id, baseline) => {
-        this.updateRevisionTokens(this.conflictPayload?.current || { revision_token: baseline })
+  createSession() {
+    return createWorkSession({
+      transport: {
+        saveSource: (_id, source, { snapshot }) => this.saveToRails(source, snapshot),
+        acceptDiskVersion: (_id, baseline) => {
+          this.updateRevisionTokens(this.conflictPayload?.current || { revision_token: baseline })
+        }
       },
-      getConflictBaseline: details => details.current?.revision_token ||
-        (details.current?.lock_version === undefined ? null : String(details.current.lock_version)),
-      isValidConflictBaseline: value => typeof value === "string" && value.length > 0,
-      getSource: () => this.currentSource(),
-      getSnapshot: () => this.snapshot(),
-      getConflictSnapshot: details => this.snapshotForConflict(details.current),
-      setSource: (source, options) => this.applyExternalSource(source, options),
-      onState: (state, details) => this.handleSaveState(state, details),
-      onConflict: conflict => this.handleSaveConflict(conflict),
-      onError: error => { this.lastSaveError = error },
-      materializeEdits: () => this.materializeEditorEdits()
+      policy: {
+        workId: this.flowDeckId,
+        kind: this.hasWorkKindValue ? this.workKindValue : "presentation",
+        deck: {
+          id: this.flowDeckId,
+          source: this.currentSource(),
+          source_file: "",
+          content_hash: this.currentRevisionBaseline()
+        },
+        getText: () => this.currentSource(),
+        setText: (source, options) => this.applyExternalSource(source, options),
+        getSnapshot: () => this.snapshot(),
+        getConflictSnapshot: details => this.snapshotForConflict(details.current),
+        getConflictBaseline: details => details.current?.revision_token ||
+          (details.current?.lock_version === undefined ? null : String(details.current.lock_version)),
+        isValidConflictBaseline: value => typeof value === "string" && value.length > 0,
+        saveDelay: this.delayValue,
+        onState: (state, details) => this.handleSaveState(state, details),
+        onConflict: conflict => this.handleSaveConflict(conflict),
+        onError: error => { this.lastSaveError = error },
+        materializeEdits: () => this.materializeEditorEdits()
+      }
     })
   }
 

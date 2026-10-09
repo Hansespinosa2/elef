@@ -123,7 +123,9 @@ test("desktop media URLs and fetch interception stay in native transport", async
 })
 
 test("Rails and desktop consume the same client-owned save state machine", () => {
-  assert.match(autosaveController, /import \{ createSaveFlow \} from "@elef\/client"/)
+  assert.match(autosaveController, /import \{ createWorkSession \} from "@elef\/client"/)
+  assert.match(autosaveController, /createSession\(\)/)
+  assert.doesNotMatch(autosaveController, /createSaveFlow/)
   assert.match(application, /import \{ createWorkSession, createTitleSaveFlow \} from "@elef\/client"/)
   assert.match(workSession, /import \{ createSaveFlow \} from "\.\/save_flow\.js"/)
   assert.match(autosaveController, /import \{ presentConflictDialog \} from "lib\/conflict_dialog"/)

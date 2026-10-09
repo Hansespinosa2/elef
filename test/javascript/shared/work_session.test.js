@@ -136,8 +136,41 @@ test("work session validates transport and policy", () => {
   assert.throws(() => createWorkSession({ transport, policy: { ...policy, workId: "" } }), TypeError)
   assert.throws(() => createWorkSession({ transport, policy: { ...policy, getText: null } }), TypeError)
   assert.throws(() => createWorkSession({ transport, policy: { ...policy, deck: { ...deck, id: "other" } } }), TypeError)
-  assert.throws(() => createWorkSession({ transport, policy: { ...policy, deck: { ...deck, content_hash: "nope" } } }), TypeError)
+  assert.throws(() => createWorkSession({ transport, policy: { ...policy, deck: { ...deck, content_hash: "" } } }), TypeError)
+  assert.throws(() => createWorkSession({ transport, policy: { ...policy, deck: { ...deck, content_hash: null } } }), TypeError)
+  // Baselines are opaque: web revision tokens (`lock_version:digest`) bind like content hashes.
+  createWorkSession({ transport, policy: { ...policy, deck: { ...deck, content_hash: "3:digest" } } }).dispose()
   void timers
+})
+
+test("work session forwards host snapshot, baseline, and state policy", async () => {
+  const states = []
+  let current = "old"
+  const { session, state, timers, conflicts } = setup({
+    policy: {
+      getText: () => current,
+      setText: async value => { current = value; return true },
+      getSnapshot: () => `title\x1f${current}`,
+      getConflictSnapshot: details => `disk:${details.current?.source}`,
+      getConflictBaseline: details => details.current?.revision_token,
+      isValidConflictBaseline: value => typeof value === "string" && value.length > 0,
+      onState: (status, details) => states.push([status, Boolean(details.conflict)])
+    }
+  })
+  state.saveImpl = async () => {
+    throw Object.assign(new Error("Changed."), {
+      code: "conflict",
+      details: { message: "Changed.", current: { source: "disk", revision_token: "opaque-2" } }
+    })
+  }
+  await session.replaceText("local")
+  await timers.advance(100)
+  await flush()
+  assert.equal(conflicts.length, 1)
+  assert.equal(session.conflict.diskHash, "opaque-2")
+  assert.equal(session.conflict.diskSnapshot, "disk:disk")
+  assert.ok(states.some(([status]) => status === "Saving…"))
+  session.dispose()
 })
 
 test("work session saves local edits and tracks the baseline", async () => {

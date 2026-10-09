@@ -20,8 +20,6 @@
 import { createSaveFlow } from "./save_flow.js"
 import { assertEditorAdapter } from "./editor_adapter.js"
 
-const HASH_PATTERN = /^[a-f\d]{64}$/i
-
 const ERROR_CATEGORIES = {
   conflict: "conflict",
   not_found: "not_found",
@@ -49,6 +47,9 @@ function toElefError(error) {
 }
 
 export function createWorkSession({ transport, policy }) {
+  // Baseline opacity: the flow only compares baselines for equality, so any
+  // non-empty token binds the session. Desktop passes 64-hex content hashes;
+  // web passes revision tokens shaped `lock_version:digest` (see Work#revision_token).
   if (!transport || typeof transport !== "object") {
     throw new TypeError("createWorkSession requires a transport.")
   }
@@ -64,12 +65,17 @@ export function createWorkSession({ transport, policy }) {
     deck,
     getText,
     setText = null,
+    getSnapshot,
+    getConflictSnapshot,
+    getConflictBaseline,
+    isValidConflictBaseline,
     saveDelay = 650,
     externalPollMs = 0,
     snapshotIntervalMs = 0,
     workspaceId = "",
     title = "",
     materializeEdits = () => {},
+    onState = null,
     onConflict = () => {},
     onError = () => {},
     setTimer = setTimeout,
@@ -82,7 +88,7 @@ export function createWorkSession({ transport, policy }) {
     throw new TypeError("Session policy requires getText().")
   }
   assertEditorAdapter({ getText, setText: setText ?? (() => false), materializeEdits })
-  if (!deck || deck.id !== workId || !HASH_PATTERN.test(deck.content_hash || "")) {
+  if (!deck || deck.id !== workId || typeof deck.content_hash !== "string" || deck.content_hash.length === 0) {
     throw new TypeError("Session policy requires the opened deck for workId.")
   }
 
@@ -159,9 +165,16 @@ export function createWorkSession({ transport, policy }) {
       : null,
     getSource: () => getText(),
     setSource: setText ? ((source, meta) => setText(source, meta)) : () => false,
+    ...(getSnapshot ? { getSnapshot } : null),
+    ...(getConflictSnapshot ? { getConflictSnapshot } : null),
+    ...(getConflictBaseline ? { getConflictBaseline } : null),
+    ...(isValidConflictBaseline ? { isValidConflictBaseline } : null),
     saveDelay,
     materializeEdits,
-    onState: notifyStatus,
+    onState: (state, details) => {
+      notifyStatus(state)
+      if (typeof onState === "function") onState(state, details)
+    },
     onConflict,
     onError: reportError,
     setTimer,

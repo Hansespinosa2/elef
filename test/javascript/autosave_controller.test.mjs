@@ -2,13 +2,12 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import { readFile } from "node:fs/promises"
 
-const saveFlowSource = await readFile(new URL("../../packages/client/src/session/save_flow.js", import.meta.url), "utf8")
-const saveFlowUrl = `data:text/javascript;base64,${Buffer.from(saveFlowSource).toString("base64")}`
+const workSessionUrl = new URL("../../packages/client/src/session/work_session.js", import.meta.url).href
 const conflictDialogSource = await readFile(new URL("../../app/javascript/lib/conflict_dialog.js", import.meta.url), "utf8")
 const conflictDialogUrl = `data:text/javascript;base64,${Buffer.from(conflictDialogSource).toString("base64")}`
 const source = (await readFile(new URL("../../app/javascript/controllers/autosave_controller.js", import.meta.url), "utf8"))
   .replace('import { Controller } from "@hotwired/stimulus"', "class Controller {}")
-  .replace('import { createSaveFlow } from "@elef/client"', `const { createSaveFlow } = await import("${saveFlowUrl}")`)
+  .replace('import { createWorkSession } from "@elef/client"', `import { createWorkSession } from "${workSessionUrl}"`)
   .replace('import { presentConflictDialog } from "lib/conflict_dialog"', `const { presentConflictDialog } = await import("${conflictDialogUrl}")`)
   .replace('import { editorFor } from "lib/editor_controller_lookup"', "const editorFor = () => null")
   .replace('import { applyEditorSource } from "lib/editor_source"', "const applyEditorSource = async () => true")
@@ -205,7 +204,9 @@ test("Rails autosave uses the shared state machine for source and metadata snaps
   Object.assign(controller, {
     delayValue: 1000,
     fieldTargets: [sourceField, titleField],
+    flowDeckId: "presentation-1",
     currentSource: () => sourceField.value,
+    currentRevisionBaseline: () => "revision-1",
     snapshot: () => [sourceField.value, titleField.value].join("\u001f"),
     saveToRails: async (value, snapshot) => {
       calls.push({ value, snapshot })
@@ -217,16 +218,15 @@ test("Rails autosave uses the shared state machine for source and metadata snaps
     handleSaveConflict() {},
     materializeEditorEdits() {}
   })
-  controller.flow = controller.createSaveFlow()
-  const deck = { id: "presentation-1", source: sourceField.value, content_hash: "revision-1" }
-  controller.flow.activate(deck)
+  controller.flow = controller.createSession()
   titleField.value = "Updated title"
   controller.flow.noteChange()
 
-  assert.equal(await controller.flow.flush({ force: true }), true)
+  assert.equal((await controller.flow.flush({ force: true })).kind, "saved")
   assert.deepEqual(calls, [{ value: "# Start", snapshot: "# Start\u001fUpdated title" }])
   assert.equal(controller.flow.dirty, false)
-  assert.equal(deck.savedSnapshot, "# Start\u001fUpdated title")
+  assert.equal((await controller.flow.flush({ force: true })).kind, "clean")
+  assert.equal(calls.length, 1)
 })
 
 test("CRLF responses settle against the browser's normalized source snapshot", async () => {
@@ -253,16 +253,16 @@ test("CRLF responses settle against the browser's normalized source snapshot", a
     updateRevisionTokens() {},
     setStatus() {},
     materializeEditorEdits() {},
+    flowDeckId: "presentation-1",
     currentSource: () => sourceWithCrLf,
+    currentRevisionBaseline: () => "revision-1",
     snapshot: () => [sourceField.value, titleField.value].join("\u001f"),
     sourceField: () => sourceField,
     synchronizeCanonicalSource: savedSource => {
       sourceField.value = savedSource.replace(/\r\n?/g, "\n")
     }
   })
-  controller.flow = controller.createSaveFlow()
-  const deck = { id: "presentation-1", source: sourceWithCrLf, content_hash: "revision-1" }
-  controller.flow.activate(deck)
+  controller.flow = controller.createSession()
 
   const originalFetch = globalThis.fetch
   const originalFormData = globalThis.FormData
@@ -286,10 +286,11 @@ test("CRLF responses settle against the browser's normalized source snapshot", a
   try {
     titleField.value = "Updated title"
     controller.flow.noteChange()
-    assert.equal(await controller.flow.flush({ force: true }), true, controller.lastSaveError?.stack)
+    assert.equal((await controller.flow.flush({ force: true })).kind, "saved", controller.lastSaveError?.stack)
     assert.equal(controller.flow.dirty, false)
     assert.equal(requestCount, 1)
-    assert.equal(deck.savedSnapshot, `${source}\u001fUpdated title`)
+    assert.equal((await controller.flow.flush({ force: true })).kind, "clean")
+    assert.equal(requestCount, 1)
   } finally {
     globalThis.fetch = originalFetch
     globalThis.FormData = originalFormData
@@ -333,13 +334,14 @@ test("Rails revision conflicts resolve through the shared flow without requiring
     },
     materializeEditorEdits() {}
   })
-  controller.flow = controller.createSaveFlow()
-  controller.flow.activate({ id: "document-1", source: "original", content_hash: "opaque-revision-1" })
+  controller.flowDeckId = "document-1"
+  controller.currentRevisionBaseline = () => "opaque-revision-1"
+  controller.flow = controller.createSession()
   sourceField.value = "local"
   titleField.value = "Local title"
   controller.flow.noteChange()
 
-  assert.equal(await controller.flow.flush({ force: true }), false)
+  assert.equal((await controller.flow.flush({ force: true })).kind, "conflict")
   assert.equal(controller.flow.conflict.diskHash, "opaque-revision-2")
   assert.equal(await controller.flow.useDiskVersion(), true)
   assert.equal(sourceField.value, "disk")
@@ -387,15 +389,16 @@ test("merged Rails text saves local metadata against the disk metadata baseline"
     },
     materializeEditorEdits() {}
   })
-  controller.flow = controller.createSaveFlow()
-  controller.flow.activate({ id: "presentation-1", source: "original", content_hash: "opaque-revision-1" })
+  controller.flowDeckId = "presentation-1"
+  controller.currentRevisionBaseline = () => "opaque-revision-1"
+  controller.flow = controller.createSession()
   sourceField.value = "local"
   titleField.value = "Local title"
   controller.flow.noteChange()
 
-  assert.equal(await controller.flow.flush({ force: true }), false)
+  assert.equal((await controller.flow.flush({ force: true })).kind, "conflict")
   assert.equal(await controller.flow.saveMergedVersion("disk"), true)
-  assert.equal(await controller.flow.flush({ force: true }), true)
+  assert.ok(["saved", "clean"].includes((await controller.flow.flush({ force: true })).kind))
   assert.deepEqual(calls, [
     { source: "local", snapshot: "local\u001fLocal title" },
     { source: "disk", snapshot: "disk\u001fLocal title" }
@@ -448,14 +451,15 @@ test("a style-only Rails conflict still saves local appearance overrides after m
     },
     materializeEditorEdits() {}
   })
-  controller.flow = controller.createSaveFlow()
-  controller.flow.activate({ id: "presentation-1", source: "same source", content_hash: "opaque-revision-1" })
+  controller.flowDeckId = "presentation-1"
+  controller.currentRevisionBaseline = () => "opaque-revision-1"
+  controller.flow = controller.createSession()
   fields[2].value = "light"
   controller.flow.noteChange()
 
-  assert.equal(await controller.flow.flush({ force: true }), false)
+  assert.equal((await controller.flow.flush({ force: true })).kind, "conflict")
   assert.equal(await controller.flow.saveMergedVersion("same source"), true)
-  assert.equal(await controller.flow.flush({ force: true }), true)
+  assert.ok(["saved", "clean"].includes((await controller.flow.flush({ force: true })).kind))
   assert.deepEqual(calls, [
     { source: "same source", snapshot: "same source\u001fDeck\u001flight\u001f" },
     { source: "same source", snapshot: "same source\u001fDeck\u001flight\u001f" }
