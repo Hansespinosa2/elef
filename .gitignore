@@ -54,3 +54,12 @@
 /apps/web/app/assets/builds/*
 !/apps/web/app/assets/builds/.keep
 !/apps/web/app/assets/builds/tailwind.css
+
+# Ignore campaign scratch (disposable gate checkouts, review bundles, probes).
+/tmp/
+
+# Ignore desktop e2e run outputs (regenerable diagnostics; CI uploads them).
+/apps/desktop/e2e/logs/
+/apps/desktop/e2e/test-results/
+/apps/desktop/e2e/playwright-report/
+/apps/desktop/e2e/native-scenarios.log
