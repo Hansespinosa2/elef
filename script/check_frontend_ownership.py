@@ -294,6 +294,7 @@ shared_workflows = {
     "documentLinkCompletionWorkflow",
     "documentPageAspectRatioWorkflow",
     "editAndPreviewWorkflow",
+    "exportWorkflow",
     "externalEditConflictWorkflow",
     "hostileDeckNeutralizedWorkflow",
     "libraryAndGraphWorkflow",

@@ -16,6 +16,7 @@ import { PIXEL_PNG_DIGEST, PIXEL_PNG_MARKDOWN } from "../../../test/e2e/scenario
 import { presentationModeWorkflow } from "../../../test/e2e/scenarios/presentation-mode.js"
 import { vimRelativeLineNumbersWorkflow } from "../../../test/e2e/scenarios/vim-relative-line-numbers.js"
 import { documentPageAspectRatioWorkflow } from "../../../test/e2e/scenarios/document-page-aspect-ratio.js"
+import { exportWorkflow } from "../../../test/e2e/scenarios/export.js"
 import { createHash } from "node:crypto"
 import { answerMacNativeDialog } from "../mac-native-dialog.js"
 
@@ -279,6 +280,7 @@ class DesktopEditorUi {
   constructor() {
     this.rejectExternalMedia = true
     this.activeDeckTitle = null
+    this.capabilities = { export: false }
   }
 
   async pauseAutosave() {
@@ -362,6 +364,13 @@ class DesktopEditorUi {
       throw new Error(`${error.message}; desktop open diagnostic: ${JSON.stringify(diagnostic)}`)
     }
     this.activeDeckTitle = title
+  }
+
+  async assertExportUnavailable() {
+    await this.openDeck("E2E seed")
+    if (await $("//button[contains(., 'Download PPTX')]").isExisting()) {
+      throw new Error("The desktop editor must not offer a PPTX export surface (HD-06)")
+    }
   }
 
   async enableVimRelativeLineNumbers() {
@@ -1762,6 +1771,10 @@ describe("desktop binary workflows and native boundaries", () => {
 
   it("runs the shared presentation navigation flow in the desktop binary", async () => {
     await presentationModeWorkflow(new DesktopEditorUi())
+  })
+
+  it("asserts the explicit export-disabled path in the desktop binary", async () => {
+    await exportWorkflow(new DesktopEditorUi())
   })
 
   it("updates Vim relative line numbers from CodeMirror cursor positions", async () => {

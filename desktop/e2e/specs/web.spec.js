@@ -12,6 +12,7 @@ import { PIXEL_PNG_MARKDOWN } from "../../../test/e2e/scenarios/media-fixture.js
 import { presentationModeWorkflow } from "../../../test/e2e/scenarios/presentation-mode.js"
 import { vimRelativeLineNumbersWorkflow } from "../../../test/e2e/scenarios/vim-relative-line-numbers.js"
 import { documentPageAspectRatioWorkflow } from "../../../test/e2e/scenarios/document-page-aspect-ratio.js"
+import { exportWorkflow } from "../../../test/e2e/scenarios/export.js"
 import { execFileSync } from "node:child_process"
 import path from "node:path"
 import { readFile } from "node:fs/promises"
@@ -68,6 +69,7 @@ class WebEditorUi {
     this.page = page
     this.rejectExternalMedia = false
     this.activeWorkId = null
+    this.capabilities = { export: true }
   }
 
   async openDeck(title = "E2E seed") {
@@ -88,6 +90,18 @@ class WebEditorUi {
     await this.page.goto(`/${path}/${id}/edit`)
     await expect(this.page.locator(".visual-editor-form")).toHaveAttribute("data-editor-mode", "visual")
     await expect(this.page.locator(".source-field .cm-content")).toBeVisible()
+  }
+
+  async downloadPptx() {
+    const id = process.env.ELEF_E2E_PRESENTATION_ID
+    if (!id) throw new Error("The shared web scenario requires an E2E presentation fixture")
+    this.activeWorkId = id
+    await this.page.goto(`/presentations/${id}`)
+    await this.page.locator(".show-actions button", { hasText: "Download PPTX" }).click()
+  }
+
+  async assertPptxDownloaded() {
+    await expect(this.page.locator('[data-pptx-export-host-target="status"]')).toContainText("PowerPoint downloaded.", { timeout: 30_000 })
   }
 
   async enableVimRelativeLineNumbers() {
@@ -959,6 +973,10 @@ test("the web app without an updater capability shows no updater affordance", as
   await ui.openAuthoringSettings()
   await expect(page.locator('section[aria-label="Updates"]')).toHaveCount(0)
   await ui.closeAuthoringSettings()
+})
+
+test("shared export flow downloads PPTX in the web app", async ({ page }) => {
+  await exportWorkflow(new WebEditorUi(page))
 })
 
 test("shared math input flow works in the web app", async ({ page }) => {

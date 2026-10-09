@@ -88,8 +88,14 @@ Capability keys come from `HostCapabilities`
 - Supported side: Rails pptx/pdf export service + system tests
   (`test/services/presentations/pptx_export_test.rb`,
   `test/system/pptx_export_test.rb`, `test/system/media_pdf_export_test.rb`).
-- Disabled side: shared `test/e2e/scenarios/export.js` asserts the explicit
-  desktop-disabled path (added Phase 10 DO-2).
+- Disabled side: shared `test/e2e/scenarios/export.js` branches on
+  `ui.capabilities.export`; the desktop UI declares `export: false` and
+  `assertExportUnavailable` proves no Download PPTX surface exists
+  (`desktop/e2e/specs/desktop.spec.js`, "asserts the explicit
+  export-disabled path in the desktop binary").
+- Supported side (shared definition): the web UI declares `export: true` and
+  runs download → status proof (`desktop/e2e/specs/web.spec.js`,
+  "shared export flow downloads PPTX in the web app").
 
 ## HD-07 search implementation (contract-identical, locality differs)
 
