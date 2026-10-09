@@ -73,10 +73,12 @@ function safeAttribute(element, name, value, interactive, documentPagination, me
   if (lower === "data-art-layout") return ["peers-wrap", "sequence-horizontal", "sequence-vertical", "plain-list"].includes(value)
   if (lower === "data-art-settled" || lower === "data-art-overfull") return value === "true" || value === "false"
   if (lower === "data-art-host") return value === "fixed"
-  if (lower === "data-art-diagnostic") return ["ART_NO_LIST_TARGET", "ART_INVALID_SYNTAX", "ART_UNSUPPORTED_CONTENT", "ART_NO_FIT", "ART_ITEM_TOO_TALL", "ART_INTERNAL_ERROR"].includes(value)
+  if (lower === "data-art-diagnostic") return ["ART_NO_LIST_TARGET", "ART_INVALID_SYNTAX", "ART_UNSUPPORTED_CONTENT", "ART_REVEAL_BOUNDARY", "ART_NO_FIT", "ART_ITEM_TOO_TALL", "ART_INTERNAL_ERROR"].includes(value)
   if (lower === "data-editor-math-source") return element.tagName === "SPAN" && ["katex", "katex-display", "math-error"].some(className => element.classList.contains(className))
   if (lower === "data-editor-math-open" || lower === "data-editor-math-close") return MATH_DELIMITERS.has(value)
   if (lower === "data-presentation-canvas-target") return interactive && element.tagName === "SECTION" && value === "canvas"
+  if (lower === "data-elef-reveal-event") return element.tagName === "DIV" && element.classList.contains("slide-block") && /^(?:0|[1-9]\d*)$/.test(value)
+  if (lower === "data-elef-reveal-event-count") return element.tagName === "SECTION" && element.classList.contains("slide") && /^[1-9]\d*$/.test(value)
   if (lower === "data-presentation-editor-target") return interactive && element.tagName === "DIV" && element.classList.contains("presentation-surface") && value === "canvas"
   if (lower === "data-document-pages-target") {
     const reader = element.parentElement

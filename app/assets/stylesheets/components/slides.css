@@ -122,6 +122,12 @@
   width: 100%;
 }
 
+.presentation-mode .slide-block.is-presentation-reveal-hidden,
+.presenting-deck .slide-block.is-presentation-reveal-hidden {
+  pointer-events: none !important;
+  visibility: hidden !important;
+}
+
 .slide-title {
   flex: 0 0 auto;
 }

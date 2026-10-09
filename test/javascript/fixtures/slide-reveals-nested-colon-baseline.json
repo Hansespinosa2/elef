@@ -1,0 +1,160 @@
+{
+  "baseline_commit": "2dc9ba70746ef94a03b1db1f258ead3da19c8f0b",
+  "source": "# Literal colons\n\n- parent\n  :::\n  keep this line",
+  "html": "<div class=\"presentation-surface work-surface slides slides-theme-match slides-typography-book work-theme-match work-typography-book presentation-editor-projection\" data-controller=\"mermaid-diagrams\" data-presentation-editor-target=\"canvas\"><div class=\"slide-frame\" data-controller=\"presentation-canvas\"><section class=\"slide slide-body\" data-presentation-canvas-target=\"canvas\" aria-label=\"Slide 1\" data-editor-slide-id=\"slide-1\" data-slide-index=\"0\"><div class=\"presentation-editor-slide-toolbar\" aria-label=\"Slide 1 controls\"><span class=\"presentation-editor-slide-label\">Slide 1</span><button type=\"button\" data-presentation-editor-action=\"add-slide-after\" data-slide-index=\"0\">Add slide</button><button type=\"button\" class=\"presentation-editor-add-image\" data-action=\"click-&gt;media#chooseForSlide\" data-slide-index=\"0\">Add image</button><button type=\"button\" data-presentation-editor-action=\"delete-slide\" data-slide-index=\"0\" disabled>Delete</button><button type=\"button\" data-presentation-editor-action=\"move-slide-up\" data-slide-index=\"0\" disabled>Move up</button><button type=\"button\" data-presentation-editor-action=\"move-slide-down\" data-slide-index=\"0\" disabled>Move down</button></div><div class=\"slide-margin slide-margin-top\" aria-hidden=\"true\"><span class=\"slide-margin-subsection\"></span><span class=\"slide-margin-section\"></span></div><div class=\"slide-content\"><div class=\"slide-block\" data-editor-block-id=\"slide-1-block-1\" data-editor-region-id=\"slide-1-region-1\" data-editor-source-editable=\"true\" contenteditable=\"true\" role=\"textbox\" aria-label=\"Editable slide block\" aria-multiline=\"true\" spellcheck=\"true\" data-action=\"input-&gt;presentation-editor#blockInput focus-&gt;presentation-editor#blockFocus blur-&gt;presentation-editor#blockBlur\"><h1>Literal colons</h1>\n</div><div class=\"presentation-editor-block-controls\" aria-label=\"Block controls\"><button type=\"button\" data-presentation-editor-action=\"add-block-after\" data-slide-index=\"0\" data-block-index=\"0\">Add block</button><button type=\"button\" data-presentation-editor-action=\"delete-block\" data-slide-index=\"0\" data-block-index=\"0\">Delete</button><button type=\"button\" aria-label=\"Move block up\" data-presentation-editor-action=\"move-block-up\" data-slide-index=\"0\" data-block-index=\"0\" disabled>↑</button><button type=\"button\" aria-label=\"Move block down\" data-presentation-editor-action=\"move-block-down\" data-slide-index=\"0\" data-block-index=\"0\">↓</button><label>Align <select aria-label=\"Block alignment\" data-presentation-editor-align data-slide-index=\"0\" data-block-index=\"0\" data-action=\"change-&gt;presentation-editor#alignmentChanged\"><option value=\"left\" selected>Left</option><option value=\"center\">Center</option><option value=\"right\">Right</option><option value=\"center left\">Center Left</option><option value=\"center center\">Center Center</option><option value=\"center right\">Center Right</option><option value=\"bottom left\">Bottom Left</option><option value=\"bottom center\">Bottom Center</option><option value=\"bottom right\">Bottom Right</option></select></label></div><div class=\"slide-block\" data-editor-block-id=\"slide-1-block-2\" data-editor-region-id=\"slide-1-region-2\" data-editor-source-editable=\"true\" contenteditable=\"true\" role=\"textbox\" aria-label=\"Editable slide block\" aria-multiline=\"true\" spellcheck=\"true\" data-action=\"input-&gt;presentation-editor#blockInput focus-&gt;presentation-editor#blockFocus blur-&gt;presentation-editor#blockBlur\"><ul>\n<li>parent\n:::\nkeep this line</li>\n</ul>\n</div><div class=\"presentation-editor-block-controls\" aria-label=\"Block controls\"><button type=\"button\" data-presentation-editor-action=\"add-block-after\" data-slide-index=\"0\" data-block-index=\"1\">Add block</button><button type=\"button\" data-presentation-editor-action=\"delete-block\" data-slide-index=\"0\" data-block-index=\"1\">Delete</button><button type=\"button\" aria-label=\"Move block up\" data-presentation-editor-action=\"move-block-up\" data-slide-index=\"0\" data-block-index=\"1\">↑</button><button type=\"button\" aria-label=\"Move block down\" data-presentation-editor-action=\"move-block-down\" data-slide-index=\"0\" data-block-index=\"1\" disabled>↓</button><label>Align <select aria-label=\"Block alignment\" data-presentation-editor-align data-slide-index=\"0\" data-block-index=\"1\" data-action=\"change-&gt;presentation-editor#alignmentChanged\"><option value=\"left\" selected>Left</option><option value=\"center\">Center</option><option value=\"right\">Right</option><option value=\"center left\">Center Left</option><option value=\"center center\">Center Center</option><option value=\"center right\">Center Right</option><option value=\"bottom left\">Bottom Left</option><option value=\"bottom center\">Bottom Center</option><option value=\"bottom right\">Bottom Right</option></select></label></div></div><div class=\"slide-margin slide-margin-bottom\" aria-hidden=\"true\"><span class=\"slide-margin-count\">1 / 1</span></div></section></div></div>",
+  "editor_map": {
+    "version": 1,
+    "source_name": "Untitled",
+    "mode": "presentation",
+    "source_length": 49,
+    "front_matter": null,
+    "slides": [
+      {
+        "id": "slide-1",
+        "index": 0,
+        "layout": "body",
+        "range": {
+          "start": 0,
+          "end": 49
+        },
+        "source_range": {
+          "start": 0,
+          "end": 49
+        },
+        "delimiter_range": null,
+        "blocks": [
+          {
+            "id": "slide-1-block-1",
+            "index": 0,
+            "kind": "heading",
+            "markdown": "# Literal colons",
+            "position": null,
+            "position_directive_id": null,
+            "position_scope": null,
+            "range": {
+              "start": 0,
+              "end": 17
+            },
+            "source_range": {
+              "start": 0,
+              "end": 17
+            },
+            "content_range": {
+              "start": 0,
+              "end": 16
+            },
+            "editable_region_id": "slide-1-region-1"
+          },
+          {
+            "id": "slide-1-block-2",
+            "index": 1,
+            "kind": "list",
+            "markdown": "- parent\n  :::\n  keep this line",
+            "position": null,
+            "position_directive_id": null,
+            "position_scope": null,
+            "range": {
+              "start": 18,
+              "end": 49
+            },
+            "source_range": {
+              "start": 18,
+              "end": 49
+            },
+            "content_range": {
+              "start": 18,
+              "end": 49
+            },
+            "editable_region_id": "slide-1-region-2"
+          }
+        ],
+        "directives": [],
+        "editable_regions": [
+          {
+            "id": "slide-1-region-1",
+            "block_id": "slide-1-block-1",
+            "role": "heading",
+            "kind": "heading",
+            "text": "Literal colons",
+            "range": {
+              "start": 0,
+              "end": 16
+            },
+            "source_range": {
+              "start": 0,
+              "end": 16
+            },
+            "content_range": {
+              "start": 2,
+              "end": 16
+            },
+            "editable": true
+          },
+          {
+            "id": "slide-1-region-2",
+            "block_id": "slide-1-block-2",
+            "role": "block",
+            "kind": "list",
+            "text": "- parent\n  :::\n  keep this line",
+            "range": {
+              "start": 18,
+              "end": 49
+            },
+            "source_range": {
+              "start": 18,
+              "end": 49
+            },
+            "content_range": {
+              "start": 18,
+              "end": 49
+            },
+            "editable": true
+          }
+        ]
+      }
+    ],
+    "directives": [],
+    "editable_regions": [
+      {
+        "id": "slide-1-region-1",
+        "block_id": "slide-1-block-1",
+        "role": "heading",
+        "kind": "heading",
+        "text": "Literal colons",
+        "range": {
+          "start": 0,
+          "end": 16
+        },
+        "source_range": {
+          "start": 0,
+          "end": 16
+        },
+        "content_range": {
+          "start": 2,
+          "end": 16
+        },
+        "editable": true
+      },
+      {
+        "id": "slide-1-region-2",
+        "block_id": "slide-1-block-2",
+        "role": "block",
+        "kind": "list",
+        "text": "- parent\n  :::\n  keep this line",
+        "range": {
+          "start": 18,
+          "end": 49
+        },
+        "source_range": {
+          "start": 18,
+          "end": 49
+        },
+        "content_range": {
+          "start": 18,
+          "end": 49
+        },
+        "editable": true
+      }
+    ]
+  }
+}

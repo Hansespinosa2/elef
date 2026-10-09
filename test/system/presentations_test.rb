@@ -2309,6 +2309,114 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_text "1 / 2"
   end
 
+  test "Present reveals cumulative events with buttons and reverses them before changing slides" do
+    source = "# One\n\n:::step{01}\nFirst reveal\n\n:::step{2}\nSecond reveal\n\n---\n# Two"
+    presentation = Presentation.create!(title: "Cumulative Present", source: source)
+
+    visit present_presentation_path(presentation)
+    assert_equal "hidden", reveal_visibility("First reveal")
+    assert_equal "hidden", reveal_visibility("Second reveal")
+
+    click_button "Next"
+    assert_equal "visible", reveal_visibility("First reveal")
+    assert_equal "hidden", reveal_visibility("Second reveal")
+
+    click_button "Next"
+    assert_equal "visible", reveal_visibility("Second reveal")
+    click_button "Next"
+    assert_selector ".presentation-slide-frame.is-active-presentation-slide", text: "Two"
+
+    click_button "Previous"
+    assert_selector ".presentation-slide-frame.is-active-presentation-slide", text: "One"
+    assert_equal "visible", reveal_visibility("First reveal")
+    assert_equal "visible", reveal_visibility("Second reveal")
+
+    click_button "Previous"
+    assert_equal "visible", reveal_visibility("First reveal")
+    assert_equal "hidden", reveal_visibility("Second reveal")
+  end
+
+  test "reveals keep one, two, and three column block geometry fixed" do
+    source = <<~MARKDOWN
+      # One column
+
+      Unmarked before
+
+      :::step{1}
+      ## Stable heading
+
+      :::step{2}
+      Stepped body
+
+      ---
+      # Two columns
+
+      ## Left
+      :::step{05}
+      Left reveal
+
+      ## Right
+      :::step{5}
+      Right reveal
+
+      ---
+      # Three columns
+
+      ## First
+      :::step{2}
+      First reveal
+
+      ## Second
+      :::step{1}
+      Second reveal
+
+      ## Third
+      :::step{2}
+      Third reveal
+    MARKDOWN
+    presentation = Presentation.create!(title: "Reveal geometry", source: source)
+    visit present_presentation_path(presentation)
+
+    assert_equal "slide-body", find(".presentation-stage .slide-frame.is-active-presentation-slide .slide")[:class].split.last
+    initial = reveal_slide_block_boxes
+    send_keys :arrow_right
+    assert_equal initial, reveal_slide_block_boxes, "revealing the stepped heading moved slide content"
+    send_keys :arrow_right
+    assert_equal initial, reveal_slide_block_boxes, "revealing the later group moved slide content"
+
+    send_keys :arrow_right
+    assert_equal "slide-two-column", find(".presentation-stage .slide-frame.is-active-presentation-slide .slide")[:class].split.last
+    initial = reveal_slide_block_boxes
+    send_keys :arrow_right
+    assert_equal initial, reveal_slide_block_boxes, "revealing both numbered column groups moved slide content"
+
+    send_keys :arrow_right
+    assert_equal "slide-three-column", find(".presentation-stage .slide-frame.is-active-presentation-slide .slide")[:class].split.last
+    initial = reveal_slide_block_boxes
+    send_keys :arrow_right
+    assert_equal initial, reveal_slide_block_boxes, "revealing two groups in three columns moved slide content"
+  end
+
+  def reveal_visibility(text)
+    page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const text = #{JSON.generate(text)};
+        const block = [...document.querySelectorAll(".presentation-stage .slide-block[data-elef-reveal-event]")]
+          .find((node) => node.textContent.includes(text));
+        return block ? getComputedStyle(block).visibility : null;
+      })()
+    JAVASCRIPT
+  end
+
+  def reveal_slide_block_boxes
+    page.evaluate_script(<<~JAVASCRIPT)
+      [...document.querySelectorAll(".presentation-stage .slide-frame.is-active-presentation-slide .slide-block")].map((block) => {
+        const rect = block.getBoundingClientRect();
+        return [rect.x, rect.y, rect.width, rect.height].map(value => Math.round(value * 100) / 100);
+      })
+    JAVASCRIPT
+  end
+
   test "presentation keyboard shortcuts do not hijack toolbar activation" do
     presentation = Presentation.create!(title: "Keyboard exit", source: "# One")
 

@@ -22,6 +22,7 @@ export const ART_DIAGNOSTICS = Object.freeze({
   NO_LIST_TARGET: "ART_NO_LIST_TARGET",
   INVALID_SYNTAX: "ART_INVALID_SYNTAX",
   UNSUPPORTED_CONTENT: "ART_UNSUPPORTED_CONTENT",
+  REVEAL_BOUNDARY: "ART_REVEAL_BOUNDARY",
   NO_FIT: "ART_NO_FIT",
   ITEM_TOO_TALL: "ART_ITEM_TOO_TALL",
   INTERNAL_ERROR: "ART_INTERNAL_ERROR"
@@ -116,8 +117,22 @@ function rootListRecords(tokens) {
 
 function markdownBoundaryContext(source) {
   const lines = source.split(/\r\n|\r|\n/)
-  const mathRanges = displayMathRanges(lines)
   const sourceTokens = listParser.parse(source, {})
+  const codeProtectedLines = new Uint8Array(lines.length)
+  const markdownProtectedLines = new Uint8Array(lines.length)
+  const listLines = new Uint8Array(lines.length)
+  const codeTypes = new Set(["code_block", "fence", "html_block"])
+  const markdownProtectedTypes = new Set([
+    "bullet_list_open", "ordered_list_open", "blockquote_open", "code_block", "fence", "html_block", "table_open"
+  ])
+  const listTypes = new Set(["bullet_list_open", "ordered_list_open"])
+  for (const token of sourceTokens) {
+    if (!token.map) continue
+    if (codeTypes.has(token.type)) markLines(codeProtectedLines, token.map[0], token.map[1])
+    if (markdownProtectedTypes.has(token.type)) markLines(markdownProtectedLines, token.map[0], token.map[1])
+    if (listTypes.has(token.type)) markLines(listLines, token.map[0], token.map[1])
+  }
+  const mathRanges = displayMathRanges(lines, codeProtectedLines)
   const blocks = sourceTokens.filter(token =>
     token.level === 0 && token.map && token.type !== "inline" && token.nesting !== -1
   ).map(token => ({
@@ -125,36 +140,22 @@ function markdownBoundaryContext(source) {
     startLine: token.map[0],
     endLine: token.map[1]
   }))
-  const protectedTypes = new Set([
-    "bullet_list_open", "ordered_list_open", "blockquote_open", "code_block", "fence", "html_block", "table_open"
-  ])
-  const nonMathProtectedRanges = blocks.filter(block => protectedTypes.has(block.type))
-  const protectedRanges = [...nonMathProtectedRanges]
-  protectedRanges.push(...mathRanges)
-  const protectedLines = new Uint8Array(lines.length)
-  const nonMathProtectedLines = new Uint8Array(lines.length)
   const mathLines = new Uint8Array(lines.length)
-  for (const range of nonMathProtectedRanges) {
-    for (let line = Math.max(0, range.startLine); line < Math.min(lines.length, range.endLine); line += 1) {
-      nonMathProtectedLines[line] = 1
-    }
-  }
   for (const range of mathRanges) {
-    for (let line = Math.max(0, range.startLine); line < Math.min(lines.length, range.endLine); line += 1) {
-      mathLines[line] = 1
-    }
+    markLines(mathLines, range.startLine, range.endLine)
   }
-  for (const range of protectedRanges) {
-    for (let line = Math.max(0, range.startLine); line < Math.min(lines.length, range.endLine); line += 1) {
-      protectedLines[line] = 1
-    }
+  const blankLines = new Uint8Array(lines.length)
+  lines.forEach((line, index) => { if (isWhitespaceLine(line)) blankLines[index] = 1 })
+  const protectedLines = new Uint8Array(lines.length)
+  for (let index = 0; index < lines.length; index += 1) {
+    if (markdownProtectedLines[index] || mathLines[index]) protectedLines[index] = 1
   }
   const blockStartLines = new Set(blocks.map(block => block.startLine))
 
   const directiveLines = new Set()
   const artDirectiveLines = new Set()
   for (let index = 0; index < lines.length; index += 1) {
-    const isDirective = /^\s*:::/.test(lines[index])
+    const isDirective = /^\s*:::/.test(lines[index]) && !isIndentedCodeMarker(lines[index])
     const isArtCandidate = validArtLine(lines[index]) || invalidArtLine(lines[index])
     const isLegacyMarginDirective = /^\s*:::(section|subsection|footnote)\{/.test(lines[index])
     const isProtected = protectedLines[index] === 1
@@ -165,8 +166,15 @@ function markdownBoundaryContext(source) {
     }
   }
 
+  for (let index = 0; index < lines.length; index += 1) {
+    const closingDelimiter = /^ {0,3}:::[ \t]*$/.test(lines[index])
+    const indentedListContent = listLines[index] && lines[index].startsWith(" ")
+    if (closingDelimiter && !codeProtectedLines[index] && !mathLines[index] && !indentedListContent) directiveLines.add(index)
+    if (/^ {0,3}:::step(?=$|[^A-Za-z0-9_-])/.test(lines[index]) && !codeProtectedLines[index] && !mathLines[index]) directiveLines.add(index)
+  }
+
   const maskedSource = lines.map((line, index) =>
-    directiveLines.has(index) || mathLines[index] === 1 ? "" : line
+    directiveLines.has(index) || blankLines[index] === 1 || mathLines[index] === 1 ? "" : line
   ).join("\n")
   const markdownTokens = listParser.parse(maskedSource, {})
   const markdownBlocks = markdownTokens.filter(token =>
@@ -177,7 +185,7 @@ function markdownBoundaryContext(source) {
   }))
   const nonMathProtectedPrefix = new Uint32Array(lines.length + 1)
   for (let line = 0; line < lines.length; line += 1) {
-    nonMathProtectedPrefix[line + 1] = nonMathProtectedPrefix[line] + nonMathProtectedLines[line]
+    nonMathProtectedPrefix[line + 1] = nonMathProtectedPrefix[line] + markdownProtectedLines[line]
   }
   const topLevelMathRanges = mathRanges.filter(range =>
     nonMathProtectedPrefix[range.endLine] === nonMathProtectedPrefix[range.startLine]
@@ -187,8 +195,9 @@ function markdownBoundaryContext(source) {
   const boundaryMap = {
     blockStarts: markdownBlocks.map(block => block.startLine),
     blockEnds: markdownBlocks.map(block => block.endLine),
-    directiveLines: [...directiveLines],
-    artDirectiveLines: [...artDirectiveLines]
+    directiveLines: [...directiveLines].sort((left, right) => left - right),
+    artDirectiveLines: [...artDirectiveLines].sort((left, right) => left - right),
+    blankLines: indexesOf(blankLines)
   }
   const rootListsByStartLine = new Map()
   for (const record of rootListRecords(markdownTokens)) rootListsByStartLine.set(record.token.map[0], record)
@@ -200,11 +209,12 @@ export function markdownBoundaryMap(source) {
   return markdownBoundaryContext(source).boundaryMap
 }
 
-function displayMathRanges(lines) {
+function displayMathRanges(lines, codeProtectedLines) {
   const ranges = []
   let mathFence = null
   let startLine = null
   lines.forEach((line, index) => {
+    if (codeProtectedLines[index]) return
     if (mathFence) {
       if (mathFenceMarker(line) === mathFence) {
         ranges.push({ type: "display_math", startLine, endLine: index + 1 })
@@ -221,6 +231,25 @@ function displayMathRanges(lines) {
   })
   if (mathFence) ranges.push({ type: "display_math", startLine, endLine: lines.length })
   return ranges
+}
+
+function markLines(target, startLine, endLine) {
+  for (let line = Math.max(0, startLine); line < Math.min(target.length, endLine); line += 1) target[line] = 1
+}
+
+function indexesOf(values) {
+  const indexes = []
+  values.forEach((value, index) => { if (value) indexes.push(index) })
+  return indexes
+}
+
+function isWhitespaceLine(line) {
+  // Shared definition consumed by Ruby through boundary_map.blankLines.
+  return /^[\t-\r \u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000\uFEFF]*$/.test(line)
+}
+
+function isIndentedCodeMarker(line) {
+  return /^(?: {4,}| *\t)[ \t]*:::/.test(line)
 }
 
 function findItemClose(tokens, start, end, level) {
@@ -300,7 +329,7 @@ export function resolveArtBindings(source, { idPrefix = "art-directive" } = {}) 
 
     if (!pending) continue
     if (!line.text.trim()) continue
-    if (validPositionLine(line.text) && directiveLines.has(index)) continue
+    if (directiveLines.has(index) && compatibleStackDirective(line.text)) continue
 
     if (directiveLines.has(index) && (/^:::\s*$/.test(line.text) || /^:::/.test(line.text))) {
       reportNoTarget(pending)
@@ -326,15 +355,27 @@ export function resolveArtBindings(source, { idPrefix = "art-directive" } = {}) 
       },
       analysis
     }
-    bindings.push({
-      directive_id: pending.id,
-      directive_range: { ...pending.range },
-      target_range: target.range,
-      target_lines: { start: index, end: endLine },
-      target_markdown: target.markdown,
-      analysis: target.analysis
-    })
-    if (!target.analysis.supported) diagnostics.push({
+    const revealBoundaryLine = targetLines.find((entry, offset) =>
+      offset > 0 && directiveLines.has(index + offset) &&
+      /^ {0,3}:::step(?:\{[0-9]+\})?[ \t]*$/.test(entry.text)
+    )
+    if (revealBoundaryLine) {
+      diagnostics.push({
+        code: ART_DIAGNOSTICS.REVEAL_BOUNDARY,
+        directive_id: pending.id,
+        source_range: { start: revealBoundaryLine.start, end: revealBoundaryLine.end }
+      })
+    } else {
+      bindings.push({
+        directive_id: pending.id,
+        directive_range: { ...pending.range },
+        target_range: target.range,
+        target_lines: { start: index, end: endLine },
+        target_markdown: target.markdown,
+        analysis: target.analysis
+      })
+    }
+    if (!revealBoundaryLine && !target.analysis.supported) diagnostics.push({
       code: ART_DIAGNOSTICS.UNSUPPORTED_CONTENT,
       directive_id: pending.id,
       source_range: { ...pending.range }
@@ -363,6 +404,11 @@ export function resolveArtBindings(source, { idPrefix = "art-directive" } = {}) 
     diagnostics,
     boundary_map: boundaryMap
   }
+}
+
+function compatibleStackDirective(line) {
+  return validPositionLine(line) ||
+    /^[ \t]*:::step(?=$|[^A-Za-z0-9_-])/.test(line)
 }
 
 function makeDirective(line, index, type, idPrefix) {
