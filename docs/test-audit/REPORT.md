@@ -130,7 +130,7 @@ The initial estimate that SQLite reruns the complete non-system suite is correct
 | Foreign-key enforcement and partial unique index semantics | SQLite requires `PRAGMA foreign_keys` enabled on the connection; `works` uses a unique partial index for document titles. | A direct SQL insert checks duplicate documents fail, duplicate presentation titles remain allowed, and an invalid workspace reference is rejected. The `PRAGMA` assertion runs only on SQLite. |
 | Optimistic locking | `works.lock_version` is applied by Active Record through adapter-specific updates. | Two SQLite-loaded copies verify that a stale save raises and cannot replace the committed source. |
 
-The new `test/sqlite_compatibility_test.rb` passed locally on a disposable SQLite database (4 tests, 9 assertions, about 0.13 seconds). These four tests also run in the PostgreSQL test job, so both branches of the migration and adapter-level persistence behavior receive the same assertions in CI. Local PostgreSQL was unavailable, so I could not verify that leg on this device. The full SQLite compatibility suite remains in the new weekly scheduled workflow and can also be started manually.
+The new `test/sqlite_compatibility_test.rb` passed locally on a disposable SQLite database (4 tests, 9 assertions, about 0.13 seconds). These four tests also run in the PostgreSQL test job, so both branches of the migration and adapter-level persistence behavior receive the same assertions in CI. Local PostgreSQL was unavailable, so I could not verify that leg on this device. The full SQLite compatibility suite runs on `dev` pushes and on a weekly schedule; it can also be started manually.
 
 ## Phase 1: remove verified duplicate executions
 
@@ -144,9 +144,9 @@ The maintainer approved run-once changes, SQLite narrowing after documenting the
 | Linux `elef-core` unit tests from the full-workspace command. | `desktop-fast` runs all `elef-core` tests. Linux runs `elef_desktop_lib` tests; macOS retains full-workspace tests because `elef-core` contains platform-conditional filesystem code. |
 | The macOS copy of the web browser scenarios and static component checks. | The Linux E2E runner executes the shared web stage and standalone component checks once, then runs native WebdriverIO and the updater pass in order. macOS sets `ELEF_E2E_SKIP_WEB=1` and runs native WebdriverIO followed by the unchanged updater pass. Shared scenario definitions and the final Linux web/native parity assertion remain. |
 | The second Chromium download. | Only the Linux web phase installs Chromium; `~/.cache/ms-playwright` is keyed by OS and `desktop/e2e/package-lock.json`. macOS has no web/component stage and no browser download. |
-| The two 20-process benchmark runs and their dedicated measurement-only release builds from required `desktop` jobs. | `native-performance.yml` runs weekly or by manual dispatch on Linux and macOS, with 10 launches per platform. The local benchmark default remains 20. Native performance is declared non-gating in attestation schema v2; the deployment verifier checks that manifest as well as the exact required-job list. Package builds and native/updater security scenarios remain in required CI; signed release packaging in `desktop-release.yml` is unchanged. |
+| The two 20-process benchmark runs and their dedicated measurement-only release builds from required `desktop` jobs. | `native-performance.yml` runs on `dev` pushes, weekly, or by manual dispatch on Linux and macOS, with 10 launches per platform. The local benchmark default remains 20. Native performance is declared non-gating in attestation schema v2; the deployment verifier checks that manifest as well as the exact required-job list. Package builds and native/updater security scenarios remain in required CI; signed release packaging in `desktop-release.yml` is unchanged. |
 
-`ci_single_run_test.rb` now checks exact command ownership, the sole web stage and macOS skip, SQLite job scope and scheduled full suite, benchmark placement, required job names/gates, and attestation declarations. The deployment authorization harness now rejects an attestation that omits or changes the required-job manifest or non-gating measurement policy. The verifier's exact-one-and-success rule rejects missing, duplicate, skipped, or failed job records; the harness explicitly exercises failed required jobs and malformed attestation policy.
+`ci_single_run_test.rb` now checks exact command ownership, the sole web stage and macOS skip, SQLite job scope and dev-push/scheduled full suite, benchmark placement, required job names/gates, and attestation declarations. The deployment authorization harness now rejects an attestation that omits or changes the required-job manifest or non-gating measurement policy. The verifier's exact-one-and-success rule rejects missing, duplicate, skipped, or failed job records; the harness explicitly exercises failed required jobs and malformed attestation policy.
 
 ### Phase 1 validation
 
@@ -154,7 +154,7 @@ The maintainer approved run-once changes, SQLite narrowing after documenting the
 | --- | --- |
 | `ruby test/scripts/ci_single_run_test.rb` | Passed; all 11 required job names, event gates, once-only commands and new workflow policies matched. |
 | `bash test/scripts/deployment_authorization_test.sh` | Passed; successful run authorized, while missing policy fields, missing jobs/artifact, failed jobs/run, and a mismatched tested tree were rejected. |
-| `python3 desktop/scripts/check_architecture.py` | Passed; exactly two scheduled benchmark invocations remain and command allowlist/CSP checks still pass. |
+| `python3 desktop/scripts/check_architecture.py` | Passed; exactly two non-gating benchmark invocations remain, on dev pushes and weekly/manual runs, and command allowlist/CSP checks still pass. |
 | `python3 script/check_frontend_ownership.py` | Passed after moving static browser fixtures out of `desktop/`; Rails remains the owner of shared UI source. |
 | Full non-system Rails suite on disposable SQLite (`bin/rails db:test:prepare test`) | 372 tests, 3,037 assertions, 0 failures, 0 errors, 0 skips; 38.07 seconds. |
 | `npm run test:javascript` | 444 tests passed. |
@@ -357,7 +357,7 @@ The updater signature rejection scenario is present, but I did not mutate the Ta
 
 ## Phase 6: local repeat validation
 
-Each locally runnable suite below completed three consecutive runs. The system tier was rerun three times after the final system-test edits, serially with `PARALLEL_WORKERS=1`, headless Chromium, and a dedicated SQLite test database. All three current-tree system runs passed, including the three separately isolated library card tests. The JavaScript suite was rerun three times after adding the controller tests; other tiers were unchanged by the subsequent system- or JavaScript-only adjustments. This is a small stability sample, not a statistical flake-rate estimate.
+Each locally runnable suite below completed three consecutive runs on the audit branch before it was merged with the three newer commits on `dev`. The system tier was rerun three times after the final system-test edits, serially with `PARALLEL_WORKERS=1`, headless Chromium, and a dedicated SQLite test database. All three audit-branch system runs passed, including the three separately isolated library card tests. The JavaScript suite was rerun three times after adding the controller tests; other tiers were unchanged by the subsequent system- or JavaScript-only adjustments. This is a small stability sample, not a statistical flake-rate estimate.
 
 | Suite | Three-run result | Local elapsed times |
 | --- | --- | --- |
@@ -371,6 +371,29 @@ Each locally runnable suite below completed three consecutive runs. The system t
 | Standalone Chromium components (`npm run test:components --prefix desktop/e2e`) | 4 tests passed on every run without Rails or a database. | 1.8s, 1.6s, 1.7s |
 
 These are local Linux timings and cannot be compared directly to the hosted PR workflow. The workflow changes have not run on GitHub, so there is no post-change CI wall-time, p95, runner-minute, retry, or attestation result. The macOS native WebView and offline leg were not executable on this host. The full desktop harness was not run because the repository instructions prohibit competing with the existing development server on port 3000.
+
+### Validation after merging current `dev`
+
+The task branch was merged with current `dev` (`b039966`, which includes the center-to-middle alignment migration) before opening draft PR #151. The migration and its product behavior are part of the PR base, not this audit's diff. I resolved two test conflicts by keeping the moved sample-data suite in `presentation_sample_data_test.rb`, updating it to the current canonical `middle` directive, and preserving the source/visual autosave and reopen assertions with the current serialized directive.
+
+After that merge, these checks passed:
+
+| Check | Result |
+| --- | --- |
+| `bin/rails test test/models/presentation_sample_data_test.rb` | 2 tests, 66 assertions |
+| `bin/rails test test/models/presentation_test.rb` | 48 tests, 234 assertions |
+| `bin/rails test test/system/documents_test.rb:2835` | 1 test, 35 assertions; source/visual round-trip and reopen |
+| `npm run test:javascript` | 460 tests |
+| `npm test --prefix desktop/frontend` | 26 tests |
+| `npm run test:unit --prefix desktop/e2e` | 15 tests |
+| `cargo test --manifest-path desktop/Cargo.toml --workspace --locked` | 43 `elef-core` and 7 desktop library tests |
+| `ruby test/scripts/ci_single_run_test.rb` | Passed |
+| `bash test/scripts/deployment_authorization_test.sh` | Passed, including rejected-attestation cases |
+| `python3 script/check_frontend_ownership.py` | Passed |
+| `npm run renderer:build`, `npm run build --prefix desktop/frontend`, then `python3 desktop/scripts/check_architecture.py` | Passed; the architecture check initially saw stale ignored desktop build output and passed after rebuilding it |
+| `git diff --check origin/dev...HEAD` | Passed after normalizing the baseline timing CSV files to LF line endings |
+
+These are focused post-merge checks, not three repeated full-suite runs on the merged tree. The CI contract and architecture check also passed after adding the `dev` push triggers. PR #151's required CI checks are still pending; the new SQLite and benchmark workflows are push-triggered only on `dev`, so they are expected to start when this PR is merged there. The hosted workflow, current-tree attestation, and macOS/native legs remain unverified.
 
 ### System-test parallelism audit
 
@@ -391,8 +414,10 @@ Before the two-worker diagnostic, I checked shared databases, files, service sta
 The maintainer approved the following workflow decisions in this session, and those changes are implemented with job names and required check membership preserved:
 
 - Run pure JavaScript and frontend adapter suites once, keep one shared web browser stage, preserve Linux/macOS native scenarios and the updater sequence, scope Linux Rust tests to the desktop library, and cache Chromium.
-- Narrow PR SQLite coverage after documenting the PostgreSQL/SQLite differential matrix; retain the full SQLite suite on a weekly schedule and manual dispatch.
-- Move the 20-launch measurement out of required PR jobs, use a parameterized 10-launch scheduled/manual run, and update the architecture check, CI contract, attestation schema, and deployment verifier together.
+- Narrow PR SQLite coverage after documenting the PostgreSQL/SQLite differential matrix; retain the full SQLite suite on `dev` pushes, a weekly schedule, and manual dispatch.
+- Move the 20-launch measurement out of required PR jobs, use a parameterized 10-launch `dev`-push, scheduled, and manual run, and update the architecture check, CI contract, attestation schema, and deployment verifier together.
+
+The adversarial review caught that GitHub's `schedule` and `workflow_dispatch` triggers only activate when the workflow file exists on the repository's default branch, and schedules run only on that branch. This repository's default branch is `main`, while this PR targets `dev`. I verified the default branch from the GitHub PR/repository metadata and the trigger behavior in [GitHub's Actions event documentation](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows). To ensure these runs cover the merged development tree without waiting for the workflows to reach `main`, both non-gating workflows now also trigger on pushes to `dev`; weekly schedules remain for `main`, and the manual trigger remains. The CI contract asserts the `dev` push scope. These triggers do not add or alter required PR jobs or deployment authorization.
 
 No removal of the `ELEF_RENDERER=ruby` path is proposed; it remains live code and must be tested before any future removal request. Release packaging and updater signature checks remain unchanged.
 
@@ -401,7 +426,7 @@ Cross-job artifact reuse was evaluated and not implemented. The common renderer 
 ## Not yet verified
 
 - Remaining Phase 3 runtime work: hosted CI confirmation before changing system-test worker count. The library card system test with six `visit root_path` calls is split into three focused tests; total root-route transitions are unchanged, so this is a test-isolation improvement rather than a runtime optimization. Projection caching was skipped because `wait_for_fresh_projection` is only a state wait, not a request trigger, and independent tests cannot share editor projections safely. Renderer artifact transfer was measured at 0.316s locally and not pursued because required-job dependencies would cost more startup time.
-- The changed GitHub workflows have not executed yet. Local contract tests verify their job names, invocation ownership, required job manifest, attestation policy, and schedule placement, but only CI can validate hosted runner installation and native execution.
+- The changed GitHub workflows have not executed yet. Local contract tests verify their job names, invocation ownership, required job manifest, attestation policy, and dev-push/schedule placement, but only CI can validate hosted runner installation and native execution.
 - Phase 4 still has post-change platform verification gaps. Both Linux and macOS already run shared scenarios with external network access denied, and both jobs passed in the audited baseline workflow; the changed job topology needs a new hosted run. All 13 controllers in the original no-unit-test list now have logic coverage: new tests cover the eight remaining nontrivial controllers, `math_shortcut_palette` is exercised by `math_shorthand.test.mjs`, and the `library_search` behavior is exercised through its shared `filterLibraryCards` implementation. The hostile-media policy assertions passed as unit tests, but actual web/native host scenarios require a hosted E2E run.
 - Phase 5 mutations were detected for SSRF address/protocol/pinning decisions, remote-origin IPC, updater version matching, archive filename/control-character validation, GitHub issue URL hostname/HTTPS validation, bug-report 429 handling, and both external-media host policies. The Tauri updater's bad-signature scenario is covered but its signature-verification boundary was not mutated locally; the native CI run is still required. Other unmutated trust-boundary branches remain open work.
 - Phase 6 repeated local checks passed as listed above. The changed hosted workflow, exact required-job attestations on the new tree, macOS native behavior, post-change CI p95/runner-minutes, and the performance acceptance targets remain unverified. The 20% wall-time and 25% runner-minute goals are not claimed.

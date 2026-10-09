@@ -91,13 +91,16 @@ abort "PR SQLite must run only the documented differential matrix" unless
 sqlite_workflow = YAML.load_file(File.expand_path("../../.github/workflows/sqlite-compatibility.yml", __dir__))
 sqlite_events = sqlite_workflow["on"] || sqlite_workflow[true]
 full_sqlite_commands = sqlite_workflow.fetch("jobs").values.flat_map { |job| job.fetch("steps", []) }.filter_map { |step| step["run"] }
-abort "the full SQLite suite must remain on a scheduled workflow" unless
-  sqlite_events.key?("schedule") && full_sqlite_commands.any? { |run| run.include?("bin/rails db:test:prepare test") }
+abort "the full SQLite suite must run on dev pushes, on a schedule, and manually" unless
+  sqlite_events.dig("push", "branches") == ["dev"] && sqlite_events.key?("schedule") &&
+    sqlite_events.key?("workflow_dispatch") &&
+    full_sqlite_commands.any? { |run| run.include?("bin/rails db:test:prepare test") }
 
 performance_workflow = YAML.load_file(File.expand_path("../../.github/workflows/native-performance.yml", __dir__))
 performance_events = performance_workflow["on"] || performance_workflow[true]
 abort "native performance must remain outside PR authorization" unless
-  performance_events.key?("schedule") && !performance_events.key?("pull_request") &&
+  performance_events.dig("push", "branches") == ["dev"] && performance_events.key?("schedule") &&
+    performance_events.key?("workflow_dispatch") && !performance_events.key?("pull_request") &&
     performance_workflow.fetch("jobs").values.flat_map { |job| job.fetch("steps", []) }.any? do |step|
       step.fetch("run", "").include?("--launch-count 10 --report-runner")
     end

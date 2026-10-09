@@ -1,6 +1,9 @@
 name: Native performance (non-gating)
 
 on:
+  push:
+    branches:
+      - dev
   workflow_dispatch:
   schedule:
     - cron: "17 5 * * 1"

@@ -1,6 +1,9 @@
 name: SQLite compatibility
 
 on:
+  push:
+    branches:
+      - dev
   workflow_dispatch:
   schedule:
     - cron: "31 6 * * 1"
