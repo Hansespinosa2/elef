@@ -13,6 +13,7 @@ if [[ ! "${ELEF_BUILD_SHA:-}" =~ ^[[:xdigit:]]{40,64}$ ]]; then
   exit 2
 fi
 
+pacman-key --init
 pacman -Sy --noconfirm archlinux-keyring
 pacman -Syu --noconfirm --needed \
   appmenu-gtk-module \

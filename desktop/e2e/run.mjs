@@ -9,6 +9,7 @@ import { PIXEL_PNG_MARKDOWN } from "../../test/e2e/scenarios/media-fixture.js"
 import { SHARED_LIBRARY_CREATE_DELETE_TITLES } from "../../test/e2e/scenarios/library-create-delete.js"
 import { runNativeQuitSmokes } from "./native-quit-smoke.js"
 import { runPackagedUpdateSmoke } from "./packaged-update-smoke.js"
+import { createDesktopAppEnvironment } from "./desktop-app-environment.js"
 import { desktopAppEnvironment, verifyOfflineSandbox } from "./offline-macos.js"
 
 const e2eRoot = path.dirname(fileURLToPath(import.meta.url))
@@ -89,13 +90,12 @@ if (process.env.ELEF_E2E_PACKAGED_UPDATES === "1") {
 
 // Keep Tauri's app-data, cache, config and macOS HOME inside this disposable
 // fixture without redirecting Playwright or the test runner's own caches.
-const desktopEnv = {
-  ...env,
-  HOME: isolatedHome,
-  XDG_CONFIG_HOME: isolatedConfig,
-  XDG_DATA_HOME: isolatedData,
-  XDG_CACHE_HOME: isolatedCache
-}
+const desktopEnv = () => createDesktopAppEnvironment(env, {
+  home: isolatedHome,
+  config: isolatedConfig,
+  data: isolatedData,
+  cache: isolatedCache
+})
 
 async function prepareInstalledAppImage() {
   const image = env.ELEF_E2E_INSTALLED_ARTIFACT
@@ -282,11 +282,11 @@ try {
     updaterServer.once("error", reject)
     updaterServer.once("exit", code => reject(new Error(`Updater fixture server exited before readiness (${code})`)))
   }), 10_000, "Updater fixture server did not start")
-  if (process.env.CI) await runNativeQuitSmokes(desktopEnv)
+  if (process.env.CI) await runNativeQuitSmokes(desktopEnv())
   const desktopResult = spawnSync(webdriverio, ["run", "wdio.conf.js"], {
     cwd: e2eRoot,
     env: {
-      ...desktopAppEnvironment(desktopEnv),
+      ...desktopAppEnvironment(desktopEnv()),
       TAURI_WEBDRIVER_PORT: process.env.TAURI_WEBDRIVER_PORT || "4445"
     },
     stdio: "inherit"
@@ -294,10 +294,10 @@ try {
   if (desktopResult.error) throw desktopResult.error
   if (desktopResult.status !== 0) throw new Error("Shared desktop scenarios failed with status " + desktopResult.status)
   if (env.ELEF_E2E_PACKAGED_UPDATES === "1") {
-    if (process.platform === "darwin") await runPackagedUpdateSmoke(desktopEnv)
+    if (process.platform === "darwin") await runPackagedUpdateSmoke(desktopEnv())
     if (process.platform === "linux") await prepareInstalledAppImage()
     const upgradedEnv = {
-      ...desktopEnv,
+      ...desktopEnv(),
       ELEF_E2E_APP_BINARY: env.ELEF_E2E_APP_BINARY,
       APPDIR: env.APPDIR,
       APPIMAGE: env.APPIMAGE

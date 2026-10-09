@@ -123,6 +123,9 @@ run_native_smoke() {
       done
       if [[ -z "$window_id" ]]; then cat "$HOME/elef.log"; echo "Elef did not create a visible window." >&2; exit 1; fi
       xdotool windowactivate --sync "$window_id"
+      # The WebView can become visible before its menu listeners are attached.
+      # Let the frontend finish bootstrapping before sending the native Quit.
+      sleep 5
       xdotool key --clearmodifiers ctrl+q
       for attempt in $(seq 1 100); do
         if ! kill -0 "$app_pid" 2>/dev/null; then wait "$app_pid"; app_pid=""; exit 0; fi
