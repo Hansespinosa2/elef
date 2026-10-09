@@ -50,6 +50,50 @@ class PresentationsPptxExportTest < ActiveSupport::TestCase
     end
   end
 
+  test "rejects an embedded image over the 10 MB per-image limit" do
+    presentation = Presentation.new(title: "Large remote image", source: "# Image\n\n![Large](https://assets.example.org/large.png)")
+    oversized = "x".b * (Presentations::PptxExport::MAX_REMOTE_IMAGE_BYTES + 1)
+    image = Presentations::PptxExport::RemoteImageFetcher::Image.new(oversized, "image/png")
+
+    with_remote_image_fetcher(->(_url) { image }) do
+      error = assert_raises(Presentations::PptxExport::Error) do
+        Presentations::PptxExport.new(presentation).as_json
+      end
+      assert_match(/10 MB/, error.message)
+    end
+  end
+
+  test "rejects aggregate embedded images over the 30 MB export limit" do
+    markdown_images = 4.times.map { |index| "![Image #{index}](https://assets.example.org/image-#{index}.png)" }.join("\n\n")
+    presentation = Presentation.new(title: "Large image set", source: "# Images\n\n#{markdown_images}")
+    image = Presentations::PptxExport::RemoteImageFetcher::Image.new("x".b * 8.megabytes, "image/png")
+
+    with_remote_image_fetcher(->(_url) { image }) do
+      error = assert_raises(Presentations::PptxExport::Error) do
+        Presentations::PptxExport.new(presentation).as_json
+      end
+      assert_match(/30 MB/, error.message)
+    end
+  end
+
+  test "rejects a remote response with an unsupported content type" do
+    presentation = Presentation.new(title: "Remote HTML", source: "# Image\n\n![Remote](https://assets.example.org/image.png)")
+    response = Presentations::PptxExport::RemoteImageFetcher::Image.new("<html>not an image</html>", "text/html")
+
+    with_remote_image_fetcher(->(_url) { response }) do
+      error = assert_raises(Presentations::PptxExport::Error) do
+        Presentations::PptxExport.new(presentation).as_json
+      end
+      assert_match(/unsupported image format/, error.message)
+    end
+  end
+
+  test "generates a safe PPTX filename from a title with reserved path characters" do
+    presentation = Presentation.new(title: "  Quarterly / Forecast?  ", source: "# Forecast")
+
+    assert_equal "Quarterly Forecast.pptx", Presentations::PptxExport.new(presentation).as_json.fetch(:filename)
+  end
+
   test "preserves positions for extracted column titles in the PPTX model" do
     presentation = Presentation.new(title: "Positioned title", source: <<~MARKDOWN)
       :::align{top right}
@@ -102,12 +146,12 @@ class PresentationsPptxExportTest < ActiveSupport::TestCase
     assert_raises(Presentations::PptxExport::Error) { fetcher.fetch("http://127.0.0.1/private.png") }
     assert_raises(Presentations::PptxExport::Error) { fetcher.fetch("https://example.org:8443/image.png") }
     assert_raises(Presentations::PptxExport::Error) { fetcher.fetch("https://user:pass@example.org/image.png") }
-    assert fetcher.send(:blocked_address?, IPAddr.new("127.0.0.1"))
-    assert fetcher.send(:blocked_address?, IPAddr.new("10.1.2.3"))
-    assert fetcher.send(:blocked_address?, IPAddr.new("::1"))
-    assert fetcher.send(:blocked_address?, IPAddr.new("64:ff9b::7f00:1"))
-    assert fetcher.send(:blocked_address?, IPAddr.new("2002:7f00:1::"))
-    assert_not fetcher.send(:blocked_address?, IPAddr.new("8.8.8.8"))
+    assert fetcher.blocked_address?(IPAddr.new("127.0.0.1"))
+    assert fetcher.blocked_address?(IPAddr.new("10.1.2.3"))
+    assert fetcher.blocked_address?(IPAddr.new("::1"))
+    assert fetcher.blocked_address?(IPAddr.new("64:ff9b::7f00:1"))
+    assert fetcher.blocked_address?(IPAddr.new("2002:7f00:1::"))
+    assert_not fetcher.blocked_address?(IPAddr.new("8.8.8.8"))
   end
 
   private

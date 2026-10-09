@@ -563,6 +563,17 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "# One\n---\n# Two", presentation.source
   end
 
+  test "start creates a default presentation and redirects to its editor" do
+    assert_difference("Presentation.count", 1) do
+      post start_presentations_path
+    end
+
+    presentation = Presentation.order(:id).last
+    assert_redirected_to edit_presentation_path(presentation)
+    assert_equal "New presentation started.", flash[:notice]
+    assert_equal Presentation::DEFAULT_SOURCE, presentation.source
+  end
+
   test "updates source only on explicit save request" do
     presentation = presentations(:one)
 

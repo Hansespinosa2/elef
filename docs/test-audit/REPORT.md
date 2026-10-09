@@ -214,6 +214,29 @@ The presentation print system test was renamed to `published presentation print 
 
 The full system suite, full desktop E2E harness, macOS-native leg, and CI after-change metrics were not rerun in this partial phase. The static component runner was exercised directly; the full `run.mjs` path was not run locally because the E2E harness would compete for the existing development server's port 3000.
 
+## Phase 4: security and correctness coverage (partial)
+
+### Coverage added
+
+| Area | Change |
+| --- | --- |
+| Remote image SSRF boundary | `RemoteImageFetcher` accepts an address resolver and HTTP factory at construction; its production class method still uses the system resolver and `Net::HTTP`. A new service test drives the real URL validation, DNS classification, redirect recursion, and vetted-address pinning with controlled resolver results and an in-memory HTTP transport. It covers a private redirect destination, a public-to-private DNS change on the second lookup, decimal and hexadecimal loopback host forms, IPv4-mapped IPv6 loopback, rejected schemes/ports/credentials, non-HTTPS redirects, a safe HTTPS redirect, and the redirect-count limit. No DNS lookup or network connection occurs in these tests. |
+| PPTX remote image limits and responses | Added service cases for the 10 MB per-image limit, 30 MB aggregate limit, unsupported remote content type, and title-based safe filename generation. |
+| GitHub issue URL and API behavior | `GithubIssueCreator` tests now cover the HTTPS/host/repository path allowlist, 401/404/500/503 mappings, and both timeout and socket-error fallback messages. |
+| Shared editor data projection | Added a helper test that captures the `editor_preview` call and checks the source/title overrides, presentation mode/id, theme/typography, margin flags, media resolver, remote-media policy, and same-workspace linkable documents/aliases. |
+| New-work endpoints | Added request tests for `POST /documents/start` and `POST /presentations/start`, including record creation, redirect target, notice, and default source. |
+
+### Phase 4 validation and mutation evidence
+
+| Command / check | Result |
+| --- | --- |
+| Focused Rails controllers, helper, GitHub issue, PPTX export, and remote image fetcher suites on disposable SQLite | 110 tests, 1,171 assertions, passed |
+| Manual mutant: private-address filter always returns false | Detected by the redirect-to-private and alternate-IP assertions. |
+| Manual mutant: protocol/port/userinfo guard removed | Detected by the disallowed URL test before any real network access. |
+| Manual mutant: vetted `ipaddr` assignment removed | Detected by direct and redirect tests that assert the selected public address is pinned into the HTTP client. |
+
+The new fetcher seam is only used by focused unit tests; the default production path remains `Addrinfo.getaddrinfo` followed by a `Net::HTTP` connection pinned to the checked address. This phase remains incomplete; archive import, updater, IPC permissions, document persistence, release staleness/fork branches, FolderSync cleanup, renderer fallback, bug-report environment matrix/429 UI, and the other listed gaps remain open.
+
 ## Maintainer approval required before workflow changes
 
 No workflow definition or authorization behavior has been changed. Before changing required workflow commands, triggers, or gates, I will present the concrete change set for approval. Decisions needed before merge are:

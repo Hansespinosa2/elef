@@ -69,6 +69,17 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
     assert_response :created
   end
 
+  test "start creates a default document and redirects to its editor" do
+    assert_difference("Document.count", 1) do
+      post start_documents_path
+    end
+
+    document = Document.order(:id).last
+    assert_redirected_to edit_document_path(document)
+    assert_equal "New document started.", flash[:notice]
+    assert_match(/\A# Untitled document(?: \d+)?\z/, document.source)
+  end
+
   test "editor projections resolve document links through the shared renderer" do
     source = Document.create!(source: "# Source notes\n\n[[Target notes]]")
     target = Document.create!(title: "Target notes", source: "# Target notes")
