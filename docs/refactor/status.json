@@ -2,13 +2,13 @@
   "campaign_version": 9,
   "campaign_branch": "feat/refactor-desktop-and-web",
   "campaign_base_sha": "88f61a7a8ffd7c276bafcf06eee09c36a8adf134",
-  "current_phase": 6,
-  "phase_state": "PASS",
-  "phase_base_sha": "dff371c49ced594eb228123ec0d28cd753007f6e",
-  "head_sha": "1c043b67f6b2b17d4f3b1409d1ce22a5fab3d477",
-  "review_round": 1,
-  "phase_contract_sha256": "b1d5bf64b406f60d80f745606da3c73ffc504c09f83eaa53a1bb2f796c374bd9",
-  "frozen_plan_sha256": "39a9e889d813071c2e9a596f0b7e67b72c6ed57bd28aa6e41530e19e37c19ab1",
+  "current_phase": 7,
+  "phase_state": "PLAN",
+  "phase_base_sha": "873904da32953b513b89b073b331ce692c84cb0a",
+  "head_sha": "873904da32953b513b89b073b331ce692c84cb0a",
+  "review_round": 0,
+  "phase_contract_sha256": "59bdd29ab5b49e6f8e8e59472c9dbc3686feef6a16a40dfe74e635795f4f4f86",
+  "frozen_plan_sha256": null,
   "last_completed_phase": 6,
   "last_verified_checks": [
     {
@@ -287,5 +287,5 @@
   },
   "pending_human_gates": [],
   "blocker": null,
-  "next_action": "Phase 06 PASS: work links and graph complete (round-1 review PASS, Stimulus graph retired). Open Phase 07 PLAN."
+  "next_action": "Phase 07 PLAN: open presentation and product export (plan drafted, unfrozen); freeze before DO production edits."
 }
