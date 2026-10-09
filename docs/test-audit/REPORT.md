@@ -334,6 +334,22 @@ The full system suite, full desktop E2E harness, macOS-native leg, and CI after-
 
 The new fetcher seam is only used by focused unit tests; the default production path remains `Addrinfo.getaddrinfo` followed by a `Net::HTTP` connection pinned to the checked address. Archive import path/manifest/size guards, native interrupted-save reopening, updater version/install locking, production-capability IPC checks, Ruby renderer fallback, work-package request paths, release source/title/asset/renderer staleness, dirty-parent/self-fork validation, folder-sync cleanup, legacy release import, bug-report environment classification, the 429 UI, and explicit host media policies now have the coverage described above. The native IPC test uses Tauri's `MockRuntime` with production capability data; Linux Wry/WebKit and macOS native WebView execution still require CI. Artifact-level PPTX validation, the updater activation/backup safeguards, and stale-presentation autosave conflict handling were already covered at the audit commit and remain covered. Remaining Phase 4 work includes offline guarantees on each OS, full host execution of the policy scenario after the workflow changes, and the still-uncovered editor, service, and host-specific behavior listed in the original inventory.
 
+## Phase 6: local repeat validation
+
+Each locally runnable suite below completed three consecutive runs after the final test changes. The system tier ran serially with `PARALLEL_WORKERS=1`, headless Chromium, and a dedicated SQLite test database. No failures, errors, skips, or new flakes appeared in these three local repetitions. This is a small stability sample, not a statistical flake-rate estimate.
+
+| Suite | Three-run result | Local elapsed times |
+| --- | --- | --- |
+| Rails system tests (`test/system`) | 227 tests and 6,205 assertions passed on every run; 0 failures/errors/skips. The baseline had 241 system tests before the verified demotions. | 347.47s, 327.95s, 332.55s |
+| Rails non-system tests (`bin/rails test`) | 391 tests and 3,167 assertions passed on every run; 0 failures/errors/skips. | 4.11s, 3.73s, 4.13s |
+| Rails-owned JavaScript (`npm run test:javascript`) | 446 tests passed on every run. | 1.68s, 1.70s, 1.72s |
+| Rust workspace (`cargo test --manifest-path desktop/Cargo.toml --workspace --locked`) | 43 `elef-core` plus 7 desktop library tests passed on every run. | Core test execution: 2.28s, 2.26s, 2.39s |
+| Desktop frontend adapters (`npm test --prefix desktop/frontend`) | 26 tests passed on every run. | 0.32s, 0.33s, 0.40s |
+| E2E harness unit tests (`npm run test:unit --prefix desktop/e2e`) | 15 tests passed on every run, including host media policy cases. | All three invocations passed. |
+| Standalone Chromium components (`npm run test:components --prefix desktop/e2e`) | 4 tests passed on every run without Rails or a database. | 1.8s, 1.6s, 1.7s |
+
+These are local Linux timings and cannot be compared directly to the hosted PR workflow. The workflow changes have not run on GitHub, so there is no post-change CI wall-time, p95, runner-minute, retry, or attestation result. The macOS native WebView and offline leg were not executable on this host. The full desktop harness was not run because the repository instructions prohibit competing with the existing development server on port 3000.
+
 ## Maintainer approval decisions
 
 The maintainer approved the following workflow decisions in this session, and those changes are implemented with job names and required check membership preserved:
@@ -348,5 +364,6 @@ No removal of the `ELEF_RENDERER=ruby` path is proposed; it remains live code an
 
 - Remaining Phase 3 runtime work: shared system-test projection caching, reducing the 84-presentation geometry fixture, splitting the repeated root visits, worker isolation/parallelism experiments, and artifact reuse.
 - The changed GitHub workflows have not executed yet. Local contract tests verify their job names, invocation ownership, required job manifest, attestation policy, and schedule placement, but only CI can validate hosted runner installation and native execution.
-- Phase 4 security/correctness coverage, Phase 5 security mutation campaigns, and Phase 6 repeated-run/CI measurements remain incomplete.
-- No post-change timing comparison, three-run stability check, or final PR CI result exists yet. The acceptance targets are therefore not claimed.
+- Phase 4 still has the offline guarantee on every OS and several editor/service gaps from the original inventory. The new hostile-media policy assertions passed as unit tests, but the actual web/native host scenarios require a hosted E2E run.
+- Phase 5 mutations were detected for SSRF address/protocol/pinning decisions, remote-origin IPC, updater version matching, archive filename validation, GitHub issue URL hostname validation, bug-report 429 handling, and both external-media host policies. The full security mutation campaign is incomplete; unmutated trust-boundary branches remain open work.
+- Phase 6 repeated local checks passed as listed above. The changed hosted workflow, exact required-job attestations on the new tree, macOS native behavior, post-change CI p95/runner-minutes, and the performance acceptance targets remain unverified. The 20% wall-time and 25% runner-minute goals are not claimed.
