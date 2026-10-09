@@ -74,7 +74,12 @@ shared_library_sources = [
     (REPO_ROOT / "packages" / "client" / "src" / "features" / "library" / name).read_text()
     for name in ("LibraryApp.tsx", "LibraryCard.tsx")
 ]
-shared_library_sources.append((REPO_ROOT / "app" / "javascript" / "lib" / "document_graph_view.js").read_text())
+shared_library_sources.append(
+    (REPO_ROOT / "packages" / "client" / "src" / "features" / "graph" / "graphView.ts").read_text()
+)
+shared_library_sources.append(
+    (REPO_ROOT / "packages" / "client" / "src" / "features" / "graph" / "graphController.ts").read_text()
+)
 assert 'import "../../../app/assets/stylesheets/application.css"' in desktop_main, "desktop must bundle Rails rendering and authoring styles"
 assert 'lib/performance_measurement' in desktop_application, "desktop performance UI must reuse the Rails-owned browser measurement helper"
 assert (REPO_ROOT / "desktop" / "frontend" / "src" / "performance-measurement.js").exists() is False, "desktop must not own a second performance measurement helper"
@@ -82,6 +87,12 @@ assert not re.search(r"^\.(?:slide-frame|slide-content|presentation-surface|docu
 shared_library_classes = set()
 for source in shared_library_sources:
     for class_list in re.findall(r"\bclass(?:Name)?\s*=\s*['\"]([^'\"]*)['\"]", source):
+        shared_library_classes.update(class_list.split())
+    # The client graph view builds DOM through element()/svgElement() helpers
+    # rather than JSX: element(document, "tag", "classes") and class: "...".
+    for class_list in re.findall(r"\belement\(\s*document\s*,\s*\"[^\"]*\"\s*,\s*\"([^\"]*)\"", source):
+        shared_library_classes.update(class_list.split())
+    for class_list in re.findall(r"(?m)^\s*class:\s*\"([^\"]+)\"", source):
         shared_library_classes.update(class_list.split())
     for arguments in re.findall(r"classList\.(?:add|remove|toggle)\(([^)]*)\)", source):
         for class_list in re.findall(r"['\"]([^'\"]+)['\"]", arguments):
@@ -143,8 +154,8 @@ for shared_selector in (
 web_shell = (REPO_ROOT / "app" / "views" / "library" / "shell.html.erb").read_text()
 web_controller = (REPO_ROOT / "app" / "javascript" / "controllers" / "client_shell_controller.js").read_text()
 client_index = (REPO_ROOT / "packages" / "client" / "src" / "index.ts").read_text()
-graph_view = (REPO_ROOT / "app" / "javascript" / "lib" / "document_graph_view.js").read_text()
-graph_controller = (REPO_ROOT / "app" / "javascript" / "controllers" / "document_graph_controller.js").read_text()
+graph_view = (REPO_ROOT / "packages" / "client" / "src" / "features" / "graph" / "graphView.ts").read_text()
+graph_controller = (REPO_ROOT / "packages" / "client" / "src" / "features" / "graph" / "graphController.ts").read_text()
 graph_partial = (REPO_ROOT / "app" / "views" / "presentations" / "_document_graph.html.erb").read_text()
 assert "export { mountElef }" in client_index, "the shared client must expose a single mount entry point"
 assert '"@elef/client"' in web_controller and "mountElef" in web_controller, "Rails must mount library UI through the shared client entry"
@@ -155,8 +166,11 @@ assert "<article" not in desktop_application and 'createElement("article")' not 
 assert "renderLibraryCard" not in desktop_application and "renderLibraryCard" not in web_controller, "both hosts must use the client mount, not the retired card renderer"
 for retired in ("app/javascript/lib/library_view.js", "app/javascript/lib/library_card.js", "app/views/library/_work_card.html.erb"):
     assert not (REPO_ROOT / retired).exists(), f"retired library implementation must stay deleted: {retired}"
-assert "renderDocumentGraphView" in graph_controller and "renderDocumentGraphView" in graph_view, "both hosts must use the shared document graph view"
+assert "renderGraphView" in graph_view and "GraphController" in graph_controller, "the shared client must own graph rendering and interaction"
+assert "renderGraphView" in desktop_application and "GraphController" in desktop_application, "desktop must render the graph through the shared client module"
+assert "renderGraphView" in web_controller and "GraphController" in web_controller, "Rails must render the graph through the shared client module"
 assert "document-graph-node" not in graph_partial, "Rails must not keep a second document graph node template"
+assert 'data-controller="document-graph"' not in graph_partial, "Rails must not keep the retired Stimulus graph mount"
 assert "createElementNS" not in desktop_application and "document-graph-node" not in desktop_application, "desktop must not keep a second document graph node template"
 
 declared = command_names(build_source, r"let app_commands = &\[(.*?)\];")
