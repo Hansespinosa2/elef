@@ -376,6 +376,16 @@ These are local Linux timings and cannot be compared directly to the hosted PR w
 
 Before the two-worker diagnostic, I checked shared databases, files, service state, editor state, and ports. Rails supplies a separate test database to each worker; `Presentations::FolderSync` already uses `Process.pid`; ActiveStorage disk keys are unique; each Capybara server selected its own ephemeral port; and Rails service/controller state is process-local. The concrete collision was `MediaPdfExportTest` writing `tmp/pdfs/origin-screen.png` and fixed PDF probe names. Both paths now include the worker PID. Three two-worker local system runs passed after this change. The Linux CI job remains at `PARALLEL_WORKERS=1`: local results show a wall-time gain, but the requested repeated hosted CI evidence is unavailable, and parallelism does not reduce total runner compute.
 
+## Commit map
+
+- **Phase 0:** `8298ff5` records the audited baseline metrics and inventory.
+- **Phase 1:** `dba6a44` removes verified repeated PR test invocations while preserving required jobs.
+- **Phase 2:** `18063aa` corrects vacuous and overclaimed assertions; `0a845c1` removes a transient upload-status race while retaining final-state checks.
+- **Phase 3:** `777c20b` moves browser assertions to cheaper layers; `efb091e` demotes folder checks and replaces fixed autosave sleeps; `3d4bde2` reduces a large geometry fixture; `5b2422c` namespaces shared PDF artifacts; `4ace9f0` splits the multi-claim library-card system test.
+- **Phase 4:** `1836c06` covers SSRF boundaries; `cf024aa` covers archive and updater guards; `2fa433f` adds Rails and native persistence coverage; `e294505` makes host media policy explicit; `16b32d4` verifies source/visual persistence parity; `3b3b437` and `747a68d` add controller logic tests.
+- **Phase 5:** `93717e4` and `6ffb4c8` correct verified claims and record mutation results and open checks.
+- **Phase 6:** `c2622f1` records repeated local results; `8777f28` records remaining audit gaps. Later system-test runs after `4ace9f0` are included in `6ffb4c8`'s report updates.
+
 ## Maintainer approval decisions
 
 The maintainer approved the following workflow decisions in this session, and those changes are implemented with job names and required check membership preserved:
