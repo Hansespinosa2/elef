@@ -93,9 +93,13 @@ pacman -Qkk elef-bin
 for required_file in /usr/bin/elef /usr/share/applications/elef.desktop /usr/share/icons/hicolor/512x512/apps/elef.png /usr/share/mime/packages/elef.xml /usr/share/licenses/elef-bin/LICENSE; do
   test -f "$required_file"
 done
-pacman -Qlq elef-bin | while IFS= read -r package_file; do
-  if [[ -f "$package_file" ]]; then sha256sum "$package_file"; fi
-done > "${temporary_root}/package-files-before-launch.sha256"
+hash_package_owned_files() {
+  local output_file="$1"
+  pacman -Qlq elef-bin | while IFS= read -r package_file; do
+    if [[ -f "$package_file" ]]; then sha256sum "$package_file"; fi
+  done > "$output_file"
+}
+hash_package_owned_files "${temporary_root}/package-files-before-launch.sha256"
 
 run_native_smoke() {
   local label="$1"
@@ -139,9 +143,7 @@ run_native_smoke() {
 }
 
 run_native_smoke install
-pacman -Qlq elef-bin | while IFS= read -r package_file; do
-  if [[ -f "$package_file" ]]; then sha256sum "$package_file"; fi
-done > "${temporary_root}/package-files-after-launch.sha256"
+hash_package_owned_files "${temporary_root}/package-files-after-launch.sha256"
 diff -u "${temporary_root}/package-files-before-launch.sha256" "${temporary_root}/package-files-after-launch.sha256"
 
 # Exercise an Arch package-manager upgrade without changing the tested binary.
@@ -159,6 +161,9 @@ pacman -U --noconfirm "$package_v2"
 test "$(pacman -Q elef-bin | awk '{print $2}')" = "${version}-2"
 pacman -Qkk elef-bin
 run_native_smoke upgrade
+pacman -Qkk elef-bin
+hash_package_owned_files "${temporary_root}/package-files-after-upgrade-launch.sha256"
+diff -u "${temporary_root}/package-files-before-launch.sha256" "${temporary_root}/package-files-after-upgrade-launch.sha256"
 
 pacman -Rns --noconfirm elef-bin
 test ! -e /usr/bin/elef

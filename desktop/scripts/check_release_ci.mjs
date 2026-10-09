@@ -96,6 +96,9 @@ assert.ok(archPackageJob.includes(archBuildImage), "the Arch base container must
 assert.match(archPackageJob, /desktop\/scripts\/arch_package_ci\.sh/, "the Arch build/install/upgrade gate must run from its checked-in script")
 const archPackageScript = await readFile(path.join(repoRoot, "desktop/scripts/arch_package_ci.sh"), "utf8")
 assert.match(archPackageScript, /rust_toolchain_version="1\.98\.0"/, "the Arch native build must pin its Rust toolchain")
+const archPackageSmoke = await readFile(path.join(repoRoot, "desktop/scripts/test_arch_package.sh"), "utf8")
+assert.match(archPackageSmoke, /hash_package_owned_files/, "Arch smoke must hash package-managed files around app launches")
+assert.match(archPackageSmoke, /run_native_smoke upgrade\s+pacman -Qkk elef-bin\s+hash_package_owned_files .*after-upgrade-launch\.sha256/, "Arch smoke must verify managed files after the package-manager upgrade and relaunch")
 
 const prepareReleases = jobBlock(releaseWorkflow, "prepare-releases")
 assert.match(prepareReleases, /prepare_desktop_releases\.mjs pages/, "approved reservations must create their source-pinned tag and draft release")
