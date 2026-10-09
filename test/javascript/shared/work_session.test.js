@@ -125,6 +125,43 @@ test("work session carries identity and disposal state", async () => {
   second.session.dispose()
 })
 
+test("same-tick replacements keep the first writer and drop the stale one", async () => {
+  let collisionText = "old"
+  const { session } = setup({
+    policy: {
+      getText: () => collisionText,
+      // Async application like the real adapter: both replacements read
+      // "old" before either applies, so the second arrives stale.
+      setText: async (value, meta) => {
+        await Promise.resolve()
+        if (meta.expectedSource !== collisionText) return false
+        collisionText = value
+        return true
+      }
+    }
+  })
+  void session.replaceText("first")
+  await assert.rejects(session.replaceText("second"))
+  await flush()
+  assert.equal(collisionText, "first")
+  session.dispose()
+})
+
+test("a save that outlives its session fails cancelled without moving the baseline", async () => {
+  const { session, state } = setup()
+  let release
+  const gate = new Promise(resolve => { release = resolve })
+  state.saveImpl = () => gate
+  await session.replaceText("pending")
+  const flushing = session.flush({ force: true })
+  session.dispose()
+  release({ content_hash: "whatever" })
+  assert.deepEqual(await flushing, {
+    kind: "failed",
+    error: { category: "cancelled", message: "Session is disposed.", retryable: false }
+  })
+})
+
 test("work session exposes the contract surface and starts clean", async () => {
   const { session, statuses } = setup()
   assert.equal(session.workId, "deck-1")
