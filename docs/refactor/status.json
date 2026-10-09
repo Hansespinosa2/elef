@@ -294,6 +294,6 @@
  "pending_human_gates": [],
  "phase_base_sha": "c5456e79e4007f70ab41b9877baabe4bd51aa4a1",
  "phase_contract_sha256": "da19b3dbe4512ffc8c94cb46c51fbb3767bab21a7c0a21f9d113bcc425d74490",
- "phase_state": "PLAN",
+ "phase_state": "DO",
  "review_round": 0
 }
