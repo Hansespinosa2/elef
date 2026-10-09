@@ -8,10 +8,9 @@
 /apps/web/.bundle
 
 # Ignore all environment files.
+# Live secrets live at the repo root (.env.personal / .env.development, see
+# ops/*-instance); the tracked examples live at ops/.env.*.example.
 /.env*
-!.env.example
-!.env.personal.example
-!.env.development.example
 
 # Personal instance backup bundles can contain the complete database and files.
 /backups/
@@ -31,20 +30,20 @@
 # Ignore all logfiles and tempfiles.
 /apps/web/log/*
 /apps/web/tmp/*
-!/log/.keep
-!/tmp/.keep
+!/apps/web/log/.keep
+!/apps/web/tmp/.keep
 
 # Ignore pidfiles, but keep the directory.
 /apps/web/tmp/pids/*
-!/tmp/pids/
-!/tmp/pids/.keep
+!/apps/web/tmp/pids/
+!/apps/web/tmp/pids/.keep
 
 # Ignore storage (uploaded files in development and any SQLite databases).
 /apps/web/storage/*
-!/storage/.keep
+!/apps/web/storage/.keep
 /apps/web/tmp/storage/*
-!/tmp/storage/
-!/tmp/storage/.keep
+!/apps/web/tmp/storage/
+!/apps/web/tmp/storage/.keep
 
 /apps/web/public/assets
 
@@ -53,5 +52,5 @@
 
 /docs/notes/*
 /apps/web/app/assets/builds/*
-!/app/assets/builds/.keep
-!/app/assets/builds/tailwind.css
+!/apps/web/app/assets/builds/.keep
+!/apps/web/app/assets/builds/tailwind.css

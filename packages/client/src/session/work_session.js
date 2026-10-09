@@ -1,7 +1,7 @@
 // Shared work-session factory over createSaveFlow, implementing the
 // contracts WorkSession surface (packages/contracts/src/session.ts).
 //
-// Client-owned since Phase 08 (moved from app/javascript/lib/). It is
+// Client-owned since Phase 08 (moved from apps/web/app/javascript/lib/). It is
 // host-agnostic: the host supplies a transport (persistence IPC) and a
 // policy (editor bindings, timing, callbacks). No host branches are
 // allowed here.

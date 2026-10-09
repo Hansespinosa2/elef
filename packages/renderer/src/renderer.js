@@ -344,7 +344,7 @@ function renderPresentation(source, slides, style, margin, env, chrome) {
 
 // Default chrome: plain structural wrappers with no editor controls, host
 // framework hooks or editing affordances. Hosts compose richer chrome (see
-// app/javascript/lib/preview_chrome.js) through the `chrome` option.
+// apps/web/app/javascript/lib/preview_chrome.js) through the `chrome` option.
 const bareChrome = {
   imageAttributes: () => "",
   mathAttributes: () => "",

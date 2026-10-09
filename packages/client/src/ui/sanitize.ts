@@ -1,7 +1,7 @@
 // Client-owned HTML sanitizer for renderer output: the implementation behind
 // the SafeHtml insertion boundary. Faithful port of the retired
-// app/javascript lib (parity-proven by the shared
-// test/javascript/shared/preview_sanitizer_cases.js corpus, executed against
+// apps/web/app/javascript lib (parity-proven by the shared
+// apps/web/test/javascript/shared/preview_sanitizer_cases.js corpus, executed against
 // this implementation through the host-side re-export); the only deliberate
 // difference is that mediaBaseUrl is an explicit option — the old host-form
 // dataset fallback stays with the host-side re-export until the editor

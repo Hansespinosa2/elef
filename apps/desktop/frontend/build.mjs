@@ -68,7 +68,7 @@ const appSourceAlias = {
       const resolved = result.path
       const relativeDependency = path.relative(path.join(frontendRoot, "node_modules"), resolved)
       if (relativeDependency.startsWith("..") || path.isAbsolute(relativeDependency)) {
-        throw new Error(`Rails-owned frontend dependency ${args.path} must be declared by desktop/frontend/package.json.`)
+        throw new Error(`Rails-owned frontend dependency ${args.path} must be declared by apps/desktop/frontend/package.json.`)
       }
       return { path: resolved }
     })

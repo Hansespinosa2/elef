@@ -14,7 +14,7 @@
   "swap_mb": 0,
   "tauri_native_runner": "available"
  },
- "frozen_plan_sha256": "57c832606365271867f850b40a74dd297704c2a0b8069cd745f7587b1c14ce57",
+ "frozen_plan_sha256": "78610dceea9b1c43cdec41629491aae0cfaf82ae5d79ba57c5a8c6a995752483",
  "head_sha": "a08832a3efcaa949deefc7c713f8787e67d09179",
  "last_completed_phase": 10,
  "last_verified_checks": [
@@ -366,8 +366,8 @@
    "selected_gate_path": "docs/refactor/execution/phase-10-gate.json"
   }
  ],
- "next_action": "Phase 11 DO: move Rails tree to apps/web (DO-1).",
- "pending_human_gates": [],
+ "next_action": "Phase 11 CHECK prep: candidate battery, phase-11-ci-evidence.json, prepare-gate.",
+ "pending_human_gates": ["H4: owner-verified live Mac mini web deployment after host rehome (recorded pending per P11-06; blocks release-ready)"],
  "phase_base_sha": "a08832a3efcaa949deefc7c713f8787e67d09179",
  "phase_contract_sha256": "31fb70214fd26b21ea570ac79b5a14e38cda21ef479d95c3cb645b16c5f313c9",
  "phase_state": "DO",

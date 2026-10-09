@@ -3,7 +3,7 @@
 // PptxGenJS slides) is pure client logic, while model fetching (web-host
 // JSON endpoint, draft form posts) and the download button/status stay
 // host-owned in the web export adapter. PPTX byte output must not drift; see
-// test/system/pptx_export_test.rb and the engine unit tests.
+// apps/web/test/system/pptx_export_test.rb and the engine unit tests.
 
 const PX_PER_INCH = 96
 const REMOTE_FONT_FALLBACK = "Arial"

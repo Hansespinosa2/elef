@@ -167,7 +167,7 @@ assert not missing_shared_alias_pins, (
     "Every shared Elef module alias must be pinned in the Rails importmap: "
     + ", ".join(missing_shared_alias_pins)
 )
-# renderer_global.js is the esbuild bundle entry (script/build_renderer.mjs), never
+# renderer_global.js is the esbuild bundle entry (apps/web/script/build_renderer.mjs), never
 # served through the importmap, so its package imports resolve via node_modules.
 BUNDLED_ONLY = {app_frontend / "lib/renderer_global.js"}
 frontend_package_imports = {

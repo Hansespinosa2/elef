@@ -1,6 +1,6 @@
 // Presentation chrome for the shared renderer: slide shells, toolbars and
 // controls wrapped around @elef/renderer projection output. Moved from
-// app/javascript/lib/preview_chrome.js (which keeps the document-editor
+// apps/web/app/javascript/lib/preview_chrome.js (which keeps the document-editor
 // chrome for Phase 09). Hook attributes are host-neutral contracts:
 // behavior binds through `data-editor-action` / `data-client-mount` (see
 // lib/editor_actions.js and lib/client_mounts.js); the client feature

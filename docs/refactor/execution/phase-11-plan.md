@@ -162,3 +162,4 @@ gates 1–3, 5 remain pending as before (not triggered by this phase).
 
 ## 9. Re-plan log
 <!-- Append dated entries: defect found, what changed, new hash. Never rewrite earlier sections silently. -->
+- 2026-10-09: §2 manifest abbreviated the release verifier as `scripts/verify-deployment-ref`; the live pre-existing name is `scripts/verify-deployment-authorization` (moved intact to `tooling/release/verify-deployment-authorization`, referenced by `.github/workflows/ci.yml`). No scope change; the DO-11 gate asserts the live name. New plan hash recorded in status.json.
