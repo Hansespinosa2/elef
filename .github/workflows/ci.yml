@@ -208,7 +208,7 @@ jobs:
           PGTESTDATABASE: elef_test
           ELEF_CONFORMANCE_RAILS_URL: http://127.0.0.1:3101
         run: |
-          apps/web/bin/rails server -e test -p 3101 -b 127.0.0.1 -P apps/web/tmp/pids/conformance-server.pid &
+          apps/web/bin/rails server -e test -p 3101 -b 127.0.0.1 -P tmp/pids/conformance-server.pid &
           for attempt in $(seq 1 60); do
             curl --silent --output /dev/null http://127.0.0.1:3101/ && break
             sleep 2
