@@ -47,5 +47,9 @@ test("router rejects non-work paths", () => {
   assert.equal(parseWorkRoute("/documents/12/edit/extra"), null);
   assert.equal(parseWorkRoute("/settings"), null);
   assert.equal(parseWorkRoute("::::"), null);
+  // Trailing slashes resolve to the same route (the router strips them).
+  assert.deepEqual(parseWorkRoute("/documents/12/"), { kind: "document", id: "12", view: "show" });
+  assert.deepEqual(parseWorkRoute("/presentations/7/edit/"), { kind: "presentation", id: "7", view: "edit" });
+  assert.deepEqual(parseWorkRoute("/documents/new/"), { kind: "document", id: null, view: "new" });
   assert.equal(isWorkRoute("/documents"), false);
 });
