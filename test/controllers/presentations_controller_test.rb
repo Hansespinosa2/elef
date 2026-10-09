@@ -371,25 +371,25 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
   test "PPTX editor actions expose draft and published exports" do
     presentation = presentations(:one)
     get edit_presentation_path(presentation)
-    assert_select '[data-controller="pptx-export"][data-pptx-export-url-value=?]', pptx_presentation_path(presentation, version: "draft") do
+    assert_select '[data-controller="pptx-export-host"][data-pptx-export-host-url-value=?]', pptx_presentation_path(presentation, version: "draft") do
       assert_select "button", text: "Download PPTX draft"
     end
 
     post publish_presentation_path(presentation)
     get edit_presentation_path(presentation)
-    assert_select '[data-controller="pptx-export"][data-pptx-export-url-value=?]', pptx_presentation_path(presentation, version: "published") do
+    assert_select '[data-controller="pptx-export-host"][data-pptx-export-host-url-value=?]', pptx_presentation_path(presentation, version: "published") do
       assert_select "button", text: "Download published PPTX"
     end
 
     get new_presentation_path
-    assert_select '[data-controller="pptx-export"][data-pptx-export-url-value=?][data-pptx-export-current-draft-value="true"]',
+    assert_select '[data-controller="pptx-export-host"][data-pptx-export-host-url-value=?][data-pptx-export-host-current-draft-value="true"]',
       pptx_presentations_path(version: "draft") do
       assert_select "button", text: "Download PPTX draft"
     end
-    assert_select '[data-pptx-export-library-url-value="/vendor/pptxgen.bundle.js"]'
+    assert_select '[data-pptx-export-host-library-url-value="/vendor/pptxgen.bundle.js"]'
 
     get new_presentation_path, headers: { "SCRIPT_NAME" => "/apps/elef/dev" }
-    assert_select '[data-pptx-export-library-url-value="/apps/elef/dev/vendor/pptxgen.bundle.js"]'
+    assert_select '[data-pptx-export-host-library-url-value="/apps/elef/dev/vendor/pptxgen.bundle.js"]'
   end
 
   test "previews an unsaved presentation without creating a record" do
