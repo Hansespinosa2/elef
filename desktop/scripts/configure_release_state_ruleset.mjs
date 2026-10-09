@@ -27,7 +27,7 @@ if (mode === "--apply") {
   ghJson(["api", "--method", method, endpoint, "--input", "-"], JSON.stringify(payload))
 }
 
-const current = ghJson(["api", `repos/${repository}/rulesets?per_page=100`])
+const current = mode === "--apply" ? ghJson(["api", `repos/${repository}/rulesets?per_page=100`]) : existing
 if (!Array.isArray(current)) throw new TypeError("GitHub returned an invalid ruleset list")
 const currentMatches = current.filter(rule => rule?.name === RELEASE_STATE_RULESET_NAME)
 if (currentMatches.length !== 1) throw new Error(`exactly one ${RELEASE_STATE_RULESET_NAME} ruleset must exist`)
