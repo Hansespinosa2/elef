@@ -100,6 +100,25 @@ class SourceBlockRendererTest < ActiveSupport::TestCase
     assert_equal ["br"], quote_lines.last.element_children.map(&:name)
   end
 
+  test "keeps a trailing list or quote marker editable when its source has no following space" do
+    [
+      ["# Heading\n\n- First item\n-", ".document-editor-block ul > li"],
+      ["# Heading\n\n> First line\n>", ".document-editor-block blockquote > p"]
+    ].each do |source, selector|
+      editor_map = Source::Document.editor_map(source, mode: :document)
+      html = Source::BlockRenderer.render(
+        source,
+        editable: true,
+        editor_map: editor_map,
+        documents: [],
+        workspace: Workspace.default
+      )
+      last_line = Nokogiri::HTML.fragment(html).css(selector).last
+
+      assert_equal ["br"], last_line.element_children.map(&:name), html
+    end
+  end
+
   test "annotates non-editable document blocks with source line anchors" do
     source = "---\ntheme: dark\n---\n# Title\n\nParagraph content.\n\n- List item"
     html = Source::BlockRenderer.render(
@@ -129,7 +148,7 @@ class SourceBlockRendererTest < ActiveSupport::TestCase
   end
 
   test "maps document position metadata to its content block in the editable preview" do
-    source = "# Alignment\n\nLeft block\n\n:::position{center}\n\nCentered block\n\n:::position{right}\n\nRight block"
+    source = "# Alignment\n\nLeft block\n\n:::align{center}\n\nCentered block\n\n:::align{right}\n\nRight block"
     editor_map = Source::Document.editor_map(source, mode: :document)
     slide = editor_map[:slides].first
     blocks = slide[:blocks].reject { |block| block[:empty_placeholder] }
@@ -138,7 +157,7 @@ class SourceBlockRendererTest < ActiveSupport::TestCase
 
     assert_equal [nil, "center", "right"], blocks.drop(1).map { |block| block.dig(:position, :horizontal) }
     assert_equal source.index("Centered block"), centered[:range][:start]
-    assert_equal source.index(":::position{center}"), centered_directive[:range][:start]
+    assert_equal source.index(":::align{center}"), centered_directive[:range][:start]
 
     html = Source::BlockRenderer.render(
       source,
@@ -155,8 +174,9 @@ class SourceBlockRendererTest < ActiveSupport::TestCase
 
     assert_includes centered_element["class"], "position-center"
     assert_equal "center", centered_control.at_css("option[selected]")["value"]
-    assert_equal "", left_control.at_css("option[selected]")["value"]
-    refute_includes html, ":::position"
+    assert_equal "left", left_control.at_css("option[selected]")["value"]
+    refute_includes html, "Automatic position"
+    refute_includes html, ":::align"
   end
 
   test "validates editable mapping boundary conditions" do
@@ -193,5 +213,29 @@ class SourceBlockRendererTest < ActiveSupport::TestCase
 
     assert_includes html, '<figure class="editor-media">'
     assert_includes html, '<figcaption class="editor-media-caption" aria-label="Editable image alt text" title="Edit image alt text">Alt text</figcaption>'
+  end
+
+  test "keeps Mermaid fences read-only and other fenced code editable" do
+    source = "```mermaid\nflowchart LR\n  A[Research] --> B[Design]\n```\n\n```ruby\nputs 'hi'\n```"
+
+    %i[document presentation].each do |mode|
+      editor_map = Source::Document.editor_map(source, mode: mode)
+      html = Source::BlockRenderer.render(
+        source,
+        editable: true,
+        editor_map: editor_map,
+        documents: [],
+        workspace: Workspace.default
+      )
+      blocks = Nokogiri::HTML.fragment(html).css(".document-editor-block, .slide")
+      mermaid_block = blocks.find { |block| block.at_css("pre.mermaid") }
+      ruby_block = blocks.find { |block| block.at_css("code.highlight") }
+
+      assert mermaid_block, "expected a Mermaid block in #{mode} mode"
+      assert_equal "false", mermaid_block["contenteditable"]
+      assert_equal "true", mermaid_block["aria-readonly"]
+      assert ruby_block, "expected a Ruby code block in #{mode} mode"
+      assert_equal "true", ruby_block["contenteditable"]
+    end
   end
 end

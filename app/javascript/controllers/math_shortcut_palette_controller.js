@@ -1,13 +1,17 @@
 import { Controller } from "@hotwired/stimulus"
-import { editorFor } from "controllers/editor_controller"
+import { editorFor } from "lib/editor_controller_lookup"
 import { application } from "controllers/application"
-import { insideMath, parseMathShorthand } from "controllers/math_shorthand_controller"
+import { editorInsideMath, expandMathShorthand, mathShorthandAtEditor, parseMathShorthand } from "controllers/math_shorthand_controller"
+import { authoringRegistryFor } from "controllers/authoring_registry"
+import { snippetStopsEffect } from "controllers/snippet_stops"
+
+export const MAX_PREVIEW_LENGTH = 48
 
 export default class extends Controller {
   static targets = ["editor", "palette"]
-  static values = { shortcuts: Array }
 
   connect() {
+    this.registry = authoringRegistryFor(this.element)
     this.matches = []
     this.selectedIndex = 0
     this.stops = []
@@ -18,6 +22,11 @@ export default class extends Controller {
       this.setupEditor()
     }
     this.element.addEventListener("elef:editor-ready", this.editorReady)
+    this.editorSelectionChange = () => this.scheduleStopPrune()
+    this.editorModeChange = () => this.endStops()
+    this.element.addEventListener("elef:editor-selection-change", this.editorSelectionChange)
+    this.editorForm = this.element.closest("form")
+    this.editorForm?.addEventListener("elef:editor-mode-change", this.editorModeChange)
     this.positionPalette = this.positionPalette.bind(this)
     this.setupEditor()
     window.addEventListener("resize", this.positionPalette)
@@ -30,6 +39,9 @@ export default class extends Controller {
       this.editorController.dom.removeEventListener("keydown", this.handleEditorKeydown, true)
     }
     this.element.removeEventListener("elef:editor-ready", this.editorReady)
+    this.element.removeEventListener("elef:editor-selection-change", this.editorSelectionChange)
+    this.editorForm?.removeEventListener("elef:editor-mode-change", this.editorModeChange)
+    this.endStops()
   }
 
   setupEditor() {
@@ -70,7 +82,29 @@ export default class extends Controller {
 
   input() {
     this.adjustStops()
+    this.scheduleStopPrune()
     this.schedule()
+  }
+
+  scheduleStopPrune() {
+    if (this.stopPruneScheduled) return
+    this.stopPruneScheduled = true
+    queueMicrotask(() => {
+      this.stopPruneScheduled = false
+      this.pruneStops()
+    })
+  }
+
+  pruneStops() {
+    if (!this.stops.length) return
+    const editor = this.editorController
+    if (!editor || editor.destroyed || editor.editingMode !== "source") return this.endStops()
+    const active = this.activeStop
+    if (!active) return this.endStops()
+    const from = editor.selectionStart
+    const to = editor.selectionEnd
+    if (from <= active.end && to >= active.start) return
+    this.endStops()
   }
 
   keydown(event) {
@@ -78,10 +112,15 @@ export default class extends Controller {
     if (event.key === "Escape" && !this.paletteTarget.hidden) {
       event.preventDefault()
       this.close()
+      if (this.stops.length) this.endStops()
       return
     }
     const editor = this.editorController
-    if (!editor?.insertMode) return
+    if (!editor || editor.editingMode !== "source" || !editor.insertMode) {
+      this.close()
+      if (this.stops.length) this.endStops()
+      return
+    }
 
     if (!this.paletteTarget.hidden) {
       const currentQuery = this.queryAtCaret()
@@ -97,6 +136,11 @@ export default class extends Controller {
       return
     }
 
+    if (this.paletteTarget.hidden) {
+      if (event.key === "Escape" && this.stops.length > 0) this.endStops()
+      this.scheduleStopPrune()
+    }
+
     if (["ArrowDown", "ArrowUp"].includes(event.key) && !this.paletteTarget.hidden) {
       event.preventDefault()
       this.move(event.key === "ArrowDown" ? 1 : -1)
@@ -108,21 +152,27 @@ export default class extends Controller {
       this.insertSelected()
       return
     }
-    queueMicrotask(() => this.refresh())
+    this.schedule()
   }
 
   schedule() {
-    queueMicrotask(() => this.refresh())
+    if (this.refreshScheduled) return
+    this.refreshScheduled = true
+    queueMicrotask(() => {
+      this.refreshScheduled = false
+      this.refresh()
+    })
   }
 
   refresh() {
     const query = this.queryAtCaret()
     if (!query) return this.close()
 
-    const singleLetterAlias = query.prefix === "@" && /^[A-Za-z]$/.test(query.text)
-    const matches = this.shortcutsValue
-      .filter((shortcut) => shortcut.prefix === query.prefix)
-      .filter((shortcut) => !singleLetterAlias || (shortcut.aliases || []).includes(query.text))
+    const singleCharacterAlias = query.prefix === "@" && query.text.length === 1
+    const matches = this.registry
+      .filter((shortcut) => shortcut.namespace === query.prefix)
+      .filter((shortcut) => query.prefix !== "." || (shortcut.built_in && shortcut.behavior?.operator_class))
+      .filter((shortcut) => !singleCharacterAlias || (shortcut.aliases || []).includes(query.text))
       .map((shortcut) => ({ shortcut, score: this.matchScore(shortcut, query.text) }))
       .filter(({ score }) => score !== null)
       .sort((left, right) => right.score - left.score || left.shortcut.name.localeCompare(right.shortcut.name))
@@ -139,27 +189,44 @@ export default class extends Controller {
 
   queryAtCaret() {
     const editor = this.editorController
-    if (!editor || editor.selectionStart !== editor.selectionEnd) return null
+    if (!editor || editor.editingMode !== "source" || editor.selectionStart !== editor.selectionEnd) return null
     const caret = editor.selectionStart
-    if (!insideMath(editor.value, caret)) return null
-    const before = editor.value.slice(0, caret)
-    const match = before.match(/([A-Za-z][A-Za-z0-9]*)?([.@])([A-Za-z0-9_-]*)$/)
+    const line = editor.view.state.doc.lineAt(caret)
+    const before = line.text.slice(0, caret - line.from)
+    const match = before.match(/([.@])([A-Za-z0-9_-]*|=)$/)
     if (!match) return null
+    if (!editorInsideMath(editor, caret)) return null
+
+    const prefix = match[1]
+    const separatorStart = match.index
+    let baseStart = separatorStart
+    const tokenCharacter = /[A-Za-z0-9.@\\{}()^-]/
+    while (baseStart > 0 && tokenCharacter.test(before[baseStart - 1])) baseStart -= 1
+    const candidateBase = before.slice(baseStart, separatorStart)
+    if (prefix === "." && !this.validModifierBase(candidateBase)) return null
 
     return {
-      prefix: match[2],
-      text: match[3],
-      start: match[2] === "." && match[1] ? match.index : match.index + (match[1]?.length || 0),
-      base: match[1] || "",
-      baseStart: match.index
+      prefix,
+      text: match[2],
+      start: line.from + (prefix === "." ? baseStart : separatorStart),
+      base: prefix === "." ? candidateBase : "",
+      baseStart: line.from + baseStart
     }
+  }
+
+  validModifierBase(candidate) {
+    if (!candidate) return false
+    const parsed = parseMathShorthand(candidate)
+    if (parsed) return parsed.status === "valid"
+    return parseMathShorthand(`${candidate}.t`)?.status === "valid"
   }
 
   validExactShorthandAtCaret() {
     const editor = this.editorController
     if (!editor) return false
 
-    const before = editor.value.slice(0, editor.selectionStart)
+    const line = editor.view.state.doc.lineAt(editor.selectionStart)
+    const before = line.text.slice(0, editor.selectionStart - line.from)
     const match = before.match(/([A-Za-z][A-Za-z0-9]*(?:\.[A-Za-z][A-Za-z0-9]*)+)$/)
     return !this.selectionMoved && Boolean(match && parseMathShorthand(match[1]))
   }
@@ -169,7 +236,7 @@ export default class extends Controller {
     if (!editor) return false
 
     const shorthand = application.getControllerForElementAndIdentifier(this.element, "math-shorthand")
-    return Boolean(shorthand?.hasRecognizedAppendedModifiers(editor, editor.selectionStart))
+    return Boolean(shorthand?.hasRecognizedAppendedModifiers(editor, editor.selectionStart) || mathShorthandAtEditor(editor, editor.selectionStart)?.status === "valid")
   }
 
   matchScore(shortcut, query) {
@@ -228,13 +295,13 @@ export default class extends Controller {
       const name = document.createElement("strong")
       name.className = "math-shortcut-name"
       name.textContent = shortcut.name
-      const latex = this.previewExpansion(shortcut, this.query)
+      const latex = this.expansionPreview(shortcut, this.query)
       const expansion = document.createElement("code")
       expansion.className = "math-shortcut-expansion"
-      expansion.textContent = latex
+      expansion.textContent = latex.text
 
-      option.setAttribute("aria-label", `${trigger.textContent} inserts ${latex}, ${shortcut.name}`)
-      option.title = shortcut.description || shortcut.name
+      option.setAttribute("aria-label", `${trigger.textContent} inserts ${latex.full}, ${shortcut.name}`)
+      option.title = `${shortcut.description || shortcut.name}: ${latex.full}`
       option.append(trigger, name, expansion)
       option.addEventListener("mousedown", (event) => {
         event.preventDefault()
@@ -249,16 +316,30 @@ export default class extends Controller {
   }
 
   triggerFor(shortcut, query) {
-    const aliases = shortcut.aliases || []
-    const alias = aliases
-      .map((candidate) => ({ candidate, score: this.fieldScore(candidate, query.text, 10000) ?? -1 }))
-      .sort((left, right) => right.score - left.score)[0]?.candidate || ""
+    const alias = this.aliasFor(shortcut, query)
 
     if (shortcut.prefix === "." && query.base) return `${query.base}.${alias}`
     return `${shortcut.prefix}${alias}`
   }
 
+  aliasFor(shortcut, query) {
+    return (shortcut.aliases || [])
+      .map((candidate) => ({ candidate, score: this.fieldScore(candidate, query.text, 10000) ?? -1 }))
+      .sort((left, right) => right.score - left.score)[0]?.candidate || ""
+  }
+
+  expansionPreview(shortcut, query) {
+    const full = this.previewExpansion(shortcut, query)
+    return { text: shortenExpansion(full), full }
+  }
+
   previewExpansion(shortcut, query) {
+    if (shortcut.prefix === "." && query.base) {
+      const alias = this.aliasFor(shortcut, query)
+      const expansion = alias && expandMathShorthand(`${query.base}.${alias}`)
+      if (expansion) return expansion
+    }
+
     const source = shortcut.expansion || ""
     const examples = ["x", "y", "z"]
     return source.replace(/\$\{(\d+)(?::([^}]*))?\}/g, (_placeholder, number, defaultValue) => {
@@ -293,9 +374,20 @@ export default class extends Controller {
   }
 
   insertSelected() {
+    this.endStops()
     const shortcut = this.matches?.[this.selectedIndex]
     const query = this.query
     if (!shortcut || !query || !this.editorController) return this.close()
+
+    if (shortcut.prefix === ".") {
+      const canonical = { "default-bold": "b", "default-blackboard": "bb", "default-vector": "vec", "default-transpose": "t", "default-inverse": "inv" }
+      const operation = canonical[shortcut.id] || shortcut.aliases?.[0]
+      const source = query.base ? `${query.base}.${operation}` : `.${operation}`
+      this.close()
+      this.editorController.replaceRange(source, query.start, this.editorController.selectionStart)
+      this.editorController.focus()
+      return
+    }
 
     const expansion = this.expandShortcut(shortcut, query)
     const base = query.start
@@ -343,9 +435,11 @@ export default class extends Controller {
     if (next) return this.selectStop(next)
 
     const editor = this.editorController
-    if (!editor) return
-    const exit = editor.value[current.end] === "}" ? current.end + 1 : current.end
-    editor.setSelectionRange(exit, exit)
+    if (editor && !editor.destroyed) {
+      const exit = editor.value[current.end] === "}" ? current.end + 1 : current.end
+      editor.setSelectionRange(exit, exit)
+    }
+    this.endStops()
   }
 
   selectStop(stop) {
@@ -353,6 +447,7 @@ export default class extends Controller {
     if (!editor || !stop) return
     this.activeStop = stop
     editor.setSelectionRange(stop.start, stop.end)
+    this.updateStopDecorations()
   }
 
   adjustStops() {
@@ -360,7 +455,8 @@ export default class extends Controller {
     if (!active) return
 
     const editor = this.editorController
-    if (!editor) return
+    if (!editor || editor.destroyed) return this.endStops()
+    if (editor.selectionStart < active.start) return this.endStops()
     const delta = editor.selectionStart - active.end
     if (delta === 0) return
     active.end = editor.selectionStart
@@ -369,6 +465,27 @@ export default class extends Controller {
       stop.start += delta
       stop.end += delta
     })
+    this.updateStopDecorations()
+  }
+
+  endStops() {
+    this.stops = []
+    this.activeStop = null
+    this.updateStopDecorations()
+  }
+
+  updateStopDecorations() {
+    const editor = this.editorController
+    const view = editor?.view
+    if (!editor || editor.destroyed || !view || view.destroyed) return
+
+    const length = view.state.doc.length
+    const decorations = this.stops.map((stop, index) => ({
+      from: Math.max(0, Math.min(stop.start, length)),
+      to: Math.max(0, Math.min(stop.end, length)),
+      active: index === 0
+    }))
+    view.dispatch({ effects: snippetStopsEffect.of(decorations) })
   }
 
   close() {
@@ -377,4 +494,13 @@ export default class extends Controller {
     this.query = null
     this.updateAccessibility()
   }
+}
+
+function shortenExpansion(expansion) {
+  if (expansion.length <= MAX_PREVIEW_LENGTH) return expansion
+
+  const kept = MAX_PREVIEW_LENGTH - 1
+  const head = Math.ceil(kept / 2)
+  const tail = kept - head
+  return `${expansion.slice(0, head)}…${expansion.slice(expansion.length - tail)}`
 }

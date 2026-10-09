@@ -1,5 +1,92 @@
 import { Controller } from "@hotwired/stimulus"
 
+const IMAGE_TYPES_BY_EXTENSION = {
+  avif: "image/avif",
+  bmp: "image/bmp",
+  gif: "image/gif",
+  heic: "image/heic",
+  heif: "image/heif",
+  jpeg: "image/jpeg",
+  jpg: "image/jpeg",
+  png: "image/png",
+  svg: "image/svg+xml",
+  tif: "image/tiff",
+  tiff: "image/tiff",
+  webp: "image/webp"
+}
+
+export function imageTypeForFilename(filename = "") {
+  const extension = filename.match(/\.([^.]+)$/)?.[1]?.toLowerCase()
+  return (extension && IMAGE_TYPES_BY_EXTENSION[extension]) || null
+}
+
+export async function imageTypeFromContents(file) {
+  const bytes = new Uint8Array(await file.slice(0, 1024).arrayBuffer())
+  const startsWith = (...signature) => signature.every((byte, index) => bytes[index] === byte)
+
+  if (startsWith(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)) return "image/png"
+  if (startsWith(0xff, 0xd8, 0xff)) return "image/jpeg"
+  const gifSignature = new TextDecoder().decode(bytes.slice(0, 6))
+  if (["GIF87a", "GIF89a"].includes(gifSignature)) return "image/gif"
+  if (startsWith(0x42, 0x4d)) return "image/bmp"
+  if ((startsWith(0x49, 0x49, 0x2a, 0x00)) || (startsWith(0x4d, 0x4d, 0x00, 0x2a))) return "image/tiff"
+
+  const header = new TextDecoder().decode(bytes)
+  if (header.slice(0, 4) === "RIFF" && header.slice(8, 12) === "WEBP") return "image/webp"
+
+  const brand = header.slice(8, 16)
+  if (header.slice(4, 8) === "ftyp") {
+    if (/avif|avis/.test(brand)) return "image/avif"
+    if (/heic|heix|hevc|hevx|heim|heis|mif1|msf1/.test(brand)) return "image/heic"
+  }
+
+  if (/^(?:\uFEFF)?\s*(?:<\?xml[\s\S]*?\?>\s*)?(?:<!--[\s\S]*?-->\s*)*<svg(?:\s|>)/i.test(header)) {
+    return "image/svg+xml"
+  }
+
+  return null
+}
+
+export function isMediaTransferTypes(types) {
+  const list = Array.from(types || [])
+  return list.includes("Files") ||
+    list.includes("application/x-moz-file") ||
+    list.includes("text/uri-list") ||
+    list.includes("public.url") ||
+    list.some(type => typeof type === "string" && type.startsWith("image/"))
+}
+
+export function urlFromTransfer(transfer) {
+  if (!transfer) return null
+
+  const html = transfer.getData?.("text/html")
+  if (html) {
+    if (typeof DOMParser !== "undefined") {
+      try {
+        const doc = new DOMParser().parseFromString(html, "text/html")
+        const img = doc.querySelector("img")
+        if (img?.src) return img.src
+      } catch (_e) {}
+    } else {
+      const match = html.match(/<img[^>]+src=["']([^"']+)["']/i)
+      if (match?.[1]) return match[1]
+    }
+  }
+
+  const uriList = transfer.getData?.("text/uri-list")
+  if (uriList) {
+    const uri = uriList.split(/\r?\n/).map(line => line.trim()).find(line => line && !line.startsWith("#"))
+    if (uri) return uri
+  }
+
+  const plain = transfer.getData?.("text/plain")?.trim()
+  if (plain && (/^https?:\/\//i.test(plain) || /^data:image\//i.test(plain) || /^blob:/i.test(plain))) {
+    return plain
+  }
+
+  return null
+}
+
 export default class extends Controller {
   static targets = ["input", "fit", "status"]
   static values = { uploadUrl: String, enabled: Boolean, workKind: String }
@@ -7,6 +94,19 @@ export default class extends Controller {
   connect() {
     this.pendingRange = null
     this.targetSlideIndex = null
+  }
+
+  filesFromTransfer(transfer) {
+    const files = [...(transfer?.files || [])]
+    // Prefer the file list when present; the same files may also appear as items.
+    if (files.length) return files
+
+    for (const item of transfer?.items || []) {
+      if (item.kind !== "file") continue
+      const file = item.getAsFile?.()
+      if (file) files.push(file)
+    }
+    return files
   }
 
   choose() {
@@ -37,9 +137,32 @@ export default class extends Controller {
   }
 
   paste(event) {
-    const file = [...(event.clipboardData?.files || [])][0]
-    if (!file) return
+    const sourcePaste = this.isSourceEditorTarget(event.target)
+    const visualPaste = this.isVisualEditorTarget(event.target)
+    if (!sourcePaste && !visualPaste) return
+
+    const files = this.filesFromTransfer(event.clipboardData)
+    if (!files.length) return
+
+    const editor = this.editor
+    if (!editor?.view) {
+      this.setStatus("The editor is not ready yet. Try again in a moment.")
+      return
+    }
+
     event.preventDefault()
+
+    if (sourcePaste) {
+      const rangeId = editor.trackMediaRange({ from: editor.selectionStart, to: editor.selectionEnd })
+      this.insertSourceImage(files, rangeId)
+      return
+    }
+
+    const file = files[0]
+    if (!file) {
+      this.setStatus("Choose an image file to insert into source mode.")
+      return
+    }
 
     const slideElement = document.activeElement?.closest?.("[data-slide-index], [data-editor-slide-id]") ||
       event.target?.closest?.("[data-slide-index], [data-editor-slide-id]")
@@ -48,15 +171,173 @@ export default class extends Controller {
       targetIndex = this.slideIndexFromElement(slideElement)
     }
 
-    const editor = this.editor
     const range = targetIndex !== null
       ? this.rangeForSlide(targetIndex)
       : (editor ? { from: editor.selectionStart, to: editor.selectionEnd } : null)
     this.upload(file, range)
   }
 
+  sourceDragOver(event) {
+    const types = Array.from(event.dataTransfer?.types || [])
+    if (!this.isSourceEditorTarget(event.currentTarget) || !isMediaTransferTypes(types)) return
+    if (!this.editor?.view) {
+      this.setStatus("The source editor is not ready yet. Try dropping the image again in a moment.")
+      return
+    }
+    event.preventDefault()
+    event.dataTransfer.dropEffect = "copy"
+    event.currentTarget.classList.add("is-media-drop-target")
+  }
+
+  sourceDragLeave(event) {
+    if (event.currentTarget.contains(event.relatedTarget)) return
+    event.currentTarget.classList.remove("is-media-drop-target")
+  }
+
+  async sourceDrop(event) {
+    if (!this.isSourceEditorTarget(event.currentTarget)) return
+    const types = Array.from(event.dataTransfer?.types || [])
+    if (!isMediaTransferTypes(types)) return
+
+    const editor = this.editor
+    if (!editor?.view) {
+      this.setStatus("The source editor is not ready yet. Try dropping the image again in a moment.")
+      return
+    }
+
+    event.preventDefault()
+    // Stop CodeMirror's native drop handler from inserting the same transfer as text.
+    event.stopPropagation()
+    event.currentTarget.classList.remove("is-media-drop-target")
+
+    const position = editor.view.posAtCoords({ x: event.clientX, y: event.clientY })
+    const fallback = editor.selectionEnd
+    const range = { from: position ?? fallback, to: position ?? fallback }
+    const rangeId = editor.trackMediaRange(range)
+
+    const files = this.filesFromTransfer(event.dataTransfer)
+    if (files.length) {
+      await this.insertSourceImage(files, rangeId)
+      return
+    }
+
+    await this.insertSourceTransfer(event.dataTransfer, rangeId)
+  }
+
+  async insertSourceTransfer(transfer, rangeId) {
+    this.setStatus("Preparing image…", true)
+    try {
+      const url = urlFromTransfer(transfer)
+      const file = url ? await this.fileFromUrl(url) : null
+
+      if (!file) {
+        this.editor?.releaseMediaRange(rangeId)
+        this.setStatus("Only image files can be dropped here — to use an image from a web page, save it first.")
+        return
+      }
+
+      await this.insertSourceImage([file], rangeId)
+    } catch (_error) {
+      this.editor?.releaseMediaRange(rangeId)
+      this.setStatus("Only image files can be dropped here — to use an image from a web page, save it first.")
+    }
+  }
+
+  async fileFromUrl(url) {
+    if (!url) return null
+    try {
+      const signal = typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function"
+        ? AbortSignal.timeout(5000)
+        : undefined
+      const response = await fetch(url, { signal })
+      if (!response.ok) return null
+      const blob = await response.blob()
+
+      let type = blob.type || ""
+      if (!type.startsWith("image/")) {
+        type = imageTypeForFilename(url) || await imageTypeFromContents(blob)
+      }
+      if (!type?.startsWith("image/")) return null
+
+      let filename = "dropped-image"
+      try {
+        const baseHref = globalThis.window?.location?.href || "http://localhost"
+        const parsed = new URL(url, baseHref)
+        const base = parsed.pathname.split("/").pop()
+        if (base && /\.[a-z0-9]+$/i.test(base)) {
+          filename = decodeURIComponent(base)
+        }
+      } catch (_e) {}
+
+      return new File([blob], filename, { type })
+    } catch (_error) {
+      return null
+    }
+  }
+
+  isSourceEditorTarget(target) {
+    const sourceSurface = target?.closest?.(".editor-surface")
+    const mode = this.editor?.editingMode || this.element.dataset.editorMode
+    return mode === "source" && Boolean(sourceSurface)
+  }
+
+  isVisualEditorTarget(target) {
+    const mode = this.editor?.editingMode || this.element.dataset.editorMode
+    return mode === "visual" && Boolean(target?.closest?.(".editor-projection"))
+  }
+
+  async fileForSourceUpload(file) {
+    const declaredType = file.type || ""
+    let type
+    if (declaredType.startsWith("image/")) {
+      type = declaredType
+    } else if (["", "application/octet-stream"].includes(declaredType)) {
+      type = imageTypeForFilename(file.name) || await imageTypeFromContents(file)
+    } else {
+      return null
+    }
+    if (!type?.startsWith("image/")) return null
+
+    const knownExtension = Object.entries(IMAGE_TYPES_BY_EXTENSION).find(([, mimeType]) => mimeType === type)?.[0]
+    const filenameExtension = file.name.match(/\.([^.]+)$/)?.[1]?.toLowerCase()
+    const extension = knownExtension || filenameExtension
+    if (!extension) return null
+
+    const filenameType = imageTypeForFilename(file.name)
+    let name = file.name || "pasted-image"
+    if (filenameType !== type || !filenameExtension) {
+      if (filenameExtension) name = name.slice(0, -(filenameExtension.length + 1))
+      name = `${name || "pasted-image"}.${extension}`
+    }
+
+    if (name === file.name && type === file.type) return file
+    return new File([file], name, { type, lastModified: file.lastModified })
+  }
+
+  async insertSourceImage(files, rangeId) {
+    this.setStatus("Preparing image…", true)
+    try {
+      let image
+      for (const file of files) {
+        image = await this.fileForSourceUpload(file)
+        if (image) break
+      }
+
+      if (!image) {
+        this.editor?.releaseMediaRange(rangeId)
+        this.setStatus("Choose an image file to insert into source mode.")
+        return
+      }
+
+      await this.upload(image, null, { rangeId })
+    } catch (error) {
+      this.editor?.releaseMediaRange(rangeId)
+      this.setStatus(error.message || "Media could not be uploaded.")
+    }
+  }
+
   dragOver(event) {
-    if (!event.dataTransfer?.types?.includes("Files")) return
+    if (!Array.from(event.dataTransfer?.types || []).includes("Files")) return
     event.preventDefault()
     event.dataTransfer.dropEffect = "copy"
     event.currentTarget.classList.add("is-media-drop-target")
@@ -180,12 +461,14 @@ export default class extends Controller {
     return true
   }
 
-  async upload(file, range) {
+  async upload(file, range, { rangeId = null } = {}) {
+    const fileName = file.name || "pasted-image"
+    this.setStatus(`${this.enabledValue && this.uploadUrlValue ? "Uploading" : "Preparing"} ${fileName}…`, true)
     try {
       if (!this.enabledValue || !this.uploadUrlValue) {
         await this.ensurePersisted()
       }
-      this.setStatus(`Uploading ${file.name}…`)
+      this.setStatus(`Uploading ${fileName}…`, true)
       const body = new FormData()
       body.append("file", file, file.name)
       body.append("fit", this.hasFitTarget ? this.fitTarget.value : "contain")
@@ -205,13 +488,17 @@ export default class extends Controller {
 
       const editor = this.editor
       if (!editor) throw new Error("The Markdown editor is not ready yet.")
-      const insertionPoint = range || { from: editor.selectionStart, to: editor.selectionEnd }
+      const trackedRange = rangeId === null ? null : editor.consumeMediaRange(rangeId)
+      if (rangeId !== null && !trackedRange) throw new Error("The source editor changed before the image finished uploading.")
+      const insertionPoint = trackedRange || range || { from: editor.selectionStart, to: editor.selectionEnd }
       const markdown = this.withSpacing(editor.value, insertionPoint, result.source)
       editor.replaceRange(markdown, insertionPoint.from, insertionPoint.to)
       editor.focus()
-      this.setStatus(`${file.name} added to the Markdown source.`)
+      this.setStatus(`${fileName} added to the Markdown source.`)
     } catch (error) {
       this.setStatus(error.message || "Media could not be uploaded.")
+    } finally {
+      if (rangeId !== null) this.editor?.releaseMediaRange(rangeId)
     }
   }
 
@@ -250,8 +537,10 @@ export default class extends Controller {
     return range ? { from: range.end, to: range.end } : { from: editor.selectionEnd, to: editor.selectionEnd }
   }
 
-  setStatus(message) {
-    if (this.hasStatusTarget) this.statusTarget.textContent = message
+  setStatus(message, busy = false) {
+    if (!this.hasStatusTarget) return
+    this.statusTarget.textContent = message
+    this.statusTarget.setAttribute("aria-busy", String(busy))
   }
 
   get editor() {

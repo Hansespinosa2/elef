@@ -1,5 +1,72 @@
 import { Controller } from "@hotwired/stimulus"
-import { editorFor } from "controllers/editor_controller"
+import { editorFor } from "lib/editor_controller_lookup"
+
+// Prefix matches score 0, later substring matches score their index, and titles
+// that miss the query entirely drop out. Ties fall back to the title so the
+// palette order is stable while the author keeps typing.
+export function scoreLinkTitle(title, query) {
+  const value = title.toLowerCase()
+  if (!query) return 0
+  if (value.startsWith(query)) return 0
+  const index = value.indexOf(query)
+  return index === -1 ? null : index + 1
+}
+
+export function rankLinkTitles(titles, query) {
+  return titles
+    .map((title) => ({ title, score: scoreLinkTitle(title, query) }))
+    .filter((result) => result.score !== null)
+    .sort((a, b) => a.score - b.score || a.title.localeCompare(b.title))
+    .map((result) => result.title)
+}
+
+// Autocomplete stays closed inside code, so this walks the source up to the
+// caret looking for an indented line, an open fence, or an unbalanced inline
+// code span. Only the line holding the caret decides.
+export function insideCode(source) {
+  const lines = source.split("\n")
+  let fenced = false
+  let fenceCharacter = null
+  let fenceLength = 0
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index]
+    const fence = line.match(/^ {0,3}(`{3,}|~{3,})(.*)$/)
+    if (fenced) {
+      if (fence && fence[1][0] === fenceCharacter && fence[1].length >= fenceLength && /^[ \t]*$/.test(fence[2])) {
+        fenced = false
+      } else if (index === lines.length - 1) {
+        return true
+      }
+    } else if (fence) {
+      fenced = true
+      fenceCharacter = fence[1][0]
+      fenceLength = fence[1].length
+      if (index === lines.length - 1) return true
+    } else if (index === lines.length - 1 && /^( {4}|\t)/.test(line)) {
+      return true
+    }
+  }
+
+  if (fenced) return true
+  return insideInlineCode(lines.at(-1))
+}
+
+export function insideInlineCode(line) {
+  let markerLength = 0
+
+  for (let index = 0; index < line.length; index += 1) {
+    if (line[index] !== "`") continue
+
+    let length = 1
+    while (line[index + length] === "`") length += 1
+    if (markerLength === 0) markerLength = length
+    else if (length === markerLength) markerLength = 0
+    index += length - 1
+  }
+
+  return markerLength > 0
+}
 
 export default class extends Controller {
   static targets = ["editor", "palette"]
@@ -98,28 +165,15 @@ export default class extends Controller {
   refresh() {
     const editor = this.editor()
     const beforeCaret = editor.value.slice(0, editor.selectionStart)
-    if (this.insideCode(beforeCaret)) return this.close()
-
     const match = beforeCaret.match(/\[\[([^\]\r\n]*)$/)
     if (!match) return this.close()
+    if (insideCode(beforeCaret)) return this.close()
 
     this.query = match[1].toLowerCase()
     this.queryStart = editor.selectionStart - this.query.length - 2
-    this.matches = this.titlesValue
-      .map((title) => ({ title, score: this.score(title) }))
-      .filter((result) => result.score !== null)
-      .sort((a, b) => a.score - b.score || a.title.localeCompare(b.title))
-      .map((result) => result.title)
+    this.matches = rankLinkTitles(this.titlesValue, this.query)
     this.selectedIndex = 0
     this.renderPalette()
-  }
-
-  score(title) {
-    const value = title.toLowerCase()
-    if (!this.query) return 0
-    if (value.startsWith(this.query)) return 0
-    const index = value.indexOf(this.query)
-    return index === -1 ? null : index + 1
   }
 
   renderPalette() {
@@ -199,11 +253,13 @@ export default class extends Controller {
 
     const editor = this.editor()
     const before = editor.value.slice(0, this.queryStart)
-    const after = editor.value.slice(editor.selectionStart)
+    let end = editor.selectionStart
+    if (editor.value.slice(end, end + 2) === "]]") end += 2
+    const after = editor.value.slice(end)
     const insertion = `[[${title}]]`
     const caret = before.length + insertion.length
     if (this.editorController) {
-      this.editorController.replaceRange(insertion, this.queryStart, this.editorController.selectionStart)
+      this.editorController.replaceRange(insertion, this.queryStart, end)
       this.editorController.focus()
       this.editorController.setSelectionRange(caret, caret)
     } else {
@@ -217,53 +273,6 @@ export default class extends Controller {
 
   editor() {
     return this.editorController || this.editorTarget
-  }
-
-  insideCode(source) {
-    const lines = source.split("\n")
-    let fenced = false
-    let fenceCharacter = null
-    let fenceLength = 0
-
-    for (let index = 0; index < lines.length; index += 1) {
-      const line = lines[index]
-      const fence = line.match(/^ {0,3}(`{3,}|~{3,})(.*)$/)
-      if (fenced) {
-        if (fence && fence[1][0] === fenceCharacter && fence[1].length >= fenceLength && /^[ \t]*$/.test(fence[2])) {
-          fenced = false
-        } else if (index === lines.length - 1) {
-          // Only the line containing the caret determines whether an
-          // indented/code-fenced context is active for autocomplete.
-          return true
-        }
-      } else if (fence) {
-        fenced = true
-        fenceCharacter = fence[1][0]
-        fenceLength = fence[1].length
-        if (index === lines.length - 1) return true
-      } else if (index === lines.length - 1 && /^( {4}|\t)/.test(line)) {
-        return true
-      }
-    }
-
-    if (fenced) return true
-    return this.insideInlineCode(lines.at(-1))
-  }
-
-  insideInlineCode(line) {
-    let markerLength = 0
-
-    for (let index = 0; index < line.length; index += 1) {
-      if (line[index] !== "`") continue
-
-      let length = 1
-      while (line[index + length] === "`") length += 1
-      if (markerLength === 0) markerLength = length
-      else if (length === markerLength) markerLength = 0
-      index += length - 1
-    }
-
-    return markerLength > 0
   }
 
   close() {

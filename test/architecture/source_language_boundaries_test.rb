@@ -103,6 +103,16 @@ class SourceLanguageBoundariesTest < ActiveSupport::TestCase
     assert_includes html, "katex"
   end
 
+  test "document graph resolution is provided by the Rails-owned renderer bundle" do
+    graph = read("app/lib/document_links/graph.rb")
+    renderer = read("app/lib/source/javascript_renderer.rb")
+    bundle = read("app/javascript/lib/renderer_global.js")
+
+    assert_includes graph, "Source::JavascriptRenderer.document_graph"
+    assert_includes renderer, 'context.call("ElefRenderer.buildDocumentGraph"'
+    assert_includes bundle, "buildDocumentGraph"
+  end
+
   test "the media adapter serves both kinds from one URL scheme" do
     digest = "a" * 64
     document = Document.create!(source: "![alt](elef-asset:#{digest})")

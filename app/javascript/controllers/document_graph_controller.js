@@ -1,10 +1,12 @@
 import { Controller } from "@hotwired/stimulus"
+import { renderDocumentGraphView } from "lib/document_graph_view"
 
 export default class extends Controller {
   static targets = ["canvas", "viewport", "edges", "edge", "nodes", "node", "search", "results", "status", "scaleLabel"]
   static values = { data: Object }
 
   connect() {
+    renderDocumentGraphView(this.element, this.dataValue)
     this.zoom = 1
     this.pan = { x: 0, y: 0 }
     this.drag = null
@@ -18,6 +20,7 @@ export default class extends Controller {
       wheel: (event) => this.wheel(event)
     }
     this.nodeHandlers = new Map()
+    this.statusTarget.textContent = this.dataValue.nodes.length + (this.dataValue.nodes.length === 1 ? " document" : " documents")
     this.simulationFrame = requestAnimationFrame(() => this.simulate())
     this.render()
 

@@ -20,6 +20,8 @@ export default class extends Controller {
 
   disconnect() {
     this.previewObserver?.disconnect()
+    this.thumbnailObserver?.disconnect()
+    this.thumbnailFrames?.clear()
     this.preview?.removeEventListener("load", this.mediaLoaded, true)
     this.preview?.removeEventListener("loadeddata", this.mediaLoaded, true)
     cancelAnimationFrame(this.measurementFrame)
@@ -35,7 +37,6 @@ export default class extends Controller {
     this.installedSource = this.source
     this.projectionPending = false
     this.selectedIndex = Math.min(this.selectedIndex, Math.max(0, this.sourceRanges().length - 1))
-    this.renderOverview()
     this.scheduleMeasurement()
   }
 
@@ -115,13 +116,17 @@ export default class extends Controller {
 
   renderOverview() {
     if (!this.hasGridTarget) return
+    recordPreviewTrace("slide-overview-render-start")
     const count = this.sourceRanges().length
     const frames = [...(this.preview?.querySelectorAll(".slide-frame") || [])]
     const focusedIndex = this.gridTarget.contains(document.activeElement)
       ? Number(document.activeElement.dataset.slideIndex)
       : null
+    this.thumbnailObserver?.disconnect()
+    this.thumbnailFrames = new Map()
     this.gridTarget.replaceChildren()
 
+    const thumbnailCards = []
     for (let index = 0; index < count; index += 1) {
       const frame = frames[index]
       const title = frame?.querySelector("h1, h2, h3, h4, .empty-slide")?.textContent?.trim() || `Slide ${index + 1}`
@@ -138,21 +143,9 @@ export default class extends Controller {
       thumbnail.className = "slide-overview-thumbnail"
       thumbnail.setAttribute("aria-hidden", "true")
       if (frame) {
-        const clone = frame.cloneNode(true)
-        clone.removeAttribute("data-controller")
-        clone.querySelectorAll(".presentation-editor-slide-toolbar, .presentation-editor-block-controls").forEach((element) => element.remove())
-        clone.querySelectorAll("[data-controller]").forEach((element) => element.removeAttribute("data-controller"))
-        clone.querySelectorAll("[contenteditable], [data-action], [data-editor-block-id], [data-editor-region-id]").forEach((element) => {
-          element.removeAttribute("contenteditable")
-          element.removeAttribute("data-action")
-          element.removeAttribute("data-editor-block-id")
-          element.removeAttribute("data-editor-region-id")
-        })
-        clone.querySelectorAll("a, button, input, video").forEach((element) => {
-          element.tabIndex = -1
-          if (element instanceof HTMLVideoElement) element.controls = false
-        })
-        thumbnail.append(clone)
+        thumbnail.classList.add("is-loading")
+        this.thumbnailFrames.set(card, frame)
+        thumbnailCards.push(card)
       } else {
         thumbnail.classList.add("is-loading")
       }
@@ -165,14 +158,52 @@ export default class extends Controller {
     }
     this.countTarget.textContent = `${count} ${count === 1 ? "slide" : "slides"}`
     this.updateActionAvailability(count)
-    requestAnimationFrame(() => {
-      this.gridTarget.querySelectorAll(".slide-overview-thumbnail > .slide-frame").forEach((frame) => {
-        frame.style.setProperty("--slide-scale", frame.clientWidth / 1280)
+    recordPreviewTrace("slide-overview-render-ready")
+    if (Number.isInteger(focusedIndex)) this.gridTarget.querySelector(`[data-slide-index="${focusedIndex}"]`)?.focus()
+
+    if (typeof IntersectionObserver === "function") {
+      this.thumbnailObserver = new IntersectionObserver(entries => {
+        const visibleCards = entries
+          .filter(entry => entry.isIntersecting)
+          .map(entry => ({ card: entry.target, frame: this.thumbnailFrames.get(entry.target) }))
+          .filter(entry => entry.frame)
+        visibleCards.forEach(({ card }) => this.thumbnailObserver?.unobserve(card))
+        this.renderVisibleThumbnails(visibleCards)
+      }, { root: this.gridTarget, rootMargin: "80px" })
+      thumbnailCards.forEach(card => this.thumbnailObserver.observe(card))
+    } else {
+      this.renderVisibleThumbnails(thumbnailCards.map(card => ({ card, frame: this.thumbnailFrames.get(card) })))
+    }
+  }
+
+  renderVisibleThumbnails(entries) {
+    if (!entries.length) return
+    recordPreviewTrace("slide-overview-scale-start")
+    for (const { card, frame } of entries) {
+      const clone = document.createElement("div")
+      clone.className = "slide-frame"
+      const slide = frame.querySelector(":scope > .slide")
+      if (slide) clone.append(slide.cloneNode(true))
+      clone.querySelectorAll(".presentation-editor-slide-toolbar, .presentation-editor-block-controls").forEach(element => element.remove())
+      clone.querySelectorAll("[data-controller]").forEach(element => element.removeAttribute("data-controller"))
+      clone.querySelectorAll("[contenteditable], [data-action], [data-editor-block-id], [data-editor-region-id]").forEach(element => {
+        element.removeAttribute("contenteditable")
+        element.removeAttribute("data-action")
+        element.removeAttribute("data-editor-block-id")
+        element.removeAttribute("data-editor-region-id")
       })
-      if (Number.isInteger(focusedIndex)) {
-        this.gridTarget.querySelector(`[data-slide-index="${focusedIndex}"]`)?.focus()
-      }
-    })
+      clone.querySelectorAll("a, button, input, video").forEach(element => {
+        element.tabIndex = -1
+        if (element instanceof HTMLVideoElement) element.controls = false
+      })
+      const thumbnail = card.querySelector(".slide-overview-thumbnail")
+      thumbnail.classList.remove("is-loading")
+      thumbnail.append(clone)
+    }
+    const clones = entries.map(({ card }) => card.querySelector(".slide-overview-thumbnail > .slide-frame"))
+    const scales = clones.map(frame => frame.clientWidth / 1280)
+    clones.forEach((frame, index) => frame.style.setProperty("--slide-scale", scales[index]))
+    recordPreviewTrace("slide-overview-scale-ready")
   }
 
   scheduleMeasurement() {
@@ -181,12 +212,22 @@ export default class extends Controller {
   }
 
   measureOverflow() {
+    recordPreviewTrace("slide-overflow-start")
     const frames = [...(this.preview?.querySelectorAll(".slide-frame") || [])]
-    const messages = []
-    frames.forEach((frame, index) => {
+    const measurements = frames.map((frame, index) => {
       const slide = frame.querySelector(":scope > .slide")
-      if (!slide) return
-      const overflowing = slide.scrollHeight > slide.clientHeight + 4 || slide.scrollWidth > slide.clientWidth + 4
+      if (!slide) return null
+      return {
+        frame,
+        slide,
+        index,
+        overflowing: slide.scrollHeight > slide.clientHeight + 4 || slide.scrollWidth > slide.clientWidth + 4
+      }
+    })
+    const messages = []
+    measurements.forEach(measurement => {
+      if (!measurement) return
+      const { frame, slide, index, overflowing } = measurement
       frame.classList.toggle("is-overflowing", overflowing)
       slide.classList.toggle("is-overflowing", overflowing)
       if (overflowing) messages.push(`Slide ${index + 1} extends beyond its 16:9 frame. Shorten, reflow, or split its content.`)
@@ -200,6 +241,7 @@ export default class extends Controller {
     })
     this.warningsTarget.hidden = messages.length === 0
     this.renderOverview()
+    recordPreviewTrace("slide-overflow-ready")
   }
 
   get warningListTarget() {
@@ -279,4 +321,11 @@ export default class extends Controller {
   get source() {
     return this.editor?.value ?? this.element.querySelector('[name$="[source]"]')?.value ?? ""
   }
+}
+
+function recordPreviewTrace(stage) {
+  const trace = globalThis.__elefPreviewTrace
+  if (!Array.isArray(trace)) return
+  trace.push({ time: performance.now(), stage })
+  if (trace.length > 512) trace.shift()
 }

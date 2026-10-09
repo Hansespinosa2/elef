@@ -1,0 +1,26 @@
+
+@media (max-width: 540px) {
+  .document-graph-search { flex-basis: 100%; min-width: 0; }
+  .document-graph-controls { display: grid; grid-template-columns: 40px minmax(3.5rem, 1fr) 40px; width: 100%; }
+  .document-graph-canvas, .document-graph-canvas svg { min-height: 400px; }
+  .math-shortcut-flow { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.1fr); }
+  .math-shortcut-flow > :nth-child(4) { display: none; }
+  .math-shortcut-result { grid-column: 1 / -1; }
+}
+
+@media (max-width: 540px) {
+  .app-header-inner { flex-wrap: wrap; gap: 0.75rem; }
+  .app-header-identity { margin-right: auto; }
+  .app-nav { min-width: 0; order: 3; width: 100%; }
+  .app-nav-link { flex: 1; font-size: 0.75rem; min-width: 0; padding-inline: 0.25rem; text-align: center; }
+  .lineage-panel { padding: 1rem; }
+  .lineage-search { flex-basis: 100%; min-width: 0; }
+  .lineage-navigation select { width: 100%; }
+  .lineage-graph-controls { display: grid; grid-template-columns: 40px minmax(3.5rem, 1fr) 40px auto; width: 100%; }
+  .lineage-graph-canvas { min-height: 460px; }
+}
+
+@media (max-width: 700px) {
+  .conflict-columns { grid-template-columns: 1fr; }
+  .conflict-source { max-height: 22vh; min-height: 5rem; }
+}

@@ -1,5 +1,8 @@
 import { Controller } from "@hotwired/stimulus"
-import { editorFor } from "controllers/editor_controller"
+import { editorFor } from "lib/editor_controller_lookup"
+import { enableVisualModeAfterPreview, enableVisualModeFromInstalledPreview } from "lib/editor_view"
+import { setProjectionBlockEditable } from "lib/projection_editability"
+import { blockOperationRange, blockOperationStart } from "lib/editor_block_ranges"
 import { markdownForVisibleText, renderInlineMath, sourceOffsetForVisiblePosition } from "controllers/editor_markdown"
 import {
   moveCaretBetweenBlocks,
@@ -9,7 +12,7 @@ import {
   visibleOffsetAtPoint,
   visibleOffsetForSourceOffset
 } from "controllers/editor_caret"
-import { handleMathClick, handleMathKeydown, syncActiveMath } from "controllers/editor_math"
+import { createActiveMathSpan, deRenderMath, finishMathBeforeEnter, handleMathClick, handleMathKeydown, syncActiveMath } from "controllers/editor_math"
 
 export default class extends Controller {
   static targets = ["projection"]
@@ -27,7 +30,10 @@ export default class extends Controller {
     this.element.addEventListener("elef:editor-ready", this.editorReady)
     this.modeChangedHandler = (event) => this.applyMode(event.detail.mode)
     this.element.addEventListener("elef:editor-mode-change", this.modeChangedHandler)
-    this.previewHandler = (event) => this.previewUpdated(event.detail.payload)
+    this.previewHandler = (event) => {
+      this.previewUpdated(event.detail.payload)
+      enableVisualModeAfterPreview(this.element, event.detail)
+    }
     this.element.addEventListener("elef:preview-updated", this.previewHandler)
     this.previewStaleHandler = (event) => this.previewStale(event.detail)
     this.element.addEventListener("elef:preview-stale", this.previewStaleHandler)
@@ -40,6 +46,17 @@ export default class extends Controller {
     this.element.addEventListener("elef:document-paginated", this.documentPaginatedHandler)
     this.projectionLinkHandler = (event) => this.projectionLinkClicked(event)
     this.element.addEventListener("click", this.projectionLinkHandler)
+    // Stimulus can connect this controller after the first preview event when
+    // a desktop deck is opened. Restore the toggle from the installed preview
+    // state so that a successful render cannot leave Visual permanently disabled.
+    enableVisualModeFromInstalledPreview(this.element)
+    this.positionControlOutsidePointerDown = (event) => {
+      const targetControl = event.target.closest?.(".document-block-position-control")
+      this.projectionTarget.querySelectorAll(".document-block-position-control.is-open").forEach((control) => {
+        if (control !== targetControl) control.classList.remove("is-open")
+      })
+    }
+    document.addEventListener("pointerdown", this.positionControlOutsidePointerDown, true)
     this.hasPresentationProjection = Boolean(this.element.querySelector(".presentation-editor-projection"))
     if (!this.hasPresentationProjection) {
       this.blockKeydownHandler = (event) => this.blockKeydown(event)
@@ -58,6 +75,7 @@ export default class extends Controller {
     this.element.removeEventListener("elef:preview-stale", this.previewStaleHandler)
     this.element.removeEventListener("elef:document-paginated", this.documentPaginatedHandler)
     this.element.removeEventListener("click", this.projectionLinkHandler)
+    document.removeEventListener("pointerdown", this.positionControlOutsidePointerDown, true)
     this.element.removeEventListener("keydown", this.blockKeydownHandler, true)
     document.removeEventListener("selectionchange", this.selectionChangeHandler)
     if (this.pendingProjectionFrame) cancelAnimationFrame(this.pendingProjectionFrame)
@@ -68,6 +86,11 @@ export default class extends Controller {
   applyMode(mode) {
     const visual = mode !== "source"
     this.element.dataset.editorMode = visual ? "visual" : "source"
+    if (!visual) {
+      this.projectionTarget.querySelectorAll(".document-block-position-control.is-open").forEach((control) => {
+        control.classList.remove("is-open")
+      })
+    }
     if (!visual) this.pendingCaretRestore = null
     if (this.hasProjectionTarget) this.projectionTarget.setAttribute("aria-label", visual ? "Visual editing surface" : "Rendered preview")
     this.syncProjectionEditability()
@@ -132,6 +155,18 @@ export default class extends Controller {
     const region = this.regionForBlock(current.blockId)
     if (!region) return null
     const source = this.editorController.value.slice(region.content_range.start, region.content_range.end)
+    const focusNode = selection?.focusNode
+    const focusElement = focusNode?.nodeType === Node.ELEMENT_NODE
+      ? focusNode
+      : focusNode?.parentElement
+    const activeDisplayMath = focusElement?.closest?.(".editor-math-active.editor-live-math-display")
+    if (focusNode && activeDisplayMath && source === activeDisplayMath.textContent) {
+      const offset = visibleOffsetAtPoint(activeDisplayMath, focusNode, selection.focusOffset)
+      if (offset !== null) {
+        return { blockId: current.blockId, sourceOffset: region.content_range.start + offset }
+      }
+    }
+
     return {
       blockId: current.blockId,
       sourceOffset: region.content_range.start + sourceOffsetForVisibleOffset(source, current.visibleOffset)
@@ -283,26 +318,8 @@ export default class extends Controller {
 
   blockSourceRange(block) {
     const slide = this.map?.slides?.find((candidate) => candidate.blocks?.some((item) => item.id === block.id))
-    let from = block.range.start
-    let to = block.range.end
-    if (!slide || !block.position_directive_id) return { from, to }
-
-    const directiveIndex = slide.directives.findIndex((candidate) => candidate.id === block.position_directive_id)
-    const directive = slide.directives[directiveIndex]
-    if (!directive) return { from, to }
-
-    if (block.position_scope === "block") {
-      from = directive.range.start
-    } else if (block.position_scope === "group") {
-      const groupMembers = slide.blocks.filter((candidate) => candidate.position_directive_id === block.position_directive_id)
-      if (groupMembers.length === 1) {
-        from = directive.range.start
-        const closing = slide.directives.slice(directiveIndex + 1).find((candidate) => candidate.type === "position_close")
-        if (closing) to = closing.range.end
-      }
-    }
-
-    return { from, to }
+    const range = slide ? blockOperationRange(slide, block) : { start: block.range.start, end: block.range.end }
+    return { from: range.start, to: range.end }
   }
 
   restoreProjectionCaret() {
@@ -318,6 +335,7 @@ export default class extends Controller {
 
     const blockElement = event.target.closest?.(".document-editor-block[data-editor-block-id]")
     if (!blockElement || !this.canEditBlock(blockElement)) return
+    finishMathBeforeEnter(event, this.projectionTarget, () => this.flushPendingProjectionEdits())
 
     const block = this.map?.slides?.flatMap((slide) => slide.blocks || [])
       .find((candidate) => candidate.id === blockElement.dataset.editorBlockId)
@@ -338,7 +356,34 @@ export default class extends Controller {
       if (this.removeEmptyBlock(blockElement, block, region, kind, markdown, source)) event.preventDefault()
       return
     }
-    if (event.key !== "Enter" || event.shiftKey || kind === "code") return
+    if (event.key !== "Enter" || event.shiftKey) return
+
+    const openingCodeFence = kind === "code"
+      ? markdown.match(/^([ \t]*)(`{3,}|~{3,})([^\r\n]*)$/)
+      : null
+    const openingMathFence = kind === "paragraph"
+      ? markdown.match(/^([ \t]{0,3})(\$\$|\\\[)[ \t]*$/)
+      : null
+    if (openingCodeFence || openingMathFence) {
+      if (!this.selectionIsAtEnd(blockElement)) return
+
+      event.preventDefault()
+      const [, indentation, marker] = openingCodeFence || openingMathFence
+      const closingMarker = openingCodeFence
+        ? marker
+        : marker === "$$" ? "$$" : "\\]"
+      const lineEnding = source.match(/\r\n|\r|\n/)?.[0] || "\n"
+      const replacement = markdown + lineEnding + lineEnding + indentation + closingMarker
+      if (openingMathFence) {
+        const [, indentation] = openingMathFence
+        const open = openingMathFence[2]
+        const close = open === "$$" ? "$$" : "\\]"
+        this.replaceAndEnterDisplayMath(blockElement, start, end, replacement, indentation, open, close, lineEnding)
+      } else {
+        this.replaceAndFocus(blockElement, start, end, replacement, { sourceOffset: start + markdown.length + lineEnding.length, location: "block_end" })
+      }
+      return
+    }
 
     const atEnd = this.selectionIsAtEnd(blockElement)
     const rawStructuredBlock = (kind === "list" && !blockElement.querySelector("ul, ol")) ||
@@ -367,10 +412,11 @@ export default class extends Controller {
     }
   }
 
-  positionChanged(event) {
+  alignmentChanged(event) {
     const control = event.target.closest?.("[data-visual-editor-block-id]")
-    if (!control || !this.editorController || this.element.dataset.editorMode !== "visual" ||
-      this.element.previewController?.projectionFresh === false) return
+    if (!control) return
+    control.closest(".document-block-position-control")?.classList.remove("is-open")
+    if (!this.editorController || this.element.dataset.editorMode !== "visual" || !this.map) return
 
     this.flushPendingProjectionEdits()
     const blockId = control.dataset.visualEditorBlockId
@@ -379,8 +425,8 @@ export default class extends Controller {
 
     const source = this.editorController.value
     const slide = this.map.slides.find((candidate) => candidate.blocks?.some((item) => item.id === block.id))
-    const directive = slide?.directives?.find((candidate) => candidate.id === block.position_directive_id)
     if (!slide) return
+    const directive = slide?.directives?.find((candidate) => candidate.id === block.position_directive_id)
 
     const horizontal = control.value
     if (!horizontal) {
@@ -400,14 +446,24 @@ export default class extends Controller {
         : (region?.content_range.start ?? block.range.start)
       let updated = source
       ranges.sort((left, right) => right.start - left.start).forEach((range) => {
+        let rangeEnd = range.end
         const before = updated.slice(0, range.start)
-        let after = updated.slice(range.end)
+        const lineEnding = updated.slice(range.start, rangeEnd).match(/(?:\r\n|\r|\n)$/)?.[0]
+        if (!lineEnding) {
+          const restMatch = updated.slice(rangeEnd).match(/^(?:\r\n|\r|\n)/)?.[0]
+          if (restMatch) rangeEnd += restMatch.length
+        }
+        let after = updated.slice(rangeEnd)
         if (before.endsWith("\n\n") && after.startsWith("\n")) after = after.slice(1)
         const next = `${before}${after}`
         if (range.start < sourceOffset) sourceOffset += next.length - updated.length
-        this.shiftMapAfterEdit(range.start, range.end, 0)
+        this.shiftMapAfterEdit(range.start, rangeEnd, 0)
         updated = next
       })
+
+      delete block.position_directive_id
+      delete block.position
+      slide.directives = slide.directives.filter((candidate) => !ranges.includes(candidate.range))
 
       if (updated === source) return
       this.pendingCaretRestore = { sourceOffset, preferredBlockId: block.id }
@@ -429,14 +485,24 @@ export default class extends Controller {
     if (directive) {
       from = directive.range.start
       to = directive.range.end
-      const lineEnding = source.slice(from, to).match(/(?:\r\n|\r|\n)$/)?.[0] || ""
-      const vertical = block.position?.vertical_explicit ? ` ${block.position.vertical}` : ""
-      replacement = `:::position{${horizontal}${vertical}}${lineEnding}`
+      let lineEnding = source.slice(from, to).match(/(?:\r\n|\r|\n)$/)?.[0]
+      if (!lineEnding) {
+        const restMatch = source.slice(to).match(/^(?:\r\n|\r|\n)/)?.[0]
+        if (restMatch) {
+          to += restMatch.length
+          lineEnding = restMatch
+        } else {
+          lineEnding = "\n"
+        }
+      }
+      const vertical = block.position?.vertical_explicit ? block.position.vertical : null
+      const verticalAlignment = vertical === "middle" ? "center" : vertical
+      replacement = `:::align{${verticalAlignment ? `${verticalAlignment} ` : ""}${horizontal}}${lineEnding}`
     } else {
       from = block.range.start
       to = from
       const lineEnding = source.match(/\r\n|\r|\n/)?.[0] || "\n"
-      replacement = `:::position{${horizontal}}${lineEnding}${lineEnding}`
+      replacement = `:::align{${horizontal}}${lineEnding}${lineEnding}`
     }
 
     const delta = replacement.length - (to - from)
@@ -453,9 +519,43 @@ export default class extends Controller {
           if (object[name]?.start === from) object[name].start += replacement.length
         })
       })
+      const lineEnding = source.match(/\r\n|\r|\n/)?.[0] || "\n"
+      const directiveLength = `:::align{${horizontal}}${lineEnding}`.length
+      const directiveId = `directive-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+      const newDirective = {
+        id: directiveId,
+        type: "position",
+        range: { start: from, end: from + directiveLength },
+        source_range: { start: from, end: from + directiveLength }
+      }
+      slide.directives ||= []
+      slide.directives.push(newDirective)
+      this.map.directives ||= []
+      this.map.directives.push(newDirective)
+      block.position_directive_id = directiveId
+      block.position = { horizontal, vertical: "top", vertical_explicit: false }
+    } else {
+      directive.range.end = from + replacement.length
+      directive.source_range.end = directive.range.end
+      block.position = {
+        ...(block.position || {}),
+        horizontal
+      }
     }
+
     const updated = `${source.slice(0, from)}${replacement}${source.slice(to)}`
     this.editorController.replaceRange(updated, 0, source.length)
+  }
+
+  positionControlOpened(event) {
+    // Pin the hover-only trigger even if the native select temporarily loses focus.
+    event.target.closest?.(".document-block-position-control")?.classList.add("is-open")
+  }
+
+  positionControlKeydown(event) {
+    if (!["Escape", "Tab"].includes(event.key)) return
+
+    event.target.closest?.(".document-block-position-control")?.classList.remove("is-open")
   }
 
   previewUpdated(payload) {
@@ -490,23 +590,11 @@ export default class extends Controller {
     const active = preserveActive ? document.activeElement?.closest?.("[data-editor-block-id]") : null
     this.projectionTarget.querySelectorAll(".document-editor-block[data-editor-block-id]").forEach((block) => {
       const editable = visual && (fresh || (preserveActive && block === active))
-      block.contentEditable = String(editable)
-      if (editable) {
-        block.setAttribute("role", "textbox")
-        block.setAttribute("aria-label", "Editable Markdown block")
-        block.setAttribute("aria-multiline", "true")
-        block.setAttribute("spellcheck", "true")
-        block.removeAttribute("aria-readonly")
-      } else {
-        block.removeAttribute("role")
-        block.removeAttribute("aria-label")
-        block.removeAttribute("aria-multiline")
-        block.removeAttribute("spellcheck")
-        block.setAttribute("aria-readonly", "true")
-      }
+      setProjectionBlockEditable(block, editable, "Editable Markdown block")
     })
     this.projectionTarget.querySelectorAll("[data-visual-editor-block-id]").forEach((control) => {
-      control.disabled = !visual || !fresh
+      const disabled = !visual || !this.map
+      if (control.disabled !== disabled) control.disabled = disabled
     })
   }
 
@@ -691,6 +779,36 @@ export default class extends Controller {
     blockElement.blur()
   }
 
+  replaceAndEnterDisplayMath(blockElement, from, to, replacement, indentation, open, close, lineEnding) {
+    this.pendingCaret = null
+    this.shiftMapAfterEdit(from, to, replacement.length, blockElement.dataset.editorBlockId)
+
+    const content = blockElement.matches("[data-document-page-flow-content]")
+      ? blockElement
+      : blockElement.querySelector("[data-document-page-flow-content]") || blockElement
+    let paragraph = content.querySelector(":scope > p")
+    if (!paragraph) {
+      paragraph = document.createElement("p")
+      content.replaceChildren(paragraph)
+    }
+
+    const openingLength = indentation.length + open.length
+    const source = replacement.slice(openingLength, replacement.length - indentation.length - close.length)
+    const activeMath = createActiveMathSpan(replacement, { source, open, close, display: true })
+    paragraph.replaceChildren(activeMath)
+    blockElement.focus({ preventScroll: true })
+    const textNode = activeMath.firstChild
+    const offset = Math.min(openingLength + lineEnding.length, textNode.textContent.length)
+    window.getSelection()?.setBaseAndExtent(textNode, offset, textNode, offset)
+    this.lastProjectionCaret = { blockId: blockElement.dataset.editorBlockId, visibleOffset: offset }
+
+    // Install the source after the active DOM and selection are ready. The
+    // preview's stale-projection handler then preserves this focused block,
+    // while the shifted map lets the first typed character round-trip safely.
+    this.editorController.replaceRange(replacement, from, to)
+    this.editorController.setSelectionRange(from + offset)
+  }
+
   continueStructuredBlock(blockElement, region, kind, markdown, source, emptyMarker) {
     const marker = kind === "list"
       ? (markdown.match(/(?:^|\n)([ \t]*(?:[-*+]|\d+[.)])[ \t]+)[^\n]*$/)?.[1] || "- ")
@@ -794,6 +912,17 @@ export default class extends Controller {
     if (!candidate || !element) return
 
     this.pendingCaret = null
+    if (pending.location === "math_expression_start") {
+      const mathElement = element.querySelector("[data-editor-math-source]:not([data-editor-math-active])")
+      if (mathElement) {
+        element.focus({ preventScroll: true })
+        if (deRenderMath(mathElement, { caret: "start" })) {
+          this.lastProjectionCaret = { blockId: candidate.id, visibleOffset }
+          return
+        }
+      }
+    }
+
     const target = pending.location === "list_item_end"
       ? element.querySelector("li:last-child") || element
       : pending.location === "quote_line_end"

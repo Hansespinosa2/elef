@@ -74,9 +74,9 @@ class DocumentsController < ApplicationController
     title = params.require(:document).permit(:title)[:title]
     source = Source::Document.replace_first_h1(@document.source, title)
     if @document.update(source: source)
-      redirect_to documents_path, notice: "Document renamed."
+      redirect_to(params[:library_view] == "all" ? root_path : documents_path, notice: "Document renamed.")
     else
-      redirect_to documents_path, alert: @document.errors.full_messages.to_sentence
+      redirect_to(params[:library_view] == "all" ? root_path : documents_path, alert: @document.errors.full_messages.to_sentence)
     end
   end
 
@@ -86,17 +86,11 @@ class DocumentsController < ApplicationController
   end
 
   def history
-    render json: @document.work_revisions.history.map { |revision| revision_payload(revision) }
+    render_work_history(@document)
   end
 
   def restore
-    revision = @document.work_revisions.find(params.require(:revision_id))
-    result = DraftRestorer.call(@document, revision)
-    payload = draft_payload(Drafts::Save::Result.new(:saved, result.work, result.revision, nil, [], nil))
-    respond_to do |format|
-      format.html { redirect_to edit_document_path(@document), notice: "Revision restored." }
-      format.json { render json: payload, status: :ok }
-    end
+    restore_work_revision(@document)
   end
 
   def export
@@ -104,36 +98,11 @@ class DocumentsController < ApplicationController
   end
 
   def upload_asset
-    upload = params.require(:file)
-    content_type = upload.content_type.to_s
-    unless content_type.start_with?("image/")
-      return render json: { error: "Choose an image file." }, status: :unprocessable_content
-    end
-    if upload.size.to_i > 50.megabytes
-      return render json: { error: "Media files must be 50 MB or smaller." }, status: :unprocessable_content
-    end
-
-    blob = WorkAssets.attach_upload(@document, upload, content_type: content_type)
-    digest = WorkAssets.digest(blob)
-    @document.reload
-    render json: {
-      digest: digest,
-      lock_version: @document.lock_version,
-      revision_token: @document.revision_token,
-      source: WorkAssets.markdown_source(
-        digest,
-        alt: params[:alt].presence || File.basename(upload.original_filename, ".*"),
-        fit: %w[contain cover].include?(params[:fit]) ? params[:fit] : "contain"
-      )
-    }, status: :created
+    upload_work_asset(@document)
   end
 
   def media_asset
-    blob = WorkAssets.resolve_blob(@document, params[:digest])
-    return head :not_found unless blob
-
-    response.headers["Cache-Control"] = "private, max-age=3600"
-    send_data blob.download, type: blob.content_type, disposition: :inline, filename: blob.filename.to_s
+    send_work_media_asset(@document)
   end
 
   def import
@@ -159,10 +128,6 @@ class DocumentsController < ApplicationController
       :source, :lock_version, :base_revision, :base_revision_id,
       :revision_token, :edit_session_id, :checkpoint, :reason, :theme, :typography
     )
-  end
-
-  def submitted_editor_mode
-    "source" if params[:editor_mode] == "source"
   end
 
   def sample_conflict_alert(conflicts)

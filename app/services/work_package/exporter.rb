@@ -15,7 +15,7 @@ module WorkPackage
     def call
       manifest = manifest_payload
       buffer = Zip::OutputStream.write_buffer do |zip|
-        write_entry(zip, "source.md", @work.source.to_s)
+        write_entry(zip, "source.md", portable_source)
         if @work.presentation?
           write_entry(zip, "presentation.md", WorkAssets.portable_markdown(@work.source.to_s, @work))
         end
@@ -45,6 +45,18 @@ module WorkPackage
     end
 
     private
+
+    def portable_source
+      source = @work.source.to_s
+      return source unless @work.document?
+
+      aliases = Source::Document.portable_document_link_metadata(source)[:aliases] + @work.aliases.map(&:alias_name)
+      Source::Document.with_portable_document_link_metadata(
+        source,
+        document_key: @work.document_key,
+        aliases: aliases
+      )
+    end
 
     def manifest_payload
       {

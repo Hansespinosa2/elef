@@ -38,7 +38,7 @@ module Presentations
           ---
           # Decision to carry forward
 
-          :::position{center middle}
+          :::align{center center}
 
           Keep the onboarding change, measure its cost, and revisit the decision
           after the next reporting cycle.
@@ -134,7 +134,7 @@ module Presentations
           ---
           # Put the question in the room
 
-          :::position{center middle}
+          :::align{center center}
 
           What would we change if the next team had to learn this without us?
           ---
@@ -332,7 +332,7 @@ module Presentations
           ---
           # The moment of clarity
 
-          :::position{center middle}
+          :::align{center center}
 
           The workflow became easier to trust when the source and the outcome
           told the same story.
@@ -542,7 +542,7 @@ module Presentations
           ---
           # Put the hardest question first
 
-          :::position{center middle}
+          :::align{center center}
 
           What evidence would make us change our mind?
           ---

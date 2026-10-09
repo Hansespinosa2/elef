@@ -1,7 +1,7 @@
 source "https://rubygems.org"
 
 # Bundle edge Rails instead: gem "rails", github: "rails/rails", branch: "main"
-gem "rails", "~> 8.1.3"
+gem "rails", "~> 8.1.4"
 gem "rubyzip", "~> 3.0"
 # The modern asset pipeline for Rails [https://github.com/rails/propshaft]
 gem "propshaft"
@@ -52,3 +52,5 @@ end
 gem "redcarpet", "~> 3.6"
 gem "rouge", "~> 5.1"
 gem "katex", "~> 0.11.0"
+gem "mini_racer", "= 0.22.1", require: false
+gem "libv8-node", "= 24.12.0.1", require: false

@@ -1,6 +1,8 @@
 import { Controller } from "@hotwired/stimulus"
-import { editorFor } from "controllers/editor_controller"
+import { editorFor } from "lib/editor_controller_lookup"
 import { markdownForVisibleText, renderInlineMath } from "controllers/editor_markdown"
+import { setProjectionBlockEditable } from "lib/projection_editability"
+import { blockOperationRange, blockOperationStart } from "lib/editor_block_ranges"
 import {
   moveCaretBetweenBlocks,
   pointAtVisibleOffset,
@@ -248,34 +250,151 @@ export default class extends Controller {
     if (updated !== source) this.replaceSource(updated)
   }
 
-  positionChanged(event) {
-    if (!this.canOperateOnProjection()) return
+  alignmentChanged(event) {
+    if (this.element.dataset.editorMode === "source") return
     const select = event.target
+    if (!this.editorController || !this.map) return
+
+    syncActiveMath(this.canvasTarget, () => this.flushPendingProjectionEdits())
+    this.flushPendingProjectionEdits()
+
     const source = this.sourceValue()
     const slideIndex = Number(select.dataset.slideIndex)
     const blockIndex = Number(select.dataset.blockIndex)
-    const block = this.map?.slides?.[slideIndex]?.blocks?.[blockIndex]
+    const blockId = select.dataset.presentationEditorBlockId || select.dataset.editorBlockId
+    const block = (blockId && this.findBlock(blockId)) || this.map?.slides?.[slideIndex]?.blocks?.[blockIndex]
     if (!block) return
 
-    const directive = this.map.slides[slideIndex].directives.find((candidate) => candidate.id === block.position_directive_id)
-    const position = select.value
+    const slide = this.map.slides.find((candidate) => candidate.blocks?.some((item) => item.id === block.id)) || this.map.slides[slideIndex]
+    if (!slide) return
+
+    const directive = slide.directives?.find((candidate) => candidate.id === block.position_directive_id)
+    const alignment = select.value
     let updated
-    if (directive) {
-      const from = directive.range.start
-      const to = directive.range.end
-      if (position) {
-        const lineEnding = source.slice(from, to).match(/\r\n|\n|\r$/)?.[0] || ""
-        updated = `${source.slice(0, from)}:::position{${position}}${lineEnding}${source.slice(to)}`
-      } else {
-        updated = this.removePositionDirectives(source, this.map.slides[slideIndex], directive)
+
+    const parseAlignment = (value) => {
+      if (!value) return { horizontal: "left", vertical: "top", verticalExplicit: false }
+      const parts = value.trim().split(/\s+/)
+      let vertical = "top"
+      let horizontal = "left"
+      if (parts.length === 1) {
+        if (["left", "center", "right"].includes(parts[0])) horizontal = parts[0]
+        else if (["top", "middle", "bottom"].includes(parts[0])) vertical = parts[0]
+      } else if (parts.length >= 2) {
+        vertical = parts[0] === "center" ? "middle" : parts[0]
+        horizontal = parts[1]
       }
-    } else if (position) {
-      const from = block.range.start
-      updated = `${source.slice(0, from)}:::position{${position}}\n\n${source.slice(from)}`
+      return { horizontal, vertical, verticalExplicit: vertical !== "top" }
+    }
+
+    const { horizontal, vertical, verticalExplicit } = parseAlignment(alignment)
+
+    const caret = this.captureCaret()
+    const region = this.regionForBlock(block.id)
+    const sourceOffset = caret?.blockId === block.id
+      ? caret.sourceOffset
+      : (region?.content_range.start ?? block.range.start)
+
+    let from
+    let to
+    let replacement = ""
+
+    if (directive) {
+      from = directive.range.start
+      to = directive.range.end
+      if (alignment) {
+        let lineEnding = source.slice(from, to).match(/(?:\r\n|\r|\n)$/)?.[0]
+        if (!lineEnding) {
+          const restMatch = source.slice(to).match(/^(?:\r\n|\r|\n)/)?.[0]
+          if (restMatch) {
+            to += restMatch.length
+            lineEnding = restMatch
+          } else {
+            lineEnding = "\n"
+          }
+        }
+        replacement = `:::align{${alignment}}${lineEnding}`
+        updated = `${source.slice(0, from)}${replacement}${source.slice(to)}`
+        const delta = replacement.length - (to - from)
+        this.shiftMapAfterEdit(from, to, replacement.length)
+        directive.range.end = from + replacement.length
+        directive.source_range.end = directive.range.end
+        block.position = { horizontal, vertical, vertical_explicit: verticalExplicit }
+        this.pendingCaretRestore = {
+          sourceOffset: sourceOffset >= to ? sourceOffset + delta : sourceOffset,
+          preferredBlockId: block.id
+        }
+      } else {
+        const directiveIndex = slide.directives.findIndex((candidate) => candidate.id === directive.id)
+        const closing = slide.directives[directiveIndex + 1]
+        const ranges = [directive]
+        if (closing?.type === "position_close") ranges.push(closing)
+        ranges.sort((left, right) => right.range.start - left.range.start).forEach((candidate) => {
+          let rangeEnd = candidate.range.end
+          const lineEnding = source.slice(candidate.range.start, rangeEnd).match(/(?:\r\n|\r|\n)$/)?.[0]
+          if (!lineEnding) {
+            const restMatch = source.slice(rangeEnd).match(/^(?:\r\n|\r|\n)/)?.[0]
+            if (restMatch) rangeEnd += restMatch.length
+          }
+          this.shiftMapAfterEdit(candidate.range.start, rangeEnd, 0)
+        })
+        delete block.position_directive_id
+        delete block.position
+        slide.directives = slide.directives.filter((candidate) => !ranges.includes(candidate))
+        updated = this.removePositionDirectives(source, slide, directive)
+      }
+    } else if (alignment) {
+      from = block.range.start
+      to = from
+      const lineEnding = source.match(/\r\n|\r|\n/)?.[0] || "\n"
+      replacement = `:::align{${alignment}}${lineEnding}${lineEnding}`
+      updated = `${source.slice(0, from)}${replacement}${source.slice(from)}`
+      this.shiftMapAfterEdit(from, to, replacement.length)
+      const affected = [block, region].filter(Boolean)
+      affected.forEach((object) => {
+        ["range", "source_range", "content_range", "delimiter_range"].forEach((name) => {
+          if (object[name]?.start === from) object[name].start += replacement.length
+        })
+      })
+      const directiveId = `directive-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+      const directiveLength = `:::align{${alignment}}${lineEnding}`.length
+      const newDirective = {
+        id: directiveId,
+        type: "position",
+        range: { start: from, end: from + directiveLength },
+        source_range: { start: from, end: from + directiveLength }
+      }
+      slide.directives ||= []
+      slide.directives.push(newDirective)
+      this.map.directives ||= []
+      this.map.directives.push(newDirective)
+      block.position_directive_id = directiveId
+      block.position = { horizontal, vertical, vertical_explicit: verticalExplicit }
+      const delta = replacement.length
+      this.pendingCaretRestore = {
+        sourceOffset: sourceOffset >= to ? sourceOffset + delta : sourceOffset,
+        preferredBlockId: block.id
+      }
     } else {
       return
     }
-    this.replaceSource(updated)
+
+    // Immediately update visual block in presentation DOM
+    const blockElement = this.canvasTarget?.querySelector(`[data-editor-block-id="${block.id}"]`)
+    if (blockElement) {
+      blockElement.classList.remove(
+        "position-left", "position-center", "position-right",
+        "position-top", "position-middle", "position-bottom"
+      )
+      blockElement.classList.add(`position-${horizontal}`, `position-${vertical}`)
+    }
+
+    this.updatingSource = true
+    this.editorController.replaceRange(updated, 0, this.editorController.value.length)
+    this.updatingSource = false
+    this.operationPending = false
+    this.setControlsDisabled(false)
+    this.setStatus("Updating visual preview…")
   }
 
   handleAction(event) {
@@ -399,20 +518,7 @@ export default class extends Controller {
     const block = slide?.blocks?.[blockIndex]
     if (!slide || !block) return
     const source = this.sourceValue()
-    let from = this.blockOperationStart(slide, block)
-    let to = block.range.end
-
-    if (block.position_scope === "group") {
-      const groupMembers = slide.blocks.filter((candidate) => candidate.position_directive_id === block.position_directive_id)
-      if (groupMembers.length === 1) {
-        const directiveIndex = slide.directives.findIndex((candidate) => candidate.id === block.position_directive_id)
-        const closing = slide.directives.slice(directiveIndex + 1).find((candidate) => candidate.type === "position_close")
-        if (closing) {
-          from = slide.directives[directiveIndex].range.start
-          to = closing.range.end
-        }
-      }
-    }
+    const { start: from, end: to } = blockOperationRange(slide, block)
 
     const before = source.slice(0, from)
     let after = source.slice(to)
@@ -472,13 +578,25 @@ export default class extends Controller {
   }
 
   previewStale(detail = {}) {
-    this.operationPending = true
-    this.setControlsDisabled(true)
+    if (!this.isMapSynchronized()) {
+      this.operationPending = true
+      this.setControlsDisabled(true)
+    }
     this.syncProjectionEditability({ preserveActive: detail.preserveActive })
   }
 
+  isMapSynchronized() {
+    return Boolean(
+      this.map &&
+      this.editorController &&
+      Number(this.map.source_length || 0) === this.editorController.value.length
+    )
+  }
+
   canOperateOnProjection() {
-    return this.element.dataset.editorMode !== "source" && this.element.previewController?.projectionFresh !== false
+    if (this.element.dataset.editorMode === "source") return false
+    if (this.operationPending) return false
+    return this.isMapSynchronized() || this.element.previewController?.projectionFresh !== false
   }
 
   canEditBlock(blockElement) {
@@ -496,20 +614,12 @@ export default class extends Controller {
     this.element.querySelectorAll("[data-editor-block-id][data-editor-source-editable]").forEach((block) => {
       const sourceEditable = block.dataset.editorSourceEditable !== "false"
       const editable = sourceEditable && visual && (fresh || (preserveActive && block === active))
-      block.contentEditable = String(editable)
-      if (editable) {
-        block.setAttribute("role", "textbox")
-        block.setAttribute("aria-label", block.classList.contains("slide-title") ? "Editable slide title" : "Editable slide block")
-        block.setAttribute("aria-multiline", "true")
-        block.setAttribute("spellcheck", "true")
-        block.removeAttribute("aria-readonly")
-      } else {
-        block.removeAttribute("role")
-        block.removeAttribute("aria-label")
-        block.removeAttribute("aria-multiline")
-        block.removeAttribute("spellcheck")
-        block.setAttribute("aria-readonly", "true")
-      }
+      const label = block.classList.contains("slide-title") ? "Editable slide title" : "Editable slide block"
+      setProjectionBlockEditable(block, editable, label)
+    })
+    this.element.querySelectorAll("[data-presentation-editor-align]").forEach((control) => {
+      const disabled = !visual || !this.map
+      if (control.disabled !== disabled) control.disabled = disabled
     })
   }
 
@@ -597,9 +707,7 @@ export default class extends Controller {
   }
 
   blockOperationStart(slide, block) {
-    if (block.position_scope !== "block" || !block.position_directive_id) return block.range.start
-    const directive = slide.directives.find((candidate) => candidate.id === block.position_directive_id)
-    return directive?.range.start ?? block.range.start
+    return blockOperationStart(slide, block)
   }
 
   updateBlockBoundaries() {
@@ -617,11 +725,11 @@ export default class extends Controller {
       }
 
       if (disabled) {
-        control.dataset.editorBoundaryDisabled = "true"
-        control.disabled = true
+        if (control.dataset.editorBoundaryDisabled !== "true") control.dataset.editorBoundaryDisabled = "true"
+        if (!control.disabled) control.disabled = true
       } else {
-        delete control.dataset.editorBoundaryDisabled
-        control.disabled = false
+        if (control.dataset.editorBoundaryDisabled !== undefined) delete control.dataset.editorBoundaryDisabled
+        if (control.disabled) control.disabled = false
       }
     })
   }
@@ -634,8 +742,14 @@ export default class extends Controller {
     return ranges
       .sort((left, right) => right.range.start - left.range.start)
       .reduce((updated, candidate) => {
+        let rangeEnd = candidate.range.end
         const before = updated.slice(0, candidate.range.start)
-        let after = updated.slice(candidate.range.end)
+        const lineEnding = updated.slice(candidate.range.start, rangeEnd).match(/(?:\r\n|\r|\n)$/)?.[0]
+        if (!lineEnding) {
+          const restMatch = updated.slice(rangeEnd).match(/^(?:\r\n|\r|\n)/)?.[0]
+          if (restMatch) rangeEnd += restMatch.length
+        }
+        let after = updated.slice(rangeEnd)
         if (before.endsWith("\n\n") && after.startsWith("\n")) after = after.slice(1)
         return `${before}${after}`
       }, source)
@@ -660,7 +774,7 @@ export default class extends Controller {
   }
 
   setControlsDisabled(disabled) {
-    this.element.querySelectorAll("[data-presentation-editor-action], [data-presentation-editor-position]").forEach((control) => {
+    this.element.querySelectorAll("[data-presentation-editor-action]").forEach((control) => {
       if (disabled) {
         if (control.dataset.editorOperationPending !== "true") {
           control.dataset.editorOriginalDisabled = String(control.disabled)

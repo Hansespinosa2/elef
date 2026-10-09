@@ -49,21 +49,58 @@ module ApplicationHelper
   end
 
   def document_link_titles(workspace: Workspace.default)
-    Document.where(workspace: workspace || Workspace.default).order(:title).pluck(:title).select do |title|
-      DocumentLinks::Parser.linkable_title?(title)
+    titles = Document.where(workspace: workspace || Workspace.default).order(:title).pluck(:title)
+    Source::JavascriptRenderer.linkable_document_titles(titles)
+  end
+
+  def shared_editor_projection(
+    work,
+    source: work.source.to_s,
+    title: work.title
+  )
+    workspace = work.workspace || Workspace.default
+    documents = Document.where(workspace: workspace)
+      .includes(:document_detail, :document_aliases)
+      .order(:title)
+      .to_a
+    linkable_titles = Source::JavascriptRenderer.linkable_document_titles(
+      documents.flat_map { |document| [document.title, *document.document_aliases.map(&:alias_name)] }
+    ).to_h { |value| [value, true] }
+    document_nodes = documents.map do |document|
+      {
+        id: document.id.to_s,
+        title: document.title,
+        documentKey: document.document_key,
+        aliases: document.document_aliases
+          .map(&:alias_name)
+          .select { |name| linkable_titles.key?(name) },
+        href: document_path(document)
+      }
     end
+    document_nodes.select! { |node| linkable_titles.key?(node[:title]) }
+
+    margin_settings = if work.presentation?
+      margin = work.document.margin_settings
+      { section: margin.section, subsection: margin.subsection, footnote: margin.footnote, slide_count: margin.slide_count }
+    else
+      {}
+    end
+
+    Source::JavascriptRenderer.editor_preview(
+      source,
+      kind: work.document? ? "document" : "presentation",
+      title: title,
+      deck_id: work.id,
+      media_resolver: WorkAssets.resolver_for(work),
+      document_nodes: document_nodes,
+      style: { theme: work.theme, typography: work.typography },
+      margin_settings: margin_settings,
+      allow_remote_media: true
+    )
   end
 
   def snippet_category_label(category)
     category == "Elef DSL" ? "Elef directives" : category
   end
 
-  def math_shortcut_example_input(shortcut)
-    alias_name = shortcut.aliases.first
-    shortcut.prefix == "." ? "x.#{alias_name}" : "@#{alias_name}"
-  end
-
-  def math_shortcut_example_expansion(shortcut)
-    shortcut.expansion.to_s.gsub(MathShortcuts::Catalog::PLACEHOLDER, "x")
-  end
 end

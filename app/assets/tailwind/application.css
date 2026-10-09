@@ -1,7 +1,9 @@
-@import "tailwindcss";
+@import "tailwindcss" source(none);
 
 @source "../../../app/views";
 @source "../../../app/helpers";
+@source "../../../app/javascript/controllers";
+@source "../../../app/javascript/lib";
 
 @theme {
   --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;

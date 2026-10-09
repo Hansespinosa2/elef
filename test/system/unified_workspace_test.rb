@@ -28,20 +28,20 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     input.send_keys("new snippet", :enter)
 
     assert_current_path new_snippet_path
-    assert_selector "#snippet_name:focus"
-    assert_selector "label[for='snippet_name']", text: "Name"
-    assert_selector "label[for='snippet_trigger']", text: "Trigger"
-    assert_selector "label[for='snippet_body']", text: "Body"
+    assert_selector "#authoring-name:focus"
+    assert_selector "label[for='authoring-name']", text: "Name"
+    assert_selector "label[for='authoring-trigger']", text: "Trigger"
+    assert_selector "label[for='authoring-body']", text: "Body"
 
     keyboard = page.driver.browser.action
     keyboard.send_keys("Meeting outline").send_keys(:tab).send_keys("agenda")
       .send_keys(:tab).send_keys("A reusable meeting outline")
       .send_keys(:tab).send_keys(:tab).send_keys("# Agenda")
       .send_keys(:enter).send_keys(:enter).send_keys("- ${1:topic}")
-      .send_keys(:tab).send_keys(:enter).perform
+      .send_keys(:tab).send_keys(:tab).send_keys(:enter).perform
 
-    assert_current_path snippets_path
-    assert_selector ".flash", text: "Snippet created."
+    assert_current_path new_snippet_path
+    assert_selector "#authoring-settings-status", text: "New entry saved (snippet)."
     assert_selector ".snippet-card", text: "Meeting outline"
     snippet = Snippet.find_by!(trigger: "agenda")
     assert_equal "# Agenda\n\n- ${1:topic}", snippet.body
@@ -95,13 +95,14 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     MathShortcut.create!(name: "Array", aliases: ["array"], prefix: "@", expansion: "\\operatorname{array}")
 
     visit edit_document_path(document)
+    click_on "Source"
     page.execute_script("const editor = document.querySelector('.source-field').editorController; editor.setSelectionRange(editor.value.length, editor.value.length); editor.focus();")
     editor = find(".cm-content")
     editor.send_keys("\n$x.b")
     assert_selector ".math-shortcut-palette .snippet-option", text: /Bold/, wait: 5
     editor.send_keys(:enter)
 
-    editor.send_keys("\n@a")
+    editor.send_keys("\n$@a")
     assert_selector ".math-shortcut-palette .snippet-option", text: /Alpha/, wait: 5
     assert_selector ".math-shortcut-option.is-selected", text: /Alpha/
     editor.send_keys(:enter)
@@ -111,7 +112,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     assert_includes source, "\\alpha"
     refute_includes source, "\\operatorname{array}"
 
-    editor.send_keys("\n@Q")
+    editor.send_keys(" @Q")
     capital_theta = find(".math-shortcut-option", text: /Capital Theta/, wait: 5)
     within(capital_theta) do
       assert_selector ".math-shortcut-trigger", text: "@Q"
@@ -119,7 +120,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     end
     editor.send_keys(:enter)
 
-    editor.send_keys("\n@q")
+    editor.send_keys(" @q")
     theta = find(".math-shortcut-option", text: /^Theta/, wait: 5)
     within(theta) do
       assert_selector ".math-shortcut-trigger", text: "@q"
@@ -127,7 +128,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     end
     editor.send_keys(:enter)
 
-    editor.send_keys("\n@w")
+    editor.send_keys(" @w")
     omega = find(".math-shortcut-option", text: /^Omega/, wait: 5)
     within(omega) do
       assert_selector ".math-shortcut-trigger", text: "@w"
@@ -140,14 +141,53 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     assert_includes source, "\\theta"
     assert_includes source, "\\omega"
 
-    editor.send_keys("\n@A")
+    editor.send_keys(" @A")
     assert_no_selector ".math-shortcut-palette:not([hidden])", wait: 1
+  end
+
+  test "shows and accepts beta and theta shortcuts after an inline math opener" do
+    document = Document.create!(title: "Greek math palette", source: "# Greek math palette")
+
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    editor.click
+    editor.send_keys("\n$ @b")
+
+    beta = find(".math-shortcut-option", text: /Beta/, wait: 5)
+    within(beta) do
+      assert_selector ".math-shortcut-trigger", text: "@b"
+      assert_selector ".math-shortcut-expansion", text: "\\beta"
+    end
+    editor.send_keys(:tab)
+    assert_includes find_field("Markdown source").value, "$ \\beta"
+
+    editor.send_keys(" @q")
+    theta = find(".math-shortcut-option", text: /^Theta/, wait: 5)
+    within(theta) do
+      assert_selector ".math-shortcut-trigger", text: "@q"
+      assert_selector ".math-shortcut-expansion", text: "\\theta"
+    end
+    editor.send_keys(:tab)
+    source = find_field("Markdown source").value
+    assert_includes source, "\\beta"
+    assert_includes source, "\\theta"
+
+    editor.send_keys(" @=")
+    equivalent = find(".math-shortcut-option", text: /Equivalent/, wait: 5)
+    within(equivalent) do
+      assert_selector ".math-shortcut-trigger", text: "@="
+      assert_selector ".math-shortcut-expansion", text: "\\equiv"
+    end
+    editor.send_keys(:tab)
+    assert_includes find_field("Markdown source").value, "\\equiv"
   end
 
   test "shows compact math shortcut suggestions with their LaTeX expansion" do
     document = Document.create!(title: "Math shortcut previews", source: "# Math shortcut previews")
 
     visit edit_document_path(document)
+    click_on "Source"
     editor = find(".cm-content")
     editor.click
     editor.send_keys("\n$@g")
@@ -180,22 +220,46 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     end
   end
 
+  test "previews the full chained math expansion that the shortcut commits" do
+    document = Document.create!(title: "Chained math previews", source: "# Chained math previews")
+
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    editor.click
+    editor.send_keys("\n$$x.bar.b.t.inv")
+
+    inverse = find(".math-shortcut-option", text: /Inverse/, wait: 5)
+    within(inverse) do
+      assert_selector ".math-shortcut-trigger", text: "x.bar.b.t.inv"
+      assert_selector ".math-shortcut-expansion", text: "\\left(\\bar{\\mathbf{x}}^\\top\\right)^{-1}"
+      assert_match "\\left(\\bar{\\mathbf{x}}^\\top\\right)^{-1}", inverse["title"]
+    end
+
+    editor.send_keys(:enter)
+
+    assert_includes find_field("Markdown source").value, "\\left(\\bar{\\mathbf{x}}^\\top\\right)^{-1}"
+    assert_selector ".document-surface .katex", minimum: 1, wait: 5
+    assert_no_selector ".math-error"
+  end
+
   test "uses dark Aradia surfaces for math shortcut settings" do
     visit math_shortcuts_path
 
     assert_selector ".math-shortcut-card"
     assert_equal "rgb(24, 33, 38)", page.evaluate_script("getComputedStyle(document.querySelector('.math-shortcut-card')).backgroundColor")
+    assert_equal "rgb(24, 33, 38)", page.evaluate_script("getComputedStyle(document.querySelector('.authoring-settings-dialog')).backgroundColor")
 
     click_on "New shortcut"
-    assert_selector ".math-shortcut-form"
-    assert_equal "rgb(24, 33, 38)", page.evaluate_script("getComputedStyle(document.querySelector('.math-shortcut-form')).backgroundColor")
-    assert_equal "rgb(17, 22, 26)", page.evaluate_script("getComputedStyle(document.querySelector('.math-shortcut-form input')).backgroundColor")
+    assert_selector ".authoring-entry-form:not([hidden]) .authoring-math-fields:not([hidden])"
+    assert_equal "rgb(17, 22, 26)", page.evaluate_script("getComputedStyle(document.querySelector('.authoring-math-fields input')).backgroundColor")
   end
 
   test "expands common TeX operators and walks fraction tab stops" do
     document = Document.create!(title: "TeX operators", source: "# TeX operators")
 
     visit edit_document_path(document)
+    click_on "Source"
     editor = find(".cm-content")
     editor.click
     editor.send_keys("\n$@nabla")
@@ -224,33 +288,79 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     assert_no_selector ".math-error"
   end
 
+  test "inserts structured math entries with ordered placeholder stops" do
+    document = Document.create!(title: "Structured math", source: "# Math\n\n$$x$$")
+
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector(".source-field").editorController;
+      const opening = editor.value.indexOf("$$x") + 2;
+      editor.setSelectionRange(opening);
+      editor.focus();
+    JAVASCRIPT
+
+    editor.send_keys("@frac")
+    assert_selector ".math-shortcut-option", text: /Fraction/, wait: 5
+    editor.send_keys(:enter, "n", :tab, "d", :tab, " +@choose")
+    assert_selector ".math-shortcut-option", text: /Choose/, wait: 5
+    editor.send_keys(:enter, "n", :tab, "k", :tab, " +@cases")
+    assert_selector ".math-shortcut-option", text: /Cases/, wait: 5
+    editor.send_keys(:enter, "f(x)", :tab, "x>0", :tab, "0", :tab, "otherwise", :tab, " +@equation")
+    assert_selector ".math-shortcut-option", text: /Equation/, wait: 5
+    editor.send_keys(:enter, "lhs", :tab, "rhs", :tab, " +@gather")
+    assert_selector ".math-shortcut-option", text: /Gather/, wait: 5
+    editor.send_keys(:enter, "g_1", :tab, "g_2", :tab)
+
+    source = find_field("Markdown source").value
+    expected = [
+      "\\frac{n}{d}",
+      "\\binom{n}{k}",
+      "\\begin{cases}",
+      "f(x) & x>0",
+      "0 & otherwise",
+      "\\begin{aligned}",
+      "lhs &= rhs",
+      "\\begin{gathered}",
+      "g_1 \\\\",
+      "g_2"
+    ]
+    positions = expected.map { |fragment| source.index(fragment) }
+    assert positions.all?, "missing structured output in #{source.inspect}"
+    assert_equal positions.sort, positions, "math placeholders or commands were reordered"
+    %w[@frac @choose @cases @equation @gather].each { |command| refute_includes source, command }
+  end
+
   test "uses the selected math transform without duplicating its base" do
     document = Document.create!(title: "Selected math transform", source: "# Math")
 
     visit edit_document_path(document)
+    click_on "Source"
     editor = find(".cm-content")
     editor.click
     editor.send_keys("\n$x.bo")
     find(".math-shortcut-palette .snippet-option", text: /Bold/).click
+    editor.send_keys(:enter)
 
     source = find_field("Markdown source").value
     assert_includes source, "$\\mathbf{x}"
     refute_includes source, "$x\\mathbf{x}"
   end
 
-  test "ships the common block and list colon snippets" do
+  test "inserts an equation block from the source command palette" do
     document = Document.create!(title: "Authoring snippets", source: "# Authoring snippets")
 
     visit edit_document_path(document)
+    click_on "Source"
     editor = find(".cm-content")
     editor.click
-    editor.send_keys("\n:bga")
-    assert_selector ".snippet-palette .snippet-option", text: /Gathered equations/, wait: 5
+    editor.send_keys("\n/equation")
+    assert_selector ".snippet-palette .snippet-option", text: /Equation/, wait: 5
     editor.send_keys(:enter)
 
     source = find_field("Markdown source").value
-    assert_includes source, "\\begin{gathered}"
-    assert_includes source, "\\end{gathered}"
+    assert_includes source, "$$\nequation\n$$"
   end
 
   test "front matter can be revealed and hidden again on demand" do

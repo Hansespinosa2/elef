@@ -2,6 +2,16 @@ require "test_helper"
 require "tempfile"
 
 class PresentationsControllerTest < ActionDispatch::IntegrationTest
+  test "rename preserves the all-library view and rejects arbitrary destinations" do
+    work = presentations(:one)
+    get root_path
+    assert_select "form[action='#{rename_presentation_path(work)}'] input[name='library_view'][value='all']"
+    patch rename_presentation_path(work), params: { library_view: "all", presentation: { title: "Renamed" } }
+    assert_redirected_to root_path
+    patch rename_presentation_path(work), params: { library_view: "https://example.invalid/", presentation: { title: "Again" } }
+    assert_redirected_to presentations_path
+  end
+
   test "library rename form submits scoped parameters" do
     get presentations_path
     assert_select "form[action='#{rename_presentation_path(presentations(:one))}']" do
@@ -37,12 +47,14 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "stale JSON saves return recovery metadata without overwriting the server draft" do
-    presentation = Presentation.create!(title: "Concurrent", source: "# Initial")
+    source = "---\ntheme: dark\ntypography: technical\n---\n# Initial"
+    server_source = "---\ntheme: dark\ntypography: technical\n---\n# Server"
+    presentation = Presentation.create!(title: "Concurrent", source: source)
     lock_version = presentation.lock_version
     base_revision = presentation.revision_token
 
     patch presentation_path(presentation), params: {
-      presentation: { source: "# Server", lock_version: lock_version, base_revision: base_revision }
+      presentation: { source: server_source, lock_version: lock_version, base_revision: base_revision }
     }, as: :json
     assert_response :ok
 
@@ -54,7 +66,22 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "conflict", response.parsed_body["status"]
     assert_predicate response.parsed_body["recovery_revision_id"], :present?
     assert_equal "# Local", response.parsed_body.dig("recovery_revision", "source")
-    assert_equal "# Server", presentation.reload.source
+    assert_equal server_source, presentation.reload.source
+    assert_equal "dark", response.parsed_body.dig("current", "theme")
+    assert_equal "technical", response.parsed_body.dig("current", "typography")
+  end
+
+  test "invalid HTML draft saves re-render the edit form instead of redirecting" do
+    presentation = presentations(:one)
+    source = presentation.source
+
+    patch presentation_path(presentation), params: {
+      presentation: { title: "x" * 121, source: "# Rejected" }
+    }
+
+    assert_response :unprocessable_content
+    assert_select "form[action='#{presentation_path(presentation)}']"
+    assert_equal source, presentation.reload.source
   end
 
   test "forks both relationship types and rejects unsupported types" do
@@ -112,26 +139,28 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
 
   test "editor wires autosave and keeps new presentations client-only until creation" do
     get edit_presentation_path(presentations(:one))
-    assert_select 'form[data-controller~="autosave"]'
+    assert_select "form.visual-editor-form"
     assert_select "form[action='#{publish_presentation_path(presentations(:one))}'] button.button", text: "Present"
-    assert_select 'form[data-controller~="autosave"] form', count: 0
-    assert_select '[data-autosave-target="retry"]'
-    assert_select '[data-preview-target="retry"]'
-    assert_select '[data-controller~="editor"]'
-    assert_select '[data-editor-target="surface"][aria-labelledby]'
-    assert_select 'textarea[name="presentation[source]"][data-editor-target="input"]'
-    assert_select '[data-editor-target="mode"]', text: "Standard"
+    assert_select 'form.visual-editor-form form', count: 0
+    assert_select '[data-editor-view-config]'
+    assert_select '[data-editor-form-controllers*="autosave"][data-editor-form-controllers*="preview"]'
+    config = editor_host_config
+    assert_equal "presentation", config.fetch("kind")
+    assert_equal "presentation[source]", config.fetch("sourceName")
+    assert_equal "presentation[theme]", config.fetch("themeName")
+    assert_equal "presentation[typography]", config.fetch("typographyName")
+    assert config.fetch("persisted")
     assert_select 'button[data-dirty-navigation]', text: "Present"
     assert_select "a[href='#{print_presentation_path(presentations(:one))}']", text: "Print draft / save PDF"
     get new_presentation_path
-    assert_select 'form[data-controller~="autosave"][data-autosave-save-enabled-value="false"]'
-    assert_select "textarea[name='presentation[source]']", text: Presentation::DEFAULT_SOURCE
-    assert_select 'form[data-controller~="preview"]'
+    assert_select 'form.visual-editor-form[data-autosave-save-enabled-value="false"]'
+    config = editor_host_config
+    assert_equal Presentation::DEFAULT_SOURCE, config.fetch("source")
+    refute config.fetch("persisted")
     assert_select 'form[data-preview-url-value="/presentations/preview"]'
-    assert_select 'form[data-controller~="slide-overview"][data-controller~="media"]'
-    assert_select '[data-slide-overview-target="grid"][role="group"]'
-    assert_select '.preview-pane[data-action="dragover->media#dragOver dragleave->media#dragLeave drop->media#drop"]'
-    assert_select 'button[data-action="media#choose"]', text: "Add image or MP4"
+    assert_select '[data-editor-form-controllers*="slide-overview"][data-editor-form-controllers*="media"]'
+    assert_equal "presentation", config.fetch("kind")
+    assert_equal 1, config.fetch("slideCount")
   end
 
   test "uploads image assets with content digest references and rejects other files" do
@@ -390,11 +419,13 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     presentation = Presentation.create!(title: "Editable deck", source: "# First\n\nBody")
 
     post preview_presentation_path(presentation), params: {
-      presentation: { source: "# Draft\n\nBody" }, projection: "editor", revision: "editor-1"
+      presentation: { source: "# Draft\n\nBody\n\n![Diagram](/diagram.svg)" }, projection: "editor", revision: "editor-1"
     }, as: :json
 
     assert_response :success
     assert_includes response.parsed_body["html"], 'contenteditable="true"'
+    assert_includes response.parsed_body["html"], 'class="editor-media-caption"'
+    assert_includes response.parsed_body["html"], 'src="/diagram.svg"'
     assert_equal "editor-1", response.parsed_body["revision"]
     assert_equal "# First\n\nBody", presentation.reload.source
 
@@ -555,7 +586,7 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
 
   test "renders inferred layouts and positioned blocks in the saved preview" do
     presentation = Presentation.create!(title: "Automatic layouts", source: <<~MARKDOWN)
-      :::position{right top}
+      :::align{top right}
       # Compare
 
       ## Left
@@ -568,7 +599,7 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
       ---
       # Positioned
 
-      :::position{center middle}
+      :::align{center center}
 
       Center this message.
     MARKDOWN
@@ -579,7 +610,7 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_select ".slide-two-column .slide-regions"
     assert_select ".slide-two-column .slide-title.slide-block.position-right.position-top", text: "Compare"
     assert_select ".slide-statement .position-center.position-middle", text: /Center this message/
-    assert_no_match /:::position/, response.body
+    assert_no_match /:::align/, response.body
   end
 
   test "renders margin metadata and slide count in both views" do
@@ -663,11 +694,16 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     get edit_presentation_path(presentations(:one))
 
     assert_response :success
-    assert_select "select[name='presentation[typography]']" do
-      assert_select "option[value='book']", text: "Book"
-      assert_select "option[value='modern']", text: "Modern"
-      assert_select "option[value='technical']", text: "Technical"
-    end
+    assert_equal "presentation[typography]", editor_host_config.fetch("typographyName")
+    assert_equal "presentation", editor_host_config.fetch("kind")
+  end
+
+  private
+
+  def editor_host_config
+    host = css_select("[data-editor-view-config]").first
+    assert host, "expected the shared editor host"
+    JSON.parse(host["data-editor-view-config"])
   end
 
   test "renders positioning warnings without leaking directives" do
@@ -689,6 +725,72 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert json["id"]
     assert_equal edit_presentation_path(json["id"]), json["edit_url"]
     assert_equal upload_asset_presentation_path(json["id"]), json["upload_url"]
+  end
+
+  test "rejects image and video uploads over the 50 MB media limit" do
+    presentation = Presentation.create!(title: "Oversized media", source: "# Media")
+
+    Tempfile.create(["huge", ".png"]) do |file|
+      file.truncate(50.megabytes + 1)
+      upload = Rack::Test::UploadedFile.new(file.path, "image/png")
+      post upload_asset_presentation_path(presentation), params: { file: upload }, headers: { "Accept" => "application/json" }
+    end
+    assert_response :unprocessable_content
+    assert_equal "Media files must be 50 MB or smaller.", response.parsed_body["error"]
+
+    Tempfile.create(["huge", ".mp4"]) do |file|
+      file.truncate(50.megabytes + 1)
+      upload = Rack::Test::UploadedFile.new(file.path, "video/mp4")
+      post upload_asset_presentation_path(presentation), params: { file: upload }, headers: { "Accept" => "application/json" }
+    end
+    assert_response :unprocessable_content
+    assert_equal "Media files must be 50 MB or smaller.", response.parsed_body["error"]
+
+    assert_empty presentation.assets.reload
+  end
+
+  test "history lists revisions newest first with their payload fields" do
+    presentation = Presentation.create!(title: "History deck", source: "# First")
+    later = presentation.work_revisions.create!(
+      workspace: presentation.workspace,
+      source: "# Second",
+      source_digest: WorkRevision.digest("# Second"),
+      reason: "checkpoint",
+      status: "checkpoint"
+    )
+
+    get history_presentation_path(presentation)
+
+    assert_response :success
+    json = response.parsed_body
+    assert_equal [later.id, presentation.work_revisions.order(:id).first.id], json.map { |entry| entry["id"] }
+    assert_equal %w[created_at id reason source source_digest status].sort, json.first.keys.sort
+    assert_equal "# Second", json.first["source"]
+    assert_equal WorkRevision.digest("# Second"), json.first["source_digest"]
+    assert_equal "checkpoint", json.first["reason"]
+    assert_equal "checkpoint", json.first["status"]
+    assert json.first["created_at"].present?
+  end
+
+  test "restore reinstates a chosen revision and reports the restored draft" do
+    presentation = Presentation.create!(title: "Restore deck", source: "# First")
+    presentation.update!(source: "# Second")
+    original = presentation.work_revisions.order(:id).first
+
+    post restore_presentation_path(presentation), params: { revision_id: original.id }
+
+    assert_redirected_to edit_presentation_path(presentation)
+    assert_equal "Revision restored.", flash[:notice]
+    assert_equal "# First", presentation.reload.source
+
+    presentation.update!(source: "# Third")
+    post restore_presentation_path(presentation), params: { revision_id: original.id }, as: :json
+
+    assert_response :ok
+    assert_equal "# First", response.parsed_body["source"]
+    assert_equal "saved", response.parsed_body["status"]
+    assert_equal "restore", response.parsed_body.dig("latest_checkpoint", "reason")
+    assert_equal "# First", presentation.reload.source
   end
 
   test "media_asset serves assets by filename and relative path as well as digest" do

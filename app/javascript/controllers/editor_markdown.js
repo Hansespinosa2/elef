@@ -1,4 +1,4 @@
-import "katex"
+import katex from "katex"
 
 const INLINE_MATH = /(?<!\\)\\\[([\s\S]+?)\\\]|(?<!\\)\$\$([\s\S]+?)\$\$(?!\$)|(?<!\\)\\\(([^\r\n]+?)\\\)|(?<![\\$])\$(?!\$|\s)([^$\r\n]+?)(?<!\s)\$(?!\$)/g
 
@@ -13,10 +13,12 @@ export function markdownForVisibleText(markdown, text, kind, element = null, { d
   const protectedElements = protectedElementsFor(element)
   const allMathElements = allMathElementsFor(element)
   const activeCount = allMathElements.filter((candidate) => candidate.dataset.editorMathActive === "true").length
+  const activeDisplayMath = activeDisplayMathBlock(source, allMathElements)
+  if (activeDisplayMath !== null) return activeDisplayMath
   const sourceAtoms = sourceAtomCounts(source)
   const expectedAtoms = protectedElements.length + activeCount
   if (element?.querySelectorAll && sourceAtoms.total !== expectedAtoms &&
-    !hasMatchingActiveMathDelimiter(source, allMathElements, sourceAtoms.total, expectedAtoms)) return source
+    !hasMatchingActiveMathDelimiter(source, allMathElements, sourceAtoms.total, protectedElements.length, expectedAtoms)) return source
   const structured = kind === "list" || kind === "quote"
   const sourceText = documentMode && structured ? String(text || "").replace(/\u00a0/g, " ") : rawValue
   const atomText = protectedElements.length ? visibleTextWithProtectedAtoms(element, protectedElements.length) : sourceText
@@ -47,7 +49,7 @@ export function sourceOffsetForVisiblePosition(source, element, visiblePosition)
   const sourceAtoms = sourceAtomCounts(source).total
   const expectedAtoms = protectedElements.length + activeCount
   if (sourceAtoms !== expectedAtoms &&
-    !hasMatchingActiveMathDelimiter(source, allMathElements, sourceAtoms, expectedAtoms)) return null
+    !hasMatchingActiveMathDelimiter(source, allMathElements, sourceAtoms, protectedElements.length, expectedAtoms)) return null
 
   const projection = inlineProjection(source, 0, protectedElements, 0, inlineFormatBudget(element), allMathElements)
   return projection.boundaries[visiblePosition] ?? null
@@ -57,7 +59,6 @@ export function sourceOffsetForVisiblePosition(source, element, visiblePosition)
 // that its HTML and source map stay atomic. Project completed expressions into
 // the active block locally, keeping their Markdown delimiters in the source.
 export function renderInlineMath(element) {
-  const katex = globalThis.katex
   if (!element || typeof katex?.renderToString !== "function") return 0
 
   const textNodes = []
@@ -94,6 +95,27 @@ export function renderInlineMath(element) {
       const displayMode = match[1] !== undefined || match[2] !== undefined
       const openDelimiter = match[1] !== undefined ? "\\[" : match[2] !== undefined ? "$$" : match[3] !== undefined ? "\\(" : "$"
       const closeDelimiter = match[1] !== undefined ? "\\]" : match[2] !== undefined ? "$$" : match[3] !== undefined ? "\\)" : "$"
+
+      if (selection?.isCollapsed && selection.anchorNode === node && anchorOffset >= from + openDelimiter.length &&
+        anchorOffset <= to - closeDelimiter.length) {
+        const activeMath = document.createElement("span")
+        activeMath.className = "editor-math-active"
+        activeMath.dataset.editorMathActive = "true"
+        activeMath.dataset.editorMathOpen = openDelimiter
+        activeMath.dataset.editorMathClose = closeDelimiter
+        activeMath.dataset.editorMathSource = expression
+        if (displayMode) activeMath.classList.add("editor-live-math-display")
+        activeMath.contentEditable = "true"
+        activeMath.spellcheck = false
+
+        const activeText = document.createTextNode(match[0])
+        activeMath.append(activeText)
+        fragment.append(activeMath)
+        segments.push({ from, to, node: activeMath, textNode: activeText, type: "active-math" })
+        cursor = to
+        return
+      }
+
       const rendered = document.createElement("span")
       try {
         rendered.innerHTML = katex.renderToString(expression, { displayMode, throwOnError: true })
@@ -137,6 +159,9 @@ export function renderInlineMath(element) {
 
       const segment = segments.find((candidate) => candidate.type === "text" && offset >= candidate.from && offset <= candidate.to)
       if (segment) return [segment.node, offset - segment.from]
+
+      const activeMath = segments.find((candidate) => candidate.type === "active-math" && offset >= candidate.from && offset <= candidate.to)
+      if (activeMath) return [activeMath.textNode, offset - activeMath.from]
 
       const math = segments.find((candidate) => candidate.type === "math" && offset > candidate.from && offset < candidate.to)
       if (!math) return null
@@ -287,6 +312,28 @@ function markdownForImage(source, element, fallback) {
   return `${image[1]}![${alt}](${image[3]}${title})${image[5]}`
 }
 
+function activeDisplayMathBlock(source, allMathElements) {
+  const activeMath = allMathElements.find((candidate) => candidate.dataset.editorMathActive === "true")
+  if (!activeMath) return null
+
+  const opening = activeMath.dataset.editorMathOpen || "$"
+  const closing = activeMath.dataset.editorMathClose || opening
+  if (!["$$", "\\["].includes(opening)) return null
+
+  const fullText = activeMath.textContent || ""
+  if (!fullText.startsWith(opening) || !fullText.endsWith(closing)) return null
+
+  const openingIndex = source.indexOf(opening)
+  const closingIndex = source.lastIndexOf(closing)
+  if (openingIndex < 0 || closingIndex < openingIndex + opening.length) return null
+
+  const before = source.slice(0, openingIndex)
+  const after = source.slice(closingIndex + closing.length)
+  if (!/^[ \t]{0,3}$/.test(before) || !/^[ \t]*$/.test(after)) return null
+
+  return before + fullText + after
+}
+
 function preserveInlineMarkdown(source, value, protectedElements, formatBudget, allMathElements = []) {
   return preserveProjectedMarkdown(source, value, inlineProjection(source, 0, protectedElements, 0, formatBudget, allMathElements))
 }
@@ -371,7 +418,8 @@ function inlineProjection(source, sourceOffset = 0, protectedElements = [], prot
   }
 
   for (let index = 0; index < source.length;) {
-    const token = inlineTokenAt(source.slice(index), formatBudget, source[index - 1])
+    const token = inlineTokenAt(source.slice(index), formatBudget, source[index - 1]) ||
+      activeEmptyMathTokenAt(source, index, allMathElements[mathIndex])
     if (!token) {
       const codePoint = source.codePointAt(index)
       const width = codePoint > 0xffff ? 2 : 1
@@ -569,33 +617,64 @@ export function allMathElementsFor(element) {
   return [...(element?.querySelectorAll?.("[data-editor-math-source], [data-editor-math-active]") || [])]
 }
 
-function hasMatchingActiveMathDelimiter(source, allMathElements, sourceAtoms, expectedAtoms) {
+function hasMatchingActiveMathDelimiter(source, allMathElements, sourceAtoms, protectedAtomCount, expectedAtoms) {
   const missingAtoms = expectedAtoms - sourceAtoms
-  if (missingAtoms <= 0) return false
+  if (missingAtoms <= 0 || sourceAtoms < protectedAtomCount) return false
 
-  let matched = 0
-  const availableDelimiters = new Map()
-  allMathElements.forEach((element) => {
-    if (matched >= missingAtoms || element.dataset.editorMathActive !== "true") return
+  // An active span can outlive the source token while its empty delimiters
+  // are being edited. Count that mismatch only when a delimiter pair appears
+  // at the same math position in the source and DOM.
+  return matchingEmptyActiveMathCount(source, allMathElements) === missingAtoms
+}
 
-    const open = element.dataset.editorMathOpen || "$"
-    const close = element.dataset.editorMathClose || open
-    const delimiter = `${open}${close}`
-    if (!availableDelimiters.has(delimiter)) {
-      availableDelimiters.set(delimiter, source.split(delimiter).length - 1)
+function matchingEmptyActiveMathCount(source, allMathElements, state = { mathIndex: 0, count: 0 }) {
+  for (let index = 0; index < source.length;) {
+    const token = inlineTokenAt(source.slice(index), null, source[index - 1])
+    if (token) {
+      if (token.kind === "math") state.mathIndex += 1
+      else if (token.kind === "link" || token.kind === "format") {
+        matchingEmptyActiveMathCount(token.content, allMathElements, state)
+      }
+      index += token.length
+      continue
     }
 
-    // The source can still have an empty expression while the active span
-    // already contains newly typed text and its pending projection has not
-    // flushed yet.
-    const available = availableDelimiters.get(delimiter)
-    if (available > 0) {
-      availableDelimiters.set(delimiter, available - 1)
-      matched += 1
+    const emptyMath = activeEmptyMathTokenAt(source, index, allMathElements[state.mathIndex])
+    if (emptyMath) {
+      state.mathIndex += 1
+      state.count += 1
+      index += emptyMath.length
+      continue
     }
-  })
 
-  return matched === missingAtoms
+    const codePoint = source.codePointAt(index)
+    index += codePoint > 0xffff ? 2 : 1
+  }
+
+  return state.count
+}
+
+function activeEmptyMathTokenAt(source, index, element) {
+  if (element?.dataset?.editorMathActive !== "true") return null
+
+  const open = element.dataset.editorMathOpen || "$"
+  const close = element.dataset.editorMathClose || open
+  const delimiter = `${open}${close}`
+  if (!source.startsWith(delimiter, index)) return null
+
+  if (open.startsWith("$") && close.startsWith("$")) {
+    if (source[index - 1] === "$" || source[index + delimiter.length] === "$") return null
+  } else if (isEscapedAt(source, index)) {
+    return null
+  }
+
+  return { length: delimiter.length, content: "", kind: "math" }
+}
+
+function isEscapedAt(source, index) {
+  let backslashes = 0
+  for (let offset = index - 1; offset >= 0 && source[offset] === "\\"; offset -= 1) backslashes += 1
+  return backslashes % 2 === 1
 }
 
 function atomMarker(index) {

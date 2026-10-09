@@ -61,9 +61,9 @@ class PresentationsController < ApplicationController
 
   def rename
     if @presentation.update(title: params.require(:presentation).permit(:title)[:title])
-      redirect_to presentations_path, notice: "Presentation renamed."
+      redirect_to(params[:library_view] == "all" ? root_path : presentations_path, notice: "Presentation renamed.")
     else
-      redirect_to presentations_path, alert: @presentation.errors.full_messages.to_sentence
+      redirect_to(params[:library_view] == "all" ? root_path : presentations_path, alert: @presentation.errors.full_messages.to_sentence)
     end
   end
 
@@ -171,37 +171,11 @@ class PresentationsController < ApplicationController
   end
 
   def upload_asset
-    upload = params.require(:file)
-    content_type = upload.content_type.to_s
-    unless content_type.start_with?("image/") || content_type == "video/mp4"
-      return render json: { error: "Choose an image or MP4 video." }, status: :unprocessable_content
-    end
-    if upload.size.to_i > 50.megabytes
-      return render json: { error: "Media files must be 50 MB or smaller." }, status: :unprocessable_content
-    end
-
-    blob = WorkAssets.attach_upload(@presentation, upload, content_type: content_type)
-    digest = WorkAssets.digest(blob)
-    @presentation.reload
-    Presentations::FolderSync.sync!(@presentation)
-    render json: {
-      digest: digest,
-      lock_version: @presentation.lock_version,
-      revision_token: @presentation.revision_token,
-      source: WorkAssets.markdown_source(
-        digest,
-        alt: params[:alt].presence || File.basename(upload.original_filename, ".*"),
-        fit: %w[contain cover].include?(params[:fit]) ? params[:fit] : "contain"
-      )
-    }, status: :created
+    upload_work_asset(@presentation, allow_video: true) { |work| Presentations::FolderSync.sync!(work) }
   end
 
   def media_asset
-    blob = WorkAssets.resolve_blob(@presentation, params[:digest])
-    return head :not_found unless blob
-
-    response.headers["Cache-Control"] = "private, max-age=3600"
-    send_data blob.download, type: blob.content_type, disposition: :inline, filename: blob.filename.to_s
+    send_work_media_asset(@presentation)
   end
 
   def publish
@@ -225,17 +199,11 @@ class PresentationsController < ApplicationController
   end
 
   def history
-    render json: @presentation.work_revisions.history.map { |revision| revision_payload(revision) }
+    render_work_history(@presentation)
   end
 
   def restore
-    revision = @presentation.work_revisions.find(params.require(:revision_id))
-    result = DraftRestorer.call(@presentation, revision)
-    payload = draft_payload(Drafts::Save::Result.new(:saved, result.work, result.revision, nil, [], nil))
-    respond_to do |format|
-      format.html { redirect_to edit_presentation_path(@presentation), notice: "Revision restored." }
-      format.json { render json: payload, status: :ok }
-    end
+    restore_work_revision(@presentation)
   end
 
   def export
@@ -265,10 +233,6 @@ class PresentationsController < ApplicationController
       :title, :source, :theme, :typography, :lock_version, :base_revision,
       :base_revision_id, :revision_token, :edit_session_id, :checkpoint, :reason
     )
-  end
-
-  def submitted_editor_mode
-    "source" if params[:editor_mode] == "source"
   end
 
   def pptx_params

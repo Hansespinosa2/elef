@@ -1,10 +1,10 @@
 class Presentation < Work
   WORK_TYPE = "presentation".freeze
   DEFAULT_SOURCE = <<~MARKDOWN.chomp.freeze
-    :::position{center middle}
+    :::align{center center}
     # Untitled Document
 
-    :::position {center}
+    :::align {center}
     Start writing Markdown here.
   MARKDOWN
   FORK_TYPES = PresentationLineageEdge::FORK_TYPES
@@ -69,10 +69,6 @@ class Presentation < Work
 
   def storage_dir
     Presentations::FolderSync.presentation_dir(self)
-  end
-
-  def presentation_detail_record
-    presentation_detail
   end
 
   def last_published_at

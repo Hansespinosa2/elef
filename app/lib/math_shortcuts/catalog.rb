@@ -2,22 +2,16 @@ module MathShortcuts
   class Catalog
     PLACEHOLDER = /\$\{(\d+)(?::([^}]*))?\}/.freeze
     DEFAULTS = [
-      { id: "default-bold", name: "Bold", aliases: %w[b bb bold], prefix: ".", description: "Bold mathematical symbols", expansion: "\\mathbf{${1}}", built_in: true },
-      { id: "default-hat", name: "Hat", aliases: %w[h hat], prefix: ".", description: "Put a hat over a symbol", expansion: "\\hat{${1}}", built_in: true },
-      { id: "default-tilde", name: "Tilde", aliases: %w[t tilde], prefix: ".", description: "Put a tilde over a symbol", expansion: "\\tilde{${1}}", built_in: true },
-      { id: "default-transpose", name: "Transpose", aliases: %w[T tr transpose], prefix: ".", description: "Add a mathematical transpose", expansion: "${1}^{\\mathsf{T}}", built_in: true },
-      { id: "default-vector", name: "Vector", aliases: %w[v vec vector], prefix: ".", description: "Put a vector arrow over a symbol", expansion: "\\vec{${1}}", built_in: true },
-      { id: "default-dot", name: "Dot", aliases: %w[dot], prefix: ".", description: "Put a dot over a symbol", expansion: "\\dot{${1}}", built_in: true },
+      { id: "default-bold", name: "Bold", aliases: %w[b], prefix: ".", description: "Bold mathematical symbols", expansion: "\\mathbf{${1}}", built_in: true },
+      { id: "default-calligraphic", name: "Calligraphic", aliases: %w[cal calligraphic], prefix: ".", description: "Calligraphic mathematical symbols", expansion: "\\mathcal{${1}}", built_in: true },
+      { id: "default-roman", name: "Roman", aliases: %w[rm roman], prefix: ".", description: "Upright roman type in math", expansion: "\\mathrm{${1}}", built_in: true },
+      { id: "default-blackboard", name: "Blackboard bold", aliases: %w[bb], prefix: ".", description: "Use blackboard bold typography", expansion: "\\mathbb{${1}}", built_in: true },
+      { id: "default-transpose", name: "Transpose", aliases: %w[t T transpose], prefix: ".", description: "Add a mathematical transpose", expansion: "${1}^{\\mathsf{T}}", built_in: true },
+      { id: "default-vector", name: "Vector", aliases: %w[vec v vector], prefix: ".", description: "Put a vector arrow over a symbol", expansion: "\\vec{${1}}", built_in: true },
       { id: "default-bar", name: "Bar", aliases: %w[bar], prefix: ".", description: "Put a bar over a symbol", expansion: "\\bar{${1}}", built_in: true },
-      { id: "default-underline", name: "Underline", aliases: %w[u underline], prefix: ".", description: "Underline a symbol", expansion: "\\underline{${1}}", built_in: true },
-      { id: "default-overline", name: "Overline", aliases: %w[overline], prefix: ".", description: "Put a line over a symbol", expansion: "\\overline{${1}}", built_in: true },
-      { id: "default-ddot", name: "Double dot", aliases: %w[ddot], prefix: ".", description: "Put two dots over a symbol", expansion: "\\ddot{${1}}", built_in: true },
-      { id: "default-check", name: "Check", aliases: %w[check], prefix: ".", description: "Put a check accent over a symbol", expansion: "\\check{${1}}", built_in: true },
-      { id: "default-blackboard", name: "Blackboard bold", aliases: %w[blackboard], prefix: ".", description: "Use blackboard bold typography", expansion: "\\mathbb{${1}}", built_in: true },
-      { id: "default-calligraphic", name: "Calligraphic", aliases: %w[cal calligraphic], prefix: ".", description: "Use calligraphic typography", expansion: "\\mathcal{${1}}", built_in: true },
-      { id: "default-roman", name: "Roman", aliases: %w[rm roman], prefix: ".", description: "Use upright roman typography", expansion: "\\mathrm{${1}}", built_in: true },
-      { id: "default-sans", name: "Sans serif", aliases: %w[sf sans], prefix: ".", description: "Use sans-serif typography", expansion: "\\mathsf{${1}}", built_in: true },
-      { id: "default-mono", name: "Monospace", aliases: %w[tt mono], prefix: ".", description: "Use monospace typography", expansion: "\\mathtt{${1}}", built_in: true },
+      { id: "default-hat", name: "Hat", aliases: %w[hat], prefix: ".", description: "Put a hat over an atomic symbol", expansion: "\\hat{${1}}", built_in: true },
+      { id: "default-tilde", name: "Tilde", aliases: %w[tilde], prefix: ".", description: "Put a tilde over an atomic symbol", expansion: "\\tilde{${1}}", built_in: true },
+      { id: "default-inverse", name: "Inverse", aliases: %w[inv inverse], prefix: ".", description: "Take the inverse of an object", expansion: "${1}^{-1}", built_in: true },
       { id: "default-alpha", name: "Alpha", aliases: %w[a alpha], prefix: "@", description: "Greek alpha", expansion: "\\alpha", built_in: true },
       { id: "default-beta", name: "Beta", aliases: %w[b beta], prefix: "@", description: "Greek beta", expansion: "\\beta", built_in: true },
       { id: "default-gamma", name: "Gamma", aliases: %w[g gamma], prefix: "@", description: "Greek gamma", expansion: "\\gamma", built_in: true },
@@ -69,8 +63,9 @@ module MathShortcuts
       { id: "default-sum", name: "Summation", aliases: %w[sum summation], prefix: "@", description: "Summation operator", expansion: "\\sum", built_in: true },
       { id: "default-prod", name: "Product", aliases: %w[prod product], prefix: "@", description: "Product operator", expansion: "\\prod", built_in: true },
       { id: "default-int", name: "Integral", aliases: %w[int integral], prefix: "@", description: "Integral operator", expansion: "\\int", built_in: true },
-      { id: "default-partial", name: "Partial", aliases: %w[partial], prefix: "@", description: "Partial derivative symbol", expansion: "\\partial", built_in: true },
-      { id: "default-infty", name: "Infinity", aliases: %w[infty infinity], prefix: "@", description: "Infinity symbol", expansion: "\\infty", built_in: true },
+      { id: "default-partial", name: "Partial", aliases: %w[6 partial], prefix: "@", description: "Partial derivative symbol", expansion: "\\partial", built_in: true },
+      { id: "default-infty", name: "Infinity", aliases: %w[8 infty infinity], prefix: "@", description: "Infinity symbol", expansion: "\\infty", built_in: true },
+      { id: "default-superscript-circle", name: "Superscript circle", aliases: %w[0], prefix: "@", description: "Superscript circle", expansion: "^\\circ", built_in: true },
       { id: "default-forall", name: "For all", aliases: %w[forall], prefix: "@", description: "Universal quantifier", expansion: "\\forall", built_in: true },
       { id: "default-exists", name: "There exists", aliases: %w[exists], prefix: "@", description: "Existential quantifier", expansion: "\\exists", built_in: true },
       { id: "default-in", name: "Element of", aliases: %w[in element], prefix: "@", description: "Set membership relation", expansion: "\\in", built_in: true },
@@ -81,7 +76,7 @@ module MathShortcuts
       { id: "default-approx", name: "Approximately", aliases: %w[approx], prefix: "@", description: "Approximation relation", expansion: "\\approx", built_in: true },
       { id: "default-times", name: "Times", aliases: %w[times], prefix: "@", description: "Multiplication symbol", expansion: "\\times", built_in: true },
       { id: "default-cdot", name: "Dot product", aliases: %w[cdot dotproduct], prefix: "@", description: "Centered multiplication dot", expansion: "\\cdot", built_in: true },
-      { id: "default-equiv", name: "Equivalent", aliases: %w[equiv equivalent], prefix: "@", description: "Equivalent relation", expansion: "\\equiv", built_in: true },
+      { id: "default-equiv", name: "Equivalent", aliases: ["=", "equiv", "equivalent"], prefix: "@", description: "Equivalent relation", expansion: "\\equiv", built_in: true },
       { id: "default-sim", name: "Similar", aliases: %w[sim similar], prefix: "@", description: "Similarity relation", expansion: "\\sim", built_in: true },
       { id: "default-propto", name: "Proportional", aliases: %w[propto proportional], prefix: "@", description: "Proportionality relation", expansion: "\\propto", built_in: true },
       { id: "default-perp", name: "Perpendicular", aliases: %w[perp perpendicular], prefix: "@", description: "Perpendicular relation", expansion: "\\perp", built_in: true },
@@ -98,7 +93,11 @@ module MathShortcuts
       { id: "default-tan", name: "Tangent", aliases: %w[tan], prefix: "@", description: "Tangent operator", expansion: "\\tan", built_in: true },
       { id: "default-frac", name: "Fraction", aliases: %w[frac fraction], prefix: "@", description: "Fraction with numerator and denominator", expansion: "\\frac{${1}}{${2}}", built_in: true },
       { id: "default-sqrt", name: "Square root", aliases: %w[sqrt root], prefix: "@", description: "Square root with one slot", expansion: "\\sqrt{${1}}", built_in: true },
-      { id: "default-binomial", name: "Binomial", aliases: %w[binom choose], prefix: "@", description: "Binomial coefficient", expansion: "\\binom{${1}}{${2}}", built_in: true },
+      { id: "default-binomial", name: "Choose", aliases: %w[choose binom], prefix: "@", description: "Binomial coefficient", expansion: "\\binom{${1}}{${2}}", built_in: true },
+      { id: "default-cases", name: "Cases", aliases: %w[cases piecewise], prefix: "@", description: "Piecewise cases expression", expansion: "\\begin{cases}\n${1:value} & ${2:condition}\\\\\n${3:otherwise} & ${4:condition}\n\\end{cases}", built_in: true },
+      { id: "default-equation", name: "Equation", aliases: %w[equation beq], prefix: "@", description: "Aligned equation", expansion: "\\begin{aligned}\n${1:left} &= ${2:right}\n\\end{aligned}", built_in: true },
+      { id: "default-gather", name: "Gather", aliases: %w[gather bga], prefix: "@", description: "Gathered equations", expansion: "\\begin{gathered}\n${1:first equation} \\\\\n${2:second equation}\n\\end{gathered}", built_in: true },
+      { id: "default-matrix", name: "Matrix", aliases: %w[matrix bmat], prefix: "@", description: "Two by two matrix", expansion: "\\begin{bmatrix}\n${1:a} & ${2:b}\\\\\n${3:c} & ${4:d}\n\\end{bmatrix}", built_in: true },
       { id: "default-int-bounds", name: "Bounded integral", aliases: %w[intb integralbounds], prefix: "@", description: "Integral with lower and upper bounds", expansion: "\\int_{${1}}^{${2}}", built_in: true },
       { id: "default-sum-bounds", name: "Bounded sum", aliases: %w[sumb summationbounds], prefix: "@", description: "Sum with lower and upper bounds", expansion: "\\sum_{${1}}^{${2}}", built_in: true },
       { id: "default-left-parens", name: "Parentheses", aliases: %w[paren parentheses], prefix: "@", description: "Sized parentheses around an expression", expansion: "\\left( ${1} \\right)", built_in: true },
@@ -111,20 +110,47 @@ module MathShortcuts
     end
 
     def self.for_editor(workspace: Workspace.default)
-      persisted = all(workspace: workspace).map do |shortcut|
-        {
-          id: shortcut.id,
-          name: shortcut.name,
-          aliases: shortcut.aliases,
-          description: shortcut.description,
-          prefix: shortcut.prefix,
-          expansion: shortcut.expansion,
-          built_in: shortcut.built_in
-        }
+      persisted_shortcuts = all(workspace: workspace).to_a
+      personal_aliases = persisted_shortcuts.reject(&:built_in).flat_map do |shortcut|
+        shortcut.aliases.map { |alias_name| [shortcut.prefix, alias_name] }
       end
-      persisted_aliases = persisted.flat_map { |shortcut| shortcut[:aliases].map { |alias_name| [shortcut[:prefix], alias_name] } }
-      defaults = DEFAULTS.reject do |shortcut|
-        shortcut[:aliases].any? { |alias_name| persisted_aliases.include?([shortcut[:prefix], alias_name]) }
+      persisted_built_in_keys = persisted_shortcuts.filter_map do |shortcut|
+        [shortcut.name, shortcut.prefix] if shortcut.built_in
+      end
+      persisted = persisted_shortcuts.filter_map do |shortcut|
+        built_in_default = if shortcut.built_in
+          DEFAULTS.find { |item| item[:name] == shortcut.name && item[:prefix] == shortcut.prefix }
+        end
+        next if shortcut.built_in && built_in_default.nil?
+
+        if built_in_default
+          aliases = built_in_default[:aliases].reject do |alias_name|
+            personal_aliases.include?([shortcut.prefix, alias_name])
+          end
+          next if aliases.empty?
+
+          built_in_default.merge(id: shortcut.id, aliases: aliases)
+        else
+          {
+            id: shortcut.id,
+            name: shortcut.name,
+            aliases: shortcut.aliases,
+            description: shortcut.description,
+            prefix: shortcut.prefix,
+            expansion: shortcut.expansion,
+            built_in: shortcut.built_in
+          }
+        end
+      end
+      defaults = DEFAULTS.filter_map do |shortcut|
+        next if persisted_built_in_keys.include?([shortcut[:name], shortcut[:prefix]])
+
+        aliases = shortcut[:aliases].reject do |alias_name|
+          personal_aliases.include?([shortcut[:prefix], alias_name])
+        end
+        next if aliases.empty?
+
+        shortcut.merge(aliases: aliases)
       end
       defaults + persisted
     end
@@ -132,6 +158,16 @@ module MathShortcuts
     def self.for_ui(workspace: Workspace.default)
       persisted = all(workspace: workspace).index_by { |shortcut| shortcut.id.to_s }
       for_editor(workspace: workspace).map do |attributes|
+        next MathShortcut.new(
+          name: attributes[:name],
+          aliases: attributes[:aliases],
+          description: attributes[:description],
+          prefix: attributes[:prefix],
+          expansion: attributes[:expansion],
+          built_in: attributes[:built_in],
+          workspace: workspace
+        ) if attributes[:built_in]
+
         persisted[attributes[:id].to_s] || MathShortcut.new(
           name: attributes[:name],
           aliases: attributes[:aliases],

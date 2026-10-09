@@ -1,4 +1,5 @@
 import { Controller } from "@hotwired/stimulus"
+import { withAppearanceValue } from "lib/document_map"
 
 const normalizeSource = (source) => String(source ?? "").replace(/\r\n?/g, "\n")
 
@@ -28,8 +29,31 @@ export default class extends Controller {
       this.sync()
     }
     this.appearanceChanged = (event) => {
-      if (event.target === this.themeTarget) this.style.theme = this.themeTarget.value
-      if (event.target === this.typographyTarget) this.style.typography = this.typographyTarget.value
+      const key = event.target === this.themeTarget ? "theme"
+        : event.target === this.typographyTarget ? "typography"
+          : null
+      if (!key) return
+
+      let source = this.currentSource()
+      try {
+        source = withAppearanceValue(source, "theme", this.themeTarget.value)
+        source = withAppearanceValue(source, "typography", this.typographyTarget.value)
+      } catch (_error) {
+        this.sync()
+        return
+      }
+
+      this.style[key] = event.target.value
+      if (this.mode !== "visual" || this.sourceStyleStale || source === this.currentSource()) return
+
+      const sourceField = this.form.querySelector('[name$="[source]"]')
+      const editor = this.form.querySelector(".source-field")?.editorController
+      if (editor?.setExternalValue) {
+        editor.setExternalValue(source)
+      } else if (sourceField) {
+        sourceField.value = source
+        sourceField.dispatchEvent(new Event("input", { bubbles: true }))
+      }
     }
     this.previewUpdated = (event) => {
       const style = event.detail?.payload?.style

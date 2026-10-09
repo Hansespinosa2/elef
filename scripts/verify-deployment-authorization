@@ -46,7 +46,7 @@ if [[ "$(jq -r '.merged_at != null' <<<"$pull_request")" != true || \
   exit 1
 fi
 
-required_checks=(scan_ruby scan_js test sqlite-test system-test production-smoke development-smoke)
+required_checks=(desktop-fast scan_ruby scan_js test sqlite-test system-test desktop desktop-macos renderer-macos production-smoke development-smoke)
 required_jobs=("${required_checks[@]}" record-ci-attestation)
 
 find_pr_run() {
@@ -204,4 +204,4 @@ if [[ "$(jq -r '.id' <<<"$latest_run")" != "$run_id" || \
   exit 1
 fi
 
-echo "PR #$pull_number CI run $run_id passed all seven required checks; tested tree $tested_tree matches merged commit $sha"
+echo "PR #$pull_number CI run $run_id passed all required checks; tested tree $tested_tree matches merged commit $sha"

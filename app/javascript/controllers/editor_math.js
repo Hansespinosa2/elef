@@ -1,4 +1,4 @@
-import "katex"
+import katex from "katex"
 
 export function deRenderMath(mathElement, { caret = "end", clickEvent = null } = {}) {
   if (!mathElement?.parentNode) return null
@@ -9,18 +9,8 @@ export function deRenderMath(mathElement, { caret = "end", clickEvent = null } =
   const close = mathElement.dataset.editorMathClose || open
   const fullText = `${open}${source}${close}`
 
-  const activeSpan = document.createElement("span")
-  activeSpan.className = "editor-math-active"
-  activeSpan.dataset.editorMathActive = "true"
-  activeSpan.dataset.editorMathOpen = open
-  activeSpan.dataset.editorMathClose = close
-  activeSpan.dataset.editorMathSource = source
-  if (isDisplay) activeSpan.classList.add("editor-live-math-display")
-  activeSpan.contentEditable = "true"
-  activeSpan.spellcheck = false
-
-  const textNode = document.createTextNode(fullText)
-  activeSpan.appendChild(textNode)
+  const activeSpan = createActiveMathSpan(fullText, { source, open, close, display: isDisplay })
+  const textNode = activeSpan.firstChild
 
   mathElement.parentNode.replaceChild(activeSpan, mathElement)
 
@@ -29,7 +19,8 @@ export function deRenderMath(mathElement, { caret = "end", clickEvent = null } =
     const offset = Math.max(open.length, fullText.length - close.length)
     selection?.setBaseAndExtent(textNode, offset, textNode, offset)
   } else if (caret === "start") {
-    const offset = open.length
+    const openingLineBreak = source.match(/^(?:\r\n|\r|\n)/)?.[0].length || 0
+    const offset = open.length + (isDisplay ? openingLineBreak : 0)
     selection?.setBaseAndExtent(textNode, offset, textNode, offset)
   } else if (caret === "click" && clickEvent) {
     let offset = null
@@ -54,6 +45,20 @@ export function deRenderMath(mathElement, { caret = "end", clickEvent = null } =
   return activeSpan
 }
 
+export function createActiveMathSpan(fullText, { source = "", open = "$", close = open, display = false } = {}) {
+  const activeSpan = document.createElement("span")
+  activeSpan.className = "editor-math-active"
+  activeSpan.dataset.editorMathActive = "true"
+  activeSpan.dataset.editorMathOpen = open
+  activeSpan.dataset.editorMathClose = close
+  activeSpan.dataset.editorMathSource = source
+  if (display) activeSpan.classList.add("editor-live-math-display")
+  activeSpan.contentEditable = "true"
+  activeSpan.spellcheck = false
+  activeSpan.appendChild(document.createTextNode(fullText))
+  return activeSpan
+}
+
 export function reRenderMath(activeSpan, { caret = null } = {}, onFlush = null) {
   if (!activeSpan?.parentNode) return null
 
@@ -71,7 +76,6 @@ export function reRenderMath(activeSpan, { caret = null } = {}, onFlush = null) 
 
   if (hasDelimiters) {
     const expression = fullText.slice(open.length, fullText.length - close.length)
-    const katex = globalThis.katex
     if (katex?.renderToString && expression.trim().length > 0) {
       try {
         const wrapper = document.createElement("span")
@@ -188,6 +192,19 @@ export function handleMathKeydown(event, rootElement, onFlush = null) {
   }
 
   return false
+}
+
+export function finishMathBeforeEnter(event, rootElement, onFlush = null) {
+  if (event.key !== "Enter" || event.isComposing || event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) return false
+
+  const selection = window.getSelection()
+  if (!selection?.isCollapsed) return false
+
+  const info = getActiveMathInfo(selection, rootElement)
+  if (!info || info.offset < info.fullText.length - info.close.length) return false
+
+  reRenderMath(info.activeSpan, { caret: "after" }, onFlush)
+  return true
 }
 
 export function handleMathClick(event, rootElement) {

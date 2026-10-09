@@ -2,7 +2,36 @@ require "application_system_test_case"
 
 class DocumentsTest < ApplicationSystemTestCase
   def wait_for_fresh_projection
-    assert_selector "form.visual-editor-form:not([data-preview-projection-stale='true'])", wait: 5
+    selector = "form.visual-editor-form:not([data-preview-projection-stale='true'])"
+    return if has_selector?(selector, wait: 2)
+
+    return if has_selector?(selector, wait: 10)
+
+    if has_css?(".preview-retry:not([hidden])", wait: 0)
+      click_button "Retry preview"
+    end
+    return if has_selector?(selector, wait: 10)
+
+    state = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const form = document.querySelector("form.visual-editor-form");
+        const preview = form?.previewController;
+        const active = document.activeElement;
+        return JSON.stringify({
+          stale: form?.dataset.previewProjectionStale || null,
+          projectionFresh: preview?.projectionFresh ?? null,
+          status: form?.querySelector("[data-preview-target='status']")?.textContent?.trim() || "",
+          warnings: [...(form?.querySelectorAll(".preview-warnings li") || [])].map((item) => item.textContent),
+          retryVisible: Boolean(form?.querySelector(".preview-retry:not([hidden])")),
+          activeElement: active?.tagName || null,
+          activeEditableBlock: Boolean(active?.closest?.("[contenteditable='true']") && form?.querySelector("[data-preview-target='container']")?.contains(active.closest("[contenteditable='true']"))),
+          requestId: preview?.requestId ?? null,
+          pendingProjection: Boolean(preview?.pendingProjection),
+          activeRequest: Boolean(preview?.requestController)
+        });
+      })()
+    JAVASCRIPT
+    assert has_selector?(selector, wait: 0), "preview remained stale after one retry: #{state}"
   end
 
   def wait_for_settled_document_projection
@@ -102,22 +131,475 @@ class DocumentsTest < ApplicationSystemTestCase
     find(".document-editor-block[data-editor-block-id]:focus")
   end
 
+  def source_editor_state
+    page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const editor = document.querySelector('.source-field').editorController;
+        const doc = editor.view.state.doc;
+        return {
+          source: editor.value,
+          lines: Array.from({ length: doc.lines }, (_, index) => doc.line(index + 1).text),
+          lineSeparator: editor.lineSeparator
+        };
+      })()
+    JAVASCRIPT
+  end
+
+  test "source mode inserts and continues Mermaid flowcharts with Enter and branching keys" do
+    document = Document.create!(title: "Mermaid process", source: "# Existing text")
+
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      editor.setSelectionRange(editor.value.length);
+      editor.focus();
+    JAVASCRIPT
+    editor.send_keys(:enter, "/diagram")
+
+    assert_selector ".mermaid-assist-option", text: "Flowchart / process", wait: 5
+    find(".mermaid-assist-option", text: "Flowchart / process").click
+    source = find_field("Markdown source")
+    assert_includes source.value, "```mermaid\nflowchart LR\n    A[]\n```"
+    assert_equal "[]", page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const editor = document.querySelector('.source-field').editorController;
+        return editor.value.slice(editor.selectionStart - 1, editor.selectionStart + 1);
+      })()
+    JAVASCRIPT
+
+    editor.send_keys("Research", :enter)
+    assert_field "Markdown source", with: /A\[Research\] --> B\[\]/, wait: 5
+    editor.send_keys("Design", :enter)
+    assert_field "Markdown source", with: /A\[Research\] --> B\[Design\] --> C\[\]/, wait: 5
+
+    editor.send_keys(:tab)
+    assert_field "Markdown source", with: /C --> D\[\]/, wait: 5
+    branch_source = source.value
+    editor.send_keys(:shift, :tab)
+    assert_equal branch_source, source.value
+    assert_equal "C", page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const editor = document.querySelector('.source-field').editorController;
+        return editor.value[editor.selectionStart];
+      })()
+    JAVASCRIPT
+    editor.send_keys(:shift, :tab)
+    assert_includes source.value, "B[Design] --> C[]"
+    assert_match(/\ADesign\]/, page.evaluate_script(<<~JAVASCRIPT))
+      (() => {
+        const editor = document.querySelector('.source-field').editorController;
+        return editor.value.slice(editor.selectionStart, editor.selectionStart + 7);
+      })()
+    JAVASCRIPT
+    node_ids = source.value.scan(/\b([A-Z])(?=\[)/).flatten
+    assert_equal node_ids.uniq, node_ids
+  end
+
+  test "source mode keeps /diagram keyboard navigation open through selection" do
+    document = Document.create!(title: "Mermaid keyboard command", source: "# Existing text")
+
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      editor.setSelectionRange(editor.value.length);
+      editor.focus();
+    JAVASCRIPT
+    editor.send_keys(:enter, "/diag")
+
+    assert_selector ".mermaid-assist-option", text: "/diagram", wait: 5
+    editor.send_keys(:enter)
+    assert_selector ".mermaid-assist-option", text: "Flowchart / process", wait: 5
+    assert_selector '[data-mermaid-assist-target="palette"]:not([hidden])'
+
+    editor.send_keys(:arrow_down)
+    assert_selector ".mermaid-assist-option[aria-selected='true']", text: "Sequence diagram"
+    assert_selector '[data-mermaid-assist-target="palette"]:not([hidden])'
+    editor.send_keys(:arrow_up)
+    assert_selector ".mermaid-assist-option[aria-selected='true']", text: "Flowchart / process"
+    assert_selector '[data-mermaid-assist-target="palette"]:not([hidden])'
+
+    editor.send_keys(:arrow_down, :enter)
+    assert_field "Markdown source", with: /sequenceDiagram/, wait: 5
+    assert_no_selector '[data-mermaid-assist-target="palette"]:not([hidden])'
+  end
+
+  test "source mode accepts a Mermaid diagram type with Tab" do
+    document = Document.create!(title: "Mermaid keyboard Tab", source: "# Existing text")
+
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      editor.setSelectionRange(editor.value.length);
+      editor.focus();
+    JAVASCRIPT
+    editor.send_keys(:enter, "/diagram")
+    assert_selector ".mermaid-assist-option", text: "Flowchart / process", wait: 5
+    editor.send_keys(:arrow_down)
+    assert_selector ".mermaid-assist-option[aria-selected='true']", text: "Sequence diagram", wait: 5
+    assert_selector '[data-mermaid-assist-target="palette"]:not([hidden])'
+
+    editor.send_keys(:tab)
+    assert_field "Markdown source", with: /sequenceDiagram/, wait: 5
+    assert_no_selector '[data-mermaid-assist-target="palette"]:not([hidden])'
+  end
+
+  test "source mode dismisses Mermaid suggestions when the caret leaves their context" do
+    document = Document.create!(title: "Mermaid stale suggestion", source: "# Existing text")
+
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      editor.setSelectionRange(editor.value.length);
+      editor.focus();
+    JAVASCRIPT
+    editor.send_keys(:enter, "/diagram")
+    assert_selector '[data-mermaid-assist-target="palette"]:not([hidden])', wait: 5
+
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      editor.setSelectionRange(0);
+    JAVASCRIPT
+    assert_no_selector '[data-mermaid-assist-target="palette"]:not([hidden])', wait: 5
+  end
+
+  test "Mermaid source assist restores keyboard listeners after Stimulus reconnects" do
+    document = Document.create!(title: "Mermaid reconnect", source: "# Existing text")
+
+    visit edit_document_path(document)
+    click_on "Source"
+    page.evaluate_async_script(<<~JAVASCRIPT)
+      const done = arguments[arguments.length - 1];
+      const root = document.querySelector('.source-field');
+      const controllers = root.dataset.controller.split(/\\s+/);
+      root.dataset.controller = controllers.filter((name) => name !== 'mermaid-assist').join(' ');
+      setTimeout(() => {
+        root.dataset.controller = controllers.join(' ');
+        setTimeout(done, 50);
+      }, 50);
+    JAVASCRIPT
+
+    editor = find(".cm-content")
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      editor.setSelectionRange(editor.value.length);
+      editor.focus();
+    JAVASCRIPT
+    assert_equal true, page.evaluate_script("window.Stimulus.getControllerForElementAndIdentifier(document.querySelector('.source-field'), 'mermaid-assist').keydownBound")
+    editor.send_keys(:enter, "/diag")
+    assert_selector ".mermaid-assist-option", text: "/diagram", wait: 5
+    editor.send_keys(:enter)
+    assert_selector ".mermaid-assist-option", text: "Flowchart / process", wait: 5
+    editor.send_keys(:enter)
+    assert_field "Markdown source", with: /flowchart LR/, wait: 5
+  end
+
+  test "Mermaid source assist ignores mutations after its editor view is destroyed" do
+    source = "```mermaid\nflowchart LR\n    A[Research]\n```"
+    document = Document.create!(title: "Mermaid editor teardown", source: source)
+
+    visit edit_document_path(document)
+    click_on "Source"
+    results = page.evaluate_async_script(<<~JAVASCRIPT)
+      const done = arguments[arguments.length - 1];
+      const root = document.querySelector('.source-field');
+      const controllers = root.dataset.controller.split(/\\s+/);
+      const editor = root.editorController;
+      const assist = window.Stimulus.getControllerForElementAndIdentifier(root, 'mermaid-assist');
+      root.dataset.controller = controllers.filter((name) => name !== 'editor').join(' ');
+      setTimeout(() => {
+        const original = editor.value;
+        let noThrow = true;
+        try {
+          editor.dom.dispatchEvent(new KeyboardEvent('keydown', {
+            key: 'Enter', bubbles: true, cancelable: true
+          }));
+          editor.setSelectionRange(0);
+          editor.replaceRange('bad', 0, 0);
+          editor.replaceRangeWithSelection('bad', 0, 0, { from: 0, to: 0 });
+        } catch (_error) {
+          noThrow = false;
+        }
+        const results = {
+          noThrow,
+          unchanged: editor.value === original,
+          staleEditorDestroyed: editor.destroyed,
+          assistRetargeted: assist.editorController === editor
+        };
+        root.dataset.controller = controllers.join(' ');
+        setTimeout(() => done({ ...results, assistRetargetedAfterReconnect: assist.editorController === root.editorController }), 100);
+      }, 100);
+    JAVASCRIPT
+
+    assert_equal({
+      "noThrow" => true,
+      "unchanged" => true,
+      "staleEditorDestroyed" => true,
+      "assistRetargeted" => true,
+      "assistRetargetedAfterReconnect" => true
+    }, results)
+    assert page.evaluate_script("Boolean(document.querySelector('.source-field').editorController)")
+  end
+
+  test "document command palettes stay inactive inside Mermaid code" do
+    source = "```mermaid\nflowchart LR\n    A[]\n```"
+    document = Document.create!(title: "Mermaid palette context", source: source)
+
+    visit edit_document_path(document)
+    click_on "Source"
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      const position = editor.value.indexOf('A[]') + 2;
+      editor.setSelectionRange(position);
+      editor.focus();
+    JAVASCRIPT
+    editor = find(".cm-content")
+    editor.send_keys("/image")
+    assert_no_selector ".snippet-option", text: /Image/
+    assert_includes find_field("Markdown source").value, "A[/image]"
+  end
+
+  test "Mermaid Enter does not continue a diagram during IME composition" do
+    source = "```mermaid\nflowchart LR\n    A[Research]\n```"
+    document = Document.create!(title: "Mermaid IME composition", source: source)
+
+    visit edit_document_path(document)
+    click_on "Source"
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      const caret = editor.value.indexOf('Research') + 'Research'.length;
+      editor.setSelectionRange(caret);
+      editor.focus();
+      editor.dom.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+      const event = new KeyboardEvent('keydown', {
+        key: 'Enter', code: 'Enter', keyCode: 229, which: 229,
+        bubbles: true, cancelable: true, isComposing: true
+      });
+      editor.dom.dispatchEvent(event);
+      editor.dom.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: '' }));
+    JAVASCRIPT
+    refute_includes find_field("Markdown source").value, "--> B[]"
+  end
+
+  test "Mermaid suggestions stay dismissed during IME composition and refresh afterward" do
+    document = Document.create!(title: "Mermaid IME suggestions", source: "# Existing text")
+
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      editor.setSelectionRange(editor.value.length);
+      editor.focus();
+    JAVASCRIPT
+    editor.send_keys(:enter, "/diagram")
+    assert_selector '[data-mermaid-assist-target="palette"]:not([hidden])', wait: 5
+
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      editor.dom.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+      editor.inputTarget.dispatchEvent(new Event('input', { bubbles: true }));
+    JAVASCRIPT
+    assert_no_selector '[data-mermaid-assist-target="palette"]:not([hidden])', wait: 5
+    refute_includes find_field("Markdown source").value, "```mermaid"
+
+    page.execute_script(<<~JAVASCRIPT)
+      document.querySelector('.source-field').editorController.dom.dispatchEvent(
+        new CompositionEvent('compositionend', { bubbles: true, data: '' })
+      );
+    JAVASCRIPT
+    assert_selector '[data-mermaid-assist-target="palette"]:not([hidden])', wait: 5
+  end
+
+  test "CRLF Mermaid source keeps valid insertion positions" do
+    source = "# Existing text\r\n\r\n```mermaid\r\nflowchart LR\r\n    A[Research]\r\n```"
+    document = Document.create!(title: "Mermaid CRLF", source: source)
+
+    visit edit_document_path(document)
+    click_on "Source"
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      const caret = editor.value.indexOf('Research') + 'Research'.length;
+      editor.setSelectionRange(caret);
+      editor.focus();
+    JAVASCRIPT
+    find(".cm-content").send_keys(:enter)
+    assert_field "Markdown source", with: /A\[Research\] --> B\[\]/, wait: 5
+  end
+
+  test "multiline snippets create real source lines and keep placeholders and backslash content intact" do
+    source = "# Snippet line endings\r\n\r\nLiteral \\n and \\newline remain here.\r\n\r\n```tex\r\n\\begin{aligned}\r\nx &= y \\\\\r\n\\end{aligned}\r\n```\r\n\r\n"
+    document = Document.create!(title: "Snippet line endings", source: source)
+    expected = "#{source.gsub(/\r\n?/, "\n")}| Column 1 | Column 2 |\n| --- | --- |\n| Value 1 | Value 2 |"
+
+    visit edit_document_path(document)
+    click_on "Source"
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      editor.setSelectionRange(editor.value.length);
+      editor.focus();
+    JAVASCRIPT
+    find(".cm-content").send_keys("/table")
+    assert_selector ".snippet-option", text: "Table", wait: 5
+    find(".cm-content").send_keys(:enter)
+
+    assert_equal "\r\n", source_editor_state["lineSeparator"]
+    assert_equal expected, source_editor_state["source"]
+    assert_equal expected.split("\n"), source_editor_state["lines"]
+    assert_equal "Column 1", page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const editor = document.querySelector('.source-field').editorController;
+        return editor.value.slice(editor.selectionStart, editor.selectionEnd);
+      })()
+    JAVASCRIPT
+
+    find(".cm-content").send_keys(:tab)
+    assert_equal "Column 2", page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const editor = document.querySelector('.source-field').editorController;
+        return editor.value.slice(editor.selectionStart, editor.selectionEnd);
+      })()
+    JAVASCRIPT
+    assert_equal expected, source_editor_state["source"]
+    wait_for_fresh_projection
+    assert_selector ".document-editor-block table"
+    assert_selector ".document-editor-block pre code", text: /\\begin\{aligned\}/
+    assert_selector ".document-editor-block", text: /Literal \\n and \\newline remain here\./
+  end
+
+  test "visual source projection preserves real lines through mode switches, save, and reload" do
+    source = "# Visual line endings\r\n\r\nOriginal paragraph\r\n\r\nLiteral \\n and \\newline remain.\r\n\r\n```tex\r\n\\begin{aligned}\r\nx &= y \\\\\r\n\\end{aligned}\r\n```"
+    document = Document.create!(title: "Visual line endings", source: source)
+    expected = source.gsub(/\r\n?/, "\n").sub("Original paragraph", "First authored line\n\nSecond authored line")
+
+    visit edit_document_path(document, editor_mode: "source")
+    assert_equal "\r\n", source_editor_state["lineSeparator"]
+    assert_equal source.gsub(/\r\n?/, "\n"), source_editor_state["source"]
+
+    click_on "Visual"
+    block = find(".document-editor-block", text: "Original paragraph")
+    page.execute_script(<<~JAVASCRIPT, block)
+      const block = arguments[0];
+      block.innerHTML = '<p>First authored line</p><p>Second authored line</p>';
+      block.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertParagraph' }));
+    JAVASCRIPT
+
+    assert_field "Markdown source", with: expected, wait: 5
+    assert_equal expected, source_editor_state["source"]
+    assert_equal expected.split("\n"), source_editor_state["lines"]
+    assert_equal "\r\n", source_editor_state["lineSeparator"]
+    page.execute_script("document.activeElement.blur()")
+    wait_for_fresh_projection
+    assert_selector ".document-editor-block", text: "First authored line"
+    assert_selector ".document-editor-block", text: "Second authored line"
+    assert_selector ".document-editor-block pre code", text: /\\begin\{aligned\}/
+    assert_selector ".document-editor-block", text: /Literal \\n and \\newline remain\./
+
+    click_on "Source"
+    assert_equal expected, source_editor_state["source"]
+    click_on "Visual"
+    click_on "Source"
+    assert_equal expected, source_editor_state["source"]
+    assert_equal expected.split("\n"), source_editor_state["lines"]
+
+    click_on "Save document"
+    assert_selector ".flash.notice", text: "Document saved.", wait: 10
+    assert_equal expected, document.reload.source.gsub(/\r\n?/, "\n")
+
+    visit edit_document_path(document, editor_mode: "source")
+    assert_equal expected, source_editor_state["source"]
+    assert_equal expected.split("\n"), source_editor_state["lines"]
+  end
+
+  test "mermaid continuation falls back safely when the caret is in the middle of a label" do
+    source = "```mermaid\nflowchart LR\n    A[Research] --> B[Design]\n```"
+    document = Document.create!(title: "Mermaid middle edit", source: source)
+
+    visit edit_document_path(document)
+    click_on "Source"
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      const position = editor.value.indexOf('Research') + 3;
+      editor.setSelectionRange(position);
+      editor.focus();
+    JAVASCRIPT
+    find(".cm-content").send_keys(:enter)
+
+    edited = find_field("Markdown source").value
+    assert_match(/Res\s+earch\] --> B\[Design\]/, edited)
+    refute_match(/--> C\[\]/, edited)
+  end
+
+  test "Mermaid autocomplete offers existing flowchart nodes when completing an edge" do
+    source = "```mermaid\nflowchart LR\n    A[Research]\n    A --> \n```"
+    document = Document.create!(title: "Mermaid node completion", source: source)
+
+    visit edit_document_path(document)
+    click_on "Source"
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      editor.setSelectionRange(editor.value.indexOf('\\n```'));
+      editor.focus();
+    JAVASCRIPT
+    editor = find(".cm-content")
+    editor.send_keys("A")
+
+    assert_selector ".mermaid-assist-option", text: "A", wait: 5
+    editor.send_keys(:enter)
+    assert_includes find_field("Markdown source").value, "A --> A\n```"
+  end
+
+  test "normal source Enter and snippet Tab completion remain available outside Mermaid" do
+    Snippet.create!(name: "Two text fields", trigger: "pair", category: "Markdown", body: "${1:first} ${2:second}")
+    document = Document.create!(title: "Ordinary source", source: "# Existing")
+
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      editor.setSelectionRange(editor.value.length);
+      editor.focus();
+    JAVASCRIPT
+    editor.send_keys(:enter, "Plain text", :enter, "/pair")
+
+    assert_selector ".snippet-option", text: "Two text fields", wait: 5
+    assert_selector '[data-mermaid-assist-target="palette"]', visible: false
+    editor.send_keys(:enter)
+    source = find_field("Markdown source")
+    assert_includes source.value, "Plain text\nfirst second"
+    editor.send_keys(:tab)
+    assert_equal "second", page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const editor = document.querySelector('.source-field').editorController;
+        return editor.value.slice(editor.selectionStart, editor.selectionEnd);
+      })()
+    JAVASCRIPT
+  end
+
   test "suggests document links in the Markdown editor" do
     Document.create!(title: "Research target", source: "# Target")
-    document = Document.create!(title: "Research source", source: "# Source")
+    document = Document.create!(title: "Research source", source: "")
 
     visit edit_document_path(document)
     editor = find_field("Markdown source")
-    fill_in "Markdown source", with: "# Source\n\n    [[Not a link]]\n\n[[Research ta"
+    fill_in "Markdown source", with: "[[Research ta"
 
     assert_selector ".document-link-option", text: "Research target", wait: 5
-    editor.send_keys(:enter)
-    assert_includes editor.value, "[[Research target]]"
+    editor.send_keys(:tab)
+    assert_equal "[[Research target]]", editor.value
   end
 
   test "suggests document links from the visible CodeMirror editor" do
     Document.create!(title: "Research target", source: "# Target")
-    document = Document.create!(title: "Research source", source: "# Source")
+    document = Document.create!(title: "Research source", source: "")
 
     visit settings_path
     find("[data-vim-settings-target='vimToggle']").check
@@ -130,8 +612,25 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_selector ".document-link-option", text: "Research target", wait: 5
     assert_selector ".document-link-option[aria-selected='true']", text: "Research target"
     assert_equal "true", page.evaluate_script("document.querySelector('.cm-editor').getAttribute('aria-expanded')")
-    editor.send_keys(:enter)
-    assert_includes find_field("Markdown source").value, "[[Research target]]"
+    editor.send_keys(:tab)
+    assert_equal "[[Research target]]", find_field("Markdown source").value
+  end
+
+  test "suggests document links from CodeMirror when accepting with a mouse click" do
+    Document.create!(title: "Research target", source: "# Target")
+    document = Document.create!(title: "Research source", source: "")
+
+    visit settings_path
+    find("[data-vim-settings-target='vimToggle']").check
+    visit edit_document_path(document)
+
+    editor = find(".cm-content")
+    editor.click
+    editor.send_keys("i", "[[Research ta")
+
+    assert_selector ".document-link-option", text: "Research target", wait: 5
+    find(".document-link-option", text: "Research target").click
+    assert_equal "[[Research target]]", find_field("Markdown source").value
   end
 
   test "navigates resolved document links to previews" do
@@ -889,6 +1388,21 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: "# Untitled document\n\n$x=3$", wait: 5
   end
 
+  test "typing after navigating into empty inline math stays inside the expression" do
+    visit new_document_path
+
+    find(".document-editor-block h1", text: "Untitled document").send_keys(:enter)
+    block = active_document_block
+    block.send_keys("$$")
+    block.send_keys(:left)
+    block.send_keys("x=3")
+    assert_selector ".document-editor-block .editor-math-active", text: "$x=3$", wait: 5
+    assert_field "Markdown source", with: "# Untitled document\n\n$x=3$", wait: 5
+    block.send_keys(:enter)
+
+    assert_field "Markdown source", with: "# Untitled document\n\n$x=3$\n\n", wait: 5
+  end
+
   test "display latex visual mode enter and exit and click to edit" do
     visit new_document_path
 
@@ -920,6 +1434,63 @@ class DocumentsTest < ApplicationSystemTestCase
     find(".document-editor-block h1").click
     assert_selector ".document-editor-block [data-editor-math-source='a=2']", wait: 5
     assert_no_selector ".document-editor-block .editor-math-active"
+  end
+
+  test "visual display math keystrokes keep the caret on the empty body line" do
+    visit new_document_path
+    find(".document-editor-block h1", text: "Untitled document").send_keys(:enter)
+
+    find(".document-editor-block[data-editor-block-id]:focus").send_keys("$")
+    find(".document-editor-block[data-editor-block-id]:focus").send_keys("$")
+    preview_request_before_enter = page.evaluate_script(
+      "document.querySelector('form.visual-editor-form').previewController.requestId"
+    )
+    find(".document-editor-block[data-editor-block-id]:focus").send_keys(:enter)
+
+    expected_source = "# Untitled document\n\n$$\n\n$$"
+    expected_caret = "# Untitled document\n\n".length + 3
+    assert_field "Markdown source", with: expected_source, wait: 5
+
+    preview_settled = page.evaluate_async_script(<<~JAVASCRIPT, preview_request_before_enter)
+      const before = arguments[0];
+      const done = arguments[arguments.length - 1];
+      const preview = document.querySelector("form.visual-editor-form")?.previewController;
+      const deadline = Date.now() + 8000;
+      const wait = () => {
+        if (preview?.requestId > before && preview.pendingProjection && !preview.timer && !preview.requestController) return done(true);
+        if (Date.now() >= deadline) return done(false);
+        window.setTimeout(wait, 20);
+      };
+      wait();
+    JAVASCRIPT
+    assert preview_settled, "preview response did not settle while display math remained focused"
+
+    caret = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const form = document.querySelector("form.visual-editor-form");
+        const editor = document.querySelector(".source-field").editorController;
+        const selection = window.getSelection();
+        const activeMath = selection.focusNode?.parentElement?.closest?.(".editor-math-active");
+        return {
+          value: editor.value,
+          selectionStart: editor.selectionStart,
+          capturedSourceOffset: form.visualEditorController.captureCaret()?.sourceOffset,
+          activeMathText: activeMath?.textContent || null,
+          visualOffset: selection.focusOffset
+        };
+      })()
+    JAVASCRIPT
+
+    assert_equal expected_source, caret["value"]
+    assert_equal expected_caret, caret["selectionStart"]
+    assert_equal expected_caret, caret["capturedSourceOffset"]
+    assert_equal "$$\n\n$$", caret["activeMathText"]
+    assert_equal 3, caret["visualOffset"]
+
+    click_on "Source"
+    page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(() => arguments[0]()))")
+    assert_equal expected_caret,
+      page.evaluate_script("document.querySelector('.source-field').editorController.selectionStart")
   end
 
   test "new document renders inline and display math before its first save" do
@@ -1066,6 +1637,372 @@ class DocumentsTest < ApplicationSystemTestCase
     media_file&.close!
   end
 
+  test "source mode pastes and drops local images at the cursor and keeps text paste working" do
+    document = Document.create!(title: "Source image gestures", source: "# Source image gestures\n\nLead text.\n\nTail text.")
+    visit edit_document_path(document, editor_mode: "source")
+    png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+i9MwAAAAASUVORK5CYII="
+
+    paste_result = page.execute_script(<<~JAVASCRIPT, png)
+      const editor = document.querySelector('.source-field').editorController;
+      const insertion = editor.value.indexOf('Tail text.');
+      editor.setSelectionRange(insertion);
+      editor.focus();
+      const originalFetch = window.fetch.bind(window);
+      window.fetch = (url, options = {}) => {
+        if (options.method === 'POST' && String(url).endsWith('/assets')) {
+          const uploadedFile = options.body.get('file');
+          window.sourceImageUpload = { name: uploadedFile.name, type: uploadedFile.type };
+          window.fetch = originalFetch;
+          return new Promise((resolve, reject) => {
+            window.setTimeout(() => originalFetch(url, options).then(resolve, reject), 250);
+          });
+        }
+        return originalFetch(url, options);
+      };
+      const bytes = Uint8Array.from(atob(arguments[0]), character => character.charCodeAt(0));
+      const transfer = new DataTransfer();
+      transfer.items.add(new File([bytes], 'blob', { type: '' }));
+      const event = new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: transfer });
+      editor.view.contentDOM.dispatchEvent(event);
+      const status = document.querySelector('.media-upload-status');
+      return { prevented: event.defaultPrevented, sourceMode: editor.editingMode, progress: status.textContent, busy: status.getAttribute('aria-busy') };
+    JAVASCRIPT
+    assert_equal "source", paste_result["sourceMode"]
+    assert paste_result["prevented"]
+    assert_equal "Preparing image…", paste_result["progress"]
+    assert_equal "true", paste_result["busy"]
+    assert_selector ".media-upload-status", text: "Uploading blob.png…", wait: 5
+    assert_equal({ "name" => "blob.png", "type" => "image/png" }, page.evaluate_script("window.sourceImageUpload"))
+
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      const insertion = editor.value.indexOf('Tail text.');
+      editor.replaceRange('Inserted while importing. ', insertion, insertion);
+    JAVASCRIPT
+    assert_selector ".media-upload-status", text: /blob\.png added to the Markdown source/i, wait: 8
+
+    pasted_source = page.evaluate_script("document.querySelector('.source-field').editorController.value")
+    assert_operator pasted_source.index("Lead text."), :<, pasted_source.index("elef-asset:")
+    assert_operator pasted_source.index("elef-asset:"), :<, pasted_source.index("Inserted while importing.")
+    assert_operator pasted_source.index("Inserted while importing."), :<, pasted_source.index("Tail text.")
+    assert_selector ".preview-pane img.presentation-media", count: 1, wait: 8
+    assert_operator page.evaluate_script("document.querySelector('.preview-pane img.presentation-media').naturalWidth"), :>, 0
+
+    drop_result = page.execute_script(<<~JAVASCRIPT, png)
+      const editor = document.querySelector('.source-field').editorController;
+      const insertion = editor.value.indexOf('Tail text.');
+      const coordinates = editor.view.coordsAtPos(insertion);
+      const resolvedPosition = editor.view.posAtCoords({ x: coordinates.left, y: (coordinates.top + coordinates.bottom) / 2 });
+      const bytes = Uint8Array.from(atob(arguments[0]), character => character.charCodeAt(0));
+      const transfer = new DataTransfer();
+      transfer.items.add(new File([bytes], 'dropped-document.png', { type: 'image/png' }));
+      const options = {
+        bubbles: true,
+        cancelable: true,
+        dataTransfer: transfer,
+        clientX: coordinates.left,
+        clientY: (coordinates.top + coordinates.bottom) / 2
+      };
+      const dragover = new DragEvent('dragover', options);
+      const drop = new DragEvent('drop', options);
+      editor.view.contentDOM.dispatchEvent(dragover);
+      editor.view.contentDOM.dispatchEvent(drop);
+      const status = document.querySelector('.media-upload-status');
+      return { intendedPosition: insertion, resolvedPosition, dragoverPrevented: dragover.defaultPrevented, dropPrevented: drop.defaultPrevented, progress: status.textContent, busy: status.getAttribute('aria-busy') };
+    JAVASCRIPT
+    assert drop_result["dragoverPrevented"], drop_result.inspect
+    assert drop_result["dropPrevented"], drop_result.inspect
+    assert_equal drop_result["intendedPosition"], drop_result["resolvedPosition"], drop_result.inspect
+    assert_equal "Preparing image…", drop_result["progress"]
+    assert_equal "true", drop_result["busy"]
+    assert_selector ".media-upload-status", text: "Uploading dropped-document.png…", wait: 5
+    assert_selector ".media-upload-status", text: /dropped-document\.png added to the Markdown source/i, wait: 8
+
+    dropped_source = page.evaluate_script("document.querySelector('.source-field').editorController.value")
+    assert_equal 2, dropped_source.scan("elef-asset:").length
+    assert_operator dropped_source.index("elef-asset:"), :<, dropped_source.rindex("elef-asset:")
+    assert_operator dropped_source.rindex("elef-asset:"), :<, dropped_source.index("Tail text.")
+    assert_selector ".preview-pane img.presentation-media", count: 2, wait: 8
+    assert_equal 2, document.reload.assets.count
+    assert_selector '[data-autosave-target="status"]', exact_text: "Saved", wait: 8
+
+    before_failed_upload = page.evaluate_script("document.querySelector('.source-field').editorController.value")
+    failed_upload = page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      const originalFetch = window.fetch.bind(window);
+      window.fetch = (url, options = {}) => {
+        if (options.method === 'POST' && String(url).endsWith('/assets')) {
+          window.fetch = originalFetch;
+          return Promise.resolve(new Response(JSON.stringify({ error: 'Upload rejected.' }), {
+            status: 422,
+            headers: { 'Content-Type': 'application/json' }
+          }));
+        }
+        return originalFetch(url, options);
+      };
+      const transfer = new DataTransfer();
+      transfer.items.add(new File(['not a valid image'], 'failed-document.png', { type: 'image/png' }));
+      const event = new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: transfer });
+      editor.view.contentDOM.dispatchEvent(event);
+      return { prevented: event.defaultPrevented };
+    JAVASCRIPT
+    assert failed_upload["prevented"]
+    assert_selector ".media-upload-status", exact_text: "Upload rejected.", wait: 5
+    assert_equal "false", page.find(".media-upload-status")["aria-busy"]
+    assert_equal before_failed_upload, page.evaluate_script("document.querySelector('.source-field').editorController.value")
+
+    text_paste = page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      editor.setSelectionRange(editor.value.length);
+      editor.focus();
+      const transfer = new DataTransfer();
+      transfer.setData('text/plain', 'ordinary pasted words');
+      const event = new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: transfer });
+      editor.view.contentDOM.dispatchEvent(event);
+      return { prevented: event.defaultPrevented, source: editor.value };
+    JAVASCRIPT
+    assert text_paste["prevented"]
+    assert_includes text_paste["source"], "ordinary pasted words"
+
+    before_unsupported_paste = page.evaluate_script("document.querySelector('.source-field').editorController.value")
+    unsupported_paste = page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      const transfer = new DataTransfer();
+      transfer.items.add(new File(['not an image'], 'notes.txt', { type: 'text/plain' }));
+      const event = new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: transfer });
+      editor.view.contentDOM.dispatchEvent(event);
+      return { prevented: event.defaultPrevented, source: editor.value };
+    JAVASCRIPT
+    assert unsupported_paste["prevented"]
+    assert_equal before_unsupported_paste, unsupported_paste["source"]
+    assert_selector ".media-upload-status", text: "Choose an image file to insert into source mode."
+    assert_equal "false", page.find(".media-upload-status")["aria-busy"]
+  end
+
+  test "media transfer handling deduplicates file-list and item entries" do
+    document = Document.create!(title: "Media transfer deduplication", source: "# Media transfer deduplication")
+    visit edit_document_path(document, editor_mode: "source")
+
+    result = page.evaluate_async_script(<<~JAVASCRIPT)
+      const done = arguments[0];
+      const waitForMedia = () => {
+        const media = window.Stimulus.getControllerForElementAndIdentifier(document.querySelector('.visual-editor-form'), 'media');
+        if (!media) {
+          window.setTimeout(waitForMedia, 10);
+          return;
+        }
+        const listed = new File(['same bytes'], 'same.png', { type: 'image/png' });
+        const itemCopy = new File(['same bytes'], 'same.png', { type: 'image/png' });
+        let duplicateItemReads = 0;
+        const combined = media.filesFromTransfer({
+          files: [listed],
+          items: [{ kind: 'file', getAsFile: () => { duplicateItemReads += 1; return itemCopy; } }]
+        });
+        const fromItems = media.filesFromTransfer({
+          files: [],
+          items: [{ kind: 'file', getAsFile: () => itemCopy }]
+        });
+        done({ combinedCount: combined.length, duplicateItemReads, fallbackCount: fromItems.length });
+      };
+      waitForMedia();
+    JAVASCRIPT
+
+    assert_equal 1, result["combinedCount"]
+    assert_equal 0, result["duplicateItemReads"]
+    assert_equal 1, result["fallbackCount"]
+  end
+
+  test "source media paste and drop tolerate an unavailable editor and disconnect clears tracked ranges" do
+    document = Document.create!(title: "Source image readiness", source: "# Source image readiness\n\nKeep this source.")
+    visit edit_document_path(document, editor_mode: "source")
+    png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+i9MwAAAAASUVORK5CYII="
+
+    unavailable_result = page.execute_script(<<~JAVASCRIPT, png)
+      const sourceField = document.querySelector('.source-field');
+      const editor = sourceField.editorController;
+      const source = editor.value;
+      const surface = document.querySelector('.editor-surface');
+      const bytes = Uint8Array.from(atob(arguments[0]), character => character.charCodeAt(0));
+      const transfer = new DataTransfer();
+      transfer.items.add(new File([bytes], 'readiness.png', { type: 'image/png' }));
+      delete sourceField.editorController;
+      const paste = new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: transfer });
+      surface.dispatchEvent(paste);
+      const drop = new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: transfer, clientX: 0, clientY: 0 });
+      surface.dispatchEvent(drop);
+      sourceField.editorController = editor;
+      return { pastePrevented: paste.defaultPrevented, dropPrevented: drop.defaultPrevented, source, currentSource: editor.value };
+    JAVASCRIPT
+    refute unavailable_result["pastePrevented"]
+    refute unavailable_result["dropPrevented"]
+    assert_equal unavailable_result["source"], unavailable_result["currentSource"]
+    assert_selector ".media-upload-status", text: /source editor is not ready yet/i
+    assert_equal "false", page.find(".media-upload-status")["aria-busy"]
+
+    lifecycle_result = page.evaluate_async_script(<<~JAVASCRIPT)
+      const done = arguments[0];
+      const sourceField = document.querySelector('.source-field');
+      const editor = sourceField.editorController;
+      editor.trackMediaRange({ from: 0, to: 0 });
+      sourceField.remove();
+      requestAnimationFrame(() => requestAnimationFrame(() => done({
+        pendingRanges: editor.pendingMediaRanges.size,
+        destroyed: editor.destroyed
+      })));
+    JAVASCRIPT
+    assert_equal 0, lifecycle_result["pendingRanges"]
+    assert lifecycle_result["destroyed"]
+  end
+
+  test "source mode drops web images at the drop position and preserves concurrent typing" do
+    document = Document.create!(title: "Web image drop", source: "# Web image drop\n\nLead text.\n\nTail text.")
+    visit edit_document_path(document, editor_mode: "source")
+    png_data_url = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+i9MwAAAAASUVORK5CYII="
+
+    drop_result = page.execute_script(<<~JAVASCRIPT, png_data_url)
+      const editor = document.querySelector('.source-field').editorController;
+      const insertion = editor.value.indexOf('Tail text.');
+      const coordinates = editor.view.coordsAtPos(insertion);
+      const resolvedPosition = editor.view.posAtCoords({ x: coordinates.left, y: (coordinates.top + coordinates.bottom) / 2 });
+      const transfer = new DataTransfer();
+      transfer.setData('text/uri-list', arguments[0]);
+      transfer.setData('text/html', '<img src="' + arguments[0] + '">');
+      const options = { bubbles: true, cancelable: true, dataTransfer: transfer, clientX: coordinates.left, clientY: (coordinates.top + coordinates.bottom) / 2 };
+      const dragover = new DragEvent('dragover', options);
+      const drop = new DragEvent('drop', options);
+      editor.view.contentDOM.dispatchEvent(dragover);
+      editor.view.contentDOM.dispatchEvent(drop);
+      const status = document.querySelector('.media-upload-status');
+      return {
+        intendedPosition: insertion,
+        resolvedPosition,
+        dragoverPrevented: dragover.defaultPrevented,
+        dropPrevented: drop.defaultPrevented,
+        progress: status.textContent,
+        busy: status.getAttribute('aria-busy')
+      };
+    JAVASCRIPT
+
+    assert drop_result["dragoverPrevented"], drop_result.inspect
+    assert drop_result["dropPrevented"], drop_result.inspect
+    assert_equal drop_result["intendedPosition"], drop_result["resolvedPosition"], drop_result.inspect
+    assert_equal "Preparing image…", drop_result["progress"]
+    assert_equal "true", drop_result["busy"]
+
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      const insertion = editor.value.indexOf('Tail text.');
+      editor.replaceRange('Typed while web image drops. ', insertion, insertion);
+    JAVASCRIPT
+
+    assert_selector ".media-upload-status", text: /dropped-image\.png added to the Markdown source/i, wait: 8
+
+    dropped_source = page.evaluate_script("document.querySelector('.source-field').editorController.value")
+    assert_includes dropped_source, "elef-asset:"
+    assert_operator dropped_source.index("Lead text."), :<, dropped_source.index("elef-asset:")
+    assert_operator dropped_source.index("elef-asset:"), :<, dropped_source.index("Typed while web image drops.")
+    assert_operator dropped_source.index("Typed while web image drops."), :<, dropped_source.index("Tail text.")
+    assert_selector ".preview-pane img.presentation-media", count: 1, wait: 8
+    assert_equal 1, document.reload.assets.count
+  end
+
+  test "source mode shows actionable status message when web drop cannot be imported as an image" do
+    document = Document.create!(title: "Web image failure", source: "# Web image failure\n\nKeep untouched.")
+    visit edit_document_path(document, editor_mode: "source")
+
+    before_drop = page.evaluate_script("document.querySelector('.source-field').editorController.value")
+
+    drop_result = page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      const transfer = new DataTransfer();
+      transfer.setData('text/uri-list', 'https://example.com/blocked-image.png');
+      const options = { bubbles: true, cancelable: true, dataTransfer: transfer, clientX: 100, clientY: 100 };
+      const dragover = new DragEvent('dragover', options);
+      const drop = new DragEvent('drop', options);
+      editor.view.contentDOM.dispatchEvent(dragover);
+      editor.view.contentDOM.dispatchEvent(drop);
+      return { dragoverPrevented: dragover.defaultPrevented, dropPrevented: drop.defaultPrevented };
+    JAVASCRIPT
+
+    assert drop_result["dragoverPrevented"]
+    assert drop_result["dropPrevented"]
+    assert_selector ".media-upload-status", text: "Only image files can be dropped here — to use an image from a web page, save it first.", wait: 8
+    assert_equal "false", page.find(".media-upload-status")["aria-busy"]
+    assert_equal before_drop, page.evaluate_script("document.querySelector('.source-field').editorController.value")
+  end
+
+  test "source dragover defensively supports DOMStringList types collections" do
+    document = Document.create!(title: "DOMStringList dragover", source: "# DOMStringList dragover")
+    visit edit_document_path(document, editor_mode: "source")
+
+    result = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.editor-surface');
+        const typesList = {
+          0: 'Files',
+          length: 1,
+          contains: (item) => item === 'Files',
+          item: (index) => index === 0 ? 'Files' : null
+        };
+        let prevented = false;
+        let dropEffect = null;
+        const mockEvent = {
+          currentTarget: surface,
+          dataTransfer: {
+            types: typesList,
+            dropEffect: 'none'
+          },
+          preventDefault: () => { prevented = true; }
+        };
+        Object.defineProperty(mockEvent.dataTransfer, 'dropEffect', {
+          set: (val) => { dropEffect = val; },
+          get: () => dropEffect
+        });
+        const media = window.Stimulus.getControllerForElementAndIdentifier(document.querySelector('.visual-editor-form'), 'media');
+        media.sourceDragOver(mockEvent);
+        return {
+          prevented,
+          dropEffect,
+          hasDropTargetClass: surface.classList.contains('is-media-drop-target')
+        };
+      })()
+    JAVASCRIPT
+
+    assert result["prevented"]
+    assert_equal "copy", result["dropEffect"]
+    assert result["hasDropTargetClass"]
+  end
+
+  test "source mode ignores plain text drops so CodeMirror retains native behavior" do
+    document = Document.create!(title: "Plain text drop", source: "# Plain text drop\n\nExisting text.")
+    visit edit_document_path(document, editor_mode: "source")
+
+    before_value = page.evaluate_script("document.querySelector('.source-field').editorController.value")
+
+    result = page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      const transfer = new DataTransfer();
+      transfer.setData('text/plain', 'ordinary words');
+      const options = { bubbles: true, cancelable: true, dataTransfer: transfer, clientX: 100, clientY: 100 };
+      const dragover = new DragEvent('dragover', options);
+      const drop = new DragEvent('drop', options);
+      editor.view.contentDOM.dispatchEvent(dragover);
+      editor.view.contentDOM.dispatchEvent(drop);
+      const status = document.querySelector('.media-upload-status');
+      return {
+        dragoverPrevented: dragover.defaultPrevented,
+        status: status?.textContent,
+        busy: status?.getAttribute('aria-busy'),
+        value: editor.value
+      };
+    JAVASCRIPT
+
+    refute result["dragoverPrevented"]
+    assert_equal "", result["status"].to_s
+    assert_equal "false", result["busy"]
+    assert_includes result["value"], "ordinary words"
+  end
+
   test "visual edits preserve nested task lists and untouched item formatting" do
     source = "- [ ] Keep **this**\n  - Nested [link](/path)\n- [x] Already done"
     document = Document.create!(title: "List preservation", source: source)
@@ -1078,6 +2015,40 @@ class DocumentsTest < ApplicationSystemTestCase
     JAVASCRIPT
 
     assert_field "Markdown source", with: "- [ ] Keep **that**\n  - Nested [link](/path)\n- [x] Already done", wait: 5
+  end
+
+  test "enter after a code fence opener inserts a matching closing fence" do
+    [["```sql", "```"], ["~~~sql", "~~~"]].each do |opening, closing|
+      visit new_document_path
+
+      find(".document-editor-block h1", text: "Untitled document").send_keys(:enter)
+      active_document_block.send_keys(opening, :enter)
+
+      expected = Regexp.new(Regexp.escape("#{opening}\n\n#{closing}"))
+      assert_field "Markdown source", with: expected, wait: 5
+      assert_selector ".document-editor-block[contenteditable='true'] pre code", text: "", wait: 5
+
+      active_document_block.send_keys("SELECT * FROM TABLE")
+      completed = Regexp.new(Regexp.escape("#{opening}\nSELECT * FROM TABLE\n#{closing}"))
+      assert_field "Markdown source", with: completed, wait: 5
+    end
+  end
+
+  test "enter after a display math opener inserts its matching closing fence" do
+    [["$$", "$$"], ["\\[", "\\]"]].each do |opening, closing|
+      visit new_document_path
+      find(".document-editor-block h1", text: "Untitled document").send_keys(:enter)
+      active_document_block.send_keys(opening, :enter)
+
+      expected = Regexp.new(Regexp.escape("#{opening}\n\n#{closing}"))
+      assert_field "Markdown source", with: expected, wait: 5
+      assert_selector ".document-editor-block .editor-math-active", wait: 5
+
+      active_document_block.send_keys("x=1")
+      completed = Regexp.new(Regexp.escape("#{opening}\nx=1\n#{closing}"))
+      assert_field "Markdown source", with: completed, wait: 5
+      assert_selector ".document-editor-block .editor-live-math-display", wait: 5
+    end
   end
 
   test "visual code editing preserves fenced language and indentation" do
@@ -1146,131 +2117,336 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_selector '.document-editor-block[aria-readonly="true"]', minimum: 8, visible: false
   end
 
-  test "expands math shorthand only when committed inside math" do
+  test "keeps an active math chain literal until commit and supports one-step undo" do
     document = Document.create!(title: "Math notes", source: "# Math")
     visit edit_document_path(document)
-    editor = find_field("Markdown source")
-    editor.click
+    click_on "Source"
+    source = find_field("Markdown source")
+    editor = find(".cm-content")
     editor.send_keys(:end)
-    editor.send_keys("\n$x.hat.b.T")
-    editor.send_keys(:enter)
+    editor.send_keys("\n$x.b.vec.t")
+    assert_includes source.value, "$x.b.vec.t$"
+    editor.send_keys(" ")
 
-    assert_includes editor.value, "$\\mathbf{\\hat{x}}^{\\mathsf{T}}"
-    assert_includes editor.value, "\n"
+    assert_includes source.value, "\\vec{\\mathbf{x}}^\\top $"
+    editor.send_keys([:control, "z"])
+    assert_includes source.value, "$x.b.vec.t$"
     assert_selector '[data-autosave-target="status"]', text: "Saved", wait: 5
   end
 
-  test "wraps TeX commands with math modifiers for Greek letters and operators" do
-    document = Document.create!(title: "TeX command modifiers", source: "# Math")
+  test "backspace deletes empty dollar pairs and keeps other edits single-character" do
+    document = Document.create!(title: "Math pair deletion", source: "# Math")
     visit edit_document_path(document)
-    editor = find_field("Markdown source")
-    editor.click
+    click_on "Source"
+    source = find_field("Markdown source")
+    editor = find(".cm-content")
+
     editor.send_keys(:end)
-
-    editor.send_keys("\n$\\chi.bar")
-    editor.send_keys(:enter)
-    assert_includes editor.value, "$\\bar{\\chi}"
-
-    editor.send_keys("$\n$\\alpha.hat")
-    editor.send_keys(:tab)
-    assert_includes editor.value, "$\\hat{\\alpha}"
-
-    editor.send_keys("$\n$\\beta.tilde")
-    editor.send_keys(:enter)
-    assert_includes editor.value, "$\\tilde{\\beta}"
-
-    greek_commands = %w[
-      alpha beta gamma delta epsilon varepsilon zeta eta theta vartheta iota kappa lambda mu nu xi
-      pi varpi rho varrho sigma varsigma tau upsilon phi varphi chi psi omega
-      Gamma Delta Theta Lambda Xi Pi Sigma Upsilon Phi Psi Omega
-    ]
-    editor.send_keys("$\n$")
-    greek_commands.each do |command|
-      editor.send_keys(" \\#{command}.bar")
-      editor.send_keys(:enter)
-      editor.send_keys(" ")
-    end
     editor.send_keys("$")
+    assert_field "Markdown source", with: "# Math$$"
+    assert_equal 7, page.evaluate_script("document.querySelector('.source-field').editorController.selectionStart")
+    editor.send_keys(:backspace)
+    assert_field "Markdown source", with: "# Math"
+    assert_equal 6, page.evaluate_script("document.querySelector('.source-field').editorController.selectionStart")
 
-    greek_commands.each do |command|
-      assert_includes editor.value, "\\bar{\\#{command}}", "\\#{command} should be wrapped as a TeX command"
-    end
+    editor.send_keys("((")
+    assert_field "Markdown source", with: "# Math(())"
+    assert_equal 8, page.evaluate_script("document.querySelector('.source-field').editorController.selectionStart")
+    editor.send_keys(:backspace)
+    assert_field "Markdown source", with: "# Math()"
 
-    editor.send_keys("\n$\\nabla.vec")
-    editor.send_keys(:enter)
-    assert_includes editor.value, "$\\vec{\\nabla}", "operators should also be wrapped as TeX commands"
-  end
-
-  test "chains supported math modifiers and leaves conflicting chains intact" do
-    document = Document.create!(title: "Math modifier chains", source: "# Math")
-    visit edit_document_path(document)
-    editor = find_field("Markdown source")
-    editor.click
-    editor.send_keys(:end)
-    expanded = ->(symbol) { "$\\mathbf{\\bar{#{symbol}}}$" }
-
-    editor.send_keys("\n$x.bar")
-    editor.send_keys(:enter)
-    editor.send_keys(".bb")
-    editor.send_keys(:enter)
-    editor.send_keys("$")
-    assert_includes editor.value, expanded.call("x"), "bar then bold should compose across commits: #{editor.value.inspect}"
-
-    editor.send_keys("\n$y.bar.bb")
-    editor.send_keys(:enter)
-    editor.send_keys("$")
-    assert_includes editor.value, expanded.call("y"), "bar then bold should compose in one token: #{editor.value.inspect}"
-
-    editor.send_keys("\n$z.bb.bar")
-    editor.send_keys(:enter)
-    editor.send_keys("$")
-    assert_includes editor.value, expanded.call("z"), "bold then bar should compose in one token: #{editor.value.inspect}"
-
-    editor.send_keys("\n$w.bb")
-    editor.send_keys(:enter)
-    editor.send_keys(".bar")
-    editor.send_keys(:enter)
-    editor.send_keys("$")
-    assert_includes editor.value, expanded.call("w"), "bold then bar should compose across commits: #{editor.value.inspect}"
-
-    assert_equal ["x", "y", "z", "w"].map { |symbol| expanded.call(symbol) }.length,
-      ["x", "y", "z", "w"].sum { |symbol| editor.value.scan(expanded.call(symbol)).length }
-
-    editor.send_keys("\n$v.bar")
-    editor.send_keys(:enter)
-    editor.send_keys(".hat")
-    editor.send_keys(:enter)
-    assert_includes editor.value, "$\\bar{v}.hat\n", "conflicting modifiers across commits should stay literal: #{editor.value.inspect}"
-    editor.send_keys("$")
-
-    ["x.bb.bb", "x.bar.bar", "x.bar.hat"].each do |token|
-      editor.send_keys("\n$#{token}")
-      editor.send_keys(:enter)
-      assert_includes editor.value, "$#{token}\n"
-      editor.send_keys("$")
-    end
-  end
-
-  test "canonicalizes modifier order and ignores code and unknown contexts" do
-    document = Document.create!(title: "Math contexts", source: "# Math")
-    visit edit_document_path(document)
-    editor = find_field("Markdown source")
-    source = "# Math\n\nOutside x.hat.b\n\n```\n$x.hat.b\n```\n\n$x.T.b.hat\n\n$x.unknown"
-    page.execute_script(<<~JAVASCRIPT, source)
-      const editor = document.querySelector('textarea[name="document[source]"]');
-      editor.value = arguments[0];
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector(".source-field").editorController;
+      const newline = String.fromCharCode(10);
+      const escapedDollarPair = String.fromCharCode(92) + "$$";
+      editor.replaceServerSource(["# Math", "", escapedDollarPair].join(newline));
+      editor.setSelectionRange(editor.value.length - 1);
       editor.focus();
-      editor.setSelectionRange(editor.value.indexOf("\\n\\n$x.unknown"), editor.value.indexOf("\\n\\n$x.unknown"));
+    JAVASCRIPT
+    editor.send_keys(:backspace)
+    assert_field "Markdown source", with: "# Math\n\n\\$"
+
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector(".source-field").editorController;
+      editor.replaceServerSource(["# Math", "", "$x$"].join(String.fromCharCode(10)));
+      editor.setSelectionRange(editor.value.indexOf("$x$") + 2);
+      editor.focus();
+    JAVASCRIPT
+    editor.send_keys(:backspace)
+    assert_field "Markdown source", with: "# Math\n\n$$"
+    assert_equal 9, page.evaluate_script("document.querySelector('.source-field').editorController.selectionStart")
+
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector(".source-field").editorController;
+      editor.replaceServerSource(["# Math", "", "a$b"].join(String.fromCharCode(10)));
+      editor.setSelectionRange(editor.value.length);
+      editor.focus();
+    JAVASCRIPT
+    editor.send_keys(:backspace)
+    assert_field "Markdown source", with: "# Math\n\na$"
+  end
+
+  test "supports editing an active math chain before committing it" do
+    document = Document.create!(title: "Editable math chain", source: "# Math")
+    visit edit_document_path(document)
+    click_on "Source"
+    source_field = find_field("Markdown source")
+    editor = find(".cm-content")
+    editor.send_keys(:end)
+    editor.send_keys("\n$x.vec.t")
+
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector(".source-field").editorController;
+      const source = editor.value;
+      editor.setSelectionRange(source.indexOf("x.vec.t") + 1);
+      editor.focus();
+    JAVASCRIPT
+    editor.send_keys(".b")
+    assert_includes source_field.value, "$x.b.vec.t$"
+
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector(".source-field").editorController;
+      editor.setSelectionRange(editor.value.indexOf("$", editor.value.indexOf("x.b.vec.t")));
+      editor.focus();
     JAVASCRIPT
     editor.send_keys(:tab)
 
-    assert_includes editor.value, "Outside x.hat.b"
-    assert_includes editor.value, "\n$x.hat.b\n```"
-    assert_includes editor.value, "$\\mathbf{\\hat{x}}^{\\mathsf{T}}"
+    assert_includes source_field.value, "\\vec{\\mathbf{x}}^\\top"
+    refute_includes source_field.value, "x.b.vec.t"
+  end
 
-    page.execute_script("const editor = document.querySelector('textarea[name=\"document[source]\"]'); editor.focus(); editor.setSelectionRange(editor.value.length, editor.value.length);")
+  test "autosave preserves an active math chain verbatim" do
+    document = Document.create!(title: "Autosaved math chain", source: "# Math")
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    source = find_field("Markdown source")
+    editor.send_keys(:end)
+    editor.send_keys("\n$x.b")
+    assert_includes source.value, "$x.b$"
+
+    assert_selector '[data-autosave-target="status"]', text: "Unsaved changes", wait: 3
+    assert_selector '[data-autosave-target="status"]', text: "Saved", wait: 10
+    assert_equal "# Math\n$x.b$", source.value.gsub(/\r\n?/, "\n")
+    assert_equal "# Math\n$x.b$", document.reload.source.gsub(/\r\n?/, "\n")
+  end
+
+  test "explicitly saving commits an active math chain" do
+    document = Document.create!(title: "Explicitly saved math chain", source: "# Math")
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    source = find_field("Markdown source")
+    editor.send_keys(:end)
+    editor.send_keys("\n$x.b")
+    assert_includes source.value, "$x.b$"
+
+    click_on "Save document"
+    assert_text "Document saved."
+
+    assert_includes source.value, "$\\mathbf{x}$"
+    assert_equal source.value.gsub(/\r\n?/, "\n"), document.reload.source.gsub(/\r\n?/, "\n")
+  end
+
+  test "typing a colon directive inserts canonical source and guides align arguments" do
+    document = Document.create!(title: "Directive palette", source: "# Notes")
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    editor.send_keys(:end)
+    editor.send_keys("\n:align")
+
+    source = find_field("Markdown source")
+    assert_includes source.value, ":::align{}"
+    refute_includes source.value.lines, ":align"
+    assert_selector ".snippet-palette [role='option'] strong", text: "left"
+    assert_selector ".snippet-palette [role='option'] strong", text: "center"
+
+    editor.send_keys("center ")
+    assert_includes source.value, ":::align{center }"
+    assert_selector ".snippet-palette [role='option'] strong", text: "top"
+    assert_selector ".snippet-palette [role='option'] strong", text: "middle"
+    assert_selector ".snippet-palette [role='option'] strong", text: "bottom"
+    assert_no_selector ".snippet-palette [role='option'] strong", text: "left"
+  end
+
+  test "slash palette inserts canonical image source" do
+    document = Document.create!(title: "Source palette", source: "# Notes")
+    visit edit_document_path(document)
+    click_on "Source"
+    source = find_field("Markdown source")
+    editor = find(".cm-content")
+    editor.send_keys(:end)
+    editor.send_keys("\n/image")
+    assert_selector ".snippet-palette [role='option']", text: /Image/
     editor.send_keys(:enter)
-    assert_includes editor.value, "$x.unknown\n"
+
+    assert_includes source.value, "![description](image URL)"
+    refute_includes source.value, "/image"
+    selected_image_placeholder = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const editor = document.querySelector(".source-field").editorController;
+        return editor.value.slice(editor.selectionStart, editor.selectionEnd);
+      })()
+    JAVASCRIPT
+    assert_equal "description", selected_image_placeholder
+
+  end
+
+  test "supports only the v1 math transforms and preserves invalid chains" do
+    document = Document.create!(title: "Math transforms", source: "# Math")
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    source = find_field("Markdown source")
+    editor.send_keys(:end)
+
+    editor.send_keys("\n$\\alpha.b")
+    editor.send_keys(:enter)
+    assert_includes source.value, "\\boldsymbol{\\alpha}"
+
+    editor.send_keys(:right)
+    editor.send_keys("\n$R.bb")
+    editor.send_keys(:enter)
+    assert_includes source.value, "\\mathbb{R}"
+
+    editor.send_keys(:right)
+    editor.send_keys("\n$A.inv.t")
+    editor.send_keys(:enter)
+    assert_includes source.value, "\\left(A^{-1}\\right)^\\top"
+
+    editor.send_keys(:right)
+    editor.send_keys("\n$x.invalid")
+    editor.send_keys(:enter)
+    assert_includes source.value, "$x.invalid"
+  end
+
+  test "commits local hat and tilde transforms while keeping each active chain literal" do
+    document = Document.create!(title: "Math accents", source: "# Math")
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    source = find_field("Markdown source")
+    editor.send_keys(:end)
+
+    editor.send_keys("\n$x.hat")
+    assert_includes source.value, "$x.hat$"
+    editor.send_keys(:tab)
+    assert_includes source.value, "$\\hat{x}$"
+
+    editor.send_keys(:right)
+    editor.send_keys("\n$x.tilde.t")
+    assert_includes source.value, "$x.tilde.t$"
+    editor.send_keys(:tab)
+    assert_includes source.value, "\\tilde{x}^\\top"
+  end
+
+  test "applies transpose and inverse to existing canonical LaTeX atoms after reload" do
+    source_text = ["# Math", "", "$x$", "$\\mathbf{x}$", "$\\vec{x}$", "$y$", "$\\mathbf{y}$", "$\\vec{y}$", "$\\mathbf{z}$"].join("\n")
+    document = Document.create!(title: "Canonical math atoms", source: source_text)
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    source = find_field("Markdown source")
+
+    transforms = [
+      ["x", ".t", "x^\\top"],
+      ["\\mathbf{x}", ".t", "\\mathbf{x}^\\top"],
+      ["\\vec{x}", ".t", "\\vec{x}^\\top"],
+      ["y", ".inv", "y^{-1}"],
+      ["\\mathbf{y}", ".inv", "\\mathbf{y}^{-1}"],
+      ["\\vec{y}", ".inv", "\\vec{y}^{-1}"]
+    ]
+
+    transforms.each do |atom, operation, expansion|
+      page.execute_script(<<~JAVASCRIPT, atom)
+        const editor = document.querySelector(".source-field").editorController;
+        const atom = arguments[0];
+        const start = editor.value.indexOf(`$${atom}$`);
+        if (start < 0) throw new Error(`Missing math atom ${atom}`);
+        editor.setSelectionRange(start + atom.length + 1);
+        editor.focus();
+      JAVASCRIPT
+      editor.send_keys(operation)
+      assert_includes source.value, "$#{atom}#{operation}$"
+      editor.send_keys(:tab)
+      assert_includes source.value, "$#{expansion}$"
+    end
+
+    assert_selector '[data-autosave-target="status"]', exact_text: "Saved", wait: 10
+    persisted_source = source.value
+    assert_equal persisted_source.gsub(/\r\n?/, "\n"), document.reload.source.gsub(/\r\n?/, "\n")
+
+    visit edit_document_path(document.reload)
+    click_on "Source"
+    editor = find(".cm-content")
+    source = find_field("Markdown source")
+    page.execute_script(<<~JAVASCRIPT, "\\mathbf{z}")
+      const editor = document.querySelector(".source-field").editorController;
+      const atom = arguments[0];
+      const start = editor.value.indexOf(`$${atom}$`);
+      if (start < 0) throw new Error(`Missing math atom ${atom}`);
+      editor.setSelectionRange(start + atom.length + 1);
+      editor.focus();
+    JAVASCRIPT
+    editor.send_keys(".t")
+    assert_includes source.value, "$\\mathbf{z}.t$"
+    editor.send_keys(:tab)
+    assert_includes source.value, "$\\mathbf{z}^\\top$"
+    assert_selector '[data-autosave-target="status"]', exact_text: "Saved", wait: 10
+    assert_equal source.value.gsub(/\r\n?/, "\n"), document.reload.source.gsub(/\r\n?/, "\n")
+  end
+
+  test "Enter in an empty display-math pair creates a blank line between delimiters" do
+    document = Document.create!(title: "Empty display math", source: "# Math\n\n$$$$")
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    source = find_field("Markdown source")
+    prefix_length = "# Math\n\n".length
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector(".source-field").editorController;
+      editor.setSelectionRange(editor.value.length - 2);
+      editor.focus();
+    JAVASCRIPT
+
+    editor.send_keys(:enter)
+
+    assert_equal "# Math\n\n$$\n\n$$", source.value
+    caret = page.evaluate_script("document.querySelector('.source-field').editorController.selectionStart")
+    assert_equal prefix_length + 3, caret
+  end
+
+  test "slash palette hides raw LaTeX outside math and keeps equation blocks available" do
+    document = Document.create!(title: "Slash context", source: "# Notes")
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    editor.send_keys(:end)
+    editor.send_keys("\n/frac")
+
+    assert_no_selector ".snippet-palette [role='option']", text: /Fraction/, wait: 1
+
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector(".source-field").editorController;
+      editor.replaceRange("/equation", editor.value.length - "/frac".length, editor.value.length);
+    JAVASCRIPT
+    assert_selector ".snippet-palette [role='option']", text: /Equation/, wait: 5
+  end
+
+  test "leaves dot syntax literal outside math and inside code" do
+    document = Document.create!(title: "Math contexts", source: "# Math")
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    editor.send_keys(:end)
+    editor.send_keys("\nOutside x.b\n\n```\n$x.b\n```")
+    editor.send_keys(:end)
+    editor.send_keys(:enter)
+
+    source = find_field("Markdown source").value
+    assert_includes source, "Outside x.b"
+    assert_includes source, "```\n$x.b\n```"
   end
 
   test "keeps the last good preview when a live preview fails" do
@@ -1433,7 +2609,7 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_equal 1, page.evaluate_script("window.previewRequests")
   end
 
-  test "ignores a slow preview response after a newer edit" do
+  test "serializes slow preview responses and renders the latest edit" do
     document = Document.create!(title: "Race notes", source: "# Initial")
     visit edit_document_path(document)
 
@@ -1453,9 +2629,23 @@ class DocumentsTest < ApplicationSystemTestCase
     wait_for_preview_response(1)
     assert_equal 1, page.evaluate_script("window.previewResponses.length")
 
+    initial_request_id = page.evaluate_script("document.querySelector('form.visual-editor-form').previewController.requestId")
     fill_in "Markdown source", with: "# Latest response"
-    wait_for_preview_response(2)
-    assert_equal 2, page.evaluate_script("window.previewResponses.length")
+    latest_edit_queued = page.evaluate_async_script(<<~JAVASCRIPT, initial_request_id)
+      const initialRequestId = arguments[0];
+      const done = arguments[arguments.length - 1];
+      const deadline = Date.now() + 5000;
+      const waitForQueuedPreview = () => {
+        const preview = document.querySelector('form.visual-editor-form')?.previewController;
+        if (preview?.requestId > initialRequestId && preview.timer === null && preview.queuedRequestId === preview.requestId) return done(true);
+        if (Date.now() >= deadline) return done(false);
+        window.setTimeout(waitForQueuedPreview, 10);
+      };
+      waitForQueuedPreview();
+    JAVASCRIPT
+    assert latest_edit_queued, "latest source was not queued behind the active preview"
+    requests_during_active_render = page.evaluate_script("window.previewResponses.length")
+    assert_equal 1, requests_during_active_render, "a newer edit must wait for the active render"
 
     page.evaluate_async_script(<<~JAVASCRIPT)
       const done = arguments[arguments.length - 1];
@@ -1469,6 +2659,9 @@ class DocumentsTest < ApplicationSystemTestCase
       window.setTimeout(done, 20);
     JAVASCRIPT
     assert_no_selector ".document-surface h1", text: "First response"
+
+    wait_for_preview_response(2)
+    assert_equal 2, page.evaluate_script("window.previewResponses.length")
 
     page.execute_script(<<~JAVASCRIPT)
       const response = window.previewResponses[1];
@@ -1534,10 +2727,12 @@ class DocumentsTest < ApplicationSystemTestCase
         .join('')
     JAVASCRIPT
 
-    last_fragment = all(".document-editor-block[data-editor-block-id]").last
-    assert_includes last_fragment.text, "next A4 page."
-    page.execute_script(<<~JAVASCRIPT, last_fragment)
-      const block = arguments[0];
+    # Font completion can repaginate between WebDriver commands. Resolve and
+    # focus the current fragment together; focused editable content suppresses
+    # subsequent reflow while the user is typing.
+    focused_text = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+      const block = [...document.querySelectorAll('.document-editor-block[data-editor-block-id]')].at(-1);
       const paragraph = block.querySelector('p') || block;
       const range = document.createRange();
       range.selectNodeContents(paragraph);
@@ -1546,8 +2741,11 @@ class DocumentsTest < ApplicationSystemTestCase
       const selection = window.getSelection();
       selection.removeAllRanges();
       selection.addRange(range);
+      return block.textContent;
+      })()
     JAVASCRIPT
-    last_fragment.send_keys(" Continued")
+    assert_includes focused_text, "next A4 page."
+    active_document_block.send_keys(" Continued")
     assert_field "Markdown source", with: source.sub(paragraph, "#{paragraph} Continued"), wait: 5
 
     focused_fragment = active_document_block
@@ -1770,15 +2968,15 @@ class DocumentsTest < ApplicationSystemTestCase
     document = Document.create!(
       title: "Inline positions",
       source: <<~MARKDOWN
-        :::position{left}
+        :::align{left}
 
         Left stays ordinary.
 
-        :::position{center}
+        :::align{center}
 
         Center stays ordinary.
 
-        :::position{right}
+        :::align{right}
 
         Right stays ordinary.
       MARKDOWN
@@ -1792,7 +2990,7 @@ class DocumentsTest < ApplicationSystemTestCase
   end
 
   test "positions document blocks visually and preserves directives across source mode" do
-    source = "# Alignment\n\nLeft block\n\n:::position{center middle}\n\nCentered block"
+    source = "# Alignment\n\nLeft block\n\n:::align{center center}\n\nCentered block"
     document = Document.create!(title: "Block alignment", source: source)
     visit edit_document_path(document)
     wait_for_fresh_projection
@@ -1802,13 +3000,13 @@ class DocumentsTest < ApplicationSystemTestCase
     left.find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
     find("[data-visual-editor-block-id='#{left_id}']").select("Right")
 
-    assert_field "Markdown source", with: /:::position\{right\}\n\nLeft block/, wait: 5
+    assert_field "Markdown source", with: /:::align\{right\}\n\nLeft block/, wait: 5
     right_aligned = find(".document-editor-block.position-right", text: "Left block", wait: 5)
     assert_equal left_id, right_aligned["data-editor-block-id"]
     assert_equal left_id, page.evaluate_script("document.activeElement?.dataset.editorBlockId")
     assert_equal "right", page.evaluate_script("getComputedStyle(arguments[0]).textAlign", right_aligned)
     type_visual_text(".document-editor-block", "Left block", "Updated left block")
-    assert_field "Markdown source", with: /:::position\{right\}\n\nUpdated left block/, wait: 5
+    assert_field "Markdown source", with: /:::align\{right\}\n\nUpdated left block/, wait: 5
     page.execute_script("document.activeElement.blur()")
     wait_for_fresh_projection
 
@@ -1819,34 +3017,32 @@ class DocumentsTest < ApplicationSystemTestCase
     centered_control = find("[data-visual-editor-block-id='#{centered['data-editor-block-id']}']")
     centered_control.select("Right")
 
-    assert_field "Markdown source", with: /:::position\{right middle\}/, wait: 5
+    assert_field "Markdown source", with: /:::align\{center right\}/, wait: 5
     assert_selector ".document-editor-block.position-right", text: "Centered block", wait: 5
     right_aligned = find(".document-editor-block.position-right", text: "Centered block")
     assert_equal "right", page.evaluate_script("getComputedStyle(arguments[0]).textAlign", right_aligned)
     right_aligned.find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
     find("[data-visual-editor-block-id='#{right_aligned['data-editor-block-id']}']").select("Left")
-    assert_field "Markdown source", with: /:::position\{left middle\}/, wait: 5
+    assert_field "Markdown source", with: /:::align\{center left\}/, wait: 5
     left_aligned = find(".document-editor-block.position-left", text: "Centered block", wait: 5)
     assert_equal "left", page.evaluate_script("getComputedStyle(arguments[0]).textAlign", left_aligned)
     centered_id = left_aligned["data-editor-block-id"]
     left_aligned.find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
-    find("[data-visual-editor-block-id='#{centered_id}']").select("Automatic position")
-    wait_for_fresh_projection
-    refute_match(/:::position\{left middle\}/, find_field("Markdown source").value)
-    assert_equal "", find("[data-visual-editor-block-id='#{centered_id}']").value
+    assert_equal "left", find("[data-visual-editor-block-id='#{centered_id}']").value
 
     click_on "Source"
-    assert_field "Markdown source", with: /:::position\{right\}\n\nUpdated left block/
+    assert_field "Markdown source", with: /:::align\{right\}\n\nUpdated left block/
+    assert_field "Markdown source", with: /:::align\{center left\}\n\nCentered block/
     click_on "Visual"
     wait_for_fresh_projection
 
     centered = find(".document-editor-block", text: "Centered block")
-    refute_includes centered["class"], "position-left"
+    assert_includes centered["class"], "position-left"
     centered.find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
-    assert_equal "", find("[data-visual-editor-block-id='#{centered['data-editor-block-id']}']").value
+    assert_equal "left", find("[data-visual-editor-block-id='#{centered['data-editor-block-id']}']").value
     type_visual_text(".document-editor-block", "Centered block", "Updated centered block")
-    assert_field "Markdown source", with: /:::position\{right\}\n\nUpdated left block\n\nUpdated centered block/, wait: 5
-    refute_includes find(".editor-projection").text, ":::position"
+    assert_field "Markdown source", with: /:::align\{right\}\n\nUpdated left block\n\n:::align\{center left\}\n\nUpdated centered block/, wait: 5
+    refute_includes find(".editor-projection").text, ":::align"
   end
 
   test "positions the first document block when no source content precedes it" do
@@ -1857,22 +3053,72 @@ class DocumentsTest < ApplicationSystemTestCase
     block = find(".document-editor-block", text: "Test")
     block_id = block["data-editor-block-id"]
     block.find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
-    find("[data-visual-editor-block-id='#{block_id}']").select("Left")
-
-    assert_field "Markdown source", with: /\A:::position\{left\}\n\nTest\z/, wait: 5
+    alignment = find("[data-visual-editor-block-id='#{block_id}']")
+    assert_equal "left", alignment.value
+    assert_field "Markdown source", with: "Test"
 
     find(".document-editor-block[data-editor-block-id='#{block_id}']").find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
-    find("[data-visual-editor-block-id='#{block_id}']").select("Center")
+    alignment.select("Center")
 
-    assert_field "Markdown source", with: /\A:::position\{center\}\n\nTest\z/, wait: 5
+    assert_field "Markdown source", with: /\A:::align\{center\}\n\nTest\z/, wait: 5
+    wait_for_fresh_projection
 
     find(".document-editor-block[data-editor-block-id='#{block_id}']").find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
     find("[data-visual-editor-block-id='#{block_id}']").select("Right")
-    assert_field "Markdown source", with: /\A:::position\{right\}\n\nTest\z/, wait: 5
+    assert_field "Markdown source", with: /\A:::align\{right\}\n\nTest\z/, wait: 5
+  end
+
+  test "pins the block alignment control until selection is dismissed" do
+    visit root_path
+    find(".new-work-menu summary").click
+    find(".new-work-option", text: "Document").click
+    wait_for_fresh_projection
+
+    block = find(".document-editor-block", text: "Untitled document")
+    block.find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
+    control = find("[data-visual-editor-block-id='#{block['data-editor-block-id']}']")
+    select_style = page.evaluate_script(<<~JAVASCRIPT, control)
+      (() => {
+        const style = getComputedStyle(arguments[0]);
+        return { borderWidth: style.borderTopWidth, borderStyle: style.borderTopStyle, background: style.backgroundColor };
+      })()
+    JAVASCRIPT
+    assert_equal "1px", select_style["borderWidth"]
+    assert_equal "solid", select_style["borderStyle"]
+    refute_equal "rgba(0, 0, 0, 0)", select_style["background"]
+    control.click
+    # Simulate the select losing DOM focus while its native popup is being used.
+    page.execute_script("arguments[0].blur()", control)
+    page.driver.browser.action.move_to_location(20, 20).perform
+
+    control_state = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const label = document.querySelector('.document-block-position-control');
+        return { open: label.classList.contains('is-open'), opacity: getComputedStyle(label).opacity, pointerEvents: getComputedStyle(label).pointerEvents };
+      })()
+    JAVASCRIPT
+    assert_equal true, control_state["open"]
+    assert_equal "1", control_state["opacity"]
+    assert_equal "auto", control_state["pointerEvents"]
+
+    page.execute_script("document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))")
+    dismissed_state = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const label = document.querySelector('.document-block-position-control');
+        return label.classList.contains('is-open');
+      })()
+    JAVASCRIPT
+    assert_equal false, dismissed_state
+
+    block.find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
+    control.select("Center")
+    assert_field "Markdown source", with: /\A:::align\{center\}\n\n# Untitled document\z/, wait: 5
+    centered_heading = find(".document-editor-block.position-center h1", text: "Untitled document", wait: 5)
+    assert_equal "center", page.evaluate_script("getComputedStyle(arguments[0]).textAlign", centered_heading)
   end
 
   test "changes a position directive on the first document block" do
-    document = Document.create!(title: "Change first block alignment", source: ":::position{right}\n\nTest")
+    document = Document.create!(title: "Change first block alignment", source: ":::align{right}\n\nTest")
     visit edit_document_path(document)
     wait_for_fresh_projection
 
@@ -1881,7 +3127,7 @@ class DocumentsTest < ApplicationSystemTestCase
     block.find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
     find("[data-visual-editor-block-id='#{block_id}']").select("Center")
 
-    assert_field "Markdown source", with: /\A:::position\{center\}\n\nTest\z/, wait: 5
+    assert_field "Markdown source", with: /\A:::align\{center\}\n\nTest\z/, wait: 5
   end
 
   test "changes a position directive added in source mode" do
@@ -1891,25 +3137,25 @@ class DocumentsTest < ApplicationSystemTestCase
 
     click_on "Source"
     page.execute_script(<<~JAVASCRIPT)
-      document.querySelector(".source-field").editorController.replaceRange(":::position{right}\\n\\n", 0, 0)
+      document.querySelector(".source-field").editorController.replaceRange(":::align{right}\\n\\n", 0, 0)
     JAVASCRIPT
-    assert_field "Markdown source", with: /\A:::position\{right\}\n\nTest\z/, wait: 5
+    assert_field "Markdown source", with: /\A:::align\{right\}\n\nTest\z/, wait: 5
     click_on "Visual"
     wait_for_fresh_projection
-    assert_field "Markdown source", with: /\A:::position\{right\}\n\nTest\z/, wait: 5
+    assert_field "Markdown source", with: /\A:::align\{right\}\n\nTest\z/, wait: 5
 
     block = find(".document-editor-block", text: "Test")
     block_id = block["data-editor-block-id"]
     block.find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
     find("[data-visual-editor-block-id='#{block_id}']").select("Center")
 
-    assert_field "Markdown source", with: /\A:::position\{center\}\n\nTest\z/, wait: 5
+    assert_field "Markdown source", with: /\A:::align\{center\}\n\nTest\z/, wait: 5
   end
 
   test "deleting an empty positioned block also removes its position directive" do
     document = Document.create!(
       title: "Delete positioned block",
-      source: "# Keep\n\n:::position{center}\n\nDelete me\n\nTail"
+      source: "# Keep\n\n:::align{center}\n\nDelete me\n\nTail"
     )
     visit edit_document_path(document)
 
@@ -1930,7 +3176,7 @@ class DocumentsTest < ApplicationSystemTestCase
   end
 
   test "deleting a single block in a grouped position removes its opening and closing directives" do
-    source = "# Keep\n\n:::position{center}\n\nDelete me\n\n:::\n\nTail"
+    source = "# Keep\n\n:::align{center}\n\nDelete me\n\n:::\n\nTail"
     map = Source::Document.editor_map(source, mode: :document)
     positioned = map[:slides].first[:blocks].find { |candidate| candidate[:markdown] == "Delete me" }
     assert_equal "group", positioned[:position_scope]
@@ -2040,5 +3286,31 @@ class DocumentsTest < ApplicationSystemTestCase
     page.execute_script("window.print = () => { window.printWasRequested = true }")
     click_on "Print / Save PDF"
     assert_equal true, page.evaluate_script("window.printWasRequested")
+  end
+
+  test "changes alignment immediately after visual edits and reflects it visually in the block" do
+    document = Document.create!(title: "Visual edit alignment", source: "Initial block")
+    visit edit_document_path(document)
+    wait_for_fresh_projection
+
+    block = find(".document-editor-block", text: "Initial block")
+    block_id = block["data-editor-block-id"]
+    block.click
+    block.send_keys(" with extra text")
+
+    block.find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
+    alignment = find("[data-visual-editor-block-id='#{block_id}']")
+    alignment.select("Center")
+
+    assert_selector ".document-editor-block.position-center[data-editor-block-id='#{block_id}']", wait: 5
+    assert_field "Markdown source", with: /\A:::align\{center\}\n\nInitial block with extra text\z/, wait: 5
+
+    alignment.select("Right")
+    assert_selector ".document-editor-block.position-right[data-editor-block-id='#{block_id}']", wait: 5
+    assert_field "Markdown source", with: /\A:::align\{right\}\n\nInitial block with extra text\z/, wait: 5
+
+    alignment.select("Left")
+    assert_selector ".document-editor-block.position-left[data-editor-block-id='#{block_id}']", wait: 5
+    assert_field "Markdown source", with: /\A:::align\{left\}\n\nInitial block with extra text\z/, wait: 5
   end
 end

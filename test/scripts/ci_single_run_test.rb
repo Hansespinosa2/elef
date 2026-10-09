@@ -8,19 +8,28 @@ events = workflow["on"] || workflow[true]
 jobs = workflow.fetch("jobs")
 
 required_checks = %w[
+  desktop-fast
   scan_ruby
   scan_js
   test
   sqlite-test
   system-test
+  desktop
+  desktop-macos
+  renderer-macos
   production-smoke
   development-smoke
 ]
 
-required_checks.each do |job_name|
+branch_push_checks = %w[desktop-fast desktop desktop-macos renderer-macos]
+(required_checks - branch_push_checks).each do |job_name|
   job = jobs.fetch(job_name)
   abort "#{job_name} must run for pull requests and dispatch, but not branch pushes" unless
     job["if"] == "github.event_name != 'push'"
+end
+
+branch_push_checks.each do |job_name|
+  abort "#{job_name} must also run on dev and main pushes" if jobs.fetch(job_name).key?("if")
 end
 
 abort "CI must run for pull requests" unless events.key?("pull_request")
@@ -44,4 +53,4 @@ abort "deployment authorization requires only scoped read access plus ref-write 
     "pull-requests" => "read"
   }
 
-puts "CI runs the seven required checks once per PR and verifies them before publishing"
+puts "CI runs all required checks once per PR and verifies them before publishing"

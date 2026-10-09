@@ -8,8 +8,47 @@ class PresentationsTest < ApplicationSystemTestCase
     RUBY_PLATFORM.match?(/darwin/) ? :meta : :control
   end
 
+  def snippet_stop_marks
+    page.evaluate_script(<<~JAVASCRIPT)
+      [...document.querySelectorAll(".cm-snippet-stop")].map((mark) => mark.textContent)
+    JAVASCRIPT
+  end
+
+  def active_snippet_stop
+    page.evaluate_script('document.querySelector(".cm-snippet-stop-active")?.textContent ?? null')
+  end
+
+  def snippet_stop_positions
+    page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const editor = document.querySelector(".source-field").editorController;
+        return [...document.querySelectorAll(".cm-snippet-stop")].map((mark) => editor.view.posAtDOM(mark));
+      })()
+    JAVASCRIPT
+  end
+
+  def active_snippet_stop_position
+    page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const editor = document.querySelector(".source-field").editorController;
+        const mark = document.querySelector(".cm-snippet-stop-active");
+        return mark ? editor.view.posAtDOM(mark) : null;
+      })()
+    JAVASCRIPT
+  end
+
+  def editor_selection
+    <<~JAVASCRIPT
+      (() => {
+        const editor = document.querySelector(".source-field").editorController;
+        return [editor.selectionStart, editor.selectionEnd];
+      })()
+    JAVASCRIPT
+  end
+
   def wait_for_fresh_projection
-    assert_selector "form.visual-editor-form:not([data-preview-projection-stale='true'])", wait: 5
+    # The shared preview controller allows requests up to 8 seconds to finish.
+    assert_selector "form.visual-editor-form:not([data-preview-projection-stale='true'])", wait: 10
   end
 
   def type_visual_text(selector, visible_text, replacement)
@@ -125,10 +164,10 @@ class PresentationsTest < ApplicationSystemTestCase
 
   test "new presentation source positions its title explicitly and lets that position be changed" do
     expected_source = <<~MARKDOWN.chomp
-      :::position{center middle}
+      :::align{center center}
       # Untitled Document
 
-      :::position {center}
+      :::align {center}
       Start writing Markdown here.
     MARKDOWN
 
@@ -157,8 +196,8 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_equal initial_alignment["marginTop"], initial_alignment["marginBottom"]
     assert_in_delta initial_alignment["slideCenterY"], initial_alignment["titleCenterY"], 50
 
-    find("select[data-presentation-editor-position][data-slide-index='0'][data-block-index='0']").select("Right Bottom")
-    assert_field "Markdown source", with: /:::position\{right bottom\}\n# Untitled Document/, wait: 5
+    find("select[data-presentation-editor-align][data-slide-index='0'][data-block-index='0']").select("Bottom Right")
+    assert_field "Markdown source", with: /:::align\{bottom right\}\n# Untitled Document/, wait: 5
     wait_for_fresh_projection
     assert_selector ".slide-statement .slide-block.position-right.position-bottom", text: "Untitled Document", wait: 5
 
@@ -183,12 +222,12 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_selector ".slide-statement .slide-block.position-center.position-middle", text: "Designing a visual system"
     assert_selector ".slide-statement .slide-block.position-center.position-top", text: /This deck exercises automatic layouts/
 
-    find("select[data-presentation-editor-position][data-slide-index='2'][data-block-index='0']").select("Right Top")
-    assert_field "Markdown source", with: /:::position\{right top\}\n\n# Establish a visual contract/, wait: 5
+    find("select[data-presentation-editor-align][data-slide-index='2'][data-block-index='0']").select("Right")
+    assert_field "Markdown source", with: /:::align\{right\}\n\n# Establish a visual contract/, wait: 5
     assert_selector ".slide-two-column .slide-title.slide-block.position-right.position-top", text: "Establish a visual contract", wait: 5
 
-    find("select[data-presentation-editor-position][data-slide-index='0'][data-block-index='0']").select("Right Bottom")
-    assert_field "Markdown source", with: /:::position\{right bottom\}\n# Designing a visual system/, wait: 5
+    find("select[data-presentation-editor-align][data-slide-index='0'][data-block-index='0']").select("Bottom Right")
+    assert_field "Markdown source", with: /:::align\{bottom right\}\n# Designing a visual system/, wait: 5
     assert_selector ".slide-statement .slide-block.position-right.position-bottom", text: "Designing a visual system", wait: 5
 
     find("[data-presentation-editor-action='add-block-after'][data-slide-index='0'][data-block-index='1']").click
@@ -200,8 +239,8 @@ class PresentationsTest < ApplicationSystemTestCase
     wait_for_fresh_projection
 
     source = find_field("Markdown source").value
-    assert_includes source, ":::position{right bottom}\n# Designing a visual system"
-    assert_includes source, ":::position {center}\nThis deck exercises automatic layouts"
+    assert_includes source, ":::align{bottom right}\n# Designing a visual system"
+    assert_includes source, ":::align {center}\nThis deck exercises automatic layouts"
     refute_includes source, "New block"
   end
 
@@ -231,7 +270,7 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_equal "# Keep this source", Presentation.find_by!(parent_id: nil, fork_type: "inspiration").source
   end
 
-  test "library cards keep previews undistorted and controls isolated from the edit link" do
+  test "library preview images open Edit while Preview and menu controls stay usable" do
     document = Document.create!(title: "Card document", source: "# Card document\n\nFirst page body.\n\n## Later heading")
     presentation = Presentation.create!(title: "Card deck", source: "# Card deck\n\n---\n\n## Later slide")
 
@@ -263,25 +302,33 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_operator geometry["slideScale"].to_f, :<, 1.0
     assert_operator geometry["pageScale"].to_f, :<, 1.0
 
-    within("#presentation_#{presentation.id}") do
-      find(".library-card-preview-button").click
-    end
+    within("#document_#{document.id}") { find(".library-card-preview-button").click }
+    assert_current_path document_path(document)
+    assert_selector ".document-surface h1", text: "Card document"
+
+    visit root_path
+    within("#presentation_#{presentation.id}") { find(".library-card-preview-button").click }
     assert_current_path presentation_path(presentation)
     assert_selector ".presentation-surface .slide", text: "Card deck"
 
     visit root_path
-    within("#presentation_#{presentation.id}") do
-      find(".library-card-menu-trigger").click
-      assert_selector "details.library-card-menu[open]"
+    [document, presentation].each do |work|
+      within("##{work.is_a?(Document) ? 'document' : 'presentation'}_#{work.id}") do
+        find(".library-card-menu-trigger").click
+        assert_selector "details.library-card-menu[open]"
+      end
+      assert_current_path root_path
     end
-    assert_current_path root_path
 
     visit root_path
-    find("#presentation_#{presentation.id} a.library-card-open").click
+    find("#document_#{document.id} .library-card-open").click
+    assert_current_path edit_document_path(document)
+
+    visit root_path
+    find("#presentation_#{presentation.id} .library-card-open").click
     assert_current_path edit_presentation_path(presentation)
 
     visit root_path
-    assert_no_link "Edit Card document"
     within("#document_#{document.id}") do
       find(".library-card-title a").click
     end
@@ -351,6 +398,28 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_includes presentation.revisions.recoveries.order(:id).last.source, "# Local tab"
   end
 
+  test "discarding a conflicted draft accepts the disk baseline without another save" do
+    presentation = Presentation.create!(title: "Discard conflict", source: "# Initial")
+    external_source = "# External version\n\nKeep the disk bytes.\n"
+
+    visit edit_presentation_path(presentation)
+    hold_autosaves
+    fill_in "Markdown source", with: "# Local draft"
+    wait_for_autosave_request(0)
+    presentation.update!(source: external_source)
+    page.execute_script("window.autosaveRequests[0].release()")
+
+    assert_selector "[data-autosave-target='conflict']", visible: true
+    click_button "Use current version"
+    assert_no_selector "[data-autosave-target='conflict']", visible: true
+    assert_field "Markdown source", with: external_source
+    assert_selector "[data-autosave-target='status']", exact_text: "Saved"
+
+    page.evaluate_async_script("window.setTimeout(() => arguments[0](), 1200)")
+    assert_equal 1, page.evaluate_script("window.autosaveRequests.length")
+    assert_equal external_source, presentation.reload.source
+  end
+
   test "refresh recovers an unsent draft from browser persistence" do
     presentation = Presentation.create!(title: "Refresh recovery", source: "# Initial")
     visit edit_presentation_path(presentation)
@@ -375,6 +444,8 @@ class PresentationsTest < ApplicationSystemTestCase
     fill_in "Markdown source", with: "# Manual latest"
     click_on "Save presentation"
     page.execute_script("window.autosaveRequests[0].release()")
+    wait_for_autosave_request(1)
+    page.execute_script("window.autosaveRequests[1].release()")
     assert_text "Presentation saved."
     assert_selector '.preview-pane .slide', text: "Manual latest"
     assert_includes presentation.reload.source, "# Manual latest"
@@ -488,8 +559,8 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_selector ".presentation-editor-projection .slide", count: 2, wait: 5
     wait_for_fresh_projection
 
-    find("select[data-presentation-editor-position][data-slide-index='0'][data-block-index='1']").select("Center Middle")
-    assert_field "Markdown source", with: /:::position\{center middle\}/, wait: 5
+    find("select[data-presentation-editor-align][data-slide-index='0'][data-block-index='1']").select("Center Center")
+    assert_field "Markdown source", with: /:::align\{center center\}/, wait: 5
 
     click_on "Save presentation"
     assert_text "Presentation saved."
@@ -498,17 +569,65 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_selector ".presentation-editor-projection .slide", count: 2
   end
 
+  test "visual presentation edits preserve source lines in a CRLF editor" do
+    source = "# CRLF presentation\r\n\r\nOriginal visual block"
+    expected = "# CRLF presentation\n\nFirst authored line\n\nSecond authored line"
+    presentation = Presentation.create!(title: "CRLF presentation", source: source)
+
+    visit edit_presentation_path(presentation, editor_mode: "source")
+    assert_equal "\r\n", page.evaluate_script("document.querySelector('.source-field').editorController.lineSeparator")
+
+    click_on "Visual"
+    block = find(".editor-projection .slide-block", text: "Original visual block")
+    page.execute_script(<<~JAVASCRIPT, block)
+      const block = arguments[0];
+      block.innerText = 'First authored line\\n\\nSecond authored line';
+      block.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertParagraph' }));
+    JAVASCRIPT
+
+    assert_field "Markdown source", with: expected, wait: 5
+    state = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const editor = document.querySelector('.source-field').editorController;
+        const doc = editor.view.state.doc;
+        return {
+          source: editor.value,
+          lines: Array.from({ length: doc.lines }, (_, index) => doc.line(index + 1).text)
+        };
+      })()
+    JAVASCRIPT
+    assert_equal expected, state["source"]
+    assert_equal expected.split("\n"), state["lines"]
+    page.execute_script("document.activeElement.blur()")
+    wait_for_fresh_projection
+    assert_selector ".editor-projection .slide-block", text: "First authored line"
+    assert_selector ".editor-projection .slide-block", text: "Second authored line"
+  end
+
   test "positions blocks in a new presentation through the visual control" do
     visit new_presentation_path
     wait_for_fresh_projection
 
-    position = find("select[data-presentation-editor-position][data-slide-index='0'][data-block-index='1']")
-    position.select("Left Top")
-    assert_field "Markdown source", with: /:::position\{left top\}/, wait: 5
+    alignment = find("select[data-presentation-editor-align][data-slide-index='0'][data-block-index='1']")
+    alignment.select("Left")
+    assert_field "Markdown source", with: /:::align\{left\}/, wait: 5
 
     wait_for_fresh_projection
-    find("select[data-presentation-editor-position][data-slide-index='0'][data-block-index='1']").select("Center Middle")
-    assert_field "Markdown source", with: /:::position\{center middle\}/, wait: 5
+    find("select[data-presentation-editor-align][data-slide-index='0'][data-block-index='1']").select("Center Center")
+    assert_field "Markdown source", with: /:::align\{center center\}/, wait: 5
+  end
+
+  test "an unaligned presentation block defaults to Align Left" do
+    presentation = Presentation.create!(title: "Default alignment", source: "# Slide\n\nPlain block")
+    visit edit_presentation_path(presentation)
+    wait_for_fresh_projection
+
+    control = find("select[data-presentation-editor-align][data-slide-index='0'][data-block-index='1']")
+
+    assert_equal "left", control.value
+    assert_no_selector "select[data-presentation-editor-align] option[value='']"
+    assert_text "Align"
+    assert_no_text "Automatic position"
   end
 
   test "presentation caret follows source switches and arrow keys move between blocks" do
@@ -700,7 +819,7 @@ class PresentationsTest < ApplicationSystemTestCase
   test "single-block position directives move with their content and are deleted with it" do
     presentation = Presentation.create!(
       title: "Positioned structure",
-      source: "# Slide\n\n:::position{center middle}\n\nPositioned\n\nPlain"
+      source: "# Slide\n\n:::align{center center}\n\nPositioned\n\nPlain"
     )
 
     visit edit_presentation_path(presentation)
@@ -708,14 +827,14 @@ class PresentationsTest < ApplicationSystemTestCase
     refute_selector ".slide-block.position-center", text: "Plain"
 
     find("[data-presentation-editor-action='move-block-down'][data-block-index='1']").click
-    assert_field "Markdown source", with: "# Slide\n\nPlain\n\n:::position{center middle}\n\nPositioned", wait: 5
+    assert_field "Markdown source", with: "# Slide\n\nPlain\n\n:::align{center center}\n\nPositioned", wait: 5
     wait_for_fresh_projection
     assert_selector ".slide-block.position-center.position-middle", text: "Positioned", wait: 5
     refute_selector ".slide-block.position-center", text: "Plain"
 
     assert_selector "[data-presentation-editor-action='add-block-after'][data-block-index='1']:not([disabled])", wait: 5
     find("[data-presentation-editor-action='add-block-after'][data-block-index='1']").click
-    assert_field "Markdown source", with: "# Slide\n\nPlain\n\nNew block\n\n:::position{center middle}\n\nPositioned", wait: 5
+    assert_field "Markdown source", with: "# Slide\n\nPlain\n\nNew block\n\n:::align{center center}\n\nPositioned", wait: 5
     wait_for_fresh_projection
     assert_selector ".slide-block", text: "New block", wait: 5
     refute_selector ".slide-block.position-center", text: "New block"
@@ -724,20 +843,20 @@ class PresentationsTest < ApplicationSystemTestCase
       find("[data-presentation-editor-action='delete-block'][data-block-index='3']").click
     end
     wait_for_fresh_projection
-    refute_includes find_field("Markdown source").value, ":::position{center middle}"
+    refute_includes find_field("Markdown source").value, ":::align{center center}"
     assert_no_selector ".slide-block.position-center", wait: 5
 
     click_on "Save presentation"
     assert_selector ".flash.notice", text: "Presentation saved.", wait: 10
     visit edit_presentation_path(presentation)
     assert_field "Markdown source", with: /# Slide\n\nPlain\n\nNew block/
-    refute_includes find_field("Markdown source").value, ":::position{center middle}"
+    refute_includes find_field("Markdown source").value, ":::align{center center}"
   end
 
   test "shared position groups stay intact and cannot be split by block reordering" do
     presentation = Presentation.create!(
       title: "Position group",
-      source: "# Slide\n\n:::position{center}\n\nFirst\n\nSecond\n\n:::\n\nOutside"
+      source: "# Slide\n\n:::align{center}\n\nFirst\n\nSecond\n\n:::\n\nOutside"
     )
 
     visit edit_presentation_path(presentation)
@@ -746,7 +865,7 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_selector "[data-presentation-editor-action='move-block-up'][data-block-index='3'][disabled]"
 
     find("[data-presentation-editor-action='move-block-down'][data-block-index='1']").click
-    assert_field "Markdown source", with: "# Slide\n\n:::position{center}\n\nSecond\n\nFirst\n\n:::\n\nOutside", wait: 5
+    assert_field "Markdown source", with: "# Slide\n\n:::align{center}\n\nSecond\n\nFirst\n\n:::\n\nOutside", wait: 5
     wait_for_fresh_projection
     assert_selector ".slide-block.position-center", text: "First", wait: 5
     assert_selector ".slide-block.position-center", text: "Second"
@@ -756,7 +875,7 @@ class PresentationsTest < ApplicationSystemTestCase
       find("[data-presentation-editor-action='delete-block'][data-block-index='2']").click
     end
     wait_for_fresh_projection
-    assert_includes find_field("Markdown source").value, ":::position{center}"
+    assert_includes find_field("Markdown source").value, ":::align{center}"
 
     assert_selector "[data-presentation-editor-action='delete-block'][data-block-index='1']:not([disabled])", wait: 5
     accept_confirm do
@@ -764,7 +883,7 @@ class PresentationsTest < ApplicationSystemTestCase
     end
     wait_for_fresh_projection
     final_source = find_field("Markdown source").value
-    refute_includes final_source, ":::position{center}"
+    refute_includes final_source, ":::align{center}"
     refute_includes final_source, ":::"
     assert_includes final_source, "Outside"
   end
@@ -1246,6 +1365,68 @@ class PresentationsTest < ApplicationSystemTestCase
     wait_for_fresh_projection
   end
 
+  test "Art block move and delete operations keep the directive with its root list" do
+    original = "# Keep\n\nBefore\n\n:::art\n- Alpha\n- Beta\n\nAfter\n\nTail"
+    presentation = Presentation.create!(title: "Art block ownership", source: original)
+
+    visit edit_presentation_path(presentation)
+    assert_selector ".presentation-editor-projection [data-elef-art-root] .elef-art-list > li", count: 2
+    find("[data-presentation-editor-action='move-block-up'][data-block-index='2']").click
+    assert_field "Markdown source", with: "# Keep\n\n:::art\n- Alpha\n- Beta\n\nBefore\n\nAfter\n\nTail", wait: 5
+    wait_for_fresh_projection
+    moved_source = find_field("Markdown source").value
+    assert_equal ":::art\n- Alpha\n- Beta", moved_source.lines[2, 3].join.strip
+    assert_includes moved_source, "\n\nAfter\n\nTail"
+    refute_includes moved_source, "data-elef-art-root"
+
+    accept_confirm do
+      find("[data-presentation-editor-action='delete-block'][data-block-index='1']").click
+    end
+    assert_field "Markdown source", with: "# Keep\n\nBefore\n\nAfter\n\nTail", wait: 5
+    wait_for_fresh_projection
+    refute_includes find_field("Markdown source").value, ":::art"
+    refute_selector ".presentation-editor-projection [data-elef-art-root]"
+  end
+
+  test "deleting Art before a single-block alignment group removes its directive too" do
+    presentation = Presentation.create!(
+      title: "Aligned Art block ownership",
+      source: "# Slide\n\n:::art\n:::align{center}\n- Alpha\n\n:::\n\n- Next list"
+    )
+
+    visit edit_presentation_path(presentation)
+    wait_for_fresh_projection
+    assert_selector ".presentation-editor-projection [data-elef-art-root] .elef-art-list > li", count: 1
+
+    accept_confirm do
+      find("[data-presentation-editor-action='delete-block'][data-block-index='1']").click
+    end
+
+    assert_field "Markdown source", with: /# Slide\n\n- Next list/, wait: 5
+    wait_for_fresh_projection
+    refute_includes find_field("Markdown source").value, ":::art"
+    refute_includes find_field("Markdown source").value, ":::align{center}"
+    assert_no_selector ".presentation-editor-projection [data-elef-art-root]"
+    assert_selector ".presentation-editor-projection ul > li", text: "Next list"
+  end
+
+  test "saved presentation Art fallback preserves attached media" do
+    media_bytes = Base64.decode64("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+i9MwAAAAASUVORK5CYII=")
+    media_digest = Digest::SHA256.hexdigest(media_bytes)
+    presentation = Presentation.create!(
+      title: "Art unsupported media",
+      source: ":::art\n- Research\n  ![Mockup](elef-asset:#{media_digest})"
+    )
+    presentation.assets.attach(io: StringIO.new(media_bytes), filename: "mockup.png", content_type: "image/png")
+    presentation.assets.blobs.last.update!(metadata: presentation.assets.blobs.last.metadata.merge("elef_sha256" => media_digest))
+
+    visit print_presentation_path(presentation)
+
+    assert_selector ".presentation-print [data-elef-art-root][data-art-status='fallback-unsupported'][data-art-layout='plain-list']"
+    assert_selector ".presentation-print [data-elef-art-root] img.presentation-media[src='/presentations/#{presentation.id}/assets/#{media_digest}'][alt='Mockup']"
+    assert_selector ".presentation-print [data-elef-art-root] .elef-art-list > li", text: "Research"
+  end
+
   test "keeps the last good presentation projection when preview is unavailable and offers retry" do
     presentation = Presentation.create!(title: "Stable deck", source: "# Stable\n\nLast good slide")
     visit edit_presentation_path(presentation)
@@ -1367,6 +1548,176 @@ class PresentationsTest < ApplicationSystemTestCase
     media_file&.close!
   end
 
+  test "source mode pastes and drops local images at the cursor and keeps text paste working" do
+    presentation = Presentation.create!(title: "Source image gestures", source: "# Source image gestures\n\nLead text.\n\nTail text.")
+    visit edit_presentation_path(presentation, editor_mode: "source")
+    png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+i9MwAAAAASUVORK5CYII="
+
+    paste_result = page.execute_script(<<~JAVASCRIPT, png)
+      const editor = document.querySelector('.source-field').editorController;
+      const insertion = editor.value.indexOf('Tail text.');
+      editor.setSelectionRange(insertion);
+      editor.focus();
+      const bytes = Uint8Array.from(atob(arguments[0]), character => character.charCodeAt(0));
+      const transfer = new DataTransfer();
+      transfer.items.add(new File([bytes], 'pasted-presentation.png', { type: 'image/png' }));
+      const event = new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: transfer });
+      editor.view.contentDOM.dispatchEvent(event);
+      return { prevented: event.defaultPrevented, sourceMode: editor.editingMode };
+    JAVASCRIPT
+    assert_equal "source", paste_result["sourceMode"]
+    assert paste_result["prevented"]
+    assert_selector ".media-upload-status", text: /pasted-presentation\.png added to the Markdown source/i, wait: 8
+
+    pasted_source = page.evaluate_script("document.querySelector('.source-field').editorController.value")
+    assert_operator pasted_source.index("Lead text."), :<, pasted_source.index("elef-asset:")
+    assert_operator pasted_source.index("elef-asset:"), :<, pasted_source.index("Tail text.")
+    assert_selector ".preview-pane img.presentation-media", count: 1, wait: 8
+    assert_operator page.evaluate_script("document.querySelector('.preview-pane img.presentation-media').naturalWidth"), :>, 0
+
+    drop_result = page.execute_script(<<~JAVASCRIPT, png)
+      const editor = document.querySelector('.source-field').editorController;
+      const insertion = editor.value.indexOf('Tail text.');
+      const coordinates = editor.view.coordsAtPos(insertion);
+      const resolvedPosition = editor.view.posAtCoords({ x: coordinates.left, y: (coordinates.top + coordinates.bottom) / 2 });
+      const bytes = Uint8Array.from(atob(arguments[0]), character => character.charCodeAt(0));
+      const transfer = new DataTransfer();
+      transfer.items.add(new File([bytes], 'dropped-presentation.png', { type: 'image/png' }));
+      const options = {
+        bubbles: true,
+        cancelable: true,
+        dataTransfer: transfer,
+        clientX: coordinates.left,
+        clientY: (coordinates.top + coordinates.bottom) / 2
+      };
+      const dragover = new DragEvent('dragover', options);
+      const drop = new DragEvent('drop', options);
+      editor.view.contentDOM.dispatchEvent(dragover);
+      editor.view.contentDOM.dispatchEvent(drop);
+      return { intendedPosition: insertion, resolvedPosition, dragoverPrevented: dragover.defaultPrevented, dropPrevented: drop.defaultPrevented };
+    JAVASCRIPT
+    assert drop_result["dragoverPrevented"], drop_result.inspect
+    assert drop_result["dropPrevented"], drop_result.inspect
+    assert_equal drop_result["intendedPosition"], drop_result["resolvedPosition"], drop_result.inspect
+    assert_selector ".media-upload-status", text: /dropped-presentation\.png added to the Markdown source/i, wait: 8
+
+    dropped_source = page.evaluate_script("document.querySelector('.source-field').editorController.value")
+    assert_equal 2, dropped_source.scan("elef-asset:").length
+    assert_operator dropped_source.index("elef-asset:"), :<, dropped_source.rindex("elef-asset:")
+    assert_operator dropped_source.rindex("elef-asset:"), :<, dropped_source.index("Tail text.")
+    assert_selector ".preview-pane img.presentation-media", count: 2, wait: 8
+    assert_equal 2, presentation.reload.assets.count
+    assert_selector '[data-autosave-target="status"]', exact_text: "Saved", wait: 8
+
+    text_paste = page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      editor.setSelectionRange(editor.value.length);
+      editor.focus();
+      const transfer = new DataTransfer();
+      transfer.setData('text/plain', 'ordinary pasted words');
+      const event = new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: transfer });
+      editor.view.contentDOM.dispatchEvent(event);
+      return { prevented: event.defaultPrevented, source: editor.value };
+    JAVASCRIPT
+    assert text_paste["prevented"]
+    assert_includes text_paste["source"], "ordinary pasted words"
+
+    before_unsupported_paste = page.evaluate_script("document.querySelector('.source-field').editorController.value")
+    unsupported_paste = page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      const transfer = new DataTransfer();
+      transfer.items.add(new File(['not an image'], 'notes.txt', { type: 'text/plain' }));
+      const event = new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: transfer });
+      editor.view.contentDOM.dispatchEvent(event);
+      return { prevented: event.defaultPrevented, source: editor.value };
+    JAVASCRIPT
+    assert unsupported_paste["prevented"]
+    assert_equal before_unsupported_paste, unsupported_paste["source"]
+    assert_selector ".media-upload-status", text: "Choose an image file to insert into source mode."
+    assert_equal "false", page.find(".media-upload-status")["aria-busy"]
+  end
+
+  test "pasting a local image into the presentation title field does not intercept it" do
+    presentation = Presentation.create!(title: "Untouched title", source: "# Untouched title\n\nKeep this source.")
+    visit edit_presentation_path(presentation, editor_mode: "source")
+
+    result = page.execute_script(<<~JAVASCRIPT)
+      const title = document.querySelector('.visual-editor-form .editor-title-input');
+      const source = document.querySelector('.source-field').editorController.value;
+      let uploadAttempts = 0;
+      window.fetch = (url, options = {}) => {
+        if (options.method === 'POST' && String(url).endsWith('/assets')) {
+          uploadAttempts += 1;
+          return Promise.resolve(new Response('{}', { status: 422, headers: { 'Content-Type': 'application/json' } }));
+        }
+        return Promise.reject(new Error('Unexpected request'));
+      };
+      const transfer = new DataTransfer();
+      transfer.items.add(new File(['image bytes'], 'title-paste.png', { type: 'image/png' }));
+      const event = new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: transfer });
+      title.dispatchEvent(event);
+      return {
+        prevented: event.defaultPrevented,
+        uploadAttempts,
+        source,
+        currentSource: document.querySelector('.source-field').editorController.value,
+        title: title.value
+      };
+    JAVASCRIPT
+
+    refute result["prevented"]
+    assert_equal 0, result["uploadAttempts"]
+    assert_equal "# Untouched title\n\nKeep this source.", result["source"]
+    assert_equal result["source"], result["currentSource"]
+  end
+
+  test "presentation form does not register duplicate media controllers" do
+    presentation = Presentation.create!(title: "Controller deduplication", source: "# Controller deduplication")
+    visit edit_presentation_path(presentation, editor_mode: "source")
+
+    controllers = page.evaluate_script("document.querySelector('.visual-editor-form').dataset.controller.split(/\\s+/)")
+    assert_equal 1, controllers.count("media")
+  end
+
+  test "source mode drops web images into presentation slides at the cursor" do
+    presentation = Presentation.create!(title: "Web image presentation", source: "# Web image presentation\n\nLead text.\n\nTail text.")
+    visit edit_presentation_path(presentation, editor_mode: "source")
+    png_data_url = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+i9MwAAAAASUVORK5CYII="
+
+    drop_result = page.execute_script(<<~JAVASCRIPT, png_data_url)
+      const editor = document.querySelector('.source-field').editorController;
+      const insertion = editor.value.indexOf('Tail text.');
+      const coordinates = editor.view.coordsAtPos(insertion);
+      const resolvedPosition = editor.view.posAtCoords({ x: coordinates.left, y: (coordinates.top + coordinates.bottom) / 2 });
+      const transfer = new DataTransfer();
+      transfer.setData('text/uri-list', arguments[0]);
+      transfer.setData('text/html', '<img src="' + arguments[0] + '">');
+      const options = { bubbles: true, cancelable: true, dataTransfer: transfer, clientX: coordinates.left, clientY: (coordinates.top + coordinates.bottom) / 2 };
+      const dragover = new DragEvent('dragover', options);
+      const drop = new DragEvent('drop', options);
+      editor.view.contentDOM.dispatchEvent(dragover);
+      editor.view.contentDOM.dispatchEvent(drop);
+      return {
+        intendedPosition: insertion,
+        resolvedPosition,
+        dragoverPrevented: dragover.defaultPrevented,
+        dropPrevented: drop.defaultPrevented
+      };
+    JAVASCRIPT
+
+    assert drop_result["dragoverPrevented"], drop_result.inspect
+    assert drop_result["dropPrevented"], drop_result.inspect
+    assert_equal drop_result["intendedPosition"], drop_result["resolvedPosition"], drop_result.inspect
+    assert_selector ".media-upload-status", text: /dropped-image\.png added to the Markdown source/i, wait: 8
+
+    dropped_source = page.evaluate_script("document.querySelector('.source-field').editorController.value")
+    assert_includes dropped_source, "elef-asset:"
+    assert_operator dropped_source.index("Lead text."), :<, dropped_source.index("elef-asset:")
+    assert_operator dropped_source.index("elef-asset:"), :<, dropped_source.index("Tail text.")
+    assert_selector ".preview-pane img.presentation-media", count: 1, wait: 8
+    assert_equal 1, presentation.reload.assets.count
+  end
+
   test "print view selects draft content and sizes slides for one landscape page each" do
     media_bytes = Base64.decode64("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+i9MwAAAAASUVORK5CYII=")
     media_digest = Digest::SHA256.hexdigest(media_bytes)
@@ -1432,7 +1783,7 @@ class PresentationsTest < ApplicationSystemTestCase
       const transfer = new DataTransfer();
       const bytes = Uint8Array.from(atob("#{png}"), character => character.charCodeAt(0));
       transfer.items.add(new File([bytes], "pasted.png", { type: "image/png" }));
-      document.querySelector("form.visual-editor-form").dispatchEvent(new ClipboardEvent("paste", {
+      document.querySelector(".editor-projection [data-editor-block-id][contenteditable='true']").dispatchEvent(new ClipboardEvent("paste", {
         bubbles: true, cancelable: true, clipboardData: transfer
       }));
     JAVASCRIPT
@@ -1468,15 +1819,16 @@ class PresentationsTest < ApplicationSystemTestCase
     visit edit_presentation_path(presentation)
     page.execute_script(<<~JAVASCRIPT)
       const originalFetch = window.fetch.bind(window);
+      window.fetchForSaveRetry = originalFetch;
       window.fetch = (url, options) => {
         if (options?.method !== 'PATCH') return originalFetch(url, options);
-        window.fetch = originalFetch;
         return Promise.reject(new Error('Simulated connection failure'));
       };
     JAVASCRIPT
     fill_in "Markdown source", with: "# Recovered"
     assert_selector '[data-autosave-target="status"]', text: "Save failed"
     assert_equal "# Original", presentation.reload.source
+    page.execute_script("window.fetch = window.fetchForSaveRetry")
     click_on "Retry save"
     assert_selector '[data-autosave-target="status"]', exact_text: "Saved"
     assert_includes presentation.reload.source, "# Recovered"
@@ -1487,6 +1839,8 @@ class PresentationsTest < ApplicationSystemTestCase
     fill_in "Title", with: "Valid title"
     assert_selector '[data-autosave-target="status"]', exact_text: "Saved"
     assert_equal "Valid title", presentation.reload.title
+  ensure
+    page.execute_script("window.fetch = window.fetchForSaveRetry") if page
   end
 
   test "recovers the browser draft after an autosave outage and reload" do
@@ -1494,9 +1848,9 @@ class PresentationsTest < ApplicationSystemTestCase
     visit edit_presentation_path(presentation)
     page.execute_script(<<~JAVASCRIPT)
       const originalFetch = window.fetch.bind(window);
+      window.restoreSaveFetch = () => { window.fetch = originalFetch; };
       window.fetch = (url, options = {}) => {
         if (options.method === "PATCH") {
-          window.fetch = originalFetch;
           return Promise.reject(new TypeError("Failed to fetch"));
         }
         return originalFetch(url, options);
@@ -1506,12 +1860,17 @@ class PresentationsTest < ApplicationSystemTestCase
     fill_in "Markdown source", with: "# Offline edit"
     assert_selector '[data-autosave-target="status"]', text: "Save failed", wait: 5
     assert_equal "# Original", presentation.reload.source
+    page.execute_script("window.restoreSaveFetch()")
 
     page.refresh
 
     assert_field "Markdown source", with: "# Offline edit", wait: 5
+    assert_selector '[data-autosave-target="status"]', exact_text: "Recovered unsent changes", wait: 5
+    assert_equal "# Offline edit", page.evaluate_script("document.querySelector('.source-field')?.editorController?.sourceValue")
     assert_selector '[data-autosave-target="status"]', exact_text: "Saved", wait: 5
     assert_includes presentation.reload.source, "# Offline edit"
+  ensure
+    page.execute_script("window.restoreSaveFetch?.()") if page
   end
 
   test "falls back to local storage when indexeddb cannot read a draft" do
@@ -1558,9 +1917,9 @@ class PresentationsTest < ApplicationSystemTestCase
       };
       window.restoreDraftStorage = () => { Storage.prototype.setItem = originalSetItem; };
       const originalFetch = window.fetch.bind(window);
+      window.restoreSaveFetch = () => { window.fetch = originalFetch; };
       window.fetch = (url, options = {}) => {
         if (options.method === 'PATCH') {
-          window.fetch = originalFetch;
           return Promise.reject(new TypeError('Failed to fetch'));
         }
         return originalFetch(url, options);
@@ -1573,7 +1932,7 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: "# Keep this open"
     assert_equal "# Original", presentation.reload.source
   ensure
-    page.execute_script("window.restoreDraftStorage?.()") if page
+    page.execute_script("window.restoreDraftStorage?.(); window.restoreSaveFetch?.()") if page
   end
 
   test "times out a stalled autosave and lets the user retry the latest edit" do
@@ -1959,16 +2318,70 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_current_path presentation_path(presentation)
   end
 
-  test "inserts a fuzzy snippet and moves through its placeholder" do
-    Snippet.create!(name: "Block equation", trigger: "beq", description: "A block LaTeX equation", category: "LaTeX", body: "$$\n${1:equation}\n$$")
-    presentation = Presentation.create!(title: "Snippet deck", source: "# Math\n\n:")
+  test "source mode inserts a Mermaid sequence starter and continues with existing participants" do
+    presentation = Presentation.create!(title: "Mermaid sequence", source: "# Existing slide")
 
     visit edit_presentation_path(presentation)
+    click_on "Source"
+    editor = find(".cm-content")
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      editor.setSelectionRange(editor.value.length);
+      editor.focus();
+    JAVASCRIPT
+    editor.send_keys(:enter, "/diagram")
+
+    assert_selector ".mermaid-assist-option", text: "Sequence diagram", wait: 5
+    find(".mermaid-assist-option", text: "Sequence diagram").click
+    source = find_field("Markdown source")
+    assert_includes source.value, "sequenceDiagram\n    participant Alice\n    participant Bob\n    Alice->>Bob: Message"
+    assert_equal "Message", page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const editor = document.querySelector('.source-field').editorController;
+        return editor.value.slice(editor.selectionStart, editor.selectionEnd);
+      })()
+    JAVASCRIPT
+
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      const participant = editor.value.indexOf('Alice->>Bob:') + 'Alice->>'.length;
+      editor.setSelectionRange(participant, participant + 3);
+      editor.focus();
+    JAVASCRIPT
+    editor.send_keys("Bo")
+    assert_selector ".mermaid-assist-option", text: "Bob", wait: 5
+    editor.send_keys(:enter)
+    assert_includes source.value, "Alice->>Bob: Message"
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      const message = editor.value.indexOf('Message');
+      editor.setSelectionRange(message, message + 'Message'.length);
+      editor.focus();
+    JAVASCRIPT
+
+    editor.send_keys("Request", :enter)
+    assert_includes source.value, "Alice->>Bob: Request\n    Bob->>Alice: Message"
+    click_on "Save presentation"
+    assert_selector ".flash.notice", text: "Presentation saved.", wait: 10
+    assert_equal source.value, presentation.reload.source
+  end
+
+  test "inserts a fuzzy snippet and moves through its placeholder" do
+    Snippet.create!(name: "Block equation", trigger: "beq", description: "A block LaTeX equation", category: "LaTeX", body: "$$\n${1:equation}\n$$")
+    presentation = Presentation.create!(title: "Snippet deck", source: "# Math\n\n/")
+
+    visit edit_presentation_path(presentation)
+    click_on "Source"
     source = find_field("Markdown source")
     editor = find(".cm-content")
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector(".source-field").editorController;
+      editor.setSelectionRange(editor.value.length);
+      editor.focus();
+    JAVASCRIPT
     editor.send_keys("beq")
     assert_selector ".snippet-palette", visible: true
-    assert_text ":beq"
+    assert_text "/beq"
     assert_selector ".snippet-option[aria-selected='true']"
     assert_equal "true", page.evaluate_script("document.querySelector('.cm-editor').getAttribute('aria-expanded')")
     palette_position = page.evaluate_script("(() => { const element = document.querySelector('[data-controller~=editor]'); const editor = element.editorController; const caret = editor.view.coordsAtPos(editor.selectionStart); const palette = document.querySelector('[data-snippet-palette-target=palette]').getBoundingClientRect(); return { belowCaret: Math.abs(palette.top - caret.bottom - 4) < 2, aboveCaret: Math.abs(palette.bottom - caret.top + 4) < 2, paletteBottom: palette.bottom, viewportBottom: window.innerHeight }; })()")
@@ -1980,35 +2393,37 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_equal "equation", page.evaluate_script("(() => { const e = document.querySelector('[data-snippet-palette-target=editor]'); return e.value.slice(e.selectionStart, e.selectionEnd) })()")
   end
 
-  test "prioritizes an exact math snippet trigger and filters suggestions for math context" do
-    Snippet.create!(name: "Array command", trigger: "array", category: "LaTeX", body: "\\operatorname{array}")
-    Snippet.create!(name: "Alpha command", trigger: "a", category: "LaTeX", body: "\\alpha")
-    Snippet.create!(name: "Aligned block", trigger: "aligned", category: "LaTeX", body: "$$\n\\begin{aligned}\nx &= y\n\\end{aligned}\n$$")
-    Snippet.create!(name: "Array notes", trigger: "array-notes", category: "Markdown", body: "- ${1:item}")
-    presentation = Presentation.create!(title: "Math snippet search", source: "# Math\n\n$$\n")
+  test "uses the math palette inside math and keeps document commands in their namespace" do
+    presentation = Presentation.create!(title: "Math authoring namespaces", source: "# Math")
 
     visit edit_presentation_path(presentation)
+    click_on "Source"
     editor = find(".cm-content")
-    editor.send_keys(":a")
+    editor.send_keys("\n$@a")
 
-    assert_selector ".snippet-option.is-selected", text: /Alpha command/
-    assert_selector ".snippet-option", text: /:array.*Array command/m
-    assert_no_selector ".snippet-option", text: /Aligned block|Array notes/
+    assert_selector ".math-shortcut-option.is-selected", text: /Alpha/
+    assert_no_selector "[data-snippet-palette-target='palette'] [role='option']"
 
     editor.send_keys(:enter)
     source = find_field("Markdown source").value
-    assert_includes source, "$$\n\\alpha"
-    refute_includes source, "\\operatorname{array}"
+    assert_includes source, "$\\alpha$"
   end
 
   test "keeps multiple snippet placeholders aligned while tabbing" do
     Snippet.create!(name: "Two fields", trigger: "twice", description: "Two tab stops", category: "Markdown", body: "A ${1:first} B ${2:second}")
-    presentation = Presentation.create!(title: "Multiple stops", source: "# Snippets\n\n:")
+    presentation = Presentation.create!(title: "Multiple stops", source: "# Snippets\n\n/")
 
     visit edit_presentation_path(presentation)
+    click_on "Source"
     source = find_field("Markdown source")
-    source.send_keys("twice")
-    source.send_keys(:enter)
+    editor = find(".cm-content")
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector(".source-field").editorController;
+      editor.setSelectionRange(editor.value.length);
+      editor.focus();
+    JAVASCRIPT
+    editor.send_keys("twice")
+    editor.send_keys(:enter)
 
     selected_text = "(() => { const e = document.querySelector('[data-snippet-palette-target=editor]'); return e.value.slice(e.selectionStart, e.selectionEnd) })()"
     assert_equal "first", page.evaluate_script(selected_text)
@@ -2016,13 +2431,153 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_equal "second", page.evaluate_script(selected_text)
   end
 
-  test "positions the palette when only the colon trigger is typed" do
-    Snippet.create!(name: "Equation", trigger: "beq", category: "LaTeX", body: "x")
+  test "marks every pending snippet tab stop and walks the active mark with Tab" do
+    document = Document.create!(title: "Tab stop marks", source: "# Tab stop marks")
+
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    editor.click
+    editor.send_keys("\n/table")
+    assert_selector ".snippet-palette .snippet-option", text: /Table/, wait: 5
+    editor.send_keys(:enter)
+
+    assert_selector ".cm-snippet-stop", count: 4, wait: 5
+    assert_selector ".cm-snippet-stop-active", count: 1
+    assert_equal ["Column 1", "Column 2", "Value 1", "Value 2"], snippet_stop_marks
+    assert_equal "Column 1", active_snippet_stop
+
+    find(".cm-content").send_keys(:tab)
+    assert_equal ["Column 2", "Value 1", "Value 2"], snippet_stop_marks
+    assert_equal "Column 2", active_snippet_stop
+
+    find(".cm-content").send_keys(:tab)
+    assert_equal "Value 1", active_snippet_stop
+    find(".cm-content").send_keys(:tab)
+    assert_equal "Value 2", active_snippet_stop
+
+    find(".cm-content").send_keys(:tab)
+    assert_no_selector ".cm-snippet-stop"
+    assert_equal "# Tab stop marks\n| Column 1 | Column 2 |\n| --- | --- |\n| Value 1 | Value 2 |",
+      find_field("Markdown source").value
+  end
+
+  test "escape clears the snippet tab stop marks and leaves Tab alone" do
+    document = Document.create!(title: "Escape tab stops", source: "# Escape tab stops")
+
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    editor.click
+    editor.send_keys("\n/table")
+    assert_selector ".snippet-palette .snippet-option", text: /Table/, wait: 5
+    editor.send_keys(:enter)
+    assert_selector ".cm-snippet-stop", count: 4, wait: 5
+
+    find(".cm-content").send_keys(:escape)
+    assert_no_selector ".cm-snippet-stop"
+
+    selection = page.evaluate_script(editor_selection)
+    source = find_field("Markdown source").value
+    find(".cm-content").send_keys(:tab)
+
+    assert_equal selection, page.evaluate_script(editor_selection)
+    assert_equal source, find_field("Markdown source").value
+    assert_no_selector ".cm-snippet-stop"
+  end
+
+  test "keeps the remaining snippet tab stop marks aligned while typing" do
+    document = Document.create!(title: "Typing tab stops", source: "# Typing tab stops")
+
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    editor.click
+    editor.send_keys("\n/table")
+    assert_selector ".snippet-palette .snippet-option", text: /Table/, wait: 5
+    editor.send_keys(:enter)
+    assert_selector ".cm-snippet-stop", count: 4, wait: 5
+
+    find(".cm-content").send_keys("Header")
+    assert_equal ["Header", "Column 2", "Value 1", "Value 2"], snippet_stop_marks
+    assert_equal "Header", active_snippet_stop
+
+    find(".cm-content").send_keys(:tab)
+    assert_equal ["Column 2", "Value 1", "Value 2"], snippet_stop_marks
+    assert_equal "Column 2", active_snippet_stop
+    assert_includes find_field("Markdown source").value, "| Header | Column 2 |"
+  end
+
+  test "marks math shortcut tab stops and clears them on Escape" do
+    document = Document.create!(title: "Fraction tab stops", source: "# Fraction tab stops")
+
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    editor.click
+    editor.send_keys("\n$x = @frac")
+    assert_selector ".math-shortcut-palette .snippet-option", text: /Fraction/, wait: 5
+    editor.send_keys(:enter)
+
+    assert_selector ".cm-snippet-stop-empty", count: 2, wait: 5
+    assert_selector ".cm-snippet-stop-active", count: 1
+    stop_positions = snippet_stop_positions
+    assert_equal 2, stop_positions.length
+    assert_equal stop_positions.first, active_snippet_stop_position
+
+    find(".cm-content").send_keys("n")
+    assert_selector ".cm-snippet-stop", count: 2
+    assert_equal "n", page.evaluate_script('document.querySelector(".cm-snippet-stop-active")?.textContent')
+    stop_positions = snippet_stop_positions
+    find(".cm-content").send_keys(:tab)
+    assert_equal stop_positions.last, active_snippet_stop_position
+
+    find(".cm-content").send_keys(:escape)
+    assert_no_selector ".cm-snippet-stop"
+    selection = page.evaluate_script(editor_selection)
+    source = find_field("Markdown source").value
+    find(".cm-content").send_keys(:tab)
+    assert_equal selection, page.evaluate_script(editor_selection)
+    assert_equal source, find_field("Markdown source").value
+    assert_no_selector ".cm-snippet-stop"
+  end
+
+  test "marks math shortcut tab stops across multiple lines" do
+    document = Document.create!(title: "Matrix tab stops", source: "# Matrix tab stops")
+
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    editor.click
+    editor.send_keys("\n$y = @matrix")
+    assert_selector ".math-shortcut-palette .snippet-option", text: /Matrix/, wait: 5
+    editor.send_keys(:enter)
+
+    assert_selector ".cm-snippet-stop", count: 4, wait: 5
+    stop_positions = snippet_stop_positions
+    editor_lines = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const editor = document.querySelector(".source-field").editorController;
+        return #{stop_positions.to_json}.map((position) => editor.view.state.doc.lineAt(position).number);
+      })()
+    JAVASCRIPT
+    assert_operator editor_lines.uniq.length, :>, 1
+    assert_equal stop_positions.first, active_snippet_stop_position
+
+    find(".cm-content").send_keys(:tab)
+    assert_equal stop_positions[1], active_snippet_stop_position
+    find(".cm-content").send_keys(:tab)
+    assert_equal stop_positions[2], active_snippet_stop_position
+  end
+
+  test "positions the palette when only the slash trigger is typed" do
+    Snippet.create!(name: "Equation", trigger: "beq", category: "LaTeX", body: "$$\n${1:equation}\n$$")
     visit new_presentation_path
+    click_on "Source"
     source = find_field("Markdown source")
     source.fill_in with: "# Math\n\n"
-    source.send_keys(":")
-    assert_selector ".snippet-option", text: ":beq"
+    find(".cm-content").send_keys("/")
+    assert_selector ".snippet-option", text: "/beq"
     bounds = page.evaluate_script(<<~JS)
       (() => {
         const element = document.querySelector('[data-controller~="editor"]');
@@ -2032,18 +2587,23 @@ class PresentationsTest < ApplicationSystemTestCase
         return { positioned: palette.style.top !== '', belowCaret: Math.abs(p.top - caret.bottom - 4) < 2, aboveCaret: Math.abs(p.bottom - caret.top + 4) < 2, bottom: p.bottom, viewportBottom: window.innerHeight };
       })()
     JS
-    assert bounds["positioned"], "The colon popup must receive caret coordinates before a query is typed"
+    assert bounds["positioned"], "The slash popup must receive caret coordinates before a query is typed"
     assert bounds["belowCaret"] || bounds["aboveCaret"], "The snippet popup should stay next to the caret"
     assert_operator bounds["bottom"], :<, bounds["viewportBottom"]
   end
 
   test "renders untrusted snippet metadata as text" do
     Snippet.create!(name: '<img src=x onerror="alert(1)">', trigger: "unsafe", description: "Untrusted", category: "Markdown", body: "text")
-    presentation = Presentation.create!(title: "Safe snippets", source: "# Safe\n\n:")
+    presentation = Presentation.create!(title: "Safe snippets", source: "# Safe\n\n/")
 
     visit edit_presentation_path(presentation)
-    source = find_field("Markdown source")
-    source.send_keys("unsafe")
+    click_on "Source"
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector(".source-field").editorController;
+      editor.setSelectionRange(editor.value.length);
+      editor.focus();
+    JAVASCRIPT
+    find(".cm-content").send_keys("unsafe")
 
     assert_selector ".snippet-option span", text: '<img src=x onerror="alert(1)"> · Markdown'
     assert_no_selector ".snippet-option img"
@@ -2204,5 +2764,30 @@ class PresentationsTest < ApplicationSystemTestCase
   ensure
     image_one_file&.close!
     image_two_file&.close!
+  end
+
+  test "changes alignment immediately after visual edits and reflects it visually in the slide block" do
+    presentation = Presentation.create!(title: "Visual edit alignment", source: "# Slide\n\nInitial block")
+    visit edit_presentation_path(presentation)
+    wait_for_fresh_projection
+
+    block = find(".slide-block", text: "Initial block")
+    block_id = block["data-editor-block-id"]
+    block.click
+    block.send_keys(" with extra text")
+
+    alignment = find("select[data-presentation-editor-align][data-slide-index='0'][data-block-index='1']")
+    alignment.select("Center Center")
+
+    assert_includes find(".slide-block[data-editor-block-id='#{block_id}']")["class"], "position-center"
+    assert_field "Markdown source", with: /:::align\{center center\}\n\nInitial.*block/, wait: 5
+
+    alignment.select("Bottom Right")
+    assert_includes find(".slide-block[data-editor-block-id='#{block_id}']")["class"], "position-right"
+    assert_field "Markdown source", with: /:::align\{bottom right\}\n\nInitial.*block/, wait: 5
+
+    alignment.select("Left")
+    assert_includes find(".slide-block[data-editor-block-id='#{block_id}']")["class"], "position-left"
+    assert_field "Markdown source", with: /:::align\{left\}\n\nInitial.*block/, wait: 5
   end
 end

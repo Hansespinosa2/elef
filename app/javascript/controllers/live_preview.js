@@ -1,7 +1,8 @@
 import { StateEffect, StateField } from "@codemirror/state"
 import { syntaxTree } from "@codemirror/language"
 import { Decoration, EditorView, WidgetType } from "@codemirror/view"
-import "katex"
+import katex from "katex"
+import { MERMAID_ERROR_CLASS, renderMermaidSvg } from "controllers/mermaid_runtime"
 
 export const livePreviewMode = StateEffect.define()
 
@@ -30,8 +31,14 @@ class PreviewWidget extends WidgetType {
       image.alt = this.attributes.alt || ""
       const source = this.attributes.src || ""
       const assetDigest = source.match(/^elef-asset:([0-9a-f]{64})$/)?.[1]
-      const uploadUrl = document.querySelector("form[data-media-upload-url-value]")?.dataset.mediaUploadUrlValue
-      image.src = assetDigest && uploadUrl ? `${uploadUrl}/${assetDigest}` : source
+      const mediaForm = document.querySelector("form[data-media-upload-url-value]")
+      const assetBaseUrl = mediaForm?.dataset.mediaAssetBaseUrlValue
+      const uploadUrl = mediaForm?.dataset.mediaUploadUrlValue
+      if (assetDigest && assetBaseUrl) image.src = `${assetBaseUrl}/${assetDigest}`
+      else if (assetDigest && uploadUrl) image.src = `${uploadUrl}/${assetDigest}`
+      else if (assetBaseUrl && source.startsWith("images/")) {
+        image.src = `${assetBaseUrl}/path/${source.split("/").map(encodeURIComponent).join("/")}`
+      } else image.src = source
       image.title = this.attributes.alt || ""
       return image
     }
@@ -44,11 +51,31 @@ class PreviewWidget extends WidgetType {
       return marker
     }
 
+    if (this.kind === "mermaid") {
+      // Mermaid resolves asynchronously, so the placeholder renders
+      // synchronously and the SVG is swapped in once it arrives.
+      const diagram = document.createElement("div")
+      diagram.className = "cm-live-widget cm-live-widget-mermaid"
+      diagram.setAttribute("aria-label", this.value)
+      renderMermaidSvg(this.value, diagram).then(
+        (svg) => {
+          if (diagram.isConnected) diagram.innerHTML = svg
+        },
+        () => {
+          if (!diagram.isConnected) return
+          diagram.classList.add(MERMAID_ERROR_CLASS)
+          diagram.setAttribute("title", "Invalid Mermaid diagram")
+          diagram.textContent = this.value
+        }
+      )
+      return diagram
+    }
+
     const element = document.createElement("span")
     element.className = `cm-live-widget cm-live-widget-${this.kind}${this.kind === "quote-marker" ? " cm-live-syntax-marker" : ""}`
     if (this.kind === "math" || this.kind === "math-display") {
       try {
-        element.innerHTML = globalThis.katex.renderToString(this.value, {
+        element.innerHTML = katex.renderToString(this.value, {
           displayMode: this.kind === "math-display",
           throwOnError: true
         })
@@ -222,6 +249,27 @@ function addInlineMarkup(decorations, state, source, ranges) {
   }
 }
 
+function fenceLanguage(info) {
+  return info.trim().split(/[\s{]/)[0].toLowerCase()
+}
+
+function fencedDiagramSource(fencedSource) {
+  return fencedSource.split("\n").slice(1, -1).join("\n")
+}
+
+function addMermaidFence(decorations, state, from, to, fencedSource) {
+  const diagramSource = fencedDiagramSource(fencedSource)
+  if (from >= to || !diagramSource.trim()) return
+  if (activeRange(state, from, to)) {
+    decorations.push(markDecoration("cm-live-active-syntax").range(from, to))
+    return
+  }
+  decorations.push(markDecoration("cm-live-syntax-marker").range(from, to))
+  decorations.push(
+    Decoration.replace({ widget: new PreviewWidget("mermaid", diagramSource), block: true }).range(from, to)
+  )
+}
+
 function addBlockMarkup(decorations, state, source) {
   const lines = source.split("\n")
   let offset = 0
@@ -233,7 +281,18 @@ function addBlockMarkup(decorations, state, source) {
     const fenceMatch = line.match(/^(\s{0,3})(`{3,}|~{3,})(.*)$/)
     if (fenceMatch) {
       if (!fence) {
-        fence = { marker: fenceMatch[2][0], length: fenceMatch[2].length }
+        fence = {
+          marker: fenceMatch[2][0],
+          length: fenceMatch[2].length,
+          start: lineStart,
+          language: fenceLanguage(fenceMatch[3])
+        }
+        // A Mermaid fence becomes a single diagram widget once its closing
+        // fence arrives, so nothing inside it is decorated line by line.
+        if (fence.language === "mermaid") {
+          offset = lineEnd + 1
+          return
+        }
         addHidden(
           decorations,
           state,
@@ -245,6 +304,12 @@ function addBlockMarkup(decorations, state, source) {
         if (fenceMatch[3].trim()) addHidden(decorations, state, lineStart + line.length - fenceMatch[3].length, lineEnd, null, [lineStart, lineEnd])
         decorations.push(lineDecoration("cm-live-code-fence").range(lineStart))
       } else if (fence.marker === fenceMatch[2][0] && fenceMatch[2].length >= fence.length && fenceMatch[3].trim() === "") {
+        if (fence.language === "mermaid") {
+          addMermaidFence(decorations, state, fence.start, lineEnd, source.slice(fence.start, lineEnd))
+          fence = null
+          offset = lineEnd + 1
+          return
+        }
         addHidden(decorations, state, lineStart + fenceMatch[1].length, lineStart + line.length, null, [lineStart, lineEnd])
         decorations.push(lineDecoration("cm-live-code-fence").range(lineStart))
         fence = null
@@ -254,7 +319,7 @@ function addBlockMarkup(decorations, state, source) {
     }
 
     if (fence) {
-      decorations.push(lineDecoration("cm-live-code-line").range(lineStart))
+      if (fence.language !== "mermaid") decorations.push(lineDecoration("cm-live-code-line").range(lineStart))
       offset = lineEnd + 1
       return
     }

@@ -1,5 +1,5 @@
 class Snippet < ApplicationRecord
-  CATEGORIES = ["Markdown", "LaTeX", "Elef DSL"].freeze
+  CATEGORIES = ["Markdown", "LaTeX", "Mermaid", "Elef DSL"].freeze
 
   belongs_to :workspace
 
@@ -23,10 +23,6 @@ class Snippet < ApplicationRecord
 
   def search_text
     [name, trigger, description, category].join(" ").downcase
-  end
-
-  def display_body
-    body.gsub(/\$\{\d+(?::([^}]*))?\}/) { Regexp.last_match(1).presence || "example" }
   end
 
   private

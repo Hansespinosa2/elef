@@ -10,10 +10,10 @@ class PresentationTest < ActiveSupport::TestCase
 
   test "new presentations use source directives to position the starter title and body" do
     expected_source = <<~MARKDOWN.chomp
-      :::position{center middle}
+      :::align{center center}
       # Untitled Document
 
-      :::position {center}
+      :::align {center}
       Start writing Markdown here.
     MARKDOWN
 
@@ -35,6 +35,17 @@ class PresentationTest < ActiveSupport::TestCase
 
     assert_equal "dark", document.theme
     assert_equal ["```yaml\n---\n```", "", ""], document.slides.map(&:markdown)
+  end
+
+  test "keeps slide ranges aligned when separators appear inside display math" do
+    [["$$", "$$"], ["\\[", "\\]"]].each do |opening, closing|
+      source = "# Math\n\n#{opening}\n---\n#{closing}\n\n---\n# Next"
+      map = Source::Document.editor_map(source, mode: :presentation)
+
+      assert_equal 2, map[:slides].length
+      assert_equal "#{opening}\n---\n#{closing}", map[:slides].first[:blocks].last[:markdown]
+      assert_equal "# Next", map[:slides].last[:blocks].first[:markdown]
+    end
   end
 
   test "maps source ranges around front matter, fenced separators, CRLF, and unicode" do
@@ -67,6 +78,34 @@ class PresentationTest < ActiveSupport::TestCase
   test "defaults typography to book" do
     assert_equal "book", Source::Document.parse("# Title").typography
     assert_equal "book", Source::Document.parse("---\ntypography: unknown\n---\n# Title").typography
+  end
+
+  test "normalizes quoted, commented, and invalid front matter style values" do
+    theme = ->(value) { Source::Document.parse("---\ntheme: #{value}\n---\n# Title").theme }
+    typography = ->(value) { Source::Document.parse("---\ntypography: #{value}\n---\n# Title").typography }
+
+    # Quotes and trailing "# ..." comments are stripped before matching.
+    assert_equal "dark", theme.call('"dark"')
+    assert_equal "light", theme.call("'light'")
+    assert_equal "dark", theme.call("dark # deck theme")
+    assert_equal 'dark', theme.call('"dark" # deck theme')
+    assert_equal "modern", typography.call("'modern'")
+    assert_equal "modern", typography.call("modern # body text")
+
+    # A "#" only counts as a comment when whitespace precedes it.
+    assert_equal "match", theme.call("light#x")
+
+    # Values outside each key's own vocabulary fall back to that key's default,
+    # so the two keys do not accept each other's values.
+    assert_equal "match", theme.call("book")
+    assert_equal "book", typography.call("light")
+    assert_equal "match", theme.call("unknown")
+    assert_equal "book", typography.call("unknown")
+  end
+
+  test "keeps the earliest style key when front matter repeats it" do
+    assert_equal "dark", Source::Document.parse("---\ntheme: dark\ntheme: light\n---\n# Title").theme
+    assert_equal "book", Source::Document.parse("---\ntypography: book\ntypography: modern\n---\n# Title").typography
   end
 
   test "parses margin settings and slide context directives" do
@@ -226,11 +265,11 @@ class PresentationTest < ActiveSupport::TestCase
     document = Source::Document.parse(<<~MARKDOWN)
       # Positioned
 
-      :::position{center middle}
+      :::align{center center}
 
       A centered message.
 
-      :::position{right bottom}
+      :::align{bottom right}
       - One
       - Two
     MARKDOWN
@@ -243,13 +282,35 @@ class PresentationTest < ActiveSupport::TestCase
     assert_empty document.warnings
   end
 
+  test "align directives use vertical then horizontal order and retain position compatibility" do
+    document = Source::Document.parse(<<~MARKDOWN)
+      :::align{center left}
+
+      Centered vertically and aligned left.
+
+      :::align{left}
+
+      Left aligned.
+
+      :::position{right bottom}
+
+      Existing source still works.
+    MARKDOWN
+
+    positions = document.slides.first.blocks.map(&:position)
+
+    assert_equal [["left", "middle"], ["left", "top"], ["right", "bottom"]],
+      positions.map { |position| [position.horizontal, position.vertical] }
+    assert_equal [true, false, true], positions.map(&:vertical_explicit)
+  end
+
   test "records whether a vertical position was explicitly requested" do
     document = Source::Document.parse(<<~MARKDOWN)
-      :::position{center}
+      :::align{center}
 
       Horizontal only.
 
-      :::position{center middle}
+      :::align{center center}
 
       Horizontal and vertical.
     MARKDOWN
@@ -258,7 +319,7 @@ class PresentationTest < ActiveSupport::TestCase
   end
 
   test "builds an ephemeral editor map with UTF-16 ranges and known directives" do
-    source = "---\npresentationTheme: dark\n---\n# 🚀 Intro\n\n:::position{center middle}\n\nA **message**.\n\n:::\n---\n:::unknown\n\n# Next"
+    source = "---\npresentationTheme: dark\n---\n# 🚀 Intro\n\n:::align{center center}\n\nA **message**.\n\n:::\n---\n:::unknown\n\n# Next"
 
     map = Source::Document.editor_map(source, source_name: "Deck", mode: :presentation)
 
@@ -277,7 +338,7 @@ class PresentationTest < ActiveSupport::TestCase
   end
 
   test "maps a single-block position directive without leaking it to the next block" do
-    source = "# Slide\n\n:::position{center}\n\nFirst\n\nSecond"
+    source = "# Slide\n\n:::align{center}\n\nFirst\n\nSecond"
 
     blocks = Source::Document.editor_map(source, mode: :presentation)[:slides].first[:blocks]
 
@@ -286,13 +347,30 @@ class PresentationTest < ActiveSupport::TestCase
   end
 
   test "maps shared position scopes to every block inside the group" do
-    source = "# Slide\n\n:::position{center}\n\nFirst\n\nSecond\n\n:::\n\nOutside"
+    source = "# Slide\n\n:::align{center}\n\nFirst\n\nSecond\n\n:::\n\nOutside"
 
     blocks = Source::Document.editor_map(source, mode: :presentation)[:slides].first[:blocks]
 
     assert_equal [nil, "group", "group", nil], blocks.map { |block| block[:position_scope] }
     assert_equal blocks[1][:position_directive_id], blocks[2][:position_directive_id]
     refute_equal blocks[1][:position_directive_id], blocks[3][:position_directive_id]
+  end
+
+  test "keeps blank lines inside display math fences in one editable block" do
+    [["$$", "$$"], ["\\[", "\\]"]].each do |opening, closing|
+      source = "# Math\n\n#{opening}\n\n#{closing}"
+      map = Source::Document.editor_map(source, mode: :document)
+      blocks = map[:slides].first[:blocks]
+      math_block = blocks.last
+      region = map[:slides].first[:editable_regions].find { |candidate| candidate[:block_id] == math_block[:id] }
+
+      assert_equal "#{opening}\n\n#{closing}", math_block[:markdown]
+      assert_equal true, region[:editable]
+
+      opener_map = Source::Document.editor_map("# Math\n\n#{opening}", mode: :document)
+      opener_region = opener_map[:slides].first[:editable_regions].last
+      assert_equal true, opener_region[:editable]
+    end
   end
 
   test "keeps a document editor map as one source surface across horizontal rules" do
@@ -484,7 +562,8 @@ class PresentationTest < ActiveSupport::TestCase
     assert_includes layouts.slides.map(&:layout), "statement"
     assert_equal 5, layouts.slides.count { |slide| slide.layout == "three-column" }
     %w[left center right].product(%w[top middle bottom]).each do |horizontal, vertical|
-      assert_includes layouts.source, ":::position{#{horizontal} #{vertical}}"
+      vertical_value = vertical == "middle" ? "center" : vertical
+      assert_includes layouts.source, ":::align{#{vertical_value} #{horizontal}}"
     end
     assert layouts.slides.any? { |slide| slide.blocks.any? { |block| block.position&.horizontal == "center" && block.position.vertical == "middle" } }
     assert layouts.slides.any? { |slide| slide.blocks.any? { |block| block.position&.horizontal == "right" && block.position.vertical == "bottom" } }
