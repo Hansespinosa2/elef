@@ -80,6 +80,43 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
     assert_match(/\A# Untitled document(?: \d+)?\z/, document.source)
   end
 
+  test "exports a document as a downloadable Elef archive" do
+    document = Document.create!(title: "Exported notes", source: "# Exported notes\n\nArchive content")
+
+    get export_document_path(document)
+
+    assert_response :success
+    assert_equal "application/zip", response.media_type
+    assert_match(/attachment; filename=\"exported-notes-elef-work\.zip\"/, response.headers.fetch("Content-Disposition"))
+    Zip::File.open_buffer(response.body) do |zip|
+      manifest = JSON.parse(zip.read("manifest.json"))
+      assert_equal "document", manifest.dig("work", "kind")
+      assert_includes zip.read("source.md"), "# Exported notes"
+    end
+  end
+
+  test "imports an uploaded Elef archive through the document endpoint" do
+    source = Document.create!(title: "Imported notes", source: "# Imported notes\n\nArchive content")
+    package = WorkPackage::Exporter.call(source)
+    source.destroy!
+
+    Tempfile.create(["document-package", ".elef"]) do |file|
+      file.binmode
+      file.write(package)
+      file.rewind
+      upload = Rack::Test::UploadedFile.new(file.path, "application/zip")
+
+      assert_difference("Document.count", 1) do
+        post import_documents_path, params: { package: upload }
+      end
+    end
+
+    imported = Document.find_by!(title: "Imported notes")
+    assert_redirected_to edit_document_path(imported)
+    assert_includes imported.source, "# Imported notes\n\nArchive content"
+    assert_equal "Document imported.", flash[:notice]
+  end
+
   test "editor projections resolve document links through the shared renderer" do
     source = Document.create!(source: "# Source notes\n\n[[Target notes]]")
     target = Document.create!(title: "Target notes", source: "# Target notes")

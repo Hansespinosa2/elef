@@ -601,6 +601,42 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_equal Presentation::DEFAULT_SOURCE, presentation.source
   end
 
+  test "exports a presentation as a downloadable Elef archive" do
+    presentation = Presentation.create!(title: "Exported deck", source: "# Exported deck\n\nArchive content")
+
+    get export_presentation_path(presentation)
+
+    assert_response :success
+    assert_equal "application/zip", response.media_type
+    assert_match(/attachment; filename=\"exported-deck-elef-work\.zip\"/, response.headers.fetch("Content-Disposition"))
+    Zip::File.open_buffer(response.body) do |zip|
+      manifest = JSON.parse(zip.read("manifest.json"))
+      assert_equal "presentation", manifest.dig("work", "kind")
+      assert_includes zip.read("presentation.md"), "# Exported deck"
+    end
+  end
+
+  test "imports an uploaded Elef archive through the presentation endpoint" do
+    source = Presentation.create!(title: "Imported deck", source: "# Imported deck\n\nArchive content")
+    package = WorkPackage::Exporter.call(source)
+
+    Tempfile.create(["presentation-package", ".elef"]) do |file|
+      file.binmode
+      file.write(package)
+      file.rewind
+      upload = Rack::Test::UploadedFile.new(file.path, "application/zip")
+
+      assert_difference("Presentation.count", 1) do
+        post import_presentations_path, params: { package: upload }
+      end
+    end
+
+    imported = Presentation.order(:id).last
+    assert_redirected_to edit_presentation_path(imported)
+    assert_equal "# Imported deck\n\nArchive content", imported.source
+    assert_equal "Presentation imported.", flash[:notice]
+  end
+
   test "updates source only on explicit save request" do
     presentation = presentations(:one)
 

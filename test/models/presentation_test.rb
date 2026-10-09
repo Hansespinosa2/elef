@@ -600,6 +600,37 @@ class PresentationTest < ActiveSupport::TestCase
     end
   end
 
+  test "forking a dirty parent checkpoints the exact source used for the fork" do
+    parent = Presentation.create!(title: "Dirty parent", source: "# Checkpointed source")
+    previous_checkpoint_id = parent.latest_checkpoint.id
+    result = Drafts::Save.call(
+      parent,
+      source: "# New unsnapshotted draft",
+      lock_version: parent.lock_version,
+      base_revision: parent.revision_token,
+      checkpoint: false
+    )
+    assert_predicate result, :success?
+    assert_equal previous_checkpoint_id, parent.reload.latest_checkpoint.id
+
+    child = parent.fork_as("inspiration")
+    origin_revision = child.pending_lineage_origin_revision
+
+    assert_equal "# New unsnapshotted draft", origin_revision.source
+    assert_not_equal previous_checkpoint_id, origin_revision.id
+    assert child.save, child.errors.full_messages.to_sentence
+    assert_equal origin_revision.id, child.lineage_edge.origin_revision_id
+    assert_equal "# New unsnapshotted draft", child.reload.source
+  end
+
+  test "rejects a pending lineage parent that is the presentation itself" do
+    presentation = Presentation.new(title: "Self fork", source: "# Self")
+    presentation.parent = presentation
+
+    refute presentation.valid?
+    assert_includes presentation.errors[:parent], "cannot be itself"
+  end
+
   test "infers image layout for a slide containing only an image without headings" do
     slide = Source::Document.parse("![Dummy](dummy.png)").slides.first
 

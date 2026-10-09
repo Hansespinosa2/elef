@@ -3112,7 +3112,8 @@ mod tests {
                     .into_iter()
                     .find(|summary| summary.name == "Crash fixture")
                     .unwrap();
-                library.open_deck(&deck.id).unwrap();
+                let reopened = library.open_deck(&deck.id).unwrap();
+                assert_eq!(reopened.source, expected);
                 assert!(fs::read_dir(&deck_path).unwrap().all(|entry| {
                     !entry
                         .unwrap()

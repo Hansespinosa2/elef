@@ -23,6 +23,13 @@ class BugReports::IssueRendererTest < ActiveSupport::TestCase
     refute_includes body, "3."
   end
 
+  test "normalizes CRLF reproduction steps before numbering them" do
+    body = renderer.body(expected: "A", actual: "B", steps: "1. First step\r\n2) Second step\r\n", environment: "test")
+
+    assert_includes body, "1. First step\n2. Second step"
+    refute_includes body, "\r"
+  end
+
   test "uses the first meaningful actual line and caps the deterministic title" do
     assert_equal "Bug: Save does not finish", renderer.title_for(actual: "\n  Save does not finish  \nMore detail")
 

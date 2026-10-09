@@ -224,4 +224,26 @@ class PersistenceServicesTest < ActiveSupport::TestCase
     refute_equal base, Presentations::RenderCache.key(source: "# One", settings: { "theme" => "dark" }, asset_manifest: [])
     refute_equal base, Presentations::RenderCache.key(source: "# One", settings: { "theme" => "light" }, asset_manifest: [{ "checksum" => "abc" }])
   end
+
+  test "render cache fetch stores and reuses the generated artifact" do
+    source = "# Cached rendering #{SecureRandom.hex(8)}"
+    calls = 0
+    original_cache = Rails.cache
+    Rails.cache = ActiveSupport::Cache::MemoryStore.new
+
+    first = Presentations::RenderCache.fetch(source:) do
+      calls += 1
+      "<h1>cached</h1>"
+    end
+    second = Presentations::RenderCache.fetch(source:) do
+      calls += 1
+      "<h1>unexpected second render</h1>"
+    end
+
+    assert_equal "<h1>cached</h1>", first
+    assert_equal first, second
+    assert_equal 1, calls
+  ensure
+    Rails.cache = original_cache if original_cache
+  end
 end
