@@ -73,6 +73,7 @@ const env = {
   ELEF_E2E_IMPORT_ARCHIVE: importArchive,
   ELEF_E2E_PORTABLE_GRAPH_ARCHIVE: portableGraphArchive,
   ELEF_E2E_EXPORT_PATH: exportArchive,
+  ELEF_E2E_DIAGNOSTICS_EXPORT_PATH: path.join(temporaryRoot, "elef-diagnostics.zip"),
   ELEF_E2E_SEED_DECK_ID: "a3d0f020-6605-4f9e-a96d-d825ee4b13f1"
 }
 

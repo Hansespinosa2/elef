@@ -148,13 +148,16 @@ fn record_diagnostic(
     let Ok(data_dir) = app.path().app_data_dir() else {
         return;
     };
-    let profile = if cfg!(feature = "desktop-dev") {
+    let event = DiagnosticEvent::new(event_code, result, error_code, event_profile());
+    let _ = elef_core::diagnostics::append_event(&data_dir.join("logs"), &event);
+}
+
+fn event_profile() -> EventProfile {
+    if cfg!(feature = "desktop-dev") {
         EventProfile::Dev
     } else {
         EventProfile::Stable
-    };
-    let event = DiagnosticEvent::new(event_code, result, error_code, profile);
-    let _ = elef_core::diagnostics::append_event(&data_dir.join("logs"), &event);
+    }
 }
 
 fn record_command_result<T>(
@@ -1263,6 +1266,62 @@ async fn export_diagnostics_inner(app: &AppHandle) -> Result<bool, CommandError>
     Ok(true)
 }
 
+/// Test-only path that exercises the real diagnostics writer and ZIP exporter
+/// without opening a native save panel. It is compiled only in WebDriver builds.
+#[cfg(feature = "webdriver")]
+#[tauri::command]
+async fn export_diagnostics_fixture(app: AppHandle) -> Result<bool, CommandError> {
+    let result = export_diagnostics_fixture_inner(&app).await;
+    record_bool_command_result(&app, EventCode::DiagnosticsExport, &result);
+    result
+}
+
+#[cfg(feature = "webdriver")]
+async fn export_diagnostics_fixture_inner(app: &AppHandle) -> Result<bool, CommandError> {
+    let destination = std::env::var_os("ELEF_E2E_DIAGNOSTICS_EXPORT_PATH")
+        .map(PathBuf::from)
+        .ok_or_else(|| {
+            CommandError::new(
+                "invalid_input",
+                "Diagnostics export fixture is unavailable.",
+                false,
+            )
+        })?;
+    let log_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| CommandError::new("io_error", "Diagnostics are unavailable.", true))?
+        .join("logs");
+    let profile = event_profile();
+    let exported = tauri::async_runtime::spawn_blocking(move || -> std::io::Result<()> {
+        let sentinels: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../test/fixtures/desktop/release/redaction-sentinels.json"
+        ))
+        .map_err(|_| std::io::Error::other("diagnostics fixture is invalid"))?;
+        let fields = sentinels
+            .as_object()
+            .ok_or_else(|| std::io::Error::other("diagnostics fixture is invalid"))?;
+        for value in fields.values() {
+            let sentinel = value
+                .as_str()
+                .ok_or_else(|| std::io::Error::other("diagnostics fixture is invalid"))?;
+            let event = DiagnosticEvent::new(
+                EventCode::Save,
+                EventResult::Failure,
+                Some(sentinel),
+                profile,
+            );
+            elef_core::diagnostics::append_event(&log_dir, &event)?;
+        }
+        elef_core::diagnostics::export_diagnostics(&log_dir, &destination)
+    })
+    .await
+    .map_err(|_| CommandError::new("internal", "Diagnostics could not be exported.", true))?;
+    exported
+        .map_err(|_| CommandError::new("io_error", "Diagnostics could not be exported.", true))?;
+    Ok(true)
+}
+
 fn asset_protocol_response(
     app: &AppHandle,
     request: &ProtocolRequest<Vec<u8>>,
@@ -1761,13 +1820,41 @@ pub fn run() {
         });
 
     #[cfg(all(feature = "desktop-dev", feature = "webdriver"))]
-    let builder =
-        builder.invoke_handler(app_commands!(document_graph, stage_update, install_update));
+    let builder = builder.invoke_handler(app_commands!(
+        document_graph,
+        stage_update,
+        install_update,
+        export_diagnostics_fixture
+    ));
     #[cfg(all(feature = "desktop-dev", not(feature = "webdriver")))]
     let builder = builder.invoke_handler(app_commands!(document_graph));
-    #[cfg(all(not(feature = "desktop-dev"), target_os = "macos"))]
+    #[cfg(all(
+        not(feature = "desktop-dev"),
+        target_os = "macos",
+        feature = "webdriver"
+    ))]
+    let builder = builder.invoke_handler(app_commands!(
+        stage_update,
+        install_update,
+        export_diagnostics_fixture
+    ));
+    #[cfg(all(
+        not(feature = "desktop-dev"),
+        target_os = "macos",
+        not(feature = "webdriver")
+    ))]
     let builder = builder.invoke_handler(app_commands!(stage_update, install_update));
-    #[cfg(all(not(feature = "desktop-dev"), not(target_os = "macos")))]
+    #[cfg(all(
+        not(feature = "desktop-dev"),
+        not(target_os = "macos"),
+        feature = "webdriver"
+    ))]
+    let builder = builder.invoke_handler(app_commands!(export_diagnostics_fixture));
+    #[cfg(all(
+        not(feature = "desktop-dev"),
+        not(target_os = "macos"),
+        not(feature = "webdriver")
+    ))]
     let builder = builder.invoke_handler(app_commands!());
 
     let app = builder

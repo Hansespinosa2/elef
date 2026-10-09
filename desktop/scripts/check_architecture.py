@@ -166,7 +166,8 @@ assert allowed_commands(set(dev_capability["permissions"])) == declared | {"docu
 assert allowed_commands(set(macos_updater_capability["permissions"])) == {"stage_update", "install_update"}, "only the macOS updater capability may stage or activate a signed update"
 assert macos_updater_capability["platforms"] == ["macOS"], "updater command permissions must be macOS-only"
 assert "document_graph" not in declared and "install_update" not in declared and "stage_update" not in declared, "profile-specific commands must not enter the common Stable ACL"
-assert "match (desktop_dev, has_update_command)" in build_source and 'command_list!("document_graph")' in build_source
+assert "(desktop_dev, has_update_command, webdriver)" in build_source and 'command_list!("document_graph")' in build_source
+assert "export_diagnostics_fixture" in build_source and "#[cfg(feature = \"webdriver\")]\n#[tauri::command]\nasync fn export_diagnostics_fixture" in app_source, "privacy fixture export must exist only in WebDriver command builds"
 assert 'let has_update_command = target_os == "macos" || (desktop_dev && webdriver);' in build_source
 assert re.search(r'#\[cfg\(any\(\s*target_os = "macos",\s*all\(feature = "desktop-dev", feature = "webdriver"\)\s*\)\)\]', app_source), "Linux Stable WebDriver must not compile updater code"
 assert "app_commands!(document_graph)" in app_source and "app_commands!(stage_update, install_update)" in app_source
@@ -200,14 +201,17 @@ assert set(e2e_capability["permissions"]) == {
     "process:allow-restart",
     "core:app:allow-version",
     "core:window:allow-is-fullscreen",
+    "allow-export-diagnostics-fixture",
 }, "only the test-only capability may expose WebdriverIO and fixture downloads"
 assert set(e2e_stable_capability["permissions"]) == {
     "wdio:default",
     "wdio-webdriver:default",
     "core:app:allow-version",
     "core:window:allow-is-fullscreen",
+    "allow-export-diagnostics-fixture",
 }, "Stable runtime tests may add WebDriver and read the version without experimental or updater permissions"
 assert "allow-document-graph" not in e2e_stable_capability["permissions"]
+assert "allow-export-diagnostics-fixture" not in capability["permissions"] + dev_capability["permissions"], "production Stable and Dev must not expose the WebDriver-only diagnostics fixture command"
 assert e2e_config["app"].get("withGlobalTauri") is True, "global Tauri access is enabled only for the test-only WebdriverIO build"
 assert config["app"].get("withGlobalTauri") is not True, "production must not expose the global Tauri API"
 production_frontend = (REPO_ROOT / "desktop/frontend/dist/assets/app.js").read_text()

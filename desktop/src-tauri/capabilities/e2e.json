@@ -12,6 +12,7 @@
     "updater:allow-download",
     "process:allow-restart",
     "core:app:allow-version",
-    "core:window:allow-is-fullscreen"
+    "core:window:allow-is-fullscreen",
+    "allow-export-diagnostics-fixture"
   ]
 }

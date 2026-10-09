@@ -7,6 +7,7 @@ import { createHash, randomUUID } from "node:crypto"
 import { desktopCommand } from "./offline-macos.js"
 import { nativeQuit } from "./native-quit-smoke.js"
 import { reserveWebdriverPort } from "./webdriver-port.js"
+import { verifyDiagnosticsArchive } from "./diagnostics-archive.js"
 
 const pause = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds))
 const hash = async filename => createHash("sha256").update(await readFile(filename)).digest("hex")
@@ -323,6 +324,15 @@ export async function runPackagedUpdateSmoke(env, { packageMode = "package" } = 
     if (env.ELEF_E2E_PRE_RELEASE_STATE) {
       assert.equal(await readFile(env.ELEF_E2E_PRE_RELEASE_STATE, "utf8"), env.ELEF_E2E_EXPECTED_PRE_RELEASE_STATE,
         "The N-1 to N update must preserve the previous Stable library selection bytes")
+    }
+    if (packageMode === "stable-package") {
+      const diagnosticsPath = env.ELEF_E2E_DIAGNOSTICS_EXPORT_PATH
+      assert.ok(diagnosticsPath, "the packaged Stable diagnostics archive path must be set")
+      await rm(diagnosticsPath, { force: true })
+      const exported = await execute(app.port, relaunchedSession,
+        `return await window.__TAURI__.core.invoke("export_diagnostics_fixture")`)
+      assert.equal(exported, true, "packaged Stable should export diagnostics after the update")
+      await verifyDiagnosticsArchive(diagnosticsPath, "stable")
     }
     nativeQuit(relaunchedPid)
     await waitUntil(() => !appPids().includes(relaunchedPid), "The relaunched N application did not close cleanly", 20_000)

@@ -19,6 +19,7 @@ import { displayMathEnterWorkflow } from "../../../test/e2e/scenarios/display-ma
 import { artRenderingWorkflow } from "../../../test/e2e/scenarios/art-rendering.js"
 import { createHash } from "node:crypto"
 import { answerMacNativeDialog } from "../mac-native-dialog.js"
+import { exportAndVerifyDiagnostics } from "../diagnostics-archive.js"
 
 async function openDesktopAuthoringSettings() {
   await openDesktopSettings()
@@ -2452,6 +2453,10 @@ describe("desktop binary workflows and native boundaries", () => {
 
     const cancelled = await browser.execute(async () => await window.__elefDiagnosticsExport)
     if (cancelled !== false) throw new Error("Cancelling the diagnostics dialog should leave the export unwritten")
+  })
+
+  it("exports a diagnostics ZIP without privacy fixture sentinels", async () => {
+    await exportAndVerifyDiagnostics(browser, "dev")
   })
 })
 

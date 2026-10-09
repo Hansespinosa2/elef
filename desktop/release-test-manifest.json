@@ -54,13 +54,13 @@
     },
     {
       "id": "diagnostics_privacy",
-      "command": "cargo test --manifest-path desktop/Cargo.toml -p elef-core diagnostics::tests --locked",
+      "command": "cargo test --manifest-path desktop/Cargo.toml -p elef-core diagnostics::tests --locked && ELEF_E2E_PACKAGED_UPDATES=1 npm test --prefix desktop/e2e",
       "expected_exit_code": 0,
-      "observed_exit_code": 0,
-      "platform": "Linux x86-64",
+      "observed_exit_code": null,
+      "platform": "Linux and macOS hosted; packaged Stable ZIP inspection on macOS",
       "observed_tests_passed": 4,
       "status": "IN_PROGRESS",
-      "note": "Core tests cover all eight checked-in sentinel values, failure-category sanitization, hostile fields during ZIP export, and bounded rotation. Native menu/export runtime smoke remains."
+      "note": "Core tests cover all eight checked-in sentinel values, failure-category sanitization, hostile fields during ZIP export, and bounded rotation. Hosted WebDriver builds use a test-only command to write failure-category sentinels and export the app's real ZIP; the post-update Stable N package inspects every entry and verifies the sentinels are absent while version, profile, build SHA, event code, and sanitized result remain actionable."
     }
   ],
   "package_pair_generator": {
@@ -157,10 +157,10 @@
       "id": "redaction_sentinels",
       "paths": ["test/fixtures/desktop/release/redaction-sentinels.json"],
       "status": "IN_PROGRESS",
-      "acceptance_command": "cargo test --manifest-path desktop/Cargo.toml -p elef-core diagnostics::tests --locked",
+      "acceptance_command": "cargo test --manifest-path desktop/Cargo.toml -p elef-core diagnostics::tests --locked && ELEF_E2E_PACKAGED_UPDATES=1 npm test --prefix desktop/e2e",
       "expected_exit_code": 0,
-      "observed_exit_code": 0,
-      "invariants": ["No sentinel value appears in structured logs or exported diagnostics ZIP, including failure-category inputs and tampered exception, source, title, filename, path, token, secret, and IPC fields.", "Native menu and dialog integration still needs runtime smoke coverage."]
+      "observed_exit_code": null,
+      "invariants": ["No sentinel value appears in structured logs or exported diagnostics ZIP, including failure-category inputs and tampered exception, source, title, filename, path, token, secret, and IPC fields.", "The packaged Stable N app exports and inspects the diagnostics ZIP after N-1 to N update; native menu cancellation is exercised separately."]
     }
   ],
   "environment_notes": [

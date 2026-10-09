@@ -1,5 +1,6 @@
 import assert from "node:assert/strict"
 import { $, browser } from "@wdio/globals"
+import { exportAndVerifyDiagnostics } from "./diagnostics-archive.js"
 import {
   STABLE_PROFILE_DECK_TITLE,
   STABLE_PROFILE_EDITED_SOURCE,
@@ -115,5 +116,6 @@ describe("Stable profile exclusions", () => {
       timeout: 15_000,
       timeoutMsg: "Stable did not reopen the exact saved source"
     })
+    await exportAndVerifyDiagnostics(browser, "stable")
   })
 })
