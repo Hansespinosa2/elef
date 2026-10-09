@@ -1808,13 +1808,15 @@ mod tests {
         state
             .use_library(restored_root.clone())
             .expect("open the library selected by the previous Stable release");
+        let canonical_library_root =
+            fs::canonicalize(&library_root).expect("canonicalize the opened library root");
         assert_eq!(
             state
                 .root
                 .read()
                 .expect("read selected library root")
                 .as_ref(),
-            Some(&library_root)
+            Some(&canonical_library_root)
         );
         let library = state.current_library().expect("restored library is active");
         let deck = library
