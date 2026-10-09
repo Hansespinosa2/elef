@@ -1,3 +1,4 @@
+export { ADAPTER_METHODS, assertEditorAdapter } from "./session/editor_adapter.js";
 export { createSaveFlow } from "./session/save_flow.js";
 export { createTitleSaveFlow } from "./session/title_save_flow.js";
 export { createWorkSession } from "./session/work_session.js";

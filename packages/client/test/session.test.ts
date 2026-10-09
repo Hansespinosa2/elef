@@ -1,6 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
+import { ADAPTER_METHODS, assertEditorAdapter } from "../src/session/editor_adapter.js";
+
 import {
   caretAfterInsert,
   clampSelection,
@@ -71,6 +73,22 @@ test("diff touches only the changed span", () => {
 test("caret and selection arithmetic match the controller shells", () => {
   assert.equal(caretAfterInsert(4, "ab\r\ncd"), 4 + 5);
   assert.deepEqual(offsetSelection(10, { from: 1, to: 3 }), { anchor: 11, head: 13 });
+});
+
+test("adapter validation pins the narrow binding surface", () => {
+  assert.deepEqual(ADAPTER_METHODS, ["getText", "setText", "materializeEdits"]);
+  const valid = { getText: () => "", setText: () => true, materializeEdits: () => {} };
+  assert.equal(assertEditorAdapter(valid), valid);
+  assert.throws(() => assertEditorAdapter(null), /adapter object/);
+  assert.throws(() => assertEditorAdapter({}), /getText/);
+  assert.throws(
+    () => assertEditorAdapter({ getText: () => "", setText: () => true }),
+    /materializeEdits/
+  );
+  assert.throws(
+    () => assertEditorAdapter({ getText: () => "", setText: "yes", materializeEdits: () => {} }),
+    /setText/
+  );
 });
 
 test("frontmatter range matches the controller regex", () => {

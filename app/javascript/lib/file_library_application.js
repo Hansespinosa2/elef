@@ -1,5 +1,4 @@
 import { createDeckOpenFlow, prepareDeckOpen } from "lib/deck_open_flow"
-import { applyEditorSource } from "lib/editor_source"
 import { measurePaintedAction } from "lib/performance_measurement"
 import { editorFor } from "lib/editor_controller_lookup"
 import { mountHostPresentationEditor } from "lib/presentation_editor_host"
@@ -8,6 +7,7 @@ import { createRequestGuard } from "lib/request_identity"
 import { buildDocumentGraph } from "@elef/work-model"
 import { waitForEditorController } from "lib/editor_ready"
 import { createWorkSession, createTitleSaveFlow } from "@elef/client"
+import { createCodeMirrorBinding } from "lib/editor_binding"
 import { presentConflictDialog } from "lib/conflict_dialog"
 import { createRendererClient } from "lib/renderer_worker_client"
 import { applyDesktopFeatureFlags } from "lib/feature_flags"
@@ -187,18 +187,26 @@ export function startFileLibraryApplication(platform) {
   function openSession(deck) {
     closeSession()
     lastSourceFile = deck.source_file
+    const adapter = createCodeMirrorBinding({
+      getEditor: () => editorFor(elements.editorField),
+      getDeckId: () => activeDeck?.id,
+      getFallbackValue: () => elements.editorInput.value,
+      setFallbackValue: value => { elements.editorInput.value = value },
+      waitForEditor: () => waitForEditorController(elements.editorField, editorFor),
+      materializeEdits: materializePendingVisualEdits
+    })
     const session = createWorkSession({
       transport: sessionTransport,
       policy: {
         workId: deck.id,
         kind: deck.source_file === "document.md" ? "document" : "presentation",
         deck,
-        getText: currentSource,
-        setText: (source, meta) => setEditorSource(source, meta),
+        getText: adapter.getText,
+        setText: adapter.setText,
         saveDelay: quietSavePolicy.saveDelay,
         externalPollMs: quietSavePolicy.externalPollMs,
         snapshotIntervalMs: quietSavePolicy.snapshotIntervalMs,
-        materializeEdits: materializePendingVisualEdits,
+        materializeEdits: adapter.materializeEdits,
         onConflict: showConflict,
         onError: showError
       }
@@ -795,15 +803,6 @@ export function startFileLibraryApplication(platform) {
 
   function currentSource() {
     return editorFor(elements.editorField)?.sourceValue ?? elements.editorInput.value
-  }
-
-  async function setEditorSource(source, { id = activeDeck?.id, expectedSource = currentSource() } = {}) {
-    return applyEditorSource(source, {
-      id, expectedSource, getDeckId: () => activeDeck?.id, getSource: currentSource,
-      waitForEditor: () => waitForEditorController(elements.editorField, editorFor),
-      materializeEdits: materializePendingVisualEdits,
-      setFallback: value => { elements.editorInput.value = value }
-    })
   }
 
   async function showSettings() {

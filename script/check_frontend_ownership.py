@@ -506,11 +506,15 @@ assert 'pin "lib/editor_controller_lookup", to: "lib/editor_controller_lookup.js
 )
 assert '"lib/presentation_navigation"' not in client_presentation, "the shared controller must not keep host-owned key mapping"
 for shared_module in (
-    "deck_open_flow", "document_graph_cache", "editor_ready", "editor_source",
+    "deck_open_flow", "document_graph_cache", "editor_ready",
     "feature_flags", "performance_measurement", "renderer_worker_client",
-    "request_identity",
+    "request_identity", "editor_binding",
 ):
     assert f'"lib/{shared_module}"' in desktop_application, f"desktop application must consume app/javascript/lib/{shared_module}.js"
+editor_binding = (ROOT / "app/javascript/lib/editor_binding.js").read_text()
+assert '"./editor_source.js"' in editor_binding, (
+    "the CodeMirror binding must apply sources through the shared guarded path"
+)
 assert "renderPreviewCore" in client_library_card and '"@elef/client/preview-core"' in client_library_card, (
     "desktop library previews must render through the shared renderer core"
 )

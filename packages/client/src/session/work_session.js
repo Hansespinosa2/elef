@@ -18,6 +18,7 @@
 // untouched. Notifications carry two pre-migration extensions beyond the
 // contract WorkSnapshot: sourceFile (the disk source file name) and removed.
 import { createSaveFlow } from "./save_flow.js"
+import { assertEditorAdapter } from "./editor_adapter.js"
 
 const HASH_PATTERN = /^[a-f\d]{64}$/i
 
@@ -80,6 +81,7 @@ export function createWorkSession({ transport, policy }) {
   if (typeof getText !== "function") {
     throw new TypeError("Session policy requires getText().")
   }
+  assertEditorAdapter({ getText, setText: setText ?? (() => false), materializeEdits })
   if (!deck || deck.id !== workId || !HASH_PATTERN.test(deck.content_hash || "")) {
     throw new TypeError("Session policy requires the opened deck for workId.")
   }

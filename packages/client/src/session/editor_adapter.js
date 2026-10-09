@@ -1,0 +1,32 @@
+// Editor-adapter interface for the session (Phase 08).
+//
+// The session owns text; it reaches the screen only through the adapter the
+// host binds. The adapter is the narrow CodeMirror seam: a second,
+// non-CodeMirror adapter (ProseMirror, TipTap) implements this same surface
+// later without touching session logic.
+//
+// Interface:
+//   getText() -> string                     current buffer text
+//   setText(source, meta) -> boolean|Promise<boolean>
+//     apply an authorized source replacement (external change, conflict
+//     resolution, structural op); meta carries { id, expectedSource } and
+//     the adapter must refuse stale targets exactly like applyEditorSource.
+//   materializeEdits()                      flush pending projection edits
+//     into the buffer before any read or write.
+//
+// Binding rule: exactly one live adapter per session. The session validates
+// the shape at construction (assertEditorAdapter); identity/epoch binding
+// arrives in DO-5.
+export const ADAPTER_METHODS = ["getText", "setText", "materializeEdits"]
+
+export function assertEditorAdapter(adapter) {
+  if (!adapter || typeof adapter !== "object") {
+    throw new TypeError("Session policy requires an editor adapter object.")
+  }
+  for (const method of ADAPTER_METHODS) {
+    if (typeof adapter[method] !== "function") {
+      throw new TypeError(`Session editor adapter requires ${method}().`)
+    }
+  }
+  return adapter
+}
