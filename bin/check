@@ -629,10 +629,17 @@ def run_step(command: str) -> float:
         parts = parts[1:]
     if not parts:
         fail(f"step has no command: {command}")
+    step_cwd = ROOT
+    if parts[0].startswith("apps/web/bin/"):
+        # Rails binstubs run inside apps/web (rake resolves its Rakefile from
+        # the working directory); the recorded command string keeps the
+        # root-relative form while argv resolves app-relative paths.
+        step_cwd = ROOT / "apps" / "web"
+        parts = [part[len("apps/web/"):] if part.startswith("apps/web/") else part for part in parts]
     started = time.monotonic()
     result = subprocess.run(
         parts,
-        cwd=ROOT,
+        cwd=step_cwd,
         capture_output=True,
         text=True,
         check=False,
