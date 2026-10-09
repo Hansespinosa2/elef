@@ -34,6 +34,22 @@ class DocumentsTest < ApplicationSystemTestCase
     assert has_selector?(selector, wait: 0), "preview remained stale after one retry: #{state}"
   end
 
+  def wait_for_autosave_idle
+    idle = page.evaluate_async_script(<<~JAVASCRIPT)
+      const done = arguments[arguments.length - 1];
+      const deadline = Date.now() + 5000;
+      const wait = () => {
+        const form = document.querySelector('form[data-controller~="autosave"]');
+        const controller = form && window.Stimulus.getControllerForElementAndIdentifier(form, "autosave");
+        if (controller && !controller.flow.dirty && !controller.flow.saving) return done(true);
+        if (Date.now() >= deadline) return done(false);
+        window.setTimeout(wait, 10);
+      };
+      wait();
+    JAVASCRIPT
+    assert idle, "autosave did not reach an idle state"
+  end
+
   def wait_for_settled_document_projection
     wait_for_fresh_projection
     assert_selector ".document-editor-projection .document-surface[data-document-pages-settled='true']", wait: 10
@@ -2869,7 +2885,21 @@ class DocumentsTest < ApplicationSystemTestCase
     centered.find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
     assert_equal "left", find("[data-visual-editor-block-id='#{centered['data-editor-block-id']}']").value
     type_visual_text(".document-editor-block", "Centered block", "Updated centered block")
-    assert_field "Markdown source", with: /:::align\{right\}\n\nUpdated left block\n\n:::align\{center left\}\n\nUpdated centered block/, wait: 5
+    expected_source = "# Alignment\n\n:::align{right}\n\nUpdated left block\n\n:::align{center left}\n\nUpdated centered block"
+    normalize_source = ->(value) { value.to_s.gsub(/\r\n?/, "\n") }
+    assert_field "Markdown source", with: expected_source, wait: 5
+    refute_includes find(".editor-projection").text, ":::align"
+
+    wait_for_autosave_idle
+    assert_equal expected_source, normalize_source.call(document.reload.source)
+
+    visit edit_document_path(document)
+    assert_equal expected_source, normalize_source.call(find_field("Markdown source").value)
+    click_on "Source"
+    click_on "Visual"
+    wait_for_fresh_projection
+    assert_selector ".document-editor-block.position-right", text: "Updated left block"
+    assert_selector ".document-editor-block.position-left", text: "Updated centered block"
     refute_includes find(".editor-projection").text, ":::align"
   end
 
