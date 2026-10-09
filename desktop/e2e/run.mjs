@@ -9,6 +9,7 @@ import { PIXEL_PNG_MARKDOWN } from "../../test/e2e/scenarios/media-fixture.js"
 import { SHARED_LIBRARY_CREATE_DELETE_TITLES } from "../../test/e2e/scenarios/library-create-delete.js"
 import { runNativeQuitSmokes } from "./native-quit-smoke.js"
 import { runPackagedUpdateSmoke } from "./packaged-update-smoke.js"
+import { installMacDmgFixture } from "./install-macos-dmg-fixture.js"
 import { createDesktopAppEnvironment } from "./desktop-app-environment.js"
 import { runStableProfileSmoke } from "./stable-profile-smoke.js"
 import { desktopAppEnvironment, verifyOfflineSandbox } from "./offline-macos.js"
@@ -84,6 +85,10 @@ if (process.env.ELEF_E2E_PACKAGED_UPDATES === "1") {
     ? path.join(installed, "Elef.app/Contents/MacOS/elef-desktop") : path.join(installed, "Elef.AppImage")
   env.ELEF_E2E_INSTALLED_ARTIFACT = env.ELEF_E2E_APP_BINARY
   env.ELEF_E2E_UPDATE_PACKAGE = path.join(packages, process.platform === "darwin" ? "update.tar.gz" : "update.AppImage")
+  if (process.platform === "darwin") {
+    env.ELEF_E2E_STABLE_DMG = path.join(packages, "stable-n-1", "Elef-0.1.0.dmg")
+    env.ELEF_E2E_STABLE_UPDATE_PACKAGE = path.join(packages, "stable-update.tar.gz")
+  }
   if (process.platform === "linux") await prepareInstalledAppImage()
 } else if (process.env.CI) {
   throw new Error("CI must exercise the installed N-1 and N updater packages")
@@ -295,19 +300,41 @@ try {
   if (desktopResult.error) throw desktopResult.error
   if (desktopResult.status !== 0) throw new Error("Shared desktop scenarios failed with status " + desktopResult.status)
   if (env.ELEF_E2E_PACKAGED_UPDATES === "1") {
-    if (process.platform === "darwin") await runPackagedUpdateSmoke(desktopEnv())
-    if (process.platform === "linux") await prepareInstalledAppImage()
-    const upgradedEnv = {
-      ...desktopEnv(),
-      ELEF_E2E_APP_BINARY: env.ELEF_E2E_APP_BINARY,
-      APPDIR: env.APPDIR,
-      APPIMAGE: env.APPIMAGE
+    if (process.platform === "darwin") {
+      await runPackagedUpdateSmoke(desktopEnv())
+      const stableInstallDirectory = path.join(temporaryRoot, "stable-installed")
+      const stableBinary = await installMacDmgFixture(env.ELEF_E2E_STABLE_DMG, stableInstallDirectory)
+      const stableAppData = path.join(isolatedHome, "Library", "Application Support", "com.elef.desktop")
+      const stableStatePath = path.join(stableAppData, "library-root.json")
+      const preReleaseStateTemplate = await readFile(path.join(releaseFixtureRoot,
+        "pre-release-app-state/library-root.json.template"), "utf8")
+      const preReleaseState = preReleaseStateTemplate.replace("${ELEF_RELEASE_FIXTURE_LIBRARY_ROOT}", libraryRoot)
+      await mkdir(stableAppData, { recursive: true })
+      await writeFile(stableStatePath, preReleaseState)
+      await runPackagedUpdateSmoke({
+        ...desktopEnv(),
+        ELEF_E2E_APP_BINARY: stableBinary,
+        ELEF_E2E_INSTALLED_ARTIFACT: stableBinary,
+        ELEF_E2E_UPDATE_PACKAGE: env.ELEF_E2E_STABLE_UPDATE_PACKAGE,
+        ELEF_E2E_CACHE_APP_ID: "com.elef.desktop",
+        ELEF_E2E_SKIP_LIBRARY_OVERRIDE: "1",
+        ELEF_E2E_PRE_RELEASE_STATE: stableStatePath,
+        ELEF_E2E_EXPECTED_PRE_RELEASE_STATE: preReleaseState
+      }, { packageMode: "stable-package" })
     }
-    const upgradedResult = spawnSync(webdriverio, ["run", "wdio.conf.js"], {
-      cwd: e2eRoot, env: { ...desktopAppEnvironment(upgradedEnv), ELEF_E2E_VERIFY_UPGRADED: "1" }, stdio: "inherit"
-    })
-    if (upgradedResult.error) throw upgradedResult.error
-    if (upgradedResult.status !== 0) throw new Error("The installed update did not launch and preserve the deck")
+    if (process.platform === "darwin") {
+      const upgradedEnv = {
+        ...desktopEnv(),
+        ELEF_E2E_APP_BINARY: env.ELEF_E2E_APP_BINARY,
+        APPDIR: env.APPDIR,
+        APPIMAGE: env.APPIMAGE
+      }
+      const upgradedResult = spawnSync(webdriverio, ["run", "wdio.conf.js"], {
+        cwd: e2eRoot, env: { ...desktopAppEnvironment(upgradedEnv), ELEF_E2E_VERIFY_UPGRADED: "1" }, stdio: "inherit"
+      })
+      if (upgradedResult.error) throw upgradedResult.error
+      if (upgradedResult.status !== 0) throw new Error("The installed update did not launch and preserve the deck")
+    }
   }
   if (process.env.CI) {
     await runStableProfileSmoke({

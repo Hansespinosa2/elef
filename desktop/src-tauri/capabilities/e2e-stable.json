@@ -6,6 +6,7 @@
   "permissions": [
     "wdio:default",
     "wdio-webdriver:default",
+    "core:app:allow-version",
     "core:window:allow-is-fullscreen"
   ]
 }

@@ -204,8 +204,9 @@ assert set(e2e_capability["permissions"]) == {
 assert set(e2e_stable_capability["permissions"]) == {
     "wdio:default",
     "wdio-webdriver:default",
+    "core:app:allow-version",
     "core:window:allow-is-fullscreen",
-}, "Stable runtime tests may add WebDriver only, without experimental or updater permissions"
+}, "Stable runtime tests may add WebDriver and read the version without experimental or updater permissions"
 assert "allow-document-graph" not in e2e_stable_capability["permissions"]
 assert e2e_config["app"].get("withGlobalTauri") is True, "global Tauri access is enabled only for the test-only WebdriverIO build"
 assert config["app"].get("withGlobalTauri") is not True, "production must not expose the global Tauri API"

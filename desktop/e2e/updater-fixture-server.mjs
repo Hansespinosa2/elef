@@ -24,15 +24,21 @@ function signArtifact(bytes) {
 const encodedSignature = signArtifact(artifact)
 const packageBytes = process.env.ELEF_E2E_UPDATE_PACKAGE ? await readFile(process.env.ELEF_E2E_UPDATE_PACKAGE) : null
 const packageSignature = packageBytes ? signArtifact(packageBytes) : null
+const stablePackageBytes = process.env.ELEF_E2E_STABLE_UPDATE_PACKAGE
+  ? await readFile(process.env.ELEF_E2E_STABLE_UPDATE_PACKAGE)
+  : null
+const stablePackageSignature = stablePackageBytes ? signArtifact(stablePackageBytes) : null
 let artifactRequests = 0
 
-const modes = new Set(["none", "unavailable", "older", "valid", "bad-signature", "truncated", "version-mismatch", "package"])
+const modes = new Set(["none", "unavailable", "older", "valid", "bad-signature", "truncated", "version-mismatch", "package", "stable-package"])
 let mode = "none"
 const server = createServer((request, response) => {
   const url = new URL(request.url, "http://127.0.0.1:8888")
   if (url.pathname === "/mode") {
     const selected = url.searchParams.get("value")
-    if (!modes.has(selected) || selected === "package" && !packageBytes) { response.writeHead(400); response.end(); return }
+    if (!modes.has(selected) || selected === "package" && !packageBytes || selected === "stable-package" && !stablePackageBytes) {
+      response.writeHead(400); response.end(); return
+    }
     mode = selected
     response.writeHead(200); response.end(mode); return
   }
@@ -55,13 +61,13 @@ const server = createServer((request, response) => {
       version: mode === "older" ? "0.0.1" : mode === "version-mismatch" ? "0.3.0" : "0.2.0",
       notes: "Ephemeral update verification fixture",
       url: "http://127.0.0.1:8888/artifact",
-      signature: mode === "package" ? packageSignature : encodedSignature
+      signature: mode === "package" ? packageSignature : mode === "stable-package" ? stablePackageSignature : encodedSignature
     }))
     return
   }
   if (url.pathname === "/artifact") {
     artifactRequests += 1
-    const bytes = mode === "package" ? packageBytes : artifact
+    const bytes = mode === "package" ? packageBytes : mode === "stable-package" ? stablePackageBytes : artifact
     response.writeHead(200, { "Content-Type": "application/octet-stream", "Content-Length": bytes.length })
     if (mode === "truncated") {
       response.write(artifact.subarray(0, artifact.length / 2))

@@ -37,8 +37,10 @@ async function waitUntil(check, message, timeoutMs = 60_000) {
 
 function launchPackagedApp(env, port) {
   const command = desktopCommand(env.ELEF_E2E_APP_BINARY)
+  const childEnv = { ...env, TAURI_WEBDRIVER_PORT: String(port) }
+  if (childEnv.ELEF_E2E_SKIP_LIBRARY_OVERRIDE === "1") delete childEnv.ELEF_E2E_LIBRARY_ROOT
   const child = spawn(command.command, command.args, {
-    env: { ...env, TAURI_WEBDRIVER_PORT: String(port) },
+    env: childEnv,
     stdio: ["ignore", "pipe", "pipe"]
   })
   let output = ""
@@ -79,6 +81,12 @@ async function execute(port, sessionId, script, ...args) {
   return body.value
 }
 
+async function confirmAppReady(port, sessionId) {
+  await waitUntil(() => execute(port, sessionId, `return Boolean(window.__TAURI__?.core?.invoke)`),
+    "The packaged app bridge did not become ready", 15_000)
+  await execute(port, sessionId, `return window.__TAURI__.core.invoke("confirm_app_ready")`)
+}
+
 async function updaterStats() {
   const response = await fetch("http://127.0.0.1:8888/stats")
   if (!response.ok) throw new Error("Could not inspect the loopback updater fixture")
@@ -90,8 +98,8 @@ async function resetUpdaterStats() {
   if (!response.ok) throw new Error("Could not reset the loopback updater fixture counters")
 }
 
-async function selectPackageUpdate() {
-  const response = await fetch("http://127.0.0.1:8888/mode?value=package")
+async function selectPackageUpdate(packageMode) {
+  const response = await fetch(`http://127.0.0.1:8888/mode?value=${encodeURIComponent(packageMode)}`)
   if (!response.ok) throw new Error("The packaged update fixture is missing")
 }
 
@@ -118,10 +126,10 @@ function stagedDirectory(env) {
   const cacheRoot = process.platform === "darwin"
     ? path.join(env.HOME, "Library", "Caches")
     : env.XDG_CACHE_HOME
-  return path.join(cacheRoot, "com.elef.desktop.e2e", "updates", "pending")
+  return path.join(cacheRoot, env.ELEF_E2E_CACHE_APP_ID || "com.elef.desktop.e2e", "updates", "pending")
 }
 
-export async function runPackagedUpdateSmoke(env) {
+export async function runPackagedUpdateSmoke(env, { packageMode = "package" } = {}) {
   const binaryPath = env.ELEF_E2E_INSTALLED_ARTIFACT
   const sourceFile = path.join(env.ELEF_E2E_LIBRARY_ROOT, "E2E packaged update", "presentation.md")
   const deck = path.dirname(sourceFile)
@@ -151,8 +159,12 @@ export async function runPackagedUpdateSmoke(env) {
       if (app.exitResult) throw new Error(`N-1 exited during startup: ${JSON.stringify(app.exitResult)}; ${app.output}`)
       try { sessionId = await createSession(app.port); return true } catch (_error) { return false }
     }, "N-1 did not start its isolated WebDriver service", 65_000)
-    await execute(app.port, sessionId, `return window.__TAURI__.core.invoke("confirm_app_ready")`)
-    await selectPackageUpdate()
+    await confirmAppReady(app.port, sessionId)
+    if (env.ELEF_E2E_PRE_RELEASE_STATE) {
+      assert.equal(await readFile(env.ELEF_E2E_PRE_RELEASE_STATE, "utf8"), env.ELEF_E2E_EXPECTED_PRE_RELEASE_STATE,
+        "Stable's first packaged launch must preserve the previous library-root.json bytes")
+    }
+    await selectPackageUpdate(packageMode)
     await stageFromUpdateControl(app.port, sessionId)
     assert.equal((await updaterStats()).artifactRequests, 1, "The first stage should download the package once")
 
@@ -177,8 +189,8 @@ export async function runPackagedUpdateSmoke(env) {
       if (app.exitResult) throw new Error(`N-1 did not restart: ${JSON.stringify(app.exitResult)}; ${app.output}`)
       try { sessionId = await createSession(app.port); return true } catch (_error) { return false }
     }, "N-1 did not restart with its staged update", 65_000)
-    await execute(app.port, sessionId, `return window.__TAURI__.core.invoke("confirm_app_ready")`)
-    await selectPackageUpdate()
+    await confirmAppReady(app.port, sessionId)
+    await selectPackageUpdate(packageMode)
     await stageFromUpdateControl(app.port, sessionId)
     assert.equal((await updaterStats()).artifactRequests, 1, "Restart must reuse the verified payload without redownloading")
 
@@ -199,8 +211,8 @@ export async function runPackagedUpdateSmoke(env) {
       if (app.exitResult) throw new Error(`N-1 did not restart after the safe-feed block: ${JSON.stringify(app.exitResult)}; ${app.output}`)
       try { sessionId = await createSession(app.port); return true } catch (_error) { return false }
     }, "N-1 did not restart after the safe-feed block", 65_000)
-    await execute(app.port, sessionId, `return window.__TAURI__.core.invoke("confirm_app_ready")`)
-    await selectPackageUpdate()
+    await confirmAppReady(app.port, sessionId)
+    await selectPackageUpdate(packageMode)
     await stageFromUpdateControl(app.port, sessionId)
     assert.equal((await updaterStats()).artifactRequests, 2, "The safe package should be downloaded after unblocking")
 
@@ -216,7 +228,7 @@ export async function runPackagedUpdateSmoke(env) {
     assert.equal(retained.version, metadata.version, "A feed outage must retain the verified staged update")
 
     // Restore the feed and prove the retained bytes avoid another download.
-    await selectPackageUpdate()
+    await selectPackageUpdate(packageMode)
     app = launchPackagedApp({
       ...env,
       ELEF_E2E_INTERRUPT_UPDATE_AFTER_STAGE_INSTALL: "1"
@@ -227,7 +239,7 @@ export async function runPackagedUpdateSmoke(env) {
       if (app.exitResult) throw new Error(`N-1 did not restart after the feed outage: ${JSON.stringify(app.exitResult)}; ${app.output}`)
       try { sessionId = await createSession(app.port); return true } catch (_error) { return false }
     }, "N-1 did not restart after the feed outage", 65_000)
-    await execute(app.port, sessionId, `return window.__TAURI__.core.invoke("confirm_app_ready")`)
+    await confirmAppReady(app.port, sessionId)
     await stageFromUpdateControl(app.port, sessionId)
     assert.equal((await updaterStats()).artifactRequests, 2, "Feed recovery should reuse the retained verified archive")
 
@@ -276,8 +288,8 @@ export async function runPackagedUpdateSmoke(env) {
       if (app.exitResult) throw new Error(`N-1 did not restart after interrupted installation: ${JSON.stringify(app.exitResult)}; ${app.output}`)
       try { sessionId = await createSession(app.port); return true } catch (_error) { return false }
     }, "N-1 did not restart after interrupted installation", 65_000)
-    await execute(app.port, sessionId, `return window.__TAURI__.core.invoke("confirm_app_ready")`)
-    await selectPackageUpdate()
+    await confirmAppReady(app.port, sessionId)
+    await selectPackageUpdate(packageMode)
     await stageFromUpdateControl(app.port, sessionId)
     assert.equal((await updaterStats()).artifactRequests, 2, "Interrupted installation should retain the verified archive")
 
@@ -307,6 +319,10 @@ export async function runPackagedUpdateSmoke(env) {
     `, deckId)
     assert.equal(relaunchedState.version, "0.2.0")
     assert.equal(relaunchedState.source, draftSource)
+    if (env.ELEF_E2E_PRE_RELEASE_STATE) {
+      assert.equal(await readFile(env.ELEF_E2E_PRE_RELEASE_STATE, "utf8"), env.ELEF_E2E_EXPECTED_PRE_RELEASE_STATE,
+        "The N-1 to N update must preserve the previous Stable library selection bytes")
+    }
     nativeQuit(relaunchedPid)
     await waitUntil(() => !appPids().includes(relaunchedPid), "The relaunched N application did not close cleanly", 20_000)
     process.stdout.write("Packaged N-1 → N safe-quit update smoke passed.\n")
