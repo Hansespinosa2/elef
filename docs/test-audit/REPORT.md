@@ -221,7 +221,7 @@ Phase 2 test corrections above are implemented and locally verified at the state
 
 ## Phase 3: cheaper observation and duplicate coverage (partial)
 
-These changes move selected assertions to lower layers and consolidate tests that exercise the same implementation. The phase is incomplete: projection reuse, root-visit reduction, and post-change CI measurements remain open. No workflow YAML, required job definition/name/gate, trigger, verifier, attestation, or release rule changed in this phase. The desktop E2E runner now invokes the static component browser suite before Rails database fixture setup; the shared web → native → updater sequence and parity scenarios are unchanged.
+These changes move selected assertions to lower layers and consolidate tests that exercise the same implementation. The phase is incomplete: projection reuse, artifact reuse, and post-change CI measurements remain open. No required job definition, name, gate, or release rule changed. The desktop E2E runner now invokes the static component browser suite before Rails database fixture setup; the shared web → native → updater sequence and parity scenarios are unchanged.
 
 ### Demotions and moves
 
@@ -261,6 +261,7 @@ The presentation print system test was renamed to `published presentation print 
 | Reduced repeated KaTeX renders in the math shortcut catalog test. | Every alias-to-expansion mapping is still asserted; six representative Greek expressions and one variant render through KaTeX. |
 | Reduced the Rake import task tests to CLI/env wiring, exit/output, and count delta. | Stable identity, source round-trip, workspace, and revision behavior remains covered by `persistence_services_test.rb`. |
 | Reduced `navigates a large same-day timeline without overlapping slides` from 84 generated presentations to 56 (8 families × 7 nodes). | Both viewport geometry passes, all remaining per-node overlap checks, search, locate, and open assertions remain. The focused test passed before and after; local test time changed from 4.67s to 4.12s, while geometry assertions scaled from 1,712 to 1,144. |
+| Split the library card system test that mixed preview geometry, preview routes, menu toggles, and edit navigation into three focused system tests. | Each test now has its own setup and claim; the two preview-to-preview returns and edit-to-library transitions use the visible Library navigation. This addresses the six `visit root_path` calls in one test. The total number of root-route transitions is not reduced, so no runtime saving is claimed. |
 
 ### Phase 3 validation
 
@@ -274,12 +275,13 @@ The presentation print system test was renamed to `published presentation print 
 | Selected remaining print, PDF, presentation styling, Mermaid rendering/editor, and reconnect system tests | 6 tests, 28 assertions, passed on headless Chromium with disposable SQLite |
 | Focused controller upload/folder-sync request test | 1 test, 7 assertions, passed; a `FolderSync.sync!` no-op mutation caused the missing-file assertion to fail. |
 | Focused presentation upload system tests | 2 tests, 25 assertions, passed on headless Chromium with disposable SQLite. |
+| Focused library card system tests after splitting | 3 tests, 23 assertions, passed on headless Chromium with disposable SQLite. |
 | Focused autosave ordering/conflict system tests | 2 tests, 24 assertions, passed on headless Chromium with disposable SQLite after replacing fixed sleeps with state-based waits. |
 | Deliberate break checks for moved controller assertions | Published release selection, application body class, and presentation-mode body class mutations each failed the expected controller test; source restored afterward. Earlier targeted break checks for href, print surface, controller token, warning, alignment, Art position, and Art fallback are listed above. |
 | Deliberate CSS mutations | Incorrect math shortcut surface color and one-column editor layout each failed the expected standalone component assertion; CSS restored afterward. |
 | `git diff --check` | Passed after restoring all deliberate mutations. |
 
-The full system suite, full desktop E2E harness, macOS-native leg, and CI after-change metrics were not rerun in this partial phase. The static component runner was exercised directly; the full `run.mjs` path was not run locally because the E2E harness would compete for the existing development server's port 3000.
+The full Rails system suite was subsequently rerun three times, as recorded in Phase 6. The full desktop E2E harness, macOS-native leg, and CI after-change metrics remain unverified. The static component runner was exercised directly; the full `run.mjs` path was not run locally because the E2E harness would compete with the existing development server's port 3000.
 
 ## Phase 4: security and correctness coverage (partial)
 
@@ -340,12 +342,12 @@ The new fetcher seam is only used by focused unit tests; the default production 
 
 ## Phase 6: local repeat validation
 
-Each locally runnable suite below completed three consecutive runs. The system tier was rerun three times after the final system-test edits, serially with `PARALLEL_WORKERS=1`, headless Chromium, and a dedicated SQLite test database. All three final-tree system runs passed. The JavaScript suite was rerun three times after adding the controller tests; other tiers were unchanged by the subsequent system- or JavaScript-only adjustments. This is a small stability sample, not a statistical flake-rate estimate.
+Each locally runnable suite below completed three consecutive runs. The system tier was rerun three times after the final system-test edits, serially with `PARALLEL_WORKERS=1`, headless Chromium, and a dedicated SQLite test database. All three current-tree system runs passed, including the three separately isolated library card tests. The JavaScript suite was rerun three times after adding the controller tests; other tiers were unchanged by the subsequent system- or JavaScript-only adjustments. This is a small stability sample, not a statistical flake-rate estimate.
 
 | Suite | Three-run result | Local elapsed times |
 | --- | --- | --- |
-| Rails system tests (`test/system`) | 227 tests and 5,636 assertions passed on every final-tree run; 0 failures/errors/skips. The baseline had 241 system tests before the verified demotions. | 321.63s, 343.73s, 334.59s |
-| Rails system tests with two local workers (diagnostic only) | After namespacing the PDF probe files, 227 tests and 5,636 assertions passed in all three runs; 0 failures/errors/skips. Median wall time was 210.02s versus 334.59s serial (37% lower on this host). | 202.24s, 210.02s, 211.82s |
+| Rails system tests (`test/system`) | 229 tests and 5,639 assertions passed on every current-tree run; 0 failures/errors/skips. The baseline had 241 system tests before the verified demotions. | 438.74s, 443.16s, 378.95s |
+| Rails system tests with two local workers (diagnostic only; before the library card test split) | After namespacing the PDF probe files, 227 tests and 5,636 assertions passed in all three runs; 0 failures/errors/skips. Median wall time was 210.02s versus 334.59s serial (37% lower on that host revision). | 202.24s, 210.02s, 211.82s |
 | Rails non-system tests (`bin/rails test`) | 391 tests and 3,167 assertions passed on every run; 0 failures/errors/skips. | 4.11s, 3.73s, 4.13s |
 | Rails-owned JavaScript (`npm run test:javascript`) | 450 tests passed on every run, including the four controller tests. | 1.71s, 1.79s, 1.79s |
 | Rust workspace (`cargo test --manifest-path desktop/Cargo.toml --workspace --locked`) | 43 `elef-core` plus 7 desktop library tests passed on every run. | Core test execution: 2.28s, 2.26s, 2.39s |
@@ -371,7 +373,7 @@ No removal of the `ELEF_RENDERER=ruby` path is proposed; it remains live code an
 
 ## Not yet verified
 
-- Remaining Phase 3 runtime work: shared system-test projection caching, splitting the repeated root visits, artifact reuse, and hosted CI confirmation before changing system-test worker count.
+- Remaining Phase 3 runtime work: shared system-test projection caching, artifact reuse, and hosted CI confirmation before changing system-test worker count. The library card system test with six `visit root_path` calls is split into three focused tests; total root-route transitions are unchanged, so this is a test-isolation improvement rather than a runtime optimization.
 - The changed GitHub workflows have not executed yet. Local contract tests verify their job names, invocation ownership, required job manifest, attestation policy, and schedule placement, but only CI can validate hosted runner installation and native execution.
 - Phase 4 still has platform and editor gaps. The macOS Seatbelt offline harness exists and passed on the audited baseline, but Linux has no network-denied native run, and neither platform has a post-workflow-change result. Direct unit tests are still missing for `command_palette`, `math_shortcut_palette`, `snippet_palette`, `document_pages`, `lineage_graph`, `mermaid_diagrams`, `presentation_canvas`, `presentation_editor`, `library_search`, and `visual_editor`. The new hostile-media policy assertions passed as unit tests, but the actual web/native host scenarios require a hosted E2E run.
 - Phase 5 mutations were detected for SSRF address/protocol/pinning decisions, remote-origin IPC, updater version matching, archive filename validation, GitHub issue URL hostname validation, bug-report 429 handling, and both external-media host policies. The full security mutation campaign is incomplete; unmutated trust-boundary branches remain open work.

@@ -286,7 +286,7 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_equal "# Keep this source", Presentation.find_by!(parent_id: nil, fork_type: "inspiration").source
   end
 
-  test "library preview images open Edit while Preview and menu controls stay usable" do
+  test "library previews preserve geometry and open document and presentation surfaces" do
     document = Document.create!(title: "Card document", source: "# Card document\n\nFirst page body.\n\n## Later heading")
     presentation = Presentation.create!(title: "Card deck", source: "# Card deck\n\n---\n\n## Later slide")
 
@@ -322,29 +322,45 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_current_path document_path(document)
     assert_selector ".document-surface h1", text: "Card document"
 
-    visit root_path
+    find("a.app-nav-link", text: "Library").click
+    assert_current_path root_path
     within("#presentation_#{presentation.id}") { find(".library-card-preview-button").click }
     assert_current_path presentation_path(presentation)
     assert_selector ".presentation-surface .slide", text: "Card deck"
+  end
+
+  test "library menus open for document and presentation cards" do
+    document = Document.create!(title: "Menu document", source: "# Menu document")
+    presentation = Presentation.create!(title: "Menu deck", source: "# Menu deck")
 
     visit root_path
     [document, presentation].each do |work|
-      within("##{work.is_a?(Document) ? 'document' : 'presentation'}_#{work.id}") do
-        find(".library-card-menu-trigger").click
+      type = work.is_a?(Document) ? "document" : "presentation"
+      within("##{type}_#{work.id}") do
+        trigger = find(".library-card-menu-trigger")
+        trigger.click
         assert_selector "details.library-card-menu[open]"
+        trigger.click
+        assert_no_selector "details.library-card-menu[open]"
       end
-      assert_current_path root_path
     end
+  end
+
+  test "library card open buttons and titles open their edit screens" do
+    document = Document.create!(title: "Open document", source: "# Open document")
+    presentation = Presentation.create!(title: "Open deck", source: "# Open deck")
 
     visit root_path
     find("#document_#{document.id} .library-card-open").click
     assert_current_path edit_document_path(document)
 
-    visit root_path
+    click_on "Library"
+    assert_current_path root_path
     find("#presentation_#{presentation.id} .library-card-open").click
     assert_current_path edit_presentation_path(presentation)
 
-    visit root_path
+    click_on "Library"
+    assert_current_path root_path
     within("#document_#{document.id}") do
       find(".library-card-title a").click
     end
