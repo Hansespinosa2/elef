@@ -258,6 +258,22 @@ export function safeMacosManifest(ledger) {
   }
 }
 
+/** Select only the newest eligible pending platform release for catch-up. */
+export function latestPendingPlatformRelease(ledger, platformName) {
+  validateLedger(ledger)
+  assert(["macos", "linux_asset", "aur"].includes(platformName), `unknown platform ${platformName}`)
+  const candidates = ledger.releases
+    .filter(release => {
+      if (release.gate !== "passed" || release.blocked) return false
+      const platform = release[platformName]
+      if (platform.status !== "pending" && platform.status !== "failed") return false
+      if (platformName === "aur" && (!release.public || release.linux_asset.status !== "passed")) return false
+      return !ledger.releases.some(other => compareVersions(other.version, release.version) > 0 && other[platformName].status === "passed")
+    })
+    .sort((left, right) => compareVersions(right.version, left.version))
+  return candidates[0] ? clone(candidates[0]) : null
+}
+
 export function serializeLedger(ledger) {
   validateLedger(ledger)
   return `${JSON.stringify(ledger, null, 2)}\n`

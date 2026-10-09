@@ -68,8 +68,9 @@ mkdir -p desktop/target/arch-release
 } > desktop/target/arch-release/build-inputs.txt
 npm ci --prefix desktop/frontend
 npm run build --prefix desktop/frontend
-ELEF_BUILD_SHA="$ELEF_BUILD_SHA" cargo build --manifest-path desktop/Cargo.toml --package elef-desktop --release --locked
-version="$(node -e 'process.stdout.write(JSON.parse(require("node:fs").readFileSync("desktop/src-tauri/tauri.conf.json", "utf8")).version)')"
+version="${DESKTOP_RELEASE_VERSION:-$(node -e 'process.stdout.write(JSON.parse(require("node:fs").readFileSync("desktop/src-tauri/tauri.conf.json", "utf8")).version)')}"
+DESKTOP_RELEASE_VERSION="$version" node desktop/scripts/prepare-linux-release-config.mjs
+ELEF_BUILD_SHA="$ELEF_BUILD_SHA" npm run tauri:build --prefix desktop/frontend -- --no-bundle --config src-tauri/tauri.linux-release.generated.conf.json
 output_directory="${repo_root}/desktop/target/arch-release"
 ELEF_BUILD_SHA="$ELEF_BUILD_SHA" node desktop/scripts/package_arch_archive.mjs "$version" desktop/target/release/elef-desktop "$output_directory"
 bash desktop/scripts/test_arch_package.sh "$version" "${output_directory}/elef-${version}-x86_64.tar.zst"

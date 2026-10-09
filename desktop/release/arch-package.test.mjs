@@ -13,6 +13,8 @@ import {
   packageArchArchive,
   renderArchPkgbuild
 } from "./arch-package.mjs"
+import { buildMacosArtifactMetadata } from "../scripts/prepare_macos_release_assets.mjs"
+import { buildLinuxArtifactMetadata } from "../scripts/prepare_linux_release_assets.mjs"
 
 const version = "0.1.0"
 const sha256 = "a".repeat(64)
@@ -101,4 +103,98 @@ test("Arch package builder rejects non-executable and symlink inputs", async () 
   } finally {
     await rm(temporaryRoot, { recursive: true, force: true })
   }
+})
+
+test("Linux release config embeds the reserved version without enabling updater artifacts", async () => {
+  const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "elef-linux-release-config-"))
+  try {
+    const outputPath = path.join(temporaryRoot, "release.conf.json")
+    const result = spawnSync(process.execPath, [
+      "desktop/scripts/prepare-linux-release-config.mjs",
+      outputPath
+    ], {
+      encoding: "utf8",
+      env: { ...process.env, DESKTOP_RELEASE_VERSION: version }
+    })
+    assert.equal(result.status, 0, result.stderr)
+    assert.deepEqual(JSON.parse(await readFile(outputPath, "utf8")), {
+      version,
+      bundle: { createUpdaterArtifacts: false }
+    })
+
+    const invalid = spawnSync(process.execPath, ["desktop/scripts/prepare-linux-release-config.mjs", outputPath], {
+      encoding: "utf8",
+      env: { ...process.env, DESKTOP_RELEASE_VERSION: "0.1.0-rc1" }
+    })
+    assert.notEqual(invalid.status, 0)
+    assert.match(invalid.stderr, /numeric semantic version/)
+  } finally {
+    await rm(temporaryRoot, { recursive: true, force: true })
+  }
+})
+
+test("macOS release metadata binds signed updater, signature, DMG, source, and version", () => {
+  const updaterBundle = { name: "Elef.app.tar.gz", path: "/tmp/Elef.app.tar.gz", sha256: "1".repeat(64) }
+  const updaterSignature = { name: "Elef.app.tar.gz.sig", path: "/tmp/Elef.app.tar.gz.sig", sha256: "2".repeat(64) }
+  const dmg = { name: "Elef_0.1.0_aarch64.dmg", path: "/tmp/Elef.dmg", sha256: "3".repeat(64) }
+  const metadata = buildMacosArtifactMetadata({
+    version,
+    sourceSha: mainSha,
+    pr: 147,
+    updaterBundle,
+    updaterSignature,
+    dmg,
+    signature: "base64-tauri-signature"
+  })
+  assert.equal(metadata.artifact.signature_verified, true)
+  assert.equal(metadata.artifact.source_sha, mainSha)
+  assert.equal(metadata.artifact.updater_url, `https://github.com/Hansespinosa2/elef/releases/download/desktop-v${version}/${updaterBundle.name}`)
+  assert.equal(metadata.artifact.dmg_url, `https://github.com/Hansespinosa2/elef/releases/download/desktop-v${version}/${dmg.name}`)
+  assert.deepEqual(metadata.files.map(file => file.name), [updaterBundle.name, updaterSignature.name, dmg.name])
+  assert.throws(() => buildMacosArtifactMetadata({
+    version,
+    sourceSha: mainSha,
+    pr: 147,
+    updaterBundle,
+    updaterSignature: { ...updaterSignature, name: "wrong.sig" },
+    dmg,
+    signature: "base64"
+  }), /must be paired/)
+})
+
+test("Linux release metadata requires exact archive checksum, version, source, and provenance", () => {
+  const filename = `elef-${version}-x86_64.tar.zst`
+  const sha = "c".repeat(64)
+  const provenance = {
+    schema_version: 1,
+    version,
+    main_sha: mainSha,
+    platform: "linux",
+    architecture: "x86_64",
+    archive: filename,
+    sha256: sha
+  }
+  const metadata = buildLinuxArtifactMetadata({
+    version,
+    sourceSha: mainSha,
+    pr: 147,
+    archive: { name: filename, path: "/tmp/archive" },
+    checksumFile: { name: `${filename}.sha256`, path: "/tmp/archive.sha256" },
+    provenanceFile: { name: `${filename}.provenance.json`, path: "/tmp/archive.provenance.json" },
+    checksum: sha,
+    provenance
+  })
+  assert.equal(metadata.artifact.format, "arch-native")
+  assert.equal(metadata.artifact.sha256, sha)
+  assert.equal(metadata.artifact.asset_url, archReleaseAssetUrl(version))
+  assert.throws(() => buildLinuxArtifactMetadata({
+    version,
+    sourceSha: mainSha,
+    pr: 147,
+    archive: { name: filename, path: "/tmp/archive" },
+    checksumFile: { name: `${filename}.sha256`, path: "/tmp/archive.sha256" },
+    provenanceFile: { name: `${filename}.provenance.json`, path: "/tmp/archive.provenance.json" },
+    checksum: "d".repeat(64),
+    provenance
+  }), /does not match its provenance/)
 })

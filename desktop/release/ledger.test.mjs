@@ -3,6 +3,7 @@ import assert from "node:assert/strict"
 import {
   blockVersions,
   createLedger,
+  latestPendingPlatformRelease,
   parseLedger,
   publishAur,
   publishLinuxAsset,
@@ -155,6 +156,17 @@ test("newer validated platform artifacts supersede pending older deliveries and 
     expectedRevision: ledger.revision,
     at: NOW
   }), /superseded|newer 0\.1\.1/)
+})
+
+test("platform catch-up selects the newest safe pending release and requires Linux publication for AUR", () => {
+  const ledger = twoReleases()
+  assert.equal(latestPendingPlatformRelease(ledger, "macos").version, "0.1.1")
+  assert.equal(latestPendingPlatformRelease(ledger, "linux_asset").version, "0.1.1")
+  assert.equal(latestPendingPlatformRelease(ledger, "aur"), null)
+
+  const next = publishLinuxAsset(ledger, "0.1.1", linuxArtifact("0.1.1", SHA2), { expectedRevision: ledger.revision })
+  assert.equal(latestPendingPlatformRelease(next, "aur").version, "0.1.1")
+  assert.equal(next.releases.find(release => release.version === "0.1.0").linux_asset.status, "superseded")
 })
 
 test("invalid provenance, signature, checksum, and immutable retry metadata are rejected", () => {

@@ -47,6 +47,7 @@ jobs:
           python3 script/check_art_static.py
           python3 script/check_art_traceability.py
           cargo test --manifest-path desktop/Cargo.toml -p elef-core --locked
+          CARGO_TARGET_DIR=desktop/target/signature-verifier cargo test --manifest-path desktop/release/signature-verifier/Cargo.toml --locked
           elapsed=$((SECONDS - started))
           echo "Fast desktop test tier: ${elapsed}s (budget: 300s)"
           test "$elapsed" -lt 300

@@ -19,6 +19,7 @@
 # Ignore old/local JavaScript dependency installs.
 /node_modules
 /desktop/target
+/desktop/src-tauri/tauri.*.generated.conf.json
 /desktop/frontend/node_modules
 /desktop/e2e/node_modules
 /desktop/frontend/dist

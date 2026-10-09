@@ -32,6 +32,7 @@ dev_capability = json.loads((TAURI_ROOT / "capabilities" / "main-dev.json").read
 macos_updater_capability = json.loads((TAURI_ROOT / "capabilities" / "macos-updater.json").read_text())
 e2e_capability = json.loads((TAURI_ROOT / "capabilities" / "e2e.json").read_text())
 config = json.loads((TAURI_ROOT / "tauri.conf.json").read_text())
+assert config["bundle"]["macOS"]["signingIdentity"] == "-", "v0.x macOS bundles must use ad-hoc signing, without a Developer ID identity"
 e2e_config = json.loads((TAURI_ROOT / "tauri.e2e.conf.json").read_text())
 performance_config = json.loads((TAURI_ROOT / "tauri.performance.conf.json").read_text())
 assert performance_config == {"plugins": {"updater": {"endpoints": ["https://127.0.0.1:8888/manifest"]}}}, "release measurement must keep secure transport and a loopback-only offline check"

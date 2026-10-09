@@ -41,6 +41,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: desktop-release-state
+    outputs:
+      macos_candidate: ${{ steps.publish.outputs.macos_candidate }}
+      linux_candidate: ${{ steps.publish.outputs.linux_candidate }}
+      aur_candidate: ${{ steps.publish.outputs.aur_candidate }}
+      release_action: ${{ github.event.inputs.action || 'reconcile' }}
+      control_versions: ${{ github.event.inputs.versions || '' }}
     permissions:
       actions: read
       contents: write
@@ -85,3 +91,272 @@ jobs:
         run: |
           echo "::error::One or more owner-approved main merges failed exact-SHA Gate A. The ledger records failed_gate and no release version was reserved."
           exit 1
+
+  prepare-releases:
+    name: Prepare immutable release tags and drafts
+    needs: reconcile
+    if: needs.reconcile.outputs.release_action != 'block' && needs.reconcile.outputs.release_action != 'unblock'
+    runs-on: ubuntu-latest
+    environment: desktop-release-state
+    permissions:
+      contents: write
+    steps:
+      - name: Check out release source and scripts
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          path: source
+      - name: Check out the current release ledger
+        uses: actions/checkout@v7
+        with:
+          ref: gh-pages
+          path: pages
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Ensure each candidate has one immutable tag and draft release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          MACOS_CANDIDATE: ${{ needs.reconcile.outputs.macos_candidate }}
+          LINUX_CANDIDATE: ${{ needs.reconcile.outputs.linux_candidate }}
+        run: node source/desktop/scripts/prepare_desktop_releases.mjs pages
+
+  linux-release:
+    name: Build and publish Arch x86-64 release
+    needs: [ reconcile, prepare-releases ]
+    if: needs.reconcile.outputs.linux_candidate != '' && needs.reconcile.outputs.release_action != 'block' && needs.reconcile.outputs.release_action != 'unblock'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment: desktop-release-state
+    permissions:
+      contents: write
+    outputs:
+      release_version: ${{ steps.publish.outputs.release_version }}
+      aur_candidate: ${{ steps.publish.outputs.aur_candidate }}
+    steps:
+      - name: Check out release tooling
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          path: source
+      - name: Check out the reserved release source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ fromJSON(needs.reconcile.outputs.linux_candidate).main_sha }}
+          path: build-source
+      - name: Check out the current release ledger
+        uses: actions/checkout@v7
+        with:
+          ref: gh-pages
+          path: pages
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build and smoke the immutable Arch package in the pinned Arch container
+        id: build
+        env:
+          ELEF_BUILD_SHA: ${{ fromJSON(needs.reconcile.outputs.linux_candidate).main_sha }}
+          DESKTOP_RELEASE_VERSION: ${{ fromJSON(needs.reconcile.outputs.linux_candidate).version }}
+        run: |
+          set -o pipefail
+          mkdir -p "$GITHUB_WORKSPACE/build-source/desktop/target"
+          docker run --rm --pull=always \
+            --platform linux/amd64 \
+            --volume "$GITHUB_WORKSPACE/build-source:/workspace" \
+            --workdir /workspace \
+            --env ELEF_BUILD_SHA \
+            --env DESKTOP_RELEASE_VERSION \
+            archlinux:base-devel@sha256:996c3a1d6b0d87b01242f6fcd8cfa3ad3eece1a67ab5c8f108e20af1d7b97bdd \
+            bash desktop/scripts/arch_package_ci.sh 2>&1 | tee "$GITHUB_WORKSPACE/build-source/desktop/target/arch-release-gate.log"
+      - name: Verify archive checksum and source provenance
+        id: prepare-assets
+        env:
+          RELEASE_VERSION: ${{ fromJSON(needs.reconcile.outputs.linux_candidate).version }}
+          RELEASE_SOURCE_SHA: ${{ fromJSON(needs.reconcile.outputs.linux_candidate).main_sha }}
+          RELEASE_PR: ${{ fromJSON(needs.reconcile.outputs.linux_candidate).pr }}
+        run: |
+          node source/desktop/scripts/prepare_linux_release_assets.mjs \
+            "$RELEASE_VERSION" "$RELEASE_SOURCE_SHA" "$RELEASE_PR" \
+            "$GITHUB_WORKSPACE/build-source/desktop/target/arch-release" \
+            "$GITHUB_WORKSPACE/build-source/desktop/target/arch-release/assets.json"
+      - name: Publish validated Linux assets and record the ledger transition
+        id: publish
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: node source/desktop/scripts/publish_desktop_platform.mjs pages build-source/desktop/target/arch-release/assets.json
+      - name: Record a sanitized Linux platform failure
+        if: failure()
+        env:
+          RELEASE_VERSION: ${{ fromJSON(needs.reconcile.outputs.linux_candidate).version }}
+        run: |
+          category=publication_failed
+          if [[ "${{ steps.build.outcome }}" == failure ]]; then category=build_failed; fi
+          if [[ "${{ steps.prepare-assets.outcome }}" == failure ]]; then category=asset_verification_failed; fi
+          node source/desktop/scripts/record_desktop_platform_failure.mjs pages "$RELEASE_VERSION" linux_asset "$category"
+      - name: Preserve Arch release build evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: arch-release-${{ fromJSON(needs.reconcile.outputs.linux_candidate).version }}
+          path: |
+            build-source/desktop/target/arch-release/assets.json
+            build-source/desktop/target/arch-release/build-inputs.txt
+            build-source/desktop/target/arch-release-gate.log
+          if-no-files-found: ignore
+
+  macos-release:
+    name: Build and publish Apple Silicon macOS release
+    needs: [ reconcile, prepare-releases ]
+    if: needs.reconcile.outputs.macos_candidate != '' && needs.reconcile.outputs.release_action != 'block' && needs.reconcile.outputs.release_action != 'unblock'
+    runs-on: macos-15
+    timeout-minutes: 90
+    environment: desktop-release-signing
+    permissions:
+      contents: write
+    outputs:
+      release_version: ${{ steps.publish.outputs.release_version }}
+    steps:
+      - name: Check out release tooling
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          path: source
+      - name: Check out the reserved release source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ fromJSON(needs.reconcile.outputs.macos_candidate).main_sha }}
+          path: build-source
+      - name: Check out the current release ledger
+        uses: actions/checkout@v7
+        with:
+          ref: gh-pages
+          path: pages
+      - name: Confirm Apple Silicon runner
+        run: test "$(uname -m)" = arm64
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            build-source/package-lock.json
+            build-source/desktop/frontend/package-lock.json
+      - name: Set up Ruby and install the locked bundle
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: build-source/.ruby-version
+          bundler-cache: true
+          working-directory: build-source
+      - name: Install locked Rails and desktop frontend dependencies
+        run: |
+          cd build-source && npm ci
+          cd desktop/frontend && npm ci
+      - name: Build Rails-owned offline styles and renderer
+        run: |
+          cd build-source
+          bin/rails tailwindcss:build
+          npm run renderer:build
+          git diff --exit-code -- app/assets/builds/tailwind.css vendor/javascript/elef-renderer.bundle.js vendor/javascript/art_source.bundle.js
+      - name: Prepare versioned signed updater configuration
+        env:
+          DESKTOP_RELEASE_TAG: ${{ fromJSON(needs.reconcile.outputs.macos_candidate).tag }}
+          TAURI_UPDATER_PUBKEY: ${{ vars.TAURI_UPDATER_PUBKEY }}
+        run: node source/desktop/scripts/prepare-updater-config.mjs "$GITHUB_WORKSPACE/build-source/desktop/src-tauri/tauri.release.generated.conf.json"
+      - name: Build ad-hoc signed Apple Silicon DMG and Tauri updater archive
+        id: build
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          TAURI_UPDATER_PUBKEY: ${{ vars.TAURI_UPDATER_PUBKEY }}
+          APPLE_SIGNING_IDENTITY: '-'
+        run: npm run tauri:build --prefix build-source/desktop/frontend -- --config src-tauri/tauri.release.generated.conf.json --bundles app,dmg
+      - name: Verify ad-hoc app signature and DMG integrity
+        id: package-check
+        run: |
+          app_path="$(find build-source/desktop/src-tauri/target/release/bundle/macos -maxdepth 1 -type d -name '*.app' -print -quit)"
+          dmg_path="$(find build-source/desktop/src-tauri/target/release/bundle/dmg -maxdepth 1 -type f -name '*.dmg' -print -quit)"
+          test -d "$app_path"
+          test -f "$dmg_path"
+          codesign --verify --deep --strict --verbose=2 "$app_path"
+          codesign -dv --verbose=4 "$app_path" 2> build-source/desktop/target/macos-codesign.txt
+          grep -F 'Signature=adhoc' build-source/desktop/target/macos-codesign.txt
+          hdiutil verify "$dmg_path"
+      - name: Verify updater signature and prepare immutable asset metadata
+        id: prepare-assets
+        env:
+          TAURI_UPDATER_PUBKEY: ${{ vars.TAURI_UPDATER_PUBKEY }}
+          CARGO_TARGET_DIR: ${{ github.workspace }}/build-source/desktop/target/signature-verifier
+          RELEASE_VERSION: ${{ fromJSON(needs.reconcile.outputs.macos_candidate).version }}
+          RELEASE_SOURCE_SHA: ${{ fromJSON(needs.reconcile.outputs.macos_candidate).main_sha }}
+          RELEASE_PR: ${{ fromJSON(needs.reconcile.outputs.macos_candidate).pr }}
+        run: |
+          node source/desktop/scripts/prepare_macos_release_assets.mjs \
+            "$RELEASE_VERSION" "$RELEASE_SOURCE_SHA" "$RELEASE_PR" \
+            "$GITHUB_WORKSPACE/build-source/desktop/src-tauri/target/release/bundle" \
+            "$GITHUB_WORKSPACE/build-source/desktop/target/macos-release/assets.json"
+      - name: Publish verified macOS assets and record the ledger transition
+        id: publish
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          TAURI_UPDATER_PUBKEY: ${{ vars.TAURI_UPDATER_PUBKEY }}
+          CARGO_TARGET_DIR: ${{ github.workspace }}/build-source/desktop/target/signature-verifier
+        run: node source/desktop/scripts/publish_desktop_platform.mjs pages build-source/desktop/target/macos-release/assets.json
+      - name: Record a sanitized macOS platform failure
+        if: failure()
+        env:
+          RELEASE_VERSION: ${{ fromJSON(needs.reconcile.outputs.macos_candidate).version }}
+        run: |
+          category=publication_failed
+          if [[ "${{ steps.build.outcome }}" == failure ]]; then category=build_failed; fi
+          if [[ "${{ steps.prepare-assets.outcome }}" == failure ]]; then category=signature_invalid; fi
+          node source/desktop/scripts/record_desktop_platform_failure.mjs pages "$RELEASE_VERSION" macos "$category"
+      - name: Preserve macOS release build evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: macos-release-${{ fromJSON(needs.reconcile.outputs.macos_candidate).version }}
+          path: |
+            build-source/desktop/target/macos-release/assets.json
+            build-source/desktop/target/macos-codesign.txt
+          if-no-files-found: ignore
+
+  finalize-release-notes:
+    name: Finalize release status and safety notes
+    needs: [ reconcile, prepare-releases, linux-release, macos-release ]
+    if: always() && (needs.reconcile.outputs.macos_candidate != '' || needs.reconcile.outputs.linux_candidate != '' || needs.reconcile.outputs.aur_candidate != '' || needs.reconcile.outputs.release_action == 'block' || needs.reconcile.outputs.release_action == 'unblock')
+    runs-on: ubuntu-latest
+    environment: desktop-release-state
+    permissions:
+      contents: write
+    steps:
+      - name: Check out release tooling
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          path: source
+      - name: Check out the latest authoritative ledger
+        uses: actions/checkout@v7
+        with:
+          ref: gh-pages
+          path: pages
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Publish current partial, complete, or blocked notes
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          MACOS_CANDIDATE: ${{ needs.reconcile.outputs.macos_candidate }}
+          LINUX_CANDIDATE: ${{ needs.reconcile.outputs.linux_candidate }}
+          AUR_CANDIDATE: ${{ needs.reconcile.outputs.aur_candidate }}
+          MACOS_RELEASE_VERSION: ${{ needs.macos-release.outputs.release_version }}
+          LINUX_RELEASE_VERSION: ${{ needs.linux-release.outputs.release_version }}
+          DESKTOP_RELEASE_ACTION: ${{ needs.reconcile.outputs.release_action }}
+          DESKTOP_RELEASE_VERSIONS: ${{ needs.reconcile.outputs.control_versions }}
+        run: node source/desktop/scripts/finalize_desktop_release_notes.mjs pages

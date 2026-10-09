@@ -2,7 +2,7 @@ import { appendFile, readFile } from "node:fs/promises"
 import path from "node:path"
 import { execFileSync } from "node:child_process"
 
-import { blockVersions, parseLedger, selectMinorMilestone, unblockVersions } from "../release/ledger.mjs"
+import { blockVersions, latestPendingPlatformRelease, parseLedger, selectMinorMilestone, unblockVersions } from "../release/ledger.mjs"
 import { GitHubReleaseApi } from "../release/github-api.mjs"
 import { reconcileReleaseLedger } from "../release/reconciler.mjs"
 import { writePagesStateFiles } from "../release/pages-state.mjs"
@@ -81,6 +81,10 @@ const result = {
   pendingSha: reconciliation?.pendingSha || "",
   pendingReason: reconciliation?.pendingReason || "",
   processedMerges: reconciliation?.processedMerges || [],
+  platformCandidates: Object.fromEntries(["macos", "linux_asset", "aur"].map(platform => {
+    const release = latestPendingPlatformRelease(ledger, platform)
+    return [platform, release ? { version: release.version, tag: release.tag, main_sha: release.main_sha, pr: release.pr } : null]
+  })),
   publicVersions: ledger.releases.filter(release => release.public && !release.blocked).map(release => release.version),
   action
 }
@@ -117,6 +121,9 @@ async function writeOutputs(values) {
     `pending_sha=${values.pendingSha}`,
     `pending_reason=${values.pendingReason}`,
     `processed_merges=${JSON.stringify(values.processedMerges)}`,
+    `macos_candidate=${values.platformCandidates.macos ? JSON.stringify(values.platformCandidates.macos) : ""}`,
+    `linux_candidate=${values.platformCandidates.linux_asset ? JSON.stringify(values.platformCandidates.linux_asset) : ""}`,
+    `aur_candidate=${values.platformCandidates.aur ? JSON.stringify(values.platformCandidates.aur) : ""}`,
     `failed_gate_count=${values.processedMerges.filter(merge => merge.gate === "failed_gate").length}`,
     `public_versions=${JSON.stringify(values.publicVersions)}`
   ].join("\n") + "\n")
