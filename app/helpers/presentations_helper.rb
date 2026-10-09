@@ -43,8 +43,7 @@ module PresentationsHelper
     return position.horizontal if position.vertical == "top"
     return position.horizontal unless position.vertical_explicit
 
-    vertical = position.vertical == "middle" ? "center" : position.vertical
-    "#{vertical} #{position.horizontal}"
+    "#{position.vertical} #{position.horizontal}"
   end
 
   def total_slides(presentation = nil)

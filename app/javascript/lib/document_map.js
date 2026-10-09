@@ -947,10 +947,6 @@ function positionFromBlock(block) {
   const values = match[2].split(/\s+/).filter(Boolean).map(value => value.toLowerCase())
   let horizontal = values.find(value => ["left", "center", "right"].includes(value))
   let vertical = values.find(value => ["top", "middle", "bottom"].includes(value))
-  if (match[1] === "align" && values.length === 2 && ["top", "center", "middle", "bottom"].includes(values[0]) && ["left", "center", "right"].includes(values[1])) {
-    horizontal = values[1]
-    vertical = values[0] === "center" ? "middle" : values[0]
-  }
   if (!horizontal && !vertical) return null
   return { horizontal: horizontal || "left", vertical: vertical || "top", vertical_explicit: Boolean(vertical) }
 }

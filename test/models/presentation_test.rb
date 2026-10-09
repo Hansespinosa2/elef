@@ -10,7 +10,7 @@ class PresentationTest < ActiveSupport::TestCase
 
   test "new presentations use source directives to position the starter title and body" do
     expected_source = <<~MARKDOWN.chomp
-      :::align{center center}
+      :::align{middle center}
       # Untitled Document
 
       :::align {center}
@@ -265,7 +265,7 @@ class PresentationTest < ActiveSupport::TestCase
     document = Source::Document.parse(<<~MARKDOWN)
       # Positioned
 
-      :::align{center center}
+      :::align{middle center}
 
       A centered message.
 
@@ -284,7 +284,7 @@ class PresentationTest < ActiveSupport::TestCase
 
   test "align directives use vertical then horizontal order and retain position compatibility" do
     document = Source::Document.parse(<<~MARKDOWN)
-      :::align{center left}
+      :::align{middle left}
 
       Centered vertically and aligned left.
 
@@ -310,7 +310,7 @@ class PresentationTest < ActiveSupport::TestCase
 
       Horizontal only.
 
-      :::align{center center}
+      :::align{middle center}
 
       Horizontal and vertical.
     MARKDOWN
@@ -319,7 +319,7 @@ class PresentationTest < ActiveSupport::TestCase
   end
 
   test "builds an ephemeral editor map with UTF-16 ranges and known directives" do
-    source = "---\npresentationTheme: dark\n---\n# 🚀 Intro\n\n:::align{center center}\n\nA **message**.\n\n:::\n---\n:::unknown\n\n# Next"
+    source = "---\npresentationTheme: dark\n---\n# 🚀 Intro\n\n:::align{middle center}\n\nA **message**.\n\n:::\n---\n:::unknown\n\n# Next"
 
     map = Source::Document.editor_map(source, source_name: "Deck", mode: :presentation)
 
@@ -562,8 +562,7 @@ class PresentationTest < ActiveSupport::TestCase
     assert_includes layouts.slides.map(&:layout), "statement"
     assert_equal 5, layouts.slides.count { |slide| slide.layout == "three-column" }
     %w[left center right].product(%w[top middle bottom]).each do |horizontal, vertical|
-      vertical_value = vertical == "middle" ? "center" : vertical
-      assert_includes layouts.source, ":::align{#{vertical_value} #{horizontal}}"
+      assert_includes layouts.source, ":::align{#{vertical} #{horizontal}}"
     end
     assert layouts.slides.any? { |slide| slide.blocks.any? { |block| block.position&.horizontal == "center" && block.position.vertical == "middle" } }
     assert layouts.slides.any? { |slide| slide.blocks.any? { |block| block.position&.horizontal == "right" && block.position.vertical == "bottom" } }

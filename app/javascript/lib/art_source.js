@@ -435,10 +435,6 @@ function validPositionLine(line) {
   const values = match[2].trim().split(/\s+/).filter(Boolean).map(value => value.toLowerCase())
   const horizontal = values.some(value => ["left", "center", "right"].includes(value))
   const vertical = values.some(value => ["top", "middle", "bottom"].includes(value))
-  if (match[1] === "align" && values.length === 2) {
-    return ["top", "center", "middle", "bottom"].includes(values[0]) &&
-      ["left", "center", "right"].includes(values[1])
-  }
   return horizontal || vertical
 }
 

@@ -496,8 +496,7 @@ export default class extends Controller {
         }
       }
       const vertical = block.position?.vertical_explicit ? block.position.vertical : null
-      const verticalAlignment = vertical === "middle" ? "center" : vertical
-      replacement = `:::align{${verticalAlignment ? `${verticalAlignment} ` : ""}${horizontal}}${lineEnding}`
+      replacement = `:::align{${vertical ? `${vertical} ` : ""}${horizontal}}${lineEnding}`
     } else {
       from = block.range.start
       to = from
