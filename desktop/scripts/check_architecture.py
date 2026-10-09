@@ -35,6 +35,7 @@ config = json.loads((TAURI_ROOT / "tauri.conf.json").read_text())
 e2e_config = json.loads((TAURI_ROOT / "tauri.e2e.conf.json").read_text())
 performance_config = json.loads((TAURI_ROOT / "tauri.performance.conf.json").read_text())
 assert performance_config == {"plugins": {"updater": {"endpoints": ["https://127.0.0.1:8888/manifest"]}}}, "release measurement must keep secure transport and a loopback-only offline check"
+assert config["plugins"]["updater"]["endpoints"] == ["https://hansespinosa2.github.io/elef/desktop/stable/latest.json"], "Stable updater must use the controlled safe-version feed"
 performance_benchmark = (REPO_ROOT / "desktop" / "e2e" / "benchmark-native.mjs").read_text()
 ci_workflow = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text()
 assert 'process.argv.includes("--report-runner")' in performance_benchmark, "hosted native performance must be identified explicitly"

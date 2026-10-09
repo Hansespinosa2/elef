@@ -55,7 +55,7 @@
       "requireSignedVersion": true,
       "pubkey": "REPLACE_WITH_TAURI_UPDATER_PUBLIC_KEY",
       "endpoints": [
-        "https://github.com/Hansespinosa2/elef/releases/latest/download/latest.json"
+        "https://hansespinosa2.github.io/elef/desktop/stable/latest.json"
       ]
     }
   }

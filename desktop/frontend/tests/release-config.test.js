@@ -25,7 +25,7 @@ test("release configuration binds the package version to the stable tag and requ
     assert.equal(config.bundle.createUpdaterArtifacts, true)
     assert.equal(config.plugins.updater.pubkey, encodedKey)
     assert.equal(config.plugins.updater.requireSignedVersion, true)
-    assert.ok(config.plugins.updater.endpoints.every(endpoint => endpoint.startsWith("https://")))
+    assert.deepEqual(config.plugins.updater.endpoints, ["https://hansespinosa2.github.io/elef/desktop/stable/latest.json"])
   } finally {
     await rm(folder, { recursive: true, force: true })
   }
