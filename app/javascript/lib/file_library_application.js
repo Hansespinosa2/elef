@@ -207,7 +207,8 @@ export function startFileLibraryApplication(platform) {
     readPreview: id => fileLibrary.readSourcePreview(id),
     render: input => renderer.render(input),
     mediaBaseUrlForDeck: deck => mediaUrlsForDeck(deck).assetBaseUrl,
-    install: installSanitizedPreview
+    install: installSanitizedPreview,
+    visualEditing: desktopFeatures.visualEditing
   })
   saveFlow = createSaveFlow({
     saveSource: async (id, source) => {
