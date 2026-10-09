@@ -3,7 +3,7 @@ import { editAndPreviewWorkflow, SAVED_SOURCE } from "../../../test/e2e/scenario
 import { appearanceWorkflow } from "../../../test/e2e/scenarios/appearance.js"
 import { libraryAndGraphWorkflow } from "../../../test/e2e/scenarios/library-and-graph.js"
 import { libraryCreateDeleteWorkflow } from "../../../test/e2e/scenarios/library-create-delete.js"
-import { externalEditConflictWorkflow, CONFLICT_EXTERNAL_SOURCE } from "../../../test/e2e/scenarios/external-edit-conflict.js"
+import { externalEditConflictWorkflow, CONFLICT_DECK_NAME, CONFLICT_EXTERNAL_SOURCE } from "../../../test/e2e/scenarios/external-edit-conflict.js"
 import { hostileDeckNeutralizedWorkflow } from "../../../test/e2e/scenarios/hostile-deck.js"
 import { documentLinkCompletionWorkflow, mathInputWorkflow, snippetInsertWorkflow } from "../../../test/e2e/scenarios/authoring-palettes.js"
 import { authoringSettingsWorkflow } from "../../../test/e2e/scenarios/authoring-settings.js"
@@ -75,7 +75,7 @@ class WebEditorUi {
     const isDocument = title === "E2E document"
     const id = isDocument
       ? process.env.ELEF_E2E_DOCUMENT_ID
-      : title === "E2E conflict"
+      : title === CONFLICT_DECK_NAME
       ? process.env.ELEF_E2E_CONFLICT_PRESENTATION_ID
       : title === "E2E hostile"
         ? process.env.ELEF_E2E_HOSTILE_PRESENTATION_ID

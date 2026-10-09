@@ -1,11 +1,16 @@
-export const CONFLICT_LOCAL_SOURCE = "# Local draft\n\nKeep this in the conflict dialog.\n"
-export const CONFLICT_EXTERNAL_SOURCE = "# External edit\n\nThese bytes must survive.\n"
+import { readFileSync } from "node:fs"
+
+export const CONFLICT_FIXTURE = JSON.parse(readFileSync(new URL("../../fixtures/desktop/release/dirty-save-conflict.json", import.meta.url), "utf8"))
+export const CONFLICT_DECK_NAME = CONFLICT_FIXTURE.deck
+export const CONFLICT_SOURCE_FILE = CONFLICT_FIXTURE.source_file
+export const CONFLICT_LOCAL_SOURCE = CONFLICT_FIXTURE.dirty_source
+export const CONFLICT_EXTERNAL_SOURCE = CONFLICT_FIXTURE.external_source
 export const CONFLICT_MERGED_SOURCE = "# Merged version\n\nKeep the useful parts from both edits.\n"
-export const CONFLICT_BASELINE_SOURCE = "# Before conflict test\n\nSeed paragraph.\n"
+export const CONFLICT_BASELINE_SOURCE = CONFLICT_FIXTURE.baseline_source
 
 export async function externalEditConflictWorkflow(ui, resolution = "disk") {
   await ui.writeExternalSource(CONFLICT_BASELINE_SOURCE)
-  await ui.openDeck("E2E conflict")
+  await ui.openDeck(CONFLICT_DECK_NAME)
   await ui.pauseAutosave()
   await ui.replaceSource(CONFLICT_LOCAL_SOURCE)
   await ui.writeExternalSource(CONFLICT_EXTERNAL_SOURCE)

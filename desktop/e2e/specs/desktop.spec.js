@@ -7,7 +7,7 @@ import { editAndPreviewWorkflow } from "../../../test/e2e/scenarios/edit-and-pre
 import { appearanceWorkflow } from "../../../test/e2e/scenarios/appearance.js"
 import { libraryAndGraphWorkflow } from "../../../test/e2e/scenarios/library-and-graph.js"
 import { libraryCreateDeleteWorkflow } from "../../../test/e2e/scenarios/library-create-delete.js"
-import { externalEditConflictWorkflow, CONFLICT_EXTERNAL_SOURCE } from "../../../test/e2e/scenarios/external-edit-conflict.js"
+import { externalEditConflictWorkflow, CONFLICT_DECK_NAME, CONFLICT_SOURCE_FILE, CONFLICT_EXTERNAL_SOURCE } from "../../../test/e2e/scenarios/external-edit-conflict.js"
 import { hostileDeckNeutralizedWorkflow } from "../../../test/e2e/scenarios/hostile-deck.js"
 import { documentLinkCompletionWorkflow, mathInputWorkflow, snippetInsertWorkflow } from "../../../test/e2e/scenarios/authoring-palettes.js"
 import { authoringSettingsWorkflow } from "../../../test/e2e/scenarios/authoring-settings.js"
@@ -1251,7 +1251,7 @@ class DesktopEditorUi {
   }
 
   async writeExternalSource(source) {
-    await writeFile(path.join(process.env.ELEF_E2E_LIBRARY_ROOT, "E2E conflict", "presentation.md"), source)
+    await writeFile(path.join(process.env.ELEF_E2E_LIBRARY_ROOT, CONFLICT_DECK_NAME, CONFLICT_SOURCE_FILE), source)
   }
 
   async waitForConflict() {
@@ -1287,8 +1287,8 @@ class DesktopEditorUi {
   }
 
   async assertDiskSource(source) {
-    const diskPath = path.join(process.env.ELEF_E2E_LIBRARY_ROOT, "E2E conflict", "presentation.md")
-    await browser.waitUntil(async () => normalizeLineEndings(await readFile(diskPath, "utf8")) === source, {
+    const diskPath = path.join(process.env.ELEF_E2E_LIBRARY_ROOT, CONFLICT_DECK_NAME, CONFLICT_SOURCE_FILE)
+    await browser.waitUntil(async () => (await readFile(diskPath, "utf8")) === source, {
       timeout: 10_000,
       timeoutMsg: "Using the disk version changed the external source bytes"
     })

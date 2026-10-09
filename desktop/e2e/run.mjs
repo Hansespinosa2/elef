@@ -6,6 +6,7 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { createHash, randomUUID } from "node:crypto"
 import { PIXEL_PNG_MARKDOWN } from "../../test/e2e/scenarios/media-fixture.js"
+import { CONFLICT_BASELINE_SOURCE, CONFLICT_DECK_NAME, CONFLICT_SOURCE_FILE } from "../../test/e2e/scenarios/external-edit-conflict.js"
 import { SHARED_LIBRARY_CREATE_DELETE_TITLES } from "../../test/e2e/scenarios/library-create-delete.js"
 import { runNativeQuitSmokes } from "./native-quit-smoke.js"
 import { runPackagedUpdateSmoke } from "./packaged-update-smoke.js"
@@ -27,7 +28,7 @@ const isolatedCache = path.join(temporaryRoot, "cache")
 await Promise.all([isolatedHome, isolatedConfig, isolatedData, isolatedCache].map(directory => mkdir(directory)))
 const libraryRoot = path.join(temporaryRoot, "Elef")
 const seedDeck = path.join(libraryRoot, "E2E seed")
-const conflictDeck = path.join(libraryRoot, "E2E conflict")
+const conflictDeck = path.join(libraryRoot, CONFLICT_DECK_NAME)
 const hostileDeck = path.join(libraryRoot, "E2E hostile")
 const archiveFixture = path.join(temporaryRoot, "E2E archive seed")
 const importArchive = path.join(temporaryRoot, "E2E archive seed.elef")
@@ -201,7 +202,7 @@ try {
     schema_version: 1
   }))
   await mkdir(conflictDeck, { recursive: true })
-  await writeFile(path.join(conflictDeck, "presentation.md"), "# Before conflict test\n\nSeed paragraph.\n")
+  await writeFile(path.join(conflictDeck, CONFLICT_SOURCE_FILE), CONFLICT_BASELINE_SOURCE)
   await writeFile(path.join(conflictDeck, "elef.json"), JSON.stringify({ id: randomUUID(), schema_version: 1 }))
   await mkdir(hostileDeck, { recursive: true })
   await writeFile(path.join(hostileDeck, "presentation.md"), hostileSource)
@@ -247,7 +248,7 @@ try {
 
   if (process.env.CI || process.env.ELEF_E2E_RUN_WEB === "1") {
     const seeded = runRails(
-      `Presentation.where(title: ${JSON.stringify(SHARED_LIBRARY_CREATE_DELETE_TITLES.presentation)}).destroy_all; Document.where(title: ${JSON.stringify(SHARED_LIBRARY_CREATE_DELETE_TITLES.document)}).destroy_all; presentation = Presentation.create!(title: ${JSON.stringify(webTitle)}, source: ${JSON.stringify(basicPresentationSource)}); conflict = Presentation.create!(title: "E2E conflict", source: "# Before conflict test\\n\\nSeed paragraph.\\n"); hostile = Presentation.create!(title: "E2E hostile", source: ${JSON.stringify(hostileSource)}); document = Document.create!(source: ${JSON.stringify(e2eDocumentSource)}); linked = Document.create!(source: ${JSON.stringify(e2eLinkedDocumentSource)}); puts "ELEF_E2E_PRESENTATION_ID=#{presentation.id}"; puts "ELEF_E2E_CONFLICT_PRESENTATION_ID=#{conflict.id}"; puts "ELEF_E2E_HOSTILE_PRESENTATION_ID=#{hostile.id}"; puts "ELEF_E2E_DOCUMENT_IDS=#{[document.id, linked.id].join(',')}"`
+      `Presentation.where(title: ${JSON.stringify(SHARED_LIBRARY_CREATE_DELETE_TITLES.presentation)}).destroy_all; Document.where(title: ${JSON.stringify(SHARED_LIBRARY_CREATE_DELETE_TITLES.document)}).destroy_all; presentation = Presentation.create!(title: ${JSON.stringify(webTitle)}, source: ${JSON.stringify(basicPresentationSource)}); conflict = Presentation.create!(title: ${JSON.stringify(CONFLICT_DECK_NAME)}, source: ${JSON.stringify(CONFLICT_BASELINE_SOURCE)}); hostile = Presentation.create!(title: "E2E hostile", source: ${JSON.stringify(hostileSource)}); document = Document.create!(source: ${JSON.stringify(e2eDocumentSource)}); linked = Document.create!(source: ${JSON.stringify(e2eLinkedDocumentSource)}); puts "ELEF_E2E_PRESENTATION_ID=#{presentation.id}"; puts "ELEF_E2E_CONFLICT_PRESENTATION_ID=#{conflict.id}"; puts "ELEF_E2E_HOSTILE_PRESENTATION_ID=#{hostile.id}"; puts "ELEF_E2E_DOCUMENT_IDS=#{[document.id, linked.id].join(',')}"`
     )
     const id = seeded.match(/^ELEF_E2E_PRESENTATION_ID=(\d+)$/m)?.[1]
     assert.match(id, /^\d+$/, "Rails fixture command should return the presentation id")

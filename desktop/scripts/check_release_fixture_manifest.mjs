@@ -2,6 +2,13 @@ import assert from "node:assert/strict"
 import { readFile, stat } from "node:fs/promises"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
+import {
+  CONFLICT_BASELINE_SOURCE,
+  CONFLICT_DECK_NAME,
+  CONFLICT_EXTERNAL_SOURCE,
+  CONFLICT_LOCAL_SOURCE,
+  CONFLICT_SOURCE_FILE
+} from "../../test/e2e/scenarios/external-edit-conflict.js"
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const manifestPath = path.join(repoRoot, "desktop/release-test-manifest.json")
@@ -92,6 +99,11 @@ assert.match(appState, /\$\{ELEF_RELEASE_FIXTURE_LIBRARY_ROOT\}/)
 assert.ok(fixtureMap.get("pre_release_app_state").path_substitutions["${ELEF_RELEASE_FIXTURE_LIBRARY_ROOT}"])
 
 const conflict = JSON.parse(await readFixtureText("dirty_save_conflict"))
+assert.equal(conflict.deck, CONFLICT_DECK_NAME, "the shared conflict scenario must consume the manifested deck fixture")
+assert.equal(conflict.source_file, CONFLICT_SOURCE_FILE, "the shared conflict scenario must consume the manifested source filename")
+assert.equal(conflict.baseline_source, CONFLICT_BASELINE_SOURCE, "the shared conflict scenario must consume the manifested baseline")
+assert.equal(conflict.dirty_source, CONFLICT_LOCAL_SOURCE, "the shared conflict scenario must consume the manifested dirty source")
+assert.equal(conflict.external_source, CONFLICT_EXTERNAL_SOURCE, "the shared conflict scenario must consume the manifested external source")
 assert.notEqual(conflict.baseline_source, conflict.dirty_source)
 assert.notEqual(conflict.baseline_source, conflict.external_source)
 assert.match(conflict.invariant, /must not overwrite/i)
