@@ -44,7 +44,7 @@ class WebEditorUi {
 
   constructor(page) {
     this.page = page
-    this.rejectExternalMedia = false
+    this.externalMediaPolicy = "allow-remote"
     this.activeWorkId = null
   }
 

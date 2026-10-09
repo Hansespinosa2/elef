@@ -278,7 +278,7 @@ class DesktopEditorUi {
   }
 
   constructor() {
-    this.rejectExternalMedia = true
+    this.externalMediaPolicy = "reject-remote"
     this.activeDeckTitle = null
   }
 
