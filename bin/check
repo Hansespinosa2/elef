@@ -2000,7 +2000,14 @@ def check_phase11_scenarios() -> None:
 
 def check_phase11_h4(status: dict) -> None:
     pending = status.get("pending_human_gates") or []
-    if not any("H4" in str(entry) for entry in pending):
+    # Campaign state records gates as {"gate": N} objects (validator-enforced);
+    # a bare "H4" string is accepted as a legacy spelling of the same record.
+    present = any(
+        (isinstance(entry, dict) and entry.get("gate") == 4)
+        or (isinstance(entry, str) and "H4" in entry)
+        for entry in pending
+    )
+    if not present:
         fail("phase-11 status must record pending human gate H4 (owner live Mac mini deployment)")
 
 
