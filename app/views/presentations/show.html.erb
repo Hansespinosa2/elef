@@ -27,4 +27,6 @@
     </ul>
   </section>
 <% end %>
-<%= render "slides", presentation: @presentation %>
+<div data-controller="slide-scaling">
+  <%= render "slides", presentation: @presentation %>
+</div>

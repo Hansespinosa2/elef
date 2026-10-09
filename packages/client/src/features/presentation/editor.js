@@ -57,10 +57,15 @@ export class PresentationEditor {
       this.editorController = event.detail.editor
       this.applyMode(form.getAttribute("data-editor-mode") || "visual")
     })
+    // Capture phase: projection inputs must be read before form bubble-phase
+    // actions (notably input->preview#schedule) mark the projection stale.
+    // The retired Stimulus controller handled block input through the block's
+    // own action (target phase, also before the form actions); capture is the
+    // framework-free equivalent and keeps unfocused programmatic edits working.
     on(form, "input", (event) => {
       this.sourceInput(event)
       this.blockInput(event)
-    })
+    }, true)
     on(form, "elef:editor-mode-change", (event) => this.applyMode(event.detail.mode))
     on(form, "elef:preview-updated", (event) => this.previewUpdated(event.detail.payload))
     on(form, "elef:preview-stale", (event) => this.previewStale(event.detail))

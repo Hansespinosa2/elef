@@ -251,6 +251,31 @@ test("client presentation editor pauses controls while the preview is stale", ()
   mount.destroy();
 });
 
+test("client presentation editor listens for input at capture phase", () => {
+  // Projection edits must be read before form bubble-phase actions (notably
+  // input->preview#schedule) mark the projection stale. Linkedom dispatches
+  // listeners in registration order, so event-phase precedence itself is
+  // covered by the visual-edit system tests in a real browser; here we pin
+  // the capture registration that provides it.
+  const { form } = mountForm();
+  const registrations: Array<{ type: string; capture: unknown }> = [];
+  const originalAdd = form.addEventListener.bind(form);
+  (form as unknown as { addEventListener: unknown }).addEventListener = (
+    type: string,
+    handler: unknown,
+    capture: unknown,
+  ) => {
+    registrations.push({ type, capture });
+    return (originalAdd as (...args: Array<unknown>) => unknown)(type, handler, capture);
+  };
+  const mount = mountEditor(form);
+
+  const inputRegistrations = registrations.filter((registration) => registration.type === "input");
+  assert.ok(inputRegistrations.length > 0);
+  assert.ok(inputRegistrations.every((registration) => registration.capture === true));
+  mount.destroy();
+});
+
 test("client presentation editor publishes itself for the code editor host", () => {
   const { form } = mountForm();
   const mount = mountEditor(form);

@@ -2715,7 +2715,11 @@ class PresentationsTest < ApplicationSystemTestCase
     visit edit_presentation_path(presentation)
     wait_for_fresh_projection
 
-    block = find(".slide-block", text: "Initial block")
+    # Scope to the editable projection: slide overview thumbnails intentionally
+    # duplicate slide text (see the "clone only inert slide content" contract),
+    # so a page-wide selector is ambiguous. The test then clicks and types,
+    # which only the projection block supports.
+    block = find(".editor-projection .slide-block", text: "Initial block")
     block_id = block["data-editor-block-id"]
     block.click
     block.send_keys(" with extra text")
