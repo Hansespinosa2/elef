@@ -1366,6 +1366,13 @@ fn persisted_root_path(app: &AppHandle) -> Result<PathBuf, tauri::Error> {
     Ok(app.path().app_data_dir()?.join("library-root.json"))
 }
 
+fn read_persisted_library_root(path: &Path) -> Option<PathBuf> {
+    let bytes = fs::read(path).ok()?;
+    let config = serde_json::from_slice::<serde_json::Value>(&bytes).ok()?;
+    let root = config.get("library_root")?.as_str()?;
+    Some(PathBuf::from(root))
+}
+
 fn persist_library_root(app: &AppHandle, root: &str) -> Result<(), CommandError> {
     let path = persisted_root_path(app).map_err(|_| {
         CommandError::new("io_error", "Could not store the library preference.", true)
@@ -1387,19 +1394,10 @@ fn restore_library_root(app: &AppHandle, state: &DesktopState) {
     let Ok(path) = persisted_root_path(app) else {
         return;
     };
-    let Ok(bytes) = fs::read(path) else {
+    let Some(root) = read_persisted_library_root(&path) else {
         return;
     };
-    let Ok(config) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
-        return;
-    };
-    let Some(root) = config
-        .get("library_root")
-        .and_then(serde_json::Value::as_str)
-    else {
-        return;
-    };
-    let _ = state.use_library(PathBuf::from(root));
+    let _ = state.use_library(root);
 }
 
 fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
@@ -1771,6 +1769,68 @@ fn queue_open_files(state: &DesktopState, paths: impl IntoIterator<Item = PathBu
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pre_release_app_state_fixture_restores_existing_library_without_resetting_selection() {
+        const LIBRARY_ROOT_TOKEN: &str = "${ELEF_RELEASE_FIXTURE_LIBRARY_ROOT}";
+        const LEGACY_DECK_ID: &str = "550e8400-e29b-41d4-a716-446655440000";
+        let fixture_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../test/fixtures/desktop/release/pre-release-app-state");
+        let temp = tempfile::tempdir().expect("create isolated legacy app-state fixture");
+        let library_root = temp.path().join("Selected library");
+        let legacy_deck = library_root.join("Legacy presentation");
+        fs::create_dir_all(&legacy_deck).expect("create fixture deck directory");
+        fs::copy(
+            fixture_root.join("Selected library/Legacy presentation/presentation.md"),
+            legacy_deck.join("presentation.md"),
+        )
+        .expect("copy legacy presentation source");
+        fs::copy(
+            fixture_root.join("Selected library/Legacy presentation/elef.json"),
+            legacy_deck.join("elef.json"),
+        )
+        .expect("copy legacy deck identity");
+
+        let app_data_dir = temp.path().join("com.elef.desktop");
+        fs::create_dir_all(&app_data_dir).expect("create Stable app-data fixture");
+        let state_path = app_data_dir.join("library-root.json");
+        let template = fs::read_to_string(fixture_root.join("library-root.json.template"))
+            .expect("read pre-release Stable state template");
+        assert!(template.contains(LIBRARY_ROOT_TOKEN));
+        let serialized_state =
+            template.replace(LIBRARY_ROOT_TOKEN, &library_root.to_string_lossy());
+        fs::write(&state_path, serialized_state.as_bytes()).expect("seed pre-release Stable state");
+
+        let restored_root = read_persisted_library_root(&state_path)
+            .expect("restore the existing selected-library preference");
+        assert_eq!(restored_root, library_root);
+        let state = DesktopState::default();
+        state
+            .use_library(restored_root.clone())
+            .expect("open the library selected by the previous Stable release");
+        assert_eq!(
+            state
+                .root
+                .read()
+                .expect("read selected library root")
+                .as_ref(),
+            Some(&library_root)
+        );
+        let library = state.current_library().expect("restored library is active");
+        let deck = library
+            .open_deck(LEGACY_DECK_ID)
+            .expect("open the existing presentation without migrating its identity");
+        let expected_source = fs::read_to_string(
+            fixture_root.join("Selected library/Legacy presentation/presentation.md"),
+        )
+        .expect("read expected presentation source");
+        assert_eq!(deck.source, expected_source);
+        assert_eq!(
+            fs::read(&state_path).expect("read persisted selection after launch"),
+            serialized_state.as_bytes(),
+            "launch must not reset or rewrite the existing app-state file"
+        );
+    }
 
     #[test]
     fn cli_open_file_queue_accepts_arguments_with_or_without_argv_zero() {

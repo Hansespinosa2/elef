@@ -126,11 +126,11 @@
       "id": "pre_release_app_state",
       "paths": ["test/fixtures/desktop/release/pre-release-app-state/library-root.json.template", "test/fixtures/desktop/release/pre-release-app-state/Selected library/Legacy presentation/presentation.md", "test/fixtures/desktop/release/pre-release-app-state/Selected library/Legacy presentation/elef.json"],
       "path_substitutions": {"${ELEF_RELEASE_FIXTURE_LIBRARY_ROOT}": "a disposable absolute test-library directory"},
-      "status": "TODO",
-      "acceptance_command": "npm test --prefix desktop/e2e",
+      "status": "IN_PROGRESS",
+      "acceptance_command": "cargo test --manifest-path desktop/Cargo.toml -p elef-desktop --lib --locked pre_release_app_state_fixture_restores_existing_library_without_resetting_selection",
       "expected_exit_code": 0,
-      "observed_exit_code": null,
-      "invariants": ["Stable starts with app-data/library-root.json pointing at the fixture library.", "The original selected path and deck identity remain unchanged after upgrade and relaunch."]
+      "observed_exit_code": 0,
+      "invariants": ["The prior Stable app-data/library-root.json format points at the fixture library.", "The existing path, deck identity, and source remain unchanged when the selected library is restored.", "Packaged upgrade/relaunch preservation remains a separate acceptance check."]
     },
     {
       "id": "dirty_save_conflict",
