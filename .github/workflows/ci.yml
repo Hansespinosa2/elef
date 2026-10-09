@@ -541,6 +541,8 @@ jobs:
       - name: Build production image
         run: docker compose --project-name elef-ci --env-file .env.personal.example --file compose.personal.yml build --build-arg RUBY_BASE_IMAGE=mirror.gcr.io/library/ruby@sha256:4116b6119a53dfef69f4cd591784a1aff9e1095b2ef4eccd865e46906e90be36 web
       - name: Boot and smoke-test production stack
+        env:
+          POSTGRES_IMAGE: mirror.gcr.io/library/postgres@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3
         run: |
           set -euo pipefail
           compose=(docker compose --project-name elef-ci --env-file .env.personal.example --file compose.personal.yml)
@@ -574,6 +576,8 @@ jobs:
       - name: Build development image
         run: docker compose --project-name elef-development-ci --env-file .env.development.example --file compose.development.yml build --build-arg RUBY_BASE_IMAGE=mirror.gcr.io/library/ruby@sha256:4116b6119a53dfef69f4cd591784a1aff9e1095b2ef4eccd865e46906e90be36 web
       - name: Prepare and smoke-test development stack
+        env:
+          POSTGRES_IMAGE: mirror.gcr.io/library/postgres@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3
         run: |
           set -euo pipefail
           compose=(docker compose --project-name elef-development-ci --env-file .env.development.example --file compose.development.yml)

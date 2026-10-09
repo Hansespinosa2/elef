@@ -9,6 +9,8 @@ const releaseWorkflow = await readFile(path.join(repoRoot, ".github/workflows/de
 const releaseControls = await readFile(path.join(repoRoot, ".github/workflows/desktop-release-controls.yml"), "utf8")
 const productionDockerfile = await readFile(path.join(repoRoot, "Dockerfile"), "utf8")
 const developmentDockerfile = await readFile(path.join(repoRoot, "Dockerfile.development"), "utf8")
+const personalCompose = await readFile(path.join(repoRoot, "compose.personal.yml"), "utf8")
+const developmentCompose = await readFile(path.join(repoRoot, "compose.development.yml"), "utf8")
 const mainPushCondition = "github.event_name != 'push' || github.ref_name == 'main'"
 const rerunJobs = ["scan_ruby", "scan_js", "test", "sqlite-test", "system-test", "production-smoke", "development-smoke"]
 const requiredGateJobs = [
@@ -46,8 +48,13 @@ assert.match(jobBlock(workflow, "desktop-fast"), /npm run test:release-ledger/, 
 assert.match(jobBlock(workflow, "desktop-fast"), /npm run test:arch-package/, "Arch package metadata tests must run in the required fast CI tier")
 assert.match(jobBlock(workflow, "desktop-fast"), /desktop\/release\/signature-verifier\/Cargo\.toml --locked/, "Tauri updater signature verification must be tested in the required fast CI tier")
 assert.equal((workflow.match(new RegExp(escapeRegExp(`image: ${postgresCiImage}`), "g")) ?? []).length, 2, "Rails PostgreSQL services must use the digest-pinned official mirror image")
+for (const [name, compose] of [["production", personalCompose], ["development", developmentCompose]]) {
+  assert.match(compose, /^    image: \$\{POSTGRES_IMAGE:-postgres:17\}$/m, `${name} Compose must allow CI to pin its PostgreSQL image`)
+}
 for (const jobName of ["production-smoke", "development-smoke"]) {
-  assert.ok(jobBlock(workflow, jobName).includes(rubyCiImage), `${jobName} must build from the digest-pinned official Ruby mirror image`)
+  const block = jobBlock(workflow, jobName)
+  assert.ok(block.includes(rubyCiImage), `${jobName} must build from the digest-pinned official Ruby mirror image`)
+  assert.ok(block.includes(`POSTGRES_IMAGE: ${postgresCiImage}`), `${jobName} Compose smoke must use the digest-pinned official PostgreSQL mirror image`)
 }
 for (const [name, dockerfile] of [["production", productionDockerfile], ["development", developmentDockerfile]]) {
   assert.match(dockerfile, /^ARG RUBY_BASE_IMAGE=ruby:3\.4-trixie$/m, `${name} Dockerfile must keep its normal upstream default`)
