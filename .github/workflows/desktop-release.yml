@@ -325,9 +325,93 @@ jobs:
             build-source/desktop/target/macos-codesign.txt
           if-no-files-found: ignore
 
+  aur-release:
+    name: Publish validated Linux asset to elef-bin on AUR
+    needs: [ reconcile, prepare-releases, linux-release ]
+    if: >-
+      always() &&
+      needs.prepare-releases.result == 'success' &&
+      (
+        needs.reconcile.outputs.aur_candidate != '' ||
+        (needs.linux-release.result == 'success' && needs.linux-release.outputs.aur_candidate != '')
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: desktop-aur-publishing
+    permissions:
+      contents: write
+    outputs:
+      release_version: ${{ steps.publish.outputs.release_version }}
+    steps:
+      - name: Check out release tooling
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          path: source
+      - name: Check out the current release ledger
+        uses: actions/checkout@v7
+        with:
+          ref: gh-pages
+          path: pages
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Select the newest AUR candidate
+        env:
+          AUR_CANDIDATE: ${{ needs.linux-release.outputs.aur_candidate || needs.reconcile.outputs.aur_candidate }}
+        run: |
+          test -n "$AUR_CANDIDATE"
+          printf '%s\n' "$AUR_CANDIDATE" > "$GITHUB_WORKSPACE/aur-candidate.json"
+      - name: Verify the public GitHub archive and prepare PKGBUILD
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          AUR_ACCOUNT_NAME: ${{ vars.AUR_ACCOUNT_NAME }}
+        run: node source/desktop/scripts/prepare_desktop_aur.mjs pages "$GITHUB_WORKSPACE/aur-candidate.json" "$GITHUB_WORKSPACE/aur-package"
+      - name: Generate .SRCINFO as an unprivileged user in the pinned Arch environment
+        run: |
+          docker run --rm --pull=always \
+            --platform linux/amd64 \
+            --volume "$GITHUB_WORKSPACE/aur-package:/pkg" \
+            archlinux:base-devel@sha256:996c3a1d6b0d87b01242f6fcd8cfa3ad3eece1a67ab5c8f108e20af1d7b97bdd \
+            bash -euc '
+              useradd --create-home builder
+              chown -R builder:builder /pkg
+              runuser -u builder -- bash -euc "cd /pkg && makepkg --printsrcinfo > .SRCINFO"
+              test -s /pkg/.SRCINFO
+            '
+      - name: Publish PKGBUILD and .SRCINFO over pinned AUR SSH
+        id: publish
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          AUR_ACCOUNT_NAME: ${{ vars.AUR_ACCOUNT_NAME }}
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          AUR_SSH_KNOWN_HOSTS: ${{ vars.AUR_SSH_KNOWN_HOSTS }}
+        run: node source/desktop/scripts/publish_desktop_aur.mjs pages "$GITHUB_WORKSPACE/aur-candidate.json" "$GITHUB_WORKSPACE/aur-package"
+      - name: Record a sanitized AUR publication failure
+        if: failure()
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_CANDIDATE: ${{ needs.linux-release.outputs.aur_candidate || needs.reconcile.outputs.aur_candidate }}
+        run: |
+          version="$(node -e 'process.stdout.write(JSON.parse(process.env.RELEASE_CANDIDATE).version)')"
+          node source/desktop/scripts/record_desktop_platform_failure.mjs pages "$version" aur aur_push_failed
+      - name: Preserve generated AUR metadata evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: aur-package-metadata
+          path: |
+            aur-package/PKGBUILD
+            aur-package/.SRCINFO
+            aur-package/release-metadata.json
+          if-no-files-found: ignore
+
   finalize-release-notes:
     name: Finalize release status and safety notes
-    needs: [ reconcile, prepare-releases, linux-release, macos-release ]
+    needs: [ reconcile, prepare-releases, linux-release, macos-release, aur-release ]
     if: always() && (needs.reconcile.outputs.macos_candidate != '' || needs.reconcile.outputs.linux_candidate != '' || needs.reconcile.outputs.aur_candidate != '' || needs.reconcile.outputs.release_action == 'block' || needs.reconcile.outputs.release_action == 'unblock')
     runs-on: ubuntu-latest
     environment: desktop-release-state
@@ -357,6 +441,7 @@ jobs:
           AUR_CANDIDATE: ${{ needs.reconcile.outputs.aur_candidate }}
           MACOS_RELEASE_VERSION: ${{ needs.macos-release.outputs.release_version }}
           LINUX_RELEASE_VERSION: ${{ needs.linux-release.outputs.release_version }}
+          AUR_RELEASE_VERSION: ${{ needs.aur-release.outputs.release_version }}
           DESKTOP_RELEASE_ACTION: ${{ needs.reconcile.outputs.release_action }}
           DESKTOP_RELEASE_VERSIONS: ${{ needs.reconcile.outputs.control_versions }}
         run: node source/desktop/scripts/finalize_desktop_release_notes.mjs pages

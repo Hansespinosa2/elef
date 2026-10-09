@@ -238,9 +238,11 @@ export class GitHubPublisher {
   }
 }
 
-export function releaseNotes({ version, sourceSha, pr, macos, linuxAsset, aur, blockedReason = null }) {
+export function releaseNotes({ version, sourceSha, pr, macos, linuxAsset, aur, aurPackage = null, blockedReason = null }) {
   if (!VERSION_PATTERN.test(`desktop-v${version}`)) throw new TypeError("release notes need a semantic version")
   validateSha(sourceSha)
+  if (aurPackage !== null && !["elef-bin", "elef-desktop-bin"].includes(aurPackage)) throw new TypeError("release notes contain an unapproved AUR package name")
+  const aurPackageLine = aurPackage ? "**AUR package:** `" + aurPackage + "`" : null
   if (!Number.isInteger(pr) || pr < 1) throw new TypeError("release notes need the merged pull request number")
   if (blockedReason) {
     return [
@@ -250,6 +252,7 @@ export function releaseNotes({ version, sourceSha, pr, macos, linuxAsset, aur, b
       `**Reason:** ${blockedReason}`,
       `**Source SHA:** \`${sourceSha}\``,
       `**Merged PR:** #${pr}`,
+      ...(aurPackageLine ? [aurPackageLine] : []),
       "",
       "Previously published artifacts remain available for recovery. Automatic macOS updates exclude this version. AUR packages already fetched or installed cannot be recalled centrally."
     ].join("\n")
@@ -269,6 +272,7 @@ export function releaseNotes({ version, sourceSha, pr, macos, linuxAsset, aur, b
     `**Status:** ${statusLine}`,
     `**Source SHA:** \`${sourceSha}\``,
     `**Merged PR:** #${pr}`,
+    ...(aurPackageLine ? [aurPackageLine] : []),
     "",
     "| Distribution | Status |",
     "| --- | --- |",

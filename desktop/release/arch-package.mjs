@@ -11,6 +11,7 @@ const repositoryRoot = path.resolve(moduleDirectory, "../..")
 const archPackagingRoot = path.join(repositoryRoot, "desktop/packaging/arch")
 
 export const ARCH_PACKAGE_NAME = "elef-bin"
+export const ARCH_PACKAGE_NAMES = Object.freeze(["elef-bin", "elef-desktop-bin"])
 export const ARCH_PACKAGE_DEPENDENCIES = Object.freeze([
   "cairo",
   "desktop-file-utils",
@@ -29,22 +30,24 @@ export function archReleaseAssetUrl(version) {
   return `https://github.com/Hansespinosa2/elef/releases/download/desktop-v${version}/elef-${version}-x86_64.tar.zst`
 }
 
-export async function renderArchPkgbuild({ version, sha256, sourceUrl = archReleaseAssetUrl(version), allowLoopback = false }) {
+export async function renderArchPkgbuild({ version, sha256, sourceUrl = archReleaseAssetUrl(version), packageName = ARCH_PACKAGE_NAME, allowLoopback = false }) {
   validateVersion(version)
   validateSha256(sha256)
+  validatePackageName(packageName)
   validateSourceUrl(sourceUrl, version, allowLoopback)
   const template = await readFile(path.join(archPackagingRoot, "PKGBUILD.in"), "utf8")
   const rendered = template
+    .replaceAll("@PKGNAME@", packageName)
     .replaceAll("@PKGVER@", version)
     .replaceAll("@SHA256@", sha256.toLowerCase())
     .replaceAll("@SOURCE_URL@", sourceUrl)
-  if (/@(?:PKGVER|SHA256|SOURCE_URL)@/.test(rendered)) throw new Error("The Arch PKGBUILD template has unresolved placeholders.")
+  if (/@(?:PKGNAME|PKGVER|SHA256|SOURCE_URL)@/.test(rendered)) throw new Error("The Arch PKGBUILD template has unresolved placeholders.")
   return rendered
 }
 
-export async function writeArchPkgbuild({ version, sha256, outputPath, sourceUrl, allowLoopback = false }) {
+export async function writeArchPkgbuild({ version, sha256, outputPath, sourceUrl, packageName, allowLoopback = false }) {
   if (typeof outputPath !== "string" || outputPath.length === 0) throw new TypeError("An output path is required.")
-  const rendered = await renderArchPkgbuild({ version, sha256, sourceUrl, allowLoopback })
+  const rendered = await renderArchPkgbuild({ version, sha256, sourceUrl, packageName, allowLoopback })
   await mkdir(path.dirname(path.resolve(outputPath)), { recursive: true })
   await writeFile(outputPath, rendered, { mode: 0o644 })
 }
@@ -130,6 +133,10 @@ function validateVersion(version) {
   if (typeof version !== "string" || !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(version)) {
     throw new TypeError("Arch package versions must be numeric semantic versions such as 0.1.0.")
   }
+}
+
+function validatePackageName(packageName) {
+  if (!ARCH_PACKAGE_NAMES.includes(packageName)) throw new TypeError("AUR package name must be elef-bin or elef-desktop-bin.")
 }
 
 function validateSha256(sha256) {

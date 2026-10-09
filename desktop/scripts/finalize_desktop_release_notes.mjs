@@ -49,6 +49,7 @@ for (const version of versions) {
         macos: releaseRecord.macos.status,
         linuxAsset: releaseRecord.linux_asset.status,
         aur: releaseRecord.aur.status,
+        aurPackage: releaseRecord.aur.artifact?.package_name || null,
         blockedReason: releaseRecord.reason
       })
     : releaseNotes({
@@ -57,7 +58,8 @@ for (const version of versions) {
         pr: releaseRecord.pr,
         macos: releaseRecord.macos.status,
         linuxAsset: releaseRecord.linux_asset.status,
-        aur: releaseRecord.aur.status
+        aur: releaseRecord.aur.status,
+        aurPackage: releaseRecord.aur.artifact?.package_name || null
       })
   await publisher.updateReleaseNotes(release, body)
   updated.push(version)

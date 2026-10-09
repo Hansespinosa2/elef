@@ -99,6 +99,16 @@ test("a release is public only after assets exist and notes show status plus sou
 test("release notes mark complete distribution and central block limitations", () => {
   const complete = releaseNotes({ version: VERSION, sourceSha: SOURCE_SHA, pr: 147, macos: "passed", linuxAsset: "passed", aur: "passed" })
   assert.match(complete, /\*\*Status:\*\* Complete/)
+  const alternatePackage = releaseNotes({
+    version: VERSION,
+    sourceSha: SOURCE_SHA,
+    pr: 147,
+    macos: "passed",
+    linuxAsset: "passed",
+    aur: "passed",
+    aurPackage: "elef-desktop-bin"
+  })
+  assert.match(alternatePackage, /\*\*AUR package:\*\* `elef-desktop-bin`/)
   const blocked = releaseNotes({
     version: VERSION,
     sourceSha: SOURCE_SHA,

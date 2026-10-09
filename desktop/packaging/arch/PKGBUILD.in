@@ -1,4 +1,4 @@
-pkgname=elef-bin
+pkgname=@PKGNAME@
 pkgver=@PKGVER@
 pkgrel=1
 pkgdesc="Offline-first desktop authoring for Elef decks"
@@ -19,7 +19,7 @@ depends=(
 )
 makedepends=('zstd')
 options=('!strip' '!emptydirs')
-install=elef-bin.install
+install=@PKGNAME@.install
 source=("elef-${pkgver}-x86_64.tar.zst::@SOURCE_URL@")
 sha256sums=('@SHA256@')
 
