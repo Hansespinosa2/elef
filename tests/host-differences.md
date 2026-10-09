@@ -1,8 +1,8 @@
 # Host differences inventory
 
 One Elef product, two hosts. Every entry below is a concrete platform or
-capability difference with a verifiable reason. Anything justified only by
-"desktop/web can be different" is rejected from this file (P10-03).
+capability difference with a verifiable reason. Bare host-name preference
+("it differs because the hosts differ") is rejected from this file (P10-03).
 
 Capability keys come from `HostCapabilities`
 (`packages/contracts/src/errors.ts:21-28`). Adapter declarations:

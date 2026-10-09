@@ -920,6 +920,32 @@ PHASE8_CI_EVIDENCE_PATH = ROOT / "docs" / "refactor" / "execution" / "phase-8-ci
 PHASE9_PLAN_PATH = ROOT / "docs" / "refactor" / "execution" / "phase-9-plan.md"
 PHASE9_PHASE_PATH = ROOT / "docs" / "refactor" / "phases" / "09-visual-editor.md"
 PHASE9_CI_EVIDENCE_PATH = ROOT / "docs" / "refactor" / "execution" / "phase-9-ci-evidence.json"
+PHASE10_PLAN_PATH = ROOT / "docs" / "refactor" / "execution" / "phase-10-plan.md"
+PHASE10_PHASE_PATH = ROOT / "docs" / "refactor" / "phases" / "10-parity.md"
+PHASE10_CI_EVIDENCE_PATH = ROOT / "docs" / "refactor" / "execution" / "phase-10-ci-evidence.json"
+PHASE10_SCENARIOS = (
+    "appearance",
+    "authoring-palettes",
+    "authoring-settings",
+    "document-page-aspect-ratio",
+    "edit-and-preview",
+    "export",
+    "external-edit-conflict",
+    "hostile-deck",
+    "insert-image",
+    "library-and-graph",
+    "library-create-delete",
+    "library-deep-links",
+    "media-fixture",
+    "presentation-mode",
+    "undo-redo-session",
+    "vim-relative-line-numbers",
+)
+PHASE10_DRIFT_FORBIDDEN_FILES = (
+    "docs/refactor/baseline.json",
+    "docs/refactor/baseline.md",
+)
+PHASE10_DRIFT_FORBIDDEN_PREFIXES = ("packages/contracts/",)
 
 
 def check_phase3_ci_evidence(status: dict, head: str) -> None:
@@ -1627,6 +1653,153 @@ def run_phase9(json_output: bool) -> int:
     return 0
 
 
+def check_phase10_ci_evidence(status: dict, head: str) -> None:
+    external = os.environ.get("ELEF_GATE_EVIDENCE_DIR")
+    evidence_path = (
+        Path(external) / "phase-10-ci-evidence.json" if external else PHASE10_CI_EVIDENCE_PATH
+    )
+    evidence = read_json(evidence_path)
+    if not isinstance(evidence, dict):
+        fail("phase-10 CI evidence must be an object")
+    run = evidence.get("run", {})
+    parents = run.get("tested_merge_parents", []) or []
+    if evidence.get("candidate_sha") != head and head not in parents:
+        fail("phase-10 CI evidence does not name the candidate")
+    # Deferred-CI posture while the campaign PR is conflicted (see
+    # docs/refactor/deferred-dev-reconciliation.md): remote CI is advisory, so
+    # evidence may declare ci_deferred and prove the candidate with local
+    # verification instead.
+    if evidence.get("ci_deferred"):
+        local_proof = evidence.get("local_verification", {})
+        if not isinstance(local_proof, dict) or not local_proof:
+            fail("phase-10 deferred CI evidence lacks local verification")
+        for name, record in local_proof.items():
+            if not isinstance(record, dict):
+                fail(f"phase-10 local verification entry {name!r} must be an object")
+            if record.get("exit") != 0:
+                fail(f"phase-10 local verification entry {name!r} did not pass")
+            if record.get("head") != head:
+                fail(f"phase-10 local verification entry {name!r} is not for the candidate")
+        return
+    jobs = {job.get("name"): job for job in evidence.get("jobs", [])}
+    required = (
+        "desktop-fast",
+        "test",
+        "system-test",
+        "affected",
+        "sqlite-test",
+        "desktop",
+        "desktop-macos",
+        "renderer-macos",
+    )
+    missing = [name for name in required if (jobs.get(name) or {}).get("conclusion") != "success"]
+    if missing:
+        fail(f"phase-10 CI evidence lacks successful jobs: {', '.join(missing)}")
+    if run.get("conclusion") != "success":
+        fail("phase-10 CI run did not succeed")
+
+
+def check_phase10_scenarios() -> None:
+    directory = ROOT / "test/e2e/scenarios"
+    actual = sorted(path.stem for path in directory.glob("*.js"))
+    if actual != list(PHASE10_SCENARIOS):
+        fail("phase-10 shared scenario inventory differs from the 16 frozen live files")
+
+
+def check_phase10_parity_evidence() -> None:
+    inventory = (ROOT / "tests/host-differences.md").read_text(encoding="utf-8")
+    if "can be different" in inventory.lower():
+        fail("phase-10 host-differences inventory must not justify differences by host name")
+    entries = re.findall(r"^## (HD-\d+)", inventory, re.MULTILINE)
+    if len(entries) < 7:
+        fail("phase-10 host-differences inventory must carry at least the 7 HD entries")
+    for marker in ("Capability", "Concrete reason"):
+        if inventory.count(marker) < len(entries):
+            fail(f"phase-10 host-differences entries must each name a {marker.lower()}")
+    execution = ROOT / "docs/refactor/execution"
+    transcripts = (execution / "phase-10-exercise-transcripts.md").read_text(encoding="utf-8")
+    for token in ("EX-1b", "EX-2", "EX-3"):
+        if token not in transcripts:
+            fail(f"phase-10 exercise transcripts lack {token}")
+    if transcripts.count("Verdict: PASS") < 3:
+        fail("phase-10 exercise transcripts lack three PASS verdicts")
+    for seed in ("ex1-shared-feature.md", "ex2-web-bug.md", "ex3-desktop-bug.md", "ex1b-shared-feature-reseed.md"):
+        if not (execution / "phase-10-exercises" / seed).is_file():
+            fail(f"phase-10 exercise seed is missing: {seed}")
+    loop = (execution / "phase-10-do5-loop.md").read_text(encoding="utf-8")
+    if "PASS" not in loop or "affected" not in loop:
+        fail("phase-10 DO-5 edit-loop evidence lacks the tier results")
+    serverfree = (execution / "phase-10-do7-serverfree.md").read_text(encoding="utf-8")
+    if "99 pass" not in serverfree or "12 pass" not in serverfree:
+        fail("phase-10 DO-7 server-free evidence lacks the suite results")
+
+
+def check_phase10_no_drift(base: str, head: str) -> None:
+    if base == head:
+        return
+    names = git("diff", "--name-only", f"{base}..{head}").splitlines()
+    for name in names:
+        name = name.strip()
+        if name in PHASE10_DRIFT_FORBIDDEN_FILES or name.startswith(PHASE10_DRIFT_FORBIDDEN_PREFIXES):
+            fail(f"Phase 10 must not touch frozen file: {name}")
+
+
+def check_phase10(status: dict) -> str:
+    if not isinstance(status, dict):
+        fail("status.json must be an object")
+    head = git("rev-parse", "HEAD")
+    if os.environ.get("ELEF_GATE_STATUS_PATH") or status.get("head_sha") != head:
+        status = read_gate_snapshot(status, head, 10)
+    if status.get("current_phase") != 10:
+        fail("status.current_phase must be Phase 10")
+    base = status.get("phase_base_sha")
+    if not base or not is_ancestor(base, head):
+        fail("status.phase_base_sha must be an ancestor of HEAD")
+    if digest_file(PHASE10_PHASE_PATH) != status.get("phase_contract_sha256"):
+        fail("phase contract hash differs from phases/10-parity.md")
+    if digest_file(PHASE10_PLAN_PATH) != status.get("frozen_plan_sha256"):
+        fail("frozen plan hash differs from execution/phase-10-plan.md")
+    return head
+
+
+def run_phase10(json_output: bool) -> int:
+    before_status = git("status", "--porcelain", "--untracked-files=all")
+    errors: list[str] = []
+    head = "unknown"
+    try:
+        if before_status:
+            fail("Phase 10 verification requires a clean candidate checkout")
+        status = read_json(STATUS_PATH)
+        head = check_phase10(status)
+        check_phase10_scenarios()
+        check_phase10_parity_evidence()
+        check_phase10_no_drift(status.get("phase_base_sha"), head)
+        run_tier(QUICK_COMMANDS_1, QUICK_CEILING_S, quiet=True)
+        for command in ARCH_COMMANDS_1:
+            run_step(command)
+        run_fresh()
+        check_remaining_stubs()
+        check_phase10_ci_evidence(status, head)
+        after_status = git("status", "--porcelain", "--untracked-files=all")
+        if after_status != before_status:
+            fail("Phase 10 verification changed the candidate working tree")
+    except (CheckFailure, KeyError, TypeError, ValueError, OSError, json.JSONDecodeError) as error:
+        errors.append(str(error))
+    if errors:
+        if json_output:
+            print(json.dumps({"phase": 10, "result": "FAIL", "head": head, "errors": errors}, separators=(",", ":")))
+        else:
+            for error in errors:
+                print(f"bin/check phase 10: {error}", file=sys.stderr)
+        return 1
+    if json_output:
+        print(json.dumps({"phase": 10, "result": "PASS", "head": head}, separators=(",", ":")))
+        print("ELEF_PHASE_10=PASS")
+    else:
+        print(f"Phase 10 parity checks passed at {head}.")
+    return 0
+
+
 def print_usage() -> None:
     print("Usage: bin/check {quick|affected|phase N|all|arch|fresh|docs|perf}", file=sys.stderr)
 
@@ -1710,6 +1883,8 @@ def main(argv: list[str]) -> int:
         return run_phase8("--json" in extra)
     if argv[1] == "9":
         return run_phase9("--json" in extra)
+    if argv[1] == "10":
+        return run_phase10("--json" in extra)
     print(f"bin/check phase {argv[1]} is not implemented in Phase 01.", file=sys.stderr)
     return 2
 
