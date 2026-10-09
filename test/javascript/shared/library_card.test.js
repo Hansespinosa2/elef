@@ -29,6 +29,11 @@ test("library metadata remains inert and navigation stays local", () => {
   assert.equal(document.querySelector(".library-card-title").textContent, title)
   assert.equal(document.querySelector(".library-card-note").textContent, title)
   assert.equal(document.querySelector(".library-card-meta").textContent, "Markdown slides · Updated date unavailable")
+  const deck = { id: "deck-unsafe", name: title, kind: "presentation", source_file: "deck.md", warnings: ['<script>run()</script>'] }
+  const card = createLibraryCard(document, deck, { open() {}, rename() {}, delete() {} })
+  assert.equal(card.querySelector("img, script, [onerror]"), null)
+  assert.equal(card.querySelector(".deck-warning").textContent, deck.warnings[0])
+  assert.equal(card.querySelector(".deck-warning").getAttribute("role"), "note")
   for (const editUrl of ["javascript:run()", "https://example.com", "//example.com"]) {
     assert.throws(() => renderLibraryCard({ ...properties, editUrl }), TypeError)
   }
@@ -74,15 +79,15 @@ test("Rails and desktop use the shared library action markup with host-supplied 
 })
 
 test("desktop card actions match web preview and presentation entry points", () => {
-  const { document } = parseHTML("<main></main>")
+  const { document, Event } = parseHTML("<main></main>")
   const calls = []
   const deck = { id: "pres-1", name: "A presentation", kind: "presentation", modified_ms: 0, warnings: [] }
   const card = createLibraryCard(document, deck, {
     open: id => calls.push(["edit", id]),
     preview: item => calls.push(["preview", item.id]),
     present: item => calls.push(["present", item.id]),
-    rename() {},
-    delete() {}
+    rename: (item, name) => calls.push(["rename", item.id, name]),
+    delete: item => calls.push(["delete", item.id])
   })
 
   assert.equal(card.querySelectorAll(".library-card-controls").length, 1)
@@ -90,8 +95,16 @@ test("desktop card actions match web preview and presentation entry points", () 
   ;[...card.querySelectorAll(".library-card-menu-options button")]
     .find(button => button.textContent === "Present")
     .click()
+  card.querySelector(".library-rename input").value = "Renamed presentation"
+  card.querySelector(".library-rename").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }))
+  card.querySelector(".danger").click()
 
-  assert.deepEqual(calls, [["preview", deck.id], ["present", deck.id]])
+  assert.deepEqual(calls, [
+    ["preview", deck.id],
+    ["present", deck.id],
+    ["rename", deck.id, "Renamed presentation"],
+    ["delete", deck.id]
+  ])
   assert.equal(card.querySelector(".library-card-preview-button").getAttribute("aria-label"), "Preview A presentation")
 
   const documentDeck = { ...deck, id: "doc-1", kind: "document" }

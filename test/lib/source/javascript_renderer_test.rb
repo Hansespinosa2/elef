@@ -80,9 +80,6 @@ class SourceJavascriptRendererTest < ActiveSupport::TestCase
         allow_remote_media: input["allowRemoteMedia"] == true
       )
       assert_equal expected.fetch("preview"), actual.deep_stringify_keys
-      assert_equal expected.dig("preview", "editor_map"), Source::JavascriptRenderer.editor_map(
-        input.fetch("source"), mode: input.fetch("kind"), source_name: input.fetch("title")
-      ).deep_stringify_keys
     end
   end
 

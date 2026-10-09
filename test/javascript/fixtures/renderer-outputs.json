@@ -3113,15 +3113,15 @@
   },
   {
     "name": "hostile-content-and-urls",
-    "blockHtml": "<h1>Safe title</h1>\n<p>&lt;script&gt;alert(1)&lt;/script&gt;</p>\n<p>&lt;img src=x onerror=alert(1)&gt;</p>\n<p>Attack and <a href=\"mailto:a@example.com\">Email</a>.</p>\n<p></p>\n<p></p>\n",
+    "blockHtml": "<h1>Safe title</h1>\n<p>&lt;script&gt;alert(1)&lt;/script&gt;</p>\n<p>&lt;img src=x onerror=alert(1)&gt;</p>\n<p>Attack and <a href=\"mailto:a@example.com\">Email</a> and Data and VB.</p>\n<p></p>\n<p></p>\n",
     "preview": {
-      "html": "<div class=\"document-reader document-theme-match document-typography-book work-theme-match work-typography-book document-editor-projection\" data-controller=\"document-pages mermaid-diagrams\"><div class=\"document-surface\" data-document-pages-target=\"surface\"><div class=\"document-editor-block-shell\"><div class=\"document-editor-block\" data-editor-region-id=\"slide-1-region-1\" data-editor-block-id=\"slide-1-block-1\" contenteditable=\"true\" role=\"textbox\" aria-label=\"Editable Markdown block\" aria-multiline=\"true\" spellcheck=\"true\" data-action=\"input-&gt;visual-editor#projectionInput focus-&gt;visual-editor#blockFocus blur-&gt;visual-editor#blockBlur\"><h1>Safe title</h1>\n</div><label class=\"document-block-position-control\" data-action=\"pointerdown-&gt;visual-editor#positionControlOpened\">Align <select aria-label=\"Block alignment\" data-visual-editor-block-id=\"slide-1-block-1\" data-action=\"focus-&gt;visual-editor#positionControlOpened keydown-&gt;visual-editor#positionControlKeydown change-&gt;visual-editor#alignmentChanged\"><option value=\"left\" selected>Left</option><option value=\"center\">Center</option><option value=\"right\">Right</option></select></label></div><div class=\"document-editor-block-shell\"><div class=\"document-editor-block\" contenteditable=\"false\" aria-readonly=\"true\"><p>&lt;script&gt;alert(1)&lt;/script&gt;</p>\n</div><label class=\"document-block-position-control\" data-action=\"pointerdown-&gt;visual-editor#positionControlOpened\">Align <select aria-label=\"Block alignment\" data-visual-editor-block-id=\"slide-1-block-2\" data-action=\"focus-&gt;visual-editor#positionControlOpened keydown-&gt;visual-editor#positionControlKeydown change-&gt;visual-editor#alignmentChanged\"><option value=\"left\" selected>Left</option><option value=\"center\">Center</option><option value=\"right\">Right</option></select></label></div><div class=\"document-editor-block-shell\"><div class=\"document-editor-block\" contenteditable=\"false\" aria-readonly=\"true\"><p>&lt;img src=x onerror=alert(1)&gt;</p>\n</div><label class=\"document-block-position-control\" data-action=\"pointerdown-&gt;visual-editor#positionControlOpened\">Align <select aria-label=\"Block alignment\" data-visual-editor-block-id=\"slide-1-block-3\" data-action=\"focus-&gt;visual-editor#positionControlOpened keydown-&gt;visual-editor#positionControlKeydown change-&gt;visual-editor#alignmentChanged\"><option value=\"left\" selected>Left</option><option value=\"center\">Center</option><option value=\"right\">Right</option></select></label></div><div class=\"document-editor-block-shell\"><div class=\"document-editor-block\" contenteditable=\"false\" aria-readonly=\"true\"><p>Attack and <a href=\"mailto:a@example.com\">Email</a>.</p>\n</div><label class=\"document-block-position-control\" data-action=\"pointerdown-&gt;visual-editor#positionControlOpened\">Align <select aria-label=\"Block alignment\" data-visual-editor-block-id=\"slide-1-block-4\" data-action=\"focus-&gt;visual-editor#positionControlOpened keydown-&gt;visual-editor#positionControlKeydown change-&gt;visual-editor#alignmentChanged\"><option value=\"left\" selected>Left</option><option value=\"center\">Center</option><option value=\"right\">Right</option></select></label></div><div class=\"document-editor-block-shell\"><div class=\"document-editor-block\" data-editor-region-id=\"slide-1-region-5\" data-editor-block-id=\"slide-1-block-5\" contenteditable=\"true\" role=\"textbox\" aria-label=\"Editable Markdown block\" aria-multiline=\"true\" spellcheck=\"true\" data-action=\"input-&gt;visual-editor#projectionInput focus-&gt;visual-editor#blockFocus blur-&gt;visual-editor#blockBlur\"><figure class=\"editor-media\"><p></p>\n<figcaption class=\"editor-media-caption\" aria-label=\"Editable image alt text\" title=\"Edit image alt text\">Remote</figcaption></figure></div><label class=\"document-block-position-control\" data-action=\"pointerdown-&gt;visual-editor#positionControlOpened\">Align <select aria-label=\"Block alignment\" data-visual-editor-block-id=\"slide-1-block-5\" data-action=\"focus-&gt;visual-editor#positionControlOpened keydown-&gt;visual-editor#positionControlKeydown change-&gt;visual-editor#alignmentChanged\"><option value=\"left\" selected>Left</option><option value=\"center\">Center</option><option value=\"right\">Right</option></select></label></div><div class=\"document-editor-block-shell\"><div class=\"document-editor-block\" data-editor-region-id=\"slide-1-region-6\" data-editor-block-id=\"slide-1-block-6\" contenteditable=\"true\" role=\"textbox\" aria-label=\"Editable Markdown block\" aria-multiline=\"true\" spellcheck=\"true\" data-action=\"input-&gt;visual-editor#projectionInput focus-&gt;visual-editor#blockFocus blur-&gt;visual-editor#blockBlur\"><figure class=\"editor-media\"><p></p>\n<figcaption class=\"editor-media-caption\" aria-label=\"Editable image alt text\" title=\"Edit image alt text\">Data</figcaption></figure></div><label class=\"document-block-position-control\" data-action=\"pointerdown-&gt;visual-editor#positionControlOpened\">Align <select aria-label=\"Block alignment\" data-visual-editor-block-id=\"slide-1-block-6\" data-action=\"focus-&gt;visual-editor#positionControlOpened keydown-&gt;visual-editor#positionControlKeydown change-&gt;visual-editor#alignmentChanged\"><option value=\"left\" selected>Left</option><option value=\"center\">Center</option><option value=\"right\">Right</option></select></label></div></div></div>",
+      "html": "<div class=\"document-reader document-theme-match document-typography-book work-theme-match work-typography-book document-editor-projection\" data-controller=\"document-pages mermaid-diagrams\"><div class=\"document-surface\" data-document-pages-target=\"surface\"><div class=\"document-editor-block-shell\"><div class=\"document-editor-block\" data-editor-region-id=\"slide-1-region-1\" data-editor-block-id=\"slide-1-block-1\" contenteditable=\"true\" role=\"textbox\" aria-label=\"Editable Markdown block\" aria-multiline=\"true\" spellcheck=\"true\" data-action=\"input-&gt;visual-editor#projectionInput focus-&gt;visual-editor#blockFocus blur-&gt;visual-editor#blockBlur\"><h1>Safe title</h1>\n</div><label class=\"document-block-position-control\" data-action=\"pointerdown-&gt;visual-editor#positionControlOpened\">Align <select aria-label=\"Block alignment\" data-visual-editor-block-id=\"slide-1-block-1\" data-action=\"focus-&gt;visual-editor#positionControlOpened keydown-&gt;visual-editor#positionControlKeydown change-&gt;visual-editor#alignmentChanged\"><option value=\"left\" selected>Left</option><option value=\"center\">Center</option><option value=\"right\">Right</option></select></label></div><div class=\"document-editor-block-shell\"><div class=\"document-editor-block\" contenteditable=\"false\" aria-readonly=\"true\"><p>&lt;script&gt;alert(1)&lt;/script&gt;</p>\n</div><label class=\"document-block-position-control\" data-action=\"pointerdown-&gt;visual-editor#positionControlOpened\">Align <select aria-label=\"Block alignment\" data-visual-editor-block-id=\"slide-1-block-2\" data-action=\"focus-&gt;visual-editor#positionControlOpened keydown-&gt;visual-editor#positionControlKeydown change-&gt;visual-editor#alignmentChanged\"><option value=\"left\" selected>Left</option><option value=\"center\">Center</option><option value=\"right\">Right</option></select></label></div><div class=\"document-editor-block-shell\"><div class=\"document-editor-block\" contenteditable=\"false\" aria-readonly=\"true\"><p>&lt;img src=x onerror=alert(1)&gt;</p>\n</div><label class=\"document-block-position-control\" data-action=\"pointerdown-&gt;visual-editor#positionControlOpened\">Align <select aria-label=\"Block alignment\" data-visual-editor-block-id=\"slide-1-block-3\" data-action=\"focus-&gt;visual-editor#positionControlOpened keydown-&gt;visual-editor#positionControlKeydown change-&gt;visual-editor#alignmentChanged\"><option value=\"left\" selected>Left</option><option value=\"center\">Center</option><option value=\"right\">Right</option></select></label></div><div class=\"document-editor-block-shell\"><div class=\"document-editor-block\" contenteditable=\"false\" aria-readonly=\"true\"><p>Attack and <a href=\"mailto:a@example.com\">Email</a> and Data and VB.</p>\n</div><label class=\"document-block-position-control\" data-action=\"pointerdown-&gt;visual-editor#positionControlOpened\">Align <select aria-label=\"Block alignment\" data-visual-editor-block-id=\"slide-1-block-4\" data-action=\"focus-&gt;visual-editor#positionControlOpened keydown-&gt;visual-editor#positionControlKeydown change-&gt;visual-editor#alignmentChanged\"><option value=\"left\" selected>Left</option><option value=\"center\">Center</option><option value=\"right\">Right</option></select></label></div><div class=\"document-editor-block-shell\"><div class=\"document-editor-block\" data-editor-region-id=\"slide-1-region-5\" data-editor-block-id=\"slide-1-block-5\" contenteditable=\"true\" role=\"textbox\" aria-label=\"Editable Markdown block\" aria-multiline=\"true\" spellcheck=\"true\" data-action=\"input-&gt;visual-editor#projectionInput focus-&gt;visual-editor#blockFocus blur-&gt;visual-editor#blockBlur\"><figure class=\"editor-media\"><p></p>\n<figcaption class=\"editor-media-caption\" aria-label=\"Editable image alt text\" title=\"Edit image alt text\">Remote</figcaption></figure></div><label class=\"document-block-position-control\" data-action=\"pointerdown-&gt;visual-editor#positionControlOpened\">Align <select aria-label=\"Block alignment\" data-visual-editor-block-id=\"slide-1-block-5\" data-action=\"focus-&gt;visual-editor#positionControlOpened keydown-&gt;visual-editor#positionControlKeydown change-&gt;visual-editor#alignmentChanged\"><option value=\"left\" selected>Left</option><option value=\"center\">Center</option><option value=\"right\">Right</option></select></label></div><div class=\"document-editor-block-shell\"><div class=\"document-editor-block\" data-editor-region-id=\"slide-1-region-6\" data-editor-block-id=\"slide-1-block-6\" contenteditable=\"true\" role=\"textbox\" aria-label=\"Editable Markdown block\" aria-multiline=\"true\" spellcheck=\"true\" data-action=\"input-&gt;visual-editor#projectionInput focus-&gt;visual-editor#blockFocus blur-&gt;visual-editor#blockBlur\"><figure class=\"editor-media\"><p></p>\n<figcaption class=\"editor-media-caption\" aria-label=\"Editable image alt text\" title=\"Edit image alt text\">Data</figcaption></figure></div><label class=\"document-block-position-control\" data-action=\"pointerdown-&gt;visual-editor#positionControlOpened\">Align <select aria-label=\"Block alignment\" data-visual-editor-block-id=\"slide-1-block-6\" data-action=\"focus-&gt;visual-editor#positionControlOpened keydown-&gt;visual-editor#positionControlKeydown change-&gt;visual-editor#alignmentChanged\"><option value=\"left\" selected>Left</option><option value=\"center\">Center</option><option value=\"right\">Right</option></select></label></div></div></div>",
       "warnings": [],
       "editor_map": {
         "version": 1,
         "source_name": "Hostile",
         "mode": "document",
-        "source_length": 219,
+        "source_length": 301,
         "front_matter": null,
         "slides": [
           {
@@ -3130,11 +3130,11 @@
             "layout": "body",
             "range": {
               "start": 0,
-              "end": 219
+              "end": 301
             },
             "source_range": {
               "start": 0,
-              "end": 219
+              "end": 301
             },
             "delimiter_range": null,
             "blocks": [
@@ -3205,20 +3205,20 @@
                 "id": "slide-1-block-4",
                 "index": 3,
                 "kind": "paragraph",
-                "markdown": "[Attack](javascript:alert(1)) and [Email](mailto:a@example.com).",
+                "markdown": "[Attack](javascript:alert(1)) and [Email](mailto:a@example.com) and [Data](data:text/html,<script>alert(1)</script>) and [VB](vbscript:msgbox(1)).",
                 "position": null,
                 "position_directive_id": null,
                 "range": {
                   "start": 71,
-                  "end": 136
+                  "end": 218
                 },
                 "source_range": {
                   "start": 71,
-                  "end": 136
+                  "end": 218
                 },
                 "content_range": {
                   "start": 71,
-                  "end": 135
+                  "end": 217
                 },
                 "editable_region_id": "slide-1-region-4"
               },
@@ -3230,16 +3230,16 @@
                 "position": null,
                 "position_directive_id": null,
                 "range": {
-                  "start": 137,
-                  "end": 182
+                  "start": 219,
+                  "end": 264
                 },
                 "source_range": {
-                  "start": 137,
-                  "end": 182
+                  "start": 219,
+                  "end": 264
                 },
                 "content_range": {
-                  "start": 137,
-                  "end": 181
+                  "start": 219,
+                  "end": 263
                 },
                 "editable_region_id": "slide-1-region-5"
               },
@@ -3251,16 +3251,16 @@
                 "position": null,
                 "position_directive_id": null,
                 "range": {
-                  "start": 183,
-                  "end": 219
+                  "start": 265,
+                  "end": 301
                 },
                 "source_range": {
-                  "start": 183,
-                  "end": 219
+                  "start": 265,
+                  "end": 301
                 },
                 "content_range": {
-                  "start": 183,
-                  "end": 218
+                  "start": 265,
+                  "end": 300
                 },
                 "editable_region_id": "slide-1-region-6"
               }
@@ -3332,18 +3332,18 @@
                 "block_id": "slide-1-block-4",
                 "role": "block",
                 "kind": "paragraph",
-                "text": "[Attack](javascript:alert(1)) and [Email](mailto:a@example.com).",
+                "text": "[Attack](javascript:alert(1)) and [Email](mailto:a@example.com) and [Data](data:text/html,<script>alert(1)</script>) and [VB](vbscript:msgbox(1)).",
                 "range": {
                   "start": 71,
-                  "end": 135
+                  "end": 217
                 },
                 "source_range": {
                   "start": 71,
-                  "end": 135
+                  "end": 217
                 },
                 "content_range": {
                   "start": 71,
-                  "end": 135
+                  "end": 217
                 },
                 "editable": false
               },
@@ -3354,16 +3354,16 @@
                 "kind": "image",
                 "text": "![Remote](https://example.invalid/image.png)",
                 "range": {
-                  "start": 137,
-                  "end": 181
+                  "start": 219,
+                  "end": 263
                 },
                 "source_range": {
-                  "start": 137,
-                  "end": 181
+                  "start": 219,
+                  "end": 263
                 },
                 "content_range": {
-                  "start": 137,
-                  "end": 181
+                  "start": 219,
+                  "end": 263
                 },
                 "editable": true
               },
@@ -3374,16 +3374,16 @@
                 "kind": "image",
                 "text": "![Data](data:image/svg+xml,payload)",
                 "range": {
-                  "start": 183,
-                  "end": 218
+                  "start": 265,
+                  "end": 300
                 },
                 "source_range": {
-                  "start": 183,
-                  "end": 218
+                  "start": 265,
+                  "end": 300
                 },
                 "content_range": {
-                  "start": 183,
-                  "end": 218
+                  "start": 265,
+                  "end": 300
                 },
                 "editable": true
               }
@@ -3457,18 +3457,18 @@
             "block_id": "slide-1-block-4",
             "role": "block",
             "kind": "paragraph",
-            "text": "[Attack](javascript:alert(1)) and [Email](mailto:a@example.com).",
+            "text": "[Attack](javascript:alert(1)) and [Email](mailto:a@example.com) and [Data](data:text/html,<script>alert(1)</script>) and [VB](vbscript:msgbox(1)).",
             "range": {
               "start": 71,
-              "end": 135
+              "end": 217
             },
             "source_range": {
               "start": 71,
-              "end": 135
+              "end": 217
             },
             "content_range": {
               "start": 71,
-              "end": 135
+              "end": 217
             },
             "editable": false
           },
@@ -3479,16 +3479,16 @@
             "kind": "image",
             "text": "![Remote](https://example.invalid/image.png)",
             "range": {
-              "start": 137,
-              "end": 181
+              "start": 219,
+              "end": 263
             },
             "source_range": {
-              "start": 137,
-              "end": 181
+              "start": 219,
+              "end": 263
             },
             "content_range": {
-              "start": 137,
-              "end": 181
+              "start": 219,
+              "end": 263
             },
             "editable": true
           },
@@ -3499,16 +3499,16 @@
             "kind": "image",
             "text": "![Data](data:image/svg+xml,payload)",
             "range": {
-              "start": 183,
-              "end": 218
+              "start": 265,
+              "end": 300
             },
             "source_range": {
-              "start": 183,
-              "end": 218
+              "start": 265,
+              "end": 300
             },
             "content_range": {
-              "start": 183,
-              "end": 218
+              "start": 265,
+              "end": 300
             },
             "editable": true
           }

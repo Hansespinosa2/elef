@@ -5,6 +5,7 @@
   "scripts": {
     "test": "node run.mjs",
     "test:unit": "node --test *.test.js",
+    "test:components": "playwright test --config=playwright.components.config.js --project=components",
     "test:web": "playwright test --project=web",
     "test:desktop": "wdio run wdio.conf.js"
   },

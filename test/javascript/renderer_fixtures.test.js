@@ -23,3 +23,11 @@ for (const [index, { name, input }] of inputs.entries()) {
     }))), outputs[index].preview.editor_map)
   })
 }
+
+test("hostile URL fixture rejects executable link protocols while keeping mail links", () => {
+  const fixture = inputs.find(({ name }) => name === "hostile-content-and-urls")
+  const html = sandbox.ElefRenderer.renderMarkdownBlock(fixture.input.source)
+
+  assert.match(html, /href="mailto:a@example\.com"/)
+  assert.doesNotMatch(html, /href="(?:javascript|data|vbscript):/i)
+})

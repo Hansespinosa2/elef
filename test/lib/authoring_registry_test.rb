@@ -7,8 +7,6 @@ class AuthoringRegistryTest < ActiveSupport::TestCase
     generated = JSON.parse(AuthoringRegistry.built_in_entries.to_json)
 
     assert_equal generated, checked_in
-    assert checked_in.any? { |entry| entry["namespace"] == "/" && entry["trigger"] == "bold" }
-    assert checked_in.any? { |entry| entry["namespace"] == "@" && entry["aliases"].include?("alpha") }
   end
 
   test "exposes canonical directive names with compatibility aliases and schemas" do

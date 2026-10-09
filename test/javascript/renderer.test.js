@@ -354,6 +354,15 @@ test("shared Markdown block renderer supports both KaTeX delimiter families and 
   assert.match(html, /href="https:\/\/example\.com"/)
 })
 
+test("shared Markdown rendering preserves styled transpose and inverse atoms", () => {
+  for (const expression of ["\\mathbf{x}^{\\mathsf{T}}", "\\vec{x}^{\\mathsf{T}}", "\\mathbf{x}^{-1}", "\\vec{x}^{-1}"]) {
+    const html = renderMarkdownBlock(`$${expression}$`)
+
+    assert.match(html, /class="katex"/, `${expression} should render as math`)
+    assert.doesNotMatch(html, /class="math-error"/, `${expression} should not produce a math error`)
+  }
+})
+
 test("empty display math retains its exact inner source whitespace for visual editing", () => {
   for (const [opening, closing] of [["$$", "$$"], ["\\[", "\\]"]]) {
     const html = renderMarkdownBlock(`# Untitled document\n\n${opening}\n\n${closing}`)

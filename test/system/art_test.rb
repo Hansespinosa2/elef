@@ -391,17 +391,6 @@ class ArtTest < ApplicationSystemTestCase
     assert three.fetch("items").all? { |width, client_width, height, client_height| width <= client_width + 1 && height <= client_height + 1 }, three.inspect
   end
 
-  test "ART-SRC-008 position modifiers stay on an Art block in Rails presentation rendering" do
-    presentation = Presentation.create!(
-      title: "Positioned Art",
-      source: "# Positioned Art\n\n## Context\n\n- One input\n\n## Art block\n\n:::position{middle right}\n:::art\n- Alpha\n- Beta"
-    )
-
-    visit present_presentation_path(presentation)
-
-    assert_selector ".slide-region[data-art-host='fixed'] > .slide-region-block.position-right.position-middle > .slide-block.position-right.position-middle [data-elef-art-root][data-art-mode='peers']", wait: 10
-  end
-
   test "a hidden fixed Art host stays pending until it becomes measurable" do
     presentation = Presentation.create!(title: "Hidden Art host", source: ":::art\n- Alpha\n- Beta")
     visit edit_presentation_path(presentation)

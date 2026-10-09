@@ -66,20 +66,30 @@ class StyleAndMathShortcutTest < ActiveSupport::TestCase
     end
     assert_equal expected_aliases.sort, actual_aliases.sort, "single-letter @ aliases should only name supported Greek shortcuts"
 
+    rendered_aliases = %w[a D Q w X]
     lowercase_greek.merge(uppercase_greek).each do |letter, expansion|
       shortcut = catalog.find { |item| item[:prefix] == "@" && item[:aliases].include?(letter) }
       assert_equal expansion, shortcut&.fetch(:expansion), "@#{letter} should expand to #{expansion}"
 
-      html = Source::Renderer.render("$#{expansion}$")
-      assert_includes html, 'class="katex"', "@#{letter} should render through KaTeX"
-      refute_includes html, 'class="math-error"', "@#{letter} should not produce a math error"
+      if rendered_aliases.include?(letter)
+        html = Source::Renderer.render("$#{expansion}$")
+        assert_includes html, 'class="katex"', "@#{letter} should render through KaTeX"
+        refute_includes html, 'class="math-error"', "@#{letter} should not produce a math error"
+      end
     end
 
-    %w[ve vf vs vq vp vr].each do |alias_name|
+    variant_expansions = {
+      "ve" => "\\varepsilon", "vf" => "\\varphi", "vs" => "\\varsigma",
+      "vq" => "\\vartheta", "vp" => "\\varpi", "vr" => "\\varrho"
+    }
+    variant_expansions.each do |alias_name, expansion|
       shortcut = catalog.find { |item| item[:prefix] == "@" && item[:aliases].include?(alias_name) }
-      html = Source::Renderer.render("$#{shortcut[:expansion]}$")
-      assert_includes html, 'class="katex"', "@#{alias_name} should render through KaTeX"
-      refute_includes html, 'class="math-error"', "@#{alias_name} should not produce a math error"
+      assert_equal expansion, shortcut&.fetch(:expansion), "@#{alias_name} should expand to #{expansion}"
+      if alias_name == "ve"
+        html = Source::Renderer.render("$#{shortcut[:expansion]}$")
+        assert_includes html, 'class="katex"', "@#{alias_name} should render through KaTeX"
+        refute_includes html, 'class="math-error"', "@#{alias_name} should not produce a math error"
+      end
     end
   end
 

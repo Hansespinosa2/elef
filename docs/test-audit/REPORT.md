@@ -117,7 +117,7 @@ The source-level claims below were checked against the audited tree before editi
 | Deleted `document_sample_data_test.rb`'s report-length fixture test. | It only checked the length and headings of a constant. The other sample-data tests still exercise catalog loading, idempotent seeding, rendering, warnings, and graph behavior. |
 | Renamed and strengthened the PPTX service determinism test. | It now constructs two independent `Presentation` and `PptxExport` instances per fixture, compares the complete payloads, and checks an independently specified title and filename. |
 | Strengthened “presents from the edit screen without submitting the editor form.” | It changes the source, holds the autosave request, verifies the dirty state, accepts the navigation confirmation, and verifies that the persisted source stayed original. The focused system test passed. |
-| Renamed the five overclaimed tests in the library controller, presentation controller, presentation release model, Art integration, and Tauri build-hook tests. | The names now describe data-attribute wiring, draft/title staleness, the Ruby renderer path, and configured build commands, matching the bodies. |
+| Renamed five overclaimed tests: “card previews are scaled from their design size by the presentation canvas controller” → “card preview markup exposes presentation canvas dimensions and stage”; “editor wires autosave and keeps new presentations client-only until creation” → “editor markup configures autosave and keeps new presentations client-only”; “tracks stale and current states based on draft source, title, and assets” → “tracks stale and current states based on draft source and title”; “saved document resolution and rendering use shared recursive Art semantics” → “the Ruby document renderer resolves recursive Art directives”; and “Tauri dev and production builds both rebuild the Rails-owned frontend” → “Tauri config points both build hooks at the Rails frontend build command.” | Each new name describes the markup, draft/title comparison, Ruby-only path, or configured command that the body actually checks. |
 | Replaced the stylesheet contract's fixed count of 13 imports with a comparison between every `components/*.css` file and the imported component set. | Adding a component stylesheet no longer invalidates an unrelated magic count. |
 | Removed the two-page graph-panel style comparison system test and added a static Chromium fixture with expected panel background, border, and shadow values. | Comparing two pages could pass if both were wrong. A deliberate `base.css` background mutation caused the replacement assertion to fail; restoring the CSS made it pass. |
 | Added independent geometry expectations to the shared stylesheet browser check. | The check now asserts the 1280×720 logical slide, 16:9 frame, equal two-column widths, A4 page ratio/bounds, document heading size, paragraph line height, and overflow behavior, in addition to stylesheet parity. |
@@ -156,11 +156,67 @@ The first real-browser PPTX attempt exposed the missing import-map pin: the cont
 - `test/system/presentations_test.rb` line 247 passes as written; no fix is justified from the claimed failure.
 - The Ruby renderer fallback is present behind `ELEF_RENDERER=ruby`; static inspection does not establish that it is dead code.
 
-Phase 2 test corrections above are implemented and locally verified at the stated tiers. Phases 1 and 3–6 remain incomplete; their unverified claims and measurements will be added as work proceeds.
+Phase 2 test corrections above are implemented and locally verified at the stated tiers.
+
+## Phase 3: cheaper observation and duplicate coverage (partial)
+
+These changes move selected assertions to lower layers and consolidate tests that exercise the same implementation. The phase is incomplete: worker-safety/parallelism work, projection reuse, geometry fixture reduction, and post-change CI measurements remain open. No workflow YAML, required job definition/name/gate, trigger, verifier, attestation, or release rule changed. The desktop E2E runner now invokes the static component browser suite before Rails database fixture setup; the shared web → native → updater sequence and parity scenarios are unchanged.
+
+### Demotions and moves
+
+| Removed or shortened browser assertion | Replacement and reason | Break-test evidence |
+| --- | --- | --- |
+| `test/system/documents_test.rb`: “media transfer handling deduplicates file-list and item entries” | Direct media-controller unit test for file-list precedence and item fallback in `media_transfer.test.mjs`. | Removing the file-list guard made the unit assertion fail. |
+| `test/system/documents_test.rb`: “source dragover defensively supports DOMStringList types collections” | Direct controller unit test for `Files`, `preventDefault`, `dropEffect`, and the drop-target class. | Changing the drop effect to `none` made the unit assertion fail. |
+| `test/system/documents_test.rb`: “Mermaid source assist ignores mutations after its editor view is destroyed” | Direct Mermaid assistant controller test verifies a destroyed view closes the palette without editing. The separate reconnect browser test remains. | Removing the stale-editor guard made the unit assertion fail. |
+| `test/system/presentations_test.rb`: “falls back to local storage when indexeddb cannot read a draft” | Autosave controller unit test stubs a failing IndexedDB transaction and verifies the localStorage record is returned. | Returning `null` from the fallback path made the unit assertion fail. |
+| `test/system/presentations_test.rb`: “pasting a local image into the presentation title field does not intercept it” | Media controller unit test verifies a paste outside `.editor-surface` and `.editor-projection` is not prevented and does not upload. | Removing the editor-target guard made the unit assertion fail. |
+| `test/system/documents_test.rb`: “navigates resolved document links to previews” | Existing document controller response test now scopes the resolved and unresolved links to `.document-surface`, proving the rendered href and fallback markup. | Breaking the vendor renderer's wiki-link href made the scoped response test fail. |
+| `test/system/documents_test.rb`: content assertions in “print view renders paginated document and triggers window.print” | Controller response test now asserts both page headings and print toolbar; the remaining browser test only clicks Print with a `window.print` stub. | Removing the rendered document surface made the controller assertion fail. |
+| `test/system/art_test.rb`: “ART-SRC-008 position modifiers stay on an Art block in Rails presentation rendering” | Presentation response test asserts the position classes in the rendered presentation markup. | Removing `position_classes` from the renderer made the response assertion fail. |
+| `test/system/presentations_test.rb`: “an unaligned presentation block defaults to Align Left” | Presentation controller test inspects the server-generated editor projection for the selected left option. | Changing the editor default to center made the response assertion fail. |
+| `test/system/presentations_test.rb`: “presentation form does not register duplicate media controllers” | Presentation editor markup test counts the server-rendered controller token. | Omitting `media` from the form controller list made the response assertion fail. |
+| `test/system/presentations_test.rb`: “saved presentation Art fallback preserves attached media” | Presentation print response test asserts fallback status, asset URL, alt text, and list content. | Changing the renderer's fallback status made the response assertion fail. |
+| Warning text in “source mode keeps unsupported presentation directives available,” plus body-class assertions in “keeps Elef UI and presentation surfaces as separate styling zones” | Exact warning text and both application/presentation body classes are asserted in presentation controller responses. | Mutating the warning text and removing either body class made the respective response assertion fail. |
+| Draft/published DOM assertions in “print view selects draft content and sizes slides for one landscape page each” | Existing controller response test selects the latest draft and pinned published release. The browser test retains the real print-button action, CDP geometry, and PDF page/image-byte assertions. | Changing the `version=published` selection made the controller test fail. |
+| `test/system/unified_workspace_test.rb`: “uses dark Aradia surfaces for math shortcut settings” | Moved to the standalone Chromium component suite using a static HTML fixture; the CSS check no longer starts Rails or a database. | Changing the settings-card background made the component assertion fail. |
+| Static CSS/layout checks at the end of `web.spec.js`: “shared rendering styles preserve slide layouts and document typography,” “workspace graph panels use the independently specified dark surface colors,” and “the source editor has matching styles in Rails and the desktop asset bundle” | Moved into `components.spec.js` with fixture-only pages: shared slide/document geometry, graph panel colors, and editor shell geometry. They run in a standalone Playwright configuration before Rails database fixture setup. | Mutating the editor grid to one column made the component parity/geometry assertion fail. Independent expected slide, page, typography, and color values remain. |
+
+The presentation print system test was renamed to `published presentation print action produces a landscape PDF with one page per slide and attached media`; it still uses Chromium CDP to inspect the generated PDF and retains the print-button smoke. No PDF assertion was demoted.
+
+### Consolidations and reductions
+
+| Change | Evidence/replacement |
+| --- | --- |
+| Reduced `SourceRendererTest` from 18 tests to four facade-specific tests: resolver error propagation, unresolved asset empty output, attached video markup, and resolver/HTML-safe plumbing. | Fifteen original test bodies were removed because the same renderer is exercised more directly in JS: “renders standard Markdown links with safe URLs,” “blocks unsafe URL schemes in links and renders only link text,” “renders safe images with editor source metadata,” “strips images with unsafe URLs,” “resolves elef-asset image attachments with contain and cover fit,” “renders code blocks with syntax highlighting classes,” “renders a Mermaid fence as a diagram container,” “keeps other fenced code blocks highlighted,” “renders inline and display math via KaTeX,” “renders transpose and inverse commands on canonical styled atoms,” “renders parenthesized inline and bracketed display math via KaTeX,” “renders empty block display math as an editable math atom,” “preserves escaped dollar signs without rendering math,” “leaves math syntax inside code blocks literal,” and “rescues invalid LaTeX into a styled math error element.” The 14-fixture shared JavaScript bundle loop now includes unsafe link schemes (`data:` and `vbscript:`) alongside `javascript:` and explicitly asserts that none become links; a direct JS render test covers all four styled transpose/inverse expressions. The Rails facade parity loop remains in `javascript_renderer_test.rb`. Its duplicate editor-map fetch was removed because the same loop already compares the complete editor map inside the preview result. |
+| Merged “untrusted deck names and warnings are inserted as text” and “deck actions carry the selected deck identity” from `test/javascript/library_card.test.js` into `shared/library_card.test.js`; deleted the old file. | Shared card metadata, warning escaping/accessibility, and open/preview/present/rename/delete callbacks are tested against the shared implementation. |
+| Merged “library search matches titles without case or canonical Unicode differences” from `shared/library_search.test.js` into `shared/library_filter.test.js`; deleted the old file. | Both files exercised `library_filter.js`; the merged suite tests filtering, normalization, visibility, and no-results state. |
+| Combined “a rendered document draws the diagram instead of the fence source” and “a rendered presentation draws the diagram instead of the fence source” into one looped system test; removed “inserting /diagram renders a diagram on the rendered work.” | The document source-mode scenario still covers `/diagram` editing; the render suite covers document and presentation SVG output, while the Mermaid system suite retains editor preview, edit round-trip, and invalid-diagram checks. |
+| Moved “sample data covers supported presentation features” and “renders every sample's representative content” into `presentation_sample_data_test.rb`. | The remaining 46 presentation model tests no longer perform 22 full sample presentation creates and KaTeX renders. The prompt estimated three such tests; the audited file had two. The third test removed in this group was “deleting a parent leaves the fork detached and intact,” a duplicate fork-detachment assertion covered more strongly in `persistence_services_test.rb`. |
+| Removed “deleting a parent leaves the fork detached and intact” from the presentation model tests. | `persistence_services_test.rb` keeps the fork, origin revision, independence, and parent deletion assertions. |
+| Removed two `any?` authoring registry spot checks. | Exact comparison with generated canonical entries and remaining schema/alias tests cover the same entries more strongly. |
+| Reduced repeated KaTeX renders in the math shortcut catalog test. | Every alias-to-expansion mapping is still asserted; six representative Greek expressions and one variant render through KaTeX. |
+| Reduced the Rake import task tests to CLI/env wiring, exit/output, and count delta. | Stable identity, source round-trip, workspace, and revision behavior remains covered by `persistence_services_test.rb`. |
+
+### Phase 3 validation
+
+| Command / check | Result |
+| --- | --- |
+| `npm run test:javascript` | 444 passed |
+| Focused changed Rails controller/model/service suites on disposable SQLite | 173 tests, 1,366 assertions, passed |
+| `npm run test:components --prefix desktop/e2e` | 4 standalone headless Chromium tests passed without Rails or a database |
+| `npm run test:unit --prefix desktop/e2e` | 10 passed |
+| Focused Rails renderer facade fixture loop | 20 tests, 85 assertions, passed |
+| Selected remaining print, PDF, presentation styling, Mermaid rendering/editor, and reconnect system tests | 6 tests, 28 assertions, passed on headless Chromium with disposable SQLite |
+| Deliberate break checks for moved controller assertions | Published release selection, application body class, and presentation-mode body class mutations each failed the expected controller test; source restored afterward. Earlier targeted break checks for href, print surface, controller token, warning, alignment, Art position, and Art fallback are listed above. |
+| Deliberate CSS mutations | Incorrect math shortcut surface color and one-column editor layout each failed the expected standalone component assertion; CSS restored afterward. |
+| `git diff --check` | Passed after restoring all deliberate mutations. |
+
+The full system suite, full desktop E2E harness, macOS-native leg, and CI after-change metrics were not rerun in this partial phase. The static component runner was exercised directly; the full `run.mjs` path was not run locally because the E2E harness would compete for the existing development server's port 3000.
 
 ## Maintainer approval required before workflow changes
 
-No required job or authorization behavior has been edited. Before changing required workflow jobs, I will present the concrete change set for approval. Decisions needed before merge are:
+No workflow definition or authorization behavior has been changed. Before changing required workflow commands, triggers, or gates, I will present the concrete change set for approval. Decisions needed before merge are:
 
 - Whether to remove duplicate commands from required jobs and split the shared web E2E phase so it runs once, while preserving the Linux/macOS native phases, updater sequence, scenario parity gate, and all required job names.
 - Whether to narrow the PR SQLite run to tests with PostgreSQL/SQLite behavior differences, and where the full SQLite compatibility run should remain.
@@ -170,6 +226,7 @@ No required job or authorization behavior has been edited. Before changing requi
 
 ## Not yet verified
 
-- The test corrections, demotions, consolidations, new coverage, and mutation checks in phases 2–5 have not been implemented yet.
-- The required workflow changes in phase 1 are held for maintainer approval.
+- Remaining Phase 3 runtime work: shared system-test projection caching, reducing the 84-presentation geometry fixture, splitting the repeated root visits, worker isolation/parallelism experiments, and artifact reuse.
+- Phase 1 workflow deduplication and the proposed SQLite/benchmark changes are held for maintainer approval; no job definitions or release gates have changed.
+- Phase 4 security/correctness coverage, Phase 5 security mutation campaigns, and Phase 6 repeated-run/CI measurements remain incomplete.
 - No post-change timing comparison, three-run stability check, or final PR CI result exists yet. The acceptance targets are therefore not claimed.

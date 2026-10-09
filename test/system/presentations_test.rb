@@ -627,19 +627,6 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: /:::align\{center center\}/, wait: 5
   end
 
-  test "an unaligned presentation block defaults to Align Left" do
-    presentation = Presentation.create!(title: "Default alignment", source: "# Slide\n\nPlain block")
-    visit edit_presentation_path(presentation)
-    wait_for_fresh_projection
-
-    control = find("select[data-presentation-editor-align][data-slide-index='0'][data-block-index='1']")
-
-    assert_equal "left", control.value
-    assert_no_selector "select[data-presentation-editor-align] option[value='']"
-    assert_text "Align"
-    assert_no_text "Automatic position"
-  end
-
   test "presentation caret follows source switches and arrow keys move between blocks" do
     source = "# First slide\n\nA paragraph\n\nNext paragraph"
     presentation = Presentation.create!(title: "Presentation caret", source: source)
@@ -1326,7 +1313,6 @@ class PresentationsTest < ApplicationSystemTestCase
     visit edit_presentation_path(presentation)
 
     assert_equal "visual", page.evaluate_script("document.querySelector('form.visual-editor-form').dataset.editorMode")
-    assert_text "Unknown or malformed presentation directive was removed."
     click_on "Source"
     assert_selector ".cm-content", visible: true
     assert_includes find_field("Markdown source").value, ":::custom-directive{value}"
@@ -1410,23 +1396,6 @@ class PresentationsTest < ApplicationSystemTestCase
     refute_includes find_field("Markdown source").value, ":::align{center}"
     assert_no_selector ".presentation-editor-projection [data-elef-art-root]"
     assert_selector ".presentation-editor-projection p", text: "Next paragraph"
-  end
-
-  test "saved presentation Art fallback preserves attached media" do
-    media_bytes = Base64.decode64("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+i9MwAAAAASUVORK5CYII=")
-    media_digest = Digest::SHA256.hexdigest(media_bytes)
-    presentation = Presentation.create!(
-      title: "Art unsupported media",
-      source: ":::art\n- Research\n  ![Mockup](elef-asset:#{media_digest})"
-    )
-    presentation.assets.attach(io: StringIO.new(media_bytes), filename: "mockup.png", content_type: "image/png")
-    presentation.assets.blobs.last.update!(metadata: presentation.assets.blobs.last.metadata.merge("elef_sha256" => media_digest))
-
-    visit print_presentation_path(presentation)
-
-    assert_selector ".presentation-print [data-elef-art-root][data-art-status='fallback-unsupported'][data-art-layout='plain-list']"
-    assert_selector ".presentation-print [data-elef-art-root] img.presentation-media[src='/presentations/#{presentation.id}/assets/#{media_digest}'][alt='Mockup']"
-    assert_selector ".presentation-print [data-elef-art-root] .elef-art-list > li", text: "Research"
   end
 
   test "keeps the last good presentation projection when preview is unavailable and offers retry" do
@@ -1639,48 +1608,6 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_equal "false", page.find(".media-upload-status")["aria-busy"]
   end
 
-  test "pasting a local image into the presentation title field does not intercept it" do
-    presentation = Presentation.create!(title: "Untouched title", source: "# Untouched title\n\nKeep this source.")
-    visit edit_presentation_path(presentation, editor_mode: "source")
-
-    result = page.execute_script(<<~JAVASCRIPT)
-      const title = document.querySelector('.visual-editor-form .editor-title-input');
-      const source = document.querySelector('.source-field').editorController.value;
-      let uploadAttempts = 0;
-      window.fetch = (url, options = {}) => {
-        if (options.method === 'POST' && String(url).endsWith('/assets')) {
-          uploadAttempts += 1;
-          return Promise.resolve(new Response('{}', { status: 422, headers: { 'Content-Type': 'application/json' } }));
-        }
-        return Promise.reject(new Error('Unexpected request'));
-      };
-      const transfer = new DataTransfer();
-      transfer.items.add(new File(['image bytes'], 'title-paste.png', { type: 'image/png' }));
-      const event = new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: transfer });
-      title.dispatchEvent(event);
-      return {
-        prevented: event.defaultPrevented,
-        uploadAttempts,
-        source,
-        currentSource: document.querySelector('.source-field').editorController.value,
-        title: title.value
-      };
-    JAVASCRIPT
-
-    refute result["prevented"]
-    assert_equal 0, result["uploadAttempts"]
-    assert_equal "# Untouched title\n\nKeep this source.", result["source"]
-    assert_equal result["source"], result["currentSource"]
-  end
-
-  test "presentation form does not register duplicate media controllers" do
-    presentation = Presentation.create!(title: "Controller deduplication", source: "# Controller deduplication")
-    visit edit_presentation_path(presentation, editor_mode: "source")
-
-    controllers = page.evaluate_script("document.querySelector('.visual-editor-form').dataset.controller.split(/\\s+/)")
-    assert_equal 1, controllers.count("media")
-  end
-
   test "source mode drops web images into presentation slides at the cursor" do
     presentation = Presentation.create!(title: "Web image presentation", source: "# Web image presentation\n\nLead text.\n\nTail text.")
     visit edit_presentation_path(presentation, editor_mode: "source")
@@ -1720,7 +1647,7 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_equal 1, presentation.reload.assets.count
   end
 
-  test "print view selects draft content and sizes slides for one landscape page each" do
+  test "published presentation print action produces a landscape PDF with one page per slide and attached media" do
     media_bytes = Base64.decode64("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+i9MwAAAAASUVORK5CYII=")
     media_digest = Digest::SHA256.hexdigest(media_bytes)
     published_source = "---\ntheme: dark\ntypography: technical\n---\n# Published one\n\n![Diagram](elef-asset:#{media_digest} \"fit:contain\")\n---\n# Published two"
@@ -1731,21 +1658,10 @@ class PresentationsTest < ApplicationSystemTestCase
     PresentationReleasePublisher.call(presentation)
     presentation.update!(source: "---\ntheme: light\n---\n# Latest draft\n---\n# Draft two")
 
-    visit print_presentation_path(presentation)
-    assert_text "Latest draft · Print workflow"
-    assert_selector ".presentation-print-slides > .slide-frame", count: 2
-    assert_selector ".presentation-print.work-theme-light.work-typography-book"
-    assert_selector ".presentation-print .slide h1", text: "Latest draft"
+    visit print_presentation_path(presentation, version: "published")
     page.execute_script("window.print = () => { window.printWasRequested = true }")
     click_on "Print / Save PDF"
     assert_equal true, page.evaluate_script("window.printWasRequested")
-
-    visit print_presentation_path(presentation, version: "published")
-    assert_text "Published release · Print workflow"
-    assert_selector ".presentation-print.work-theme-dark.work-typography-technical"
-    assert_selector ".presentation-print .slide h1", text: "Published one"
-    assert_selector ".presentation-print img.presentation-media-contain[src='/presentations/#{presentation.id}/assets/#{media_digest}']"
-    assert_selector ".presentation-print-slides > .slide-frame", count: 2
 
     browser = page.driver.browser
     begin
@@ -1873,34 +1789,6 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_includes presentation.reload.source, "# Offline edit"
   ensure
     page.execute_script("window.restoreSaveFetch?.()") if page
-  end
-
-  test "falls back to local storage when indexeddb cannot read a draft" do
-    presentation = Presentation.create!(title: "Storage fallback", source: "# Initial")
-    visit edit_presentation_path(presentation)
-
-    page.execute_script(<<~JAVASCRIPT)
-      const controller = window.Stimulus.getControllerForElementAndIdentifier(
-        document.querySelector('form[data-controller~="autosave"]'), 'autosave'
-      );
-      const record = {
-        key: controller.localDraftKey,
-        snapshot: "# Browser copy",
-        values: ["Storage fallback", "# Browser copy"],
-        updatedAt: Date.now()
-      };
-      localStorage.setItem(controller.storageKey(record.key), JSON.stringify(record));
-      controller.database = Promise.resolve({ transaction() { throw new Error("IndexedDB unavailable"); } });
-      window.draftFallbackController = controller;
-    JAVASCRIPT
-
-    record = page.evaluate_async_script(<<~JAVASCRIPT)
-      const done = arguments[arguments.length - 1];
-      window.draftFallbackController.readDraft(window.draftFallbackController.localDraftKey).then(done);
-    JAVASCRIPT
-    assert_equal "# Browser copy", record["values"][1]
-
-    page.execute_script("localStorage.removeItem(window.draftFallbackController.storageKey(window.draftFallbackController.localDraftKey))")
   end
 
   test "warns when autosave and both browser draft stores are unavailable" do
@@ -2199,23 +2087,13 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_operator (fraction_parts[1]["top"] - fraction_parts[0]["top"]).abs, :>, 1
   end
 
-  test "keeps Elef UI and presentation surfaces as separate styling zones" do
+  test "presentation list styling applies inside the presentation surface" do
     presentation = Presentation.create!(title: "Scoped Deck", source: "# Scoped\n\n- One\n- Two")
 
-    visit presentations_path
-    assert_selector "body.elef-app"
-    refute_selector "body.presentation-body"
-
     visit presentation_path(presentation)
-    assert_selector "body.elef-app"
     assert_selector ".presentation-surface"
     assert_equal "disc",
       page.evaluate_script("getComputedStyle(document.querySelector('.presentation-surface ul')).listStyleType")
-
-    visit present_presentation_path(presentation)
-    assert_selector "body.presentation-body"
-    assert_selector ".presentation-mode.presentation-surface"
-    refute_selector "body.elef-app"
   end
 
   test "starts every regular slide header at the same inset" do

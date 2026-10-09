@@ -307,8 +307,8 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
 
     get document_path(document)
 
-    assert_select "a.document-link[href='#{document_path(target)}']", text: "Preview target"
-    assert_select "span.document-link.unresolved", text: "[[Missing target]]"
+    assert_select ".document-surface a.document-link[href='#{document_path(target)}']", text: "Preview target"
+    assert_select ".document-surface span.document-link.unresolved", text: "[[Missing target]]"
   end
 
   test "document views expose collapsed outgoing and incoming context" do
@@ -367,14 +367,15 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "# Saved", document.reload.source
   end
 
-  test "print view renders toolbar and paginated pages for a document" do
+  test "print view renders document content and its toolbar" do
     document = Document.create!(title: "Printable Document", source: "# Page 1\n\nContent\n\n---\n\n# Page 2\n\nMore")
 
     get print_document_path(document)
     assert_response :success
     assert_select ".document-print-toolbar", text: /Printable Document/
     assert_select ".document-print-toolbar button", text: "Print / Save PDF"
-    assert_select ".document-surface"
+    assert_select ".document-surface h1", text: "Page 1"
+    assert_select ".document-surface h1", text: "Page 2"
   end
 
   private

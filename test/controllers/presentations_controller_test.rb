@@ -164,6 +164,8 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "presentation[theme]", config.fetch("themeName")
     assert_equal "presentation[typography]", config.fetch("typographyName")
     assert config.fetch("persisted")
+    media_controllers = css_select("[data-editor-form-controllers]").first["data-editor-form-controllers"].split.count("media")
+    assert_equal 1, media_controllers
     assert_select 'button[data-dirty-navigation]', text: "Present"
     assert_select "a[href='#{print_presentation_path(presentations(:one))}']", text: "Print draft / save PDF"
     get new_presentation_path
@@ -600,6 +602,7 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
 
     get presentation_path(presentation)
     assert_response :success
+    assert_select "body.elef-app"
     assert_select ".presentation-surface"
     assert_select ".slides-typography-book"
     assert_select ".slide", 2
@@ -743,9 +746,50 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     get presentation_path(presentation)
 
     assert_response :success
-    assert_select '[aria-label="Markdown warnings"]', text: /directive/
+    assert_select '[aria-label="Markdown warnings"]', text: /Unknown or malformed presentation directive was removed\./
     assert_select ".slide", text: /Content/
     refute_includes response.body, ":::unknown"
+  end
+
+  test "presentation editor renders left alignment as the default for an unaligned block" do
+    presentation = Presentation.create!(title: "Default alignment", source: "# Slide\n\nPlain block")
+
+    get edit_presentation_path(presentation)
+
+    assert_response :success
+    projection = editor_host_config.fetch("previewHtml")
+    assert_match(/<select[^>]*data-presentation-editor-align[^>]*>[\s\S]*?<option value=\"left\" selected>Left<\/option>/, projection)
+    refute_match(/<option value=\"\"><\/option>/, projection)
+  end
+
+  test "presentation rendering keeps position modifiers on the Art block" do
+    presentation = Presentation.create!(
+      title: "Positioned Art",
+      source: "# Positioned Art\n\n## Context\n\n- One input\n\n## Art block\n\n:::position{middle right}\n:::art\n- Alpha\n- Beta"
+    )
+
+    get present_presentation_path(presentation)
+
+    assert_response :success
+    assert_select ".slide-region[data-art-host='fixed'] > .slide-region-block.position-right.position-middle > .slide-block.position-right.position-middle [data-elef-art-root][data-art-mode='peers']"
+  end
+
+  test "print output preserves attached media in the Art fallback" do
+    media_bytes = Base64.decode64("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+i9MwAAAAASUVORK5CYII=")
+    media_digest = Digest::SHA256.hexdigest(media_bytes)
+    presentation = Presentation.create!(
+      title: "Art unsupported media",
+      source: ":::art\n- Research\n  ![Mockup](elef-asset:#{media_digest})"
+    )
+    presentation.assets.attach(io: StringIO.new(media_bytes), filename: "mockup.png", content_type: "image/png")
+    presentation.assets.blobs.last.update!(metadata: presentation.assets.blobs.last.metadata.merge("elef_sha256" => media_digest))
+
+    get print_presentation_path(presentation)
+
+    assert_response :success
+    assert_select ".presentation-print [data-elef-art-root][data-art-status='fallback-unsupported'][data-art-layout='plain-list']"
+    assert_select ".presentation-print [data-elef-art-root] img.presentation-media[src='/presentations/#{presentation.id}/assets/#{media_digest}'][alt='Mockup']"
+    assert_select ".presentation-print [data-elef-art-root] .elef-art-list > li", text: "Research"
   end
 
   test "create responds to JSON format with edit and upload urls" do

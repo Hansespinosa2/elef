@@ -220,6 +220,15 @@ try {
   env.ELEF_E2E_DESKTOP_LINKED_DOCUMENT_ID = desktopLinkedDocumentId
 
   if (process.env.CI || process.env.ELEF_E2E_RUN_WEB === "1") {
+    // These fixture-only browser checks need Chromium, but not Rails or test data.
+    const componentsResult = spawnSync(
+      path.join(e2eRoot, "node_modules", ".bin", "playwright"),
+      ["test", "--config=playwright.components.config.js", "--project=components"],
+      { cwd: e2eRoot, env, stdio: "inherit" }
+    )
+    if (componentsResult.error) throw componentsResult.error
+    if (componentsResult.status !== 0) throw new Error("Static browser component checks failed with status " + componentsResult.status)
+
     const seeded = runRails(
       `Presentation.where(title: ${JSON.stringify(SHARED_LIBRARY_CREATE_DELETE_TITLES.presentation)}).destroy_all; Document.where(title: ${JSON.stringify(SHARED_LIBRARY_CREATE_DELETE_TITLES.document)}).destroy_all; presentation = Presentation.create!(title: ${JSON.stringify(webTitle)}, source: "# Before E2E\\n\\nSeed paragraph.\\n\\nSee [[E2E linked]].\\n"); conflict = Presentation.create!(title: "E2E conflict", source: "# Before conflict test\\n\\nSeed paragraph.\\n"); hostile = Presentation.create!(title: "E2E hostile", source: ${JSON.stringify(hostileSource)}); document = Document.create!(source: ${JSON.stringify(e2eDocumentSource)}); linked = Document.create!(source: ${JSON.stringify(e2eLinkedDocumentSource)}); puts "ELEF_E2E_PRESENTATION_ID=#{presentation.id}"; puts "ELEF_E2E_CONFLICT_PRESENTATION_ID=#{conflict.id}"; puts "ELEF_E2E_HOSTILE_PRESENTATION_ID=#{hostile.id}"; puts "ELEF_E2E_DOCUMENT_IDS=#{[document.id, linked.id].join(',')}"`
     )

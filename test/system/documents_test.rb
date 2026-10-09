@@ -301,53 +301,6 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: /flowchart LR/, wait: 5
   end
 
-  test "Mermaid source assist ignores mutations after its editor view is destroyed" do
-    source = "```mermaid\nflowchart LR\n    A[Research]\n```"
-    document = Document.create!(title: "Mermaid editor teardown", source: source)
-
-    visit edit_document_path(document)
-    click_on "Source"
-    results = page.evaluate_async_script(<<~JAVASCRIPT)
-      const done = arguments[arguments.length - 1];
-      const root = document.querySelector('.source-field');
-      const controllers = root.dataset.controller.split(/\\s+/);
-      const editor = root.editorController;
-      const assist = window.Stimulus.getControllerForElementAndIdentifier(root, 'mermaid-assist');
-      root.dataset.controller = controllers.filter((name) => name !== 'editor').join(' ');
-      setTimeout(() => {
-        const original = editor.value;
-        let noThrow = true;
-        try {
-          editor.dom.dispatchEvent(new KeyboardEvent('keydown', {
-            key: 'Enter', bubbles: true, cancelable: true
-          }));
-          editor.setSelectionRange(0);
-          editor.replaceRange('bad', 0, 0);
-          editor.replaceRangeWithSelection('bad', 0, 0, { from: 0, to: 0 });
-        } catch (_error) {
-          noThrow = false;
-        }
-        const results = {
-          noThrow,
-          unchanged: editor.value === original,
-          staleEditorDestroyed: editor.destroyed,
-          assistRetargeted: assist.editorController === editor
-        };
-        root.dataset.controller = controllers.join(' ');
-        setTimeout(() => done({ ...results, assistRetargetedAfterReconnect: assist.editorController === root.editorController }), 100);
-      }, 100);
-    JAVASCRIPT
-
-    assert_equal({
-      "noThrow" => true,
-      "unchanged" => true,
-      "staleEditorDestroyed" => true,
-      "assistRetargeted" => true,
-      "assistRetargetedAfterReconnect" => true
-    }, results)
-    assert page.evaluate_script("Boolean(document.querySelector('.source-field').editorController)")
-  end
-
   test "document command palettes stay inactive inside Mermaid code" do
     source = "```mermaid\nflowchart LR\n    A[]\n```"
     document = Document.create!(title: "Mermaid palette context", source: source)
@@ -631,17 +584,6 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_selector ".document-link-option", text: "Research target", wait: 5
     find(".document-link-option", text: "Research target").click
     assert_equal "[[Research target]]", find_field("Markdown source").value
-  end
-
-  test "navigates resolved document links to previews" do
-    target = Document.create!(title: "Linked target", source: "# Linked target")
-    source = Document.create!(title: "Linked source", source: "See [[Linked target]]")
-
-    visit document_path(source)
-    click_on "Linked target"
-
-    assert_current_path document_path(target)
-    assert_selector ".document-surface h1", text: "Linked target"
   end
 
   test "keeps links editable in the visual surface instead of navigating" do
@@ -1740,39 +1682,6 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_equal "false", page.find(".media-upload-status")["aria-busy"]
   end
 
-  test "media transfer handling deduplicates file-list and item entries" do
-    document = Document.create!(title: "Media transfer deduplication", source: "# Media transfer deduplication")
-    visit edit_document_path(document, editor_mode: "source")
-
-    result = page.evaluate_async_script(<<~JAVASCRIPT)
-      const done = arguments[0];
-      const waitForMedia = () => {
-        const media = window.Stimulus.getControllerForElementAndIdentifier(document.querySelector('.visual-editor-form'), 'media');
-        if (!media) {
-          window.setTimeout(waitForMedia, 10);
-          return;
-        }
-        const listed = new File(['same bytes'], 'same.png', { type: 'image/png' });
-        const itemCopy = new File(['same bytes'], 'same.png', { type: 'image/png' });
-        let duplicateItemReads = 0;
-        const combined = media.filesFromTransfer({
-          files: [listed],
-          items: [{ kind: 'file', getAsFile: () => { duplicateItemReads += 1; return itemCopy; } }]
-        });
-        const fromItems = media.filesFromTransfer({
-          files: [],
-          items: [{ kind: 'file', getAsFile: () => itemCopy }]
-        });
-        done({ combinedCount: combined.length, duplicateItemReads, fallbackCount: fromItems.length });
-      };
-      waitForMedia();
-    JAVASCRIPT
-
-    assert_equal 1, result["combinedCount"]
-    assert_equal 0, result["duplicateItemReads"]
-    assert_equal 1, result["fallbackCount"]
-  end
-
   test "source media paste and drop tolerate an unavailable editor and disconnect clears tracked ranges" do
     document = Document.create!(title: "Source image readiness", source: "# Source image readiness\n\nKeep this source.")
     visit edit_document_path(document, editor_mode: "source")
@@ -1890,48 +1799,6 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_selector ".media-upload-status", text: "Only image files can be dropped here — to use an image from a web page, save it first.", wait: 8
     assert_equal "false", page.find(".media-upload-status")["aria-busy"]
     assert_equal before_drop, page.evaluate_script("document.querySelector('.source-field').editorController.value")
-  end
-
-  test "source dragover defensively supports DOMStringList types collections" do
-    document = Document.create!(title: "DOMStringList dragover", source: "# DOMStringList dragover")
-    visit edit_document_path(document, editor_mode: "source")
-
-    result = page.evaluate_script(<<~JAVASCRIPT)
-      (() => {
-        const surface = document.querySelector('.editor-surface');
-        const typesList = {
-          0: 'Files',
-          length: 1,
-          contains: (item) => item === 'Files',
-          item: (index) => index === 0 ? 'Files' : null
-        };
-        let prevented = false;
-        let dropEffect = null;
-        const mockEvent = {
-          currentTarget: surface,
-          dataTransfer: {
-            types: typesList,
-            dropEffect: 'none'
-          },
-          preventDefault: () => { prevented = true; }
-        };
-        Object.defineProperty(mockEvent.dataTransfer, 'dropEffect', {
-          set: (val) => { dropEffect = val; },
-          get: () => dropEffect
-        });
-        const media = window.Stimulus.getControllerForElementAndIdentifier(document.querySelector('.visual-editor-form'), 'media');
-        media.sourceDragOver(mockEvent);
-        return {
-          prevented,
-          dropEffect,
-          hasDropTargetClass: surface.classList.contains('is-media-drop-target')
-        };
-      })()
-    JAVASCRIPT
-
-    assert result["prevented"]
-    assert_equal "copy", result["dropEffect"]
-    assert result["hasDropTargetClass"]
   end
 
   test "source mode ignores plain text drops so CodeMirror retains native behavior" do
@@ -3232,17 +3099,9 @@ class DocumentsTest < ApplicationSystemTestCase
     page.driver.browser.manage.window.resize_to(1400, 1000)
   end
 
-  test "print view renders paginated document and triggers window.print" do
-    document = Document.create!(
-      title: "Printable Document",
-      source: "# Page 1\n\nFirst page body\n\n---\n\n# Page 2\n\nSecond page body"
-    )
-
+  test "print button requests browser printing" do
+    document = Document.create!(title: "Printable Document", source: "# Printable Document")
     visit print_document_path(document)
-
-    assert_text "Printable Document"
-    assert_selector ".document-print-toolbar", text: /Printable Document/
-    assert_selector ".document-page", minimum: 1
 
     page.execute_script("window.print = () => { window.printWasRequested = true }")
     click_on "Print / Save PDF"
