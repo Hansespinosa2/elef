@@ -106,6 +106,56 @@ The per-file system run found another timing-sensitive result: `documents_test.r
 
 An initial attempt to count Ruby directories ran two Rails processes concurrently against one SQLite file and hit `SQLite3::BusyException: database is locked`. That was an instrumentation collision, not a product test result. I reran the directory suites sequentially against separate SQLite files; 263 core Ruby tests and 98 controller tests passed.
 
+## SQLite/PostgreSQL differential matrix
+
+The initial estimate that SQLite reruns the complete non-system suite is correct. Before narrowing it, I searched application SQL, migrations, schema definitions, and test coverage. The app has no PostgreSQL-only query operator in runtime code; the identified adapter-sensitive behavior is concentrated in migration SQL, SQLite's foreign-key connection setting, partial unique indexes, and optimistic locking's adapter-generated update.
+
+| Differential behavior | Source evidence | Focused assertion on both adapters |
+| --- | --- | --- |
+| Sample-id migration backfill | `20260922003000_add_sample_compatibility_to_works.rb` selects `UPDATE ... FROM` for PostgreSQL and a correlated subquery otherwise. | `sqlite_compatibility_test.rb` runs the migration against a presentation detail and asserts the copied `works.sample_id`. |
+| Serialized math-shortcut alias migration | `20260925100000_move_bb_alias_to_bold_math_shortcut.rb` queries a quoted boolean and parses/quotes JSON text through adapter SQL. | The focused test runs the migration on SQLite and checks the source and destination alias arrays after reloading. |
+| Foreign-key enforcement and partial unique index semantics | SQLite requires `PRAGMA foreign_keys` enabled on the connection; `works` uses a unique partial index for document titles. | A direct SQL insert checks duplicate documents fail, duplicate presentation titles remain allowed, and an invalid workspace reference is rejected. The `PRAGMA` assertion runs only on SQLite. |
+| Optimistic locking | `works.lock_version` is applied by Active Record through adapter-specific updates. | Two SQLite-loaded copies verify that a stale save raises and cannot replace the committed source. |
+
+The new `test/sqlite_compatibility_test.rb` passed locally on a disposable SQLite database (4 tests, 9 assertions, about 0.13 seconds). These four tests also run in the PostgreSQL test job, so both branches of the migration and adapter-level persistence behavior receive the same assertions in CI. Local PostgreSQL was unavailable, so I could not verify that leg on this device. The full SQLite compatibility suite remains in the new weekly scheduled workflow and can also be started manually.
+
+## Phase 1: remove verified duplicate executions
+
+The maintainer approved run-once changes, SQLite narrowing after documenting the differential matrix, and moving the performance measurement out of PR authorization. No required job was removed, renamed, or made conditional, and the 11-job required list and attestation dependency remain unchanged.
+
+| Removed PR execution | Remaining coverage and contract |
+| --- | --- |
+| The eight explicit deterministic JavaScript invocations in `test` (111 tests in the audited baseline). | `npm run test:javascript` in `desktop-fast` includes all eight files and the full shared JavaScript suite. The contract test rejects those explicit workflow invocations. |
+| The extra `npm run test:javascript` copies from `desktop` and `desktop-macos`. | The complete Rails-owned JavaScript suite runs once in `desktop-fast`; each desktop job still rebuilds and consumes the Rails renderer bundle. |
+| The extra `npm test --prefix desktop/frontend` copies from `desktop` and `desktop-macos`. | The 26 adapter tests run once in `desktop-fast`; platform jobs still build the frontend and exercise it in native E2E. |
+| Linux `elef-core` unit tests from the full-workspace command. | `desktop-fast` runs all `elef-core` tests. Linux runs `elef_desktop_lib` tests; macOS retains full-workspace tests because `elef-core` contains platform-conditional filesystem code. |
+| The macOS copy of the web browser scenarios and static component checks. | The Linux E2E runner executes the shared web stage and standalone component checks once, then runs native WebdriverIO and the updater pass in order. macOS sets `ELEF_E2E_SKIP_WEB=1` and runs native WebdriverIO followed by the unchanged updater pass. Shared scenario definitions and the final Linux web/native parity assertion remain. |
+| The second Chromium download. | Only the Linux web phase installs Chromium; `~/.cache/ms-playwright` is keyed by OS and `desktop/e2e/package-lock.json`. macOS has no web/component stage and no browser download. |
+| The two 20-process benchmark runs and their dedicated measurement-only release builds from required `desktop` jobs. | `native-performance.yml` runs weekly or by manual dispatch on Linux and macOS, with 10 launches per platform. The local benchmark default remains 20. Native performance is declared non-gating in attestation schema v2; the deployment verifier checks that manifest as well as the exact required-job list. Package builds and native/updater security scenarios remain in required CI; signed release packaging in `desktop-release.yml` is unchanged. |
+
+`ci_single_run_test.rb` now checks exact command ownership, the sole web stage and macOS skip, SQLite job scope and scheduled full suite, benchmark placement, required job names/gates, and attestation declarations. The deployment authorization harness now rejects an attestation that omits or changes the required-job manifest or non-gating measurement policy. The verifier's exact-one-and-success rule rejects missing, duplicate, skipped, or failed job records; the harness explicitly exercises failed required jobs and malformed attestation policy.
+
+### Phase 1 validation
+
+| Command / check | Result |
+| --- | --- |
+| `ruby test/scripts/ci_single_run_test.rb` | Passed; all 11 required job names, event gates, once-only commands and new workflow policies matched. |
+| `bash test/scripts/deployment_authorization_test.sh` | Passed; successful run authorized, while missing policy fields, missing jobs/artifact, failed jobs/run, and a mismatched tested tree were rejected. |
+| `python3 desktop/scripts/check_architecture.py` | Passed; exactly two scheduled benchmark invocations remain and command allowlist/CSP checks still pass. |
+| `python3 script/check_frontend_ownership.py` | Passed after moving static browser fixtures out of `desktop/`; Rails remains the owner of shared UI source. |
+| Full non-system Rails suite on disposable SQLite (`bin/rails db:test:prepare test`) | 372 tests, 3,037 assertions, 0 failures, 0 errors, 0 skips; 38.07 seconds. |
+| `npm run test:javascript` | 444 tests passed. |
+| `npm test --prefix desktop/frontend` | 26 tests passed. |
+| `npm run test:unit --prefix desktop/e2e` | 12 tests passed, including parameterized benchmark count validation. |
+| `npm run test:components --prefix desktop/e2e` | 4 static headless Chromium component tests passed. |
+| `npm run build --prefix desktop/frontend` | Passed. |
+| `bin/rails test test/sqlite_compatibility_test.rb` on disposable SQLite | 4 tests, 9 assertions, passed. |
+| `cargo test --manifest-path desktop/Cargo.toml --workspace --locked` | 43 `elef-core` tests and 7 `elef_desktop_lib` tests passed. |
+| `cargo fmt --manifest-path desktop/Cargo.toml --all -- --check` | Passed. |
+| `cargo clippy --manifest-path desktop/Cargo.toml --workspace --all-targets -- -D warnings` | Passed. |
+
+The updated workflow itself has not run on GitHub yet, so there are no after-change PR wall-time or runner-minute measurements. Baseline metrics remain the only CI measurements; the 20% wall-time and 25% runner-minute targets are not claimed. The new weekly workflows and both native platforms need a CI execution to validate runner setup. Local PostgreSQL is unavailable, and native macOS cannot be run on this Linux host.
+
 ## Phase 2: correct misleading tests
 
 The source-level claims below were checked against the audited tree before editing. The following test changes are in the working branch; no required job, job trigger, verifier, attestation, or release behavior has changed.
@@ -246,19 +296,19 @@ The full system suite, full desktop E2E harness, macOS-native leg, and CI after-
 
 The new fetcher seam is only used by focused unit tests; the default production path remains `Addrinfo.getaddrinfo` followed by a `Net::HTTP` connection pinned to the checked address. Archive import path/manifest/size guards, updater version/install locking, and production-capability IPC checks now have the coverage described above. The native IPC test uses Tauri's `MockRuntime` with production capability data; Linux Wry/WebKit and macOS native WebView execution still require CI. Remaining Phase 4 work includes Rails document persistence/start/import/export/release/fork/FolderSync paths, renderer fallback, bug-report environment matrix and 429 UI, remaining PPTX fetcher edge cases, and the other listed coverage gaps.
 
-## Maintainer approval required before workflow changes
+## Maintainer approval decisions
 
-No workflow definition or authorization behavior has been changed. Before changing required workflow commands, triggers, or gates, I will present the concrete change set for approval. Decisions needed before merge are:
+The maintainer approved the following workflow decisions in this session, and those changes are implemented with job names and required check membership preserved:
 
-- Whether to remove duplicate commands from required jobs and split the shared web E2E phase so it runs once, while preserving the Linux/macOS native phases, updater sequence, scenario parity gate, and all required job names.
-- Whether to narrow the PR SQLite run to tests with PostgreSQL/SQLite behavior differences, and where the full SQLite compatibility run should remain.
-- Whether to move the benchmark out of the PR path. It currently fails the required `desktop` job if it fails, so moving it changes release/deployment authorization gating; the workflow verifier, attestation, and contract tests would need a coordinated update.
-- Whether to remove the `ELEF_RENDERER=ruby` fallback if later evidence establishes it is dead. It is currently present and will be tested before any removal proposal.
-- Any proposed change to release packaging or updater signature checks. No such change is included in this audit.
+- Run pure JavaScript and frontend adapter suites once, keep one shared web browser stage, preserve Linux/macOS native scenarios and the updater sequence, scope Linux Rust tests to the desktop library, and cache Chromium.
+- Narrow PR SQLite coverage after documenting the PostgreSQL/SQLite differential matrix; retain the full SQLite suite on a weekly schedule and manual dispatch.
+- Move the 20-launch measurement out of required PR jobs, use a parameterized 10-launch scheduled/manual run, and update the architecture check, CI contract, attestation schema, and deployment verifier together.
+
+No removal of the `ELEF_RENDERER=ruby` path is proposed; it remains live code and must be tested before any future removal request. Release packaging and updater signature checks remain unchanged. There are no further workflow decisions pending in this report.
 
 ## Not yet verified
 
 - Remaining Phase 3 runtime work: shared system-test projection caching, reducing the 84-presentation geometry fixture, splitting the repeated root visits, worker isolation/parallelism experiments, and artifact reuse.
-- Phase 1 workflow deduplication and the proposed SQLite/benchmark changes are held for maintainer approval; no job definitions or release gates have changed.
+- The changed GitHub workflows have not executed yet. Local contract tests verify their job names, invocation ownership, required job manifest, attestation policy, and schedule placement, but only CI can validate hosted runner installation and native execution.
 - Phase 4 security/correctness coverage, Phase 5 security mutation campaigns, and Phase 6 repeated-run/CI measurements remain incomplete.
 - No post-change timing comparison, three-run stability check, or final PR CI result exists yet. The acceptance targets are therefore not claimed.

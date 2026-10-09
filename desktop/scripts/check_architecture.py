@@ -35,10 +35,15 @@ performance_config = json.loads((TAURI_ROOT / "tauri.performance.conf.json").rea
 assert performance_config == {"plugins": {"updater": {"endpoints": ["https://127.0.0.1:8888/manifest"]}}}, "release measurement must keep secure transport and a loopback-only offline check"
 performance_benchmark = (REPO_ROOT / "desktop" / "e2e" / "benchmark-native.mjs").read_text()
 ci_workflow = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text()
+performance_workflow = (REPO_ROOT / ".github" / "workflows" / "native-performance.yml").read_text()
 assert 'process.argv.includes("--report-runner")' in performance_benchmark, "hosted native performance must be identified explicitly"
 assert 'report.budgetMode = reportOnly ? "runner-report-only" : "enforced"' in performance_benchmark
 assert 'assert.deepEqual(report.misses, [], "Native release application performance exceeded its budgets")' in performance_benchmark, "target-device performance runs must keep hard budget assertions"
-assert ci_workflow.count("benchmark-native.mjs --binary") == 2 and ci_workflow.count("--report-runner") == 2, "both hosted benchmark jobs must report their measurements without claiming target-device enforcement"
+assert "benchmark-native.mjs" not in ci_workflow, "native measurements must not gate a pull-request CI job"
+assert performance_workflow.count("benchmark-native.mjs --binary") == 2, "the scheduled workflow must keep one benchmark invocation per platform"
+assert performance_workflow.count("--launch-count 10 --report-runner") == 2, "scheduled measurements must use an explicit bounded launch count on both platforms"
+assert 'schedule:' in performance_workflow and "pull_request:" not in performance_workflow, "native measurements must run outside pull-request authorization"
+assert 'DEFAULT_LAUNCH_COUNT = 20' in (REPO_ROOT / "desktop" / "e2e" / "native-benchmark-config.js").read_text(), "local/target measurement default remains twenty launches"
 feature_flags_source = (REPO_ROOT / "app" / "javascript" / "lib" / "feature_flags.js").read_text()
 delivery_plan = (REPO_ROOT / "docs" / "desktop" / "delivery-plan.md").read_text()
 document_model = (REPO_ROOT / "app" / "lib" / "source" / "document.rb").read_text()

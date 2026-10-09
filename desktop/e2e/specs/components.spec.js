@@ -126,7 +126,7 @@ test("workspace graph panels use independently specified dark surface colors", a
 test("math shortcut settings use the expected dark surfaces", async ({ page }) => {
   const styles = await hostStylesheets()
   for (const [host, css] of Object.entries(styles)) {
-    await setStaticFixture(page, "../fixtures/math-shortcuts-dark.html", css)
+    await setStaticFixture(page, "../../../test/e2e/fixtures/math-shortcuts-dark.html", css)
     const colors = await page.evaluate(() => [
       getComputedStyle(document.querySelector(".math-shortcut-card")).backgroundColor,
       getComputedStyle(document.querySelector(".authoring-settings-dialog")).backgroundColor,
@@ -140,7 +140,7 @@ test("the source editor component has matching web and desktop layout styles", a
   const styles = await hostStylesheets()
   const measured = {}
   for (const [host, css] of Object.entries(styles)) {
-    await setStaticFixture(page, "../fixtures/editor-styles.html", css)
+    await setStaticFixture(page, "../../../test/e2e/fixtures/editor-styles.html", css)
     measured[host] = await page.evaluate(() => {
       const selectors = [".editor-shell", ".editor-layout", ".source-pane", ".source-field", ".editor-toolbar",
         ".editor-surface", ".cm-editor", ".cm-scroller", ".cm-content", ".editor-projection"]

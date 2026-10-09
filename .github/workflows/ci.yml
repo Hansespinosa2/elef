@@ -106,10 +106,6 @@ jobs:
           PGPASSWORD: postgres
           PGTESTDATABASE: elef_test
         run: bin/rails db:test:prepare test
-      - name: Run deterministic JavaScript unit tests
-        run: |
-          node test/javascript/bug_report_events.test.mjs
-          node --test test/javascript/document_link_palette.test.mjs test/javascript/editor_markdown_math.test.mjs test/javascript/math_shorthand.test.mjs test/javascript/mermaid_syntax.test.mjs test/javascript/mermaid_runtime.test.mjs test/javascript/media_transfer.test.mjs test/javascript/pptx_export.test.mjs
       - name: Check repository launchers and deployment files
         run: |
           bash test/scripts/elef-agent_test.sh
@@ -135,7 +131,9 @@ jobs:
         env:
           RAILS_ENV: test
           ELEF_USE_SQLITE: "1"
-        run: bin/rails db:test:prepare test
+        run: |
+          bin/rails db:test:prepare
+          bin/rails test test/sqlite_compatibility_test.rb
 
   system-test:
     if: github.event_name != 'push'
@@ -235,10 +233,6 @@ jobs:
         run: npm run renderer:build
       - name: Verify the Rails renderer bundle is current
         run: git diff --exit-code -- vendor/javascript/elef-renderer.bundle.js vendor/javascript/art_source.bundle.js
-      - name: Test Rails-owned frontend modules
-        run: npm run test:javascript
-      - name: Test desktop frontend adapters
-        run: npm test --prefix desktop/frontend
       - name: Bundle the desktop frontend
         run: npm run build --prefix desktop/frontend
       - name: Check command allowlist and CSP
@@ -250,12 +244,17 @@ jobs:
       - name: Lint desktop Rust workspace
         run: cargo clippy --manifest-path desktop/Cargo.toml --workspace --all-targets -- -D warnings
       - name: Test desktop Rust workspace
-        run: cargo test --manifest-path desktop/Cargo.toml --workspace
+        run: cargo test --manifest-path desktop/Cargo.toml -p elef-desktop --lib --locked
       - name: Prepare the isolated Rails E2E database
         env:
           RAILS_ENV: test
           ELEF_USE_SQLITE: "1"
         run: bin/rails db:test:prepare
+      - name: Cache Playwright Chromium
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('desktop/e2e/package-lock.json') }}
       - name: Install headless browser and system dependencies
         run: npx --prefix desktop/e2e playwright install --with-deps chromium
       - name: Build test-only N-1 and N desktop updater packages
@@ -307,19 +306,6 @@ jobs:
             desktop/e2e/test-results
             desktop/e2e/playwright-report
           if-no-files-found: ignore
-      - name: Build the release binary for native performance measurements
-        env:
-          ELEF_E2E_BUILD: "1"
-        run: npm run tauri:build --prefix desktop/frontend -- --features webdriver --no-bundle --config src-tauri/tauri.e2e.conf.json --config src-tauri/tauri.performance.conf.json
-      - name: Record hosted Linux release performance over 20 fresh processes
-        run: dbus-run-session -- xvfb-run --auto-servernum bash -c 'openbox --sm-disable >/tmp/elef-performance-openbox.log 2>&1 & sleep 1; node desktop/e2e/benchmark-native.mjs --binary "$PWD/desktop/target/release/elef-desktop" --report-runner'
-      - name: Preserve native Linux performance samples
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: native-performance-linux
-          path: desktop/target/native-performance-linux.json
-          if-no-files-found: warn
       - name: Build Linux desktop package
         run: npm run tauri:build --prefix desktop/frontend
 
@@ -370,10 +356,6 @@ jobs:
         run: npm run renderer:build
       - name: Verify the Rails renderer bundle is current
         run: git diff --exit-code -- vendor/javascript/elef-renderer.bundle.js vendor/javascript/art_source.bundle.js
-      - name: Test Rails-owned frontend modules
-        run: npm run test:javascript
-      - name: Test desktop frontend adapters
-        run: npm test --prefix desktop/frontend
       - name: Bundle the desktop frontend
         run: npm run build --prefix desktop/frontend
       - name: Check command allowlist and CSP
@@ -391,17 +373,16 @@ jobs:
           RAILS_ENV: test
           ELEF_USE_SQLITE: "1"
         run: bin/rails db:test:prepare
-      - name: Install headless web browser
-        run: npx --prefix desktop/e2e playwright install chromium
       - name: Build test-only N-1 and N desktop updater packages
         run: node desktop/e2e/build-update-fixtures.mjs
-      - name: Run shared web and desktop scenarios
+      - name: Run macOS native and updater scenarios after shared web parity
         env:
           ELEF_E2E_PACKAGED_UPDATES: "1"
           CI: "true"
           RAILS_ENV: test
           ELEF_USE_SQLITE: "1"
           ELEF_E2E_OFFLINE: "1"
+          ELEF_E2E_SKIP_WEB: "1"
         run: |
           set -o pipefail
           npm test --prefix desktop/e2e 2>&1 | tee desktop/e2e/native-scenarios.log
@@ -428,21 +409,6 @@ jobs:
             desktop/e2e/test-results
             desktop/e2e/playwright-report
           if-no-files-found: ignore
-      - name: Build the release binary for native performance measurements
-        env:
-          ELEF_E2E_BUILD: "1"
-        run: npm run tauri:build --prefix desktop/frontend -- --features webdriver --no-bundle --config src-tauri/tauri.e2e.conf.json --config src-tauri/tauri.performance.conf.json
-      - name: Record hosted macOS release performance over 20 fresh processes
-        env:
-          ELEF_E2E_OFFLINE: "1"
-        run: node desktop/e2e/benchmark-native.mjs --binary "$PWD/desktop/target/release/elef-desktop" --report-runner
-      - name: Preserve native macOS performance samples
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: native-performance-darwin
-          path: desktop/target/native-performance-darwin.json
-          if-no-files-found: warn
       - name: Build Apple Silicon desktop package
         run: npm run tauri:build --prefix desktop/frontend -- --bundles app,dmg
 
@@ -550,13 +516,17 @@ jobs:
           WORKFLOW_RUN_ID: ${{ github.run_id }}
           WORKFLOW_RUN_ATTEMPT: ${{ github.run_attempt }}
         run: |
+          required_jobs='["desktop-fast","scan_ruby","scan_js","test","sqlite-test","system-test","desktop","desktop-macos","renderer-macos","production-smoke","development-smoke"]'
           jq -n \
+            --argjson schema_version 2 \
             --argjson pr_number "$PR_NUMBER" \
             --argjson workflow_run_id "$WORKFLOW_RUN_ID" \
             --argjson run_attempt "$WORKFLOW_RUN_ATTEMPT" \
+            --argjson required_jobs "$required_jobs" \
+            --argjson non_gating_measurements '["native-performance"]' \
             --arg tested_sha "$GITHUB_SHA" \
             --arg tested_tree "$(git rev-parse "$GITHUB_SHA^{tree}")" \
-            '{pr_number: $pr_number, workflow_run_id: $workflow_run_id, run_attempt: $run_attempt, tested_sha: $tested_sha, tested_tree: $tested_tree}' \
+            '{schema_version: $schema_version, pr_number: $pr_number, workflow_run_id: $workflow_run_id, run_attempt: $run_attempt, required_jobs: $required_jobs, non_gating_measurements: $non_gating_measurements, tested_sha: $tested_sha, tested_tree: $tested_tree}' \
             > deployment-attestation.json
       - name: Upload the deployment attestation
         uses: actions/upload-artifact@v7

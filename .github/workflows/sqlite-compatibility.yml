@@ -1,0 +1,28 @@
+name: SQLite compatibility
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "31 6 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  full-sqlite-compatibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          bundler-cache: true
+      - name: Build Tailwind CSS
+        run: bin/rails tailwindcss:build
+      - name: Run the full non-system Ruby suite on SQLite
+        env:
+          RAILS_ENV: test
+          ELEF_USE_SQLITE: "1"
+        run: bin/rails db:test:prepare test

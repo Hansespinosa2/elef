@@ -219,7 +219,7 @@ try {
   }
   env.ELEF_E2E_DESKTOP_LINKED_DOCUMENT_ID = desktopLinkedDocumentId
 
-  if (process.env.CI || process.env.ELEF_E2E_RUN_WEB === "1") {
+  if ((env.CI || process.env.ELEF_E2E_RUN_WEB === "1") && env.ELEF_E2E_SKIP_WEB !== "1") {
     // These fixture-only browser checks need Chromium, but not Rails or test data.
     const componentsResult = spawnSync(
       path.join(e2eRoot, "node_modules", ".bin", "playwright"),
