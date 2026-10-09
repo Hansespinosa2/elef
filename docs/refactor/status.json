@@ -14,7 +14,7 @@
     "swap_mb": 0,
     "tauri_native_runner": "available"
   },
-  "frozen_plan_sha256": "cff3e49e0a977b82bce2a8aacdd83b02171533aee76cb42a162e19da6c5642c5",
+  "frozen_plan_sha256": null,
   "head_sha": "15e95a91d8683d32459cfff82b88caa812ff2a22",
   "last_completed_phase": 11,
   "last_verified_checks": [
@@ -390,7 +390,7 @@
       "tier": "phase"
     }
   ],
-  "next_action": "Phase 12 DO-7: freeze candidate, run bin/check all x2 for P12-09 evidence.",
+  "next_action": "Phase 12 re-plan: adversarial review found criterion-blocking leftovers (F1 desktop bootstrap in web host, F2 vim dup, F3 temp-compat, F4 contract drift, F5 spec gap); revise plan then re-freeze.",
   "pending_human_gates": [
     {
       "detail": "production signing/updater keys and offline backups (constitution \u00a78 gate class 1; owner-held release material)",
@@ -415,6 +415,6 @@
   ],
   "phase_base_sha": "15e95a91d8683d32459cfff82b88caa812ff2a22",
   "phase_contract_sha256": "626b04626484ffda893825753e01de5bf4dcd4fe5c7f3b93ca44554ba3311386",
-  "phase_state": "DO",
+  "phase_state": "PLAN",
   "review_round": 0
 }
