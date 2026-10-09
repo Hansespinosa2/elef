@@ -3,6 +3,10 @@ import { insertImageWorkflow } from "./insert-image.js"
 
 export const SAVED_SOURCE = "# Saved by shared scenario\n\nThe editor autosaved this text.\n\nSee [[E2E linked]].\n"
 
+function normalizeLineEndings(source) {
+  return source.replace(/\r\n?/g, "\n")
+}
+
 export async function editAndPreviewWorkflow(ui) {
   await ui.openDeck()
   await ui.renameEditorTitle("E2E shared title")
@@ -32,7 +36,11 @@ export async function editAndPreviewWorkflow(ui) {
   const sourceWithImage = await insertImageWorkflow(ui)
   await ui.showVisualMode()
   await ui.waitForPreview("The editor autosaved this text.")
-  const visualSource = sourceWithImage.replace("The editor autosaved this text.", "The visual editor changed this text.")
+  // Existing visual presentation edits serialize through the editor's LF
+  // canonical value, even when the source loaded before the edit used CRLF.
+  const visualSource = normalizeLineEndings(
+    sourceWithImage.replace("The editor autosaved this text.", "The visual editor changed this text.")
+  )
   await ui.editVisualText("The editor autosaved this text.", "The visual editor changed this text.")
   await ui.waitForSource(visualSource)
   await ui.waitForSaved(visualSource)
