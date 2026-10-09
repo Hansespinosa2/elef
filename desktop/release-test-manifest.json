@@ -175,11 +175,12 @@
     {
       "id": "dirty_save_conflict",
       "paths": ["test/fixtures/desktop/release/dirty-save-conflict.json"],
-      "status": "TODO",
+      "status": "IN_PROGRESS",
       "acceptance_command": "npm test --prefix desktop/e2e",
       "expected_exit_code": 0,
       "observed_exit_code": null,
-      "invariants": ["Stale save does not overwrite external bytes.", "Local unsaved text remains available while conflict resolution is pending.", "Unsafe close/update leaves the app open."]
+      "invariants": ["The shared web/desktop conflict scenario seeds from this fixture.", "Stale save does not overwrite external bytes.", "Local unsaved text remains available while conflict resolution is pending.", "Unsafe close/update leaves the app open."],
+      "note": "The shared conflict scenario and its adapters now import deck name, source filename, baseline, dirty source, and external source from this fixture. The validator checks those values are wired into the runtime test. Hosted conflict acceptance on this wiring remains pending."
     },
     {
       "id": "n_minus_1_n_package_pair",
