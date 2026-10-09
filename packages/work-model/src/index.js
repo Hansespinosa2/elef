@@ -17,6 +17,21 @@ export {
   withFrontMatterValue
 } from "@elef/work-model/document-map"
 export {
+  addSlide,
+  blockOperationStart,
+  deleteSlide,
+  directiveLineSpan,
+  exciseRanges,
+  expandSnippet,
+  insertAlignDirective,
+  insertBlock,
+  mediaInsertText,
+  moveBlock,
+  moveSlide,
+  parseAlignment,
+  removeBlock
+} from "@elef/work-model/document-transforms"
+export {
   buildDocumentGraph,
   createDocumentLinkResolver,
   extractDocumentLinkTitles,

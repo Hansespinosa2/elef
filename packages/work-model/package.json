@@ -8,7 +8,8 @@
   "exports": {
     ".": "./src/index.js",
     "./document-map": "./src/document_map.js",
-    "./document-links": "./src/document_links.js"
+    "./document-links": "./src/document_links.js",
+    "./document-transforms": "./src/document_transforms.js"
   },
   "files": [
     "src"
