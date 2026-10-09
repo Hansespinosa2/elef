@@ -1,31 +1,5 @@
 {
-  "blocker": {
-    "code": "pr-conflict-suppresses-pr-ci",
-    "detail": "PR #136 is CONFLICTING with dev (mergeStateStatus DIRTY since dev PR #141 merged), so GitHub silently skips pull_request synchronize runs for campaign pushes. Only workflow_dispatch CI executes, and the record-ci-attestation job (pull_request-only) can never succeed. The isolated phase-7 gate at repair candidate 7f3f6c7 passes everything except record-ci-attestation.",
-    "evidence": {
-      "candidate": "7f3f6c730d732b550207654d822b87450d4106a0",
-      "ci_evidence": "docs/refactor/execution/phase-7-ci-evidence.json",
-      "conflict_files": [
-        ".github/workflows/ci.yml",
-        "app/javascript/controllers/preview_controller.js",
-        "app/javascript/lib/preview_sanitizer.js",
-        "app/javascript/lib/renderer_global.js"
-      ],
-      "dev_inflow_overlaps_frozen_renderer": [
-        "app/lib/source/renderer.rb",
-        "app/lib/source/block_renderer.rb",
-        "app/lib/source/javascript_renderer.rb",
-        "app/javascript/lib/renderer.js",
-        "app/views/presentations/_slides.html.erb"
-      ],
-      "gate_diagnostic": "bin/check phase 7 in tmp/gates/phase-7-3977e80e... fails solely on record-ci-attestation",
-      "green_dispatch_run": "https://github.com/Hansespinosa2/elef/actions/runs/37882870249",
-      "merge_state": "CONFLICTING/DIRTY",
-      "pr": "https://github.com/Hansespinosa2/elef/pull/136"
-    },
-    "resume_state": "DO",
-    "unblock": "Owner decision: (A) merge dev into feat/refactor-desktop-and-web now, then re-plan Phase 7 against the combined tree and re-validate fully; or (B) defer PR mergeability to campaign end and approve amending the attestation criterion for Phase 7 (dispatch-run evidence stands)."
-  },
+  "blocker": null,
   "campaign_base_sha": "88f61a7a8ffd7c276bafcf06eee09c36a8adf134",
   "campaign_branch": "feat/refactor-desktop-and-web",
   "campaign_version": 9,
@@ -308,7 +282,7 @@
       "tier": "phase"
     }
   ],
-  "next_action": "Blocked: owner decision on PR #136 conflict (merge dev now vs defer mergeability). Then re-plan/re-validate (A) or amend criterion (B), run-gate 7, CHECK, review.",
+  "next_action": "Owner approved dev-reconciliation deferral with dispatch+SHA attestation equivalence. Re-validate gate correction, dispatch CI on correction commit, run-gate 7, CHECK, review round 1.",
   "pending_human_gates": [],
   "phase_base_sha": "873904da32953b513b89b073b331ce692c84cb0a",
   "phase_contract_sha256": "59bdd29ab5b49e6f8e8e59472c9dbc3686feef6a16a40dfe74e635795f4f4f86",
