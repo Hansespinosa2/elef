@@ -97,7 +97,7 @@ desktop_main = (ROOT / "desktop/frontend/src/main.js").read_text()
 tauri_config = json.loads((ROOT / "desktop/src-tauri/tauri.conf.json").read_text())
 desktop_scripts = json.loads((ROOT / "desktop/frontend/package.json").read_text())["scripts"]
 desktop_application = (ROOT / "app/javascript/lib/file_library_application.js").read_text()
-work_session = (ROOT / "app/javascript/lib/work_session.js").read_text()
+work_session = (ROOT / "packages/client/src/session/work_session.js").read_text()
 client_library_app = (ROOT / "packages/client/src/features/library/LibraryApp.tsx").read_text()
 client_library_card = (ROOT / "packages/client/src/features/library/LibraryCard.tsx").read_text()
 client_library_filtering = (ROOT / "packages/client/src/features/library/filtering.ts").read_text()
@@ -376,14 +376,14 @@ assert "@tauri-apps/" not in desktop_application and "desktop/" not in desktop_a
     "the Rails-owned file-library application must depend on injected host services, not desktop code"
 )
 assert "script/build_renderer.mjs" not in build, "desktop must consume the renderer build, not own it"
-assert '"lib/work_session"' in desktop_application, (
-    "desktop save behavior must import the Rails-owned session factory"
+assert "createWorkSession" in desktop_application and '"lib/work_session"' not in desktop_application, (
+    "desktop save behavior must import the client-owned session factory, not a host copy"
 )
 assert "sanitizePreview" in client_library_card and '"../../ui/sanitize.js"' in client_library_card, (
     "desktop library previews must sanitize through the shared client module"
 )
 assert '"./save_flow.js"' in work_session, (
-    "the shared work-session factory must consume the Rails-owned save state machine"
+    "the shared work-session factory must consume the client-owned save state machine"
 )
 assert 'from "@elef/client"' in desktop_application, (
     "desktop library behavior must mount the shared client"
@@ -508,7 +508,7 @@ assert '"lib/presentation_navigation"' not in client_presentation, "the shared c
 for shared_module in (
     "deck_open_flow", "document_graph_cache", "editor_ready", "editor_source",
     "feature_flags", "performance_measurement", "renderer_worker_client",
-    "request_identity", "work_session", "title_save_flow",
+    "request_identity",
 ):
     assert f'"lib/{shared_module}"' in desktop_application, f"desktop application must consume app/javascript/lib/{shared_module}.js"
 assert "renderPreviewCore" in client_library_card and '"@elef/client/preview-core"' in client_library_card, (

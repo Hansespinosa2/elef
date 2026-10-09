@@ -1,5 +1,5 @@
 import { Controller } from "@hotwired/stimulus"
-import { createSaveFlow } from "lib/save_flow"
+import { createSaveFlow } from "@elef/client"
 import { editorFor } from "lib/editor_controller_lookup"
 import { applyEditorSource } from "lib/editor_source"
 import { waitForEditorController } from "lib/editor_ready"

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { createWorkSession } from "../../../app/javascript/lib/work_session.js"
+import { createWorkSession } from "../../../packages/client/src/session/work_session.js"
 
 const hash = letter => letter.repeat(64)
 

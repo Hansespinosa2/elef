@@ -1,10 +1,10 @@
 // Shared work-session factory over createSaveFlow, implementing the
 // contracts WorkSession surface (packages/contracts/src/session.ts).
 //
-// Pre-migration home: this module graduates to client/session/ in Phases
-// 03-09, which own that move. It is host-agnostic: the host supplies a
-// transport (persistence IPC) and a policy (editor bindings, timing,
-// callbacks). No host branches are allowed here.
+// Client-owned since Phase 08 (moved from app/javascript/lib/). It is
+// host-agnostic: the host supplies a transport (persistence IPC) and a
+// policy (editor bindings, timing, callbacks). No host branches are
+// allowed here.
 //
 // Session lifetime: one session per opened work. Switching works means
 // dispose() plus a new session. The host must show the deck text in the

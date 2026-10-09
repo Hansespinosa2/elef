@@ -2,13 +2,13 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import { readFile } from "node:fs/promises"
 
-const saveFlowSource = await readFile(new URL("../../app/javascript/lib/save_flow.js", import.meta.url), "utf8")
+const saveFlowSource = await readFile(new URL("../../packages/client/src/session/save_flow.js", import.meta.url), "utf8")
 const saveFlowUrl = `data:text/javascript;base64,${Buffer.from(saveFlowSource).toString("base64")}`
 const conflictDialogSource = await readFile(new URL("../../app/javascript/lib/conflict_dialog.js", import.meta.url), "utf8")
 const conflictDialogUrl = `data:text/javascript;base64,${Buffer.from(conflictDialogSource).toString("base64")}`
 const source = (await readFile(new URL("../../app/javascript/controllers/autosave_controller.js", import.meta.url), "utf8"))
   .replace('import { Controller } from "@hotwired/stimulus"', "class Controller {}")
-  .replace('import { createSaveFlow } from "lib/save_flow"', `const { createSaveFlow } = await import("${saveFlowUrl}")`)
+  .replace('import { createSaveFlow } from "@elef/client"', `const { createSaveFlow } = await import("${saveFlowUrl}")`)
   .replace('import { presentConflictDialog } from "lib/conflict_dialog"', `const { presentConflictDialog } = await import("${conflictDialogUrl}")`)
   .replace('import { editorFor } from "lib/editor_controller_lookup"', "const editorFor = () => null")
   .replace('import { applyEditorSource } from "lib/editor_source"', "const applyEditorSource = async () => true")

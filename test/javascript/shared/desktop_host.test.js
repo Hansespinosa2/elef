@@ -27,7 +27,7 @@ const importmap = await read("config/importmap.rb")
 const rootPackage = JSON.parse(await read("package.json"))
 const appearanceController = await read("app/javascript/controllers/appearance_controller.js")
 const autosaveController = await read("app/javascript/controllers/autosave_controller.js")
-const workSession = await read("app/javascript/lib/work_session.js")
+const workSession = await read("packages/client/src/session/work_session.js")
 const quietSavePolicy = await read("desktop/frontend/src/quiet_save_policy.js")
 const { document } = parseHTML(page)
 // The empty-library call to action is client-owned now; the host template
@@ -122,9 +122,9 @@ test("desktop media URLs and fetch interception stay in native transport", async
   assert.match(bootstrap, /mediaUrlsForDeck,/)
 })
 
-test("Rails and desktop consume the same Rails-owned save state machine", () => {
-  assert.match(autosaveController, /import \{ createSaveFlow \} from "lib\/save_flow"/)
-  assert.match(application, /import \{ createWorkSession \} from "lib\/work_session"/)
+test("Rails and desktop consume the same client-owned save state machine", () => {
+  assert.match(autosaveController, /import \{ createSaveFlow \} from "@elef\/client"/)
+  assert.match(application, /import \{ createWorkSession, createTitleSaveFlow \} from "@elef\/client"/)
   assert.match(workSession, /import \{ createSaveFlow \} from "\.\/save_flow\.js"/)
   assert.match(autosaveController, /import \{ presentConflictDialog \} from "lib\/conflict_dialog"/)
   assert.match(application, /import \{ presentConflictDialog \} from "lib\/conflict_dialog"/)
