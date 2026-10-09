@@ -1,5 +1,5 @@
 import { Controller } from "@hotwired/stimulus"
-import { createPresentationNavigation, presentationActionForKey } from "lib/presentation_navigation"
+import { createPresentationNavigation, presentationActionForKey } from "@elef/client"
 
 export default class extends Controller {
   static targets = ["slide", "counter", "stage"]

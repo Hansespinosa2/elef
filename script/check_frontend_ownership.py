@@ -480,13 +480,16 @@ assert "data-library-tab={name}" in client_library_app and "shell.setFilter" in 
 )
 assert "elements.description.textContent" not in desktop_application, "library tab descriptions belong to the Rails-owned view"
 assert "elements.graphView.hidden = libraryTab" not in desktop_application, "shared library graph visibility belongs to the Rails-owned view"
-assert 'pin "lib/presentation_navigation", to: "lib/presentation_navigation.js"' in importmap, (
-    "Rails must resolve the shared presentation navigation module"
+assert 'lib/presentation_navigation' not in importmap, (
+    "Rails must not pin the retired host-owned navigation module"
+)
+assert '"@elef/client"' in presentation_controller, (
+    "the presentation controller must consume key mapping from the shared client"
 )
 assert 'pin "lib/editor_controller_lookup", to: "lib/editor_controller_lookup.js"' in importmap, (
     "Rails must resolve the shared editor controller lookup"
 )
-assert '"lib/presentation_navigation"' in presentation_controller, "the shared controller must own presentation key mapping"
+assert '"lib/presentation_navigation"' not in presentation_controller, "the shared controller must not keep host-owned key mapping"
 for shared_module in (
     "deck_open_flow", "document_graph_cache", "editor_ready", "editor_source",
     "feature_flags", "performance_measurement", "renderer_worker_client",

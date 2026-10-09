@@ -2,6 +2,7 @@ export { mountElef } from "./application/shell.js";
 export { isSettingsRoute, parseLibraryRoute, parseSettingsRoute } from "./application/router.js";
 export type { SettingsRoute } from "./application/router.js";
 export { CREATE_WORK_EVENT } from "./features/library/LibraryApp.js";
+export { createPresentationNavigation, presentationActionForKey } from "./features/presentation/navigation.js";
 export { GraphController } from "./features/graph/graphController.js";
 export type { GraphControllerOptions } from "./features/graph/graphController.js";
 export { renderGraphView, graphNodeHref } from "./features/graph/graphView.js";

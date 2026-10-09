@@ -7,11 +7,11 @@ import { parseHTML } from "linkedom"
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..")
 const sourcePath = path.join(root, "app/javascript/controllers/presentation_controller.js")
-const navigationPath = pathToFileURL(path.join(root, "app/javascript/lib/presentation_navigation.js")).href
+const navigationPath = pathToFileURL(path.join(root, "packages/client/src/features/presentation/navigation.js")).href
 const source = (await readFile(sourcePath, "utf8"))
   .replace('import { Controller } from "@hotwired/stimulus"', "class Controller {}")
   .replace(
-    'import { createPresentationNavigation, presentationActionForKey } from "lib/presentation_navigation"',
+    'import { createPresentationNavigation, presentationActionForKey } from "@elef/client"',
     `import { createPresentationNavigation, presentationActionForKey } from "${navigationPath}"`
   )
 const presentation = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`)
