@@ -302,6 +302,7 @@ The full system suite, full desktop E2E harness, macOS-native leg, and CI after-
 | Small service edges | Added `RenderCache.fetch` cache-hit coverage, blank/case/no-match `Snippet.search` cases, CRLF reproduction-step normalization, and a bug-report user-agent matrix for Edge, Opera, Safari, iOS, Android, ChromeOS, Linux, environment build id, and truncation. |
 | Hostile-document external-media policy | Web and native adapters now declare `allow-remote` and `reject-remote` explicitly. The shared scenario asserts the web host retains the fixture's remote image source and the native host emits neither external media nor remote requests; an E2E unit test covers both policy outcomes and rejects undeclared policies. The web request remains intercepted and no external request is sent during this test. |
 | Source/visual editor persistence parity | Extended the existing document alignment test to assert the exact saved Markdown after visual edits, wait for autosave to become idle, reopen the edit page, and confirm directives still drive visual alignment after switching modes. Comparisons normalize CRLF, which the browser editor exposes in its source field. |
+| Three Stimulus controller logic gaps | Added direct controller tests for dirty-state save ordering and navigation protection, autofocus without scrolling, and print cleanup that pauses/resets videos while tolerating an unseekable source. These tests import each controller implementation with only the Stimulus base stubbed; browser tests remain. Ten controllers from the original no-unit-test list still need direct logic coverage. |
 | Archive import hardening | The audited tree already rejected traversal, Unix symlink entries, and extreme compression ratios. Added tests for malformed `elef.json`, a declared extraction size above 500 MiB, and Windows drive, backslash traversal, absolute, and control-character member names. The oversize case mutates a tiny ZIP's central-directory size so the guard is exercised without creating or extracting a huge file. |
 | Updater guard logic | Extracted the existing version syntax check, exact requested/offered version comparison, and atomic install lease acquisition into helpers used by `install_update`. Added tests for safe, malformed, and overlong versions; a changed offered version; concurrent install rejection; and lease release after scope exit. No updater signature, prompt, staging, or release behavior changed. |
 | Tauri IPC capability enforcement | Added a Tauri `MockRuntime` IPC test built from the production `tauri.conf.json` and capability manifest. It invokes the registered `pending_open_elef_count` command successfully from Elef's local origin and verifies rejection from `https://untrusted.example`. This exercises Tauri's runtime ACL resolution with production capability data; it does not substitute for native WebView checks on each OS. |
@@ -315,6 +316,7 @@ The full system suite, full desktop E2E harness, macOS-native leg, and CI after-
 | `cargo test --manifest-path desktop/Cargo.toml -p elef-desktop --lib --locked` | 7 tests passed, including the remote-origin IPC rejection and updater guard tests. |
 | `cargo fmt --manifest-path desktop/Cargo.toml --all -- --check` and `python3 desktop/scripts/check_architecture.py` | Passed after the Rust changes; the capability/architecture check still found 23 commands. |
 | Focused Ruby renderer, release/fork, controller, and service suites on disposable SQLite | 165 tests, 1,245 assertions, passed. |
+| `node --test test/javascript/editor_lifecycle_controllers.test.mjs` | 4 direct controller logic tests passed. |
 | `node --test test/javascript/bug_report_response.test.mjs` | 2 tests passed. |
 | `npm run test:unit --prefix desktop/e2e` | 15 passed, including explicit web/native hostile-media policy checks. |
 | `test/system/bug_reports_test.rb` on headless Chromium with disposable SQLite | 1 test, 34 assertions, passed. |
@@ -338,13 +340,13 @@ The new fetcher seam is only used by focused unit tests; the default production 
 
 ## Phase 6: local repeat validation
 
-Each locally runnable suite below completed three consecutive runs. The system tier was rerun three times after the final system-test edits, serially with `PARALLEL_WORKERS=1`, headless Chromium, and a dedicated SQLite test database. All three final-tree system runs passed. The other tiers were unchanged by the subsequent system-test-only adjustments. This is a small stability sample, not a statistical flake-rate estimate.
+Each locally runnable suite below completed three consecutive runs. The system tier was rerun three times after the final system-test edits, serially with `PARALLEL_WORKERS=1`, headless Chromium, and a dedicated SQLite test database. All three final-tree system runs passed. The JavaScript suite was rerun three times after adding the controller tests; other tiers were unchanged by the subsequent system- or JavaScript-only adjustments. This is a small stability sample, not a statistical flake-rate estimate.
 
 | Suite | Three-run result | Local elapsed times |
 | --- | --- | --- |
 | Rails system tests (`test/system`) | 227 tests and 5,636 assertions passed on every final-tree run; 0 failures/errors/skips. The baseline had 241 system tests before the verified demotions. | 321.63s, 343.73s, 334.59s |
 | Rails non-system tests (`bin/rails test`) | 391 tests and 3,167 assertions passed on every run; 0 failures/errors/skips. | 4.11s, 3.73s, 4.13s |
-| Rails-owned JavaScript (`npm run test:javascript`) | 446 tests passed on every run. | 1.68s, 1.70s, 1.72s |
+| Rails-owned JavaScript (`npm run test:javascript`) | 450 tests passed on every run, including the four controller tests. | 1.71s, 1.79s, 1.79s |
 | Rust workspace (`cargo test --manifest-path desktop/Cargo.toml --workspace --locked`) | 43 `elef-core` plus 7 desktop library tests passed on every run. | Core test execution: 2.28s, 2.26s, 2.39s |
 | Desktop frontend adapters (`npm test --prefix desktop/frontend`) | 26 tests passed on every run. | 0.32s, 0.33s, 0.40s |
 | E2E harness unit tests (`npm run test:unit --prefix desktop/e2e`) | 15 tests passed on every run, including host media policy cases. | All three invocations passed. |
@@ -366,6 +368,6 @@ No removal of the `ELEF_RENDERER=ruby` path is proposed; it remains live code an
 
 - Remaining Phase 3 runtime work: shared system-test projection caching, splitting the repeated root visits, worker isolation/parallelism experiments, and artifact reuse.
 - The changed GitHub workflows have not executed yet. Local contract tests verify their job names, invocation ownership, required job manifest, attestation policy, and schedule placement, but only CI can validate hosted runner installation and native execution.
-- Phase 4 still has the offline guarantee on every OS and several editor/service gaps from the original inventory. The new hostile-media policy assertions passed as unit tests, but the actual web/native host scenarios require a hosted E2E run.
+- Phase 4 still has the offline guarantee on every OS, direct tests for ten listed Stimulus controllers, and other editor/service gaps from the original inventory. The new hostile-media policy assertions passed as unit tests, but the actual web/native host scenarios require a hosted E2E run.
 - Phase 5 mutations were detected for SSRF address/protocol/pinning decisions, remote-origin IPC, updater version matching, archive filename validation, GitHub issue URL hostname validation, bug-report 429 handling, and both external-media host policies. The full security mutation campaign is incomplete; unmutated trust-boundary branches remain open work.
 - Phase 6 repeated local checks passed as listed above. The changed hosted workflow, exact required-job attestations on the new tree, macOS native behavior, post-change CI p95/runner-minutes, and the performance acceptance targets remain unverified. The 20% wall-time and 25% runner-minute goals are not claimed.
