@@ -1,3 +1,5 @@
+import { createActiveMathSpan, deRenderMath, finishMathBeforeEnter } from "controllers/editor_math"
+import { sourceOffsetForVisiblePosition } from "controllers/editor_markdown"
 import { editorFor } from "lib/editor_controller_lookup"
 import {
   moveCaretBetweenBlocks,
@@ -31,6 +33,16 @@ export function presentationEditorDeps() {
     handleMathKeydown,
     syncActiveMath,
     setProjectionBlockEditable
+  }
+}
+
+export function documentEditorDeps() {
+  return {
+    ...presentationEditorDeps(),
+    createActiveMathSpan,
+    deRenderMath,
+    finishMathBeforeEnter,
+    sourceOffsetForVisiblePosition
   }
 }
 

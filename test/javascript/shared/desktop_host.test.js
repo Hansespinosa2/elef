@@ -259,6 +259,7 @@ test("structural source operations commit through the bound session", async () =
   const editorController = await read("app/javascript/controllers/editor_controller.js")
   const clientEditor = await read("packages/client/src/features/presentation/editor.js")
   const visualEditor = await read("app/javascript/controllers/visual_editor_controller.js")
+  const documentEditor = await read("packages/client/src/features/document/document_editor.js")
   const overview = await read("app/javascript/controllers/slide_overview_controller.js")
   const overviewFeature = await read("packages/client/src/features/overview/overview.js")
   // The adapter exposes one session commit entry point with a direct fallback.
@@ -268,11 +269,12 @@ test("structural source operations commit through the bound session", async () =
   // survives only as the no-session fallback inside those two call sites)…
   assert.equal((clientEditor.match(/\.commitSource\(/g) || []).length, 2)
   assert.equal((clientEditor.match(/\.replaceRange\(/g) || []).length, 2)
-  assert.equal((visualEditor.match(/\.commitSource\(/g) || []).length, 3)
+  assert.match(visualEditor, /new DocumentEditor\(/)
+  assert.equal((documentEditor.match(/\.commitSource\(/g) || []).length, 3)
   assert.match(overview, /new SlideOverview\(/)
   assert.match(overviewFeature, /editor\.commitSource\(fullSource/)
   // …while keystroke-equivalent ranged inserts stay on the adapter primitives.
-  assert.match(visualEditor, /\.replaceRanges\(changes\)/)
+  assert.match(documentEditor, /\.replaceRanges\(changes\)/)
   // Hosts bind exactly one live session per open work and detach on close.
   assert.match(application, /attachSession\?\. *\(session\)/)
   assert.match(application, /detachSession\?\. *\(saveFlow\)/)
