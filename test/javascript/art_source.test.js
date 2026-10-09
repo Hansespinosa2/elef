@@ -1,5 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
+import { performance } from "node:perf_hooks"
 import { parseHTML } from "linkedom"
 import { analyzeArtList, resolveArtBindings } from "../../app/javascript/lib/art_source.js"
 import { buildEditorStructure } from "../../app/javascript/lib/document_map.js"
@@ -229,6 +230,23 @@ test("ART-ARCH-RESOLUTION-ONCE: margin directive barriers resolve identically fo
   assert.equal(document.querySelectorAll("[data-elef-art-root]").length, 0)
   assert.deepEqual(preview.editor_map.art_diagnostics.map(diagnostic => diagnostic.code), ["ART_NO_LIST_TARGET"])
   assert.equal(document.querySelector("li")?.textContent, "A")
+})
+
+test("Art source mapping stays responsive across thousands of Markdown blocks and targets", () => {
+  const parts = []
+  for (let index = 0; index < 6000; index += 1) {
+    parts.push(`Paragraph ${index}.`)
+    if (index % 6 === 0) parts.push(`:::art\n- Item ${index}`)
+  }
+  const source = parts.join("\n\n")
+  const startedAt = performance.now()
+  const structure = buildEditorStructure(source, { mode: "document" })
+  const elapsed = performance.now() - startedAt
+  const blocks = structure.editorMap.slides[0].blocks
+
+  assert.equal(blocks.length, 7000)
+  assert.equal(blocks.filter(block => block.art).length, 1000)
+  assert.ok(elapsed < 1500, `mapping 6000 paragraphs and 1000 Art lists took ${Math.round(elapsed)}ms`)
 })
 
 test("ART-SRC-INVALID-PARITY: invalid Art is consumed with only its stable Art diagnostic", () => {

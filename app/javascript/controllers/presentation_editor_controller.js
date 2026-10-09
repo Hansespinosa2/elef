@@ -2,7 +2,7 @@ import { Controller } from "@hotwired/stimulus"
 import { editorFor } from "lib/editor_controller_lookup"
 import { markdownForVisibleText, renderInlineMath } from "controllers/editor_markdown"
 import { setProjectionBlockEditable } from "lib/projection_editability"
-import { blockOperationStart } from "lib/editor_block_ranges"
+import { blockOperationRange, blockOperationStart } from "lib/editor_block_ranges"
 import {
   moveCaretBetweenBlocks,
   pointAtVisibleOffset,
@@ -518,20 +518,7 @@ export default class extends Controller {
     const block = slide?.blocks?.[blockIndex]
     if (!slide || !block) return
     const source = this.sourceValue()
-    let from = this.blockOperationStart(slide, block)
-    let to = block.range.end
-
-    if (block.position_scope === "group") {
-      const groupMembers = slide.blocks.filter((candidate) => candidate.position_directive_id === block.position_directive_id)
-      if (groupMembers.length === 1) {
-        const directiveIndex = slide.directives.findIndex((candidate) => candidate.id === block.position_directive_id)
-        const closing = slide.directives.slice(directiveIndex + 1).find((candidate) => candidate.type === "position_close")
-        if (closing) {
-          from = slide.directives[directiveIndex].range.start
-          to = closing.range.end
-        }
-      }
-    }
+    const { start: from, end: to } = blockOperationRange(slide, block)
 
     const before = source.slice(0, from)
     let after = source.slice(to)

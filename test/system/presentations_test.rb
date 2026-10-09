@@ -1388,6 +1388,28 @@ class PresentationsTest < ApplicationSystemTestCase
     refute_selector ".presentation-editor-projection [data-elef-art-root]"
   end
 
+  test "deleting Art before a single-block alignment group removes its directive too" do
+    presentation = Presentation.create!(
+      title: "Aligned Art block ownership",
+      source: "# Slide\n\n:::art\n:::align{center}\n- Alpha\n\n:::\n\n- Next list"
+    )
+
+    visit edit_presentation_path(presentation)
+    wait_for_fresh_projection
+    assert_selector ".presentation-editor-projection [data-elef-art-root] .elef-art-list > li", count: 1
+
+    accept_confirm do
+      find("[data-presentation-editor-action='delete-block'][data-block-index='1']").click
+    end
+
+    assert_field "Markdown source", with: /# Slide\n\n- Next list/, wait: 5
+    wait_for_fresh_projection
+    refute_includes find_field("Markdown source").value, ":::art"
+    refute_includes find_field("Markdown source").value, ":::align{center}"
+    assert_no_selector ".presentation-editor-projection [data-elef-art-root]"
+    assert_selector ".presentation-editor-projection ul > li", text: "Next list"
+  end
+
   test "saved presentation Art fallback preserves attached media" do
     media_bytes = Base64.decode64("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+i9MwAAAAASUVORK5CYII=")
     media_digest = Digest::SHA256.hexdigest(media_bytes)

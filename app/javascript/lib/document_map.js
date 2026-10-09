@@ -203,6 +203,8 @@ function slideSourceRanges(source, bodyStart) {
 
 function editorBlocks(source, start, end, slide, slideIndex, mode, artResolution, sourceBoundaryMap) {
   const lines = sourceLines(source, start, end)
+  const artBindings = indexArtBindings(artResolution.bindings, lines.length, start)
+  const artDirectivesByLine = new Map(artResolution.directives.map(directive => [directive.line, directive]))
   const boundaryMap = {
     blockStarts: new Set(sourceBoundaryMap.blockStarts),
     blockEnds: new Set(sourceBoundaryMap.blockEnds),
@@ -240,7 +242,7 @@ function editorBlocks(source, start, end, slide, slideIndex, mode, artResolution
       source_range: { ...range },
       content_range: contentRange
     }
-    const artBinding = artResolution.bindings.find(binding => start + binding.target_range.start === blockStart)
+    const artBinding = artBindings.byTargetStart.get(blockStart)
     if (artBinding) {
       block.art = {
         directive_id: artBinding.directive_id,
@@ -286,7 +288,7 @@ function editorBlocks(source, start, end, slide, slideIndex, mode, artResolution
       return
     }
     if (!line.text.trim()) {
-      const artBinding = artResolution.bindings.find(binding => lineIndex >= binding.target_lines.start && lineIndex < binding.target_lines.end)
+      const artBinding = artBindings.byLine[lineIndex]
       if (artBinding && lineIndex + 1 < artBinding.target_lines.end) current.push(line)
       else flush()
       return
@@ -294,7 +296,7 @@ function editorBlocks(source, start, end, slide, slideIndex, mode, artResolution
     if (boundaryMap.directiveLines.has(lineIndex)) {
       flush()
       const text = line.text.trim()
-      const artDirective = artResolution.directives.find(directive => directive.line === lineIndex)
+      const artDirective = artDirectivesByLine.get(lineIndex)
       const directive = editorDirective(line, text, slideIndex, directives.length)
       if (artDirective) {
         directive.id = artDirective.id
@@ -320,6 +322,18 @@ function editorBlocks(source, start, end, slide, slideIndex, mode, artResolution
   flush()
   if (mode === "document") directives.forEach(directive => { directive.scope = "document" })
   return { blocks, directives, regions }
+}
+
+function indexArtBindings(bindings, lineCount, sourceOffset = 0) {
+  const byLine = new Array(lineCount)
+  const byTargetStart = new Map()
+  for (const binding of bindings) {
+    byTargetStart.set(sourceOffset + binding.target_range.start, binding)
+    const start = Math.max(0, binding.target_lines.start)
+    const end = Math.min(lineCount, binding.target_lines.end)
+    for (let line = start; line < end; line += 1) byLine[line] = binding
+  }
+  return { byLine, byTargetStart }
 }
 
 function editorDirective(line, text, slideIndex, directiveIndex) {
@@ -651,6 +665,7 @@ function parseBlocks(markdown, artResolution, sourceBoundaryMap) {
   const rawBlocks = markdownBlocks(markdown, artResolution, sourceBoundaryMap)
   const blocks = []
   const warnings = []
+  const artBindingsByStartLine = new Map(artResolution.bindings.map(binding => [binding.target_lines.start, binding]))
   for (let index = 0; index < rawBlocks.length;) {
     const record = rawBlocks[index]
     const block = record.markdown
@@ -659,10 +674,10 @@ function parseBlocks(markdown, artResolution, sourceBoundaryMap) {
       const closingOffset = rawBlocks.slice(index + 1).findIndex(candidate => candidate.markdown === ":::")
       if (closingOffset >= 0) {
         const closing = index + 1 + closingOffset
-        for (const grouped of rawBlocks.slice(index + 1, closing)) if (grouped.markdown) blocks.push(parsedBlock(grouped, position, artResolution))
+        for (const grouped of rawBlocks.slice(index + 1, closing)) if (grouped.markdown) blocks.push(parsedBlock(grouped, position, artBindingsByStartLine))
         index = closing + 1
       } else if (rawBlocks[index + 1] !== undefined) {
-        blocks.push(parsedBlock(rawBlocks[index + 1], position, artResolution))
+        blocks.push(parsedBlock(rawBlocks[index + 1], position, artBindingsByStartLine))
         index += 2
       } else {
         warnings.push("Alignment directive has no following Markdown block.")
@@ -672,22 +687,23 @@ function parseBlocks(markdown, artResolution, sourceBoundaryMap) {
       warnings.push("Unknown or malformed presentation directive was removed.")
       index += 1
     } else {
-      blocks.push(parsedBlock(record, null, artResolution))
+      blocks.push(parsedBlock(record, null, artBindingsByStartLine))
       index += 1
     }
   }
   return { blocks, warnings }
 }
 
-function parsedBlock(record, position, artResolution) {
+function parsedBlock(record, position, artBindingsByStartLine) {
   const block = { markdown: record.markdown, position }
-  const binding = artResolution.bindings.find(candidate => candidate.target_lines.start === record.startLine)
+  const binding = artBindingsByStartLine.get(record.startLine)
   if (binding) block.art = { directive_id: binding.directive_id }
   return block
 }
 
 function markdownBlocks(markdown, artResolution, sourceBoundaryMap) {
   const blocks = []
+  const artBindings = indexArtBindings(artResolution.bindings, markdown.split("\n").length)
   const boundaryMap = {
     blockStarts: new Set(sourceBoundaryMap.blockStarts),
     blockEnds: new Set(sourceBoundaryMap.blockEnds),
@@ -736,7 +752,7 @@ function markdownBlocks(markdown, artResolution, sourceBoundaryMap) {
       flush()
       blocks.push({ markdown: line.trim(), startLine: index, endLine: index + 1 })
     } else if (!line.trim() && !fence && !mathFence) {
-      const artBinding = artResolution.bindings.find(binding => index >= binding.target_lines.start && index < binding.target_lines.end)
+      const artBinding = artBindings.byLine[index]
       if (artBinding && index + 1 < artBinding.target_lines.end) pushLine(line, index)
       else flush()
     } else {
