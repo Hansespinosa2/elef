@@ -3,13 +3,13 @@
   "campaign_branch": "feat/refactor-desktop-and-web",
   "campaign_base_sha": "88f61a7a8ffd7c276bafcf06eee09c36a8adf134",
   "current_phase": 6,
-  "phase_state": "ACT",
+  "phase_state": "PASS",
   "phase_base_sha": "dff371c49ced594eb228123ec0d28cd753007f6e",
   "head_sha": "1c043b67f6b2b17d4f3b1409d1ce22a5fab3d477",
   "review_round": 1,
   "phase_contract_sha256": "b1d5bf64b406f60d80f745606da3c73ffc504c09f83eaa53a1bb2f796c374bd9",
   "frozen_plan_sha256": "39a9e889d813071c2e9a596f0b7e67b72c6ed57bd28aa6e41530e19e37c19ab1",
-  "last_completed_phase": 5,
+  "last_completed_phase": 6,
   "last_verified_checks": [
     {
       "attempt_id": "a03b10a585714f3185ca7d32a0777989",
@@ -287,5 +287,5 @@
   },
   "pending_human_gates": [],
   "blocker": null,
-  "next_action": "Phase 06 ACT: round-1 PASS report collected; ready for PASS."
+  "next_action": "Phase 06 PASS: work links and graph complete (round-1 review PASS, Stimulus graph retired). Open Phase 07 PLAN."
 }
