@@ -15,7 +15,7 @@
   "tauri_native_runner": "available"
  },
  "frozen_plan_sha256": "78610dceea9b1c43cdec41629491aae0cfaf82ae5d79ba57c5a8c6a995752483",
- "head_sha": "a08832a3efcaa949deefc7c713f8787e67d09179",
+ "head_sha": "3120c650acc65b42faa5f4faef6537ecedf08d7d",
  "last_completed_phase": 10,
  "last_verified_checks": [
   {
@@ -364,12 +364,41 @@
    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
    "result_path": "docs/refactor/execution/phase-10-gate-attempts/524cd4a0571b48aaa7e749409da69c85/result.json",
    "selected_gate_path": "docs/refactor/execution/phase-10-gate.json"
+  },
+  {
+   "attempt_id": "023f54c3d1b249faa6e8a2cf5b7995cf",
+   "phase": 11,
+   "head": "3120c650acc65b42faa5f4faef6537ecedf08d7d",
+   "root": "/root/elef",
+   "checkout": "/root/elef/tmp/gates/phase-11-023f54c3d1b249faa6e8a2cf5b7995cf",
+   "state": "completed",
+   "started_ns": 1791582010811354232,
+   "status_sha256": "227cbcace6c5769a6c28b78242b4b2ba7edeb8de479488492f8c1750ec64db0c",
+   "frozen_plan_sha256": "78610dceea9b1c43cdec41629491aae0cfaf82ae5d79ba57c5a8c6a995752483",
+   "phase_contract_sha256": "31fb70214fd26b21ea570ac79b5a14e38cda21ef479d95c3cb645b16c5f313c9",
+   "runner_pid": 331,
+   "runner_start": "22417603",
+   "child_pid": 337,
+   "child_start": "22417628",
+   "command": "bin/check phase 11 --json",
+   "exit": 0,
+   "duration_s": 36.308,
+   "tier": "phase",
+   "stdout_sha256": "3d57d81401a6af9772cba87bce8c2a91ed112a86d6bca2e682e116132c2b5885",
+   "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "result_path": "docs/refactor/execution/phase-11-gate-attempts/023f54c3d1b249faa6e8a2cf5b7995cf/result.json",
+   "selected_gate_path": "docs/refactor/execution/phase-11-gate.json"
   }
  ],
- "next_action": "Phase 11 CHECK prep: candidate battery, phase-11-ci-evidence.json, prepare-gate.",
- "pending_human_gates": [{"gate": 4, "detail": "owner-verified live Mac mini web deployment after host rehome (recorded pending per P11-06; blocks release-ready)"}],
+ "next_action": "Phase 11 CHECK round 1: request independent review of candidate 3120c65.",
+ "pending_human_gates": [
+  {
+   "gate": 4,
+   "detail": "owner-verified live Mac mini web deployment after host rehome (recorded pending per P11-06; blocks release-ready)"
+  }
+ ],
  "phase_base_sha": "a08832a3efcaa949deefc7c713f8787e67d09179",
  "phase_contract_sha256": "31fb70214fd26b21ea570ac79b5a14e38cda21ef479d95c3cb645b16c5f313c9",
- "phase_state": "DO",
- "review_round": 0
+ "phase_state": "CHECK",
+ "review_round": 1
 }
