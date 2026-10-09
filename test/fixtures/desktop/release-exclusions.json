@@ -1,0 +1,110 @@
+{
+  "schema_version": 1,
+  "profile": "stable",
+  "excluded_features": [
+    {
+      "id": "visual-editor",
+      "controllers": [
+        "visual_editor_controller",
+        "presentation_editor_controller",
+        "slide_overview_controller"
+      ],
+      "module_inputs": [
+        "app/javascript/controllers/visual_editor_controller.js",
+        "app/javascript/controllers/presentation_editor_controller.js",
+        "app/javascript/controllers/slide_overview_controller.js"
+      ],
+      "ui_selectors": [
+        "#visual-mode",
+        ".presentation-editor-tools",
+        ".slide-overview",
+        ".presentation-editor-slide-toolbar",
+        ".presentation-editor-block-controls",
+        ".document-block-position-control"
+      ],
+      "native_commands": [],
+      "routes": [],
+      "negative_scenario": "stable-source-only-editor"
+    },
+    {
+      "id": "document-graph",
+      "controllers": ["document_graph_controller"],
+      "module_inputs": [
+        "app/javascript/controllers/document_graph_controller.js",
+        "app/javascript/lib/document_graph_view.js",
+        "app/javascript/lib/document_graph_cache.js"
+      ],
+      "ui_selectors": ["#document-graph-view", "[data-library-tab='graph']"],
+      "native_commands": ["document_graph"],
+      "routes": [],
+      "negative_scenario": "stable-document-list-has-no-graph"
+    },
+    {
+      "id": "document-links",
+      "controllers": ["document_link_palette_controller"],
+      "module_inputs": [
+        "app/javascript/controllers/document_link_palette_controller.js",
+        "app/javascript/lib/document_links.js"
+      ],
+      "ui_selectors": [
+        "[data-document-link-palette-target]",
+        "[data-action*='document-link-palette#']"
+      ],
+      "native_commands": ["document_graph"],
+      "routes": [],
+      "negative_scenario": "stable-double-brackets-remain-source"
+    },
+    {
+      "id": "revisions",
+      "controllers": [],
+      "module_inputs": [],
+      "ui_selectors": ["[data-desktop-feature='revisions']"],
+      "native_commands": [],
+      "routes": [],
+      "baseline_note": "No standalone revisions controller or native command exists in the inspected desktop runtime. Preserve existing Rails behavior and the current desktop feature-flag boundary.",
+      "negative_scenario": "stable-revisions-entry-unreachable"
+    },
+    {
+      "id": "lineage",
+      "controllers": ["lineage_graph_controller"],
+      "module_inputs": ["app/javascript/controllers/lineage_graph_controller.js"],
+      "ui_selectors": ["[data-desktop-feature='lineage']", "[data-library-view-slot='lineage']"],
+      "native_commands": [],
+      "routes": [],
+      "negative_scenario": "stable-lineage-entry-unreachable"
+    }
+  ],
+  "shared_exceptions": [
+    {
+      "module_input": "app/javascript/lib/editor_view.js",
+      "dependent_retained_feature": "The Rails-owned source editor and live preview host are used by both desktop profiles.",
+      "stable_constraint": "Stable renders source mode only and omits direct-manipulation controls while preserving the preview pane.",
+      "negative_scenario": "stable-source-only-editor"
+    },
+    {
+      "module_input": "app/javascript/controllers/editor_controller.js",
+      "dependent_retained_feature": "CodeMirror source editing, math shortcuts, snippets, and Elef directives.",
+      "stable_constraint": "The shared source controller remains available; Stable does not mount a visual-editing entry point.",
+      "negative_scenario": "stable-source-only-editor"
+    },
+    {
+      "module_input": "app/javascript/lib/preview_sanitizer.js",
+      "dependent_retained_feature": "Sanitized offline preview rendering for documents and presentations.",
+      "stable_constraint": "Stable strips direct-edit affordances from preview output and retains render/presentation behavior.",
+      "negative_scenario": "stable-preview-is-read-only"
+    },
+    {
+      "module_input": "vendor/javascript/elef-renderer.bundle.js",
+      "dependent_retained_feature": "The canonical Rails-owned renderer used for offline preview, presentation, and export.",
+      "stable_constraint": "The bundle remains byte-identical to the Rails artifact; Stable filters excluded interaction affordances at its desktop preview boundary.",
+      "negative_scenario": "stable-preview-is-read-only"
+    }
+  ],
+  "excluded_routes": [],
+  "route_boundary_note": "The desktop loads a static Rails-owned host and has no Tauri route registry. Excluded navigation is represented by the UI selectors above.",
+  "verification": {
+    "stable_metafile": "desktop/frontend/dist/assets/app.metafile.json",
+    "dev_metafile": "desktop/frontend/dist-dev/assets/app.metafile.json",
+    "stable_command_acl": "desktop/src-tauri/capabilities/main.json"
+  }
+}
