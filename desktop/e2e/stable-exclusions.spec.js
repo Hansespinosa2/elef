@@ -84,6 +84,24 @@ describe("Stable profile exclusions", () => {
     })
     assert.equal(graphCommandReachable, false, "Stable must not register or grant the document graph command")
 
+    if (process.platform === "linux") {
+      const updaterCommands = await browser.executeAsync((commands, done) => {
+        Promise.all(commands.map(async command => {
+          try {
+            await window.__TAURI__.core.invoke(command)
+            return { command, error: null }
+          } catch (error) {
+            return { command, error: error?.message || String(error) }
+          }
+        })).then(done, error => done({ failure: error?.message || String(error) }))
+      }, ["stage_update", "install_update"])
+      assert.ok(Array.isArray(updaterCommands), updaterCommands.failure || "Updater command checks did not return results")
+      for (const result of updaterCommands) {
+        assert.match(result.error || "", new RegExp(`${result.command}.*not found`, "i"),
+          `Linux Stable must not register or grant the ${result.command} command`)
+      }
+    }
+
     const changed = await browser.execute(source => {
       const editor = document.querySelector("#desktop-editor-field").editorController
       editor.replaceRange(source, 0, editor.sourceValue.length)

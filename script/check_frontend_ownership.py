@@ -273,6 +273,7 @@ shared_workflows = {
     "libraryCreateDeleteWorkflow",
     "mathInputWorkflow",
     "presentationModeWorkflow",
+    "richRenderingMediaWorkflow",
     "snippetInsertWorkflow",
     "vimRelativeLineNumbersWorkflow",
 }
