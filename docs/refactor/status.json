@@ -3,7 +3,7 @@
  "campaign_base_sha": "88f61a7a8ffd7c276bafcf06eee09c36a8adf134",
  "campaign_branch": "feat/refactor-desktop-and-web",
  "campaign_version": 9,
- "current_phase": 10,
+ "current_phase": 11,
  "execution_environment": {
   "arch": "x86_64",
   "cpu_count": 4,
@@ -14,8 +14,8 @@
   "swap_mb": 0,
   "tauri_native_runner": "available"
  },
- "frozen_plan_sha256": "e65063e355c578cc2f368968292d93db9b576a48d5dfcf00b6f60b348db1f16f",
- "head_sha": "bb40ef616387ef4226f5be69404c1257dcfc1636",
+ "frozen_plan_sha256": null,
+ "head_sha": "a08832a3efcaa949deefc7c713f8787e67d09179",
  "last_completed_phase": 10,
  "last_verified_checks": [
   {
@@ -366,10 +366,10 @@
    "selected_gate_path": "docs/refactor/execution/phase-10-gate.json"
   }
  ],
- "next_action": "Phase 10 PASS. Create PLAN(11).",
+ "next_action": "Phase 11 PLAN: draft host-rehome plan, freeze, enter DO.",
  "pending_human_gates": [],
- "phase_base_sha": "7556161a411bb211063b7a362814c43fd79f7926",
- "phase_contract_sha256": "181dbe440cf7b66ee058fbc5fbce9b0de26886c1ce5a0973d4186a706fb247fc",
- "phase_state": "PASS",
- "review_round": 1
+ "phase_base_sha": "a08832a3efcaa949deefc7c713f8787e67d09179",
+ "phase_contract_sha256": "31fb70214fd26b21ea570ac79b5a14e38cda21ef479d95c3cb645b16c5f313c9",
+ "phase_state": "PLAN",
+ "review_round": 0
 }
