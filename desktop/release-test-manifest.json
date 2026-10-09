@@ -24,7 +24,7 @@
       "observed_exit_code": 0,
       "platform": "Linux x86-64",
       "covers": ["basic_document", "basic_presentation", "rich_rendering_media", "historical_file_format", "unknown_directives"],
-      "observed_tests_passed": 41,
+      "observed_tests_passed": 50,
       "status": "VERIFIED"
     },
     {
@@ -40,8 +40,8 @@
       "command": "ELEF_E2E_PACKAGED_UPDATES=1 npm test --prefix desktop/e2e",
       "expected_exit_code": 0,
       "observed_exit_code": null,
-      "status": "TODO",
-      "note": "Current generated fixtures are WebDriver test bundles and do not establish production Stable DMG or Arch package acceptance."
+      "status": "IN_PROGRESS",
+      "note": "The Mac-only packaged smoke exercises the test-only app bundle: stage signed N, kill and restart N-1 with the verified cache, withdraw feed eligibility, restore it, simulate an unavailable feed during safe quit and verify the cache survives, defer quit during a dirty-save conflict, interrupt installation after modifying only the disposable staged copy, then verify N relaunch and source preservation. The interruption failpoint compiles only with the WebDriver feature. Hosted macOS execution is pending; production Stable DMG proof remains. Linux runs download verification only and has no self-installer."
     },
     {
       "id": "diagnostics_privacy",
@@ -65,7 +65,7 @@
     ],
     "status": "TODO",
     "observed_exit_code": null,
-    "limitation": "Current generator creates test-only WebDriver bundles (AppImage on Linux); it is not proof of the supported Stable DMG or Arch package transition. Replace/extend it for packaged Stable N-1 to N tests."
+    "limitation": "The generator creates test-only WebDriver bundles (app bundle on macOS, AppImage on Linux); it is not proof of the supported Stable DMG or Arch package transition. Replace/extend it for production Stable DMG and Arch package tests."
   },
   "fixtures": [
     {
@@ -140,7 +140,7 @@
       "acceptance_command": "ELEF_E2E_PACKAGED_UPDATES=1 npm test --prefix desktop/e2e",
       "expected_exit_code": 0,
       "observed_exit_code": null,
-      "invariants": ["Install N-1, stage N, restart, and prove the installed app is N.", "Library and source survive; unsafe save, interrupted install, invalid signature, and blocked eligibility defer or fail safely."]
+      "invariants": ["On macOS, stage signed N from N-1, interrupt and restart before activation, then verify cached integrity metadata is reused without redownloading.", "A dirty-save conflict keeps the old app open and preserves both external bytes and the local draft; a later ordinary quit installs and relaunches N with the saved library source.", "Invalid signature and version mismatch are rejected by the native stage command; central block and interrupted activation still need packaged cases."]
     },
     {
       "id": "redaction_sentinels",

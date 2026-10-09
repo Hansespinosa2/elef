@@ -5,6 +5,8 @@ use std::sync::{Arc, RwLock};
 
 #[cfg(feature = "desktop-dev")]
 use elef_core::DocumentGraphDocument;
+#[cfg(any(target_os = "macos", feature = "webdriver"))]
+use elef_core::StagedUpdateStore;
 use elef_core::diagnostics::{DiagnosticEvent, EventCode, EventProfile, EventResult};
 use elef_core::{
     AuthoringRegistries, CoreError, DeckPreview, DeckSummary, ImportResolution, ImportResult,
@@ -310,11 +312,164 @@ async fn install_update(
     app: AppHandle,
     state: State<'_, DesktopState>,
     version: String,
-    on_progress: tauri::ipc::Channel<serde_json::Value>,
 ) -> Result<bool, CommandError> {
-    let result = install_update_inner(app.clone(), state, version, on_progress).await;
+    let result = install_update_inner(app.clone(), state, version).await;
     record_bool_command_result(&app, EventCode::UpdateActivation, &result);
     result
+}
+
+#[cfg(any(target_os = "macos", feature = "webdriver"))]
+#[tauri::command]
+async fn stage_update(
+    app: AppHandle,
+    state: State<'_, DesktopState>,
+    on_progress: tauri::ipc::Channel<serde_json::Value>,
+) -> Result<Option<StagedUpdateInfo>, CommandError> {
+    let result = stage_update_inner(app.clone(), state, on_progress).await;
+    match &result {
+        Ok(Some(_)) => record_diagnostic(&app, EventCode::UpdateStage, EventResult::Success, None),
+        Ok(None) => record_diagnostic(&app, EventCode::UpdateStage, EventResult::Deferred, None),
+        Err(error) => record_diagnostic(
+            &app,
+            EventCode::UpdateStage,
+            EventResult::Failure,
+            Some(error.code),
+        ),
+    }
+    result
+}
+
+#[cfg(any(target_os = "macos", feature = "webdriver"))]
+#[derive(Debug, Serialize)]
+struct StagedUpdateInfo {
+    version: String,
+    notes: String,
+}
+
+#[cfg(any(target_os = "macos", feature = "webdriver"))]
+async fn stage_update_inner(
+    app: AppHandle,
+    state: State<'_, DesktopState>,
+    on_progress: tauri::ipc::Channel<serde_json::Value>,
+) -> Result<Option<StagedUpdateInfo>, CommandError> {
+    if state
+        .update_installing
+        .compare_exchange(
+            false,
+            true,
+            std::sync::atomic::Ordering::Acquire,
+            std::sync::atomic::Ordering::Relaxed,
+        )
+        .is_err()
+    {
+        return Err(CommandError::new(
+            "invalid_input",
+            "An update is already being installed.",
+            false,
+        ));
+    }
+    let _lease = UpdateLease(&state.update_installing);
+    let _ = installed_application(&app)?;
+    let store = staged_update_store(&app)?;
+    let updater = app
+        .updater_builder()
+        .timeout(std::time::Duration::from_secs(120))
+        .build()
+        .map_err(|_| update_check_error())?;
+    let update = updater.check().await.map_err(|_| {
+        record_diagnostic(
+            &app,
+            EventCode::UpdateCheck,
+            EventResult::Failure,
+            Some("unavailable"),
+        );
+        update_check_error()
+    })?;
+    let Some(update) = update else {
+        let clear_store = store.clone();
+        tauri::async_runtime::spawn_blocking(move || clear_store.clear())
+            .await
+            .map_err(|_| update_stage_error())?
+            .map_err(|_| update_stage_error())?;
+        record_diagnostic(&app, EventCode::UpdateCheck, EventResult::Success, None);
+        return Ok(None);
+    };
+    record_diagnostic(&app, EventCode::UpdateCheck, EventResult::Success, None);
+    let version = update.version.clone();
+    let notes = update.body.clone().unwrap_or_default();
+
+    // Reuse a verified cache after a restart instead of downloading the same
+    // archive again. The signed manifest remains the authority for eligibility.
+    let cached = tauri::async_runtime::spawn_blocking({
+        let store = store.clone();
+        move || store.load()
+    })
+    .await
+    .map_err(|_| update_stage_error())?;
+    match cached {
+        Ok(Some(cached)) => {
+            let valid_manifest = same_staged_update(&update, &cached.metadata);
+            let public_key = updater_public_key(&app)?;
+            let metadata = cached.metadata;
+            let payload = cached.payload;
+            let valid_signature = if valid_manifest {
+                tauri::async_runtime::spawn_blocking(move || {
+                    elef_core::staged_update::verify_signature(
+                        &payload,
+                        &metadata.signature,
+                        &public_key,
+                        &metadata.version,
+                    )
+                    .is_ok()
+                })
+                .await
+                .unwrap_or(false)
+            } else {
+                false
+            };
+            if valid_manifest && valid_signature {
+                return Ok(Some(StagedUpdateInfo { version, notes }));
+            }
+            let clear_store = store.clone();
+            tauri::async_runtime::spawn_blocking(move || clear_store.clear())
+                .await
+                .map_err(|_| update_stage_error())?
+                .map_err(|_| update_stage_error())?;
+        }
+        Ok(None) => {}
+        Err(_) => {
+            // A corrupt/incomplete cache is discarded before a fresh verified
+            // download is staged. The live app and library are untouched.
+            let clear_store = store.clone();
+            tauri::async_runtime::spawn_blocking(move || clear_store.clear())
+                .await
+                .map_err(|_| update_stage_error())?
+                .map_err(|_| update_stage_error())?;
+        }
+    }
+
+    let signature = update.signature.clone();
+    let download_url = update.download_url.to_string();
+    let _ = on_progress.send(serde_json::json!({"event": "Started"}));
+    let progress = on_progress.clone();
+    let bytes = update
+        .download(
+            move |chunk_length, content_length| {
+                let _ = progress.send(serde_json::json!({"event": "Progress", "data": {"chunkLength": chunk_length, "contentLength": content_length}}));
+            },
+            || {},
+        )
+        .await
+        .map_err(|_| update_stage_error())?;
+    let _ = on_progress.send(serde_json::json!({"event": "Finished"}));
+    let version_for_store = version.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        store.save(&version_for_store, &signature, &download_url, &bytes)
+    })
+    .await
+    .map_err(|_| update_stage_error())?
+    .map_err(|_| update_stage_error())?;
+    Ok(Some(StagedUpdateInfo { version, notes }))
 }
 
 #[cfg(any(target_os = "macos", feature = "webdriver"))]
@@ -322,7 +477,6 @@ async fn install_update_inner(
     app: AppHandle,
     state: State<'_, DesktopState>,
     version: String,
-    on_progress: tauri::ipc::Channel<serde_json::Value>,
 ) -> Result<bool, CommandError> {
     if version.len() > 64
         || version.is_empty()
@@ -348,22 +502,47 @@ async fn install_update_inner(
     {
         return Err(CommandError::new(
             "invalid_input",
-            "An update is already being installed.",
+            "An update operation is already running.",
             false,
         ));
     }
     let _lease = UpdateLease(&state.update_installing);
-    let (live, relative_executable) = installed_application(&app)?;
-    let confirmed = confirm_native_action(
-        &app,
-        format!("Install Elef {version}? Elef will restart after installation."),
-        "Install Elef update",
-        MessageDialogKind::Info,
-    )
-    .await?;
-    if !confirmed {
+    let store = staged_update_store(&app)?;
+    let staged_update = tauri::async_runtime::spawn_blocking({
+        let store = store.clone();
+        move || store.load()
+    })
+    .await
+    .map_err(|_| update_install_error())?
+    .map_err(|_| update_install_error())?;
+    let Some(staged_update) = staged_update else {
+        return Ok(false);
+    };
+    if staged_update.metadata.version != version {
         return Ok(false);
     }
+
+    // Check the controlled feed before making a second copy of the installed app.
+    let eligible = app
+        .updater_builder()
+        .timeout(std::time::Duration::from_secs(120))
+        .build()
+        .map_err(|_| update_check_error())?
+        .check()
+        .await
+        .map_err(|_| update_check_error())?;
+    let Some(eligible) = eligible else {
+        let clear_store = store.clone();
+        let _ = tauri::async_runtime::spawn_blocking(move || clear_store.clear()).await;
+        return Ok(false);
+    };
+    if !same_staged_update(&eligible, &staged_update.metadata) {
+        let clear_store = store.clone();
+        let _ = tauri::async_runtime::spawn_blocking(move || clear_store.clear()).await;
+        return Ok(false);
+    }
+
+    let (live, relative_executable) = installed_application(&app)?;
     let stage = tauri::async_runtime::spawn_blocking(move || {
         elef_core::update_install::UpdateStage::new(&live)
     })
@@ -381,37 +560,133 @@ async fn install_update_inner(
         .timeout(std::time::Duration::from_secs(120))
         .build()
         .map_err(|_| update_install_error())?;
-    // Re-read the configured release endpoint. IPC cannot supply a URL, key,
-    // destination, signature or arbitrary package bytes.
-    let update = updater
-        .check()
-        .await
-        .map_err(|_| update_install_error())?
-        .ok_or_else(|| {
-            CommandError::new("not_found", "This update is no longer available.", false)
-        })?;
-    if update.version != version {
-        return Err(CommandError::new(
-            "conflict",
-            "The available update changed. Check for updates again.",
-            false,
-        ));
+    // Recheck the safe feed immediately before activation. IPC cannot supply a
+    // URL, key, destination, signature, or arbitrary package bytes.
+    let update = updater.check().await.map_err(|_| update_check_error())?;
+    let Some(update) = update else {
+        let clear_store = store.clone();
+        let _ = tauri::async_runtime::spawn_blocking(move || clear_store.clear()).await;
+        return Ok(false);
+    };
+    if !same_staged_update(&update, &staged_update.metadata) {
+        let clear_store = store.clone();
+        let _ = tauri::async_runtime::spawn_blocking(move || clear_store.clear()).await;
+        return Ok(false);
     }
-    let _ = on_progress.send(serde_json::json!({"event": "Started"}));
-    let progress = on_progress.clone();
-    let bytes = update.download(move |chunk_length, content_length| {
-        let _ = progress.send(serde_json::json!({"event": "Progress", "data": {"chunkLength": chunk_length, "contentLength": content_length}}));
-    }, || {}).await.map_err(|_| update_install_error())?;
-    let _ = on_progress.send(serde_json::json!({"event": "Finished"}));
-    tauri::async_runtime::spawn_blocking(move || {
+
+    let public_key = updater_public_key(&app)?;
+    let signature = staged_update.metadata.signature.clone();
+    let expected_version = staged_update.metadata.version.clone();
+    let payload = staged_update.payload;
+    let stage = tauri::async_runtime::spawn_blocking(move || {
+        elef_core::staged_update::verify_signature(
+            &payload,
+            &signature,
+            &public_key,
+            &expected_version,
+        )
+        .map_err(|_| update_integrity_error())?;
         // Tauri installs only into the private copy. It never touches the live app.
-        update.install(bytes).map_err(|_| update_install_error())?;
-        stage.activate().map_err(|_| update_install_error())?;
-        Ok::<_, CommandError>(())
+        update
+            .install(payload)
+            .map_err(|_| update_install_error())?;
+        #[cfg(feature = "webdriver")]
+        interrupt_update_install_for_e2e();
+        Ok::<_, CommandError>(stage)
     })
     .await
     .map_err(|_| update_install_error())??;
+
+    // Installation has only modified the disposable copy. Check the central
+    // safe feed again immediately before the atomic app-bundle swap.
+    let latest = app
+        .updater_builder()
+        .timeout(std::time::Duration::from_secs(120))
+        .build()
+        .map_err(|_| update_check_error())?
+        .check()
+        .await
+        .map_err(|_| update_check_error())?;
+    if !latest
+        .as_ref()
+        .is_some_and(|latest| same_staged_update(latest, &staged_update.metadata))
+    {
+        let clear_store = store.clone();
+        let _ = tauri::async_runtime::spawn_blocking(move || clear_store.clear()).await;
+        return Ok(false);
+    }
+    tauri::async_runtime::spawn_blocking(move || stage.activate())
+        .await
+        .map_err(|_| update_install_error())?
+        .map_err(|_| update_install_error())?;
+    let _ = tauri::async_runtime::spawn_blocking(move || store.clear()).await;
     Ok(true)
+}
+
+#[cfg(any(target_os = "macos", feature = "webdriver"))]
+fn staged_update_store(app: &AppHandle) -> Result<StagedUpdateStore, CommandError> {
+    let cache = app
+        .path()
+        .app_cache_dir()
+        .map_err(|_| update_stage_error())?;
+    Ok(StagedUpdateStore::new(cache.join("updates")))
+}
+
+#[cfg(any(target_os = "macos", feature = "webdriver"))]
+fn updater_public_key(app: &AppHandle) -> Result<String, CommandError> {
+    if let Ok(public_key) = std::env::var("ELEF_E2E_UPDATER_PUBLIC_KEY") {
+        return Ok(public_key);
+    }
+    app.config()
+        .plugins
+        .0
+        .get("updater")
+        .and_then(|updater| updater.get("pubkey"))
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_owned)
+        .ok_or_else(update_integrity_error)
+}
+
+#[cfg(any(target_os = "macos", feature = "webdriver"))]
+fn same_staged_update(
+    update: &tauri_plugin_updater::Update,
+    staged: &elef_core::staged_update::StagedUpdateMetadata,
+) -> bool {
+    update.version == staged.version
+        && update.signature == staged.signature
+        && update.download_url.as_str() == staged.download_url
+}
+
+#[cfg(any(target_os = "macos", feature = "webdriver"))]
+fn update_check_error() -> CommandError {
+    CommandError::new(
+        "unavailable",
+        "The safe update feed could not be checked.",
+        true,
+    )
+}
+
+#[cfg(any(target_os = "macos", feature = "webdriver"))]
+fn update_stage_error() -> CommandError {
+    CommandError::new("io_error", "The verified update could not be staged.", true)
+}
+
+#[cfg(any(target_os = "macos", feature = "webdriver"))]
+fn update_integrity_error() -> CommandError {
+    CommandError::new(
+        "integrity",
+        "The staged update did not pass integrity verification.",
+        false,
+    )
+}
+
+#[cfg(feature = "webdriver")]
+fn interrupt_update_install_for_e2e() {
+    if std::env::var_os("ELEF_E2E_INTERRUPT_UPDATE_AFTER_STAGE_INSTALL").is_some() {
+        // Test-only abrupt exit after the updater has modified its disposable
+        // copy and before UpdateStage can exchange it with the live app.
+        std::process::exit(86);
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -1419,11 +1694,12 @@ pub fn run() {
         });
 
     #[cfg(all(feature = "desktop-dev", feature = "webdriver"))]
-    let builder = builder.invoke_handler(app_commands!(document_graph, install_update));
+    let builder =
+        builder.invoke_handler(app_commands!(document_graph, stage_update, install_update));
     #[cfg(all(feature = "desktop-dev", not(feature = "webdriver")))]
     let builder = builder.invoke_handler(app_commands!(document_graph));
     #[cfg(all(not(feature = "desktop-dev"), target_os = "macos"))]
-    let builder = builder.invoke_handler(app_commands!(install_update));
+    let builder = builder.invoke_handler(app_commands!(stage_update, install_update));
     #[cfg(all(not(feature = "desktop-dev"), not(target_os = "macos")))]
     let builder = builder.invoke_handler(app_commands!());
 

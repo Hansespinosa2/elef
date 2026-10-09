@@ -20,7 +20,7 @@ const [stable, dev] = await Promise.all([
   readMetafile(stableMetafilePath, "Stable"),
   readMetafile(devMetafilePath, "Dev")
 ])
-const [stableConfig, devConfig, e2eConfig, stableCapability, devCapability, macUpdaterCapability, nativeSource, buildSource, packageConfig] = await Promise.all([
+const [stableConfig, devConfig, e2eConfig, stableCapability, devCapability, macUpdaterCapability, nativeSource, buildRsSource, packageConfig] = await Promise.all([
   readJson(path.join(tauriRoot, "tauri.conf.json")),
   readJson(path.join(tauriRoot, "tauri.dev.conf.json")),
   readJson(path.join(tauriRoot, "tauri.e2e.conf.json")),
@@ -46,11 +46,16 @@ assert.deepEqual(devConfig.plugins.updater.endpoints, [], "Dev must not inherit 
 assert.match(packageConfig.scripts["tauri:dev"], /--features desktop-dev --config src-tauri\/tauri\.dev\.conf\.json/)
 assert.match(nativeSource, /#\[cfg\(feature = "desktop-dev"\)\]\s+#\[tauri::command\]\s+fn document_graph/)
 assert.match(nativeSource, /#\[cfg\(any\(target_os = "macos", feature = "webdriver"\)\)\]\s+#\[tauri::command\]\s+async fn install_update/)
-assert.match(buildSource, /desktop_dev, has_update_command/)
+assert.match(nativeSource, /#\[cfg\(feature = "webdriver"\)\]\s+fn interrupt_update_install_for_e2e\(\)/, "the interrupted-install failpoint must compile only into WebDriver tests")
+assert.match(nativeSource, /#\[cfg\(feature = "webdriver"\)\]\s+interrupt_update_install_for_e2e\(\);/, "production updater activation must not call the test-only failpoint")
+assert.match(buildRsSource, /desktop_dev, has_update_command/)
 assert.match(nativeSource, /app\.path\(\)\.app_data_dir\(\)\?\.join\("library-root\.json"\)/)
 assert.match(nativeSource, /tauri_plugin_single_instance::init/)
-assert.match(await readFile(path.join(frontendRoot, "build.mjs"), "utf8"), /profile === "stable" && process\.platform === "darwin"/, "only Stable macOS builds may select the native updater module")
-assert.match(await readFile(path.join(frontendRoot, "src/update-runtime-macos.js"), "utf8"), /@tauri-apps\/plugin-updater/)
+const buildSource = await readFile(path.join(frontendRoot, "build.mjs"), "utf8")
+assert.match(buildSource, /profile === "stable" && process\.platform === "darwin"/, "only Stable macOS builds may use the public updater runtime")
+assert.match(buildSource, /e2eBuild && process\.platform === "darwin"/, "the loopback-only E2E bundle may exercise packaged macOS updates")
+assert.match(await readFile(path.join(frontendRoot, "src/update-runtime-macos.js"), "utf8"), /invoke\("stage_update"/)
+assert.doesNotMatch(await readFile(path.join(frontendRoot, "src/update-runtime-macos.js"), "utf8"), /@tauri-apps\/plugin-updater/)
 assert.doesNotMatch(await readFile(path.join(frontendRoot, "src/main.js"), "utf8"), /@tauri-apps\/(?:plugin-updater|plugin-process)/)
 const updaterModulePresent = inputs => [...inputs].some(input => input.includes("@tauri-apps/plugin-updater") || input.includes("@tauri-apps/plugin-process"))
 assert.equal(updaterModulePresent(stableInputs), process.platform === "darwin", "only Stable on macOS may bundle Tauri updater modules")
@@ -67,7 +72,7 @@ for (const feature of inventory.excluded_features) {
   }
 }
 assert.deepEqual(macUpdaterCapability.platforms, ["macOS"], "only macOS may receive updater command permissions")
-assert.deepEqual(macUpdaterCommands, new Set(["install-update"]))
+assert.deepEqual(macUpdaterCommands, new Set(["stage-update", "install-update"]))
 assert.ok(!devCapability.permissions.some(permission => permission.startsWith("updater:") || permission === "process:allow-restart"))
 assert.ok(!stableCapability.permissions.includes("allow-install-update"))
 

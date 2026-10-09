@@ -6,6 +6,7 @@
   "permissions": [
     "wdio:default",
     "wdio-webdriver:default",
+    "allow-stage-update",
     "allow-install-update",
     "updater:allow-check",
     "updater:allow-download",

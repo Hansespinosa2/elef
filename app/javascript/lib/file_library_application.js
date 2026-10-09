@@ -129,10 +129,6 @@ export function startFileLibraryApplication(platform) {
     restoreDraft: document.querySelector("#restore-local-draft"),
     importConflictDialog: document.querySelector("#import-conflict-dialog"),
     importConflictMessage: document.querySelector("#import-conflict-message"),
-    updateDialog: document.querySelector("#update-dialog"),
-    updateVersion: document.querySelector("#update-version"),
-    updateNotes: document.querySelector("#update-notes"),
-    updateProgress: document.querySelector("#update-progress"),
     presentationExit: document.querySelector("#exit-presentation")
   }
 
@@ -146,11 +142,13 @@ export function startFileLibraryApplication(platform) {
     ? documentGraphRuntime.createCache(async () => documentGraphRuntime.build(await fileLibrary.readDocumentGraph()))
     : null
   let libraryTab = "all"
+  const updateCheckIntervalMs = 6 * 60 * 60 * 1000
   let cardPreviewObserver = null
   let libraryMoreObserver = null
   const libraryListRenderer = createIncrementalList(elements.list)
-  let pendingUpdate = null
+  let stagedUpdate = null
   let updateInstalling = false
+  let updateChecking = false
   let libraryStatusLoaded = false
   let processingOpenedFiles = false
   let openFilesRequested = false
@@ -160,7 +158,8 @@ export function startFileLibraryApplication(platform) {
   let titleFlow = null
   const startupUpdateCheck = createIdleUpdateCheck(
     () => checkForUpdates(false),
-    () => !elements.deckView.hidden
+    () => false,
+    { repeatDelayMs: updateCheckIntervalMs }
   )
 
   const authoringSettings = createAuthoringSettingsDialog({
@@ -919,50 +918,42 @@ export function startFileLibraryApplication(platform) {
 
   async function checkForUpdates(showNoUpdate = true) {
     if (showNoUpdate) startupUpdateCheck.cancel()
-    if (updateInstalling) return false
+    if (updateInstalling || updateChecking) {
+      if (showNoUpdate) startupUpdateCheck.schedule(updateCheckIntervalMs)
+      return false
+    }
+    updateChecking = true
     try {
       const update = await checkForUpdate()
+      stagedUpdate = update
       if (!update) {
         if (showNoUpdate) setStatus("Elef is up to date")
         return false
       }
-      await pendingUpdate?.dispose().catch(() => {})
-      pendingUpdate = update
-      elements.updateVersion.textContent = "Version " + update.version + " is ready to install."
-      elements.updateNotes.textContent = update.notes
-      elements.updateProgress.textContent = "The update signature will be verified before installation."
-      elements.updateDialog.showModal()
+      const message = `Version ${update.version} is ready. It will be applied when you quit Elef.`
+      setStatus(message)
+      if (showNoUpdate) showNotice(message)
       return true
     } catch (_error) {
       if (showNoUpdate) showError({ message: "Could not check for updates. Try again while online." })
       return false
+    } finally {
+      updateChecking = false
+      if (showNoUpdate) startupUpdateCheck.schedule(updateCheckIntervalMs)
     }
   }
 
-  async function installUpdate() {
-    if (!pendingUpdate || updateInstalling) return
+  async function applyStagedUpdateOnQuit() {
+    if (!stagedUpdate || updateInstalling) return "close"
     updateInstalling = true
-    const button = document.querySelector("#install-update")
-    const later = document.querySelector("#update-later")
-    button.disabled = true
-    later.disabled = true
     try {
-      const installed = await installPendingUpdate(pendingUpdate, {
-        prepare: async () => !hasUnsavedChanges() || await flushSave({ force: true }),
-        onProgress: event => {
-          if (event.event === "Started" || event.event === "Progress") {
-            elements.updateProgress.textContent = "Downloading update…"
-          }
-          if (event.event === "Finished") elements.updateProgress.textContent = "Installing update…"
-        }
-      })
-      if (!installed) elements.updateProgress.textContent = "Installation paused. Save your changes and choose Install to try again."
+      const installed = await installPendingUpdate(stagedUpdate)
+      return installed ? "relaunch" : "close"
     } catch (_error) {
-      showError({ message: "The update could not be installed. Your current version is still available." })
+      return "close"
     } finally {
+      stagedUpdate = null
       updateInstalling = false
-      button.disabled = false
-      later.disabled = false
     }
   }
 
@@ -1125,17 +1116,7 @@ export function startFileLibraryApplication(platform) {
     void authoringSettings.open()
   })
   document.querySelector("#check-for-updates")?.addEventListener("click", () => void checkForUpdates(true))
-  document.querySelector("#install-update").addEventListener("click", () => void installUpdate())
   elements.presentationExit.addEventListener("click", () => void exitPresentation())
-  document.querySelector("#update-later").addEventListener("click", () => elements.updateDialog.close())
-  elements.updateDialog.addEventListener("cancel", event => {
-    if (updateInstalling) event.preventDefault()
-  })
-  elements.updateDialog.addEventListener("close", () => {
-    const update = pendingUpdate
-    pendingUpdate = null
-    void update?.dispose().catch(() => {})
-  })
   document.querySelector("#import-conflict-replace").addEventListener("click", () => void resolveImportConflict("replace"))
   document.querySelector("#import-conflict-keep-both").addEventListener("click", () => void resolveImportConflict("keep_both"))
   document.querySelector("#import-conflict-cancel").addEventListener("click", () => void resolveImportConflict("cancel"))
@@ -1170,6 +1151,8 @@ export function startFileLibraryApplication(platform) {
     isDirty: () => hasUnsavedChanges(),
     flushSave,
     close: () => getCurrentWindow().close(),
+    shouldPrepareClose: () => Boolean(stagedUpdate) && !updateChecking,
+    prepareClose: applyStagedUpdateOnQuit,
     onError: showError
   }))
 

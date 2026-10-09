@@ -16,7 +16,10 @@ use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, DateTime, ZipArchive, ZipWriter};
 
 pub mod diagnostics;
+pub mod staged_update;
 pub mod update_install;
+
+pub use staged_update::StagedUpdateStore;
 
 #[cfg(unix)]
 use std::os::unix::fs::OpenOptionsExt;

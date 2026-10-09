@@ -33,9 +33,9 @@ fn main() {
     let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
     let has_update_command = target_os == "macos" || webdriver;
     let app_commands: &'static [&'static str] = match (desktop_dev, has_update_command) {
-        (true, true) => command_list!("document_graph", "install_update"),
+        (true, true) => command_list!("document_graph", "stage_update", "install_update"),
         (true, false) => command_list!("document_graph"),
-        (false, true) => command_list!("install_update"),
+        (false, true) => command_list!("stage_update", "install_update"),
         (false, false) => command_list!(),
     };
     let attributes = tauri_build::Attributes::new()

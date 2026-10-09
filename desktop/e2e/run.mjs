@@ -8,6 +8,7 @@ import { createHash, randomUUID } from "node:crypto"
 import { PIXEL_PNG_MARKDOWN } from "../../test/e2e/scenarios/media-fixture.js"
 import { SHARED_LIBRARY_CREATE_DELETE_TITLES } from "../../test/e2e/scenarios/library-create-delete.js"
 import { runNativeQuitSmokes } from "./native-quit-smoke.js"
+import { runPackagedUpdateSmoke } from "./packaged-update-smoke.js"
 import { desktopAppEnvironment, verifyOfflineSandbox } from "./offline-macos.js"
 
 const e2eRoot = path.dirname(fileURLToPath(import.meta.url))
@@ -16,6 +17,11 @@ const releaseFixtureRoot = path.join(repoRoot, "test/fixtures/desktop/release")
 const basicPresentationSource = await readFile(path.join(releaseFixtureRoot, "basic-presentation.md"), "utf8")
 const basicDocumentSource = await readFile(path.join(releaseFixtureRoot, "basic-document.md"), "utf8")
 const temporaryRoot = await realpath(await mkdtemp(path.join(os.tmpdir(), "elef-desktop-e2e-")))
+const isolatedHome = path.join(temporaryRoot, "home")
+const isolatedConfig = path.join(temporaryRoot, "config")
+const isolatedData = path.join(temporaryRoot, "data")
+const isolatedCache = path.join(temporaryRoot, "cache")
+await Promise.all([isolatedHome, isolatedConfig, isolatedData, isolatedCache].map(directory => mkdir(directory)))
 const libraryRoot = path.join(temporaryRoot, "Elef")
 const seedDeck = path.join(libraryRoot, "E2E seed")
 const conflictDeck = path.join(libraryRoot, "E2E conflict")
@@ -79,6 +85,16 @@ if (process.env.ELEF_E2E_PACKAGED_UPDATES === "1") {
   if (process.platform === "linux") await prepareInstalledAppImage()
 } else if (process.env.CI) {
   throw new Error("CI must exercise the installed N-1 and N updater packages")
+}
+
+// Keep Tauri's app-data, cache, config and macOS HOME inside this disposable
+// fixture without redirecting Playwright or the test runner's own caches.
+const desktopEnv = {
+  ...env,
+  HOME: isolatedHome,
+  XDG_CONFIG_HOME: isolatedConfig,
+  XDG_DATA_HOME: isolatedData,
+  XDG_CACHE_HOME: isolatedCache
 }
 
 async function prepareInstalledAppImage() {
@@ -266,11 +282,11 @@ try {
     updaterServer.once("error", reject)
     updaterServer.once("exit", code => reject(new Error(`Updater fixture server exited before readiness (${code})`)))
   }), 10_000, "Updater fixture server did not start")
-  if (process.env.CI) await runNativeQuitSmokes(env)
+  if (process.env.CI) await runNativeQuitSmokes(desktopEnv)
   const desktopResult = spawnSync(webdriverio, ["run", "wdio.conf.js"], {
     cwd: e2eRoot,
     env: {
-      ...desktopAppEnvironment(env),
+      ...desktopAppEnvironment(desktopEnv),
       TAURI_WEBDRIVER_PORT: process.env.TAURI_WEBDRIVER_PORT || "4445"
     },
     stdio: "inherit"
@@ -278,9 +294,16 @@ try {
   if (desktopResult.error) throw desktopResult.error
   if (desktopResult.status !== 0) throw new Error("Shared desktop scenarios failed with status " + desktopResult.status)
   if (env.ELEF_E2E_PACKAGED_UPDATES === "1") {
+    if (process.platform === "darwin") await runPackagedUpdateSmoke(desktopEnv)
     if (process.platform === "linux") await prepareInstalledAppImage()
+    const upgradedEnv = {
+      ...desktopEnv,
+      ELEF_E2E_APP_BINARY: env.ELEF_E2E_APP_BINARY,
+      APPDIR: env.APPDIR,
+      APPIMAGE: env.APPIMAGE
+    }
     const upgradedResult = spawnSync(webdriverio, ["run", "wdio.conf.js"], {
-      cwd: e2eRoot, env: { ...desktopAppEnvironment(env), ELEF_E2E_VERIFY_UPGRADED: "1" }, stdio: "inherit"
+      cwd: e2eRoot, env: { ...desktopAppEnvironment(upgradedEnv), ELEF_E2E_VERIFY_UPGRADED: "1" }, stdio: "inherit"
     })
     if (upgradedResult.error) throw upgradedResult.error
     if (upgradedResult.status !== 0) throw new Error("The installed update did not launch and preserve the deck")

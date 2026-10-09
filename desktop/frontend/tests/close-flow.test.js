@@ -46,3 +46,44 @@ test("a failed visual-buffer flush prevents closing instead of losing pending in
   assert.equal(prevented, true)
   assert.equal(reported, true)
 })
+
+test("a staged update intercepts a clean close and relaunches only after the safe activation", async () => {
+  const events = []
+  let prevented = false
+  const request = createCloseFlow({
+    isDirty: () => false,
+    flushSave: () => assert.fail("clean close does not flush"),
+    close: () => events.push("close"),
+    shouldPrepareClose: () => true,
+    prepareClose: async () => { events.push("recheck-and-activate"); return "relaunch" }
+  })
+  await request({ preventDefault: () => { prevented = true } })
+  assert.equal(prevented, true)
+  assert.deepEqual(events, ["recheck-and-activate"])
+})
+
+test("dirty data is flushed before an update can activate, and failed flush leaves the app open", async () => {
+  const events = []
+  const request = createCloseFlow({
+    isDirty: () => true,
+    flushSave: async () => { events.push("flush"); return false },
+    close: () => events.push("close"),
+    shouldPrepareClose: () => true,
+    prepareClose: async () => { events.push("activate"); return "relaunch" }
+  })
+  await request({ preventDefault() {} })
+  assert.deepEqual(events, ["flush"])
+})
+
+test("a safe-version recheck that defers installation allows ordinary quit", async () => {
+  let closes = 0
+  const request = createCloseFlow({
+    isDirty: () => false,
+    flushSave: () => assert.fail("clean close does not flush"),
+    close: () => { closes += 1 },
+    shouldPrepareClose: () => true,
+    prepareClose: async () => "close"
+  })
+  await request({ preventDefault() {} })
+  assert.equal(closes, 1)
+})

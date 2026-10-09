@@ -25,7 +25,11 @@ const desktopProfileModules = {
   "#desktop/document-graph-runtime": path.join(frontendRoot, `src/document-graph-runtime-${profile}.js`),
   "#desktop/update-runtime": profile === "stable" && process.platform === "darwin"
     ? path.join(frontendRoot, "src/update-runtime-macos.js")
-    : path.join(frontendRoot, "src/update-runtime-disabled.js")
+    // The separate loopback-only E2E bundle tests safe restart updates without
+    // adding the updater to repository Dev or the production Linux profile.
+    : e2eBuild && process.platform === "darwin"
+      ? path.join(frontendRoot, "src/update-runtime-macos.js")
+      : path.join(frontendRoot, "src/update-runtime-disabled.js")
 }
 const sharedModuleAliases = {
   "#elef/art-source": "lib/art_source.js",

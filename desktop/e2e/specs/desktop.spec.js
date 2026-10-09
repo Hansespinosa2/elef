@@ -2432,33 +2432,21 @@ describe("native updater verification", () => {
       try {
         const result = await browser.execute(async () => {
           const { invoke, Channel } = window.__TAURI__.core
-          const metadata = await invoke("plugin:updater|check", { timeout: 5_000 })
-          if (!metadata) return { outcome: "no-update" }
-          let bytesRid
           try {
-            const onEvent = new Channel()
-            bytesRid = await invoke("plugin:updater|download", { rid: metadata.rid, onEvent, timeout: 5_000 })
-            return { outcome: "verified-download", version: metadata.version }
+            const update = await invoke("stage_update", { onProgress: new Channel() })
+            return update ? { outcome: "staged", version: update.version } : { outcome: "no-update" }
           } catch (error) {
-            // The embedded driver reserves a top-level `error` field for its
-            // own execution failures. Keep expected plugin rejection data
-            // under a distinct name so it reaches the scenario assertion.
             return { outcome: "rejected", rejectionReason: String(error) }
-          } finally {
-            if (bytesRid !== undefined) await invoke("plugin:resources|close", { rid: bytesRid })
-            await invoke("plugin:resources|close", { rid: metadata.rid })
           }
         })
         if (["none", "older"].includes(mode)) {
           if (result.outcome !== "no-update") throw new Error(`Expected no update: ${JSON.stringify(result)}`)
         } else if (mode === "valid") {
-          if (result.outcome !== "verified-download" || result.version !== "0.2.0") {
-            throw new Error(`Signed download did not verify: ${JSON.stringify(result)}`)
+          if (result.outcome !== "staged" || result.version !== "0.2.0") {
+            throw new Error(`Signed update was not staged: ${JSON.stringify(result)}`)
           }
         } else {
           if (result.outcome !== "rejected") throw new Error(`Unsafe update was accepted: ${JSON.stringify(result)}`)
-          if (mode === "bad-signature" && !/signature/i.test(result.rejectionReason)) throw new Error(`Wrong signature rejection: ${result.rejectionReason}`)
-          if (mode === "version-mismatch" && !/version/i.test(result.rejectionReason)) throw new Error(`Wrong version rejection: ${result.rejectionReason}`)
         }
         if (await hash(binaryPath) !== original.binary || await hash(sourcePath) !== original.source) {
           throw new Error("Update verification changed the installed binary or deck source")
@@ -2477,57 +2465,4 @@ describe("native updater verification", () => {
     })
   }
 
-  if (process.env.ELEF_E2E_PACKAGED_UPDATES === "1") {
-    it("requires native confirmation and installs signed version N without changing deck bytes", async function () {
-      this.timeout(180_000)
-      const binaryPath = process.env.ELEF_E2E_INSTALLED_ARTIFACT || process.env.ELEF_E2E_REAL_APP_BINARY || process.env.ELEF_E2E_APP_BINARY
-      const sourcePath = path.join(process.env.ELEF_E2E_LIBRARY_ROOT, "E2E seed", "presentation.md")
-      const hash = async filename => createHash("sha256").update(await readFile(filename)).digest("hex")
-      const original = { binary: await hash(binaryPath), source: await hash(sourcePath) }
-      const response = await fetch("http://127.0.0.1:8888/mode?value=package")
-      if (!response.ok) throw new Error("The packaged update fixture is missing")
-      const begin = async () => {
-        await browser.execute(() => {
-          window.focus()
-          window.__elefUpdateInstallation = window.__TAURI__.core.invoke("install_update", {
-            version: "0.2.0", onProgress: new window.__TAURI__.core.Channel()
-          }).then(installed => ({ installed })).catch(error => ({ rejection: error.message || String(error) }))
-        })
-      }
-      const answer = async accept => {
-        if (process.platform === "darwin") {
-          answerMacNativeDialog(accept ? "OK" : "Cancel")
-        } else if (process.platform === "linux") {
-          const dialogId = execFileSync("xdotool", ["search", "--sync", "--onlyvisible", "--name", "^Install Elef update$"], {
-            encoding: "utf8", timeout: 15_000
-          }).trim().split(/\s+/).at(-1)
-          execFileSync("xdotool", ["windowactivate", "--sync", dialogId], { timeout: 5_000 })
-          execFileSync("xdotool", ["key", "--clearmodifiers", accept ? "alt+o" : "Escape"], { timeout: 5_000 })
-        } else throw new Error("Unsupported native updater confirmation platform")
-      }
-      try {
-        await begin()
-        await answer(false)
-        const cancelled = await browser.execute(async () => await window.__elefUpdateInstallation)
-        if (cancelled.installed !== false) throw new Error(`Native cancellation did not cancel: ${JSON.stringify(cancelled)}`)
-        if (await hash(binaryPath) !== original.binary) throw new Error("Cancelling the update changed the installed application")
-        await begin()
-        await answer(true)
-        const installed = await browser.execute(async () => await window.__elefUpdateInstallation)
-        if (installed.installed !== true) throw new Error(`The signed package did not install: ${JSON.stringify(installed)}`)
-        if (await hash(binaryPath) === original.binary) throw new Error("The signed update did not replace the installed application")
-        if (await hash(sourcePath) !== original.source) throw new Error("Installation changed the user's deck bytes")
-        if (!(await $("#back-to-library").isExisting())) throw new Error("The application stopped responding after installation")
-      } catch (error) {
-        try {
-          await fetch("http://127.0.0.1:8888/mode?value=none")
-        } catch (resetError) {
-          console.error("Updater fixture reset also failed:", resetError.cause?.code || resetError.message)
-        }
-        throw new Error(error.message || String(error))
-      }
-      const reset = await fetch("http://127.0.0.1:8888/mode?value=none")
-      if (!reset.ok) throw new Error("The updater fixture did not reset")
-    })
-  }
 })

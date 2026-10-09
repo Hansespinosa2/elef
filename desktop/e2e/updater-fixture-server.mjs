@@ -24,8 +24,9 @@ function signArtifact(bytes) {
 const encodedSignature = signArtifact(artifact)
 const packageBytes = process.env.ELEF_E2E_UPDATE_PACKAGE ? await readFile(process.env.ELEF_E2E_UPDATE_PACKAGE) : null
 const packageSignature = packageBytes ? signArtifact(packageBytes) : null
+let artifactRequests = 0
 
-const modes = new Set(["none", "older", "valid", "bad-signature", "truncated", "version-mismatch", "package"])
+const modes = new Set(["none", "unavailable", "older", "valid", "bad-signature", "truncated", "version-mismatch", "package"])
 let mode = "none"
 const server = createServer((request, response) => {
   const url = new URL(request.url, "http://127.0.0.1:8888")
@@ -35,8 +36,20 @@ const server = createServer((request, response) => {
     mode = selected
     response.writeHead(200); response.end(mode); return
   }
+  if (url.pathname === "/stats") {
+    response.writeHead(200, { "Content-Type": "application/json" })
+    response.end(JSON.stringify({ artifactRequests }))
+    return
+  }
+  if (url.pathname === "/stats/reset") {
+    artifactRequests = 0
+    response.writeHead(204)
+    response.end()
+    return
+  }
   if (url.pathname === "/manifest") {
     if (mode === "none") { response.writeHead(204); response.end(); return }
+    if (mode === "unavailable") { response.writeHead(503); response.end(); return }
     response.writeHead(200, { "Content-Type": "application/json" })
     response.end(JSON.stringify({
       version: mode === "older" ? "0.0.1" : mode === "version-mismatch" ? "0.3.0" : "0.2.0",
@@ -47,6 +60,7 @@ const server = createServer((request, response) => {
     return
   }
   if (url.pathname === "/artifact") {
+    artifactRequests += 1
     const bytes = mode === "package" ? packageBytes : artifact
     response.writeHead(200, { "Content-Type": "application/octet-stream", "Content-Length": bytes.length })
     if (mode === "truncated") {

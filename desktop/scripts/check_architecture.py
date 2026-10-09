@@ -160,12 +160,12 @@ def allowed_commands(capability_permissions: set[str]) -> set[str]:
 assert declared == registered, f"build ACL and runtime invoke handler common commands differ: {declared ^ registered}"
 assert declared == allowed_commands(permissions), f"Stable capability command permissions differ: {declared ^ allowed_commands(permissions)}"
 assert allowed_commands(set(dev_capability["permissions"])) == declared | {"document_graph"}, "repository Dev must add only its graph command to the common ACL"
-assert allowed_commands(set(macos_updater_capability["permissions"])) == {"install_update"}, "only the macOS updater capability may install a signed update"
+assert allowed_commands(set(macos_updater_capability["permissions"])) == {"stage_update", "install_update"}, "only the macOS updater capability may stage or activate a signed update"
 assert macos_updater_capability["platforms"] == ["macOS"], "updater command permissions must be macOS-only"
-assert "document_graph" not in declared and "install_update" not in declared, "profile-specific commands must not enter the common Stable ACL"
+assert "document_graph" not in declared and "install_update" not in declared and "stage_update" not in declared, "profile-specific commands must not enter the common Stable ACL"
 assert "match (desktop_dev, has_update_command)" in build_source and 'command_list!("document_graph")' in build_source
 assert 'let has_update_command = target_os == "macos" || webdriver;' in build_source
-assert "app_commands!(document_graph)" in app_source and "app_commands!(install_update)" in app_source
+assert "app_commands!(document_graph)" in app_source and "app_commands!(stage_update, install_update)" in app_source
 assert "core:default" not in permissions, "use only the individual core permissions needed"
 assert {permission for permission in permissions if permission.startswith("core:")} == {
     "core:event:allow-listen",
@@ -187,6 +187,7 @@ assert not performance_config.get("plugins", {}).get("updater", {}).get("dangero
 assert set(e2e_capability["permissions"]) == {
     "wdio:default",
     "wdio-webdriver:default",
+    "allow-stage-update",
     "allow-install-update",
     "updater:allow-check",
     "updater:allow-download",
@@ -233,6 +234,7 @@ assert rails_hash == desktop_hash, "Rails and desktop renderer bundle hashes dif
 assert not re.search(r"def (?:editor_blocks|editable_region_for_block|utf16_range)\b", document_model), "Rails must not retain a second editor-map implementation"
 assert not any(":" in permission for permission in permissions if not permission.startswith("core:")), "Stable common capability must not expose updater plugins"
 assert set(macos_updater_capability["permissions"]) == {
+    "allow-stage-update",
     "allow-install-update",
     "updater:allow-check",
     "process:allow-restart",
