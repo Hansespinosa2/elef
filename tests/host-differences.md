@@ -38,7 +38,9 @@ Capability keys come from `HostCapabilities`
 - Supported side: desktop menu integration in the Tauri shell
   (`desktop/src-tauri/src/lib.rs`).
 - Disabled side: the web app renders menus in-DOM with no native menu surface
-  (explicit assertion added in Phase 10 DO-3).
+  (`desktop/e2e/specs/web.spec.js`, "the web app without a nativeMenus
+  capability renders menus in-DOM": opens the New menu, asserts 2 in-DOM
+  menuitems).
 
 ## HD-03 localFilesystem (tauri-only)
 
@@ -50,8 +52,11 @@ Capability keys come from `HostCapabilities`
 - Supported side: quiet-save suite (13 tests,
   `desktop/e2e/specs/quiet-save.spec.js`) + local-store unit matrix
   (`cargo test -p local-store`, 73 tests).
-- Disabled side: the web app has no deck-folder access (explicit assertion
-  added in Phase 10 DO-3).
+- Disabled side: the web app has no deck-folder access
+  (`desktop/e2e/specs/web.spec.js`, "the web app without a localFilesystem
+  capability offers no library folder picker": asserts `#change-library`
+  count 0 on the library page; the button exists only in the desktop host
+  template `app/views/desktop_host.html:27`).
 
 ## HD-04 deleteProgrammatic policy (dialog-mediated on desktop)
 

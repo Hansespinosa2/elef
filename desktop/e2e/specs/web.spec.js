@@ -979,6 +979,19 @@ test("shared export flow downloads PPTX in the web app", async ({ page }) => {
   await exportWorkflow(new WebEditorUi(page))
 })
 
+test("the web app without a nativeMenus capability renders menus in-DOM", async ({ page }) => {
+  const ui = new WebLibraryUi(page)
+  await ui.openLibrary()
+  await page.locator(".new-work-trigger").click()
+  await expect(page.locator('[role="menu"][aria-label="Create new"] [role="menuitem"]')).toHaveCount(2)
+})
+
+test("the web app without a localFilesystem capability offers no library folder picker", async ({ page }) => {
+  const ui = new WebLibraryUi(page)
+  await ui.openLibrary()
+  await expect(page.locator("#change-library")).toHaveCount(0)
+})
+
 test("shared math input flow works in the web app", async ({ page }) => {
   await mathInputWorkflow(new WebEditorUi(page))
 })
