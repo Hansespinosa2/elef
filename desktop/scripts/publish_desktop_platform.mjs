@@ -14,6 +14,7 @@ import {
 import { GitHubPublisher, releaseNotes } from "../release/github-publisher.mjs"
 import { publishPagesStateWithRetry } from "../release/pages-publisher.mjs"
 import { writePagesStateFiles } from "../release/pages-state.mjs"
+import { verifyReleaseStateWriterPolicy } from "../release/release-state-ruleset-api.mjs"
 
 const [pagesRootArgument, artifactManifestArgument] = process.argv.slice(2)
 if (!pagesRootArgument || !artifactManifestArgument) {
@@ -33,7 +34,14 @@ const repository = requiredEnv("GITHUB_REPOSITORY")
 const token = requiredEnv("GITHUB_TOKEN")
 const [owner, repositoryName] = repository.split("/")
 if (!owner || !repositoryName) throw new Error("GITHUB_REPOSITORY must use owner/repository form")
+const releaseStatePolicy = {
+  repository,
+  appId: requiredEnv("ELEF_RELEASE_STATE_APP_ID"),
+  token: requiredEnv("ELEF_RELEASE_STATE_PUSH_TOKEN"),
+  apiUrl: process.env.GITHUB_API_URL
+}
 const publisher = new GitHubPublisher({ owner, repository: repositoryName, token })
+await verifyReleaseStateWriterPolicy(releaseStatePolicy)
 await refreshPages(pagesRoot)
 await assertEligible()
 
@@ -64,8 +72,10 @@ const provisionalBody = releaseNotes({
   pr: manifest.pr,
   ...provisional
 })
+await verifyReleaseStateWriterPolicy(releaseStatePolicy)
 await publisher.exposeRelease(release, provisionalBody, verifiedAssets)
 
+await verifyReleaseStateWriterPolicy(releaseStatePolicy)
 const stateResult = await publishPagesStateWithRetry({
   pagesRoot,
   reconcile: async () => {

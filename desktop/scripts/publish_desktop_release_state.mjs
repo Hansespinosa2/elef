@@ -4,6 +4,7 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 
 import { publishPagesStateWithRetry } from "../release/pages-publisher.mjs"
+import { verifyReleaseStateWriterPolicy } from "../release/release-state-ruleset-api.mjs"
 
 const [pagesRootArgument, sourceRootArgument] = process.argv.slice(2)
 if (!pagesRootArgument || !sourceRootArgument) {
@@ -13,6 +14,12 @@ const pagesRoot = path.resolve(pagesRootArgument)
 const sourceRoot = path.resolve(sourceRootArgument)
 const reconcileScript = path.join(path.dirname(fileURLToPath(import.meta.url)), "reconcile_desktop_releases.mjs")
 
+await verifyReleaseStateWriterPolicy({
+  repository: requiredEnv("GITHUB_REPOSITORY"),
+  appId: requiredEnv("ELEF_RELEASE_STATE_APP_ID"),
+  token: requiredEnv("ELEF_RELEASE_STATE_PUSH_TOKEN"),
+  apiUrl: process.env.GITHUB_API_URL
+})
 const result = await publishPagesStateWithRetry({
   pagesRoot,
   reconcile: () => runReconciliation(reconcileScript, pagesRoot, sourceRoot)
@@ -67,6 +74,12 @@ function runGit(repositoryPath, args) {
   const result = spawnSync("git", ["-C", repositoryPath, ...args], { encoding: "utf8", maxBuffer: 1024 * 1024 })
   if (result.error) throw new Error("could not run Git for desktop release reconciliation")
   return { status: result.status ?? 1, stdout: result.stdout || "" }
+}
+
+function requiredEnv(name) {
+  const value = process.env[name]
+  if (!value) throw new Error(`missing required environment variable ${name}`)
+  return value
 }
 
 async function writeOutputs(values) {

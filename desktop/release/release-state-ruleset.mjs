@@ -21,10 +21,15 @@ export function releaseStateWriterRuleset(appId) {
   }
 }
 
-export function validateReleaseStateWriterRuleset(ruleset, appId) {
+export function validateReleaseStateWriterRuleset(ruleset, appId, repository) {
   const expected = releaseStateWriterRuleset(appId)
   if (!ruleset || ruleset.name !== expected.name || ruleset.target !== "branch" || ruleset.enforcement !== "active") {
     throw new Error("the active desktop release-state writer ruleset is missing")
+  }
+  if (repository) {
+    if (ruleset.source_type !== "Repository" || ruleset.source?.toLowerCase() !== repository.toLowerCase()) {
+      throw new Error("the release-state writer ruleset must belong to this repository")
+    }
   }
   if (!sameJson(ruleset.conditions, expected.conditions)) {
     throw new Error("the release-state writer ruleset must match only refs/heads/gh-pages")
@@ -38,11 +43,11 @@ export function validateReleaseStateWriterRuleset(ruleset, appId) {
   return true
 }
 
-export function validateReleaseStateRulesetCollection(rulesets, appId) {
+export function validateReleaseStateRulesetCollection(rulesets, appId, repository) {
   if (!Array.isArray(rulesets)) throw new TypeError("repository rulesets must be an array")
   const matching = rulesets.filter(ruleset => ruleset?.name === RELEASE_STATE_RULESET_NAME)
   if (matching.length !== 1) throw new Error("exactly one desktop release-state writer ruleset must be active")
-  return validateReleaseStateWriterRuleset(matching[0], appId)
+  return validateReleaseStateWriterRuleset(matching[0], appId, repository)
 }
 
 function sameJson(left, right) {

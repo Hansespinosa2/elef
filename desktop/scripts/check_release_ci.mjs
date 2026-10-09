@@ -7,6 +7,10 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../
 const workflow = await readFile(path.join(repoRoot, ".github/workflows/ci.yml"), "utf8")
 const releaseWorkflow = await readFile(path.join(repoRoot, ".github/workflows/desktop-release.yml"), "utf8")
 const releaseControls = await readFile(path.join(repoRoot, ".github/workflows/desktop-release-controls.yml"), "utf8")
+const statePublisherScript = await readFile(path.join(repoRoot, "desktop/scripts/publish_desktop_release_state.mjs"), "utf8")
+const platformPublisherScript = await readFile(path.join(repoRoot, "desktop/scripts/publish_desktop_platform.mjs"), "utf8")
+const aurPublisherScript = await readFile(path.join(repoRoot, "desktop/scripts/publish_desktop_aur.mjs"), "utf8")
+const failureRecorderScript = await readFile(path.join(repoRoot, "desktop/scripts/record_desktop_platform_failure.mjs"), "utf8")
 const productionDockerfile = await readFile(path.join(repoRoot, "Dockerfile"), "utf8")
 const developmentDockerfile = await readFile(path.join(repoRoot, "Dockerfile.development"), "utf8")
 const personalCompose = await readFile(path.join(repoRoot, "compose.personal.yml"), "utf8")
@@ -81,19 +85,34 @@ const appTokenAction = "actions/create-github-app-token@bcd2ba49218906704ab6c1aa
 assert.equal((releaseWorkflow.match(new RegExp(escapeRegExp(`uses: ${appTokenAction}`), "g")) ?? []).length, 7, "every Pages ledger writer and failure recorder must mint a dedicated App token")
 assert.match(releaseWorkflow, /repositories: elef\n\s+permission-contents: write/, "the writer App token must be scoped to the Elef repository contents")
 for (const jobName of ["reconcile", "linux-release", "macos-release", "aur-release"]) {
-  assert.match(jobBlock(releaseWorkflow, jobName), /ELEF_RELEASE_STATE_PUSH_TOKEN:/, `${jobName} must pass the dedicated App token only to its Pages writer`)
+  const block = jobBlock(releaseWorkflow, jobName)
+  assert.match(block, /ELEF_RELEASE_STATE_PUSH_TOKEN:/, `${jobName} must pass the dedicated App token only to its Pages writer`)
+  assert.match(block, /ELEF_RELEASE_STATE_APP_ID: \$\{\{ vars\.ELEF_RELEASE_STATE_APP_ID \}\}/, `${jobName} must verify the configured writer App ID`)
+  assert.match(block, /GITHUB_API_URL: \$\{\{ github\.api_url \}\}/, `${jobName} must use the GitHub API host for rule verification`)
 }
 assert.match(releaseControls, /options: \[ block, unblock \]/, "emergency block and unblock must have a dedicated dispatch path")
 assert.match(releaseControls, /if: github\.ref == 'refs\/heads\/main'/, "emergency controls must run only from trusted main code")
 assert.match(releaseControls, /environment: desktop-release-state/, "emergency controls must use the protected release-state environment")
 assert.equal((releaseControls.match(new RegExp(escapeRegExp(`uses: ${appTokenAction}`), "g")) ?? []).length, 1, "emergency controls must mint the dedicated release-state App token")
 assert.match(releaseControls, /ELEF_RELEASE_STATE_PUSH_TOKEN: \$\{\{ steps\.pages-writer-token\.outputs\.token \}\}/, "emergency ledger writes must use the dedicated App token")
+assert.match(releaseControls, /ELEF_RELEASE_STATE_APP_ID: \$\{\{ vars\.ELEF_RELEASE_STATE_APP_ID \}\}/, "emergency controls must verify the configured writer App ID")
 assert.match(releaseControls, /ref: gh-pages\n\s+path: pages\n\s+fetch-depth: 1\n\s+persist-credentials: false/, "emergency control checkout must not retain the general Actions token")
 assert.match(releaseControls, /actions: write/, "emergency blocks must be able to cancel a stale publisher after committing block state")
 assert.match(releaseControls, /publish_desktop_release_state\.mjs pages source/, "emergency controls must use the CAS ledger writer")
 assert.match(releaseControls, /cancel_desktop_release_runs\.mjs/, "emergency blocks must stop any active release coordinator after the ledger update")
 assert.match(releaseControls, /finalize_desktop_release_notes\.mjs pages/, "emergency controls must publish the warning to GitHub Releases")
 assert.doesNotMatch(releaseControls, /^concurrency:/m, "emergency blocks must not wait behind an ordinary publication run; the shared Pages CAS serializes ledger writes")
+
+for (const [name, script] of [
+  ["coordinator", statePublisherScript],
+  ["platform publisher", platformPublisherScript],
+  ["AUR publisher", aurPublisherScript],
+  ["platform failure recorder", failureRecorderScript]
+]) {
+  assert.match(script, /verifyReleaseStateWriterPolicy/, `${name} must verify the active exclusive gh-pages ruleset before state publication`)
+  assert.match(script, /ELEF_RELEASE_STATE_APP_ID/, `${name} must bind ruleset verification to the configured writer App`)
+  assert.match(script, /ELEF_RELEASE_STATE_PUSH_TOKEN/, `${name} must use the scoped release-state App token for policy verification`)
+}
 
 for (const jobName of ["desktop", "desktop-macos"]) {
   const block = jobBlock(workflow, jobName)

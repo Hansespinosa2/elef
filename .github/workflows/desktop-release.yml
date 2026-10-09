@@ -41,6 +41,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: desktop-release-state
+    env:
+      ELEF_RELEASE_STATE_APP_ID: ${{ vars.ELEF_RELEASE_STATE_APP_ID }}
+      GITHUB_API_URL: ${{ github.api_url }}
+      GITHUB_REPOSITORY: ${{ github.repository }}
     outputs:
       macos_candidate: ${{ steps.publish.outputs.macos_candidate }}
       linux_candidate: ${{ steps.publish.outputs.linux_candidate }}
@@ -143,6 +147,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     environment: desktop-release-state
+    env:
+      ELEF_RELEASE_STATE_APP_ID: ${{ vars.ELEF_RELEASE_STATE_APP_ID }}
+      GITHUB_API_URL: ${{ github.api_url }}
+      GITHUB_REPOSITORY: ${{ github.repository }}
     permissions:
       contents: write
     outputs:
@@ -250,6 +258,10 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 90
     environment: desktop-release-signing
+    env:
+      ELEF_RELEASE_STATE_APP_ID: ${{ vars.ELEF_RELEASE_STATE_APP_ID }}
+      GITHUB_API_URL: ${{ github.api_url }}
+      GITHUB_REPOSITORY: ${{ github.repository }}
     permissions:
       contents: write
     outputs:
@@ -395,6 +407,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: desktop-aur-publishing
+    env:
+      ELEF_RELEASE_STATE_APP_ID: ${{ vars.ELEF_RELEASE_STATE_APP_ID }}
+      GITHUB_API_URL: ${{ github.api_url }}
+      GITHUB_REPOSITORY: ${{ github.repository }}
     permissions:
       contents: write
     outputs:
@@ -471,7 +487,6 @@ jobs:
       - name: Record a sanitized AUR publication failure
         if: failure()
         env:
-          GITHUB_TOKEN: ${{ github.token }}
           RELEASE_CANDIDATE: ${{ needs.linux-release.outputs.aur_candidate || needs.reconcile.outputs.aur_candidate }}
           ELEF_RELEASE_STATE_PUSH_TOKEN: ${{ steps.pages-writer-failure-token.outputs.token || steps.pages-writer-token.outputs.token }}
         run: |

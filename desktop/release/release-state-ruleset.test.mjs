@@ -50,3 +50,18 @@ test("release-state ruleset validates safe app IDs", () => {
     assert.throws(() => releaseStateWriterRuleset(id), /positive integer/)
   }
 })
+
+test("release-state ruleset must be repository-scoped when checked against GitHub metadata", () => {
+  const expected = {
+    ...releaseStateWriterRuleset(481516),
+    source_type: "Repository",
+    source: "Hansespinosa2/elef"
+  }
+  assert.equal(validateReleaseStateRulesetCollection([expected], 481516, "Hansespinosa2/elef"), true)
+  assert.throws(() => validateReleaseStateRulesetCollection([expected], 481516, "other/elef"), /belong to this repository/)
+  assert.throws(() => validateReleaseStateRulesetCollection([{
+    ...expected,
+    source_type: "Organization",
+    source: "Hansespinosa2"
+  }], 481516, "Hansespinosa2/elef"), /belong to this repository/)
+})

@@ -27,6 +27,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: desktop-release-state
+    env:
+      ELEF_RELEASE_STATE_APP_ID: ${{ vars.ELEF_RELEASE_STATE_APP_ID }}
+      GITHUB_API_URL: ${{ github.api_url }}
+      GITHUB_REPOSITORY: ${{ github.repository }}
     permissions:
       actions: write
       contents: write

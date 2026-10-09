@@ -3,6 +3,7 @@ import path from "node:path"
 
 import { parseLedger, recordPlatformFailure } from "../release/ledger.mjs"
 import { publishPagesStateWithRetry } from "../release/pages-publisher.mjs"
+import { verifyReleaseStateWriterPolicy } from "../release/release-state-ruleset-api.mjs"
 import { writePagesStateFiles } from "../release/pages-state.mjs"
 
 const [pagesRootArgument, version, platform, category] = process.argv.slice(2)
@@ -23,6 +24,13 @@ const pagesRoot = path.resolve(pagesRootArgument)
 const statePath = path.join(pagesRoot, "desktop/stable/state.json")
 const at = new Date().toISOString()
 
+await verifyReleaseStateWriterPolicy({
+  repository: requiredEnv("GITHUB_REPOSITORY"),
+  appId: requiredEnv("ELEF_RELEASE_STATE_APP_ID"),
+  token: requiredEnv("ELEF_RELEASE_STATE_PUSH_TOKEN"),
+  apiUrl: process.env.GITHUB_API_URL
+})
+
 const result = await publishPagesStateWithRetry({
   pagesRoot,
   reconcile: async () => {
@@ -42,3 +50,9 @@ const result = await publishPagesStateWithRetry({
   }
 })
 process.stdout.write(`Recorded ${result.reconciliation?.failure || category} for ${platform} ${version}; Pages ledger revision ${result.reconciliation?.revision || "unchanged"}.\n`)
+
+function requiredEnv(name) {
+  const value = process.env[name]
+  if (!value) throw new Error(`missing required environment variable ${name}`)
+  return value
+}

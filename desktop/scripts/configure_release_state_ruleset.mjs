@@ -17,7 +17,7 @@ const existing = ghJson(["api", `repos/${repository}/rulesets?per_page=100`])
 if (!Array.isArray(existing)) throw new TypeError("GitHub returned an invalid ruleset list")
 const matches = existing.filter(rule => rule?.name === RELEASE_STATE_RULESET_NAME)
 if (matches.length > 1) throw new Error(`multiple ${RELEASE_STATE_RULESET_NAME} rulesets exist`)
-if (mode !== "--apply" && matches.length === 1) validateReleaseStateRulesetCollection(existing, appId)
+if (matches.length === 1) assertRepositorySummary(matches[0])
 
 if (mode === "--apply") {
   const method = matches.length ? "PUT" : "POST"
@@ -28,9 +28,19 @@ if (mode === "--apply") {
 }
 
 const current = ghJson(["api", `repos/${repository}/rulesets?per_page=100`])
-validateReleaseStateRulesetCollection(current, appId)
-const matching = current.find(rule => rule.name === RELEASE_STATE_RULESET_NAME)
+if (!Array.isArray(current)) throw new TypeError("GitHub returned an invalid ruleset list")
+const currentMatches = current.filter(rule => rule?.name === RELEASE_STATE_RULESET_NAME)
+if (currentMatches.length !== 1) throw new Error(`exactly one ${RELEASE_STATE_RULESET_NAME} ruleset must exist`)
+assertRepositorySummary(currentMatches[0])
+const matching = ghJson(["api", `repos/${repository}/rulesets/${currentMatches[0].id}?includes_parents=true`])
+validateReleaseStateRulesetCollection([matching], appId, repository)
 process.stdout.write(`${mode === "--apply" ? "Configured" : "Verified"} ${RELEASE_STATE_RULESET_NAME} (${matching.id}) for refs/heads/gh-pages.\n`)
+
+function assertRepositorySummary(rule) {
+  if (rule.source_type !== "Repository" || rule.source?.toLowerCase() !== repository.toLowerCase()) {
+    throw new Error(`${RELEASE_STATE_RULESET_NAME} must be a repository ruleset on ${repository}`)
+  }
+}
 
 function ghJson(args, input) {
   try {

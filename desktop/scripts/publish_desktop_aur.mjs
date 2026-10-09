@@ -10,6 +10,7 @@ import { assertAurCandidate, readPackageFiles, selectAurPackageName, synchronize
 import { verifyPublishedLinuxArtifact } from "../release/aur-github.mjs"
 import { parseLedger, publishAur } from "../release/ledger.mjs"
 import { publishPagesStateWithRetry } from "../release/pages-publisher.mjs"
+import { verifyReleaseStateWriterPolicy } from "../release/release-state-ruleset-api.mjs"
 import { writePagesStateFiles } from "../release/pages-state.mjs"
 
 const [pagesRootArgument, candidatePathArgument, packageDirectoryArgument] = process.argv.slice(2)
@@ -23,7 +24,14 @@ const candidate = parseCandidate(await readFile(candidatePath, "utf8"))
 const metadata = JSON.parse(await readFile(path.join(packageDirectory, "release-metadata.json"), "utf8"))
 const repository = process.env.GITHUB_REPOSITORY || "Hansespinosa2/elef"
 if (repository.toLowerCase() !== "hansespinosa2/elef") throw new Error("AUR publishing is allowed only for the Elef release repository")
-const publisher = new GitHubPublisher({ owner: "Hansespinosa2", repository: "elef", token: requiredEnv("GITHUB_TOKEN") })
+const githubToken = requiredEnv("GITHUB_TOKEN")
+const releaseStatePolicy = {
+  repository,
+  appId: requiredEnv("ELEF_RELEASE_STATE_APP_ID"),
+  token: requiredEnv("ELEF_RELEASE_STATE_PUSH_TOKEN"),
+  apiUrl: process.env.GITHUB_API_URL
+}
+const publisher = new GitHubPublisher({ owner: "Hansespinosa2", repository: "elef", token: githubToken })
 const maintainer = requiredEnv("AUR_ACCOUNT_NAME")
 const privateKey = requiredEnv("AUR_SSH_PRIVATE_KEY")
 const knownHosts = requiredEnv("AUR_SSH_KNOWN_HOSTS")
@@ -32,6 +40,7 @@ const aurUrl = `ssh://aur@aur.archlinux.org/${metadata.package_name}.git`
 const workRoot = await mkdtemp(path.join(os.tmpdir(), "elef-aur-publisher-"))
 
 try {
+  await verifyReleaseStateWriterPolicy(releaseStatePolicy)
   let ledger = await currentLedger()
   let releaseRecord = assertAurCandidate(ledger, candidate)
   const verified = await verifyPublishedLinuxArtifact({ publisher, candidate, releaseRecord })
@@ -76,6 +85,7 @@ try {
     packageName: metadata.package_name,
     git: (root, args) => git(root, args, gitEnv),
     beforePush: async () => {
+      await verifyReleaseStateWriterPolicy(releaseStatePolicy)
       await refreshPages(pagesRoot)
       ledger = await currentLedger()
       releaseRecord = assertAurCandidate(ledger, candidate)
@@ -85,6 +95,7 @@ try {
     }
   })
 
+  await verifyReleaseStateWriterPolicy(releaseStatePolicy)
   const stateResult = await publishPagesStateWithRetry({
     pagesRoot,
     reconcile: async () => {
