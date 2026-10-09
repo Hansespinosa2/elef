@@ -3,7 +3,7 @@
   "campaign_branch": "feat/refactor-desktop-and-web",
   "campaign_base_sha": "88f61a7a8ffd7c276bafcf06eee09c36a8adf134",
   "current_phase": 6,
-  "phase_state": "CHECK",
+  "phase_state": "ACT",
   "phase_base_sha": "dff371c49ced594eb228123ec0d28cd753007f6e",
   "head_sha": "1c043b67f6b2b17d4f3b1409d1ce22a5fab3d477",
   "review_round": 1,
@@ -287,5 +287,5 @@
   },
   "pending_human_gates": [],
   "blocker": null,
-  "next_action": "Phase 06 CHECK: candidate 1c043b6 (graph switch-over) gated exit 0 (attempt 1170e36e, 29.4s) with full CI green (run 37867338543 attempt 2); independent review round 1 requested."
+  "next_action": "Phase 06 ACT: round-1 PASS report collected; ready for PASS."
 }
