@@ -14,7 +14,11 @@ const repository = requiredEnv("GITHUB_REPOSITORY")
 const token = requiredEnv("GITHUB_TOKEN")
 const actor = requiredEnv("GITHUB_ACTOR")
 const eventName = process.env.GITHUB_EVENT_NAME || ""
+const eventRef = process.env.GITHUB_REF || ""
 const action = process.env.DESKTOP_RELEASE_ACTION || "reconcile"
+if (eventName === "workflow_dispatch" && eventRef !== "refs/heads/main") {
+  throw new Error("release workflow dispatch must target the protected main branch")
+}
 const [owner, repositoryName] = repository.split("/")
 if (!owner || !repositoryName) throw new Error("GITHUB_REPOSITORY must use owner/repository form")
 
@@ -70,16 +74,23 @@ if (action === "reconcile") {
 }
 
 await writePagesStateFiles(pagesRoot, ledger)
-await writeOutputs({
+const result = {
   initialized,
   revision: ledger.revision,
   lastReconciledMain: ledger.last_reconciled_main,
   pendingSha: reconciliation?.pendingSha || "",
+  pendingReason: reconciliation?.pendingReason || "",
   processedMerges: reconciliation?.processedMerges || [],
-  publicVersions: ledger.releases.filter(release => release.public && !release.blocked).map(release => release.version)
-})
-await writeSummary({ ledger, reconciliation, initialized, action })
-process.stdout.write(`Release state revision ${ledger.revision}; main watermark ${ledger.last_reconciled_main}.\n`)
+  publicVersions: ledger.releases.filter(release => release.public && !release.blocked).map(release => release.version),
+  action
+}
+if (process.env.DESKTOP_RELEASE_MACHINE_OUTPUT === "1") {
+  process.stdout.write(`${JSON.stringify(result)}\n`)
+} else {
+  await writeOutputs(result)
+  await writeSummary({ ledger, reconciliation, initialized, action })
+  process.stdout.write(`Release state revision ${ledger.revision}; main watermark ${ledger.last_reconciled_main}.\n`)
+}
 
 async function readOptionalLedger(filename) {
   try {
@@ -91,14 +102,9 @@ async function readOptionalLedger(filename) {
 }
 
 function gitMainHistory() {
-  const output = execFileSync("git", ["rev-list", "--first-parent", "--reverse", "origin/main"], { encoding: "utf8" }).trim()
+  const mainRepository = process.env.DESKTOP_MAIN_REPOSITORY_PATH || process.cwd()
+  const output = execFileSync("git", ["-C", mainRepository, "rev-list", "--first-parent", "--reverse", "origin/main"], { encoding: "utf8" }).trim()
   return output ? output.split(/\r?\n/) : []
-}
-
-function parseVersions(input) {
-  const versions = input.split(/[\s,]+/).map(version => version.trim()).filter(Boolean)
-  if (!versions.length) throw new Error("block or unblock action requires at least one version")
-  return versions
 }
 
 async function writeOutputs(values) {
@@ -109,7 +115,9 @@ async function writeOutputs(values) {
     `revision=${values.revision}`,
     `last_reconciled_main=${values.lastReconciledMain}`,
     `pending_sha=${values.pendingSha}`,
+    `pending_reason=${values.pendingReason}`,
     `processed_merges=${JSON.stringify(values.processedMerges)}`,
+    `failed_gate_count=${values.processedMerges.filter(merge => merge.gate === "failed_gate").length}`,
     `public_versions=${JSON.stringify(values.publicVersions)}`
   ].join("\n") + "\n")
 }
@@ -127,12 +135,18 @@ async function writeSummary({ ledger, reconciliation, initialized: didInitialize
     `- Failed Gate A merges: ${reconciliation?.processedMerges.filter(merge => merge.gate === "failed_gate").length || 0}`
   ]
   if (didInitialize) lines.push("- Release ledger initialized at the current main head; earlier merges are not retroactively released.")
-  if (reconciliation?.pendingSha) lines.push(`- Waiting for exact-SHA Gate A checks: \`${reconciliation.pendingSha}\``)
+  if (reconciliation?.pendingSha) lines.push(`- Waiting at main SHA \`${reconciliation.pendingSha}\` (${reconciliation.pendingReason}).`)
   if (reconciliation?.unapprovedMerges.length) {
     lines.push(`- Merged PRs without a current repository-owner approval were not eligible: ${reconciliation.unapprovedMerges.map(item => `#${item.pr}`).join(", ")}`)
   }
   lines.push("", "This job reconciles source history and ledger state. It does not prove a public platform artifact, Pages availability, or a user-device installation.")
   await appendFile(summaryPath, `${lines.join("\n")}\n`)
+}
+
+function parseVersions(input) {
+  const versions = input.split(/[\s,]+/).map(version => version.trim()).filter(Boolean)
+  if (!versions.length) throw new Error("block or unblock action requires at least one version")
+  return versions
 }
 
 function requiredEnv(name) {

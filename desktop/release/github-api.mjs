@@ -66,7 +66,9 @@ export class GitHubReleaseApi {
       .filter(review => review.user?.login?.toLowerCase() === ownerLogin.toLowerCase() && review.submitted_at)
       .sort((left, right) => Date.parse(left.submitted_at) - Date.parse(right.submitted_at))
     const latestReview = ownerReviews.at(-1)
-    return latestReview?.state === "APPROVED" && latestReview.commit_id === pullRequest.head?.sha
+    return latestReview?.state === "APPROVED" &&
+      latestReview.commit_id === pullRequest.head?.sha &&
+      Date.parse(latestReview.submitted_at) <= Date.parse(pullRequest.merged_at)
   }
 
   async gateForMainSha(sha) {

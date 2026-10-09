@@ -18,7 +18,7 @@ test("GitHub reconciliation follows first-parent order, records exact PR gates, 
   const start = createLedger({ lastReconciledMain: SHA0 })
   const first = await reconcileReleaseLedger({
     ledger: start,
-    mainHistory: [SHA0, SHA1, SHA2, SHA3],
+    mainHistory: [SHA0, SHA1, SHA3],
     github,
     ownerLogin: "owner",
     now: () => NOW
@@ -31,7 +31,7 @@ test("GitHub reconciliation follows first-parent order, records exact PR gates, 
 
   const replayed = await reconcileReleaseLedger({
     ledger: first.ledger,
-    mainHistory: [SHA0, SHA1, SHA2, SHA3],
+    mainHistory: [SHA0, SHA1, SHA3],
     github,
     ownerLogin: "owner",
     now: () => NOW
@@ -48,14 +48,48 @@ test("a pending exact-SHA main gate stops the watermark before that merge", asyn
   const start = createLedger({ lastReconciledMain: SHA0 })
   const result = await reconcileReleaseLedger({
     ledger: start,
-    mainHistory: [SHA0, SHA1, SHA2, SHA3],
+    mainHistory: [SHA0, SHA1, SHA3],
     github,
     ownerLogin: "owner",
     now: () => NOW
   })
   assert.equal(result.pendingSha, SHA3)
-  assert.equal(result.ledger.last_reconciled_main, SHA2)
+  assert.equal(result.pendingReason, "gate_pending")
+  assert.equal(result.ledger.last_reconciled_main, SHA1)
   assert.deepEqual(result.ledger.releases.map(release => release.version), ["0.1.0"])
+})
+
+test("an unassociated main commit blocks the watermark until its PR record is available", async () => {
+  const github = fakeGitHub({ prs: [pull(601, SHA3)], gates: new Map([[SHA3, "passed"]]) })
+  const result = await reconcileReleaseLedger({
+    ledger: createLedger({ lastReconciledMain: SHA0 }),
+    mainHistory: [SHA0, SHA2, SHA3],
+    github,
+    ownerLogin: "owner",
+    now: () => NOW
+  })
+  assert.equal(result.pendingSha, SHA2)
+  assert.equal(result.pendingReason, "pr_association_unavailable")
+  assert.equal(result.ledger.last_reconciled_main, SHA0)
+  assert.equal(result.ledger.releases.length, 0)
+})
+
+test("an incomplete associated PR record blocks the watermark instead of skipping the merge", async () => {
+  const github = {
+    pullRequestsForCommit: async () => [pull(602, SHA2)],
+    pullRequest: async () => null,
+    versionTags: async () => []
+  }
+  const result = await reconcileReleaseLedger({
+    ledger: createLedger({ lastReconciledMain: SHA0 }),
+    mainHistory: [SHA0, SHA2],
+    github,
+    ownerLogin: "owner",
+    now: () => NOW
+  })
+  assert.equal(result.pendingSha, SHA2)
+  assert.equal(result.pendingReason, "pr_record_unavailable")
+  assert.equal(result.ledger.last_reconciled_main, SHA0)
 })
 
 test("only a current owner approval is eligible and a missing history anchor fails closed", async () => {

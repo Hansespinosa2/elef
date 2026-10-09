@@ -76,6 +76,21 @@ test("owner approval is tied to the latest review of the merged head commit", as
   assert.equal(await api.ownerApprovedPullRequest(pullRequest, "owner"), true)
 })
 
+test("an approval submitted after merge does not authorize a release", async () => {
+  const api = new GitHubReleaseApi({
+    owner: "example",
+    repository: "elef",
+    token: "test-token",
+    fetchImpl: async () => jsonResponse([
+      { user: { login: "owner" }, state: "APPROVED", commit_id: SHA, submitted_at: "2026-10-09T13:00:00Z" }
+    ]),
+    sleep: async () => {}
+  })
+  const pullRequest = { number: 10, base: { ref: "main" }, merged_at: "2026-10-09T12:00:00Z", merge_commit_sha: SHA, head: { sha: SHA } }
+
+  assert.equal(await api.ownerApprovedPullRequest(pullRequest, "owner"), false)
+})
+
 test("transient GitHub API responses retry without exposing response bodies", async () => {
   let calls = 0
   let sleeps = 0

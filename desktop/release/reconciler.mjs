@@ -28,6 +28,7 @@ export async function reconcileReleaseLedger({ ledger, mainHistory, github, owne
   const newMerges = []
   const unapprovedMerges = []
   let pendingSha = null
+  let pendingReason = null
   let historyEnd = mainHistory.length - 1
 
   for (let index = baselineIndex + 1; index < mainHistory.length; index += 1) {
@@ -36,10 +37,20 @@ export async function reconcileReleaseLedger({ ledger, mainHistory, github, owne
     const matching = associations.filter(pr => pr.base?.ref === "main" && pr.merge_commit_sha === sha)
     if (matching.length > 1) throw new Error(`main commit ${sha} is associated with multiple merged pull requests`)
     const associated = matching[0]
-    if (!associated) continue
+    if (!associated) {
+      pendingSha = sha
+      pendingReason = "pr_association_unavailable"
+      historyEnd = index - 1
+      break
+    }
 
     const pullRequest = await github.pullRequest(associated.number)
-    if (pullRequest.base?.ref !== "main" || !pullRequest.merged_at || pullRequest.merge_commit_sha !== sha) continue
+    if (!pullRequest || pullRequest.base?.ref !== "main" || !pullRequest.merged_at || pullRequest.merge_commit_sha !== sha) {
+      pendingSha = sha
+      pendingReason = "pr_record_unavailable"
+      historyEnd = index - 1
+      break
+    }
     if (!await github.ownerApprovedPullRequest(pullRequest, ownerLogin)) {
       unapprovedMerges.push({ pr: pullRequest.number, sha })
       continue
@@ -48,6 +59,7 @@ export async function reconcileReleaseLedger({ ledger, mainHistory, github, owne
     const gate = await github.gateForMainSha(sha)
     if (gate === null) {
       pendingSha = sha
+      pendingReason = "gate_pending"
       historyEnd = index - 1
       break
     }
@@ -74,5 +86,5 @@ export async function reconcileReleaseLedger({ ledger, mainHistory, github, owne
     now
   })
   const processedMerges = next.processed_merges.filter(merge => !before.has(merge.sha))
-  return { ledger: next, initialized: false, pendingSha, unapprovedMerges, processedMerges }
+  return { ledger: next, initialized: false, pendingSha, pendingReason, unapprovedMerges, processedMerges }
 }
