@@ -17,7 +17,6 @@ class PresentationRevealsBaselineTest < ActiveSupport::TestCase
       }
     )
 
-    assert_equal "3ce290e539f8e4a57e5a6dc0ba994073e53f3a6a", baseline.fetch(:baseline_commit)
     assert_equal normalize_template_markers(baseline.fetch(:first_slide_html)), normalize_template_markers(html)
     assert_equal baseline.fetch(:editor_map), Source::Document.editor_map(
       baseline.fetch(:source),
@@ -86,7 +85,6 @@ class PresentationRevealsBaselineTest < ActiveSupport::TestCase
 
   test "Rails Present keeps nested literal colons visible on a no-step deck" do
     baseline = JSON.parse(File.read(Rails.root.join("test/javascript/fixtures/slide-reveals-nested-colon-baseline.json")))
-    assert_equal "2dc9ba70746ef94a03b1db1f258ead3da19c8f0b", baseline.fetch("baseline_commit")
     assert_equal baseline.fetch("editor_map"), Source::Document.editor_map(
       baseline.fetch("source"),
       source_name: "Untitled",

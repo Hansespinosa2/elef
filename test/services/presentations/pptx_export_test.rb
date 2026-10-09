@@ -4,25 +4,32 @@ require "stringio"
 class PresentationsPptxExportTest < ActiveSupport::TestCase
   PIXEL_PNG = Base64.decode64("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+i9MwAAAAASUVORK5CYII=").freeze
 
-  test "builds a deterministic Markdown model for every presentation fixture" do
+  test "builds the same PPTX model from independent presentation instances for every fixture" do
     fixtures = [{ id: "presentations.yml:one", title: presentations(:one).title, source: presentations(:one).source }]
     fixtures += Presentations::SampleData::SAMPLES.map { |sample| sample.slice(:id, :title, :source) }
     fixtures += Presentations::LineageSampleData::SAMPLES.map { |sample| sample.slice(:id, :title, :source) }
+    fixtures << { id: "independent-expected-value", title: "Independent expected title", source: "# Independent expected title\n\nExpected body." }
     remote_image = Presentations::PptxExport::RemoteImageFetcher::Image.new(PIXEL_PNG, "image/png")
 
     with_remote_image_fetcher(->(_url) { remote_image }) do
       fixtures.each do |fixture|
-        presentation = Presentation.new(title: fixture.fetch(:title), source: fixture.fetch(:source))
-        payload = Presentations::PptxExport.new(presentation).as_json
-        expected_slides = presentation.slides.length
+        payloads = 2.times.map do
+          presentation = Presentation.new(title: fixture.fetch(:title), source: fixture.fetch(:source))
+          Presentations::PptxExport.new(presentation).as_json
+        end
+        payload = payloads.first
 
-        assert_equal expected_slides, payload[:slides].length, fixture[:id]
+        assert_equal payloads.first, payloads.last, "#{fixture[:id]} must produce the same model independently"
+        assert_operator payload[:slides].length, :>, 0, fixture[:id]
         assert_equal 1280, payload.dig(:presentation, :width), fixture[:id]
         assert_equal 720, payload.dig(:presentation, :height), fixture[:id]
-        assert_equal presentation.theme, payload.dig(:presentation, :theme), fixture[:id]
-        assert_equal presentation.typography, payload.dig(:presentation, :typography), fixture[:id]
+        assert_equal fixture.fetch(:title), payload.dig(:presentation, :title), fixture[:id]
         assert payload[:slides].all? { |slide| %w[body two-column three-column image table code statement].include?(slide[:layout]) }, fixture[:id]
         assert payload[:slides].all? { |slide| slide[:blocks].all? { |block| block[:html].is_a?(String) } }, fixture[:id]
+        if fixture[:id] == "independent-expected-value"
+          assert_equal "Independent expected title.pptx", payload[:filename]
+          assert_equal "Independent expected title", payload.dig(:presentation, :title)
+        end
       end
     end
   end

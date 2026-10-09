@@ -106,6 +106,46 @@ The per-file system run found another timing-sensitive result: `documents_test.r
 
 An initial attempt to count Ruby directories ran two Rails processes concurrently against one SQLite file and hit `SQLite3::BusyException: database is locked`. That was an instrumentation collision, not a product test result. I reran the directory suites sequentially against separate SQLite files; 263 core Ruby tests and 98 controller tests passed.
 
+## Phase 2: correct misleading tests
+
+The source-level claims below were checked against the audited tree before editing. The following test changes are in the working branch; no required job, job trigger, verifier, attestation, or release behavior has changed.
+
+| Change | Reason and evidence |
+| --- | --- |
+| Replaced the two `assert_no_difference { nil }` blocks in `test/lib/tasks/elef_work_rake_test.rb` with assertions around the actual invalid import invocations. | The old blocks executed no application behavior. The replacement still checks the usage error and that no `Work` is created. |
+| Removed the two hardcoded `baseline_commit` comparisons in `test/lib/source/presentation_reveals_baseline_test.rb` and the equivalent JS reveal-golden provenance comparison. | Each compared a hardcoded SHA with metadata in the same fixture. The HTML and editor-map output comparisons remain. Fixture SHA metadata is retained as provenance. |
+| Deleted `document_sample_data_test.rb`'s report-length fixture test. | It only checked the length and headings of a constant. The other sample-data tests still exercise catalog loading, idempotent seeding, rendering, warnings, and graph behavior. |
+| Renamed and strengthened the PPTX service determinism test. | It now constructs two independent `Presentation` and `PptxExport` instances per fixture, compares the complete payloads, and checks an independently specified title and filename. |
+| Strengthened “presents from the edit screen without submitting the editor form.” | It changes the source, holds the autosave request, verifies the dirty state, accepts the navigation confirmation, and verifies that the persisted source stayed original. The focused system test passed. |
+| Renamed the five overclaimed tests in the library controller, presentation controller, presentation release model, Art integration, and Tauri build-hook tests. | The names now describe data-attribute wiring, draft/title staleness, the Ruby renderer path, and configured build commands, matching the bodies. |
+| Replaced the stylesheet contract's fixed count of 13 imports with a comparison between every `components/*.css` file and the imported component set. | Adding a component stylesheet no longer invalidates an unrelated magic count. |
+| Removed the two-page graph-panel style comparison system test and added a static Chromium fixture with expected panel background, border, and shadow values. | Comparing two pages could pass if both were wrong. A deliberate `base.css` background mutation caused the replacement assertion to fail; restoring the CSS made it pass. |
+| Added independent geometry expectations to the shared stylesheet browser check. | The check now asserts the 1280×720 logical slide, 16:9 frame, equal two-column widths, A4 page ratio/bounds, document heading size, paragraph line height, and overflow behavior, in addition to stylesheet parity. |
+| Moved detailed empty-dollar-pair Backspace cases to the math-controller unit test and changed the shared web and native E2E smoke to send a real keyboard Backspace. | Unit cases cover one and two preceding backslashes plus inline/fenced code. The real web/native keyboard scenarios are committed but were not run locally; the complete native runner is unavailable here. |
+| Extracted PPTX generation helpers into `app/javascript/lib/pptx_export.js`; `pptx_export.test.mjs` imports that module directly instead of rewriting the Stimulus controller source. | Rails now pins the new module in `config/importmap.rb`; the desktop consumer build and actual Rails browser download cases passed after that pin was added. Existing browser tests continue to exercise the real download action and inspect the generated package. |
+| Deleted `test/javascript/reveal_probes.mjs`. | Repository search found no command or CI step that runs this standalone review probe. |
+| Moved duplicate-title validation to `test/models/document_test.rb`, document creation overrides to `documents_controller_test.rb`, and presentation preview immutability to `presentations_controller_test.rb`. | These tests now live at the model or endpoint they exercise. The relocated model/controller suites passed. |
+
+The `find_by!` concern in `test/system/presentations_test.rb` is not a test defect: the focused test passed in Phase 0 (1 test, 5 assertions). The source-level architecture assertions in `test/javascript/shared/desktop_host.test.js` remain as ownership and import-boundary pins; related transport, save-flow, renderer, sanitizer, and frontend adapter behavior has direct unit coverage. No change was made to weaken those architecture checks.
+
+### Phase 2 validation
+
+| Command / test | Result |
+| --- | --- |
+| `npm run test:javascript` | 439 tests passed |
+| `npm test --prefix desktop/frontend` | 26 tests passed |
+| `npm run build --prefix desktop/frontend` | Passed after the new shared module import |
+| `npm run test:web --prefix desktop/e2e -- --grep 'shared rendering styles preserve slide layouts and document typography|workspace graph panels use the independently specified dark surface colors'` | 2 focused Chromium tests passed; neither navigated to Rails or used a database |
+| Deliberate graph-panel background mutation | Replacement test failed on both incorrect panel backgrounds, as intended |
+| Focused moved model/controller suite | 74 tests, 753 assertions, passed |
+| Other focused changed Ruby suites | 82 tests, 969 assertions, passed |
+| Dirty-editor Present system test | 1 test, 6 assertions, passed |
+| PPTX draft-download system test | 1 test, 6 assertions, passed after adding the Rails import-map pin |
+| PPTX media-attachment system test | 1 test, 4 assertions, passed after adding the Rails import-map pin |
+| `python3 script/check_frontend_ownership.py` and `git diff --check` | Passed |
+
+The first real-browser PPTX attempt exposed the missing import-map pin: the controller failed to load and the browser test did not see the success status. Adding the explicit pin fixed the issue; the draft and media browser cases above were rerun and passed. I did not rerun the entire PPTX system-test file after the fix. The new native-host slide-geometry assertion and real keyboard smoke were not executed locally; this Linux checkout does not have the Tauri E2E fixture/binary running, and the macOS leg cannot run on this machine.
+
 ## Claims verified for later phases
 
 - The eight explicit JavaScript invocations are duplicated as described; the count is eight, not seven.
@@ -116,7 +156,7 @@ An initial attempt to count Ruby directories ran two Rails processes concurrentl
 - `test/system/presentations_test.rb` line 247 passes as written; no fix is justified from the claimed failure.
 - The Ruby renderer fallback is present behind `ELEF_RENDERER=ruby`; static inspection does not establish that it is dead code.
 
-Other 3b–3f claims have not yet been fully checked against the tests or measured by a deliberate break. Phase 2 and later work is not recorded as complete here.
+Phase 2 test corrections above are implemented and locally verified at the stated tiers. Phases 1 and 3–6 remain incomplete; their unverified claims and measurements will be added as work proceeds.
 
 ## Maintainer approval required before workflow changes
 

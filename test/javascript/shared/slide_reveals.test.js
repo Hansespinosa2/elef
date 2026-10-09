@@ -51,7 +51,6 @@ for (const fixture of fixtures) {
 }
 
 test("a no-step nested-colon deck stays byte-identical to the dev renderer golden", () => {
-  assert.equal(nestedColonBaseline.baseline_commit, "2dc9ba70746ef94a03b1db1f258ead3da19c8f0b")
   const rendered = renderPreview({ source: nestedColonBaseline.source })
 
   assert.equal(rendered.html, nestedColonBaseline.html)

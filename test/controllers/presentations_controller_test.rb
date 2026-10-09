@@ -2,6 +2,20 @@ require "test_helper"
 require "tempfile"
 
 class PresentationsControllerTest < ActionDispatch::IntegrationTest
+  test "presentation preview keeps the saved record untouched" do
+    presentation = presentations(:one)
+
+    post preview_presentation_path(presentation), params: {
+      presentation: { title: "Draft", source: "# Draft" }, revision: 12
+    }, as: :json
+
+    assert_response :success
+    assert_equal 12, response.parsed_body["revision"]
+    assert_includes response.parsed_body["html"], "Draft"
+    assert_equal "Demo Deck", presentation.reload.title
+    assert_equal "# One\n\nBody\n---\n# Two", presentation.source
+  end
+
   test "rename preserves the all-library view and rejects arbitrary destinations" do
     work = presentations(:one)
     get root_path
@@ -137,7 +151,7 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_select ".presentation-release-warning", text: /newer changes/
   end
 
-  test "editor wires autosave and keeps new presentations client-only until creation" do
+  test "editor markup configures autosave and keeps new presentations client-only" do
     get edit_presentation_path(presentations(:one))
     assert_select "form.visual-editor-form"
     assert_select "form[action='#{publish_presentation_path(presentations(:one))}'] button.button", text: "Present"

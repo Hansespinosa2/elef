@@ -727,45 +727,6 @@ class DocumentsTest < ApplicationSystemTestCase
     page.driver.browser.manage.window.resize_to(1400, 1000)
   end
 
-  test "document and presentation graph panels share the workspace shell styling" do
-    Document.create!(title: "Graph styling document", source: "# Graph styling document")
-    Presentation.create!(title: "Graph styling presentation", source: "# Graph styling presentation")
-
-    visit documents_path
-    document_panel_style = page.evaluate_script(<<~JAVASCRIPT)
-      (() => {
-        const panel = document.querySelector('.document-graph-panel');
-        const description = panel.querySelector('.mb-4 > div > p:not(.eyebrow)');
-        return {
-          background: getComputedStyle(panel).backgroundColor,
-          border: getComputedStyle(panel).borderColor,
-          shadow: getComputedStyle(panel).boxShadow,
-          heading: getComputedStyle(panel.querySelector('h2')).color,
-          description: getComputedStyle(description).color,
-          legend: getComputedStyle(panel.querySelector('.document-graph-legend')).color
-        };
-      })()
-    JAVASCRIPT
-
-    visit presentations_path
-    presentation_panel_style = page.evaluate_script(<<~JAVASCRIPT)
-      (() => {
-        const panel = document.querySelector('.lineage-panel');
-        const description = panel.querySelector('.mb-4 > div > p:not(.eyebrow)');
-        return {
-          background: getComputedStyle(panel).backgroundColor,
-          border: getComputedStyle(panel).borderColor,
-          shadow: getComputedStyle(panel).boxShadow,
-          heading: getComputedStyle(panel.querySelector('h2')).color,
-          description: getComputedStyle(description).color,
-          legend: getComputedStyle(panel.querySelector('.lineage-legend')).color
-        };
-      })()
-    JAVASCRIPT
-
-    assert_equal presentation_panel_style, document_panel_style
-  end
-
   test "creates a document and updates its continuous live preview" do
     visit new_document_path
     assert_no_selector "#document_title"

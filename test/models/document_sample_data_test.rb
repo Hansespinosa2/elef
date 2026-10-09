@@ -93,13 +93,4 @@ class DocumentSampleDataTest < ActiveSupport::TestCase
     orphan = documents.fetch("document-links-orphan").id
     refute graph[:edges].any? { |edge| edge[:source] == orphan || edge[:target] == orphan }
   end
-
-  test "includes a report-length fixture for long-form reading" do
-    report = Documents::SampleData::SAMPLES.find { |sample| sample[:id] == "document-full-report" }
-
-    assert report
-    assert_operator report[:source].split.size, :>=, 4_000
-    assert_operator report[:source].lines.count { |line| line.start_with?("## ") }, :>=, 10
-    assert_includes report[:source], "## Appendix C: Glossary"
-  end
 end

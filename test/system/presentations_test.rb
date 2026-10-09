@@ -455,7 +455,17 @@ class PresentationsTest < ApplicationSystemTestCase
     presentation = Presentation.create!(title: "Edit presentation", source: "# Original")
 
     visit edit_presentation_path(presentation)
-    click_on "Present"
+    hold_autosaves
+    fill_in "Markdown source", with: "# Unsaved editor change"
+    wait_for_autosave_request(0)
+    assert_equal true, page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const form = document.querySelector('form[data-controller~="dirty"]');
+        return window.Stimulus.getControllerForElementAndIdentifier(form, "dirty").dirty;
+      })()
+    JAVASCRIPT
+
+    accept_confirm { click_on "Present" }
 
     assert_current_path present_presentation_path(presentation)
     assert_selector "body.presentation-body"

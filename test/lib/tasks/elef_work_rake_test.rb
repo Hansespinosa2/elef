@@ -58,23 +58,25 @@ class ElefWorkRakeTest < ActiveSupport::TestCase
   end
 
   test "aborts with the usage line when no package is given at all" do
-    _out, error = capture_io do
-      assert_raises(SystemExit) { invoke("elef:work:import") }
-    end
+    assert_no_difference("Work.count") do
+      _out, error = capture_io do
+        assert_raises(SystemExit) { invoke("elef:work:import") }
+      end
 
-    assert_includes error, "Usage: bin/rails 'elef:work:import[path/to/work.zip]'"
-    assert_no_difference("Work.count") { nil }
+      assert_includes error, "Usage: bin/rails 'elef:work:import[path/to/work.zip]'"
+    end
   end
 
   test "aborts with the usage line when the package argument is blank" do
     ENV["PACKAGE"] = "   "
 
-    _out, error = capture_io do
-      assert_raises(SystemExit) { invoke("elef:work:import", "") }
-    end
+    assert_no_difference("Work.count") do
+      _out, error = capture_io do
+        assert_raises(SystemExit) { invoke("elef:work:import", "") }
+      end
 
-    assert_includes error, "Usage: bin/rails 'elef:work:import[path/to/work.zip]'"
-    assert_no_difference("Work.count") { nil }
+      assert_includes error, "Usage: bin/rails 'elef:work:import[path/to/work.zip]'"
+    end
   end
 
   test "imports an exported presentation given as the task argument" do

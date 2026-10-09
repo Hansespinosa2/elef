@@ -49,7 +49,7 @@ class PresentationReleaseTest < ActiveSupport::TestCase
     assert_includes invalid_release.errors[:source_revision], "must belong to the released work"
   end
 
-  test "tracks stale and current states based on draft source, title, and assets" do
+  test "tracks stale and current states based on draft source and title" do
     assert @release.current?
     refute @release.stale?
 

@@ -1,10 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { readFile } from "node:fs/promises"
-
-const source = (await readFile(new URL("../../app/javascript/controllers/pptx_export_controller.js", import.meta.url), "utf8"))
-  .replace('import { Controller } from "@hotwired/stimulus"', "class Controller {}")
-const pptx = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`)
+import * as pptx from "../../app/javascript/lib/pptx_export.js"
 
 const {
   blockMarkup,

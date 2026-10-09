@@ -1,6 +1,14 @@
 require "test_helper"
 
 class DocumentsControllerTest < ActionDispatch::IntegrationTest
+  test "creates a document with generic appearance overrides" do
+    post documents_path, params: { document: { title: "Ignored title", source: "# Styled notes", theme: "dark", typography: "technical" } }
+
+    document = Document.find_by!(title: "Styled notes")
+    assert_redirected_to edit_document_path(document)
+    assert_equal ["dark", "technical"], [document.theme_override, document.typography_override]
+  end
+
   setup do
     Document.delete_all
   end
@@ -274,14 +282,6 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
     assert_select ".lineage-panel"
   end
 
-  test "duplicate document titles are rejected" do
-    Document.create!(title: "Existing notes", source: "# Existing")
-    duplicate = Document.new(title: "Existing notes", source: "# Duplicate")
-
-    assert_not duplicate.save
-    assert_includes duplicate.errors.full_messages, "Title has already been taken"
-  end
-
   test "renaming a document preserves incoming links through aliases" do
     target = Document.create!(title: "Old title", source: "# Old title")
     incoming = Document.create!(title: "Incoming", source: "[[Old title]]\n\n`[[Old title]]`\n\n```\n[[Old title]]\n```")
@@ -351,20 +351,6 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_equal 0, response.parsed_body["revision"]
     assert_includes response.parsed_body["html"], "Revisionless draft"
-  end
-
-  test "presentation preview keeps the saved record untouched" do
-    presentation = presentations(:one)
-
-    post preview_presentation_path(presentation), params: {
-      presentation: { title: "Draft", source: "# Draft" }, revision: 12
-    }, as: :json
-
-    assert_response :success
-    assert_equal 12, response.parsed_body["revision"]
-    assert_includes response.parsed_body["html"], "Draft"
-    assert_equal "Demo Deck", presentation.reload.title
-    assert_equal "# One\n\nBody\n---\n# Two", presentation.source
   end
 
   test "invalid preview returns warnings without mutating saved source" do

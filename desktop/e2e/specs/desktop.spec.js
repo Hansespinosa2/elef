@@ -395,6 +395,16 @@ class DesktopEditorUi {
   }
 
   async enterPresentationMode() {
+    const geometry = await browser.execute(() => {
+      const slide = document.querySelector("#desktop-preview .slide-frame > .slide")
+      if (!slide) return null
+      const style = getComputedStyle(slide)
+      return { width: style.width, height: style.height, overflow: style.overflow }
+    })
+    if (geometry?.width !== "1280px" || geometry.height !== "720px" || geometry.overflow !== "hidden") {
+      throw new Error(`The native presentation preview violated its 16:9 canvas contract: ${JSON.stringify(geometry)}`)
+    }
+
     const started = await browser.executeAsync(done => {
       const start = window.__elefPresentationTestHooks?.start
       if (!start) return done({ error: "The presentation shell is unavailable" })
@@ -614,20 +624,17 @@ class DesktopEditorUi {
         })
       }
 
-      const outcome = await browser.execute(() => {
+      focusDesktopWindow()
+      sendNativeKey("Backspace")
+      await browser.waitUntil(async () => browser.execute(expected => {
         const controller = document.querySelector("#desktop-editor-field")?.editorController
-        const event = new KeyboardEvent("keydown", { key: "Backspace", bubbles: true, cancelable: true })
-        controller.dom.dispatchEvent(event)
-        return {
-          source: controller.value,
-          anchor: controller.selectionStart,
-          head: controller.selectionEnd,
-          prevented: event.defaultPrevented
-        }
+        return controller?.value === expected
+          && controller.selectionStart === expected.length
+          && controller.selectionEnd === expected.length
+      }, source), {
+        timeout: 5_000,
+        timeoutMsg: "A real Backspace key did not delete both characters of the empty dollar pair"
       })
-      if (outcome?.source !== source || outcome.anchor !== source.length || outcome.head !== source.length || !outcome.prevented) {
-        throw new Error(`Backspace did not delete both characters of the empty dollar pair: ${JSON.stringify(outcome)}`)
-      }
     } finally {
       if (restoreNormalMode) {
         sendNativeKey("Escape")

@@ -285,22 +285,19 @@ class WebEditorUi {
         await expect.poll(() => this.page.locator(".source-field").evaluate(field => field.editorController.insertMode)).toBe(true)
       }
 
+      await this.page.keyboard.press("Backspace")
       const outcome = await this.page.locator(".source-field").evaluate(field => {
         const controller = field.editorController
-        const event = new KeyboardEvent("keydown", { key: "Backspace", bubbles: true, cancelable: true })
-        controller.dom.dispatchEvent(event)
         return {
           source: controller.value,
           anchor: controller.selectionStart,
-          head: controller.selectionEnd,
-          prevented: event.defaultPrevented
+          head: controller.selectionEnd
         }
       })
       expect(outcome).toEqual({
         source,
         anchor: source.length,
-        head: source.length,
-        prevented: true
+        head: source.length
       })
     } finally {
       if (restoreNormalMode) {
@@ -1076,28 +1073,82 @@ test("shared rendering styles preserve slide layouts and document typography", a
     { kind: "document", source: "# Technical\n\nBody text with `code`.\n", style: { theme: "dark", typography: "technical" } }
   ]
   for (const fixture of fixtures) {
-    const html = renderPreview({ ...fixture, title: "Style fixture", allowRemoteMedia: false }).html
+    const previewHtml = renderPreview({ ...fixture, title: "Style fixture", allowRemoteMedia: false }).html
+    const html = fixture.kind === "document"
+      ? `<div class="document-page-frame"><article class="document-page">${previewHtml}</article></div>`
+      : previewHtml
     const measured = {}
     for (const [target, css] of Object.entries(styles)) {
       await page.setContent(`<style>${css}\n*{box-sizing:border-box}body{margin:0}.fixture-root{width:1280px}</style><div class="fixture-root">${html}</div>`)
       measured[target] = await page.evaluate(() => {
-        const selectors = [".slide", ".slide h1", ".slide p", ".slide-regions", ".document-surface", ".document-surface h1", ".document-surface p"]
-        return Object.fromEntries(selectors.flatMap(selector => {
+        const selectors = [".slide-frame", ".slide", ".slide h1", ".slide p", ".slide-regions", ".document-surface", ".document-surface h1", ".document-surface p"]
+        const styles = Object.fromEntries(selectors.flatMap(selector => {
           const node = document.querySelector(selector)
           if (!node) return []
           const style = getComputedStyle(node)
+          const rect = node.getBoundingClientRect()
           return [[selector, { font: style.fontFamily, size: style.fontSize, lineHeight: style.lineHeight,
             color: style.color, background: style.backgroundImage, display: style.display,
-            columns: style.gridTemplateColumns, width: style.width }]]
+            columns: style.gridTemplateColumns, width: style.width, height: style.height,
+            rectWidth: rect.width, rectHeight: rect.height, overflow: style.overflow }]]
         }))
+        const pageFrame = document.querySelector(".document-page-frame")
+        const page = pageFrame?.querySelector(".document-page")
+        const pageRect = pageFrame?.getBoundingClientRect()
+        return {
+          styles,
+          pageBoundary: pageFrame && pageRect ? {
+            width: pageRect.width,
+            height: pageRect.height,
+            overflow: getComputedStyle(page).overflow
+          } : null
+        }
       })
     }
-    expect(measured.desktop).toEqual(measured.web)
+    expect(measured.desktop.styles).toEqual(measured.web.styles)
+    expect(measured.desktop.pageBoundary).toEqual(measured.web.pageBoundary)
+    if (fixture.kind === "presentation") {
+      expect(measured.web.styles[".slide"].width).toBe("1280px")
+      expect(measured.web.styles[".slide"].height).toBe("720px")
+      expect(Math.abs(measured.web.styles[".slide-frame"].rectWidth / measured.web.styles[".slide-frame"].rectHeight - 16 / 9)).toBeLessThan(0.01)
+      expect(measured.web.styles[".slide"].overflow).toBe("hidden")
+    }
     if (fixture.source.includes("## Second")) {
-      expect(measured.desktop[".slide-regions"].display).toBe("grid")
-      expect(measured.desktop[".slide-regions"].columns.split(" ")).toHaveLength(2)
+      expect(measured.desktop.styles[".slide-regions"].display).toBe("grid")
+      expect(measured.desktop.styles[".slide-regions"].columns.split(" ")).toHaveLength(2)
+      const regionWidths = await page.locator(".slide-region").evaluateAll(regions =>
+        regions.map(region => region.getBoundingClientRect().width)
+      )
+      expect(regionWidths).toHaveLength(2)
+      expect(regionWidths[0]).toBeGreaterThan(500)
+      expect(Math.abs(regionWidths[0] - regionWidths[1])).toBeLessThan(1)
+    }
+    if (fixture.kind === "document") {
+      expect(measured.web.pageBoundary.width).toBe(794)
+      expect(measured.web.pageBoundary.height).toBeCloseTo(794 * 297 / 210, 0)
+      expect(measured.web.pageBoundary.overflow).toBe("hidden")
+      expect(measured.web.styles[".document-surface h1"].size).toBe("48px")
+      expect(measured.web.styles[".document-surface p"].lineHeight).toBe("28.8px")
     }
   }
+})
+
+test("workspace graph panels use the independently specified dark surface colors", async ({ page }) => {
+  const tailwind = await readFile(new URL("../../../app/assets/builds/tailwind.css", import.meta.url), "utf8")
+  await page.setContent(`<!doctype html><html data-theme="dark"><head><style>${tailwind}${applicationStylesheet}</style></head><body class="elef-app">
+    <section class="document-graph-panel"><h2>Documents</h2><p>Document graph</p></section>
+    <section class="lineage-panel"><h2>Presentations</h2><p>Presentation graph</p></section>
+  </body></html>`)
+
+  const panels = await page.locator(".document-graph-panel, .lineage-panel").evaluateAll(elements => elements.map(element => {
+    const style = getComputedStyle(element)
+    return { background: style.backgroundColor, border: style.borderColor, shadow: style.boxShadow }
+  }))
+
+  expect(panels).toEqual([
+    { background: "rgb(24, 33, 38)", border: "rgba(206, 224, 213, 0.18)", shadow: "rgba(0, 0, 0, 0.16) 0px 18px 45px 0px" },
+    { background: "rgb(24, 33, 38)", border: "rgba(206, 224, 213, 0.18)", shadow: "rgba(0, 0, 0, 0.16) 0px 18px 45px 0px" }
+  ])
 })
 
 test("the source editor has matching styles in Rails and the desktop asset bundle", async ({ page }) => {
