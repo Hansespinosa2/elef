@@ -853,38 +853,30 @@ class PresentationsTest < ApplicationSystemTestCase
     refute_includes find_field("Markdown source").value, ":::align{middle center}"
   end
 
-  test "shared position groups stay intact and cannot be split by block reordering" do
+  test "blocks with position directives reorder independently without group restrictions" do
     presentation = Presentation.create!(
       title: "Position group",
-      source: "# Slide\n\n:::align{center}\n\nFirst\n\nSecond\n\n:::\n\nOutside"
+      source: "# Slide\n\n:::align{center}\n\nFirst\n\nSecond\n\nOutside"
     )
 
     visit edit_presentation_path(presentation)
     assert_selector "[data-presentation-editor-action='move-block-down'][data-block-index='1']:not([disabled])"
-    assert_selector "[data-presentation-editor-action='move-block-down'][data-block-index='2'][disabled]"
-    assert_selector "[data-presentation-editor-action='move-block-up'][data-block-index='3'][disabled]"
+    assert_selector "[data-presentation-editor-action='move-block-down'][data-block-index='2']:not([disabled])"
+    assert_selector "[data-presentation-editor-action='move-block-up'][data-block-index='3']:not([disabled])"
 
     find("[data-presentation-editor-action='move-block-down'][data-block-index='1']").click
-    assert_field "Markdown source", with: "# Slide\n\n:::align{center}\n\nSecond\n\nFirst\n\n:::\n\nOutside", wait: 5
+    assert_field "Markdown source", with: "# Slide\n\nSecond\n\n:::align{center}\n\nFirst\n\nOutside", wait: 5
     wait_for_fresh_projection
     assert_selector ".slide-block.position-center", text: "First", wait: 5
-    assert_selector ".slide-block.position-center", text: "Second"
+    refute_selector ".slide-block.position-center", text: "Second"
 
     assert_selector "[data-presentation-editor-action='delete-block'][data-block-index='2']:not([disabled])", wait: 5
     accept_confirm do
       find("[data-presentation-editor-action='delete-block'][data-block-index='2']").click
     end
     wait_for_fresh_projection
-    assert_includes find_field("Markdown source").value, ":::align{center}"
-
-    assert_selector "[data-presentation-editor-action='delete-block'][data-block-index='1']:not([disabled])", wait: 5
-    accept_confirm do
-      find("[data-presentation-editor-action='delete-block'][data-block-index='1']").click
-    end
-    wait_for_fresh_projection
     final_source = find_field("Markdown source").value
     refute_includes final_source, ":::align{center}"
-    refute_includes final_source, ":::"
     assert_includes final_source, "Outside"
   end
 
@@ -1391,7 +1383,7 @@ class PresentationsTest < ApplicationSystemTestCase
   test "deleting Art before a single-block alignment group removes its directive too" do
     presentation = Presentation.create!(
       title: "Aligned Art block ownership",
-      source: "# Slide\n\n:::art\n:::align{center}\n- Alpha\n\n:::\n\n- Next list"
+      source: "# Slide\n\n:::art\n:::align{center}\n- Alpha\n\nNext paragraph"
     )
 
     visit edit_presentation_path(presentation)
@@ -1402,12 +1394,12 @@ class PresentationsTest < ApplicationSystemTestCase
       find("[data-presentation-editor-action='delete-block'][data-block-index='1']").click
     end
 
-    assert_field "Markdown source", with: /# Slide\n\n- Next list/, wait: 5
+    assert_field "Markdown source", with: /# Slide\n\nNext paragraph/, wait: 5
     wait_for_fresh_projection
     refute_includes find_field("Markdown source").value, ":::art"
     refute_includes find_field("Markdown source").value, ":::align{center}"
     assert_no_selector ".presentation-editor-projection [data-elef-art-root]"
-    assert_selector ".presentation-editor-projection ul > li", text: "Next list"
+    assert_selector ".presentation-editor-projection p", text: "Next paragraph"
   end
 
   test "saved presentation Art fallback preserves attached media" do

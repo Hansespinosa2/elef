@@ -3175,13 +3175,13 @@ class DocumentsTest < ApplicationSystemTestCase
     refute_selector ".document-editor-block.position-center", text: "Tail"
   end
 
-  test "deleting a single block in a grouped position removes its opening and closing directives" do
-    source = "# Keep\n\n:::align{center}\n\nDelete me\n\n:::\n\nTail"
+  test "deleting a single positioned block leaves following blocks and directives alone" do
+    source = "# Keep\n\n:::align{center}\n\nDelete me\n\nTail"
     map = Source::Document.editor_map(source, mode: :document)
     positioned = map[:slides].first[:blocks].find { |candidate| candidate[:markdown] == "Delete me" }
-    assert_equal "group", positioned[:position_scope]
+    assert_equal "center", positioned[:position][:horizontal]
 
-    document = Document.create!(title: "Delete grouped position", source: source)
+    document = Document.create!(title: "Delete positioned block", source: source)
     visit edit_document_path(document)
 
     block = find(".document-editor-block", text: "Delete me")

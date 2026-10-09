@@ -597,13 +597,7 @@ module Source
         block = record[:markdown]
         position = position_from_block(block)
         if position
-          closing_index = raw_blocks[(index + 1)..]&.index { |candidate| candidate[:markdown] == ":::" }
-          if closing_index
-            closing_index += index + 1
-            grouped = raw_blocks[(index + 1)...closing_index]
-            grouped.each { |group| blocks << parsed_block(group, position, art_resolution, nil) unless group[:markdown] == "" }
-            index = closing_index + 1
-          elsif raw_blocks[index + 1]
+          if raw_blocks[index + 1]
             blocks << parsed_block(raw_blocks[index + 1], position, art_resolution, nil)
             index += 2
           else
@@ -625,15 +619,13 @@ module Source
     def parse_blocks_with_reveals(raw_blocks, art_resolution, reveals)
       blocks = []
       warnings = []
-      scoped_position = nil
       index = 0
 
       while index < raw_blocks.length
         record = raw_blocks[index]
         block = record[:markdown]
         if block == ":::"
-          warnings << "Unknown or malformed presentation directive was removed." unless scoped_position
-          scoped_position = nil
+          warnings << "Unknown or malformed presentation directive was removed."
           index += 1
           next
         end
@@ -641,24 +633,17 @@ module Source
         position = position_from_block(block)
         if position
           positions = [position]
-          last_record = record
           index += 1
           while index < raw_blocks.length && (stacked_position = position_from_block(raw_blocks[index][:markdown]))
             positions << stacked_position
-            last_record = raw_blocks[index]
             index += 1
           end
           selected_position = positions.last
-          if position_scope_closes_in_lines?(reveals[:lines], last_record[:start_line])
-            scoped_position = selected_position
+          if raw_blocks[index]
+            blocks << parsed_block(raw_blocks[index], selected_position, art_resolution, reveals[:event_by_line])
+            index += 1
           else
-            scoped_position = nil
-            if raw_blocks[index]
-              blocks << parsed_block(raw_blocks[index], selected_position, art_resolution, reveals[:event_by_line])
-              index += 1
-            else
-              warnings << "Alignment directive has no following Markdown block."
-            end
+            warnings << "Alignment directive has no following Markdown block."
           end
           next
         end
@@ -669,7 +654,7 @@ module Source
           next
         end
 
-        blocks << parsed_block(record, scoped_position, art_resolution, reveals[:event_by_line])
+        blocks << parsed_block(record, nil, art_resolution, reveals[:event_by_line])
         index += 1
       end
 
@@ -799,30 +784,6 @@ module Source
       match ? { kind: :step, label: match[1] } : { kind: :malformed }
     end
 
-    def position_scope_closes_in_lines?(lines, start_index)
-      fence = nil
-      math_fence = nil
-      lines[(start_index + 1)..].to_a.each do |line|
-        incoming_fence = fence_marker(line)
-        if fence
-          fence = toggle_fence(fence, incoming_fence) if incoming_fence
-          next
-        elsif incoming_fence
-          fence = incoming_fence
-          next
-        elsif math_fence
-          math_fence = nil if display_math_fence_marker(line) == math_fence
-          next
-        elsif (opening_math_fence = display_math_fence_opener(line))
-          math_fence = opening_math_fence
-          next
-        end
-
-        return true if line.match?(/\A {0,3}:::[ \t]*\z/)
-        return false if position_from_block(line)
-      end
-      false
-    end
 
     def markdown_blocks(markdown, art_resolution = { bindings: [] })
       blocks = []
