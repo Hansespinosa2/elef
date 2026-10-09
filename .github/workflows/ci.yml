@@ -50,7 +50,7 @@ jobs:
           test "$elapsed" -lt 300
 
   scan_ruby:
-    if: github.event_name != 'push'
+    if: github.event_name != 'push' || github.ref_name == 'main'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -63,7 +63,7 @@ jobs:
         run: bin/bundler-audit
 
   scan_js:
-    if: github.event_name != 'push'
+    if: github.event_name != 'push' || github.ref_name == 'main'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -76,7 +76,7 @@ jobs:
         run: bin/importmap audit
 
   test:
-    if: github.event_name != 'push'
+    if: github.event_name != 'push' || github.ref_name == 'main'
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -120,7 +120,7 @@ jobs:
           ruby test/scripts/ci_single_run_test.rb
 
   sqlite-test:
-    if: github.event_name != 'push'
+    if: github.event_name != 'push' || github.ref_name == 'main'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -138,7 +138,7 @@ jobs:
         run: bin/rails db:test:prepare test
 
   system-test:
-    if: github.event_name != 'push'
+    if: github.event_name != 'push' || github.ref_name == 'main'
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -241,6 +241,13 @@ jobs:
         run: npm test --prefix desktop/frontend
       - name: Bundle the desktop frontend
         run: npm run build --prefix desktop/frontend
+      - name: Bundle the repository Dev frontend
+        run: npm run build --prefix desktop/frontend -- --profile=dev
+      - name: Validate desktop release profiles and fixture manifest
+        run: |
+          npm run check:desktop-profiles
+          npm run check:release-fixtures
+          npm run check:release-ci
       - name: Check command allowlist and CSP
         run: |
           python3 desktop/scripts/check_architecture.py
@@ -376,6 +383,13 @@ jobs:
         run: npm test --prefix desktop/frontend
       - name: Bundle the desktop frontend
         run: npm run build --prefix desktop/frontend
+      - name: Bundle the repository Dev frontend
+        run: npm run build --prefix desktop/frontend -- --profile=dev
+      - name: Validate desktop release profiles and fixture manifest
+        run: |
+          npm run check:desktop-profiles
+          npm run check:release-fixtures
+          npm run check:release-ci
       - name: Check command allowlist and CSP
         run: |
           python3 desktop/scripts/check_architecture.py
@@ -480,7 +494,7 @@ jobs:
           bin/rails runner -e test script/benchmark_shared_renderer.rb
 
   production-smoke:
-    if: github.event_name != 'push'
+    if: github.event_name != 'push' || github.ref_name == 'main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -513,7 +527,7 @@ jobs:
           "${compose[@]}" exec -T web bin/rails runner 'abort "wrong Rails environment" unless Rails.env.production?; abort "wrong database adapter" unless ActiveRecord::Base.connection.adapter_name == "PostgreSQL"; storage = Rails.root.join("storage"); probe = storage.join(".write-check"); File.write(probe, "ok"); File.delete(probe); puts "production smoke ok"'
 
   development-smoke:
-    if: github.event_name != 'push'
+    if: github.event_name != 'push' || github.ref_name == 'main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -534,6 +548,25 @@ jobs:
           "${compose[@]}" up -d db
           "${compose[@]}" run --rm --no-deps web bin/rails db:prepare
           "${compose[@]}" run --rm --no-deps web bin/rails runner 'abort "wrong Rails environment" unless Rails.env.development?; abort "wrong database adapter" unless ActiveRecord::Base.connection.adapter_name == "PostgreSQL"; storage = Rails.root.join("storage"); probe = storage.join(".write-check"); File.write(probe, "ok"); File.delete(probe); puts "development smoke ok"'
+
+  release-gate:
+    name: Exact main SHA release gate
+    if: github.event_name == 'push' && github.ref_name == 'main'
+    needs: [ desktop-fast, scan_ruby, scan_js, test, sqlite-test, system-test, desktop, desktop-macos, renderer-macos, production-smoke, development-smoke ]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Record exact source SHA and passing required jobs
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          echo "Gate A passed for main SHA ${SOURCE_SHA}."
+          {
+            echo "## Desktop release Gate A"
+            echo "- Source SHA: \`${SOURCE_SHA}\`"
+            echo "- All required Linux, macOS, Rails, desktop, renderer, and deployment smoke jobs passed on this push."
+          } >> "$GITHUB_STEP_SUMMARY"
 
   record-ci-attestation:
     if: github.event_name == 'pull_request'
