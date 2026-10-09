@@ -917,6 +917,9 @@ PHASE7_CI_EVIDENCE_PATH = ROOT / "docs" / "refactor" / "execution" / "phase-7-ci
 PHASE8_PLAN_PATH = ROOT / "docs" / "refactor" / "execution" / "phase-8-plan.md"
 PHASE8_PHASE_PATH = ROOT / "docs" / "refactor" / "phases" / "08-source-editor.md"
 PHASE8_CI_EVIDENCE_PATH = ROOT / "docs" / "refactor" / "execution" / "phase-8-ci-evidence.json"
+PHASE9_PLAN_PATH = ROOT / "docs" / "refactor" / "execution" / "phase-9-plan.md"
+PHASE9_PHASE_PATH = ROOT / "docs" / "refactor" / "phases" / "09-visual-editor.md"
+PHASE9_CI_EVIDENCE_PATH = ROOT / "docs" / "refactor" / "execution" / "phase-9-ci-evidence.json"
 
 
 def check_phase3_ci_evidence(status: dict, head: str) -> None:
@@ -1511,6 +1514,119 @@ def run_phase8(json_output: bool) -> int:
     return 0
 
 
+def check_phase9_ci_evidence(status: dict, head: str) -> None:
+    external = os.environ.get("ELEF_GATE_EVIDENCE_DIR")
+    evidence_path = (
+        Path(external) / "phase-9-ci-evidence.json" if external else PHASE9_CI_EVIDENCE_PATH
+    )
+    evidence = read_json(evidence_path)
+    if not isinstance(evidence, dict):
+        fail("phase-9 CI evidence must be an object")
+    run = evidence.get("run", {})
+    parents = run.get("tested_merge_parents", []) or []
+    if evidence.get("candidate_sha") != head and head not in parents:
+        fail("phase-9 CI evidence does not name the candidate")
+    # Deferred-CI posture while the campaign PR is conflicted (see
+    # docs/refactor/deferred-dev-reconciliation.md): remote CI is advisory, so
+    # evidence may declare ci_deferred and prove the candidate with local
+    # verification instead. A pull-request run must still carry the
+    # attestation job, and a dispatch run must bind head_sha to the
+    # candidate tree.
+    if evidence.get("ci_deferred"):
+        local_proof = evidence.get("local_verification", {})
+        if not isinstance(local_proof, dict) or not local_proof:
+            fail("phase-9 deferred CI evidence lacks local verification")
+        for name, record in local_proof.items():
+            if not isinstance(record, dict):
+                fail(f"phase-9 local verification entry {name!r} must be an object")
+            if record.get("exit") != 0:
+                fail(f"phase-9 local verification entry {name!r} did not pass")
+            if record.get("head") != head:
+                fail(f"phase-9 local verification entry {name!r} is not for the candidate")
+        return
+    jobs = {job.get("name"): job for job in evidence.get("jobs", [])}
+    required = (
+        "desktop-fast",
+        "test",
+        "system-test",
+        "affected",
+        "sqlite-test",
+        "desktop",
+        "desktop-macos",
+        "renderer-macos",
+    )
+    missing = [name for name in required if (jobs.get(name) or {}).get("conclusion") != "success"]
+    if missing:
+        fail(f"phase-9 CI evidence lacks successful jobs: {', '.join(missing)}")
+    if run.get("conclusion") != "success":
+        fail("phase-9 CI run did not succeed")
+    if run.get("event") == "pull_request":
+        if (jobs.get("record-ci-attestation") or {}).get("conclusion") != "success":
+            fail("phase-9 CI evidence lacks successful jobs: record-ci-attestation")
+    else:
+        if run.get("head_sha") != evidence.get("candidate_sha"):
+            fail("phase-9 dispatch CI evidence must bind the run to the candidate tree")
+    rail_steps = evidence.get("rails_conformance", {})
+    if rail_steps.get("conclusion") != "success":
+        fail("phase-9 CI evidence lacks the rails-backed conformance run")
+    tauri_steps = evidence.get("tauri_conformance", {})
+    if tauri_steps.get("conclusion") != "success":
+        fail("phase-9 CI evidence lacks the Tauri-backed conformance run")
+
+
+def check_phase9(status: dict) -> str:
+    if not isinstance(status, dict):
+        fail("status.json must be an object")
+    head = git("rev-parse", "HEAD")
+    if os.environ.get("ELEF_GATE_STATUS_PATH") or status.get("head_sha") != head:
+        status = read_gate_snapshot(status, head, 9)
+    if status.get("current_phase") != 9:
+        fail("status.current_phase must be Phase 09")
+    base = status.get("phase_base_sha")
+    if not base or not is_ancestor(base, head):
+        fail("status.phase_base_sha must be an ancestor of HEAD")
+    if digest_file(PHASE9_PHASE_PATH) != status.get("phase_contract_sha256"):
+        fail("phase contract hash differs from phases/09-visual-editor.md")
+    if digest_file(PHASE9_PLAN_PATH) != status.get("frozen_plan_sha256"):
+        fail("frozen plan hash differs from execution/phase-9-plan.md")
+    return head
+
+
+def run_phase9(json_output: bool) -> int:
+    before_status = git("status", "--porcelain", "--untracked-files=all")
+    errors: list[str] = []
+    head = "unknown"
+    try:
+        if before_status:
+            fail("Phase 09 verification requires a clean candidate checkout")
+        status = read_json(STATUS_PATH)
+        head = check_phase9(status)
+        run_tier(QUICK_COMMANDS_1, QUICK_CEILING_S, quiet=True)
+        for command in ARCH_COMMANDS_1:
+            run_step(command)
+        run_fresh()
+        check_remaining_stubs()
+        check_phase9_ci_evidence(status, head)
+        after_status = git("status", "--porcelain", "--untracked-files=all")
+        if after_status != before_status:
+            fail("Phase 09 verification changed the candidate working tree")
+    except (CheckFailure, KeyError, TypeError, ValueError, OSError, json.JSONDecodeError) as error:
+        errors.append(str(error))
+    if errors:
+        if json_output:
+            print(json.dumps({"phase": 9, "result": "FAIL", "head": head, "errors": errors}, separators=(",", ":")))
+        else:
+            for error in errors:
+                print(f"bin/check phase 9: {error}", file=sys.stderr)
+        return 1
+    if json_output:
+        print(json.dumps({"phase": 9, "result": "PASS", "head": head}, separators=(",", ":")))
+        print("ELEF_PHASE_9=PASS")
+    else:
+        print(f"Phase 09 visual-editor checks passed at {head}.")
+    return 0
+
+
 def print_usage() -> None:
     print("Usage: bin/check {quick|affected|phase N|all|arch|fresh|docs|perf}", file=sys.stderr)
 
@@ -1592,6 +1708,8 @@ def main(argv: list[str]) -> int:
         return run_phase7("--json" in extra)
     if argv[1] == "8":
         return run_phase8("--json" in extra)
+    if argv[1] == "9":
+        return run_phase9("--json" in extra)
     print(f"bin/check phase {argv[1]} is not implemented in Phase 01.", file=sys.stderr)
     return 2
 
