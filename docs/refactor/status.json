@@ -14,7 +14,7 @@
   "swap_mb": 0,
   "tauri_native_runner": "available"
  },
- "frozen_plan_sha256": null,
+ "frozen_plan_sha256": "57c832606365271867f850b40a74dd297704c2a0b8069cd745f7587b1c14ce57",
  "head_sha": "a08832a3efcaa949deefc7c713f8787e67d09179",
  "last_completed_phase": 10,
  "last_verified_checks": [
@@ -366,7 +366,7 @@
    "selected_gate_path": "docs/refactor/execution/phase-10-gate.json"
   }
  ],
- "next_action": "Phase 11 PLAN: draft host-rehome plan, freeze, enter DO.",
+ "next_action": "Phase 11 PLAN freeze: host-rehome plan frozen; ready for DO.",
  "pending_human_gates": [],
  "phase_base_sha": "a08832a3efcaa949deefc7c713f8787e67d09179",
  "phase_contract_sha256": "31fb70214fd26b21ea570ac79b5a14e38cda21ef479d95c3cb645b16c5f313c9",
