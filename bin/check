@@ -595,6 +595,9 @@ def run_desktop_e2e() -> float:
         ["npm", "run", "tauri:build", "--prefix", "apps/desktop/frontend", "--",
          "--debug", "--no-bundle", "--features", "webdriver",
          "--config", "src-tauri/tauri.e2e.conf.json"],
+        # The e2e Tauri config reads frontendDist dist-e2e, which build.mjs
+        # only emits under this flag.
+        extra_env={"ELEF_E2E_BUILD": "1"},
     )
     harness_elapsed = run_harness_step(
         "desktop-e2e", "RAILS_ENV=test ELEF_USE_SQLITE=1 npm test --prefix apps/desktop/e2e"
