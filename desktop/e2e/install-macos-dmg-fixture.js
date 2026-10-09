@@ -42,6 +42,10 @@ export async function installMacDmgFixture(dmgPath, installDirectory) {
   }).trim()
   assert.equal(identifier, "com.elef.desktop", "The test DMG must use Stable's production identifier")
   assert.equal(version, "0.1.0", "The test DMG must represent the N-1 Stable version")
-  execFileSync("lipo", ["-verify_arch", "arm64", executable], { stdio: "inherit" })
+  verifyMacArm64Executable(executable)
   return executable
+}
+
+export function verifyMacArm64Executable(executable, run = execFileSync) {
+  run("lipo", [executable, "-verify_arch", "arm64"], { stdio: "inherit" })
 }
