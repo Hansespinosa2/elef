@@ -911,6 +911,9 @@ PHASE5_CI_EVIDENCE_PATH = ROOT / "docs" / "refactor" / "execution" / "phase-5-ci
 PHASE6_PLAN_PATH = ROOT / "docs" / "refactor" / "execution" / "phase-6-plan.md"
 PHASE6_PHASE_PATH = ROOT / "docs" / "refactor" / "phases" / "06-graph.md"
 PHASE6_CI_EVIDENCE_PATH = ROOT / "docs" / "refactor" / "execution" / "phase-6-ci-evidence.json"
+PHASE7_PLAN_PATH = ROOT / "docs" / "refactor" / "execution" / "phase-7-plan.md"
+PHASE7_PHASE_PATH = ROOT / "docs" / "refactor" / "phases" / "07-presentation-export.md"
+PHASE7_CI_EVIDENCE_PATH = ROOT / "docs" / "refactor" / "execution" / "phase-7-ci-evidence.json"
 
 
 def check_phase3_ci_evidence(status: dict, head: str) -> None:
@@ -1276,6 +1279,99 @@ def run_phase6(json_output: bool) -> int:
     return 0
 
 
+def check_phase7_ci_evidence(status: dict, head: str) -> None:
+    external = os.environ.get("ELEF_GATE_EVIDENCE_DIR")
+    evidence_path = (
+        Path(external) / "phase-7-ci-evidence.json" if external else PHASE7_CI_EVIDENCE_PATH
+    )
+    evidence = read_json(evidence_path)
+    if not isinstance(evidence, dict):
+        fail("phase-7 CI evidence must be an object")
+    run = evidence.get("run", {})
+    parents = run.get("tested_merge_parents", []) or []
+    if evidence.get("candidate_sha") != head and head not in parents:
+        fail("phase-7 CI evidence does not name the candidate")
+    if run.get("conclusion") != "success":
+        fail("phase-7 CI run did not succeed")
+    jobs = {job.get("name"): job for job in evidence.get("jobs", [])}
+    required = (
+        "desktop-fast",
+        "test",
+        "system-test",
+        "affected",
+        "sqlite-test",
+        "desktop",
+        "desktop-macos",
+        "renderer-macos",
+        "record-ci-attestation",
+    )
+    missing = [name for name in required if (jobs.get(name) or {}).get("conclusion") != "success"]
+    if missing:
+        fail(f"phase-7 CI evidence lacks successful jobs: {', '.join(missing)}")
+    for desktop_job in ("desktop", "desktop-macos"):
+        if (jobs.get(desktop_job) or {}).get("shared_scenarios") != "success":
+            fail(f"phase-7 CI evidence lacks shared presentation scenarios on {desktop_job}")
+    rail_steps = evidence.get("rails_conformance", {})
+    if rail_steps.get("conclusion") != "success":
+        fail("phase-7 CI evidence lacks the rails-backed conformance run")
+    tauri_steps = evidence.get("tauri_conformance", {})
+    if tauri_steps.get("conclusion") != "success":
+        fail("phase-7 CI evidence lacks the Tauri-backed conformance run")
+
+
+def check_phase7(status: dict) -> str:
+    if not isinstance(status, dict):
+        fail("status.json must be an object")
+    head = git("rev-parse", "HEAD")
+    if os.environ.get("ELEF_GATE_STATUS_PATH") or status.get("head_sha") != head:
+        status = read_gate_snapshot(status, head, 7)
+    if status.get("current_phase") != 7:
+        fail("status.current_phase must be Phase 07")
+    base = status.get("phase_base_sha")
+    if not base or not is_ancestor(base, head):
+        fail("status.phase_base_sha must be an ancestor of HEAD")
+    if digest_file(PHASE7_PHASE_PATH) != status.get("phase_contract_sha256"):
+        fail("phase contract hash differs from phases/07-presentation-export.md")
+    if digest_file(PHASE7_PLAN_PATH) != status.get("frozen_plan_sha256"):
+        fail("frozen plan hash differs from execution/phase-7-plan.md")
+    return head
+
+
+def run_phase7(json_output: bool) -> int:
+    before_status = git("status", "--porcelain", "--untracked-files=all")
+    errors: list[str] = []
+    head = "unknown"
+    try:
+        if before_status:
+            fail("Phase 07 verification requires a clean candidate checkout")
+        status = read_json(STATUS_PATH)
+        head = check_phase7(status)
+        run_tier(QUICK_COMMANDS_1, QUICK_CEILING_S, quiet=True)
+        for command in ARCH_COMMANDS_1:
+            run_step(command)
+        run_fresh()
+        check_remaining_stubs()
+        check_phase7_ci_evidence(status, head)
+        after_status = git("status", "--porcelain", "--untracked-files=all")
+        if after_status != before_status:
+            fail("Phase 07 verification changed the candidate working tree")
+    except (CheckFailure, KeyError, TypeError, ValueError, OSError, json.JSONDecodeError) as error:
+        errors.append(str(error))
+    if errors:
+        if json_output:
+            print(json.dumps({"phase": 7, "result": "FAIL", "head": head, "errors": errors}, separators=(",", ":")))
+        else:
+            for error in errors:
+                print(f"bin/check phase 7: {error}", file=sys.stderr)
+        return 1
+    if json_output:
+        print(json.dumps({"phase": 7, "result": "PASS", "head": head}, separators=(",", ":")))
+        print("ELEF_PHASE_7=PASS")
+    else:
+        print(f"Phase 07 presentation/export checks passed at {head}.")
+    return 0
+
+
 def print_usage() -> None:
     print("Usage: bin/check {quick|affected|phase N|all|arch|fresh|docs|perf}", file=sys.stderr)
 
@@ -1353,6 +1449,8 @@ def main(argv: list[str]) -> int:
         return run_phase5("--json" in extra)
     if argv[1] == "6":
         return run_phase6("--json" in extra)
+    if argv[1] == "7":
+        return run_phase7("--json" in extra)
     print(f"bin/check phase {argv[1]} is not implemented in Phase 01.", file=sys.stderr)
     return 2
 
