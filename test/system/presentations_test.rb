@@ -2561,6 +2561,10 @@ class PresentationsTest < ApplicationSystemTestCase
 
     visit presentation_path(presentation)
 
+    # Canvas scaling attaches through a lazily loaded Stimulus controller, so
+    # wait for its style-attribute signal instead of racing the import.
+    assert_selector ".slide-frame[style*='--slide-scale']", wait: 5
+
     geometry = page.evaluate_script(<<~JAVASCRIPT)
       (() => {
         const frame = document.querySelector('.slide-frame');
