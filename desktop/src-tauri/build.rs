@@ -31,7 +31,7 @@ fn main() {
     let desktop_dev = std::env::var_os("CARGO_FEATURE_DESKTOP_DEV").is_some();
     let webdriver = std::env::var_os("CARGO_FEATURE_WEBDRIVER").is_some();
     let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
-    let has_update_command = target_os == "macos" || webdriver;
+    let has_update_command = target_os == "macos" || (desktop_dev && webdriver);
     let app_commands: &'static [&'static str] = match (desktop_dev, has_update_command) {
         (true, true) => command_list!("document_graph", "stage_update", "install_update"),
         (true, false) => command_list!("document_graph"),

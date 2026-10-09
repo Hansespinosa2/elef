@@ -5,7 +5,10 @@ use std::sync::{Arc, RwLock};
 
 #[cfg(feature = "desktop-dev")]
 use elef_core::DocumentGraphDocument;
-#[cfg(any(target_os = "macos", feature = "webdriver"))]
+#[cfg(any(
+    target_os = "macos",
+    all(feature = "desktop-dev", feature = "webdriver")
+))]
 use elef_core::StagedUpdateStore;
 use elef_core::diagnostics::{DiagnosticEvent, EventCode, EventProfile, EventResult};
 use elef_core::{
@@ -19,7 +22,10 @@ use tauri::ipc::{InvokeBody, Request as IpcRequest};
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
-#[cfg(any(target_os = "macos", feature = "webdriver"))]
+#[cfg(any(
+    target_os = "macos",
+    all(feature = "desktop-dev", feature = "webdriver")
+))]
 use tauri_plugin_updater::UpdaterExt;
 
 #[derive(Default)]
@@ -28,7 +34,10 @@ struct DesktopState {
     root: RwLock<Option<PathBuf>>,
     pending_import: std::sync::Mutex<Option<PathBuf>>,
     open_files: std::sync::Mutex<VecDeque<PathBuf>>,
-    #[cfg(any(target_os = "macos", feature = "webdriver"))]
+    #[cfg(any(
+        target_os = "macos",
+        all(feature = "desktop-dev", feature = "webdriver")
+    ))]
     update_installing: std::sync::atomic::AtomicBool,
     app_ready: std::sync::atomic::AtomicBool,
 }
@@ -210,7 +219,10 @@ async fn confirm_app_ready(
     {
         return Ok(0);
     }
-    #[cfg(any(target_os = "macos", feature = "webdriver"))]
+    #[cfg(any(
+        target_os = "macos",
+        all(feature = "desktop-dev", feature = "webdriver")
+    ))]
     let removed = if let Ok((live, _)) = installed_application(&app) {
         // Readiness is acknowledged only after successful frontend/editor boot.
         // Failure leaves the previous complete installation available.
@@ -225,23 +237,35 @@ async fn confirm_app_ready(
     } else {
         0
     };
-    #[cfg(not(any(target_os = "macos", feature = "webdriver")))]
+    #[cfg(not(any(
+        target_os = "macos",
+        all(feature = "desktop-dev", feature = "webdriver")
+    )))]
     let removed = 0;
     record_diagnostic(&app, EventCode::Startup, EventResult::Success, None);
     Ok(removed)
 }
 
-#[cfg(any(target_os = "macos", feature = "webdriver"))]
+#[cfg(any(
+    target_os = "macos",
+    all(feature = "desktop-dev", feature = "webdriver")
+))]
 struct UpdateLease<'a>(&'a std::sync::atomic::AtomicBool);
 
-#[cfg(any(target_os = "macos", feature = "webdriver"))]
+#[cfg(any(
+    target_os = "macos",
+    all(feature = "desktop-dev", feature = "webdriver")
+))]
 impl Drop for UpdateLease<'_> {
     fn drop(&mut self) {
         self.0.store(false, std::sync::atomic::Ordering::Release);
     }
 }
 
-#[cfg(any(target_os = "macos", feature = "webdriver"))]
+#[cfg(any(
+    target_os = "macos",
+    all(feature = "desktop-dev", feature = "webdriver")
+))]
 fn installed_application(app: &AppHandle) -> Result<(PathBuf, PathBuf), CommandError> {
     #[cfg(target_os = "linux")]
     if let Some(path) = app.env().appimage {
@@ -306,7 +330,10 @@ async fn confirm_native_action(
         .map_err(|_| CommandError::new("internal", "The confirmation could not be opened.", true))
 }
 
-#[cfg(any(target_os = "macos", feature = "webdriver"))]
+#[cfg(any(
+    target_os = "macos",
+    all(feature = "desktop-dev", feature = "webdriver")
+))]
 #[tauri::command]
 async fn install_update(
     app: AppHandle,
@@ -318,7 +345,10 @@ async fn install_update(
     result
 }
 
-#[cfg(any(target_os = "macos", feature = "webdriver"))]
+#[cfg(any(
+    target_os = "macos",
+    all(feature = "desktop-dev", feature = "webdriver")
+))]
 #[tauri::command]
 async fn stage_update(
     app: AppHandle,
@@ -339,14 +369,20 @@ async fn stage_update(
     result
 }
 
-#[cfg(any(target_os = "macos", feature = "webdriver"))]
+#[cfg(any(
+    target_os = "macos",
+    all(feature = "desktop-dev", feature = "webdriver")
+))]
 #[derive(Debug, Serialize)]
 struct StagedUpdateInfo {
     version: String,
     notes: String,
 }
 
-#[cfg(any(target_os = "macos", feature = "webdriver"))]
+#[cfg(any(
+    target_os = "macos",
+    all(feature = "desktop-dev", feature = "webdriver")
+))]
 async fn stage_update_inner(
     app: AppHandle,
     state: State<'_, DesktopState>,
@@ -472,7 +508,10 @@ async fn stage_update_inner(
     Ok(Some(StagedUpdateInfo { version, notes }))
 }
 
-#[cfg(any(target_os = "macos", feature = "webdriver"))]
+#[cfg(any(
+    target_os = "macos",
+    all(feature = "desktop-dev", feature = "webdriver")
+))]
 async fn install_update_inner(
     app: AppHandle,
     state: State<'_, DesktopState>,
@@ -623,7 +662,10 @@ async fn install_update_inner(
     Ok(true)
 }
 
-#[cfg(any(target_os = "macos", feature = "webdriver"))]
+#[cfg(any(
+    target_os = "macos",
+    all(feature = "desktop-dev", feature = "webdriver")
+))]
 fn staged_update_store(app: &AppHandle) -> Result<StagedUpdateStore, CommandError> {
     let cache = app
         .path()
@@ -632,7 +674,10 @@ fn staged_update_store(app: &AppHandle) -> Result<StagedUpdateStore, CommandErro
     Ok(StagedUpdateStore::new(cache.join("updates")))
 }
 
-#[cfg(any(target_os = "macos", feature = "webdriver"))]
+#[cfg(any(
+    target_os = "macos",
+    all(feature = "desktop-dev", feature = "webdriver")
+))]
 fn updater_public_key(app: &AppHandle) -> Result<String, CommandError> {
     if let Ok(public_key) = std::env::var("ELEF_E2E_UPDATER_PUBLIC_KEY") {
         return Ok(public_key);
@@ -647,7 +692,10 @@ fn updater_public_key(app: &AppHandle) -> Result<String, CommandError> {
         .ok_or_else(update_integrity_error)
 }
 
-#[cfg(any(target_os = "macos", feature = "webdriver"))]
+#[cfg(any(
+    target_os = "macos",
+    all(feature = "desktop-dev", feature = "webdriver")
+))]
 fn same_staged_update(
     update: &tauri_plugin_updater::Update,
     staged: &elef_core::staged_update::StagedUpdateMetadata,
@@ -657,7 +705,10 @@ fn same_staged_update(
         && update.download_url.as_str() == staged.download_url
 }
 
-#[cfg(any(target_os = "macos", feature = "webdriver"))]
+#[cfg(any(
+    target_os = "macos",
+    all(feature = "desktop-dev", feature = "webdriver")
+))]
 fn update_check_error() -> CommandError {
     CommandError::new(
         "unavailable",
@@ -666,12 +717,18 @@ fn update_check_error() -> CommandError {
     )
 }
 
-#[cfg(any(target_os = "macos", feature = "webdriver"))]
+#[cfg(any(
+    target_os = "macos",
+    all(feature = "desktop-dev", feature = "webdriver")
+))]
 fn update_stage_error() -> CommandError {
     CommandError::new("io_error", "The verified update could not be staged.", true)
 }
 
-#[cfg(any(target_os = "macos", feature = "webdriver"))]
+#[cfg(any(
+    target_os = "macos",
+    all(feature = "desktop-dev", feature = "webdriver")
+))]
 fn update_integrity_error() -> CommandError {
     CommandError::new(
         "integrity",
@@ -680,7 +737,10 @@ fn update_integrity_error() -> CommandError {
     )
 }
 
-#[cfg(feature = "webdriver")]
+#[cfg(all(
+    feature = "webdriver",
+    any(target_os = "macos", feature = "desktop-dev")
+))]
 fn interrupt_update_install_for_e2e() {
     if std::env::var_os("ELEF_E2E_INTERRUPT_UPDATE_AFTER_STAGE_INSTALL").is_some() {
         // Test-only abrupt exit after the updater has modified its disposable
@@ -1600,9 +1660,15 @@ macro_rules! app_commands {
 }
 
 pub fn run() {
-    #[cfg(any(target_os = "macos", feature = "webdriver"))]
+    #[cfg(any(
+        target_os = "macos",
+        all(feature = "desktop-dev", feature = "webdriver")
+    ))]
     let updater = tauri_plugin_updater::Builder::new();
-    #[cfg(feature = "webdriver")]
+    #[cfg(all(
+        feature = "webdriver",
+        any(target_os = "macos", feature = "desktop-dev")
+    ))]
     let updater = match std::env::var("ELEF_E2E_UPDATER_PUBLIC_KEY") {
         Ok(public_key) => updater.pubkey(public_key),
         Err(_) => updater,
@@ -1620,7 +1686,10 @@ pub fn run() {
             }
         }));
 
-    #[cfg(any(target_os = "macos", feature = "webdriver"))]
+    #[cfg(any(
+        target_os = "macos",
+        all(feature = "desktop-dev", feature = "webdriver")
+    ))]
     let builder = builder
         .plugin(tauri_plugin_process::init())
         .plugin(updater.build());

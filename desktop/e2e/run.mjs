@@ -10,6 +10,7 @@ import { SHARED_LIBRARY_CREATE_DELETE_TITLES } from "../../test/e2e/scenarios/li
 import { runNativeQuitSmokes } from "./native-quit-smoke.js"
 import { runPackagedUpdateSmoke } from "./packaged-update-smoke.js"
 import { createDesktopAppEnvironment } from "./desktop-app-environment.js"
+import { runStableProfileSmoke } from "./stable-profile-smoke.js"
 import { desktopAppEnvironment, verifyOfflineSandbox } from "./offline-macos.js"
 
 const e2eRoot = path.dirname(fileURLToPath(import.meta.url))
@@ -307,6 +308,20 @@ try {
     })
     if (upgradedResult.error) throw upgradedResult.error
     if (upgradedResult.status !== 0) throw new Error("The installed update did not launch and preserve the deck")
+  }
+  if (process.env.CI) {
+    await runStableProfileSmoke({
+      e2eRoot,
+      repoRoot,
+      libraryRoot,
+      env,
+      isolatedDirectories: {
+        home: isolatedHome,
+        config: isolatedConfig,
+        data: isolatedData,
+        cache: isolatedCache
+      }
+    })
   }
 
   const desktopSource = await readFile(path.join(seedDeck, "presentation.md"), "utf8")

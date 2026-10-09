@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url"
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const frontendRoot = path.join(repoRoot, "desktop/frontend")
+const e2eRoot = path.join(repoRoot, "desktop/e2e")
 const inventoryPath = path.join(repoRoot, "test/fixtures/desktop/release-exclusions.json")
 const stableMetafilePath = path.join(frontendRoot, "dist/assets/app.metafile.json")
 const devMetafilePath = path.join(frontendRoot, "dist-dev/assets/app.metafile.json")
@@ -20,10 +21,11 @@ const [stable, dev] = await Promise.all([
   readMetafile(stableMetafilePath, "Stable"),
   readMetafile(devMetafilePath, "Dev")
 ])
-const [stableConfig, devConfig, e2eConfig, stableCapability, devCapability, macUpdaterCapability, nativeSource, buildRsSource, packageConfig] = await Promise.all([
+const [stableConfig, devConfig, e2eConfig, stableE2eConfig, stableCapability, devCapability, macUpdaterCapability, nativeSource, buildRsSource, packageConfig] = await Promise.all([
   readJson(path.join(tauriRoot, "tauri.conf.json")),
   readJson(path.join(tauriRoot, "tauri.dev.conf.json")),
   readJson(path.join(tauriRoot, "tauri.e2e.conf.json")),
+  readJson(path.join(tauriRoot, "tauri.e2e-stable.conf.json")),
   readJson(path.join(tauriRoot, "capabilities/main.json")),
   readJson(path.join(tauriRoot, "capabilities/main-dev.json")),
   readJson(path.join(tauriRoot, "capabilities/macos-updater.json")),
@@ -37,16 +39,20 @@ const devInputs = normalizeInputs(dev)
 assert.equal(stableConfig.identifier, "com.elef.desktop", "Stable must retain its existing Tauri identifier")
 assert.equal(devConfig.identifier, "com.elef.desktop.dev", "repository Dev needs a separate app-data and single-instance identity")
 assert.equal(e2eConfig.identifier, "com.elef.desktop.e2e", "E2E must use disposable app state")
+assert.equal(stableE2eConfig.identifier, "com.elef.desktop.e2e.stable", "Stable E2E must use isolated app state")
 assert.equal(devConfig.bundle?.active, false, "repository Dev must not produce an installable bundle")
+assert.equal(stableE2eConfig.bundle?.active, false, "Stable profile tests must not produce a second installer")
 assert.equal(devConfig.build.frontendDist, "../frontend/dist-dev")
+assert.equal(stableE2eConfig.build.frontendDist, "../frontend/dist-e2e-stable")
 assert.deepEqual(devConfig.app.security.capabilities, ["main-dev-capability"])
 assert.deepEqual(stableConfig.app.security.capabilities, ["main-capability", "macos-updater-capability"])
 assert.deepEqual(e2eConfig.app.security.capabilities, ["main-dev-capability", "e2e-webdriver"])
+assert.deepEqual(stableE2eConfig.app.security.capabilities, ["main-capability", "macos-updater-capability", "e2e-stable-webdriver"])
 assert.deepEqual(devConfig.plugins.updater.endpoints, [], "Dev must not inherit the public Stable update feed")
 assert.match(packageConfig.scripts["tauri:dev"], /--features desktop-dev --config src-tauri\/tauri\.dev\.conf\.json/)
 assert.match(nativeSource, /#\[cfg\(feature = "desktop-dev"\)\]\s+#\[tauri::command\]\s+fn document_graph/)
-assert.match(nativeSource, /#\[cfg\(any\(target_os = "macos", feature = "webdriver"\)\)\]\s+#\[tauri::command\]\s+async fn install_update/)
-assert.match(nativeSource, /#\[cfg\(feature = "webdriver"\)\]\s+fn interrupt_update_install_for_e2e\(\)/, "the interrupted-install failpoint must compile only into WebDriver tests")
+assert.match(nativeSource, /#\[cfg\(any\(\s*target_os = "macos",\s*all\(feature = "desktop-dev", feature = "webdriver"\)\s*\)\)\]\s+#\[tauri::command\]\s+async fn install_update/)
+assert.match(nativeSource, /#\[cfg\(all\(\s*feature = "webdriver",\s*any\(target_os = "macos", feature = "desktop-dev"\)\s*\)\)\]\s+fn interrupt_update_install_for_e2e\(\)/, "the interrupted-install failpoint must compile only into updater-enabled WebDriver tests")
 assert.match(nativeSource, /#\[cfg\(feature = "webdriver"\)\]\s+interrupt_update_install_for_e2e\(\);/, "production updater activation must not call the test-only failpoint")
 assert.match(buildRsSource, /desktop_dev, has_update_command/)
 assert.match(nativeSource, /app\.path\(\)\.app_data_dir\(\)\?\.join\("library-root\.json"\)/)
@@ -54,6 +60,11 @@ assert.match(nativeSource, /tauri_plugin_single_instance::init/)
 const buildSource = await readFile(path.join(frontendRoot, "build.mjs"), "utf8")
 assert.match(buildSource, /profile === "stable" && process\.platform === "darwin"/, "only Stable macOS builds may use the public updater runtime")
 assert.match(buildSource, /e2eBuild && process\.platform === "darwin"/, "the loopback-only E2E bundle may exercise packaged macOS updates")
+assert.match(await readFile(path.join(tauriRoot, "Cargo.toml"), "utf8"), /webdriver\s*=\s*\["dep:tauri-plugin-wdio", "dep:tauri-plugin-wdio-webdriver"\]/, "WebDriver test support must not enable desktop-dev")
+assert.match(await readFile(path.join(tauriRoot, "src/lib.rs"), "utf8"), /#\[cfg\(any\(\s*target_os = "macos",\s*all\(feature = "desktop-dev", feature = "webdriver"\)\s*\)\)\]\s+use tauri_plugin_updater::UpdaterExt/, "Linux Stable WebDriver must not compile updater code")
+assert.match(await readFile(path.join(e2eRoot, "run.mjs"), "utf8"), /runStableProfileSmoke/, "the hosted native E2E runner must execute Stable profile negatives")
+assert.match(await readFile(path.join(e2eRoot, "stable-exclusions.spec.js"), "utf8"), /document_graph|document-link-palette|visual-editor|slide-overview/, "Stable runtime exclusions need negative assertions")
+assert.match(await readFile(path.join(e2eRoot, "stable-exclusions.spec.js"), "utf8"), /sourceInput\.keys\("\[\["\)/, "Stable runtime E2E must type the excluded document-link trigger")
 assert.match(await readFile(path.join(frontendRoot, "src/update-runtime-macos.js"), "utf8"), /invoke\("stage_update"/)
 assert.doesNotMatch(await readFile(path.join(frontendRoot, "src/update-runtime-macos.js"), "utf8"), /@tauri-apps\/plugin-updater/)
 assert.doesNotMatch(await readFile(path.join(frontendRoot, "src/main.js"), "utf8"), /@tauri-apps\/(?:plugin-updater|plugin-process)/)

@@ -1776,7 +1776,7 @@ class DesktopLibraryUi {
       const busNames = execFileSync("busctl", ["--user", "list", "--no-legend"], { encoding: "utf8" })
       singleInstanceOwner = busNames
         .split("\n")
-        .find(line => line.startsWith("org.com_elef_desktop.SingleInstance ")) || "not registered"
+        .find(line => line.startsWith("org.com_elef_desktop_e2e.SingleInstance ")) || "not registered"
       if (singleInstanceOwner === "not registered") {
         throw new Error("The running desktop app did not register its Linux single-instance D-Bus name")
       }
@@ -2424,10 +2424,17 @@ describe("native updater verification", () => {
   for (const mode of ["none", "older", "valid", "bad-signature", "truncated", "version-mismatch"]) {
     it(`handles ${mode} updates without changing the installed binary or deck source`, async () => {
       const binaryPath = process.env.ELEF_E2E_INSTALLED_ARTIFACT || process.env.ELEF_E2E_REAL_APP_BINARY || process.env.ELEF_E2E_APP_BINARY
-      const hash = async filename => createHash("sha256").update(await readFile(filename)).digest("hex")
-      const sourcePath = path.join(process.env.ELEF_E2E_LIBRARY_ROOT, "E2E seed", "presentation.md")
-      const original = { binary: await hash(binaryPath), source: await hash(sourcePath) }
-      const response = await fetch(`http://127.0.0.1:8888/mode?value=${mode}`)
+    const hash = async filename => createHash("sha256").update(await readFile(filename)).digest("hex")
+    const sourcePath = path.join(process.env.ELEF_E2E_LIBRARY_ROOT, "E2E seed", "presentation.md")
+    const original = { binary: await hash(binaryPath), source: await hash(sourcePath) }
+    const clearStagedUpdate = await fetch("http://127.0.0.1:8888/mode?value=none")
+    if (!clearStagedUpdate.ok) throw new Error("Could not clear the prior updater fixture state")
+    const cleared = await browser.execute(async () => {
+      const { invoke, Channel } = window.__TAURI__.core
+      return invoke("stage_update", { onProgress: new Channel() })
+    })
+    if (cleared !== null) throw new Error(`The updater cache did not clear before ${mode}: ${JSON.stringify(cleared)}`)
+    const response = await fetch(`http://127.0.0.1:8888/mode?value=${mode}`)
       if (!response.ok) throw new Error("Could not select the updater fixture")
       try {
         const result = await browser.execute(async () => {

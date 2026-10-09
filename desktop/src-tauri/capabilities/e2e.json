@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "e2e-webdriver",
-  "description": "Local WebDriver server for the dedicated automated desktop test build.",
+  "description": "Local WebDriver server for the dedicated Dev-profile automated test build.",
   "windows": ["main"],
   "permissions": [
     "wdio:default",

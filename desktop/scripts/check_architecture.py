@@ -31,9 +31,11 @@ capability = json.loads((TAURI_ROOT / "capabilities" / "main.json").read_text())
 dev_capability = json.loads((TAURI_ROOT / "capabilities" / "main-dev.json").read_text())
 macos_updater_capability = json.loads((TAURI_ROOT / "capabilities" / "macos-updater.json").read_text())
 e2e_capability = json.loads((TAURI_ROOT / "capabilities" / "e2e.json").read_text())
+e2e_stable_capability = json.loads((TAURI_ROOT / "capabilities" / "e2e-stable.json").read_text())
 config = json.loads((TAURI_ROOT / "tauri.conf.json").read_text())
 assert config["bundle"]["macOS"]["signingIdentity"] == "-", "v0.x macOS bundles must use ad-hoc signing, without a Developer ID identity"
 e2e_config = json.loads((TAURI_ROOT / "tauri.e2e.conf.json").read_text())
+e2e_stable_config = json.loads((TAURI_ROOT / "tauri.e2e-stable.conf.json").read_text())
 performance_config = json.loads((TAURI_ROOT / "tauri.performance.conf.json").read_text())
 assert performance_config == {"plugins": {"updater": {"endpoints": ["https://127.0.0.1:8888/manifest"]}}}, "release measurement must keep secure transport and a loopback-only offline check"
 assert config["plugins"]["updater"]["endpoints"] == ["https://hansespinosa2.github.io/elef/desktop/stable/latest.json"], "Stable updater must use the controlled safe-version feed"
@@ -165,7 +167,8 @@ assert allowed_commands(set(macos_updater_capability["permissions"])) == {"stage
 assert macos_updater_capability["platforms"] == ["macOS"], "updater command permissions must be macOS-only"
 assert "document_graph" not in declared and "install_update" not in declared and "stage_update" not in declared, "profile-specific commands must not enter the common Stable ACL"
 assert "match (desktop_dev, has_update_command)" in build_source and 'command_list!("document_graph")' in build_source
-assert 'let has_update_command = target_os == "macos" || webdriver;' in build_source
+assert 'let has_update_command = target_os == "macos" || (desktop_dev && webdriver);' in build_source
+assert re.search(r'#\[cfg\(any\(\s*target_os = "macos",\s*all\(feature = "desktop-dev", feature = "webdriver"\)\s*\)\)\]', app_source), "Linux Stable WebDriver must not compile updater code"
 assert "app_commands!(document_graph)" in app_source and "app_commands!(stage_update, install_update)" in app_source
 assert "core:default" not in permissions, "use only the individual core permissions needed"
 assert {permission for permission in permissions if permission.startswith("core:")} == {
@@ -180,6 +183,8 @@ assert "await this.destroy();" in (REPO_ROOT / "desktop/frontend/node_modules/@t
 assert not any(permission.startswith(("fs:", "shell:", "dialog:")) for permission in permissions)
 assert config["app"]["security"]["capabilities"] == ["main-capability", "macos-updater-capability"], "Stable must attach only its common and macOS-only updater capabilities"
 assert e2e_config["app"]["security"]["capabilities"] == ["main-dev-capability", "e2e-webdriver"], "the test build must use Dev features and the isolated WebDriver capability"
+assert e2e_stable_config["app"]["security"]["capabilities"] == ["main-capability", "macos-updater-capability", "e2e-stable-webdriver"], "Stable runtime tests must use Stable native permissions"
+assert e2e_stable_config["identifier"] == "com.elef.desktop.e2e.stable" and e2e_stable_config["bundle"]["active"] is False
 assert e2e_config["identifier"] == "com.elef.desktop.e2e", "E2E app state must not touch Stable or Dev"
 e2e_updater = e2e_config["plugins"]["updater"]
 assert e2e_updater["endpoints"] == ["http://127.0.0.1:8888/manifest"], "the E2E updater fixture must stay loopback-only"
@@ -196,6 +201,12 @@ assert set(e2e_capability["permissions"]) == {
     "core:app:allow-version",
     "core:window:allow-is-fullscreen",
 }, "only the test-only capability may expose WebdriverIO and fixture downloads"
+assert set(e2e_stable_capability["permissions"]) == {
+    "wdio:default",
+    "wdio-webdriver:default",
+    "core:window:allow-is-fullscreen",
+}, "Stable runtime tests may add WebDriver only, without experimental or updater permissions"
+assert "allow-document-graph" not in e2e_stable_capability["permissions"]
 assert e2e_config["app"].get("withGlobalTauri") is True, "global Tauri access is enabled only for the test-only WebdriverIO build"
 assert config["app"].get("withGlobalTauri") is not True, "production must not expose the global Tauri API"
 production_frontend = (REPO_ROOT / "desktop/frontend/dist/assets/app.js").read_text()
@@ -205,11 +216,14 @@ assert config["plugins"]["updater"].get("requireSignedVersion") is True, "bind u
 assert all(url.startswith("https://") for url in config["plugins"]["updater"]["endpoints"]), "production updater transport must use HTTPS"
 assert not config["plugins"]["updater"].get("dangerousInsecureTransportProtocol"), "production must reject HTTP updater endpoints"
 tauri_manifest = (TAURI_ROOT / "Cargo.toml").read_text()
-assert 'webdriver = ["desktop-dev", "dep:tauri-plugin-wdio", "dep:tauri-plugin-wdio-webdriver"]' in tauri_manifest, "WebdriverIO test builds must opt into Dev profile behavior"
+assert 'webdriver = ["dep:tauri-plugin-wdio", "dep:tauri-plugin-wdio-webdriver"]' in tauri_manifest, "WebdriverIO instrumentation must be independently selectable from experimental Dev behavior"
 assert not re.search(r'^default\s*=.*\bwebdriver\b', tauri_manifest, re.MULTILINE), "production's default Cargo features must exclude WebDriver"
 assert '#[cfg(feature = "webdriver")]\n    let builder = builder.plugin(tauri_plugin_wdio_webdriver::init());' in app_source, "production builds must not register the WebDriver plugin"
 assert '#[cfg(feature = "webdriver")]\n    let builder = builder.plugin(tauri_plugin_wdio::init());' in app_source, "the WebdriverIO command plugin must be test-only"
 assert 'frontendDist": "../frontend/dist-e2e"' in (TAURI_ROOT / "tauri.e2e.conf.json").read_text(), "WebdriverIO code must load from the isolated E2E frontend build"
+assert 'frontendDist": "../frontend/dist-e2e-stable"' in (TAURI_ROOT / "tauri.e2e-stable.conf.json").read_text(), "Stable runtime tests must load the separate Stable E2E frontend"
+stable_e2e_spec = (REPO_ROOT / "desktop" / "e2e" / "stable-exclusions.spec.js").read_text()
+assert all(name in stable_e2e_spec for name in ("visual-editor", "document-graph", "document-link-palette", "elefRevisionsEnabled", "elefLineageEnabled")), "Stable E2E must test every excluded runtime surface"
 
 feature_flags = {
     name: value == "true"

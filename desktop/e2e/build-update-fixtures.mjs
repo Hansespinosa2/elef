@@ -16,7 +16,7 @@ await mkdir(output, { recursive: true })
 // or release publication is involved in these isolated test packages.
 for (const [name, version] of [["n", "0.2.0"], ["n-1", "0.1.0"]]) {
   execFileSync("npm", ["run", "tauri:build", "--prefix", "desktop/frontend", "--",
-    "--debug", "--features", "webdriver", "--bundles", platform === "darwin" ? "app" : "appimage",
+    "--debug", "--features", "desktop-dev,webdriver", "--bundles", platform === "darwin" ? "app" : "appimage",
     "--config", "src-tauri/tauri.e2e.conf.json", "--config", JSON.stringify({ version })], {
     cwd: repo, env: { ...process.env, ELEF_E2E_BUILD: "1" }, stdio: "inherit"
   })
