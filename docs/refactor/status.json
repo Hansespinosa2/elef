@@ -3,7 +3,7 @@
   "campaign_branch": "feat/refactor-desktop-and-web",
   "campaign_base_sha": "88f61a7a8ffd7c276bafcf06eee09c36a8adf134",
   "current_phase": 7,
-  "phase_state": "PLAN",
+  "phase_state": "DO",
   "phase_base_sha": "873904da32953b513b89b073b331ce692c84cb0a",
   "head_sha": "873904da32953b513b89b073b331ce692c84cb0a",
   "review_round": 0,
@@ -287,5 +287,5 @@
   },
   "pending_human_gates": [],
   "blocker": null,
-  "next_action": "Phase 07 PLAN freeze: DO-1 answers recorded, visual set frozen; ready for DO."
+  "next_action": "Phase 07 DO: build client presentation/export features."
 }
