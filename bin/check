@@ -1151,6 +1151,19 @@ PHASE11_REQUIRED_JOBS = (
     "record-ci-attestation",
     "publish-deployment-ref",
 )
+PHASE12_PLAN_PATH = ROOT / "docs" / "refactor" / "execution" / "phase-12-plan.md"
+PHASE12_PHASE_PATH = ROOT / "docs" / "refactor" / "phases" / "12-cleanup.md"
+PHASE12_CI_EVIDENCE_PATH = ROOT / "docs" / "refactor" / "execution" / "phase-12-ci-evidence.json"
+# Phase 12 changes no workflow: the required CI job set is identical to Phase 11.
+PHASE12_REQUIRED_JOBS = PHASE11_REQUIRED_JOBS
+# P12-07/P12-08/P12-12 evidence the candidate must track.
+PHASE12_EVIDENCE_FILES = (
+    "docs/refactor/execution/phase-12-exercise-transcripts.md",
+    "docs/refactor/execution/phase-12-deletion-proof.md",
+    "docs/refactor/execution/phase-12-retirement-manifest.md",
+)
+# Constitution §8: exactly these five human gate classes may remain pending.
+PHASE12_HUMAN_GATES = (1, 2, 3, 4, 5)
 
 
 def check_phase3_ci_evidence(status: dict, head: str) -> None:
@@ -2233,6 +2246,184 @@ def run_phase11(json_output: bool) -> int:
     return 0
 
 
+def check_phase12_deletions(tracked: list[str]) -> None:
+    tracked_set = set(tracked)
+    if "scripts/elef-agent" in tracked_set:
+        fail("Phase 12 retired workflow scripts/elef-agent is still tracked")
+    if "apps/web/test/scripts/elef-agent_test.sh" in tracked_set:
+        fail("Phase 12 retired launcher test apps/web/test/scripts/elef-agent_test.sh is still tracked")
+    boundaries = (ROOT / "tooling" / "check_boundaries.py").read_text(encoding="utf-8")
+    if "RANGE_WRAPPER_ALLOW" in boundaries:
+        fail("Phase 12 dead R8 exception RANGE_WRAPPER_ALLOW is still present")
+    for filename in PHASE12_EVIDENCE_FILES:
+        if filename not in tracked_set:
+            fail(f"Phase 12 expected evidence is not tracked: {filename}")
+
+
+def check_phase12_no_campaign_links() -> None:
+    roots = [
+        ROOT / "README.md",
+        ROOT / "AGENTS.md",
+        ROOT / "ELEF-DOCTRINE.md",
+        ROOT / "docs" / "architecture.md",
+        ROOT / "docs" / "development.md",
+        *sorted((ROOT / "docs").glob("*.md")),
+    ]
+    for path in roots:
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            fail(f"Phase 12 durable doc is missing: {path.relative_to(ROOT)}")
+        if "docs/refactor" in text:
+            fail(f"Phase 12 durable doc links the campaign tree: {path.relative_to(ROOT)}")
+
+
+def check_phase12_scenarios() -> None:
+    directory = ROOT / "apps" / "web" / "test" / "e2e" / "scenarios"
+    actual = sorted(path.stem for path in directory.glob("*.js"))
+    if actual != list(PHASE10_SCENARIOS):
+        fail("phase-12 Phase 10 scenario inventory differs from the 16 frozen names")
+
+
+def check_phase12_human_gates(status: dict) -> None:
+    pending = status.get("pending_human_gates") or []
+    present: set[int] = set()
+    for entry in pending:
+        # Campaign state records gates as {"gate": N} objects; a bare "HN"
+        # string is accepted as a legacy spelling of the same record.
+        if isinstance(entry, dict) and isinstance(entry.get("gate"), int):
+            present.add(entry["gate"])
+        elif isinstance(entry, str):
+            for gate in PHASE12_HUMAN_GATES:
+                if f"H{gate}" in entry:
+                    present.add(gate)
+    if present != set(PHASE12_HUMAN_GATES):
+        fail(
+            "phase-12 status must explicitly name all five human release gates "
+            "(1-5) as pending and no others"
+        )
+
+
+def check_phase12_all_evidence(evidence: dict, head: str) -> None:
+    runs = evidence.get("all_runs")
+    if not isinstance(runs, list) or len(runs) < 2:
+        fail("phase-12 evidence must record at least two bin/check all runs (P12-09)")
+    for index, run in enumerate(runs):
+        if not isinstance(run, dict):
+            fail(f"phase-12 all_runs[{index}] must be an object")
+        if run.get("head") != head:
+            fail(f"phase-12 all_runs[{index}] is not for the candidate")
+        if run.get("exit") != 0 or run.get("verdict") != "PASS":
+            fail(f"phase-12 all_runs[{index}] did not pass")
+        if not run.get("clean_before") or not run.get("clean_after"):
+            fail(f"phase-12 all_runs[{index}] was not on a clean checkout with no diff")
+        duration = run.get("duration_s")
+        if not isinstance(duration, (int, float)) or duration > ALL_CEILING_S:
+            fail(f"phase-12 all_runs[{index}] exceeds the all-tier ceiling")
+
+
+def check_phase12_ci_evidence(status: dict, head: str) -> None:
+    external = os.environ.get("ELEF_GATE_EVIDENCE_DIR")
+    evidence_path = (
+        Path(external) / "phase-12-ci-evidence.json" if external else PHASE12_CI_EVIDENCE_PATH
+    )
+    evidence = read_json(evidence_path)
+    if not isinstance(evidence, dict):
+        fail("phase-12 CI evidence must be an object")
+    run = evidence.get("run", {})
+    parents = run.get("tested_merge_parents", []) or []
+    if evidence.get("candidate_sha") != head and head not in parents:
+        fail("phase-12 CI evidence does not name the candidate")
+    check_phase12_all_evidence(evidence, head)
+    # Deferred-CI posture while the campaign PR is conflicted (see
+    # docs/refactor/deferred-dev-reconciliation.md): remote CI is advisory, so
+    # evidence may declare ci_deferred and prove the candidate with local
+    # verification instead.
+    if evidence.get("ci_deferred"):
+        local_proof = evidence.get("local_verification", {})
+        if not isinstance(local_proof, dict) or not local_proof:
+            fail("phase-12 deferred CI evidence lacks local verification")
+        for name, record in local_proof.items():
+            if not isinstance(record, dict):
+                fail(f"phase-12 local verification entry {name!r} must be an object")
+            if record.get("exit") != 0:
+                fail(f"phase-12 local verification entry {name!r} did not pass")
+            if record.get("head") != head:
+                fail(f"phase-12 local verification entry {name!r} is not for the candidate")
+        return
+    jobs = {job.get("name"): job for job in evidence.get("jobs", [])}
+    missing = [
+        name for name in PHASE12_REQUIRED_JOBS if (jobs.get(name) or {}).get("conclusion") != "success"
+    ]
+    if missing:
+        fail(f"phase-12 CI evidence lacks successful jobs: {', '.join(missing)}")
+    if run.get("conclusion") != "success":
+        fail("phase-12 CI run did not succeed")
+
+
+def check_phase12(status: dict) -> str:
+    if not isinstance(status, dict):
+        fail("status.json must be an object")
+    head = git("rev-parse", "HEAD")
+    if os.environ.get("ELEF_GATE_STATUS_PATH") or status.get("head_sha") != head:
+        status = read_gate_snapshot(status, head, 12)
+    if status.get("current_phase") != 12:
+        fail("status.current_phase must be Phase 12")
+    if status.get("last_completed_phase") != 11:
+        fail("phase-12 requires all prior phases complete (last_completed_phase 11)")
+    if status.get("blocker"):
+        fail("phase-12 candidate status must not record a blocker")
+    base = status.get("phase_base_sha")
+    if not base or not is_ancestor(base, head):
+        fail("status.phase_base_sha must be an ancestor of HEAD")
+    if digest_file(PHASE12_PHASE_PATH) != status.get("phase_contract_sha256"):
+        fail("phase contract hash differs from phases/12-cleanup.md")
+    if digest_file(PHASE12_PLAN_PATH) != status.get("frozen_plan_sha256"):
+        fail("frozen plan hash differs from execution/phase-12-plan.md")
+    check_phase12_human_gates(status)
+    return head
+
+
+def run_phase12(json_output: bool) -> int:
+    before_status = git("status", "--porcelain", "--untracked-files=all")
+    errors: list[str] = []
+    head = "unknown"
+    try:
+        if before_status:
+            fail("Phase 12 verification requires a clean candidate checkout")
+        status = read_json(STATUS_PATH)
+        head = check_phase12(status)
+        tracked = sorted(git("ls-files", "-z").split("\x00"))
+        tracked = [path for path in tracked if path]
+        check_phase12_deletions(tracked)
+        check_phase12_no_campaign_links()
+        check_phase12_scenarios()
+        run_tier(QUICK_COMMANDS_1, QUICK_CEILING_S, quiet=True)
+        for command in ARCH_COMMANDS_1:
+            run_step(command)
+        run_fresh()
+        check_remaining_stubs()
+        check_phase12_ci_evidence(status, head)
+        after_status = git("status", "--porcelain", "--untracked-files=all")
+        if after_status != before_status:
+            fail("Phase 12 verification changed the candidate working tree")
+    except (CheckFailure, KeyError, TypeError, ValueError, OSError, json.JSONDecodeError) as error:
+        errors.append(str(error))
+    if errors:
+        if json_output:
+            print(json.dumps({"phase": 12, "result": "FAIL", "head": head, "errors": errors}, separators=(",", ":")))
+        else:
+            for error in errors:
+                print(f"bin/check phase 12: {error}", file=sys.stderr)
+        return 1
+    if json_output:
+        print(json.dumps({"phase": 12, "result": "PASS", "head": head}, separators=(",", ":")))
+        print("ELEF_PHASE_12=PASS")
+    else:
+        print(f"Phase 12 cleanup checks passed at {head}.")
+    return 0
+
+
 def print_usage() -> None:
     print("Usage: bin/check {quick|affected|phase N|all|arch|fresh|docs|perf}", file=sys.stderr)
 
@@ -2325,6 +2516,8 @@ def main(argv: list[str]) -> int:
         return run_phase10("--json" in extra)
     if argv[1] == "11":
         return run_phase11("--json" in extra)
+    if argv[1] == "12":
+        return run_phase12("--json" in extra)
     print(f"bin/check phase {argv[1]} is not implemented in Phase 01.", file=sys.stderr)
     return 2
 
