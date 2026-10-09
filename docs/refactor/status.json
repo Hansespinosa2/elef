@@ -251,6 +251,13 @@
       "duration_s": 31.687,
       "tier": "phase",
       "attempt_id": "1eb1345b615841bbb9d7514642c4a797"
+    },
+    {
+      "command": "bin/check affected",
+      "exit": 0,
+      "head": "512f454",
+      "duration_s": 43.2,
+      "tier": "affected"
     }
   ],
   "execution_environment": {
@@ -265,5 +272,5 @@
   },
   "pending_human_gates": [],
   "blocker": null,
-  "next_action": "Phase 06 DO step 1: differential probe Ruby-vs-work-model, baseline fixtures, async inventory."
+  "next_action": "Phase 06 DO-3 pushed (switch-over + checker updates); affected PASS; awaiting CI on candidate for gate evidence."
 }
