@@ -142,6 +142,22 @@ class PresentationsTest < ApplicationSystemTestCase
     assert ready, "autosave request #{index} was not registered"
   end
 
+  def wait_for_autosave_idle
+    idle = page.evaluate_async_script(<<~JAVASCRIPT)
+      const done = arguments[arguments.length - 1];
+      const deadline = Date.now() + 5000;
+      const wait = () => {
+        const form = document.querySelector('form[data-controller~="autosave"]');
+        const controller = form && window.Stimulus.getControllerForElementAndIdentifier(form, "autosave");
+        if (controller && !controller.flow.dirty && !controller.flow.saving) return done(true);
+        if (Date.now() >= deadline) return done(false);
+        window.setTimeout(wait, 10);
+      };
+      wait();
+    JAVASCRIPT
+    assert idle, "autosave did not reach an idle state"
+  end
+
   test "appearance controls are collapsed in the presentation editor" do
     presentation = Presentation.create!(title: "Appearance popup", source: "# Appearance popup")
 
@@ -361,15 +377,7 @@ class PresentationsTest < ApplicationSystemTestCase
     page.execute_script("window.autosaveRequests[1].release()")
     assert_selector '[data-autosave-target="status"]', exact_text: "Saved"
     assert_includes presentation.reload.source, "# Latest edit"
-    page.evaluate_async_script(<<~JAVASCRIPT)
-      window.setTimeout(() => arguments[0](), 1200);
-    JAVASCRIPT
-    assert_nil page.evaluate_script(<<~JAVASCRIPT)
-      (() => {
-        const form = document.querySelector('form[data-controller~="autosave"]');
-        return window.Stimulus.getControllerForElementAndIdentifier(form, "autosave").timer;
-      })()
-    JAVASCRIPT
+    wait_for_autosave_idle
     assert_equal 2, page.evaluate_script("window.autosaveRequests.length")
     assert_equal false, page.evaluate_script(<<~JAVASCRIPT)
       (() => {
@@ -415,7 +423,7 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: external_source
     assert_selector "[data-autosave-target='status']", exact_text: "Saved"
 
-    page.evaluate_async_script("window.setTimeout(() => arguments[0](), 1200)")
+    wait_for_autosave_idle
     assert_equal 1, page.evaluate_script("window.autosaveRequests.length")
     assert_equal external_source, presentation.reload.source
   end
@@ -2636,7 +2644,7 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_equal "112px", page.evaluate_script("getComputedStyle(document.querySelector('.slide h1')).fontSize")
   end
 
-  test "new presentation allows uploading dummy images to blank slides in Markdown and visual editor with rendering and folder sync" do
+  test "new presentation uploads and renders images in Markdown and visual editor" do
     require "zlib"
     generate_test_png = lambda do |width, height|
       raw = []
@@ -2736,19 +2744,6 @@ class PresentationsTest < ApplicationSystemTestCase
     # Wait for autosave to ensure persistence
     assert_selector '[data-autosave-target="status"]', exact_text: "Saved", wait: 8
 
-    # Verify folder storage on disk next to presentation.md
-    presentation = Presentation.last
-    storage_dir = presentation.storage_dir
-    assert File.exist?(storage_dir.join("presentation.md")), "presentation.md should be saved in presentation folder"
-    assert File.exist?(storage_dir.join("source.md")), "source.md should be saved in presentation folder"
-    assert Dir.exist?(storage_dir.join("assets")), "assets/ directory should exist next to presentation.md"
-
-    portable_content = File.read(storage_dir.join("presentation.md"))
-    assert_includes portable_content, "assets/dummy_stock_photo", "presentation.md should reference assets folder"
-    assert_includes portable_content, "assets/dummy_screenshot", "presentation.md should reference assets folder"
-
-    assert File.exist?(storage_dir.join("assets/#{File.basename(image_one_file.path)}"))
-    assert File.exist?(storage_dir.join("assets/#{File.basename(image_two_file.path)}"))
   ensure
     image_one_file&.close!
     image_two_file&.close!

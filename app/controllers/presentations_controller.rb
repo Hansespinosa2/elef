@@ -171,7 +171,7 @@ class PresentationsController < ApplicationController
   end
 
   def upload_asset
-    upload_work_asset(@presentation, allow_video: true) { |work| Presentations::FolderSync.sync!(work) }
+    upload_work_asset(@presentation, allow_video: true)
   end
 
   def media_asset

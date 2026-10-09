@@ -240,6 +240,33 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "Choose an image or MP4 video.", response.parsed_body["error"]
   end
 
+  test "copies an uploaded asset to the presentation folder before its Markdown is saved" do
+    presentation = Presentation.create!(title: "Immediate folder upload", source: "# Upload")
+    bytes = Base64.decode64("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+i9MwAAAAASUVORK5CYII=")
+
+    Tempfile.create(["folder-upload", ".png"]) do |file|
+      file.binmode
+      file.write(bytes)
+      file.rewind
+      upload = Rack::Test::UploadedFile.new(file.path, "image/png")
+      post upload_asset_presentation_path(presentation), params: { file: upload }, headers: { "Accept" => "application/json" }
+    end
+
+    assert_response :created
+    filename = presentation.assets.blobs.last.filename.to_s
+    asset_path = presentation.storage_dir.join("assets", filename)
+    assert File.file?(asset_path), "the upload action must sync the asset before a later source save"
+    assert_equal bytes, File.binread(asset_path)
+
+    source = "# Upload\n\n#{response.parsed_body.fetch("source")}"
+    patch presentation_path(presentation), params: { presentation: { source: source } }, as: :json
+    assert_response :ok
+    assert_equal source, File.read(presentation.storage_dir.join("source.md"))
+    assert_includes File.read(presentation.storage_dir.join("presentation.md")), "assets/#{filename}"
+  ensure
+    Presentations::FolderSync.remove!(presentation) if presentation
+  end
+
   test "print view selects the latest draft or published release" do
     presentation = Presentation.create!(title: "Print selection", source: "# Published version")
     post publish_presentation_path(presentation)
