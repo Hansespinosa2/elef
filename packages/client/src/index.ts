@@ -3,6 +3,7 @@ export { isSettingsRoute, parseLibraryRoute, parseSettingsRoute } from "./applic
 export type { SettingsRoute } from "./application/router.js";
 export { CREATE_WORK_EVENT } from "./features/library/LibraryApp.js";
 export { createPresentationNavigation, presentationActionForKey } from "./features/presentation/navigation.js";
+export { attachCanvasScaling, PresentationController, mountPresentation } from "./features/presentation/presentation.js";
 export {
   presentationBlockAttributes,
   presentationBlockControls,
