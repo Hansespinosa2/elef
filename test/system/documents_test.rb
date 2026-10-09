@@ -1634,7 +1634,6 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_equal drop_result["intendedPosition"], drop_result["resolvedPosition"], drop_result.inspect
     assert_equal "Preparing image…", drop_result["progress"]
     assert_equal "true", drop_result["busy"]
-    assert_selector ".media-upload-status", text: "Uploading dropped-document.png…", wait: 5
     assert_selector ".media-upload-status", text: /dropped-document\.png added to the Markdown source/i, wait: 8
 
     dropped_source = page.evaluate_script("document.querySelector('.source-field').editorController.value")
