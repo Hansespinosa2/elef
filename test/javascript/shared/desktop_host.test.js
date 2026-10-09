@@ -219,12 +219,29 @@ test("the file-backed host mounts the shared library view and graph", () => {
   assert.match(application, /mount\.querySelector\("#document-graph-view"\)/)
 })
 
-test("the Rails-owned application loads shared editor and graph controllers on demand", () => {
+test("both hosts render the graph through the shared client module, never Stimulus", async () => {
+  const clientShell = await read("app/javascript/controllers/client_shell_controller.js")
+  const graphPartial = await read("app/views/presentations/_document_graph.html.erb")
+  assert.match(application, /renderGraphView\(slot, graph\)/)
+  assert.match(application, /new GraphController\(slot, graph, \{ onOpenDeck/)
+  assert.match(application, /graphRequestId/)
+  assert.match(application, /graphController\?\.destroy\(\)/)
+  assert.doesNotMatch(application, /document-graph-data-value/)
+  assert.doesNotMatch(application, /document_graph_controller/)
+  assert.match(clientShell, /renderGraphView\(slot, graph\)/)
+  assert.match(clientShell, /new GraphController\(slot, graph\)/)
+  assert.match(clientShell, /data-graph-data/)
+  assert.match(graphPartial, /data-graph-data/)
+  assert.doesNotMatch(graphPartial, /data-controller/)
+})
+
+test("the Rails-owned application loads shared editor controllers on demand; the graph lives in the client", () => {
   assert.match(application, /loadEditorRuntime\(\)/)
-  assert.match(application, /loadLibraryRuntime\(\)/)
+  assert.doesNotMatch(application, /loadLibraryRuntime\(\)/)
   assert.match(bootstrap, /from "lib\/editor_runtime"/)
   assert.match(editorRuntime, /import\("controllers\/editor_controller"\)/)
-  assert.match(editorRuntime, /import\("controllers\/document_graph_controller"\)/)
+  assert.doesNotMatch(editorRuntime, /document_graph_controller/)
+  assert.doesNotMatch(editorRuntime, /loadLibraryRuntime/)
   assert.doesNotMatch(editorRuntime, /^import\s+\w+Controller\s+from\s+["']controllers\//m)
   assert.match(build, /splitting:\s*true/)
 })

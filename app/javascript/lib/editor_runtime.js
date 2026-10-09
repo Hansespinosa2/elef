@@ -20,7 +20,6 @@ if (__ELEF_E2E__) {
 }
 
 let editorRuntime
-let libraryRuntime
 
 export function loadEditorRuntime() {
   if (!editorRuntime) {
@@ -68,18 +67,6 @@ export function loadEditorRuntime() {
       })
   }
   return editorRuntime
-}
-
-export function loadLibraryRuntime() {
-  if (!libraryRuntime) {
-    libraryRuntime = import("controllers/document_graph_controller")
-      .then(({ default: controller }) => register("document-graph", controller))
-      .catch(error => {
-        libraryRuntime = null
-        throw error
-      })
-  }
-  return libraryRuntime
 }
 
 function register(identifier, controller) {

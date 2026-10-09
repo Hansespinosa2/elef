@@ -1,4 +1,1 @@
-<section class="document-graph-panel mt-8 rounded-2xl border border-[#ddd5c8] bg-[#fffdf8] p-5"
-  aria-labelledby="document-graph-heading"
-  data-controller="document-graph"
-  data-document-graph-data-value="<%= json_escape(graph.to_json) %>"></section>
+<div data-graph-data="<%= json_escape(graph.to_json) %>" hidden></div>

@@ -454,7 +454,11 @@ assert '"controllers/presentation_controller"' in editor_runtime, (
 )
 assert "splitting: true" in build, "desktop must emit lazy ESM chunks instead of parsing every editor controller at launch"
 assert 'import("controllers/editor_controller")' in editor_runtime, "the heavy shared editor controller must load on demand"
-assert 'import("controllers/document_graph_controller")' in editor_runtime, "the shared graph controller must load on demand"
+assert 'import("controllers/document_graph_controller")' not in editor_runtime, "the retired Stimulus graph controller must not load on demand"
+assert "loadLibraryRuntime" not in editor_runtime, "no host may keep the retired graph controller loader"
+assert "renderGraphView" in desktop_application and "GraphController" in desktop_application, (
+    "desktop graph rendering must use the shared client graph module"
+)
 assert '"lib/renderer_worker"' in (ROOT / "desktop/frontend/src/renderer-worker.js").read_text(), (
     "desktop worker bootstrap must delegate renderer response behavior to app/javascript"
 )

@@ -183,8 +183,9 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to documents_path
     assert_equal "Sample documents loaded.", flash[:notice]
     follow_redirect!
-    graph_element = Nokogiri::HTML(response.body).at_css('[data-controller="document-graph"]')
-    graph = JSON.parse(graph_element["data-document-graph-data-value"])
+    graph_element = Nokogiri::HTML(response.body).at_css("[data-graph-data]")
+    assert_nil graph_element["data-controller"]
+    graph = JSON.parse(graph_element["data-graph-data"])
     assert_equal Document.count, graph.fetch("nodes").length
     assert_includes graph.fetch("nodes").map { |node| node.fetch("title") }, "Stress: Renderer kitchen sink"
     assert_includes graph.fetch("nodes").map { |node| node.fetch("title") }, "Fixture: Graph orphan"
@@ -238,9 +239,10 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
     Document.create!(title: "Orphan", source: "# Orphan")
 
     get documents_path
-    assert_select ".document-graph-panel[data-controller='document-graph']"
-    graph_element = Nokogiri::HTML(response.body).at_css('[data-controller="document-graph"]')
-    graph = JSON.parse(graph_element["data-document-graph-data-value"])
+    assert_select ".document-graph-panel[data-controller='document-graph']", count: 0
+    assert_select "template[data-client-slot='graph'] [data-graph-data]"
+    graph_element = Nokogiri::HTML(response.body).at_css("[data-graph-data]")
+    graph = JSON.parse(graph_element["data-graph-data"])
     assert_equal 3, graph.fetch("nodes").length
     assert_includes graph.fetch("edges"), { "source" => source.id, "target" => target.id }
     assert_select ".lineage-panel", count: 0

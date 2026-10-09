@@ -1,6 +1,6 @@
 import { Controller } from "@hotwired/stimulus"
 import "elef-renderer"
-import { mountElef } from "@elef/client"
+import { GraphController, mountElef, renderGraphView } from "@elef/client"
 import { createRailsHost } from "host/rails-http-host"
 import { createRailsAuthoringSettingsTransport } from "host/rails-authoring-settings-transport"
 
@@ -110,11 +110,36 @@ export default class extends Controller {
         }
       },
     })
+    this.mountGraph()
   }
 
   disconnect() {
+    this.graph?.destroy()
+    this.graph = null
     this.shell?.unmount()
     this.shell = null
+  }
+
+  // The document graph renders through the shared client module from the
+  // server-computed graph payload. No onOpenDeck hook: node anchors keep
+  // their server URLs and navigate natively (Turbo intercepts them),
+  // exactly like the retired Stimulus controller's links.
+  mountGraph() {
+    this.graph?.destroy()
+    this.graph = null
+    const slot = this.element.querySelector("#document-graph-view")
+    const holder = slot?.querySelector("[data-graph-data]") ?? this.element.querySelector("[data-graph-data]")
+    if (!slot || !holder) return
+    let graph = null
+    try {
+      graph = JSON.parse(holder.getAttribute("data-graph-data") || "null")
+    } catch {
+      graph = null
+    }
+    if (!graph || !Array.isArray(graph.nodes) || !Array.isArray(graph.edges)) return
+    renderGraphView(slot, graph)
+    slot.hidden = false
+    this.graph = new GraphController(slot, graph)
   }
 
   resolveWorkUrl(work) {

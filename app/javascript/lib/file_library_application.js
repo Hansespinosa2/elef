@@ -11,7 +11,7 @@ import { presentConflictDialog } from "lib/conflict_dialog"
 import { createRendererClient } from "lib/renderer_worker_client"
 import { applyDesktopFeatureFlags } from "lib/feature_flags"
 import { configureEditorKind, renderEditorView } from "lib/editor_view"
-import { CREATE_WORK_EVENT, mountElef, mountVimSettings, parseLibraryRoute } from "@elef/client"
+import { CREATE_WORK_EVENT, GraphController, mountElef, mountVimSettings, parseLibraryRoute, renderGraphView } from "@elef/client"
 
 export function startFileLibraryApplication(platform) {
   const {
@@ -19,7 +19,7 @@ export function startFileLibraryApplication(platform) {
     completeBootstrap, createCloseFlow, createTransportAdapter, installFetchTransport,
     mediaUrlsForDeck, checkForUpdate, createIdleUpdateCheck, installPendingUpdate,
     desktopAuthoringRegistry, loadDesktopAuthoringRegistry, quietSavePolicy,
-    loadEditorRuntime, loadLibraryRuntime
+    loadEditorRuntime
   } = platform
 
   applyDesktopFeatureFlags(document)
@@ -462,27 +462,29 @@ export function startFileLibraryApplication(platform) {
     }
   }
 
+  // Request identity for graph loads: a slow graph resolving after the user
+  // navigated away (library hidden) or after a newer request started must
+  // not render into the stale slot. The previous Stimulus mount had no such
+  // guard; the panel re-read the filter but still applied late payloads.
+  let graphRequestId = 0
+  let graphController = null
   async function showDocumentGraph() {
     if (!library) return
+    const request = ++graphRequestId
     try {
-      await loadLibraryRuntime()
       const graph = await documentGraphData()
-      const previous = mount.querySelector("#document-graph-view")
-      if (!previous) return
-      const graphView = previous.cloneNode(false)
-      graphView.dataset.documentGraphDataValue = JSON.stringify(graph)
-      graphView.setAttribute("data-controller", "document-graph")
-      graphView.addEventListener("click", event => {
-        const link = event.target.closest?.("[data-deck-id]")
-        if (!link) return
-        event.preventDefault()
-        void openDeck(link.dataset.deckId)
-      })
-      previous.replaceWith(graphView)
+      // Reject stale results: navigation away from the library or a newer
+      // graph request supersedes this payload.
+      if (request !== graphRequestId || !libraryShown) return
+      const slot = mount.querySelector("#document-graph-view")
+      if (!slot) return
+      graphController?.destroy()
+      renderGraphView(slot, graph)
+      graphController = new GraphController(slot, graph, { onOpenDeck: id => void openDeck(id) })
       // The client hides the panel when the filter leaves documents; the host
       // unhides it once populated. Re-read the settled filter here so a slow
       // load racing a tab switch lands in the correct state.
-      graphView.hidden = currentFilter() !== "documents"
+      slot.hidden = currentFilter() !== "documents"
     } catch (error) {
       showError(error)
     }

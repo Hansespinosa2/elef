@@ -17,7 +17,7 @@ import builtInRegistry from "../../../app/javascript/data/default_authoring_regi
 import { mergeAuthoringRegistryEntries } from "lib/authoring_registry_merge"
 import { createQuietSavePolicy } from "./quiet_save_policy.js"
 import { desktopAuthoringRegistry, loadDesktopAuthoringRegistry } from "./authoring-registry-loader.js"
-import { loadEditorRuntime, loadLibraryRuntime } from "lib/editor_runtime"
+import { loadEditorRuntime } from "lib/editor_runtime"
 import { startFileLibraryApplication } from "lib/file_library_application"
 import "../../../app/assets/stylesheets/application.css"
 
@@ -62,6 +62,5 @@ startFileLibraryApplication({
   }),
   updaterSeam: createDesktopUpdaterSeam({ check: () => checkUpdater({ timeout: 10_000 }) }),
   quietSavePolicy: createQuietSavePolicy(),
-  loadEditorRuntime,
-  loadLibraryRuntime
+  loadEditorRuntime
 })
