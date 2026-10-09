@@ -1,0 +1,149 @@
+{
+  "schema_version": 1,
+  "status": "IN_PROGRESS",
+  "purpose": "Canonical fixture paths, acceptance commands, expected exit codes, observed results, and invariants for the desktop v0.x release gates.",
+  "validation": {
+    "command": "npm run check:release-fixtures",
+    "expected_exit_code": 0,
+    "observed_exit_code": 0
+  },
+  "checks": [
+    {
+      "id": "manifest_integrity",
+      "command": "npm run check:release-fixtures",
+      "expected_exit_code": 0,
+      "observed_exit_code": 0,
+      "platform": "Linux x86-64",
+      "status": "VERIFIED"
+    },
+    {
+      "id": "source_storage_fixture_round_trip",
+      "command": "cargo test --manifest-path desktop/Cargo.toml -p elef-core --locked",
+      "test_name": "release_compatibility_fixtures_open_save_and_archive_round_trip_source_bytes",
+      "expected_exit_code": 0,
+      "observed_exit_code": 0,
+      "platform": "Linux x86-64",
+      "covers": ["basic_document", "basic_presentation", "rich_rendering_media", "historical_file_format", "unknown_directives"],
+      "observed_tests_passed": 41,
+      "status": "VERIFIED"
+    },
+    {
+      "id": "full_web_desktop_parity",
+      "command": "npm test --prefix desktop/e2e",
+      "expected_exit_code": 0,
+      "observed_exit_code": null,
+      "status": "TODO",
+      "note": "Use the isolated CI harness; this can start Rails on port 3000 and must not run against the user's occupied development endpoint."
+    },
+    {
+      "id": "packaged_n_minus_1_to_n_update",
+      "command": "ELEF_E2E_PACKAGED_UPDATES=1 npm test --prefix desktop/e2e",
+      "expected_exit_code": 0,
+      "observed_exit_code": null,
+      "status": "TODO",
+      "note": "Current generated fixtures are WebDriver test bundles and do not establish production Stable DMG or Arch package acceptance."
+    }
+  ],
+  "package_pair_generator": {
+    "command": "node desktop/e2e/build-update-fixtures.mjs",
+    "expected_exit_code": 0,
+    "generated_paths": [
+      "desktop/target/e2e-packages/n-1",
+      "desktop/target/e2e-packages/n",
+      "desktop/target/e2e-packages/update.tar.gz",
+      "desktop/target/e2e-packages/update.AppImage"
+    ],
+    "status": "TODO",
+    "observed_exit_code": null,
+    "limitation": "Current generator creates test-only WebDriver bundles (AppImage on Linux); it is not proof of the supported Stable DMG or Arch package transition. Replace/extend it for packaged Stable N-1 to N tests."
+  },
+  "fixtures": [
+    {
+      "id": "basic_document",
+      "paths": ["test/fixtures/desktop/release/basic-document.md"],
+      "status": "IN_PROGRESS",
+      "acceptance_command": "npm test --prefix desktop/e2e",
+      "expected_exit_code": 0,
+      "observed_exit_code": null,
+      "invariants": ["Create, edit, save, close, and reopen without source loss.", "Source round-trips byte-for-byte, including front matter and [[...]] syntax."]
+    },
+    {
+      "id": "basic_presentation",
+      "paths": ["test/fixtures/desktop/release/basic-presentation.md"],
+      "status": "IN_PROGRESS",
+      "acceptance_command": "npm test --prefix desktop/e2e",
+      "expected_exit_code": 0,
+      "observed_exit_code": null,
+      "invariants": ["Create, edit, save, close, reopen, and present.", "Source round-trips byte-for-byte, including ordinary Markdown and literal document-link syntax."]
+    },
+    {
+      "id": "rich_rendering_media",
+      "paths": ["test/fixtures/desktop/release/rich-rendering-media.md", "test/fixtures/desktop/release/images/release-pixel.png"],
+      "status": "IN_PROGRESS",
+      "acceptance_command": "npm test --prefix desktop/e2e",
+      "expected_exit_code": 0,
+      "observed_exit_code": null,
+      "invariants": ["Preview and presentation retain theme, typography, math, Mermaid, Art, and local media.", "Export/import preserves source and media bytes."]
+    },
+    {
+      "id": "historical_file_format",
+      "paths": ["test/fixtures/desktop/release/historical-no-manifest/Legacy presentation/talk.md"],
+      "status": "VERIFIED",
+      "acceptance_command": "cargo test --manifest-path desktop/Cargo.toml -p elef-core --locked",
+      "expected_exit_code": 0,
+      "observed_exit_code": 0,
+      "invariants": ["A pre-manifest deck with a noncanonical top-level Markdown filename opens.", "Compatible open/save/export/import preserves the exact Markdown bytes."]
+    },
+    {
+      "id": "unknown_directives",
+      "paths": ["test/fixtures/desktop/release/unknown-directives.md"],
+      "status": "IN_PROGRESS",
+      "acceptance_command": "npm test --prefix desktop/e2e",
+      "expected_exit_code": 0,
+      "observed_exit_code": null,
+      "invariants": ["Stable does not activate excluded document linking for [[...]].", "Unsupported directive text survives compatible save and .elef round-trip byte-for-byte."]
+    },
+    {
+      "id": "pre_release_app_state",
+      "paths": ["test/fixtures/desktop/release/pre-release-app-state/library-root.json.template", "test/fixtures/desktop/release/pre-release-app-state/Selected library/Legacy presentation/presentation.md", "test/fixtures/desktop/release/pre-release-app-state/Selected library/Legacy presentation/elef.json"],
+      "path_substitutions": {"${ELEF_RELEASE_FIXTURE_LIBRARY_ROOT}": "a disposable absolute test-library directory"},
+      "status": "TODO",
+      "acceptance_command": "npm test --prefix desktop/e2e",
+      "expected_exit_code": 0,
+      "observed_exit_code": null,
+      "invariants": ["Stable starts with app-data/library-root.json pointing at the fixture library.", "The original selected path and deck identity remain unchanged after upgrade and relaunch."]
+    },
+    {
+      "id": "dirty_save_conflict",
+      "paths": ["test/fixtures/desktop/release/dirty-save-conflict.json"],
+      "status": "TODO",
+      "acceptance_command": "npm test --prefix desktop/e2e",
+      "expected_exit_code": 0,
+      "observed_exit_code": null,
+      "invariants": ["Stale save does not overwrite external bytes.", "Local unsaved text remains available while conflict resolution is pending.", "Unsafe close/update leaves the app open."]
+    },
+    {
+      "id": "n_minus_1_n_package_pair",
+      "generated_by": "package_pair_generator",
+      "paths": ["desktop/target/e2e-packages/n-1", "desktop/target/e2e-packages/n"],
+      "status": "TODO",
+      "acceptance_command": "ELEF_E2E_PACKAGED_UPDATES=1 npm test --prefix desktop/e2e",
+      "expected_exit_code": 0,
+      "observed_exit_code": null,
+      "invariants": ["Install N-1, stage N, restart, and prove the installed app is N.", "Library and source survive; unsafe save, interrupted install, invalid signature, and blocked eligibility defer or fail safely."]
+    },
+    {
+      "id": "redaction_sentinels",
+      "paths": ["test/fixtures/desktop/release/redaction-sentinels.json"],
+      "status": "TODO",
+      "acceptance_command": "npm test --prefix desktop/e2e",
+      "expected_exit_code": 0,
+      "observed_exit_code": null,
+      "invariants": ["No sentinel value appears in default logs or exported diagnostics ZIP, including failures and arbitrary exception inputs."]
+    }
+  ],
+  "environment_notes": [
+    "The full E2E command uses disposable fixtures, but can start a Rails test server on port 3000; do not run it while the user's development server occupies that port.",
+    "An expected exit code is not a result. Null observed exit codes and TODO statuses mean the acceptance scenario has not yet been run and passed."
+  ]
+}

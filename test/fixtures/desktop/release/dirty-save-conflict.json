@@ -1,0 +1,8 @@
+{
+  "deck": "Disposable conflict fixture",
+  "source_file": "presentation.md",
+  "baseline_source": "# Before conflict test\n\nSeed paragraph.\n",
+  "dirty_source": "# Local draft\n\nKeep this in the conflict dialog.\n",
+  "external_source": "# External edit\n\nPreserve the disk version for review.\n",
+  "invariant": "A stale baseline hash must not overwrite the external source; unsaved local source remains available for resolution."
+}
