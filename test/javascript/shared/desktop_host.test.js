@@ -7,7 +7,7 @@ import { parseHTML } from "linkedom"
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..")
 const read = relative => readFile(path.join(root, relative), "utf8")
-const [hostTemplate, shellStyles, applicationStylesheetIndex, application, bootstrap, editorRuntime, build, editorView, libraryView, fileLibraryTransport] = await Promise.all([
+const [hostTemplate, shellStyles, applicationStylesheetIndex, application, bootstrap, editorRuntime, build, editorView, clientLibrary, fileLibraryTransport] = await Promise.all([
   read("app/views/desktop_host.html"),
   read("app/assets/stylesheets/file_library_host.css"),
   read("app/assets/stylesheets/application.css"),
@@ -16,19 +16,24 @@ const [hostTemplate, shellStyles, applicationStylesheetIndex, application, boots
   read("app/javascript/lib/editor_runtime.js"),
   read("desktop/frontend/build.mjs"),
   read("app/javascript/lib/editor_view.js"),
-  read("app/javascript/lib/library_view.js"),
+  read("packages/client/src/features/library/LibraryApp.tsx"),
   read("desktop/frontend/src/file-library-transport.js")
 ])
 const applicationPartialPaths = [...applicationStylesheetIndex.matchAll(/@import url\("\.\/([^\"]+)"\) layer\([^\)]+\);/g)]
 const applicationStyles = (await Promise.all(applicationPartialPaths.map(([, path]) => read(`app/assets/stylesheets/${path}`)))).join("\n")
-const authoringMarkup = await read("app/views/shared/_authoring_settings_dialog.html.erb")
-const page = hostTemplate.replace("<!-- elef:shared-authoring-settings -->", authoringMarkup)
+const clientAuthoringDialog = await read("packages/client/src/features/settings/AuthoringDialog.tsx")
+const page = hostTemplate
 const importmap = await read("config/importmap.rb")
 const rootPackage = JSON.parse(await read("package.json"))
 const appearanceController = await read("app/javascript/controllers/appearance_controller.js")
 const autosaveController = await read("app/javascript/controllers/autosave_controller.js")
+const workSession = await read("app/javascript/lib/work_session.js")
+const quietSavePolicy = await read("desktop/frontend/src/quiet_save_policy.js")
 const { document } = parseHTML(page)
-const emptyAction = page.match(/<template data-library-view-slot="empty-action">([\s\S]*?)<\/template>/)?.[1] || ""
+// The empty-library call to action is client-owned now; the host template
+// carries no empty-action slot. Assert the shared button classes in the
+// client source that renders them.
+const emptyAction = clientLibrary.match(/id="empty-library"([\s\S]*?)<\/div>\s*<p id="library-no-results"/)?.[0] || ""
 
 test("the desktop packages Rails-owned host markup and styles", () => {
   assert.deepEqual(
@@ -42,13 +47,17 @@ test("the desktop packages Rails-owned host markup and styles", () => {
   assert.match(shellStyles, /\.desktop-app-shell\s*\{[^}]*max-width: 1440px/)
   assert.doesNotMatch(shellStyles, /^h1\s*\{/m)
   assert.match(bootstrap, /app\/assets\/stylesheets\/application\.css/)
-  assert.match(editorRuntime, /import\("controllers\/vim_settings_controller"\)/)
-  assert.match(page, /data-controller="vim-settings" data-vim-settings-view/)
+  assert.doesNotMatch(editorRuntime, /vim_settings_controller/)
+  assert.match(page, /id="vim-settings-mount"/)
   assert.match(build, /app\/views\/desktop_host\.html/)
-  assert.match(build, /app\/views\/shared\/_authoring_settings_dialog\.html\.erb/)
-  assert.match(build, /desktopHost\.replace\(authoringSettingsMarker, sharedAuthoringSettings\)/)
-  assert.equal((hostTemplate.match(/<!-- elef:shared-authoring-settings -->/g) || []).length, 1)
-  assert.equal((page.match(/id="authoring-settings-dialog"/g) || []).length, 1)
+  assert.match(build, /authoring-settings-mount/)
+  assert.doesNotMatch(build, /elef:shared-authoring-settings/)
+  assert.doesNotMatch(build, /_authoring_settings_dialog\.html\.erb/)
+  assert.match(clientAuthoringDialog, /id="authoring-settings-dialog"/)
+  assert.match(page, /id="authoring-dialog"/)
+  assert.match(page, /id="authoring-settings-mount"/)
+  assert.match(page, /id="vim-settings-mount"/)
+  assert.doesNotMatch(page, /data-controller="vim-settings"/)
   assert.match(applicationStyles, /\.authoring-settings-dialog\s*\{/)
   assert.doesNotMatch(shellStyles, /\.authoring-settings-dialog\s*\{/)
   assert.match(build, /app\/assets\/stylesheets\/file_library_host\.css/)
@@ -74,7 +83,7 @@ test("the desktop packages Rails-owned host markup and styles", () => {
   assert.doesNotMatch(applicationStyles, /\.library-shared-view \.library-card:hover\s*\{[^}]*!important/)
   assert.match(applicationStyles, /\.library-shared-view h1,\s*\.library-shared-view h2,\s*\.library-shared-view h3\s*\{[^}]*font-family: var\(--oradia-serif\)/)
   assert.match(applicationStyles, /\.library-shared-view \.button:not\(\.primary\)\s*\{[^}]*var\(--sidebar, var\(--oradia-slate-800\)\)/)
-  assert.match(emptyAction, /class="button primary inline-flex[^\"]+"/)
+  assert.match(emptyAction, /class(Name)?="button primary inline-flex[^\"]+"/)
   assert.match(applicationStyles, /\.library-shared-view \.button\.primary\s*\{/)
 })
 
@@ -115,10 +124,17 @@ test("desktop media URLs and fetch interception stay in native transport", async
 
 test("Rails and desktop consume the same Rails-owned save state machine", () => {
   assert.match(autosaveController, /import \{ createSaveFlow \} from "lib\/save_flow"/)
-  assert.match(application, /import \{ createSaveFlow \} from "lib\/save_flow"/)
+  assert.match(application, /import \{ createWorkSession \} from "lib\/work_session"/)
+  assert.match(workSession, /import \{ createSaveFlow \} from "\.\/save_flow\.js"/)
   assert.match(autosaveController, /import \{ presentConflictDialog \} from "lib\/conflict_dialog"/)
   assert.match(application, /import \{ presentConflictDialog \} from "lib\/conflict_dialog"/)
   assert.doesNotMatch(bootstrap, /createSaveFlow|conflict-dialog|autosave#schedule/)
+  assert.match(bootstrap, /quietSavePolicy: createQuietSavePolicy\(\)/)
+  assert.match(application, /quietSavePolicy\.saveDelay/)
+  assert.match(application, /quietSavePolicy\.externalPollMs/)
+  assert.match(application, /quietSavePolicy\.snapshotIntervalMs/)
+  assert.match(quietSavePolicy, /saveDelay: 2000/)
+  assert.match(quietSavePolicy, /QUIET_SAVE_SNAPSHOT_INTERVAL_MS = 5 \* 60 \* 1000/)
 })
 
 test("Rails and desktop share one sanitized preview insertion path", () => {
@@ -159,8 +175,8 @@ test("the desktop host defaults to Rails' Visual mode and gates it until preview
   const editorController = await read("app/javascript/controllers/editor_controller.js")
   assert.match(editorController, /this\.form\?\.dispatchEvent\(new CustomEvent\("elef:editor-mode-change"/)
   assert.match(application, /theme: "dark"/)
-  assert.match(application, /preview: deck => void openDeck\(deck\.id\)/)
-  assert.match(application, /present: deck =>\s*\{[\s\S]*?startPresentation\(\)/)
+  assert.match(application, /void openDeck\(target\.workId\)/)
+  assert.match(application, /presentWork: work => \{[\s\S]*?startPresentation\(\)/)
   assert.match(application, /configureEditorKind\(elements\.editorField\.closest\("\.editor-shell"\), isDocument \? "document" : "presentation"/)
   assert.doesNotMatch(application, /elements\.editorInput\.name = isDocument/)
   assert.match(editorView, /export function configureEditorKind\(root, kind/)
@@ -191,22 +207,42 @@ test("the editor host uses the shared editor markup rather than a second copy", 
 
 test("the file-backed host mounts the shared library view and graph", () => {
   assert.ok(document.querySelector("#library-view-mount"))
-  assert.match(application, /renderLibraryView\(document\.querySelector\("#library-view-mount"\)/)
-  assert.match(application, /setLibraryViewTab\(document\.querySelector\("#library-view-mount"\)/)
-  assert.doesNotMatch(application, /elements\.description\.textContent|elements\.graphView\.hidden = libraryTab/)
-  assert.match(libraryView, /id="show-deck-list" class="library-tab" data-library-tab="all"/)
-  assert.match(libraryView, /id="show-documents" class="library-tab" data-library-tab="documents"/)
-  assert.match(libraryView, /id="show-presentations" class="library-tab" data-library-tab="presentations"/)
-  assert.match(libraryView, /id="document-graph-view"/)
-  assert.doesNotMatch(libraryView, /show-document-graph/)
+  assert.match(application, /libraryHost = createLibraryHost\(status\)/)
+  assert.match(application, /shell = await mountElef\(mount, libraryHost, \{/)
+  assert.match(application, /onLibraryEvent: handleLibraryEvent/)
+  assert.doesNotMatch(application, /renderLibraryView|setLibraryViewTab|renderDecks/)
+  assert.match(clientLibrary, /show-deck-list/)
+  assert.match(clientLibrary, /show-documents/)
+  assert.match(clientLibrary, /show-presentations/)
+  assert.match(clientLibrary, /data-library-tab=\{name\}/)
+  assert.match(clientLibrary, /id="document-graph-view"/)
+  assert.match(application, /mount\.querySelector\("#document-graph-view"\)/)
 })
 
-test("the Rails-owned application loads shared editor and graph controllers on demand", () => {
+test("both hosts render the graph through the shared client module, never Stimulus", async () => {
+  const clientShell = await read("app/javascript/controllers/client_shell_controller.js")
+  const graphPartial = await read("app/views/presentations/_document_graph.html.erb")
+  assert.match(application, /renderGraphView\(slot, graph\)/)
+  assert.match(application, /new GraphController\(slot, graph, \{ onOpenDeck/)
+  assert.match(application, /createRequestGuard/)
+  assert.match(application, /graphRequests\.isCurrent\(request\)/)
+  assert.match(application, /graphController\?\.destroy\(\)/)
+  assert.doesNotMatch(application, /document-graph-data-value/)
+  assert.doesNotMatch(application, /document_graph_controller/)
+  assert.match(clientShell, /renderGraphView\(slot, graph\)/)
+  assert.match(clientShell, /new GraphController\(slot, graph\)/)
+  assert.match(clientShell, /data-graph-data/)
+  assert.match(graphPartial, /data-graph-data/)
+  assert.doesNotMatch(graphPartial, /data-controller/)
+})
+
+test("the Rails-owned application loads shared editor controllers on demand; the graph lives in the client", () => {
   assert.match(application, /loadEditorRuntime\(\)/)
-  assert.match(application, /loadLibraryRuntime\(\)/)
+  assert.doesNotMatch(application, /loadLibraryRuntime\(\)/)
   assert.match(bootstrap, /from "lib\/editor_runtime"/)
   assert.match(editorRuntime, /import\("controllers\/editor_controller"\)/)
-  assert.match(editorRuntime, /import\("controllers\/document_graph_controller"\)/)
+  assert.doesNotMatch(editorRuntime, /document_graph_controller/)
+  assert.doesNotMatch(editorRuntime, /loadLibraryRuntime/)
   assert.doesNotMatch(editorRuntime, /^import\s+\w+Controller\s+from\s+["']controllers\//m)
   assert.match(build, /splitting:\s*true/)
 })

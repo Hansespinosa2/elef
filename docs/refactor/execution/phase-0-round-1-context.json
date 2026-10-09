@@ -1,0 +1,13 @@
+{
+  "phase": 0,
+  "round": 1,
+  "head": "26a6b0f155c4354b8649cdc82219d728836081b7",
+  "base": "88f61a7a8ffd7c276bafcf06eee09c36a8adf134",
+  "mechanism": "native fresh collaboration agent session",
+  "conversation_inherited": false,
+  "state": "completed",
+  "launch": "collaboration.spawn_agent(task_name=\"phase_0_review_round_1\", fork_turns=\"none\", message=\"Read /root/elef/tmp/reviews/phase-0-round-1/REVIEWER-PROMPT.md and follow it exactly.\")",
+  "identity": "fresh-context subagent session `/root/phase_0_review_round_1`",
+  "terminal_evidence": "collaboration tool returned FINAL_ANSWER for /root/phase_0_review_round_1; wait_agent delivered final response and list_agents confirmed completed",
+  "report_sha256": "fb121324b834ae8579b91007ceb884a35431ebb9fc3184bcbfcb06575256b06c"
+}

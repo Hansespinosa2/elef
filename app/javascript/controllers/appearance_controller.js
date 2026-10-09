@@ -1,5 +1,5 @@
 import { Controller } from "@hotwired/stimulus"
-import { withAppearanceValue } from "lib/document_map"
+import { withAppearanceValue } from "@elef/work-model"
 
 const normalizeSource = (source) => String(source ?? "").replace(/\r\n?/g, "\n")
 

@@ -1,0 +1,14 @@
+{
+  "phase": 4,
+  "round": 2,
+  "base": "2bdfa86d6c6651b692a9c3bf11988309d52b27be",
+  "head": "df7580eedbb1effc4850805d02266aba09b3ac94",
+  "mechanism": "native fresh subagent session",
+  "conversation_inherited": false,
+  "launch": "muse.subagent_spawn task_name=phase_4_review_round_2; objective=Read /root/elef/tmp/reviews/phase-4-round-2/REVIEWER-PROMPT.md and follow it exactly.",
+  "state": "completed",
+  "identity": "independent subagent session 01a11bee (phase-4-round-2 reviewer), read-only worktree audit",
+  "session": "reviewer subagent 01a11bee-8255-7f92-a285-25cb1f846fac via spawn task/01a11bee-824f-7a82-9547-91bf808e236d#0 (agent_path main/phase_4_review_round_2/15)",
+  "report_sha256": "3e3767dee1db3620341e160c6c84fc4d4b4242cc1efd5ee2eb486a58085a387a",
+  "terminal_evidence": "subagent result delivered ready with summary Result: FAIL (P4R1-PERF-01 recurs: linux coldStart +15.7%, linux open100Slides +20.2%, darwin coldStart +11.1% vs locked baseline; zero distribution overlap on linux cold/open; all other criteria PASS), report at tmp/reviews/phase-4-round-2/report.md; review worktree HEAD == candidate df7580eedbb1effc4850805d02266aba09b3ac94, worktree clean; report copied verbatim to docs/refactor/reviews/phase-4-round-2.md (sha256 3e3767de...)"
+}

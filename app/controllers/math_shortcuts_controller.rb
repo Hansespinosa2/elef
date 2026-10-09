@@ -3,13 +3,14 @@ class MathShortcutsController < ApplicationController
 
   def index
     respond_to do |format|
-      format.html
+      format.html { render template: "shared/settings_page", locals: { settings_page_title: "Math shortcuts" } }
       format.json { render json: { entries: MathShortcuts::Catalog.for_editor } }
     end
   end
 
   def new
     @math_shortcut = MathShortcut.new(prefix: ".", aliases: [])
+    render template: "shared/settings_page", locals: { settings_page_title: "New math shortcut" }
   end
 
   def create
@@ -29,6 +30,8 @@ class MathShortcutsController < ApplicationController
 
   def edit
     return redirect_to math_shortcuts_path, alert: "Built-in math shortcuts are read-only." if @math_shortcut.built_in?
+
+    render template: "shared/settings_page", locals: { settings_page_title: "Edit #{@math_shortcut.name}" }
   end
 
   def update

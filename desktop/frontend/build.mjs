@@ -10,9 +10,7 @@ const e2eBuild = process.env.ELEF_E2E_BUILD === "1"
 const output = path.join(frontendRoot, e2eBuild ? "dist-e2e" : "dist")
 const assets = path.join(output, "assets")
 const sharedModuleAliases = {
-  "#elef/preview-sanitizer": "lib/preview_sanitizer.js",
-  "#elef/authoring-settings": "lib/authoring_settings.js",
-  "#elef/authoring-registry-write": "lib/authoring_registry_write.js"
+  "#elef/preview-sanitizer": "lib/preview_sanitizer.js"
 }
 
 await rm(output, { recursive: true, force: true })
@@ -30,8 +28,32 @@ const appSourceAlias = {
     }))
     context.onResolve({ filter: /^[^./]/ }, async (args) => {
       if (args.pluginData?.desktopSharedDependencyResolution) return
+      // Monorepo packages are first-party source, not declared dependencies:
+      // resolve the package barrel directly so Rails and desktop share one copy.
+      const workspaceMatch = /^@elef\/([^/]+)(\/[^/]+)?$/.exec(args.path)
+      if (workspaceMatch) {
+        // The client ships a committed self-contained dist (React included)
+        // that both hosts consume byte-identically, following the renderer
+        // precedent; the desktop never re-bundles client source. The deferred
+        // preview renderer ships the same way as its own committed file.
+        if (workspaceMatch[1] === "client" && !workspaceMatch[2]) {
+          return { path: path.join(repoRoot, "packages", "client", "dist", "elef-client.js") }
+        }
+        if (workspaceMatch[1] === "client" && workspaceMatch[2] === "/preview-core") {
+          return { path: path.join(repoRoot, "packages", "client", "dist", "preview-core.js") }
+        }
+        const manifest = JSON.parse(await readFile(path.join(repoRoot, "packages", workspaceMatch[1], "package.json"), "utf8"))
+        const subpath = workspaceMatch[2] ? `.${workspaceMatch[2]}` : "."
+        const exported = manifest.exports?.[subpath]
+        const entry = typeof exported === "string" ? exported : exported?.default
+        if (!entry) throw new Error(`Workspace package @elef/${workspaceMatch[1]} has no export ${subpath}.`)
+        return { path: path.join(repoRoot, "packages", workspaceMatch[1], entry) }
+      }
       const relativeImporter = path.relative(sharedFrontendRoot, args.importer)
-      if (relativeImporter.startsWith("..") || path.isAbsolute(relativeImporter)) return
+      const relativePackageImporter = path.relative(path.join(repoRoot, "packages"), args.importer)
+      const sharedImporter = !(relativeImporter.startsWith("..") || path.isAbsolute(relativeImporter))
+        || !(relativePackageImporter.startsWith("..") || path.isAbsolute(relativePackageImporter))
+      if (!sharedImporter) return
       if (args.path.startsWith("controllers/") || args.path.startsWith("lib/")) return
 
       const result = await context.resolve(args.path, {
@@ -118,15 +140,13 @@ await build({
 })
 
 const desktopHost = await readFile(path.join(repoRoot, "app/views/desktop_host.html"), "utf8")
-const sharedAuthoringSettings = await readFile(path.join(repoRoot, "app/views/shared/_authoring_settings_dialog.html.erb"), "utf8")
-const authoringSettingsMarker = "<!-- elef:shared-authoring-settings -->"
-if (desktopHost.split(authoringSettingsMarker).length !== 2) {
-  throw new Error("The Rails-owned authoring settings partial must have exactly one desktop host slot.")
+// The authoring dialog renders through the shared client now (same DOM
+// contract the web pages use), so the host ships a mount point instead of
+// inlining server-rendered dialog markup.
+const indexHtml = desktopHost
+if (!indexHtml.includes('id="authoring-settings-mount"')) {
+  throw new Error("The desktop host must provide the shared authoring dialog mount point.")
 }
-if (/<%[=#-]?/.test(sharedAuthoringSettings)) {
-  throw new Error("The shared authoring settings partial must remain static so the offline desktop can consume it verbatim.")
-}
-const indexHtml = desktopHost.replace(authoringSettingsMarker, sharedAuthoringSettings)
 if (e2eBuild) {
   await build({
     entryPoints: [path.join(frontendRoot, "../e2e/wdio-init.js")],

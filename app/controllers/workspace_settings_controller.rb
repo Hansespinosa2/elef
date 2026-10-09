@@ -2,6 +2,7 @@ class WorkspaceSettingsController < ApplicationController
   before_action :set_workspace
 
   def show
+    render template: "shared/settings_page", locals: { settings_page_title: "Settings" }
   end
 
   def update

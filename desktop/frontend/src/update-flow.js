@@ -24,6 +24,29 @@ export async function installDesktopUpdate(update, { onProgress, relaunch, prepa
   return true
 }
 
+// Client settings affordance seam: reports update availability without
+// owning installation (host menus and the idle flow keep that). Each query
+// releases its native update resource right away; a later install re-checks
+// through the owning flow, so dropping the handle here is safe.
+export function createDesktopUpdaterSeam({ check }) {
+  if (typeof check !== "function") throw new TypeError("An updater check function is required.")
+  async function query() {
+    const update = await check()
+    if (!update) return { available: false }
+    const version = typeof update.version === "string" ? update.version : undefined
+    try {
+      // The adapted check shape releases via dispose; the raw plugin update
+      // releases via close. Either way the seam drops its handle right away.
+      if (typeof update.dispose === "function") await update.dispose()
+      else if (typeof update.close === "function") await update.close()
+    } catch (_error) {
+      // Availability is already recorded; releasing the native resource is best-effort.
+    }
+    return version === undefined ? { available: true } : { available: true, version }
+  }
+  return { status: query, checkForUpdate: query }
+}
+
 export function createIdleUpdateCheck(check, isBusy, {
   setTimer = setTimeout,
   clearTimer = clearTimeout

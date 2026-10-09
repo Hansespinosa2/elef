@@ -4,7 +4,7 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
-const target = path.join(repo, "desktop/target")
+const target = path.join(repo, "target")
 const output = path.join(target, "e2e-packages")
 const platform = process.platform
 if (!["linux", "darwin"].includes(platform)) throw new Error("Unsupported updater test platform")

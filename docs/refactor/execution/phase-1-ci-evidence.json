@@ -1,0 +1,136 @@
+{
+  "schema_version": 1,
+  "candidate_sha": "df6033fd2b92467f3ae0dcf0c2bc81f4e7eff325",
+  "pull_request": {
+    "number": 136,
+    "url": "https://github.com/Hansespinosa2/elef/pull/136",
+    "base_branch": "dev",
+    "base_sha": "73ba6afed637fbe4da261d58efcca0ffe2e23ae8",
+    "head_branch": "feat/refactor-desktop-and-web"
+  },
+  "run": {
+    "id": 37660430068,
+    "url": "https://github.com/Hansespinosa2/elef/actions/runs/37660430068",
+    "event": "pull_request",
+    "attempt": 1,
+    "conclusion": "success",
+    "tested_merge_sha": "754076a8d25a35e492c9a578c03f6ae6d6969866",
+    "tested_merge_parents": [
+      "73ba6afed637fbe4da261d58efcca0ffe2e23ae8",
+      "df6033fd2b92467f3ae0dcf0c2bc81f4e7eff325"
+    ],
+    "attempt_history": [
+      {
+        "attempt": 1,
+        "conclusion": "success"
+      }
+    ],
+    "note": "Candidate differs from a83c96c only by this evidence file (execution/, non-production); run 37647011099 proved the same production tree green on attempt 3."
+  },
+  "jobs": [
+    {
+      "name": "desktop-fast",
+      "id": 112926250592,
+      "conclusion": "success"
+    },
+    {
+      "name": "test",
+      "id": 112926250744,
+      "conclusion": "success"
+    },
+    {
+      "name": "system-test",
+      "id": 112926250509,
+      "conclusion": "success"
+    },
+    {
+      "name": "affected",
+      "id": 112926250203,
+      "conclusion": "success",
+      "note": "bin/check affected: PASS (51.2s warm, ceiling 420s)."
+    },
+    {
+      "name": "sqlite-test",
+      "id": 112926250551,
+      "conclusion": "success"
+    },
+    {
+      "name": "desktop",
+      "id": 112926250667,
+      "conclusion": "success",
+      "tested_merge_sha": "754076a8d25a35e492c9a578c03f6ae6d6969866",
+      "shared_scenarios_step": "success"
+    },
+    {
+      "name": "desktop-macos",
+      "id": 112926250698,
+      "conclusion": "success",
+      "tested_merge_sha": "754076a8d25a35e492c9a578c03f6ae6d6969866",
+      "shared_scenarios_step": "success"
+    },
+    {
+      "name": "renderer-macos",
+      "id": 112926250545,
+      "conclusion": "success"
+    },
+    {
+      "name": "production-smoke",
+      "id": 112926250594,
+      "conclusion": "success"
+    },
+    {
+      "name": "development-smoke",
+      "id": 112926250802,
+      "conclusion": "success"
+    },
+    {
+      "name": "record-ci-attestation",
+      "id": 112932919129,
+      "conclusion": "success"
+    }
+  ],
+  "rails_conformance": {
+    "conclusion": "success",
+    "job": "system-test",
+    "job_id": 112926250509,
+    "command": "node tests/host-conformance/run-node.js rails",
+    "result": "conformance rails: 11 passed, 1 skipped, 0 failed (suite v12 cases)"
+  },
+  "tauri_conformance": {
+    "conclusion": "success",
+    "jobs": [
+      {
+        "name": "desktop",
+        "job_id": 112926250667,
+        "spec": "specs/contract-conformance.spec.js",
+        "result": "host contract conformance (desktop invoke): 1 passing"
+      },
+      {
+        "name": "desktop-macos",
+        "job_id": 112926250698,
+        "spec": "specs/contract-conformance.spec.js",
+        "result": "host contract conformance (desktop invoke): 1 passing"
+      }
+    ]
+  },
+  "artifacts": [
+    {
+      "name": "ci-attestation-pr136-run37660430068-attempt1",
+      "id": 11500539851,
+      "sha256": "b8d8629ceee4218c5bae34e3d52f51cb34cc26cffb2f22ab48c4bdb684d23908",
+      "size_bytes": 316
+    },
+    {
+      "name": "native-performance-linux",
+      "id": 11500712378,
+      "sha256": "6165d6988a1b56e2a36ed3f9b81358a9377cdb91dce210f7eef11a7c1c4413b2",
+      "size_bytes": 4686
+    },
+    {
+      "name": "native-performance-darwin",
+      "id": 11501086808,
+      "sha256": "e1108fe5b1b9abbc8cae183291193ef771156631e5366a75eeafaec3a691b1f3",
+      "size_bytes": 5353
+    }
+  ]
+}

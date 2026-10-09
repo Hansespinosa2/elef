@@ -9,8 +9,9 @@ class DocumentsController < ApplicationController
     @filter = "documents"
     @works = Document.recent_first
     @lineage_presentations = []
+    @card_notes = {}
     @document_graph = DocumentLinks::Graph.new(@works).as_json
-    render "library/index"
+    render "library/shell"
   end
 
   def load_samples

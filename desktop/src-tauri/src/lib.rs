@@ -3,10 +3,10 @@ use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
-use elef_core::{
-    AuthoringRegistries, CoreError, DeckPreview, DeckSummary, DocumentGraphDocument,
-    ImportResolution, ImportResult, Library, LibraryConfig, OpenDeck, SaveResult, SourceSnapshot,
-    UploadedAsset,
+use local_store::{
+    AuthoringRegistries, CoreError, DeckPreview, DeckSummary, DocumentGraphDocument, FileEvent,
+    ImportResolution, ImportResult, Library, LibraryConfig, MergeOutcome, OpenDeck, RestoreOutcome,
+    SaveResult, SnapshotInfo, SourceSnapshot, StoredAsset, UploadedAsset,
 };
 use serde::Serialize;
 use tauri::RunEvent;
@@ -21,15 +21,46 @@ use tauri_plugin_updater::UpdaterExt;
 struct DesktopState {
     library: RwLock<Option<Arc<Library>>>,
     root: RwLock<Option<PathBuf>>,
-    pending_import: std::sync::Mutex<Option<PathBuf>>,
+    pending_import: std::sync::Mutex<Option<PendingImport>>,
     open_files: std::sync::Mutex<VecDeque<PathBuf>>,
     update_installing: std::sync::atomic::AtomicBool,
     app_ready: std::sync::atomic::AtomicBool,
 }
 
+/// An archive waiting for an import-conflict choice. Byte imports stage the
+/// archive in a temp file owned by the app; dialog imports reference the
+/// user's file, which the app must never delete.
+#[derive(Debug)]
+struct PendingImport {
+    path: PathBuf,
+    staged: bool,
+}
+
+fn store_pending_import(state: &DesktopState, path: PathBuf, staged: bool) {
+    *state
+        .pending_import
+        .lock()
+        .expect("pending import lock poisoned") = Some(PendingImport { path, staged });
+}
+
+fn take_pending_import(state: &DesktopState) -> Option<PendingImport> {
+    state
+        .pending_import
+        .lock()
+        .expect("pending import lock poisoned")
+        .take()
+}
+
+fn discard_pending_import(pending: &PendingImport) {
+    if pending.staged {
+        let _ = fs::remove_file(&pending.path);
+    }
+}
+
 impl DesktopState {
     fn use_library(&self, path: PathBuf) -> Result<LibraryStatus, CommandError> {
         let library = Arc::new(Library::open(path)?);
+        library.enable_watching()?;
         let root = library.root().to_path_buf();
         let status = library_status(&library, &root)?;
         *self.library.write().expect("library state lock poisoned") = Some(library);
@@ -117,7 +148,11 @@ impl From<CoreError> for CommandError {
             other => Self {
                 code: other.code(),
                 message: other.to_string(),
-                retryable: matches!(other, CoreError::Io(_)),
+                // A deck path that vanishes mid-session (sync tools, transient
+                // unmounts) must retry on the capped backoff like any IO
+                // failure instead of wedging the saver in a manual-retry
+                // state that quiet-save no longer offers.
+                retryable: matches!(other, CoreError::Io(_) | CoreError::NotFound),
                 details: None,
             },
         }
@@ -150,7 +185,7 @@ async fn confirm_app_ready(
         // Readiness is acknowledged only after successful frontend/editor boot.
         // Failure leaves the previous complete installation available.
         match tauri::async_runtime::spawn_blocking(move || {
-            elef_core::update_install::cleanup_previous_installation(&live)
+            local_store::update_install::cleanup_previous_installation(&live)
         })
         .await
         {
@@ -283,7 +318,7 @@ async fn install_update(
         return Ok(false);
     }
     let stage = tauri::async_runtime::spawn_blocking(move || {
-        elef_core::update_install::UpdateStage::new(&live)
+        local_store::update_install::UpdateStage::new(&live)
     })
     .await
     .map_err(|_| update_install_error())?
@@ -473,6 +508,17 @@ async fn delete_deck(
 }
 
 #[tauri::command]
+async fn confirm_discard_unsaved_changes(app: AppHandle) -> Result<bool, CommandError> {
+    confirm_native_action(
+        &app,
+        "Elef could not save your latest edits. Quit without saving them?".into(),
+        "Quit Without Saving",
+        MessageDialogKind::Warning,
+    )
+    .await
+}
+
+#[tauri::command]
 fn read_library_config(state: State<'_, DesktopState>) -> Result<LibraryConfig, CommandError> {
     Ok(state.current_library()?.read_config()?)
 }
@@ -599,7 +645,7 @@ async fn import_elef(
         .into_path()
         .map_err(|_| CommandError::new("invalid_input", "Choose a local file.", false))?;
     let library = state.current_library()?;
-    import_archive(&state, &library, archive_path)
+    import_archive(&state, &library, archive_path, false)
 }
 
 #[tauri::command]
@@ -636,7 +682,7 @@ fn import_opened_elef(
             .push_front(archive_path);
         return Ok(None);
     }
-    import_archive(&state, &library, archive_path)
+    import_archive(&state, &library, archive_path, false)
 }
 
 #[tauri::command]
@@ -652,18 +698,26 @@ fn import_archive(
     state: &DesktopState,
     library: &Library,
     archive_path: PathBuf,
+    staged: bool,
 ) -> Result<Option<ImportResult>, CommandError> {
     match library.import_elef(&archive_path, None) {
         Ok(result) => Ok(Some(result)),
         Err(error @ CoreError::ImportConflict { .. }) => {
-            *state
-                .pending_import
-                .lock()
-                .expect("pending import lock poisoned") = Some(archive_path);
+            store_pending_import(state, archive_path, staged);
             Err(error.into())
         }
         Err(error) => Err(error.into()),
     }
+}
+
+fn complete_pending_import(
+    library: &Library,
+    pending: &PendingImport,
+    choice: ImportResolution,
+) -> Result<Option<ImportResult>, CommandError> {
+    let result = library.import_elef(&pending.path, Some(choice))?;
+    discard_pending_import(pending);
+    Ok(Some(result))
 }
 
 #[tauri::command]
@@ -673,11 +727,9 @@ async fn resolve_import_conflict(
     resolution: String,
 ) -> Result<Option<ImportResult>, CommandError> {
     if resolution == "cancel" {
-        state
-            .pending_import
-            .lock()
-            .expect("pending import lock poisoned")
-            .take();
+        if let Some(pending) = take_pending_import(&state) {
+            discard_pending_import(&pending);
+        }
         return Ok(None);
     }
     let choice = match resolution.as_str() {
@@ -691,21 +743,16 @@ async fn resolve_import_conflict(
             ));
         }
     };
-    let archive_path = state
-        .pending_import
-        .lock()
-        .expect("pending import lock poisoned")
-        .take()
-        .ok_or_else(|| {
-            CommandError::new(
-                "not_found",
-                "There is no import waiting for a choice.",
-                false,
-            )
-        })?;
+    let pending = take_pending_import(&state).ok_or_else(|| {
+        CommandError::new(
+            "not_found",
+            "There is no import waiting for a choice.",
+            false,
+        )
+    })?;
     let library = state.current_library()?;
     if choice == ImportResolution::Replace {
-        let preview = match library.import_elef(&archive_path, None) {
+        let preview = match library.import_elef(&pending.path, None) {
             Err(CoreError::ImportConflict { existing_name, .. }) => existing_name,
             Ok(_) => {
                 return Err(CommandError::new(
@@ -724,10 +771,11 @@ async fn resolve_import_conflict(
         )
         .await?;
         if !confirmed {
+            discard_pending_import(&pending);
             return Ok(None);
         }
     }
-    Ok(Some(library.import_elef(&archive_path, Some(choice))?))
+    complete_pending_import(&library, &pending, choice)
 }
 
 fn write_elef_archive(
@@ -779,6 +827,53 @@ fn save_source(
     Ok(state
         .current_library()?
         .save_source(&id, &source, &base_hash)?)
+}
+
+#[tauri::command]
+fn poll_file_events(state: State<'_, DesktopState>) -> Result<Vec<FileEvent>, CommandError> {
+    Ok(state.current_library()?.poll_file_events())
+}
+
+#[tauri::command]
+fn take_snapshot(
+    state: State<'_, DesktopState>,
+    id: String,
+    reason: String,
+    source: Option<String>,
+) -> Result<SnapshotInfo, CommandError> {
+    Ok(state
+        .current_library()?
+        .take_snapshot(&id, &reason, source.as_deref())?)
+}
+
+#[tauri::command]
+fn list_snapshots(
+    state: State<'_, DesktopState>,
+    id: String,
+) -> Result<Vec<SnapshotInfo>, CommandError> {
+    Ok(state.current_library()?.list_snapshots(&id)?)
+}
+
+#[tauri::command]
+fn restore_snapshot(
+    state: State<'_, DesktopState>,
+    id: String,
+    snapshot_id: String,
+) -> Result<RestoreOutcome, CommandError> {
+    Ok(state
+        .current_library()?
+        .restore_snapshot(&id, &snapshot_id)?)
+}
+
+#[tauri::command]
+fn merge_external_change(
+    state: State<'_, DesktopState>,
+    id: String,
+    local_source: String,
+) -> Result<MergeOutcome, CommandError> {
+    Ok(state
+        .current_library()?
+        .merge_external_change(&id, &local_source)?)
 }
 
 fn asset_protocol_response(
@@ -938,6 +1033,69 @@ fn upload_asset(
     Ok(state
         .current_library()?
         .upload_asset(id, filename, media_type, bytes, fit)?)
+}
+
+#[tauri::command]
+fn list_media(
+    state: State<'_, DesktopState>,
+    id: String,
+) -> Result<Vec<StoredAsset>, CommandError> {
+    Ok(state.current_library()?.list_assets(&id)?)
+}
+
+#[tauri::command]
+fn remove_media(
+    state: State<'_, DesktopState>,
+    id: String,
+    digest: String,
+) -> Result<bool, CommandError> {
+    Ok(state.current_library()?.remove_asset(&id, &digest)?)
+}
+
+#[tauri::command]
+fn import_elef_bytes(
+    state: State<'_, DesktopState>,
+    bytes: Vec<u8>,
+) -> Result<Option<ImportResult>, CommandError> {
+    import_elef_bytes_impl(&state, &bytes)
+}
+
+fn import_elef_bytes_impl(
+    state: &DesktopState,
+    bytes: &[u8],
+) -> Result<Option<ImportResult>, CommandError> {
+    if bytes.is_empty() {
+        return Err(CommandError::new(
+            "invalid_input",
+            "Choose an .elef archive to import.",
+            false,
+        ));
+    }
+    let staged = tempfile::Builder::new()
+        .prefix("elef-import-")
+        .suffix(".elef")
+        .tempfile()
+        .map_err(|_| CommandError::new("io_error", "The archive could not be staged.", true))?;
+    std::io::Write::write_all(&mut &staged, bytes)
+        .map_err(|_| CommandError::new("io_error", "The archive could not be staged.", true))?;
+    let path = staged
+        .into_temp_path()
+        .keep()
+        .map_err(|_| CommandError::new("io_error", "The archive could not be staged.", true))?;
+    let library = state.current_library()?;
+    let result = import_archive(state, &library, path.clone(), true);
+    // A conflict stores the staged archive as the pending import, so the
+    // file must survive until the conflict is resolved or cancelled.
+    let pending_mine = state
+        .pending_import
+        .lock()
+        .expect("pending import lock poisoned")
+        .as_ref()
+        .is_some_and(|pending| pending.path == path);
+    if !pending_mine {
+        let _ = fs::remove_file(&path);
+    }
+    result
 }
 
 fn persisted_root_path(app: &AppHandle) -> Result<PathBuf, tauri::Error> {
@@ -1230,7 +1388,15 @@ pub fn run() {
             rename_deck,
             delete_deck,
             save_source,
+            poll_file_events,
+            take_snapshot,
+            list_snapshots,
+            restore_snapshot,
+            merge_external_change,
             upload_asset,
+            list_media,
+            remove_media,
+            import_elef_bytes,
             export_elef,
             import_elef,
             import_opened_elef,
@@ -1238,6 +1404,7 @@ pub fn run() {
             resolve_import_conflict,
             install_update,
             confirm_app_ready,
+            confirm_discard_unsaved_changes,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Elef Desktop");
@@ -1368,6 +1535,53 @@ mod tests {
                 ))
             })
         );
+    }
+
+    #[test]
+    fn staged_bytes_import_survives_conflict_until_keep_both_resolution() {
+        use std::io::Cursor;
+        let temp = tempfile::TempDir::new().unwrap();
+        let root = temp.path().join("library");
+        fs::create_dir(&root).unwrap();
+        let state = DesktopState::default();
+        state.use_library(root).unwrap();
+        let library = state.current_library().unwrap();
+        let deck = library.create_deck("Transfer", "document").unwrap();
+        let mut archive = Cursor::new(Vec::new());
+        library.export_elef(&deck.id, &mut archive).unwrap();
+        let bytes = archive.into_inner();
+        assert!(!bytes.is_empty());
+
+        // The deck is still present, so the byte import conflicts and the
+        // staged archive becomes the pending import.
+        let error = import_elef_bytes_impl(&state, &bytes).unwrap_err();
+        assert_eq!(error.code, "import_conflict");
+        let staged = take_pending_import(&state).expect("conflict stays pending");
+        assert!(staged.staged);
+        assert!(staged.path.exists());
+
+        // Resolving through the real completion path re-imports the staged
+        // archive instead of failing on the deleted file, then cleans up.
+        // Byte imports carry no deck-name metadata, so keep_both mints a
+        // fresh identity under the staged file's stem, not a name collision.
+        let resolved = complete_pending_import(&library, &staged, ImportResolution::KeepBoth)
+            .unwrap()
+            .unwrap();
+        assert_ne!(resolved.deck.id, deck.id);
+        let reread = library.open_deck(&resolved.deck.id).unwrap();
+        assert!(reread.source.contains("# Transfer"));
+        assert!(!staged.path.exists());
+        assert!(take_pending_import(&state).is_none());
+    }
+
+    #[test]
+    fn transient_storage_errors_are_retryable_and_input_errors_are_not() {
+        let retryable = CommandError::from(CoreError::NotFound);
+        assert_eq!(retryable.code, "not_found");
+        assert!(retryable.retryable);
+        let fatal = CommandError::from(CoreError::InvalidInput);
+        assert_eq!(fatal.code, "invalid_input");
+        assert!(!fatal.retryable);
     }
 
     #[test]

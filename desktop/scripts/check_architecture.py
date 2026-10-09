@@ -71,9 +71,15 @@ for source_file in desktop_frontend_source.rglob("*.js"):
     source = source_file.read_text()
     assert not any(re.search(pattern, source) for pattern in desktop_dom_ui_patterns), f"desktop frontend must not implement UI/UX DOM logic: {source_file.relative_to(REPO_ROOT)}"
 shared_library_sources = [
-    (REPO_ROOT / "app" / "javascript" / "lib" / name).read_text()
-    for name in ("library_view.js", "library_card.js", "document_graph_view.js")
+    (REPO_ROOT / "packages" / "client" / "src" / "features" / "library" / name).read_text()
+    for name in ("LibraryApp.tsx", "LibraryCard.tsx")
 ]
+shared_library_sources.append(
+    (REPO_ROOT / "packages" / "client" / "src" / "features" / "graph" / "graphView.ts").read_text()
+)
+shared_library_sources.append(
+    (REPO_ROOT / "packages" / "client" / "src" / "features" / "graph" / "graphController.ts").read_text()
+)
 assert 'import "../../../app/assets/stylesheets/application.css"' in desktop_main, "desktop must bundle Rails rendering and authoring styles"
 assert 'lib/performance_measurement' in desktop_application, "desktop performance UI must reuse the Rails-owned browser measurement helper"
 assert (REPO_ROOT / "desktop" / "frontend" / "src" / "performance-measurement.js").exists() is False, "desktop must not own a second performance measurement helper"
@@ -81,6 +87,12 @@ assert not re.search(r"^\.(?:slide-frame|slide-content|presentation-surface|docu
 shared_library_classes = set()
 for source in shared_library_sources:
     for class_list in re.findall(r"\bclass(?:Name)?\s*=\s*['\"]([^'\"]*)['\"]", source):
+        shared_library_classes.update(class_list.split())
+    # The client graph view builds DOM through element()/svgElement() helpers
+    # rather than JSX: element(document, "tag", "classes") and class: "...".
+    for class_list in re.findall(r"\belement\(\s*document\s*,\s*\"[^\"]*\"\s*,\s*\"([^\"]*)\"", source):
+        shared_library_classes.update(class_list.split())
+    for class_list in re.findall(r"(?m)^\s*class:\s*\"([^\"]+)\"", source):
         shared_library_classes.update(class_list.split())
     for arguments in re.findall(r"classList\.(?:add|remove|toggle)\(([^)]*)\)", source):
         for class_list in re.findall(r"['\"]([^'\"]+)['\"]", arguments):
@@ -107,21 +119,58 @@ for shared_selector in (
     ".library-tabs",
     ".library-tab",
     ".library-no-results",
+    ".app-dialog",
 ):
     assert shared_selector in shared_application_styles, f"shared library styles must be owned by application.css: {shared_selector}"
-web_card = (REPO_ROOT / "app" / "views" / "library" / "_work_card.html.erb").read_text()
-desktop_card = (REPO_ROOT / "app" / "javascript" / "lib" / "library_card.js").read_text()
-graph_view = (REPO_ROOT / "app" / "javascript" / "lib" / "document_graph_view.js").read_text()
-graph_controller = (REPO_ROOT / "app" / "javascript" / "controllers" / "document_graph_controller.js").read_text()
+shared_settings_sources = [
+    (REPO_ROOT / "packages" / "client" / "src" / "features" / "settings" / name).read_text()
+    for name in ("SettingsApp.tsx", "AuthoringDialog.tsx")
+]
+shared_settings_classes = set()
+for source in shared_settings_sources:
+    for class_list in re.findall(r"""\bclass(?:Name)?\s*=\s*['"]([^'"]*)['"]""", source):
+        shared_settings_classes.update(class_list.split())
+duplicate_settings_styles = shared_settings_classes & host_styled_classes
+# dialog-copy is generic across unrelated native dialogs and shared views,
+# like is-active above; the component classes themselves must stay off the
+# native host stylesheet.
+duplicate_settings_styles.discard("dialog-copy")
+assert not duplicate_settings_styles, f"shared settings UI classes must not be styled by the host stylesheet: {sorted(duplicate_settings_styles)}"
+for shared_selector in (
+    ".settings-card",
+    ".settings-control",
+    ".authoring-entry-card",
+    ".authoring-entry-actions",
+    ".authoring-entry-form",
+    ".snippet-card",
+    ".snippet-example-preview",
+    ".snippet-template",
+    ".math-shortcut-card",
+    ".math-shortcut-alias",
+    ".authoring-settings-status",
+    ".authoring-settings-list",
+):
+    assert shared_selector in shared_application_styles, f"shared settings styles must be owned by application.css: {shared_selector}"
+web_shell = (REPO_ROOT / "app" / "views" / "library" / "shell.html.erb").read_text()
+web_controller = (REPO_ROOT / "app" / "javascript" / "controllers" / "client_shell_controller.js").read_text()
+client_index = (REPO_ROOT / "packages" / "client" / "src" / "index.ts").read_text()
+graph_view = (REPO_ROOT / "packages" / "client" / "src" / "features" / "graph" / "graphView.ts").read_text()
+graph_controller = (REPO_ROOT / "packages" / "client" / "src" / "features" / "graph" / "graphController.ts").read_text()
 graph_partial = (REPO_ROOT / "app" / "views" / "presentations" / "_document_graph.html.erb").read_text()
-assert "Source::JavascriptRenderer.library_card" in web_card, "Rails library cards must use the shared HTML producer"
-assert "Source::JavascriptRenderer.library_card_controls" in web_card, "Rails library actions must use the shared controls producer"
-assert not re.search(r"<(?:a|button|details|form|input)\b", web_card), "Rails library cards must not duplicate shared action markup"
-assert "ElefRenderer.renderLibraryCard" in javascript_renderer and "renderLibraryCard" in renderer_global
-assert "ElefRenderer.renderLibraryCardControls" in javascript_renderer and "renderLibraryCardControls" in renderer_global
-assert "export function createLibraryCard" in desktop_card and "renderLibraryCardControls" in desktop_card, "desktop cards must use app-owned card and action markup"
-assert "renderDocumentGraphView" in graph_controller and "renderDocumentGraphView" in graph_view, "both hosts must use the shared document graph view"
+assert "export { mountElef }" in client_index, "the shared client must expose a single mount entry point"
+assert '"@elef/client"' in web_controller and "mountElef" in web_controller, "Rails must mount library UI through the shared client entry"
+assert '"@elef/client"' in desktop_application and "mountElef" in desktop_application, "desktop must mount the same shared client entry"
+assert 'data-controller="client-shell"' in web_shell, "Rails library routes must mount the client shell"
+assert "<article" not in web_shell, "Rails library shell must not duplicate client card markup"
+assert "<article" not in desktop_application and 'createElement("article")' not in desktop_application, "desktop must not keep a second library card template"
+assert "renderLibraryCard" not in desktop_application and "renderLibraryCard" not in web_controller, "both hosts must use the client mount, not the retired card renderer"
+for retired in ("app/javascript/lib/library_view.js", "app/javascript/lib/library_card.js", "app/views/library/_work_card.html.erb"):
+    assert not (REPO_ROOT / retired).exists(), f"retired library implementation must stay deleted: {retired}"
+assert "renderGraphView" in graph_view and "GraphController" in graph_controller, "the shared client must own graph rendering and interaction"
+assert "renderGraphView" in desktop_application and "GraphController" in desktop_application, "desktop must render the graph through the shared client module"
+assert "renderGraphView" in web_controller and "GraphController" in web_controller, "Rails must render the graph through the shared client module"
 assert "document-graph-node" not in graph_partial, "Rails must not keep a second document graph node template"
+assert 'data-controller="document-graph"' not in graph_partial, "Rails must not keep the retired Stimulus graph mount"
 assert "createElementNS" not in desktop_application and "document-graph-node" not in desktop_application, "desktop must not keep a second document graph node template"
 
 declared = command_names(build_source, r"let app_commands = &\[(.*?)\];")

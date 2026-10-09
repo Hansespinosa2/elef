@@ -16,7 +16,7 @@ const webServer = process.env.ELEF_E2E_START_WEB_SERVER === "1"
 
 export default {
   testDir: "./specs",
-  testMatch: "web.spec.js",
+  testMatch: ["web.spec.js", "renderer-corpus.spec.js"],
   fullyParallel: false,
   workers: 1,
   timeout: 60_000,

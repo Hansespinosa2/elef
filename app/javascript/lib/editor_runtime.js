@@ -20,7 +20,6 @@ if (__ELEF_E2E__) {
 }
 
 let editorRuntime
-let libraryRuntime
 
 export function loadEditorRuntime() {
   if (!editorRuntime) {
@@ -40,12 +39,11 @@ export function loadEditorRuntime() {
       import("controllers/slide_overview_controller"),
       import("controllers/document_pages_controller"),
       import("controllers/mermaid_diagrams_controller"),
-      import("controllers/snippet_palette_controller"),
-      import("controllers/vim_settings_controller")
+      import("controllers/snippet_palette_controller")
     ])
       .then(([editor, appearance, documentLinks, mathPalette, mathShorthand, mermaidAssist, media, preview,
         presentationCanvas, presentation, visualEditor, presentationEditor, slideOverview, documentPages,
-        mermaidDiagrams, snippetPalette, vimSettings]) => {
+        mermaidDiagrams, snippetPalette]) => {
         register("editor", editor.default)
         register("appearance", appearance.default)
         register("document-link-palette", documentLinks.default)
@@ -62,7 +60,6 @@ export function loadEditorRuntime() {
         register("document-pages", documentPages.default)
         register("mermaid-diagrams", mermaidDiagrams.default)
         register("snippet-palette", snippetPalette.default)
-        register("vim-settings", vimSettings.default)
       })
       .catch(error => {
         editorRuntime = null
@@ -70,18 +67,6 @@ export function loadEditorRuntime() {
       })
   }
   return editorRuntime
-}
-
-export function loadLibraryRuntime() {
-  if (!libraryRuntime) {
-    libraryRuntime = import("controllers/document_graph_controller")
-      .then(({ default: controller }) => register("document-graph", controller))
-      .catch(error => {
-        libraryRuntime = null
-        throw error
-      })
-  }
-  return libraryRuntime
 }
 
 function register(identifier, controller) {

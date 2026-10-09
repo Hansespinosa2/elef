@@ -5,10 +5,10 @@ class MathShortcutsControllerTest < ActionDispatch::IntegrationTest
     get math_shortcuts_path
 
     assert_response :success
-    assert_select '[data-controller="authoring-settings"]'
-    assert_select '[data-authoring-settings-registry-value="math_shortcuts"]'
-    assert_select "#authoring-settings-dialog"
-    assert_select ".math-shortcut-card", count: 0
+    assert_select '[data-controller="client-shell"]'
+    assert_select '[data-client-shell-initial-url-value="/math_shortcuts"]'
+    assert_select '[data-client-shell-snippets-url-value="/snippets.json"]'
+    assert_select '[data-client-shell-math-shortcuts-url-value="/math_shortcuts.json"]'
 
     get math_shortcuts_path(format: :json), as: :json
     assert_response :success

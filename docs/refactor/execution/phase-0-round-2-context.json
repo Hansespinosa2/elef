@@ -1,0 +1,29 @@
+{
+  "attempts": [
+    {
+      "base": "88f61a7a8ffd7c276bafcf06eee09c36a8adf134",
+      "conversation_inherited": false,
+      "head": "4f71a97885256063dcd5f4651375cfec29c9b885",
+      "identity": "/root/phase_0_review_round_2",
+      "launch": "collaboration.spawn_agent task_name=phase_0_review_round_2 fork_turns=none; task=Read /root/elef/tmp/reviews/phase-0-round-2/REVIEWER-PROMPT.md and follow it exactly.",
+      "mechanism": "fresh collaboration subagent session",
+      "phase": 0,
+      "round": 2,
+      "session": "/root/phase_0_review_round_2",
+      "state": "interrupted",
+      "terminal_evidence": "Prior-session launch receipt unrecoverable in this session: path /root/phase_0_review_round_2 absent, no live reviewer process or work item, no report at tmp/reviews/phase-0-round-2/report.md. Superseded by fresh native subagent launch; original receipt preserved here."
+    }
+  ],
+  "base": "88f61a7a8ffd7c276bafcf06eee09c36a8adf134",
+  "conversation_inherited": false,
+  "head": "4f71a97885256063dcd5f4651375cfec29c9b885",
+  "launch": "muse.subagent_spawn task_name=phase_0_review_round_2; objective=Read /root/elef/tmp/reviews/phase-0-round-2/REVIEWER-PROMPT.md and follow it exactly.",
+  "identity": "fresh-context subagent session 01a11647-44b9-7dd3-9789-e10ccd55f800 (no implementer history; read-only)",
+  "mechanism": "native fresh subagent session",
+  "phase": 0,
+  "round": 2,
+  "session": "01a11647-444d-7de1-82c1-59821b8bf49f (spawn handle; reviewer session 01a11647-44b9-7dd3-9789-e10ccd55f800; agent_path main/phase_0_review_round_2/2)",
+  "state": "completed",
+  "terminal_evidence": "muse.subagent_wait returned ready for subagent 01a11647-444d-7de1-82c1-59821b8bf49f with summary Result: PASS, report at tmp/reviews/phase-0-round-2/report.md; report Review-context line names reviewer session 01a11647-44b9-7dd3-9789-e10ccd55f800, linked via session log subagent/01a11647-44b9-7dd3-9789-e10ccd55f800/session.jsonl",
+  "report_sha256": "ee136fe004418d7046e8039387c523e863241aa66efeaea9754b717a8ca99d71"
+}

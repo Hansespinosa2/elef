@@ -4478,5 +4478,1379 @@
         "typography": "book"
       }
     }
+  },
+  {
+    "name": "document-front-matter-and-margins",
+    "blockHtml": "<hr>\n<h2>theme: dark\ntypography: modern\nshow-in-margin:\nfootnote: false</h2>\n<h1>Notes</h1>\n<p>First paragraph.</p>\n<p>Second paragraph.</p>\n",
+    "preview": {
+      "html": "<div class=\"document-reader document-theme-dark document-typography-modern work-theme-dark work-typography-modern document-editor-projection\" data-controller=\"document-pages mermaid-diagrams\"><div class=\"document-surface\" data-document-pages-target=\"surface\"><div class=\"document-editor-block-shell\"><div class=\"document-editor-block\" data-editor-region-id=\"slide-1-region-1\" data-editor-block-id=\"slide-1-block-1\" contenteditable=\"true\" role=\"textbox\" aria-label=\"Editable Markdown block\" aria-multiline=\"true\" spellcheck=\"true\" data-action=\"input-&gt;visual-editor#projectionInput focus-&gt;visual-editor#blockFocus blur-&gt;visual-editor#blockBlur\"><h1>Notes</h1>\n</div><label class=\"document-block-position-control\" data-action=\"pointerdown-&gt;visual-editor#positionControlOpened\">Align <select aria-label=\"Block alignment\" data-visual-editor-block-id=\"slide-1-block-1\" data-action=\"focus-&gt;visual-editor#positionControlOpened keydown-&gt;visual-editor#positionControlKeydown change-&gt;visual-editor#alignmentChanged\"><option value=\"left\" selected>Left</option><option value=\"center\">Center</option><option value=\"right\">Right</option></select></label></div><div class=\"document-editor-block-shell\"><div class=\"document-editor-block\" data-editor-region-id=\"slide-1-region-2\" data-editor-block-id=\"slide-1-block-2\" contenteditable=\"true\" role=\"textbox\" aria-label=\"Editable Markdown block\" aria-multiline=\"true\" spellcheck=\"true\" data-action=\"input-&gt;visual-editor#projectionInput focus-&gt;visual-editor#blockFocus blur-&gt;visual-editor#blockBlur\"><p>First paragraph.</p>\n</div><label class=\"document-block-position-control\" data-action=\"pointerdown-&gt;visual-editor#positionControlOpened\">Align <select aria-label=\"Block alignment\" data-visual-editor-block-id=\"slide-1-block-2\" data-action=\"focus-&gt;visual-editor#positionControlOpened keydown-&gt;visual-editor#positionControlKeydown change-&gt;visual-editor#alignmentChanged\"><option value=\"left\" selected>Left</option><option value=\"center\">Center</option><option value=\"right\">Right</option></select></label></div><div class=\"document-editor-block-shell\"><div class=\"document-editor-block\" data-editor-region-id=\"slide-1-region-3\" data-editor-block-id=\"slide-1-block-3\" contenteditable=\"true\" role=\"textbox\" aria-label=\"Editable Markdown block\" aria-multiline=\"true\" spellcheck=\"true\" data-action=\"input-&gt;visual-editor#projectionInput focus-&gt;visual-editor#blockFocus blur-&gt;visual-editor#blockBlur\"><p>Second paragraph.</p>\n</div><label class=\"document-block-position-control\" data-action=\"pointerdown-&gt;visual-editor#positionControlOpened\">Align <select aria-label=\"Block alignment\" data-visual-editor-block-id=\"slide-1-block-3\" data-action=\"focus-&gt;visual-editor#positionControlOpened keydown-&gt;visual-editor#positionControlKeydown change-&gt;visual-editor#alignmentChanged\"><option value=\"left\" selected>Left</option><option value=\"center\">Center</option><option value=\"right\">Right</option></select></label></div></div></div>",
+      "warnings": [],
+      "editor_map": {
+        "version": 1,
+        "source_name": "Notes",
+        "mode": "document",
+        "source_length": 118,
+        "front_matter": {
+          "range": {
+            "start": 0,
+            "end": 73
+          },
+          "body_start": 73
+        },
+        "slides": [
+          {
+            "id": "slide-1",
+            "index": 0,
+            "layout": "body",
+            "range": {
+              "start": 73,
+              "end": 118
+            },
+            "source_range": {
+              "start": 73,
+              "end": 118
+            },
+            "delimiter_range": null,
+            "blocks": [
+              {
+                "id": "slide-1-block-1",
+                "index": 0,
+                "kind": "heading",
+                "markdown": "# Notes",
+                "position": null,
+                "position_directive_id": null,
+                "position_scope": null,
+                "range": {
+                  "start": 73,
+                  "end": 81
+                },
+                "source_range": {
+                  "start": 73,
+                  "end": 81
+                },
+                "content_range": {
+                  "start": 73,
+                  "end": 80
+                },
+                "editable_region_id": "slide-1-region-1"
+              },
+              {
+                "id": "slide-1-block-2",
+                "index": 1,
+                "kind": "paragraph",
+                "markdown": "First paragraph.",
+                "position": null,
+                "position_directive_id": null,
+                "position_scope": null,
+                "range": {
+                  "start": 82,
+                  "end": 99
+                },
+                "source_range": {
+                  "start": 82,
+                  "end": 99
+                },
+                "content_range": {
+                  "start": 82,
+                  "end": 98
+                },
+                "editable_region_id": "slide-1-region-2"
+              },
+              {
+                "id": "slide-1-block-3",
+                "index": 2,
+                "kind": "paragraph",
+                "markdown": "Second paragraph.",
+                "position": null,
+                "position_directive_id": null,
+                "position_scope": null,
+                "range": {
+                  "start": 100,
+                  "end": 118
+                },
+                "source_range": {
+                  "start": 100,
+                  "end": 118
+                },
+                "content_range": {
+                  "start": 100,
+                  "end": 117
+                },
+                "editable_region_id": "slide-1-region-3"
+              }
+            ],
+            "directives": [],
+            "editable_regions": [
+              {
+                "id": "slide-1-region-1",
+                "block_id": "slide-1-block-1",
+                "role": "title",
+                "kind": "heading",
+                "text": "Notes",
+                "range": {
+                  "start": 73,
+                  "end": 80
+                },
+                "source_range": {
+                  "start": 73,
+                  "end": 80
+                },
+                "content_range": {
+                  "start": 75,
+                  "end": 80
+                },
+                "editable": true
+              },
+              {
+                "id": "slide-1-region-2",
+                "block_id": "slide-1-block-2",
+                "role": "block",
+                "kind": "paragraph",
+                "text": "First paragraph.",
+                "range": {
+                  "start": 82,
+                  "end": 98
+                },
+                "source_range": {
+                  "start": 82,
+                  "end": 98
+                },
+                "content_range": {
+                  "start": 82,
+                  "end": 98
+                },
+                "editable": true
+              },
+              {
+                "id": "slide-1-region-3",
+                "block_id": "slide-1-block-3",
+                "role": "block",
+                "kind": "paragraph",
+                "text": "Second paragraph.",
+                "range": {
+                  "start": 100,
+                  "end": 117
+                },
+                "source_range": {
+                  "start": 100,
+                  "end": 117
+                },
+                "content_range": {
+                  "start": 100,
+                  "end": 117
+                },
+                "editable": true
+              }
+            ]
+          }
+        ],
+        "directives": [],
+        "editable_regions": [
+          {
+            "id": "slide-1-region-1",
+            "block_id": "slide-1-block-1",
+            "role": "title",
+            "kind": "heading",
+            "text": "Notes",
+            "range": {
+              "start": 73,
+              "end": 80
+            },
+            "source_range": {
+              "start": 73,
+              "end": 80
+            },
+            "content_range": {
+              "start": 75,
+              "end": 80
+            },
+            "editable": true
+          },
+          {
+            "id": "slide-1-region-2",
+            "block_id": "slide-1-block-2",
+            "role": "block",
+            "kind": "paragraph",
+            "text": "First paragraph.",
+            "range": {
+              "start": 82,
+              "end": 98
+            },
+            "source_range": {
+              "start": 82,
+              "end": 98
+            },
+            "content_range": {
+              "start": 82,
+              "end": 98
+            },
+            "editable": true
+          },
+          {
+            "id": "slide-1-region-3",
+            "block_id": "slide-1-block-3",
+            "role": "block",
+            "kind": "paragraph",
+            "text": "Second paragraph.",
+            "range": {
+              "start": 100,
+              "end": 117
+            },
+            "source_range": {
+              "start": 100,
+              "end": 117
+            },
+            "content_range": {
+              "start": 100,
+              "end": 117
+            },
+            "editable": true
+          }
+        ]
+      },
+      "style": {
+        "theme": "dark",
+        "typography": "modern"
+      }
+    }
+  },
+  {
+    "name": "front-matter-variants",
+    "blockHtml": "<hr>\n<h2>theme: &quot;dark&quot; # shade\ntypography: 'modern'\ntitle: Q3 &amp; Q4</h2>\n<h1>Styled</h1>\n<p>Body text</p>\n",
+    "preview": {
+      "html": "<div class=\"presentation-surface work-surface slides slides-theme-dark slides-typography-modern work-theme-dark work-typography-modern presentation-editor-projection\" data-controller=\"mermaid-diagrams\" data-presentation-editor-target=\"canvas\"><div class=\"slide-frame\" data-controller=\"presentation-canvas\"><section class=\"slide slide-statement\" data-presentation-canvas-target=\"canvas\" aria-label=\"Slide 1\" data-editor-slide-id=\"slide-1\" data-slide-index=\"0\"><div class=\"presentation-editor-slide-toolbar\" aria-label=\"Slide 1 controls\"><span class=\"presentation-editor-slide-label\">Slide 1</span><button type=\"button\" data-presentation-editor-action=\"add-slide-after\" data-slide-index=\"0\">Add slide</button><button type=\"button\" class=\"presentation-editor-add-image\" data-action=\"click-&gt;media#chooseForSlide\" data-slide-index=\"0\">Add image</button><button type=\"button\" data-presentation-editor-action=\"delete-slide\" data-slide-index=\"0\" disabled>Delete</button><button type=\"button\" data-presentation-editor-action=\"move-slide-up\" data-slide-index=\"0\" disabled>Move up</button><button type=\"button\" data-presentation-editor-action=\"move-slide-down\" data-slide-index=\"0\" disabled>Move down</button></div><div class=\"slide-margin slide-margin-top\" aria-hidden=\"true\"><span class=\"slide-margin-subsection\"></span><span class=\"slide-margin-section\"></span></div><div class=\"slide-content\"><div class=\"slide-block\" data-editor-block-id=\"slide-1-block-1\" data-editor-region-id=\"slide-1-region-1\" data-editor-source-editable=\"true\" contenteditable=\"true\" role=\"textbox\" aria-label=\"Editable slide block\" aria-multiline=\"true\" spellcheck=\"true\" data-action=\"input-&gt;presentation-editor#blockInput focus-&gt;presentation-editor#blockFocus blur-&gt;presentation-editor#blockBlur\"><h1>Styled</h1>\n</div><div class=\"presentation-editor-block-controls\" aria-label=\"Block controls\"><button type=\"button\" data-presentation-editor-action=\"add-block-after\" data-slide-index=\"0\" data-block-index=\"0\">Add block</button><button type=\"button\" data-presentation-editor-action=\"delete-block\" data-slide-index=\"0\" data-block-index=\"0\">Delete</button><button type=\"button\" aria-label=\"Move block up\" data-presentation-editor-action=\"move-block-up\" data-slide-index=\"0\" data-block-index=\"0\" disabled>↑</button><button type=\"button\" aria-label=\"Move block down\" data-presentation-editor-action=\"move-block-down\" data-slide-index=\"0\" data-block-index=\"0\">↓</button><label>Align <select aria-label=\"Block alignment\" data-presentation-editor-align data-slide-index=\"0\" data-block-index=\"0\" data-action=\"change-&gt;presentation-editor#alignmentChanged\"><option value=\"left\" selected>Left</option><option value=\"center\">Center</option><option value=\"right\">Right</option><option value=\"center left\">Center Left</option><option value=\"center center\">Center Center</option><option value=\"center right\">Center Right</option><option value=\"bottom left\">Bottom Left</option><option value=\"bottom center\">Bottom Center</option><option value=\"bottom right\">Bottom Right</option></select></label></div><div class=\"slide-block\" data-editor-block-id=\"slide-1-block-2\" data-editor-region-id=\"slide-1-region-2\" data-editor-source-editable=\"true\" contenteditable=\"true\" role=\"textbox\" aria-label=\"Editable slide block\" aria-multiline=\"true\" spellcheck=\"true\" data-action=\"input-&gt;presentation-editor#blockInput focus-&gt;presentation-editor#blockFocus blur-&gt;presentation-editor#blockBlur\"><p>Body text</p>\n</div><div class=\"presentation-editor-block-controls\" aria-label=\"Block controls\"><button type=\"button\" data-presentation-editor-action=\"add-block-after\" data-slide-index=\"0\" data-block-index=\"1\">Add block</button><button type=\"button\" data-presentation-editor-action=\"delete-block\" data-slide-index=\"0\" data-block-index=\"1\">Delete</button><button type=\"button\" aria-label=\"Move block up\" data-presentation-editor-action=\"move-block-up\" data-slide-index=\"0\" data-block-index=\"1\">↑</button><button type=\"button\" aria-label=\"Move block down\" data-presentation-editor-action=\"move-block-down\" data-slide-index=\"0\" data-block-index=\"1\" disabled>↓</button><label>Align <select aria-label=\"Block alignment\" data-presentation-editor-align data-slide-index=\"0\" data-block-index=\"1\" data-action=\"change-&gt;presentation-editor#alignmentChanged\"><option value=\"left\" selected>Left</option><option value=\"center\">Center</option><option value=\"right\">Right</option><option value=\"center left\">Center Left</option><option value=\"center center\">Center Center</option><option value=\"center right\">Center Right</option><option value=\"bottom left\">Bottom Left</option><option value=\"bottom center\">Bottom Center</option><option value=\"bottom right\">Bottom Right</option></select></label></div></div><div class=\"slide-margin slide-margin-bottom\" aria-hidden=\"true\"><span class=\"slide-margin-count\">1 / 1</span></div></section></div></div>",
+      "warnings": [],
+      "editor_map": {
+        "version": 1,
+        "source_name": "Styled",
+        "mode": "presentation",
+        "source_length": 94,
+        "front_matter": {
+          "range": {
+            "start": 0,
+            "end": 71
+          },
+          "body_start": 71
+        },
+        "slides": [
+          {
+            "id": "slide-1",
+            "index": 0,
+            "layout": "statement",
+            "range": {
+              "start": 71,
+              "end": 94
+            },
+            "source_range": {
+              "start": 71,
+              "end": 94
+            },
+            "delimiter_range": null,
+            "blocks": [
+              {
+                "id": "slide-1-block-1",
+                "index": 0,
+                "kind": "heading",
+                "markdown": "# Styled",
+                "position": null,
+                "position_directive_id": null,
+                "position_scope": null,
+                "range": {
+                  "start": 71,
+                  "end": 81
+                },
+                "source_range": {
+                  "start": 71,
+                  "end": 81
+                },
+                "content_range": {
+                  "start": 71,
+                  "end": 79
+                },
+                "editable_region_id": "slide-1-region-1"
+              },
+              {
+                "id": "slide-1-block-2",
+                "index": 1,
+                "kind": "paragraph",
+                "markdown": "Body text",
+                "position": null,
+                "position_directive_id": null,
+                "position_scope": null,
+                "range": {
+                  "start": 83,
+                  "end": 94
+                },
+                "source_range": {
+                  "start": 83,
+                  "end": 94
+                },
+                "content_range": {
+                  "start": 83,
+                  "end": 92
+                },
+                "editable_region_id": "slide-1-region-2"
+              }
+            ],
+            "directives": [],
+            "editable_regions": [
+              {
+                "id": "slide-1-region-1",
+                "block_id": "slide-1-block-1",
+                "role": "heading",
+                "kind": "heading",
+                "text": "Styled",
+                "range": {
+                  "start": 71,
+                  "end": 79
+                },
+                "source_range": {
+                  "start": 71,
+                  "end": 79
+                },
+                "content_range": {
+                  "start": 73,
+                  "end": 79
+                },
+                "editable": true
+              },
+              {
+                "id": "slide-1-region-2",
+                "block_id": "slide-1-block-2",
+                "role": "block",
+                "kind": "paragraph",
+                "text": "Body text",
+                "range": {
+                  "start": 83,
+                  "end": 92
+                },
+                "source_range": {
+                  "start": 83,
+                  "end": 92
+                },
+                "content_range": {
+                  "start": 83,
+                  "end": 92
+                },
+                "editable": true
+              }
+            ]
+          }
+        ],
+        "directives": [],
+        "editable_regions": [
+          {
+            "id": "slide-1-region-1",
+            "block_id": "slide-1-block-1",
+            "role": "heading",
+            "kind": "heading",
+            "text": "Styled",
+            "range": {
+              "start": 71,
+              "end": 79
+            },
+            "source_range": {
+              "start": 71,
+              "end": 79
+            },
+            "content_range": {
+              "start": 73,
+              "end": 79
+            },
+            "editable": true
+          },
+          {
+            "id": "slide-1-region-2",
+            "block_id": "slide-1-block-2",
+            "role": "block",
+            "kind": "paragraph",
+            "text": "Body text",
+            "range": {
+              "start": 83,
+              "end": 92
+            },
+            "source_range": {
+              "start": 83,
+              "end": 92
+            },
+            "content_range": {
+              "start": 83,
+              "end": 92
+            },
+            "editable": true
+          }
+        ]
+      },
+      "style": {
+        "theme": "dark",
+        "typography": "modern"
+      }
+    }
+  },
+  {
+    "name": "lone-cr-line-endings",
+    "blockHtml": "<h1>Notes</h1>\n<p>First.</p>\n<p>Second.</p>\n",
+    "preview": {
+      "html": "<div class=\"document-reader document-theme-match document-typography-book work-theme-match work-typography-book document-editor-projection\" data-controller=\"document-pages mermaid-diagrams\"><div class=\"document-surface\" data-document-pages-target=\"surface\"><div class=\"document-editor-block-shell\"><div class=\"document-editor-block\" data-editor-region-id=\"slide-1-region-1\" data-editor-block-id=\"slide-1-block-1\" contenteditable=\"true\" role=\"textbox\" aria-label=\"Editable Markdown block\" aria-multiline=\"true\" spellcheck=\"true\" data-action=\"input-&gt;visual-editor#projectionInput focus-&gt;visual-editor#blockFocus blur-&gt;visual-editor#blockBlur\"><h1>Notes</h1>\n</div><label class=\"document-block-position-control\" data-action=\"pointerdown-&gt;visual-editor#positionControlOpened\">Align <select aria-label=\"Block alignment\" data-visual-editor-block-id=\"slide-1-block-1\" data-action=\"focus-&gt;visual-editor#positionControlOpened keydown-&gt;visual-editor#positionControlKeydown change-&gt;visual-editor#alignmentChanged\"><option value=\"left\" selected>Left</option><option value=\"center\">Center</option><option value=\"right\">Right</option></select></label></div><div class=\"document-editor-block-shell\"><div class=\"document-editor-block\" data-editor-region-id=\"slide-1-region-2\" data-editor-block-id=\"slide-1-block-2\" contenteditable=\"true\" role=\"textbox\" aria-label=\"Editable Markdown block\" aria-multiline=\"true\" spellcheck=\"true\" data-action=\"input-&gt;visual-editor#projectionInput focus-&gt;visual-editor#blockFocus blur-&gt;visual-editor#blockBlur\"><p>First.</p>\n</div><label class=\"document-block-position-control\" data-action=\"pointerdown-&gt;visual-editor#positionControlOpened\">Align <select aria-label=\"Block alignment\" data-visual-editor-block-id=\"slide-1-block-2\" data-action=\"focus-&gt;visual-editor#positionControlOpened keydown-&gt;visual-editor#positionControlKeydown change-&gt;visual-editor#alignmentChanged\"><option value=\"left\" selected>Left</option><option value=\"center\">Center</option><option value=\"right\">Right</option></select></label></div><div class=\"document-editor-block-shell\"><div class=\"document-editor-block\" data-editor-region-id=\"slide-1-region-3\" data-editor-block-id=\"slide-1-block-3\" contenteditable=\"true\" role=\"textbox\" aria-label=\"Editable Markdown block\" aria-multiline=\"true\" spellcheck=\"true\" data-action=\"input-&gt;visual-editor#projectionInput focus-&gt;visual-editor#blockFocus blur-&gt;visual-editor#blockBlur\"><p>Second.</p>\n</div><label class=\"document-block-position-control\" data-action=\"pointerdown-&gt;visual-editor#positionControlOpened\">Align <select aria-label=\"Block alignment\" data-visual-editor-block-id=\"slide-1-block-3\" data-action=\"focus-&gt;visual-editor#positionControlOpened keydown-&gt;visual-editor#positionControlKeydown change-&gt;visual-editor#alignmentChanged\"><option value=\"left\" selected>Left</option><option value=\"center\">Center</option><option value=\"right\">Right</option></select></label></div></div></div>",
+      "warnings": [],
+      "editor_map": {
+        "version": 1,
+        "source_name": "Legacy",
+        "mode": "document",
+        "source_length": 25,
+        "front_matter": null,
+        "slides": [
+          {
+            "id": "slide-1",
+            "index": 0,
+            "layout": "body",
+            "range": {
+              "start": 0,
+              "end": 25
+            },
+            "source_range": {
+              "start": 0,
+              "end": 25
+            },
+            "delimiter_range": null,
+            "blocks": [
+              {
+                "id": "slide-1-block-1",
+                "index": 0,
+                "kind": "heading",
+                "markdown": "# Notes",
+                "position": null,
+                "position_directive_id": null,
+                "position_scope": null,
+                "range": {
+                  "start": 0,
+                  "end": 8
+                },
+                "source_range": {
+                  "start": 0,
+                  "end": 8
+                },
+                "content_range": {
+                  "start": 0,
+                  "end": 7
+                },
+                "editable_region_id": "slide-1-region-1"
+              },
+              {
+                "id": "slide-1-block-2",
+                "index": 1,
+                "kind": "paragraph",
+                "markdown": "First.",
+                "position": null,
+                "position_directive_id": null,
+                "position_scope": null,
+                "range": {
+                  "start": 9,
+                  "end": 16
+                },
+                "source_range": {
+                  "start": 9,
+                  "end": 16
+                },
+                "content_range": {
+                  "start": 9,
+                  "end": 15
+                },
+                "editable_region_id": "slide-1-region-2"
+              },
+              {
+                "id": "slide-1-block-3",
+                "index": 2,
+                "kind": "paragraph",
+                "markdown": "Second.",
+                "position": null,
+                "position_directive_id": null,
+                "position_scope": null,
+                "range": {
+                  "start": 17,
+                  "end": 25
+                },
+                "source_range": {
+                  "start": 17,
+                  "end": 25
+                },
+                "content_range": {
+                  "start": 17,
+                  "end": 24
+                },
+                "editable_region_id": "slide-1-region-3"
+              }
+            ],
+            "directives": [],
+            "editable_regions": [
+              {
+                "id": "slide-1-region-1",
+                "block_id": "slide-1-block-1",
+                "role": "title",
+                "kind": "heading",
+                "text": "Notes",
+                "range": {
+                  "start": 0,
+                  "end": 7
+                },
+                "source_range": {
+                  "start": 0,
+                  "end": 7
+                },
+                "content_range": {
+                  "start": 2,
+                  "end": 7
+                },
+                "editable": true
+              },
+              {
+                "id": "slide-1-region-2",
+                "block_id": "slide-1-block-2",
+                "role": "block",
+                "kind": "paragraph",
+                "text": "First.",
+                "range": {
+                  "start": 9,
+                  "end": 15
+                },
+                "source_range": {
+                  "start": 9,
+                  "end": 15
+                },
+                "content_range": {
+                  "start": 9,
+                  "end": 15
+                },
+                "editable": true
+              },
+              {
+                "id": "slide-1-region-3",
+                "block_id": "slide-1-block-3",
+                "role": "block",
+                "kind": "paragraph",
+                "text": "Second.",
+                "range": {
+                  "start": 17,
+                  "end": 24
+                },
+                "source_range": {
+                  "start": 17,
+                  "end": 24
+                },
+                "content_range": {
+                  "start": 17,
+                  "end": 24
+                },
+                "editable": true
+              }
+            ]
+          }
+        ],
+        "directives": [],
+        "editable_regions": [
+          {
+            "id": "slide-1-region-1",
+            "block_id": "slide-1-block-1",
+            "role": "title",
+            "kind": "heading",
+            "text": "Notes",
+            "range": {
+              "start": 0,
+              "end": 7
+            },
+            "source_range": {
+              "start": 0,
+              "end": 7
+            },
+            "content_range": {
+              "start": 2,
+              "end": 7
+            },
+            "editable": true
+          },
+          {
+            "id": "slide-1-region-2",
+            "block_id": "slide-1-block-2",
+            "role": "block",
+            "kind": "paragraph",
+            "text": "First.",
+            "range": {
+              "start": 9,
+              "end": 15
+            },
+            "source_range": {
+              "start": 9,
+              "end": 15
+            },
+            "content_range": {
+              "start": 9,
+              "end": 15
+            },
+            "editable": true
+          },
+          {
+            "id": "slide-1-region-3",
+            "block_id": "slide-1-block-3",
+            "role": "block",
+            "kind": "paragraph",
+            "text": "Second.",
+            "range": {
+              "start": 17,
+              "end": 24
+            },
+            "source_range": {
+              "start": 17,
+              "end": 24
+            },
+            "content_range": {
+              "start": 17,
+              "end": 24
+            },
+            "editable": true
+          }
+        ]
+      },
+      "style": {
+        "theme": "match",
+        "typography": "book"
+      }
+    }
+  },
+  {
+    "name": "malformed-front-matter",
+    "blockHtml": "<hr>\n<h1>Looks like front matter but has no keys</h1>\n<p>Body text</p>\n<hr>\n<h1>Second</h1>\n",
+    "preview": {
+      "html": "<div class=\"presentation-surface work-surface slides slides-theme-match slides-typography-book work-theme-match work-typography-book presentation-editor-projection\" data-controller=\"mermaid-diagrams\" data-presentation-editor-target=\"canvas\"><div class=\"slide-frame\" data-controller=\"presentation-canvas\"><section class=\"slide slide-body\" data-presentation-canvas-target=\"canvas\" aria-label=\"Slide 1\" data-editor-slide-id=\"slide-1\" data-slide-index=\"0\"><div class=\"presentation-editor-slide-toolbar\" aria-label=\"Slide 1 controls\"><span class=\"presentation-editor-slide-label\">Slide 1</span><button type=\"button\" data-presentation-editor-action=\"add-slide-after\" data-slide-index=\"0\">Add slide</button><button type=\"button\" class=\"presentation-editor-add-image\" data-action=\"click-&gt;media#chooseForSlide\" data-slide-index=\"0\">Add image</button><button type=\"button\" data-presentation-editor-action=\"delete-slide\" data-slide-index=\"0\">Delete</button><button type=\"button\" data-presentation-editor-action=\"move-slide-up\" data-slide-index=\"0\" disabled>Move up</button><button type=\"button\" data-presentation-editor-action=\"move-slide-down\" data-slide-index=\"0\">Move down</button></div><div class=\"slide-margin slide-margin-top\" aria-hidden=\"true\"><span class=\"slide-margin-subsection\"></span><span class=\"slide-margin-section\"></span></div><div class=\"slide-content\"><div class=\"empty-slide\"><p>Empty slide</p><button type=\"button\" class=\"button secondary empty-slide-add-image\" data-action=\"click-&gt;media#chooseForSlide\" data-slide-index=\"0\">Add image</button></div></div><div class=\"slide-margin slide-margin-bottom\" aria-hidden=\"true\"><span class=\"slide-margin-count\">1 / 3</span></div></section></div><div class=\"slide-frame\" data-controller=\"presentation-canvas\"><section class=\"slide slide-statement\" data-presentation-canvas-target=\"canvas\" aria-label=\"Slide 2\" data-editor-slide-id=\"slide-2\" data-slide-index=\"1\"><div class=\"presentation-editor-slide-toolbar\" aria-label=\"Slide 2 controls\"><span class=\"presentation-editor-slide-label\">Slide 2</span><button type=\"button\" data-presentation-editor-action=\"add-slide-after\" data-slide-index=\"1\">Add slide</button><button type=\"button\" class=\"presentation-editor-add-image\" data-action=\"click-&gt;media#chooseForSlide\" data-slide-index=\"1\">Add image</button><button type=\"button\" data-presentation-editor-action=\"delete-slide\" data-slide-index=\"1\">Delete</button><button type=\"button\" data-presentation-editor-action=\"move-slide-up\" data-slide-index=\"1\">Move up</button><button type=\"button\" data-presentation-editor-action=\"move-slide-down\" data-slide-index=\"1\">Move down</button></div><div class=\"slide-margin slide-margin-top\" aria-hidden=\"true\"><span class=\"slide-margin-subsection\"></span><span class=\"slide-margin-section\"></span></div><div class=\"slide-content\"><div class=\"slide-block\" data-editor-block-id=\"slide-2-block-1\" data-editor-region-id=\"slide-2-region-1\" data-editor-source-editable=\"true\" contenteditable=\"true\" role=\"textbox\" aria-label=\"Editable slide block\" aria-multiline=\"true\" spellcheck=\"true\" data-action=\"input-&gt;presentation-editor#blockInput focus-&gt;presentation-editor#blockFocus blur-&gt;presentation-editor#blockBlur\"><h1>Looks like front matter but has no keys</h1>\n</div><div class=\"presentation-editor-block-controls\" aria-label=\"Block controls\"><button type=\"button\" data-presentation-editor-action=\"add-block-after\" data-slide-index=\"1\" data-block-index=\"0\">Add block</button><button type=\"button\" data-presentation-editor-action=\"delete-block\" data-slide-index=\"1\" data-block-index=\"0\">Delete</button><button type=\"button\" aria-label=\"Move block up\" data-presentation-editor-action=\"move-block-up\" data-slide-index=\"1\" data-block-index=\"0\" disabled>↑</button><button type=\"button\" aria-label=\"Move block down\" data-presentation-editor-action=\"move-block-down\" data-slide-index=\"1\" data-block-index=\"0\">↓</button><label>Align <select aria-label=\"Block alignment\" data-presentation-editor-align data-slide-index=\"1\" data-block-index=\"0\" data-action=\"change-&gt;presentation-editor#alignmentChanged\"><option value=\"left\" selected>Left</option><option value=\"center\">Center</option><option value=\"right\">Right</option><option value=\"center left\">Center Left</option><option value=\"center center\">Center Center</option><option value=\"center right\">Center Right</option><option value=\"bottom left\">Bottom Left</option><option value=\"bottom center\">Bottom Center</option><option value=\"bottom right\">Bottom Right</option></select></label></div><div class=\"slide-block\" data-editor-block-id=\"slide-2-block-2\" data-editor-region-id=\"slide-2-region-2\" data-editor-source-editable=\"true\" contenteditable=\"true\" role=\"textbox\" aria-label=\"Editable slide block\" aria-multiline=\"true\" spellcheck=\"true\" data-action=\"input-&gt;presentation-editor#blockInput focus-&gt;presentation-editor#blockFocus blur-&gt;presentation-editor#blockBlur\"><p>Body text</p>\n</div><div class=\"presentation-editor-block-controls\" aria-label=\"Block controls\"><button type=\"button\" data-presentation-editor-action=\"add-block-after\" data-slide-index=\"1\" data-block-index=\"1\">Add block</button><button type=\"button\" data-presentation-editor-action=\"delete-block\" data-slide-index=\"1\" data-block-index=\"1\">Delete</button><button type=\"button\" aria-label=\"Move block up\" data-presentation-editor-action=\"move-block-up\" data-slide-index=\"1\" data-block-index=\"1\">↑</button><button type=\"button\" aria-label=\"Move block down\" data-presentation-editor-action=\"move-block-down\" data-slide-index=\"1\" data-block-index=\"1\" disabled>↓</button><label>Align <select aria-label=\"Block alignment\" data-presentation-editor-align data-slide-index=\"1\" data-block-index=\"1\" data-action=\"change-&gt;presentation-editor#alignmentChanged\"><option value=\"left\" selected>Left</option><option value=\"center\">Center</option><option value=\"right\">Right</option><option value=\"center left\">Center Left</option><option value=\"center center\">Center Center</option><option value=\"center right\">Center Right</option><option value=\"bottom left\">Bottom Left</option><option value=\"bottom center\">Bottom Center</option><option value=\"bottom right\">Bottom Right</option></select></label></div></div><div class=\"slide-margin slide-margin-bottom\" aria-hidden=\"true\"><span class=\"slide-margin-count\">2 / 3</span></div></section></div><div class=\"slide-frame\" data-controller=\"presentation-canvas\"><section class=\"slide slide-body\" data-presentation-canvas-target=\"canvas\" aria-label=\"Slide 3\" data-editor-slide-id=\"slide-3\" data-slide-index=\"2\"><div class=\"presentation-editor-slide-toolbar\" aria-label=\"Slide 3 controls\"><span class=\"presentation-editor-slide-label\">Slide 3</span><button type=\"button\" data-presentation-editor-action=\"add-slide-after\" data-slide-index=\"2\">Add slide</button><button type=\"button\" class=\"presentation-editor-add-image\" data-action=\"click-&gt;media#chooseForSlide\" data-slide-index=\"2\">Add image</button><button type=\"button\" data-presentation-editor-action=\"delete-slide\" data-slide-index=\"2\">Delete</button><button type=\"button\" data-presentation-editor-action=\"move-slide-up\" data-slide-index=\"2\">Move up</button><button type=\"button\" data-presentation-editor-action=\"move-slide-down\" data-slide-index=\"2\" disabled>Move down</button></div><div class=\"slide-margin slide-margin-top\" aria-hidden=\"true\"><span class=\"slide-margin-subsection\"></span><span class=\"slide-margin-section\"></span></div><div class=\"slide-content\"><div class=\"slide-block\" data-editor-block-id=\"slide-3-block-1\" data-editor-region-id=\"slide-3-region-1\" data-editor-source-editable=\"true\" contenteditable=\"true\" role=\"textbox\" aria-label=\"Editable slide block\" aria-multiline=\"true\" spellcheck=\"true\" data-action=\"input-&gt;presentation-editor#blockInput focus-&gt;presentation-editor#blockFocus blur-&gt;presentation-editor#blockBlur\"><h1>Second</h1>\n</div><div class=\"presentation-editor-block-controls\" aria-label=\"Block controls\"><button type=\"button\" data-presentation-editor-action=\"add-block-after\" data-slide-index=\"2\" data-block-index=\"0\">Add block</button><button type=\"button\" data-presentation-editor-action=\"delete-block\" data-slide-index=\"2\" data-block-index=\"0\" disabled>Delete</button><button type=\"button\" aria-label=\"Move block up\" data-presentation-editor-action=\"move-block-up\" data-slide-index=\"2\" data-block-index=\"0\" disabled>↑</button><button type=\"button\" aria-label=\"Move block down\" data-presentation-editor-action=\"move-block-down\" data-slide-index=\"2\" data-block-index=\"0\" disabled>↓</button><label>Align <select aria-label=\"Block alignment\" data-presentation-editor-align data-slide-index=\"2\" data-block-index=\"0\" data-action=\"change-&gt;presentation-editor#alignmentChanged\"><option value=\"left\" selected>Left</option><option value=\"center\">Center</option><option value=\"right\">Right</option><option value=\"center left\">Center Left</option><option value=\"center center\">Center Center</option><option value=\"center right\">Center Right</option><option value=\"bottom left\">Bottom Left</option><option value=\"bottom center\">Bottom Center</option><option value=\"bottom right\">Bottom Right</option></select></label></div></div><div class=\"slide-margin slide-margin-bottom\" aria-hidden=\"true\"><span class=\"slide-margin-count\">3 / 3</span></div></section></div></div>",
+      "warnings": [],
+      "editor_map": {
+        "version": 1,
+        "source_name": "Broken",
+        "mode": "presentation",
+        "source_length": 71,
+        "front_matter": null,
+        "slides": [
+          {
+            "id": "slide-1",
+            "index": 0,
+            "layout": "body",
+            "range": {
+              "start": 0,
+              "end": 0
+            },
+            "source_range": {
+              "start": 0,
+              "end": 0
+            },
+            "delimiter_range": {
+              "start": 0,
+              "end": 4
+            },
+            "blocks": [],
+            "directives": [],
+            "editable_regions": []
+          },
+          {
+            "id": "slide-2",
+            "index": 1,
+            "layout": "statement",
+            "range": {
+              "start": 4,
+              "end": 58
+            },
+            "source_range": {
+              "start": 4,
+              "end": 58
+            },
+            "delimiter_range": {
+              "start": 58,
+              "end": 62
+            },
+            "blocks": [
+              {
+                "id": "slide-2-block-1",
+                "index": 0,
+                "kind": "heading",
+                "markdown": "# Looks like front matter but has no keys",
+                "position": null,
+                "position_directive_id": null,
+                "position_scope": null,
+                "range": {
+                  "start": 4,
+                  "end": 46
+                },
+                "source_range": {
+                  "start": 4,
+                  "end": 46
+                },
+                "content_range": {
+                  "start": 4,
+                  "end": 45
+                },
+                "editable_region_id": "slide-2-region-1"
+              },
+              {
+                "id": "slide-2-block-2",
+                "index": 1,
+                "kind": "paragraph",
+                "markdown": "Body text",
+                "position": null,
+                "position_directive_id": null,
+                "position_scope": null,
+                "range": {
+                  "start": 47,
+                  "end": 57
+                },
+                "source_range": {
+                  "start": 47,
+                  "end": 57
+                },
+                "content_range": {
+                  "start": 47,
+                  "end": 56
+                },
+                "editable_region_id": "slide-2-region-2"
+              }
+            ],
+            "directives": [],
+            "editable_regions": [
+              {
+                "id": "slide-2-region-1",
+                "block_id": "slide-2-block-1",
+                "role": "heading",
+                "kind": "heading",
+                "text": "Looks like front matter but has no keys",
+                "range": {
+                  "start": 4,
+                  "end": 45
+                },
+                "source_range": {
+                  "start": 4,
+                  "end": 45
+                },
+                "content_range": {
+                  "start": 6,
+                  "end": 45
+                },
+                "editable": true
+              },
+              {
+                "id": "slide-2-region-2",
+                "block_id": "slide-2-block-2",
+                "role": "block",
+                "kind": "paragraph",
+                "text": "Body text",
+                "range": {
+                  "start": 47,
+                  "end": 56
+                },
+                "source_range": {
+                  "start": 47,
+                  "end": 56
+                },
+                "content_range": {
+                  "start": 47,
+                  "end": 56
+                },
+                "editable": true
+              }
+            ]
+          },
+          {
+            "id": "slide-3",
+            "index": 2,
+            "layout": "body",
+            "range": {
+              "start": 62,
+              "end": 71
+            },
+            "source_range": {
+              "start": 62,
+              "end": 71
+            },
+            "delimiter_range": null,
+            "blocks": [
+              {
+                "id": "slide-3-block-1",
+                "index": 0,
+                "kind": "heading",
+                "markdown": "# Second",
+                "position": null,
+                "position_directive_id": null,
+                "position_scope": null,
+                "range": {
+                  "start": 62,
+                  "end": 71
+                },
+                "source_range": {
+                  "start": 62,
+                  "end": 71
+                },
+                "content_range": {
+                  "start": 62,
+                  "end": 70
+                },
+                "editable_region_id": "slide-3-region-1"
+              }
+            ],
+            "directives": [],
+            "editable_regions": [
+              {
+                "id": "slide-3-region-1",
+                "block_id": "slide-3-block-1",
+                "role": "heading",
+                "kind": "heading",
+                "text": "Second",
+                "range": {
+                  "start": 62,
+                  "end": 70
+                },
+                "source_range": {
+                  "start": 62,
+                  "end": 70
+                },
+                "content_range": {
+                  "start": 64,
+                  "end": 70
+                },
+                "editable": true
+              }
+            ]
+          }
+        ],
+        "directives": [],
+        "editable_regions": [
+          {
+            "id": "slide-2-region-1",
+            "block_id": "slide-2-block-1",
+            "role": "heading",
+            "kind": "heading",
+            "text": "Looks like front matter but has no keys",
+            "range": {
+              "start": 4,
+              "end": 45
+            },
+            "source_range": {
+              "start": 4,
+              "end": 45
+            },
+            "content_range": {
+              "start": 6,
+              "end": 45
+            },
+            "editable": true
+          },
+          {
+            "id": "slide-2-region-2",
+            "block_id": "slide-2-block-2",
+            "role": "block",
+            "kind": "paragraph",
+            "text": "Body text",
+            "range": {
+              "start": 47,
+              "end": 56
+            },
+            "source_range": {
+              "start": 47,
+              "end": 56
+            },
+            "content_range": {
+              "start": 47,
+              "end": 56
+            },
+            "editable": true
+          },
+          {
+            "id": "slide-3-region-1",
+            "block_id": "slide-3-block-1",
+            "role": "heading",
+            "kind": "heading",
+            "text": "Second",
+            "range": {
+              "start": 62,
+              "end": 70
+            },
+            "source_range": {
+              "start": 62,
+              "end": 70
+            },
+            "content_range": {
+              "start": 64,
+              "end": 70
+            },
+            "editable": true
+          }
+        ]
+      },
+      "style": {
+        "theme": "match",
+        "typography": "book"
+      }
+    }
+  },
+  {
+    "name": "preview-input-overrides",
+    "blockHtml": "<h1>Plain</h1>\n<p>Body</p>\n",
+    "preview": {
+      "html": "<div class=\"presentation-surface work-surface slides slides-theme-dark slides-typography-technical work-theme-dark work-typography-technical presentation-editor-projection\" data-controller=\"mermaid-diagrams\" data-presentation-editor-target=\"canvas\"><div class=\"slide-frame\" data-controller=\"presentation-canvas\"><section class=\"slide slide-statement\" data-presentation-canvas-target=\"canvas\" aria-label=\"Slide 1\" data-editor-slide-id=\"slide-1\" data-slide-index=\"0\"><div class=\"presentation-editor-slide-toolbar\" aria-label=\"Slide 1 controls\"><span class=\"presentation-editor-slide-label\">Slide 1</span><button type=\"button\" data-presentation-editor-action=\"add-slide-after\" data-slide-index=\"0\">Add slide</button><button type=\"button\" class=\"presentation-editor-add-image\" data-action=\"click-&gt;media#chooseForSlide\" data-slide-index=\"0\">Add image</button><button type=\"button\" data-presentation-editor-action=\"delete-slide\" data-slide-index=\"0\" disabled>Delete</button><button type=\"button\" data-presentation-editor-action=\"move-slide-up\" data-slide-index=\"0\" disabled>Move up</button><button type=\"button\" data-presentation-editor-action=\"move-slide-down\" data-slide-index=\"0\" disabled>Move down</button></div><div class=\"slide-margin slide-margin-top\" aria-hidden=\"true\"><span class=\"slide-margin-subsection\"></span><span class=\"slide-margin-section\"></span></div><div class=\"slide-content\"><div class=\"slide-block\" data-editor-block-id=\"slide-1-block-1\" data-editor-region-id=\"slide-1-region-1\" data-editor-source-editable=\"true\" contenteditable=\"true\" role=\"textbox\" aria-label=\"Editable slide block\" aria-multiline=\"true\" spellcheck=\"true\" data-action=\"input-&gt;presentation-editor#blockInput focus-&gt;presentation-editor#blockFocus blur-&gt;presentation-editor#blockBlur\"><h1>Plain</h1>\n</div><div class=\"presentation-editor-block-controls\" aria-label=\"Block controls\"><button type=\"button\" data-presentation-editor-action=\"add-block-after\" data-slide-index=\"0\" data-block-index=\"0\">Add block</button><button type=\"button\" data-presentation-editor-action=\"delete-block\" data-slide-index=\"0\" data-block-index=\"0\">Delete</button><button type=\"button\" aria-label=\"Move block up\" data-presentation-editor-action=\"move-block-up\" data-slide-index=\"0\" data-block-index=\"0\" disabled>↑</button><button type=\"button\" aria-label=\"Move block down\" data-presentation-editor-action=\"move-block-down\" data-slide-index=\"0\" data-block-index=\"0\">↓</button><label>Align <select aria-label=\"Block alignment\" data-presentation-editor-align data-slide-index=\"0\" data-block-index=\"0\" data-action=\"change-&gt;presentation-editor#alignmentChanged\"><option value=\"left\" selected>Left</option><option value=\"center\">Center</option><option value=\"right\">Right</option><option value=\"center left\">Center Left</option><option value=\"center center\">Center Center</option><option value=\"center right\">Center Right</option><option value=\"bottom left\">Bottom Left</option><option value=\"bottom center\">Bottom Center</option><option value=\"bottom right\">Bottom Right</option></select></label></div><div class=\"slide-block\" data-editor-block-id=\"slide-1-block-2\" data-editor-region-id=\"slide-1-region-2\" data-editor-source-editable=\"true\" contenteditable=\"true\" role=\"textbox\" aria-label=\"Editable slide block\" aria-multiline=\"true\" spellcheck=\"true\" data-action=\"input-&gt;presentation-editor#blockInput focus-&gt;presentation-editor#blockFocus blur-&gt;presentation-editor#blockBlur\"><p>Body</p>\n</div><div class=\"presentation-editor-block-controls\" aria-label=\"Block controls\"><button type=\"button\" data-presentation-editor-action=\"add-block-after\" data-slide-index=\"0\" data-block-index=\"1\">Add block</button><button type=\"button\" data-presentation-editor-action=\"delete-block\" data-slide-index=\"0\" data-block-index=\"1\">Delete</button><button type=\"button\" aria-label=\"Move block up\" data-presentation-editor-action=\"move-block-up\" data-slide-index=\"0\" data-block-index=\"1\">↑</button><button type=\"button\" aria-label=\"Move block down\" data-presentation-editor-action=\"move-block-down\" data-slide-index=\"0\" data-block-index=\"1\" disabled>↓</button><label>Align <select aria-label=\"Block alignment\" data-presentation-editor-align data-slide-index=\"0\" data-block-index=\"1\" data-action=\"change-&gt;presentation-editor#alignmentChanged\"><option value=\"left\" selected>Left</option><option value=\"center\">Center</option><option value=\"right\">Right</option><option value=\"center left\">Center Left</option><option value=\"center center\">Center Center</option><option value=\"center right\">Center Right</option><option value=\"bottom left\">Bottom Left</option><option value=\"bottom center\">Bottom Center</option><option value=\"bottom right\">Bottom Right</option></select></label></div></div><div class=\"slide-margin slide-margin-bottom\" aria-hidden=\"true\"></div></section></div></div>",
+      "warnings": [],
+      "editor_map": {
+        "version": 1,
+        "source_name": "Override",
+        "mode": "presentation",
+        "source_length": 14,
+        "front_matter": null,
+        "slides": [
+          {
+            "id": "slide-1",
+            "index": 0,
+            "layout": "statement",
+            "range": {
+              "start": 0,
+              "end": 14
+            },
+            "source_range": {
+              "start": 0,
+              "end": 14
+            },
+            "delimiter_range": null,
+            "blocks": [
+              {
+                "id": "slide-1-block-1",
+                "index": 0,
+                "kind": "heading",
+                "markdown": "# Plain",
+                "position": null,
+                "position_directive_id": null,
+                "position_scope": null,
+                "range": {
+                  "start": 0,
+                  "end": 8
+                },
+                "source_range": {
+                  "start": 0,
+                  "end": 8
+                },
+                "content_range": {
+                  "start": 0,
+                  "end": 7
+                },
+                "editable_region_id": "slide-1-region-1"
+              },
+              {
+                "id": "slide-1-block-2",
+                "index": 1,
+                "kind": "paragraph",
+                "markdown": "Body",
+                "position": null,
+                "position_directive_id": null,
+                "position_scope": null,
+                "range": {
+                  "start": 9,
+                  "end": 14
+                },
+                "source_range": {
+                  "start": 9,
+                  "end": 14
+                },
+                "content_range": {
+                  "start": 9,
+                  "end": 13
+                },
+                "editable_region_id": "slide-1-region-2"
+              }
+            ],
+            "directives": [],
+            "editable_regions": [
+              {
+                "id": "slide-1-region-1",
+                "block_id": "slide-1-block-1",
+                "role": "heading",
+                "kind": "heading",
+                "text": "Plain",
+                "range": {
+                  "start": 0,
+                  "end": 7
+                },
+                "source_range": {
+                  "start": 0,
+                  "end": 7
+                },
+                "content_range": {
+                  "start": 2,
+                  "end": 7
+                },
+                "editable": true
+              },
+              {
+                "id": "slide-1-region-2",
+                "block_id": "slide-1-block-2",
+                "role": "block",
+                "kind": "paragraph",
+                "text": "Body",
+                "range": {
+                  "start": 9,
+                  "end": 13
+                },
+                "source_range": {
+                  "start": 9,
+                  "end": 13
+                },
+                "content_range": {
+                  "start": 9,
+                  "end": 13
+                },
+                "editable": true
+              }
+            ]
+          }
+        ],
+        "directives": [],
+        "editable_regions": [
+          {
+            "id": "slide-1-region-1",
+            "block_id": "slide-1-block-1",
+            "role": "heading",
+            "kind": "heading",
+            "text": "Plain",
+            "range": {
+              "start": 0,
+              "end": 7
+            },
+            "source_range": {
+              "start": 0,
+              "end": 7
+            },
+            "content_range": {
+              "start": 2,
+              "end": 7
+            },
+            "editable": true
+          },
+          {
+            "id": "slide-1-region-2",
+            "block_id": "slide-1-block-2",
+            "role": "block",
+            "kind": "paragraph",
+            "text": "Body",
+            "range": {
+              "start": 9,
+              "end": 13
+            },
+            "source_range": {
+              "start": 9,
+              "end": 13
+            },
+            "content_range": {
+              "start": 9,
+              "end": 13
+            },
+            "editable": true
+          }
+        ]
+      },
+      "style": {
+        "theme": "dark",
+        "typography": "technical"
+      }
+    }
+  },
+  {
+    "name": "empty-presentation",
+    "blockHtml": "",
+    "preview": {
+      "html": "<div class=\"presentation-surface work-surface slides slides-theme-match slides-typography-book work-theme-match work-typography-book presentation-editor-projection\" data-controller=\"mermaid-diagrams\" data-presentation-editor-target=\"canvas\"><div class=\"slide-frame\" data-controller=\"presentation-canvas\"><section class=\"slide slide-body\" data-presentation-canvas-target=\"canvas\" aria-label=\"Slide 1\" data-editor-slide-id=\"slide-1\" data-slide-index=\"0\"><div class=\"presentation-editor-slide-toolbar\" aria-label=\"Slide 1 controls\"><span class=\"presentation-editor-slide-label\">Slide 1</span><button type=\"button\" data-presentation-editor-action=\"add-slide-after\" data-slide-index=\"0\">Add slide</button><button type=\"button\" class=\"presentation-editor-add-image\" data-action=\"click-&gt;media#chooseForSlide\" data-slide-index=\"0\">Add image</button><button type=\"button\" data-presentation-editor-action=\"delete-slide\" data-slide-index=\"0\" disabled>Delete</button><button type=\"button\" data-presentation-editor-action=\"move-slide-up\" data-slide-index=\"0\" disabled>Move up</button><button type=\"button\" data-presentation-editor-action=\"move-slide-down\" data-slide-index=\"0\" disabled>Move down</button></div><div class=\"slide-margin slide-margin-top\" aria-hidden=\"true\"><span class=\"slide-margin-subsection\"></span><span class=\"slide-margin-section\"></span></div><div class=\"slide-content\"><div class=\"empty-slide\"><p>Empty slide</p><button type=\"button\" class=\"button secondary empty-slide-add-image\" data-action=\"click-&gt;media#chooseForSlide\" data-slide-index=\"0\">Add image</button></div></div><div class=\"slide-margin slide-margin-bottom\" aria-hidden=\"true\"><span class=\"slide-margin-count\">1 / 1</span></div></section></div></div>",
+      "warnings": [],
+      "editor_map": {
+        "version": 1,
+        "source_name": "Empty",
+        "mode": "presentation",
+        "source_length": 0,
+        "front_matter": null,
+        "slides": [
+          {
+            "id": "slide-1",
+            "index": 0,
+            "layout": "body",
+            "range": {
+              "start": 0,
+              "end": 0
+            },
+            "source_range": {
+              "start": 0,
+              "end": 0
+            },
+            "delimiter_range": null,
+            "blocks": [],
+            "directives": [],
+            "editable_regions": []
+          }
+        ],
+        "directives": [],
+        "editable_regions": []
+      },
+      "style": {
+        "theme": "match",
+        "typography": "book"
+      }
+    }
+  },
+  {
+    "name": "margin-subsection-footnote",
+    "blockHtml": "<p>:::section{Q3}\n:::subsection{July}</p>\n<h1>Month</h1>\n<p>Body text</p>\n<p>:::footnote{See appendix}</p>\n",
+    "preview": {
+      "html": "<div class=\"presentation-surface work-surface slides slides-theme-match slides-typography-book work-theme-match work-typography-book presentation-editor-projection\" data-controller=\"mermaid-diagrams\" data-presentation-editor-target=\"canvas\"><div class=\"slide-frame\" data-controller=\"presentation-canvas\"><section class=\"slide slide-statement\" data-presentation-canvas-target=\"canvas\" aria-label=\"Slide 1\" data-editor-slide-id=\"slide-1\" data-slide-index=\"0\"><div class=\"presentation-editor-slide-toolbar\" aria-label=\"Slide 1 controls\"><span class=\"presentation-editor-slide-label\">Slide 1</span><button type=\"button\" data-presentation-editor-action=\"add-slide-after\" data-slide-index=\"0\">Add slide</button><button type=\"button\" class=\"presentation-editor-add-image\" data-action=\"click-&gt;media#chooseForSlide\" data-slide-index=\"0\">Add image</button><button type=\"button\" data-presentation-editor-action=\"delete-slide\" data-slide-index=\"0\" disabled>Delete</button><button type=\"button\" data-presentation-editor-action=\"move-slide-up\" data-slide-index=\"0\" disabled>Move up</button><button type=\"button\" data-presentation-editor-action=\"move-slide-down\" data-slide-index=\"0\" disabled>Move down</button></div><div class=\"slide-margin slide-margin-top\" aria-hidden=\"true\"><span class=\"slide-margin-subsection\">July</span><span class=\"slide-margin-section\">Q3</span></div><div class=\"slide-content\"><div class=\"slide-block\" data-editor-block-id=\"slide-1-block-1\" data-editor-region-id=\"slide-1-region-1\" data-editor-source-editable=\"true\" contenteditable=\"true\" role=\"textbox\" aria-label=\"Editable slide block\" aria-multiline=\"true\" spellcheck=\"true\" data-action=\"input-&gt;presentation-editor#blockInput focus-&gt;presentation-editor#blockFocus blur-&gt;presentation-editor#blockBlur\"><h1>Month</h1>\n</div><div class=\"presentation-editor-block-controls\" aria-label=\"Block controls\"><button type=\"button\" data-presentation-editor-action=\"add-block-after\" data-slide-index=\"0\" data-block-index=\"0\">Add block</button><button type=\"button\" data-presentation-editor-action=\"delete-block\" data-slide-index=\"0\" data-block-index=\"0\">Delete</button><button type=\"button\" aria-label=\"Move block up\" data-presentation-editor-action=\"move-block-up\" data-slide-index=\"0\" data-block-index=\"0\" disabled>↑</button><button type=\"button\" aria-label=\"Move block down\" data-presentation-editor-action=\"move-block-down\" data-slide-index=\"0\" data-block-index=\"0\">↓</button><label>Align <select aria-label=\"Block alignment\" data-presentation-editor-align data-slide-index=\"0\" data-block-index=\"0\" data-action=\"change-&gt;presentation-editor#alignmentChanged\"><option value=\"left\" selected>Left</option><option value=\"center\">Center</option><option value=\"right\">Right</option><option value=\"center left\">Center Left</option><option value=\"center center\">Center Center</option><option value=\"center right\">Center Right</option><option value=\"bottom left\">Bottom Left</option><option value=\"bottom center\">Bottom Center</option><option value=\"bottom right\">Bottom Right</option></select></label></div><div class=\"slide-block\" data-editor-block-id=\"slide-1-block-2\" data-editor-region-id=\"slide-1-region-2\" data-editor-source-editable=\"true\" contenteditable=\"true\" role=\"textbox\" aria-label=\"Editable slide block\" aria-multiline=\"true\" spellcheck=\"true\" data-action=\"input-&gt;presentation-editor#blockInput focus-&gt;presentation-editor#blockFocus blur-&gt;presentation-editor#blockBlur\"><p>Body text</p>\n</div><div class=\"presentation-editor-block-controls\" aria-label=\"Block controls\"><button type=\"button\" data-presentation-editor-action=\"add-block-after\" data-slide-index=\"0\" data-block-index=\"1\">Add block</button><button type=\"button\" data-presentation-editor-action=\"delete-block\" data-slide-index=\"0\" data-block-index=\"1\">Delete</button><button type=\"button\" aria-label=\"Move block up\" data-presentation-editor-action=\"move-block-up\" data-slide-index=\"0\" data-block-index=\"1\">↑</button><button type=\"button\" aria-label=\"Move block down\" data-presentation-editor-action=\"move-block-down\" data-slide-index=\"0\" data-block-index=\"1\" disabled>↓</button><label>Align <select aria-label=\"Block alignment\" data-presentation-editor-align data-slide-index=\"0\" data-block-index=\"1\" data-action=\"change-&gt;presentation-editor#alignmentChanged\"><option value=\"left\" selected>Left</option><option value=\"center\">Center</option><option value=\"right\">Right</option><option value=\"center left\">Center Left</option><option value=\"center center\">Center Center</option><option value=\"center right\">Center Right</option><option value=\"bottom left\">Bottom Left</option><option value=\"bottom center\">Bottom Center</option><option value=\"bottom right\">Bottom Right</option></select></label></div></div><div class=\"slide-margin slide-margin-bottom\" aria-hidden=\"true\"><span class=\"slide-margin-count\">1 / 1</span><span class=\"slide-margin-footnote\" aria-label=\"Footnote\"><span class=\"slide-margin-footnote-marker\">*</span><span class=\"slide-margin-footnote-text\"><p>See appendix</p>\n</span></span></div></section></div></div>",
+      "warnings": [],
+      "editor_map": {
+        "version": 1,
+        "source_name": "Margins",
+        "mode": "presentation",
+        "source_length": 81,
+        "front_matter": null,
+        "slides": [
+          {
+            "id": "slide-1",
+            "index": 0,
+            "layout": "statement",
+            "range": {
+              "start": 0,
+              "end": 81
+            },
+            "source_range": {
+              "start": 0,
+              "end": 81
+            },
+            "delimiter_range": null,
+            "blocks": [
+              {
+                "id": "slide-1-block-1",
+                "index": 0,
+                "kind": "heading",
+                "markdown": "# Month",
+                "position": null,
+                "position_directive_id": null,
+                "position_scope": null,
+                "range": {
+                  "start": 35,
+                  "end": 43
+                },
+                "source_range": {
+                  "start": 35,
+                  "end": 43
+                },
+                "content_range": {
+                  "start": 35,
+                  "end": 42
+                },
+                "editable_region_id": "slide-1-region-1"
+              },
+              {
+                "id": "slide-1-block-2",
+                "index": 1,
+                "kind": "paragraph",
+                "markdown": "Body text",
+                "position": null,
+                "position_directive_id": null,
+                "position_scope": null,
+                "range": {
+                  "start": 44,
+                  "end": 54
+                },
+                "source_range": {
+                  "start": 44,
+                  "end": 54
+                },
+                "content_range": {
+                  "start": 44,
+                  "end": 53
+                },
+                "editable_region_id": "slide-1-region-2"
+              }
+            ],
+            "directives": [
+              {
+                "id": "slide-1-directive-1",
+                "type": "section",
+                "value": null,
+                "text": ":::section{Q3}",
+                "range": {
+                  "start": 0,
+                  "end": 15
+                },
+                "source_range": {
+                  "start": 0,
+                  "end": 15
+                },
+                "editable": false
+              },
+              {
+                "id": "slide-1-directive-2",
+                "type": "subsection",
+                "value": null,
+                "text": ":::subsection{July}",
+                "range": {
+                  "start": 15,
+                  "end": 35
+                },
+                "source_range": {
+                  "start": 15,
+                  "end": 35
+                },
+                "editable": false
+              },
+              {
+                "id": "slide-1-directive-3",
+                "type": "footnote",
+                "value": null,
+                "text": ":::footnote{See appendix}",
+                "range": {
+                  "start": 55,
+                  "end": 81
+                },
+                "source_range": {
+                  "start": 55,
+                  "end": 81
+                },
+                "editable": false
+              }
+            ],
+            "editable_regions": [
+              {
+                "id": "slide-1-region-1",
+                "block_id": "slide-1-block-1",
+                "role": "heading",
+                "kind": "heading",
+                "text": "Month",
+                "range": {
+                  "start": 35,
+                  "end": 42
+                },
+                "source_range": {
+                  "start": 35,
+                  "end": 42
+                },
+                "content_range": {
+                  "start": 37,
+                  "end": 42
+                },
+                "editable": true
+              },
+              {
+                "id": "slide-1-region-2",
+                "block_id": "slide-1-block-2",
+                "role": "block",
+                "kind": "paragraph",
+                "text": "Body text",
+                "range": {
+                  "start": 44,
+                  "end": 53
+                },
+                "source_range": {
+                  "start": 44,
+                  "end": 53
+                },
+                "content_range": {
+                  "start": 44,
+                  "end": 53
+                },
+                "editable": true
+              }
+            ]
+          }
+        ],
+        "directives": [
+          {
+            "id": "slide-1-directive-1",
+            "type": "section",
+            "value": null,
+            "text": ":::section{Q3}",
+            "range": {
+              "start": 0,
+              "end": 15
+            },
+            "source_range": {
+              "start": 0,
+              "end": 15
+            },
+            "editable": false
+          },
+          {
+            "id": "slide-1-directive-2",
+            "type": "subsection",
+            "value": null,
+            "text": ":::subsection{July}",
+            "range": {
+              "start": 15,
+              "end": 35
+            },
+            "source_range": {
+              "start": 15,
+              "end": 35
+            },
+            "editable": false
+          },
+          {
+            "id": "slide-1-directive-3",
+            "type": "footnote",
+            "value": null,
+            "text": ":::footnote{See appendix}",
+            "range": {
+              "start": 55,
+              "end": 81
+            },
+            "source_range": {
+              "start": 55,
+              "end": 81
+            },
+            "editable": false
+          }
+        ],
+        "editable_regions": [
+          {
+            "id": "slide-1-region-1",
+            "block_id": "slide-1-block-1",
+            "role": "heading",
+            "kind": "heading",
+            "text": "Month",
+            "range": {
+              "start": 35,
+              "end": 42
+            },
+            "source_range": {
+              "start": 35,
+              "end": 42
+            },
+            "content_range": {
+              "start": 37,
+              "end": 42
+            },
+            "editable": true
+          },
+          {
+            "id": "slide-1-region-2",
+            "block_id": "slide-1-block-2",
+            "role": "block",
+            "kind": "paragraph",
+            "text": "Body text",
+            "range": {
+              "start": 44,
+              "end": 53
+            },
+            "source_range": {
+              "start": 44,
+              "end": 53
+            },
+            "content_range": {
+              "start": 44,
+              "end": 53
+            },
+            "editable": true
+          }
+        ]
+      },
+      "style": {
+        "theme": "match",
+        "typography": "book"
+      }
+    }
   }
 ]

@@ -1,0 +1,23 @@
+{
+  "name": "@elef/renderer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Deterministic projection of an Elef Work to HTML: markdown-it core, Elef syntax rules, image/math rules, block and preview rendering. No editor chrome, DOM, React, filesystem, network, Rails or Tauri.",
+  "types": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "@elef/work-model": "0.1.0",
+    "highlight.js": "11.11.1",
+    "katex": "0.18.7",
+    "markdown-it": "14.3.2"
+  }
+}

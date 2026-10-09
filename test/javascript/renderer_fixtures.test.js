@@ -18,6 +18,8 @@ for (const [index, { name, input }] of inputs.entries()) {
     }), outputs[index].blockHtml)
     // Strip V8 realm prototypes, preserving every value and HTML byte.
     assert.deepEqual(JSON.parse(JSON.stringify(renderer.renderPreview(input))), outputs[index].preview)
+    // Determinism: the same input renders byte-identical output every time.
+    assert.deepEqual(JSON.parse(JSON.stringify(renderer.renderPreview(input))), outputs[index].preview)
     assert.deepEqual(JSON.parse(JSON.stringify(renderer.buildEditorMap(input.source, {
       mode: input.kind, sourceName: input.title
     }))), outputs[index].preview.editor_map)

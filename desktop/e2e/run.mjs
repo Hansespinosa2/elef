@@ -56,7 +56,7 @@ let updaterServer = null
 const env = {
   ...process.env,
   ELEF_E2E_LIBRARY_ROOT: libraryRoot,
-  ELEF_E2E_APP_BINARY: path.join(repoRoot, "desktop", "target", "debug", "elef-desktop"),
+  ELEF_E2E_APP_BINARY: path.join(repoRoot, "target", "debug", "elef-desktop"),
   ELEF_E2E_IMPORT_ARCHIVE: importArchive,
   ELEF_E2E_PORTABLE_GRAPH_ARCHIVE: portableGraphArchive,
   ELEF_E2E_EXPORT_PATH: exportArchive,
@@ -64,7 +64,7 @@ const env = {
 }
 
 if (process.env.ELEF_E2E_PACKAGED_UPDATES === "1") {
-  const packages = path.join(repoRoot, "desktop/target/e2e-packages")
+  const packages = path.join(repoRoot, "target/e2e-packages")
   const installed = path.join(temporaryRoot, "installed")
   await cp(path.join(packages, "n-1"), installed, { recursive: true, verbatimSymlinks: true })
   env.ELEF_E2E_PACKAGED_UPDATES = "1"
@@ -294,8 +294,9 @@ try {
     await readFile(path.join(libraryRoot, "E2E archive seed", "presentation.md"), "utf8"),
     "# Imported from Elef\n\nPortable archive fixture.\n"
   )
-  await access(exportArchive)
-  execFileSync("unzip", ["-q", "-o", exportArchive, "-d", exportContents])
+  const exportSnapshot = `${exportArchive}.seed-bytes`
+  await access(exportSnapshot)
+  execFileSync("unzip", ["-q", "-o", exportSnapshot, "-d", exportContents])
   await makeTreeAccessible(exportContents)
   assert.deepEqual(await hashTree(exportContents), await hashTree(seedDeck),
     "Exporting a deck must preserve every file byte, including its manifest and uploaded image")

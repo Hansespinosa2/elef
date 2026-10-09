@@ -93,14 +93,7 @@ module Source
     end
 
     def source_anchor_lines(source)
-      front_matter = Source::Document.initial_front_matter(source.to_s)
-      body_line = front_matter ? source.to_s[0...front_matter.body_start].to_s.count("\n") + 1 : 1
-      lines = source.to_s.lines.each_with_index.filter_map do |line, index|
-        next if index + 1 < body_line || line.strip.blank? || line.match?(/\A\s*:::/)
-
-        index + 1
-      end
-      lines.presence || [body_line]
+      Source::JavascriptRenderer.source_anchor_lines(source.to_s)
     end
 
     def source_line_for(source, markdown, offset)

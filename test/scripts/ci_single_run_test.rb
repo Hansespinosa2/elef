@@ -14,6 +14,7 @@ required_checks = %w[
   test
   sqlite-test
   system-test
+  affected
   desktop
   desktop-macos
   renderer-macos

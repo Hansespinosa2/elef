@@ -6,6 +6,21 @@ Rails.application.routes.draw do
   resource :settings, only: %i[show update], controller: "workspace_settings"
   get "search", to: "library#search", as: :search
 
+  namespace :api do
+    namespace :host do
+      resources :works, only: %i[index create show update destroy], controller: "/host_api" do
+        member do
+          patch :rename, to: "/host_api#rename"
+          get :media, to: "/host_api#media_index"
+          delete "media/:digest", to: "/host_api#media_destroy", as: :media_item
+        end
+      end
+      get :settings, to: "/host_api#settings_show"
+      patch :settings, to: "/host_api#settings_update"
+      post :imports, to: "/host_api#imports_create"
+    end
+  end
+
   resources :snippets, except: :show
   resources :math_shortcuts, except: :show
 

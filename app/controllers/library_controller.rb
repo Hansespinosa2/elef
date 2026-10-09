@@ -1,8 +1,9 @@
 class LibraryController < ApplicationController
   def index
     @filter = "all"
-    @works = Work.recent_first
+    @card_notes = {}
     @lineage_presentations = []
+    render :shell
   end
 
   def search

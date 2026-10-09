@@ -10,6 +10,7 @@ Elef is a Markdown authoring and presentation application with a Rails web app a
 
 ## Start here
 
+- [Active desktop/web refactor campaign](docs/refactor/README.md) — agent startup: `go`.
 - [Product principles](ELEF-DOCTRINE.md)
 - [Architecture and code map](docs/architecture.md)
 - [Development and testing](docs/development.md)

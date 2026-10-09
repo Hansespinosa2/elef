@@ -1,0 +1,19 @@
+{
+  "name": "@elef/work-model",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Pure semantics of an Elef Work (document | presentation): parsing, front matter, directives, structural ranges, links, pure source transforms. No DOM, React, filesystem, network, Rails or Tauri.",
+  "types": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./document-map": "./src/document_map.js",
+    "./document-links": "./src/document_links.js"
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  }
+}

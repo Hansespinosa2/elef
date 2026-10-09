@@ -2,31 +2,25 @@ import { createDeckOpenFlow, prepareDeckOpen } from "lib/deck_open_flow"
 import { applyEditorSource } from "lib/editor_source"
 import { measurePaintedAction } from "lib/performance_measurement"
 import { editorFor } from "lib/editor_controller_lookup"
-import { createLibraryCard } from "lib/library_card"
-import { createIncrementalList } from "lib/incremental_list"
 import { createDocumentGraphCache } from "lib/document_graph_cache"
-import { buildDocumentGraph } from "lib/document_links"
+import { createRequestGuard } from "lib/request_identity"
+import { buildDocumentGraph } from "@elef/work-model"
 import { waitForEditorController } from "lib/editor_ready"
-import { createSaveFlow } from "lib/save_flow"
+import { createWorkSession } from "lib/work_session"
 import { createTitleSaveFlow } from "lib/title_save_flow"
 import { presentConflictDialog } from "lib/conflict_dialog"
 import { createRendererClient } from "lib/renderer_worker_client"
-import { installSanitizedPreview } from "lib/preview_sanitizer"
-import { authoringSettingsElements, createAuthoringSettingsDialog } from "lib/authoring_settings_dialog"
-import { mergeAuthoringRegistryEntries } from "lib/authoring_registry_merge"
 import { applyDesktopFeatureFlags } from "lib/feature_flags"
 import { configureEditorKind, renderEditorView } from "lib/editor_view"
-import { renderLibraryView, setLibraryViewTab, updateLibraryEmptyState } from "lib/library_view"
-import { filterDecks } from "lib/library_filter"
-import { createLibraryPreviewLoader } from "lib/library_preview"
+import { CREATE_WORK_EVENT, GraphController, mountElef, mountPresentation, mountVimSettings, parseLibraryRoute, renderGraphView } from "@elef/client"
 
 export function startFileLibraryApplication(platform) {
   const {
-    fileLibrary, listen, getCurrentWindow,
+    fileLibrary, createLibraryHost, listen, getCurrentWindow,
     completeBootstrap, createCloseFlow, createTransportAdapter, installFetchTransport,
     mediaUrlsForDeck, checkForUpdate, createIdleUpdateCheck, installPendingUpdate,
-    desktopAuthoringRegistry, loadDesktopAuthoringRegistry,
-    loadEditorRuntime, loadLibraryRuntime
+    desktopAuthoringRegistry, loadDesktopAuthoringRegistry, quietSavePolicy,
+    loadEditorRuntime
   } = platform
 
   applyDesktopFeatureFlags(document)
@@ -52,6 +46,7 @@ export function startFileLibraryApplication(platform) {
     visualDisabledMessage: "Open a deck to render its preview",
     showTitle: true,
     showSubmit: false,
+    showSaveStatus: false,
     persisted: false,
     authoringRegistry: desktopAuthoringRegistry(),
     documentTitles: [],
@@ -65,22 +60,21 @@ export function startFileLibraryApplication(platform) {
       sourceMode: "source-mode",
       theme: "deck-theme",
       typography: "deck-typography",
-      preview: "desktop-preview",
-      saveState: "save-state",
-      retrySave: "retry-save"
+      preview: "desktop-preview"
     }
   })
   const editorFieldHost = document.querySelector("#desktop-editor-field")
   const editorFormHost = document.querySelector("#desktop-editor-form")
   editorFieldHost.removeAttribute("data-controller")
   editorFormHost.removeAttribute("data-controller")
-  editorFormHost.dataset.presentationActiveValue = "false"
 
-  renderLibraryView(document.querySelector("#library-view-mount"), {
-    filter: "all",
-    countLabel: "0 works",
-    description: "One home for your documents, presentations, and source."
-  })
+  // The shared client renders the library markup (tabs, cards, notice,
+  // graph panel) into #library-view-mount during bootstrap initialize; the
+  // host queries those client-owned nodes fresh at each use site instead of
+  // caching them here.
+  const mount = document.querySelector("#library-view-mount")
+  let shell = null
+  let libraryHost = null
 
   const elements = {
     libraryName: document.querySelector("#library-name"),
@@ -88,27 +82,15 @@ export function startFileLibraryApplication(platform) {
     library: document.querySelector("#library-view"),
     deckView: document.querySelector("#deck-view"),
     deckTitle: document.querySelector("#deck-title"),
-    list: document.querySelector("#deck-list"),
-    loadMore: document.querySelector("#library-load-more"),
-    graphView: document.querySelector("#document-graph-view"),
-    count: document.querySelector("#library-count"),
-    empty: document.querySelector("#empty-library"),
-    noResults: document.querySelector("#library-no-results"),
-    search: document.querySelector("#library-search"),
     status: document.querySelector("#status-text"),
-    notice: document.querySelector("#notice"),
-    createDialog: document.querySelector("#create-dialog"),
     settingsDialog: document.querySelector("#settings-dialog"),
     settingsForm: document.querySelector("#settings-form"),
     libraryTheme: document.querySelector("#library-theme"),
-    createForm: document.querySelector("#create-form"),
     aboutDialog: document.querySelector("#about-dialog"),
     editorField: document.querySelector("#desktop-editor-field"),
     editorForm: document.querySelector("#desktop-editor-form"),
     editorInput: document.querySelector("#deck-source"),
     titleInput: document.querySelector("#desktop-editor-title"),
-    saveState: document.querySelector("#save-state"),
-    retrySave: document.querySelector("#retry-save"),
     restoreDraft: document.querySelector("#restore-local-draft"),
     importConflictDialog: document.querySelector("#import-conflict-dialog"),
     importConflictMessage: document.querySelector("#import-conflict-message"),
@@ -124,74 +106,72 @@ export function startFileLibraryApplication(platform) {
   let decks = []
   let activeDeck = null
   let saveFlow = null
+  let sessionStatusKind = "clean"
+  let lastSourceFile = null
   let e2eNextSaveDelayMs = 0
   const documentGraphCache = createDocumentGraphCache(async () => buildDocumentGraph(await fileLibrary.readDocumentGraph()))
-  let libraryTab = "all"
-  let cardPreviewObserver = null
-  let libraryMoreObserver = null
-  const libraryListRenderer = createIncrementalList(elements.list)
   let pendingUpdate = null
   let updateInstalling = false
   let libraryStatusLoaded = false
   let processingOpenedFiles = false
   let openFilesRequested = false
   let openFilesWaitingForSave = false
-  let sourcePollBusy = false
-  let lastSourcePollError = null
   let titleFlow = null
   const startupUpdateCheck = createIdleUpdateCheck(
     () => checkForUpdates(false),
     () => !elements.deckView.hidden
   )
 
-  const authoringSettings = createAuthoringSettingsDialog({
-    elements: authoringSettingsElements(document),
-    readRegistries: async () => {
-      const result = await fileLibrary.readAuthoringRegistries()
-      const entries = mergeAuthoringRegistryEntries(
-        desktopAuthoringRegistry().filter(entry => entry.built_in),
-        result.snippets,
-        result.math_shortcuts
-      )
-      return {
-        snippets: entries.filter(entry => typeof entry.body === "string" && typeof entry.trigger === "string").map(entry => ({
-          id: entry.id,
-          name: entry.name,
-          trigger: entry.trigger,
-          description: entry.description,
-          category: entry.category,
-          body: entry.body,
-          built_in: entry.built_in === true
-        })),
-        math_shortcuts: entries.filter(entry => typeof entry.expansion === "string" && Array.isArray(entry.aliases)).map(entry => ({
-          id: entry.id,
-          name: entry.name,
-          aliases: entry.aliases,
-          description: entry.description,
-          prefix: entry.prefix,
-          expansion: entry.expansion,
-          built_in: entry.built_in === true
-        })),
-        hashes: result.hashes
+  // The shared client renders the authoring dialog (the same DOM contract as
+  // the web settings pages, so the shared scenarios cover both hosts).
+  // Remount on every open so the dialog loads fresh registries, matching the
+  // previous dialog's open-time load.
+  const authoringHostDialog = document.querySelector("#authoring-dialog")
+  const authoringMount = document.querySelector("#authoring-settings-mount")
+  let authoringShell = null
+  function closeAuthoringSettings() {
+    if (authoringShell) {
+      authoringShell.unmount()
+      authoringShell = null
+    }
+    if (authoringHostDialog.open) authoringHostDialog.close()
+  }
+  async function openAuthoringSettings() {
+    closeAuthoringSettings()
+    authoringShell = await mountElef(authoringMount, libraryHost, {
+      initialUrl: "/snippets",
+      authoring: {
+        transport: platform.authoringTransport,
+        renderExample: source => renderer.renderMarkdownBlock(source),
+        reloadEditorRegistry: loadDesktopAuthoringRegistry,
+        onClose: closeAuthoringSettings,
+        onSaved: setStatus
+      },
+      updater: platform.updaterSeam
+    })
+    authoringHostDialog.showModal()
+  }
+
+  // Device-local vim preferences render through the shared client UI with a
+  // bridge that live-syncs the open editor, preserving the previous
+  // controller's behavior (same storage keys, same editor push).
+  const vimMount = document.querySelector("#vim-settings-mount")
+  if (vimMount) {
+    const editorForVim = () => document.querySelector(".source-field")?.editorController || null
+    mountVimSettings(vimMount, {
+      editorBridge: {
+        setVimEnabled: enabled => editorForVim()?.setVimEnabled(enabled),
+        setEscapeKey: key => editorForVim()?.setEscapeKey(key),
+        clearEscapeKey: () => editorForVim()?.clearEscapeKey(),
+        setLineNumberMode: mode => editorForVim()?.setLineNumberMode(mode),
+        setModeAwareCursor: enabled => editorForVim()?.setModeAwareCursor(enabled)
       }
-    },
-    writeRegistry: async payload => {
-      const result = await fileLibrary.writeAuthoringRegistry(payload)
-      return { contentHash: result.content_hash }
-    },
-    reloadEditorRegistry: loadDesktopAuthoringRegistry,
-    renderMarkdownBlock: source => renderer.renderMarkdownBlock(source),
-    onSaved: setStatus
-  })
+    })
+  }
 
   const transport = createTransportAdapter({ onConflict: event => saveFlow?.handleConflict(event) })
-  const loadLibraryPreview = createLibraryPreviewLoader({
-    readPreview: id => fileLibrary.readSourcePreview(id),
-    render: input => renderer.render(input),
-    mediaBaseUrlForDeck: deck => mediaUrlsForDeck(deck).assetBaseUrl,
-    install: installSanitizedPreview
-  })
-  saveFlow = createSaveFlow({
+  const sessionTransport = {
+    ...transport,
     saveSource: async (id, source) => {
       const isDocument = decks.find(deck => deck.id === id)?.source_file === "document.md"
       if (__ELEF_E2E__ && e2eNextSaveDelayMs > 0) {
@@ -202,23 +182,55 @@ export function startFileLibraryApplication(platform) {
       const result = await transport.saveSource(id, source)
       if (isDocument) documentGraphCache.invalidate()
       return result
-    },
-    acceptDiskVersion: (id, contentHash) => transport.acceptDiskVersion(id, contentHash),
-    getSource: currentSource,
-    setSource: setEditorSource,
-    onState: (state, details) => {
-      if (state !== "Saved" || !titleFlow?.isDirty()) setSaveState(state)
-      elements.restoreDraft.hidden = !details.canRestoreDraft
-      elements.retrySave.hidden = !details.blocked && !titleFlow?.isBlocked()
-      if (!details.dirty && openFilesWaitingForSave) {
+    }
+  }
+  function openSession(deck) {
+    closeSession()
+    lastSourceFile = deck.source_file
+    const session = createWorkSession({
+      transport: sessionTransport,
+      policy: {
+        workId: deck.id,
+        kind: deck.source_file === "document.md" ? "document" : "presentation",
+        deck,
+        getText: currentSource,
+        setText: (source, meta) => setEditorSource(source, meta),
+        saveDelay: quietSavePolicy.saveDelay,
+        externalPollMs: quietSavePolicy.externalPollMs,
+        snapshotIntervalMs: quietSavePolicy.snapshotIntervalMs,
+        materializeEdits: materializePendingVisualEdits,
+        onConflict: showConflict,
+        onError: showError
+      }
+    })
+    session.onStatus(status => {
+      sessionStatusKind = status.kind
+      elements.restoreDraft.hidden = !session.canRestoreDraft
+      if (activeDeck && activeDeck.source_file !== lastSourceFile) {
+        lastSourceFile = activeDeck.source_file
+        syncSourceLabel()
+      }
+      if (status.kind === "clean" && openFilesWaitingForSave) {
         openFilesWaitingForSave = false
         queueMicrotask(() => void processOpenedFiles())
       }
-    },
-    onConflict: showConflict,
-    materializeEdits: materializePendingVisualEdits,
-    onError: showError
-  })
+    })
+    session.onExternalChange(snapshot => {
+      if (snapshot.removed || !activeDeck) return
+      if (activeDeck.source_file === "document.md" &&
+          (snapshot.baseline.revision !== activeDeck.content_hash || snapshot.sourceFile !== activeDeck.source_file)) {
+        documentGraphCache.invalidate()
+      }
+    })
+    saveFlow = session
+  }
+
+  function closeSession() {
+    if (!saveFlow) return
+    saveFlow.dispose()
+    saveFlow = null
+    sessionStatusKind = "clean"
+  }
   titleFlow = createTitleSaveFlow({
     getDeck: () => activeDeck,
     getTitle: () => elements.titleInput.value,
@@ -227,10 +239,7 @@ export function startFileLibraryApplication(platform) {
       elements.deckTitle.textContent = renamed.name
       document.querySelector("#breadcrumb-current").textContent = renamed.name
     },
-    onState: (state, details) => {
-      if (state !== "Saved" || !saveFlow?.dirty) setSaveState(state)
-      elements.retrySave.hidden = !details.blocked && !saveFlow?.blocked
-    },
+    onState: () => {},
     onError: showError
   })
 
@@ -330,10 +339,12 @@ export function startFileLibraryApplication(platform) {
         async list() {
           return measurePaintedAction(async () => {
             await refreshLibrary()
-            if (!elements.notice.hidden && elements.notice.dataset.tone === "error") throw new Error("The measured library refresh failed.")
-            return { total: decks.length, rendered: libraryListRenderer.renderedCount }
+            const notice = document.querySelector("#notice")
+            if (notice && !notice.hidden && notice.dataset.tone === "error") throw new Error("The measured library refresh failed.")
+            return { total: decks.length, rendered: document.querySelectorAll("#deck-list .library-card").length }
           })
         },
+        typingValue: () => currentSource(),
         startTypingDuringSave(text) {
           const editor = editorFor(elements.editorField)
           if (!editor) throw new Error("The measured source editor is not ready.")
@@ -368,14 +379,21 @@ export function startFileLibraryApplication(platform) {
     })
     Object.defineProperty(window, "__elefSaveTestHooks", {
       value: Object.freeze({
-        pause: () => saveFlow.pause(),
+        pause: () => saveFlow?.pause(),
+        saveStatus: () => {
+          if (titleFlow?.isDirty() || titleFlow?.isBlocked()) return "dirty"
+          return sessionStatusKind
+        },
         async flush() {
           try {
-            return await saveFlow.flush({ force: true })
+            if (!saveFlow) return true
+            const result = await saveFlow.flush({ force: true })
+            return result.kind === "clean" || result.kind === "saved"
           } finally {
-            saveFlow.resume()
+            saveFlow?.resume()
           }
-        }
+        },
+        runSnapshotCadence: () => saveFlow?.runSnapshotCadence?.() ?? null
       })
     })
   }
@@ -385,14 +403,11 @@ export function startFileLibraryApplication(platform) {
   }
 
   function showNotice(message, tone = "info") {
-    elements.notice.textContent = message
-    elements.notice.dataset.tone = tone
-    elements.notice.hidden = false
+    shell?.notify(message, tone)
   }
 
   function clearNotice() {
-    elements.notice.hidden = true
-    elements.notice.textContent = ""
+    shell?.notify(null)
   }
 
   function applyTheme(theme) {
@@ -405,6 +420,7 @@ export function startFileLibraryApplication(platform) {
     showNotice(message, "error")
   }
 
+  let libraryShown = false
   function showLibrary() {
     elements.editorForm.previewController?.finishEditing()
     document.body.dataset.desktopView = "library"
@@ -415,14 +431,22 @@ export function startFileLibraryApplication(platform) {
     document.querySelector("#new-deck").disabled = !library
     document.querySelector("#import-elef").disabled = !library
     document.querySelector("#breadcrumb-current").textContent = "Decks"
-    showLibraryTab("all")
+    // The first show preserves the boot filter (a deep-linked tab); every
+    // return home resets to All and reloads, so cards and previews reflect
+    // saves made in the editor (the pre-client card pass re-read preview
+    // sources on every return; the client caches by revision and needs
+    // the explicit reload to see them).
+    if (libraryShown) {
+      shell.setFilter("all")
+      void refreshLibrary()
+    } else libraryShown = true
     void startupUpdateCheck.resume()
   }
 
-  function showLibraryTab(tab) {
-    libraryTab = setLibraryViewTab(document.querySelector("#library-view-mount"), tab)
-    renderDecks()
-    if (libraryTab === "documents") void showDocumentGraph()
+  // The client owns the active tab; the host reads it back from the settled
+  // DOM whenever a refresh or library event needs the graph decision.
+  function currentFilter() {
+    return mount.querySelector("[data-library-tab][aria-current='page']")?.dataset.libraryTab ?? "all"
   }
 
   async function documentGraphData() {
@@ -438,87 +462,32 @@ export function startFileLibraryApplication(platform) {
     }
   }
 
+  // Request identity for graph loads: a slow graph resolving after the user
+  // navigated away (library hidden) or after a newer request started must
+  // not render into the stale slot. The previous Stimulus mount had no such
+  // guard; the panel re-read the filter but still applied late payloads.
+  const graphRequests = createRequestGuard()
+  let graphController = null
   async function showDocumentGraph() {
     if (!library) return
+    const request = graphRequests.request()
     try {
-      await loadLibraryRuntime()
       const graph = await documentGraphData()
-      const previous = elements.graphView
-      const graphView = previous.cloneNode(false)
-      graphView.dataset.documentGraphDataValue = JSON.stringify(graph)
-      graphView.setAttribute("data-controller", "document-graph")
-      graphView.addEventListener("click", event => {
-        const link = event.target.closest?.("[data-deck-id]")
-        if (!link) return
-        event.preventDefault()
-        void openDeck(link.dataset.deckId)
-      })
-      previous.replaceWith(graphView)
-      elements.graphView = graphView
-      setLibraryViewTab(document.querySelector("#library-view-mount"), libraryTab)
+      // Reject stale results: navigation away from the library or a newer
+      // graph request supersedes this payload.
+      if (!graphRequests.isCurrent(request) || !libraryShown) return
+      const slot = mount.querySelector("#document-graph-view")
+      if (!slot) return
+      graphController?.destroy()
+      renderGraphView(slot, graph)
+      graphController = new GraphController(slot, graph, { onOpenDeck: id => void openDeck(id) })
+      // The client hides the panel when the filter leaves documents; the host
+      // unhides it once populated. Re-read the settled filter here so a slow
+      // load racing a tab switch lands in the correct state.
+      slot.hidden = currentFilter() !== "documents"
     } catch (error) {
       showError(error)
     }
-  }
-
-  function renderDecks() {
-    const query = elements.search.value.trim()
-    const filtered = filterDecks(decks, libraryTab, query)
-    const totalForFilter = filterDecks(decks, libraryTab).length
-    cardPreviewObserver?.disconnect()
-    libraryMoreObserver?.disconnect()
-    const decksById = new Map(filtered.map(deck => [deck.id, deck]))
-    const startPreview = target => {
-      const deck = decksById.get(target.dataset.deckId)
-      if (deck) void loadLibraryPreview(target, deck)
-    }
-    if (typeof IntersectionObserver === "function") {
-      cardPreviewObserver = new IntersectionObserver(entries => {
-        for (const entry of entries) {
-          if (!entry.isIntersecting) continue
-          cardPreviewObserver.unobserve(entry.target)
-          startPreview(entry.target)
-        }
-      }, { rootMargin: "180px" })
-    } else {
-      cardPreviewObserver = null
-    }
-    libraryListRenderer.render(filtered, deck => createLibraryCard(document, deck, {
-      open: id => void openDeck(id),
-      preview: deck => void openDeck(deck.id),
-      present: deck => {
-        void openDeck(deck.id).then(opened => {
-          if (opened) void startPresentation()
-        })
-      },
-      rename: (item, name) => void renameDeck(item, name).catch(showError),
-      delete: item => void deleteDeck(item)
-    }), { onAppend: cards => {
-      const previewTargets = cards.flatMap(card => [...card.querySelectorAll(".library-card-preview[data-deck-id]")])
-      if (cardPreviewObserver) previewTargets.forEach(target => cardPreviewObserver.observe(target))
-      else previewTargets.forEach(startPreview)
-    } })
-    elements.loadMore.hidden = !libraryListRenderer.hasMore
-    if (libraryListRenderer.hasMore && typeof IntersectionObserver === "function") {
-      libraryMoreObserver = new IntersectionObserver(entries => {
-        if (entries.some(entry => entry.target === elements.loadMore && entry.isIntersecting)) appendLibraryDeckBatch()
-      }, { rootMargin: "300px" })
-      libraryMoreObserver.observe(elements.loadMore)
-    }
-    const kindLabel = libraryTab === "all" ? "work" : libraryTab === "documents" ? "document" : "presentation"
-    elements.count.textContent = `${totalForFilter} ${totalForFilter === 1 ? kindLabel : `${kindLabel}s`}${query ? ` · ${filtered.length} shown` : ""}`
-    const isEmptyState = filtered.length === 0 && !query
-    elements.empty.hidden = !isEmptyState
-    elements.list.hidden = filtered.length === 0 && !isEmptyState
-    elements.noResults.hidden = !query || filtered.length > 0
-    updateLibraryEmptyState(elements.empty, libraryTab)
-    if (filtered.length === 0 && query) {
-      elements.list.hidden = false
-    }
-  }
-
-  function appendLibraryDeckBatch() {
-    elements.loadMore.hidden = !libraryListRenderer.appendNext()
   }
 
   async function refreshLibrary() {
@@ -530,8 +499,9 @@ export function startFileLibraryApplication(platform) {
       ])
       decks = listedDecks
       documentGraphCache.invalidate()
-      renderDecks()
-      if (libraryTab === "documents") await showDocumentGraph()
+      libraryHost?.noteListedDecks(listedDecks)
+      await shell.refresh()
+      if (currentFilter() === "documents") await showDocumentGraph()
       setStatus(`${decks.length} ${decks.length === 1 ? "deck" : "decks"}`)
       clearNotice()
     } catch (error) {
@@ -550,6 +520,7 @@ export function startFileLibraryApplication(platform) {
         return
       }
       library = selected
+      libraryHost?.noteRootChanged()
       await loadDesktopAuthoringRegistry()
       documentGraphCache.invalidate()
       libraryConfig = selected.config || libraryConfig
@@ -564,43 +535,38 @@ export function startFileLibraryApplication(platform) {
     }
   }
 
+  // The create dialog is client-owned; the host only requests it. Creation
+  // itself flows through the host adapter, then the navigate seam opens the
+  // new work, matching the old create-then-open sequence.
   function showCreateDialog(kind = "presentation") {
-    document.querySelector("#new-deck-kind").value = kind
-    elements.createDialog.showModal()
-    document.querySelector("#new-deck-name").focus()
-  }
-
-  async function createDeck(event) {
-    event.preventDefault()
-    const form = new FormData(elements.createForm)
-    const name = String(form.get("name") || "").trim()
-    const kind = String(form.get("kind") || "presentation")
-    if (!name) return
-    elements.createDialog.close()
-    try {
-      const opened = await fileLibrary.createDeck(name, kind)
-      await refreshLibrary()
-      await openDeck(opened.id)
-    } catch (error) {
-      showError(error)
-    }
+    mount.querySelector(".library-shared-view")?.dispatchEvent(
+      new CustomEvent(CREATE_WORK_EVENT, { detail: { kind } })
+    )
   }
 
   const openDeck = createDeckOpenFlow(openDeckNow)
 
   async function openDeckNow(id) {
+    // Hide the library before the first await: pending card-preview idle
+    // callbacks would otherwise spend fetches and main-thread renders
+    // through the whole open. Every early exit below restores visibility;
+    // the success path leaves the editor swap in charge and failures return
+    // through showLibrary.
+    const libraryWasHidden = elements.library.hidden
+    elements.library.hidden = true
+    const restoreLibrary = () => { elements.library.hidden = libraryWasHidden }
     try {
       if (document.body.classList.contains("presenting-deck")) await exitPresentation()
       elements.editorForm.previewController?.finishEditing()
       await Promise.resolve()
-      if (activeDeck && hasUnsavedChanges() && !(await flushSave())) return false
+      if (activeDeck && hasUnsavedChanges() && !(await flushSave())) { restoreLibrary(); return false }
       delete elements.editorForm.dataset.loadedDeckId
       let transition
       do {
         transition = await prepareDeckOpen(id, {
           read: target => measureOpenStage("readDeck", () => transport.readDeck(target)),
           isDirty: hasUnsavedChanges,
-          getRevision: () => saveFlow.revision,
+          getRevision: () => saveFlow?.revision ?? 0,
           flushSave,
           prepare: deck => measureOpenStage("prepareDeck", async () => {
             await loadEditorRuntime()
@@ -617,9 +583,10 @@ export function startFileLibraryApplication(platform) {
             return { documentTitles }
           })
         })
-      } while (transition && (hasUnsavedChanges() || saveFlow.revision !== transition.revision))
+      } while (transition && (hasUnsavedChanges() || (saveFlow?.revision ?? 0) !== transition.revision))
       if (!transition) {
         if (activeDeck) elements.editorForm.dataset.loadedDeckId = activeDeck.id
+        restoreLibrary()
         return false
       }
       const { deck, prepared: { documentTitles } } = transition
@@ -627,19 +594,19 @@ export function startFileLibraryApplication(platform) {
       if (deck.id !== id) {
         decks = decks.map(item => item.id === id ? { ...item, id: deck.id } : item)
         documentGraphCache.invalidate()
-        renderDecks()
+        void shell.refresh()
       }
       // All asynchronous work is finished. Installing the buffer and changing
       // save ownership occur in one synchronous turn, with no stale A buffer
       // able to schedule a write for B during graph/controller preparation.
-      saveFlow.deactivate()
+      closeSession()
       activeDeck = null
       try {
         configureEditorKind(elements.editorField.closest(".editor-shell"), isDocument ? "document" : "presentation", {
           documentTitles,
           sourceName: isDocument ? "document[source]" : "presentation[source]",
           showTitle: true,
-          formControllers: "preview visual-editor presentation-editor slide-overview media presentation"
+          formControllers: "preview visual-editor presentation-editor slide-overview media"
         })
         const editor = await measureOpenStage("editorReady", () => editorFor(elements.editorField)?.editorReady
           ? editorFor(elements.editorField)
@@ -656,7 +623,7 @@ export function startFileLibraryApplication(platform) {
     const viewSetupStartedAt = __ELEF_E2E__ ? performance.now() : null
       transport.activateDeck(deck, id)
       activeDeck = deck
-      saveFlow.activate(deck)
+      openSession(deck)
       elements.deckTitle.textContent = deck.name
       elements.deckTitle.hidden = !isDocument
       elements.titleInput.value = deck.name
@@ -674,7 +641,6 @@ export function startFileLibraryApplication(platform) {
       visualButton.disabled = true
       visualButton.title = "Rendering preview…"
       elements.editorInput.disabled = false
-      setSaveState("Saved")
       document.querySelector("#deck-id").textContent = deck.id
       elements.editorForm.dataset.loadedDeckId = deck.id
       const notice = document.querySelector("#deck-notice")
@@ -699,24 +665,26 @@ export function startFileLibraryApplication(platform) {
     const renamed = await fileLibrary.renameDeck(deck.id, name.trim())
     if (activeDeck?.id === deck.id) Object.assign(activeDeck, renamed)
     decks = decks.map(item => item.id === deck.id ? { ...item, ...renamed } : item)
-    renderDecks()
+    await shell.refresh()
     return renamed
   }
 
-  async function deleteDeck(deck) {
-    try {
-      const result = await fileLibrary.deleteDeck(deck.id)
-      if (result.deleted) {
-        if (activeDeck?.id === deck.id) {
-          activeDeck = null
-          saveFlow.deactivate()
-        }
-        await refreshLibrary()
-        setStatus(`Moved “${deck.name}” to Trash`)
-      }
-    } catch (error) {
-      showError(error)
+  // Card rename/delete run inside the client through the host adapter; the
+  // host only keeps its editor-side caches consistent and reports status.
+  function handleLibraryEvent(event) {
+    if (event.type === "renamed") {
+      if (activeDeck?.id === event.work.id) Object.assign(activeDeck, { name: event.work.title })
+      decks = decks.map(item => item.id === event.work.id ? { ...item, name: event.work.title } : item)
     }
+    if (event.type === "deleted") {
+      if (activeDeck?.id === event.work.id) {
+        activeDeck = null
+        closeSession()
+      }
+      decks = decks.filter(item => item.id !== event.work.id)
+      setStatus(`Moved “${event.work.title}” to Trash`)
+    }
+    if (currentFilter() === "documents") void showDocumentGraph()
   }
 
   function showImportConflict(error) {
@@ -729,7 +697,7 @@ export function startFileLibraryApplication(platform) {
   async function completeImport(imported) {
     if (imported.replaced && activeDeck?.id === imported.deck.id) {
       activeDeck = null
-      saveFlow.deactivate()
+      closeSession()
       showLibrary()
     }
     await refreshLibrary()
@@ -775,13 +743,8 @@ export function startFileLibraryApplication(platform) {
     }
   }
 
-  function setSaveState(state) {
-    elements.saveState.textContent = state
-    elements.saveState.dataset.state = state.toLowerCase().replaceAll(" ", "-")
-  }
-
   function scheduleSave() {
-    saveFlow.noteChange()
+    saveFlow?.noteChange()
   }
 
   function materializePendingVisualEdits() {
@@ -797,7 +760,19 @@ export function startFileLibraryApplication(platform) {
   async function flushSave(options) {
     hasUnsavedChanges()
     if (titleFlow && !(await titleFlow.flush(options))) return false
-    return saveFlow.flush(options)
+    if (!saveFlow) return true
+    const result = await saveFlow.flush(options)
+    return result.kind === "clean" || result.kind === "saved"
+  }
+
+  async function flushForClose() {
+    hasUnsavedChanges()
+    if (titleFlow && !(await titleFlow.flush())) return "failed"
+    if (!saveFlow) return "saved"
+    const result = await saveFlow.flush()
+    if (result.kind === "clean" || result.kind === "saved") return "saved"
+    if (result.kind === "conflict") return "conflict"
+    return "failed"
   }
 
   function showConflict(conflict) {
@@ -960,6 +935,37 @@ export function startFileLibraryApplication(platform) {
     window.print()
   }
 
+  // Present mode runs on the shared client presentation mount (the retired
+  // Stimulus "presentation" controller is gone). The mount persists across
+  // decks on this form; start() re-discovers the live projection slides and
+  // preview re-renders resync scaling plus navigation while presenting.
+  let presentationMount = null
+
+  function presentationStage() {
+    return elements.editorForm.querySelector(".presentation-editor-projection")
+  }
+
+  // renderEditorView rebuilds the projection on every deck open, so each
+  // present starts from a fresh mount bound to the live projection element.
+  let presentationResyncListening = false
+
+  function mountFreshPresentation() {
+    presentationMount?.destroy()
+    presentationMount = mountPresentation(elements.editorForm, {
+      stage: presentationStage(),
+      document
+    })
+    if (!presentationResyncListening) {
+      presentationResyncListening = true
+      elements.editorForm.addEventListener("elef:preview-updated", resyncPresentationMount)
+    }
+    return presentationMount
+  }
+
+  function resyncPresentationMount() {
+    presentationMount?.resync()
+  }
+
   async function startPresentation() {
     if (!activeDeck || activeDeck.source_file === "document.md") {
       showNotice("Open a presentation deck to start presentation mode.")
@@ -969,8 +975,8 @@ export function startFileLibraryApplication(platform) {
       showNotice("Render the presentation before starting presentation mode.", "error")
       return
     }
-    const presentation = window.Stimulus?.getControllerForElementAndIdentifier(elements.editorForm, "presentation")
-    if (!presentation?.start()) {
+    const presentation = mountFreshPresentation()
+    if (!presentation.controller.start()) {
       showNotice("This presentation has no slides to show.", "error")
       return
     }
@@ -984,7 +990,7 @@ export function startFileLibraryApplication(platform) {
     } finally {
       // Native fullscreen can move focus to the exit button. Put keyboard
       // navigation back on the shared presentation stage after the transition.
-      presentation.stageTarget?.focus({ preventScroll: true })
+      presentationStage()?.focus({ preventScroll: true })
     }
   }
 
@@ -1000,7 +1006,8 @@ export function startFileLibraryApplication(platform) {
     document.body.classList.remove("presenting-deck")
     elements.presentationExit.hidden = true
     document.removeEventListener("keydown", presentationKeydown, true)
-    window.Stimulus?.getControllerForElementAndIdentifier(elements.editorForm, "presentation")?.stop()
+    presentationMount?.destroy()
+    presentationMount = null
     try {
       await getCurrentWindow().setFullscreen(false)
     } catch (_error) {}
@@ -1043,7 +1050,7 @@ export function startFileLibraryApplication(platform) {
       if (!library) return chooseLibrary()
       if (hasUnsavedChanges() && !(await flushSave())) return
       showLibrary()
-      elements.search.focus()
+      mount.querySelector("#library-search")?.focus()
       return
     }
     if (action === "new-presentation") return showCreateDialog("presentation")
@@ -1066,10 +1073,9 @@ export function startFileLibraryApplication(platform) {
   })
   document.querySelector("#open-settings").addEventListener("click", () => void showSettings())
   document.querySelector("#new-deck").addEventListener("click", () => {
-    showCreateDialog(libraryTab === "documents" ? "document" : "presentation")
+    showCreateDialog(currentFilter() === "documents" ? "document" : "presentation")
   })
   document.querySelector("#refresh-library").addEventListener("click", () => void refreshLibrary())
-  elements.loadMore.addEventListener("click", appendLibraryDeckBatch)
   document.querySelector("#import-elef").addEventListener("click", () => void importDeck())
   document.querySelector("#back-to-library").addEventListener("click", () => {
     if (hasUnsavedChanges()) {
@@ -1083,13 +1089,10 @@ export function startFileLibraryApplication(platform) {
     showLibrary()
     setStatus("Library")
   })
-  document.querySelector("#create-form").addEventListener("submit", event => {
-    if (event.submitter?.value === "create") void createDeck(event)
-  })
   elements.settingsForm.addEventListener("submit", event => void saveSettings(event))
   document.querySelector("#manage-authoring").addEventListener("click", () => {
     elements.settingsDialog.close()
-    void authoringSettings.open()
+    void openAuthoringSettings()
   })
   document.querySelector("#check-for-updates").addEventListener("click", () => void checkForUpdates(true))
   document.querySelector("#install-update").addEventListener("click", () => void installUpdate())
@@ -1106,79 +1109,72 @@ export function startFileLibraryApplication(platform) {
   document.querySelector("#import-conflict-replace").addEventListener("click", () => void resolveImportConflict("replace"))
   document.querySelector("#import-conflict-keep-both").addEventListener("click", () => void resolveImportConflict("keep_both"))
   document.querySelector("#import-conflict-cancel").addEventListener("click", () => void resolveImportConflict("cancel"))
-  document.querySelector("#library-search").addEventListener("input", renderDecks)
-  document.querySelectorAll("[data-library-tab]").forEach(link => {
-    link.addEventListener("click", event => {
-      event.preventDefault()
-      showLibraryTab(link.dataset.libraryTab)
-    })
-  })
-  document.querySelector("#empty-library [data-action='create-presentation']").addEventListener("click", event => {
-    showCreateDialog(event.currentTarget.dataset.kind || "presentation")
-  })
   elements.editorField.addEventListener("input", () => scheduleSave())
   elements.titleInput.addEventListener("input", () => titleFlow.noteChange())
   elements.editorForm.querySelector("#use-disk-version").addEventListener("click", resolveConflictWithDisk)
   elements.editorForm.querySelector("#keep-local-version").addEventListener("click", resolveConflictWithLocal)
   elements.editorForm.querySelector("#save-merged-version").addEventListener("click", resolveConflictWithMerge)
   elements.editorForm.querySelector("#conflict-dialog").addEventListener("cancel", event => {
-    if (saveFlow.conflict) event.preventDefault()
+    if (saveFlow?.conflict) event.preventDefault()
   })
   elements.restoreDraft.addEventListener("click", () => {
-    void saveFlow.restoreDraft()
+    void saveFlow?.restoreDraft()
   })
-  elements.retrySave.addEventListener("click", () => void flushSave({ force: true }))
-  window.addEventListener("beforeunload", event => {
-    if (!hasUnsavedChanges()) return
-    event.preventDefault()
-    event.returnValue = ""
-  })
+  window.addEventListener("blur", () => void flushSave())
   void getCurrentWindow().onCloseRequested(createCloseFlow({
     isDirty: () => hasUnsavedChanges(),
-    flushSave,
+    flushForClose,
     close: () => getCurrentWindow().close(),
+    confirmDiscard: () => fileLibrary.confirmDiscardUnsavedChanges(),
     onError: showError
   }))
 
   window.addEventListener("keydown", event => {
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
       event.preventDefault()
-      elements.search.focus()
+      mount.querySelector("#library-search")?.focus()
     }
   })
 
-  window.setInterval(async () => {
-    if (!activeDeck || sourcePollBusy || document.hidden) return
-    sourcePollBusy = true
-    const id = activeDeck.id
-    try {
-      const snapshot = await transport.readSourceSnapshot(id)
-      lastSourcePollError = null
-      if (activeDeck?.id === id) {
-        if (activeDeck.source_file === "document.md" &&
-            (snapshot.content_hash !== activeDeck.content_hash || snapshot.source_file !== activeDeck.source_file)) {
-          documentGraphCache.invalidate()
-        }
-        const result = await saveFlow.checkExternalChange(id, snapshot)
-        if (result === "reloaded" || result === "source-file-changed") syncSourceLabel()
-      }
-    } catch (error) {
-      const key = error?.code || "unknown"
-      if (key !== lastSourcePollError) showError(error)
-      lastSourcePollError = key
-    } finally {
-      sourcePollBusy = false
-    }
-  }, 2_000)
-
   void listen("desktop-menu-action", event => void handleMenuAction(event.payload))
   const openedFileListener = listen("desktop-open-elef", () => void processOpenedFiles())
+  async function mountLibrary(status) {
+    // The desktop writes #library/<filter> hashes on tab switches; boot from
+    // the live URL so a reload restores the same filter.
+    libraryHost = createLibraryHost(status)
+    shell = await mountElef(mount, libraryHost, {
+      initialUrl: location.href,
+      // The desktop has no URL routing: work targets open in the embedded
+      // editor, tab targets only move the location hash for deep-linking.
+      navigate: target => {
+        if (target.url === undefined) {
+          void openDeck(target.workId)
+          return
+        }
+        if (target.url.startsWith("#")) location.hash = target.url
+        if (parseLibraryRoute(target.url)?.filter === "documents") void showDocumentGraph()
+      },
+      resolveMediaBaseUrl: work => mediaUrlsForDeck(work.id).assetBaseUrl,
+      presentWork: work => {
+        void openDeck(work.id).then(opened => {
+          if (opened) void startPresentation()
+        })
+      },
+      onLibraryEvent: handleLibraryEvent
+    })
+  }
+
   void completeBootstrap({
     initialize: async () => {
+      // Status first: the client's mount fires its own initial load, and
+      // racing that listing against this one serialized both on the native
+      // side. Mounting on the measured status hands the client its first
+      // list with zero extra IPC.
       const [status] = await measureBootstrapStage("library-status", () => Promise.all([fileLibrary.getLibraryStatus(), openedFileListener]))
       library = status
       libraryConfig = status?.config || libraryConfig
       decks = status?.decks || []
+      await mountLibrary(status)
       applyTheme(libraryConfig.theme)
       measureBootstrapStage("initial-library-render", showLibrary)
       if (status?.config_notice) showNotice(status.config_notice, "error")
@@ -1190,10 +1186,14 @@ export function startFileLibraryApplication(platform) {
       if (__ELEF_E2E__) window.__elefPerformanceTestHooks.interactive()
     },
     waitForEditor: async () => {
+      // Prewarm the preview worker off the interactive path: the library no
+      // longer renders card previews through it, so without this the first
+      // deck open pays the cold-worker spawn and bundle parse.
+      void renderer.warmup()
       await measureBootstrapStage("editor-runtime", () => loadEditorRuntime())
       configureEditorKind(elements.editorField.closest(".editor-shell"), "presentation", {
         showTitle: true,
-        formControllers: "preview visual-editor presentation-editor slide-overview media presentation"
+        formControllers: "preview visual-editor presentation-editor slide-overview media"
       })
       await measureBootstrapStage("editor-ready", () => waitForEditorController(elements.editorField, editorFor))
     },

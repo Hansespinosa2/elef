@@ -1,12 +1,13 @@
 import { $, $$, browser } from "@wdio/globals"
 import { Key } from "webdriverio"
 import { execFileSync, spawn } from "node:child_process"
-import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises"
+import { copyFile, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises"
 import path from "node:path"
 import { editAndPreviewWorkflow } from "../../../test/e2e/scenarios/edit-and-preview.js"
 import { appearanceWorkflow } from "../../../test/e2e/scenarios/appearance.js"
 import { libraryAndGraphWorkflow } from "../../../test/e2e/scenarios/library-and-graph.js"
 import { libraryCreateDeleteWorkflow } from "../../../test/e2e/scenarios/library-create-delete.js"
+import { libraryDeepLinksWorkflow } from "../../../test/e2e/scenarios/library-deep-links.js"
 import { externalEditConflictWorkflow, CONFLICT_EXTERNAL_SOURCE } from "../../../test/e2e/scenarios/external-edit-conflict.js"
 import { hostileDeckNeutralizedWorkflow } from "../../../test/e2e/scenarios/hostile-deck.js"
 import { documentLinkCompletionWorkflow, mathInputWorkflow, snippetInsertWorkflow } from "../../../test/e2e/scenarios/authoring-palettes.js"
@@ -369,12 +370,14 @@ class DesktopEditorUi {
 
   async enableVimRelativeLineNumbers() {
     await openDesktopSettings()
-    const vimToggle = $("[data-vim-settings-target='vimToggle']")
+    // Vim preferences render through the shared client UI now (same device
+    // storage keys, same editor bridge); drive its stable hooks.
+    const vimToggle = $("#vim-enabled")
     if (!(await vimToggle.isSelected())) await vimToggle.click()
     // The embedded driver's option click does not update native <select>s.
     // Exercise the same input/change seam as a browser selection.
     await browser.execute(() => {
-      const select = document.querySelector("[data-vim-settings-target='lineNumbers']")
+      const select = document.querySelector("#vim-line-numbers")
       select.value = "relative"
       select.dispatchEvent(new Event("input", { bubbles: true }))
       select.dispatchEvent(new Event("change", { bubbles: true }))
@@ -479,7 +482,7 @@ class DesktopEditorUi {
     await browser.waitUntil(async () =>
       (await $("#desktop-editor-title").getValue()) === title &&
       (await $("#deck-title").getText()) === title &&
-      (await $("#save-state").getText()) === "Saved", {
+      (await browser.execute(() => window.__elefSaveTestHooks?.saveStatus())) === "clean", {
       timeout: 10_000,
       timeoutMsg: `The presentation title did not save as ${title}`
     })
@@ -942,7 +945,7 @@ class DesktopEditorUi {
         const [diskSource, state] = await Promise.all([
           readFile(sourcePath, "utf8").catch(readError => `<${readError.code || "read_error"}>`),
           browser.execute(() => ({
-            saveState: document.querySelector("#save-state")?.textContent || "<missing>",
+            saveStatus: window.__elefSaveTestHooks?.saveStatus?.() || "<missing>",
             status: document.querySelector("#status-text")?.textContent || "<missing>",
             notice: document.querySelector("#notice")?.textContent || "",
             deckId: document.querySelector("#deck-id")?.textContent || "",
@@ -952,7 +955,7 @@ class DesktopEditorUi {
         throw new Error(`${error.message}; desktop state: ${JSON.stringify(state)}; disk source: ${JSON.stringify(diskSource)}`)
       })
     }
-    await browser.waitUntil(async () => (await $("#save-state").getText()) === "Saved", {
+    await browser.waitUntil(async () => (await browser.execute(() => window.__elefSaveTestHooks?.saveStatus())) === "clean", {
       timeout: 10_000,
       timeoutMsg: "The desktop editor did not finish saving"
     })
@@ -972,7 +975,7 @@ class DesktopEditorUi {
           buttonTitle: document.querySelector("#visual-mode")?.title || "",
           previewUrl: form?.previewController?.urlValue || form?.dataset.previewUrlValue || "",
           status: document.querySelector("#status-text")?.textContent || "",
-          saveState: document.querySelector("#save-state")?.textContent || "",
+          saveStatus: window.__elefSaveTestHooks?.saveStatus?.() || "",
           previewStatus: form?.querySelector("[data-preview-target='status']")?.textContent || "",
           previewWarnings: [...(form?.querySelectorAll(".preview-warnings li") || [])].map((item) => item.textContent),
           previewText: preview?.textContent || "",
@@ -1075,7 +1078,7 @@ class DesktopEditorUi {
         return {
           mode: form?.dataset.editorMode,
           source: field?.editorController?.sourceValue,
-          saveState: document.querySelector("#save-state")?.textContent,
+          saveStatus: window.__elefSaveTestHooks?.saveStatus?.(),
           previewStatus: document.querySelector("[data-preview-target='status']")?.textContent,
           preview: document.querySelector("#desktop-preview")?.innerText,
           warnings: document.querySelector("[data-preview-target='warnings']")?.innerText,
@@ -1588,9 +1591,13 @@ class DesktopLibraryUi {
       const diagnostic = await browser.execute(async (deckTitle, previewText) => {
         const button = [...document.querySelectorAll(".library-card-open")]
           .find(element => element.getAttribute("aria-label") === `Edit ${deckTitle}`)
-        const preview = button?.closest(".library-card")?.querySelector(".library-card-preview")
+        const card = button?.closest(".library-card")
+        const preview = card?.querySelector(".library-card-preview")
+        // Card DOM ids are `<kind>_<work id>`; the preview node itself no
+        // longer carries the retired data-deck-id attribute.
+        const workId = card?.id?.replace(/^(?:presentation|document)_/, "")
         try {
-          const deck = await window.__TAURI__.core.invoke("read_deck_preview", { id: preview?.dataset.deckId })
+          const deck = await window.__TAURI__.core.invoke("read_deck_preview", { id: workId })
           return {
             previewState: preview?.dataset.previewState ?? null,
             previewMissing: !preview,
@@ -1683,6 +1690,20 @@ class DesktopLibraryUi {
 
   async showDocuments() {
     await $("#show-documents").click()
+  }
+
+  async openLibraryDeepLink(filter) {
+    await browser.execute(name => { window.location.hash = `#library/${name}` }, filter)
+    await browser.refresh()
+    await $("#library-view").waitForDisplayed({ timeout: 20_000 })
+    await browser.waitUntil(async () => (await $$(".library-card")).length > 0, {
+      timeout: 20_000,
+      timeoutMsg: "The library did not render any cards after a deep-link reload"
+    })
+  }
+
+  async setLibraryHash(filter) {
+    await browser.execute(name => { window.location.hash = `#library/${name}` }, filter)
   }
 
   async assertDocumentsOnly(documentTitle) {
@@ -1952,14 +1973,62 @@ describe("desktop binary workflows and native boundaries", () => {
           }
         }
       })
+      // Snapshot without detaching: lagged tail keystrokes may still be in
+      // flight when typing returns, so the listener stays until the buffer
+      // proves they landed.
+      const earlyKeys = await browser.execute(() => {
+        const tracker = window.__elefTrustedEditorKeys
+        return tracker?.events.slice() || []
+      })
+      if (!earlyKeys.some(event => event.trusted && event.key.toLowerCase() === "n")) {
+        throw new Error(`Native input did not reach CodeMirror: ${JSON.stringify({ focus, trustedKeys: earlyKeys })}`)
+      }
+      const keydownDiagnostics = async () => {
+        const lateKeys = await browser.execute(() => window.__elefTrustedEditorKeys?.events.slice() || []).catch(() => [])
+        const sequence = lateKeys.map(event => (event.trusted ? event.key : `(${event.key}?)`)).join(" ")
+        return `keydown sequence (${lateKeys.length}): ${sequence}`
+      }
+      // Native synthesis occasionally delivers a keydown whose text never
+      // inserts (observed: single dropped chars with full keydown arrival).
+      // Retype exactly the missing span once, natively, before failing: the
+      // pass criteria below stay identical, and any retry is logged.
+      let nativeCharsSent = inserted.length + (vimEnabled ? 1 : 0) + (needsLineBreak ? 1 : 0)
+      try {
+        await ui.waitForSource(expected)
+      } catch (firstError) {
+        const buffer = await ui.readSource()
+        let prefix = 0
+        while (prefix < buffer.length && prefix < expected.length && buffer[prefix] === expected[prefix]) prefix++
+        let suffix = 0
+        while (suffix < buffer.length - prefix && suffix < expected.length - prefix &&
+          buffer[buffer.length - 1 - suffix] === expected[expected.length - 1 - suffix]) suffix++
+        const missing = expected.slice(prefix, expected.length - suffix)
+        const retryable = buffer.startsWith(original) && buffer.length - prefix - suffix === 0 && missing.length > 0
+        if (!retryable) throw new Error(`${firstError.message}; ${await keydownDiagnostics()}`)
+        console.error(`E2E-RETRY: native typing dropped ${missing.length} char(s) at offset ${prefix}; retyping span.`)
+        await browser.execute(offset => {
+          document.querySelector("#desktop-editor-field")?.editorController?.setSelectionRange(offset)
+        }, prefix)
+        typeNativeText(missing, { activate: false })
+        nativeCharsSent += missing.length
+        await ui.waitForSource(expected).catch(async secondError => {
+          throw new Error(`${secondError.message}; after retyping ${missing.length} char(s) at offset ${prefix}; ${await keydownDiagnostics()}`)
+        })
+      }
       const trustedKeys = await browser.execute(() => {
         const tracker = window.__elefTrustedEditorKeys
         tracker?.target.removeEventListener("keydown", tracker.handler)
         delete window.__elefTrustedEditorKeys
         return tracker?.events || []
       })
-      if (!trustedKeys.some(event => event.trusted && event.key.toLowerCase() === "n")) {
-        throw new Error(`Native input did not reach CodeMirror: ${JSON.stringify({ focus, trustedKeys })}`)
+      // Every synthesized character must surface as a trusted keydown. Extras
+      // (modifier or repeat events) are harmless; anything below the minimum
+      // means keystrokes were swallowed before CodeMirror.
+      const trustedCount = trustedKeys.filter(event => event.trusted).length
+      const expectedMinKeys = nativeCharsSent
+      if (trustedCount < expectedMinKeys) {
+        const sequence = trustedKeys.map(event => (event.trusted ? event.key : `(${event.key}?)`)).join(" ")
+        throw new Error(`Native input lost keystrokes before CodeMirror: ${JSON.stringify({ focus, trustedCount, expectedMinKeys, sequence })}`)
       }
       await ui.waitForSaved(expected)
     } finally {
@@ -1980,6 +2049,10 @@ describe("desktop binary workflows and native boundaries", () => {
 
   it("runs the shared library create and delete flow", async () => {
     await libraryCreateDeleteWorkflow(new DesktopLibraryUi())
+  })
+
+  it("runs the shared library deep links flow", async () => {
+    await libraryDeepLinksWorkflow(new DesktopLibraryUi())
   })
 
   it("persists appearance through the shared editing flow", async () => {
@@ -2012,6 +2085,17 @@ describe("desktop binary workflows and native boundaries", () => {
 
   it("runs the shared authoring settings create, edit, and delete flow in the desktop binary", async () => {
     await authoringSettingsWorkflow(new DesktopEditorUi())
+  })
+
+  it("shows the updater affordance on the updater-capable desktop settings", async () => {
+    await openDesktopAuthoringSettings()
+    const updates = $("section[aria-label='Updates']")
+    await updates.waitForDisplayed({ timeout: 10_000 })
+    // Presence is capability-driven; the status line itself may still be
+    // resolving the updater endpoint in the background.
+    await $("section[aria-label='Updates'] button").waitForDisplayed()
+    await $("#close-authoring-settings").click()
+    await $("#authoring-settings-dialog").waitForDisplayed({ reverse: true })
   })
 
   it("runs the shared math input flow in the desktop binary", async () => {
@@ -2339,6 +2423,11 @@ describe("desktop binary workflows and native boundaries", () => {
       window.__TAURI__?.core?.invoke("export_elef", { id }),
     process.env.ELEF_E2E_SEED_DECK_ID)
     if (exported !== true) throw new Error("The desktop export command did not write the .elef archive")
+    // The conformance spec later exports other decks through the same
+    // harness file, so snapshot the seed bytes before they are replaced.
+    const exportPath = process.env.ELEF_E2E_EXPORT_PATH
+    if (!exportPath) throw new Error("ELEF_E2E_EXPORT_PATH is not set for the seed export snapshot")
+    await copyFile(exportPath, `${exportPath}.seed-bytes`)
   })
 
   it("opens and cancels the native .elef export dialog", async () => {

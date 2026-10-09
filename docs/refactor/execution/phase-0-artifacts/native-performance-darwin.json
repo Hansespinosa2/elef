@@ -1,0 +1,3453 @@
+{
+  "platform": "darwin",
+  "architecture": "arm64",
+  "release": "24.6.0",
+  "protocol": "20 fresh release processes; 1000 deck index; first 48 cards; one 50 MiB deck; painted operation timings",
+  "samples": {
+    "coldStart": [
+      3092,
+      2340,
+      2442,
+      2185,
+      2307,
+      2120,
+      2293,
+      2381,
+      2377,
+      2360,
+      2214,
+      2314,
+      2226,
+      2391,
+      2045,
+      1841,
+      1814.000244140625,
+      1918.000244140625,
+      1972,
+      1975
+    ],
+    "open100Slides": [
+      1186,
+      1209,
+      1140,
+      1033,
+      1113,
+      1173.9999999999998,
+      966.0000000000005,
+      1102,
+      1147,
+      1063,
+      969,
+      1163,
+      1171,
+      1253,
+      947,
+      904.9999999999999,
+      906,
+      964,
+      1041,
+      961
+    ],
+    "warmLibrary": [
+      133,
+      196,
+      143,
+      249,
+      138,
+      183,
+      111.00000000000023,
+      106,
+      113,
+      149,
+      129,
+      155,
+      162,
+      125.99999999999955,
+      161,
+      119,
+      97.00000000000011,
+      100,
+      166.0000000000001,
+      162.9999999999999
+    ]
+  },
+  "inputPreservedRuns": 20,
+  "renderedLibraryCards": [
+    48,
+    48,
+    48,
+    48,
+    48,
+    48,
+    48,
+    48,
+    48,
+    48,
+    48,
+    48,
+    48,
+    48,
+    48,
+    48,
+    48,
+    48,
+    48,
+    48
+  ],
+  "bootstrapStageRuns": [
+    [
+      {
+        "name": "library-status",
+        "milliseconds": 111
+      },
+      {
+        "name": "initial-library-render",
+        "milliseconds": 51.000000000000114
+      },
+      {
+        "name": "initial-paint",
+        "milliseconds": 231.9999999999999
+      },
+      {
+        "name": "editor-runtime",
+        "milliseconds": 209
+      },
+      {
+        "name": "editor-ready",
+        "milliseconds": 49
+      },
+      {
+        "name": "native-ready-ack",
+        "milliseconds": 62
+      }
+    ],
+    [
+      {
+        "name": "library-status",
+        "milliseconds": 86
+      },
+      {
+        "name": "initial-library-render",
+        "milliseconds": 70
+      },
+      {
+        "name": "initial-paint",
+        "milliseconds": 141
+      },
+      {
+        "name": "editor-runtime",
+        "milliseconds": 179
+      },
+      {
+        "name": "editor-ready",
+        "milliseconds": 45
+      },
+      {
+        "name": "native-ready-ack",
+        "milliseconds": 58.000000000000114
+      }
+    ],
+    [
+      {
+        "name": "library-status",
+        "milliseconds": 102.99999999999989
+      },
+      {
+        "name": "initial-library-render",
+        "milliseconds": 65
+      },
+      {
+        "name": "initial-paint",
+        "milliseconds": 143
+      },
+      {
+        "name": "editor-runtime",
+        "milliseconds": 182
+      },
+      {
+        "name": "editor-ready",
+        "milliseconds": 47
+      },
+      {
+        "name": "native-ready-ack",
+        "milliseconds": 36
+      }
+    ],
+    [
+      {
+        "name": "library-status",
+        "milliseconds": 73
+      },
+      {
+        "name": "initial-library-render",
+        "milliseconds": 55
+      },
+      {
+        "name": "initial-paint",
+        "milliseconds": 139
+      },
+      {
+        "name": "editor-runtime",
+        "milliseconds": 116
+      },
+      {
+        "name": "editor-ready",
+        "milliseconds": 37
+      },
+      {
+        "name": "native-ready-ack",
+        "milliseconds": 56
+      }
+    ],
+    [
+      {
+        "name": "library-status",
+        "milliseconds": 78.00000000000006
+      },
+      {
+        "name": "initial-library-render",
+        "milliseconds": 57.99999999999994
+      },
+      {
+        "name": "initial-paint",
+        "milliseconds": 158.0000000000001
+      },
+      {
+        "name": "editor-runtime",
+        "milliseconds": 124
+      },
+      {
+        "name": "editor-ready",
+        "milliseconds": 57.999999999999886
+      },
+      {
+        "name": "native-ready-ack",
+        "milliseconds": 40
+      }
+    ],
+    [
+      {
+        "name": "library-status",
+        "milliseconds": 76
+      },
+      {
+        "name": "initial-library-render",
+        "milliseconds": 54.000000000000114
+      },
+      {
+        "name": "initial-paint",
+        "milliseconds": 125
+      },
+      {
+        "name": "editor-runtime",
+        "milliseconds": 137
+      },
+      {
+        "name": "editor-ready",
+        "milliseconds": 63.999999999999886
+      },
+      {
+        "name": "native-ready-ack",
+        "milliseconds": 47.000000000000114
+      }
+    ],
+    [
+      {
+        "name": "library-status",
+        "milliseconds": 156
+      },
+      {
+        "name": "initial-library-render",
+        "milliseconds": 56
+      },
+      {
+        "name": "initial-paint",
+        "milliseconds": 139.0000000000001
+      },
+      {
+        "name": "editor-runtime",
+        "milliseconds": 216.9999999999999
+      },
+      {
+        "name": "editor-ready",
+        "milliseconds": 40
+      },
+      {
+        "name": "native-ready-ack",
+        "milliseconds": 40
+      }
+    ],
+    [
+      {
+        "name": "library-status",
+        "milliseconds": 119
+      },
+      {
+        "name": "initial-library-render",
+        "milliseconds": 55
+      },
+      {
+        "name": "initial-paint",
+        "milliseconds": 151
+      },
+      {
+        "name": "editor-runtime",
+        "milliseconds": 102
+      },
+      {
+        "name": "editor-ready",
+        "milliseconds": 38
+      },
+      {
+        "name": "native-ready-ack",
+        "milliseconds": 72
+      }
+    ],
+    [
+      {
+        "name": "library-status",
+        "milliseconds": 145.99999999999994
+      },
+      {
+        "name": "initial-library-render",
+        "milliseconds": 49
+      },
+      {
+        "name": "initial-paint",
+        "milliseconds": 145.0000000000001
+      },
+      {
+        "name": "editor-runtime",
+        "milliseconds": 135
+      },
+      {
+        "name": "editor-ready",
+        "milliseconds": 48.999999999999886
+      },
+      {
+        "name": "native-ready-ack",
+        "milliseconds": 57.999999999999886
+      }
+    ],
+    [
+      {
+        "name": "library-status",
+        "milliseconds": 86.99999999999994
+      },
+      {
+        "name": "initial-library-render",
+        "milliseconds": 61
+      },
+      {
+        "name": "initial-paint",
+        "milliseconds": 138
+      },
+      {
+        "name": "editor-runtime",
+        "milliseconds": 159
+      },
+      {
+        "name": "editor-ready",
+        "milliseconds": 48
+      },
+      {
+        "name": "native-ready-ack",
+        "milliseconds": 62
+      }
+    ],
+    [
+      {
+        "name": "library-status",
+        "milliseconds": 95
+      },
+      {
+        "name": "initial-library-render",
+        "milliseconds": 50
+      },
+      {
+        "name": "initial-paint",
+        "milliseconds": 124
+      },
+      {
+        "name": "editor-runtime",
+        "milliseconds": 173
+      },
+      {
+        "name": "editor-ready",
+        "milliseconds": 35
+      },
+      {
+        "name": "native-ready-ack",
+        "milliseconds": 32
+      }
+    ],
+    [
+      {
+        "name": "library-status",
+        "milliseconds": 132
+      },
+      {
+        "name": "initial-library-render",
+        "milliseconds": 61
+      },
+      {
+        "name": "initial-paint",
+        "milliseconds": 163
+      },
+      {
+        "name": "editor-runtime",
+        "milliseconds": 177
+      },
+      {
+        "name": "editor-ready",
+        "milliseconds": 73
+      },
+      {
+        "name": "native-ready-ack",
+        "milliseconds": 48
+      }
+    ],
+    [
+      {
+        "name": "library-status",
+        "milliseconds": 130
+      },
+      {
+        "name": "initial-library-render",
+        "milliseconds": 64
+      },
+      {
+        "name": "initial-paint",
+        "milliseconds": 146.0000000000001
+      },
+      {
+        "name": "editor-runtime",
+        "milliseconds": 157.9999999999999
+      },
+      {
+        "name": "editor-ready",
+        "milliseconds": 56
+      },
+      {
+        "name": "native-ready-ack",
+        "milliseconds": 65
+      }
+    ],
+    [
+      {
+        "name": "library-status",
+        "milliseconds": 111
+      },
+      {
+        "name": "initial-library-render",
+        "milliseconds": 42
+      },
+      {
+        "name": "initial-paint",
+        "milliseconds": 142
+      },
+      {
+        "name": "editor-runtime",
+        "milliseconds": 345
+      },
+      {
+        "name": "editor-ready",
+        "milliseconds": 48
+      },
+      {
+        "name": "native-ready-ack",
+        "milliseconds": 53
+      }
+    ],
+    [
+      {
+        "name": "library-status",
+        "milliseconds": 63
+      },
+      {
+        "name": "initial-library-render",
+        "milliseconds": 48
+      },
+      {
+        "name": "initial-paint",
+        "milliseconds": 130
+      },
+      {
+        "name": "editor-runtime",
+        "milliseconds": 120
+      },
+      {
+        "name": "editor-ready",
+        "milliseconds": 41
+      },
+      {
+        "name": "native-ready-ack",
+        "milliseconds": 60.000000000000114
+      }
+    ],
+    [
+      {
+        "name": "library-status",
+        "milliseconds": 67
+      },
+      {
+        "name": "initial-library-render",
+        "milliseconds": 54
+      },
+      {
+        "name": "initial-paint",
+        "milliseconds": 136
+      },
+      {
+        "name": "editor-runtime",
+        "milliseconds": 108.00000000000011
+      },
+      {
+        "name": "editor-ready",
+        "milliseconds": 38.999999999999886
+      },
+      {
+        "name": "native-ready-ack",
+        "milliseconds": 45
+      }
+    ],
+    [
+      {
+        "name": "library-status",
+        "milliseconds": 62
+      },
+      {
+        "name": "initial-library-render",
+        "milliseconds": 37
+      },
+      {
+        "name": "initial-paint",
+        "milliseconds": 124
+      },
+      {
+        "name": "editor-runtime",
+        "milliseconds": 116
+      },
+      {
+        "name": "editor-ready",
+        "milliseconds": 45
+      },
+      {
+        "name": "native-ready-ack",
+        "milliseconds": 40
+      }
+    ],
+    [
+      {
+        "name": "library-status",
+        "milliseconds": 94.99999999999994
+      },
+      {
+        "name": "initial-library-render",
+        "milliseconds": 58
+      },
+      {
+        "name": "initial-paint",
+        "milliseconds": 136
+      },
+      {
+        "name": "editor-runtime",
+        "milliseconds": 136
+      },
+      {
+        "name": "editor-ready",
+        "milliseconds": 46.000000000000114
+      },
+      {
+        "name": "native-ready-ack",
+        "milliseconds": 47.999999999999886
+      }
+    ],
+    [
+      {
+        "name": "library-status",
+        "milliseconds": 73.99999999999994
+      },
+      {
+        "name": "initial-library-render",
+        "milliseconds": 44
+      },
+      {
+        "name": "initial-paint",
+        "milliseconds": 125
+      },
+      {
+        "name": "editor-runtime",
+        "milliseconds": 134
+      },
+      {
+        "name": "editor-ready",
+        "milliseconds": 37
+      },
+      {
+        "name": "native-ready-ack",
+        "milliseconds": 35
+      }
+    ],
+    [
+      {
+        "name": "library-status",
+        "milliseconds": 79
+      },
+      {
+        "name": "initial-library-render",
+        "milliseconds": 44
+      },
+      {
+        "name": "initial-paint",
+        "milliseconds": 154
+      },
+      {
+        "name": "editor-runtime",
+        "milliseconds": 119
+      },
+      {
+        "name": "editor-ready",
+        "milliseconds": 45.000000000000114
+      },
+      {
+        "name": "native-ready-ack",
+        "milliseconds": 60.999999999999886
+      }
+    ]
+  ],
+  "frontendNavigationRuns": [
+    {
+      "domContentLoadedEventEnd": 309,
+      "domInteractive": 76,
+      "loadEventEnd": 309,
+      "responseEnd": 76
+    },
+    {
+      "domContentLoadedEventEnd": 253,
+      "domInteractive": 60,
+      "loadEventEnd": 253,
+      "responseEnd": 60
+    },
+    {
+      "domContentLoadedEventEnd": 337,
+      "domInteractive": 79,
+      "loadEventEnd": 337,
+      "responseEnd": 79
+    },
+    {
+      "domContentLoadedEventEnd": 199,
+      "domInteractive": 55,
+      "loadEventEnd": 199,
+      "responseEnd": 55
+    },
+    {
+      "domContentLoadedEventEnd": 234,
+      "domInteractive": 69,
+      "loadEventEnd": 234,
+      "responseEnd": 69
+    },
+    {
+      "domContentLoadedEventEnd": 264,
+      "domInteractive": 63,
+      "loadEventEnd": 264,
+      "responseEnd": 63
+    },
+    {
+      "domContentLoadedEventEnd": 271,
+      "domInteractive": 78,
+      "loadEventEnd": 272,
+      "responseEnd": 78
+    },
+    {
+      "domContentLoadedEventEnd": 214,
+      "domInteractive": 57,
+      "loadEventEnd": 214,
+      "responseEnd": 57
+    },
+    {
+      "domContentLoadedEventEnd": 230,
+      "domInteractive": 59.00000000000001,
+      "loadEventEnd": 230,
+      "responseEnd": 59.00000000000001
+    },
+    {
+      "domContentLoadedEventEnd": 245,
+      "domInteractive": 65,
+      "loadEventEnd": 245,
+      "responseEnd": 65
+    },
+    {
+      "domContentLoadedEventEnd": 219,
+      "domInteractive": 52.00000000000001,
+      "loadEventEnd": 219,
+      "responseEnd": 52.00000000000001
+    },
+    {
+      "domContentLoadedEventEnd": 220,
+      "domInteractive": 53,
+      "loadEventEnd": 220,
+      "responseEnd": 53
+    },
+    {
+      "domContentLoadedEventEnd": 199,
+      "domInteractive": 52.00000000000001,
+      "loadEventEnd": 199,
+      "responseEnd": 52.00000000000001
+    },
+    {
+      "domContentLoadedEventEnd": 277,
+      "domInteractive": 79,
+      "loadEventEnd": 278,
+      "responseEnd": 79
+    },
+    {
+      "domContentLoadedEventEnd": 225,
+      "domInteractive": 64,
+      "loadEventEnd": 225,
+      "responseEnd": 64
+    },
+    {
+      "domContentLoadedEventEnd": 204.00000000000003,
+      "domInteractive": 54,
+      "loadEventEnd": 205.00000000000003,
+      "responseEnd": 54
+    },
+    {
+      "domContentLoadedEventEnd": 195,
+      "domInteractive": 57,
+      "loadEventEnd": 195,
+      "responseEnd": 57
+    },
+    {
+      "domContentLoadedEventEnd": 210,
+      "domInteractive": 54,
+      "loadEventEnd": 210,
+      "responseEnd": 54
+    },
+    {
+      "domContentLoadedEventEnd": 209,
+      "domInteractive": 50,
+      "loadEventEnd": 209,
+      "responseEnd": 50
+    },
+    {
+      "domContentLoadedEventEnd": 216,
+      "domInteractive": 50,
+      "loadEventEnd": 216,
+      "responseEnd": 50
+    }
+  ],
+  "openTraceRuns": [
+    [
+      {
+        "milliseconds": 2,
+        "name": "readDeck"
+      },
+      {
+        "milliseconds": 1,
+        "name": "prepareDeck"
+      },
+      {
+        "milliseconds": 0,
+        "name": "editorReady"
+      },
+      {
+        "milliseconds": 86,
+        "name": "loadDocument"
+      },
+      {
+        "milliseconds": 1.0000000000002274,
+        "name": "deckViewSetup"
+      },
+      {
+        "milliseconds": 862.9999999999998,
+        "name": "previewRefresh"
+      }
+    ],
+    [
+      {
+        "milliseconds": 0.9999999999997726,
+        "name": "readDeck"
+      },
+      {
+        "milliseconds": 0,
+        "name": "prepareDeck"
+      },
+      {
+        "milliseconds": 0,
+        "name": "editorReady"
+      },
+      {
+        "milliseconds": 56.99999999999977,
+        "name": "loadDocument"
+      },
+      {
+        "milliseconds": 2,
+        "name": "deckViewSetup"
+      },
+      {
+        "milliseconds": 835.0000000000005,
+        "name": "previewRefresh"
+      }
+    ],
+    [
+      {
+        "milliseconds": 1,
+        "name": "readDeck"
+      },
+      {
+        "milliseconds": 1,
+        "name": "prepareDeck"
+      },
+      {
+        "milliseconds": 0,
+        "name": "editorReady"
+      },
+      {
+        "milliseconds": 82,
+        "name": "loadDocument"
+      },
+      {
+        "milliseconds": 1,
+        "name": "deckViewSetup"
+      },
+      {
+        "milliseconds": 804,
+        "name": "previewRefresh"
+      }
+    ],
+    [
+      {
+        "milliseconds": 3,
+        "name": "readDeck"
+      },
+      {
+        "milliseconds": 0,
+        "name": "prepareDeck"
+      },
+      {
+        "milliseconds": 0,
+        "name": "editorReady"
+      },
+      {
+        "milliseconds": 68,
+        "name": "loadDocument"
+      },
+      {
+        "milliseconds": 1,
+        "name": "deckViewSetup"
+      },
+      {
+        "milliseconds": 752,
+        "name": "previewRefresh"
+      }
+    ],
+    [
+      {
+        "milliseconds": 3.0000000000004547,
+        "name": "readDeck"
+      },
+      {
+        "milliseconds": 0.9999999999995453,
+        "name": "prepareDeck"
+      },
+      {
+        "milliseconds": 0,
+        "name": "editorReady"
+      },
+      {
+        "milliseconds": 64,
+        "name": "loadDocument"
+      },
+      {
+        "milliseconds": 1,
+        "name": "deckViewSetup"
+      },
+      {
+        "milliseconds": 815,
+        "name": "previewRefresh"
+      }
+    ],
+    [
+      {
+        "milliseconds": 3.0000000000002274,
+        "name": "readDeck"
+      },
+      {
+        "milliseconds": 0,
+        "name": "prepareDeck"
+      },
+      {
+        "milliseconds": 0,
+        "name": "editorReady"
+      },
+      {
+        "milliseconds": 120.00000000000023,
+        "name": "loadDocument"
+      },
+      {
+        "milliseconds": 0.9999999999997726,
+        "name": "deckViewSetup"
+      },
+      {
+        "milliseconds": 816,
+        "name": "previewRefresh"
+      }
+    ],
+    [
+      {
+        "milliseconds": 2,
+        "name": "readDeck"
+      },
+      {
+        "milliseconds": 0,
+        "name": "prepareDeck"
+      },
+      {
+        "milliseconds": 0,
+        "name": "editorReady"
+      },
+      {
+        "milliseconds": 55,
+        "name": "loadDocument"
+      },
+      {
+        "milliseconds": 0,
+        "name": "deckViewSetup"
+      },
+      {
+        "milliseconds": 698,
+        "name": "previewRefresh"
+      }
+    ],
+    [
+      {
+        "milliseconds": 2,
+        "name": "readDeck"
+      },
+      {
+        "milliseconds": 0,
+        "name": "prepareDeck"
+      },
+      {
+        "milliseconds": 0,
+        "name": "editorReady"
+      },
+      {
+        "milliseconds": 96,
+        "name": "loadDocument"
+      },
+      {
+        "milliseconds": 1,
+        "name": "deckViewSetup"
+      },
+      {
+        "milliseconds": 726,
+        "name": "previewRefresh"
+      }
+    ],
+    [
+      {
+        "milliseconds": 2,
+        "name": "readDeck"
+      },
+      {
+        "milliseconds": 1.0000000000002274,
+        "name": "prepareDeck"
+      },
+      {
+        "milliseconds": 0,
+        "name": "editorReady"
+      },
+      {
+        "milliseconds": 79,
+        "name": "loadDocument"
+      },
+      {
+        "milliseconds": 2,
+        "name": "deckViewSetup"
+      },
+      {
+        "milliseconds": 826,
+        "name": "previewRefresh"
+      }
+    ],
+    [
+      {
+        "milliseconds": 4,
+        "name": "readDeck"
+      },
+      {
+        "milliseconds": 0,
+        "name": "prepareDeck"
+      },
+      {
+        "milliseconds": 0,
+        "name": "editorReady"
+      },
+      {
+        "milliseconds": 56,
+        "name": "loadDocument"
+      },
+      {
+        "milliseconds": 2,
+        "name": "deckViewSetup"
+      },
+      {
+        "milliseconds": 717,
+        "name": "previewRefresh"
+      }
+    ],
+    [
+      {
+        "milliseconds": 1,
+        "name": "readDeck"
+      },
+      {
+        "milliseconds": 0,
+        "name": "prepareDeck"
+      },
+      {
+        "milliseconds": 0,
+        "name": "editorReady"
+      },
+      {
+        "milliseconds": 55,
+        "name": "loadDocument"
+      },
+      {
+        "milliseconds": 2,
+        "name": "deckViewSetup"
+      },
+      {
+        "milliseconds": 666,
+        "name": "previewRefresh"
+      }
+    ],
+    [
+      {
+        "milliseconds": 0.9999999999997726,
+        "name": "readDeck"
+      },
+      {
+        "milliseconds": 0,
+        "name": "prepareDeck"
+      },
+      {
+        "milliseconds": 0,
+        "name": "editorReady"
+      },
+      {
+        "milliseconds": 103.99999999999977,
+        "name": "loadDocument"
+      },
+      {
+        "milliseconds": 2,
+        "name": "deckViewSetup"
+      },
+      {
+        "milliseconds": 788.0000000000005,
+        "name": "previewRefresh"
+      }
+    ],
+    [
+      {
+        "milliseconds": 4,
+        "name": "readDeck"
+      },
+      {
+        "milliseconds": 1,
+        "name": "prepareDeck"
+      },
+      {
+        "milliseconds": 0,
+        "name": "editorReady"
+      },
+      {
+        "milliseconds": 109,
+        "name": "loadDocument"
+      },
+      {
+        "milliseconds": 1,
+        "name": "deckViewSetup"
+      },
+      {
+        "milliseconds": 826.0000000000005,
+        "name": "previewRefresh"
+      }
+    ],
+    [
+      {
+        "milliseconds": 26,
+        "name": "readDeck"
+      },
+      {
+        "milliseconds": 0,
+        "name": "prepareDeck"
+      },
+      {
+        "milliseconds": 0,
+        "name": "editorReady"
+      },
+      {
+        "milliseconds": 93,
+        "name": "loadDocument"
+      },
+      {
+        "milliseconds": 5,
+        "name": "deckViewSetup"
+      },
+      {
+        "milliseconds": 880,
+        "name": "previewRefresh"
+      }
+    ],
+    [
+      {
+        "milliseconds": 2,
+        "name": "readDeck"
+      },
+      {
+        "milliseconds": 1,
+        "name": "prepareDeck"
+      },
+      {
+        "milliseconds": 0,
+        "name": "editorReady"
+      },
+      {
+        "milliseconds": 48,
+        "name": "loadDocument"
+      },
+      {
+        "milliseconds": 0,
+        "name": "deckViewSetup"
+      },
+      {
+        "milliseconds": 691.0000000000002,
+        "name": "previewRefresh"
+      }
+    ],
+    [
+      {
+        "milliseconds": 2,
+        "name": "readDeck"
+      },
+      {
+        "milliseconds": 0,
+        "name": "prepareDeck"
+      },
+      {
+        "milliseconds": 0,
+        "name": "editorReady"
+      },
+      {
+        "milliseconds": 64,
+        "name": "loadDocument"
+      },
+      {
+        "milliseconds": 0.9999999999998863,
+        "name": "deckViewSetup"
+      },
+      {
+        "milliseconds": 647,
+        "name": "previewRefresh"
+      }
+    ],
+    [
+      {
+        "milliseconds": 2,
+        "name": "readDeck"
+      },
+      {
+        "milliseconds": 0,
+        "name": "prepareDeck"
+      },
+      {
+        "milliseconds": 0,
+        "name": "editorReady"
+      },
+      {
+        "milliseconds": 56,
+        "name": "loadDocument"
+      },
+      {
+        "milliseconds": 1,
+        "name": "deckViewSetup"
+      },
+      {
+        "milliseconds": 629,
+        "name": "previewRefresh"
+      }
+    ],
+    [
+      {
+        "milliseconds": 11,
+        "name": "readDeck"
+      },
+      {
+        "milliseconds": 0,
+        "name": "prepareDeck"
+      },
+      {
+        "milliseconds": 0,
+        "name": "editorReady"
+      },
+      {
+        "milliseconds": 53,
+        "name": "loadDocument"
+      },
+      {
+        "milliseconds": 0,
+        "name": "deckViewSetup"
+      },
+      {
+        "milliseconds": 677.0000000000002,
+        "name": "previewRefresh"
+      }
+    ],
+    [
+      {
+        "milliseconds": 4,
+        "name": "readDeck"
+      },
+      {
+        "milliseconds": 0,
+        "name": "prepareDeck"
+      },
+      {
+        "milliseconds": 0,
+        "name": "editorReady"
+      },
+      {
+        "milliseconds": 54,
+        "name": "loadDocument"
+      },
+      {
+        "milliseconds": 1,
+        "name": "deckViewSetup"
+      },
+      {
+        "milliseconds": 745,
+        "name": "previewRefresh"
+      }
+    ],
+    [
+      {
+        "milliseconds": 1,
+        "name": "readDeck"
+      },
+      {
+        "milliseconds": 0,
+        "name": "prepareDeck"
+      },
+      {
+        "milliseconds": 0,
+        "name": "editorReady"
+      },
+      {
+        "milliseconds": 79,
+        "name": "loadDocument"
+      },
+      {
+        "milliseconds": 2,
+        "name": "deckViewSetup"
+      },
+      {
+        "milliseconds": 678.0000000000002,
+        "name": "previewRefresh"
+      }
+    ]
+  ],
+  "previewTraceRuns": [
+    [
+      {
+        "stage": "passthrough",
+        "time": 1546,
+        "url": "ipc://localhost/open_deck"
+      },
+      {
+        "stage": "request",
+        "time": 1639,
+        "url": "elef-preview://localhost/0567687d-df49-4c58-80cf-caaa35e97813"
+      },
+      {
+        "sourceLength": 8779,
+        "stage": "context-start",
+        "time": 1639
+      },
+      {
+        "documentCount": 0,
+        "stage": "context-ready",
+        "time": 1644.0000000000002
+      },
+      {
+        "stage": "render-start",
+        "time": 1644.0000000000002
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 1793
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 1793
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 1804
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 1804
+      },
+      {
+        "hasHtml": true,
+        "stage": "render-ready",
+        "time": 1849
+      },
+      {
+        "stage": "preview-install-start",
+        "time": 1853
+      },
+      {
+        "stage": "preview-install-ready",
+        "time": 1980
+      },
+      {
+        "stage": "preview-events-ready",
+        "time": 2120
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 2506
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 2508
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 2532
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 2532
+      },
+      {
+        "stage": "slide-overview-scale-start",
+        "time": 2613
+      },
+      {
+        "stage": "slide-overview-scale-ready",
+        "time": 2623
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 2732
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 2733
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 2766
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 2767
+      },
+      {
+        "stage": "slide-overview-scale-start",
+        "time": 2855
+      },
+      {
+        "stage": "slide-overview-scale-ready",
+        "time": 2864
+      }
+    ],
+    [
+      {
+        "stage": "passthrough",
+        "time": 1271.0000000000002,
+        "url": "ipc://localhost/open_deck"
+      },
+      {
+        "stage": "request",
+        "time": 1333,
+        "url": "elef-preview://localhost/0567687d-df49-4c58-80cf-caaa35e97813"
+      },
+      {
+        "sourceLength": 8779,
+        "stage": "context-start",
+        "time": 1333
+      },
+      {
+        "documentCount": 0,
+        "stage": "context-ready",
+        "time": 1337
+      },
+      {
+        "stage": "render-start",
+        "time": 1337
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 1432
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 1433
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 1442
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 1442
+      },
+      {
+        "hasHtml": true,
+        "stage": "render-ready",
+        "time": 1562
+      },
+      {
+        "stage": "preview-install-start",
+        "time": 1568
+      },
+      {
+        "stage": "preview-install-ready",
+        "time": 1709
+      },
+      {
+        "stage": "preview-events-ready",
+        "time": 1792
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 2177
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 2178
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 2212
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 2212
+      },
+      {
+        "stage": "slide-overview-scale-start",
+        "time": 2308
+      },
+      {
+        "stage": "slide-overview-scale-ready",
+        "time": 2318
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 2479
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 2483
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 2537
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 2537
+      },
+      {
+        "stage": "slide-overview-scale-start",
+        "time": 2657
+      },
+      {
+        "stage": "slide-overview-scale-ready",
+        "time": 2667.0000000000005
+      },
+      {
+        "stage": "passthrough",
+        "time": 2735,
+        "url": "ipc://localhost/read_source_snapshot"
+      }
+    ],
+    [
+      {
+        "stage": "passthrough",
+        "time": 1353,
+        "url": "ipc://localhost/open_deck"
+      },
+      {
+        "stage": "request",
+        "time": 1439,
+        "url": "elef-preview://localhost/0567687d-df49-4c58-80cf-caaa35e97813"
+      },
+      {
+        "sourceLength": 8779,
+        "stage": "context-start",
+        "time": 1439
+      },
+      {
+        "documentCount": 0,
+        "stage": "context-ready",
+        "time": 1442
+      },
+      {
+        "stage": "render-start",
+        "time": 1442
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 1532
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 1533.0000000000002
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 1542
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 1542
+      },
+      {
+        "hasHtml": true,
+        "stage": "render-ready",
+        "time": 1639
+      },
+      {
+        "stage": "preview-install-start",
+        "time": 1645
+      },
+      {
+        "stage": "preview-install-ready",
+        "time": 1841
+      },
+      {
+        "stage": "preview-events-ready",
+        "time": 1957
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 2251
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 2256
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 2276.0000000000005
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 2276.0000000000005
+      },
+      {
+        "stage": "slide-overview-scale-start",
+        "time": 2366
+      },
+      {
+        "stage": "slide-overview-scale-ready",
+        "time": 2373
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 2492
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 2493
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 2528
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 2528
+      },
+      {
+        "stage": "slide-overview-scale-start",
+        "time": 2599
+      },
+      {
+        "stage": "slide-overview-scale-ready",
+        "time": 2605
+      },
+      {
+        "stage": "passthrough",
+        "time": 2669,
+        "url": "ipc://localhost/read_source_snapshot"
+      }
+    ],
+    [
+      {
+        "stage": "passthrough",
+        "time": 1112,
+        "url": "ipc://localhost/open_deck"
+      },
+      {
+        "stage": "request",
+        "time": 1185,
+        "url": "elef-preview://localhost/0567687d-df49-4c58-80cf-caaa35e97813"
+      },
+      {
+        "sourceLength": 8779,
+        "stage": "context-start",
+        "time": 1185
+      },
+      {
+        "documentCount": 0,
+        "stage": "context-ready",
+        "time": 1192
+      },
+      {
+        "stage": "render-start",
+        "time": 1192
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 1287
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 1289
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 1296
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 1296
+      },
+      {
+        "hasHtml": true,
+        "stage": "render-ready",
+        "time": 1408
+      },
+      {
+        "stage": "preview-install-start",
+        "time": 1416
+      },
+      {
+        "stage": "preview-install-ready",
+        "time": 1563
+      },
+      {
+        "stage": "preview-events-ready",
+        "time": 1648.0000000000002
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 1944
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 1945
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 1967
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 1967
+      },
+      {
+        "stage": "slide-overview-scale-start",
+        "time": 2037
+      },
+      {
+        "stage": "slide-overview-scale-ready",
+        "time": 2044
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 2144
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 2145
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 2163.0000000000005
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 2164
+      },
+      {
+        "stage": "slide-overview-scale-start",
+        "time": 2254
+      },
+      {
+        "stage": "slide-overview-scale-ready",
+        "time": 2261
+      }
+    ],
+    [
+      {
+        "stage": "passthrough",
+        "time": 2293,
+        "url": "ipc://localhost/open_deck"
+      },
+      {
+        "stage": "request",
+        "time": 2364,
+        "url": "elef-preview://localhost/0567687d-df49-4c58-80cf-caaa35e97813"
+      },
+      {
+        "sourceLength": 8779,
+        "stage": "context-start",
+        "time": 2364
+      },
+      {
+        "documentCount": 0,
+        "stage": "context-ready",
+        "time": 2368
+      },
+      {
+        "stage": "render-start",
+        "time": 2368
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 2498
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 2499
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 2508
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 2508
+      },
+      {
+        "hasHtml": true,
+        "stage": "render-ready",
+        "time": 2571
+      },
+      {
+        "stage": "preview-install-start",
+        "time": 2586
+      },
+      {
+        "stage": "preview-install-ready",
+        "time": 2712
+      },
+      {
+        "stage": "preview-events-ready",
+        "time": 2814
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 3183.0000000000005
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 3186
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 3202
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 3204
+      },
+      {
+        "stage": "slide-overview-scale-start",
+        "time": 3304.0000000000005
+      },
+      {
+        "stage": "slide-overview-scale-ready",
+        "time": 3311
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 3406
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 3407
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 3429.0000000000005
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 3430
+      },
+      {
+        "stage": "slide-overview-scale-start",
+        "time": 3522.0000000000005
+      },
+      {
+        "stage": "slide-overview-scale-ready",
+        "time": 3538.0000000000005
+      },
+      {
+        "stage": "passthrough",
+        "time": 3565,
+        "url": "ipc://localhost/read_source_snapshot"
+      }
+    ],
+    [
+      {
+        "stage": "passthrough",
+        "time": 1394.0000000000002,
+        "url": "ipc://localhost/open_deck"
+      },
+      {
+        "stage": "request",
+        "time": 1519.0000000000002,
+        "url": "elef-preview://localhost/0567687d-df49-4c58-80cf-caaa35e97813"
+      },
+      {
+        "sourceLength": 8779,
+        "stage": "context-start",
+        "time": 1519.0000000000002
+      },
+      {
+        "documentCount": 0,
+        "stage": "context-ready",
+        "time": 1522
+      },
+      {
+        "stage": "render-start",
+        "time": 1522
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 1657
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 1658.0000000000002
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 1664.0000000000002
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 1664.0000000000002
+      },
+      {
+        "hasHtml": true,
+        "stage": "render-ready",
+        "time": 1743
+      },
+      {
+        "stage": "preview-install-start",
+        "time": 1748
+      },
+      {
+        "stage": "preview-install-ready",
+        "time": 1891
+      },
+      {
+        "stage": "preview-events-ready",
+        "time": 1980
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 2338
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 2340
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 2361
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 2363
+      },
+      {
+        "stage": "slide-overview-scale-start",
+        "time": 2455
+      },
+      {
+        "stage": "slide-overview-scale-ready",
+        "time": 2465
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 2566
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 2567
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 2591
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 2591
+      },
+      {
+        "stage": "slide-overview-scale-start",
+        "time": 2697
+      },
+      {
+        "stage": "slide-overview-scale-ready",
+        "time": 2704
+      },
+      {
+        "stage": "passthrough",
+        "time": 2751,
+        "url": "ipc://localhost/read_source_snapshot"
+      }
+    ],
+    [
+      {
+        "stage": "passthrough",
+        "time": 1303,
+        "url": "ipc://localhost/open_deck"
+      },
+      {
+        "stage": "request",
+        "time": 1362,
+        "url": "elef-preview://localhost/0567687d-df49-4c58-80cf-caaa35e97813"
+      },
+      {
+        "sourceLength": 8779,
+        "stage": "context-start",
+        "time": 1362
+      },
+      {
+        "documentCount": 0,
+        "stage": "context-ready",
+        "time": 1366
+      },
+      {
+        "stage": "render-start",
+        "time": 1366
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 1468
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 1469
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 1484
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 1484
+      },
+      {
+        "hasHtml": true,
+        "stage": "render-ready",
+        "time": 1559
+      },
+      {
+        "stage": "preview-install-start",
+        "time": 1564
+      },
+      {
+        "stage": "preview-install-ready",
+        "time": 1681
+      },
+      {
+        "stage": "preview-events-ready",
+        "time": 1762
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 2063
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 2065
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 2079
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 2080
+      },
+      {
+        "stage": "slide-overview-scale-start",
+        "time": 2165
+      },
+      {
+        "stage": "slide-overview-scale-ready",
+        "time": 2173
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 2268.0000000000005
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 2269
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 2309
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 2309
+      },
+      {
+        "stage": "slide-overview-scale-start",
+        "time": 2396
+      },
+      {
+        "stage": "slide-overview-scale-ready",
+        "time": 2405.0000000000005
+      }
+    ],
+    [
+      {
+        "stage": "passthrough",
+        "time": 1182,
+        "url": "ipc://localhost/open_deck"
+      },
+      {
+        "stage": "request",
+        "time": 1283,
+        "url": "elef-preview://localhost/0567687d-df49-4c58-80cf-caaa35e97813"
+      },
+      {
+        "sourceLength": 8779,
+        "stage": "context-start",
+        "time": 1283
+      },
+      {
+        "documentCount": 0,
+        "stage": "context-ready",
+        "time": 1288
+      },
+      {
+        "stage": "render-start",
+        "time": 1288
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 1381
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 1381
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 1388.0000000000002
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 1388.0000000000002
+      },
+      {
+        "hasHtml": true,
+        "stage": "render-ready",
+        "time": 1453
+      },
+      {
+        "stage": "preview-install-start",
+        "time": 1457
+      },
+      {
+        "stage": "preview-install-ready",
+        "time": 1561
+      },
+      {
+        "stage": "preview-events-ready",
+        "time": 1694
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 2013
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 2015.0000000000002
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 2037
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 2039.0000000000002
+      },
+      {
+        "stage": "slide-overview-scale-start",
+        "time": 2122
+      },
+      {
+        "stage": "slide-overview-scale-ready",
+        "time": 2129
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 2283
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 2285
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 2303
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 2303
+      },
+      {
+        "stage": "slide-overview-scale-start",
+        "time": 2401.0000000000005
+      },
+      {
+        "stage": "slide-overview-scale-ready",
+        "time": 2412
+      }
+    ],
+    [
+      {
+        "stage": "passthrough",
+        "time": 1379,
+        "url": "ipc://localhost/open_deck"
+      },
+      {
+        "stage": "request",
+        "time": 1465,
+        "url": "elef-preview://localhost/0567687d-df49-4c58-80cf-caaa35e97813"
+      },
+      {
+        "sourceLength": 8779,
+        "stage": "context-start",
+        "time": 1465
+      },
+      {
+        "documentCount": 0,
+        "stage": "context-ready",
+        "time": 1471
+      },
+      {
+        "stage": "render-start",
+        "time": 1471
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 1621
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 1621
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 1630.0000000000002
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 1630.0000000000002
+      },
+      {
+        "hasHtml": true,
+        "stage": "render-ready",
+        "time": 1692
+      },
+      {
+        "stage": "preview-install-start",
+        "time": 1699
+      },
+      {
+        "stage": "preview-install-ready",
+        "time": 1851
+      },
+      {
+        "stage": "preview-events-ready",
+        "time": 1965
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 2294
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 2295
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 2315
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 2315
+      },
+      {
+        "stage": "slide-overview-scale-start",
+        "time": 2399
+      },
+      {
+        "stage": "slide-overview-scale-ready",
+        "time": 2416
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 2525
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 2530.0000000000005
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 2553
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 2553
+      },
+      {
+        "stage": "slide-overview-scale-start",
+        "time": 2671.0000000000005
+      },
+      {
+        "stage": "slide-overview-scale-ready",
+        "time": 2679.0000000000005
+      },
+      {
+        "stage": "passthrough",
+        "time": 2725,
+        "url": "ipc://localhost/read_source_snapshot"
+      }
+    ],
+    [
+      {
+        "stage": "passthrough",
+        "time": 1250,
+        "url": "ipc://localhost/open_deck"
+      },
+      {
+        "stage": "request",
+        "time": 1313,
+        "url": "elef-preview://localhost/0567687d-df49-4c58-80cf-caaa35e97813"
+      },
+      {
+        "sourceLength": 8779,
+        "stage": "context-start",
+        "time": 1313
+      },
+      {
+        "documentCount": 0,
+        "stage": "context-ready",
+        "time": 1318
+      },
+      {
+        "stage": "render-start",
+        "time": 1318
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 1468
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 1468
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 1475
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 1475
+      },
+      {
+        "hasHtml": true,
+        "stage": "render-ready",
+        "time": 1531.0000000000002
+      },
+      {
+        "stage": "preview-install-start",
+        "time": 1535.0000000000002
+      },
+      {
+        "stage": "preview-install-ready",
+        "time": 1690
+      },
+      {
+        "stage": "preview-events-ready",
+        "time": 1778
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 2032
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 2033
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 2051
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 2052
+      },
+      {
+        "stage": "slide-overview-scale-start",
+        "time": 2151.0000000000005
+      },
+      {
+        "stage": "slide-overview-scale-ready",
+        "time": 2160
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 2312
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 2314
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 2334
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 2334
+      },
+      {
+        "stage": "slide-overview-scale-start",
+        "time": 2415
+      },
+      {
+        "stage": "slide-overview-scale-ready",
+        "time": 2422
+      }
+    ],
+    [
+      {
+        "stage": "passthrough",
+        "time": 1097,
+        "url": "ipc://localhost/open_deck"
+      },
+      {
+        "stage": "request",
+        "time": 1157,
+        "url": "elef-preview://localhost/0567687d-df49-4c58-80cf-caaa35e97813"
+      },
+      {
+        "sourceLength": 8779,
+        "stage": "context-start",
+        "time": 1157
+      },
+      {
+        "documentCount": 0,
+        "stage": "context-ready",
+        "time": 1160
+      },
+      {
+        "stage": "render-start",
+        "time": 1160
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 1248
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 1248
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 1254
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 1254
+      },
+      {
+        "hasHtml": true,
+        "stage": "render-ready",
+        "time": 1296
+      },
+      {
+        "stage": "preview-install-start",
+        "time": 1304
+      },
+      {
+        "stage": "preview-install-ready",
+        "time": 1432
+      },
+      {
+        "stage": "preview-events-ready",
+        "time": 1511.0000000000002
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 1826
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 1827
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 1841
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 1841
+      },
+      {
+        "stage": "slide-overview-scale-start",
+        "time": 1934
+      },
+      {
+        "stage": "slide-overview-scale-ready",
+        "time": 1943
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 2065
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 2067
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 2116
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 2116
+      },
+      {
+        "stage": "slide-overview-scale-start",
+        "time": 2204
+      },
+      {
+        "stage": "slide-overview-scale-ready",
+        "time": 2212
+      }
+    ],
+    [
+      {
+        "stage": "passthrough",
+        "time": 1269.0000000000002,
+        "url": "ipc://localhost/open_deck"
+      },
+      {
+        "stage": "request",
+        "time": 1381,
+        "url": "elef-preview://localhost/0567687d-df49-4c58-80cf-caaa35e97813"
+      },
+      {
+        "sourceLength": 8779,
+        "stage": "context-start",
+        "time": 1381
+      },
+      {
+        "documentCount": 0,
+        "stage": "context-ready",
+        "time": 1385
+      },
+      {
+        "stage": "render-start",
+        "time": 1385
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 1537
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 1537
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 1544
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 1544
+      },
+      {
+        "hasHtml": true,
+        "stage": "render-ready",
+        "time": 1595
+      },
+      {
+        "stage": "preview-install-start",
+        "time": 1603
+      },
+      {
+        "stage": "preview-install-ready",
+        "time": 1765.0000000000002
+      },
+      {
+        "stage": "preview-events-ready",
+        "time": 1871
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 2174
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 2176
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 2200
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 2201
+      },
+      {
+        "stage": "slide-overview-scale-start",
+        "time": 2327
+      },
+      {
+        "stage": "slide-overview-scale-ready",
+        "time": 2338
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 2431
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 2432
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 2454
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 2455
+      },
+      {
+        "stage": "slide-overview-scale-start",
+        "time": 2528
+      },
+      {
+        "stage": "slide-overview-scale-ready",
+        "time": 2535
+      }
+    ],
+    [
+      {
+        "stage": "passthrough",
+        "time": 2321,
+        "url": "ipc://localhost/open_deck"
+      },
+      {
+        "stage": "request",
+        "time": 2439,
+        "url": "elef-preview://localhost/0567687d-df49-4c58-80cf-caaa35e97813"
+      },
+      {
+        "sourceLength": 8779,
+        "stage": "context-start",
+        "time": 2439
+      },
+      {
+        "documentCount": 0,
+        "stage": "context-ready",
+        "time": 2450
+      },
+      {
+        "stage": "render-start",
+        "time": 2450
+      },
+      {
+        "stage": "passthrough",
+        "time": 2553,
+        "url": "ipc://localhost/read_source_snapshot"
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 2581
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 2581
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 2585
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 2585
+      },
+      {
+        "hasHtml": true,
+        "stage": "render-ready",
+        "time": 2650
+      },
+      {
+        "stage": "preview-install-start",
+        "time": 2659.0000000000005
+      },
+      {
+        "stage": "preview-install-ready",
+        "time": 2790
+      },
+      {
+        "stage": "preview-events-ready",
+        "time": 2901.0000000000005
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 3269
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 3272.0000000000005
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 3288.0000000000005
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 3288.0000000000005
+      },
+      {
+        "stage": "slide-overview-scale-start",
+        "time": 3375
+      },
+      {
+        "stage": "slide-overview-scale-ready",
+        "time": 3386
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 3491
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 3494
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 3550.0000000000005
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 3550.0000000000005
+      },
+      {
+        "stage": "slide-overview-scale-start",
+        "time": 3648
+      },
+      {
+        "stage": "slide-overview-scale-ready",
+        "time": 3656
+      }
+    ],
+    [
+      {
+        "stage": "passthrough",
+        "time": 2337,
+        "url": "ipc://localhost/open_deck"
+      },
+      {
+        "stage": "request",
+        "time": 2464,
+        "url": "elef-preview://localhost/0567687d-df49-4c58-80cf-caaa35e97813"
+      },
+      {
+        "sourceLength": 8779,
+        "stage": "context-start",
+        "time": 2464
+      },
+      {
+        "documentCount": 0,
+        "stage": "context-ready",
+        "time": 2470
+      },
+      {
+        "stage": "render-start",
+        "time": 2470
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 2594
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 2594
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 2602
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 2603
+      },
+      {
+        "stage": "passthrough",
+        "time": 2638,
+        "url": "ipc://localhost/read_source_snapshot"
+      },
+      {
+        "hasHtml": true,
+        "stage": "render-ready",
+        "time": 2640
+      },
+      {
+        "stage": "preview-install-start",
+        "time": 2676
+      },
+      {
+        "stage": "preview-install-ready",
+        "time": 2831
+      },
+      {
+        "stage": "preview-events-ready",
+        "time": 2983
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 3347
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 3348
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 3363
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 3363
+      },
+      {
+        "stage": "slide-overview-scale-start",
+        "time": 3469
+      },
+      {
+        "stage": "slide-overview-scale-ready",
+        "time": 3486
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 3588
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 3590
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 3610
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 3610
+      },
+      {
+        "stage": "slide-overview-scale-start",
+        "time": 3720
+      },
+      {
+        "stage": "slide-overview-scale-ready",
+        "time": 3727
+      }
+    ],
+    [
+      {
+        "stage": "passthrough",
+        "time": 1030,
+        "url": "ipc://localhost/open_deck"
+      },
+      {
+        "stage": "request",
+        "time": 1081,
+        "url": "elef-preview://localhost/0567687d-df49-4c58-80cf-caaa35e97813"
+      },
+      {
+        "sourceLength": 8779,
+        "stage": "context-start",
+        "time": 1081
+      },
+      {
+        "documentCount": 0,
+        "stage": "context-ready",
+        "time": 1085
+      },
+      {
+        "stage": "render-start",
+        "time": 1085
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 1202
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 1202
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 1209
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 1209
+      },
+      {
+        "hasHtml": true,
+        "stage": "render-ready",
+        "time": 1248
+      },
+      {
+        "stage": "preview-install-start",
+        "time": 1254
+      },
+      {
+        "stage": "preview-install-ready",
+        "time": 1378
+      },
+      {
+        "stage": "preview-events-ready",
+        "time": 1457
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 1775.0000000000002
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 1776
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 1793
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 1794
+      },
+      {
+        "stage": "slide-overview-scale-start",
+        "time": 1866
+      },
+      {
+        "stage": "slide-overview-scale-ready",
+        "time": 1874
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 1977
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 1981
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 2011.0000000000002
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 2012
+      },
+      {
+        "stage": "slide-overview-scale-start",
+        "time": 2108
+      },
+      {
+        "stage": "slide-overview-scale-ready",
+        "time": 2116
+      }
+    ],
+    [
+      {
+        "stage": "passthrough",
+        "time": 954.0000000000001,
+        "url": "ipc://localhost/open_deck"
+      },
+      {
+        "stage": "request",
+        "time": 1023.0000000000001,
+        "url": "elef-preview://localhost/0567687d-df49-4c58-80cf-caaa35e97813"
+      },
+      {
+        "sourceLength": 8779,
+        "stage": "context-start",
+        "time": 1023.0000000000001
+      },
+      {
+        "documentCount": 0,
+        "stage": "context-ready",
+        "time": 1026
+      },
+      {
+        "stage": "render-start",
+        "time": 1026
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 1153
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 1153
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 1159
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 1159
+      },
+      {
+        "hasHtml": true,
+        "stage": "render-ready",
+        "time": 1208
+      },
+      {
+        "stage": "preview-install-start",
+        "time": 1212
+      },
+      {
+        "stage": "preview-install-ready",
+        "time": 1314
+      },
+      {
+        "stage": "preview-events-ready",
+        "time": 1391
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 1672
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 1673
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 1687
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 1687
+      },
+      {
+        "stage": "slide-overview-scale-start",
+        "time": 1756
+      },
+      {
+        "stage": "slide-overview-scale-ready",
+        "time": 1764
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 1860
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 1861
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 1876
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 1876
+      },
+      {
+        "stage": "slide-overview-scale-start",
+        "time": 1962
+      },
+      {
+        "stage": "slide-overview-scale-ready",
+        "time": 1969
+      }
+    ],
+    [
+      {
+        "stage": "passthrough",
+        "time": 1037,
+        "url": "ipc://localhost/open_deck"
+      },
+      {
+        "stage": "request",
+        "time": 1098,
+        "url": "elef-preview://localhost/0567687d-df49-4c58-80cf-caaa35e97813"
+      },
+      {
+        "sourceLength": 8779,
+        "stage": "context-start",
+        "time": 1098
+      },
+      {
+        "documentCount": 0,
+        "stage": "context-ready",
+        "time": 1102
+      },
+      {
+        "stage": "render-start",
+        "time": 1102
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 1205
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 1205
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 1213
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 1213
+      },
+      {
+        "hasHtml": true,
+        "stage": "render-ready",
+        "time": 1247
+      },
+      {
+        "stage": "preview-install-start",
+        "time": 1252
+      },
+      {
+        "stage": "preview-install-ready",
+        "time": 1371
+      },
+      {
+        "stage": "preview-events-ready",
+        "time": 1449
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 1731
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 1732
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 1746
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 1747
+      },
+      {
+        "stage": "slide-overview-scale-start",
+        "time": 1834
+      },
+      {
+        "stage": "slide-overview-scale-ready",
+        "time": 1841
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 1941
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 1944
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 1967
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 1968
+      },
+      {
+        "stage": "slide-overview-scale-start",
+        "time": 2040
+      },
+      {
+        "stage": "slide-overview-scale-ready",
+        "time": 2047.0000000000002
+      }
+    ],
+    [
+      {
+        "stage": "passthrough",
+        "time": 1158,
+        "url": "ipc://localhost/open_deck"
+      },
+      {
+        "stage": "request",
+        "time": 1226,
+        "url": "elef-preview://localhost/0567687d-df49-4c58-80cf-caaa35e97813"
+      },
+      {
+        "sourceLength": 8779,
+        "stage": "context-start",
+        "time": 1226
+      },
+      {
+        "documentCount": 0,
+        "stage": "context-ready",
+        "time": 1229
+      },
+      {
+        "stage": "render-start",
+        "time": 1229
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 1338
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 1338
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 1343
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 1343
+      },
+      {
+        "hasHtml": true,
+        "stage": "render-ready",
+        "time": 1383
+      },
+      {
+        "stage": "preview-install-start",
+        "time": 1387
+      },
+      {
+        "stage": "preview-install-ready",
+        "time": 1513.0000000000002
+      },
+      {
+        "stage": "preview-events-ready",
+        "time": 1617
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 1907
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 1908.0000000000002
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 1945
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 1945
+      },
+      {
+        "stage": "slide-overview-scale-start",
+        "time": 2024
+      },
+      {
+        "stage": "slide-overview-scale-ready",
+        "time": 2031.0000000000002
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 2120
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 2121
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 2139.0000000000005
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 2139.0000000000005
+      },
+      {
+        "stage": "slide-overview-scale-start",
+        "time": 2224
+      },
+      {
+        "stage": "slide-overview-scale-ready",
+        "time": 2231
+      }
+    ],
+    [
+      {
+        "stage": "passthrough",
+        "time": 1030,
+        "url": "ipc://localhost/open_deck"
+      },
+      {
+        "stage": "request",
+        "time": 1090,
+        "url": "elef-preview://localhost/0567687d-df49-4c58-80cf-caaa35e97813"
+      },
+      {
+        "sourceLength": 8779,
+        "stage": "context-start",
+        "time": 1090
+      },
+      {
+        "documentCount": 0,
+        "stage": "context-ready",
+        "time": 1094
+      },
+      {
+        "stage": "render-start",
+        "time": 1094
+      },
+      {
+        "hasHtml": true,
+        "stage": "render-ready",
+        "time": 1229
+      },
+      {
+        "stage": "preview-install-start",
+        "time": 1234
+      },
+      {
+        "stage": "preview-install-ready",
+        "time": 1395
+      },
+      {
+        "stage": "preview-events-ready",
+        "time": 1530
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 1838
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 1840
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 1859
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 1859
+      },
+      {
+        "stage": "slide-overview-scale-start",
+        "time": 1939
+      },
+      {
+        "stage": "slide-overview-scale-ready",
+        "time": 1948
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 2072
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 2073
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 2095
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 2095
+      },
+      {
+        "stage": "slide-overview-scale-start",
+        "time": 2206
+      },
+      {
+        "stage": "slide-overview-scale-ready",
+        "time": 2216
+      }
+    ],
+    [
+      {
+        "stage": "passthrough",
+        "time": 1245,
+        "url": "ipc://localhost/open_deck"
+      },
+      {
+        "stage": "request",
+        "time": 1330,
+        "url": "elef-preview://localhost/0567687d-df49-4c58-80cf-caaa35e97813"
+      },
+      {
+        "sourceLength": 8779,
+        "stage": "context-start",
+        "time": 1330
+      },
+      {
+        "documentCount": 0,
+        "stage": "context-ready",
+        "time": 1336
+      },
+      {
+        "stage": "render-start",
+        "time": 1336
+      },
+      {
+        "hasHtml": true,
+        "stage": "render-ready",
+        "time": 1438
+      },
+      {
+        "stage": "preview-install-start",
+        "time": 1452
+      },
+      {
+        "stage": "preview-install-ready",
+        "time": 1563
+      },
+      {
+        "stage": "preview-events-ready",
+        "time": 1655
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 2011.0000000000002
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 2013
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 2027.0000000000002
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 2027.0000000000002
+      },
+      {
+        "stage": "slide-overview-scale-start",
+        "time": 2107
+      },
+      {
+        "stage": "slide-overview-scale-ready",
+        "time": 2115
+      },
+      {
+        "stage": "slide-overflow-start",
+        "time": 2205
+      },
+      {
+        "stage": "slide-overview-render-start",
+        "time": 2209
+      },
+      {
+        "stage": "slide-overview-render-ready",
+        "time": 2230
+      },
+      {
+        "stage": "slide-overflow-ready",
+        "time": 2230
+      },
+      {
+        "stage": "slide-overview-scale-start",
+        "time": 2319
+      },
+      {
+        "stage": "slide-overview-scale-ready",
+        "time": 2334
+      }
+    ]
+  ],
+  "p95Milliseconds": {
+    "coldStart": 2442,
+    "open100Slides": 1209,
+    "warmLibrary": 196
+  },
+  "p95BootstrapStageMilliseconds": {
+    "library-status": 145.99999999999994,
+    "initial-library-render": 65,
+    "initial-paint": 163,
+    "editor-runtime": 216.9999999999999,
+    "editor-ready": 63.999999999999886,
+    "native-ready-ack": 65
+  },
+  "p95OpenStageMilliseconds": {
+    "readDeck": 11,
+    "prepareDeck": 1,
+    "editorReady": 0,
+    "loadDocument": 109,
+    "deckViewSetup": 2,
+    "previewRefresh": 862.9999999999998
+  },
+  "p95NavigationStageMilliseconds": {
+    "domContentLoadedEventEnd": 309,
+    "domInteractive": 79,
+    "loadEventEnd": 309,
+    "responseEnd": 79
+  },
+  "p95PreviewStageMilliseconds": {
+    "render": 221,
+    "previewInstall": 162.00000000000023,
+    "previewEvents": 307,
+    "slideOverview": 54,
+    "slideOverviewScale": 17,
+    "slideOverflow": 58
+  },
+  "budgetsMilliseconds": {
+    "coldStart": 1500,
+    "open100Slides": 300,
+    "warmLibrary": 500
+  },
+  "misses": [
+    "coldStart",
+    "open100Slides"
+  ],
+  "budgetMode": "runner-report-only"
+}

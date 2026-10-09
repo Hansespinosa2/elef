@@ -97,7 +97,12 @@ desktop_main = (ROOT / "desktop/frontend/src/main.js").read_text()
 tauri_config = json.loads((ROOT / "desktop/src-tauri/tauri.conf.json").read_text())
 desktop_scripts = json.loads((ROOT / "desktop/frontend/package.json").read_text())["scripts"]
 desktop_application = (ROOT / "app/javascript/lib/file_library_application.js").read_text()
-web_authoring_settings = (ROOT / "app/javascript/controllers/authoring_settings_controller.js").read_text()
+work_session = (ROOT / "app/javascript/lib/work_session.js").read_text()
+client_library_app = (ROOT / "packages/client/src/features/library/LibraryApp.tsx").read_text()
+client_library_card = (ROOT / "packages/client/src/features/library/LibraryCard.tsx").read_text()
+client_library_filtering = (ROOT / "packages/client/src/features/library/filtering.ts").read_text()
+web_authoring_settings = (ROOT / "app/javascript/controllers/client_shell_controller.js").read_text()
+client_authoring_dialog = (ROOT / "packages/client/src/features/settings/AuthoringDialog.tsx").read_text()
 desktop_shell_styles = (ROOT / "app/assets/stylesheets/file_library_host.css").read_text()
 assert "globalThis.fetch =" not in desktop_application, (
     "The shared frontend must not replace the host fetch implementation"
@@ -107,9 +112,9 @@ presentation_controller = (ROOT / "app/javascript/controllers/presentation_contr
 importmap = (ROOT / "config/importmap.rb").read_text()
 renderer_build = (ROOT / "script/build_renderer.mjs").read_text()
 renderer_sources = (
-    ROOT / "app/javascript/lib/renderer.js",
-    ROOT / "app/javascript/lib/document_links.js",
-    ROOT / "app/javascript/lib/document_map.js",
+    ROOT / "packages/renderer/src/renderer.js",
+    ROOT / "packages/work-model/src/document_links.js",
+    ROOT / "packages/work-model/src/document_map.js",
     ROOT / "app/javascript/lib/renderer_global.js",
 )
 editor_runtime = (ROOT / "app/javascript/lib/editor_runtime.js").read_text()
@@ -161,6 +166,31 @@ missing_shared_alias_pins = sorted(frontend_shared_aliases - rails_shared_alias_
 assert not missing_shared_alias_pins, (
     "Every shared Elef module alias must be pinned in the Rails importmap: "
     + ", ".join(missing_shared_alias_pins)
+)
+# renderer_global.js is the esbuild bundle entry (script/build_renderer.mjs), never
+# served through the importmap, so its package imports resolve via node_modules.
+BUNDLED_ONLY = {app_frontend / "lib/renderer_global.js"}
+frontend_package_imports = {
+    specifier
+    for path in app_frontend.rglob("*.js")
+    if path not in BUNDLED_ONLY
+    for specifier in MODULE_SPECIFIER.findall(path.read_text())
+    if specifier.startswith("@elef/")
+}
+rails_package_pins = set(re.findall(r'^pin "(@elef/[^\"]+)"', importmap, re.MULTILINE))
+# The work-model barrel is browser-loaded through the importmap, which does
+# not rewrite relative specifiers: the barrel must use self-referential bare
+# imports, and every barrel subpath must be pinned.
+work_model_barrel = (ROOT / "packages/work-model/src/index.js").read_text()
+assert '"./' not in work_model_barrel and '"../' not in work_model_barrel, (
+    "packages/work-model/src/index.js must not use relative imports (browser-loaded)"
+)
+for subpath in ("@elef/work-model/document-map", "@elef/work-model/document-links"):
+    assert subpath in rails_package_pins, f"work-model barrel subpath must be pinned: {subpath}"
+missing_package_pins = sorted(frontend_package_imports - rails_package_pins)
+assert not missing_package_pins, (
+    "Every shared Elef package import must be pinned in the Rails importmap: "
+    + ", ".join(missing_package_pins)
 )
 
 for module in math_modules:
@@ -269,6 +299,7 @@ shared_workflows = {
     "hostileDeckNeutralizedWorkflow",
     "libraryAndGraphWorkflow",
     "libraryCreateDeleteWorkflow",
+    "libraryDeepLinksWorkflow",
     "mathInputWorkflow",
     "presentationModeWorkflow",
     "snippetInsertWorkflow",
@@ -346,47 +377,89 @@ assert "@tauri-apps/" not in desktop_application and "desktop/" not in desktop_a
     "the Rails-owned file-library application must depend on injected host services, not desktop code"
 )
 assert "script/build_renderer.mjs" not in build, "desktop must consume the renderer build, not own it"
-assert '"lib/save_flow"' in desktop_application and '"lib/preview_sanitizer"' in desktop_application, (
-    "desktop save and preview behavior must import Rails-owned modules"
+assert '"lib/work_session"' in desktop_application, (
+    "desktop save behavior must import the Rails-owned session factory"
 )
-assert '"lib/library_view"' in desktop_application and '"lib/library_filter"' in desktop_application, (
-    "desktop library behavior must import Rails-owned components"
+assert "sanitizePreview" in client_library_card and '"../../ui/sanitize.js"' in client_library_card, (
+    "desktop library previews must sanitize through the shared client module"
 )
-assert '"lib/authoring_settings_dialog"' in desktop_application, "desktop authoring settings UI must consume the Rails-owned dialog"
-assert '"lib/authoring_settings_dialog"' in web_authoring_settings and "createAuthoringSettingsDialog" in web_authoring_settings, (
-    "web authoring settings must use the same Rails-owned dialog as desktop"
+assert '"./save_flow.js"' in work_session, (
+    "the shared work-session factory must consume the Rails-owned save state machine"
 )
-assert 'render "shared/authoring_settings_dialog"' in (ROOT / "app/views/shared/_authoring_settings_page.html.erb").read_text(), (
-    "web authoring settings must render the same Rails-owned dialog markup packaged by desktop"
+assert 'from "@elef/client"' in desktop_application, (
+    "desktop library behavior must mount the shared client"
 )
-assert '"app/views/shared/_authoring_settings_dialog.html.erb"' in build, (
-    "desktop must package the same Rails-owned authoring settings markup used by the web app"
+assert "export function filterWorks" in client_library_filtering, (
+    "desktop library filtering must use the shared client rules"
 )
-assert '"lib/library_card"' in desktop_application, "desktop library cards must be owned by app/javascript"
+assert "openAuthoringSettings" in desktop_application and "mountElef" in desktop_application, (
+    "desktop authoring settings UI must mount the shared client"
+)
+assert "authoringTransport" in desktop_application and "platform.authoringTransport" in desktop_application, (
+    "desktop authoring settings must persist through the injected registry transport seam"
+)
+assert "createRailsAuthoringSettingsTransport" in web_authoring_settings, (
+    "web authoring settings must persist through the same registry transport seam as desktop"
+)
+settings_page = (ROOT / "app/views/shared/settings_page.html.erb").read_text()
+assert 'render "shared/client_settings_mount"' in settings_page, (
+    "web settings routes must mount the shared client instead of server-rendered settings markup"
+)
+for view_dir in ("app/views/snippets", "app/views/math_shortcuts", "app/views/workspace_settings"):
+    assert not list((ROOT / view_dir).glob("*.html.erb")), (
+        f"{view_dir} must not keep per-route settings shells; routes render the single shared settings page"
+    )
+for controller in (
+    "app/controllers/snippets_controller.rb",
+    "app/controllers/math_shortcuts_controller.rb",
+    "app/controllers/workspace_settings_controller.rb",
+):
+    assert 'render template: "shared/settings_page"' in (ROOT / controller).read_text(), (
+        f"{controller} must render the single shared settings page for HTML settings routes"
+    )
+assert 'id="authoring-settings-dialog"' in client_authoring_dialog, (
+    "the shared client dialog must own the authoring DOM contract both hosts assert"
+)
+assert '"app/views/shared/_authoring_settings_dialog.html.erb"' not in build, (
+    "desktop must not package the retired server-rendered authoring dialog"
+)
+assert '"lib/library_card"' not in desktop_application, "desktop must not keep the retired card renderer"
+assert "export function cardDomId" in client_library_card, "desktop library cards must be owned by the shared client"
 assert '"lib/editor_controller_lookup"' in desktop_application, "desktop editor lookup must use the app-owned controller helper"
-assert '"lib/document_links"' in desktop_application and "buildDocumentGraph" in desktop_application, (
-    "desktop graph construction must consume the Rails-owned resolver"
+assert '"@elef/work-model"' in desktop_application and "buildDocumentGraph" in desktop_application, (
+    "desktop graph construction must consume the shared work-model resolver"
 )
 assert '"ElefRenderer.buildDocumentGraph"' in (ROOT / "app/lib/source/javascript_renderer.rb").read_text(), (
     "Rails graph construction must use the same app-owned resolver"
 )
-assert "markdown_document_links" not in (ROOT / "desktop/crates/elef-core/src/lib.rs").read_text(), (
+assert "markdown_document_links" not in (ROOT / "crates/local-store/src/lib.rs").read_text(), (
     "desktop core must not keep a parallel document-link parser"
 )
-assert "markdown_document_title" not in (ROOT / "desktop/crates/elef-core/src/lib.rs").read_text(), (
+assert "markdown_document_title" not in (ROOT / "crates/local-store/src/lib.rs").read_text(), (
     "desktop core must return source and folder name; Rails-owned JavaScript derives Markdown graph labels"
 )
-assert "extractFirstMarkdownHeading" in (ROOT / "app/javascript/lib/document_links.js").read_text(), (
-    "document graph labels must use the Rails-owned Markdown rules"
+assert "extractFirstMarkdownHeading" in (ROOT / "packages/work-model/src/document_links.js").read_text(), (
+    "document graph labels must use the shared work-model Markdown rules"
 )
-authoring_settings_dialog = (ROOT / "app/javascript/lib/authoring_settings_dialog.js").read_text()
-assert '"#elef/authoring-registry-write"' in authoring_settings_dialog, "authoring UI must use the app-owned persistence flow"
+assert "transport.readRegistries" in client_authoring_dialog, (
+    "authoring UI must load through the injected transport seam"
+)
+assert "writeRegistry" in client_authoring_dialog, (
+    "authoring UI must persist through the injected transport seam"
+)
+assert "globalThis.fetch(" not in client_authoring_dialog and "invoke(" not in client_authoring_dialog, (
+    "authoring UI must not reach a network or native layer past its transport seam"
+)
 assert '"controllers/presentation_controller"' in editor_runtime, (
     "the Rails-owned controller runtime must register the shared presentation controller"
 )
 assert "splitting: true" in build, "desktop must emit lazy ESM chunks instead of parsing every editor controller at launch"
 assert 'import("controllers/editor_controller")' in editor_runtime, "the heavy shared editor controller must load on demand"
-assert 'import("controllers/document_graph_controller")' in editor_runtime, "the shared graph controller must load on demand"
+assert 'import("controllers/document_graph_controller")' not in editor_runtime, "the retired Stimulus graph controller must not load on demand"
+assert "loadLibraryRuntime" not in editor_runtime, "no host may keep the retired graph controller loader"
+assert "renderGraphView" in desktop_application and "GraphController" in desktop_application, (
+    "desktop graph rendering must use the shared client graph module"
+)
 assert '"lib/renderer_worker"' in (ROOT / "desktop/frontend/src/renderer-worker.js").read_text(), (
     "desktop worker bootstrap must delegate renderer response behavior to app/javascript"
 )
@@ -396,36 +469,63 @@ assert 'path.join(frontendRoot, "src/renderer-worker.js")' in build, (
 assert (ROOT / "test/javascript/shared/renderer_worker.test.js").is_file(), (
     "shared renderer worker behavior must be tested under test/javascript"
 )
-assert '"presentation"' in desktop_application and "getControllerForElementAndIdentifier(elements.editorForm, \"presentation\")" in desktop_application, (
-    "desktop presentation mode must delegate slide behavior to the Rails-owned controller"
+assert "mountPresentation" in desktop_application, (
+    "desktop presentation mode must mount slide behavior from the shared client"
+)
+assert "getControllerForElementAndIdentifier(elements.editorForm, \"presentation\")" not in desktop_application, (
+    "desktop presentation mode must not reach the retired Stimulus presentation controller"
 )
 assert "createPresentationNavigation" not in desktop_application and "presentationActionForKey" not in desktop_application, (
     "desktop must not maintain its own slide navigation behavior"
 )
-assert "setLibraryViewTab" in desktop_application, "desktop library tabs must use the Rails-owned shared view behavior"
+assert "setLibraryViewTab" not in desktop_application, "desktop must not keep the retired tab helper"
+assert "data-library-tab={name}" in client_library_app and "shell.setFilter" in desktop_application, (
+    "desktop library tabs must use the shared client view behavior"
+)
 assert "elements.description.textContent" not in desktop_application, "library tab descriptions belong to the Rails-owned view"
 assert "elements.graphView.hidden = libraryTab" not in desktop_application, "shared library graph visibility belongs to the Rails-owned view"
-assert 'pin "lib/presentation_navigation", to: "lib/presentation_navigation.js"' in importmap, (
-    "Rails must resolve the shared presentation navigation module"
+assert 'lib/presentation_navigation' not in importmap, (
+    "Rails must not pin the retired host-owned navigation module"
+)
+assert '"@elef/client"' in presentation_controller, (
+    "the presentation controller must consume key mapping from the shared client"
 )
 assert 'pin "lib/editor_controller_lookup", to: "lib/editor_controller_lookup.js"' in importmap, (
     "Rails must resolve the shared editor controller lookup"
 )
-assert '"lib/presentation_navigation"' in presentation_controller, "the shared controller must own presentation key mapping"
-assert "write_authoring_registry" not in (ROOT / "app/javascript/lib/authoring_registry_write.js").read_text(), (
-    "Rails-owned authoring flow must receive persistence through a host transport callback"
-)
+assert '"lib/presentation_navigation"' not in presentation_controller, "the shared controller must not keep host-owned key mapping"
 for shared_module in (
     "deck_open_flow", "document_graph_cache", "editor_ready", "editor_source",
-    "feature_flags", "library_preview", "performance_measurement", "renderer_worker_client",
-    "authoring_settings_dialog", "save_flow", "title_save_flow",
+    "feature_flags", "performance_measurement", "renderer_worker_client",
+    "request_identity", "work_session", "title_save_flow",
 ):
     assert f'"lib/{shared_module}"' in desktop_application, f"desktop application must consume app/javascript/lib/{shared_module}.js"
+assert "renderPreviewCore" in client_library_card and '"@elef/client/preview-core"' in client_library_card, (
+    "desktop library previews must render through the shared renderer core"
+)
+preview_core_entry = (ROOT / "packages/client/src/features/library/preview-core.ts").read_text()
+assert '"@elef/renderer"' in preview_core_entry and "renderPreviewCore" in preview_core_entry, (
+    "the deferred preview entry must re-export the shared renderer core, not fork it"
+)
+assert 'pin "@elef/client/preview-core", to: "client/dist/preview-core.js"' in importmap, (
+    "Rails must serve the deferred preview renderer entry"
+)
 assert '"lib/projection_editability"' in (ROOT / "app/javascript/controllers/presentation_editor_controller.js").read_text()
 assert '"lib/projection_editability"' in (ROOT / "app/javascript/controllers/visual_editor_controller.js").read_text()
 assert 'pin "lib/projection_editability", to: "lib/projection_editability.js"' in importmap
-assert all(path.is_file() for path in renderer_sources), "renderer source must stay under app/javascript"
+assert all(path.is_file() for path in renderer_sources), "renderer sources must stay in shared app/javascript or packages"
 assert "desktop/" not in renderer_build, "Rails renderer generation must not reference desktop files"
+bundle_entry = (ROOT / "app/javascript/lib/renderer_global.js").read_text()
+assert (ROOT / "app/javascript/lib/preview_chrome.js").is_file(), "editor chrome must live in the app-side preview_chrome module"
+assert '"./preview_chrome.js"' in bundle_entry and "editorChrome" in bundle_entry, (
+    "the bundle entry must compose bare projection with editor chrome"
+)
+for bridge_function in (
+    "parsePortableDocumentLinks", "extractFirstMarkdownHeading", "frontMatterHasKey",
+    "readStyle", "readStyleOverrides", "normalizeThemeValue", "normalizeTypographyValue",
+    "withFrontMatterValue", "replaceFirstHeading", "sourceAnchorLines",
+):
+    assert bridge_function in bundle_entry, f"the bundle must export the work-model bridge function {bridge_function}"
 desktop_sources = ROOT / "desktop/frontend/src"
 desktop_source_reasons = {
     "authoring-registry-loader.js": "loads the library's native authoring-registry commands",
@@ -435,7 +535,10 @@ desktop_source_reasons = {
     "main.js": "boots the Rails-owned application with Tauri services and native lifecycle",
     "media-transport.js": "adapts browser media fetches to Tauri IPC and asset protocols",
     "preview-transport.js": "adapts the shared renderer to the desktop preview endpoint",
+    "quiet_save_policy.js": "declares desktop quiet-save timing injected into the shared session factory",
     "renderer-worker.js": "starts the packaged renderer bundle in a Web Worker",
+    "tauri-authoring-transport.js": "implements the shared authoring-registry seam over native registry commands",
+    "tauri-host.js": "implements the ElefHost contract over Tauri invoke for the desktop shell",
     "transport-adapter.js": "maps Rails-shaped requests to native command calls",
     "update-flow.js": "drives the Tauri updater and native relaunch",
 }

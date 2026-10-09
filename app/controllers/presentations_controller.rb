@@ -10,7 +10,11 @@ class PresentationsController < ApplicationController
     @filter = "presentations"
     @works = Presentation.includes(:presentation_detail).recent_first
     @lineage_presentations = @works.select(&:presentation?)
-    render "library/index"
+    @card_notes = @works.filter_map do |work|
+      note = work.library_card_note
+      [work.id.to_s, note] if note
+    end.to_h
+    render "library/shell"
   end
 
   def load_samples
@@ -238,4 +242,5 @@ class PresentationsController < ApplicationController
   def pptx_params
     params.require(:presentation).permit(:title, :source, :theme, :typography)
   end
+
 end

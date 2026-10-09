@@ -22,6 +22,28 @@ export function createTransportAdapter({ invoke, onConflict = () => {} }) {
       return invoke("read_source_snapshot", { id })
     },
 
+    pollFileEvents() {
+      return invoke("poll_file_events", {})
+    },
+
+    takeSnapshot(id, reason, source) {
+      return invoke("take_snapshot", { id, reason, source: source ?? null })
+    },
+
+    async mergeExternalChange(id, localSource) {
+      const outcome = await invoke("merge_external_change", { id, localSource })
+      if (outcome && typeof outcome === "object" && typeof outcome.Merged === "string") {
+        return { kind: "merged", source: outcome.Merged }
+      }
+      if (outcome === "Overlap") return { kind: "overlap" }
+      if (outcome === "Suspicious") return { kind: "suspicious" }
+      throw {
+        code: "invalid_response",
+        message: "Elef received an unrecognized merge result.",
+        retryable: false
+      }
+    },
+
     async saveSource(id, source) {
       const baseHash = baseHashes.get(id)
       if (!baseHash) {

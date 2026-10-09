@@ -7,8 +7,6 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
 
   test "rename preserves the all-library view and rejects arbitrary destinations" do
     work = Document.create!(source: "# Before")
-    get root_path
-    assert_select "form[action='#{rename_document_path(work)}'] input[name='library_view'][value='all']"
     patch rename_document_path(work), params: { library_view: "all", document: { title: "Renamed" } }
     assert_redirected_to root_path
     patch rename_document_path(work), params: { library_view: "https://example.invalid/", document: { title: "Again" } }
@@ -174,22 +172,6 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "# First", document.reload.source
   end
 
-  test "document library is separate from the combined library" do
-    document = Document.create!(title: "Notes", source: "# Notes")
-
-    get documents_path
-    assert_response :success
-    assert_select "h1", "Library"
-    assert_select "##{ActionView::RecordIdentifier.dom_id(document)}"
-    assert_select "#presentation_#{presentations(:one).id}", count: 0
-
-    get root_path
-    assert_response :success
-    assert_select "h1", "Library"
-    assert_select "#document_#{document.id}"
-    assert_select "#presentation_#{presentations(:one).id}"
-  end
-
   test "loads sample documents idempotently from the document library" do
     unrelated = Document.create!(title: "Personal notes", source: "# Keep me")
     expected_seed_records = Documents::SampleData::SAMPLES.length
@@ -201,8 +183,9 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to documents_path
     assert_equal "Sample documents loaded.", flash[:notice]
     follow_redirect!
-    graph_element = Nokogiri::HTML(response.body).at_css('[data-controller="document-graph"]')
-    graph = JSON.parse(graph_element["data-document-graph-data-value"])
+    graph_element = Nokogiri::HTML(response.body).at_css("[data-graph-data]")
+    assert_nil graph_element["data-controller"]
+    graph = JSON.parse(graph_element["data-graph-data"])
     assert_equal Document.count, graph.fetch("nodes").length
     assert_includes graph.fetch("nodes").map { |node| node.fetch("title") }, "Stress: Renderer kitchen sink"
     assert_includes graph.fetch("nodes").map { |node| node.fetch("title") }, "Fixture: Graph orphan"
@@ -256,22 +239,21 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
     Document.create!(title: "Orphan", source: "# Orphan")
 
     get documents_path
-    assert_select ".document-graph-panel[data-controller='document-graph']"
-    graph_element = Nokogiri::HTML(response.body).at_css('[data-controller="document-graph"]')
-    graph = JSON.parse(graph_element["data-document-graph-data-value"])
+    assert_select ".document-graph-panel[data-controller='document-graph']", count: 0
+    assert_select "template[data-client-slot='graph'] [data-graph-data]"
+    graph_element = Nokogiri::HTML(response.body).at_css("[data-graph-data]")
+    graph = JSON.parse(graph_element["data-graph-data"])
     assert_equal 3, graph.fetch("nodes").length
     assert_includes graph.fetch("edges"), { "source" => source.id, "target" => target.id }
     assert_select ".lineage-panel", count: 0
 
     get root_path
-    assert_select ".document-graph", count: 0
-    assert_select ".lineage-panel", count: 0
-    assert_select "#document_#{source.id}"
-    assert_select "#presentation_#{presentations(:one).id}"
+    assert_select "template[data-client-slot='graph'] .document-graph-panel", count: 0
+    assert_select "template[data-client-slot='lineage'] .lineage-panel", count: 0
 
     get presentations_path
-    assert_select ".document-graph", count: 0
-    assert_select ".lineage-panel"
+    assert_select "template[data-client-slot='graph'] .document-graph-panel", count: 0
+    assert_select "template[data-client-slot='lineage'] .lineage-panel"
   end
 
   test "duplicate document titles are rejected" do
@@ -285,11 +267,6 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
   test "renaming a document preserves incoming links through aliases" do
     target = Document.create!(title: "Old title", source: "# Old title")
     incoming = Document.create!(title: "Incoming", source: "[[Old title]]\n\n`[[Old title]]`\n\n```\n[[Old title]]\n```")
-
-    get documents_path
-    assert_select "##{ActionView::RecordIdentifier.dom_id(target)} form[action='#{rename_document_path(target)}']" do
-      assert_select 'input[name="document[title]"]'
-    end
 
     patch rename_document_path(target), params: { document: { title: "New title" } }
 

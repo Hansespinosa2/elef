@@ -3,6 +3,7 @@ import { editAndPreviewWorkflow, SAVED_SOURCE } from "../../../test/e2e/scenario
 import { appearanceWorkflow } from "../../../test/e2e/scenarios/appearance.js"
 import { libraryAndGraphWorkflow } from "../../../test/e2e/scenarios/library-and-graph.js"
 import { libraryCreateDeleteWorkflow } from "../../../test/e2e/scenarios/library-create-delete.js"
+import { libraryDeepLinksWorkflow } from "../../../test/e2e/scenarios/library-deep-links.js"
 import { externalEditConflictWorkflow, CONFLICT_EXTERNAL_SOURCE } from "../../../test/e2e/scenarios/external-edit-conflict.js"
 import { hostileDeckNeutralizedWorkflow } from "../../../test/e2e/scenarios/hostile-deck.js"
 import { documentLinkCompletionWorkflow, mathInputWorkflow, snippetInsertWorkflow } from "../../../test/e2e/scenarios/authoring-palettes.js"
@@ -15,7 +16,10 @@ import { displayMathEnterWorkflow } from "../../../test/e2e/scenarios/display-ma
 import { execFileSync } from "node:child_process"
 import path from "node:path"
 import { readFile } from "node:fs/promises"
-import { renderPreview } from "../../../app/javascript/lib/renderer.js"
+import { renderPreviewCore } from "@elef/renderer"
+import { editorChrome } from "../../../app/javascript/lib/preview_chrome.js"
+
+const renderPreview = input => renderPreviewCore(input, { chrome: editorChrome })
 
 async function readApplicationStylesheet() {
   const index = await readFile(new URL("../../../app/assets/stylesheets/application.css", import.meta.url), "utf8")
@@ -89,9 +93,11 @@ class WebEditorUi {
 
   async enableVimRelativeLineNumbers() {
     await this.page.goto("/settings")
-    const vimToggle = this.page.locator("[data-vim-settings-target='vimToggle']")
+    // Vim preferences render through the shared client UI (same hooks as
+    // the desktop settings flow); drive its stable element ids.
+    const vimToggle = this.page.locator("#vim-enabled")
     if (!await vimToggle.isChecked()) await vimToggle.check()
-    await this.page.locator("[data-vim-settings-target='lineNumbers']").selectOption("relative")
+    await this.page.locator("#vim-line-numbers").selectOption("relative")
   }
 
   async openAuthoringSettings() {
@@ -918,6 +924,15 @@ class WebLibraryUi {
     await this.page.goto("/documents")
   }
 
+  async openLibraryDeepLink(filter) {
+    await this.page.goto(filter === "all" ? "/" : `/${filter}`, { waitUntil: "domcontentloaded" })
+    await expect(this.page.locator("#deck-list")).toBeVisible()
+  }
+
+  async setLibraryHash(filter) {
+    await this.page.evaluate(name => { window.location.hash = `#library/${name}` }, filter)
+  }
+
   async assertDocumentsOnly(documentTitle) {
     await expect(this.page.getByRole("heading", { name: documentTitle, exact: true })).toBeVisible()
     await expect(this.page.locator("article.library-card")).toHaveCount(2)
@@ -969,6 +984,10 @@ test("shared library create and delete flow works in the web app", async ({ page
   await libraryCreateDeleteWorkflow(new WebLibraryUi(page))
 })
 
+test("shared library deep links land on the requested filter in the web app", async ({ page }) => {
+  await libraryDeepLinksWorkflow(new WebLibraryUi(page))
+})
+
 test("shared external-edit conflict flow preserves the disk version in the web app", async ({ page }) => {
   const ui = new WebEditorUi(page)
   await externalEditConflictWorkflow(ui)
@@ -993,6 +1012,13 @@ test("shared document-link completion replaces auto-paired closers in the web ap
 
 test("shared authoring settings create, edit, and delete flow works in the web app", async ({ page }) => {
   await authoringSettingsWorkflow(new WebEditorUi(page))
+})
+
+test("the web app without an updater capability shows no updater affordance", async ({ page }) => {
+  const ui = new WebEditorUi(page)
+  await ui.openAuthoringSettings()
+  await expect(page.locator('section[aria-label="Updates"]')).toHaveCount(0)
+  await ui.closeAuthoringSettings()
 })
 
 test("shared math input flow works in the web app", async ({ page }) => {

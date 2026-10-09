@@ -1,0 +1,218 @@
+[
+  {
+    "run": 1,
+    "exit_code": 0,
+    "seconds": 16.76,
+    "commands": [
+      {
+        "command": "bin/rails tailwindcss:build",
+        "exit_code": 0,
+        "seconds": 1.234
+      },
+      {
+        "command": "npm run renderer:build",
+        "exit_code": 0,
+        "seconds": 0.215
+      },
+      {
+        "command": "git diff --exit-code -- vendor/javascript/elef-renderer.bundle.js app/assets/builds/tailwind.css",
+        "exit_code": 0,
+        "seconds": 0.009
+      },
+      {
+        "command": "npm run test:javascript",
+        "exit_code": 0,
+        "seconds": 3.039
+      },
+      {
+        "command": "bin/rails db:test:prepare",
+        "exit_code": 0,
+        "seconds": 1.559
+      },
+      {
+        "command": "bin/rails test test/lib/source/renderer_test.rb test/lib/source/javascript_renderer_test.rb test/lib/authoring_registry_test.rb test/models/presentation_test.rb test/services/presentations/pptx_export_test.rb",
+        "exit_code": 0,
+        "seconds": 2.705
+      },
+      {
+        "command": "npm test --prefix desktop/frontend",
+        "exit_code": 0,
+        "seconds": 0.467
+      },
+      {
+        "command": "npm run build --prefix desktop/frontend",
+        "exit_code": 0,
+        "seconds": 0.332
+      },
+      {
+        "command": "python3 desktop/scripts/check_architecture.py",
+        "exit_code": 0,
+        "seconds": 0.518
+      },
+      {
+        "command": "python3 script/check_frontend_ownership.py",
+        "exit_code": 0,
+        "seconds": 0.176
+      },
+      {
+        "command": "cargo fmt --manifest-path desktop/Cargo.toml --all -- --check",
+        "exit_code": 0,
+        "seconds": 0.081
+      },
+      {
+        "command": "cargo clippy --manifest-path desktop/Cargo.toml -p elef-core --all-targets -- -D warnings",
+        "exit_code": 0,
+        "seconds": 3.878
+      },
+      {
+        "command": "cargo test --manifest-path desktop/Cargo.toml -p elef-core --locked",
+        "exit_code": 0,
+        "seconds": 2.546
+      }
+    ]
+  },
+  {
+    "run": 2,
+    "exit_code": 0,
+    "seconds": 13.664,
+    "commands": [
+      {
+        "command": "bin/rails tailwindcss:build",
+        "exit_code": 0,
+        "seconds": 1.266
+      },
+      {
+        "command": "npm run renderer:build",
+        "exit_code": 0,
+        "seconds": 0.217
+      },
+      {
+        "command": "git diff --exit-code -- vendor/javascript/elef-renderer.bundle.js app/assets/builds/tailwind.css",
+        "exit_code": 0,
+        "seconds": 0.009
+      },
+      {
+        "command": "npm run test:javascript",
+        "exit_code": 0,
+        "seconds": 3.038
+      },
+      {
+        "command": "bin/rails db:test:prepare",
+        "exit_code": 0,
+        "seconds": 1.525
+      },
+      {
+        "command": "bin/rails test test/lib/source/renderer_test.rb test/lib/source/javascript_renderer_test.rb test/lib/authoring_registry_test.rb test/models/presentation_test.rb test/services/presentations/pptx_export_test.rb",
+        "exit_code": 0,
+        "seconds": 3.247
+      },
+      {
+        "command": "npm test --prefix desktop/frontend",
+        "exit_code": 0,
+        "seconds": 0.487
+      },
+      {
+        "command": "npm run build --prefix desktop/frontend",
+        "exit_code": 0,
+        "seconds": 0.353
+      },
+      {
+        "command": "python3 desktop/scripts/check_architecture.py",
+        "exit_code": 0,
+        "seconds": 0.529
+      },
+      {
+        "command": "python3 script/check_frontend_ownership.py",
+        "exit_code": 0,
+        "seconds": 0.18
+      },
+      {
+        "command": "cargo fmt --manifest-path desktop/Cargo.toml --all -- --check",
+        "exit_code": 0,
+        "seconds": 0.083
+      },
+      {
+        "command": "cargo clippy --manifest-path desktop/Cargo.toml -p elef-core --all-targets -- -D warnings",
+        "exit_code": 0,
+        "seconds": 0.18
+      },
+      {
+        "command": "cargo test --manifest-path desktop/Cargo.toml -p elef-core --locked",
+        "exit_code": 0,
+        "seconds": 2.548
+      }
+    ]
+  },
+  {
+    "run": 3,
+    "exit_code": 0,
+    "seconds": 13.425,
+    "commands": [
+      {
+        "command": "bin/rails tailwindcss:build",
+        "exit_code": 0,
+        "seconds": 1.232
+      },
+      {
+        "command": "npm run renderer:build",
+        "exit_code": 0,
+        "seconds": 0.221
+      },
+      {
+        "command": "git diff --exit-code -- vendor/javascript/elef-renderer.bundle.js app/assets/builds/tailwind.css",
+        "exit_code": 0,
+        "seconds": 0.009
+      },
+      {
+        "command": "npm run test:javascript",
+        "exit_code": 0,
+        "seconds": 3.053
+      },
+      {
+        "command": "bin/rails db:test:prepare",
+        "exit_code": 0,
+        "seconds": 1.558
+      },
+      {
+        "command": "bin/rails test test/lib/source/renderer_test.rb test/lib/source/javascript_renderer_test.rb test/lib/authoring_registry_test.rb test/models/presentation_test.rb test/services/presentations/pptx_export_test.rb",
+        "exit_code": 0,
+        "seconds": 3.151
+      },
+      {
+        "command": "npm test --prefix desktop/frontend",
+        "exit_code": 0,
+        "seconds": 0.447
+      },
+      {
+        "command": "npm run build --prefix desktop/frontend",
+        "exit_code": 0,
+        "seconds": 0.322
+      },
+      {
+        "command": "python3 desktop/scripts/check_architecture.py",
+        "exit_code": 0,
+        "seconds": 0.491
+      },
+      {
+        "command": "python3 script/check_frontend_ownership.py",
+        "exit_code": 0,
+        "seconds": 0.179
+      },
+      {
+        "command": "cargo fmt --manifest-path desktop/Cargo.toml --all -- --check",
+        "exit_code": 0,
+        "seconds": 0.08
+      },
+      {
+        "command": "cargo clippy --manifest-path desktop/Cargo.toml -p elef-core --all-targets -- -D warnings",
+        "exit_code": 0,
+        "seconds": 0.177
+      },
+      {
+        "command": "cargo test --manifest-path desktop/Cargo.toml -p elef-core --locked",
+        "exit_code": 0,
+        "seconds": 2.504
+      }
+    ]
+  }
+]

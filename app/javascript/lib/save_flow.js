@@ -1,9 +1,31 @@
 const MAX_DISCARDED_DRAFTS = 10
 const RETRY_DELAYS = [1_000, 3_000, 10_000, 30_000]
+// Clean fast-path pre-gate. Mirrors is_suspicious_external_change in
+// crates/local-store/src/lib.rs exactly (200-char floor, char counts, the
+// empty-external and 2:1 truncation rules): a clean buffer facing a
+// suspicious-looking external rewrite must consult merge instead of
+// reloading silently (P02-07). The Rust merge hook keeps the final verdict;
+// this only decides whether the cheap call-free reload may run.
+const SUSPICIOUS_MIN_LOCAL_CHARS = 200
+
+function isSuspiciousExternalChange(local, external) {
+  const localText = typeof local === "string" ? local : ""
+  const externalText = typeof external === "string" ? external : ""
+  if (externalText === "") {
+    return localText !== ""
+  }
+  const localChars = [...localText].length
+  if (localChars < SUSPICIOUS_MIN_LOCAL_CHARS) {
+    return false
+  }
+  return [...externalText].length * 2 < localChars
+}
 
 export function createSaveFlow({
   saveSource,
   acceptDiskVersion,
+  mergeExternalChange = null,
+  takeSnapshot = null,
   getSource,
   getSnapshot = getSource,
   setSource,
@@ -163,6 +185,79 @@ export function createSaveFlow({
     if (dirty) schedule()
     else setStatus("External changes loaded")
     return "reloaded"
+  }
+
+  async function resolveExternalChange(id, snapshot) {
+    if (!activeDeck || activeDeck.id !== id) return "inactive"
+    materializeEdits()
+    if (sourceMutation) return "busy"
+    if (!mergeExternalChange || !takeSnapshot) return checkExternalChange(id, snapshot)
+    if (!snapshot || !isValidConflictBaseline(snapshot.content_hash)) {
+      const error = Object.assign(new Error("Elef received an invalid file fingerprint."), {
+        code: "invalid_response",
+        retryable: false
+      })
+      onError(error)
+      return "invalid"
+    }
+    if (snapshot.source === getSource()) {
+      return checkExternalChange(id, snapshot)
+    }
+    // A clean buffer facing changed bytes normally reloads without any
+    // merge or snapshot calls. Only a suspicious-looking rewrite diverts
+    // through snapshots and the merge consult below, and any outcome other
+    // than a clean merge takes the conflict path (P02-07).
+    const wasClean = !dirty && getSnapshot() === activeDeck.savedSnapshot && !activeConflict
+    const localSource = getSource()
+    if (wasClean && !isSuspiciousExternalChange(localSource, snapshot.source)) {
+      return checkExternalChange(id, snapshot)
+    }
+    const conflictUnverifiable = () => {
+      handleConflict({
+        id,
+        details: {
+          disk_hash: snapshot.content_hash,
+          current: { source: snapshot.source, source_file: snapshot.source_file }
+        }
+      })
+      return "conflict"
+    }
+    try {
+      await takeSnapshot(id, "pre-merge", localSource)
+      await takeSnapshot(id, "external-change")
+    } catch (error) {
+      onError(error)
+      if (wasClean) return conflictUnverifiable()
+      return checkExternalChange(id, snapshot)
+    }
+    let outcome
+    try {
+      outcome = await mergeExternalChange(id, localSource)
+    } catch (error) {
+      onError(error)
+      if (wasClean) return conflictUnverifiable()
+      return checkExternalChange(id, snapshot)
+    }
+    if (!outcome || outcome.kind !== "merged" || typeof outcome.source !== "string") {
+      if (wasClean) return conflictUnverifiable()
+      return checkExternalChange(id, snapshot)
+    }
+    if (wasClean) return checkExternalChange(id, snapshot)
+    const deck = activeDeck
+    if (!(await applySource(outcome.source, deck, { preserveMetadata: true })) || activeDeck !== deck) {
+      if (activeDeck?.id === id) return checkExternalChange(id, snapshot)
+      return "inactive"
+    }
+    acceptDiskVersion(id, snapshot.content_hash)
+    revision += 1
+    deck.content_hash = snapshot.content_hash
+    deck.source = snapshot.source
+    deck.source_file = snapshot.source_file || deck.source_file
+    activeConflict = null
+    dirty = true
+    setStatus("Saving merged changes…")
+    await flush({ force: true })
+    return "merged"
   }
 
   async function flush({ force = false } = {}) {
@@ -396,6 +491,7 @@ export function createSaveFlow({
     flush,
     handleConflict,
     checkExternalChange,
+    resolveExternalChange,
     useDiskVersion,
     keepLocalVersion,
     saveMergedVersion,

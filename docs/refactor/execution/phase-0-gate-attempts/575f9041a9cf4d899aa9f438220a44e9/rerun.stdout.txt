@@ -1,0 +1,2 @@
+{"phase":0,"result":"PASS","head":"4f71a97885256063dcd5f4651375cfec29c9b885"}
+ELEF_PHASE_0=PASS

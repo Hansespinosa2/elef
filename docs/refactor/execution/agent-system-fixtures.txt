@@ -1,0 +1,43 @@
+Command: PYTHONDONTWRITEBYTECODE=1 python3 .agents/skills/elef-campaign/scripts/test_campaign_state.py
+Exit: 0
+Scope: synthetic Git protocol fixtures; no actual phase evidence
+
+test_active_gate_prevents_retry_and_cleanup (__main__.Recovery.test_active_gate_prevents_retry_and_cleanup) ... ok
+test_all_thirteen_checkpoints_reconstruct_final_postcondition (__main__.Recovery.test_all_thirteen_checkpoints_reconstruct_final_postcondition) ... ok
+test_blocked_act_still_requires_complete_review (__main__.Recovery.test_blocked_act_still_requires_complete_review) ... ok
+test_blocked_candidate_guard_is_preserved (__main__.Recovery.test_blocked_candidate_guard_is_preserved) ... ok
+test_blocked_check_and_act_recover_same_review (__main__.Recovery.test_blocked_check_and_act_recover_same_review) ... ok
+test_blocked_phase_position_must_match_completed_history (__main__.Recovery.test_blocked_phase_position_must_match_completed_history) ... ok
+test_blocker_requires_resume_state (__main__.Recovery.test_blocker_requires_resume_state) ... ok
+test_boolean_phase_is_not_an_integer_verdict (__main__.Recovery.test_boolean_phase_is_not_an_integer_verdict) ... ok
+test_bundle_prepare_is_repeatable_cleanup_preserves_dirty_worktree (__main__.Recovery.test_bundle_prepare_is_repeatable_cleanup_preserves_dirty_worktree) ... ok
+test_changed_or_missing_stderr_invalidates_completed_attempt (__main__.Recovery.test_changed_or_missing_stderr_invalidates_completed_attempt) ... ok
+test_collector_records_real_nonzero_exit_despite_pass_stdout (__main__.Recovery.test_collector_records_real_nonzero_exit_despite_pass_stdout) ... ok
+test_committed_check_act_pass_is_proven (__main__.Recovery.test_committed_check_act_pass_is_proven) ... ok
+test_duplicate_criterion_and_empty_evidence_rejected (__main__.Recovery.test_duplicate_criterion_and_empty_evidence_rejected) ... ok
+test_final_postcondition_is_a_machine_addressable_criterion (__main__.Recovery.test_final_postcondition_is_a_machine_addressable_criterion) ... ok
+test_gate_and_review_without_act_do_not_complete_phase (__main__.Recovery.test_gate_and_review_without_act_do_not_complete_phase) ... ok
+test_gate_attempt_isolated_and_retry_preserves_logs (__main__.Recovery.test_gate_attempt_isolated_and_retry_preserves_logs) ... ok
+test_gate_status_snapshot_tampering_cannot_pass (__main__.Recovery.test_gate_status_snapshot_tampering_cannot_pass) ... ok
+test_historical_checkpoint_remains_proven_after_next_phase_edits (__main__.Recovery.test_historical_checkpoint_remains_proven_after_next_phase_edits) ... ok
+test_identical_replan_bytes_cannot_reuse_previous_freeze (__main__.Recovery.test_identical_replan_bytes_cannot_reuse_previous_freeze) ... ok
+test_initial_plan_rejects_new_untracked_source (__main__.Recovery.test_initial_plan_rejects_new_untracked_source) ... ok
+test_initial_plan_rejects_staged_and_unstaged_source (__main__.Recovery.test_initial_plan_rejects_staged_and_unstaged_source) ... ok
+test_missing_and_duplicate_contract_inventory_fails (__main__.Recovery.test_missing_and_duplicate_contract_inventory_fails) ... ok
+test_missing_criterion_and_launch_receipt_rejected (__main__.Recovery.test_missing_criterion_and_launch_receipt_rejected) ... ok
+test_nonzero_exit_cannot_pass_even_with_marker (__main__.Recovery.test_nonzero_exit_cannot_pass_even_with_marker) ... ok
+test_phase_base_must_equal_predecessor_pass_checkpoint (__main__.Recovery.test_phase_base_must_equal_predecessor_pass_checkpoint) ... ok
+test_plan_modified_after_candidate_rejected (__main__.Recovery.test_plan_modified_after_candidate_rejected) ... ok
+test_plan_note_cannot_move_replan_boundary (__main__.Recovery.test_plan_note_cannot_move_replan_boundary) ... ok
+test_replanning_preserves_legal_do_but_forbids_new_source (__main__.Recovery.test_replanning_preserves_legal_do_but_forbids_new_source) ... ok
+test_review_cleanup_refuses_active_process_and_nonterminal_session (__main__.Recovery.test_review_cleanup_refuses_active_process_and_nonterminal_session) ... ok
+test_selected_partial_attempt_cannot_pass (__main__.Recovery.test_selected_partial_attempt_cannot_pass) ... ok
+test_socket_probe_permission_denial_is_unknown (__main__.Recovery.test_socket_probe_permission_denial_is_unknown) ... ok
+test_stale_review_candidate_is_rejected (__main__.Recovery.test_stale_review_candidate_is_rejected) ... ok
+test_uncommitted_freeze_is_only_prospective (__main__.Recovery.test_uncommitted_freeze_is_only_prospective) ... ok
+test_untracked_mjs_and_configuration_are_detected (__main__.Recovery.test_untracked_mjs_and_configuration_are_detected) ... ok
+
+----------------------------------------------------------------------
+Ran 34 tests in 14.833s
+
+OK

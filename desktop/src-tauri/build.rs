@@ -15,7 +15,15 @@ fn main() {
         "rename_deck",
         "delete_deck",
         "save_source",
+        "poll_file_events",
+        "take_snapshot",
+        "list_snapshots",
+        "restore_snapshot",
+        "merge_external_change",
         "upload_asset",
+        "list_media",
+        "remove_media",
+        "import_elef_bytes",
         "export_elef",
         "import_elef",
         "import_opened_elef",
@@ -23,6 +31,7 @@ fn main() {
         "resolve_import_conflict",
         "install_update",
         "confirm_app_ready",
+        "confirm_discard_unsaved_changes",
     ];
     let attributes = tauri_build::Attributes::new()
         .app_manifest(tauri_build::AppManifest::new().commands(app_commands));

@@ -1,0 +1,821 @@
+{
+  "schema_version": 1,
+  "captured_date": "2026-10-07",
+  "campaign": {
+    "branch": "feat/refactor-desktop-and-web",
+    "base_sha": "88f61a7a8ffd7c276bafcf06eee09c36a8adf134",
+    "phase_base_sha": "88f61a7a8ffd7c276bafcf06eee09c36a8adf134",
+    "phase_number": 0,
+    "phase_state": "DO",
+    "phase_contract_sha256": "57a5419cace79af009b9b2889cd0aa8cd481b1de561a582214d8adea883394ce",
+    "frozen_plan_sha256": "fc6d3f6595a8e90bd92e91826bbed8044687e18c89d4c4acc3d8b08405c0b93c",
+    "rollback_source_sha": "22efe0d2f8fd0f7a868f37c85e3a9a2d5413d175",
+    "local_measurement_checkout_sha": "de3963d06219fc495abae58eefafd75b9880ed9e",
+    "desktop_feature_branch_merged_sha": "f9e00e026ab4249d99dc2fe0816ace6e3e5331db",
+    "desktop_feature_branch_tip_is_ancestor": true,
+    "pull_request": {
+      "number": 136,
+      "state": "OPEN",
+      "draft": true,
+      "base": "dev",
+      "head": "feat/refactor-desktop-and-web"
+    }
+  },
+  "execution_environment": {
+    "machine": {
+      "os": "linux",
+      "arch": "x86_64",
+      "ram_mb": 7966,
+      "swap_mb": 0,
+      "cpu_count": 4,
+      "free_disk_mb": 33520,
+      "display_mode": "none",
+      "tauri_native_runner": "unavailable"
+    },
+    "available_ram_mb": 7406,
+    "cgroup_mem_limit_mb": null,
+    "display_mode": "none",
+    "port_3000_in_use": false,
+    "tauri_native_runner_missing": [
+      "tauri-driver",
+      "WebKitWebDriver",
+      "xvfb-run"
+    ],
+    "toolchains": {
+      "node": "v22.23.2",
+      "npm": "10.9.8",
+      "ruby": "3.3.8",
+      "bundler": "4.0.6 (Gemfile.lock)",
+      "cargo": "1.99.0",
+      "rustc": "1.99.0",
+      "python3": "3.12.14",
+      "chromium": null,
+      "psql": null
+    },
+    "repository_pins": {
+      "ruby": ".ruby-version 3.4.3",
+      "node": "CI Node 22",
+      "rust": "CI stable"
+    },
+    "runtime_notes": {
+      "rails": "Dockerfile uses ruby:3.4-trixie and installs nodejs for asset compilation in the single-stage image",
+      "rails_renderer": "MiniRacer/libv8-node, Rails 8.1.3.1",
+      "desktop": "Tauri package with host WebView; Node/Rust are build tools"
+    }
+  },
+  "bootstrap": {
+    "workspace_dependency_dirs_initially_absent": true,
+    "shared_caches_preserved": [
+      "/root/.npm",
+      "/root/.cargo"
+    ],
+    "ruby_bundle_path_after_tmpfs_limit": "/root/.cache/elef-phase00-bundle",
+    "measured_total_seconds_including_failed_attempt_and_resume": 599.638,
+    "commands": [
+      {
+        "command": "npm ci",
+        "seconds": 1.594,
+        "exit_code": 0,
+        "note": "root Rails-owned frontend lockfile"
+      },
+      {
+        "command": "npm ci --prefix desktop/frontend",
+        "seconds": 1.233,
+        "exit_code": 0
+      },
+      {
+        "command": "npm ci --prefix desktop/e2e",
+        "seconds": 4.6,
+        "exit_code": 0
+      },
+      {
+        "command": "env BUNDLE_PATH=/tmp/elef-phase00-bundle bundle install",
+        "seconds": 563.413,
+        "exit_code": 5,
+        "note": "failed with Bundler::NoSpaceOnDeviceError; /tmp is 512 MiB tmpfs and filled"
+      },
+      {
+        "command": "env BUNDLE_PATH=/root/.cache/elef-phase00-bundle bundle install",
+        "seconds": 9.133,
+        "exit_code": 0,
+        "note": "resumed from retained partial install; 98 gems installed"
+      },
+      {
+        "command": "cargo test --manifest-path desktop/Cargo.toml -p elef-core --locked",
+        "seconds": 19.665,
+        "exit_code": 0,
+        "note": "initial locked crate download and compile; 40 tests passed"
+      }
+    ],
+    "total_note": "sum of the command wall times; npm and Cargo caches were retained, so this is a fresh workspace dependency bootstrap on a cache-preserving runner rather than a pristine network-cache benchmark"
+  },
+  "fast_feedback": {
+    "quick": {
+      "name": "desktop-fast local proxy",
+      "description": "Exact five test/check commands in the CI desktop-fast test step; caches warm after dependency setup.",
+      "result_path": "docs/refactor/execution/phase-0-quick-proxy-results.json",
+      "repetitions": 3,
+      "runs_seconds": [
+        6.479,
+        6.419,
+        6.54
+      ],
+      "median_seconds": 6.479,
+      "all_exit_zero": true,
+      "expected_commands": [
+        "npm run test:javascript",
+        "npm test --prefix desktop/frontend",
+        "npm run test:unit --prefix desktop/e2e",
+        "python3 script/check_frontend_ownership.py",
+        "cargo test --manifest-path desktop/Cargo.toml -p elef-core --locked"
+      ],
+      "environment": {}
+    },
+    "affected": {
+      "name": "shared-renderer affected local proxy",
+      "description": "Rails renderer/Tailwind, JavaScript, focused Rails/SQLite, desktop frontend, architecture and elef-core validation.",
+      "result_path": "docs/refactor/execution/phase-0-affected-proxy-results.json",
+      "repetitions": 3,
+      "runs_seconds": [
+        16.76,
+        13.664,
+        13.425
+      ],
+      "median_seconds": 13.664,
+      "all_exit_zero": true,
+      "expected_commands": [
+        "bin/rails tailwindcss:build",
+        "npm run renderer:build",
+        "git diff --exit-code -- vendor/javascript/elef-renderer.bundle.js app/assets/builds/tailwind.css",
+        "npm run test:javascript",
+        "bin/rails db:test:prepare",
+        "bin/rails test test/lib/source/renderer_test.rb test/lib/source/javascript_renderer_test.rb test/lib/authoring_registry_test.rb test/models/presentation_test.rb test/services/presentations/pptx_export_test.rb",
+        "npm test --prefix desktop/frontend",
+        "npm run build --prefix desktop/frontend",
+        "python3 desktop/scripts/check_architecture.py",
+        "python3 script/check_frontend_ownership.py",
+        "cargo fmt --manifest-path desktop/Cargo.toml --all -- --check",
+        "cargo clippy --manifest-path desktop/Cargo.toml -p elef-core --all-targets -- -D warnings",
+        "cargo test --manifest-path desktop/Cargo.toml -p elef-core --locked"
+      ],
+      "environment": {
+        "rails_env": "test",
+        "database": "SQLite",
+        "ruby": "3.3.8 (repository pin is 3.4.3)"
+      }
+    },
+    "affected_warm_median_after_first_clippy_compile_seconds": 13.5445,
+    "canonical_tiers_implemented": false,
+    "hosted_desktop_fast_job_seconds": 34,
+    "hosted_desktop_fast_job_includes": "checkout, tool setup and dependency installation"
+  },
+  "renderer_fixtures": {
+    "inputs_path": "test/javascript/fixtures/renderer-inputs.json",
+    "input_count": 14,
+    "input_sha256": "f4e96603b40eb2f5a6c92791827aab59e5979f3d5ccc52babcfe913911bdbfe2",
+    "outputs_path": "test/javascript/fixtures/renderer-outputs.json",
+    "output_count": 14,
+    "output_sha256": "0ada6d346642d7d27007d4fa1cb81295af45bf36ad29727715b489cd11957e62",
+    "node_test": "test/javascript/renderer_fixtures.test.js",
+    "current_runtime_paths": [
+      "Node VM",
+      "Chromium through Playwright",
+      "real Tauri WebView through WebDriverIO",
+      "Rails MiniRacer smoke on macOS CI"
+    ],
+    "single_four_runtime_conformance_suite": false
+  },
+  "shared_scenarios": {
+    "directory": "test/e2e/scenarios",
+    "count": 14,
+    "names": [
+      "appearance",
+      "authoring-palettes",
+      "authoring-settings",
+      "document-page-aspect-ratio",
+      "edit-and-preview",
+      "external-edit-conflict",
+      "hostile-deck",
+      "insert-image",
+      "library-and-graph",
+      "library-create-delete",
+      "media-fixture",
+      "presentation-mode",
+      "undo-redo-session",
+      "vim-relative-line-numbers"
+    ],
+    "adapters": [
+      "desktop/e2e/playwright.config.js",
+      "desktop/e2e/wdio.conf.js",
+      "desktop/e2e/run.mjs"
+    ]
+  },
+  "architecture_checks": [
+    {
+      "path": "script/check_frontend_ownership.py",
+      "purpose": "current Rails-owned frontend to desktop one-way ownership; forbidden host/Tauri imports; Rails importmap parity; shared workflow consumers"
+    },
+    {
+      "path": "desktop/scripts/check_architecture.py",
+      "purpose": "Tauri command/capability/CSP policy; test-only permissions; renderer artifact identity; shared UI/style/workflow ownership and deferred feature flags"
+    },
+    {
+      "path": "test/architecture/source_language_boundaries_test.rb",
+      "purpose": "database-free shared Ruby source semantics and document/presentation dependency boundary"
+    }
+  ],
+  "root_layout": {
+    "target_directories": {
+      "apps": false,
+      "packages": false,
+      "crates": false,
+      "spec": false,
+      "tests": false,
+      "tooling": false,
+      "ops": false
+    },
+    "current_roots": [
+      "app",
+      "config",
+      "db",
+      "desktop",
+      "lib",
+      "script",
+      "test",
+      "vendor"
+    ],
+    "root_cargo_workspace": false
+  },
+  "architecture_inventory": [
+    {
+      "boundary": "host roots",
+      "current": "Rails source is rooted in app/ and Tauri is rooted in desktop/; apps/web and apps/desktop do not exist",
+      "target_owner": "apps/web and apps/desktop",
+      "removal_phases": [
+        11
+      ]
+    },
+    {
+      "boundary": "contracts and workspaces",
+      "current": "No packages/contracts, root Cargo workspace, or shared Rails/Tauri/fake-host contract conformance suite",
+      "target_owner": "packages/contracts and root workspaces",
+      "removal_phases": [
+        1
+      ]
+    },
+    {
+      "boundary": "local persistence engine",
+      "current": "Tauri-independent local file, archive, snapshot and save engine is under desktop/crates/elef-core",
+      "target_owner": "crates/local-store",
+      "removal_phases": [
+        1
+      ]
+    },
+    {
+      "boundary": "Work semantics and renderer",
+      "current": "Shared source semantics live in Rails Ruby and app/javascript; Rails calls a MiniRacer bundle and a Ruby renderer fallback remains",
+      "target_owner": "packages/work-model and packages/renderer",
+      "removal_phases": [
+        3
+      ]
+    },
+    {
+      "boundary": "host-neutral interactive client",
+      "current": "Shared library/editor/product workflows and Stimulus glue are mixed in app/javascript/controllers and app/javascript/lib; desktop consumes that source through adapters",
+      "target_owner": "packages/client plus host adapters",
+      "removal_phases": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ]
+    },
+    {
+      "boundary": "generated artifacts",
+      "current": "Renderer bundle is generated to vendor/javascript and desktop copies it into generated dist; Tailwind artifact is under app/assets/builds",
+      "target_owner": "one canonical producing-package dist per generated asset",
+      "removal_phases": [
+        1,
+        3
+      ]
+    },
+    {
+      "boundary": "cross-host tests",
+      "current": "Fourteen scenario modules are under test/e2e/scenarios with separate Playwright and WebDriverIO adapters; no shared host-contract suite",
+      "target_owner": "tests/ cross-boundary conformance and parity suite",
+      "removal_phases": [
+        1,
+        10
+      ]
+    },
+    {
+      "boundary": "renderer HTML insertion",
+      "current": "Renderer preview has an allowlist sanitizer, while static templates, KaTeX, Mermaid, graph and PPTX staging use additional HTML insertion sites",
+      "target_owner": "renderer safe projection plus client.ui single render boundary",
+      "removal_phases": [
+        3,
+        4
+      ]
+    },
+    {
+      "boundary": "tooling and operations",
+      "current": "Checks/build scripts are spread across bin, script and desktop/scripts; Mac mini operations are external to this checkout",
+      "target_owner": "tooling and ops boundaries",
+      "removal_phases": [
+        1,
+        11
+      ]
+    }
+  ],
+  "html_boundary": {
+    "query": "rg -n 'innerHTML|insertAdjacentHTML|dangerouslySetInnerHTML' app/javascript desktop/frontend/src app/views",
+    "occurrence_count": 13,
+    "occurrence_paths": [
+      "app/javascript/controllers/editor_markdown.js",
+      "app/javascript/controllers/editor_math.js",
+      "app/javascript/controllers/lineage_graph_controller.js",
+      "app/javascript/controllers/live_preview.js",
+      "app/javascript/controllers/mermaid_runtime.js",
+      "app/javascript/controllers/pptx_export_controller.js",
+      "app/javascript/lib/editor_view.js",
+      "app/javascript/lib/library_card.js",
+      "app/javascript/lib/library_view.js",
+      "app/javascript/lib/preview_sanitizer.js",
+      "app/javascript/lib/vim_settings_view.js"
+    ],
+    "occurrences": [
+      {
+        "path": "app/javascript/controllers/editor_markdown.js",
+        "line": 121,
+        "terms": [
+          "innerHTML"
+        ],
+        "source": "rendered.innerHTML = katex.renderToString(expression, { displayMode, throwOnError: true })"
+      },
+      {
+        "path": "app/javascript/controllers/editor_math.js",
+        "line": 82,
+        "terms": [
+          "innerHTML"
+        ],
+        "source": "wrapper.innerHTML = katex.renderToString(expression, { displayMode: isDisplay, throwOnError: true })"
+      },
+      {
+        "path": "app/javascript/controllers/lineage_graph_controller.js",
+        "line": 113,
+        "terms": [
+          "innerHTML"
+        ],
+        "source": "this.edgesTarget.innerHTML = `<defs>${markers}</defs>${paths}`"
+      },
+      {
+        "path": "app/javascript/controllers/live_preview.js",
+        "line": 62,
+        "terms": [
+          "innerHTML"
+        ],
+        "source": "if (diagram.isConnected) diagram.innerHTML = svg"
+      },
+      {
+        "path": "app/javascript/controllers/live_preview.js",
+        "line": 78,
+        "terms": [
+          "innerHTML"
+        ],
+        "source": "element.innerHTML = katex.renderToString(this.value, {"
+      },
+      {
+        "path": "app/javascript/controllers/mermaid_runtime.js",
+        "line": 181,
+        "terms": [
+          "innerHTML"
+        ],
+        "source": "const sources = new Map(containers.map((container) => [container, container.innerHTML]))"
+      },
+      {
+        "path": "app/javascript/controllers/mermaid_runtime.js",
+        "line": 188,
+        "terms": [
+          "innerHTML"
+        ],
+        "source": "container.innerHTML = sources.get(container)"
+      },
+      {
+        "path": "app/javascript/controllers/pptx_export_controller.js",
+        "line": 123,
+        "terms": [
+          "innerHTML"
+        ],
+        "source": "stage.innerHTML = model.slides.map((slide) => slideMarkup(slide, model)).join(\"\")"
+      },
+      {
+        "path": "app/javascript/lib/editor_view.js",
+        "line": 147,
+        "terms": [
+          "innerHTML"
+        ],
+        "source": "template.innerHTML = EDITOR_VIEW"
+      },
+      {
+        "path": "app/javascript/lib/library_card.js",
+        "line": 123,
+        "terms": [
+          "innerHTML"
+        ],
+        "source": "template.innerHTML = renderLibraryCard({"
+      },
+      {
+        "path": "app/javascript/lib/library_view.js",
+        "line": 65,
+        "terms": [
+          "innerHTML"
+        ],
+        "source": "template.innerHTML = LIBRARY_VIEW"
+      },
+      {
+        "path": "app/javascript/lib/preview_sanitizer.js",
+        "line": 25,
+        "terms": [
+          "innerHTML"
+        ],
+        "source": "template.innerHTML = typeof html === \"string\" ? html : \"\""
+      },
+      {
+        "path": "app/javascript/lib/vim_settings_view.js",
+        "line": 45,
+        "terms": [
+          "innerHTML"
+        ],
+        "source": "template.innerHTML = VIM_SETTINGS_VIEW"
+      }
+    ],
+    "dangerously_set_inner_html_present": false,
+    "sanitizer_path": "app/javascript/lib/preview_sanitizer.js",
+    "sanitizer_behavior": "template parse; element/attribute/protocol/action allowlists; replaceChildren for preview output"
+  },
+  "data_safety": {
+    "desktop_source_poll_seconds": 2,
+    "core_path": "desktop/crates/elef-core/src/lib.rs",
+    "external_edit_scenario": "test/e2e/scenarios/external-edit-conflict.js",
+    "save_flow": "app/javascript/lib/save_flow.js",
+    "properties": [
+      "source fingerprints",
+      "stale writer conflicts",
+      "atomic replacement",
+      "external bytes preserved in conflict",
+      "reload/keep-local/merge"
+    ],
+    "known_residual": "external write can race between final source fingerprint check and rename; ADR-008 keeps check-to-rename p95 under 250 ms and does not claim the race is eliminated"
+  },
+  "graph_identity": {
+    "rails_builder": "app/lib/document_links/graph.rb",
+    "javascript_resolver": "app/javascript/lib/document_links.js",
+    "metadata": "Markdown front matter elef_document_key and elef_aliases (ADR-010)",
+    "desktop_manifest": "elef.json",
+    "resolution_order": [
+      "explicit document: key",
+      "database id",
+      "aliases",
+      "title"
+    ],
+    "ambiguous_key_behavior": "leave unresolved"
+  },
+  "adrs": {
+    "index": "docs/desktop/adr/README.md",
+    "count": 10,
+    "accepted": [
+      "001",
+      "005",
+      "006",
+      "008",
+      "010"
+    ],
+    "proposed": [
+      "002",
+      "003",
+      "004",
+      "007",
+      "009"
+    ],
+    "known_gaps": [
+      "Preview differs: web saved read-only view; desktop editable visual editor",
+      "Present differs: web publishes a release; desktop presents local draft",
+      "desktop fork actions absent; lineage deferred",
+      "renderer fixture/parity/rollback removal gates open",
+      "device install/performance/soak and updater-key ceremony pending"
+    ],
+    "issues": [
+      126,
+      128,
+      129
+    ]
+  },
+  "hosts_and_deployment": {
+    "web_layout": "app/views/layouts/application.html.erb",
+    "desktop_shell": "app/views/desktop_host.html",
+    "desktop_packager": "desktop/frontend/build.mjs",
+    "route_source": "config/routes.rb",
+    "web_routes": [
+      "root library",
+      "settings",
+      "search",
+      "snippets",
+      "math shortcuts",
+      "documents",
+      "presentations",
+      "media",
+      "history",
+      "export",
+      "publish",
+      "fork"
+    ],
+    "tauri_config": "desktop/src-tauri/tauri.conf.json",
+    "file_association": ".elef",
+    "custom_asset_scheme": "elefasset",
+    "product_deep_link_scheme_registered": false,
+    "updater_transport": "HTTPS",
+    "deployment_runbook": "docs/mac-mini-deployment.md",
+    "machine_ops_in_checkout": false,
+    "deployment_authorization": [
+      "scripts/verify-deployment-authorization",
+      "scripts/publish-deployment-ref"
+    ],
+    "dockerfile": "Dockerfile",
+    "docker_base": "ruby:3.4-trixie",
+    "nodejs_installed_for_asset_build": true,
+    "docker_image_single_stage": true
+  },
+  "ci": {
+    "workflow": ".github/workflows/ci.yml",
+    "workflow_name": "CI",
+    "run_id": 37601674921,
+    "run_url": "https://github.com/Hansespinosa2/elef/actions/runs/37601674921",
+    "source_sha": "22efe0d2f8fd0f7a868f37c85e3a9a2d5413d175",
+    "conclusion": "success",
+    "created_at": "2026-10-07T09:35:34Z",
+    "updated_at": "2026-10-07T09:51:34Z",
+    "total_duration_seconds": 960,
+    "path_filters_present": false,
+    "attestation_needs": [
+      "desktop-fast",
+      "scan_ruby",
+      "scan_js",
+      "test",
+      "sqlite-test",
+      "system-test",
+      "desktop",
+      "desktop-macos",
+      "renderer-macos",
+      "production-smoke",
+      "development-smoke"
+    ],
+    "jobs": [
+      {
+        "name": "desktop-macos",
+        "conclusion": "success",
+        "duration_seconds": 790
+      },
+      {
+        "name": "system-test",
+        "conclusion": "success",
+        "duration_seconds": 460
+      },
+      {
+        "name": "desktop",
+        "conclusion": "success",
+        "duration_seconds": 942
+      },
+      {
+        "name": "sqlite-test",
+        "conclusion": "success",
+        "duration_seconds": 20
+      },
+      {
+        "name": "scan_js",
+        "conclusion": "success",
+        "duration_seconds": 12
+      },
+      {
+        "name": "desktop-fast",
+        "conclusion": "success",
+        "duration_seconds": 34
+      },
+      {
+        "name": "scan_ruby",
+        "conclusion": "success",
+        "duration_seconds": 11
+      },
+      {
+        "name": "production-smoke",
+        "conclusion": "success",
+        "duration_seconds": 100
+      },
+      {
+        "name": "renderer-macos",
+        "conclusion": "success",
+        "duration_seconds": 38
+      },
+      {
+        "name": "development-smoke",
+        "conclusion": "success",
+        "duration_seconds": 94
+      },
+      {
+        "name": "test",
+        "conclusion": "success",
+        "duration_seconds": 48
+      },
+      {
+        "name": "Authorize deployment after CI",
+        "conclusion": "skipped",
+        "duration_seconds": null
+      },
+      {
+        "name": "record-ci-attestation",
+        "conclusion": "success",
+        "duration_seconds": 7
+      }
+    ]
+  },
+  "product_performance": {
+    "probe_source": "desktop/e2e/benchmark-native.mjs",
+    "processes_per_platform": 20,
+    "protocol": "fresh release processes; 1000 deck index; first 48 cards; one 50 MiB deck",
+    "budgets_ms": {
+      "coldStart": 1500,
+      "open100Slides": 300,
+      "warmLibrary": 500
+    },
+    "artifacts": [
+      {
+        "platform": "linux",
+        "architecture": "x64",
+        "runner_release": "6.17.0-1022-azure",
+        "artifact_path": "docs/refactor/execution/phase-0-artifacts/native-performance-linux.json",
+        "artifact_sha256": "68469707acd1317d804930e96c022049ce46b3865d2154e3762062f425e6ad59",
+        "samples_per_operation": 20,
+        "protocol": "20 fresh release processes; 1000 deck index; first 48 cards; one 50 MiB deck; painted operation timings",
+        "median_ms": {
+          "coldStart": 879.0001220703125,
+          "open100Slides": 1277.0,
+          "warmLibrary": 373.5
+        },
+        "p95_ms": {
+          "coldStart": 906,
+          "open100Slides": 1314,
+          "warmLibrary": 455
+        },
+        "budgets_ms": {
+          "coldStart": 1500,
+          "open100Slides": 300,
+          "warmLibrary": 500
+        },
+        "misses": [
+          "open100Slides"
+        ],
+        "budget_mode": "runner-report-only",
+        "p95_bootstrap_stage_ms": {
+          "library-status": 49,
+          "initial-library-render": 36.00000000000003,
+          "initial-paint": 347,
+          "editor-runtime": 150,
+          "editor-ready": 44,
+          "native-ready-ack": 276
+        },
+        "p95_open_stage_ms": {
+          "readDeck": 11,
+          "prepareDeck": 1,
+          "editorReady": 1,
+          "loadDocument": 84,
+          "deckViewSetup": 4.000000000000455,
+          "previewRefresh": 967
+        },
+        "p95_preview_stage_ms": {
+          "render": 332,
+          "previewInstall": 205,
+          "previewEvents": 387,
+          "slideOverview": 34,
+          "slideOverviewScale": 29.000000000000455,
+          "slideOverflow": 36
+        }
+      },
+      {
+        "platform": "darwin",
+        "architecture": "arm64",
+        "runner_release": "24.6.0",
+        "artifact_path": "docs/refactor/execution/phase-0-artifacts/native-performance-darwin.json",
+        "artifact_sha256": "c4ffd9ed89cc85c6741aeafb2541cf9e9b52fdc593c6663d55ab8ad460792885",
+        "samples_per_operation": 20,
+        "protocol": "20 fresh release processes; 1000 deck index; first 48 cards; one 50 MiB deck; painted operation timings",
+        "median_ms": {
+          "coldStart": 2259.5,
+          "open100Slides": 1082.5,
+          "warmLibrary": 140.5
+        },
+        "p95_ms": {
+          "coldStart": 2442,
+          "open100Slides": 1209,
+          "warmLibrary": 196
+        },
+        "budgets_ms": {
+          "coldStart": 1500,
+          "open100Slides": 300,
+          "warmLibrary": 500
+        },
+        "misses": [
+          "coldStart",
+          "open100Slides"
+        ],
+        "budget_mode": "runner-report-only",
+        "p95_bootstrap_stage_ms": {
+          "library-status": 145.99999999999994,
+          "initial-library-render": 65,
+          "initial-paint": 163,
+          "editor-runtime": 216.9999999999999,
+          "editor-ready": 63.999999999999886,
+          "native-ready-ack": 65
+        },
+        "p95_open_stage_ms": {
+          "readDeck": 11,
+          "prepareDeck": 1,
+          "editorReady": 0,
+          "loadDocument": 109,
+          "deckViewSetup": 2,
+          "previewRefresh": 862.9999999999998
+        },
+        "p95_preview_stage_ms": {
+          "render": 221,
+          "previewInstall": 162.00000000000023,
+          "previewEvents": 307,
+          "slideOverview": 54,
+          "slideOverviewScale": 17,
+          "slideOverflow": 58
+        }
+      }
+    ],
+    "shared_renderer_macos": {
+      "source": "script/benchmark_shared_renderer.rb; exact-source renderer-macos CI job",
+      "source_bytes": 7277,
+      "cold_preview_ms": 161.65,
+      "javascript_block_p95_ms": 24.2,
+      "javascript_projection_p95_ms": 98.47,
+      "ruby_fallback_block_p95_ms": 41.47
+    },
+    "rust_save_fingerprint_check_to_rename_p95_ceiling_ms": 250
+  },
+  "build_references": {
+    "rollback_source_sha": "22efe0d2f8fd0f7a868f37c85e3a9a2d5413d175",
+    "ci_run_id": 37601674921,
+    "renderer": {
+      "path": "vendor/javascript/elef-renderer.bundle.js",
+      "sha256": "bfcb4693b07684d54526e2e3a564735f1323d3ccbcdb24fc7c4c79f3fa73c9fe",
+      "local_command": "npm run renderer:build",
+      "local_repeated": true
+    },
+    "tailwind": {
+      "path": "app/assets/builds/tailwind.css",
+      "sha256": "35eed9a0dc2ebb06d6661e80250fe962cc44c3c494a4d401377dcd3051883de1",
+      "local_command": "bin/rails tailwindcss:build",
+      "local_repeated": true
+    },
+    "desktop_frontend": {
+      "command": "npm run build --prefix desktop/frontend",
+      "tree_hash_algorithm": "sha256 over sorted per-file sha256 and relative paths",
+      "tree_sha256": "f0df9ca169611ae308fd912f594c829f3a07a56982b2dffe4c71433cc1f5d913",
+      "file_count": 100,
+      "repeated_build_seconds": [
+        0.299,
+        0.279,
+        0.298
+      ],
+      "identical_trees": true,
+      "local_measurement_checkout_sha": "de3963d06219fc495abae58eefafd75b9880ed9e",
+      "tree_manifest_path": "docs/refactor/execution/phase-0-desktop-frontend-manifest.json",
+      "tree_manifest_sha256": "095d9fcd9d736c324d472a3ffcc4a4060460b8cceb0fa1e13ed8d59d264e1fdb",
+      "clean_detached_checkout": {
+        "source_sha": "de3963d06219fc495abae58eefafd75b9880ed9e",
+        "dependency_install_command": "npm ci --prefix desktop/frontend",
+        "dependency_install_seconds": 0.853,
+        "build_seconds": [
+          0.347,
+          0.348,
+          0.332
+        ],
+        "identical_trees": true,
+        "clean_git_status_after_build": true
+      }
+    },
+    "ci_success_jobs": [
+      "test",
+      "system-test",
+      "desktop",
+      "desktop-macos",
+      "renderer-macos",
+      "production-smoke",
+      "development-smoke"
+    ],
+    "local_native_tauri_package": "unavailable: missing tauri-driver, WebKitWebDriver and xvfb-run"
+  }
+}

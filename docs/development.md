@@ -6,7 +6,7 @@ Use the smallest check that covers a change, then run the shared web/desktop flo
 
 The repository uses Ruby 3.4 (.ruby-version), Rails 8.1, Node 22 in CI, and stable Rust for Tauri. config/database.yml defaults Rails to PostgreSQL. CI also runs SQLite compatibility and desktop E2E database jobs with ELEF_USE_SQLITE=1; SQLite is never the desktop store.
 
-In Andres's Omarchy checkout, use the existing web app at https://127.0.0.1:3000/. Do not start a second Rails server or change its port. If the endpoint is down, diagnose the existing proxy, Rails, and database setup. See [AGENTS.md](../AGENTS.md) for the agent-specific environment rules.
+In Andres's Omarchy checkout, https://127.0.0.1:3000/ is the owner's interactive preview. Automated tests and browser harnesses use isolated test environments and disposable data; never target this server. Do not start a second Rails server, restart the owner's server or change its port. If the endpoint is down, diagnose the existing proxy, Rails, and database setup read-only. See [AGENTS.md](../AGENTS.md) for the agent-specific environment rules.
 
 To test a merged change on the Mac mini, follow the [Mac mini deployment runbook](mac-mini-deployment.md#automatic-deployment) and use its development URL. The watcher deploys only a commit approved by PR CI; an open feature branch does not change the dev instance.
 

@@ -4,19 +4,10 @@ require "tempfile"
 class PresentationsControllerTest < ActionDispatch::IntegrationTest
   test "rename preserves the all-library view and rejects arbitrary destinations" do
     work = presentations(:one)
-    get root_path
-    assert_select "form[action='#{rename_presentation_path(work)}'] input[name='library_view'][value='all']"
     patch rename_presentation_path(work), params: { library_view: "all", presentation: { title: "Renamed" } }
     assert_redirected_to root_path
     patch rename_presentation_path(work), params: { library_view: "https://example.invalid/", presentation: { title: "Again" } }
     assert_redirected_to presentations_path
-  end
-
-  test "library rename form submits scoped parameters" do
-    get presentations_path
-    assert_select "form[action='#{rename_presentation_path(presentations(:one))}']" do
-      assert_select "input[name='presentation[title]']"
-    end
   end
 
   test "renames without changing source and rejects an oversized title" do
@@ -435,44 +426,20 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_select '[contenteditable="true"]', count: 0
   end
 
-  test "the root library shows all work while the presentations URL stays presentation-focused" do
-    Document.create!(title: "Root notes", source: "# Root notes")
-
-    get root_path
-    assert_response :success
-    assert_select "h1", "Library"
-    assert_select "#document_#{Document.order(:id).last.id}"
-
-    get presentations_path
-    assert_select "h1", "Library"
-    assert_select "#document_#{Document.order(:id).last.id}", count: 0
-  end
-
   test "presentation collection no longer interprets type query filters" do
-    document = Document.create!(title: "Query notes", source: "# Query notes")
+    Document.create!(title: "Query notes", source: "# Query notes")
 
     get presentations_path, params: { type: "all" }
 
     assert_response :success
-    assert_select "#document_#{document.id}", count: 0
-    assert_select "#presentation_#{presentations(:one).id}"
-  end
-
-  test "the all library is a combined list without relationship graphs" do
-    Document.create!(title: "All notes", source: "# Notes")
-
-    get root_path
-
-    assert_select ".document-graph", count: 0
-    assert_select ".lineage-panel", count: 0
-    assert_select "#document_#{Document.order(:id).last.id}"
-    assert_select "#presentation_#{presentations(:one).id}"
+    mount = css_select("#client-shell-mount").first
+    assert_equal presentations_path, mount["data-client-shell-initial-url-value"]
   end
 
   test "library loads" do
     get presentations_path
     assert_response :success
-    assert_select "h1", "Library"
+    assert_select "#client-shell-mount", 1
     assert_select 'body.elef-app'
     assert_select 'link[href*="tailwind"]'
     assert_select 'link[href*="katex/katex.min"]'
@@ -491,9 +458,8 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to presentations_path
     assert_equal "Sample presentations loaded.", flash[:notice]
     follow_redirect!
-    (Presentations::SampleData::SAMPLES + Presentations::LineageSampleData::SAMPLES).each do |sample|
-      assert_select ".library-card-title", text: sample[:title]
-    end
+    assert_response :success
+    assert_select "#client-shell-mount", 1
 
     Presentations::SampleData::SAMPLES.each do |sample|
       assert_equal sample[:source], Presentation.find_by!(sample_id: sample[:id]).reload.source

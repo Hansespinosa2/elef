@@ -50,9 +50,7 @@
         </section>
 
         <section id="library-view" class="library-view" hidden>
-          <div id="library-view-mount">
-            <template data-library-view-slot="empty-action"><button class="button primary inline-flex min-h-10 cursor-pointer items-center gap-1 rounded-full border border-[#6d4aff] bg-[#6d4aff] px-4 py-2 font-bold text-white no-underline hover:brightness-95" type="button" data-library-empty-action data-action="create-presentation">Create a presentation</button></template>
-          </div>
+          <div id="library-view-mount"></div>
         </section>
 
         <section id="deck-view" class="deck-view" hidden aria-labelledby="deck-title">
@@ -73,30 +71,20 @@
 
     <footer class="statusbar" role="status"><span id="status-text" aria-live="polite">Ready</span><span class="status-right">Folders are the source of truth</span></footer>
 
-    <dialog id="create-dialog" class="app-dialog">
-      <form id="create-form" method="dialog">
-        <p class="native-eyebrow">NEW DECK</p>
-        <h2>Create a deck</h2>
-        <label for="new-deck-name">Name</label>
-        <input id="new-deck-name" name="name" required maxlength="120" autocomplete="off" placeholder="A clear, memorable title">
-        <label for="new-deck-kind">Format</label>
-        <select id="new-deck-kind" name="kind"><option value="presentation">Presentation</option><option value="document">Document</option></select>
-        <div class="dialog-actions"><button class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" value="cancel">Cancel</button><button id="create-submit" class="button primary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" value="create">Create deck</button></div>
-      </form>
-    </dialog>
     <dialog id="settings-dialog" class="app-dialog">
       <form id="settings-form" method="dialog">
         <p class="native-eyebrow">LIBRARY SETTINGS</p>
         <h2>Appearance</h2>
         <label for="library-theme">Theme</label>
         <select id="library-theme" name="theme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select>
-        <section class="settings-card rounded-2xl border p-6" data-controller="vim-settings" data-vim-settings-view></section>
+        <div id="vim-settings-mount"></div>
         <button id="manage-authoring" class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold authoring-settings-link" type="button">Manage snippets and math shortcuts</button>
         <div class="dialog-actions"><button class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" value="cancel">Cancel</button><button class="button primary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" value="save">Save settings</button></div>
       </form>
     </dialog>
-    <!-- Shared Rails-owned authoring settings markup is inserted by the desktop asset build. -->
-    <!-- elef:shared-authoring-settings -->
+    <dialog id="authoring-dialog" class="app-dialog">
+      <div id="authoring-settings-mount"></div>
+    </dialog>
     <dialog id="import-conflict-dialog" class="app-dialog">
       <form method="dialog">
         <p class="native-eyebrow">DUPLICATE DECK</p>

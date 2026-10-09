@@ -1,0 +1,1 @@
+{"phase":3,"result":"FAIL","head":"8b8f9ec3d1494b484474d58d95d1df009d17c819","errors":["cannot read JSON /root/elef/docs/refactor/execution/phase-3-ci-evidence.json: Expecting ',' delimiter: line 1 column 4105 (char 4104)"]}

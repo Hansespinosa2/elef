@@ -8,6 +8,10 @@ export function createRendererClient({
   let worker = null
   let nextId = 0
   const pending = new Map()
+  // Best-effort prewarm, attempted once: real requests use ids from 1 up,
+  // so id 0 never collides with the pending map and its reply is ignored.
+  const WARMUP_ID = 0
+  let warmupPromise = null
 
   function failAll(error) {
     for (const request of pending.values()) {
@@ -59,7 +63,34 @@ export function createRendererClient({
     })
   }
 
+  // A tiny deck through the same entry point as every preview: two slides
+  // (splitter), inline math (KaTeX) and a fenced block (highlight), so the
+  // first real render meets compiled code, not a cold worker.
+  const WARMUP_DECK = "# Warmup\n\nInline $x^2$ math.\n\n```js\nconst warm = 1\n```\n\n---\n\nSecond slide.\n"
+
+  function warmup() {
+    if (!warmupPromise) {
+      warmupPromise = (async () => {
+        try {
+          // Bypass the pending/timeout machinery on purpose: a slow or
+          // failing warmup must never cancel a real render, it only leaves
+          // the first render to pay the cold-worker cost as before.
+          const prewarmed = ensureWorker()
+          prewarmed.postMessage({ id: WARMUP_ID, input: { source: WARMUP_DECK } })
+          prewarmed.postMessage({ id: WARMUP_ID, input: { kind: "markdown-block", source: "Elef" } })
+        } catch (_error) {
+          // Missing/broken workers resolve silently; the render path still
+          // reports its own errors when a real preview is requested.
+        }
+      })()
+    }
+    return warmupPromise
+  }
+
   return {
+    warmup() {
+      return warmup()
+    },
     render(input) {
       return request(input)
     },

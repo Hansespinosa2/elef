@@ -4,10 +4,13 @@ import { createRendererClient } from "../../../app/javascript/lib/renderer_worke
 
 class FakeWorker {
   static last = null
+  static count = 0
 
   constructor() {
     FakeWorker.last = this
+    FakeWorker.count += 1
     this.listeners = new Map()
+    this.messages = []
     this.terminated = false
   }
 
@@ -17,6 +20,7 @@ class FakeWorker {
 
   postMessage(message) {
     this.lastMessage = message
+    this.messages.push(message)
   }
 
   respond(result) {
@@ -41,4 +45,31 @@ test("renderer timeout rejects the waiting request and restarts the worker", asy
   await assert.rejects(client.render({ source: "large" }), { code: "render_timeout", retryable: true })
   assert.equal(client.pendingCount, 0)
   assert.equal(FakeWorker.last.terminated, true)
+})
+
+test("renderer warmup spawns the worker once without a pending request", async () => {
+  const before = FakeWorker.count
+  const client = createRendererClient({ WorkerClass: FakeWorker, timeoutMs: 100, workerUrl: "worker" })
+  await client.warmup()
+  assert.equal(FakeWorker.count, before + 1)
+  assert.deepEqual(
+    FakeWorker.last.messages,
+    [
+      { id: 0, input: { source: "# Warmup\n\nInline $x^2$ math.\n\n```js\nconst warm = 1\n```\n\n---\n\nSecond slide.\n" } },
+      { id: 0, input: { kind: "markdown-block", source: "Elef" } },
+    ],
+  )
+  assert.equal(client.pendingCount, 0)
+  FakeWorker.last.respond({ html: "<p>Elef</p>" })
+  assert.equal(client.pendingCount, 0)
+  await client.warmup()
+  assert.equal(FakeWorker.count, before + 1)
+})
+
+test("renderer warmup without worker support resolves silently", async () => {
+  const before = FakeWorker.count
+  const client = createRendererClient({ WorkerClass: null, timeoutMs: 100, workerUrl: "worker" })
+  await client.warmup()
+  assert.equal(FakeWorker.count, before)
+  assert.equal(client.pendingCount, 0)
 })
