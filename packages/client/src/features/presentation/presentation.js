@@ -15,7 +15,11 @@ export class PresentationController {
   constructor(scope, options = {}) {
     this.scope = scope
     this.document = options.document ?? scope?.ownerDocument ?? globalThis.document
-    this.stage = options.stage ?? null
+    // Hosts replace the projection element on every preview install, so the
+    // stage is resolved live (like the retired Stimulus stage target did);
+    // a bound element would go stale after the first re-render.
+    this.getStage = options.getStage ?? (() => options.stage ?? null)
+    this.stage = null
     this.counter = options.counter ?? scope?.querySelector("[data-presentation-counter]") ?? null
     this.explicitSlides = options.slides ?? null
     this.slides = []
@@ -38,6 +42,7 @@ export class PresentationController {
   }
 
   start() {
+    this.stage = this.getStage()
     this.slides = this.stage
       ? [...this.stage.querySelectorAll(".slide-frame")]
       : [...(this.explicitSlides ?? this.scope.querySelectorAll('[data-presentation-slide]'))]
@@ -91,7 +96,9 @@ export class PresentationController {
   }
 
   refreshSlides() {
-    if (!this.active || !this.stage) return
+    if (!this.active) return
+    this.stage = this.getStage()
+    if (!this.stage) return
     const slides = [...this.stage.querySelectorAll(".slide-frame")]
     if (!slides.length) return
 
@@ -147,8 +154,9 @@ export function mountPresentation(scope, options = {}) {
   const controller = new PresentationController(scope, {
     document: options.document,
     stage: options.stage ?? null,
+    getStage: options.getStage,
     counter: options.counter,
-    slides: options.stage ? undefined : [...scope.querySelectorAll(".slide-frame")],
+    slides: options.stage ?? options.getStage ? undefined : [...scope.querySelectorAll(".slide-frame")],
     active: options.active ?? false,
   })
   let scalings = attachScalings()

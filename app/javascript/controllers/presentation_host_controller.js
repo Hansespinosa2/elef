@@ -24,7 +24,7 @@ export default class extends Controller {
       return
     }
     this.mount = mountPresentation(this.element, {
-      stage: this.hasStageTarget ? this.stageTarget : undefined,
+      getStage: () => (this.hasStageTarget ? this.stageTarget : undefined),
       counter: this.hasCounterTarget ? this.counterTarget : undefined,
       document,
     })

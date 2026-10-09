@@ -960,7 +960,7 @@ export function startFileLibraryApplication(platform) {
   function mountFreshPresentation() {
     presentationMount?.destroy()
     presentationMount = mountPresentation(elements.editorForm, {
-      stage: presentationStage(),
+      getStage: presentationStage,
       document
     })
     if (!presentationResyncListening) {

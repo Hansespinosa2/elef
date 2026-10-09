@@ -105,6 +105,38 @@ test("client presentation mount resyncs slides after host re-render", () => {
   assert.ok(frames.every((frame) => frame.hidden === false));
 });
 
+test("client presentation mount follows a replaced projection stage", () => {
+  const { document, scope } = mount(2);
+  const getStage = () => document.querySelector("#stage") as unknown as Element;
+  const mountHandle = mountPresentation(scope, {
+    document: document as unknown as Document,
+    getStage,
+  });
+  assert.equal(mountHandle.controller.start(), true);
+  mountHandle.controller.next();
+  assert.equal(scope.querySelector("[data-presentation-counter]")?.textContent, "2 / 2");
+
+  // Hosts replace the projection element (not just its children) on every
+  // preview install: swap the whole stage node for a pristine one.
+  const replacement = document.createElement("div");
+  replacement.id = "stage";
+  replacement.setAttribute("data-presentation-stage", "");
+  replacement.innerHTML = Array.from(
+    { length: 2 },
+    (_, index) => `<div class="slide-frame"><section class="slide">Live ${index + 1}</section></div>`,
+  ).join("");
+  document.querySelector("#stage")?.replaceWith(replacement as unknown as Element);
+  mountHandle.resync();
+  // Repair must land on the live replacement, not the detached original.
+  const frames = [...scope.querySelectorAll(".slide-frame")] as unknown as HTMLElement[];
+  assert.equal(frames[1]?.hidden, false);
+  assert.ok(frames[1]?.classList.contains("is-active-presentation-slide"));
+  assert.equal(scope.querySelector("[data-presentation-counter]")?.textContent, "2 / 2");
+  mountHandle.controller.next();
+  assert.equal(frames[0]?.hidden, true);
+  mountHandle.destroy();
+});
+
 test("client canvas scaling tracks element width", () => {
   const { document } = parseHTML('<div id="canvas" style="width: 640px"></div>');
   const canvas = document.querySelector("#canvas") as unknown as HTMLElement;
