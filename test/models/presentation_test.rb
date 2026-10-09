@@ -343,17 +343,28 @@ class PresentationTest < ActiveSupport::TestCase
     blocks = Source::Document.editor_map(source, mode: :presentation)[:slides].first[:blocks]
 
     assert_equal [nil, "center", nil], blocks.map { |block| block[:position]&.fetch(:horizontal) }
-    assert_equal [nil, "block", nil], blocks.map { |block| block[:position_scope] }
   end
 
-  test "maps shared position scopes to every block inside the group" do
+  test "position directive followed later by a bare ::: binds only to the single next block and bare ::: warns" do
     source = "# Slide\n\n:::align{center}\n\nFirst\n\nSecond\n\n:::\n\nOutside"
 
     blocks = Source::Document.editor_map(source, mode: :presentation)[:slides].first[:blocks]
+    assert_equal [nil, "center", nil, nil], blocks.map { |block| block[:position]&.fetch(:horizontal) }
 
-    assert_equal [nil, "group", "group", nil], blocks.map { |block| block[:position_scope] }
-    assert_equal blocks[1][:position_directive_id], blocks[2][:position_directive_id]
-    refute_equal blocks[1][:position_directive_id], blocks[3][:position_directive_id]
+    parsed = Source::Document.parse(source)
+    assert_equal [nil, "center", nil, nil], parsed.slides.first.blocks.map { |b| b.position&.horizontal }
+    assert_includes parsed.warnings, "Unknown or malformed presentation directive was removed."
+  end
+
+  test "bare ::: alone warns as unknown directive and does not affect positioning" do
+    source = "# Slide\n\n:::\n\nFirst"
+
+    parsed = Source::Document.parse(source)
+    assert_equal [nil, nil], parsed.slides.first.blocks.map { |b| b.position&.horizontal }
+    assert_equal ["Unknown or malformed presentation directive was removed."], parsed.warnings
+
+    map = Source::Document.editor_map(source, mode: :presentation)
+    assert_equal "unknown", map[:slides].first[:directives].first[:type]
   end
 
   test "keeps blank lines inside display math fences in one editable block" do

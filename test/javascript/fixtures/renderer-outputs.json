@@ -33,7 +33,6 @@
                 "markdown": "# Title",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 0,
                   "end": 8
@@ -55,7 +54,6 @@
                 "markdown": "A **bold** and *emphasized* paragraph with ~~deleted~~ text.",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 9,
                   "end": 70
@@ -77,7 +75,6 @@
                 "markdown": "- One\n- Two",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 71,
                   "end": 83
@@ -99,7 +96,6 @@
                 "markdown": "1. First\n2. Second",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 84,
                   "end": 103
@@ -121,7 +117,6 @@
                 "markdown": "> Quoted text",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 104,
                   "end": 118
@@ -143,7 +138,6 @@
                 "markdown": "| Left | Right |\n| :--- | ---: |\n| one | two |",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 119,
                   "end": 166
@@ -165,7 +159,6 @@
                 "markdown": "---",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 167,
                   "end": 171
@@ -519,7 +512,6 @@
                 "markdown": "# Roadmap",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 115,
                   "end": 125
@@ -541,7 +533,6 @@
                 "markdown": "## First",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 126,
                   "end": 135
@@ -563,7 +554,6 @@
                 "markdown": "First column.",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 136,
                   "end": 150
@@ -585,7 +575,6 @@
                 "markdown": "## Second",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 151,
                   "end": 161
@@ -607,7 +596,6 @@
                 "markdown": "Second column.",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 162,
                   "end": 177
@@ -764,7 +752,6 @@
                 "markdown": "# Next slide",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 181,
                   "end": 194
@@ -786,7 +773,6 @@
                 "markdown": "Next paragraph.",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 195,
                   "end": 211
@@ -1047,7 +1033,6 @@
                 "markdown": "# Code",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 0,
                   "end": 7
@@ -1069,7 +1054,6 @@
                 "markdown": "```ruby\ndef hello\n  puts 'world'\nend\n```",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 8,
                   "end": 49
@@ -1091,7 +1075,6 @@
                 "markdown": "```mermaid\nflowchart LR\n A[Read] --> B[Write]\n```",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 50,
                   "end": 100
@@ -1113,7 +1096,6 @@
                 "markdown": "```unknown\n<script>literal code</script>\n```",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 101,
                   "end": 146
@@ -1338,7 +1320,6 @@
                 "markdown": "# Math",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 0,
                   "end": 7
@@ -1360,7 +1341,6 @@
                 "markdown": "Inline $x^2$ and \\(\\bar{x}\\).",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 8,
                   "end": 38
@@ -1382,7 +1362,6 @@
                 "markdown": "$$\n\\sum_{i=1}^{n} i\n$$",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 39,
                   "end": 62
@@ -1404,7 +1383,6 @@
                 "markdown": "\\[\n\\alpha + \\beta\n\\]",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 63,
                   "end": 84
@@ -1629,7 +1607,6 @@
                 "markdown": "# Recovery",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 0,
                   "end": 11
@@ -1651,7 +1628,6 @@
                 "markdown": "$\\invalidMacro{}$ and \\$50.",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 12,
                   "end": 40
@@ -1673,7 +1649,6 @@
                 "markdown": "`$literal$`",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 41,
                   "end": 53
@@ -1695,7 +1670,6 @@
                 "markdown": "```text\n$$literal code$$\n```",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 54,
                   "end": 83
@@ -1717,7 +1691,6 @@
                 "markdown": "$$\n\n$$",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 84,
                   "end": 91
@@ -1739,7 +1712,6 @@
                 "markdown": "\\[\n\n\\]",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 92,
                   "end": 99
@@ -2044,7 +2016,6 @@
                 "markdown": "# ",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 0,
                   "end": 3
@@ -2066,7 +2037,6 @@
                 "markdown": "- First item\n- ",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 4,
                   "end": 20
@@ -2088,7 +2058,6 @@
                 "markdown": "> First line\n> ",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 21,
                   "end": 37
@@ -2337,7 +2306,6 @@
                 "markdown": "# Positions",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 0,
                   "end": 12
@@ -2363,7 +2331,6 @@
                   "vertical_explicit": false
                 },
                 "position_directive_id": "slide-1-directive-1",
-                "position_scope": "block",
                 "range": {
                   "start": 33,
                   "end": 53
@@ -2389,7 +2356,6 @@
                   "vertical_explicit": false
                 },
                 "position_directive_id": "slide-1-directive-2",
-                "position_scope": "block",
                 "range": {
                   "start": 73,
                   "end": 104
@@ -2643,7 +2609,6 @@
                 "markdown": "# Café 😀",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 0,
                   "end": 11
@@ -2665,7 +2630,6 @@
                 "markdown": "Text 日本語.",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 13,
                   "end": 24
@@ -2687,7 +2651,6 @@
                 "markdown": "```md\r\n---\r\n```",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 26,
                   "end": 43
@@ -2788,7 +2751,6 @@
                 "markdown": "# Second",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 48,
                   "end": 58
@@ -2956,7 +2918,6 @@
                 "markdown": "# Safe content",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 0,
                   "end": 15
@@ -2978,7 +2939,6 @@
                 "markdown": "Still readable.",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 62,
                   "end": 78
@@ -3185,7 +3145,6 @@
                 "markdown": "# Safe title",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 0,
                   "end": 13
@@ -3207,7 +3166,6 @@
                 "markdown": "<script>alert(1)</script>",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 14,
                   "end": 40
@@ -3229,7 +3187,6 @@
                 "markdown": "<img src=x onerror=alert(1)>",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 41,
                   "end": 70
@@ -3251,7 +3208,6 @@
                 "markdown": "[Attack](javascript:alert(1)) and [Email](mailto:a@example.com).",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 71,
                   "end": 136
@@ -3273,7 +3229,6 @@
                 "markdown": "![Remote](https://example.invalid/image.png)",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 137,
                   "end": 182
@@ -3295,7 +3250,6 @@
                 "markdown": "![Data](data:image/svg+xml,payload)",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 183,
                   "end": 219
@@ -3600,7 +3554,6 @@
                 "markdown": "# Links",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 0,
                   "end": 8
@@ -3622,7 +3575,6 @@
                 "markdown": "[[Target alias|Open target]] and [[document:target-key]] and [[Missing]].",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 9,
                   "end": 83
@@ -3644,7 +3596,6 @@
                 "markdown": "![Photo](elef-asset:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \"fit:cover\")",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 84,
                   "end": 182
@@ -3666,7 +3617,6 @@
                 "markdown": "![Clip](elef-asset:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb)",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 183,
                   "end": 268
@@ -3688,7 +3638,6 @@
                 "markdown": "![Relative](images/diagram.png)",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 269,
                   "end": 301
@@ -3953,7 +3902,6 @@
                 "markdown": "# Portable",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 0,
                   "end": 11
@@ -3975,7 +3923,6 @@
                 "markdown": "[[Target alias|Open target]] and [[document:target-key]] and [[Missing]].",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 12,
                   "end": 86
@@ -3997,7 +3944,6 @@
                 "markdown": "![Photo](elef-asset:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \"fit:cover\")",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 87,
                   "end": 185
@@ -4019,7 +3965,6 @@
                 "markdown": "![Relative](images/diagram.png)",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 186,
                   "end": 218
@@ -4244,7 +4189,6 @@
                 "markdown": "# Web",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 0,
                   "end": 6
@@ -4266,7 +4210,6 @@
                 "markdown": "https://example.com and [Section](#section) and [Phone](tel:123).",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 7,
                   "end": 73
@@ -4288,7 +4231,6 @@
                 "markdown": "![Remote](https://example.com/image.png \"Diagram\")",
                 "position": null,
                 "position_directive_id": null,
-                "position_scope": null,
                 "range": {
                   "start": 74,
                   "end": 125

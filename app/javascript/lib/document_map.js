@@ -239,7 +239,6 @@ function editorBlocks(source, start, end, slide, slideIndex, mode, artResolution
       markdown,
       position: pendingPosition?.value ?? null,
       position_directive_id: pendingPosition?.directiveId ?? null,
-      position_scope: pendingPosition ? (pendingPosition.scoped ? "group" : "block") : null,
       range,
       source_range: { ...range },
       content_range: contentRange
@@ -261,7 +260,7 @@ function editorBlocks(source, start, end, slide, slideIndex, mode, artResolution
     blocks.push(block)
     regions.push(region)
     current = []
-    if (pendingPosition && !pendingPosition.scoped) pendingPosition = null
+    pendingPosition = null
   }
 
   lines.forEach((line, lineIndex) => {
@@ -312,11 +311,8 @@ function editorBlocks(source, start, end, slide, slideIndex, mode, artResolution
       if (position) {
         pendingPosition = {
           value: position,
-          directiveId: directive.id,
-          scoped: positionScopeCloses(lines, lineIndex)
+          directiveId: directive.id
         }
-      } else if (text === ":::" && pendingPosition) {
-        pendingPosition = null
       }
       return
     }
@@ -344,7 +340,7 @@ function editorDirective(line, text, slideIndex, directiveIndex, mode) {
   const step = mode === "presentation" ? stepDirective(line.text) : null
   const position = /^:::(align|position)[ \t]*\{([^}]*)\}/.exec(text)
   const margin = /^:::(section|subsection|footnote)\{/.exec(text)
-  const type = text === ":::" ? "position_close" : step?.kind === "step" ? "step" : step?.kind === "malformed" ? "malformed_step" : position ? "position" : margin?.[1] ?? "unknown"
+  const type = step?.kind === "step" ? "step" : step?.kind === "malformed" ? "malformed_step" : position ? "position" : margin?.[1] ?? "unknown"
   const range = { start: line.start, end: line.end }
   return {
     id: `slide-${slideIndex + 1}-directive-${directiveIndex + 1}`,
@@ -355,34 +351,6 @@ function editorDirective(line, text, slideIndex, directiveIndex, mode) {
     source_range: { ...range },
     editable: type === "position"
   }
-}
-
-function positionScopeCloses(lines, startIndex) {
-  let fence = null
-  let mathFence = null
-  for (const line of lines.slice(startIndex + 1)) {
-    const incoming = fenceMarker(line.text)
-    if (fence) {
-      fence = toggleFence(fence, incoming)
-      continue
-    }
-    if (incoming) {
-      fence = incoming
-      continue
-    }
-    if (mathFence) {
-      if (displayMathFenceMarker(line.text) === mathFence) mathFence = null
-      continue
-    }
-    const openingMathFence = displayMathFenceOpener(line.text)
-    if (openingMathFence) {
-      mathFence = openingMathFence
-      continue
-    }
-    if (/^ {0,3}:::[ \t]*$/.test(line.text)) return true
-    if (/^[ \t]*:::(?:align|position)[ \t]*\{/.test(line.text)) return false
-  }
-  return false
 }
 
 function editableRegion(markdown, blockStart, blockId, slideIndex, blockIndex, kind, slide, mode) {
@@ -696,12 +664,7 @@ function parseBlocksLegacy(rawBlocks, artResolution) {
     const block = record.markdown
     const position = positionFromBlock(block)
     if (position) {
-      const closingOffset = rawBlocks.slice(index + 1).findIndex(candidate => candidate.markdown === ":::")
-      if (closingOffset >= 0) {
-        const closing = index + 1 + closingOffset
-        for (const grouped of rawBlocks.slice(index + 1, closing)) if (grouped.markdown) blocks.push(parsedBlock(grouped, position, artBindingsByStartLine, null))
-        index = closing + 1
-      } else if (rawBlocks[index + 1] !== undefined) {
+      if (rawBlocks[index + 1] !== undefined) {
         blocks.push(parsedBlock(rawBlocks[index + 1], position, artBindingsByStartLine, null))
         index += 2
       } else {
@@ -723,12 +686,10 @@ function parseBlocksWithReveals(rawBlocks, artResolution, reveals) {
   const blocks = []
   const warnings = []
   const artBindingsByStartLine = new Map(artResolution.bindings.map(binding => [binding.target_lines.start, binding]))
-  let scopedPosition = null
   for (let index = 0; index < rawBlocks.length;) {
     const record = rawBlocks[index]
     if (record.markdown === ":::") {
-      if (!scopedPosition) warnings.push("Unknown or malformed presentation directive was removed.")
-      scopedPosition = null
+      warnings.push("Unknown or malformed presentation directive was removed.")
       index += 1
       continue
     }
@@ -736,25 +697,18 @@ function parseBlocksWithReveals(rawBlocks, artResolution, reveals) {
     const position = positionFromBlock(record.markdown)
     if (position) {
       let selectedPosition = position
-      let lastPositionRecord = record
       index += 1
       while (index < rawBlocks.length) {
         const nextPosition = positionFromBlock(rawBlocks[index].markdown)
         if (!nextPosition) break
         selectedPosition = nextPosition
-        lastPositionRecord = rawBlocks[index]
         index += 1
       }
-      if (positionScopeCloses(reveals.lines.map(text => ({ text })), lastPositionRecord.startLine)) {
-        scopedPosition = selectedPosition
+      if (rawBlocks[index]) {
+        blocks.push(parsedBlock(rawBlocks[index], selectedPosition, artBindingsByStartLine, reveals.event_by_line))
+        index += 1
       } else {
-        scopedPosition = null
-        if (rawBlocks[index]) {
-          blocks.push(parsedBlock(rawBlocks[index], selectedPosition, artBindingsByStartLine, reveals.event_by_line))
-          index += 1
-        } else {
-          warnings.push("Alignment directive has no following Markdown block.")
-        }
+        warnings.push("Alignment directive has no following Markdown block.")
       }
       continue
     }
@@ -765,7 +719,7 @@ function parseBlocksWithReveals(rawBlocks, artResolution, reveals) {
       continue
     }
 
-    blocks.push(parsedBlock(record, scopedPosition, artBindingsByStartLine, reveals.event_by_line))
+    blocks.push(parsedBlock(record, null, artBindingsByStartLine, reveals.event_by_line))
     index += 1
   }
   return { blocks, warnings, reveal_event_count: reveals.event_count }
