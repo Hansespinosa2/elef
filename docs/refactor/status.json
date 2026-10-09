@@ -15,7 +15,7 @@
     "tauri_native_runner": "available"
   },
   "frozen_plan_sha256": "00d584807e6a94436368e370078906045e4ccbc3f784ab11eeebcf960fa430cc",
-  "head_sha": "873904da32953b513b89b073b331ce692c84cb0a",
+  "head_sha": "6f3d34c7f28b32d3ace7d27174b6f83da21dab02",
   "last_completed_phase": 6,
   "last_verified_checks": [
     {
@@ -280,12 +280,20 @@
       "exit": 0,
       "head": "1c043b67f6b2b17d4f3b1409d1ce22a5fab3d477",
       "tier": "phase"
+    },
+    {
+      "command": "bin/check phase 7 --json (isolated gate checkout, local deferred-CI evidence)",
+      "exit": 0,
+      "head": "6f3d34c7f28b32d3ace7d27174b6f83da21dab02",
+      "duration_s": 28.347,
+      "tier": "phase",
+      "attempt": "52e72590d3c1407488f60b0949767a09"
     }
   ],
-  "next_action": "Local-testing posture active. Correction commit pushed; re-verify post-commit, write local evidence, run-gate 7, CHECK, review round 1.",
+  "next_action": "Phase 07 CHECK round 1: independent review of candidate 6f3d34c.",
   "pending_human_gates": [],
   "phase_base_sha": "873904da32953b513b89b073b331ce692c84cb0a",
   "phase_contract_sha256": "59bdd29ab5b49e6f8e8e59472c9dbc3686feef6a16a40dfe74e635795f4f4f86",
-  "phase_state": "DO",
-  "review_round": 0
+  "phase_state": "CHECK",
+  "review_round": 1
 }
