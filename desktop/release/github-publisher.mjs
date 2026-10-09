@@ -254,7 +254,7 @@ export function releaseNotes({ version, sourceSha, pr, macos, linuxAsset, aur, a
       `**Merged PR:** #${pr}`,
       ...(aurPackageLine ? [aurPackageLine] : []),
       "",
-      "Previously published artifacts remain available for recovery. Automatic macOS updates exclude this version. AUR packages already fetched or installed cannot be recalled centrally."
+      "Stop installing this version. Previously published artifacts remain available for recovery, and automatic macOS updates exclude this version. AUR packages already fetched or installed cannot be recalled centrally; use a higher owner-approved fixed version once it is available."
     ].join("\n")
   }
   const statuses = { macOS: macos, Linux: linuxAsset, AUR: aur }

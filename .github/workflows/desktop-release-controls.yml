@@ -1,0 +1,90 @@
+name: Desktop Release Emergency Controls
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: Emergency central release action
+        type: choice
+        options: [ block, unblock ]
+        required: true
+      versions:
+        description: Comma or space separated release versions
+        type: string
+        required: true
+      reason:
+        description: Required owner authorization reason
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  control:
+    name: Update release eligibility immediately
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: desktop-release-state
+    permissions:
+      actions: write
+      contents: write
+      pull-requests: read
+    steps:
+      - name: Check out trusted release control code
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          path: source
+          fetch-depth: 0
+
+      - name: Check out the authoritative Pages state branch
+        uses: actions/checkout@v7
+        with:
+          ref: gh-pages
+          path: pages
+          fetch-depth: 1
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Validate emergency action inputs
+        env:
+          DESKTOP_RELEASE_ACTION: ${{ inputs.action }}
+          DESKTOP_RELEASE_VERSIONS: ${{ inputs.versions }}
+          DESKTOP_RELEASE_REASON: ${{ inputs.reason }}
+        run: |
+          case "$DESKTOP_RELEASE_ACTION" in block|unblock) ;; *) exit 2 ;; esac
+          test -n "$DESKTOP_RELEASE_VERSIONS"
+          test -n "$DESKTOP_RELEASE_REASON"
+
+      - name: Compare-and-swap the block ledger and safe feed
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_REF: ${{ github.ref }}
+          DESKTOP_RELEASE_ACTION: ${{ inputs.action }}
+          DESKTOP_RELEASE_VERSIONS: ${{ inputs.versions }}
+          DESKTOP_RELEASE_REASON: ${{ inputs.reason }}
+        run: node source/desktop/scripts/publish_desktop_release_state.mjs pages source
+
+      - name: Cancel an active coordinator after recording the block
+        if: inputs.action == 'block'
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: node source/desktop/scripts/cancel_desktop_release_runs.mjs
+
+      - name: Publish current release warning and recovery guidance
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          DESKTOP_RELEASE_ACTION: ${{ inputs.action }}
+          DESKTOP_RELEASE_VERSIONS: ${{ inputs.versions }}
+        run: node source/desktop/scripts/finalize_desktop_release_notes.mjs pages

@@ -16,13 +16,12 @@ The v0.x app uses ad-hoc signing and is not signed with an Apple Developer ID or
 
 When a release lists Linux as validated and the AUR package page contains the matching version, install the native package named in the release notes (normally **elef-bin**; it may be **elef-desktop-bin** if the first name is owned by another maintainer). Do not install an AppImage; it is not a supported v0.x artifact.
 
-To build and install the current AUR recipe manually:
-
-If release notes name elef-desktop-bin, use that package name in the AUR URL and directory below.
+To build and install the current AUR recipe manually, set `AUR_PACKAGE` to the name in the release notes:
 
 ~~~sh
-git clone https://aur.archlinux.org/elef-bin.git
-cd elef-bin
+AUR_PACKAGE=elef-bin # use elef-desktop-bin if that is the name in release notes
+git clone "https://aur.archlinux.org/${AUR_PACKAGE}.git"
+cd "$AUR_PACKAGE"
 makepkg -si
 ~~~
 
@@ -51,12 +50,13 @@ Deck editing, rendering, local media, library search, presentation, and export w
 Keep older versioned DMGs and Arch package history. On macOS, replace Elef.app with the app from the older DMG using Finder; a blocked version remains excluded from automatic updates. Once AUR history is available, use it to rebuild the exact older package metadata and install that package with pacman:
 
 ~~~sh
-git clone https://aur.archlinux.org/elef-bin.git
-cd elef-bin
+AUR_PACKAGE=elef-bin # use the package name shown in the release notes
+git clone "https://aur.archlinux.org/${AUR_PACKAGE}.git"
+cd "$AUR_PACKAGE"
 git log --oneline -- PKGBUILD
 git checkout <known-good-commit>
 makepkg
-sudo pacman -U ./elef-bin-<version>-<pkgrel>-x86_64.pkg.tar.zst
+sudo pacman -U ./${AUR_PACKAGE}-<version>-<pkgrel>-x86_64.pkg.tar.zst
 ~~~
 
 Package history and downloaded archives cannot be remotely recalled. If an AUR release is unsafe, stop promotion and use an owner-approved higher fixed version. A central block removes the macOS update offer but cannot reliably downgrade AUR clients that already fetched or installed the package.

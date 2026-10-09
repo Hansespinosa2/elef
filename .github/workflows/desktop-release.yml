@@ -10,7 +10,7 @@ on:
       action:
         description: Release control action
         type: choice
-        options: [ reconcile, minor, block, unblock ]
+        options: [ reconcile, minor ]
         default: reconcile
         required: true
       minor:
@@ -326,7 +326,7 @@ jobs:
           if-no-files-found: ignore
 
   aur-release:
-    name: Publish validated Linux asset to elef-bin on AUR
+    name: Publish validated Linux asset to the selected AUR package
     needs: [ reconcile, prepare-releases, linux-release ]
     if: >-
       always() &&

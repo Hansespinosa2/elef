@@ -14,7 +14,7 @@
     "check:release-fixtures": "node desktop/scripts/check_release_fixture_manifest.mjs",
     "check:release-ci": "node desktop/scripts/check_release_ci.mjs",
     "test:arch-package": "node --test desktop/release/arch-package.test.mjs",
-    "test:release-ledger": "node --test desktop/release/ledger.test.mjs desktop/release/pages-state.test.mjs desktop/release/reconciler.test.mjs desktop/release/github-api.test.mjs desktop/release/pages-publisher.test.mjs desktop/release/github-publisher.test.mjs desktop/release/aur-publisher.test.mjs",
+    "test:release-ledger": "node --test desktop/release/ledger.test.mjs desktop/release/pages-state.test.mjs desktop/release/reconciler.test.mjs desktop/release/github-api.test.mjs desktop/release/pages-publisher.test.mjs desktop/release/github-publisher.test.mjs desktop/release/aur-publisher.test.mjs desktop/release/control-api.test.mjs",
     "test:javascript": "node --test test/javascript/*.test.js test/javascript/*.test.mjs test/javascript/shared/*.test.js"
   },
   "devDependencies": {

@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url"
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const workflow = await readFile(path.join(repoRoot, ".github/workflows/ci.yml"), "utf8")
 const releaseWorkflow = await readFile(path.join(repoRoot, ".github/workflows/desktop-release.yml"), "utf8")
+const releaseControls = await readFile(path.join(repoRoot, ".github/workflows/desktop-release-controls.yml"), "utf8")
 const mainPushCondition = "github.event_name != 'push' || github.ref_name == 'main'"
 const rerunJobs = ["scan_ruby", "scan_js", "test", "sqlite-test", "system-test", "production-smoke", "development-smoke"]
 const requiredGateJobs = [
@@ -52,6 +53,15 @@ assert.match(releaseWorkflow, /ref: gh-pages\n\s+path: pages/, "the coordinator 
 assert.match(releaseWorkflow, /actions: read[\s\S]*contents: write[\s\S]*pull-requests: read/, "the state writer must use narrow GitHub permissions")
 assert.match(releaseWorkflow, /publish_desktop_release_state\.mjs pages source/, "the workflow must use the tested CAS publisher")
 assert.match(releaseWorkflow, /steps\.publish\.outputs\.failed_gate_count/, "terminal Gate A failures must produce an owner-visible workflow failure")
+assert.match(releaseWorkflow, /options: \[ reconcile, minor \]/, "ordinary release workflow must leave emergency controls to the unqueued control path")
+assert.match(releaseControls, /options: \[ block, unblock \]/, "emergency block and unblock must have a dedicated dispatch path")
+assert.match(releaseControls, /if: github\.ref == 'refs\/heads\/main'/, "emergency controls must run only from trusted main code")
+assert.match(releaseControls, /environment: desktop-release-state/, "emergency controls must use the protected release-state environment")
+assert.match(releaseControls, /actions: write/, "emergency blocks must be able to cancel a stale publisher after committing block state")
+assert.match(releaseControls, /publish_desktop_release_state\.mjs pages source/, "emergency controls must use the CAS ledger writer")
+assert.match(releaseControls, /cancel_desktop_release_runs\.mjs/, "emergency blocks must stop any active release coordinator after the ledger update")
+assert.match(releaseControls, /finalize_desktop_release_notes\.mjs pages/, "emergency controls must publish the warning to GitHub Releases")
+assert.doesNotMatch(releaseControls, /^concurrency:/m, "emergency blocks must not wait behind an ordinary publication run; the shared Pages CAS serializes ledger writes")
 
 for (const jobName of ["desktop", "desktop-macos"]) {
   const block = jobBlock(workflow, jobName)

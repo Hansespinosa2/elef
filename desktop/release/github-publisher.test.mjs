@@ -119,6 +119,8 @@ test("release notes mark complete distribution and central block limitations", (
     blockedReason: "unsafe fixture"
   })
   assert.match(blocked, /BLOCKED — do not install/)
+  assert.match(blocked, /Stop installing this version/)
+  assert.match(blocked, /higher owner-approved fixed version/)
   assert.match(blocked, /AUR packages already fetched or installed cannot be recalled centrally/)
 })
 
