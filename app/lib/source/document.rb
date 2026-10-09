@@ -479,6 +479,7 @@ module Source
     def parse_margin_directives(markdown, context, art_resolution)
       lines = markdown.split("\n", -1)
       directive_lines = art_resolution.dig(:boundary_map, :directiveLines).to_set
+      blank_lines = art_resolution.dig(:boundary_map, :blankLines).to_set
       content = []
       warnings = []
       leading = true
@@ -514,7 +515,7 @@ module Source
           if directive[:malformed]
             warnings << "Malformed #{directive[:type]} margin directive was removed."
           elsif directive[:type] == "footnote"
-            if lines[(index + 1)..].to_a.all?(&:blank?)
+            if (index + 1...lines.length).all? { |following| blank_lines.include?(following) }
               footnote = directive[:value]
             else
               warnings << "Footnote margin directive must appear at the end of a slide."
@@ -527,7 +528,7 @@ module Source
           next
         end
 
-        leading = false unless line.blank?
+        leading = false unless blank_lines.include?(index)
         content << line
       end
 
@@ -696,6 +697,7 @@ module Source
 
       lines = markdown.split("\n", -1)
       directive_lines = art_resolution.dig(:boundary_map, :directiveLines).to_set
+      blank_lines = art_resolution.dig(:boundary_map, :blankLines).to_set
       art_lines = art_resolution[:directives].map { |directive| directive[:line] }.to_set
       event_by_line = {}
       consumed = []
@@ -749,14 +751,14 @@ module Source
           next
         end
 
-        if line.blank?
+        if blank_lines.include?(line_index)
           flush.call
           orphan.call
           next
         end
 
         if directive_lines.include?(line_index)
-          if line.match?(/\A\s*:::\s*\z/)
+          if line.match?(/\A {0,3}:::[ \t]*\z/)
             flush.call
             orphan.call
             next
@@ -816,7 +818,7 @@ module Source
           next
         end
 
-        return true if line.strip == ":::"
+        return true if line.match?(/\A {0,3}:::[ \t]*\z/)
         return false if position_from_block(line)
       end
       false
@@ -828,6 +830,7 @@ module Source
       block_starts = boundary[:blockStarts].to_set
       block_ends = boundary[:blockEnds].to_set
       directive_lines = boundary[:directiveLines].to_set
+      blank_lines = boundary[:blankLines].to_set
       current = []
       current_start_line = nil
       current_end_line = nil
@@ -865,14 +868,14 @@ module Source
           next
         end
 
-        if line.blank? && directive_lines.include?(line_index)
+        if (line.empty? || blank_lines.include?(line_index)) && directive_lines.include?(line_index)
           # Art and margin directives were consumed as metadata before this
           # pass. Their blank placeholders preserve source line ownership.
           flush.call
         elsif fence.nil? && directive_lines.include?(line_index)
           flush.call
           blocks << { markdown: line.strip, start_line: line_index, end_line: line_index + 1 }
-        elsif line.blank? && fence.nil?
+        elsif (line.empty? || blank_lines.include?(line_index)) && fence.nil?
           art_binding = art_resolution[:bindings].find do |binding|
             line_index >= binding[:target_lines][:start] && line_index < binding[:target_lines][:end]
           end
@@ -891,7 +894,8 @@ module Source
       {
         "ART_NO_LIST_TARGET" => "Art needs a root Markdown list immediately after its directive.",
         "ART_INVALID_SYNTAX" => "Art directive syntax is invalid. Use :::art with no arguments.",
-        "ART_UNSUPPORTED_CONTENT" => "Art contains unsupported content; the complete Markdown list is shown."
+        "ART_UNSUPPORTED_CONTENT" => "Art contains unsupported content; the complete Markdown list is shown.",
+        "ART_REVEAL_BOUNDARY" => "SmartArt list crosses a reveal boundary; split the Art list or remove the step marker inside it. The complete Markdown list is shown."
       }.fetch(code, "Art reported a layout diagnostic.")
     end
 

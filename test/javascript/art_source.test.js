@@ -90,6 +90,19 @@ test("ART-SEM-EMPTY: empty root items remain counted and compact", () => {
   assert.equal(analysis?.density, "compact")
 })
 
+test("ART-REVEAL-BOUNDARY: SmartArt crossing reveal groups falls back to complete Markdown", () => {
+  const source = "# Split Art\n\n:::step{1}\n:::art\n- first\n\n:::step{2}\n- second"
+  const resolution = resolveArtBindings(source)
+  const preview = renderPreview({ source })
+  const { document } = parseHTML(`<html><body>${preview.html}</body></html>`)
+
+  assert.equal(resolution.bindings.length, 0)
+  assert.deepEqual(resolution.diagnostics.map(diagnostic => diagnostic.code), ["ART_REVEAL_BOUNDARY"])
+  assert.ok(preview.warnings.some(warning => warning.includes("split the Art list or remove the step marker")))
+  assert.equal(document.querySelectorAll(".elef-art").length, 0)
+  assert.deepEqual([...document.querySelectorAll(".slide-block")].map(block => block.textContent.trim()), ["Split Art", "first", "second"])
+})
+
 test("ART-ARCH-SHARED-MAP: Art source ownership and loose-list block mapping share one binding", () => {
   const source = ":::art\r\n:::align{center}\r\n- Lead\r\n\r\n  Body\r\n- Second"
   const structure = buildEditorStructure(source, { mode: "document" })

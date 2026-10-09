@@ -536,5 +536,113 @@
     ],
     "event_counts": [1, 1],
     "warnings": []
+  },
+  {
+    "name": "nested list fences protect step-looking code",
+    "mode": "presentation",
+    "source": "# Nested fence\n\n- outer\n  - inner\n    ```md\n    :::step\n    still code\n    ```",
+    "expected_slide_blocks": [
+      [
+        { "markdown": "# Nested fence", "reveal_event": null, "position": null },
+        { "markdown": "- outer\n  - inner\n    ```md\n    :::step\n    still code\n    ```", "reveal_event": null, "position": null }
+      ]
+    ],
+    "event_counts": [0],
+    "warnings": []
+  },
+  {
+    "name": "four space and tab indented delimiters stay in stepped code",
+    "mode": "presentation",
+    "source": "# Indented close\n\n:::align{center}\n:::step{8}\n    :::\n    four spaces\n\n:::step{9}\n\t:::\n\ttabbed\n:::\nAfter",
+    "expected_slide_blocks": [
+      [
+        { "markdown": "# Indented close", "reveal_event": null, "position": null },
+        { "markdown": "    :::\n    four spaces", "reveal_event": 0, "position": ["center", "top"] },
+        { "markdown": "\t:::\n\ttabbed", "reveal_event": 1, "position": ["center", "top"] },
+        { "markdown": "After", "reveal_event": null, "position": null }
+      ]
+    ],
+    "event_counts": [2],
+    "warnings": []
+  },
+  {
+    "name": "no step nested list delimiters remain literal content",
+    "mode": "presentation",
+    "source": "# Literal colons\n\n- parent\n  :::\n  keep this line",
+    "expected_slide_blocks": [
+      [
+        { "markdown": "# Literal colons", "reveal_event": null, "position": null },
+        { "markdown": "- parent\n  :::\n  keep this line", "reveal_event": null, "position": null }
+      ]
+    ],
+    "event_counts": [0],
+    "warnings": []
+  },
+  {
+    "name": "display math delimiters do not close alignment scopes",
+    "mode": "presentation",
+    "source": "# Math scope\n\n:::align{center}\n$$\n:::\n$$\n:::step{9}\n- revealed\n:::\nAfter",
+    "expected_slide_blocks": [
+      [
+        { "markdown": "# Math scope", "reveal_event": null, "position": null },
+        { "markdown": "$$\n:::\n$$", "reveal_event": null, "position": ["center", "top"] },
+        { "markdown": "- revealed", "reveal_event": 0, "position": ["center", "top"] },
+        { "markdown": "After", "reveal_event": null, "position": null }
+      ]
+    ],
+    "event_counts": [1],
+    "warnings": []
+  },
+  {
+    "name": "Unicode whitespace separates reveal groups consistently",
+    "mode": "presentation",
+    "source": "# Unicode blanks\n\n:::step{1}\nA\n\u00A0\nB\n\n:::step{2}\nC\n\u2003\nD\n\n:::step{3}\nE\n\u3000\nF\n\n:::step{4}\nG\n\uFEFF\nH",
+    "expected_slide_blocks": [
+      [
+        { "markdown": "# Unicode blanks", "reveal_event": null, "position": null },
+        { "markdown": "A", "reveal_event": 0, "position": null },
+        { "markdown": "B", "reveal_event": null, "position": null },
+        { "markdown": "C", "reveal_event": 1, "position": null },
+        { "markdown": "D", "reveal_event": null, "position": null },
+        { "markdown": "E", "reveal_event": 2, "position": null },
+        { "markdown": "F", "reveal_event": null, "position": null },
+        { "markdown": "G", "reveal_event": 3, "position": null },
+        { "markdown": "H", "reveal_event": null, "position": null }
+      ]
+    ],
+    "event_counts": [4],
+    "warnings": []
+  },
+  {
+    "name": "unknown directives interrupt reveal stacks with an orphan warning",
+    "mode": "presentation",
+    "source": "# Unknown stack\n\n:::step{1}\n:::frobnicate\n- Content",
+    "expected_slide_blocks": [
+      [
+        { "markdown": "# Unknown stack", "reveal_event": null, "position": null },
+        { "markdown": "- Content", "reveal_event": null, "position": null }
+      ]
+    ],
+    "event_counts": [0],
+    "warnings": [
+      "Step directive has no following contiguous Markdown group; place content immediately below it without a blank line.",
+      "Unknown or malformed presentation directive was removed."
+    ]
+  },
+  {
+    "name": "blank separated SmartArt is rejected with a diagnostic",
+    "mode": "presentation",
+    "source": "# Split Art\n\n:::step{1}\n:::art\n- first\n\n:::step{2}\n- second",
+    "expected_slide_blocks": [
+      [
+        { "markdown": "# Split Art", "reveal_event": null, "position": null },
+        { "markdown": "- first", "reveal_event": 0, "position": null },
+        { "markdown": "- second", "reveal_event": 1, "position": null }
+      ]
+    ],
+    "event_counts": [2],
+    "warnings": [
+      "SmartArt list crosses a reveal boundary; split the Art list or remove the step marker inside it. The complete Markdown list is shown."
+    ]
   }
 ]

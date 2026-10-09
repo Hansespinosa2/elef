@@ -10,6 +10,7 @@ import { parseHTML } from "linkedom"
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..")
 const fixtures = JSON.parse(await readFile(path.join(root, "test/fixtures/slide-reveals/parity-cases.json"), "utf8"))
+const nestedColonBaseline = JSON.parse(await readFile(path.join(root, "test/javascript/fixtures/slide-reveals-nested-colon-baseline.json"), "utf8"))
 
 function sourceFor(fixture) {
   return fixture.long_label_digits
@@ -48,6 +49,14 @@ for (const fixture of fixtures) {
     }
   })
 }
+
+test("a no-step nested-colon deck stays byte-identical to the dev renderer golden", () => {
+  assert.equal(nestedColonBaseline.baseline_commit, "2dc9ba70746ef94a03b1db1f258ead3da19c8f0b")
+  const rendered = renderPreview({ source: nestedColonBaseline.source })
+
+  assert.equal(rendered.html, nestedColonBaseline.html)
+  assert.deepEqual(rendered.editor_map, nestedColonBaseline.editor_map)
+})
 
 test("presentation HTML annotates stepped titles, blocks, media, and invalid editability projections", () => {
   const source = [

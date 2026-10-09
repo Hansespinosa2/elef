@@ -35,6 +35,7 @@ Art-looking text in code fences, display math, blockquotes, indented code, or ne
 - Presentations use the same Peer wrapping. Compact Sequences may use a horizontal row when the fixed host is wide enough; rich Sequences and all other Sequences are vertical.
 - Layout never changes whether the source means Peers or Sequence. The author does not select a mode, orientation, or coordinates.
 - Images, video, tables, code blocks, and other unsupported content keep their complete Markdown rendering in a plain-list fallback and report `ART_UNSUPPORTED_CONTENT`.
+- An Art list containing an effective presentation step boundary falls back to complete Markdown and reports `ART_REVEAL_BOUNDARY`; split the Art list or remove the step marker inside it.
 - If content cannot fit a fixed presentation host, all content stays in the semantic list and Art reports `ART_NO_FIT` in the editor. Art does not shrink text or hide content.
 - Document pagination splits between root items. A single root item taller than a page remains intact and reports `ART_ITEM_TOO_TALL`.
 

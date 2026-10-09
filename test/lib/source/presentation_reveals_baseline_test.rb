@@ -84,6 +84,38 @@ class PresentationRevealsBaselineTest < ActiveSupport::TestCase
     assert block.at_css(".elef-art-list")
   end
 
+  test "Rails Present keeps nested literal colons visible on a no-step deck" do
+    baseline = JSON.parse(File.read(Rails.root.join("test/javascript/fixtures/slide-reveals-nested-colon-baseline.json")))
+    assert_equal "2dc9ba70746ef94a03b1db1f258ead3da19c8f0b", baseline.fetch("baseline_commit")
+    assert_equal baseline.fetch("editor_map"), Source::Document.editor_map(
+      baseline.fetch("source"),
+      source_name: "Untitled",
+      mode: :presentation
+    ).deep_stringify_keys
+
+    document = Source::Document.parse(baseline.fetch("source"), source_name: "Nested colon baseline", mode: :presentation)
+    slide = document.slides.first
+    assert_equal ["# Literal colons", "- parent\n  :::\n  keep this line"], slide.blocks.map(&:markdown)
+    assert_equal 0, slide.reveal_event_count
+    assert_empty document.warnings
+
+    presentation = Struct.new(:id, :slides).new(nil, document.slides)
+    html = ApplicationController.renderer.render(
+      partial: "presentations/slide",
+      locals: {
+        slide: slide,
+        presentation: presentation,
+        presentation_slide: true,
+        margin_settings: document.margin_settings
+      }
+    )
+    fragment = Nokogiri::HTML5.fragment(html)
+    list = fragment.at_css(".slide-block ul")
+
+    assert_equal "parent ::: keep this line", list.text.squish
+    assert_nil fragment.at_css("[data-elef-reveal-event]")
+  end
+
   private
 
   def normalize_template_markers(html)

@@ -209,7 +209,8 @@ function editorBlocks(source, start, end, slide, slideIndex, mode, artResolution
   const boundaryMap = {
     blockStarts: new Set(sourceBoundaryMap.blockStarts),
     blockEnds: new Set(sourceBoundaryMap.blockEnds),
-    directiveLines: new Set(sourceBoundaryMap.directiveLines)
+    directiveLines: new Set(sourceBoundaryMap.directiveLines),
+    blankLines: new Set(sourceBoundaryMap.blankLines)
   }
   const blocks = []
   const directives = []
@@ -290,7 +291,7 @@ function editorBlocks(source, start, end, slide, slideIndex, mode, artResolution
       mathFence = openingMathFence
       return
     }
-    if (!line.text.trim()) {
+    if (boundaryMap.blankLines.has(lineIndex)) {
       const artBinding = artBindings.byLine[lineIndex]
       if (artBinding && lineIndex + 1 < artBinding.target_lines.end) current.push(line)
       else flush()
@@ -358,6 +359,7 @@ function editorDirective(line, text, slideIndex, directiveIndex, mode) {
 
 function positionScopeCloses(lines, startIndex) {
   let fence = null
+  let mathFence = null
   for (const line of lines.slice(startIndex + 1)) {
     const incoming = fenceMarker(line.text)
     if (fence) {
@@ -368,8 +370,17 @@ function positionScopeCloses(lines, startIndex) {
       fence = incoming
       continue
     }
-    if (line.text.trim() === ":::") return true
-    if (/^\s*:::(?:align|position)[ \t]*\{/.test(line.text)) return false
+    if (mathFence) {
+      if (displayMathFenceMarker(line.text) === mathFence) mathFence = null
+      continue
+    }
+    const openingMathFence = displayMathFenceOpener(line.text)
+    if (openingMathFence) {
+      mathFence = openingMathFence
+      continue
+    }
+    if (/^ {0,3}:::[ \t]*$/.test(line.text)) return true
+    if (/^[ \t]*:::(?:align|position)[ \t]*\{/.test(line.text)) return false
   }
   return false
 }
@@ -591,6 +602,7 @@ function slideMetadata(markdown, context, mode, artResolution, sourceBoundaryMap
 function parseMarginDirectives(markdown, context, sourceBoundaryMap) {
   const lines = markdown.split("\n")
   const directiveLines = new Set(sourceBoundaryMap.directiveLines)
+  const blankLines = new Set(sourceBoundaryMap.blankLines)
   const content = []
   const warnings = []
   let leading = true
@@ -628,7 +640,7 @@ function parseMarginDirectives(markdown, context, sourceBoundaryMap) {
       if (directive.malformed) {
         warnings.push(`Malformed ${directive.type} margin directive was removed.`)
       } else if (directive.type === "footnote") {
-        if (lines.slice(index + 1).every(following => !following.trim())) footnote = directive.value
+        if (lines.slice(index + 1).every((_following, offset) => blankLines.has(index + 1 + offset))) footnote = directive.value
         else warnings.push("Footnote margin directive must appear at the end of a slide.")
       } else if (leading) {
         context[directive.type] = directive.value
@@ -637,7 +649,7 @@ function parseMarginDirectives(markdown, context, sourceBoundaryMap) {
       }
       return
     }
-    if (line.trim()) leading = false
+    if (!blankLines.has(index)) leading = false
     content.push(line)
   })
   return { content: content.join("\n"), section: context.section, subsection: context.subsection, footnote, warnings }
@@ -774,6 +786,7 @@ function resolveRevealGroups(markdown, mode, artResolution) {
   if (mode !== "presentation") return empty
 
   const directiveLines = new Set(artResolution.boundary_map.directiveLines)
+  const blankLines = new Set(artResolution.boundary_map.blankLines)
   const artLines = new Set(artResolution.directives.map(directive => directive.line))
   const eventByLine = {}
   const consumed = []
@@ -827,13 +840,13 @@ function resolveRevealGroups(markdown, mode, artResolution) {
       return
     }
 
-    if (!line.trim()) {
+    if (blankLines.has(lineIndex)) {
       flush()
       orphan()
       return
     }
     if (directiveLines.has(lineIndex)) {
-      if (/^\s*:::\s*$/.test(line)) {
+      if (/^ {0,3}:::[ \t]*$/.test(line)) {
         flush()
         orphan()
         return
@@ -870,7 +883,8 @@ function markdownBlocks(markdown, artResolution, sourceBoundaryMap) {
   const boundaryMap = {
     blockStarts: new Set(sourceBoundaryMap.blockStarts),
     blockEnds: new Set(sourceBoundaryMap.blockEnds),
-    directiveLines: new Set(sourceBoundaryMap.directiveLines)
+    directiveLines: new Set(sourceBoundaryMap.directiveLines),
+    blankLines: new Set(sourceBoundaryMap.blankLines)
   }
   let current = []
   let currentStartLine = null
@@ -906,7 +920,7 @@ function markdownBlocks(markdown, artResolution, sourceBoundaryMap) {
       const opening = displayMathFenceOpener(line)
       if (opening) mathFence = opening
     }
-    if (!line.trim() && boundaryMap.directiveLines.has(index)) {
+    if ((line === "" || boundaryMap.blankLines.has(index)) && boundaryMap.directiveLines.has(index)) {
       // Source resolution has already consumed this directive as metadata.
       // Its blank placeholder preserves line ownership without creating an
       // empty rendered block or a second directive interpretation.
@@ -914,7 +928,7 @@ function markdownBlocks(markdown, artResolution, sourceBoundaryMap) {
     } else if (!fence && !mathFence && boundaryMap.directiveLines.has(index)) {
       flush()
       blocks.push({ markdown: line.trim(), startLine: index, endLine: index + 1 })
-    } else if (!line.trim() && !fence && !mathFence) {
+    } else if ((line === "" || boundaryMap.blankLines.has(index)) && !fence && !mathFence) {
       const artBinding = artBindings.byLine[index]
       if (artBinding && index + 1 < artBinding.target_lines.end) pushLine(line, index)
       else flush()
@@ -946,6 +960,7 @@ function artDiagnosticMessage(code) {
     [ART_DIAGNOSTICS.NO_LIST_TARGET]: "Art needs a root Markdown list immediately after its directive.",
     [ART_DIAGNOSTICS.INVALID_SYNTAX]: "Art directive syntax is invalid. Use :::art with no arguments.",
     [ART_DIAGNOSTICS.UNSUPPORTED_CONTENT]: "Art contains unsupported content; the complete Markdown list is shown.",
+    [ART_DIAGNOSTICS.REVEAL_BOUNDARY]: "SmartArt list crosses a reveal boundary; split the Art list or remove the step marker inside it. The complete Markdown list is shown.",
     [ART_DIAGNOSTICS.NO_FIT]: "Art does not fit the fixed slide; all authored content remains available.",
     [ART_DIAGNOSTICS.ITEM_TOO_TALL]: "An Art item is taller than a document page and remains intact.",
     [ART_DIAGNOSTICS.INTERNAL_ERROR]: "Art could not be laid out; the complete Markdown list remains available."

@@ -246,6 +246,13 @@
         "test:test/system/art_test.rb#rich fixed Sequence stays vertical and eight compact items show no-fit"
       ]
     },
+    "ART-DIAG-004": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/art_source.test.js#ART-REVEAL-BOUNDARY",
+        "test:test/javascript/shared/slide_reveals.test.js#shared reveal contract"
+      ]
+    },
     "ART-SEM-001": {
       "status": "VERIFIED",
       "verification": [

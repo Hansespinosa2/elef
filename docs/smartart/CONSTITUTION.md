@@ -336,6 +336,7 @@ Stable codes:
 ART_NO_LIST_TARGET
 ART_INVALID_SYNTAX
 ART_UNSUPPORTED_CONTENT
+ART_REVEAL_BOUNDARY
 ART_NO_FIT
 ART_ITEM_TOO_TALL
 ART_INTERNAL_ERROR
@@ -350,6 +351,7 @@ Human warning messages may contain escaped user-readable context only through th
 | ART-DIAG-001 | Tests assert diagnostic codes rather than prose. |
 | ART-DIAG-002 | Raw source text is never copied into code/class/style/data diagnostic values. |
 | ART-DIAG-003 | `ART_NO_FIT` and `ART_ITEM_TOO_TALL` are visible in the existing editor validation/warning experience, not console-only. |
+| ART-DIAG-004 | An Art list that spans an effective presentation reveal boundary falls back to complete Markdown and reports `ART_REVEAL_BOUNDARY` with an actionable warning. |
 
 ---
 

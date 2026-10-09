@@ -37,4 +37,6 @@ You can stack compatible directives without a blank line. They apply to the same
 This centered text appears with the group labeled `3`.
 ```
 
+Unknown directives such as `:::frobnicate` do not join a step stack. They leave the step without a target, so the existing orphan-step and unknown-directive warnings are shown and the unknown directive is removed.
+
 Headings, lists, tables, images, and math can all be part of a stepped group. Unmarked content is visible from slide entry even if it appears later in the source. Reveals apply in Present mode only; authoring previews, documents, and printed slides show all content.

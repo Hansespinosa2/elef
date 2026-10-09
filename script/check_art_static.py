@@ -130,7 +130,7 @@ def dom_enums_and_stable_diagnostics():
         '"fallback-unsupported"', '"fallback-no-fit"', '"error"', '"peers-wrap"',
         '"sequence-horizontal"', '"sequence-vertical"', '"plain-list"', '"true"', '"false"',
         'ART_NO_LIST_TARGET', 'ART_INVALID_SYNTAX', 'ART_UNSUPPORTED_CONTENT', 'ART_NO_FIT',
-        'ART_ITEM_TOO_TALL', 'ART_INTERNAL_ERROR'
+        'ART_REVEAL_BOUNDARY', 'ART_ITEM_TOO_TALL', 'ART_INTERNAL_ERROR'
     )) and "data-art-diagnostic=\"${diagnostic}\"" in renderer_js
 
 
