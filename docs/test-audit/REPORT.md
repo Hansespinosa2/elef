@@ -221,7 +221,7 @@ Phase 2 test corrections above are implemented and locally verified at the state
 
 ## Phase 3: cheaper observation and duplicate coverage (partial)
 
-These changes move selected assertions to lower layers and consolidate tests that exercise the same implementation. The phase is incomplete: worker-safety/parallelism work, projection reuse, root-visit reduction, and post-change CI measurements remain open. No workflow YAML, required job definition/name/gate, trigger, verifier, attestation, or release rule changed in this phase. The desktop E2E runner now invokes the static component browser suite before Rails database fixture setup; the shared web → native → updater sequence and parity scenarios are unchanged.
+These changes move selected assertions to lower layers and consolidate tests that exercise the same implementation. The phase is incomplete: projection reuse, root-visit reduction, and post-change CI measurements remain open. No workflow YAML, required job definition/name/gate, trigger, verifier, attestation, or release rule changed in this phase. The desktop E2E runner now invokes the static component browser suite before Rails database fixture setup; the shared web → native → updater sequence and parity scenarios are unchanged.
 
 ### Demotions and moves
 
@@ -345,6 +345,7 @@ Each locally runnable suite below completed three consecutive runs. The system t
 | Suite | Three-run result | Local elapsed times |
 | --- | --- | --- |
 | Rails system tests (`test/system`) | 227 tests and 5,636 assertions passed on every final-tree run; 0 failures/errors/skips. The baseline had 241 system tests before the verified demotions. | 321.63s, 343.73s, 334.59s |
+| Rails system tests with two local workers (diagnostic only) | After namespacing the PDF probe files, 227 tests and 5,636 assertions passed in all three runs; 0 failures/errors/skips. Median wall time was 210.02s versus 334.59s serial (37% lower on this host). | 202.24s, 210.02s, 211.82s |
 | Rails non-system tests (`bin/rails test`) | 391 tests and 3,167 assertions passed on every run; 0 failures/errors/skips. | 4.11s, 3.73s, 4.13s |
 | Rails-owned JavaScript (`npm run test:javascript`) | 450 tests passed on every run, including the four controller tests. | 1.71s, 1.79s, 1.79s |
 | Rust workspace (`cargo test --manifest-path desktop/Cargo.toml --workspace --locked`) | 43 `elef-core` plus 7 desktop library tests passed on every run. | Core test execution: 2.28s, 2.26s, 2.39s |
@@ -353,6 +354,10 @@ Each locally runnable suite below completed three consecutive runs. The system t
 | Standalone Chromium components (`npm run test:components --prefix desktop/e2e`) | 4 tests passed on every run without Rails or a database. | 1.8s, 1.6s, 1.7s |
 
 These are local Linux timings and cannot be compared directly to the hosted PR workflow. The workflow changes have not run on GitHub, so there is no post-change CI wall-time, p95, runner-minute, retry, or attestation result. The macOS native WebView and offline leg were not executable on this host. The full desktop harness was not run because the repository instructions prohibit competing with the existing development server on port 3000.
+
+### System-test parallelism audit
+
+Before the two-worker diagnostic, I checked shared databases, files, service state, editor state, and ports. Rails supplies a separate test database to each worker; `Presentations::FolderSync` already uses `Process.pid`; ActiveStorage disk keys are unique; each Capybara server selected its own ephemeral port; and Rails service/controller state is process-local. The concrete collision was `MediaPdfExportTest` writing `tmp/pdfs/origin-screen.png` and fixed PDF probe names. Both paths now include the worker PID. Three two-worker local system runs passed after this change. The Linux CI job remains at `PARALLEL_WORKERS=1`: local results show a wall-time gain, but the requested repeated hosted CI evidence is unavailable, and parallelism does not reduce total runner compute.
 
 ## Maintainer approval decisions
 
@@ -366,7 +371,7 @@ No removal of the `ELEF_RENDERER=ruby` path is proposed; it remains live code an
 
 ## Not yet verified
 
-- Remaining Phase 3 runtime work: shared system-test projection caching, splitting the repeated root visits, worker isolation/parallelism experiments, and artifact reuse.
+- Remaining Phase 3 runtime work: shared system-test projection caching, splitting the repeated root visits, artifact reuse, and hosted CI confirmation before changing system-test worker count.
 - The changed GitHub workflows have not executed yet. Local contract tests verify their job names, invocation ownership, required job manifest, attestation policy, and schedule placement, but only CI can validate hosted runner installation and native execution.
 - Phase 4 still has platform and editor gaps. The macOS Seatbelt offline harness exists and passed on the audited baseline, but Linux has no network-denied native run, and neither platform has a post-workflow-change result. Direct unit tests are still missing for `command_palette`, `math_shortcut_palette`, `snippet_palette`, `document_pages`, `lineage_graph`, `mermaid_diagrams`, `presentation_canvas`, `presentation_editor`, `library_search`, and `visual_editor`. The new hostile-media policy assertions passed as unit tests, but the actual web/native host scenarios require a hosted E2E run.
 - Phase 5 mutations were detected for SSRF address/protocol/pinning decisions, remote-origin IPC, updater version matching, archive filename validation, GitHub issue URL hostname validation, bug-report 429 handling, and both external-media host policies. The full security mutation campaign is incomplete; unmutated trust-boundary branches remain open work.
