@@ -128,7 +128,6 @@ jobs:
           node --test apps/web/test/javascript/document_link_palette.test.mjs apps/web/test/javascript/editor_markdown_math.test.mjs apps/web/test/javascript/math_shorthand.test.mjs apps/web/test/javascript/mermaid_syntax.test.mjs apps/web/test/javascript/mermaid_runtime.test.mjs apps/web/test/javascript/media_transfer.test.mjs apps/web/test/javascript/pptx_export.test.mjs
       - name: Check repository launchers and deployment files
         run: |
-          bash apps/web/test/scripts/elef-agent_test.sh
           bash apps/web/test/scripts/personal_instance_test.sh
           bash apps/web/test/scripts/development_instance_test.sh
           bash apps/web/test/scripts/deployment_ref_monotonicity_test.sh

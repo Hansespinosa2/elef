@@ -45,7 +45,6 @@ Never:
 - merge into `dev`, publish a production release, or perform human release gates;
 - stop, restart, re-port or test against the owner's `https://127.0.0.1:3000/` server;
 - point tests at personal/live development data;
-- use the retired `scripts/elef-agent` Apple Container workflow.
 
 ## Verification
 

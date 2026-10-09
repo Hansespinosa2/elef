@@ -125,7 +125,6 @@ REINTERPRET_PATTERN = re.compile(
     r"Redcarpet|Rouge|ELEF_RENDERER|parse_margin|parse_blocks|protect_math"
     r"|fence_marker|toggle_fence|display_math_fence|markdown_blocks|split_sections"
 )
-RANGE_WRAPPER_ALLOW = re.compile(r"^\s*def slide_source_ranges")
 
 
 def package_sources(package: str) -> list[Path]:
@@ -334,11 +333,6 @@ def check_no_reinterpretation() -> list[str]:
                 continue
             for number, line in enumerate(text.splitlines(), start=1):
                 if not REINTERPRET_PATTERN.search(line):
-                    continue
-                if (
-                    source == ROOT / "apps" / "web" / "app" / "lib" / "source" / "document.rb"
-                    and RANGE_WRAPPER_ALLOW.match(line)
-                ):
                     continue
                 violations.append(
                     f"R8 Work syntax reinterpreted: {source.relative_to(ROOT)}:{number}"
