@@ -1,61 +1,39 @@
-import { Controller } from "@hotwired/stimulus"
+// Shared PPTX export engine + orchestration. Moved from the Stimulus-era
+// pptx_export_controller.js without behavior change: the engine (model to
+// PptxGenJS slides) is pure client logic, while model fetching (web-host
+// JSON endpoint, draft form posts) and the download button/status stay
+// host-owned in the web export adapter. PPTX byte output must not drift; see
+// test/system/pptx_export_test.rb and the engine unit tests.
 
 const PX_PER_INCH = 96
 const REMOTE_FONT_FALLBACK = "Arial"
 let pptxLibraryPromise
 
-export default class extends Controller {
-  static targets = ["status"]
-  static values = { url: String, libraryUrl: String, currentDraft: Boolean }
+// Orchestrates one model-to-blob export: loads the generator library,
+// builds the deck, renders slides off-screen, and returns the file blob.
+// Seams exist so unit tests drive orchestration without a browser
+// (P07-04): pass a fake PptxGenJS class, a linkedom document, and stub
+// media/render steps.
+export async function exportPptxModel(model, seams = {}) {
+  const loadLibrary = seams.loadLibrary ?? loadPptxLibrary
+  const PptxGenJS = seams.PptxGenJS ?? globalThis.window?.PptxGenJS ?? globalThis.PptxGenJS
+  const hostDocument = seams.document ?? globalThis.document
+  const prepare = seams.prepareMedia ?? prepareMedia
+  const renderAll = seams.renderSlides ?? renderSlides
 
-  async download(event) {
-    event.preventDefault()
-    const button = this.element.querySelector("button")
-    button.disabled = true
-
-    try {
-      this.setStatus("Preparing PowerPoint…")
-      const request = { headers: { Accept: "application/json" }, credentials: "same-origin" }
-      if (this.currentDraftValue) {
-        const form = document.querySelector('form[data-controller~="autosave"]')
-        if (!form) throw new Error("The current draft form is unavailable for export.")
-
-        request.method = "POST"
-        request.headers["X-CSRF-Token"] = document.querySelector('meta[name="csrf-token"]')?.content || ""
-        request.body = new FormData(form)
-        request.body.delete("_method")
-      }
-      const response = await fetch(this.urlValue, request)
-      const model = await response.json()
-      if (!response.ok) throw new Error(model.error || "The PowerPoint export could not be prepared.")
-
-      await loadPptxLibrary(this.libraryUrlValue)
-      const pptx = createPresentation(model)
-      const stage = createRenderStage(model)
-      document.body.append(stage)
-      let assets
-      try {
-        assets = await prepareMedia(stage)
-        await renderSlides(pptx, stage, model, assets)
-      } finally {
-        stage.remove()
-        assets?.objectUrls.forEach((url) => URL.revokeObjectURL(url))
-      }
-
-      const blob = await pptx.write({ outputType: "blob" })
-      downloadBlob(blob, model.filename)
-      this.setStatus("PowerPoint downloaded.")
-    } catch (error) {
-      console.error("PPTX export failed", error)
-      this.setStatus(error.message || "The PowerPoint export failed.")
-    } finally {
-      button.disabled = false
-    }
+  await loadLibrary(seams.libraryUrl)
+  const pptx = createPresentation(model, PptxGenJS)
+  const stage = createRenderStage(model, hostDocument)
+  hostDocument.body.append(stage)
+  let assets
+  try {
+    assets = await prepare(stage)
+    await renderAll(pptx, stage, model, assets)
+  } finally {
+    stage.remove()
+    assets?.objectUrls.forEach((url) => URL.revokeObjectURL(url))
   }
-
-  setStatus(message) {
-    if (this.hasStatusTarget) this.statusTarget.textContent = message
-  }
+  return pptx.write({ outputType: "blob" })
 }
 
 export function loadPptxLibrary(url) {
@@ -87,8 +65,8 @@ export function loadPptxLibrary(url) {
   return pptxLibraryPromise
 }
 
-export function createPresentation(model) {
-  const pptx = new window.PptxGenJS()
+export function createPresentation(model, PptxGenJS = globalThis.window?.PptxGenJS ?? globalThis.PptxGenJS) {
+  const pptx = new PptxGenJS()
   pptx.defineLayout({ name: "ELEF_16_9", width: 40 / 3, height: 7.5 })
   pptx.layout = "ELEF_16_9"
   pptx.author = "Elef"
@@ -110,8 +88,8 @@ export function primaryFont(stack) {
   return first.replace(/^['"]|['"]$/g, "") || REMOTE_FONT_FALLBACK
 }
 
-export function createRenderStage(model) {
-  const stage = document.createElement("div")
+export function createRenderStage(model, hostDocument = globalThis.document) {
+  const stage = hostDocument.createElement("div")
   stage.className = [
     "pptx-render-stage presentation-surface",
     `work-theme-${model.presentation.theme}`,
@@ -155,7 +133,7 @@ export function escapeHtml(value) {
   })[character])
 }
 
-async function prepareMedia(stage) {
+export async function prepareMedia(stage) {
   const media = new Map()
   const objectUrls = []
   const fetchedMedia = new Map()
@@ -204,7 +182,7 @@ export function dataUriToBlob(dataUri) {
   return new Blob([bytes], { type: contentType })
 }
 
-async function renderSlides(pptx, stage, model, assets) {
+export async function renderSlides(pptx, stage, model, assets) {
   const frames = [...stage.querySelectorAll(".slide-frame")]
   for (let index = 0; index < frames.length; index += 1) {
     const frame = frames[index]
@@ -594,7 +572,7 @@ function inlineComputedStyles(source, target) {
   sourceChildren.forEach((child, index) => inlineComputedStyles(child, targetChildren[index]))
 }
 
-function downloadBlob(blob, filename) {
+export function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement("a")
   anchor.href = url

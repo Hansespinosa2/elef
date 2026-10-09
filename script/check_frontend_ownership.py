@@ -534,6 +534,16 @@ assert '"controllers/presentation_editor_controller"' not in editor_runtime, (
 assert "mountHostPresentationEditor" in (ROOT / "app/javascript/lib/presentation_editor_host.js").read_text(), (
     "both hosts must mount the client presentation editor through the shared host seam"
 )
+assert not (ROOT / "app/javascript/controllers/pptx_export_controller.js").is_file(), (
+    "the retired Stimulus PPTX export controller must be absent"
+)
+client_export_registry = (ROOT / "packages/client/src/features/export/registry.js").read_text()
+assert '"pptx"' in client_export_registry and '"print"' in client_export_registry and '"elef"' in client_export_registry, (
+    "the client export registry must declare every user-facing format in one place"
+)
+assert "exportPptxModel" in (ROOT / "app/javascript/controllers/pptx_export_host_controller.js").read_text(), (
+    "the Rails export adapter must orchestrate through the shared client engine"
+)
 assert '"lib/projection_editability"' in (ROOT / "app/javascript/controllers/visual_editor_controller.js").read_text()
 assert 'pin "lib/projection_editability", to: "lib/projection_editability.js"' in importmap
 assert all(path.is_file() for path in renderer_sources), "renderer sources must stay in shared app/javascript or packages"

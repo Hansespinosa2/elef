@@ -5,6 +5,8 @@ export { CREATE_WORK_EVENT } from "./features/library/LibraryApp.js";
 export { createPresentationNavigation, presentationActionForKey } from "./features/presentation/navigation.js";
 export { attachCanvasScaling, PresentationController, mountPresentation } from "./features/presentation/presentation.js";
 export { PresentationEditor, mountPresentationEditor } from "./features/presentation/editor.js";
+export { exportPptxModel, loadPptxLibrary, createPresentation, primaryFont, createRenderStage, slideMarkup, blockMarkup, escapeHtml, prepareMedia, dataUriToBlob, renderSlides, cssLineSpacingMultiple, relativeRect, pixelRectToInches, cssFontSize, cssCharSpacing, colorHex, safeHyperlink, gradientBackground, downloadBlob } from "./features/export/pptx.js";
+export { EXPORT_FORMATS, exportFormatsFor, exportFormatById } from "./features/export/registry.js";
 export {
   presentationBlockAttributes,
   presentationBlockControls,

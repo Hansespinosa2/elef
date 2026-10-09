@@ -7,9 +7,9 @@
   </div>
   <div class="show-actions flex flex-wrap items-center gap-3">
     <%= link_to "Edit", edit_presentation_path(@presentation), class: "button inline-flex min-h-10 items-center rounded-full border border-[#ddd5c8] bg-[#fffdf8] px-4 py-2 font-bold no-underline hover:bg-[#f7efe2]" %>
-    <div data-controller="pptx-export" data-pptx-export-url-value="<%= pptx_presentation_path(@presentation, version: "draft") %>" data-pptx-export-library-url-value="<%= pptx_library_path %>">
-      <button type="button" data-action="pptx-export#download" class="button inline-flex min-h-10 items-center rounded-full border border-[#ddd5c8] bg-[#fffdf8] px-4 py-2 font-bold no-underline hover:bg-[#f7efe2]">Download PPTX</button>
-      <span class="ml-2 text-sm" role="status" aria-live="polite" data-pptx-export-target="status"></span>
+    <div data-controller="pptx-export-host" data-pptx-export-host-url-value="<%= pptx_presentation_path(@presentation, version: "draft") %>" data-pptx-export-host-library-url-value="<%= pptx_library_path %>">
+      <button type="button" data-action="pptx-export-host#download" class="button inline-flex min-h-10 items-center rounded-full border border-[#ddd5c8] bg-[#fffdf8] px-4 py-2 font-bold no-underline hover:bg-[#f7efe2]">Download PPTX</button>
+      <span class="ml-2 text-sm" role="status" aria-live="polite" data-pptx-export-host-target="status"></span>
     </div>
     <%= button_to "Present", publish_presentation_path(@presentation), method: :post, class: "button primary inline-flex min-h-10 items-center rounded-full border border-[#6d4aff] bg-[#6d4aff] px-4 py-2 font-bold text-white no-underline hover:brightness-95", form: { data: { turbo: false } } %>
   </div>
