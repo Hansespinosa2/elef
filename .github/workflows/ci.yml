@@ -31,7 +31,7 @@ jobs:
           cache: npm
           cache-dependency-path: |
             package-lock.json
-            desktop/frontend/package-lock.json
+            apps/desktop/frontend/package-lock.json
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Cache Rust build artifacts
@@ -39,7 +39,7 @@ jobs:
         with:
           workspaces: . -> target
       - name: Install frontend dependencies
-        run: npm ci --prefix desktop/frontend
+        run: npm ci --prefix apps/desktop/frontend
       - name: Install Rails-owned frontend dependencies
         run: npm ci
       - name: Run the fast desktop unit tier
@@ -48,9 +48,9 @@ jobs:
           ./node_modules/.bin/tsc -p packages/contracts/tsconfig.test.json
           node --test tests/host-conformance/conformance-fake.test.js
           npm run test:javascript
-          npm test --prefix desktop/frontend
-          npm run test:unit --prefix desktop/e2e
-          python3 script/check_frontend_ownership.py
+          npm test --prefix apps/desktop/frontend
+          npm run test:unit --prefix apps/desktop/e2e
+          python3 apps/web/script/check_frontend_ownership.py
           python3 tooling/check_boundaries.py
           python3 tooling/check_boundaries.py --self-test
           cargo test --manifest-path Cargo.toml -p local-store --locked
@@ -67,8 +67,10 @@ jobs:
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
+          working-directory: apps/web
           bundler-cache: true
       - name: Scan for known security vulnerabilities in gems used
+        working-directory: apps/web
         run: bin/bundler-audit
 
   scan_js:
@@ -80,8 +82,10 @@ jobs:
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
+          working-directory: apps/web
           bundler-cache: true
       - name: Scan for security vulnerabilities in JavaScript dependencies
+        working-directory: apps/web
         run: bin/importmap audit
 
   test:
@@ -102,11 +106,13 @@ jobs:
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
+          working-directory: apps/web
           bundler-cache: true
       - name: Build Tailwind CSS
+        working-directory: apps/web
         run: bin/rails tailwindcss:build
       - name: Verify the shared Tailwind artifact is current
-        run: git diff --exit-code -- app/assets/builds/tailwind.css
+        run: git diff --exit-code -- apps/web/app/assets/builds/tailwind.css
       - name: Run tests
         env:
           RAILS_ENV: test
@@ -114,19 +120,20 @@ jobs:
           PGUSER: postgres
           PGPASSWORD: postgres
           PGTESTDATABASE: elef_test
+        working-directory: apps/web
         run: bin/rails db:test:prepare test
       - name: Run deterministic JavaScript unit tests
         run: |
-          node test/javascript/bug_report_events.test.mjs
-          node --test test/javascript/document_link_palette.test.mjs test/javascript/editor_markdown_math.test.mjs test/javascript/math_shorthand.test.mjs test/javascript/mermaid_syntax.test.mjs test/javascript/mermaid_runtime.test.mjs test/javascript/media_transfer.test.mjs test/javascript/pptx_export.test.mjs
+          node apps/web/test/javascript/bug_report_events.test.mjs
+          node --test apps/web/test/javascript/document_link_palette.test.mjs apps/web/test/javascript/editor_markdown_math.test.mjs apps/web/test/javascript/math_shorthand.test.mjs apps/web/test/javascript/mermaid_syntax.test.mjs apps/web/test/javascript/mermaid_runtime.test.mjs apps/web/test/javascript/media_transfer.test.mjs apps/web/test/javascript/pptx_export.test.mjs
       - name: Check repository launchers and deployment files
         run: |
-          bash test/scripts/elef-agent_test.sh
-          bash test/scripts/personal_instance_test.sh
-          bash test/scripts/development_instance_test.sh
-          bash test/scripts/deployment_ref_monotonicity_test.sh
-          bash test/scripts/deployment_authorization_test.sh
-          ruby test/scripts/ci_single_run_test.rb
+          bash apps/web/test/scripts/elef-agent_test.sh
+          bash apps/web/test/scripts/personal_instance_test.sh
+          bash apps/web/test/scripts/development_instance_test.sh
+          bash apps/web/test/scripts/deployment_ref_monotonicity_test.sh
+          bash apps/web/test/scripts/deployment_authorization_test.sh
+          ruby apps/web/test/scripts/ci_single_run_test.rb
 
   sqlite-test:
     if: github.event_name != 'push'
@@ -137,13 +144,16 @@ jobs:
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
+          working-directory: apps/web
           bundler-cache: true
       - name: Build Tailwind CSS
+        working-directory: apps/web
         run: bin/rails tailwindcss:build
       - name: Run SQLite compatibility tests
         env:
           RAILS_ENV: test
           ELEF_USE_SQLITE: "1"
+        working-directory: apps/web
         run: bin/rails db:test:prepare test
 
   system-test:
@@ -164,8 +174,10 @@ jobs:
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
+          working-directory: apps/web
           bundler-cache: true
       - name: Build Tailwind CSS
+        working-directory: apps/web
         run: bin/rails tailwindcss:build
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -183,6 +195,7 @@ jobs:
           PGUSER: postgres
           PGPASSWORD: postgres
           PGTESTDATABASE: elef_test
+        working-directory: apps/web
         run: |
           bin/rails db:test:prepare
           bin/rails test test/system
@@ -195,20 +208,20 @@ jobs:
           PGTESTDATABASE: elef_test
           ELEF_CONFORMANCE_RAILS_URL: http://127.0.0.1:3101
         run: |
-          bin/rails server -e test -p 3101 -b 127.0.0.1 -P tmp/pids/conformance-server.pid &
+          apps/web/bin/rails server -e test -p 3101 -b 127.0.0.1 -P apps/web/tmp/pids/conformance-server.pid &
           for attempt in $(seq 1 60); do
             curl --silent --output /dev/null http://127.0.0.1:3101/ && break
             sleep 2
           done
           curl --silent --output /dev/null http://127.0.0.1:3101/
           node tests/host-conformance/run-node.js rails
-          kill "$(cat tmp/pids/conformance-server.pid)"
+          kill "$(cat apps/web/tmp/pids/conformance-server.pid)"
       - name: Keep screenshots from failed system tests
         uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: screenshots
-          path: ${{ github.workspace }}/tmp/screenshots
+          path: ${{ github.workspace }}/apps/web/tmp/screenshots
           if-no-files-found: ignore
 
   desktop:
@@ -224,8 +237,8 @@ jobs:
           cache: npm
           cache-dependency-path: |
             package-lock.json
-            desktop/frontend/package-lock.json
-            desktop/e2e/package-lock.json
+            apps/desktop/frontend/package-lock.json
+            apps/desktop/e2e/package-lock.json
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -234,6 +247,7 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: .ruby-version
+          working-directory: apps/web
           bundler-cache: true
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
@@ -244,16 +258,16 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes build-essential curl dbus-daemon file iptables libayatana-appindicator3-dev libdbus-1-dev libgtk-3-dev librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev openbox patchelf unzip wget xdotool xvfb zip
       - name: Install frontend dependencies
-        run: npm ci --prefix desktop/frontend
+        run: npm ci --prefix apps/desktop/frontend
       - name: Install Rails-owned frontend dependencies
         run: npm ci
       - name: Install shared scenario dependencies
-        run: npm ci --prefix desktop/e2e
+        run: npm ci --prefix apps/desktop/e2e
       - name: Audit desktop JavaScript dependencies
         run: |
           npm audit --audit-level=high
-          npm audit --prefix desktop/frontend --audit-level=high
-          npm audit --prefix desktop/e2e --audit-level=high
+          npm audit --prefix apps/desktop/frontend --audit-level=high
+          npm audit --prefix apps/desktop/e2e --audit-level=high
       - name: Install pinned Cargo audit tool
         run: cargo install cargo-audit --version 0.22.2 --locked
       - name: Audit desktop Rust dependencies
@@ -262,23 +276,24 @@ jobs:
         # and rand via Tauri selector (RUSTSEC-2026-0097). Remove each ignore when updated.
         run: cargo audit --file Cargo.lock --deny warnings --ignore RUSTSEC-2025-0057 --ignore RUSTSEC-2024-0370 --ignore RUSTSEC-2024-0429 --ignore RUSTSEC-2026-0097
       - name: Build Rails Tailwind stylesheet
+        working-directory: apps/web
         run: bin/rails tailwindcss:build
       - name: Verify the Rails Tailwind artifact is current
-        run: git diff --exit-code -- app/assets/builds/tailwind.css
+        run: git diff --exit-code -- apps/web/app/assets/builds/tailwind.css
       - name: Build the Rails-owned renderer
         run: npm run renderer:build
       - name: Verify the Rails renderer bundle is current
-        run: git diff --exit-code -- vendor/javascript/elef-renderer.bundle.js
+        run: git diff --exit-code -- apps/web/vendor/javascript/elef-renderer.bundle.js
       - name: Test Rails-owned frontend modules
         run: npm run test:javascript
       - name: Test desktop frontend adapters
-        run: npm test --prefix desktop/frontend
+        run: npm test --prefix apps/desktop/frontend
       - name: Bundle the desktop frontend
-        run: npm run build --prefix desktop/frontend
+        run: npm run build --prefix apps/desktop/frontend
       - name: Check command allowlist and CSP
         run: |
-          python3 desktop/scripts/check_architecture.py
-          python3 script/check_frontend_ownership.py
+          python3 apps/desktop/scripts/check_architecture.py
+          python3 apps/web/script/check_frontend_ownership.py
       - name: Check Rust formatting
         run: cargo fmt --manifest-path Cargo.toml --all -- --check
       - name: Lint desktop Rust workspace
@@ -289,20 +304,21 @@ jobs:
         env:
           RAILS_ENV: test
           ELEF_USE_SQLITE: "1"
+        working-directory: apps/web
         run: bin/rails db:test:prepare
       - name: Cache Playwright browsers
         uses: actions/cache@v4
         with:
           # Playwright browsers are pinned by @playwright/test in
-          # desktop/e2e/package-lock.json; the lockfile hash is the key.
+          # apps/desktop/e2e/package-lock.json; the lockfile hash is the key.
           path: |
             ~/.cache/ms-playwright
             ~/Library/Caches/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('desktop/e2e/package-lock.json') }}
+          key: playwright-${{ runner.os }}-${{ hashFiles('apps/desktop/e2e/package-lock.json') }}
       - name: Install headless browser and system dependencies
-        run: npx --prefix desktop/e2e playwright install --with-deps chromium
+        run: npx --prefix apps/desktop/e2e playwright install --with-deps chromium
       - name: Build test-only N-1 and N desktop updater packages
-        run: node desktop/e2e/build-update-fixtures.mjs
+        run: node apps/desktop/e2e/build-update-fixtures.mjs
       - name: Run shared scenarios with external network blocked
         env:
           ELEF_E2E_PACKAGED_UPDATES: "1"
@@ -326,16 +342,16 @@ jobs:
             echo "External network remained reachable during the offline desktop scenario run"
             exit 1
           fi
-          dbus-run-session -- xvfb-run --auto-servernum bash -c 'set -o pipefail; openbox --sm-disable >/tmp/elef-e2e-openbox.log 2>&1 & sleep 1; npm test --prefix desktop/e2e 2>&1 | tee desktop/e2e/native-scenarios.log'
+          dbus-run-session -- xvfb-run --auto-servernum bash -c 'set -o pipefail; openbox --sm-disable >/tmp/elef-e2e-openbox.log 2>&1 & sleep 1; npm test --prefix apps/desktop/e2e 2>&1 | tee apps/desktop/e2e/native-scenarios.log'
       - name: Summarize failed Linux desktop scenarios
         if: failure()
         shell: bash
         run: |
-          if [[ -f desktop/e2e/native-scenarios.log ]]; then
+          if [[ -f apps/desktop/e2e/native-scenarios.log ]]; then
             {
               echo "### Linux desktop scenario output (last 120 lines)"
               echo '```text'
-              tail -n 120 desktop/e2e/native-scenarios.log
+              tail -n 120 apps/desktop/e2e/native-scenarios.log
               echo '```'
             } >> "$GITHUB_STEP_SUMMARY"
           fi
@@ -345,17 +361,17 @@ jobs:
         with:
           name: desktop-e2e-linux-diagnostics
           path: |
-            desktop/e2e/native-scenarios.log
-            desktop/e2e/logs
-            desktop/e2e/test-results
-            desktop/e2e/playwright-report
+            apps/desktop/e2e/native-scenarios.log
+            apps/desktop/e2e/logs
+            apps/desktop/e2e/test-results
+            apps/desktop/e2e/playwright-report
           if-no-files-found: ignore
       - name: Build the release binary for native performance measurements
         env:
           ELEF_E2E_BUILD: "1"
-        run: npm run tauri:build --prefix desktop/frontend -- --features webdriver --no-bundle --config src-tauri/tauri.e2e.conf.json --config src-tauri/tauri.performance.conf.json
+        run: npm run tauri:build --prefix apps/desktop/frontend -- --features webdriver --no-bundle --config src-tauri/tauri.e2e.conf.json --config src-tauri/tauri.performance.conf.json
       - name: Record hosted Linux release performance over 20 fresh processes
-        run: dbus-run-session -- xvfb-run --auto-servernum bash -c 'openbox --sm-disable >/tmp/elef-performance-openbox.log 2>&1 & sleep 1; node desktop/e2e/benchmark-native.mjs --binary "$PWD/target/release/elef-desktop" --report-runner'
+        run: dbus-run-session -- xvfb-run --auto-servernum bash -c 'openbox --sm-disable >/tmp/elef-performance-openbox.log 2>&1 & sleep 1; node apps/desktop/e2e/benchmark-native.mjs --binary "$PWD/target/release/elef-desktop" --report-runner'
       - name: Preserve native Linux performance samples
         if: always()
         uses: actions/upload-artifact@v7
@@ -364,7 +380,7 @@ jobs:
           path: target/native-performance-linux.json
           if-no-files-found: warn
       - name: Build Linux desktop package
-        run: npm run tauri:build --prefix desktop/frontend
+        run: npm run tauri:build --prefix apps/desktop/frontend
 
   affected:
     if: github.event_name != 'push'
@@ -389,8 +405,8 @@ jobs:
           cache: npm
           cache-dependency-path: |
             package-lock.json
-            desktop/frontend/package-lock.json
-            desktop/e2e/package-lock.json
+            apps/desktop/frontend/package-lock.json
+            apps/desktop/e2e/package-lock.json
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -399,6 +415,7 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: .ruby-version
+          working-directory: apps/web
           bundler-cache: true
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
@@ -411,8 +428,8 @@ jobs:
       - name: Install frontend dependencies
         run: |
           npm ci
-          npm ci --prefix desktop/frontend
-          npm ci --prefix desktop/e2e
+          npm ci --prefix apps/desktop/frontend
+          npm ci --prefix apps/desktop/e2e
       - name: Run the affected tier with its time ceiling
         env:
           RAILS_ENV: test
@@ -435,8 +452,8 @@ jobs:
           cache: npm
           cache-dependency-path: |
             package-lock.json
-            desktop/frontend/package-lock.json
-            desktop/e2e/package-lock.json
+            apps/desktop/frontend/package-lock.json
+            apps/desktop/e2e/package-lock.json
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -445,40 +462,42 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: .ruby-version
+          working-directory: apps/web
           bundler-cache: true
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: . -> target
       - name: Install frontend dependencies
-        run: npm ci --prefix desktop/frontend
+        run: npm ci --prefix apps/desktop/frontend
       - name: Install Rails-owned frontend dependencies
         run: npm ci
       - name: Install shared scenario dependencies
-        run: npm ci --prefix desktop/e2e
+        run: npm ci --prefix apps/desktop/e2e
       - name: Audit desktop JavaScript dependencies
         run: |
           npm audit --audit-level=high
-          npm audit --prefix desktop/frontend --audit-level=high
-          npm audit --prefix desktop/e2e --audit-level=high
+          npm audit --prefix apps/desktop/frontend --audit-level=high
+          npm audit --prefix apps/desktop/e2e --audit-level=high
       - name: Build Rails Tailwind stylesheet
+        working-directory: apps/web
         run: bin/rails tailwindcss:build
       - name: Verify the Rails Tailwind artifact is current
-        run: git diff --exit-code -- app/assets/builds/tailwind.css
+        run: git diff --exit-code -- apps/web/app/assets/builds/tailwind.css
       - name: Build the Rails-owned renderer
         run: npm run renderer:build
       - name: Verify the Rails renderer bundle is current
-        run: git diff --exit-code -- vendor/javascript/elef-renderer.bundle.js
+        run: git diff --exit-code -- apps/web/vendor/javascript/elef-renderer.bundle.js
       - name: Test Rails-owned frontend modules
         run: npm run test:javascript
       - name: Test desktop frontend adapters
-        run: npm test --prefix desktop/frontend
+        run: npm test --prefix apps/desktop/frontend
       - name: Bundle the desktop frontend
-        run: npm run build --prefix desktop/frontend
+        run: npm run build --prefix apps/desktop/frontend
       - name: Check command allowlist and CSP
         run: |
-          python3 desktop/scripts/check_architecture.py
-          python3 script/check_frontend_ownership.py
+          python3 apps/desktop/scripts/check_architecture.py
+          python3 apps/web/script/check_frontend_ownership.py
       - name: Check Rust formatting
         run: cargo fmt --manifest-path Cargo.toml --all -- --check
       - name: Lint desktop Rust workspace
@@ -489,20 +508,21 @@ jobs:
         env:
           RAILS_ENV: test
           ELEF_USE_SQLITE: "1"
+        working-directory: apps/web
         run: bin/rails db:test:prepare
       - name: Cache Playwright browsers
         uses: actions/cache@v4
         with:
           # Playwright browsers are pinned by @playwright/test in
-          # desktop/e2e/package-lock.json; the lockfile hash is the key.
+          # apps/desktop/e2e/package-lock.json; the lockfile hash is the key.
           path: |
             ~/.cache/ms-playwright
             ~/Library/Caches/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('desktop/e2e/package-lock.json') }}
+          key: playwright-${{ runner.os }}-${{ hashFiles('apps/desktop/e2e/package-lock.json') }}
       - name: Install headless web browser
-        run: npx --prefix desktop/e2e playwright install chromium
+        run: npx --prefix apps/desktop/e2e playwright install chromium
       - name: Build test-only N-1 and N desktop updater packages
-        run: node desktop/e2e/build-update-fixtures.mjs
+        run: node apps/desktop/e2e/build-update-fixtures.mjs
       - name: Run shared web and desktop scenarios
         env:
           ELEF_E2E_PACKAGED_UPDATES: "1"
@@ -512,16 +532,16 @@ jobs:
           ELEF_E2E_OFFLINE: "1"
         run: |
           set -o pipefail
-          npm test --prefix desktop/e2e 2>&1 | tee desktop/e2e/native-scenarios.log
+          npm test --prefix apps/desktop/e2e 2>&1 | tee apps/desktop/e2e/native-scenarios.log
       - name: Summarize failed macOS desktop scenarios
         if: failure()
         shell: bash
         run: |
-          if [[ -f desktop/e2e/native-scenarios.log ]]; then
+          if [[ -f apps/desktop/e2e/native-scenarios.log ]]; then
             {
               echo "### macOS desktop scenario output (last 120 lines)"
               echo '```text'
-              tail -n 120 desktop/e2e/native-scenarios.log
+              tail -n 120 apps/desktop/e2e/native-scenarios.log
               echo '```'
             } >> "$GITHUB_STEP_SUMMARY"
           fi
@@ -531,19 +551,19 @@ jobs:
         with:
           name: desktop-e2e-macos-diagnostics
           path: |
-            desktop/e2e/native-scenarios.log
-            desktop/e2e/logs
-            desktop/e2e/test-results
-            desktop/e2e/playwright-report
+            apps/desktop/e2e/native-scenarios.log
+            apps/desktop/e2e/logs
+            apps/desktop/e2e/test-results
+            apps/desktop/e2e/playwright-report
           if-no-files-found: ignore
       - name: Build the release binary for native performance measurements
         env:
           ELEF_E2E_BUILD: "1"
-        run: npm run tauri:build --prefix desktop/frontend -- --features webdriver --no-bundle --config src-tauri/tauri.e2e.conf.json --config src-tauri/tauri.performance.conf.json
+        run: npm run tauri:build --prefix apps/desktop/frontend -- --features webdriver --no-bundle --config src-tauri/tauri.e2e.conf.json --config src-tauri/tauri.performance.conf.json
       - name: Record hosted macOS release performance over 20 fresh processes
         env:
           ELEF_E2E_OFFLINE: "1"
-        run: node desktop/e2e/benchmark-native.mjs --binary "$PWD/target/release/elef-desktop" --report-runner
+        run: node apps/desktop/e2e/benchmark-native.mjs --binary "$PWD/target/release/elef-desktop" --report-runner
       - name: Preserve native macOS performance samples
         if: always()
         uses: actions/upload-artifact@v7
@@ -552,7 +572,7 @@ jobs:
           path: target/native-performance-darwin.json
           if-no-files-found: warn
       - name: Build Apple Silicon desktop package
-        run: npm run tauri:build --prefix desktop/frontend -- --bundles app,dmg
+        run: npm run tauri:build --prefix apps/desktop/frontend -- --bundles app,dmg
 
   renderer-macos:
     runs-on: macos-15
@@ -564,6 +584,7 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: .ruby-version
+          working-directory: apps/web
           bundler-cache: true
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -577,11 +598,12 @@ jobs:
         run: |
           npm run renderer:build
       - name: Verify the Rails renderer bundle is current
-        run: git diff --exit-code -- vendor/javascript/elef-renderer.bundle.js
+        run: git diff --exit-code -- apps/web/vendor/javascript/elef-renderer.bundle.js
       - name: Exercise Rails rendering on Apple Silicon macOS
         env:
           RAILS_ENV: test
           ELEF_USE_SQLITE: "1"
+        working-directory: apps/web
         run: |
           bin/rails db:test:prepare
           bin/rails test test/lib/source/renderer_test.rb test/lib/source/javascript_renderer_test.rb test/lib/authoring_registry_test.rb test/models/presentation_test.rb test/services/presentations/pptx_export_test.rb
@@ -595,13 +617,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
       - name: Validate production Compose configuration
-        run: docker compose --project-name elef-ci --env-file .env.personal.example --file compose.personal.yml config --quiet
+        run: docker compose --project-name elef-ci --env-file ops/.env.personal.example --file ops/compose.personal.yml config --quiet
       - name: Build production image
-        run: docker compose --project-name elef-ci --env-file .env.personal.example --file compose.personal.yml build web
+        run: docker compose --project-name elef-ci --env-file ops/.env.personal.example --file ops/compose.personal.yml build web
       - name: Boot and smoke-test production stack
         run: |
           set -euo pipefail
-          compose=(docker compose --project-name elef-ci --env-file .env.personal.example --file compose.personal.yml)
+          compose=(docker compose --project-name elef-ci --env-file ops/.env.personal.example --file ops/compose.personal.yml)
           cleanup() {
             "${compose[@]}" down -v --remove-orphans
           }
@@ -628,13 +650,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
       - name: Validate development Compose configuration
-        run: docker compose --project-name elef-development-ci --env-file .env.development.example --file compose.development.yml config --quiet
+        run: docker compose --project-name elef-development-ci --env-file ops/.env.development.example --file ops/compose.development.yml config --quiet
       - name: Build development image
-        run: docker compose --project-name elef-development-ci --env-file .env.development.example --file compose.development.yml build web
+        run: docker compose --project-name elef-development-ci --env-file ops/.env.development.example --file ops/compose.development.yml build web
       - name: Prepare and smoke-test development stack
         run: |
           set -euo pipefail
-          compose=(docker compose --project-name elef-development-ci --env-file .env.development.example --file compose.development.yml)
+          compose=(docker compose --project-name elef-development-ci --env-file ops/.env.development.example --file ops/compose.development.yml)
           cleanup() {
             "${compose[@]}" down -v --remove-orphans
           }
@@ -696,8 +718,8 @@ jobs:
       - name: Verify the merged PR's seven CI checks and tested tree
         env:
           DEPLOYMENT_REMOTE: origin
-        run: scripts/verify-deployment-authorization
+        run: tooling/release/verify-deployment-authorization
       - name: Publish the CI-approved deployment ref
         env:
           DEPLOYMENT_REMOTE: origin
-        run: scripts/publish-deployment-ref
+        run: tooling/release/publish-deployment-ref

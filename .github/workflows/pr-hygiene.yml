@@ -23,7 +23,7 @@ jobs:
       - name: Validate pull request description
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
-        run: ruby scripts/check_pr_description.rb
+        run: ruby tooling/check_pr_description.rb
 
   normalize:
     if: github.event.pull_request.head.ref != 'main' && github.event.pull_request.head.ref != 'dev'
