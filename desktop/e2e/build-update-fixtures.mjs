@@ -23,7 +23,7 @@ for (const [name, version] of [["n", "0.2.0"], ["n-1", "0.1.0"]]) {
   const folder = path.join(output, name)
   await mkdir(folder)
   if (platform === "darwin") {
-    const bundle = path.join(target, "debug/bundle/macos/Elef.app")
+    const bundle = path.join(target, "debug/bundle/macos/Elef E2E.app")
     await cp(bundle, path.join(folder, "Elef.app"), { recursive: true, verbatimSymlinks: true })
     if (name === "n") execFileSync("tar", ["-czf", path.join(output, "update.tar.gz"), "-C", folder, "Elef.app"])
   } else {
