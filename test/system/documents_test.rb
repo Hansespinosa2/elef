@@ -2990,7 +2990,7 @@ class DocumentsTest < ApplicationSystemTestCase
   end
 
   test "positions document blocks visually and preserves directives across source mode" do
-    source = "# Alignment\n\nLeft block\n\n:::align{center center}\n\nCentered block"
+    source = "# Alignment\n\nLeft block\n\n:::align{middle center}\n\nCentered block"
     document = Document.create!(title: "Block alignment", source: source)
     visit edit_document_path(document)
     wait_for_fresh_projection
@@ -3017,13 +3017,13 @@ class DocumentsTest < ApplicationSystemTestCase
     centered_control = find("[data-visual-editor-block-id='#{centered['data-editor-block-id']}']")
     centered_control.select("Right")
 
-    assert_field "Markdown source", with: /:::align\{center right\}/, wait: 5
+    assert_field "Markdown source", with: /:::align\{middle right\}/, wait: 5
     assert_selector ".document-editor-block.position-right", text: "Centered block", wait: 5
     right_aligned = find(".document-editor-block.position-right", text: "Centered block")
     assert_equal "right", page.evaluate_script("getComputedStyle(arguments[0]).textAlign", right_aligned)
     right_aligned.find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
     find("[data-visual-editor-block-id='#{right_aligned['data-editor-block-id']}']").select("Left")
-    assert_field "Markdown source", with: /:::align\{center left\}/, wait: 5
+    assert_field "Markdown source", with: /:::align\{middle left\}/, wait: 5
     left_aligned = find(".document-editor-block.position-left", text: "Centered block", wait: 5)
     assert_equal "left", page.evaluate_script("getComputedStyle(arguments[0]).textAlign", left_aligned)
     centered_id = left_aligned["data-editor-block-id"]
@@ -3032,7 +3032,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
     click_on "Source"
     assert_field "Markdown source", with: /:::align\{right\}\n\nUpdated left block/
-    assert_field "Markdown source", with: /:::align\{center left\}\n\nCentered block/
+    assert_field "Markdown source", with: /:::align\{middle left\}\n\nCentered block/
     click_on "Visual"
     wait_for_fresh_projection
 
@@ -3041,7 +3041,7 @@ class DocumentsTest < ApplicationSystemTestCase
     centered.find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
     assert_equal "left", find("[data-visual-editor-block-id='#{centered['data-editor-block-id']}']").value
     type_visual_text(".document-editor-block", "Centered block", "Updated centered block")
-    assert_field "Markdown source", with: /:::align\{right\}\n\nUpdated left block\n\n:::align\{center left\}\n\nUpdated centered block/, wait: 5
+    assert_field "Markdown source", with: /:::align\{right\}\n\nUpdated left block\n\n:::align\{middle left\}\n\nUpdated centered block/, wait: 5
     refute_includes find(".editor-projection").text, ":::align"
   end
 
@@ -3175,13 +3175,13 @@ class DocumentsTest < ApplicationSystemTestCase
     refute_selector ".document-editor-block.position-center", text: "Tail"
   end
 
-  test "deleting a single block in a grouped position removes its opening and closing directives" do
-    source = "# Keep\n\n:::align{center}\n\nDelete me\n\n:::\n\nTail"
+  test "deleting a single positioned block leaves following blocks and directives alone" do
+    source = "# Keep\n\n:::align{center}\n\nDelete me\n\nTail"
     map = Source::Document.editor_map(source, mode: :document)
     positioned = map[:slides].first[:blocks].find { |candidate| candidate[:markdown] == "Delete me" }
-    assert_equal "group", positioned[:position_scope]
+    assert_equal "center", positioned[:position][:horizontal]
 
-    document = Document.create!(title: "Delete grouped position", source: source)
+    document = Document.create!(title: "Delete positioned block", source: source)
     visit edit_document_path(document)
 
     block = find(".document-editor-block", text: "Delete me")

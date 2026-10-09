@@ -1,7 +1,7 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 import { collectMediaReferences, renderMarkdownBlock, renderPreview } from "../../app/javascript/lib/renderer.js"
-import { buildEditorMap } from "../../app/javascript/lib/document_map.js"
+import { buildEditorMap, buildEditorStructure } from "../../app/javascript/lib/document_map.js"
 
 test("presentation preview builds editable source ranges and ignores slide delimiters in code fences", () => {
   const source = "---\ntheme: dark\n---\n# One\n\nText 😀\n\n```md\n---\n```\n---\n# Two"
@@ -55,6 +55,37 @@ test("desktop presentation structure comes from the same source map exported to 
   assert.match(preview.html, /class="slide-regions"/)
   assert.match(preview.html, /data-presentation-editor-action="add-block-after"/)
   assert.match(preview.html, /class="slide-margin-section"/)
+})
+
+test("position directive binds to exactly the single next block and bare ::: does not extend scope", () => {
+  const source = "# Slide\n\n:::align{center}\n\nFirst\n\nSecond\n\n:::\n\nOutside"
+  const map = buildEditorMap(source, { mode: "presentation" })
+  const blocks = map.slides[0].blocks
+
+  assert.equal(blocks.length, 4)
+  assert.equal(blocks[0].markdown, "# Slide")
+  assert.equal(blocks[0].position, null)
+  assert.equal(blocks[1].markdown, "First")
+  assert.deepEqual(blocks[1].position, { horizontal: "center", vertical: "top", vertical_explicit: false })
+  assert.equal(blocks[2].markdown, "Second")
+  assert.equal(blocks[2].position, null)
+  assert.equal(blocks[3].markdown, "Outside")
+  assert.equal(blocks[3].position, null)
+  assert.equal(blocks[1].position_directive_id, map.slides[0].directives[0].id)
+  assert.equal(blocks[2].position_directive_id, null)
+
+  const structure = buildEditorStructure(source, { mode: "presentation" })
+  assert.ok(structure.warnings.includes("Unknown or malformed presentation directive was removed."))
+})
+
+test("bare ::: alone is typed as unknown directive and warns without affecting positioning", () => {
+  const source = "# Slide\n\n:::\n\nFirst"
+  const structure = buildEditorStructure(source, { mode: "presentation" })
+  const map = structure.editorMap
+
+  assert.equal(map.slides[0].directives[0].type, "unknown")
+  assert.equal(map.slides[0].blocks[1].position, null)
+  assert.deepEqual(structure.warnings, ["Unknown or malformed presentation directive was removed."])
 })
 
 test("document preview renders basic Markdown with safe content-addressed local assets", () => {
@@ -331,4 +362,27 @@ test("empty display math retains its exact inner source whitespace for visual ed
     assert.ok(html.includes(`data-editor-math-close="${closing}"`))
     assert.ok(!html.includes(`data-editor-math-source="${opening}`))
   }
+})
+
+test("positionFromBlock treats center as horizontal-only and parses middle as vertical", () => {
+  const mapCenterCenter = buildEditorMap(":::align{center center}\n\nBlock")
+  assert.deepEqual(mapCenterCenter.slides[0].blocks[0].position, {
+    horizontal: "center",
+    vertical: "top",
+    vertical_explicit: false
+  })
+
+  const mapMiddleCenter = buildEditorMap(":::align{middle center}\n\nBlock")
+  assert.deepEqual(mapMiddleCenter.slides[0].blocks[0].position, {
+    horizontal: "center",
+    vertical: "middle",
+    vertical_explicit: true
+  })
+
+  const mapCenterLeft = buildEditorMap(":::align{center left}\n\nBlock")
+  assert.deepEqual(mapCenterLeft.slides[0].blocks[0].position, {
+    horizontal: "center",
+    vertical: "top",
+    vertical_explicit: false
+  })
 })

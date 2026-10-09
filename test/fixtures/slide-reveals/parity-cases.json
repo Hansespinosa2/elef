@@ -137,7 +137,9 @@
     "event_counts": [
       2
     ],
-    "warnings": []
+    "warnings": [
+      "Unknown or malformed presentation directive was removed."
+    ]
   },
   {
     "name": "blank boundaries malformed markers and conflicts are isolated",
@@ -558,12 +560,14 @@
       [
         { "markdown": "# Indented close", "reveal_event": null, "position": null },
         { "markdown": "    :::\n    four spaces", "reveal_event": 0, "position": ["center", "top"] },
-        { "markdown": "\t:::\n\ttabbed", "reveal_event": 1, "position": ["center", "top"] },
+        { "markdown": "\t:::\n\ttabbed", "reveal_event": 1, "position": null },
         { "markdown": "After", "reveal_event": null, "position": null }
       ]
     ],
     "event_counts": [2],
-    "warnings": []
+    "warnings": [
+      "Unknown or malformed presentation directive was removed."
+    ]
   },
   {
     "name": "no step nested list delimiters remain literal content",
@@ -586,12 +590,14 @@
       [
         { "markdown": "# Math scope", "reveal_event": null, "position": null },
         { "markdown": "$$\n:::\n$$", "reveal_event": null, "position": ["center", "top"] },
-        { "markdown": "- revealed", "reveal_event": 0, "position": ["center", "top"] },
+        { "markdown": "- revealed", "reveal_event": 0, "position": null },
         { "markdown": "After", "reveal_event": null, "position": null }
       ]
     ],
     "event_counts": [1],
-    "warnings": []
+    "warnings": [
+      "Unknown or malformed presentation directive was removed."
+    ]
   },
   {
     "name": "Unicode whitespace separates reveal groups consistently",

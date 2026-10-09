@@ -31,9 +31,25 @@ class SourceSlidePositionLayoutTest < ActiveSupport::TestCase
           placement_blocks[entry[:start]...entry[:end]].map { |block| block_label(block.markdown) }
         end
       end
+      actual_region_placements = placements.each_with_index.map do |placement, context_index|
+        placement_blocks = contexts[context_index]
+        {
+          "middleGroups" => placement[:entries].filter_map do |entry|
+            next unless entry[:type] == :middle
+
+            placement_blocks[entry[:start]...entry[:end]].map { |block| block_label(block.markdown) }
+          end,
+          "bottomLanes" => placement[:entries].filter_map do |entry|
+            next unless entry[:type] == :bottom
+
+            placement_blocks[entry[:start]...entry[:end]].map { |block| block_label(block.markdown) }
+          end
+        }
+      end
 
       assert_equal expected.fetch("middleGroups"), actual_middle_groups, "#{fixture.fetch('id')} middle groups"
       assert_equal expected.fetch("bottomLanes"), actual_bottom_lanes, "#{fixture.fetch('id')} bottom lanes"
+      assert_equal expected["regionPlacements"], actual_region_placements, "#{fixture.fetch('id')} per-region placement" if expected.key?("regionPlacements")
       assert_equal expected.fetch("warningPatterns").length, slide.warnings.length, "#{fixture.fetch('id')} warning count"
       expected.fetch("warningPatterns").each do |pattern|
         assert slide.warnings.any? { |warning| warning.downcase.include?(pattern) }, "#{fixture.fetch('id')} missing warning: #{pattern}"

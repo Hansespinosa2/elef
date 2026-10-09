@@ -76,13 +76,13 @@
     {
       "id": "F-13",
       "source": "# Deck title\n\n:::align{middle center}\n## Left\n\nLeft text here.\n\n## Right\n\nRight text here.",
-      "expected": { "layout": "two-column", "middleGroups": [["Left", "Left text here."]], "bottomLanes": [], "warningPatterns": [], "blockClasses": {} },
+      "expected": { "layout": "two-column", "middleGroups": [["Left", "Left text here."]], "bottomLanes": [], "regionPlacements": [{ "middleGroups": [["Left", "Left text here."]], "bottomLanes": [] }, { "middleGroups": [], "bottomLanes": [] }], "warningPatterns": [], "blockClasses": {} },
       "geometry": []
     },
     {
       "id": "F-14",
       "source": "# T\n\n## L\n\nL text.\n\n:::align{bottom right}\nL foot.\n\n## R\n\nR text here.",
-      "expected": { "layout": "two-column", "middleGroups": [], "bottomLanes": [["L foot."]], "warningPatterns": [], "blockClasses": {} },
+      "expected": { "layout": "two-column", "middleGroups": [], "bottomLanes": [["L foot."]], "regionPlacements": [{ "middleGroups": [], "bottomLanes": [["L foot."]] }, { "middleGroups": [], "bottomLanes": [] }], "warningPatterns": [], "blockClasses": {} },
       "geometry": ["left lane bottom edge == left region bottom edge (±1px)"]
     },
     {
@@ -93,7 +93,7 @@
     },
     {
       "id": "F-16",
-      "source": ":::align{center center}\n# Untitled Document\n\n:::align {center}\nStart writing Markdown here.",
+      "source": ":::align{middle center}\n# Untitled Document\n\n:::align {center}\nStart writing Markdown here.",
       "expected": { "layout": "statement", "middleGroups": [["Untitled Document", "Start writing Markdown here."]], "bottomLanes": [], "warningPatterns": [], "blockClasses": {} },
       "geometry": ["title block center Y within 50px of slide center Y", "vertical gap between title and subtitle < 8px"]
     }

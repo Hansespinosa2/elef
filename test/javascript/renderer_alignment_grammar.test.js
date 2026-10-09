@@ -29,8 +29,13 @@ for (const fixture of corpus.fixtures) {
     assert.ok(slide.classList.contains(`slide-${expected.layout}`), `${fixture.id} layout`)
     const groups = [...slide.querySelectorAll(".slide-middle-group")]
     const lanes = [...slide.querySelectorAll(".slide-bottom-lane")]
+    const regionPlacements = [...slide.querySelectorAll(".slide-region")].map(region => ({
+      middleGroups: [...region.querySelectorAll(".slide-middle-group")].map(labels),
+      bottomLanes: [...region.querySelectorAll(".slide-bottom-lane")].map(labels)
+    }))
     assert.deepEqual(groups.map(labels), expected.middleGroups, `${fixture.id} middle groups`)
     assert.deepEqual(lanes.map(labels), expected.bottomLanes, `${fixture.id} bottom lanes`)
+    if (expected.regionPlacements) assert.deepEqual(regionPlacements, expected.regionPlacements, `${fixture.id} per-region placement`)
     assert.equal(groups.filter(group => group.classList.contains("flush-bottom")).length, expected.flushBottom ? 1 : 0)
     assert.equal(preview.warnings.length, expected.warningPatterns.length, `${fixture.id} warning count`)
     expected.warningPatterns.forEach(pattern => {

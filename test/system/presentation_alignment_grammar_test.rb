@@ -27,6 +27,10 @@ class PresentationAlignmentGrammarTest < ApplicationSystemTestCase
           return {
             layout: [...slide.classList].find((name) => name.startsWith("slide-") && name !== "slide-frame"),
             regions: slide.querySelectorAll(".slide-region").length,
+            regionPlacements: [...slide.querySelectorAll(".slide-region")].map(region => ({
+              middleGroups: [...region.querySelectorAll(".slide-middle-group")].map(group => [...group.querySelectorAll(".slide-block")].map(label)),
+              bottomLanes: [...region.querySelectorAll(".slide-bottom-lane")].map(lane => [...lane.querySelectorAll(".slide-block")].map(label))
+            })),
             blocks: blockElements.map((block) => ({ label: label(block), classes: [...block.classList], ...rect(block) })),
             groups: groups.map((group) => {
               const parent = group.parentElement;
@@ -60,6 +64,7 @@ class PresentationAlignmentGrammarTest < ApplicationSystemTestCase
       assert_equal "slide-#{expected.fetch('layout')}", actual.fetch("layout"), "#{id} layout"
       assert_equal expected.fetch("middleGroups"), actual.fetch("groups").map { |group| group.fetch("labels") }, "#{id} groups"
       assert_equal expected.fetch("bottomLanes"), actual.fetch("lanes").map { |lane| lane.fetch("labels") }, "#{id} lanes"
+      assert_equal expected.fetch("regionPlacements"), actual.fetch("regionPlacements"), "#{id} per-region placement" if expected.key?("regionPlacements")
       assert_equal expected.fetch("flushBottom", false), actual.fetch("groups").any? { |group| group.fetch("flushBottom") }, "#{id} docking"
       assert_equal 2, actual.fetch("regions"), "#{id} column regions" if expected.fetch("layout").include?("column")
 

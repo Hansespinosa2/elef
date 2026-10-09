@@ -10,7 +10,7 @@ class PresentationTest < ActiveSupport::TestCase
 
   test "new presentations use source directives to position the starter title and body" do
     expected_source = <<~MARKDOWN.chomp
-      :::align{center center}
+      :::align{middle center}
       # Untitled Document
 
       :::align {center}
@@ -265,7 +265,7 @@ class PresentationTest < ActiveSupport::TestCase
     document = Source::Document.parse(<<~MARKDOWN)
       # Positioned
 
-      :::align{center center}
+      :::align{middle center}
 
       A centered message.
 
@@ -284,7 +284,7 @@ class PresentationTest < ActiveSupport::TestCase
 
   test "align directives use vertical then horizontal order and retain position compatibility" do
     document = Source::Document.parse(<<~MARKDOWN)
-      :::align{center left}
+      :::align{middle left}
 
       Centered vertically and aligned left.
 
@@ -310,7 +310,7 @@ class PresentationTest < ActiveSupport::TestCase
 
       Horizontal only.
 
-      :::align{center center}
+      :::align{middle center}
 
       Horizontal and vertical.
     MARKDOWN
@@ -319,7 +319,7 @@ class PresentationTest < ActiveSupport::TestCase
   end
 
   test "builds an ephemeral editor map with UTF-16 ranges and known directives" do
-    source = "---\npresentationTheme: dark\n---\n# 🚀 Intro\n\n:::align{center center}\n\nA **message**.\n\n:::\n---\n:::unknown\n\n# Next"
+    source = "---\npresentationTheme: dark\n---\n# 🚀 Intro\n\n:::align{middle center}\n\nA **message**.\n\n:::\n---\n:::unknown\n\n# Next"
 
     map = Source::Document.editor_map(source, source_name: "Deck", mode: :presentation)
 
@@ -343,17 +343,28 @@ class PresentationTest < ActiveSupport::TestCase
     blocks = Source::Document.editor_map(source, mode: :presentation)[:slides].first[:blocks]
 
     assert_equal [nil, "center", nil], blocks.map { |block| block[:position]&.fetch(:horizontal) }
-    assert_equal [nil, "block", nil], blocks.map { |block| block[:position_scope] }
   end
 
-  test "maps shared position scopes to every block inside the group" do
+  test "position directive followed later by a bare ::: binds only to the single next block and bare ::: warns" do
     source = "# Slide\n\n:::align{center}\n\nFirst\n\nSecond\n\n:::\n\nOutside"
 
     blocks = Source::Document.editor_map(source, mode: :presentation)[:slides].first[:blocks]
+    assert_equal [nil, "center", nil, nil], blocks.map { |block| block[:position]&.fetch(:horizontal) }
 
-    assert_equal [nil, "group", "group", nil], blocks.map { |block| block[:position_scope] }
-    assert_equal blocks[1][:position_directive_id], blocks[2][:position_directive_id]
-    refute_equal blocks[1][:position_directive_id], blocks[3][:position_directive_id]
+    parsed = Source::Document.parse(source)
+    assert_equal [nil, "center", nil, nil], parsed.slides.first.blocks.map { |b| b.position&.horizontal }
+    assert_includes parsed.warnings, "Unknown or malformed presentation directive was removed."
+  end
+
+  test "bare ::: alone warns as unknown directive and does not affect positioning" do
+    source = "# Slide\n\n:::\n\nFirst"
+
+    parsed = Source::Document.parse(source)
+    assert_equal [nil, nil], parsed.slides.first.blocks.map { |b| b.position&.horizontal }
+    assert_equal ["Unknown or malformed presentation directive was removed."], parsed.warnings
+
+    map = Source::Document.editor_map(source, mode: :presentation)
+    assert_equal "unknown", map[:slides].first[:directives].first[:type]
   end
 
   test "keeps blank lines inside display math fences in one editable block" do
@@ -562,8 +573,7 @@ class PresentationTest < ActiveSupport::TestCase
     assert_includes layouts.slides.map(&:layout), "statement"
     assert_equal 5, layouts.slides.count { |slide| slide.layout == "three-column" }
     %w[left center right].product(%w[top middle bottom]).each do |horizontal, vertical|
-      vertical_value = vertical == "middle" ? "center" : vertical
-      assert_includes layouts.source, ":::align{#{vertical_value} #{horizontal}}"
+      assert_includes layouts.source, ":::align{#{vertical} #{horizontal}}"
     end
     assert layouts.slides.any? { |slide| slide.blocks.any? { |block| block.position&.horizontal == "center" && block.position.vertical == "middle" } }
     assert layouts.slides.any? { |slide| slide.blocks.any? { |block| block.position&.horizontal == "right" && block.position.vertical == "bottom" } }

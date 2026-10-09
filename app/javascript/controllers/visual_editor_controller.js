@@ -432,12 +432,7 @@ export default class extends Controller {
     if (!horizontal) {
       if (!directive) return
 
-      const directiveIndex = slide.directives.findIndex((candidate) => candidate.id === directive.id)
       const ranges = [directive.range]
-      if (block.position_scope === "group") {
-        const closing = slide.directives.slice(directiveIndex + 1).find((candidate) => candidate.type === "position_close")
-        if (closing) ranges.push(closing.range)
-      }
 
       const caret = this.captureCaret()
       const region = this.regionForBlock(block.id)
@@ -496,8 +491,7 @@ export default class extends Controller {
         }
       }
       const vertical = block.position?.vertical_explicit ? block.position.vertical : null
-      const verticalAlignment = vertical === "middle" ? "center" : vertical
-      replacement = `:::align{${verticalAlignment ? `${verticalAlignment} ` : ""}${horizontal}}${lineEnding}`
+      replacement = `:::align{${vertical ? `${vertical} ` : ""}${horizontal}}${lineEnding}`
     } else {
       from = block.range.start
       to = from

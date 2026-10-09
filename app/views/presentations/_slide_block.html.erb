@@ -14,7 +14,7 @@
     <label>Align <select aria-label="Block alignment" data-presentation-editor-align data-presentation-editor-block-id="<%= editor_block[:id] %>" data-slide-index="<%= slide.index %>" data-block-index="<%= block_index %>" data-action="change->presentation-editor#alignmentChanged">
       <% %w[top middle bottom].each do |vertical| %>
         <% %w[left center right].each do |horizontal| %>
-          <% value = vertical == "top" ? horizontal : "#{vertical == "middle" ? "center" : vertical} #{horizontal}" %>
+          <% value = vertical == "top" ? horizontal : "#{vertical} #{horizontal}" %>
           <option value="<%= value %>"<%= " selected" if alignment_value(block.position) == value %>><%= value.titleize %></option>
         <% end %>
       <% end %>
