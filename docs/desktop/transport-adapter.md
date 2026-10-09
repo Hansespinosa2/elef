@@ -1,6 +1,6 @@
 # Desktop integration boundary
 
-Rails app/ owns the shared product workflows and user interface. Desktop packages those sources and provides native services at the boundary. The desktop does not boot Rails or reproduce Rails persistence.
+packages/client owns the shared product workflows and user interface; shared host-integration modules live in app/javascript/lib. Desktop packages those sources and provides native services at the boundary. The desktop does not boot Rails or reproduce Rails persistence.
 
 ## Flow
 
@@ -8,24 +8,24 @@ Rails app/ owns the shared product workflows and user interface. Desktop package
 2. The web host supplies Rails routes and browser persistence. The desktop entry point in desktop/frontend/src/main.js injects named file-library services and Tauri lifecycle services.
 3. Shared Stimulus controllers and modules call the same fetch-shaped interfaces in both hosts.
 4. Desktop adapters translate the relevant requests to named Tauri commands, a local rendering worker, or the asset protocol.
-5. Rust commands validate arguments and delegate filesystem operations to desktop/crates/elef-core.
+5. Rust commands validate arguments and delegate filesystem operations to crates/local-store.
 6. Shared workflows and scenarios remain in Rails-owned test source at `test/e2e/scenarios/`; desktop keeps only the Playwright and WebdriverIO runner adapters.
 
 The shared application never calls raw Tauri `invoke()` or names Rust commands. `desktop/frontend/src/file-library-transport.js` maps file-library operations to commands; editor saves, media, updater, and lifecycle stay in their corresponding desktop adapters.
 
 `desktop/frontend/src/media-transport.js` owns the desktop preview, upload, and deck-asset URL schemes. The desktop bootstrap installs the fetch bridge; shared modules receive deck-scoped media URLs as opaque values and do not patch `fetch` or parse desktop schemes.
 
-Desktop frontend edits belong in desktop/frontend/src only when they implement a native transport, lifecycle, window, media, close, or updater integration. If behavior can be expressed independently of Tauri, put it under app/ and make both hosts consume it.
+Desktop frontend edits belong in desktop/frontend/src only when they implement a native transport, lifecycle, window, media, close, or updater integration. If behavior can be expressed independently of Tauri, put host-neutral UI and workflows in packages/client (pure semantics in packages/work-model) and make both hosts consume it through mountElef and the host adapters.
 
 ## Handler categories
 
 | Work | Desktop implementation | Boundary |
 |---|---|---|
-| Library, deck, manifest, save, archive, and portable-settings operations | Tauri commands backed by elef-core | Named commands and typed errors |
+| Library, deck, manifest, save, archive, and portable-settings operations | Tauri commands backed by local-store | Named commands and typed errors |
 | Markdown preview and editor projection | Shared renderer in a web worker | Local to the webview; no Rust IPC round trip |
 | Media upload and reads | Native upload command and deck-scoped asset protocol | Content-addressed writes and validated, read-only reads |
 | Save conflict handling | Shared save flow plus desktop fingerprint adapter | The adapter supplies the base content hash; shared UI presents resolution |
-| Library cards, filters, graph, editor, settings UI | Rails-owned app/ modules | No desktop-only copy |
+| Library cards, filters, graph, editor, settings UI | packages/client modules | No desktop-only copy |
 
 The command and capability allowlists are checked by [the architecture checker](../../desktop/scripts/check_architecture.py). The complete user-flow parity harness and test commands are in [development and testing](../development.md).
 

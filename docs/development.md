@@ -34,10 +34,12 @@ The Tauri configuration runs the Rails-owned frontend build before dev and produ
 
 | Change | First check |
 |---|---|
-| Rails-owned JavaScript or shared editor workflow | npm run test:javascript |
+| Rails-owned JavaScript (host adapters, web-only behavior) | npm run test:javascript |
+| Host-neutral client UI or behavior | npm test --prefix packages/client |
+| Pure Work semantics or transforms | npm test --prefix packages/work-model |
 | Desktop transport/native frontend adapter | npm test --prefix desktop/frontend |
 | E2E harness helpers | npm run test:unit --prefix desktop/e2e |
-| Rust deck storage or archive behavior | cargo test --manifest-path desktop/Cargo.toml -p elef-core --locked |
+| Rust deck storage or archive behavior | cargo test --manifest-path Cargo.toml -p local-store --locked |
 | Rails model, service, controller, or request behavior | bin/rails test path/to/focused_test.rb |
 | Renderer implementation | npm run renderer:build, then npm run test:javascript |
 
@@ -47,8 +49,8 @@ Before handing off shared or native changes, also run the relevant build and bou
 npm run build --prefix desktop/frontend
 python3 script/check_frontend_ownership.py
 python3 desktop/scripts/check_architecture.py
-cargo fmt --manifest-path desktop/Cargo.toml --all -- --check
-cargo clippy --manifest-path desktop/Cargo.toml --workspace --all-targets -- -D warnings
+cargo fmt --manifest-path Cargo.toml --all -- --check
+cargo clippy --manifest-path Cargo.toml --workspace --all-targets -- -D warnings
 ~~~
 
 ## Web and desktop parity
