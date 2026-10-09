@@ -4,6 +4,8 @@
 
 `Desktop Release Coordinator` runs after pushes to `main`, on its 15-minute repair schedule, or by manual dispatch on `main`. Use `reconcile` to repair a missed run. Use `minor` only for an explicitly approved next minor series and enter the authorization reason. A PR merge remains the routine release decision; the coordinator does not merge PRs.
 
+For a PR from another author, the latest owner approval must target the final PR head and be submitted before merge. [GitHub does not permit PR authors to approve their own PRs](https://docs.github.com/en/pull-requests/how-tos/review-pull-requests/approving-a-pull-request-with-required-reviews), so for an owner-authored PR the owner's explicit merge is the approval signal; a merge performed by another actor is ineligible. The coordinator verifies this after merge before reserving a version.
+
 The workflow reconciles the actual first-parent `main` history, reruns the exact-SHA gate evidence, and updates `desktop/stable/state.json` and its derived `latest.json` projection in one compare-and-swap commit on `gh-pages`. A reserved version or a successful build is not a public release or an installation result.
 
 ## Emergency block or unblock

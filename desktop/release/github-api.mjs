@@ -62,9 +62,15 @@ export class GitHubReleaseApi {
 
   async ownerApprovedPullRequest(pullRequest, ownerLogin) {
     if (pullRequest.base?.ref !== "main" || !pullRequest.merged_at || !pullRequest.merge_commit_sha) return false
+    const owner = ownerLogin.toLowerCase()
+    if (pullRequest.user?.login?.toLowerCase() === owner) {
+      // GitHub does not let a PR author approve their own PR. For owner-authored
+      // work, merging the PR as the owner is the explicit release approval.
+      return pullRequest.merged_by?.login?.toLowerCase() === owner
+    }
     const reviews = await this.pullRequestReviews(pullRequest.number)
     const ownerReviews = reviews
-      .filter(review => review.user?.login?.toLowerCase() === ownerLogin.toLowerCase() && review.submitted_at)
+      .filter(review => review.user?.login?.toLowerCase() === owner && review.submitted_at)
       .sort((left, right) => Date.parse(left.submitted_at) - Date.parse(right.submitted_at))
     const latestReview = ownerReviews.at(-1)
     return latestReview?.state === "APPROVED" &&

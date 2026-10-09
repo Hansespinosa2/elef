@@ -91,6 +91,34 @@ test("an approval submitted after merge does not authorize a release", async () 
   assert.equal(await api.ownerApprovedPullRequest(pullRequest, "owner"), false)
 })
 
+test("an owner-authored PR requires the owner to perform the merge", async () => {
+  let reviewRequests = 0
+  const api = new GitHubReleaseApi({
+    owner: "example",
+    repository: "elef",
+    token: "test-token",
+    fetchImpl: async () => {
+      reviewRequests += 1
+      return jsonResponse([])
+    },
+    sleep: async () => {}
+  })
+  const pullRequest = {
+    number: 11,
+    user: { login: "OWNER" },
+    merged_by: { login: "owner" },
+    base: { ref: "main" },
+    merged_at: "2026-10-09T12:00:00Z",
+    merge_commit_sha: SHA,
+    head: { sha: SHA }
+  }
+
+  assert.equal(await api.ownerApprovedPullRequest(pullRequest, "owner"), true)
+  assert.equal(reviewRequests, 0, "the owner cannot submit a self-approval review")
+  pullRequest.merged_by = { login: "another-maintainer" }
+  assert.equal(await api.ownerApprovedPullRequest(pullRequest, "owner"), false)
+})
+
 test("transient GitHub API responses retry without exposing response bodies", async () => {
   let calls = 0
   let sleeps = 0
