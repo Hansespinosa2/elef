@@ -1,6 +1,6 @@
 # Desktop release ledger
 
-The release workflow's only mutable central state is `desktop/stable/state.json` on the repository's `gh-pages` branch. `desktop/stable/latest.json` is generated from that ledger in the same branch commit. The checked-in implementation in `desktop/release/ledger.mjs` is the deterministic transition model; it does not create a second release record.
+The release workflow's only mutable central state is `desktop/stable/state.json` on the repository's `gh-pages` branch. `desktop/stable/latest.json` is generated from that ledger in the same branch commit. `desktop/release/ledger.mjs` owns deterministic transitions; `desktop/release/pages-state.mjs` serializes state and derives the updater feed from one validated snapshot. The checked-in writer does not create a second release record.
 
 ## State shape
 
@@ -26,4 +26,4 @@ Each release records the constitutional minimum fields: `version`, `tag`, `main_
 - Emergency block/unblock records actor and reason. A block prevents new platform writes and removes that version from the derived macOS feed. It does not remove already published GitHub/AUR artifacts.
 - `latest.json` is a projection of the newest unblocked macOS release with a passed signature-verified ARM64 updater archive. Linux and AUR states never enter the Tauri updater feed.
 
-`desktop/release/ledger.test.mjs` exercises reconciliation order, duplicate events, failed gates, version gaps, partial delivery, retries, superseding, checksums/signatures, manual minor selection, blocks, stale writers, and safe-feed generation. Workflow wiring, branch protection, GitHub Pages availability, publishing credentials, and real artifact publication remain separate acceptance items in [STATUS.md](STATUS.md).
+`desktop/release/ledger.test.mjs` and `desktop/release/pages-state.test.mjs` exercise reconciliation order, duplicate events, failed gates, version gaps, partial delivery, retries, superseding, checksums/signatures, manual minor selection, blocks, stale writers, same-snapshot state/feed generation, and safe-feed projection. These tests prove local file generation only. Workflow wiring, branch CAS retries, branch protection, GitHub Pages availability, publishing credentials, and real artifact publication remain separate acceptance items in [STATUS.md](STATUS.md).
