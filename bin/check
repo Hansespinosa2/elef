@@ -551,12 +551,117 @@ def run_rails_adapter_conformance() -> float:
     return time.monotonic() - started
 
 
+def run_harness_step(label: str, inner: str) -> float:
+    import time
+
+    started = time.monotonic()
+    try:
+        result = subprocess.run(
+            ["dbus-run-session", "--", "xvfb-run", "--auto-servernum", "bash", "-c",
+             f"set -o pipefail; openbox --sm-disable >/tmp/elef-{label}-openbox.log 2>&1 & sleep 1; {inner}"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode:
+            tail = (result.stdout + result.stderr).strip().splitlines()[-25:]
+            fail(f"{label} failed\n" + "\n".join(tail))
+    finally:
+        for pattern in ("tauri-driver", "chromedriver", "openbox --sm-disable"):
+            subprocess.run(["pkill", "-f", pattern], capture_output=True, check=False)
+    return time.monotonic() - started
+
+
+def run_build_step(label: str, args: list, extra_env: dict | None = None) -> float:
+    import time
+
+    started = time.monotonic()
+    env = dict(os.environ)
+    if extra_env:
+        env.update(extra_env)
+    result = subprocess.run(
+        args, cwd=ROOT, capture_output=True, text=True, check=False, env=env
+    )
+    if result.returncode:
+        tail = (result.stdout + result.stderr).strip().splitlines()[-25:]
+        fail(f"{label} failed\n" + "\n".join(tail))
+    return time.monotonic() - started
+
+
+def run_desktop_e2e() -> float:
+    build_elapsed = run_build_step(
+        "desktop e2e debug build",
+        ["npm", "run", "tauri:build", "--prefix", "apps/desktop/frontend", "--",
+         "--debug", "--no-bundle", "--features", "webdriver",
+         "--config", "src-tauri/tauri.e2e.conf.json"],
+    )
+    harness_elapsed = run_harness_step(
+        "desktop-e2e", "RAILS_ENV=test ELEF_USE_SQLITE=1 npm test --prefix apps/desktop/e2e"
+    )
+    return build_elapsed + harness_elapsed
+
+
+def run_web_e2e() -> float:
+    import time
+
+    started = time.monotonic()
+    result = subprocess.run(
+        ["node", "apps/desktop/e2e/seed-web-fixtures.mjs"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+        env={**os.environ, "RAILS_ENV": "test", "ELEF_USE_SQLITE": "1"},
+    )
+    if result.returncode:
+        tail = (result.stdout + result.stderr).strip().splitlines()[-25:]
+        fail("web e2e failed\n" + "\n".join(tail))
+    for pattern in ("chromedriver", "openbox --sm-disable"):
+        subprocess.run(["pkill", "-f", pattern], capture_output=True, check=False)
+    return time.monotonic() - started
+
+
+def run_native_benchmark() -> float:
+    build_elapsed = run_build_step(
+        "native benchmark release build",
+        ["npm", "run", "tauri:build", "--prefix", "apps/desktop/frontend", "--",
+         "--features", "webdriver", "--no-bundle",
+         "--config", "src-tauri/tauri.e2e.conf.json",
+         "--config", "src-tauri/tauri.performance.conf.json"],
+        extra_env={"ELEF_E2E_BUILD": "1"},
+    )
+    harness_elapsed = run_harness_step(
+        "native-benchmark",
+        'node apps/desktop/e2e/benchmark-native.mjs --binary "$PWD/target/release/elef-desktop" --report-runner',
+    )
+    return build_elapsed + harness_elapsed
+
+
+def run_fresh_tier() -> float:
+    import time
+
+    started = time.monotonic()
+    run_fresh()
+    return time.monotonic() - started
+
+
+def check_stubs_tier() -> float:
+    import time
+
+    started = time.monotonic()
+    check_remaining_stubs()
+    return time.monotonic() - started
+
+
 QUICK_CEILING_S = 180.0
 AFFECTED_CEILING_S = 420.0
+ALL_CEILING_S = 2700.0
 PHASE1_PLAN_PATH = ROOT / "docs" / "refactor" / "execution" / "phase-1-plan.md"
 PHASE1_PHASE_PATH = ROOT / "docs" / "refactor" / "phases" / "01-foundations.md"
 PHASE1_CI_EVIDENCE_PATH = ROOT / "docs" / "refactor" / "execution" / "phase-1-ci-evidence.json"
-REMAINING_STUBS_1 = ("all", "docs", "perf")
+# "all" graduated to a real tier in Phase 12 (DO-1); docs/perf stay honest stubs.
+REMAINING_STUBS_1 = ("docs", "perf")
 QUICK_COMMANDS_1 = (
     "./node_modules/.bin/tsc -p packages/contracts/tsconfig.test.json",
     "node --test tests/host-conformance/conformance-fake.test.js",
@@ -596,6 +701,22 @@ AFFECTED_COMMANDS_1 = (
     "cargo fmt --manifest-path Cargo.toml --all -- --check",
     "cargo clippy --manifest-path Cargo.toml --workspace --all-targets -- -D warnings",
     "cargo test --manifest-path Cargo.toml --workspace --locked",
+)
+# Full release/integration envelope (constitution §7). Rails suites rely on
+# ambient PGPASSWORD like the affected tier; the sqlite variants pin their own
+# adapter. Browser/native suites serialize inside their steps; each step cleans
+# its harness processes so repeated runs start cold.
+ALL_COMMANDS_1 = (
+    *AFFECTED_COMMANDS_1,
+    ("freshness checks", run_fresh_tier),
+    ("remaining stub tiers", check_stubs_tier),
+    "ELEF_USE_SQLITE=1 apps/web/bin/rails db:test:prepare",
+    "ELEF_USE_SQLITE=1 apps/web/bin/rails test",
+    "apps/web/bin/rails test",
+    "PARALLEL_WORKERS=1 apps/web/bin/rails test test/system",
+    ("desktop e2e (debug build + native suite)", run_desktop_e2e),
+    ("web e2e (seeded playwright suite)", run_web_e2e),
+    ("native benchmark (release build + 20 runs)", run_native_benchmark),
 )
 ARCH_COMMANDS_1 = (
     "python3 apps/web/script/check_frontend_ownership.py",
@@ -2142,6 +2263,11 @@ def main(argv: list[str]) -> int:
             print_usage()
             return 2
         return run_tier_command("affected", AFFECTED_COMMANDS_1, AFFECTED_CEILING_S)
+    if command == "all":
+        if len(argv) != 1:
+            print_usage()
+            return 2
+        return run_tier_command("all", ALL_COMMANDS_1, ALL_CEILING_S)
     if command == "arch":
         if len(argv) != 1:
             print_usage()

