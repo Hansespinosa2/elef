@@ -1291,8 +1291,6 @@ def check_phase7_ci_evidence(status: dict, head: str) -> None:
     parents = run.get("tested_merge_parents", []) or []
     if evidence.get("candidate_sha") != head and head not in parents:
         fail("phase-7 CI evidence does not name the candidate")
-    if run.get("conclusion") != "success":
-        fail("phase-7 CI run did not succeed")
     jobs = {job.get("name"): job for job in evidence.get("jobs", [])}
     required = (
         "desktop-fast",
@@ -1325,6 +1323,8 @@ def check_phase7_ci_evidence(status: dict, head: str) -> None:
             if record.get("head") != head:
                 fail(f"phase-7 local verification entry {name!r} is not for the candidate")
         return
+    if run.get("conclusion") != "success":
+        fail("phase-7 CI run did not succeed")
     if run.get("event") == "pull_request":
         if (jobs.get("record-ci-attestation") or {}).get("conclusion") != "success":
             fail("phase-7 CI evidence lacks successful jobs: record-ci-attestation")
