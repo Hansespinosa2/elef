@@ -468,8 +468,11 @@ assert 'path.join(frontendRoot, "src/renderer-worker.js")' in build, (
 assert (ROOT / "test/javascript/shared/renderer_worker.test.js").is_file(), (
     "shared renderer worker behavior must be tested under test/javascript"
 )
-assert '"presentation"' in desktop_application and "getControllerForElementAndIdentifier(elements.editorForm, \"presentation\")" in desktop_application, (
-    "desktop presentation mode must delegate slide behavior to the Rails-owned controller"
+assert "mountPresentation" in desktop_application, (
+    "desktop presentation mode must mount slide behavior from the shared client"
+)
+assert "getControllerForElementAndIdentifier(elements.editorForm, \"presentation\")" not in desktop_application, (
+    "desktop presentation mode must not reach the retired Stimulus presentation controller"
 )
 assert "createPresentationNavigation" not in desktop_application and "presentationActionForKey" not in desktop_application, (
     "desktop must not maintain its own slide navigation behavior"

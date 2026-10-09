@@ -4,6 +4,7 @@ import { parseHTML } from "linkedom";
 
 import {
   attachCanvasScaling,
+  mountPresentation,
   PresentationController,
 } from "../src/features/presentation/presentation.js";
 
@@ -78,6 +79,30 @@ test("client presentation controller ignores keys outside travel and in fields",
   assert.equal(prevented, true);
   assert.equal(scope.querySelector("[data-presentation-counter]")?.textContent, "2 / 2");
   controller.destroy();
+});
+
+test("client presentation mount resyncs slides after host re-render", () => {
+  const { document, scope, stage } = mount(2);
+  const mountHandle = mountPresentation(scope, {
+    document: document as unknown as Document,
+    stage,
+  });
+  assert.equal(mountHandle.controller.start(), true);
+  mountHandle.controller.next();
+  assert.equal(scope.querySelector("[data-presentation-counter]")?.textContent, "2 / 2");
+
+  (document.querySelector("#stage") as unknown as HTMLElement).innerHTML = Array.from(
+    { length: 3 },
+    (_, index) => `<div class="slide-frame"><section class="slide">New ${index + 1}</section></div>`,
+  ).join("");
+  mountHandle.resync();
+  // Index preserved across the re-render (clamped), navigation rebuilt.
+  assert.equal(scope.querySelector("[data-presentation-counter]")?.textContent, "2 / 3");
+  const frames = [...scope.querySelectorAll(".slide-frame")] as unknown as HTMLElement[];
+  assert.equal(frames[1]?.hidden, false);
+  assert.ok(frames[1]?.classList.contains("is-active-presentation-slide"));
+  mountHandle.destroy();
+  assert.ok(frames.every((frame) => frame.hidden === false));
 });
 
 test("client canvas scaling tracks element width", () => {

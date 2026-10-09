@@ -19,7 +19,7 @@ export default class extends Controller {
       document,
       active: this.activeValue,
     })
-    this.previewUpdatedHandler = () => this.mount?.controller.refresh()
+    this.previewUpdatedHandler = () => this.mount?.resync()
     this.element.addEventListener("elef:preview-updated", this.previewUpdatedHandler)
   }
 

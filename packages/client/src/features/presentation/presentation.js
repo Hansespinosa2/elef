@@ -151,9 +151,19 @@ export function mountPresentation(scope, options = {}) {
     slides: options.stage ? undefined : [...scope.querySelectorAll(".slide-frame")],
     active: options.active ?? false,
   })
-  const scalings = [...scope.querySelectorAll(".slide-frame")].map((frame) => attachCanvasScaling(frame))
+  let scalings = attachScalings()
+  function attachScalings() {
+    return [...scope.querySelectorAll(".slide-frame")].map((frame) => attachCanvasScaling(frame))
+  }
   return {
     controller,
+    // Re-discovers slides after the host re-renders the projection (live
+    // preview updates replace frames while a mount is active).
+    resync() {
+      scalings.forEach((detach) => detach())
+      scalings = attachScalings()
+      controller.refreshSlides()
+    },
     destroy() {
       controller.destroy()
       scalings.forEach((detach) => detach())

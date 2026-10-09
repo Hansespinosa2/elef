@@ -12,7 +12,7 @@ import { presentConflictDialog } from "lib/conflict_dialog"
 import { createRendererClient } from "lib/renderer_worker_client"
 import { applyDesktopFeatureFlags } from "lib/feature_flags"
 import { configureEditorKind, renderEditorView } from "lib/editor_view"
-import { CREATE_WORK_EVENT, GraphController, mountElef, mountVimSettings, parseLibraryRoute, renderGraphView } from "@elef/client"
+import { CREATE_WORK_EVENT, GraphController, mountElef, mountPresentation, mountVimSettings, parseLibraryRoute, renderGraphView } from "@elef/client"
 
 export function startFileLibraryApplication(platform) {
   const {
@@ -67,7 +67,6 @@ export function startFileLibraryApplication(platform) {
   const editorFormHost = document.querySelector("#desktop-editor-form")
   editorFieldHost.removeAttribute("data-controller")
   editorFormHost.removeAttribute("data-controller")
-  editorFormHost.dataset.presentationActiveValue = "false"
 
   // The shared client renders the library markup (tabs, cards, notice,
   // graph panel) into #library-view-mount during bootstrap initialize; the
@@ -607,7 +606,7 @@ export function startFileLibraryApplication(platform) {
           documentTitles,
           sourceName: isDocument ? "document[source]" : "presentation[source]",
           showTitle: true,
-          formControllers: "preview visual-editor presentation-editor slide-overview media presentation"
+          formControllers: "preview visual-editor presentation-editor slide-overview media"
         })
         const editor = await measureOpenStage("editorReady", () => editorFor(elements.editorField)?.editorReady
           ? editorFor(elements.editorField)
@@ -936,6 +935,37 @@ export function startFileLibraryApplication(platform) {
     window.print()
   }
 
+  // Present mode runs on the shared client presentation mount (the retired
+  // Stimulus "presentation" controller is gone). The mount persists across
+  // decks on this form; start() re-discovers the live projection slides and
+  // preview re-renders resync scaling plus navigation while presenting.
+  let presentationMount = null
+
+  function presentationStage() {
+    return elements.editorForm.querySelector(".presentation-editor-projection")
+  }
+
+  // renderEditorView rebuilds the projection on every deck open, so each
+  // present starts from a fresh mount bound to the live projection element.
+  let presentationResyncListening = false
+
+  function mountFreshPresentation() {
+    presentationMount?.destroy()
+    presentationMount = mountPresentation(elements.editorForm, {
+      stage: presentationStage(),
+      document
+    })
+    if (!presentationResyncListening) {
+      presentationResyncListening = true
+      elements.editorForm.addEventListener("elef:preview-updated", resyncPresentationMount)
+    }
+    return presentationMount
+  }
+
+  function resyncPresentationMount() {
+    presentationMount?.resync()
+  }
+
   async function startPresentation() {
     if (!activeDeck || activeDeck.source_file === "document.md") {
       showNotice("Open a presentation deck to start presentation mode.")
@@ -945,8 +975,8 @@ export function startFileLibraryApplication(platform) {
       showNotice("Render the presentation before starting presentation mode.", "error")
       return
     }
-    const presentation = window.Stimulus?.getControllerForElementAndIdentifier(elements.editorForm, "presentation")
-    if (!presentation?.start()) {
+    const presentation = mountFreshPresentation()
+    if (!presentation.controller.start()) {
       showNotice("This presentation has no slides to show.", "error")
       return
     }
@@ -960,7 +990,7 @@ export function startFileLibraryApplication(platform) {
     } finally {
       // Native fullscreen can move focus to the exit button. Put keyboard
       // navigation back on the shared presentation stage after the transition.
-      presentation.stageTarget?.focus({ preventScroll: true })
+      presentationStage()?.focus({ preventScroll: true })
     }
   }
 
@@ -976,7 +1006,8 @@ export function startFileLibraryApplication(platform) {
     document.body.classList.remove("presenting-deck")
     elements.presentationExit.hidden = true
     document.removeEventListener("keydown", presentationKeydown, true)
-    window.Stimulus?.getControllerForElementAndIdentifier(elements.editorForm, "presentation")?.stop()
+    presentationMount?.destroy()
+    presentationMount = null
     try {
       await getCurrentWindow().setFullscreen(false)
     } catch (_error) {}
@@ -1162,7 +1193,7 @@ export function startFileLibraryApplication(platform) {
       await measureBootstrapStage("editor-runtime", () => loadEditorRuntime())
       configureEditorKind(elements.editorField.closest(".editor-shell"), "presentation", {
         showTitle: true,
-        formControllers: "preview visual-editor presentation-editor slide-overview media presentation"
+        formControllers: "preview visual-editor presentation-editor slide-overview media"
       })
       await measureBootstrapStage("editor-ready", () => waitForEditorController(elements.editorField, editorFor))
     },
