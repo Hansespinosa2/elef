@@ -59,6 +59,10 @@ Phase 0 audit and current implementation map for [Constitution v6.0](CONSTITUTIO
 - `3046166` Record final Art verification results
 - `ec232ed` Fix release-mode updater E2E config
 - `48848ac` Trim vendored JavaScript EOF whitespace
+- `fead813` Install WebKit driver for Linux desktop E2E
+- `7293d97` Fix Art Markdown block boundaries
+- `c71f454` Scope Art layout updates to dirty hosts
+- `2111eab` Preserve legacy source block boundaries
 
 FIX-06 and FIX-07 now pass the mandatory whole-host containment oracle at the measured 535×416 and 341×416 CSS-pixel regions. In inferred-column Art hosts, `.slide-region-block` retains the block's position classes and editor controls are overlays, so editor chrome does not consume authored slide height or create false no-fit warnings. Authored headings, Art roots, and all slide-region siblings remain part of the host measurement.
 
@@ -68,12 +72,14 @@ The existing stylesheet-index architecture test intentionally changes its expect
 
 ## Final verification snapshot
 
-- `npm run test:javascript`: 393 passed on latest `dev`.
-- `RAILS_ENV=test PARALLEL_WORKERS=1 PGHOST=127.0.0.1 PGPORT=55432 PGUSER=postgres PGTESTDATABASE=elef_test bin/rails test`: 351 tests, 2,796 assertions, no failures/errors/skips, against isolated PostgreSQL 18.6.
-- `RAILS_ENV=test PARALLEL_WORKERS=1 PGHOST=127.0.0.1 PGPORT=55432 PGUSER=postgres PGTESTDATABASE=elef_test bin/rails test test/system/art_test.rb`: 12 tests, 160 assertions passed, covering canonical fixtures, pagination, 100-root lifecycle bounds, print, reflow, and Art position modifiers.
+- `npm run test:javascript`: 403 passed on the final implementation commit.
+- `ELEF_USE_SQLITE=1 RAILS_ENV=test bin/rails test`: 357 tests, 2,842 assertions; no failures or errors. `ELEF_USE_SQLITE=1 RAILS_ENV=test PARALLEL_WORKERS=1 bin/rails test test/system`: 238 tests, 6,235 assertions; no failures or errors.
+- The repository CI Rails and system-test jobs also passed on the final implementation commit, including the isolated PostgreSQL path.
 - `npm test --prefix desktop/frontend`: 26 passed; `npm run test:unit --prefix desktop/e2e`: 10 passed.
-- Full Linux E2E on latest `dev`: 19 Playwright web scenarios and 36 real Tauri/WebKitGTK 605.1.15 scenarios passed, including shared Art semantics and updater verification. The release-mode E2E updater config opts into HTTP only for its `127.0.0.1:8888` fixture; the architecture check keeps production and performance updater configs HTTPS-only. The harness used Rails port 43127, Tauri WebDriver port 4457, PostgreSQL port 55432, Xvfb, and Openbox; it left the existing port-3000 service untouched.
+- Full web Playwright suite: 19/19 passed on a fresh isolated SQLite test database at port 43127. The library preview/edit/Present flow also passed 10 repeated runs.
+- GitHub Actions [CI run 37863401369](https://github.com/Hansespinosa2/elef/actions/runs/37863401369) passed: Linux web 19/19, Linux Tauri/WebKitGTK 37 scenarios plus one signed-updater upgrade scenario, macOS parity, and the 20-process Linux release performance check. The E2E harness left the existing port-3000 service untouched.
 - `npm run renderer:build`, `bin/rails tailwindcss:build`, `npm run build --prefix desktop/frontend`, and the release-mode test-only Tauri build completed successfully with `tauri.e2e.conf.json`.
 - Art static assertions (12), traceability (97 unique normative IDs), frontend ownership, Tauri architecture, and `git diff --check` passed.
 - FIX-01 through FIX-10 and PAG-FIX-01 through PAG-FIX-04 are verified in the browser/system tier. FIX-06/FIX-07 pass at 535×416 and 341×416 CSS-pixel hosts with whole-host containment; FIX-05 still reports explicit no-fit.
-- Rust core tests (40), formatting, and Clippy passed during initial implementation validation; no Rust files changed in the later integration fixes.
+- Rust workspace tests, formatting, and Clippy passed in CI. No Rust source changed in the later integration fixes.
+- All 97 normative requirements are `VERIFIED` in `docs/smartart/VERIFICATION.json`; no external verification remains blocked.
