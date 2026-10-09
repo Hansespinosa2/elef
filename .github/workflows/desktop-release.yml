@@ -169,7 +169,7 @@ jobs:
             --workdir /workspace \
             --env ELEF_BUILD_SHA \
             --env DESKTOP_RELEASE_VERSION \
-            archlinux:base-devel@sha256:996c3a1d6b0d87b01242f6fcd8cfa3ad3eece1a67ab5c8f108e20af1d7b97bdd \
+            ghcr.io/archlinux/archlinux@sha256:ed261ac99d13e9636940e88df26ccd22b0d8d1c2139699870f0427c765352689 \
             bash desktop/scripts/arch_package_ci.sh 2>&1 | tee "$GITHUB_WORKSPACE/build-source/desktop/target/arch-release-gate.log"
       - name: Verify archive checksum and source provenance
         id: prepare-assets
@@ -374,7 +374,7 @@ jobs:
           docker run --rm --pull=always \
             --platform linux/amd64 \
             --volume "$GITHUB_WORKSPACE/aur-package:/pkg" \
-            archlinux:base-devel@sha256:996c3a1d6b0d87b01242f6fcd8cfa3ad3eece1a67ab5c8f108e20af1d7b97bdd \
+            ghcr.io/archlinux/archlinux@sha256:ed261ac99d13e9636940e88df26ccd22b0d8d1c2139699870f0427c765352689 \
             bash -euc '
               useradd --create-home builder
               chown -R builder:builder /pkg

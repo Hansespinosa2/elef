@@ -83,7 +83,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:17
+        image: mirror.gcr.io/library/postgres@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3
         env:
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: elef_test
@@ -145,7 +145,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:17
+        image: mirror.gcr.io/library/postgres@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3
         env:
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: elef_test
@@ -352,7 +352,7 @@ jobs:
             --volume "$GITHUB_WORKSPACE:/workspace" \
             --workdir /workspace \
             --env ELEF_BUILD_SHA \
-            archlinux:base-devel@sha256:996c3a1d6b0d87b01242f6fcd8cfa3ad3eece1a67ab5c8f108e20af1d7b97bdd \
+            ghcr.io/archlinux/archlinux@sha256:ed261ac99d13e9636940e88df26ccd22b0d8d1c2139699870f0427c765352689 \
             bash desktop/scripts/arch_package_ci.sh 2>&1 | tee desktop/target/arch-package-gate.log
       - name: Preserve Arch package evidence
         if: always()
@@ -539,7 +539,7 @@ jobs:
       - name: Validate production Compose configuration
         run: docker compose --project-name elef-ci --env-file .env.personal.example --file compose.personal.yml config --quiet
       - name: Build production image
-        run: docker compose --project-name elef-ci --env-file .env.personal.example --file compose.personal.yml build web
+        run: docker compose --project-name elef-ci --env-file .env.personal.example --file compose.personal.yml build --build-arg RUBY_BASE_IMAGE=mirror.gcr.io/library/ruby@sha256:4116b6119a53dfef69f4cd591784a1aff9e1095b2ef4eccd865e46906e90be36 web
       - name: Boot and smoke-test production stack
         run: |
           set -euo pipefail
@@ -572,7 +572,7 @@ jobs:
       - name: Validate development Compose configuration
         run: docker compose --project-name elef-development-ci --env-file .env.development.example --file compose.development.yml config --quiet
       - name: Build development image
-        run: docker compose --project-name elef-development-ci --env-file .env.development.example --file compose.development.yml build web
+        run: docker compose --project-name elef-development-ci --env-file .env.development.example --file compose.development.yml build --build-arg RUBY_BASE_IMAGE=mirror.gcr.io/library/ruby@sha256:4116b6119a53dfef69f4cd591784a1aff9e1095b2ef4eccd865e46906e90be36 web
       - name: Prepare and smoke-test development stack
         run: |
           set -euo pipefail

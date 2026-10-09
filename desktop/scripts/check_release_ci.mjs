@@ -7,6 +7,8 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../
 const workflow = await readFile(path.join(repoRoot, ".github/workflows/ci.yml"), "utf8")
 const releaseWorkflow = await readFile(path.join(repoRoot, ".github/workflows/desktop-release.yml"), "utf8")
 const releaseControls = await readFile(path.join(repoRoot, ".github/workflows/desktop-release-controls.yml"), "utf8")
+const productionDockerfile = await readFile(path.join(repoRoot, "Dockerfile"), "utf8")
+const developmentDockerfile = await readFile(path.join(repoRoot, "Dockerfile.development"), "utf8")
 const mainPushCondition = "github.event_name != 'push' || github.ref_name == 'main'"
 const rerunJobs = ["scan_ruby", "scan_js", "test", "sqlite-test", "system-test", "production-smoke", "development-smoke"]
 const requiredGateJobs = [
@@ -23,6 +25,9 @@ const requiredGateJobs = [
   "production-smoke",
   "development-smoke"
 ]
+const archBuildImage = "ghcr.io/archlinux/archlinux@sha256:ed261ac99d13e9636940e88df26ccd22b0d8d1c2139699870f0427c765352689"
+const postgresCiImage = "mirror.gcr.io/library/postgres@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3"
+const rubyCiImage = "mirror.gcr.io/library/ruby@sha256:4116b6119a53dfef69f4cd591784a1aff9e1095b2ef4eccd865e46906e90be36"
 
 assert.match(workflow, /push:\n\s+branches: \[ main, dev \]/, "CI must run for main pushes")
 for (const jobName of rerunJobs) {
@@ -40,6 +45,14 @@ assert.match(releaseGate, /SOURCE_SHA: \$\{\{ github\.sha \}\}/, "release eviden
 assert.match(jobBlock(workflow, "desktop-fast"), /npm run test:release-ledger/, "publication transition tests must run in the required fast CI tier")
 assert.match(jobBlock(workflow, "desktop-fast"), /npm run test:arch-package/, "Arch package metadata tests must run in the required fast CI tier")
 assert.match(jobBlock(workflow, "desktop-fast"), /desktop\/release\/signature-verifier\/Cargo\.toml --locked/, "Tauri updater signature verification must be tested in the required fast CI tier")
+assert.equal((workflow.match(new RegExp(escapeRegExp(`image: ${postgresCiImage}`), "g")) ?? []).length, 2, "Rails PostgreSQL services must use the digest-pinned official mirror image")
+for (const jobName of ["production-smoke", "development-smoke"]) {
+  assert.ok(jobBlock(workflow, jobName).includes(rubyCiImage), `${jobName} must build from the digest-pinned official Ruby mirror image`)
+}
+for (const [name, dockerfile] of [["production", productionDockerfile], ["development", developmentDockerfile]]) {
+  assert.match(dockerfile, /^ARG RUBY_BASE_IMAGE=ruby:3\.4-trixie$/m, `${name} Dockerfile must keep its normal upstream default`)
+  assert.match(dockerfile, /^FROM \$\{RUBY_BASE_IMAGE\}$/m, `${name} Dockerfile must accept the CI-pinned Ruby image`)
+}
 
 assert.match(releaseWorkflow, /push:\n\s+branches: \[ main \]/, "release coordination must run after main pushes")
 assert.match(releaseWorkflow, /schedule:\n\s+- cron: "\*\/15 \* \* \* \*"/, "periodic reconciliation must repair missed pushes")
@@ -72,7 +85,7 @@ for (const jobName of ["desktop", "desktop-macos"]) {
 const archPackageJob = jobBlock(workflow, "arch-package")
 assert.match(archPackageJob, /docker run --rm --pull=always/, "the native package gate must use an Arch container")
 assert.match(archPackageJob, /--platform linux\/amd64/, "the native package gate must target x86-64")
-assert.match(archPackageJob, /archlinux:base-devel@sha256:[a-f\d]{64}/, "the Arch base container must be pinned by digest")
+assert.ok(archPackageJob.includes(archBuildImage), "the Arch base container must use the pinned official GHCR image")
 assert.match(archPackageJob, /desktop\/scripts\/arch_package_ci\.sh/, "the Arch build/install/upgrade gate must run from its checked-in script")
 const archPackageScript = await readFile(path.join(repoRoot, "desktop/scripts/arch_package_ci.sh"), "utf8")
 assert.match(archPackageScript, /rust_toolchain_version="1\.98\.0"/, "the Arch native build must pin its Rust toolchain")
@@ -80,7 +93,7 @@ assert.match(archPackageScript, /rust_toolchain_version="1\.98\.0"/, "the Arch n
 const prepareReleases = jobBlock(releaseWorkflow, "prepare-releases")
 assert.match(prepareReleases, /prepare_desktop_releases\.mjs pages/, "approved reservations must create their source-pinned tag and draft release")
 const linuxRelease = jobBlock(releaseWorkflow, "linux-release")
-assert.match(linuxRelease, /archlinux:base-devel@sha256:[a-f\d]{64}/, "release Linux assets must build in the pinned Arch image")
+assert.ok(linuxRelease.includes(archBuildImage), "release Linux assets must build in the pinned official Arch image")
 assert.match(linuxRelease, /fromJSON\(needs\.reconcile\.outputs\.linux_candidate\)\.main_sha/, "Linux package builds must use the reserved source SHA")
 assert.match(linuxRelease, /mkdir -p \"\$GITHUB_WORKSPACE\/build-source\/desktop\/target\"/, "Arch build evidence directory must exist before the container starts")
 assert.match(linuxRelease, /prepare_linux_release_assets\.mjs/, "Linux asset publication must validate the archive checksum and source provenance")
@@ -121,4 +134,8 @@ function jobBlock(source, jobName) {
   const start = jobsStart + target.index + target[0].length
   const next = headers.find(match => jobsStart + match.index > start)
   return source.slice(start, next ? jobsStart + next.index : source.length)
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 }
