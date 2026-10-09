@@ -97,6 +97,15 @@ module Source
       render_protected_math(html, expressions).html_safe
     end
 
+    def render_art_block(markdown, host_mode: "flowing", media_resolver: nil, document_nodes: [])
+      Source::JavascriptRenderer.render_art_block(
+        markdown,
+        host_mode: host_mode,
+        media_resolver: media_resolver,
+        document_nodes: document_nodes
+      ).html_safe
+    end
+
     def markdown_renderer
       @markdown_renderer ||= Redcarpet::Markdown.new(
         HtmlRenderer.new,

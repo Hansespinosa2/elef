@@ -1312,6 +1312,37 @@
     }
   },
   {
+    "id": "default-art",
+    "name": "Art list",
+    "trigger": "art",
+    "description": "Render a Markdown list as semantic Art",
+    "category": "Elef DSL",
+    "body": ":::art",
+    "built_in": true,
+    "namespace": ":",
+    "aliases": [],
+    "search_terms": [
+      "art",
+      "Art list",
+      "Render a Markdown list as semantic Art"
+    ],
+    "contexts": [
+      "source"
+    ],
+    "behavior": {
+      "type": "insert",
+      "template": ":::art",
+      "placeholders": []
+    },
+    "commit_behavior": "accept_palette_selection",
+    "documentation_example": ":art → :::art",
+    "argument_schema": {
+      "grammar": [],
+      "argument_count": 0,
+      "values": []
+    }
+  },
+  {
     "id": "default-sse",
     "name": "Section directive",
     "trigger": "section",

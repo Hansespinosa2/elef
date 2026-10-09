@@ -12,6 +12,7 @@ import { presentationModeWorkflow } from "../../../test/e2e/scenarios/presentati
 import { vimRelativeLineNumbersWorkflow } from "../../../test/e2e/scenarios/vim-relative-line-numbers.js"
 import { documentPageAspectRatioWorkflow } from "../../../test/e2e/scenarios/document-page-aspect-ratio.js"
 import { displayMathEnterWorkflow } from "../../../test/e2e/scenarios/display-math-enter.js"
+import { artRenderingWorkflow } from "../../../test/e2e/scenarios/art-rendering.js"
 import { execFileSync } from "node:child_process"
 import path from "node:path"
 import { readFile } from "node:fs/promises"
@@ -621,6 +622,37 @@ class WebEditorUi {
     )).toContain(text)
   }
 
+  async waitForArtRoots(count) {
+    await expect.poll(() => this.page.locator(".editor-projection [data-elef-art-root]").count()).toBe(count)
+  }
+
+  async readArtSemantics() {
+    return this.page.locator(".editor-projection [data-elef-art-root]").evaluateAll(roots => roots.map(root => {
+      const list = root.querySelector(":scope > .elef-art-list")
+      const items = [...(list?.children || [])]
+      return {
+        mode: root.dataset.artMode,
+        density: root.dataset.artDensity,
+        status: root.dataset.artStatus,
+        layout: root.dataset.artLayout,
+        rootTag: list?.tagName,
+        itemCount: items.length,
+        itemText: items.map(item => {
+          const walker = document.createTreeWalker(item, NodeFilter.SHOW_TEXT)
+          const parts = []
+          while (walker.nextNode()) {
+            const text = walker.currentNode.textContent.trim()
+            if (text) parts.push(text)
+          }
+          return parts.join(" ").replace(/\s+/g, " ").trim()
+        }),
+        nestedListTag: items[0]?.querySelector(":scope > ol, :scope > ul")?.tagName || null,
+        start: list?.hasAttribute("start") ? list.getAttribute("start") : null,
+        blockClass: root.closest(".slide-block")?.className || ""
+      }
+    }))
+  }
+
   async inspectHostilePreview() {
     return this.page.locator(".editor-projection.preview-pane").evaluate(preview => {
       const elements = [...preview.querySelectorAll("*")]
@@ -1023,6 +1055,10 @@ test("shared hostile-deck security flow works in the web app", async ({ page }) 
 
 test("appearance persists through the shared editing flow", async ({ page }) => {
   await appearanceWorkflow(new WebEditorUi(page))
+})
+
+test("shared Art semantics render consistently in the web app", async ({ page }) => {
+  await artRenderingWorkflow(new WebEditorUi(page))
 })
 
 test("shared rendering styles preserve slide layouts and document typography", async ({ page }) => {

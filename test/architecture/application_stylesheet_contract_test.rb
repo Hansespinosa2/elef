@@ -22,7 +22,9 @@ class ApplicationStylesheetContractTest < ActiveSupport::TestCase
     imports = source.lines.grep(/^\s*@import\b/)
     index_rules = source.sub(%r{^/\*[\s\S]*?\*/\s*}, "").lines.reject { |line| line.strip.empty? }
 
-    assert_equal 12, imports.size
+    # Elef Art adds one shared component partial to the existing stylesheet index.
+    assert_equal 13, imports.size
+    assert_includes imports.join, 'url("./components/art.css")'
     imports.each do |line|
       assert_match(/\A\s*@import url\("\.\/[^"\n]+\.css"\) layer\(elef-[a-z-]+\);\s*\z/, line)
     end

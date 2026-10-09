@@ -1,14 +1,23 @@
 require "json"
+require "set"
 
 module Source
   module Document
     PORTABLE_DOCUMENT_KEY = "elef_document_key".freeze
     PORTABLE_DOCUMENT_ALIASES = "elef_aliases".freeze
     Position = Data.define(:horizontal, :vertical, :vertical_explicit)
-    Block = Data.define(:markdown, :position, :reveal_event)
+    Block = Data.define(:markdown, :position, :art, :reveal_event) do
+      def initialize(attributes)
+        super(**{ art: nil, reveal_event: nil, **attributes })
+      end
+    end
     Region = Data.define(:blocks)
     MarginSettings = Data.define(:section, :subsection, :footnote, :slide_count)
-    Slide = Data.define(:id, :index, :markdown, :layout, :blocks, :title, :regions, :section, :subsection, :footnote, :warnings) do
+    Slide = Data.define(:id, :index, :markdown, :layout, :blocks, :title, :regions, :section, :subsection, :footnote, :warnings, :art_diagnostics) do
+      def initialize(attributes)
+        super(**{ art_diagnostics: [], **attributes })
+      end
+
       def reveal_event_count
         blocks.filter_map(&:reveal_event).uniq.length
       end
@@ -32,7 +41,10 @@ module Source
       sections = mode == :document ? [content] : split_sections(content)
       context = { section: nil, subsection: nil }
       slides = sections.map.with_index do |section, index|
-        metadata = slide_metadata(section, context, mode: mode)
+        # The shared resolver owns both directive bindings and Markdown block
+        # boundaries. Reuse its result in margin parsing and block splitting.
+        art_resolution = Source::JavascriptRenderer.resolve_art_bindings(section)
+        metadata = slide_metadata(section, context, mode: mode, art_resolution: art_resolution)
         Slide.new(
           id: "#{source_name}-#{index + 1}",
           index: index,
@@ -44,7 +56,8 @@ module Source
           section: metadata[:section],
           subsection: metadata[:subsection],
           footnote: metadata[:footnote],
-          warnings: metadata[:warnings]
+          warnings: metadata[:warnings],
+          art_diagnostics: metadata[:art_diagnostics]
         )
       end
       Parsed.new(
@@ -405,10 +418,12 @@ module Source
     end
 
     def display_math_fence_opener(line)
-      case display_math_fence_marker(line)
-      when "$$" then "$$"
-      when "\\[" then "\\]"
-      end
+      marker = display_math_fence_marker(line)
+      return "$$" if marker == "$$"
+      return "\\]" if marker == "\\["
+
+      inline_display_opener = line.match(/\A[ \t]{0,3}\$\$[ \t]*(\S.*)\z/)
+      "$$" if inline_display_opener && !inline_display_opener[1].include?("$$")
     end
 
     def display_math_fence_source?(markdown)
@@ -428,15 +443,20 @@ module Source
       current
     end
 
-    def slide_metadata(markdown, context, mode: :presentation)
+    def slide_metadata(markdown, context, mode: :presentation, art_resolution: { directives: [], bindings: [], diagnostics: [] })
       normalized = markdown.gsub(/\r\n?/, "\n")
       margin = if mode == :presentation
-        parse_margin_directives(normalized, context)
+        parse_margin_directives(normalized, context, art_resolution)
       else
         { content: normalized, section: nil, subsection: nil, footnote: nil, warnings: [] }
       end
+      reveals = resolve_reveal_groups(normalized, mode, art_resolution)
       normalized = margin[:content]
-      parsed = parse_blocks(normalized, mode: mode)
+      lines = normalized.split("\n", -1)
+      art_resolution[:directives].each { |directive| lines[directive[:line]] = "" }
+      reveals[:directive_lines].each { |line| lines[line] = "" }
+      parsed = parse_blocks(lines.join("\n"), art_resolution, reveals)
+      art_warnings = art_resolution[:diagnostics].map { |diagnostic| art_diagnostic_message(diagnostic[:code]) }
       content = parsed[:blocks].map(&:markdown).join("\n\n")
       layout = infer_layout(parsed[:blocks])
       title = column_title(parsed[:blocks], layout)
@@ -450,12 +470,15 @@ module Source
         section: margin[:section],
         subsection: margin[:subsection],
         footnote: margin[:footnote],
-        warnings: margin[:warnings] + parsed[:warnings]
+        warnings: margin[:warnings] + reveals[:warnings] + parsed[:warnings] + art_warnings,
+        reveal_event_count: parsed[:reveal_event_count] || 0,
+        art_diagnostics: art_resolution[:diagnostics]
       }
     end
 
-    def parse_margin_directives(markdown, context)
+    def parse_margin_directives(markdown, context, art_resolution)
       lines = markdown.split("\n", -1)
+      directive_lines = art_resolution.dig(:boundary_map, :directiveLines).to_set
       content = []
       warnings = []
       leading = true
@@ -485,8 +508,9 @@ module Source
           next
         end
 
-        directive = margin_directive_from_line(line)
+        directive = directive_lines.include?(index) ? margin_directive_from_line(line) : nil
         if directive
+          content << ""
           if directive[:malformed]
             warnings << "Malformed #{directive[:type]} margin directive was removed."
           elsif directive[:type] == "footnote"
@@ -555,32 +579,31 @@ module Source
       slide.warnings
     end
 
-    def parse_blocks(markdown, mode: :presentation)
-      if mode.to_sym == :presentation && has_step_directive_candidate?(markdown)
-        return parse_presentation_blocks_with_steps(markdown)
-      end
+    def parse_blocks(markdown, art_resolution = { bindings: [] }, reveals = nil)
+      raw_blocks = markdown_blocks(markdown, art_resolution)
+      return parse_blocks_legacy(raw_blocks, art_resolution) unless reveals && !reveals[:directive_lines].empty?
 
-      parse_blocks_legacy(markdown).merge(reveal_event_count: 0)
+      parse_blocks_with_reveals(raw_blocks, art_resolution, reveals)
     end
 
-    def parse_blocks_legacy(markdown)
-      raw_blocks = markdown_blocks(markdown)
+    def parse_blocks_legacy(raw_blocks, art_resolution)
       blocks = []
       warnings = []
       index = 0
 
       while index < raw_blocks.length
-        block = raw_blocks[index]
+        record = raw_blocks[index]
+        block = record[:markdown]
         position = position_from_block(block)
         if position
-          closing_index = raw_blocks[(index + 1)..]&.index(":::")
+          closing_index = raw_blocks[(index + 1)..]&.index { |candidate| candidate[:markdown] == ":::" }
           if closing_index
             closing_index += index + 1
             grouped = raw_blocks[(index + 1)...closing_index]
-            grouped.each { |group| blocks << Block.new(group, position, nil) unless group == "" }
+            grouped.each { |group| blocks << parsed_block(group, position, art_resolution, nil) unless group[:markdown] == "" }
             index = closing_index + 1
           elsif raw_blocks[index + 1]
-            blocks << Block.new(raw_blocks[index + 1], position, nil)
+            blocks << parsed_block(raw_blocks[index + 1], position, art_resolution, nil)
             index += 2
           else
             warnings << "Alignment directive has no following Markdown block."
@@ -590,7 +613,7 @@ module Source
           warnings << "Unknown or malformed presentation directive was removed."
           index += 1
         else
-          blocks << Block.new(block, nil, nil)
+          blocks << parsed_block(record, nil, art_resolution, nil)
           index += 1
         end
       end
@@ -598,181 +621,185 @@ module Source
       { blocks: blocks, warnings: warnings }
     end
 
-    def has_step_directive_candidate?(markdown)
-      fence = nil
-      math_fence = nil
+    def parse_blocks_with_reveals(raw_blocks, art_resolution, reveals)
+      blocks = []
+      warnings = []
+      scoped_position = nil
+      index = 0
 
-      markdown.split("\n", -1).each do |line|
-        incoming_fence = fence_marker(line)
-        if fence
-          fence = toggle_fence(fence, incoming_fence) if incoming_fence
-          next
-        elsif incoming_fence
-          fence = incoming_fence
-          next
-        elsif math_fence
-          math_fence = nil if display_math_fence_marker(line) == math_fence
-          next
-        elsif (opening_math_fence = display_math_fence_opener(line))
-          math_fence = opening_math_fence
+      while index < raw_blocks.length
+        record = raw_blocks[index]
+        block = record[:markdown]
+        if block == ":::"
+          warnings << "Unknown or malformed presentation directive was removed." unless scoped_position
+          scoped_position = nil
+          index += 1
           next
         end
 
-        return true if step_directive_for_line(line)
+        position = position_from_block(block)
+        if position
+          positions = [position]
+          last_record = record
+          index += 1
+          while index < raw_blocks.length && (stacked_position = position_from_block(raw_blocks[index][:markdown]))
+            positions << stacked_position
+            last_record = raw_blocks[index]
+            index += 1
+          end
+          selected_position = positions.last
+          if position_scope_closes_in_lines?(reveals[:lines], last_record[:start_line])
+            scoped_position = selected_position
+          else
+            scoped_position = nil
+            if raw_blocks[index]
+              blocks << parsed_block(raw_blocks[index], selected_position, art_resolution, reveals[:event_by_line])
+              index += 1
+            else
+              warnings << "Alignment directive has no following Markdown block."
+            end
+          end
+          next
+        end
+
+        if block.start_with?(":::")
+          warnings << "Unknown or malformed presentation directive was removed."
+          index += 1
+          next
+        end
+
+        blocks << parsed_block(record, scoped_position, art_resolution, reveals[:event_by_line])
+        index += 1
       end
 
-      false
+      { blocks: blocks, warnings: warnings, reveal_event_count: reveals[:event_count] }
     end
 
-    def indented_step_code?(line)
-      line.match?(/\A {4,}:::step(?=\z|[^A-Za-z0-9_-])/i)
+    def parsed_block(record, position, art_resolution, event_by_line)
+      binding = art_resolution[:bindings].find do |candidate|
+        candidate[:target_lines][:start] == record[:start_line]
+      end
+      art = if binding
+        {
+          directive_id: binding[:directive_id],
+          source_range: binding[:directive_range],
+          **binding[:analysis]
+        }
+      end
+      reveal_event = event_by_line && event_by_line[record[:start_line]]
+      Block.new(markdown: record[:markdown], position: position, art: art, reveal_event: reveal_event)
     end
 
-    def step_directive_for_line(line)
-      return { kind: :indented_code } if indented_step_code?(line)
-      return unless line.match?(/\A[ \t]*:::step(?=\z|[^A-Za-z0-9_-])/i)
+    def resolve_reveal_groups(markdown, mode, art_resolution)
+      empty = { event_by_line: {}, event_count: 0, directive_lines: [], warnings: [], lines: markdown.split("\n", -1) }
+      return empty unless mode == :presentation
 
-      match = line.match(/\A {0,3}:::step(?:\{([0-9]+)\})?[ \t]*\z/)
-      match ? { kind: :step, label: match[1] } : { kind: :malformed }
+      lines = markdown.split("\n", -1)
+      directive_lines = art_resolution.dig(:boundary_map, :directiveLines).to_set
+      art_lines = art_resolution[:directives].map { |directive| directive[:line] }.to_set
+      event_by_line = {}
+      consumed = []
+      warnings = []
+      pending = []
+      current = []
+      event_ordinals = {}
+
+      warn_conflicts = lambda do
+        labels = pending.map { |step| step[:label].nil? ? "plain" : "label:#{canonical_step_label(step[:label])}" }.uniq
+        warnings << "Conflicting step directives in one stack; the last valid step directive takes effect." if labels.length > 1
+      end
+      orphan = lambda do
+        unless pending.empty?
+          warn_conflicts.call
+          warnings << "Step directive has no following contiguous Markdown group; place content immediately below it without a blank line."
+          pending = []
+        end
+      end
+      flush = lambda do
+        unless current.empty?
+          warn_conflicts.call
+          step = pending.last
+          if step
+            identity = step[:label].nil? ? "plain:#{step[:sequence]}" : "label:#{canonical_step_label(step[:label])}"
+            event_ordinals[identity] ||= event_ordinals.length
+            ordinal = event_ordinals.fetch(identity)
+            current.each { |line_index| event_by_line[line_index] = ordinal }
+          end
+          current = []
+          pending = []
+        end
+      end
+
+      step_sequence = 0
+      lines.each_with_index do |line, line_index|
+        step = directive_lines.include?(line_index) ? step_directive_for_line(line) : nil
+        if step&.fetch(:kind) == :step
+          flush.call
+          consumed << line_index
+          step_sequence += 1
+          pending << step.merge(sequence: step_sequence)
+          next
+        elsif step&.fetch(:kind) == :malformed
+          flush.call
+          consumed << line_index
+          warnings << "Malformed step directive was removed; use :::step or :::step{N} on its own line."
+          next
+        elsif step&.fetch(:kind) == :indented_code
+          current << line_index
+          next
+        end
+
+        if line.blank?
+          flush.call
+          orphan.call
+          next
+        end
+
+        if directive_lines.include?(line_index)
+          if line.match?(/\A\s*:::\s*\z/)
+            flush.call
+            orphan.call
+            next
+          end
+
+          compatible = position_from_block(line) || art_lines.include?(line_index) || line.match?(/\A\s*:::(?:section|subsection|footnote)\{/)
+          unless compatible
+            flush.call
+            orphan.call
+          end
+          consumed << line_index if step
+          next
+        end
+
+        current << line_index
+      end
+      flush.call
+      orphan.call
+
+      {
+        event_by_line: event_by_line,
+        event_count: event_ordinals.length,
+        directive_lines: consumed,
+        warnings: warnings,
+        lines: lines
+      }
     end
 
     def canonical_step_label(label)
       label.sub(/\A0+/, "").presence || "0"
     end
 
-    def parse_presentation_blocks_with_steps(markdown)
-      lines = markdown.split("\n", -1)
-      blocks = []
-      warnings = []
-      current = []
-      pending_steps = []
-      pending_position = nil
-      scoped_position = nil
-      step_sequence = 0
-      event_ordinals = {}
-      event_count = 0
-      fence = nil
-      math_fence = nil
+    def step_directive_for_line(line)
+      return { kind: :indented_code } if line.match?(/\A {4,}:::step(?=\z|[^A-Za-z0-9_-])/)
+      return unless line.match?(/\A[ \t]*:::step(?=\z|[^A-Za-z0-9_-])/)
 
-      warn_conflicting_steps = lambda do
-        choices = pending_steps.map do |step|
-          step[:label].nil? ? "plain" : "label:#{canonical_step_label(step[:label])}"
-        end.uniq
-        warnings << "Conflicting step directives in one stack; the last valid step directive takes effect." if choices.length > 1
-      end
-      orphan_steps = lambda do
-        unless pending_steps.empty?
-          warn_conflicting_steps.call
-          warnings << "Step directive has no following contiguous Markdown group; place content immediately below it without a blank line."
-          pending_steps = []
-        end
-      end
-      flush = lambda do
-        unless current.empty?
-          warn_conflicting_steps.call
-          step = pending_steps.last
-          reveal_event = nil
-          if step
-            identity = if step[:label].nil?
-              "plain:#{step[:sequence]}"
-            else
-              "label:#{canonical_step_label(step[:label])}"
-            end
-            unless event_ordinals.key?(identity)
-              event_ordinals[identity] = event_count
-              event_count += 1
-            end
-            reveal_event = event_ordinals.fetch(identity)
-          end
-          blocks << Block.new(current.join("\n"), pending_position || scoped_position, reveal_event)
-          current = []
-          pending_steps = []
-          pending_position = nil
-        end
-      end
-
-      lines.each_with_index do |line, line_index|
-        incoming_fence = fence_marker(line)
-        if fence
-          current << line
-          fence = toggle_fence(fence, incoming_fence) if incoming_fence
-          next
-        elsif incoming_fence
-          current << line
-          fence = incoming_fence
-          next
-        elsif math_fence
-          current << line
-          math_fence = nil if display_math_fence_marker(line) == math_fence
-          next
-        elsif (opening_math_fence = display_math_fence_opener(line))
-          current << line
-          math_fence = opening_math_fence
-          next
-        end
-
-        step = step_directive_for_line(line)
-        if step&.fetch(:kind) == :indented_code
-          current << line
-          next
-        end
-        if line.blank?
-          flush.call
-          orphan_steps.call
-          next
-        end
-
-        if line.match?(/\A\s*:::\s*\z/)
-          flush.call
-          orphan_steps.call
-          warnings << "Unknown or malformed presentation directive was removed." unless scoped_position
-          pending_position = nil
-          scoped_position = nil
-          next
-        end
-        if step&.fetch(:kind) == :step
-          flush.call
-          step_sequence += 1
-          pending_steps << step.merge(sequence: step_sequence)
-          next
-        end
-        if step&.fetch(:kind) == :malformed
-          flush.call
-          warnings << "Malformed step directive was removed; use :::step or :::step{N} on its own line."
-          next
-        end
-
-        position = position_from_block(line)
-        if position
-          flush.call
-          if position_scope_closes_in_lines?(lines, line_index)
-            scoped_position = position
-            pending_position = nil
-          else
-            scoped_position = nil
-            pending_position = position
-          end
-          next
-        end
-        if line.match?(/\A\s*:::/)
-          flush.call
-          orphan_steps.call
-          warnings << "Unknown or malformed presentation directive was removed."
-          next
-        end
-
-        current << line
-      end
-      flush.call
-      orphan_steps.call
-      warnings << "Alignment directive has no following Markdown block." if pending_position
-      { blocks: blocks, warnings: warnings, reveal_event_count: event_count }
+      match = line.match(/\A {0,3}:::step(?:\{([0-9]+)\})?[ \t]*\z/)
+      match ? { kind: :step, label: match[1] } : { kind: :malformed }
     end
 
     def position_scope_closes_in_lines?(lines, start_index)
       fence = nil
       math_fence = nil
-
       lines[(start_index + 1)..].to_a.each do |line|
         incoming_fence = fence_marker(line)
         if fence
@@ -792,43 +819,80 @@ module Source
         return true if line.strip == ":::"
         return false if position_from_block(line)
       end
-
       false
     end
 
-    def markdown_blocks(markdown)
+    def markdown_blocks(markdown, art_resolution = { bindings: [] })
       blocks = []
+      boundary = art_resolution.fetch(:boundary_map)
+      block_starts = boundary[:blockStarts].to_set
+      block_ends = boundary[:blockEnds].to_set
+      directive_lines = boundary[:directiveLines].to_set
       current = []
+      current_start_line = nil
+      current_end_line = nil
       fence = nil
       math_fence = nil
 
-      markdown.split("\n", -1).each do |line|
+      flush = lambda do
+        unless current.empty?
+          blocks << { markdown: current.join("\n"), start_line: current_start_line, end_line: current_end_line }
+          current = []
+          current_start_line = nil
+          current_end_line = nil
+        end
+      end
+      push_line = lambda do |line, line_index|
+        current_start_line ||= line_index
+        current << line
+        current_end_line = line_index + 1
+      end
+      markdown.split("\n", -1).each_with_index do |line, line_index|
+        flush.call if block_starts.include?(line_index) && current.any?
         next_fence = fence_marker(line)
         fence = toggle_fence(fence, next_fence) if next_fence
 
         if fence.nil? && math_fence
-          math_fence = nil if display_math_fence_marker(line) == math_fence
-          current << line
+          push_line.call(line, line_index)
+          if display_math_fence_marker(line) == math_fence
+            math_fence = nil
+            flush.call if block_ends.include?(line_index + 1)
+          end
           next
         elsif fence.nil? && (opening_math_fence = display_math_fence_opener(line))
           math_fence = opening_math_fence
-          current << line
+          push_line.call(line, line_index)
           next
         end
 
-        if fence.nil? && line.match?(/\A\s*:::/)
-          blocks << current.join("\n") if current.any?
-          blocks << line.strip
-          current = []
+        if line.blank? && directive_lines.include?(line_index)
+          # Art and margin directives were consumed as metadata before this
+          # pass. Their blank placeholders preserve source line ownership.
+          flush.call
+        elsif fence.nil? && directive_lines.include?(line_index)
+          flush.call
+          blocks << { markdown: line.strip, start_line: line_index, end_line: line_index + 1 }
         elsif line.blank? && fence.nil?
-          blocks << current.join("\n") if current.any?
-          current = []
+          art_binding = art_resolution[:bindings].find do |binding|
+            line_index >= binding[:target_lines][:start] && line_index < binding[:target_lines][:end]
+          end
+          push_line.call(line, line_index) if art_binding && line_index + 1 < art_binding[:target_lines][:end]
+          flush.call unless art_binding && line_index + 1 < art_binding[:target_lines][:end]
         else
-          current << line
+          push_line.call(line, line_index)
         end
+        flush.call if block_ends.include?(line_index + 1) && current.any?
       end
-      blocks << current.join("\n") if current.any?
+      flush.call
       blocks
+    end
+
+    def art_diagnostic_message(code)
+      {
+        "ART_NO_LIST_TARGET" => "Art needs a root Markdown list immediately after its directive.",
+        "ART_INVALID_SYNTAX" => "Art directive syntax is invalid. Use :::art with no arguments.",
+        "ART_UNSUPPORTED_CONTENT" => "Art contains unsupported content; the complete Markdown list is shown."
+      }.fetch(code, "Art reported a layout diagnostic.")
     end
 
     def position_from_block(block)

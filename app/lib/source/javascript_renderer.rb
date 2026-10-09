@@ -27,6 +27,10 @@ module Source
         .map(&:deep_symbolize_keys)
     end
 
+    def resolve_art_bindings(source)
+      context.call("ElefRenderer.resolveArtBindings", source.to_s).deep_symbolize_keys
+    end
+
     def linkable_document_titles(titles)
       context.call("ElefRenderer.linkableDocumentTitles", Array(titles).map(&:to_s))
     end
@@ -45,6 +49,24 @@ module Source
           allowRemoteMedia: allow_remote_media,
           documentNodes: document_nodes
         }
+      )
+    end
+
+    def render_art_block(markdown, host_mode: "flowing", media_resolver: nil, document_nodes: [], allow_remote_media: true)
+      source = markdown.to_s
+      raise ArgumentError, "Markdown source exceeds the renderer limit" if source.bytesize > MAX_RENDER_BYTES
+
+      renderer = context
+      media_map = resolved_media(renderer, source, media_resolver)
+      renderer.call(
+        "ElefRenderer.renderArtBlock",
+        source,
+        {
+          mediaMap: media_map,
+          allowRemoteMedia: allow_remote_media,
+          documentNodes: document_nodes
+        },
+        host_mode.to_s
       )
     end
 

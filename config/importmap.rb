@@ -39,9 +39,12 @@ pin "lib/editor_document_state", to: "lib/editor_document_state.js"
 pin "lib/vim_line_numbers", to: "lib/vim_line_numbers.js"
 pin "lib/document_graph_view", to: "lib/document_graph_view.js"
 pin "lib/document_map", to: "lib/document_map.js"
+pin "lib/art_layout", to: "lib/art_layout.js"
+pin "lib/editor_block_ranges", to: "lib/editor_block_ranges.js"
 pin "lib/editor_controller_lookup", to: "lib/editor_controller_lookup.js"
 pin "lib/editor_view", to: "lib/editor_view.js"
 pin "#elef/preview-sanitizer", to: "lib/preview_sanitizer.js"
+pin "#elef/art-source", to: "art_source.bundle.js"
 pin "lib/library_view", to: "lib/library_view.js"
 pin "lib/library_filter", to: "lib/library_filter.js"
 pin "lib/presentation_navigation", to: "lib/presentation_navigation.js"
@@ -56,3 +59,9 @@ pin "lib/authoring_settings_dialog", to: "lib/authoring_settings_dialog.js"
 pin "lib/rails_authoring_settings_transport", to: "lib/rails_authoring_settings_transport.js"
 pin "lib/editor_ready", to: "lib/editor_ready.js"
 pin "lib/conflict_dialog", to: "lib/conflict_dialog.js"
+pin "markdown-it" # @14.3.2
+pin "entities" # @4.5.0
+pin "linkify-it" # @5.0.2
+pin "mdurl" # @2.1.0
+pin "punycode.js" # @2.3.1
+pin "uc.micro" # @2.1.0

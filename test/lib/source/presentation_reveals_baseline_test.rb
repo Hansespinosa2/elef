@@ -62,9 +62,34 @@ class PresentationRevealsBaselineTest < ActiveSupport::TestCase
     assert_equal "2", fragment.css(".slide-block").find { |block| block.at_css("img") }[:"data-elef-reveal-event"]
   end
 
+  test "Rails Present annotates SmartArt on its complete stepped wrapper" do
+    source = "# Art\n\n:::step\n:::art\n- Research\n  - Read\n- Design"
+    document = Source::Document.parse(source, source_name: "Reveal Art", mode: :presentation)
+    presentation = Struct.new(:id, :slides).new(nil, document.slides)
+    html = ApplicationController.renderer.render(
+      partial: "presentations/slide",
+      locals: {
+        slide: document.slides.first,
+        presentation: presentation,
+        presentation_slide: true,
+        margin_settings: document.margin_settings
+      }
+    )
+    fragment = Nokogiri::HTML5.fragment(html)
+    block = fragment.at_css('.slide-block[data-elef-reveal-event="0"]')
+
+    assert_equal "1", fragment.at_css(".slide")["data-elef-reveal-event-count"]
+    assert block
+    assert block.at_css(".elef-art")
+    assert block.at_css(".elef-art-list")
+  end
+
   private
 
   def normalize_template_markers(html)
-    html.sub(/\A<!-- BEGIN [^\n]+\n-->\n?/, "").sub(/\n<!-- END [^>]+ -->\z/, "").delete_suffix("\n")
+    html.sub(/\A<!-- BEGIN [^\n]+\n-->\n?/, "")
+      .sub(/\n<!-- END [^>]+ -->\z/, "")
+      .gsub(/^[ \t]*\n/, "")
+      .delete_suffix("\n")
   end
 end

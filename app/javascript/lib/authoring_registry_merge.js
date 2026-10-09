@@ -17,6 +17,7 @@ const DIRECTIVE_SCHEMAS = new Map([
       ["top", "middle", "bottom"]
     ]
   }],
+  ["art", { grammar: [], argument_count: 0, values: [] }],
   ["section", { grammar: ["text"], argument_count: 1, values: [] }],
   ["subsection", { grammar: ["text"], argument_count: 1, values: [] }],
   ["footnote", { grammar: ["text"], argument_count: 1, values: [] }]

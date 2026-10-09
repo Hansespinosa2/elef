@@ -11,19 +11,10 @@ module DocumentLinks
       workspace ||= documents&.first&.workspace || Workspace.default
       documents = (documents || Document.where(workspace: workspace).includes(:document_detail, :document_aliases)).to_a
       if ENV["ELEF_RENDERER"] != "ruby"
-        nodes = documents.map do |document|
-          {
-            id: document.id.to_s,
-            title: document.title,
-            documentKey: document.document_key,
-            aliases: document.document_aliases.map(&:alias_name),
-            href: Rails.application.routes.url_helpers.document_path(document)
-          }
-        end
         return Source::JavascriptRenderer.render(
           source,
           media_resolver: media_resolver,
-          document_nodes: nodes
+          document_nodes: javascript_document_nodes(documents)
         ).html_safe
       end
 
@@ -51,6 +42,18 @@ module DocumentLinks
       html = Source::Renderer.render(annotated, media_resolver: media_resolver)
       replacements.each { |placeholder, replacement| html = html.gsub(placeholder) { replacement } }
       html.html_safe
+    end
+
+    def javascript_document_nodes(documents)
+      Array(documents).map do |document|
+        {
+          id: document.id.to_s,
+          title: document.title,
+          documentKey: document.document_key,
+          aliases: document.document_aliases.map(&:alias_name),
+          href: Rails.application.routes.url_helpers.document_path(document)
+        }
+      end
     end
 
     def replacement_for(token, document, label: nil)

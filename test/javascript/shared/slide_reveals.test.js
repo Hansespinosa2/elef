@@ -95,6 +95,20 @@ test("reveal ordinals survive the sanitized preview install", () => {
   assert.equal(preview.querySelector(".slide-block[data-elef-reveal-event]").getAttribute("data-elef-reveal-event"), "0")
 })
 
+test("presentation HTML keeps SmartArt inside its stepped content wrapper after sanitization", () => {
+  const source = "# Art\n\n:::step\n:::art\n- Research\n  - Read\n- Design"
+  const html = renderPreview({ source }).html
+  const { document } = parseHTML("<html><body><div id='preview'></div></body></html>")
+  const preview = document.querySelector("#preview")
+  installSanitizedPreview(preview, html)
+  const block = preview.querySelector('.slide-block[data-elef-reveal-event="0"]')
+
+  assert.ok(block)
+  assert.ok(block.querySelector(".elef-art"))
+  assert.ok(block.querySelector(".elef-art-list"))
+  assert.doesNotMatch(preview.innerHTML, /:::step/)
+})
+
 test("document rendering keeps step directives out of reveal visibility", () => {
   const preview = renderPreview({ source: "# Notes\n\n:::step{1}\n- item", kind: "document" })
   assert.doesNotMatch(preview.html, /data-elef-reveal-event/)

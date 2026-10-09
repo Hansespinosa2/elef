@@ -56,7 +56,8 @@ let updaterServer = null
 const env = {
   ...process.env,
   ELEF_E2E_LIBRARY_ROOT: libraryRoot,
-  ELEF_E2E_APP_BINARY: path.join(repoRoot, "desktop", "target", "debug", "elef-desktop"),
+  ELEF_E2E_APP_BINARY: process.env.ELEF_E2E_APP_BINARY
+    || path.join(repoRoot, "desktop", "target", "debug", "elef-desktop"),
   ELEF_E2E_IMPORT_ARCHIVE: importArchive,
   ELEF_E2E_PORTABLE_GRAPH_ARCHIVE: portableGraphArchive,
   ELEF_E2E_EXPORT_PATH: exportArchive,
@@ -218,7 +219,7 @@ try {
   }
   env.ELEF_E2E_DESKTOP_LINKED_DOCUMENT_ID = desktopLinkedDocumentId
 
-  if (process.env.CI) {
+  if (process.env.CI || process.env.ELEF_E2E_RUN_WEB === "1") {
     const seeded = runRails(
       `Presentation.where(title: ${JSON.stringify(SHARED_LIBRARY_CREATE_DELETE_TITLES.presentation)}).destroy_all; Document.where(title: ${JSON.stringify(SHARED_LIBRARY_CREATE_DELETE_TITLES.document)}).destroy_all; presentation = Presentation.create!(title: ${JSON.stringify(webTitle)}, source: "# Before E2E\\n\\nSeed paragraph.\\n\\nSee [[E2E linked]].\\n"); conflict = Presentation.create!(title: "E2E conflict", source: "# Before conflict test\\n\\nSeed paragraph.\\n"); hostile = Presentation.create!(title: "E2E hostile", source: ${JSON.stringify(hostileSource)}); document = Document.create!(source: ${JSON.stringify(e2eDocumentSource)}); linked = Document.create!(source: ${JSON.stringify(e2eLinkedDocumentSource)}); puts "ELEF_E2E_PRESENTATION_ID=#{presentation.id}"; puts "ELEF_E2E_CONFLICT_PRESENTATION_ID=#{conflict.id}"; puts "ELEF_E2E_HOSTILE_PRESENTATION_ID=#{hostile.id}"; puts "ELEF_E2E_DOCUMENT_IDS=#{[document.id, linked.id].join(',')}"`
     )

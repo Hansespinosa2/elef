@@ -1365,6 +1365,68 @@ class PresentationsTest < ApplicationSystemTestCase
     wait_for_fresh_projection
   end
 
+  test "Art block move and delete operations keep the directive with its root list" do
+    original = "# Keep\n\nBefore\n\n:::art\n- Alpha\n- Beta\n\nAfter\n\nTail"
+    presentation = Presentation.create!(title: "Art block ownership", source: original)
+
+    visit edit_presentation_path(presentation)
+    assert_selector ".presentation-editor-projection [data-elef-art-root] .elef-art-list > li", count: 2
+    find("[data-presentation-editor-action='move-block-up'][data-block-index='2']").click
+    assert_field "Markdown source", with: "# Keep\n\n:::art\n- Alpha\n- Beta\n\nBefore\n\nAfter\n\nTail", wait: 5
+    wait_for_fresh_projection
+    moved_source = find_field("Markdown source").value
+    assert_equal ":::art\n- Alpha\n- Beta", moved_source.lines[2, 3].join.strip
+    assert_includes moved_source, "\n\nAfter\n\nTail"
+    refute_includes moved_source, "data-elef-art-root"
+
+    accept_confirm do
+      find("[data-presentation-editor-action='delete-block'][data-block-index='1']").click
+    end
+    assert_field "Markdown source", with: "# Keep\n\nBefore\n\nAfter\n\nTail", wait: 5
+    wait_for_fresh_projection
+    refute_includes find_field("Markdown source").value, ":::art"
+    refute_selector ".presentation-editor-projection [data-elef-art-root]"
+  end
+
+  test "deleting Art before a single-block alignment group removes its directive too" do
+    presentation = Presentation.create!(
+      title: "Aligned Art block ownership",
+      source: "# Slide\n\n:::art\n:::align{center}\n- Alpha\n\n:::\n\n- Next list"
+    )
+
+    visit edit_presentation_path(presentation)
+    wait_for_fresh_projection
+    assert_selector ".presentation-editor-projection [data-elef-art-root] .elef-art-list > li", count: 1
+
+    accept_confirm do
+      find("[data-presentation-editor-action='delete-block'][data-block-index='1']").click
+    end
+
+    assert_field "Markdown source", with: /# Slide\n\n- Next list/, wait: 5
+    wait_for_fresh_projection
+    refute_includes find_field("Markdown source").value, ":::art"
+    refute_includes find_field("Markdown source").value, ":::align{center}"
+    assert_no_selector ".presentation-editor-projection [data-elef-art-root]"
+    assert_selector ".presentation-editor-projection ul > li", text: "Next list"
+  end
+
+  test "saved presentation Art fallback preserves attached media" do
+    media_bytes = Base64.decode64("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+i9MwAAAAASUVORK5CYII=")
+    media_digest = Digest::SHA256.hexdigest(media_bytes)
+    presentation = Presentation.create!(
+      title: "Art unsupported media",
+      source: ":::art\n- Research\n  ![Mockup](elef-asset:#{media_digest})"
+    )
+    presentation.assets.attach(io: StringIO.new(media_bytes), filename: "mockup.png", content_type: "image/png")
+    presentation.assets.blobs.last.update!(metadata: presentation.assets.blobs.last.metadata.merge("elef_sha256" => media_digest))
+
+    visit print_presentation_path(presentation)
+
+    assert_selector ".presentation-print [data-elef-art-root][data-art-status='fallback-unsupported'][data-art-layout='plain-list']"
+    assert_selector ".presentation-print [data-elef-art-root] img.presentation-media[src='/presentations/#{presentation.id}/assets/#{media_digest}'][alt='Mockup']"
+    assert_selector ".presentation-print [data-elef-art-root] .elef-art-list > li", text: "Research"
+  end
+
   test "keeps the last good presentation projection when preview is unavailable and offers retry" do
     presentation = Presentation.create!(title: "Stable deck", source: "# Stable\n\nLast good slide")
     visit edit_presentation_path(presentation)
@@ -2247,6 +2309,33 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_text "1 / 2"
   end
 
+  test "Present reveals cumulative events with buttons and reverses them before changing slides" do
+    source = "# One\n\n:::step{01}\nFirst reveal\n\n:::step{2}\nSecond reveal\n\n---\n# Two"
+    presentation = Presentation.create!(title: "Cumulative Present", source: source)
+
+    visit present_presentation_path(presentation)
+    assert_equal "hidden", reveal_visibility("First reveal")
+    assert_equal "hidden", reveal_visibility("Second reveal")
+
+    click_button "Next"
+    assert_equal "visible", reveal_visibility("First reveal")
+    assert_equal "hidden", reveal_visibility("Second reveal")
+
+    click_button "Next"
+    assert_equal "visible", reveal_visibility("Second reveal")
+    click_button "Next"
+    assert_selector ".presentation-slide-frame.is-active-presentation-slide", text: "Two"
+
+    click_button "Previous"
+    assert_selector ".presentation-slide-frame.is-active-presentation-slide", text: "One"
+    assert_equal "visible", reveal_visibility("First reveal")
+    assert_equal "visible", reveal_visibility("Second reveal")
+
+    click_button "Previous"
+    assert_equal "visible", reveal_visibility("First reveal")
+    assert_equal "hidden", reveal_visibility("Second reveal")
+  end
+
   test "reveals keep one, two, and three column block geometry fixed" do
     source = <<~MARKDOWN
       # One column
@@ -2306,6 +2395,17 @@ class PresentationsTest < ApplicationSystemTestCase
     initial = reveal_slide_block_boxes
     send_keys :arrow_right
     assert_equal initial, reveal_slide_block_boxes, "revealing two groups in three columns moved slide content"
+  end
+
+  def reveal_visibility(text)
+    page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const text = #{JSON.generate(text)};
+        const block = [...document.querySelectorAll(".presentation-stage .slide-block[data-elef-reveal-event]")]
+          .find((node) => node.textContent.includes(text));
+        return block ? getComputedStyle(block).visibility : null;
+      })()
+    JAVASCRIPT
   end
 
   def reveal_slide_block_boxes

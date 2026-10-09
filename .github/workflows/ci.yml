@@ -42,6 +42,8 @@ jobs:
           npm test --prefix desktop/frontend
           npm run test:unit --prefix desktop/e2e
           python3 script/check_frontend_ownership.py
+          python3 script/check_art_static.py
+          python3 script/check_art_traceability.py
           cargo test --manifest-path desktop/Cargo.toml -p elef-core --locked
           elapsed=$((SECONDS - started))
           echo "Fast desktop test tier: ${elapsed}s (budget: 300s)"
@@ -206,7 +208,7 @@ jobs:
       - name: Install Linux desktop build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --yes build-essential curl dbus-daemon file iptables libayatana-appindicator3-dev libdbus-1-dev libgtk-3-dev librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev openbox patchelf unzip wget xdotool xvfb zip
+          sudo apt-get install --yes build-essential curl dbus-daemon file iptables libayatana-appindicator3-dev libdbus-1-dev libgtk-3-dev librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev openbox patchelf unzip webkit2gtk-driver wget xdotool xvfb zip
       - name: Install frontend dependencies
         run: npm ci --prefix desktop/frontend
       - name: Install Rails-owned frontend dependencies
@@ -232,7 +234,7 @@ jobs:
       - name: Build the Rails-owned renderer
         run: npm run renderer:build
       - name: Verify the Rails renderer bundle is current
-        run: git diff --exit-code -- vendor/javascript/elef-renderer.bundle.js
+        run: git diff --exit-code -- vendor/javascript/elef-renderer.bundle.js vendor/javascript/art_source.bundle.js
       - name: Test Rails-owned frontend modules
         run: npm run test:javascript
       - name: Test desktop frontend adapters
@@ -367,7 +369,7 @@ jobs:
       - name: Build the Rails-owned renderer
         run: npm run renderer:build
       - name: Verify the Rails renderer bundle is current
-        run: git diff --exit-code -- vendor/javascript/elef-renderer.bundle.js
+        run: git diff --exit-code -- vendor/javascript/elef-renderer.bundle.js vendor/javascript/art_source.bundle.js
       - name: Test Rails-owned frontend modules
         run: npm run test:javascript
       - name: Test desktop frontend adapters
@@ -467,7 +469,7 @@ jobs:
         run: |
           npm run renderer:build
       - name: Verify the Rails renderer bundle is current
-        run: git diff --exit-code -- vendor/javascript/elef-renderer.bundle.js
+        run: git diff --exit-code -- vendor/javascript/elef-renderer.bundle.js vendor/javascript/art_source.bundle.js
       - name: Exercise Rails rendering on Apple Silicon macOS
         env:
           RAILS_ENV: test

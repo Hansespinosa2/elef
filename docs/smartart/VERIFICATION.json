@@ -1,0 +1,1014 @@
+{
+  "constitution_version": "6.0",
+  "requirements": {
+    "ART-INV-001": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/renderer.test.js#ART-TEST-005",
+        "test:test/system/presentations_test.rb#Art block move and delete operations keep the directive with its root list"
+      ]
+    },
+    "ART-INV-002": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/art_source.test.js#ART-BIND-INVALID-BRACES",
+        "test:test/javascript/art_source.test.js#ART-BIND-INVALID-ARGUMENT"
+      ]
+    },
+    "ART-INV-003": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/art_source.test.js#ART-SEM-ROOT-COUNT",
+        "test:test/javascript/art_generated.test.js#ART-TEST-001..008"
+      ]
+    },
+    "ART-INV-004": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/art_source.test.js#ART-SEM-ROOT-COUNT",
+        "test:test/javascript/art_generated.test.js#ART-TEST-001..008"
+      ]
+    },
+    "ART-INV-005": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/art_source.test.js#ART-SEM-ROOT-COUNT",
+        "test:test/javascript/art_generated.test.js#ART-TEST-001..008"
+      ]
+    },
+    "ART-INV-006": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/art_generated.test.js#ART-TEST-001..008"
+      ]
+    },
+    "ART-INV-007": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/renderer.test.js#ART-FIX-10",
+        "test:test/system/art_test.rb#rich fixed Sequence stays vertical and eight compact items show no-fit",
+        "test:test/system/presentations_test.rb#saved presentation Art fallback preserves attached media"
+      ]
+    },
+    "ART-INV-008": {
+      "status": "VERIFIED",
+      "verification": [
+        "static:script/check_art_static.py#NO_SHRINK_OR_TRUNCATION"
+      ]
+    },
+    "ART-INV-009": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/system/art_test.rb#rich fixed Sequence stays vertical and eight compact items show no-fit"
+      ]
+    },
+    "ART-INV-010": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/renderer.test.js#Art derives Peers or Sequence from the native root list and preserves nested list semantics",
+        "static:script/check_art_static.py#NATIVE_SEQUENCE_MARKERS_AND_DECORATION"
+      ]
+    },
+    "ART-INV-011": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/art_generated.test.js#ART-TEST-001..008",
+        "test:test/system/art_test.rb#document Sequence preserves order and reflows at 320, 640, and 320 CSS pixels in RTL"
+      ]
+    },
+    "ART-INV-012": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/renderer.test.js#ART-TEST-005"
+      ]
+    },
+    "ART-INV-013": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/renderer.test.js#Art has a complete server-rendered fixed-host default"
+      ]
+    },
+    "ART-INV-014": {
+      "status": "VERIFIED",
+      "verification": [
+        "static:script/check_art_static.py#SHARED_RENDERER_EXPORTS_ART_API",
+        "test:test/e2e/scenarios/art-rendering.js#ART-PARITY-SEMANTICS"
+      ]
+    },
+    "ART-INV-015": {
+      "status": "VERIFIED",
+      "verification": [
+        "static:script/check_art_static.py#NO_EXPLICIT_LAYOUT_DSL_OR_DEFERRED_DECORATION"
+      ]
+    },
+    "ART-INV-016": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/system/presentations_test.rb#Art block move and delete operations keep the directive with its root list"
+      ]
+    },
+    "ART-SRC-001": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/art_source.test.js#ART-BIND-EXACT"
+      ]
+    },
+    "ART-SRC-002": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/art_source.test.js#ART-BIND-CLOSING-BARRIER"
+      ]
+    },
+    "ART-SRC-003": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/art_source.test.js#ART-BIND-EXACT",
+        "test:test/javascript/art_source.test.js#ART-BIND-INVALID-BRACES"
+      ]
+    },
+    "ART-SRC-004": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/art_source.test.js#ART-BIND-BACKTICK-FENCE",
+        "test:test/javascript/art_source.test.js#ART-BIND-TILDE-FENCE",
+        "test:test/javascript/art_source.test.js#ART-BIND-DISPLAY-MATH",
+        "test:test/javascript/art_source.test.js#ART-BIND-BLOCKQUOTE",
+        "test:test/javascript/art_source.test.js#ART-BIND-INDENTED-LIST",
+        "test:test/javascript/art_source.test.js#ART-BIND-INDENTED-CODE"
+      ]
+    },
+    "ART-SRC-005": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/art_source.test.js#ART-SRC-005",
+        "test:test/javascript/art_source.test.js#ART-BIND-PARAGRAPH-BARRIER",
+        "test:test/javascript/art_source.test.js#ART-BIND-FENCED-CODE-BARRIER",
+        "test:test/javascript/art_source.test.js#ART-BIND-DISPLAY-MATH-BARRIER",
+        "test:test/javascript/art_source.test.js#ART-BIND-HEADING-BARRIER",
+        "test:test/javascript/art_source.test.js#ART-BIND-TABLE-BARRIER",
+        "test:test/javascript/art_source.test.js#ART-BOUNDARY-HEADING",
+        "test:test/javascript/art_source.test.js#ART-BOUNDARY-THEMATIC",
+        "test:test/javascript/art_source.test.js#ART-BOUNDARY-NESTED-NOTE",
+        "test:test/javascript/art_source.test.js#ART-BOUNDARY-NESTED-ART",
+        "test:test/javascript/art_source.test.js#ART-BOUNDARY-NESTED-MARGIN"
+      ]
+    },
+    "ART-SRC-006": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/art_source.test.js#ART-BIND-SUPERSEDED"
+      ]
+    },
+    "ART-SRC-007": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/art_source.test.js#ART-BIND-CLOSING-BARRIER"
+      ]
+    },
+    "ART-SRC-008": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/art_source.test.js#ART-BIND-ALIGN-AFTER",
+        "test:test/javascript/art_source.test.js#ART-BIND-POSITION-AFTER",
+        "test:test/javascript/art_source.test.js#ART-BIND-ALIGN-BEFORE",
+        "test:test/javascript/art_source.test.js#ART-BIND-POSITION-BEFORE",
+        "test:test/e2e/scenarios/art-rendering.js#ART-SRC-008",
+        "test:test/system/art_test.rb#ART-SRC-008 position modifiers stay on an Art block in Rails presentation rendering"
+      ]
+    },
+    "ART-SRC-009": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/art_source.test.js#ART-BIND-INVALID-BRACES",
+        "test:test/javascript/art_source.test.js#ART-BIND-INVALID-ARGUMENT",
+        "test:test/javascript/art_source.test.js#ART-BIND-LEADING-SPACE",
+        "test:test/javascript/art_source.test.js#ART-BIND-ARTIST",
+        "test:test/javascript/art_source.test.js#ART-BIND-ARTICLE"
+      ]
+    },
+    "ART-SRC-010": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/renderer.test.js#Art derives Peers or Sequence from the native root list and preserves nested list semantics"
+      ]
+    },
+    "ART-ARCH-001": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/art_source.test.js#ART-ARCH-SHARED-MAP",
+        "test:test/javascript/art_source.test.js#ART-ARCH-RESOLUTION-ONCE",
+        "test:test/javascript/art_source.test.js#ART-BOUNDARY-NESTED-MARGIN",
+        "test:test/lib/source/art_integration_test.rb#Ruby and JavaScript block maps agree at adjacent Markdown and nested directive boundaries",
+        "test:test/lib/source/art_integration_test.rb#indented margin directives stay in Art item content in both render paths",
+        "static:script/check_art_static.py#SHARED_RENDERER_EXPORTS_ART_API"
+      ]
+    },
+    "ART-ARCH-002": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/art_source.test.js#ART-ARCH-SHARED-MAP",
+        "test:test/javascript/editor_block_ranges.test.js#ART-EDIT-001"
+      ]
+    },
+    "ART-ARCH-003": {
+      "status": "VERIFIED",
+      "verification": [
+        "doc:docs/smartart/INTEGRATION-MAP.md#Current integration points",
+        "static:script/check_art_static.py#SHARED_RENDERER_EXPORTS_ART_API"
+      ]
+    },
+    "ART-ARCH-004": {
+      "status": "VERIFIED",
+      "verification": [
+        "doc:docs/smartart/INTEGRATION-MAP.md#Current integration points"
+      ]
+    },
+    "ART-DIAG-001": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/art_source.test.js#ART-BIND-SUPERSEDED",
+        "test:test/javascript/art_source.test.js#ART-SRC-INVALID-PARITY",
+        "test:test/lib/source/art_integration_test.rb#invalid Art syntax is consumed with the same diagnostic in Ruby and JavaScript paths",
+        "test:test/javascript/renderer.test.js#ART-DIAG-002"
+      ]
+    },
+    "ART-DIAG-002": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/renderer.test.js#ART-DIAG-002",
+        "static:script/check_art_static.py#DOM_ENUMS_AND_STABLE_DIAGNOSTICS"
+      ]
+    },
+    "ART-DIAG-003": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/system/art_test.rb#single oversized Art item stays atomic and surfaces its diagnostic",
+        "test:test/system/art_test.rb#rich fixed Sequence stays vertical and eight compact items show no-fit"
+      ]
+    },
+    "ART-SEM-001": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/art_source.test.js#ART-SEM-ROOT-COUNT"
+      ]
+    },
+    "ART-SEM-002": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/art_source.test.js#ART-SEM-ROOT-COUNT"
+      ]
+    },
+    "ART-SEM-003": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/art_source.test.js#ART-SEM-ROOT-COUNT",
+        "test:test/javascript/art_generated.test.js#ART-TEST-001..008"
+      ]
+    },
+    "ART-SEM-004": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/art_source.test.js#ART-SEM-EMPTY",
+        "test:test/javascript/art_generated.test.js#ART-TEST-001..008"
+      ]
+    },
+    "ART-SEM-005": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/art_source.test.js#ART-BIND-ORDERED-ZERO",
+        "test:test/javascript/art_source.test.js#ART-BIND-ORDERED-THREE"
+      ]
+    },
+    "ART-SEM-006": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/art_source.test.js#ART-SEM-EMPTY",
+        "test:test/javascript/renderer.test.js#ART-SEM-006"
+      ]
+    },
+    "ART-SEM-007": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/art_source.test.js#ART-SEM-UNSUPPORTED",
+        "test:test/javascript/renderer.test.js#ART-FIX-10"
+      ]
+    },
+    "ART-SEM-008": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/art_generated.test.js#ART-SEM-008"
+      ]
+    },
+    "ART-DOM-001": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/renderer.test.js#Art derives Peers or Sequence from the native root list and preserves nested list semantics"
+      ]
+    },
+    "ART-DOM-002": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/renderer.test.js#Art has a complete server-rendered fixed-host default",
+        "static:script/check_art_static.py#DOM_ENUMS_AND_STABLE_DIAGNOSTICS"
+      ]
+    },
+    "ART-DOM-003": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/system/art_test.rb#rich fixed Sequence stays vertical and eight compact items show no-fit"
+      ]
+    },
+    "ART-DOM-004": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/system/presentations_test.rb#Art block move and delete operations keep the directive with its root list"
+      ]
+    },
+    "ART-VIS-001": {
+      "status": "VERIFIED",
+      "verification": [
+        "static:script/check_art_static.py#TOKENS_SINGLE_SOURCE"
+      ]
+    },
+    "ART-VIS-002": {
+      "status": "VERIFIED",
+      "verification": [
+        "static:script/check_art_static.py#NO_SHRINK_OR_TRUNCATION"
+      ]
+    },
+    "ART-VIS-003": {
+      "status": "VERIFIED",
+      "verification": [
+        "static:script/check_art_static.py#NO_SHRINK_OR_TRUNCATION"
+      ]
+    },
+    "ART-VIS-004": {
+      "status": "VERIFIED",
+      "verification": [
+        "static:script/check_art_static.py#ACTIVE_THEME_TYPOGRAPHY"
+      ]
+    },
+    "ART-LAY-001": {
+      "status": "VERIFIED",
+      "verification": [
+        "static:script/check_art_static.py#PEER_WRAP_AND_PREFERRED_BASIS"
+      ]
+    },
+    "ART-LAY-002": {
+      "status": "VERIFIED",
+      "verification": [
+        "static:script/check_art_static.py#PEER_WRAP_AND_PREFERRED_BASIS"
+      ]
+    },
+    "ART-LAY-003": {
+      "status": "VERIFIED",
+      "verification": [
+        "static:script/check_art_static.py#PEER_WRAP_AND_PREFERRED_BASIS"
+      ]
+    },
+    "ART-LAY-004": {
+      "status": "VERIFIED",
+      "verification": [
+        "static:script/check_art_static.py#NATIVE_SEQUENCE_MARKERS_AND_DECORATION"
+      ]
+    },
+    "ART-LAY-005": {
+      "status": "VERIFIED",
+      "verification": [
+        "static:script/check_art_static.py#NATIVE_SEQUENCE_MARKERS_AND_DECORATION"
+      ]
+    },
+    "ART-LAY-006": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/art_layout.test.js#ART-LAY-006"
+      ]
+    },
+    "ART-LAY-007": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/art_layout.test.js#ART-LAY-006"
+      ]
+    },
+    "ART-LAY-008": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/system/art_test.rb#compact horizontal Sequence with an unbreakable lead falls back to wrapped vertical Sequence"
+      ]
+    },
+    "ART-LAY-009": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/system/art_test.rb#compact horizontal Sequence with an unbreakable lead falls back to wrapped vertical Sequence"
+      ]
+    },
+    "ART-FIT-001": {
+      "status": "VERIFIED",
+      "verification": [
+        "static:script/check_art_static.py#FIXED_HOST_POSITIONED"
+      ]
+    },
+    "ART-FIT-002": {
+      "status": "VERIFIED",
+      "verification": [
+        "static:script/check_art_static.py#FIXED_GEOMETRY_LAYOUT_SPACE_AND_CSS_TOKENS",
+        "test:test/javascript/art_layout.test.js#ART-FIT-OFFSET"
+      ]
+    },
+    "ART-FIT-003": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/system/art_test.rb#compact fixed Sequence uses the canonical width rule and the containment oracle",
+        "test:test/system/art_test.rb#inferred two and three column Art hosts use their actual bounded geometry"
+      ]
+    },
+    "ART-FIT-004": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/system/art_test.rb#a hidden fixed Art host stays pending until it becomes measurable"
+      ]
+    },
+    "ART-PERF-001": {
+      "status": "VERIFIED",
+      "verification": [
+        "static:script/check_art_static.py#LIFECYCLE_BATCHED_AND_CLEANED_UP"
+      ]
+    },
+    "ART-PERF-002": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/system/art_test.rb#compact horizontal Sequence with an unbreakable lead falls back to wrapped vertical Sequence",
+        "test:test/system/art_test.rb#100 fixed Art roots share one bounded lifecycle pass without observer oscillation"
+      ]
+    },
+    "ART-PERF-003": {
+      "status": "VERIFIED",
+      "verification": [
+        "static:script/check_art_static.py#LIFECYCLE_BATCHED_AND_CLEANED_UP"
+      ]
+    },
+    "ART-PERF-004": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/system/art_test.rb#100 fixed Art roots share one bounded lifecycle pass without observer oscillation"
+      ]
+    },
+    "ART-FIT-005": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/system/art_test.rb#single oversized Art item stays atomic and surfaces its diagnostic",
+        "test:test/system/art_test.rb#rich fixed Sequence stays vertical and eight compact items show no-fit"
+      ]
+    },
+    "ART-FIT-006": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/system/art_test.rb#compact fixed Sequence uses the canonical width rule and the containment oracle",
+        "test:test/system/art_test.rb#inferred two and three column Art hosts use their actual bounded geometry"
+      ]
+    },
+    "ART-PAG-001": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/system/art_test.rb#forced Art pagination splits at direct items and resumes ordered starts including zero"
+      ]
+    },
+    "ART-PAG-002": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/system/art_test.rb#single oversized Art item stays atomic and surfaces its diagnostic"
+      ]
+    },
+    "ART-PAG-003": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/system/art_test.rb#forced Art pagination splits at direct items and resumes ordered starts including zero"
+      ]
+    },
+    "ART-PAG-004": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/system/art_test.rb#forced Art pagination splits at direct items and resumes ordered starts including zero"
+      ]
+    },
+    "ART-PAG-005": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/system/art_test.rb#single oversized Art item stays atomic and surfaces its diagnostic"
+      ]
+    },
+    "ART-PAG-006": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/system/art_test.rb#forced Art pagination splits at direct items and resumes ordered starts including zero",
+        "test:test/system/art_test.rb#a one-item Sequence has no connector",
+        "static:script/check_art_static.py#NATIVE_SEQUENCE_MARKERS_AND_DECORATION"
+      ]
+    },
+    "ART-EDIT-001": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/editor_block_ranges.test.js#ART-EDIT-001",
+        "test:test/system/presentations_test.rb#Art block move and delete operations keep the directive with its root list"
+      ]
+    },
+    "ART-EDIT-002": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/art_source.test.js#ART-EDIT-ORPHAN",
+        "test:test/system/presentations_test.rb#Art block move and delete operations keep the directive with its root list"
+      ]
+    },
+    "ART-EDIT-003": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/art_generated.test.js#ART-TEST-001..008",
+        "test:test/javascript/art_source.test.js#ART-SEM-ROOT-COUNT"
+      ]
+    },
+    "ART-EDIT-004": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/system/presentations_test.rb#Art block move and delete operations keep the directive with its root list"
+      ]
+    },
+    "ART-EDIT-005": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/editor_block_ranges.test.js#ART-EDIT-001"
+      ]
+    },
+    "ART-AUTH-001": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/lib/authoring_registry_test.rb#exposes canonical directive names with compatibility aliases and schemas"
+      ]
+    },
+    "ART-AUTH-002": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/lib/authoring_registry_test.rb#exposes canonical directive names with compatibility aliases and schemas"
+      ]
+    },
+    "ART-SEC-001": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/renderer.test.js#ART-FIX-10",
+        "test:test/system/presentations_test.rb#saved presentation Art fallback preserves attached media"
+      ]
+    },
+    "ART-SEC-002": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/renderer.test.js#ART-DIAG-002",
+        "static:script/check_art_static.py#DOM_ENUMS_AND_STABLE_DIAGNOSTICS"
+      ]
+    },
+    "ART-SEC-003": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/art_generated.test.js#ART-SEM-008"
+      ]
+    },
+    "ART-TEST-001": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/art_generated.test.js#ART-TEST-001..008",
+        "test:test/javascript/art_source.test.js#ART-BOUNDARY-NESTED-NOTE",
+        "test:test/javascript/art_source.test.js#ART-BOUNDARY-NESTED-ART"
+      ]
+    },
+    "ART-TEST-002": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/art_generated.test.js#ART-TEST-001..008"
+      ]
+    },
+    "ART-TEST-003": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/art_generated.test.js#ART-TEST-001..008"
+      ]
+    },
+    "ART-TEST-004": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/system/art_test.rb#compact fixed Sequence uses the canonical width rule and the containment oracle"
+      ]
+    },
+    "ART-TEST-005": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/renderer.test.js#ART-TEST-005"
+      ]
+    },
+    "ART-TEST-006": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/art_layout.test.js#ART-TEST-006"
+      ]
+    },
+    "ART-TEST-007": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/art_layout.test.js#ART-LAY-006"
+      ]
+    },
+    "ART-TEST-008": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/renderer.test.js#ART-FIX-10"
+      ]
+    },
+    "ART-A11Y-001": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/renderer.test.js#Art derives Peers or Sequence from the native root list and preserves nested list semantics"
+      ]
+    },
+    "ART-A11Y-002": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/renderer.test.js#FIX-09",
+        "static:script/check_art_static.py#NATIVE_SEQUENCE_MARKERS_AND_DECORATION"
+      ]
+    },
+    "ART-A11Y-003": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/javascript/art_generated.test.js#ART-TEST-001..008",
+        "test:test/system/art_test.rb#document Sequence preserves order and reflows at 320, 640, and 320 CSS pixels in RTL"
+      ]
+    },
+    "ART-A11Y-004": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/system/art_test.rb#document Sequence preserves order and reflows at 320, 640, and 320 CSS pixels in RTL",
+        "static:script/check_art_static.py#PEER_WRAP_AND_PREFERRED_BASIS"
+      ]
+    },
+    "ART-A11Y-005": {
+      "status": "VERIFIED",
+      "verification": [
+        "test:test/system/art_test.rb#document Sequence preserves order and reflows at 320, 640, and 320 CSS pixels in RTL"
+      ]
+    }
+  },
+  "acceptance_gates": [
+    {
+      "id": "FIX-06",
+      "status": "VERIFIED",
+      "expected": "sequence-vertical / ready at an inferred 536px two-column host",
+      "observed": {
+        "viewport_css_px": [
+          1600,
+          1000
+        ],
+        "host_layout_css_px": [
+          535,
+          416
+        ],
+        "host_scroll_css_px": [
+          535,
+          416
+        ],
+        "root_layout_css_px": [
+          535,
+          276
+        ],
+        "root_offset_within_host_css_px": [
+          0,
+          132
+        ],
+        "root_item_heights_css_px": [
+          74,
+          74,
+          54,
+          54
+        ],
+        "status": "ready",
+        "diagnostic": null,
+        "containment": true
+      }
+    },
+    {
+      "id": "FIX-07",
+      "status": "VERIFIED",
+      "expected": "sequence-vertical / ready at an inferred 341px three-column host",
+      "observed": {
+        "viewport_css_px": [
+          1600,
+          1000
+        ],
+        "host_layout_css_px": [
+          341,
+          416
+        ],
+        "host_scroll_css_px": [
+          341,
+          416
+        ],
+        "root_layout_css_px": [
+          341,
+          258
+        ],
+        "root_offset_within_host_css_px": [
+          0,
+          132
+        ],
+        "root_item_heights_css_px": [
+          34,
+          34,
+          34,
+          34,
+          34
+        ],
+        "status": "ready",
+        "diagnostic": null,
+        "containment": true
+      }
+    }
+  ],
+  "external_checks": [
+    {
+      "id": "TAURI_WEBKIT_PARITY",
+      "status": "VERIFIED",
+      "evidence": "Linux Tauri E2E used the rebuilt real app binary with WebKitGTK 605.1.15 and its embedded WebDriver; the shared harness passed 19 Playwright web scenarios and 36 WebKit/Tauri scenarios, including updater verification. The release-mode test config permits HTTP only for the 127.0.0.1:8888 updater fixture; production and performance configs remain HTTPS-only. It ran the Rails test server on 127.0.0.1:43127, the native driver on 4457, and left the existing port-3000 listener untouched.",
+      "verification": [
+        "npm test --prefix desktop/e2e (Linux WebKitGTK 605.1.15, 19 web + 36 Tauri scenarios passed)"
+      ]
+    },
+    {
+      "id": "RAILS_POSTGRES_TEST_DATABASE",
+      "status": "VERIFIED",
+      "evidence": "The full Rails suite passed against an isolated PostgreSQL 18.6 instance at 127.0.0.1:55432 and disposable database elef_test. The suite completed 351 tests and 2,796 assertions with no failures, errors, or skips.",
+      "verification": [
+        "RAILS_ENV=test PARALLEL_WORKERS=1 PGHOST=127.0.0.1 PGPORT=55432 PGUSER=postgres PGTESTDATABASE=elef_test bin/rails test"
+      ]
+    }
+  ],
+  "canonical_fixtures": [
+    {
+      "id": "FIX-01",
+      "status": "VERIFIED",
+      "root_type": "unordered",
+      "mode": "peers",
+      "density": "rich",
+      "layout": "peers-wrap",
+      "status_dom": "ready",
+      "containment": "flowing document; canonical content width 673px ±2; 4 items wrap 2+2",
+      "verification": [
+        "test:test/system/art_test.rb#canonical document Peers wrap at the preferred basis and remain reflowable in RTL"
+      ]
+    },
+    {
+      "id": "FIX-02",
+      "status": "VERIFIED",
+      "root_type": "unordered",
+      "mode": "peers",
+      "density": "rich",
+      "layout": "peers-wrap",
+      "status_dom": "ready",
+      "containment": "flowing recursive Markdown; exactly 2 root items and nested ol/ul structure preserved",
+      "verification": [
+        "test:test/lib/source/art_integration_test.rb#FIX-02 mixed recursive Peers preserve nested ordered and unordered lists"
+      ]
+    },
+    {
+      "id": "FIX-03",
+      "status": "VERIFIED",
+      "root_type": "ordered",
+      "mode": "sequence",
+      "density": "compact",
+      "layout": "sequence-horizontal",
+      "status_dom": "ready",
+      "containment": "fixed full-slide host measured at 1120px ±2; exact containment oracle passes",
+      "verification": [
+        "test:test/system/art_test.rb#compact fixed Sequence uses the canonical width rule and the containment oracle"
+      ]
+    },
+    {
+      "id": "FIX-04",
+      "status": "VERIFIED",
+      "root_type": "ordered",
+      "mode": "sequence",
+      "density": "rich",
+      "layout": "sequence-vertical",
+      "status_dom": "ready",
+      "containment": "fixed full-slide host measured at 1120px ±2 by 560px ±2; exact containment oracle passes after shared token tuning",
+      "verification": [
+        "test:test/system/art_test.rb#rich fixed Sequence stays vertical and eight compact items show no-fit"
+      ]
+    },
+    {
+      "id": "FIX-05",
+      "status": "VERIFIED",
+      "root_type": "ordered",
+      "mode": "sequence",
+      "density": "compact",
+      "layout": "sequence-vertical",
+      "status_dom": "fallback-no-fit",
+      "containment": "overfull explicit; ART_NO_FIT; all 8 authored items remain in DOM; print state retained",
+      "verification": [
+        "test:test/system/art_test.rb#rich fixed Sequence stays vertical and eight compact items show no-fit",
+        "test:test/system/art_test.rb#print views preserve document pagination and settled presentation Sequence states"
+      ]
+    },
+    {
+      "id": "FIX-06",
+      "status": "VERIFIED",
+      "root_type": "ordered",
+      "mode": "sequence",
+      "density": "rich",
+      "layout": "sequence-vertical",
+      "status_dom": "ready",
+      "containment": {
+        "viewport_css_px": [
+          1600,
+          1000
+        ],
+        "host_layout_css_px": [
+          535,
+          416
+        ],
+        "host_scroll_css_px": [
+          535,
+          416
+        ],
+        "root_layout_css_px": [
+          535,
+          276
+        ],
+        "root_offset_within_host_css_px": [
+          0,
+          132
+        ],
+        "root_item_heights_css_px": [
+          74,
+          74,
+          54,
+          54
+        ],
+        "status": "ready",
+        "diagnostic": null,
+        "containment": true
+      },
+      "verification": [
+        "test:test/system/art_test.rb#inferred two and three column Art hosts use their actual bounded geometry"
+      ]
+    },
+    {
+      "id": "FIX-07",
+      "status": "VERIFIED",
+      "root_type": "ordered",
+      "mode": "sequence",
+      "density": "compact",
+      "layout": "sequence-vertical",
+      "status_dom": "ready",
+      "containment": {
+        "viewport_css_px": [
+          1600,
+          1000
+        ],
+        "host_layout_css_px": [
+          341,
+          416
+        ],
+        "host_scroll_css_px": [
+          341,
+          416
+        ],
+        "root_layout_css_px": [
+          341,
+          258
+        ],
+        "root_offset_within_host_css_px": [
+          0,
+          132
+        ],
+        "root_item_heights_css_px": [
+          34,
+          34,
+          34,
+          34,
+          34
+        ],
+        "status": "ready",
+        "diagnostic": null,
+        "containment": true
+      },
+      "verification": [
+        "test:test/system/art_test.rb#inferred two and three column Art hosts use their actual bounded geometry"
+      ]
+    },
+    {
+      "id": "FIX-08",
+      "status": "VERIFIED",
+      "root_type": "unordered",
+      "mode": "peers",
+      "density": "compact",
+      "layout": "peers-wrap",
+      "status_dom": "ready",
+      "containment": "flowing document at canonical width 673px ±2; preferred width 200px; partial final row centered in RTL",
+      "verification": [
+        "test:test/system/art_test.rb#canonical document Peers wrap at the preferred basis and remain reflowable in RTL"
+      ]
+    },
+    {
+      "id": "FIX-09",
+      "status": "VERIFIED",
+      "root_type": "ordered",
+      "mode": "sequence",
+      "density": "compact",
+      "layout": "sequence-vertical",
+      "status_dom": "ready",
+      "containment": "flowing document; native ordered numbering retained",
+      "verification": [
+        "test:test/javascript/renderer.test.js#FIX-09"
+      ]
+    },
+    {
+      "id": "FIX-10",
+      "status": "VERIFIED",
+      "root_type": "unordered",
+      "mode": "peers",
+      "density": "rich",
+      "layout": "plain-list",
+      "status_dom": "fallback-unsupported",
+      "containment": "whole-list fallback retains image and all list content; ART_UNSUPPORTED_CONTENT",
+      "verification": [
+        "test:test/javascript/renderer.test.js#ART-FIX-10",
+        "test:test/lib/source/art_integration_test.rb#saved document fallback preserves unsupported media and stable diagnostics"
+      ]
+    }
+  ],
+  "pagination_fixtures": [
+    {
+      "id": "PAG-FIX-01",
+      "status": "VERIFIED",
+      "start": 3,
+      "fragment_item_counts": [
+        2,
+        4
+      ],
+      "fragment_starts": [
+        3,
+        5
+      ],
+      "verification": [
+        "test:test/system/art_test.rb#forced Art pagination splits at direct items and resumes ordered starts including zero"
+      ]
+    },
+    {
+      "id": "PAG-FIX-02",
+      "status": "VERIFIED",
+      "start": 0,
+      "fragment_item_counts": [
+        2,
+        2
+      ],
+      "fragment_starts": [
+        0,
+        2
+      ],
+      "verification": [
+        "test:test/system/art_test.rb#forced Art pagination splits at direct items and resumes ordered starts including zero"
+      ]
+    },
+    {
+      "id": "PAG-FIX-03",
+      "status": "VERIFIED",
+      "result": "single root item remains atomic, overflows page, emits ART_ITEM_TOO_TALL and editor warning",
+      "verification": [
+        "test:test/system/art_test.rb#a single oversized Art item stays atomic and surfaces its diagnostic"
+      ]
+    },
+    {
+      "id": "PAG-FIX-04",
+      "status": "VERIFIED",
+      "result": "repeated paginate merges logical flow fragments and reproduces root item sequence, boundaries, and starts",
+      "verification": [
+        "test:test/system/art_test.rb#forced Art pagination splits at direct items and resumes ordered starts including zero"
+      ]
+    }
+  ],
+  "token_tuning": {
+    "reason": "Fixed-host acceptance fixtures required fitting authored Art content within inferred columns while keeping editor controls out of the measured authored-content flow. Shared CSS tokens were tuned; the fit controller remains non-iterative and never changes font size.",
+    "values": {
+      "--art-gap": "16px",
+      "--art-presentation-sequence-compact-gap": "20px",
+      "--art-presentation-sequence-rich-gap": "4px",
+      "--art-card-padding": "2px",
+      "--art-presentation-lead-size": "22px",
+      "--art-presentation-body-size": "15px"
+    },
+    "verified_targets": [
+      "FIX-03",
+      "FIX-04",
+      "FIX-05",
+      "FIX-06",
+      "FIX-07"
+    ],
+    "other_art_tokens": "Constitution v6 initial values"
+  }
+}

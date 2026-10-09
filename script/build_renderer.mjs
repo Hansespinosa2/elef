@@ -5,6 +5,7 @@ import { build } from "esbuild"
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const output = path.join(repoRoot, "vendor/javascript/elef-renderer.bundle.js")
+const artSourceOutput = path.join(repoRoot, "vendor/javascript/art_source.bundle.js")
 await mkdir(path.dirname(output), { recursive: true })
 
 await build({
@@ -24,3 +25,16 @@ const rawWhitespace = "[ \t\n"
 const occurrences = bundle.split(rawWhitespace).length - 1
 if (occurrences !== 1) throw new Error(`Expected one Highlight.js whitespace template, found ${occurrences}.`)
 await writeFile(output, bundle.replace(rawWhitespace, "[ \\t\n"))
+
+// Rails' importmap needs the shared Art parser as one browser module because
+// its Markdown parser dependency contains relative imports that Propshaft
+// fingerprints independently. Desktop and Node consumers import the source.
+await build({
+  entryPoints: [path.join(repoRoot, "app/javascript/lib/art_source.js")],
+  bundle: true,
+  format: "esm",
+  target: "es2022",
+  outfile: artSourceOutput,
+  minify: true,
+  legalComments: "none"
+})
