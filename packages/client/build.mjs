@@ -42,4 +42,9 @@ esbuild.buildSync({
   entryPoints: [join(here, "src", "ui", "sanitize.ts")],
   outfile: join(here, "dist", "sanitize.js"),
 });
-console.log("packages/client: dist/elef-client.js + dist/preview-core.js + dist/sanitize.js built");
+esbuild.buildSync({
+  ...shared,
+  entryPoints: [join(here, "src", "features", "presentation", "chrome.js")],
+  outfile: join(here, "dist", "presentation-chrome.js"),
+});
+console.log("packages/client: dist/elef-client.js + dist/preview-core.js + dist/sanitize.js + dist/presentation-chrome.js built");

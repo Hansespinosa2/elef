@@ -3,6 +3,15 @@ export { isSettingsRoute, parseLibraryRoute, parseSettingsRoute } from "./applic
 export type { SettingsRoute } from "./application/router.js";
 export { CREATE_WORK_EVENT } from "./features/library/LibraryApp.js";
 export { createPresentationNavigation, presentationActionForKey } from "./features/presentation/navigation.js";
+export {
+  presentationBlockAttributes,
+  presentationBlockControls,
+  presentationEmptySlide,
+  presentationRoot,
+  presentationSlideBlock,
+  presentationSlideFrame,
+  presentationSlideToolbar,
+} from "./features/presentation/chrome.js";
 export { GraphController } from "./features/graph/graphController.js";
 export type { GraphControllerOptions } from "./features/graph/graphController.js";
 export { renderGraphView, graphNodeHref } from "./features/graph/graphView.js";

@@ -20,6 +20,10 @@
     "./sanitize": {
       "types": "./src/ui/sanitize.ts",
       "default": "./dist/sanitize.js"
+    },
+    "./presentation-chrome": {
+      "types": "./src/features/presentation/chrome.js",
+      "default": "./dist/presentation-chrome.js"
     }
   },
   "files": [
