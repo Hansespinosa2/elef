@@ -1,6 +1,6 @@
 # Phase 7 plan — Presentation and product export
 
-Status: DRAFT (unfrozen; freeze records hash in `docs/refactor/status.json`)
+Status: FROZEN at 2026-10-09 (hash recorded in `docs/refactor/status.json`)
 Phase contract: `docs/refactor/phases/07-presentation-export.md` (sha256 `59bdd29ab5b49e6f8e8e59472c9dbc3686feef6a16a40dfe74e635795f4f4f86`)
 Phase base: `873904da32953b513b89b073b331ce692c84cb0a`
 
@@ -14,11 +14,12 @@ Phase base: `873904da32953b513b89b073b331ce692c84cb0a`
 | No TransferPort, export feature, or format registry exists | grep `TransferPort/transfer` across `packages/client/src app/javascript/lib crates/local-store` → zero hits; grep `pptx` in client/desktop sources → controller only |
 | Renderer delegates slide chrome to the host | `packages/renderer/src/renderer.js:333,340` calls `chrome.slideToolbar/slideFrame` (host-owned `preview_chrome.js`), keeping renderer free of editor DOM |
 
-Open questions / unknowns (each is a blocker or has a resolution step):
-1. What does `chrome.slideToolbar` render — navigation-only or editor controls? Decides the P07-02 cut line. → Resolution: DO step 1 read of `preview_chrome.js` slideToolbar/slideFrame + renderer call sites.
-2. Which export formats exist beyond PPTX (PDF? `.elef`?), and where does each engine live? → Resolution: DO step 1 inventory (`media_pdf_export_test.rb`, export buttons, server export endpoints).
-3. Where do presentation keyboard/fullscreen handlers live (controller vs editor)? → Resolution: DO step 1 map of `presentation_editor_controller.js` sections (805 lines) into navigation/chrome/editing buckets.
-4. Fixed screenshot fixture set for P07-07: which existing visual assertions become the frozen set? → Resolution: DO step 1 catalog of screenshot/visual assertions in `presentations_test.rb` + `document-page-aspect-ratio.js`.
+Answered in DO-1 (verified before freeze):
+1. `chrome.slideToolbar` renders EDITOR controls (Add slide/image, Delete, Move up/down with `data-presentation-editor-action` hooks; `app/javascript/lib/preview_chrome.js:45`); `slideFrame` mounts `data-controller="presentation-canvas"` (`preview_chrome.js:46`). P07-02 cut: toolbar + canvas controller move to the client presentation feature; renderer keeps projection structure only.
+2. Format inventory: PPTX (`presentations#pptx` JSON model + client engine in `pptx_export_controller.js`), print (server views `documents#print`/`presentations#print`), PDF-via-print (`test/system/media_pdf_export_test.rb`), `.elef` transfer (`export_work`/`import_work` in both controllers, `config/routes.rb:45,65`). No TransferPort, export feature, or registry exists yet.
+3. `presentation_editor_controller.js` buckets: connect/disconnect/mode (18-68), focus/caret (70-211), keydown/input (212-251), alignment (252-398), slide/block add/delete/move actions (399-575), preview sync (576-622+). Navigation extraction precedent exists: `app/javascript/lib/presentation_navigation.js` (tested).
+4. No pixel screenshots anywhere: the frozen visual set is DOM assertions — `test/system/presentations_test.rb:222-231` (slide position-class assertions) + `test/e2e/scenarios/document-page-aspect-ratio.js`.
+5. Baselines green pre-freeze: `pptx_export.test.mjs` + `presentation_controller.test.js` → 20/20 pass.
 
 ## 2. Scope
 In scope:
@@ -88,7 +89,7 @@ Ordered steps; structural moves and behavior changes in separate commits.
 | I01–I18 | `bin/check phase 7 --json` exit 0 in isolated gate checkout + independent review | phase + review | gate checkout |
 
 Fixed fixture sets / finite reviewer checklists required by the contract:
-- Presentation screenshot/visual fixture set (named in DO-1 re-plan log entry).
+- Presentation visual fixture set, frozen (P07-07): `test/system/presentations_test.rb:222-231` slide position-class assertions + `test/e2e/scenarios/document-page-aspect-ratio.js`. No pixel comparisons exist; reviewer judges only against these.
 - Reviewer checklist: no new packages; Stimulus presentation/pptx files absent; one scenario drives both hosts; registry is the only format-rule source.
 
 Human gates touched (constitution §8):
