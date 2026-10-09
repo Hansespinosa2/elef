@@ -5,10 +5,11 @@ This file is the persistent requirement-to-evidence map for [the approved releas
 ## Baseline and current blockers
 
 - **Baseline:** public `main` at `41d89fa92a34274d1f2c155d7ae560d728c87fca` (2026-10-09 11:35 +0200), fetched from `origin/main` and checked out as the base of `feat/desktop-release-constitution`.
+- **Review boundary:** draft PR [#147](https://github.com/Hansespinosa2/elef/pull/147) targets `main`; implementation is continuing on the same branch.
 - **AUR name:** AUR RPC v5 returned `resultcount: 0` for both `elef-bin` and `elef-desktop-bin` on 2026-10-09. Use `elef-bin`; recheck before registration.
 - **Pages:** the required latest-feed URL returned HTTP 404 and `origin` has no `gh-pages` branch. **BLOCKED_EXTERNAL:** GitHub Pages must be enabled for this repository before safe-feed publication can be demonstrated. No alternate host will be used.
 - **Physical Mac:** this session runs on Omarchy Linux x86-64, not Apple Silicon macOS. **BLOCKED_EXTERNAL:** Gate B Mac install/update/rollback needs an actual Apple Silicon Mac. Hosted ARM64 CI can satisfy Gate A only.
-- **Local build:** `npm run build --prefix desktop/frontend` was attempted before edits and stopped because `desktop/frontend/node_modules/esbuild` is absent. No test or build has passed in this session yet; install locked dependencies and rerun.
+- **Local checks:** the first frontend build attempt stopped because dependencies were absent. After `npm ci` at the repository root and `desktop/frontend`, `npm run build --prefix desktop/frontend`, `python3 desktop/scripts/check_architecture.py`, and `python3 script/check_frontend_ownership.py` all passed (the architecture checker reported 23 commands). This local session uses Node 26; hosted CI on its pinned Node 22 remains necessary.
 - **Observed implementation:** Stable already uses Tauri ID `com.elef.desktop` and app-data `library-root.json`; native update staging/recovery exists. Current production updater points to GitHub `releases/latest`, Linux targets AppImage, the desktop runtime imports visual editor/document-link/document-graph controllers, and several required CI jobs skip `push` events.
 - **Initial documentation commit:** `56151d2c2cd5b73e10b23c51b1aa876c76958d0f` (`Record desktop release constitution baseline`). Subsequent status and implementation changes remain on this feature branch. PR target: `main`, subject to owner review. No merge will be performed by this work.
 
@@ -77,6 +78,7 @@ This file is the persistent requirement-to-evidence map for [the approved releas
 
 | Commit | Change | Checks and result |
 |---|---|---|
-| `56151d2` | Captured the supplied constitution and initial requirement map. | `git diff --check` and a Python document check passed (9 numbered sections, 46 mapped requirement rows; exit 0). Baseline `npm run build --prefix desktop/frontend` failed before compilation because `esbuild` is not installed. |
+| `56151d2` | Captured the supplied constitution and initial requirement map. | `git diff --check` and a Python document check passed (9 numbered sections, 46 mapped requirement rows; exit 0). The initial build attempt failed before dependencies were installed. |
+| `1b56e5c` | Recorded the baseline branch and external checks. | After locked `npm ci` at root and `desktop/frontend`, `npm run build --prefix desktop/frontend` passed; `python3 desktop/scripts/check_architecture.py` and `python3 script/check_frontend_ownership.py` passed (exit 0). |
 
 Update this file after each coherent milestone. Record exact commit, command, exit status, and evidence location. Do not change a status to `VERIFIED` without a passing acceptance result on the stated source SHA and platform.
