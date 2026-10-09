@@ -941,7 +941,7 @@ class DesktopEditorUi {
       const sourcePath = path.join(process.env.ELEF_E2E_LIBRARY_ROOT, deckTitle, sourceFile)
       await browser.waitUntil(async () => {
         try {
-          return normalizeLineEndings(await readFile(sourcePath, "utf8")) === expectedSource
+          return normalizeLineEndings(await readFile(sourcePath, "utf8")) === normalizeLineEndings(expectedSource)
         } catch (_error) {
           return false
         }
@@ -1624,8 +1624,8 @@ class DesktopLibraryUi {
       timeout: 10_000,
       timeoutMsg: "The All library view did not show both presentations and documents"
     })
-    if ((await $$(".library-card")).length !== 5) {
-      throw new Error("The All library view did not show all five fixture decks")
+    if ((await $$(".library-card")).length !== 6) {
+      throw new Error("The All library view did not show all six fixture decks")
     }
   }
 
@@ -1735,8 +1735,8 @@ class DesktopLibraryUi {
       timeout: 10_000,
       timeoutMsg: "The presentation filter did not show its presentation"
     })
-    if ((await $$(".library-card")).length !== 3) {
-      throw new Error("The presentation filter did not show the three fixture presentations")
+    if ((await $$(".library-card")).length !== 4) {
+      throw new Error("The presentation filter did not show all four fixture presentations")
     }
     if (await $(`[aria-label='Edit ${documentTitle}']`).isExisting()) {
       throw new Error("The presentation filter still shows a document")

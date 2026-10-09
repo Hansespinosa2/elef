@@ -32,6 +32,8 @@ const outputs = {
   last_reconciled_main: reconciliation.lastReconciledMain ?? "",
   pending_sha: reconciliation.pendingSha ?? "",
   pending_reason: reconciliation.pendingReason ?? "",
+  unapproved_merges: reconciliation.unapprovedMerges ?? [],
+  recovered_merges: reconciliation.recoveredMerges ?? [],
   processed_merges: processedMerges,
   macos_candidate: reconciliation.platformCandidates?.macos ? JSON.stringify(reconciliation.platformCandidates.macos) : "",
   linux_candidate: reconciliation.platformCandidates?.linux_asset ? JSON.stringify(reconciliation.platformCandidates.linux_asset) : "",
@@ -91,6 +93,8 @@ async function writeOutputs(values) {
     `last_reconciled_main=${values.last_reconciled_main}`,
     `pending_sha=${values.pending_sha}`,
     `pending_reason=${values.pending_reason}`,
+    `unapproved_merges=${JSON.stringify(values.unapproved_merges)}`,
+    `recovered_merges=${JSON.stringify(values.recovered_merges)}`,
     `processed_merges=${JSON.stringify(values.processed_merges)}`,
     `macos_candidate=${values.macos_candidate}`,
     `linux_candidate=${values.linux_candidate}`,
@@ -117,6 +121,12 @@ async function writeSummary({ outputs: values, published, reconciliation: detail
   ]
   if (detail.initialized) lines.push("- Release ledger initialized at the current main head; earlier merges are not retroactively released.")
   if (detail.pendingSha) lines.push(`- Waiting at main SHA \`${detail.pendingSha}\` (${detail.pendingReason}).`)
+  if (detail.unapprovedMerges?.length) {
+    lines.push(`- Merged PRs without owner approval were held from release: ${detail.unapprovedMerges.map(merge => `#${merge.pr}`).join(", ")}.`)
+  }
+  for (const event of detail.recoveredMerges || []) {
+    lines.push(`- Recovery checkpoint: owner-approved PR #${event.recovery_pr} restored the verified tree from \`${event.base_sha}\`; held PRs ${event.held_merges.map(merge => `#${merge.pr}`).join(", ")} were not released.`)
+  }
   if (detail.action && detail.action !== "reconcile") lines.push(`- Owner control action: \`${detail.action}\``)
   lines.push("", "The Pages projection records ledger state only. A reservation is not a public artifact or an installation result.")
   await appendFile(summary, `${lines.join("\n")}\n`)

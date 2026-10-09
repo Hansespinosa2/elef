@@ -22,6 +22,7 @@ export function createLedger({ currentMinor = "0.1", lastReconciledMain = null }
     minor_changes: [],
     reserved_versions: [],
     processed_merges: [],
+    recovery_events: [],
     releases: []
   }
 }
@@ -32,11 +33,12 @@ export function createLedger({ currentMinor = "0.1", lastReconciledMain = null }
  * The workflow is responsible for mapping approved merged PRs and exact-SHA
  * Gate A results to each merge commit before calling this pure transition.
  */
-export function reconcileMain(ledger, { mainHistory, merges, existingTags = [], expectedRevision, now = () => new Date().toISOString() }) {
+export function reconcileMain(ledger, { mainHistory, merges, recoveryEvents = [], existingTags = [], expectedRevision, now = () => new Date().toISOString() }) {
   validateLedger(ledger)
   assertRevision(ledger, expectedRevision)
   assert(Array.isArray(mainHistory) && mainHistory.length > 0, "main history must include its current head")
   assert(Array.isArray(merges), "merged PR records must be an array")
+  assert(Array.isArray(recoveryEvents), "recovery events must be an array")
   assert(Array.isArray(existingTags), "existing Git tags must be an array")
 
   const historyIndex = new Map()
@@ -85,6 +87,20 @@ export function reconcileMain(ledger, { mainHistory, merges, existingTags = [], 
       tag,
       processed_at: now()
     })
+    changed = true
+  }
+
+  for (const event of recoveryEvents) {
+    validateRecoveryEvent(event)
+    const previous = (next.recovery_events || []).find(item => item.recovery_sha === event.recovery_sha)
+    if (previous) {
+      assert(JSON.stringify(previous) === JSON.stringify(event), `recovery checkpoint ${event.recovery_sha} is immutable`)
+      continue
+    }
+    assert(next.processed_merges.some(item => item.sha === event.recovery_sha && item.pr === event.recovery_pr),
+      `recovery checkpoint ${event.recovery_sha} must be an approved processed merge`)
+    next.recovery_events ||= []
+    next.recovery_events.push(clone(event))
     changed = true
   }
 
@@ -299,6 +315,8 @@ export function validateLedger(ledger) {
   for (const key of ["minor_changes", "reserved_versions", "processed_merges", "releases"]) {
     assert(Array.isArray(ledger[key]), `release ledger ${key} must be an array`)
   }
+  const recoveryEvents = ledger.recovery_events === undefined ? [] : ledger.recovery_events
+  assert(Array.isArray(recoveryEvents), "release ledger recovery_events must be an array")
 
   const versions = new Set()
   const tags = new Set()
@@ -326,6 +344,22 @@ export function validateLedger(ledger) {
       assert(merge.tag === `desktop-v${merge.version}`, `passing merge ${merge.sha} has an invalid tag`)
     } else {
       assert(merge.version === null && merge.tag === null, `failed gate ${merge.sha} must not reserve a release version`)
+    }
+  }
+
+  const recoveryShas = new Set()
+  const heldShas = new Set()
+  for (const event of recoveryEvents) {
+    validateRecoveryEvent(event)
+    assert(!recoveryShas.has(event.recovery_sha), `duplicate recovery checkpoint ${event.recovery_sha}`)
+    recoveryShas.add(event.recovery_sha)
+    assert(processedShas.has(event.recovery_sha), `recovery checkpoint ${event.recovery_sha} has no processed merge`)
+    const recoveryMerge = ledger.processed_merges.find(item => item.sha === event.recovery_sha)
+    assert(recoveryMerge.pr === event.recovery_pr, `recovery checkpoint ${event.recovery_sha} has a mismatched PR`)
+    for (const held of event.held_merges) {
+      assert(!heldShas.has(held.sha), `merge ${held.sha} is held by multiple recovery events`)
+      assert(!processedShas.has(held.sha), `held merge ${held.sha} cannot also be processed for release`)
+      heldShas.add(held.sha)
     }
   }
 
@@ -481,6 +515,29 @@ function validateLinuxArtifact(release, artifact) {
   assert(SHA256_PATTERN.test(artifact.sha256), "Linux native package archive needs a SHA-256")
   assertNonempty(artifact.filename, "Linux asset needs its immutable filename")
   assert(artifact.format === "arch-native", "Linux v0.x distribution must be the native Arch-compatible package archive")
+}
+
+function validateRecoveryEvent(event) {
+  assert(event && typeof event === "object" && !Array.isArray(event), "recovery event must be an object")
+  assert(SHA_PATTERN.test(event.base_sha), "recovery event needs its pre-hold main SHA")
+  assert(SHA_PATTERN.test(event.safe_tree_sha), "recovery event needs the verified safe tree SHA")
+  assert(SHA_PATTERN.test(event.recovery_tree_sha), "recovery event needs the recovery commit tree SHA")
+  assert(event.recovery_tree_sha === event.safe_tree_sha, "recovery commit tree does not restore the verified safe tree")
+  assert(Number.isInteger(event.recovery_pr) && event.recovery_pr > 0, "recovery event needs its owner-approved PR number")
+  assert(SHA_PATTERN.test(event.recovery_sha), "recovery event needs its verified recovery SHA")
+  assert(event.recovery_owner_approved === true, "recovery checkpoint must have owner approval")
+  assert(Array.isArray(event.held_merges) && event.held_merges.length > 0, "recovery event needs the quarantined merge interval")
+  assert(typeof event.recovered_at === "string" && Number.isFinite(Date.parse(event.recovered_at)), "recovery event needs its timestamp")
+  const heldShas = new Set()
+  for (const merge of event.held_merges) {
+    assert(merge && typeof merge === "object" && !Array.isArray(merge), "held merge must be an object")
+    assert(Number.isInteger(merge.pr) && merge.pr > 0, "held merge needs its PR number")
+    assert(SHA_PATTERN.test(merge.sha), "held merge needs its main SHA")
+    assert(typeof merge.owner_approved === "boolean", "held merge must record owner-approval status")
+    assert(merge.sha !== event.recovery_sha, "recovery checkpoint cannot also be a held merge")
+    assert(!heldShas.has(merge.sha), `duplicate held merge ${merge.sha}`)
+    heldShas.add(merge.sha)
+  }
 }
 
 function validateAurArtifact(release, artifact) {

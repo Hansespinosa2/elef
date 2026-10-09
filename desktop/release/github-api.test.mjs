@@ -76,6 +76,23 @@ test("owner approval is tied to the latest review of the merged head commit", as
   assert.equal(await api.ownerApprovedPullRequest(pullRequest, "owner"), true)
 })
 
+test("safe recovery compares Git tree identities returned for exact main commits", async () => {
+  const tree = "b".repeat(40)
+  const api = new GitHubReleaseApi({
+    owner: "example",
+    repository: "elef",
+    token: "test-token",
+    fetchImpl: async url => {
+      assert.match(url, new RegExp(`/git/commits/${SHA}$`))
+      return jsonResponse({ tree: { sha: tree } })
+    },
+    sleep: async () => {}
+  })
+
+  assert.equal(await api.treeForCommit(SHA), tree)
+  await assert.rejects(api.treeForCommit("bad-sha"), /valid SHA/)
+})
+
 test("an approval submitted after merge does not authorize a release", async () => {
   const api = new GitHubReleaseApi({
     owner: "example",

@@ -1,7 +1,7 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 
-import { createLedger } from "./ledger.mjs"
+import { createLedger, parseLedger, serializeLedger } from "./ledger.mjs"
 import { reconcileReleaseLedger } from "./reconciler.mjs"
 
 const SHA0 = "0".repeat(40)
@@ -137,6 +137,78 @@ test("an unapproved merge stops reconciliation before every descendant merge", a
   ])
 })
 
+test("an owner-approved exact-tree recovery records the held interval and resumes in merge order", async () => {
+  const held = pull(521, SHA1)
+  const recovery = pull(522, SHA2)
+  const next = pull(523, SHA3)
+  const safeTree = "a".repeat(40)
+  const github = fakeGitHub({
+    prs: [held, recovery, next],
+    gates: new Map([[SHA2, "passed"], [SHA3, "passed"]]),
+    approved: pr => pr.number !== held.number,
+    trees: new Map([[SHA0, safeTree], [SHA1, "b".repeat(40)], [SHA2, safeTree], [SHA3, "c".repeat(40)]])
+  })
+  const result = await reconcileReleaseLedger({
+    ledger: createLedger({ lastReconciledMain: SHA0 }),
+    mainHistory: [SHA0, SHA1, SHA2, SHA3],
+    github,
+    ownerLogin: "owner",
+    now: () => NOW
+  })
+
+  assert.equal(result.pendingSha, null)
+  assert.deepEqual(result.unapprovedMerges, [{ pr: held.number, sha: SHA1 }])
+  assert.deepEqual(result.processedMerges.map(merge => [merge.pr, merge.sha, merge.gate, merge.version]), [
+    [recovery.number, SHA2, "passed", "0.1.0"],
+    [next.number, SHA3, "passed", "0.1.1"]
+  ])
+  assert.deepEqual(result.ledger.recovery_events, [{
+    base_sha: SHA0,
+    safe_tree_sha: safeTree,
+    recovery_tree_sha: safeTree,
+    held_merges: [{ pr: held.number, sha: SHA1, owner_approved: false }],
+    recovery_pr: recovery.number,
+    recovery_sha: SHA2,
+    recovery_owner_approved: true,
+    recovered_at: NOW
+  }])
+  assert.deepEqual(parseLedger(serializeLedger(result.ledger)), result.ledger)
+
+  const replayed = await reconcileReleaseLedger({
+    ledger: result.ledger,
+    mainHistory: [SHA0, SHA1, SHA2, SHA3],
+    github,
+    ownerLogin: "owner",
+    now: () => NOW
+  })
+  assert.deepEqual(replayed.ledger, result.ledger)
+})
+
+test("a tree match without owner approval cannot recover a held main interval", async () => {
+  const held = pull(531, SHA1)
+  const unapprovedRestore = pull(532, SHA2)
+  const descendant = pull(533, SHA3)
+  const safeTree = "a".repeat(40)
+  const github = fakeGitHub({
+    prs: [held, unapprovedRestore, descendant],
+    gates: new Map([[SHA2, "passed"], [SHA3, "passed"]]),
+    approved: pr => pr.number === descendant.number,
+    trees: new Map([[SHA0, safeTree], [SHA1, "b".repeat(40)], [SHA2, safeTree], [SHA3, "c".repeat(40)]])
+  })
+  const result = await reconcileReleaseLedger({
+    ledger: createLedger({ lastReconciledMain: SHA0 }),
+    mainHistory: [SHA0, SHA1, SHA2, SHA3],
+    github,
+    ownerLogin: "owner",
+    now: () => NOW
+  })
+
+  assert.equal(result.pendingSha, SHA1)
+  assert.equal(result.pendingReason, "unapproved_pr")
+  assert.deepEqual(result.ledger.releases, [])
+  assert.deepEqual(result.ledger.recovery_events, [])
+})
+
 test("an empty Pages ledger anchors to current main without retroactively releasing history", async () => {
   const result = await reconcileReleaseLedger({
     ledger: null,
@@ -159,7 +231,7 @@ function pull(number, sha) {
   }
 }
 
-function fakeGitHub({ prs = [], gates = new Map(), approved = true }) {
+function fakeGitHub({ prs = [], gates = new Map(), approved = true, trees = new Map() }) {
   const prsBySha = new Map(prs.map(pr => [pr.merge_commit_sha, pr]))
   return {
     pullRequestsForCommit: async sha => {
@@ -169,6 +241,7 @@ function fakeGitHub({ prs = [], gates = new Map(), approved = true }) {
     pullRequest: async number => prs.find(pr => pr.number === number),
     ownerApprovedPullRequest: async pr => typeof approved === "function" ? approved(pr) : approved,
     gateForMainSha: async sha => gates.get(sha) ?? null,
+    treeForCommit: async sha => trees.get(sha) ?? sha,
     versionTags: async () => []
   }
 }

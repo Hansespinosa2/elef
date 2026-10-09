@@ -14,8 +14,11 @@ function normalizeLineEndings(source) {
 export async function richRenderingMediaWorkflow(ui) {
   await ui.openDeck(RICH_RENDERING_TITLE)
   const originalSource = await ui.readSource()
+  const originalStoredSource = await ui.readStoredSource()
   assert.equal(normalizeLineEndings(originalSource), normalizeLineEndings(RICH_RENDERING_SOURCE),
     "The runtime rich-rendering deck must start from the checked-in fixture source")
+  assert.equal(normalizeLineEndings(originalStoredSource), normalizeLineEndings(RICH_RENDERING_SOURCE),
+    "The persisted rich-rendering deck must start from the checked-in fixture source")
 
   await ui.showVisualMode()
   await ui.refreshPreview()
@@ -27,25 +30,30 @@ export async function richRenderingMediaWorkflow(ui) {
   await ui.assertPresentationSlide(1, "Art sample")
   await ui.exitPresentationMode()
 
-  const editedSource = `${originalSource}Saved by the rich fixture round-trip.\n`
+  const lineSeparator = originalStoredSource.match(/\r\n|\r|\n/)?.[0] || "\n"
+  const editedSource = `${originalStoredSource}Saved by the rich fixture round-trip.${lineSeparator}`
   await ui.showSourceMode()
   await ui.replaceSource(editedSource)
   await ui.waitForSaved(editedSource)
-  const savedRawSource = await ui.readSource()
+  const savedStoredSource = await ui.readStoredSource()
   await ui.openDeck(RICH_RENDERING_TITLE)
-  await ui.waitForSource(savedRawSource)
-  assert.equal(await ui.readSource(), savedRawSource,
-    "The rich fixture source must remain byte-identical after save and reopen")
+  await ui.waitForSource(savedStoredSource)
+  assert.equal(await ui.readStoredSource(), savedStoredSource,
+    "The persisted rich fixture source must remain byte-identical after save and reopen")
+  assert.equal(normalizeLineEndings(await ui.readSource()), normalizeLineEndings(savedStoredSource),
+    "The reopened rich fixture editor must show the persisted source")
   await ui.showVisualMode()
   await ui.assertRichRenderingMedia()
 
   await ui.showSourceMode()
-  await ui.replaceSource(originalSource)
-  await ui.waitForSaved()
-  const restoredRawSource = await ui.readSource()
+  await ui.restoreSource(originalStoredSource)
+  await ui.waitForSaved(originalStoredSource)
+  const restoredStoredSource = await ui.readStoredSource()
+  assert.equal(restoredStoredSource, originalStoredSource,
+    "Restoring the rich fixture must preserve its original source bytes")
   await ui.openDeck(RICH_RENDERING_TITLE)
-  await ui.waitForSource(restoredRawSource)
-  assert.equal(await ui.readSource(), restoredRawSource,
-    "Restoring the rich fixture must also survive close and reopen")
-  assert.equal(normalizeLineEndings(restoredRawSource), normalizeLineEndings(RICH_RENDERING_SOURCE))
+  await ui.waitForSource(restoredStoredSource)
+  assert.equal(await ui.readStoredSource(), restoredStoredSource,
+    "Restored rich fixture source must remain byte-identical after close and reopen")
+  assert.equal(normalizeLineEndings(await ui.readSource()), normalizeLineEndings(RICH_RENDERING_SOURCE))
 }

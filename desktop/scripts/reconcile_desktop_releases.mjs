@@ -80,6 +80,8 @@ const result = {
   lastReconciledMain: ledger.last_reconciled_main,
   pendingSha: reconciliation?.pendingSha || "",
   pendingReason: reconciliation?.pendingReason || "",
+  unapprovedMerges: reconciliation?.unapprovedMerges || [],
+  recoveredMerges: reconciliation?.recoveredMerges || [],
   processedMerges: reconciliation?.processedMerges || [],
   platformCandidates: Object.fromEntries(["macos", "linux_asset", "aur"].map(platform => {
     const release = latestPendingPlatformRelease(ledger, platform)
@@ -120,6 +122,8 @@ async function writeOutputs(values) {
     `last_reconciled_main=${values.lastReconciledMain}`,
     `pending_sha=${values.pendingSha}`,
     `pending_reason=${values.pendingReason}`,
+    `unapproved_merges=${JSON.stringify(values.unapprovedMerges)}`,
+    `recovered_merges=${JSON.stringify(values.recoveredMerges)}`,
     `processed_merges=${JSON.stringify(values.processedMerges)}`,
     `macos_candidate=${values.platformCandidates.macos ? JSON.stringify(values.platformCandidates.macos) : ""}`,
     `linux_candidate=${values.platformCandidates.linux_asset ? JSON.stringify(values.platformCandidates.linux_asset) : ""}`,
@@ -144,7 +148,10 @@ async function writeSummary({ ledger, reconciliation, initialized: didInitialize
   if (didInitialize) lines.push("- Release ledger initialized at the current main head; earlier merges are not retroactively released.")
   if (reconciliation?.pendingSha) lines.push(`- Waiting at main SHA \`${reconciliation.pendingSha}\` (${reconciliation.pendingReason}).`)
   if (reconciliation?.unapprovedMerges.length) {
-    lines.push(`- Merged PRs without a current repository-owner approval were not eligible: ${reconciliation.unapprovedMerges.map(item => `#${item.pr}`).join(", ")}`)
+    lines.push(`- Merged PRs without a current repository-owner approval were held from release: ${reconciliation.unapprovedMerges.map(item => `#${item.pr}`).join(", ")}`)
+  }
+  for (const event of reconciliation?.recoveredMerges || []) {
+    lines.push(`- Recovery checkpoint: owner-approved PR #${event.recovery_pr} restored the verified tree from \`${event.base_sha}\`; held PRs ${event.held_merges.map(item => `#${item.pr}`).join(", ")} were not released.`)
   }
   lines.push("", "This job reconciles source history and ledger state. It does not prove a public platform artifact, Pages availability, or a user-device installation.")
   await appendFile(summaryPath, `${lines.join("\n")}\n`)

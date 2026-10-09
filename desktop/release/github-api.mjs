@@ -1,4 +1,5 @@
 const API_VERSION = "2026-03-10"
+const SHA_PATTERN = /^[a-f0-9]{40}$/i
 
 export const RELEASE_GATE_JOB_NAMES = Object.freeze([
   "desktop-fast",
@@ -37,6 +38,13 @@ export class GitHubReleaseApi {
 
   async pullRequest(number) {
     return this.request(`/pulls/${number}`)
+  }
+
+  async treeForCommit(sha) {
+    if (!SHA_PATTERN.test(sha)) throw new TypeError("commit tree lookup needs a valid SHA")
+    const commit = await this.request(`/git/commits/${encodeURIComponent(sha)}`)
+    if (!SHA_PATTERN.test(commit?.tree?.sha || "")) throw new Error("GitHub returned an invalid commit tree record")
+    return commit.tree.sha.toLowerCase()
   }
 
   async pullRequestReviews(number) {
