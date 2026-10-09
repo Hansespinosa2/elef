@@ -10,6 +10,7 @@ const e2eBuild = process.env.ELEF_E2E_BUILD === "1"
 const output = path.join(frontendRoot, e2eBuild ? "dist-e2e" : "dist")
 const assets = path.join(output, "assets")
 const sharedModuleAliases = {
+  "#elef/art-source": "lib/art_source.js",
   "#elef/preview-sanitizer": "lib/preview_sanitizer.js",
   "#elef/authoring-settings": "lib/authoring_settings.js",
   "#elef/authoring-registry-write": "lib/authoring_registry_write.js"

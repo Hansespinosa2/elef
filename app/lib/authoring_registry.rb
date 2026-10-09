@@ -10,6 +10,7 @@ module AuthoringRegistry
 
   DIRECTIVE_SCHEMAS = {
     "align" => { grammar: ["alignment_or_position", "vertical_position?"], argument_count: { minimum: 1, maximum: 2 }, values: [["left", "center", "right", "top", "middle", "bottom"], ["top", "middle", "bottom"]] },
+    "art" => { grammar: [], argument_count: 0, values: [] },
     "section" => { grammar: ["text"], argument_count: 1, values: [] },
     "subsection" => { grammar: ["text"], argument_count: 1, values: [] },
     "footnote" => { grammar: ["text"], argument_count: 1, values: [] }

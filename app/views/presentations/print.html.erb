@@ -1,5 +1,5 @@
 <% content_for :title, "Print #{@presentation.title}" %>
-<main class="presentation-print presentation-surface work-theme-<%= @presentation.theme %> work-typography-<%= @presentation.typography %> slides-theme-<%= @presentation.theme %> slides-typography-<%= @presentation.typography %>" data-controller="print-view">
+<main class="presentation-print presentation-surface work-theme-<%= @presentation.theme %> work-typography-<%= @presentation.typography %> slides-theme-<%= @presentation.theme %> slides-typography-<%= @presentation.typography %>" data-controller="print-view<%= ' art-layout' if @presentation.slides.any? { |slide| slide.blocks.any? { |block| block.art } } %>">
   <div class="presentation-print-toolbar" aria-label="Print controls">
     <%= link_to "Back to editor", edit_presentation_path(@presentation), class: "button" %>
     <button type="button" class="button primary" data-action="print-view#print">Print / Save PDF</button>

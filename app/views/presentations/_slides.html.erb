@@ -1,6 +1,6 @@
 <% editable = local_assigns[:editable] || false %>
 <% editor_map = local_assigns[:editor_map] %>
-<div class="presentation-surface work-surface slides slides-theme-<%= presentation.theme %> slides-typography-<%= presentation.typography %> work-theme-<%= presentation.theme %> work-typography-<%= presentation.typography %><%= ' presentation-editor-projection' if editable %>" data-controller="mermaid-diagrams"<% if editable %> data-presentation-editor-target="canvas"<% end %>>
+<div class="presentation-surface work-surface slides slides-theme-<%= presentation.theme %> slides-typography-<%= presentation.typography %> work-theme-<%= presentation.theme %> work-typography-<%= presentation.typography %><%= ' presentation-editor-projection' if editable %>" data-controller="mermaid-diagrams<%= ' art-layout' if presentation.slides.any? { |slide| slide.blocks.any? { |block| block.art } } %>"<% if editable %> data-presentation-editor-target="canvas"<% end %>>
   <% presentation.slides.each do |slide| %>
     <div class="slide-frame" data-controller="presentation-canvas"<% if editable %> data-editor-slide-id="slide-<%= slide.index + 1 %>"<% end %>>
       <%= render "slide", slide: slide, presentation: presentation, margin_settings: presentation.document.margin_settings, editable: editable, editor_map: editor_map %>

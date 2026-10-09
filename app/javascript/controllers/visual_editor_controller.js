@@ -2,6 +2,7 @@ import { Controller } from "@hotwired/stimulus"
 import { editorFor } from "lib/editor_controller_lookup"
 import { enableVisualModeAfterPreview, enableVisualModeFromInstalledPreview } from "lib/editor_view"
 import { setProjectionBlockEditable } from "lib/projection_editability"
+import { blockOperationRange, blockOperationStart } from "lib/editor_block_ranges"
 import { markdownForVisibleText, renderInlineMath, sourceOffsetForVisiblePosition } from "controllers/editor_markdown"
 import {
   moveCaretBetweenBlocks,
@@ -317,26 +318,8 @@ export default class extends Controller {
 
   blockSourceRange(block) {
     const slide = this.map?.slides?.find((candidate) => candidate.blocks?.some((item) => item.id === block.id))
-    let from = block.range.start
-    let to = block.range.end
-    if (!slide || !block.position_directive_id) return { from, to }
-
-    const directiveIndex = slide.directives.findIndex((candidate) => candidate.id === block.position_directive_id)
-    const directive = slide.directives[directiveIndex]
-    if (!directive) return { from, to }
-
-    if (block.position_scope === "block") {
-      from = directive.range.start
-    } else if (block.position_scope === "group") {
-      const groupMembers = slide.blocks.filter((candidate) => candidate.position_directive_id === block.position_directive_id)
-      if (groupMembers.length === 1) {
-        from = directive.range.start
-        const closing = slide.directives.slice(directiveIndex + 1).find((candidate) => candidate.type === "position_close")
-        if (closing) to = closing.range.end
-      }
-    }
-
-    return { from, to }
+    const range = slide ? blockOperationRange(slide, block) : { start: block.range.start, end: block.range.end }
+    return { from: range.start, to: range.end }
   }
 
   restoreProjectionCaret() {

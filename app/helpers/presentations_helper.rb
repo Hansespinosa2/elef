@@ -1,14 +1,19 @@
 module PresentationsHelper
-  def render_markdown(markdown, work: @presentation)
+  def render_markdown(markdown, work: @presentation, art: false, host_mode: "fixed")
+    if art
+      return Source::Renderer.render_art_block(
+        markdown,
+        host_mode: host_mode,
+        media_resolver: presentation_media_resolver(work)
+      )
+    end
     return Source::Renderer.render(markdown) unless work&.id
 
-    @media_resolvers ||= {}
-    resolver = (@media_resolvers[work.object_id] ||= WorkAssets.resolver_for(work))
-    Source::Renderer.render(markdown, media_resolver: resolver)
+    Source::Renderer.render(markdown, media_resolver: presentation_media_resolver(work))
   end
 
   def render_editor_block(markdown, editor_block, work: @presentation)
-    rendered = render_markdown(markdown, work: work)
+    rendered = render_markdown(markdown, work: work, art: !!editor_block&.dig(:art))
     return rendered unless editor_block&.dig(:kind) == "image"
 
     alt = markdown.to_s.match(/\A\s*!\[([^\]]*)\]/)&.[](1).to_s
@@ -18,6 +23,13 @@ module PresentationsHelper
         content_tag(:figcaption, alt, class: "editor-media-caption", aria: { label: "Editable image alt text" }, title: "Edit image alt text")
       ])
     end
+  end
+
+  def presentation_media_resolver(work)
+    return nil unless work&.id
+
+    @media_resolvers ||= {}
+    @media_resolvers[work.object_id] ||= WorkAssets.resolver_for(work)
   end
 
   def position_classes(position)

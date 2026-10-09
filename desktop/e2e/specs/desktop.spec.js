@@ -16,6 +16,7 @@ import { presentationModeWorkflow } from "../../../test/e2e/scenarios/presentati
 import { vimRelativeLineNumbersWorkflow } from "../../../test/e2e/scenarios/vim-relative-line-numbers.js"
 import { documentPageAspectRatioWorkflow } from "../../../test/e2e/scenarios/document-page-aspect-ratio.js"
 import { displayMathEnterWorkflow } from "../../../test/e2e/scenarios/display-math-enter.js"
+import { artRenderingWorkflow } from "../../../test/e2e/scenarios/art-rendering.js"
 import { createHash } from "node:crypto"
 import { answerMacNativeDialog } from "../mac-native-dialog.js"
 
@@ -1086,6 +1087,40 @@ class DesktopEditorUi {
     }
   }
 
+  async waitForArtRoots(count) {
+    await browser.waitUntil(async () => (await $$("#desktop-preview [data-elef-art-root]")).length === count, {
+      timeout: 10_000,
+      timeoutMsg: `The desktop preview did not render ${count} Art roots`
+    })
+  }
+
+  async readArtSemantics() {
+    return browser.execute(() => [...document.querySelectorAll("#desktop-preview [data-elef-art-root]")].map(root => {
+      const list = root.querySelector(":scope > .elef-art-list")
+      const items = [...(list?.children || [])]
+      return {
+        mode: root.dataset.artMode,
+        density: root.dataset.artDensity,
+        status: root.dataset.artStatus,
+        layout: root.dataset.artLayout,
+        rootTag: list?.tagName,
+        itemCount: items.length,
+        itemText: items.map(item => {
+          const walker = document.createTreeWalker(item, NodeFilter.SHOW_TEXT)
+          const parts = []
+          while (walker.nextNode()) {
+            const text = walker.currentNode.textContent.trim()
+            if (text) parts.push(text)
+          }
+          return parts.join(" ").replace(/\s+/g, " ").trim()
+        }),
+        nestedListTag: items[0]?.querySelector(":scope > ol, :scope > ul")?.tagName || null,
+        start: list?.hasAttribute("start") ? list.getAttribute("start") : null,
+        blockClass: root.closest(".slide-block")?.className || ""
+      }
+    }))
+  }
+
   async inspectHostilePreview() {
     return browser.execute(() => {
       const preview = document.querySelector("#desktop-preview")
@@ -1984,6 +2019,10 @@ describe("desktop binary workflows and native boundaries", () => {
 
   it("persists appearance through the shared editing flow", async () => {
     await appearanceWorkflow(new DesktopEditorUi())
+  })
+
+  it("renders shared Art list semantics in the Tauri binary", async () => {
+    await artRenderingWorkflow(new DesktopEditorUi())
   })
 
   it("runs the shared external-edit conflict flow in the desktop binary", async () => {

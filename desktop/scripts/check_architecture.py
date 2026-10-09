@@ -167,6 +167,10 @@ assert "await this.destroy();" in (REPO_ROOT / "desktop/frontend/node_modules/@t
 assert not any(permission.startswith(("fs:", "shell:", "dialog:")) for permission in permissions)
 assert config["app"]["security"]["capabilities"] == ["main-capability"], "production must not attach the E2E WebDriver capability"
 assert e2e_config["app"]["security"]["capabilities"] == ["main-capability", "e2e-webdriver"], "the test build must attach only the production and E2E capabilities"
+e2e_updater = e2e_config["plugins"]["updater"]
+assert e2e_updater["endpoints"] == ["http://127.0.0.1:8888/manifest"], "the E2E updater fixture must stay loopback-only"
+assert e2e_updater.get("dangerousInsecureTransportProtocol") is True, "only the release-mode E2E fixture may opt into its loopback HTTP updater"
+assert not performance_config.get("plugins", {}).get("updater", {}).get("dangerousInsecureTransportProtocol"), "the release measurement config must keep secure updater transport"
 assert set(e2e_capability["permissions"]) == {
     "wdio:default",
     "wdio-webdriver:default",
