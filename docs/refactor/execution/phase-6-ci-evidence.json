@@ -1,0 +1,134 @@
+{
+ "artifacts": [
+  {
+   "id": 11590685193,
+   "name": "native-performance-darwin"
+  },
+  {
+   "id": 11588729342,
+   "name": "native-performance-linux"
+  },
+  {
+   "id": 11590132319,
+   "name": "ci-attestation-pr136-run37867338543-attempt2",
+   "note": "Attests run_attempt 2 (failed-job rerun) on candidate 1c043b67f6b2b17d4f3b1409d1ce22a5fab3d477."
+  }
+ ],
+ "candidate_sha": "1c043b67f6b2b17d4f3b1409d1ce22a5fab3d477",
+ "jobs": [
+  {
+   "conclusion": "success",
+   "id": 113623368388,
+   "name": "desktop-fast"
+  },
+  {
+   "conclusion": "success",
+   "id": 113623370924,
+   "name": "test"
+  },
+  {
+   "conclusion": "success",
+   "id": 113623378797,
+   "name": "system-test"
+  },
+  {
+   "conclusion": "success",
+   "id": 113623363089,
+   "name": "affected"
+  },
+  {
+   "conclusion": "success",
+   "id": 113623373062,
+   "name": "sqlite-test"
+  },
+  {
+   "conclusion": "success",
+   "id": 113623369964,
+   "name": "desktop",
+   "shared_scenarios": "success",
+   "shared_scenarios_note": "Shared library and document graph flow passes in the Linux binary through the new client graph module (renderGraphView + GraphController); portable graph keys/aliases resolve after archive import."
+  },
+  {
+   "conclusion": "success",
+   "id": 113623332213,
+   "name": "desktop-macos",
+   "shared_scenarios": "success",
+   "shared_scenarios_note": "Same shared graph flows pass in the macOS binary."
+  },
+  {
+   "conclusion": "success",
+   "id": 113623333860,
+   "name": "renderer-macos"
+  },
+  {
+   "conclusion": "success",
+   "id": 113623359826,
+   "name": "scan_js"
+  },
+  {
+   "conclusion": "success",
+   "id": 113623333255,
+   "name": "scan_ruby"
+  },
+  {
+   "conclusion": "success",
+   "id": 113623375035,
+   "name": "production-smoke"
+  },
+  {
+   "conclusion": "success",
+   "id": 113623333737,
+   "name": "development-smoke"
+  },
+  {
+   "conclusion": "skipped",
+   "id": 113623369498,
+   "name": "Authorize deployment after CI"
+  },
+  {
+   "conclusion": "success",
+   "id": 113628096226,
+   "name": "record-ci-attestation"
+  }
+ ],
+ "pull_request": {
+  "base_branch": "dev",
+  "base_sha": "3ce290e539f8e4a57e5a6dc0ba994073e53f3a6a",
+  "head_branch": "feat/refactor-desktop-and-web",
+  "number": 136,
+  "url": "https://github.com/Hansespinosa2/elef/pull/136"
+ },
+ "rails_conformance": {
+  "command": "node tests/host-conformance/run-node.js rails",
+  "conclusion": "success",
+  "job": "system-test",
+  "job_id": 113623378797,
+  "result": "conformance rails: 11 passed, 1 skipped, 0 failed (suite v12 cases)"
+ },
+ "run": {
+  "attempt": 2,
+  "conclusion": "success",
+  "event": "pull_request",
+  "id": 37867338543,
+  "note": "Attempt 1: all green except desktop-macos (2 editor-focus scenario flakes: next-deck-after-focus, CodeMirror keyboard; graph flows green; delta to prior green run was bin/check tooling only). Attempt 2 (rerun failed jobs, no code change): desktop-macos success. Run API head_sha equals the exact candidate.",
+  "url": "https://github.com/Hansespinosa2/elef/actions/runs/37867338543"
+ },
+ "schema_version": 1,
+ "tauri_conformance": {
+  "conclusion": "success",
+  "jobs": [
+   {
+    "job_id": 113623369964,
+    "name": "desktop",
+    "result": "spec file PASSED (desktop invoke shard, both shards)",
+    "spec": "specs/contract-conformance.spec.js"
+   },
+   {
+    "job_id": 113623332213,
+    "name": "desktop-macos",
+    "result": "spec file PASSED (desktop invoke shard, both shards)",
+    "spec": "specs/contract-conformance.spec.js"
+   }
+  ]
+ }
+}

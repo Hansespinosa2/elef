@@ -3,10 +3,10 @@
   "campaign_branch": "feat/refactor-desktop-and-web",
   "campaign_base_sha": "88f61a7a8ffd7c276bafcf06eee09c36a8adf134",
   "current_phase": 6,
-  "phase_state": "CHECK",
+  "phase_state": "DO",
   "phase_base_sha": "dff371c49ced594eb228123ec0d28cd753007f6e",
   "head_sha": "1c043b67f6b2b17d4f3b1409d1ce22a5fab3d477",
-  "review_round": 1,
+  "review_round": 0,
   "phase_contract_sha256": "b1d5bf64b406f60d80f745606da3c73ffc504c09f83eaa53a1bb2f796c374bd9",
   "frozen_plan_sha256": "39a9e889d813071c2e9a596f0b7e67b72c6ed57bd28aa6e41530e19e37c19ab1",
   "last_completed_phase": 5,
@@ -265,14 +265,6 @@
       "head": "daa818f",
       "duration_s": 43.5,
       "tier": "affected"
-    },
-    {
-      "command": "bin/check phase 6 --json",
-      "exit": 0,
-      "head": "1c043b67f6b2b17d4f3b1409d1ce22a5fab3d477",
-      "duration_s": 29.352,
-      "tier": "phase",
-      "attempt_id": "1170e36edf2149e19b25945cdcf8a8da"
     }
   ],
   "execution_environment": {
@@ -287,5 +279,5 @@
   },
   "pending_human_gates": [],
   "blocker": null,
-  "next_action": "Phase 06 CHECK: candidate 1c043b6 (graph switch-over) gated exit 0 (attempt 1170e36e, 29.4s) with full CI green (run 37867338543 attempt 2); independent review round 1 requested."
+  "next_action": "Phase 06 DO-4 pushed (request guard + tests); affected PASS; CI run 37863713242 underway for gate evidence."
 }
