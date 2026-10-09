@@ -1,5 +1,5 @@
 require "minitest/autorun"
-require_relative "../../scripts/check_pr_description"
+require_relative "../../../../tooling/check_pr_description"
 
 class CheckPrDescriptionTest < Minitest::Test
   VALID_BODY = <<~MARKDOWN

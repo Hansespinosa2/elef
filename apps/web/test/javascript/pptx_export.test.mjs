@@ -3,7 +3,7 @@ import test from "node:test"
 
 // The engine moved to the shared client export feature (the Stimulus
 // controller is retired); behavior coverage now imports the client module.
-const pptx = await import("../../packages/client/src/features/export/pptx.js")
+const pptx = await import("../../../../packages/client/src/features/export/pptx.js")
 
 const {
   blockMarkup,

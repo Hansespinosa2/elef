@@ -5,7 +5,7 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { parseHTML } from "linkedom"
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..")
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../../..")
 const clientStubUrl = `data:text/javascript;base64,${Buffer.from(`
 export class DocumentEditor {
   constructor(options) { this.options = options; this.calls = [] }
@@ -23,7 +23,7 @@ export class DocumentEditor {
   restoreCaret() { this.calls.push("restoreCaret"); return true }
 }
 `).toString("base64")}`
-const source = (await readFile(path.join(root, "app/javascript/controllers/visual_editor_controller.js"), "utf8"))
+const source = (await readFile(path.join(root, "apps/web/app/javascript/controllers/visual_editor_controller.js"), "utf8"))
   .replace('import { Controller } from "@hotwired/stimulus"', "class Controller {}")
   .replace('import { DocumentEditor } from "@elef/client"', `import { DocumentEditor } from "${clientStubUrl}"`)
   .replace(/^import \{[^}]*\} from "lib\/editor_controller_lookup";?$/m, "const editorFor = () => null")

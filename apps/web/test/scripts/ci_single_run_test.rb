@@ -2,7 +2,7 @@
 
 require "yaml"
 
-workflow_path = File.expand_path("../../.github/workflows/ci.yml", __dir__)
+workflow_path = File.expand_path("../../../../.github/workflows/ci.yml", __dir__)
 workflow = YAML.load_file(workflow_path, aliases: true)
 events = workflow["on"] || workflow[true]
 jobs = workflow.fetch("jobs")

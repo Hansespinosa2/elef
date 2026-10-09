@@ -4,16 +4,16 @@ import { readFile } from "node:fs/promises"
 import path from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..")
-const source = (await readFile(path.join(root, "app/javascript/controllers/preview_controller.js"), "utf8"))
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../../..")
+const source = (await readFile(path.join(root, "apps/web/app/javascript/controllers/preview_controller.js"), "utf8"))
   .replace('import { Controller } from "@hotwired/stimulus"', "class Controller {}")
   .replace(
     'import { installPreviewHtml } from "lib/editor_view"',
-    `import { installPreviewHtml } from "${pathToFileURL(path.join(root, "app/javascript/lib/editor_view.js")).href}"`
+    `import { installPreviewHtml } from "${pathToFileURL(path.join(root, "apps/web/app/javascript/lib/editor_view.js")).href}"`
   )
   .replace(
     'import { buildPreviewRequestBody } from "lib/preview_request_body"',
-    `import { buildPreviewRequestBody } from "${pathToFileURL(path.join(root, "app/javascript/lib/preview_request_body.js")).href}"`
+    `import { buildPreviewRequestBody } from "${pathToFileURL(path.join(root, "apps/web/app/javascript/lib/preview_request_body.js")).href}"`
   )
   .replace(
     'import { attachCanvasScaling } from "@elef/client"',

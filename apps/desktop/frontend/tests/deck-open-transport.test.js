@@ -1,6 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { prepareDeckOpen } from "../../../app/javascript/lib/deck_open_flow.js"
+import { prepareDeckOpen } from "../../../../apps/web/app/javascript/lib/deck_open_flow.js"
 import { createTransportAdapter } from "../src/transport-adapter.js"
 
 const hashA = "a".repeat(64)

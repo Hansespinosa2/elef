@@ -7,12 +7,12 @@ import re
 from pathlib import Path
 
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-TAURI_ROOT = REPO_ROOT / "desktop" / "src-tauri"
+REPO_ROOT = Path(__file__).resolve().parents[3]
+TAURI_ROOT = REPO_ROOT / "apps" / "desktop" / "src-tauri"
 
 
 def application_stylesheet_sources() -> str:
-    stylesheet_root = REPO_ROOT / "app" / "assets" / "stylesheets"
+    stylesheet_root = REPO_ROOT / "apps" / "web" / "app" / "assets" / "stylesheets"
     index = (stylesheet_root / "application.css").read_text()
     imports = re.findall(r'(?m)^\s*@import url\("\.\/([^"\n]+\.css)"\) layer\([^)]+\);\s*$', index)
     return "\n".join((stylesheet_root / path).read_text() for path in imports)
@@ -33,26 +33,26 @@ config = json.loads((TAURI_ROOT / "tauri.conf.json").read_text())
 e2e_config = json.loads((TAURI_ROOT / "tauri.e2e.conf.json").read_text())
 performance_config = json.loads((TAURI_ROOT / "tauri.performance.conf.json").read_text())
 assert performance_config == {"plugins": {"updater": {"endpoints": ["https://127.0.0.1:8888/manifest"]}}}, "release measurement must keep secure transport and a loopback-only offline check"
-performance_benchmark = (REPO_ROOT / "desktop" / "e2e" / "benchmark-native.mjs").read_text()
+performance_benchmark = (REPO_ROOT / "apps" / "desktop" / "e2e" / "benchmark-native.mjs").read_text()
 ci_workflow = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text()
 assert 'process.argv.includes("--report-runner")' in performance_benchmark, "hosted native performance must be identified explicitly"
 assert 'report.budgetMode = reportOnly ? "runner-report-only" : "enforced"' in performance_benchmark
 assert 'assert.deepEqual(report.misses, [], "Native release application performance exceeded its budgets")' in performance_benchmark, "target-device performance runs must keep hard budget assertions"
 assert ci_workflow.count("benchmark-native.mjs --binary") == 2 and ci_workflow.count("--report-runner") == 2, "both hosted benchmark jobs must report their measurements without claiming target-device enforcement"
-feature_flags_source = (REPO_ROOT / "app" / "javascript" / "lib" / "feature_flags.js").read_text()
+feature_flags_source = (REPO_ROOT / "apps" / "web" / "app" / "javascript" / "lib" / "feature_flags.js").read_text()
 delivery_plan = (REPO_ROOT / "docs" / "desktop" / "delivery-plan.md").read_text()
-document_model = (REPO_ROOT / "app" / "lib" / "source" / "document.rb").read_text()
-javascript_renderer = (REPO_ROOT / "app" / "lib" / "source" / "javascript_renderer.rb").read_text()
-renderer_global = (REPO_ROOT / "app" / "javascript" / "lib" / "renderer_global.js").read_text()
-renderer_worker = (REPO_ROOT / "desktop" / "frontend" / "src" / "renderer-worker.js").read_text()
-desktop_main = (REPO_ROOT / "desktop" / "frontend" / "src" / "main.js").read_text()
-desktop_application = (REPO_ROOT / "app" / "javascript" / "lib" / "file_library_application.js").read_text()
-native_render_styles = (REPO_ROOT / "app" / "assets" / "stylesheets" / "file_library_host.css").read_text()
+document_model = (REPO_ROOT / "apps" / "web" / "app" / "lib" / "source" / "document.rb").read_text()
+javascript_renderer = (REPO_ROOT / "apps" / "web" / "app" / "lib" / "source" / "javascript_renderer.rb").read_text()
+renderer_global = (REPO_ROOT / "apps" / "web" / "app" / "javascript" / "lib" / "renderer_global.js").read_text()
+renderer_worker = (REPO_ROOT / "apps" / "desktop" / "frontend" / "src" / "renderer-worker.js").read_text()
+desktop_main = (REPO_ROOT / "apps" / "desktop" / "frontend" / "src" / "main.js").read_text()
+desktop_application = (REPO_ROOT / "apps" / "web" / "app" / "javascript" / "lib" / "file_library_application.js").read_text()
+native_render_styles = (REPO_ROOT / "apps" / "web" / "app" / "assets" / "stylesheets" / "file_library_host.css").read_text()
 shared_application_styles = application_stylesheet_sources()
-desktop_frontend_source = REPO_ROOT / "desktop" / "frontend" / "src"
+desktop_frontend_source = REPO_ROOT / "apps" / "desktop" / "frontend" / "src"
 desktop_frontend_files = list(desktop_frontend_source.rglob("*"))
 assert not any(path.suffix.lower() in {".html", ".css"} for path in desktop_frontend_files), "desktop frontend must consume Rails-owned markup and styles, not own UI files"
-app_javascript_source = REPO_ROOT / "app" / "javascript"
+app_javascript_source = REPO_ROOT / "apps" / "web" / "app" / "javascript"
 app_import_pattern = re.compile(r"(?:\bfrom\s*|\bimport\s*(?:\(\s*)?)['\"]([^'\"]+)['\"]")
 for source_file in app_javascript_source.rglob("*.js"):
     source = source_file.read_text()
@@ -80,9 +80,9 @@ shared_library_sources.append(
 shared_library_sources.append(
     (REPO_ROOT / "packages" / "client" / "src" / "features" / "graph" / "graphController.ts").read_text()
 )
-assert 'import "../../../app/assets/stylesheets/application.css"' in desktop_main, "desktop must bundle Rails rendering and authoring styles"
+assert 'import "../../../../apps/web/app/assets/stylesheets/application.css"' in desktop_main, "desktop must bundle Rails rendering and authoring styles"
 assert 'lib/performance_measurement' in desktop_application, "desktop performance UI must reuse the Rails-owned browser measurement helper"
-assert (REPO_ROOT / "desktop" / "frontend" / "src" / "performance-measurement.js").exists() is False, "desktop must not own a second performance measurement helper"
+assert (REPO_ROOT / "apps" / "desktop" / "frontend" / "src" / "performance-measurement.js").exists() is False, "desktop must not own a second performance measurement helper"
 assert not re.search(r"^\.(?:slide-frame|slide-content|presentation-surface|document-surface|katex)(?:\s|\{|:)", native_render_styles, re.MULTILINE), "the Rails-owned host stylesheet must not duplicate rendered-content styles"
 shared_library_classes = set()
 for source in shared_library_sources:
@@ -151,12 +151,12 @@ for shared_selector in (
     ".authoring-settings-list",
 ):
     assert shared_selector in shared_application_styles, f"shared settings styles must be owned by application.css: {shared_selector}"
-web_shell = (REPO_ROOT / "app" / "views" / "library" / "shell.html.erb").read_text()
-web_controller = (REPO_ROOT / "app" / "javascript" / "controllers" / "client_shell_controller.js").read_text()
+web_shell = (REPO_ROOT / "apps" / "web" / "app" / "views" / "library" / "shell.html.erb").read_text()
+web_controller = (REPO_ROOT / "apps" / "web" / "app" / "javascript" / "controllers" / "client_shell_controller.js").read_text()
 client_index = (REPO_ROOT / "packages" / "client" / "src" / "index.ts").read_text()
 graph_view = (REPO_ROOT / "packages" / "client" / "src" / "features" / "graph" / "graphView.ts").read_text()
 graph_controller = (REPO_ROOT / "packages" / "client" / "src" / "features" / "graph" / "graphController.ts").read_text()
-graph_partial = (REPO_ROOT / "app" / "views" / "presentations" / "_document_graph.html.erb").read_text()
+graph_partial = (REPO_ROOT / "apps" / "web" / "app" / "views" / "presentations" / "_document_graph.html.erb").read_text()
 assert "export { mountElef }" in client_index, "the shared client must expose a single mount entry point"
 assert '"@elef/client"' in web_controller and "mountElef" in web_controller, "Rails must mount library UI through the shared client entry"
 assert '"@elef/client"' in desktop_application and "mountElef" in desktop_application, "desktop must mount the same shared client entry"
@@ -164,7 +164,7 @@ assert 'data-controller="client-shell"' in web_shell, "Rails library routes must
 assert "<article" not in web_shell, "Rails library shell must not duplicate client card markup"
 assert "<article" not in desktop_application and 'createElement("article")' not in desktop_application, "desktop must not keep a second library card template"
 assert "renderLibraryCard" not in desktop_application and "renderLibraryCard" not in web_controller, "both hosts must use the client mount, not the retired card renderer"
-for retired in ("app/javascript/lib/library_view.js", "app/javascript/lib/library_card.js", "app/views/library/_work_card.html.erb"):
+for retired in ("apps/web/app/javascript/lib/library_view.js", "apps/web/app/javascript/lib/library_card.js", "apps/web/app/views/library/_work_card.html.erb"):
     assert not (REPO_ROOT / retired).exists(), f"retired library implementation must stay deleted: {retired}"
 assert "renderGraphView" in graph_view and "GraphController" in graph_controller, "the shared client must own graph rendering and interaction"
 assert "renderGraphView" in desktop_application and "GraphController" in desktop_application, "desktop must render the graph through the shared client module"
@@ -212,7 +212,7 @@ assert {permission for permission in permissions if permission.startswith("core:
     "core:window:allow-set-fullscreen",
     "core:resources:allow-close",
 }, "grant only events, window close completion, presentation fullscreen, and releasing updater resources"
-assert "await this.destroy();" in (REPO_ROOT / "desktop/frontend/node_modules/@tauri-apps/api/window.js").read_text(), "recheck window permissions when the close-listener implementation changes"
+assert "await this.destroy();" in (REPO_ROOT / "apps/desktop/frontend/node_modules/@tauri-apps/api/window.js").read_text(), "recheck window permissions when the close-listener implementation changes"
 assert not any(permission.startswith(("fs:", "shell:", "dialog:")) for permission in permissions)
 assert config["app"]["security"]["capabilities"] == ["main-capability"], "production must not attach the E2E WebDriver capability"
 assert e2e_config["app"]["security"]["capabilities"] == ["main-capability", "e2e-webdriver"], "the test build must attach only the production and E2E capabilities"
@@ -225,7 +225,7 @@ assert set(e2e_capability["permissions"]) == {
 }, "only the test-only capability may expose WebdriverIO and fixture downloads"
 assert e2e_config["app"].get("withGlobalTauri") is True, "global Tauri access is enabled only for the test-only WebdriverIO build"
 assert config["app"].get("withGlobalTauri") is not True, "production must not expose the global Tauri API"
-production_frontend = (REPO_ROOT / "desktop/frontend/dist/assets/app.js").read_text()
+production_frontend = (REPO_ROOT / "apps/desktop/frontend/dist/assets/app.js").read_text()
 assert "__elefPerformanceTestHooks" not in production_frontend, "native measurement hooks must be absent from the production frontend"
 assert "__elefPresentationTestHooks" not in production_frontend, "presentation test hooks must be absent from the production frontend"
 assert config["plugins"]["updater"].get("requireSignedVersion") is True, "bind update versions to signed artifacts"
@@ -253,8 +253,8 @@ assert re.search(r"def editor_map\([^)]*\).*?Source::JavascriptRenderer\.editor_
 assert '"ElefRenderer.buildEditorMap"' in javascript_renderer, "the Rails wrapper must call the shared map exported by the renderer bundle"
 assert "buildEditorMap" in renderer_global and "buildEditorStructure" in renderer_global, "the renderer bundle must expose the shared editor map and structure"
 assert 'import "./renderer.bundle.js"' in renderer_worker, "the desktop worker must load the same renderer bundle as Rails"
-rails_bundle = REPO_ROOT / "vendor" / "javascript" / "elef-renderer.bundle.js"
-desktop_bundle = REPO_ROOT / "desktop" / "frontend" / "dist" / "assets" / "renderer.bundle.js"
+rails_bundle = REPO_ROOT / "apps" / "web" / "vendor" / "javascript" / "elef-renderer.bundle.js"
+desktop_bundle = REPO_ROOT / "apps" / "desktop" / "frontend" / "dist" / "assets" / "renderer.bundle.js"
 assert desktop_bundle.is_file(), "build the desktop frontend before checking the shared renderer bundle"
 rails_hash = hashlib.sha256(rails_bundle.read_bytes()).hexdigest()
 desktop_hash = hashlib.sha256(desktop_bundle.read_bytes()).hexdigest()

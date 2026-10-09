@@ -6,10 +6,10 @@ import { fileURLToPath } from "node:url"
 // Same exact-byte corpus as the Node fixtures test, evaluated in Chromium
 // against the shipped bundle. Needs no Rails server.
 const e2eRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
-const repoRoot = path.resolve(e2eRoot, "../..")
-const inputs = JSON.parse(await readFile(path.join(repoRoot, "test/javascript/fixtures/renderer-inputs.json"), "utf8"))
-const outputs = JSON.parse(await readFile(path.join(repoRoot, "test/javascript/fixtures/renderer-outputs.json"), "utf8"))
-const bundlePath = path.join(repoRoot, "vendor/javascript/elef-renderer.bundle.js")
+const repoRoot = path.resolve(e2eRoot, "../../..")
+const inputs = JSON.parse(await readFile(path.join(repoRoot, "apps/web/test/javascript/fixtures/renderer-inputs.json"), "utf8"))
+const outputs = JSON.parse(await readFile(path.join(repoRoot, "apps/web/test/javascript/fixtures/renderer-outputs.json"), "utf8"))
+const bundlePath = path.join(repoRoot, "apps/web/vendor/javascript/elef-renderer.bundle.js")
 
 test.describe("renderer corpus in Chromium", () => {
   test.beforeEach(async ({ page }) => {

@@ -3,7 +3,7 @@ import { cp, mkdir, readdir, rm } from "node:fs/promises"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 
-const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
+const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..")
 const target = path.join(repo, "target")
 const output = path.join(target, "e2e-packages")
 const platform = process.platform
@@ -15,7 +15,7 @@ await mkdir(output, { recursive: true })
 // Keys are generated later, in memory by the fixture server. No production key
 // or release publication is involved in these isolated test packages.
 for (const [name, version] of [["n", "0.2.0"], ["n-1", "0.1.0"]]) {
-  execFileSync("npm", ["run", "tauri:build", "--prefix", "desktop/frontend", "--",
+  execFileSync("npm", ["run", "tauri:build", "--prefix", "apps/desktop/frontend", "--",
     "--debug", "--features", "webdriver", "--bundles", platform === "darwin" ? "app" : "appimage",
     "--config", "src-tauri/tauri.e2e.conf.json", "--config", JSON.stringify({ version })], {
     cwd: repo, env: { ...process.env, ELEF_E2E_BUILD: "1" }, stdio: "inherit"

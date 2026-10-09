@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { createTitleSaveFlow } from "../../../packages/client/src/session/title_save_flow.js"
+import { createTitleSaveFlow } from "../../../../../packages/client/src/session/title_save_flow.js"
 
 function harness({ renameDeck = async (id, name) => ({ id, name }) } = {}) {
   let deck = { id: "deck-1", name: "First title" }

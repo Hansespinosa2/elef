@@ -21,7 +21,7 @@ Rules (constitution section 4, Phase 01 plan section 8):
   R7  package sources stay pure: no DOM/host-environment tokens in
       work-model, no editor-chrome tokens in renderer.
   R8  Ruby and Rust do not reinterpret Work syntax: no renderer, parser or
-      fence-scan literals in app/lib, crates or desktop/src-tauri, except
+      fence-scan literals in apps/web/app/lib, crates or apps/desktop/src-tauri, except
       the single delegating slide-range wrapper.
   R9  the interactive client is host-free (P04-05): packages/client/src
       imports only relative sources, react, and @elef packages, and
@@ -294,7 +294,7 @@ def check_client_isolation() -> list[str]:
     return violations
 
 
-SETTINGS_STYLESHEET_OWNER = Path("app/assets/stylesheets/components/settings.css")
+SETTINGS_STYLESHEET_OWNER = Path("apps/web/app/assets/stylesheets/components/settings.css")
 
 # Directory names that never hold a styles owner: generated bundles,
 # vendored code, staged canary fixtures, and disposable review/gate
@@ -321,7 +321,7 @@ def check_settings_styles() -> list[str]:
 
 def check_no_reinterpretation() -> list[str]:
     violations = []
-    scopes = [ROOT / "app" / "lib", ROOT / "crates", ROOT / "desktop" / "src-tauri"]
+    scopes = [ROOT / "apps" / "web" / "app" / "lib", ROOT / "crates", ROOT / "apps" / "desktop" / "src-tauri"]
     for scope in scopes:
         if not scope.is_dir():
             continue
@@ -336,7 +336,7 @@ def check_no_reinterpretation() -> list[str]:
                 if not REINTERPRET_PATTERN.search(line):
                     continue
                 if (
-                    source == ROOT / "app" / "lib" / "source" / "document.rb"
+                    source == ROOT / "apps" / "web" / "app" / "lib" / "source" / "document.rb"
                     and RANGE_WRAPPER_ALLOW.match(line)
                 ):
                     continue
@@ -419,10 +419,10 @@ def self_test() -> int:
         shutil.copytree(PACKAGES, stage / "packages")
         shutil.copytree(ROOT / "crates", stage / "crates")
         shutil.copytree(ROOT / "tests", stage / "tests")
-        shutil.copytree(ROOT / "app" / "lib", stage / "app" / "lib")
+        shutil.copytree(ROOT / "apps" / "web" / "app" / "lib", stage / "apps" / "web" / "app" / "lib")
         shutil.copytree(
-            ROOT / "app" / "assets" / "stylesheets",
-            stage / "app" / "assets" / "stylesheets",
+            ROOT / "apps" / "web" / "app" / "assets" / "stylesheets",
+            stage / "apps" / "web" / "app" / "assets" / "stylesheets",
         )
         for fixture in sorted(CANARY.rglob("*")):
             if not fixture.is_file():

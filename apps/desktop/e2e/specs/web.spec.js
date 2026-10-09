@@ -1,32 +1,32 @@
 import { expect, test } from "@playwright/test"
-import { editAndPreviewWorkflow, SAVED_SOURCE } from "../../../test/e2e/scenarios/edit-and-preview.js"
-import { appearanceWorkflow } from "../../../test/e2e/scenarios/appearance.js"
-import { libraryAndGraphWorkflow } from "../../../test/e2e/scenarios/library-and-graph.js"
-import { libraryCreateDeleteWorkflow } from "../../../test/e2e/scenarios/library-create-delete.js"
-import { libraryDeepLinksWorkflow } from "../../../test/e2e/scenarios/library-deep-links.js"
-import { externalEditConflictWorkflow, CONFLICT_EXTERNAL_SOURCE } from "../../../test/e2e/scenarios/external-edit-conflict.js"
-import { hostileDeckNeutralizedWorkflow } from "../../../test/e2e/scenarios/hostile-deck.js"
-import { documentLinkCompletionWorkflow, mathInputWorkflow, snippetInsertWorkflow } from "../../../test/e2e/scenarios/authoring-palettes.js"
-import { authoringSettingsWorkflow } from "../../../test/e2e/scenarios/authoring-settings.js"
-import { PIXEL_PNG_MARKDOWN } from "../../../test/e2e/scenarios/media-fixture.js"
-import { presentationModeWorkflow } from "../../../test/e2e/scenarios/presentation-mode.js"
-import { vimRelativeLineNumbersWorkflow } from "../../../test/e2e/scenarios/vim-relative-line-numbers.js"
-import { documentPageAspectRatioWorkflow } from "../../../test/e2e/scenarios/document-page-aspect-ratio.js"
-import { exportWorkflow } from "../../../test/e2e/scenarios/export.js"
+import { editAndPreviewWorkflow, SAVED_SOURCE } from "../../../../apps/web/test/e2e/scenarios/edit-and-preview.js"
+import { appearanceWorkflow } from "../../../../apps/web/test/e2e/scenarios/appearance.js"
+import { libraryAndGraphWorkflow } from "../../../../apps/web/test/e2e/scenarios/library-and-graph.js"
+import { libraryCreateDeleteWorkflow } from "../../../../apps/web/test/e2e/scenarios/library-create-delete.js"
+import { libraryDeepLinksWorkflow } from "../../../../apps/web/test/e2e/scenarios/library-deep-links.js"
+import { externalEditConflictWorkflow, CONFLICT_EXTERNAL_SOURCE } from "../../../../apps/web/test/e2e/scenarios/external-edit-conflict.js"
+import { hostileDeckNeutralizedWorkflow } from "../../../../apps/web/test/e2e/scenarios/hostile-deck.js"
+import { documentLinkCompletionWorkflow, mathInputWorkflow, snippetInsertWorkflow } from "../../../../apps/web/test/e2e/scenarios/authoring-palettes.js"
+import { authoringSettingsWorkflow } from "../../../../apps/web/test/e2e/scenarios/authoring-settings.js"
+import { PIXEL_PNG_MARKDOWN } from "../../../../apps/web/test/e2e/scenarios/media-fixture.js"
+import { presentationModeWorkflow } from "../../../../apps/web/test/e2e/scenarios/presentation-mode.js"
+import { vimRelativeLineNumbersWorkflow } from "../../../../apps/web/test/e2e/scenarios/vim-relative-line-numbers.js"
+import { documentPageAspectRatioWorkflow } from "../../../../apps/web/test/e2e/scenarios/document-page-aspect-ratio.js"
+import { exportWorkflow } from "../../../../apps/web/test/e2e/scenarios/export.js"
 import { execFileSync } from "node:child_process"
 import path from "node:path"
 import { readFile } from "node:fs/promises"
 import { renderPreviewCore } from "@elef/renderer"
-import { editorChrome } from "../../../app/javascript/lib/preview_chrome.js"
+import { editorChrome } from "../../../../apps/web/app/javascript/lib/preview_chrome.js"
 
 const renderPreview = input => renderPreviewCore(input, { chrome: editorChrome })
 
 async function readApplicationStylesheet() {
-  const index = await readFile(new URL("../../../app/assets/stylesheets/application.css", import.meta.url), "utf8")
+  const index = await readFile(new URL("../../../../apps/web/app/assets/stylesheets/application.css", import.meta.url), "utf8")
   const layerOrder = index.match(/^\s*@layer [^;]+;/m)?.[0]
   const imports = [...index.matchAll(/^\s*@import url\("\.\/([^"\n]+\.css)"\) layer\(([^)]+)\);\s*$/gm)]
   const partials = await Promise.all(imports.map(([, path]) =>
-    readFile(new URL(`../../../app/assets/stylesheets/${path}`, import.meta.url), "utf8")
+    readFile(new URL(`../../../../apps/web/app/assets/stylesheets/${path}`, import.meta.url), "utf8")
   ))
 
   if (!layerOrder || imports.length === 0) throw new Error("Could not resolve the layered application stylesheet")
@@ -589,7 +589,7 @@ class WebEditorUi {
   async writeExternalSource(source) {
     const code = `Presentation.find(${Number(process.env.ELEF_E2E_CONFLICT_PRESENTATION_ID)}).update!(source: ${JSON.stringify(source)})`
     execFileSync("bin/rails", ["runner", "-e", "test", code], {
-      cwd: path.resolve(process.cwd(), "../.."),
+      cwd: path.resolve(process.cwd(), "../../../apps/web"),
       env: { ...process.env, RAILS_ENV: "test" },
       stdio: "pipe"
     })
@@ -660,7 +660,7 @@ class WebEditorUi {
       "runner", "-e", "test",
       `puts "ELEF_E2E_PERSISTED_SOURCE=#{${model}.find(${id}).source.to_json}"`
     ], {
-      cwd: path.resolve(process.cwd(), "../.."),
+      cwd: path.resolve(process.cwd(), "../../../apps/web"),
       env: { ...process.env, RAILS_ENV: "test" },
       encoding: "utf8"
     }).match(/^ELEF_E2E_PERSISTED_SOURCE=(.*)$/m)?.[1]
@@ -1006,9 +1006,9 @@ test("appearance persists through the shared editing flow", async ({ page }) => 
 
 test("shared rendering styles preserve slide layouts and document typography", async ({ page }) => {
   const styles = {
-    web: (await readFile(new URL("../../../app/assets/builds/tailwind.css", import.meta.url), "utf8")) +
+    web: (await readFile(new URL("../../../../apps/web/app/assets/builds/tailwind.css", import.meta.url), "utf8")) +
       applicationStylesheet,
-    desktop: (await readFile(new URL("../../../app/assets/stylesheets/file_library_host.css", import.meta.url), "utf8")) +
+    desktop: (await readFile(new URL("../../../../apps/web/app/assets/stylesheets/file_library_host.css", import.meta.url), "utf8")) +
       (await readFile(new URL("../../frontend/dist/assets/tailwind.css", import.meta.url), "utf8")) +
       (await readFile(new URL("../../frontend/dist/assets/app.css", import.meta.url), "utf8"))
   }
@@ -1054,9 +1054,9 @@ test("the source editor has matching styles in Rails and the desktop asset bundl
   const editorHtml = await page.locator(".editor-shell").evaluate(element => element.outerHTML)
   const codeMirrorStyles = await page.locator("head style").evaluateAll(styles => styles.map(style => style.textContent).join("\n"))
   const stylesheets = {
-    web: (await readFile(new URL("../../../app/assets/builds/tailwind.css", import.meta.url), "utf8")) +
+    web: (await readFile(new URL("../../../../apps/web/app/assets/builds/tailwind.css", import.meta.url), "utf8")) +
       applicationStylesheet,
-    desktop: (await readFile(new URL("../../../app/assets/stylesheets/file_library_host.css", import.meta.url), "utf8")) +
+    desktop: (await readFile(new URL("../../../../apps/web/app/assets/stylesheets/file_library_host.css", import.meta.url), "utf8")) +
       (await readFile(new URL("../../frontend/dist/assets/tailwind.css", import.meta.url), "utf8")) +
       (await readFile(new URL("../../frontend/dist/assets/app.css", import.meta.url), "utf8"))
   }

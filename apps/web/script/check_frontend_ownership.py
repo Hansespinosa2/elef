@@ -9,15 +9,15 @@ from collections import Counter
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[1]
-SHARED_RAILS_PATHS = ("app", "bin", "config", "lib", "script")
-DESKTOP_SOURCE_REFERENCE = re.compile(r"desktop/")
+ROOT = Path(__file__).resolve().parents[3]
+SHARED_RAILS_PATHS = ("apps/web/app", "apps/web/bin", "apps/web/config", "apps/web/lib", "apps/web/script")
+DESKTOP_SOURCE_REFERENCE = re.compile(r"apps/desktop/")
 MODULE_SPECIFIER = re.compile(r"(?:\bfrom\s*|\bimport\s*(?:\(\s*)?|\brequire\s*\(\s*)[\"']([^\"']+)[\"']")
 checker = Path(__file__).resolve()
 
 
 def application_stylesheet_sources() -> str:
-    stylesheet_root = ROOT / "app" / "assets" / "stylesheets"
+    stylesheet_root = ROOT / "apps" / "web" / "app" / "assets" / "stylesheets"
     index = (stylesheet_root / "application.css").read_text()
     imports = re.findall(r'(?m)^\s*@import url\("\.\/([^"\n]+\.css)"\) layer\([^)]+\);\s*$', index)
     return "\n".join((stylesheet_root / path).read_text() for path in imports)
@@ -39,11 +39,11 @@ assert not violations, (
     + ", ".join(violations)
 )
 
-app_frontend = ROOT / "app" / "javascript"
-desktop_root = (ROOT / "desktop").resolve()
+app_frontend = ROOT / "apps" / "web" / "app" / "javascript"
+desktop_root = (ROOT / "apps" / "desktop").resolve()
 
 # Desktop packages the canonical host template and styles from app/. Do not
-# allow a second authored view or stylesheet to appear under desktop/, even if
+# allow a second authored view or stylesheet to appear under apps/desktop/, even if
 # its JavaScript happens to import shared modules. Native menus and dialogs
 # are implemented with Tauri APIs and do not need frontend markup or CSS.
 desktop_ui_extensions = {
@@ -59,7 +59,7 @@ for directory, subdirectories, filenames in os.walk(desktop_root):
         if path.suffix.lower() in desktop_ui_extensions:
             desktop_ui_files.append(path.relative_to(ROOT).as_posix())
 assert not desktop_ui_files, (
-    "Desktop must consume Rails-owned UI markup and styles; move authored UI files under app/: "
+    "Desktop must consume Rails-owned UI markup and styles; move authored UI files under apps/web/app/: "
     + ", ".join(sorted(desktop_ui_files))
 )
 
@@ -81,7 +81,7 @@ assert not frontend_import_violations, (
     + ", ".join(frontend_import_violations)
 )
 
-app_host_sources = [*app_frontend.rglob("*.js"), ROOT / "app/views/desktop_host.html"]
+app_host_sources = [*app_frontend.rglob("*.js"), ROOT / "apps/web/app/views/desktop_host.html"]
 desktop_protocol_violations = [
     path.relative_to(ROOT).as_posix()
     for path in app_host_sources
@@ -92,36 +92,36 @@ assert not desktop_protocol_violations, (
     + ", ".join(desktop_protocol_violations)
 )
 
-build = (ROOT / "desktop/frontend/build.mjs").read_text()
-desktop_main = (ROOT / "desktop/frontend/src/main.js").read_text()
-tauri_config = json.loads((ROOT / "desktop/src-tauri/tauri.conf.json").read_text())
-desktop_scripts = json.loads((ROOT / "desktop/frontend/package.json").read_text())["scripts"]
-desktop_application = (ROOT / "app/javascript/lib/file_library_application.js").read_text()
+build = (ROOT / "apps/desktop/frontend/build.mjs").read_text()
+desktop_main = (ROOT / "apps/desktop/frontend/src/main.js").read_text()
+tauri_config = json.loads((ROOT / "apps/desktop/src-tauri/tauri.conf.json").read_text())
+desktop_scripts = json.loads((ROOT / "apps/desktop/frontend/package.json").read_text())["scripts"]
+desktop_application = (ROOT / "apps/web/app/javascript/lib/file_library_application.js").read_text()
 work_session = (ROOT / "packages/client/src/session/work_session.js").read_text()
 client_library_app = (ROOT / "packages/client/src/features/library/LibraryApp.tsx").read_text()
 client_library_card = (ROOT / "packages/client/src/features/library/LibraryCard.tsx").read_text()
 client_library_filtering = (ROOT / "packages/client/src/features/library/filtering.ts").read_text()
-web_authoring_settings = (ROOT / "app/javascript/controllers/client_shell_controller.js").read_text()
+web_authoring_settings = (ROOT / "apps/web/app/javascript/controllers/client_shell_controller.js").read_text()
 client_authoring_dialog = (ROOT / "packages/client/src/features/settings/AuthoringDialog.tsx").read_text()
-desktop_shell_styles = (ROOT / "app/assets/stylesheets/file_library_host.css").read_text()
+desktop_shell_styles = (ROOT / "apps/web/app/assets/stylesheets/file_library_host.css").read_text()
 assert "globalThis.fetch =" not in desktop_application, (
     "The shared frontend must not replace the host fetch implementation"
 )
 shared_styles = application_stylesheet_sources()
 client_presentation = (ROOT / "packages/client/src/features/presentation/presentation.js").read_text()
-importmap = (ROOT / "config/importmap.rb").read_text()
-renderer_build = (ROOT / "script/build_renderer.mjs").read_text()
+importmap = (ROOT / "apps/web/config/importmap.rb").read_text()
+renderer_build = (ROOT / "apps/web/script/build_renderer.mjs").read_text()
 renderer_sources = (
     ROOT / "packages/renderer/src/renderer.js",
     ROOT / "packages/work-model/src/document_links.js",
     ROOT / "packages/work-model/src/document_map.js",
-    ROOT / "app/javascript/lib/renderer_global.js",
+    ROOT / "apps/web/app/javascript/lib/renderer_global.js",
 )
-editor_runtime = (ROOT / "app/javascript/lib/editor_runtime.js").read_text()
+editor_runtime = (ROOT / "apps/web/app/javascript/lib/editor_runtime.js").read_text()
 math_modules = (
-    ROOT / "app/javascript/controllers/live_preview.js",
-    ROOT / "app/javascript/controllers/editor_math.js",
-    ROOT / "app/javascript/controllers/editor_markdown.js",
+    ROOT / "apps/web/app/javascript/controllers/live_preview.js",
+    ROOT / "apps/web/app/javascript/controllers/editor_math.js",
+    ROOT / "apps/web/app/javascript/controllers/editor_markdown.js",
 )
 
 # Rails browser imports resolve through importmap, while desktop esbuild resolves
@@ -217,7 +217,7 @@ assert "npm run build" not in desktop_scripts["tauri:dev"], (
 
 # The Rails importmap and desktop bundle must run the same shared editor
 # packages. Tauri-only packages stay in the desktop manifest.
-desktop_package = json.loads((ROOT / "desktop/frontend/package.json").read_text())
+desktop_package = json.loads((ROOT / "apps/desktop/frontend/package.json").read_text())
 root_package = json.loads((ROOT / "package.json").read_text())
 desktop_shared_versions = {
     name: version
@@ -259,16 +259,16 @@ def assert_same_file(left, right, description):
 
 katex_dist = ROOT / "node_modules/katex/dist"
 assert_same_file(
-    ROOT / "vendor/javascript/katex.js",
+    ROOT / "apps/web/vendor/javascript/katex.js",
     katex_dist / "katex.mjs",
     "Rails' browser KaTeX module must match the pinned npm package",
 )
 assert_same_file(
-    ROOT / "app/assets/stylesheets/katex/katex.min.css",
+    ROOT / "apps/web/app/assets/stylesheets/katex/katex.min.css",
     katex_dist / "katex.min.css",
     "Rails' KaTeX stylesheet must match the pinned npm package",
 )
-rails_katex_fonts = ROOT / "app/assets/stylesheets/katex/fonts"
+rails_katex_fonts = ROOT / "apps/web/app/assets/stylesheets/katex/fonts"
 npm_katex_fonts = katex_dist / "fonts"
 rails_font_names = {path.name for path in rails_katex_fonts.iterdir() if path.is_file()}
 npm_font_names = {path.name for path in npm_katex_fonts.iterdir() if path.is_file()}
@@ -281,8 +281,8 @@ for font_name in sorted(npm_font_names):
     )
 
 assert rails_pins.get("mermaid") == "11.17.2", "Rails must pin the reviewed vendored Mermaid version"
-assert "vendor/javascript/mermaid.min.js" in build, "Desktop must package Rails' vendored Mermaid asset"
-assert "mermaid@11.17.2" in (ROOT / "vendor/javascript/mermaid.min.js").read_text()[:200], (
+assert "apps/web/vendor/javascript/mermaid.min.js" in build, "Desktop must package Rails' vendored Mermaid asset"
+assert "mermaid@11.17.2" in (ROOT / "apps/web/vendor/javascript/mermaid.min.js").read_text()[:200], (
     "The shared Mermaid asset must match its versioned Rails importmap pin"
 )
 
@@ -305,9 +305,9 @@ shared_workflows = {
     "snippetInsertWorkflow",
     "vimRelativeLineNumbersWorkflow",
 }
-shared_scenario_root = (ROOT / "test/e2e/scenarios").resolve()
-assert shared_scenario_root.is_dir(), "shared web/desktop scenarios must live under Rails test/"
-assert not (ROOT / "desktop/e2e/scenarios").exists(), "desktop must not own shared scenario definitions"
+shared_scenario_root = (ROOT / "apps/web/test/e2e/scenarios").resolve()
+assert shared_scenario_root.is_dir(), "shared web/desktop scenarios must live under apps/web/test/"
+assert not (ROOT / "apps/desktop/e2e/scenarios").exists(), "desktop must not own shared scenario definitions"
 for scenario_path in shared_scenario_root.glob("*.js"):
     for specifier in MODULE_SPECIFIER.findall(scenario_path.read_text()):
         assert not specifier.startswith("@tauri-apps/"), (
@@ -316,16 +316,16 @@ for scenario_path in shared_scenario_root.glob("*.js"):
         if specifier.startswith("."):
             resolved = (scenario_path.parent / specifier).resolve()
             assert resolved.is_relative_to(shared_scenario_root), (
-                f"shared scenario imports must stay within Rails test/e2e/scenarios: "
+                f"shared scenario imports must stay within apps/web/test/e2e/scenarios: "
                 f"{scenario_path.relative_to(ROOT)} -> {specifier}"
             )
 scenario_imports = {}
 scenario_calls = {}
 for runner in ("web", "desktop"):
-    source = (ROOT / f"desktop/e2e/specs/{runner}.spec.js").read_text()
+    source = (ROOT / f"apps/desktop/e2e/specs/{runner}.spec.js").read_text()
     imports = {}
     for clause, module in re.findall(
-        r'^import\s+\{([^}]+)\}\s+from\s+["\']\.\./\.\./\.\./test/e2e/scenarios/([^"\']+)["\']',
+        r'^import\s+\{([^}]+)\}\s+from\s+["\']\.\./\.\./\.\./\.\./apps/web/test/e2e/scenarios/([^"\']+)["\']',
         source,
         re.MULTILINE,
     ):
@@ -353,7 +353,7 @@ assert scenario_imports["web"] == scenario_imports["desktop"], (
 assert scenario_calls["web"] == scenario_calls["desktop"], (
     "Web and desktop must execute the same shared workflow scenarios with matching counts"
 )
-for runner_source in (ROOT / "desktop/e2e/run.mjs",):
+for runner_source in (ROOT / "apps/desktop/e2e/run.mjs",):
     for specifier in MODULE_SPECIFIER.findall(runner_source.read_text()):
         if "scenarios/" in specifier:
             resolved = (runner_source.parent / specifier).resolve()
@@ -361,14 +361,14 @@ for runner_source in (ROOT / "desktop/e2e/run.mjs",):
                 f"desktop E2E helpers must consume Rails-owned scenarios: {specifier}"
             )
 
-assert 'path.join(repoRoot, "app/views/desktop_host.html")' in build, "the Rails-owned host template must be packaged by the desktop build"
-assert 'path.join(repoRoot, "app/assets/stylesheets/file_library_host.css")' in build, "the Rails-owned host stylesheet must be packaged by the desktop build"
-assert '"app/assets/builds/tailwind.css"' in build, "desktop must package the checked-in Rails-generated utility stylesheet"
-assert (ROOT / "app/assets/builds/tailwind.css").is_file(), "shared utility CSS must be present in a clean checkout"
-assert '"vendor/javascript/elef-renderer.bundle.js"' in build, "desktop must package the Rails-owned renderer artifact"
+assert 'path.join(repoRoot, "apps/web/app/views/desktop_host.html")' in build, "the Rails-owned host template must be packaged by the desktop build"
+assert 'path.join(repoRoot, "apps/web/app/assets/stylesheets/file_library_host.css")' in build, "the Rails-owned host stylesheet must be packaged by the desktop build"
+assert '"apps/web/app/assets/builds/tailwind.css"' in build, "desktop must package the checked-in Rails-generated utility stylesheet"
+assert (ROOT / "apps/web/app/assets/builds/tailwind.css").is_file(), "shared utility CSS must be present in a clean checkout"
+assert '"apps/web/vendor/javascript/elef-renderer.bundle.js"' in build, "desktop must package the Rails-owned renderer artifact"
 assert "bin/rails" not in build and "execFileSync" not in build, "desktop packaging must not boot Rails"
-assert "app/javascript" in build, "desktop bundling must resolve frontend code from app/javascript"
-assert 'import "../../../app/assets/stylesheets/application.css"' in desktop_main, "desktop must bundle the Rails-owned application styles"
+assert "apps/web/app/javascript" in build, "desktop bundling must resolve frontend code from app/javascript"
+assert 'import "../../../../apps/web/app/assets/stylesheets/application.css"' in desktop_main, "desktop must bundle the Rails-owned application styles"
 assert "startFileLibraryApplication" in desktop_main and "document.querySelector" not in desktop_main, (
     "the desktop entry point must only wire native services into the Rails-owned application"
 )
@@ -401,18 +401,18 @@ assert "authoringTransport" in desktop_application and "platform.authoringTransp
 assert "createRailsAuthoringSettingsTransport" in web_authoring_settings, (
     "web authoring settings must persist through the same registry transport seam as desktop"
 )
-settings_page = (ROOT / "app/views/shared/settings_page.html.erb").read_text()
+settings_page = (ROOT / "apps/web/app/views/shared/settings_page.html.erb").read_text()
 assert 'render "shared/client_settings_mount"' in settings_page, (
     "web settings routes must mount the shared client instead of server-rendered settings markup"
 )
-for view_dir in ("app/views/snippets", "app/views/math_shortcuts", "app/views/workspace_settings"):
+for view_dir in ("apps/web/app/views/snippets", "apps/web/app/views/math_shortcuts", "apps/web/app/views/workspace_settings"):
     assert not list((ROOT / view_dir).glob("*.html.erb")), (
         f"{view_dir} must not keep per-route settings shells; routes render the single shared settings page"
     )
 for controller in (
-    "app/controllers/snippets_controller.rb",
-    "app/controllers/math_shortcuts_controller.rb",
-    "app/controllers/workspace_settings_controller.rb",
+    "apps/web/app/controllers/snippets_controller.rb",
+    "apps/web/app/controllers/math_shortcuts_controller.rb",
+    "apps/web/app/controllers/workspace_settings_controller.rb",
 ):
     assert 'render template: "shared/settings_page"' in (ROOT / controller).read_text(), (
         f"{controller} must render the single shared settings page for HTML settings routes"
@@ -420,7 +420,7 @@ for controller in (
 assert 'id="authoring-settings-dialog"' in client_authoring_dialog, (
     "the shared client dialog must own the authoring DOM contract both hosts assert"
 )
-assert '"app/views/shared/_authoring_settings_dialog.html.erb"' not in build, (
+assert '"apps/web/app/views/shared/_authoring_settings_dialog.html.erb"' not in build, (
     "desktop must not package the retired server-rendered authoring dialog"
 )
 assert '"lib/library_card"' not in desktop_application, "desktop must not keep the retired card renderer"
@@ -429,7 +429,7 @@ assert '"lib/editor_controller_lookup"' in desktop_application, "desktop editor 
 assert '"@elef/work-model"' in desktop_application and "buildDocumentGraph" in desktop_application, (
     "desktop graph construction must consume the shared work-model resolver"
 )
-assert '"ElefRenderer.buildDocumentGraph"' in (ROOT / "app/lib/source/javascript_renderer.rb").read_text(), (
+assert '"ElefRenderer.buildDocumentGraph"' in (ROOT / "apps/web/app/lib/source/javascript_renderer.rb").read_text(), (
     "Rails graph construction must use the same app-owned resolver"
 )
 assert "markdown_document_links" not in (ROOT / "crates/local-store/src/lib.rs").read_text(), (
@@ -453,13 +453,13 @@ assert "globalThis.fetch(" not in client_authoring_dialog and "invoke(" not in c
 assert '"controllers/presentation_controller"' not in editor_runtime, (
     "the retired Stimulus presentation controller must not load on demand"
 )
-assert not (ROOT / "app/javascript/controllers/presentation_controller.js").is_file(), (
+assert not (ROOT / "apps/web/app/javascript/controllers/presentation_controller.js").is_file(), (
     "the retired Stimulus presentation controller must be absent"
 )
-assert not (ROOT / "test/javascript/shared/presentation_controller.test.js").is_file(), (
+assert not (ROOT / "apps/web/test/javascript/shared/presentation_controller.test.js").is_file(), (
     "the retired Stimulus presentation controller test must be absent"
 )
-assert not (ROOT / "app/javascript/controllers/presentation_canvas_controller.js").is_file(), (
+assert not (ROOT / "apps/web/app/javascript/controllers/presentation_canvas_controller.js").is_file(), (
     "the retired Stimulus presentation canvas controller must be absent"
 )
 assert '"controllers/presentation_canvas_controller"' not in editor_runtime, (
@@ -472,14 +472,14 @@ assert "loadLibraryRuntime" not in editor_runtime, "no host may keep the retired
 assert "renderGraphView" in desktop_application and "GraphController" in desktop_application, (
     "desktop graph rendering must use the shared client graph module"
 )
-assert '"lib/renderer_worker"' in (ROOT / "desktop/frontend/src/renderer-worker.js").read_text(), (
+assert '"lib/renderer_worker"' in (ROOT / "apps/desktop/frontend/src/renderer-worker.js").read_text(), (
     "desktop worker bootstrap must delegate renderer response behavior to app/javascript"
 )
 assert 'path.join(frontendRoot, "src/renderer-worker.js")' in build, (
     "desktop must bundle its worker bootstrap with the shared app-owned worker behavior"
 )
-assert (ROOT / "test/javascript/shared/renderer_worker.test.js").is_file(), (
-    "shared renderer worker behavior must be tested under test/javascript"
+assert (ROOT / "apps/web/test/javascript/shared/renderer_worker.test.js").is_file(), (
+    "shared renderer worker behavior must be tested under apps/web/test/javascript"
 )
 assert "mountPresentation" in desktop_application, (
     "desktop presentation mode must mount slide behavior from the shared client"
@@ -511,8 +511,8 @@ for shared_module in (
     "feature_flags", "performance_measurement", "renderer_worker_client",
     "request_identity", "editor_binding",
 ):
-    assert f'"lib/{shared_module}"' in desktop_application, f"desktop application must consume app/javascript/lib/{shared_module}.js"
-editor_binding = (ROOT / "app/javascript/lib/editor_binding.js").read_text()
+    assert f'"lib/{shared_module}"' in desktop_application, f"desktop application must consume apps/web/app/javascript/lib/{shared_module}.js"
+editor_binding = (ROOT / "apps/web/app/javascript/lib/editor_binding.js").read_text()
 assert '"./editor_source.js"' in editor_binding, (
     "the CodeMirror binding must apply sources through the shared guarded path"
 )
@@ -530,36 +530,36 @@ client_presentation_editor = (ROOT / "packages/client/src/features/presentation/
 assert '"lib/projection_editability"' not in client_presentation_editor, (
     "the client presentation editor must receive editing utilities through injection, not host imports"
 )
-assert not (ROOT / "app/javascript/controllers/presentation_editor_controller.js").is_file(), (
+assert not (ROOT / "apps/web/app/javascript/controllers/presentation_editor_controller.js").is_file(), (
     "the retired Stimulus presentation editor must be absent"
 )
 assert '"controllers/presentation_editor_controller"' not in editor_runtime, (
     "the retired Stimulus presentation editor must not load on demand"
 )
-assert "mountHostPresentationEditor" in (ROOT / "app/javascript/lib/presentation_editor_host.js").read_text(), (
+assert "mountHostPresentationEditor" in (ROOT / "apps/web/app/javascript/lib/presentation_editor_host.js").read_text(), (
     "both hosts must mount the client presentation editor through the shared host seam"
 )
-assert not (ROOT / "app/javascript/controllers/pptx_export_controller.js").is_file(), (
+assert not (ROOT / "apps/web/app/javascript/controllers/pptx_export_controller.js").is_file(), (
     "the retired Stimulus PPTX export controller must be absent"
 )
 client_export_registry = (ROOT / "packages/client/src/features/export/registry.js").read_text()
 assert '"pptx"' in client_export_registry and '"print"' in client_export_registry and '"elef"' in client_export_registry, (
     "the client export registry must declare every user-facing format in one place"
 )
-assert "exportPptxModel" in (ROOT / "app/javascript/controllers/pptx_export_host_controller.js").read_text(), (
+assert "exportPptxModel" in (ROOT / "apps/web/app/javascript/controllers/pptx_export_host_controller.js").read_text(), (
     "the Rails export adapter must orchestrate through the shared client engine"
 )
-assert '"lib/presentation_editor_host"' in (ROOT / "app/javascript/controllers/visual_editor_controller.js").read_text(), (
+assert '"lib/presentation_editor_host"' in (ROOT / "apps/web/app/javascript/controllers/visual_editor_controller.js").read_text(), (
     "the thin visual-editor adapter must mount through the shared presentation editor host seam"
 )
-assert '"lib/projection_editability"' in (ROOT / "app/javascript/lib/presentation_editor_host.js").read_text(), (
+assert '"lib/projection_editability"' in (ROOT / "apps/web/app/javascript/lib/presentation_editor_host.js").read_text(), (
     "projection editability must flow through the shared presentation editor host seam"
 )
 assert 'pin "lib/projection_editability", to: "lib/projection_editability.js"' in importmap
-assert all(path.is_file() for path in renderer_sources), "renderer sources must stay in shared app/javascript or packages"
+assert all(path.is_file() for path in renderer_sources), "renderer sources must stay in shared apps/web/app/javascript or packages"
 assert "desktop/" not in renderer_build, "Rails renderer generation must not reference desktop files"
-bundle_entry = (ROOT / "app/javascript/lib/renderer_global.js").read_text()
-assert (ROOT / "app/javascript/lib/preview_chrome.js").is_file(), "editor chrome must live in the app-side preview_chrome module"
+bundle_entry = (ROOT / "apps/web/app/javascript/lib/renderer_global.js").read_text()
+assert (ROOT / "apps/web/app/javascript/lib/preview_chrome.js").is_file(), "editor chrome must live in the app-side preview_chrome module"
 assert '"./preview_chrome.js"' in bundle_entry and "editorChrome" in bundle_entry, (
     "the bundle entry must compose bare projection with editor chrome"
 )
@@ -569,7 +569,7 @@ for bridge_function in (
     "withFrontMatterValue", "replaceFirstHeading", "sourceAnchorLines",
 ):
     assert bridge_function in bundle_entry, f"the bundle must export the work-model bridge function {bridge_function}"
-desktop_sources = ROOT / "desktop/frontend/src"
+desktop_sources = ROOT / "apps/desktop/frontend/src"
 desktop_source_reasons = {
     "authoring-registry-loader.js": "loads the library's native authoring-registry commands",
     "bootstrap-flow.js": "orders native app startup and its readiness handshake",
@@ -592,7 +592,7 @@ actual_desktop_sources = {
 }
 assert actual_desktop_sources == set(desktop_source_reasons), (
     "Every desktop frontend source needs a reviewed shell-specific reason; "
-    "move host-agnostic product logic into app/javascript. "
+    "move host-agnostic product logic into apps/web/app/javascript. "
     f"Missing classification: {sorted(actual_desktop_sources - set(desktop_source_reasons))}; "
     f"stale classification: {sorted(set(desktop_source_reasons) - actual_desktop_sources)}"
 )
@@ -600,17 +600,17 @@ assert all(desktop_source_reasons.values()), "Every desktop frontend source clas
 
 assert not re.search(r"\.document-graph(?:-[\w-]+)?", desktop_shell_styles), "document graph styles must be shared from the Rails-owned stylesheet"
 assert ".document-graph-canvas" in shared_styles, "Rails must retain the canonical document graph styles"
-assert (ROOT / "app/views/desktop_host.html").is_file(), "the workbench host template must be owned by the Rails app"
-assert (ROOT / "app/assets/stylesheets/file_library_host.css").is_file(), "the workbench stylesheet must be owned by the Rails app"
-assert not (ROOT / "desktop/frontend/index.html").exists(), "desktop must not maintain a second host template"
-assert not (ROOT / "desktop/frontend/src/desktop-shell.css").exists(), "desktop must not own product layout styles"
-assert not (ROOT / "desktop/frontend/src/desktop-rendered-content.css").exists(), "desktop must not own rendered-content styles"
+assert (ROOT / "apps/web/app/views/desktop_host.html").is_file(), "the workbench host template must be owned by the Rails app"
+assert (ROOT / "apps/web/app/assets/stylesheets/file_library_host.css").is_file(), "the workbench stylesheet must be owned by the Rails app"
+assert not (ROOT / "apps/desktop/frontend/index.html").exists(), "desktop must not maintain a second host template"
+assert not (ROOT / "apps/desktop/frontend/src/desktop-shell.css").exists(), "desktop must not own product layout styles"
+assert not (ROOT / "apps/desktop/frontend/src/desktop-rendered-content.css").exists(), "desktop must not own rendered-content styles"
 assert len(desktop_main.splitlines()) < 80, "the desktop frontend entry point must remain a thin native bootstrap"
-assert all(path.suffix not in {".html", ".css"} for path in (ROOT / "desktop/frontend/src").rglob("*")), (
-    "HTML and CSS product source must stay in app/"
+assert all(path.suffix not in {".html", ".css"} for path in (ROOT / "apps/desktop/frontend/src").rglob("*")), (
+    "HTML and CSS product source must stay in apps/web/app/"
 )
 desktop_frontend_dom_violations = []
-for path in (ROOT / "desktop/frontend/src").rglob("*.js"):
+for path in (ROOT / "apps/desktop/frontend/src").rglob("*.js"):
     source = path.read_text()
     if re.search(r"document\.(?:querySelector|createElement|body|documentElement)|\.textContent|\.innerHTML|\.classList", source):
         desktop_frontend_dom_violations.append(path.relative_to(ROOT).as_posix())
@@ -619,7 +619,7 @@ assert not desktop_frontend_dom_violations, (
     + ", ".join(desktop_frontend_dom_violations)
 )
 for shared_test in ("authoring-settings.test.js", "deck-open-flow.test.js", "feature-flags.test.js", "renderer-client.test.js", "renderer.test.js", "renderer-fixtures.test.js"):
-    assert not (ROOT / "desktop/frontend/tests" / shared_test).exists(), f"shared behavior tests must stay under test/javascript: {shared_test}"
-assert not (ROOT / "desktop/frontend/tests/host-page.test.js").exists(), "host template tests must stay with the Rails-owned frontend"
+    assert not (ROOT / "apps/desktop/frontend/tests" / shared_test).exists(), f"shared behavior tests must stay under apps/web/test/javascript: {shared_test}"
+assert not (ROOT / "apps/desktop/frontend/tests/host-page.test.js").exists(), "host template tests must stay with the Rails-owned frontend"
 
 print("Frontend ownership checks passed: Rails owns shared source; desktop consumes it one-way.")

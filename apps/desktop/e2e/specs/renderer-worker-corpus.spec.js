@@ -9,9 +9,9 @@ import { browser } from "@wdio/globals"
 // renders blocks without media options, so block bytes are asserted only for
 // cases whose fixture input carries no media map or remote-media flag.
 const e2eRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
-const repoRoot = path.resolve(e2eRoot, "../..")
-const inputs = JSON.parse(await readFile(path.join(repoRoot, "test/javascript/fixtures/renderer-inputs.json"), "utf8"))
-const outputs = JSON.parse(await readFile(path.join(repoRoot, "test/javascript/fixtures/renderer-outputs.json"), "utf8"))
+const repoRoot = path.resolve(e2eRoot, "../../..")
+const inputs = JSON.parse(await readFile(path.join(repoRoot, "apps/web/test/javascript/fixtures/renderer-inputs.json"), "utf8"))
+const outputs = JSON.parse(await readFile(path.join(repoRoot, "apps/web/test/javascript/fixtures/renderer-outputs.json"), "utf8"))
 
 function workerSupportsBlock(input) {
   return !input.mediaMap && input.allowRemoteMedia !== true

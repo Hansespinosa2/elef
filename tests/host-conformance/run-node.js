@@ -5,7 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { CASES, runSuite } from "./suite.js";
 import { createFakeHost, fakePolicy } from "./adapters/fake-host.js";
-import { createRailsHost, railsPolicy } from "../../app/javascript/host/rails-http-host.js";
+import { createRailsHost, railsPolicy } from "../../apps/web/app/javascript/host/rails-http-host.js";
 
 const adapter = process.argv[2] ?? "fake";
 

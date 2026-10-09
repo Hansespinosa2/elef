@@ -6,7 +6,7 @@ import { fileURLToPath, pathToFileURL } from "node:url"
 
 const controllerPath = new URL("../../app/javascript/controllers/appearance_controller.js", import.meta.url)
 const testPath = fileURLToPath(import.meta.url)
-const documentMapPath = path.resolve(path.dirname(testPath), "../../packages/work-model/src/index.js")
+const documentMapPath = path.resolve(path.dirname(testPath), "../../../../packages/work-model/src/index.js")
 const importmapPath = path.resolve(path.dirname(testPath), "../../config/importmap.rb")
 const documentMapUrl = pathToFileURL(documentMapPath).href
 const source = (await readFile(controllerPath, "utf8"))

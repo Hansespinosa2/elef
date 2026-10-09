@@ -5,30 +5,30 @@ import { fileURLToPath } from "node:url"
 import test from "node:test"
 import { parseHTML } from "linkedom"
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..")
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../../..")
 const read = relative => readFile(path.join(root, relative), "utf8")
 const [hostTemplate, shellStyles, applicationStylesheetIndex, application, bootstrap, editorRuntime, build, editorView, clientLibrary, fileLibraryTransport] = await Promise.all([
-  read("app/views/desktop_host.html"),
-  read("app/assets/stylesheets/file_library_host.css"),
-  read("app/assets/stylesheets/application.css"),
-  read("app/javascript/lib/file_library_application.js"),
-  read("desktop/frontend/src/main.js"),
-  read("app/javascript/lib/editor_runtime.js"),
-  read("desktop/frontend/build.mjs"),
-  read("app/javascript/lib/editor_view.js"),
+  read("apps/web/app/views/desktop_host.html"),
+  read("apps/web/app/assets/stylesheets/file_library_host.css"),
+  read("apps/web/app/assets/stylesheets/application.css"),
+  read("apps/web/app/javascript/lib/file_library_application.js"),
+  read("apps/desktop/frontend/src/main.js"),
+  read("apps/web/app/javascript/lib/editor_runtime.js"),
+  read("apps/desktop/frontend/build.mjs"),
+  read("apps/web/app/javascript/lib/editor_view.js"),
   read("packages/client/src/features/library/LibraryApp.tsx"),
-  read("desktop/frontend/src/file-library-transport.js")
+  read("apps/desktop/frontend/src/file-library-transport.js")
 ])
 const applicationPartialPaths = [...applicationStylesheetIndex.matchAll(/@import url\("\.\/([^\"]+)"\) layer\([^\)]+\);/g)]
-const applicationStyles = (await Promise.all(applicationPartialPaths.map(([, path]) => read(`app/assets/stylesheets/${path}`)))).join("\n")
+const applicationStyles = (await Promise.all(applicationPartialPaths.map(([, path]) => read(`apps/web/app/assets/stylesheets/${path}`)))).join("\n")
 const clientAuthoringDialog = await read("packages/client/src/features/settings/AuthoringDialog.tsx")
 const page = hostTemplate
-const importmap = await read("config/importmap.rb")
+const importmap = await read("apps/web/config/importmap.rb")
 const rootPackage = JSON.parse(await read("package.json"))
-const appearanceController = await read("app/javascript/controllers/appearance_controller.js")
-const autosaveController = await read("app/javascript/controllers/autosave_controller.js")
+const appearanceController = await read("apps/web/app/javascript/controllers/appearance_controller.js")
+const autosaveController = await read("apps/web/app/javascript/controllers/autosave_controller.js")
 const workSession = await read("packages/client/src/session/work_session.js")
-const quietSavePolicy = await read("desktop/frontend/src/quiet_save_policy.js")
+const quietSavePolicy = await read("apps/desktop/frontend/src/quiet_save_policy.js")
 const { document } = parseHTML(page)
 // The empty-library call to action is client-owned now; the host template
 // carries no empty-action slot. Assert the shared button classes in the
@@ -112,7 +112,7 @@ test("the native entry point only wires Tauri APIs into the Rails-owned applicat
 })
 
 test("desktop media URLs and fetch interception stay in native transport", async () => {
-  const mediaTransport = await read("desktop/frontend/src/media-transport.js")
+  const mediaTransport = await read("apps/desktop/frontend/src/media-transport.js")
   assert.doesNotMatch(application, /elef(?:-preview|-upload|asset):\/\//)
   assert.doesNotMatch(application, /globalThis\.fetch\s*=/)
   assert.doesNotMatch(application, /__elefPreviewTrace/)
@@ -142,7 +142,7 @@ test("Rails and desktop consume the same client-owned save state machine", () =>
 test("Rails and desktop share one sanitized preview insertion path", () => {
   assert.match(editorView, /import \{ installSanitizedPreview \} from "#elef\/preview-sanitizer"/)
   assert.match(importmap, /pin "#elef\/preview-sanitizer", to: "lib\/preview_sanitizer\.js"/)
-  assert.equal(rootPackage.imports["#elef/preview-sanitizer"], "./app/javascript/lib/preview_sanitizer.js")
+  assert.equal(rootPackage.imports["#elef/preview-sanitizer"], "./apps/web/app/javascript/lib/preview_sanitizer.js")
   assert.match(build, /preview-sanitizer/)
   assert.match(editorView, /installSanitizedPreview\(container, html, \{ mediaBaseUrl \}\)/)
   const previewInstaller = editorView.match(/export function installPreviewHtml\([\s\S]*?\n\}/)?.[0] || ""
@@ -174,7 +174,7 @@ test("the desktop host defaults to Rails' Visual mode and gates it until preview
   assert.match(application, /document\.body\.dataset\.desktopView = "editor"/)
   assert.match(application, /document\.body\.dataset\.desktopView = "library"/)
   assert.match(application, /editor\.loadDocument\(deck\.source\)[\s\S]*?editor\.setEditingMode\("visual", \{ restoreCaret: false \}\)/)
-  const editorController = await read("app/javascript/controllers/editor_controller.js")
+  const editorController = await read("apps/web/app/javascript/controllers/editor_controller.js")
   assert.match(editorController, /this\.form\?\.dispatchEvent\(new CustomEvent\("elef:editor-mode-change"/)
   assert.match(application, /theme: "dark"/)
   assert.match(application, /void openDeck\(target\.workId\)/)
@@ -222,8 +222,8 @@ test("the file-backed host mounts the shared library view and graph", () => {
 })
 
 test("both hosts render the graph through the shared client module, never Stimulus", async () => {
-  const clientShell = await read("app/javascript/controllers/client_shell_controller.js")
-  const graphPartial = await read("app/views/presentations/_document_graph.html.erb")
+  const clientShell = await read("apps/web/app/javascript/controllers/client_shell_controller.js")
+  const graphPartial = await read("apps/web/app/views/presentations/_document_graph.html.erb")
   assert.match(application, /renderGraphView\(slot, graph\)/)
   assert.match(application, /new GraphController\(slot, graph, \{ onOpenDeck/)
   assert.match(application, /createRequestGuard/)
@@ -256,11 +256,11 @@ test("Markdown appearance persistence is shared and absent from desktop orchestr
 })
 
 test("structural source operations commit through the bound session", async () => {
-  const editorController = await read("app/javascript/controllers/editor_controller.js")
+  const editorController = await read("apps/web/app/javascript/controllers/editor_controller.js")
   const clientEditor = await read("packages/client/src/features/presentation/editor.js")
-  const visualEditor = await read("app/javascript/controllers/visual_editor_controller.js")
+  const visualEditor = await read("apps/web/app/javascript/controllers/visual_editor_controller.js")
   const documentEditor = await read("packages/client/src/features/document/document_editor.js")
-  const overview = await read("app/javascript/controllers/slide_overview_controller.js")
+  const overview = await read("apps/web/app/javascript/controllers/slide_overview_controller.js")
   const overviewFeature = await read("packages/client/src/features/overview/overview.js")
   // The adapter exposes one session commit entry point with a direct fallback.
   assert.match(editorController, /commitSource\(source, \{ caret \} = \{\}\)/)
@@ -286,7 +286,7 @@ test("structural source operations commit through the bound session", async () =
 })
 
 test("document reload reapplies editor preferences and readiness follows connection", async () => {
-  const controller = await read("app/javascript/controllers/editor_controller.js")
+  const controller = await read("apps/web/app/javascript/controllers/editor_controller.js")
   const load = controller.slice(controller.indexOf("  loadDocument(source)"), controller.indexOf("  setExternalValue(value)"))
   for (const method of ["vimCompartment.reconfigure", "applyLineNumbers", "applyCursorStyle", "refreshFrontmatterRange", "setEditingMode", "syncMetadataToggle"]) {
     assert.ok(load.includes(method), `New documents must reapply ${method}`)

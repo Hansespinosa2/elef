@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 elef_agent="$ROOT/scripts/elef-agent"
 
-# shellcheck source=test/scripts/lib/config_assertions.sh
-source "$ROOT/test/scripts/lib/config_assertions.sh"
+# shellcheck source=apps/web/test/scripts/lib/config_assertions.sh
+source "$ROOT/apps/web/test/scripts/lib/config_assertions.sh"
 
 # Syntax check and verify the retired launcher notice.
 bash -n "$elef_agent"

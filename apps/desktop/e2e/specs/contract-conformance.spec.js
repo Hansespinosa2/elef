@@ -1,6 +1,6 @@
 import { browser } from "@wdio/globals"
 import { readFile } from "node:fs/promises"
-import { runSuite } from "../../../tests/host-conformance/suite.js"
+import { runSuite } from "../../../../tests/host-conformance/suite.js"
 import { createTauriHost, tauriPolicy } from "../../frontend/src/tauri-host.js"
 
 // Contract conformance against the real desktop backend: every suite case

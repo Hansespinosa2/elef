@@ -1,6 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { createPresentationNavigation, presentationActionForKey } from "../../../packages/client/src/features/presentation/navigation.js"
+import { createPresentationNavigation, presentationActionForKey } from "../../../../../packages/client/src/features/presentation/navigation.js"
 
 test("presentation hosts share the same next, previous, home, and end keys", () => {
   for (const key of ["ArrowRight", "ArrowDown", "PageDown", " ", "Enter"]) {

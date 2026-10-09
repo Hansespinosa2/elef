@@ -20,7 +20,7 @@ STATUS_PATH = ROOT / "docs" / "refactor" / "status.json"
 BASELINE_PATH = ROOT / "docs" / "refactor" / "baseline.json"
 PLAN_PATH = ROOT / "docs" / "refactor" / "execution" / "phase-0-plan.md"
 PHASE_PATH = ROOT / "docs" / "refactor" / "phases" / "00-baseline.md"
-DESKTOP_SOURCE = "desktop"
+DESKTOP_SOURCE = "apps/desktop"
 DESKTOP_PATH_PREFIX = DESKTOP_SOURCE + "/"
 COMMANDS = ("quick", "affected", "phase", "all", "arch", "fresh", "docs", "perf")
 STUB_COMMANDS = ("quick", "affected", "all", "arch", "fresh", "docs", "perf")
@@ -49,20 +49,20 @@ EXPECTED_QUICK_COMMANDS = (
     "npm run test:javascript",
     f"npm test --prefix {DESKTOP_PATH_PREFIX}frontend",
     f"npm run test:unit --prefix {DESKTOP_PATH_PREFIX}e2e",
-    "python3 script/check_frontend_ownership.py",
+    "python3 apps/web/script/check_frontend_ownership.py",
     f"cargo test --manifest-path {DESKTOP_PATH_PREFIX}Cargo.toml -p elef-core --locked",
 )
 EXPECTED_AFFECTED_COMMANDS = (
-    "bin/rails tailwindcss:build",
+    "apps/web/bin/rails tailwindcss:build",
     "npm run renderer:build",
-    "git diff --exit-code -- vendor/javascript/elef-renderer.bundle.js app/assets/builds/tailwind.css",
+    "git diff --exit-code -- apps/web/vendor/javascript/elef-renderer.bundle.js apps/web/app/assets/builds/tailwind.css",
     "npm run test:javascript",
-    "bin/rails db:test:prepare",
-    "bin/rails test test/lib/source/renderer_test.rb test/lib/source/javascript_renderer_test.rb test/lib/authoring_registry_test.rb test/models/presentation_test.rb test/services/presentations/pptx_export_test.rb",
+    "apps/web/bin/rails db:test:prepare",
+    "apps/web/bin/rails test apps/web/test/lib/source/renderer_test.rb apps/web/test/lib/source/javascript_renderer_test.rb apps/web/test/lib/authoring_registry_test.rb apps/web/test/models/presentation_test.rb apps/web/test/services/presentations/pptx_export_test.rb",
     f"npm test --prefix {DESKTOP_PATH_PREFIX}frontend",
     f"npm run build --prefix {DESKTOP_PATH_PREFIX}frontend",
     f"python3 {DESKTOP_PATH_PREFIX}scripts/check_architecture.py",
-    "python3 script/check_frontend_ownership.py",
+    "python3 apps/web/script/check_frontend_ownership.py",
     f"cargo fmt --manifest-path {DESKTOP_PATH_PREFIX}Cargo.toml --all -- --check",
     f"cargo clippy --manifest-path {DESKTOP_PATH_PREFIX}Cargo.toml -p elef-core --all-targets -- -D warnings",
     f"cargo test --manifest-path {DESKTOP_PATH_PREFIX}Cargo.toml -p elef-core --locked",
@@ -263,7 +263,7 @@ def check_scenarios(baseline: dict) -> None:
 
 def html_occurrences() -> list[dict]:
     occurrences = []
-    for root_name in ("app/javascript", DESKTOP_PATH_PREFIX + "frontend/src", "app/views"):
+    for root_name in ("apps/web/app/javascript", DESKTOP_PATH_PREFIX + "frontend/src", "apps/web/app/views"):
         directory = relative_path(root_name)
         for path in sorted(directory.rglob("*")):
             if not path.is_file():
@@ -512,9 +512,9 @@ def run_rails_adapter_conformance() -> float:
     import socket
     import time
 
-    pid_file = ROOT / "tmp" / "pids" / "tier-server.pid"
+    pid_file = ROOT / "apps" / "web" / "tmp" / "pids" / "tier-server.pid"
     server = subprocess.Popen(
-        ["bin/rails", "server", "-e", "test", "-p", "3101", "-b", "127.0.0.1",
+        ["apps/web/bin/rails", "server", "-e", "test", "-p", "3101", "-b", "127.0.0.1",
          "-P", str(pid_file)],
         cwd=ROOT,
         stdout=subprocess.DEVNULL,
@@ -567,29 +567,29 @@ QUICK_COMMANDS_1 = (
     "npm test --prefix packages/client",
     f"npm test --prefix {DESKTOP_PATH_PREFIX}frontend",
     f"npm run test:unit --prefix {D_E2E}",
-    "python3 script/check_frontend_ownership.py",
+    "python3 apps/web/script/check_frontend_ownership.py",
     "python3 tooling/check_boundaries.py",
     "python3 tooling/check_boundaries.py --self-test",
     "cargo test --manifest-path Cargo.toml -p local-store --locked",
 )
 AFFECTED_RAILS_TESTS = (
-    "test/lib/source/renderer_test.rb test/lib/source/javascript_renderer_test.rb "
-    "test/lib/source/document_test.rb test/lib/source/block_renderer_test.rb "
-    "test/lib/authoring_registry_test.rb test/models/presentation_test.rb "
-    "test/models/document_links_test.rb test/models/work_test.rb "
-    "test/services/presentations/pptx_export_test.rb "
-    "test/controllers/host_api_controller_test.rb"
+    "apps/web/test/lib/source/renderer_test.rb apps/web/test/lib/source/javascript_renderer_test.rb "
+    "apps/web/test/lib/source/document_test.rb apps/web/test/lib/source/block_renderer_test.rb "
+    "apps/web/test/lib/authoring_registry_test.rb apps/web/test/models/presentation_test.rb "
+    "apps/web/test/models/document_links_test.rb apps/web/test/models/work_test.rb "
+    "apps/web/test/services/presentations/pptx_export_test.rb "
+    "apps/web/test/controllers/host_api_controller_test.rb"
 )
 AFFECTED_COMMANDS_1 = (
     *QUICK_COMMANDS_1,
     "npm run renderer:build",
-    "git diff --exit-code -- vendor/javascript/elef-renderer.bundle.js",
+    "git diff --exit-code -- apps/web/vendor/javascript/elef-renderer.bundle.js",
     "npm run build --prefix packages/client",
     "git diff --exit-code -- packages/client/dist/",
-    "bin/rails tailwindcss:build",
-    "git diff --exit-code -- app/assets/builds/tailwind.css",
-    "bin/rails db:test:prepare",
-    f"bin/rails test {AFFECTED_RAILS_TESTS}",
+    "apps/web/bin/rails tailwindcss:build",
+    "git diff --exit-code -- apps/web/app/assets/builds/tailwind.css",
+    "apps/web/bin/rails db:test:prepare",
+    f"apps/web/bin/rails test {AFFECTED_RAILS_TESTS}",
     ("rails adapter conformance (tier-booted test server)", run_rails_adapter_conformance),
     f"npm run build --prefix {DESKTOP_PATH_PREFIX}frontend",
     f"python3 {DESKTOP_PATH_PREFIX}scripts/check_architecture.py",
@@ -598,7 +598,7 @@ AFFECTED_COMMANDS_1 = (
     "cargo test --manifest-path Cargo.toml --workspace --locked",
 )
 ARCH_COMMANDS_1 = (
-    "python3 script/check_frontend_ownership.py",
+    "python3 apps/web/script/check_frontend_ownership.py",
     "python3 tooling/check_boundaries.py",
     "python3 tooling/check_boundaries.py --self-test",
     f"python3 {DESKTOP_PATH_PREFIX}scripts/check_architecture.py",
@@ -692,7 +692,7 @@ def check_contracts_fresh() -> None:
 
 def check_renderer_fresh() -> None:
     run_step("npm run renderer:build")
-    run_step("git diff --exit-code -- vendor/javascript/elef-renderer.bundle.js")
+    run_step("git diff --exit-code -- apps/web/vendor/javascript/elef-renderer.bundle.js")
 
 
 def run_fresh() -> None:
@@ -1700,7 +1700,7 @@ def check_phase10_ci_evidence(status: dict, head: str) -> None:
 
 
 def check_phase10_scenarios() -> None:
-    directory = ROOT / "test/e2e/scenarios"
+    directory = ROOT / "apps" / "web" / "test" / "e2e" / "scenarios"
     actual = sorted(path.stem for path in directory.glob("*.js"))
     if actual != list(PHASE10_SCENARIOS):
         fail("phase-10 shared scenario inventory differs from the 16 frozen live files")

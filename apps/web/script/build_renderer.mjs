@@ -3,12 +3,12 @@ import { fileURLToPath } from "node:url"
 import path from "node:path"
 import { build } from "esbuild"
 
-const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
-const output = path.join(repoRoot, "vendor/javascript/elef-renderer.bundle.js")
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..")
+const output = path.join(repoRoot, "apps/web/vendor/javascript/elef-renderer.bundle.js")
 await mkdir(path.dirname(output), { recursive: true })
 
 await build({
-  entryPoints: [path.join(repoRoot, "app/javascript/lib/renderer_global.js")],
+  entryPoints: [path.join(repoRoot, "apps/web/app/javascript/lib/renderer_global.js")],
   bundle: true,
   format: "iife",
   target: "es2022",

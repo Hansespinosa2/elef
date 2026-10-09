@@ -5,13 +5,13 @@ import os from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { createHash, randomUUID } from "node:crypto"
-import { PIXEL_PNG_MARKDOWN } from "../../test/e2e/scenarios/media-fixture.js"
-import { SHARED_LIBRARY_CREATE_DELETE_TITLES } from "../../test/e2e/scenarios/library-create-delete.js"
+import { PIXEL_PNG_MARKDOWN } from "../../../apps/web/test/e2e/scenarios/media-fixture.js"
+import { SHARED_LIBRARY_CREATE_DELETE_TITLES } from "../../../apps/web/test/e2e/scenarios/library-create-delete.js"
 import { runNativeQuitSmokes } from "./native-quit-smoke.js"
 import { desktopAppEnvironment, verifyOfflineSandbox } from "./offline-macos.js"
 
 const e2eRoot = path.dirname(fileURLToPath(import.meta.url))
-const repoRoot = path.resolve(e2eRoot, "../..")
+const repoRoot = path.resolve(e2eRoot, "../../..")
 const temporaryRoot = await realpath(await mkdtemp(path.join(os.tmpdir(), "elef-desktop-e2e-")))
 const libraryRoot = path.join(temporaryRoot, "Elef")
 const seedDeck = path.join(libraryRoot, "E2E seed")
@@ -118,7 +118,7 @@ async function makeTreeAccessible(root) {
 
 function runRails(code) {
   const result = spawnSync("bin/rails", ["runner", "-e", "test", code], {
-    cwd: repoRoot,
+    cwd: path.join(repoRoot, "apps", "web"),
     env: { ...env, RAILS_ENV: "test" },
     encoding: "utf8"
   })

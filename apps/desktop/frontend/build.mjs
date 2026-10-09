@@ -4,8 +4,8 @@ import { fileURLToPath } from "node:url"
 import { build } from "esbuild"
 
 const frontendRoot = path.dirname(fileURLToPath(import.meta.url))
-const repoRoot = path.resolve(frontendRoot, "../..")
-const sharedFrontendRoot = path.join(repoRoot, "app/javascript")
+const repoRoot = path.resolve(frontendRoot, "../../..")
+const sharedFrontendRoot = path.join(repoRoot, "apps/web/app/javascript")
 const e2eBuild = process.env.ELEF_E2E_BUILD === "1"
 const output = path.join(frontendRoot, e2eBuild ? "dist-e2e" : "dist")
 const assets = path.join(output, "assets")
@@ -125,7 +125,7 @@ if (duplicates.length) {
   throw new Error(`Desktop bundle contains duplicate runtime identity packages:\n${duplicates.join("\n")}`)
 }
 // Rails owns and builds the renderer. Desktop packages the exact same artifact.
-const rendererBundle = path.join(repoRoot, "vendor/javascript/elef-renderer.bundle.js")
+const rendererBundle = path.join(repoRoot, "apps/web/vendor/javascript/elef-renderer.bundle.js")
 await copyFile(rendererBundle, path.join(assets, "renderer.bundle.js"))
 await build({
   entryPoints: [path.join(frontendRoot, "src/renderer-worker.js")],
@@ -139,7 +139,7 @@ await build({
   plugins: [appSourceAlias]
 })
 
-const desktopHost = await readFile(path.join(repoRoot, "app/views/desktop_host.html"), "utf8")
+const desktopHost = await readFile(path.join(repoRoot, "apps/web/app/views/desktop_host.html"), "utf8")
 // The authoring dialog renders through the shared client now (same DOM
 // contract the web pages use), so the host ships a mount point instead of
 // inlining server-rendered dialog markup.
@@ -166,8 +166,8 @@ if (e2eBuild) {
 } else {
   await writeFile(path.join(output, "index.html"), indexHtml)
 }
-await copyFile(path.join(repoRoot, "app/assets/stylesheets/file_library_host.css"), path.join(assets, "file_library_host.css"))
-await copyFile(path.join(repoRoot, "app/assets/builds/tailwind.css"), path.join(assets, "tailwind.css"))
+await copyFile(path.join(repoRoot, "apps/web/app/assets/stylesheets/file_library_host.css"), path.join(assets, "file_library_host.css"))
+await copyFile(path.join(repoRoot, "apps/web/app/assets/builds/tailwind.css"), path.join(assets, "tailwind.css"))
 await copyFile(path.join(frontendRoot, "node_modules/katex/dist/katex.min.css"), path.join(assets, "katex.min.css"))
 await cp(path.join(frontendRoot, "node_modules/katex/dist/fonts"), path.join(assets, "fonts"), { recursive: true })
-await copyFile(path.join(repoRoot, "vendor/javascript/mermaid.min.js"), path.join(assets, "mermaid.min.js"))
+await copyFile(path.join(repoRoot, "apps/web/vendor/javascript/mermaid.min.js"), path.join(assets, "mermaid.min.js"))

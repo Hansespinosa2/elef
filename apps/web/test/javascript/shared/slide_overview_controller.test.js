@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { parseHTML } from "linkedom"
-import { SlideOverview } from "../../../packages/client/src/features/overview/overview.js"
+import { SlideOverview } from "../../../../../packages/client/src/features/overview/overview.js"
 
 function withDocument(html, run) {
   const previous = {

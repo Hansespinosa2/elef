@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { DocumentEditor } from "../../../packages/client/src/features/document/document_editor.js"
-import { buildEditorMap } from "../../../packages/work-model/src/index.js"
+import { DocumentEditor } from "../../../../../packages/client/src/features/document/document_editor.js"
+import { buildEditorMap } from "../../../../../packages/work-model/src/index.js"
 
 test("document block kind classification follows the source grammar", () => {
   const editor = new DocumentEditor({})

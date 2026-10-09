@@ -3,11 +3,11 @@ import test from "node:test"
 import { readFile } from "node:fs/promises"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
-import { SlideOverview } from "../../../packages/client/src/features/overview/overview.js"
+import { SlideOverview } from "../../../../../packages/client/src/features/overview/overview.js"
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..")
-const overviewUrl = new URL("../../../packages/client/src/features/overview/overview.js", import.meta.url).href
-const source = (await readFile(path.join(root, "app/javascript/controllers/slide_overview_controller.js"), "utf8"))
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../../..")
+const overviewUrl = new URL("../../../../../packages/client/src/features/overview/overview.js", import.meta.url).href
+const source = (await readFile(path.join(root, "apps/web/app/javascript/controllers/slide_overview_controller.js"), "utf8"))
   .replace('import { Controller } from "@hotwired/stimulus"', "class Controller {}")
   .replace('import { SlideOverview } from "@elef/client"', `import { SlideOverview } from "${overviewUrl}"`)
   .replace('import { bindEditorAction } from "lib/editor_actions"', "const bindEditorAction = (...args) => { (globalThis.__overviewBinds ||= []).push(args); return () => {} }")

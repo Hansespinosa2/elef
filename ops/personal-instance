@@ -72,7 +72,7 @@ backup() {
     rm -rf -- "$target"
     die "database backup failed"
   fi
-  if ! compose exec -T web sh -c 'tar --create --gzip --file=- --directory=/rails/storage .' > "$target/storage.tar.gz"; then
+  if ! compose exec -T web sh -c 'tar --create --gzip --file=- --directory=/rails/apps/web/storage .' > "$target/storage.tar.gz"; then
     rm -rf -- "$target"
     die "Active Storage backup failed"
   fi
@@ -107,7 +107,7 @@ restore() {
   compose up -d db >/dev/null
   compose stop web >/dev/null 2>&1 || true
   cat "$source/database.dump" | compose exec -T db sh -c 'pg_restore --clean --if-exists --no-owner --exit-on-error --username="$POSTGRES_USER" --dbname="$POSTGRES_DB"'
-  cat "$source/storage.tar.gz" | compose run --rm --no-deps -T web sh -c 'find /rails/storage -mindepth 1 -maxdepth 1 -exec rm -rf -- {} + && tar --extract --gzip --file=- --directory=/rails/storage'
+  cat "$source/storage.tar.gz" | compose run --rm --no-deps -T web sh -c 'find /rails/apps/web/storage -mindepth 1 -maxdepth 1 -exec rm -rf -- {} + && tar --extract --gzip --file=- --directory=/rails/apps/web/storage'
   compose up -d web >/dev/null
   echo "Restore complete"
 }
