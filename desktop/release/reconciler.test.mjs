@@ -111,6 +111,32 @@ test("only a current owner approval is eligible and a missing history anchor fai
   }), /not in current first-parent history/)
 })
 
+test("an unapproved merge stops reconciliation before every descendant merge", async () => {
+  const first = pull(511, SHA1)
+  const unauthorized = pull(512, SHA2)
+  const descendant = pull(513, SHA3)
+  const github = fakeGitHub({
+    prs: [first, unauthorized, descendant],
+    gates: new Map([[SHA1, "passed"], [SHA2, "passed"], [SHA3, "passed"]]),
+    approved: pr => pr.number !== unauthorized.number
+  })
+  const result = await reconcileReleaseLedger({
+    ledger: createLedger({ lastReconciledMain: SHA0 }),
+    mainHistory: [SHA0, SHA1, SHA2, SHA3],
+    github,
+    ownerLogin: "owner",
+    now: () => NOW
+  })
+
+  assert.equal(result.pendingSha, SHA2)
+  assert.equal(result.pendingReason, "unapproved_pr")
+  assert.deepEqual(result.unapprovedMerges, [{ pr: unauthorized.number, sha: SHA2 }])
+  assert.equal(result.ledger.last_reconciled_main, SHA1)
+  assert.deepEqual(result.ledger.releases.map(release => [release.pr, release.main_sha, release.version]), [
+    [first.number, SHA1, "0.1.0"]
+  ])
+})
+
 test("an empty Pages ledger anchors to current main without retroactively releasing history", async () => {
   const result = await reconcileReleaseLedger({
     ledger: null,
@@ -141,7 +167,7 @@ function fakeGitHub({ prs = [], gates = new Map(), approved = true }) {
       return pr ? [pr] : []
     },
     pullRequest: async number => prs.find(pr => pr.number === number),
-    ownerApprovedPullRequest: async () => approved,
+    ownerApprovedPullRequest: async pr => typeof approved === "function" ? approved(pr) : approved,
     gateForMainSha: async sha => gates.get(sha) ?? null,
     versionTags: async () => []
   }

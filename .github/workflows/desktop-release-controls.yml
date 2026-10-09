@@ -20,9 +20,15 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  # Serialize the whole emergency action with all release publishers and note writers.
+  group: elef-desktop-release-coordinator
+  cancel-in-progress: false
+  queue: max
+
 jobs:
   control:
-    name: Update release eligibility immediately
+    name: Update release eligibility under publication lock
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -32,7 +38,6 @@ jobs:
       GITHUB_API_URL: ${{ github.api_url }}
       GITHUB_REPOSITORY: ${{ github.repository }}
     permissions:
-      actions: write
       contents: write
       pull-requests: read
     steps:
@@ -88,14 +93,6 @@ jobs:
           DESKTOP_RELEASE_REASON: ${{ inputs.reason }}
           ELEF_RELEASE_STATE_PUSH_TOKEN: ${{ steps.pages-writer-token.outputs.token }}
         run: node source/desktop/scripts/publish_desktop_release_state.mjs pages source
-
-      - name: Cancel an active coordinator after recording the block
-        if: inputs.action == 'block'
-        continue-on-error: true
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-        run: node source/desktop/scripts/cancel_desktop_release_runs.mjs
 
       - name: Publish current release warning and recovery guidance
         env:

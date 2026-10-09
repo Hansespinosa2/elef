@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { readFile } from "node:fs/promises"
+import { readFile, readdir } from "node:fs/promises"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 
@@ -7,6 +7,7 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../
 const workflow = await readFile(path.join(repoRoot, ".github/workflows/ci.yml"), "utf8")
 const releaseWorkflow = await readFile(path.join(repoRoot, ".github/workflows/desktop-release.yml"), "utf8")
 const releaseControls = await readFile(path.join(repoRoot, ".github/workflows/desktop-release-controls.yml"), "utf8")
+const workflowDirectory = path.join(repoRoot, ".github/workflows")
 const statePublisherScript = await readFile(path.join(repoRoot, "desktop/scripts/publish_desktop_release_state.mjs"), "utf8")
 const platformPublisherScript = await readFile(path.join(repoRoot, "desktop/scripts/publish_desktop_platform.mjs"), "utf8")
 const aurPublisherScript = await readFile(path.join(repoRoot, "desktop/scripts/publish_desktop_aur.mjs"), "utf8")
@@ -70,6 +71,8 @@ assert.match(releaseWorkflow, /schedule:\n\s+- cron: "\*\/15 \* \* \* \*"/, "per
 assert.match(releaseWorkflow, /workflow_dispatch:/, "owner release controls and on-demand reconciliation must be available")
 assert.match(releaseWorkflow, /workflow_dispatch' && github\.ref == 'refs\/heads\/main'/, "manual coordination must run only from trusted main workflow code")
 assert.match(releaseWorkflow, /queue: max/, "release reconciliation must use the Actions maximum concurrency queue")
+const releaseConcurrencyGroup = workflowConcurrencyGroup(releaseWorkflow)
+assert.ok(releaseConcurrencyGroup, "release publication must serialize its complete workflow lifecycle")
 assert.doesNotMatch(releaseWorkflow, /tags:\s*\[\s*["']desktop-v\*/, "release publication must not depend on a bot-created tag event")
 assert.doesNotMatch(releaseWorkflow, /^\s+pull_request:/m, "release credentials and writes must not run for untrusted pull requests")
 assert.match(releaseWorkflow, /ref: main\n\s+path: source\n\s+fetch-depth: 0/, "the coordinator must inspect full main history")
@@ -77,7 +80,7 @@ assert.match(releaseWorkflow, /ref: gh-pages\n\s+path: pages/, "the coordinator 
 assert.match(releaseWorkflow, /actions: read[\s\S]*contents: write[\s\S]*pull-requests: read/, "the state writer must use narrow GitHub permissions")
 assert.match(releaseWorkflow, /publish_desktop_release_state\.mjs pages source/, "the workflow must use the tested CAS publisher")
 assert.match(releaseWorkflow, /steps\.publish\.outputs\.failed_gate_count/, "terminal Gate A failures must produce an owner-visible workflow failure")
-assert.match(releaseWorkflow, /options: \[ reconcile, minor \]/, "ordinary release workflow must leave emergency controls to the unqueued control path")
+assert.match(releaseWorkflow, /options: \[ reconcile, minor \]/, "ordinary release workflow must leave emergency actions to the dedicated control path")
 const pagesCheckouts = releaseWorkflow.split("ref: gh-pages").slice(1)
 assert.equal(pagesCheckouts.length, 6, "each release workflow Pages checkout must be explicit")
 assert.ok(pagesCheckouts.every(block => block.slice(0, 180).includes("persist-credentials: false")), "Pages checkouts must not persist the general Actions token")
@@ -97,11 +100,16 @@ assert.equal((releaseControls.match(new RegExp(escapeRegExp(`uses: ${appTokenAct
 assert.match(releaseControls, /ELEF_RELEASE_STATE_PUSH_TOKEN: \$\{\{ steps\.pages-writer-token\.outputs\.token \}\}/, "emergency ledger writes must use the dedicated App token")
 assert.match(releaseControls, /ELEF_RELEASE_STATE_APP_ID: \$\{\{ vars\.ELEF_RELEASE_STATE_APP_ID \}\}/, "emergency controls must verify the configured writer App ID")
 assert.match(releaseControls, /ref: gh-pages\n\s+path: pages\n\s+fetch-depth: 1\n\s+persist-credentials: false/, "emergency control checkout must not retain the general Actions token")
-assert.match(releaseControls, /actions: write/, "emergency blocks must be able to cancel a stale publisher after committing block state")
 assert.match(releaseControls, /publish_desktop_release_state\.mjs pages source/, "emergency controls must use the CAS ledger writer")
-assert.match(releaseControls, /cancel_desktop_release_runs\.mjs/, "emergency blocks must stop any active release coordinator after the ledger update")
 assert.match(releaseControls, /finalize_desktop_release_notes\.mjs pages/, "emergency controls must publish the warning to GitHub Releases")
-assert.doesNotMatch(releaseControls, /^concurrency:/m, "emergency blocks must not wait behind an ordinary publication run; the shared Pages CAS serializes ledger writes")
+assert.equal(workflowConcurrencyGroup(releaseControls), releaseConcurrencyGroup, "emergency actions must serialize with every release publisher and note writer")
+for (const file of await readdir(workflowDirectory)) {
+  if (!/\.ya?ml$/.test(file)) continue
+  const source = await readFile(path.join(workflowDirectory, file), "utf8")
+  if (/publish_desktop_platform\.mjs|publish_desktop_aur\.mjs|finalize_desktop_release_notes\.mjs/.test(source)) {
+    assert.equal(workflowConcurrencyGroup(source), releaseConcurrencyGroup, `${file} contains a release writer and must share the publication barrier`)
+  }
+}
 
 for (const [name, script] of [
   ["coordinator", statePublisherScript],
@@ -179,4 +187,8 @@ function jobBlock(source, jobName) {
 
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+
+function workflowConcurrencyGroup(source) {
+  return source.match(/^concurrency:\n(?:  #[^\n]*\n)*  group: ([^\n]+)\n  cancel-in-progress: false\n  queue: max$/m)?.[1] ?? null
 }

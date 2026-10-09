@@ -53,7 +53,10 @@ export async function reconcileReleaseLedger({ ledger, mainHistory, github, owne
     }
     if (!await github.ownerApprovedPullRequest(pullRequest, ownerLogin)) {
       unapprovedMerges.push({ pr: pullRequest.number, sha })
-      continue
+      pendingSha = sha
+      pendingReason = "unapproved_pr"
+      historyEnd = index - 1
+      break
     }
 
     const gate = await github.gateForMainSha(sha)
