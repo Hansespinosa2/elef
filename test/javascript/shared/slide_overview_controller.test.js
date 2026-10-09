@@ -117,6 +117,10 @@ test("large slide overviews clone thumbnails only near the visible scroll area",
 
     const cards = [...grid.querySelectorAll(".slide-overview-card")]
     assert.equal(cards.length, 3)
+    for (const card of cards) {
+      assert.equal(card.getAttribute("data-editor-action"), "overview-select")
+      assert.equal(card.hasAttribute("data-action"), false)
+    }
     assert.equal(observer.options.root, grid)
     assert.equal(observer.options.rootMargin, "80px")
     assert.equal(cards.filter(card => card.querySelector(".slide-frame")).length, 0)
@@ -151,6 +155,33 @@ test("slide overview operations rewrite the source through the editor seam", () 
   assert.equal(committed.length, 2)
   assert.equal(committed[1].source, "One\n---\nTwo")
   assert.equal(overview.selectedIndex, 1)
+})
+
+test("slide overview selection resolves cards from neutral native events", () => {
+  withDocument(`
+    <html><body><form>
+      <div class="slide-overview-grid"></div>
+      <div class="slide-overview-actions"><button></button><button></button><button></button><button></button><button></button></div>
+      <div class="slide-overview-warnings"><ul></ul></div>
+      <output></output>
+      <input type="hidden" name="presentation[source]" value="One&#10;---&#10;Two">
+    </form></body></html>
+  `, (document) => {
+    const overview = buildOverview(document)
+    overview.selectedIndex = 0
+    overview.projectionPending = false
+    overview.renderOverview()
+
+    const cards = [...document.querySelectorAll(".slide-overview-card")]
+    assert.equal(cards.length, 2)
+    const label = cards[1].querySelector(".slide-overview-label")
+    overview.select({ currentTarget: document.querySelector("form"), target: label })
+    assert.equal(overview.selectedIndex, 1)
+
+    overview.projectionPending = true
+    overview.select({ currentTarget: document.querySelector("form"), target: label })
+    assert.equal(overview.selectedIndex, 1)
+  })
 })
 
 test("slide overview source ranges skip front matter and fenced dividers", () => {

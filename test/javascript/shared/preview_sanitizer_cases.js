@@ -80,6 +80,30 @@ export const CASES = [
     ],
   },
   {
+    name: "interactive preview keeps neutral editor contracts and drops unknown mounts",
+    installs: [
+      {
+        html: `
+    <button type="button" data-editor-action="media-choose-slide" data-slide-index="0">Add image</button>
+    <span data-editor-action="overview-select" data-slide-index="1">Slide 2</span>
+    <button type="button" data-editor-action="invoke">Bad</button>
+    <div class="presentation-surface" data-client-mount="mermaid"></div>
+    <div class="document-reader" data-client-mount="document-pages mermaid"><div class="document-surface"></div></div>
+    <div data-client-mount="file-library"></div>`,
+        options: {},
+      },
+    ],
+    checks: [
+      { select: "[data-editor-action='media-choose-slide']", attribute: "data-slide-index", equals: "0" },
+      { select: "[data-editor-action='overview-select']", exists: true },
+      { select: "[data-editor-action='invoke']", exists: false },
+      { textAbsent: ["Bad"] },
+      { select: ".presentation-surface", attribute: "data-client-mount", equals: "mermaid" },
+      { select: ".document-reader", attribute: "data-client-mount", equals: "document-pages mermaid" },
+      { select: "[data-client-mount='file-library']", exists: false },
+    ],
+  },
+  {
     name: "sanitized renderer output retains the document editing controls",
     installs: [{ render: { source: "# Title\n\nA paragraph.", kind: "document" }, options: {} }],
     checks: [

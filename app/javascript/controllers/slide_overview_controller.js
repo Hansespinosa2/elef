@@ -1,5 +1,6 @@
 import { Controller } from "@hotwired/stimulus"
 import { SlideOverview } from "@elef/client"
+import { bindEditorAction } from "lib/editor_actions"
 
 // Thin host adapter: all overview state, slide operations, slide-range source
 // math, card rendering, and overflow measurement live in the client
@@ -18,9 +19,13 @@ export default class extends Controller {
       }
     })
     this.overview.connect()
+    // Neutral client contract for the overview cards the feature renders;
+    // the `select` action stays for compatibility.
+    this.unbindEditorActions = bindEditorAction(this.element, "overview-select", (event) => this.overview.select(event))
   }
 
   disconnect() {
+    this.unbindEditorActions?.()
     this.overview?.disconnect()
   }
 

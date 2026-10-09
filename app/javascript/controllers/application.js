@@ -1,7 +1,9 @@
 import { Application } from "@hotwired/stimulus"
+import { startClientMounts } from "lib/client_mounts"
 import { mountEditorHosts } from "lib/editor_view"
 
 mountEditorHosts()
+startClientMounts()
 document.addEventListener("turbo:load", () => {
   mountEditorHosts()
 })

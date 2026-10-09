@@ -282,9 +282,14 @@ test("card previews render sanitized renderer output", async () => {
       );
     }
     const docMount = previews[0]?.querySelector(
-      '[data-controller="document-pages mermaid-diagrams"] > [data-document-pages-target="surface"]',
+      '[data-client-mount="document-pages mermaid"] > [data-document-pages-target="surface"]',
     );
     assert.ok(docMount, "document previews mount the shared pagination pass");
+    assert.equal(
+      previews[0]?.querySelector("[data-controller]"),
+      null,
+      "document previews carry no Stimulus mount",
+    );
     assert.equal(
       previews[1]?.querySelector("[data-controller]"),
       null,

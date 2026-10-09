@@ -63,7 +63,17 @@ export class SlideOverview {
   select(event) {
     if (this.projectionPending) return
 
-    this.selectedIndex = Number(event.currentTarget.dataset.slideIndex || 0)
+    // Stimulus dispatches with the card as currentTarget; neutral host
+    // bindings delegate natively, so resolve the card from the event target.
+    const card = event.currentTarget?.dataset?.slideIndex !== undefined
+      ? event.currentTarget
+      : event.target?.closest?.("[data-editor-action='overview-select']")
+    if (!card) return
+    this.selectCard(card)
+  }
+
+  selectCard(card) {
+    this.selectedIndex = Number(card?.dataset.slideIndex || 0)
     if (this.element) this.element.dataset.selectedSlideIndex = String(this.selectedIndex)
     this.renderOverview()
     const frame = this.preview?.querySelectorAll(".slide-frame")[this.selectedIndex]
@@ -161,7 +171,7 @@ export class SlideOverview {
       card.type = "button"
       card.className = "slide-overview-card"
       card.dataset.slideIndex = String(index)
-      card.dataset.action = "slide-overview#select"
+      card.dataset.editorAction = "overview-select"
       card.setAttribute("aria-label", `Select slide ${index + 1}: ${title}`)
       card.setAttribute("aria-current", index === this.selectedIndex ? "true" : "false")
       card.disabled = this.projectionPending

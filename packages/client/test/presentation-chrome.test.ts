@@ -48,7 +48,7 @@ test("client presentation block attributes gate editability on region flags", ()
     label: "Block",
   });
   assert.match(editable, /contenteditable="true"/);
-  assert.match(editable, /presentation-editor#blockInput/);
+  assert.doesNotMatch(editable, /data-action=/);
 
   const locked = presentationBlockAttributes({
     valid: true,
@@ -69,7 +69,7 @@ test("client presentation block controls disable edge moves and single delete", 
   const single = presentationBlockControls({ slideIndex: 0, blockIndex: 0, blockCount: 1, position: null });
   assert.match(single, /delete-block"[^>]*disabled[^>]*>Delete</);
   assert.match(single, /Move block up[^>]*disabled/);
-  assert.match(single, /presentation-editor#alignmentChanged/);
+  assert.doesNotMatch(single, /data-action=/);
 });
 
 test("client presentation root, slide block, and empty slide keep projection hooks", () => {
@@ -85,4 +85,18 @@ test("client presentation root, slide block, and empty slide keep projection hoo
   const empty = presentationEmptySlide({ index: 2 });
   assert.match(empty, /class="empty-slide"/);
   assert.match(empty, /data-slide-index="2"/);
+});
+
+test("client presentation chrome emits neutral behavior contracts", () => {
+  const toolbar = presentationSlideToolbar({ index: 0, slideCount: 2 });
+  assert.match(toolbar, /data-editor-action="media-choose-slide"/);
+  assert.doesNotMatch(toolbar, /media#chooseForSlide/);
+  assert.doesNotMatch(toolbar, /data-action=/);
+
+  const empty = presentationEmptySlide({ index: 1 });
+  assert.match(empty, /data-editor-action="media-choose-slide"/);
+
+  const root = presentationRoot({ style: { theme: "dark", typography: "book" }, inner: "" });
+  assert.match(root, /data-client-mount="mermaid"/);
+  assert.doesNotMatch(root, /data-controller=/);
 });

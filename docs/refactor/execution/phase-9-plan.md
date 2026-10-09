@@ -116,3 +116,4 @@ Human gates touched (constitution §8): none — no signing/updater/owner-accept
 ## 9. Re-plan log
 <!-- Append dated entries: defect found, what changed, new hash. Never rewrite earlier sections silently. -->
 - 2026-10-09: frozen (initial).
+- 2026-10-09 (DO-5): `data-presentation-editor-target` / `data-presentation-editor-align` / `data-visual-editor-block-id` stay host-neutral query hooks (client-consumed, no Stimulus controller behind them); only `data-action` Stimulus strings and `data-controller` mounts go neutral in DO-5. Server ERB keeps legacy action strings until DO-6 deletion; sanitizer carries a dual allowlist transitionally.

@@ -24,6 +24,11 @@ const ALLOWED_ACTIONS = new Set([
   "focus->visual-editor#positionControlOpened keydown->visual-editor#positionControlKeydown change->visual-editor#alignmentChanged",
   "change->presentation-editor#alignmentChanged",
 ]);
+// Host-neutral behavior contracts emitted by the client (Phase 09): hosts bind
+// these natively instead of through Stimulus action strings. The legacy
+// entries above stay until the server authoring partials are deleted.
+const ALLOWED_EDITOR_ACTIONS = new Set(["media-choose-slide", "overview-select"]);
+const ALLOWED_CLIENT_MOUNTS = new Set(["mermaid", "document-pages"]);
 const ALLOWED_PRESENTATION_ACTIONS = new Set([
   "add-slide-after", "delete-slide", "move-slide-up", "move-slide-down", "add-block-after", "delete-block", "move-block-up", "move-block-down",
 ]);
@@ -91,6 +96,10 @@ function safeAttribute(
   if (lower === "style") return isSafeKatexStyle(element, value);
   if (lower.startsWith("aria-") && /^[a-z-]+$/.test(lower)) return true;
   if (lower === "data-action") return interactive && ALLOWED_ACTIONS.has(value);
+  if (lower === "data-editor-action") return interactive && ALLOWED_EDITOR_ACTIONS.has(value);
+  if (lower === "data-client-mount") {
+    return interactive && value.split(/\s+/).every((mount) => ALLOWED_CLIENT_MOUNTS.has(mount));
+  }
   if (lower === "data-controller") {
     if (interactive) {
       return value.split(/\s+/).every((controller) => ["mermaid-diagrams", "presentation-canvas", "document-pages"].includes(controller));
@@ -144,7 +153,8 @@ function safePreviewButton(element: Element, interactive: boolean): boolean {
   if (!interactive || element.getAttribute("type") !== "button") return false;
   return (
     ALLOWED_PRESENTATION_ACTIONS.has(element.getAttribute("data-presentation-editor-action") ?? "") ||
-    element.getAttribute("data-action") === "click->media#chooseForSlide"
+    element.getAttribute("data-action") === "click->media#chooseForSlide" ||
+    element.getAttribute("data-editor-action") === "media-choose-slide"
   );
 }
 

@@ -481,10 +481,11 @@ function CardPreview({
       <div className="library-card-preview" aria-hidden="true" inert data-preview-state="ready">
         {kind === "document" ? (
           // Document cards reuse the single document-pages pagination
-          // implementation: the host boots these Stimulus mounts (a
-          // MutationObserver repaginates when lazy content lands) while
-          // Stimulus-less hosts render the same content unpaginated.
-          <div className={stageClass} data-controller="document-pages mermaid-diagrams">
+          // implementation: the host boots these mounts through the neutral
+          // data-client-mount contract (a MutationObserver repaginates when
+          // lazy content lands) while mount-less hosts render the same
+          // content unpaginated.
+          <div className={stageClass} data-client-mount="document-pages mermaid">
             <div className="document-surface" data-document-pages-target="surface">
               {sanitized}
             </div>

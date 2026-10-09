@@ -1,5 +1,6 @@
 import { Controller } from "@hotwired/stimulus"
 import { mediaInsertText } from "@elef/work-model/document-transforms"
+import { bindEditorAction } from "lib/editor_actions"
 
 const IMAGE_TYPES_BY_EXTENSION = {
   avif: "image/avif",
@@ -95,6 +96,14 @@ export default class extends Controller {
   connect() {
     this.pendingRange = null
     this.targetSlideIndex = null
+    // Neutral client contract for the shared chrome image buttons; the
+    // Stimulus `chooseForSlide` action stays for server-rendered markup until
+    // the authoring partials migrate.
+    this.unbindEditorActions = bindEditorAction(this.element, "media-choose-slide", (event, control) => this.chooseForSlide(event, control))
+  }
+
+  disconnect() {
+    this.unbindEditorActions?.()
   }
 
   filesFromTransfer(transfer) {
@@ -117,10 +126,10 @@ export default class extends Controller {
     this.inputTarget.click()
   }
 
-  chooseForSlide(event) {
+  chooseForSlide(event, control = null) {
     event.preventDefault()
     event.stopPropagation()
-    const index = event.currentTarget.dataset.slideIndex
+    const index = (control ?? event.currentTarget).dataset.slideIndex
     this.targetSlideIndex = index !== undefined && index !== "" ? Number(index) : null
     this.pendingRange = null
     this.inputTarget.click()
