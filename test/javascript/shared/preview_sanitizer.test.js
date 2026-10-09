@@ -66,6 +66,24 @@ test("interactive preview keeps renderer-owned alignment controls and drops unkn
   assert.equal(container.textContent.includes("Submit action"), false)
 })
 
+test("Stable preview is read-only while preserving ordinary Markdown links and literal text", () => {
+  const { document } = parseHTML("<main id='preview'></main>")
+  const container = document.querySelector("#preview")
+  installSanitizedPreview(container, `
+    <div class="document-editor-block" contenteditable="true" data-action="input->visual-editor#projectionInput" data-editor-block-id="safe-block">
+      [[unresolved directive]] <a href="/manual">ordinary Markdown link</a>
+      <button type="button" data-presentation-editor-action="delete-slide" data-slide-index="0">Delete slide</button>
+      <select data-presentation-editor-align><option value="left">Left</option></select>
+    </div>`, { visualEditing: false })
+
+  const article = container.querySelector(".document-editor-block")
+  assert.equal(article.textContent.includes("[[unresolved directive]]"), true)
+  assert.equal(article.querySelector("a").getAttribute("href"), "/manual")
+  assert.equal(article.hasAttribute("contenteditable"), false)
+  assert.equal(article.hasAttribute("data-action"), false)
+  assert.equal(container.querySelector("button, select"), null)
+})
+
 test("interactive preview keeps only enumerated Art state and its trusted layout controller", () => {
   const { document } = parseHTML("<main id='preview'></main>")
   const container = document.querySelector("#preview")

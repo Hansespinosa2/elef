@@ -95,6 +95,7 @@
     },
     {
       "module_input": "vendor/javascript/elef-renderer.bundle.js",
+      "artifact_path": "desktop/frontend/dist/assets/renderer.bundle.js",
       "dependent_retained_feature": "The canonical Rails-owned renderer used for offline preview, presentation, and export.",
       "stable_constraint": "The bundle remains byte-identical to the Rails artifact; Stable filters excluded interaction affordances at its desktop preview boundary.",
       "negative_scenario": "stable-preview-is-read-only"

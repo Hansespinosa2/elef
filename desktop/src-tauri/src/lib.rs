@@ -3,10 +3,11 @@ use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
+#[cfg(feature = "desktop-dev")]
+use elef_core::DocumentGraphDocument;
 use elef_core::{
-    AuthoringRegistries, CoreError, DeckPreview, DeckSummary, DocumentGraphDocument,
-    ImportResolution, ImportResult, Library, LibraryConfig, OpenDeck, SaveResult, SourceSnapshot,
-    UploadedAsset,
+    AuthoringRegistries, CoreError, DeckPreview, DeckSummary, ImportResolution, ImportResult,
+    Library, LibraryConfig, OpenDeck, SaveResult, SourceSnapshot, UploadedAsset,
 };
 use serde::Serialize;
 use tauri::RunEvent;
@@ -15,6 +16,7 @@ use tauri::ipc::{InvokeBody, Request as IpcRequest};
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+#[cfg(any(target_os = "macos", feature = "webdriver"))]
 use tauri_plugin_updater::UpdaterExt;
 
 #[derive(Default)]
@@ -23,6 +25,7 @@ struct DesktopState {
     root: RwLock<Option<PathBuf>>,
     pending_import: std::sync::Mutex<Option<PathBuf>>,
     open_files: std::sync::Mutex<VecDeque<PathBuf>>,
+    #[cfg(any(target_os = "macos", feature = "webdriver"))]
     update_installing: std::sync::atomic::AtomicBool,
     app_ready: std::sync::atomic::AtomicBool,
 }
@@ -126,7 +129,7 @@ impl From<CoreError> for CommandError {
 
 #[tauri::command]
 async fn confirm_app_ready(
-    app: AppHandle,
+    _app: AppHandle,
     window: tauri::WebviewWindow,
     state: State<'_, DesktopState>,
 ) -> Result<usize, CommandError> {
@@ -146,7 +149,8 @@ async fn confirm_app_ready(
     {
         return Ok(0);
     }
-    let removed = if let Ok((live, _)) = installed_application(&app) {
+    #[cfg(any(target_os = "macos", feature = "webdriver"))]
+    let removed = if let Ok((live, _)) = installed_application(&_app) {
         // Readiness is acknowledged only after successful frontend/editor boot.
         // Failure leaves the previous complete installation available.
         match tauri::async_runtime::spawn_blocking(move || {
@@ -160,17 +164,22 @@ async fn confirm_app_ready(
     } else {
         0
     };
+    #[cfg(not(any(target_os = "macos", feature = "webdriver")))]
+    let removed = 0;
     Ok(removed)
 }
 
+#[cfg(any(target_os = "macos", feature = "webdriver"))]
 struct UpdateLease<'a>(&'a std::sync::atomic::AtomicBool);
 
+#[cfg(any(target_os = "macos", feature = "webdriver"))]
 impl Drop for UpdateLease<'_> {
     fn drop(&mut self) {
         self.0.store(false, std::sync::atomic::Ordering::Release);
     }
 }
 
+#[cfg(any(target_os = "macos", feature = "webdriver"))]
 fn installed_application(app: &AppHandle) -> Result<(PathBuf, PathBuf), CommandError> {
     #[cfg(target_os = "linux")]
     if let Some(path) = app.env().appimage {
@@ -235,6 +244,7 @@ async fn confirm_native_action(
         .map_err(|_| CommandError::new("internal", "The confirmation could not be opened.", true))
 }
 
+#[cfg(any(target_os = "macos", feature = "webdriver"))]
 #[tauri::command]
 async fn install_update(
     app: AppHandle,
@@ -404,6 +414,7 @@ fn list_decks(state: State<'_, DesktopState>) -> Result<Vec<DeckSummary>, Comman
     Ok(state.current_library()?.list_decks()?)
 }
 
+#[cfg(feature = "desktop-dev")]
 #[tauri::command]
 fn document_graph(
     state: State<'_, DesktopState>,
@@ -1099,6 +1110,7 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let minimize = PredefinedMenuItem::minimize(app, None)?;
     let close = PredefinedMenuItem::close_window(app, None)?;
     let window = Submenu::with_items(app, "Window", true, &[&minimize, &close])?;
+    #[cfg(all(target_os = "macos", not(feature = "desktop-dev")))]
     let check_updates = MenuItem::with_id(
         app,
         "check-for-updates",
@@ -1106,11 +1118,10 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
         true,
         None::<&str>,
     )?;
-    let help = if cfg!(target_os = "macos") {
-        Submenu::with_items(app, "Help", true, &[&check_updates])?
-    } else {
-        Submenu::with_items(app, "Help", true, &[&about, &settings, &check_updates])?
-    };
+    #[cfg(all(target_os = "macos", not(feature = "desktop-dev")))]
+    let help = Submenu::with_items(app, "Help", true, &[&check_updates])?;
+    #[cfg(not(all(target_os = "macos", not(feature = "desktop-dev"))))]
+    let help = Submenu::with_items(app, "Help", true, &[&about, &settings])?;
 
     let menu = if cfg!(target_os = "macos") {
         Menu::with_items(
@@ -1131,7 +1142,37 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     Ok(menu)
 }
 
+macro_rules! app_commands {
+    ($($extra:ident),* $(,)?) => {
+        tauri::generate_handler![
+            choose_library_root,
+            get_library_status,
+            read_library_config,
+            write_library_config,
+            read_authoring_registries,
+            write_authoring_registry,
+            list_decks,
+            create_deck,
+            open_deck,
+            read_deck_preview,
+            read_source_snapshot,
+            rename_deck,
+            delete_deck,
+            save_source,
+            upload_asset,
+            export_elef,
+            import_elef,
+            import_opened_elef,
+            pending_open_elef_count,
+            resolve_import_conflict,
+            confirm_app_ready,
+            $($extra),*
+        ]
+    };
+}
+
 pub fn run() {
+    #[cfg(any(target_os = "macos", feature = "webdriver"))]
     let updater = tauri_plugin_updater::Builder::new();
     #[cfg(feature = "webdriver")]
     let updater = match std::env::var("ELEF_E2E_UPDATER_PUBLIC_KEY") {
@@ -1140,7 +1181,6 @@ pub fn run() {
     };
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.set_focus();
@@ -1150,7 +1190,11 @@ pub fn run() {
             if added > 0 {
                 let _ = app.emit("desktop-open-elef", ());
             }
-        }))
+        }));
+
+    #[cfg(any(target_os = "macos", feature = "webdriver"))]
+    let builder = builder
+        .plugin(tauri_plugin_process::init())
         .plugin(updater.build());
 
     #[cfg(feature = "webdriver")]
@@ -1158,7 +1202,7 @@ pub fn run() {
     #[cfg(feature = "webdriver")]
     let builder = builder.plugin(tauri_plugin_wdio::init());
 
-    let app = builder
+    let builder = builder
         .register_asynchronous_uri_scheme_protocol("elefasset", |context, request, responder| {
             responder.respond(asset_protocol_response(context.app_handle(), &request));
         })
@@ -1190,7 +1234,11 @@ pub fn run() {
             let id = event.id().as_ref();
             match id {
                 "open-deck" | "refresh-library" | "save" | "export-elef" | "import-elef"
-                | "print" | "settings" | "check-for-updates" => {
+                | "print" | "settings" => {
+                    let _ = app.emit("desktop-menu-action", id);
+                }
+                #[cfg(all(target_os = "macos", not(feature = "desktop-dev")))]
+                "check-for-updates" => {
                     let _ = app.emit("desktop-menu-action", id);
                 }
                 "quit" => {
@@ -1213,32 +1261,18 @@ pub fn run() {
                 }
                 _ => {}
             }
-        })
-        .invoke_handler(tauri::generate_handler![
-            choose_library_root,
-            get_library_status,
-            read_library_config,
-            write_library_config,
-            read_authoring_registries,
-            write_authoring_registry,
-            list_decks,
-            document_graph,
-            create_deck,
-            open_deck,
-            read_deck_preview,
-            read_source_snapshot,
-            rename_deck,
-            delete_deck,
-            save_source,
-            upload_asset,
-            export_elef,
-            import_elef,
-            import_opened_elef,
-            pending_open_elef_count,
-            resolve_import_conflict,
-            install_update,
-            confirm_app_ready,
-        ])
+        });
+
+    #[cfg(all(feature = "desktop-dev", feature = "webdriver"))]
+    let builder = builder.invoke_handler(app_commands!(document_graph, install_update));
+    #[cfg(all(feature = "desktop-dev", not(feature = "webdriver")))]
+    let builder = builder.invoke_handler(app_commands!(document_graph));
+    #[cfg(all(not(feature = "desktop-dev"), target_os = "macos"))]
+    let builder = builder.invoke_handler(app_commands!(install_update));
+    #[cfg(all(not(feature = "desktop-dev"), not(target_os = "macos")))]
+    let builder = builder.invoke_handler(app_commands!());
+
+    let app = builder
         .build(tauri::generate_context!())
         .expect("error while building Elef Desktop");
 

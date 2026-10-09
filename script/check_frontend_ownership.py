@@ -50,7 +50,7 @@ desktop_ui_extensions = {
     ".html", ".htm", ".css", ".scss", ".sass", ".less",
     ".jsx", ".tsx", ".vue", ".svelte",
 }
-generated_directories = {"node_modules", "dist", "dist-e2e", "target"}
+generated_directories = {"node_modules", "dist", "dist-dev", "dist-e2e", "dist-e2e-stable", "target"}
 desktop_ui_files = []
 for directory, subdirectories, filenames in os.walk(desktop_root):
     subdirectories[:] = [name for name in subdirectories if name not in generated_directories]
@@ -93,6 +93,7 @@ assert not desktop_protocol_violations, (
 )
 
 build = (ROOT / "desktop/frontend/build.mjs").read_text()
+desktop_frontend_source = ROOT / "desktop/frontend/src"
 desktop_main = (ROOT / "desktop/frontend/src/main.js").read_text()
 tauri_config = json.loads((ROOT / "desktop/src-tauri/tauri.conf.json").read_text())
 desktop_scripts = json.loads((ROOT / "desktop/frontend/package.json").read_text())["scripts"]
@@ -342,7 +343,14 @@ assert 'import "../../../app/assets/stylesheets/application.css"' in desktop_mai
 assert "startFileLibraryApplication" in desktop_main and "document.querySelector" not in desktop_main, (
     "the desktop entry point must only wire native services into the Rails-owned application"
 )
-assert 'from "lib/editor_runtime"' in desktop_main, "desktop must consume the Rails-owned Stimulus controller runtime"
+assert 'from "#desktop/editor-runtime"' in desktop_main, "desktop must select a profile-specific runtime adapter"
+assert 'from "lib/editor_runtime"' in (desktop_frontend_source / "editor-runtime-dev.js").read_text(), (
+    "repository Dev must retain the Rails-owned full Stimulus controller runtime"
+)
+stable_editor_runtime = (desktop_frontend_source / "editor-runtime-stable.js").read_text()
+assert not re.search(r"visual_editor_controller|presentation_editor_controller|slide_overview_controller|document_link_palette_controller|document_graph_controller", stable_editor_runtime), (
+    "Stable runtime must not initialize excluded experimental controllers"
+)
 assert "@tauri-apps/" not in desktop_application and "desktop/" not in desktop_application, (
     "the Rails-owned file-library application must depend on injected host services, not desktop code"
 )
@@ -365,9 +373,12 @@ assert '"app/views/shared/_authoring_settings_dialog.html.erb"' in build, (
 )
 assert '"lib/library_card"' in desktop_application, "desktop library cards must be owned by app/javascript"
 assert '"lib/editor_controller_lookup"' in desktop_application, "desktop editor lookup must use the app-owned controller helper"
-assert '"lib/document_links"' in desktop_application and "buildDocumentGraph" in desktop_application, (
-    "desktop graph construction must consume the Rails-owned resolver"
+dev_graph_runtime = (desktop_frontend_source / "document-graph-runtime-dev.js").read_text()
+stable_graph_runtime = (desktop_frontend_source / "document-graph-runtime-stable.js").read_text()
+assert '"lib/document_links"' in dev_graph_runtime and "buildDocumentGraph" in dev_graph_runtime, (
+    "repository Dev graph construction must consume the Rails-owned resolver"
 )
+assert "documentGraphRuntime = null" in stable_graph_runtime, "Stable must not initialize document graph behavior"
 assert '"ElefRenderer.buildDocumentGraph"' in (ROOT / "app/lib/source/javascript_renderer.rb").read_text(), (
     "Rails graph construction must use the same app-owned resolver"
 )
@@ -421,7 +432,8 @@ for shared_module in (
     "feature_flags", "library_preview", "performance_measurement", "renderer_worker_client",
     "authoring_settings_dialog", "save_flow", "title_save_flow",
 ):
-    assert f'"lib/{shared_module}"' in desktop_application, f"desktop application must consume app/javascript/lib/{shared_module}.js"
+    consumer = dev_graph_runtime if shared_module == "document_graph_cache" else desktop_application
+    assert f'"lib/{shared_module}"' in consumer, f"desktop profile application must consume app/javascript/lib/{shared_module}.js"
 assert '"lib/projection_editability"' in (ROOT / "app/javascript/controllers/presentation_editor_controller.js").read_text()
 assert '"lib/projection_editability"' in (ROOT / "app/javascript/controllers/visual_editor_controller.js").read_text()
 assert 'pin "lib/projection_editability", to: "lib/projection_editability.js"' in importmap
@@ -432,13 +444,21 @@ desktop_source_reasons = {
     "authoring-registry-loader.js": "loads the library's native authoring-registry commands",
     "bootstrap-flow.js": "orders native app startup and its readiness handshake",
     "close-flow.js": "coordinates native window close with the save transport",
-    "file-library-transport.js": "maps named app operations to the native file-library command surface",
+    "document-graph-runtime-dev.js": "activates the Rails-owned graph resolver and cache in repository Dev",
+    "document-graph-runtime-stable.js": "provides no graph runtime to the excluded Stable profile",
+    "editor-runtime-dev.js": "loads the Rails-owned full controller runtime and Dev-only lineage controller",
+    "editor-runtime-stable.js": "registers only the source authoring and presentation controllers allowed in Stable",
+    "file-library-transport-base.js": "maps common named app operations to native file-library commands",
+    "file-library-transport-stable.js": "exposes the common native transport without the Dev graph command",
+    "file-library-transport.js": "extends the common native transport with the Dev-only graph command",
     "main.js": "boots the Rails-owned application with Tauri services and native lifecycle",
     "media-transport.js": "adapts browser media fetches to Tauri IPC and asset protocols",
     "preview-transport.js": "adapts the shared renderer to the desktop preview endpoint",
     "renderer-worker.js": "starts the packaged renderer bundle in a Web Worker",
     "transport-adapter.js": "maps Rails-shaped requests to native command calls",
-    "update-flow.js": "drives the Tauri updater and native relaunch",
+    "update-flow.js": "implements update offer handling and idle checks for the macOS updater adapter",
+    "update-runtime-disabled.js": "disables all updater behavior in Dev and Stable Linux bundles",
+    "update-runtime-macos.js": "connects Stable macOS to the signed Tauri updater and safe native staging command",
 }
 actual_desktop_sources = {
     path.relative_to(desktop_sources).as_posix()

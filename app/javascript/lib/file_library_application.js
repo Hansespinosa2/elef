@@ -4,8 +4,6 @@ import { measurePaintedAction } from "lib/performance_measurement"
 import { editorFor } from "lib/editor_controller_lookup"
 import { createLibraryCard } from "lib/library_card"
 import { createIncrementalList } from "lib/incremental_list"
-import { createDocumentGraphCache } from "lib/document_graph_cache"
-import { buildDocumentGraph } from "lib/document_links"
 import { waitForEditorController } from "lib/editor_ready"
 import { createSaveFlow } from "lib/save_flow"
 import { createTitleSaveFlow } from "lib/title_save_flow"
@@ -26,10 +24,27 @@ export function startFileLibraryApplication(platform) {
     completeBootstrap, createCloseFlow, createTransportAdapter, installFetchTransport,
     mediaUrlsForDeck, checkForUpdate, createIdleUpdateCheck, installPendingUpdate,
     desktopAuthoringRegistry, loadDesktopAuthoringRegistry,
-    loadEditorRuntime, loadLibraryRuntime
+    loadEditorRuntime, loadLibraryRuntime, documentGraphRuntime, features, featureFlags,
+    updateEnabled = true
   } = platform
 
-  applyDesktopFeatureFlags(document)
+  const desktopFeatures = Object.freeze({
+    visualEditing: features?.visualEditing !== false,
+    presentationEditing: features?.presentationEditing !== false,
+    slideOverview: features?.slideOverview !== false,
+    documentGraph: features?.documentGraph !== false && Boolean(documentGraphRuntime),
+    documentLinks: features?.documentLinks !== false
+  })
+  const editorFormControllers = [
+    "preview",
+    ...(desktopFeatures.visualEditing ? ["visual-editor"] : []),
+    ...(desktopFeatures.presentationEditing ? ["presentation-editor"] : []),
+    ...(desktopFeatures.slideOverview ? ["slide-overview"] : []),
+    "media",
+    "presentation"
+  ].join(" ")
+  applyDesktopFeatureFlags(document, featureFlags)
+  if (!updateEnabled) document.querySelector("#check-for-updates")?.remove()
 
   const renderer = createRendererClient()
   const readPreviewTrace = installFetchTransport({
@@ -47,12 +62,13 @@ export function startFileLibraryApplication(platform) {
     kind: "presentation",
     source: "",
     sourceName: "presentation[source]",
-    mode: "visual",
+    mode: desktopFeatures.visualEditing ? "visual" : "source",
     visualDisabled: true,
     visualDisabledMessage: "Open a deck to render its preview",
     showTitle: true,
     showSubmit: false,
     persisted: false,
+    desktopFeatures,
     authoringRegistry: desktopAuthoringRegistry(),
     documentTitles: [],
     ids: {
@@ -79,7 +95,8 @@ export function startFileLibraryApplication(platform) {
   renderLibraryView(document.querySelector("#library-view-mount"), {
     filter: "all",
     countLabel: "0 works",
-    description: "One home for your documents, presentations, and source."
+    description: "One home for your documents, presentations, and source.",
+    graphEnabled: desktopFeatures.documentGraph
   })
 
   const elements = {
@@ -125,7 +142,9 @@ export function startFileLibraryApplication(platform) {
   let activeDeck = null
   let saveFlow = null
   let e2eNextSaveDelayMs = 0
-  const documentGraphCache = createDocumentGraphCache(async () => buildDocumentGraph(await fileLibrary.readDocumentGraph()))
+  const documentGraphCache = desktopFeatures.documentGraph
+    ? documentGraphRuntime.createCache(async () => documentGraphRuntime.build(await fileLibrary.readDocumentGraph()))
+    : null
   let libraryTab = "all"
   let cardPreviewObserver = null
   let libraryMoreObserver = null
@@ -200,7 +219,7 @@ export function startFileLibraryApplication(platform) {
         await new Promise(resolve => setTimeout(resolve, delay))
       }
       const result = await transport.saveSource(id, source)
-      if (isDocument) documentGraphCache.invalidate()
+      if (isDocument) documentGraphCache?.invalidate()
       return result
     },
     acceptDiskVersion: (id, contentHash) => transport.acceptDiskVersion(id, contentHash),
@@ -416,21 +435,21 @@ export function startFileLibraryApplication(platform) {
     document.querySelector("#import-elef").disabled = !library
     document.querySelector("#breadcrumb-current").textContent = "Decks"
     showLibraryTab("all")
-    void startupUpdateCheck.resume()
+    if (updateEnabled) void startupUpdateCheck.resume()
   }
 
   function showLibraryTab(tab) {
     libraryTab = setLibraryViewTab(document.querySelector("#library-view-mount"), tab)
     renderDecks()
-    if (libraryTab === "documents") void showDocumentGraph()
+    if (desktopFeatures.documentGraph && libraryTab === "documents") void showDocumentGraph()
   }
 
   async function documentGraphData() {
-    return documentGraphCache.get()
+    return documentGraphCache?.get() || { nodes: [], edges: [] }
   }
 
   async function previewDocumentNodes(source) {
-    if (!source.includes("[[")) return []
+    if (!desktopFeatures.documentGraph || !source.includes("[[")) return []
     try {
       return (await documentGraphData()).nodes
     } catch (_error) {
@@ -439,7 +458,7 @@ export function startFileLibraryApplication(platform) {
   }
 
   async function showDocumentGraph() {
-    if (!library) return
+    if (!library || !desktopFeatures.documentGraph || !elements.graphView) return
     try {
       await loadLibraryRuntime()
       const graph = await documentGraphData()
@@ -529,7 +548,7 @@ export function startFileLibraryApplication(platform) {
         loadDesktopAuthoringRegistry()
       ])
       decks = listedDecks
-      documentGraphCache.invalidate()
+      documentGraphCache?.invalidate()
       renderDecks()
       if (libraryTab === "documents") await showDocumentGraph()
       setStatus(`${decks.length} ${decks.length === 1 ? "deck" : "decks"}`)
@@ -551,7 +570,7 @@ export function startFileLibraryApplication(platform) {
       }
       library = selected
       await loadDesktopAuthoringRegistry()
-      documentGraphCache.invalidate()
+      documentGraphCache?.invalidate()
       libraryConfig = selected.config || libraryConfig
       decks = selected.decks
       applyTheme(libraryConfig.theme)
@@ -605,7 +624,7 @@ export function startFileLibraryApplication(platform) {
           prepare: deck => measureOpenStage("prepareDeck", async () => {
             await loadEditorRuntime()
             let documentTitles = []
-            if (deck.source_file === "document.md" || deck.source.includes("[[")) {
+      if (desktopFeatures.documentGraph && (deck.source_file === "document.md" || deck.source.includes("[["))) {
               try {
                 const graph = await documentGraphData()
                 documentTitles = deck.source_file === "document.md" ? graph.nodes.map(node => node.title) : []
@@ -626,7 +645,7 @@ export function startFileLibraryApplication(platform) {
       const isDocument = deck.source_file === "document.md"
       if (deck.id !== id) {
         decks = decks.map(item => item.id === id ? { ...item, id: deck.id } : item)
-        documentGraphCache.invalidate()
+        documentGraphCache?.invalidate()
         renderDecks()
       }
       // All asynchronous work is finished. Installing the buffer and changing
@@ -639,14 +658,18 @@ export function startFileLibraryApplication(platform) {
           documentTitles,
           sourceName: isDocument ? "document[source]" : "presentation[source]",
           showTitle: true,
-          formControllers: "preview visual-editor presentation-editor slide-overview media presentation"
+          formControllers: editorFormControllers,
+          documentLinksEnabled: desktopFeatures.documentLinks,
+          visualEditingEnabled: desktopFeatures.visualEditing,
+          presentationEditingEnabled: desktopFeatures.presentationEditing,
+          slideOverviewEnabled: desktopFeatures.slideOverview
         })
         const editor = await measureOpenStage("editorReady", () => editorFor(elements.editorField)?.editorReady
           ? editorFor(elements.editorField)
           : waitForEditorController(elements.editorField, editorFor))
         measureOpenStage("loadDocument", () => {
           editor.loadDocument(deck.source)
-          editor.setEditingMode("visual", { restoreCaret: false })
+          editor.setEditingMode(desktopFeatures.visualEditing ? "visual" : "source", { restoreCaret: false })
         })
       } catch (error) {
         elements.editorInput.disabled = true
@@ -669,10 +692,12 @@ export function startFileLibraryApplication(platform) {
       elements.editorForm.dataset.mediaWorkKindValue = deck.source_file === "document.md" ? "document" : "presentation"
       elements.editorForm.dataset.mediaUploadUrlValue = mediaUrls.uploadUrl
       elements.editorForm.dataset.mediaAssetBaseUrlValue = mediaUrls.assetBaseUrl
-      elements.editorField.dataset.documentLinkPaletteTitlesValue = JSON.stringify(documentTitles)
+      if (desktopFeatures.documentLinks) elements.editorField.dataset.documentLinkPaletteTitlesValue = JSON.stringify(documentTitles)
       const visualButton = document.querySelector("#visual-mode")
-      visualButton.disabled = true
-      visualButton.title = "Rendering preview…"
+      if (visualButton && desktopFeatures.visualEditing) {
+        visualButton.disabled = true
+        visualButton.title = "Rendering preview…"
+      }
       elements.editorInput.disabled = false
       setSaveState("Saved")
       document.querySelector("#deck-id").textContent = deck.id
@@ -1091,7 +1116,7 @@ export function startFileLibraryApplication(platform) {
     elements.settingsDialog.close()
     void authoringSettings.open()
   })
-  document.querySelector("#check-for-updates").addEventListener("click", () => void checkForUpdates(true))
+  document.querySelector("#check-for-updates")?.addEventListener("click", () => void checkForUpdates(true))
   document.querySelector("#install-update").addEventListener("click", () => void installUpdate())
   elements.presentationExit.addEventListener("click", () => void exitPresentation())
   document.querySelector("#update-later").addEventListener("click", () => elements.updateDialog.close())
@@ -1157,7 +1182,7 @@ export function startFileLibraryApplication(platform) {
       if (activeDeck?.id === id) {
         if (activeDeck.source_file === "document.md" &&
             (snapshot.content_hash !== activeDeck.content_hash || snapshot.source_file !== activeDeck.source_file)) {
-          documentGraphCache.invalidate()
+          documentGraphCache?.invalidate()
         }
         const result = await saveFlow.checkExternalChange(id, snapshot)
         if (result === "reloaded" || result === "source-file-changed") syncSourceLabel()
@@ -1193,7 +1218,11 @@ export function startFileLibraryApplication(platform) {
       await measureBootstrapStage("editor-runtime", () => loadEditorRuntime())
       configureEditorKind(elements.editorField.closest(".editor-shell"), "presentation", {
         showTitle: true,
-        formControllers: "preview visual-editor presentation-editor slide-overview media presentation"
+        formControllers: editorFormControllers,
+        documentLinksEnabled: desktopFeatures.documentLinks,
+        visualEditingEnabled: desktopFeatures.visualEditing,
+        presentationEditingEnabled: desktopFeatures.presentationEditing,
+        slideOverviewEnabled: desktopFeatures.slideOverview
       })
       await measureBootstrapStage("editor-ready", () => waitForEditorController(elements.editorField, editorFor))
     },
@@ -1203,7 +1232,7 @@ export function startFileLibraryApplication(platform) {
       void fileLibrary.pendingOpenedElefCount()
         .then(count => { if (count) void processOpenedFiles() })
         .catch(showError)
-      startupUpdateCheck.schedule(10_000)
+      if (updateEnabled) startupUpdateCheck.schedule(10_000)
     }
   }).catch(showError)
 

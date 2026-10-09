@@ -1,0 +1,12 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "macos-updater-capability",
+  "description": "Signed update checks and staged install on Stable macOS only.",
+  "windows": ["main"],
+  "platforms": ["macOS"],
+  "permissions": [
+    "allow-install-update",
+    "updater:allow-check",
+    "process:allow-restart"
+  ]
+}

@@ -7,7 +7,8 @@ edition = "2024"
 publish = false
 
 [features]
-webdriver = ["dep:tauri-plugin-wdio", "dep:tauri-plugin-wdio-webdriver"]
+desktop-dev = []
+webdriver = ["desktop-dev", "dep:tauri-plugin-wdio", "dep:tauri-plugin-wdio-webdriver"]
 
 [lib]
 name = "elef_desktop_lib"

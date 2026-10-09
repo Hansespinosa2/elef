@@ -1,10 +1,8 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
-  "identifier": "main-capability",
-  "description": "Named library and deck operations used by the Elef desktop shell.",
-  "windows": [
-    "main"
-  ],
+  "identifier": "main-dev-capability",
+  "description": "Repository Dev library and experimental graph operations.",
+  "windows": ["main"],
   "permissions": [
     "core:event:allow-listen",
     "core:event:allow-unlisten",
@@ -19,6 +17,7 @@
     "allow-read-authoring-registries",
     "allow-write-authoring-registry",
     "allow-list-decks",
+    "allow-document-graph",
     "allow-create-deck",
     "allow-open-deck",
     "allow-read-deck-preview",
