@@ -270,7 +270,7 @@ export default class extends Controller {
         if (["left", "center", "right"].includes(parts[0])) horizontal = parts[0]
         else if (["top", "middle", "bottom"].includes(parts[0])) vertical = parts[0]
       } else if (parts.length >= 2) {
-        vertical = parts[0] === "center" ? "middle" : parts[0]
+        vertical = parts[0]
         horizontal = parts[1]
       }
       return { horizontal, vertical, verticalExplicit: vertical !== "top" }

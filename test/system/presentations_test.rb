@@ -164,7 +164,7 @@ class PresentationsTest < ApplicationSystemTestCase
 
   test "new presentation source positions its title explicitly and lets that position be changed" do
     expected_source = <<~MARKDOWN.chomp
-      :::align{center center}
+      :::align{middle center}
       # Untitled Document
 
       :::align {center}
@@ -559,8 +559,8 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_selector ".presentation-editor-projection .slide", count: 2, wait: 5
     wait_for_fresh_projection
 
-    find("select[data-presentation-editor-align][data-slide-index='0'][data-block-index='1']").select("Center Center")
-    assert_field "Markdown source", with: /:::align\{center center\}/, wait: 5
+    find("select[data-presentation-editor-align][data-slide-index='0'][data-block-index='1']").select("Middle Center")
+    assert_field "Markdown source", with: /:::align\{middle center\}/, wait: 5
 
     click_on "Save presentation"
     assert_text "Presentation saved."
@@ -613,8 +613,8 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: /:::align\{left\}/, wait: 5
 
     wait_for_fresh_projection
-    find("select[data-presentation-editor-align][data-slide-index='0'][data-block-index='1']").select("Center Center")
-    assert_field "Markdown source", with: /:::align\{center center\}/, wait: 5
+    find("select[data-presentation-editor-align][data-slide-index='0'][data-block-index='1']").select("Middle Center")
+    assert_field "Markdown source", with: /:::align\{middle center\}/, wait: 5
   end
 
   test "an unaligned presentation block defaults to Align Left" do
@@ -819,7 +819,7 @@ class PresentationsTest < ApplicationSystemTestCase
   test "single-block position directives move with their content and are deleted with it" do
     presentation = Presentation.create!(
       title: "Positioned structure",
-      source: "# Slide\n\n:::align{center center}\n\nPositioned\n\nPlain"
+      source: "# Slide\n\n:::align{middle center}\n\nPositioned\n\nPlain"
     )
 
     visit edit_presentation_path(presentation)
@@ -827,14 +827,14 @@ class PresentationsTest < ApplicationSystemTestCase
     refute_selector ".slide-block.position-center", text: "Plain"
 
     find("[data-presentation-editor-action='move-block-down'][data-block-index='1']").click
-    assert_field "Markdown source", with: "# Slide\n\nPlain\n\n:::align{center center}\n\nPositioned", wait: 5
+    assert_field "Markdown source", with: "# Slide\n\nPlain\n\n:::align{middle center}\n\nPositioned", wait: 5
     wait_for_fresh_projection
     assert_selector ".slide-block.position-center.position-middle", text: "Positioned", wait: 5
     refute_selector ".slide-block.position-center", text: "Plain"
 
     assert_selector "[data-presentation-editor-action='add-block-after'][data-block-index='1']:not([disabled])", wait: 5
     find("[data-presentation-editor-action='add-block-after'][data-block-index='1']").click
-    assert_field "Markdown source", with: "# Slide\n\nPlain\n\nNew block\n\n:::align{center center}\n\nPositioned", wait: 5
+    assert_field "Markdown source", with: "# Slide\n\nPlain\n\nNew block\n\n:::align{middle center}\n\nPositioned", wait: 5
     wait_for_fresh_projection
     assert_selector ".slide-block", text: "New block", wait: 5
     refute_selector ".slide-block.position-center", text: "New block"
@@ -843,14 +843,14 @@ class PresentationsTest < ApplicationSystemTestCase
       find("[data-presentation-editor-action='delete-block'][data-block-index='3']").click
     end
     wait_for_fresh_projection
-    refute_includes find_field("Markdown source").value, ":::align{center center}"
+    refute_includes find_field("Markdown source").value, ":::align{middle center}"
     assert_no_selector ".slide-block.position-center", wait: 5
 
     click_on "Save presentation"
     assert_selector ".flash.notice", text: "Presentation saved.", wait: 10
     visit edit_presentation_path(presentation)
     assert_field "Markdown source", with: /# Slide\n\nPlain\n\nNew block/
-    refute_includes find_field("Markdown source").value, ":::align{center center}"
+    refute_includes find_field("Markdown source").value, ":::align{middle center}"
   end
 
   test "blocks with position directives reorder independently without group restrictions" do
@@ -2877,10 +2877,10 @@ class PresentationsTest < ApplicationSystemTestCase
     block.send_keys(" with extra text")
 
     alignment = find("select[data-presentation-editor-align][data-slide-index='0'][data-block-index='1']")
-    alignment.select("Center Center")
+    alignment.select("Middle Center")
 
     assert_includes find(".slide-block[data-editor-block-id='#{block_id}']")["class"], "position-center"
-    assert_field "Markdown source", with: /:::align\{center center\}\n\nInitial.*block/, wait: 5
+    assert_field "Markdown source", with: /:::align\{middle center\}\n\nInitial.*block/, wait: 5
 
     alignment.select("Bottom Right")
     assert_includes find(".slide-block[data-editor-block-id='#{block_id}']")["class"], "position-right"

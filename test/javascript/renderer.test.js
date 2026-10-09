@@ -363,3 +363,27 @@ test("empty display math retains its exact inner source whitespace for visual ed
     assert.ok(!html.includes(`data-editor-math-source="${opening}`))
   }
 })
+
+test("positionFromBlock treats center as horizontal-only and parses middle as vertical", () => {
+  const mapCenterCenter = buildEditorMap(":::align{center center}\n\nBlock")
+  assert.deepEqual(mapCenterCenter.slides[0].blocks[0].position, {
+    horizontal: "center",
+    vertical: "top",
+    vertical_explicit: false
+  })
+
+  const mapMiddleCenter = buildEditorMap(":::align{middle center}\n\nBlock")
+  assert.deepEqual(mapMiddleCenter.slides[0].blocks[0].position, {
+    horizontal: "center",
+    vertical: "middle",
+    vertical_explicit: true
+  })
+
+  const mapCenterLeft = buildEditorMap(":::align{center left}\n\nBlock")
+  assert.deepEqual(mapCenterLeft.slides[0].blocks[0].position, {
+    horizontal: "center",
+    vertical: "top",
+    vertical_explicit: false
+  })
+})
+

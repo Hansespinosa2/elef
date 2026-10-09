@@ -864,14 +864,9 @@ module Source
       match = block.match(/\A\s*:::(align|position)[ \t]*\{([^}]*)\}\s*\z/)
       return unless match
 
-      directive = match[1]
       values = match[2].split.map(&:downcase)
       horizontal = values.find { |value| %w[left center right].include?(value) }
       vertical = values.find { |value| %w[top middle bottom].include?(value) }
-      if directive == "align" && values.length == 2 && %w[top center middle bottom].include?(values.first) && %w[left center right].include?(values.last)
-        horizontal = values.last
-        vertical = values.first == "center" ? "middle" : values.first
-      end
       return unless horizontal || vertical
 
       Position.new(horizontal || "left", vertical || "top", vertical.present?)

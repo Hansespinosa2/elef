@@ -128,4 +128,21 @@ class SourceDocumentTest < ActiveSupport::TestCase
 
     assert_equal({ document_key: nil, aliases: [] }, Source::Document.portable_document_link_metadata(source))
   end
+
+  test "position_from_block treats center as horizontal-only and parses middle as vertical" do
+    pos_center_center = Source::Document.parse(":::align{center center}\n\nBlock").slides.first.blocks.first.position
+    assert_equal "center", pos_center_center.horizontal
+    assert_equal "top", pos_center_center.vertical
+    assert_equal false, pos_center_center.vertical_explicit
+
+    pos_middle_center = Source::Document.parse(":::align{middle center}\n\nBlock").slides.first.blocks.first.position
+    assert_equal "center", pos_middle_center.horizontal
+    assert_equal "middle", pos_middle_center.vertical
+    assert_equal true, pos_middle_center.vertical_explicit
+
+    pos_center_left = Source::Document.parse(":::align{center left}\n\nBlock").slides.first.blocks.first.position
+    assert_equal "center", pos_center_left.horizontal
+    assert_equal "top", pos_center_left.vertical
+    assert_equal false, pos_center_left.vertical_explicit
+  end
 end
