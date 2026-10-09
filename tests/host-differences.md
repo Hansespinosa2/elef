@@ -7,7 +7,7 @@ capability difference with a verifiable reason. Bare host-name preference
 Capability keys come from `HostCapabilities`
 (`packages/contracts/src/errors.ts:21-28`). Adapter declarations:
 
-| key | fake (`tests/host-conformance/adapters/fake-host.js:272-279`) | rails (`app/javascript/host/rails-http-host.js:365-372`) | tauri (`desktop/frontend/src/tauri-host.js:377-384`) |
+| key | fake (`tests/host-conformance/adapters/fake-host.js:272-279`) | rails (`apps/web/app/javascript/host/rails-http-host.js:365-372`) | tauri (`apps/desktop/frontend/src/tauri-host.js:377-384`) |
 |---|---|---|---|
 | accounts | false | false | false |
 | collaboration | false | false | false |
@@ -25,20 +25,20 @@ Capability keys come from `HostCapabilities`
   deployed server-side, so no client updater exists or is needed.
 - Supported side: desktop settings show the updater affordance and the native
   updater verification flow runs
-  (`desktop/e2e/specs/desktop.spec.js:1945`, `:2324-2357`).
+  (`apps/desktop/e2e/specs/desktop.spec.js:1958`, `:2337-2446`).
 - Disabled side: the web app shows no updater affordance
-  (`desktop/e2e/specs/web.spec.js:957-962`).
+  (`apps/desktop/e2e/specs/web.spec.js:971-976`).
 
 ## HD-02 nativeMenus (tauri-only)
 
 - Capability: `nativeMenus`.
 - Concrete reason: the desktop renders OS menus through Tauri
-  (`desktop/src-tauri/src/lib.rs`); browsers expose no OS menu API, so the web
+  (`apps/desktop/src-tauri/src/lib.rs`); browsers expose no OS menu API, so the web
   app renders menus in-DOM.
 - Supported side: desktop menu integration in the Tauri shell
-  (`desktop/src-tauri/src/lib.rs`).
+  (`apps/desktop/src-tauri/src/lib.rs`).
 - Disabled side: the web app renders menus in-DOM with no native menu surface
-  (`desktop/e2e/specs/web.spec.js`, "the web app without a nativeMenus
+  (`apps/desktop/e2e/specs/web.spec.js`, "the web app without a nativeMenus
   capability renders menus in-DOM": opens the New menu, asserts 2 in-DOM
   menuitems).
 
@@ -50,20 +50,20 @@ Capability keys come from `HostCapabilities`
   with no database server (constitution §2.4); the web app persists to
   PostgreSQL + Active Storage.
 - Supported side: quiet-save suite (13 tests,
-  `desktop/e2e/specs/quiet-save.spec.js`) + local-store unit matrix
+  `apps/desktop/e2e/specs/quiet-save.spec.js`) + local-store unit matrix
   (`cargo test -p local-store`, 73 tests).
 - Disabled side: the web app has no deck-folder access
-  (`desktop/e2e/specs/web.spec.js`, "the web app without a localFilesystem
+  (`apps/desktop/e2e/specs/web.spec.js`, "the web app without a localFilesystem
   capability offers no library folder picker": asserts `#change-library`
   count 0 on the library page; the button exists only in the desktop host
-  template `app/views/desktop_host.html:27`).
+  template `apps/web/app/views/desktop_host.html:27`).
 
 ## HD-04 deleteProgrammatic policy (dialog-mediated on desktop)
 
 - Policy (not a capability): `deleteProgrammatic` is `true` for fake
   (`tests/host-conformance/adapters/fake-host.js:21-23`) and rails
-  (`app/javascript/host/rails-http-host.js:6-8`), `false` for tauri
-  (`desktop/frontend/src/tauri-host.js:8-10`).
+  (`apps/web/app/javascript/host/rails-http-host.js:6-8`), `false` for tauri
+  (`apps/desktop/frontend/src/tauri-host.js:8-10`).
 - Concrete reason: desktop production delete is mediated by a native
   confirmation dialog; automation runs through the harness path instead.
 - Proof: the conformance suite (`tests/host-conformance/suite.js`) skips
@@ -87,19 +87,19 @@ Capability keys come from `HostCapabilities`
 
 - Capability: none (product surface, not a port capability).
 - Concrete reason: the web app delivers export bytes over HTTP download routes
-  (`config/routes.rb:45,65`, `app/javascript/controllers/pptx_export_host_controller.js`)
+  (`apps/web/config/routes.rb:45,65`, `apps/web/app/javascript/controllers/pptx_export_host_controller.js`)
   over shared client logic (`packages/client/src/features/export/`); the
   desktop has no export UI and no download transport.
 - Supported side: Rails pptx/pdf export service + system tests
-  (`test/services/presentations/pptx_export_test.rb`,
-  `test/system/pptx_export_test.rb`, `test/system/media_pdf_export_test.rb`).
-- Disabled side: shared `test/e2e/scenarios/export.js` branches on
+  (`apps/web/test/services/presentations/pptx_export_test.rb`,
+  `apps/web/test/system/pptx_export_test.rb`, `apps/web/test/system/media_pdf_export_test.rb`).
+- Disabled side: shared `apps/web/test/e2e/scenarios/export.js` branches on
   `ui.capabilities.export`; the desktop UI declares `export: false` and
   `assertExportUnavailable` proves no Download PPTX surface exists
-  (`desktop/e2e/specs/desktop.spec.js`, "asserts the explicit
+  (`apps/desktop/e2e/specs/desktop.spec.js`, "asserts the explicit
   export-disabled path in the desktop binary").
 - Supported side (shared definition): the web UI declares `export: true` and
-  runs download → status proof (`desktop/e2e/specs/web.spec.js`,
+  runs download → status proof (`apps/desktop/e2e/specs/web.spec.js`,
   "shared export flow downloads PPTX in the web app").
 
 ## HD-07 search implementation (contract-identical, locality differs)
@@ -107,7 +107,7 @@ Capability keys come from `HostCapabilities`
 - Capability: none (one `SearchPort` contract, two implementations).
 - Concrete reason: the desktop must search offline with no server to query, so
   the Tauri adapter filters substring-side over `document_graph` plus deck
-  names (`desktop/frontend/src/tauri-host.js:1-6`); the web adapter queries
+  names (`apps/desktop/frontend/src/tauri-host.js:1-6`); the web adapter queries
   the server. Behavior is contract-identical; only the execution locality
   differs.
 - Proof: contract conformance suite green on rails + desktop adapters.

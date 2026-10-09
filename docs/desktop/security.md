@@ -4,7 +4,7 @@ Decks, Markdown, media, and .elef archives are untrusted input. The webview has 
 
 ## Webview boundary
 
-The shipped policy is configured in desktop/src-tauri/tauri.conf.json and checked by desktop/scripts/check_architecture.py:
+The shipped policy is configured in apps/desktop/src-tauri/tauri.conf.json and checked by apps/desktop/scripts/check_architecture.py:
 
 - Scripts are self-only. The policy does not allow inline scripts or eval.
 - Frames are disabled; network connections are limited to Tauri IPC.

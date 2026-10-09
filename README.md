@@ -6,7 +6,7 @@ Elef is a Markdown authoring and presentation application with a Rails web app a
 
 - In the web app, Rails and PostgreSQL own persistence.
 - In the desktop app, each work lives in an ordinary folder on disk and can be edited offline. The desktop app has no database server.
-- Rails app/ owns the shared editor, library, graph, markup, styles, and renderer sources. Desktop packages and adapts those sources for native filesystem and window behavior.
+- Rails apps/web/app/ owns the shared editor, library, graph, markup, styles, and renderer sources. Desktop packages and adapts those sources for native filesystem and window behavior.
 
 ## Start here
 

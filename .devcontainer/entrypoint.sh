@@ -53,6 +53,7 @@ start_local_postgres() {
 
 if [[ "${1:-}" == web ]]; then
   shift
+  cd apps/web
   log_startup_step "starting the task database"
   start_local_postgres
   log_startup_step "installing Ruby dependencies"

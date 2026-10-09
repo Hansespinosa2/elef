@@ -13,7 +13,10 @@ the only network boundary. This is a private, single-user deployment.
 ```
 
 The `ops/` directory belongs to this Mac mini workspace; it is not part of the
-`dev` or `main` checkout. Production uses PostgreSQL and uploaded files in
+`dev` or `main` checkout. Do not confuse it with the checkout's own `ops/`
+directory (Compose files and `*-instance` helpers inside `dev/` and `prod/`);
+in this runbook a bare `ops/...` path always means the workspace directory,
+while checkout paths are written with their `dev/` or `prod/` prefix. Production uses PostgreSQL and uploaded files in
 separate persistent volumes. Development has its own PostgreSQL database and
 storage volumes, isolated from production.
 
@@ -99,13 +102,26 @@ pending migrations. Keep schema changes compatible with the previous app
 version when possible. The production backup is on the Mac mini, so copy
 timestamped backups to another device regularly.
 
+## Host rehome cutover (H4)
+
+The repository rehomed its hosts: Rails lives under `apps/web`,
+the Tauri shell under `apps/desktop`, Compose files and `*-instance`
+helpers under the checkout's `ops/`, and release scripts under
+`tooling/release`. No temporary compatibility paths were retained.
+Any watcher-side reference to the old `scripts/`, `compose.*.yml`,
+`Dockerfile*`, `.env.*.example`, or `bin/` locations must move to the
+matching `dev/ops/...` or `dev/apps/web/...` path. Verify with a `dev`
+deployment before promoting to `main`; the phase stays internally
+complete but not release-ready until the owner confirms the live
+deployment.
+
 ## One-time setup
 
 Create the production secret and development environment file:
 
 ```sh
 ops/setup-production-env
-cp dev/.env.development.example dev/.env.development
+cp dev/ops/.env.development.example dev/.env.development
 ```
 
 Add the Mac mini's Tailscale MagicDNS hostname to `dev/.env.development` so
@@ -124,14 +140,14 @@ that file in either Git checkout.
 ops/elef-production up
 ops/elef-production check
 
-dev/scripts/development-instance up
-dev/scripts/development-instance check
+dev/ops/development-instance up
+dev/ops/development-instance check
 ops/check-all
 ```
 
 Production listens on `127.0.0.1:3000`; development listens on
 `127.0.0.1:3001`. Both Compose services restart when Colima's Docker VM starts.
-Use `ops/elef-production down` or `dev/scripts/development-instance down` to
+Use `ops/elef-production down` or `dev/ops/development-instance down` to
 stop a service without deleting its data volumes.
 
 ## Tailscale boundary

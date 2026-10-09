@@ -8,9 +8,9 @@ Elef is a Rails application with a Tauri desktop consumer. Shared product behavi
 flowchart LR
     Browser --> Rails
     Rails --> PG[(PostgreSQL)]
-    Rails --> Shared[packages/client UI + shared app/javascript]
+    Rails --> Shared[packages/client UI + shared apps/web/app/javascript]
     Tauri[Tauri webview] --> Shared
-    Tauri --> Adapter[desktop/frontend/src]
+    Tauri --> Adapter[apps/desktop/frontend/src]
     Adapter --> Commands[Tauri commands]
     Commands --> Core[local-store]
     Core --> Files[(Deck folders and .elef settings)]
@@ -22,16 +22,16 @@ The dependency direction for frontend sources is one-way:
 ~~~text
 packages/client (+ work-model/renderer) owns shared UI and behavior
               ↓
-desktop build consumes the client bundle + shared app/javascript modules
+apps/desktop build consumes the client bundle + shared apps/web/app/javascript modules
               ↓
 Tauri adapters and Rust file operations
               ↓
 Operating system and user-selected library
 ~~~
 
-Rails code must not import desktop files or Tauri APIs. The desktop must not duplicate shareable views, styles, controllers, or product workflows. Host-neutral behavior belongs in `packages/client` (pure semantics in `packages/work-model`), never in a host. The ownership checker enforces this boundary: [script/check_frontend_ownership.py](../script/check_frontend_ownership.py).
+Rails code must not import desktop files or Tauri APIs. The desktop must not duplicate shareable views, styles, controllers, or product workflows. Host-neutral behavior belongs in `packages/client` (pure semantics in `packages/work-model`), never in a host. The ownership checker enforces this boundary: [apps/web/script/check_frontend_ownership.py](../apps/web/script/check_frontend_ownership.py).
 
-Web-only pages, host adapters, and shared styles belong under `app/`; host-neutral UI and feature workflows belong in `packages/client`. `desktop/` may not add parallel markup or stylesheets. The desktop packages the Rails-owned static host template and shared styles. Native menus, window chrome, dialogs, and filesystem pickers use Tauri APIs where the platform requires them.
+Web-only pages, host adapters, and shared styles belong under `apps/web/app/`; host-neutral UI and feature workflows belong in `packages/client`. `apps/desktop/` may not add parallel markup or stylesheets. The desktop packages the Rails-owned static host template and shared styles. Native menus, window chrome, dialogs, and filesystem pickers use Tauri APIs where the platform requires them.
 
 ## Product boundaries
 
@@ -48,25 +48,25 @@ Markdown is the authored source. Rendered HTML, editor projections, library card
 
 | Path | Owns |
 |---|---|
-| app/controllers, app/models, app/services, app/lib | Rails request handling, persistence, domain services, and server-side integrations |
-| app/views, app/javascript, app/assets | Web-only pages and shells, web host adapters (`controllers/`, `host/`), shared host-integration modules (`lib/`), shared styles, and desktop host template |
-| app/lib/source, packages/work-model, packages/renderer | Rails renderer bridge, shared Work semantics, and shared Markdown-to-HTML projection |
+| apps/web/app/controllers, apps/web/app/models, apps/web/app/services, apps/web/app/lib | Rails request handling, persistence, domain services, and server-side integrations |
+| apps/web/app/views, apps/web/app/javascript, apps/web/app/assets | Web-only pages and shells, web host adapters (`controllers/`, `host/`), shared host-integration modules (`lib/`), shared styles, and desktop host template |
+| apps/web/app/lib/source, packages/work-model, packages/renderer | Rails renderer bridge, shared Work semantics, and shared Markdown-to-HTML projection |
 | packages/client | Host-neutral interactive UI (React): the sole owner of library, settings, source/visual editor, slide overview, presentation, graph, and export UI, mounted by both hosts via `mountElef` with a host adapter |
-| config/routes.rb, config/importmap.rb, db/ | Web routes, frontend pins, and Rails database schema/migrations |
+| apps/web/config/routes.rb, apps/web/config/importmap.rb, apps/web/db/ | Web routes, frontend pins, and Rails database schema/migrations |
 | crates/local-store | Tauri-independent deck discovery, manifests, safe writes, media, and .elef archives |
-| desktop/src-tauri | Tauri commands, capability boundary, native menu/window integration, and application lifecycle |
-| desktop/frontend/src | Tauri bootstrap and native adapters for file-library commands, editor transport, media, lifecycle, and updates |
-| test/e2e/scenarios | Rails-owned user flows shared by the Playwright web runner and WebdriverIO Tauri runner |
-| test/ | Rails model, service, request, JavaScript, architecture, and browser system tests |
+| apps/desktop/src-tauri | Tauri commands, capability boundary, native menu/window integration, and application lifecycle |
+| apps/desktop/frontend/src | Tauri bootstrap and native adapters for file-library commands, editor transport, media, lifecycle, and updates |
+| apps/web/test/e2e/scenarios | Rails-owned user flows shared by the Playwright web runner and WebdriverIO Tauri runner |
+| apps/web/test/ | Rails model, service, request, JavaScript, architecture, and browser system tests |
 | .github/workflows | CI, desktop release packaging, and deployment automation |
 
-desktop/frontend/build.mjs resolves shared controllers and modules from app/javascript (shared modules import the `@elef/client` bundle), packages app/views/desktop_host.html and Rails-owned styles, and copies the renderer bundle built by script/build_renderer.mjs. Tauri's configured dev and build hooks use that same frontend build. No Rails server is started by the desktop shell.
+apps/desktop/frontend/build.mjs resolves shared controllers and modules from apps/web/app/javascript (shared modules import the `@elef/client` bundle), packages apps/web/app/views/desktop_host.html and Rails-owned styles, and copies the renderer bundle built by apps/web/script/build_renderer.mjs. Tauri's configured dev and build hooks use that same frontend build. No Rails server is started by the desktop shell.
 
-The Rails-owned application calls named library services. Tauri command names and raw IPC stay inside `desktop/frontend/src` adapters; Rails-owned frontend code does not invoke Tauri commands.
+The Rails-owned application calls named library services. Tauri command names and raw IPC stay inside `apps/desktop/frontend/src` adapters; Rails-owned frontend code does not invoke Tauri commands.
 
 The desktop media adapter also owns its preview, upload, and deck-asset URL schemes and installs the webview fetch bridge. Shared frontend modules receive those URLs as opaque values; Rails-owned JavaScript does not name desktop protocols or replace `fetch`.
 
-app/views/desktop_host.html is a static desktop host shell consumed by the build, not a Rails response. Shared editor, library, and graph behavior lives in `packages/client`; shared styles live in Rails-owned `app/assets`.
+apps/web/app/views/desktop_host.html is a static desktop host shell consumed by the build, not a Rails response. Shared editor, library, and graph behavior lives in `packages/client`; shared styles live in Rails-owned `apps/web/app/assets`.
 
 Both hosts mount the same `packages/client` bundle for library, settings, and editor UI: Rails through a Stimulus controller with the HTTP host adapter, desktop through `file_library_application.js` with the Tauri host adapter. Host differences (routes vs in-app views, native dialogs, server templates) ride the documented mount seams; the client carries no host knowledge (boundary R9).
 
