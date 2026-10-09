@@ -2,6 +2,7 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+rust_toolchain_version="1.98.0"
 cd "$repo_root"
 if [[ "$(uname -m)" != "x86_64" ]]; then
   echo "The Arch release package gate requires x86-64." >&2
@@ -30,7 +31,7 @@ pacman -Syu --noconfirm --needed \
   libayatana-appindicator \
   librsvg \
   libsoup3 \
-  nodejs \
+  nodejs-lts-jod \
   npm \
   openbox \
   openssl \
@@ -48,7 +49,23 @@ pacman -Syu --noconfirm --needed \
   xorg-xauth \
   zstd
 
-rustup default stable
+rustup toolchain install "$rust_toolchain_version" --profile minimal
+rustup default "$rust_toolchain_version"
+node_version="$(node --version)"
+if [[ "$node_version" != v22.* ]]; then
+  echo "Arch release packaging requires the Node.js 22 LTS line." >&2
+  exit 2
+fi
+mkdir -p desktop/target/arch-release
+{
+  printf 'rust_toolchain=%s\n' "$rust_toolchain_version"
+  rustc --version --verbose
+  cargo --version
+  node --version
+  npm --version
+  printf '\narch_package_versions:\n'
+  pacman -Q | sort
+} > desktop/target/arch-release/build-inputs.txt
 npm ci --prefix desktop/frontend
 npm run build --prefix desktop/frontend
 ELEF_BUILD_SHA="$ELEF_BUILD_SHA" cargo build --manifest-path desktop/Cargo.toml --package elef-desktop --release --locked

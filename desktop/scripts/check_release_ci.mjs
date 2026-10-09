@@ -60,7 +60,11 @@ for (const jobName of ["desktop", "desktop-macos"]) {
 }
 const archPackageJob = jobBlock(workflow, "arch-package")
 assert.match(archPackageJob, /docker run --rm --pull=always/, "the native package gate must use an Arch container")
+assert.match(archPackageJob, /--platform linux\/amd64/, "the native package gate must target x86-64")
+assert.match(archPackageJob, /archlinux:base-devel@sha256:[a-f\d]{64}/, "the Arch base container must be pinned by digest")
 assert.match(archPackageJob, /desktop\/scripts\/arch_package_ci\.sh/, "the Arch build/install/upgrade gate must run from its checked-in script")
+const archPackageScript = await readFile(path.join(repoRoot, "desktop/scripts/arch_package_ci.sh"), "utf8")
+assert.match(archPackageScript, /rust_toolchain_version="1\.98\.0"/, "the Arch native build must pin its Rust toolchain")
 
 process.stdout.write(`Release CI/coordinator contract passed: ${rerunJobs.length} skipped jobs now run on main; exact-SHA gate depends on ${requiredGateJobs.length} jobs; main-history Pages reconciliation is serialized.\n`)
 

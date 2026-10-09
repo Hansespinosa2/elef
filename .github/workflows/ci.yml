@@ -347,10 +347,11 @@ jobs:
           set -o pipefail
           mkdir -p desktop/target
           docker run --rm --pull=always \
+            --platform linux/amd64 \
             --volume "$GITHUB_WORKSPACE:/workspace" \
             --workdir /workspace \
             --env ELEF_BUILD_SHA \
-            archlinux:base-devel \
+            archlinux:base-devel@sha256:996c3a1d6b0d87b01242f6fcd8cfa3ad3eece1a67ab5c8f108e20af1d7b97bdd \
             bash desktop/scripts/arch_package_ci.sh 2>&1 | tee desktop/target/arch-package-gate.log
       - name: Preserve Arch package evidence
         if: always()
