@@ -113,6 +113,8 @@ assert.match(webSpec, /richRenderingMediaWorkflow\(new WebEditorUi\(page\)\)/)
 assert.match(desktopSpec, /richRenderingMediaWorkflow\(new DesktopEditorUi\(\)\)/)
 assert.match(stableSpec, /STABLE_PROFILE_SOURCE/)
 assert.match(stableSpec, /export_elef/, "Stable runtime must export the unsupported-source fixture as .elef")
+assert.match(stableSpec, /renders and presents the rich local fixture offline in Stable/)
+assert.match(stableSpec, /RICH_RENDERING_SOURCE/, "Stable runtime must consume the manifested rich-rendering fixture")
 assert.match(stableSmoke, /unzip/, "the Stable archive must be checked after native export")
 
 const historicalPath = resolveFixturePath("historical_file_format", 0)

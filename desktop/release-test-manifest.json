@@ -143,7 +143,7 @@
       "expected_exit_code": 0,
       "observed_exit_code": null,
       "invariants": ["Preview and presentation retain theme, typography, math, Mermaid, Art, and local media.", "Export/import preserves source and media bytes."],
-      "note": "The web and native desktop scenarios seed this exact source and image, inspect preview/presentation rendering, and compare raw source after successful save and reopen. The Rust archive fixture test separately verifies the original source and image bytes through .elef export/import. Hosted runtime validation remains pending."
+      "note": "The web, native desktop, and Stable offline smoke load this exact source and image, inspect preview/presentation rendering, and compare raw source after successful save and reopen where editing applies. The Rust archive fixture test separately verifies the original source and image bytes through .elef export/import. Hosted runtime validation remains pending."
     },
     {
       "id": "historical_file_format",

@@ -7,6 +7,11 @@ import {
   STABLE_PROFILE_KEYBOARD_SOURCE,
   STABLE_PROFILE_SOURCE
 } from "./stable-profile-fixture.js"
+import { RICH_RENDERING_SOURCE, RICH_RENDERING_TITLE } from "../../test/e2e/scenarios/rich-rendering-media.js"
+
+function normalizeLineEndings(source) {
+  return source.replace(/\r\n|\r/g, "\n")
+}
 
 describe("Stable profile exclusions", () => {
   it("keeps experimental entry points unreachable and preserves literal source", async () => {
@@ -128,5 +133,64 @@ describe("Stable profile exclusions", () => {
       throw new Error(exported.error || "Stable did not export the unsupported-source fixture")
     }
     await exportAndVerifyDiagnostics(browser, "stable")
+  })
+
+  it("renders and presents the rich local fixture offline in Stable", async () => {
+    await $("#back-to-library").click()
+    await $("#library-view").waitForDisplayed()
+    await $(`[aria-label='Edit ${RICH_RENDERING_TITLE}']`).click()
+    await browser.waitUntil(async () => browser.execute(expected => {
+      const field = document.querySelector("#desktop-editor-field")
+      const source = field?.editorController?.sourceValue?.replace(/\r\n|\r/g, "\n")
+      return field?.editorController?.editorReady &&
+        source === expected &&
+        !document.querySelector("#visual-mode")
+    }, normalizeLineEndings(RICH_RENDERING_SOURCE)), {
+      timeout: 15_000,
+      timeoutMsg: "Stable did not open the checked-in rich fixture in its source editor"
+    })
+
+    await browser.waitUntil(async () => browser.execute(() => {
+      const preview = document.querySelector("#desktop-preview")
+      const imageLoaded = [...(preview?.querySelectorAll("img") || [])]
+        .some(image => image.complete && image.naturalWidth > 0)
+      return Boolean(
+        preview?.querySelector(".slides-theme-dark.slides-typography-technical") &&
+        preview.querySelectorAll(".katex").length >= 2 &&
+        preview.querySelector("pre.mermaid svg") &&
+        preview.querySelectorAll("[data-elef-art-root]").length === 1 &&
+        imageLoaded
+      )
+    }), {
+      timeout: 15_000,
+      timeoutMsg: "Stable did not render the rich fixture's theme, math, Mermaid, Art, and local image"
+    })
+
+    const started = await browser.executeAsync(done => {
+      const start = window.__elefPresentationTestHooks?.start
+      if (!start) return done({ error: "The Stable presentation shell is unavailable" })
+      start().then(() => done({ started: document.body.classList.contains("presenting-deck") }))
+        .catch(error => done({ error: error?.message || String(error) }))
+    })
+    if (started.error || !started.started) {
+      throw new Error(started.error || "Stable did not start the retained presentation mode")
+    }
+    await browser.waitUntil(async () => browser.execute(() =>
+      document.querySelectorAll("#desktop-preview .slide-frame").length === 2
+    ), { timeout: 5_000, timeoutMsg: "Stable presentation did not contain both fixture slides" })
+    const slides = await browser.execute(() => [...document.querySelectorAll("#desktop-preview .slide-frame")].map(frame => ({
+      text: frame.textContent,
+      hidden: frame.hidden,
+      active: frame.classList.contains("is-active-presentation-slide")
+    })))
+    assert.match(slides[0].text, /Rich rendering and media sample/)
+    assert.match(slides[1].text, /Art sample/)
+    assert.equal(slides[0].hidden, false)
+    assert.equal(slides[0].active, true)
+
+    await browser.execute(() => document.querySelector("#exit-presentation")?.click())
+    await browser.waitUntil(async () => browser.execute(() =>
+      !document.body.classList.contains("presenting-deck")
+    ), { timeout: 5_000, timeoutMsg: "Stable did not return to the rich fixture editor" })
   })
 })
