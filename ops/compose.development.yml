@@ -20,8 +20,8 @@ services:
 
   web:
     build:
-      context: ${ELEF_DEVELOPMENT_SOURCE:-.}
-      dockerfile: Dockerfile.development
+      context: ${ELEF_DEVELOPMENT_SOURCE:-..}
+      dockerfile: apps/web/Dockerfile.development
     restart: unless-stopped
     depends_on:
       db:
@@ -45,9 +45,9 @@ services:
     ports:
       - "${APP_BIND_ADDRESS:-127.0.0.1}:${APP_PORT:-3001}:3000"
     volumes:
-      - ${ELEF_DEVELOPMENT_SOURCE:-.}:/rails
-      - elef_development_storage:/rails/storage
-      - elef_development_tmp:/rails/tmp
+      - ${ELEF_DEVELOPMENT_SOURCE:-..}:/rails
+      - elef_development_storage:/rails/apps/web/storage
+      - elef_development_tmp:/rails/apps/web/tmp
     command: ["sh", "-c", "bin/rails db:prepare && exec bin/dev"]
     healthcheck:
       test: ["CMD-SHELL", "curl --fail --silent http://127.0.0.1:3000/up >/dev/null"]

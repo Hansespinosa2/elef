@@ -2,13 +2,13 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-COMPOSE_FILE="${ELEF_DEVELOPMENT_COMPOSE_FILE:-$ROOT/compose.development.yml}"
+COMPOSE_FILE="${ELEF_DEVELOPMENT_COMPOSE_FILE:-$ROOT/ops/compose.development.yml}"
 ENV_FILE="${ELEF_DEVELOPMENT_ENV_FILE:-$ROOT/.env.development}"
 PROJECT_NAME="${COMPOSE_PROJECT_NAME:-elef-development}"
 
 usage() {
   cat <<'USAGE'
-Usage: scripts/development-instance COMMAND
+Usage: ops/development-instance COMMAND
 
 Commands:
   config                 Validate the development Compose configuration.
@@ -35,9 +35,9 @@ command -v docker >/dev/null 2>&1 || die "Docker is required"
 
 if [[ ! -f "$ENV_FILE" ]]; then
   if [[ "${1:-}" == "config" || "${1:-}" == "help" || "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
-    die "copy .env.development.example to .env.development"
+    die "copy ops/.env.development.example to .env.development"
   fi
-  die "missing $ENV_FILE; copy .env.development.example to .env.development"
+  die "missing $ENV_FILE; copy ops/.env.development.example to .env.development"
 fi
 
 compose() {

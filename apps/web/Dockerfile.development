@@ -12,12 +12,14 @@ RUN apt-get update \
 
 WORKDIR ${APP_HOME}
 
-COPY Gemfile Gemfile.lock ./
-RUN bundle install \
+COPY apps/web/Gemfile apps/web/Gemfile.lock apps/web/
+RUN cd apps/web && bundle install \
   && rm -rf /root/.bundle/cache /usr/local/bundle/cache
 
 COPY . .
 
 EXPOSE 3000
+
+WORKDIR ${APP_HOME}/apps/web
 
 CMD ["bin/dev"]

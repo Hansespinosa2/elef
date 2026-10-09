@@ -18,8 +18,8 @@ services:
 
   web:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: apps/web/Dockerfile
     restart: unless-stopped
     depends_on:
       db:
@@ -42,7 +42,7 @@ services:
     ports:
       - "${APP_BIND_ADDRESS:-127.0.0.1}:${APP_PORT:-3000}:3000"
     volumes:
-      - elef_personal_storage:/rails/storage
+      - elef_personal_storage:/rails/apps/web/storage
     command: ["sh", "-c", "bin/rails db:migrate && exec bin/rails server -b 0.0.0.0 -p 3000"]
     healthcheck:
       test: ["CMD-SHELL", "curl --fail --silent http://127.0.0.1:3000/up >/dev/null"]

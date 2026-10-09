@@ -2,14 +2,14 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-COMPOSE_FILE="${ELEF_PERSONAL_COMPOSE_FILE:-$ROOT/compose.personal.yml}"
+COMPOSE_FILE="${ELEF_PERSONAL_COMPOSE_FILE:-$ROOT/ops/compose.personal.yml}"
 ENV_FILE="${ELEF_PERSONAL_ENV_FILE:-$ROOT/.env.personal}"
 PROJECT_NAME="${COMPOSE_PROJECT_NAME:-elef-personal}"
 BACKUP_ROOT="${ELEF_BACKUP_DIR:-$ROOT/backups}"
 
 usage() {
   cat <<'USAGE'
-Usage: scripts/personal-instance COMMAND [ARGUMENTS]
+Usage: ops/personal-instance COMMAND [ARGUMENTS]
 
 Commands:
   config                 Validate the Compose configuration without printing secrets.
@@ -38,9 +38,9 @@ command -v docker >/dev/null 2>&1 || die "Docker is required"
 
 if [[ ! -f "$ENV_FILE" ]]; then
   if [[ "${1:-}" == "config" || "${1:-}" == "help" || "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
-    die "copy .env.personal.example to .env.personal and fill in the secrets"
+    die "copy ops/.env.personal.example to .env.personal and fill in the secrets"
   fi
-  die "missing $ENV_FILE; copy .env.personal.example and fill in the secrets"
+  die "missing $ENV_FILE; copy ops/.env.personal.example and fill in the secrets"
 fi
 
 compose() {

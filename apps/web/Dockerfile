@@ -14,8 +14,8 @@ RUN apt-get update \
 
 WORKDIR ${APP_HOME}
 
-COPY Gemfile Gemfile.lock ./
-RUN bundle install \
+COPY apps/web/Gemfile apps/web/Gemfile.lock apps/web/
+RUN cd apps/web && bundle install \
   && rm -rf /root/.bundle/cache /usr/local/bundle/cache
 
 COPY . .
@@ -25,14 +25,16 @@ COPY . .
 # during the image build.
 RUN SECRET_KEY_BASE=dummy-secret-for-image-build \
     DATABASE_URL=postgresql://build:build@127.0.0.1:5432/elef \
-    bundle exec rails assets:precompile
+    sh -c 'cd apps/web && bundle exec rails assets:precompile'
 
 RUN groupadd --system --gid 10001 elef \
   && useradd --system --uid 10001 --gid 10001 --home-dir ${APP_HOME} --shell /usr/sbin/nologin elef \
-  && mkdir -p ${APP_HOME}/log ${APP_HOME}/storage ${APP_HOME}/tmp/pids \
+  && mkdir -p ${APP_HOME}/apps/web/log ${APP_HOME}/apps/web/storage ${APP_HOME}/apps/web/tmp/pids \
   && chown -R elef:elef ${APP_HOME}
 
 USER elef
+
+WORKDIR ${APP_HOME}/apps/web
 
 EXPOSE 3000
 
