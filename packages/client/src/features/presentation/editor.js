@@ -450,11 +450,15 @@ export class PresentationEditor {
     }
 
     this.updatingSource = true
-    this.editorController.replaceRange(updated, 0, this.editorController.value.length)
-    this.updatingSource = false
-    this.operationPending = false
-    this.setControlsDisabled(false)
-    this.setStatus("Updating visual preview…")
+    const committed = this.editorController.commitSource
+      ? this.editorController.commitSource(updated)
+      : (this.editorController.replaceRange(updated, 0, this.editorController.value.length), Promise.resolve(true))
+    void Promise.resolve(committed).then(() => {
+      this.updatingSource = false
+      this.operationPending = false
+      this.setControlsDisabled(false)
+      this.setStatus("Updating visual preview…")
+    })
   }
 
   handleAction(event) {
@@ -743,9 +747,15 @@ export class PresentationEditor {
     this.operationPending = true
     this.setControlsDisabled(true)
     this.updatingSource = true
-    this.editorController.replaceRange(source, 0, this.editorController.value.length)
-    this.updatingSource = false
-    this.setStatus("Updating visual preview…")
+    const committed = this.editorController.commitSource
+      ? this.editorController.commitSource(source)
+      : (this.editorController.replaceRange(source, 0, this.editorController.value.length), Promise.resolve(true))
+    // The session commit applies asynchronously; hold the guard until it
+    // settles so projection input cannot interleave with the replacement.
+    void Promise.resolve(committed).then(() => {
+      this.updatingSource = false
+      this.setStatus("Updating visual preview…")
+    })
   }
 
   sourceValue() {

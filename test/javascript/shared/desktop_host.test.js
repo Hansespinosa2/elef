@@ -255,6 +255,32 @@ test("Markdown appearance persistence is shared and absent from desktop orchestr
   assert.doesNotMatch(application, /editorForm\.addEventListener\("change"/)
 })
 
+test("structural source operations commit through the bound session", async () => {
+  const editorController = await read("app/javascript/controllers/editor_controller.js")
+  const clientEditor = await read("packages/client/src/features/presentation/editor.js")
+  const visualEditor = await read("app/javascript/controllers/visual_editor_controller.js")
+  const overview = await read("app/javascript/controllers/slide_overview_controller.js")
+  // The adapter exposes one session commit entry point with a direct fallback.
+  assert.match(editorController, /commitSource\(source, \{ caret \} = \{\}\)/)
+  assert.match(editorController, /this\.session && !this\.session\.disposed/)
+  // Whole-buffer structural replacements funnel through it (direct replace
+  // survives only as the no-session fallback inside those two call sites)…
+  assert.equal((clientEditor.match(/\.commitSource\(/g) || []).length, 2)
+  assert.equal((clientEditor.match(/\.replaceRange\(/g) || []).length, 2)
+  assert.equal((visualEditor.match(/\.commitSource\(/g) || []).length, 3)
+  assert.match(overview, /editor\.commitSource\(fullSource/)
+  // …while keystroke-equivalent ranged inserts stay on the adapter primitives.
+  assert.match(visualEditor, /\.replaceRanges\(changes\)/)
+  // Hosts bind exactly one live session per open work and detach on close.
+  assert.match(application, /attachSession\?\. *\(session\)/)
+  assert.match(application, /detachSession\?\. *\(saveFlow\)/)
+  assert.match(autosaveController, /attachSessionToEditor\(\)/)
+  assert.match(autosaveController, /detachSession\?\. *\(this\.flow\)/)
+  // The session carries identity so commits can refuse stale sessions.
+  assert.match(workSession, /get epoch\(\)/)
+  assert.match(workSession, /get disposed\(\)/)
+})
+
 test("document reload reapplies editor preferences and readiness follows connection", async () => {
   const controller = await read("app/javascript/controllers/editor_controller.js")
   const load = controller.slice(controller.indexOf("  loadDocument(source)"), controller.indexOf("  setExternalValue(value)"))

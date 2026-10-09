@@ -230,11 +230,14 @@ export function startFileLibraryApplication(platform) {
         documentGraphCache.invalidate()
       }
     })
+    const editor = editorFor(elements.editorField)
+    editor?.attachSession?.(session)
     saveFlow = session
   }
 
   function closeSession() {
     if (!saveFlow) return
+    editorFor(elements.editorField)?.detachSession?.(saveFlow)
     saveFlow.dispose()
     saveFlow = null
     sessionStatusKind = "clean"

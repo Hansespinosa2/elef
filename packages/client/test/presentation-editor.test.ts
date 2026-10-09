@@ -50,7 +50,13 @@ function testMap() {
 function fakeEditor() {
   const state = {
     value: SOURCE,
+    commits: [] as string[],
     inputTarget: null,
+    commitSource(text: string) {
+      state.commits.push(text);
+      state.value = text;
+      return Promise.resolve(true);
+    },
     replaceRange(text: string, from: number, to: number) {
       state.value = state.value.slice(0, from) + text + state.value.slice(to);
     },
@@ -161,6 +167,19 @@ test("client presentation editor moves slides by rewriting sections", () => {
   mount.editor.moveSlide(0, 1);
 
   assert.ok(editorState.value.indexOf("# Beta") < editorState.value.indexOf("# Alpha"));
+  mount.destroy();
+});
+
+test("structural operations commit through the session pipeline", () => {
+  const { form } = mountForm();
+  const editorState = fakeEditor();
+  const mount = mountEditor(form, testMap(), editorState);
+
+  mount.editor.moveSlide(0, 1);
+  mount.editor.addBlock(0, 1);
+
+  assert.equal(editorState.commits.length, 2);
+  assert.equal(editorState.commits[1], editorState.value);
   mount.destroy();
 });
 

@@ -6,8 +6,10 @@ import { fileURLToPath } from "node:url"
 import { parseHTML } from "linkedom"
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..")
+const sourceOpsUrl = new URL("../../../packages/client/src/session/source_ops.js", import.meta.url).href
 const source = (await readFile(path.join(root, "app/javascript/controllers/slide_overview_controller.js"), "utf8"))
   .replace('import { Controller } from "@hotwired/stimulus"', "class Controller {}")
+  .replace('import { caretAfterInsert } from "@elef/client"', `import { caretAfterInsert } from "${sourceOpsUrl}"`)
 const slideOverview = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`)
 
 test("slide overview thumbnails clone only inert slide content", () => {

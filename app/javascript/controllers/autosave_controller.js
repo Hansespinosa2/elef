@@ -50,6 +50,7 @@ export default class extends Controller {
     // The web editor persists through the shared session (constructed
     // activated: one session per edited work, disposed on disconnect).
     this.flow = this.createSession()
+    this.attachSessionToEditor()
     this.restoreLocalDraft()
   }
 
@@ -60,6 +61,7 @@ export default class extends Controller {
       this.conflictTarget.removeEventListener("click", this.resolveConflictClick)
     }
     this.editorReadyCleanup?.()
+    editorFor(this.element.querySelector(".source-field"))?.detachSession?.(this.flow)
     this.flow?.dispose?.()
     clearTimeout(this.requestTimeout)
     this.requestTimeout = null
@@ -497,6 +499,22 @@ export default class extends Controller {
     if (!this.active) return
     this.scheduleSave(this.delayValue)
     this.setStatus("Recovered unsent changes", "recovered")
+  }
+
+  attachSessionToEditor() {
+    const editorHost = this.element.querySelector(".source-field")
+    if (!editorHost) return
+    const ready = editorFor(editorHost)
+    if (ready?.editorReady) {
+      ready.attachSession(this.flow)
+      return
+    }
+    waitForEditorController(editorHost, editorFor).then(
+      editor => {
+        if (this.active && editor && !editor.destroyed) editor.attachSession(this.flow)
+      },
+      () => {}
+    )
   }
 
   waitForEditorReady(editorHost) {

@@ -292,7 +292,7 @@ export default class extends Controller {
     const updated = removeEmptyBlockSource(source, from, to)
     if (updated === source) return
     this.pendingCaret = { sourceOffset: Math.min(from, updated.length), location: "block_end" }
-    this.editorController.replaceRange(updated, 0, source.length)
+    void this.editorController.commitSource(updated)
   }
 
   allRegions() {
@@ -472,7 +472,7 @@ export default class extends Controller {
 
       if (updated === source) return
       this.pendingCaretRestore = { sourceOffset, preferredBlockId: block.id }
-      this.editorController.replaceRange(updated, 0, source.length)
+      void this.editorController.commitSource(updated)
       return
     }
 
@@ -549,7 +549,7 @@ export default class extends Controller {
     }
 
     const updated = `${source.slice(0, from)}${replacement}${source.slice(to)}`
-    this.editorController.replaceRange(updated, 0, source.length)
+    void this.editorController.commitSource(updated)
   }
 
   positionControlOpened(event) {

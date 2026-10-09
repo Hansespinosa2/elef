@@ -176,6 +176,7 @@ export default class extends Controller {
   disconnect() {
     this.editorReady = false
     this.destroyed = true
+    this.session = null
     this.pendingMediaRanges?.clear()
     if (this.lineNumberFrame) cancelAnimationFrame(this.lineNumberFrame)
     this.form?.removeEventListener("submit", this.handleSubmit)
@@ -435,6 +436,36 @@ export default class extends Controller {
       ? { ...change, insert: this.toEditorLineEndings(change.insert) }
       : change)
     this.view.dispatch({ changes: editorChanges, userEvent: "input" })
+  }
+
+  attachSession(session) {
+    this.session = session || null
+  }
+
+  detachSession(session) {
+    if (!session || this.session === session) this.session = null
+  }
+
+  // Programmatic full-source commit through the bound session (P08-03).
+  // Keystroke-equivalent ranged inserts stay on the adapter primitives
+  // (replaceRange/replaceRanges) to preserve caret and undo granularity;
+  // only whole-buffer replacements funnel here. Without a live session this
+  // is the legacy direct replace; with one, stale races resolve to false
+  // instead of writing. Caret defaults to the legacy end-of-document.
+  commitSource(source, { caret } = {}) {
+    const live = this.session && !this.session.disposed ? this.session : null
+    if (!live) {
+      this.replaceRange(source, 0, this.value.length)
+      return Promise.resolve(true)
+    }
+    const caretOffset = caret === undefined ? caretAfterInsert(0, source) : caret
+    return live.replaceText(source).then(
+      () => {
+        if (caretOffset !== null && !this.destroyed) this.setSelectionRange(caretOffset, caretOffset)
+        return true
+      },
+      () => false
+    )
   }
 
   trackMediaRange(range) {

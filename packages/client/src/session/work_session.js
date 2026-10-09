@@ -20,6 +20,8 @@
 import { createSaveFlow } from "./save_flow.js"
 import { assertEditorAdapter } from "./editor_adapter.js"
 
+let sessionEpoch = 0
+
 const ERROR_CATEGORIES = {
   conflict: "conflict",
   not_found: "not_found",
@@ -92,6 +94,7 @@ export function createWorkSession({ transport, policy }) {
     throw new TypeError("Session policy requires the opened deck for workId.")
   }
 
+  const epoch = ++sessionEpoch
   let baseline = deck.content_hash
   let lastError = null
   let lastPollErrorKey = null
@@ -376,6 +379,8 @@ export function createWorkSession({ transport, policy }) {
   return {
     get workId() { return workId },
     get kind() { return kind },
+    get epoch() { return epoch },
+    get disposed() { return disposed },
     get dirty() { return flow.dirty },
     get conflict() { return flow.conflict },
     getText: () => getText(),

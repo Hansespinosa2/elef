@@ -1,4 +1,5 @@
 import { Controller } from "@hotwired/stimulus"
+import { caretAfterInsert } from "@elef/client"
 
 export default class extends Controller {
   static targets = ["grid", "count", "warnings"]
@@ -107,7 +108,14 @@ export default class extends Controller {
     const editor = this.editor
     if (!editor) return
 
-    editor.replaceRange(body, bodyStart, source.length)
+    // Full-source commit through the session; caret matches the legacy
+    // ranged replace (end of the rewritten body).
+    const fullSource = source.slice(0, bodyStart) + body
+    if (typeof editor.commitSource === "function") {
+      void editor.commitSource(fullSource, { caret: caretAfterInsert(bodyStart, body) })
+    } else {
+      editor.replaceRange(body, bodyStart, source.length)
+    }
     this.selectedIndex = selectedIndex
     this.element.dataset.selectedSlideIndex = String(selectedIndex)
     this.renderOverview()

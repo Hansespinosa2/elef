@@ -15,8 +15,9 @@
 //     into the buffer before any read or write.
 //
 // Binding rule: exactly one live adapter per session. The session validates
-// the shape at construction (assertEditorAdapter); identity/epoch binding
-// arrives in DO-5.
+// the shape at construction (assertEditorAdapter) and carries identity
+// (workId + epoch) with a disposed flag, so hosts bind one session per open
+// work and commit paths can refuse stale sessions.
 export const ADAPTER_METHODS = ["getText", "setText", "materializeEdits"]
 
 export function assertEditorAdapter(adapter) {

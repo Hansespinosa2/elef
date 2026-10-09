@@ -113,6 +113,18 @@ function setup(overrides = {}) {
   }
 }
 
+test("work session carries identity and disposal state", async () => {
+  const first = setup()
+  const second = setup()
+  assert.equal(typeof first.session.epoch, "number")
+  assert.ok(second.session.epoch > first.session.epoch)
+  assert.equal(first.session.disposed, false)
+  first.session.dispose()
+  assert.equal(first.session.disposed, true)
+  assert.equal(second.session.disposed, false)
+  second.session.dispose()
+})
+
 test("work session exposes the contract surface and starts clean", async () => {
   const { session, statuses } = setup()
   assert.equal(session.workId, "deck-1")
