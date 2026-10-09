@@ -11,7 +11,7 @@ source "$ROOT/test/scripts/lib/config_assertions.sh"
 
 bash -n "$SCRIPT"
 
-assert_active_line "$COMPOSE" "image: postgres:17"
+assert_active_line "$COMPOSE" 'image: ${POSTGRES_IMAGE:-postgres:17}'
 assert_active_line "$COMPOSE" "elef_development_postgres:/var/lib/postgresql/data"
 assert_active_line "$COMPOSE" "elef_development_storage:/rails/storage"
 assert_active_line "$COMPOSE" "Dockerfile.development"
