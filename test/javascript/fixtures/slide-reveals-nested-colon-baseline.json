@@ -30,7 +30,6 @@
             "markdown": "# Literal colons",
             "position": null,
             "position_directive_id": null,
-            "position_scope": null,
             "range": {
               "start": 0,
               "end": 17
@@ -52,7 +51,6 @@
             "markdown": "- parent\n  :::\n  keep this line",
             "position": null,
             "position_directive_id": null,
-            "position_scope": null,
             "range": {
               "start": 18,
               "end": 49

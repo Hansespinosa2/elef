@@ -33,7 +33,6 @@
             "markdown": "# Baseline visual contract",
             "position": null,
             "position_directive_id": null,
-            "position_scope": null,
             "range": {
               "start": 0,
               "end": 27
@@ -55,7 +54,6 @@
             "markdown": "## Left",
             "position": null,
             "position_directive_id": null,
-            "position_scope": null,
             "range": {
               "start": 28,
               "end": 36
@@ -77,7 +75,6 @@
             "markdown": "A paragraph with **formatting**.",
             "position": null,
             "position_directive_id": null,
-            "position_scope": null,
             "range": {
               "start": 37,
               "end": 70
@@ -99,7 +96,6 @@
             "markdown": "## Right",
             "position": null,
             "position_directive_id": null,
-            "position_scope": null,
             "range": {
               "start": 71,
               "end": 80
@@ -121,7 +117,6 @@
             "markdown": "- first\n- second",
             "position": null,
             "position_directive_id": null,
-            "position_scope": null,
             "range": {
               "start": 81,
               "end": 98
@@ -262,7 +257,6 @@
             "markdown": "# Baseline export",
             "position": null,
             "position_directive_id": null,
-            "position_scope": null,
             "range": {
               "start": 103,
               "end": 121
@@ -284,7 +278,6 @@
             "markdown": "Use [links](https://example.test).",
             "position": null,
             "position_directive_id": null,
-            "position_scope": null,
             "range": {
               "start": 122,
               "end": 157
@@ -306,7 +299,6 @@
             "markdown": "| Name | Count |\n| --- | ---: |\n| Alpha | 2 |",
             "position": null,
             "position_directive_id": null,
-            "position_scope": null,
             "range": {
               "start": 158,
               "end": 203

@@ -235,17 +235,6 @@ export default class extends Controller {
     const source = this.sourceValue()
     let from = this.blockOperationStart(slide, block)
     let to = block.range.end
-    if (block.position_scope === "group") {
-      const groupMembers = slide.blocks.filter((candidate) => candidate.position_directive_id === block.position_directive_id)
-      if (groupMembers.length === 1) {
-        const directiveIndex = slide.directives.findIndex((candidate) => candidate.id === block.position_directive_id)
-        const closing = slide.directives.slice(directiveIndex + 1).find((candidate) => candidate.type === "position_close")
-        if (closing) {
-          from = slide.directives[directiveIndex].range.start
-          to = closing.range.end
-        }
-      }
-    }
     const updated = removeEmptyBlockSource(source, from, to)
     if (updated !== source) this.replaceSource(updated)
   }
@@ -325,11 +314,8 @@ export default class extends Controller {
           preferredBlockId: block.id
         }
       } else {
-        const directiveIndex = slide.directives.findIndex((candidate) => candidate.id === directive.id)
-        const closing = slide.directives[directiveIndex + 1]
         const ranges = [directive]
-        if (closing?.type === "position_close") ranges.push(closing)
-        ranges.sort((left, right) => right.range.start - left.range.start).forEach((candidate) => {
+        ranges.forEach((candidate) => {
           let rangeEnd = candidate.range.end
           const lineEnding = source.slice(candidate.range.start, rangeEnd).match(/(?:\r\n|\r|\n)$/)?.[0]
           if (!lineEnding) {
@@ -530,17 +516,6 @@ export default class extends Controller {
   moveBlock(slideIndex, index, target) {
     const slide = this.map?.slides?.[slideIndex]
     if (!slide || target < 0 || target >= slide.blocks.length) return
-    const movingGroupId = slide.blocks[index]?.position_scope === "group"
-      ? slide.blocks[index].position_directive_id
-      : null
-    const low = Math.min(index, target)
-    const high = Math.max(index, target)
-    if (slide.blocks.slice(low, high + 1).some((block) =>
-      block.position_scope === "group" && block.position_directive_id !== movingGroupId
-    )) return
-    if (movingGroupId && slide.blocks.slice(low, high + 1).some((block) =>
-      block.position_scope !== "group" || block.position_directive_id !== movingGroupId
-    )) return
 
     const source = this.sourceValue()
     const contentEnd = (block) => {
@@ -719,11 +694,6 @@ export default class extends Controller {
       const block = slide?.blocks?.[index]
       let disabled = !neighbor || !block
 
-      if (neighbor && block && (neighbor.position_scope === "group" || block.position_scope === "group")) {
-        disabled = neighbor.position_scope !== "group" || block.position_scope !== "group" ||
-          neighbor.position_directive_id !== block.position_directive_id
-      }
-
       if (disabled) {
         if (control.dataset.editorBoundaryDisabled !== "true") control.dataset.editorBoundaryDisabled = "true"
         if (!control.disabled) control.disabled = true
@@ -735,10 +705,7 @@ export default class extends Controller {
   }
 
   removePositionDirectives(source, slide, directive) {
-    const directiveIndex = slide.directives.findIndex((candidate) => candidate.id === directive.id)
-    const closing = slide.directives[directiveIndex + 1]
     const ranges = [directive]
-    if (closing?.type === "position_close") ranges.push(closing)
     return ranges
       .sort((left, right) => right.range.start - left.range.start)
       .reduce((updated, candidate) => {
