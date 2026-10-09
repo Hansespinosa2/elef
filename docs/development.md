@@ -31,6 +31,18 @@ npm run tauri:dev --prefix apps/desktop/frontend
 
 The Tauri configuration runs the Rails-owned frontend build before dev and production launches. After changing shared frontend sources, the running desktop app must be relaunched to load the rebuilt bundle.
 
+## Check tiers
+
+`bin/check` is the canonical entry point. Tiers nest: each tier runs everything below it plus its own scope.
+
+| Tier | Command | Covers |
+|---|---|---|
+| quick | `bin/check quick` | JS/package unit suites, ownership/boundary checkers, local-store tests (~20 s) |
+| affected | `bin/check affected` | quick + generated-asset diffs, Rails unit subset, adapter conformance, frontend build, Tauri arch checker, fmt/clippy, Rust workspace tests (~1 min) |
+| all | `bin/check all` | affected + full Rails unit (PostgreSQL + SQLite) + Rails system + desktop e2e + web e2e + native benchmark (~18 min, ceiling 45 min) |
+
+Rails suites need ambient `PGPASSWORD` for the local PostgreSQL test database (same as CI). Browser suites need a graphical harness (`dbus-run-session`, `xvfb-run`, `openbox`, all installed in dev/CI) and /tmp headroom: the client and browser suites stage tens of MB under `/tmp/elef-*`; on `ENOSPC` clear stale `elef-*` entries left by killed runs and retry before concluding anything is broken. Keep browser automation headless and run suites one at a time on small machines.
+
 ## Fast checks
 
 | Change | First check |
@@ -60,7 +72,7 @@ cargo clippy --manifest-path Cargo.toml --workspace --all-targets -- -D warnings
 
 The user-flow definitions live once in `apps/web/test/e2e/scenarios/` with the Rails test suite. Playwright and WebdriverIO adapters under `apps/desktop/e2e/` run those flows against Rails and the real Tauri binary. The runners differ because the Tauri driver uses WebDriver, but the scenarios and expected behavior are shared.
 
-The full CI parity harness is npm test --prefix apps/desktop/e2e. It seeds disposable Rails test records and a temporary desktop library, then runs web and native desktop scenarios, including offline and update paths. Its Rails test server uses port 3000; do not run this harness while the user's development server occupies that port. CI runs the native matrix on Linux and macOS. A unit test, frontend bundle, or browser-only run does not establish native WebKit behavior.
+The full local parity envelope is `bin/check all`, which runs the e2e harness plus every suite below it. The harness itself (`npm test --prefix apps/desktop/e2e`) seeds disposable Rails test records and a temporary desktop library, then runs web and native desktop scenarios, including offline and update paths; run it directly when iterating on e2e behavior only. Its Rails test server uses port 3000; do not run this harness while the user's development server occupies that port. CI runs the native matrix on Linux and macOS. A unit test, frontend bundle, or browser-only run does not establish native WebKit behavior.
 
 For Rails browser workflows, run a focused system test first, then the suite as needed:
 

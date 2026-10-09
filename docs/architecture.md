@@ -70,6 +70,56 @@ apps/web/app/views/desktop_host.html is a static desktop host shell consumed by 
 
 Both hosts mount the same `packages/client` bundle for library, settings, and editor UI: Rails through a Stimulus controller with the HTTP host adapter, desktop through `file_library_application.js` with the Tauri host adapter. Host differences (routes vs in-app views, native dialogs, server templates) ride the documented mount seams; the client carries no host knowledge (boundary R9).
 
+## Packages
+
+Each package exists for exactly one reason; anything else is a module inside its owner.
+
+| Package | One-sentence justification |
+|---|---|
+| packages/contracts | Single frozen vocabulary both hosts and every package import, so cross-boundary names cannot drift. |
+| packages/work-model | Single pure implementation of Work semantics, so structure rules never fork between hosts. |
+| packages/renderer | Single deterministic Markdown-to-HTML projection, so both hosts render identical output. |
+| packages/client | Single host-neutral interactive UI mounted by both hosts, so product workflows are written once. |
+| crates/local-store | Single Tauri-independent deck-storage core, so desktop persistence is testable without the native shell. |
+
+`apps/desktop/frontend` and `apps/desktop/e2e` carry a `package.json` as host-owned build/test tooling with one consumer each; they are not architectural packages and need no justification.
+
+## Dependency rules
+
+These hold everywhere and are machine-checked (`tooling/check_boundaries.py`, `apps/web/script/check_frontend_ownership.py`):
+
+- imports point one way: contracts ← work-model ← renderer ← client ← hosts; nothing imports upward;
+- `contracts` is dependency-free and frozen; `work-model` is pure (no DOM, no I/O, no host);
+- `local-store` never touches Tauri; Tauri commands stay inside `apps/desktop/frontend/src` adapters;
+- Rails code never imports desktop files or Tauri APIs; the desktop never duplicates shareable views, styles, controllers, or workflows;
+- no package reaches into another package's internals (public entry points only);
+- Work syntax is interpreted exactly once, in `work-model` (rule R8);
+- source writes are atomic with fingerprint checks; see the [desktop data format](desktop/data-format.md) and [ADR-008](desktop/adr/008-safe-writes-and-conflict-detection.md).
+
+## State ownership
+
+Each mutable state has exactly one owner; anything else reads it through that owner.
+
+| State | Owner |
+|---|---|
+| Work semantics and structure | `packages/work-model` |
+| Projection and derived HTML | `packages/renderer` |
+| Cursor, selection, undo | the editor (client feature slice) |
+| Navigation and current work | `packages/client` application shell |
+| Save lifecycle and conflict flow | `WorkSession` (`packages/client/src/session`) |
+| Web persistence, auth, sessions | Rails + PostgreSQL (`apps/web`) |
+| Local persistence, history, archives | `crates/local-store` + filesystem |
+| Native lifecycle, updater, windows | desktop host (`apps/desktop`) |
+
+## Change routing
+
+Ask "which row owns the state or behavior?" and put the change there; add a host adapter only when a concrete platform capability differs.
+
+- **New Work syntax** (a directive, position rule, or boundary): `packages/work-model` (semantics + tests), `packages/renderer` (projection), both hosts inherit; never in a host or the Rails shim.
+- **New editor behavior** (a command, palette, or shortcut): `packages/client` feature slice behind the editor seam; the web Stimulus adapter and the Tauri adapter only mount it.
+- **New native capability** (a dialog, menu, or filesystem picker): `apps/desktop/frontend/src` adapter + Tauri command, capability-declared; the client receives values, never Tauri APIs.
+- **Web-only page or admin surface**: `apps/web/app/` (controller + view); shared styling only from `apps/web/app/assets`.
+
 ## Important contracts
 
 - Deck layout, source selection, manifests, library settings, and archive contents: [desktop data format](desktop/data-format.md).
