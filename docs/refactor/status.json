@@ -14,7 +14,7 @@
   "swap_mb": 0,
   "tauri_native_runner": "available"
  },
- "frozen_plan_sha256": "3426a9590208650b1229f4e9247c714ce82bde63834749c9ba6461d15ba811f2",
+ "frozen_plan_sha256": null,
  "head_sha": "e5df421d15332a2e25b4ee045ef9bcf154699e2b",
  "last_completed_phase": 8,
  "last_verified_checks": [
@@ -290,10 +290,10 @@
    "attempt": "52e72590d3c1407488f60b0949767a09"
   }
  ],
- "next_action": "Phase 09 PLAN: draft visual-editor plan, freeze, enter DO.",
+ "next_action": "Phase 09 PLAN: re-freeze after DO-6 deletion-scope defect (retained read/publish pages render the slated projection partials).",
  "pending_human_gates": [],
  "phase_base_sha": "e5df421d15332a2e25b4ee045ef9bcf154699e2b",
  "phase_contract_sha256": "e39bba95d6d5a8fd8db65de9a221cf2b37333fe18737ab13c9b8080e39c04ba0",
- "phase_state": "DO",
+ "phase_state": "PLAN",
  "review_round": 0
 }
