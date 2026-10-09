@@ -561,6 +561,13 @@ class DesktopEditorUi {
     return browser.execute(() => document.querySelector("#desktop-editor-field")?.editorController?.sourceValue ?? "")
   }
 
+  async readStoredSource() {
+    const deckTitle = this.activeDeckTitle || "E2E seed"
+    const sourceFile = deckTitle === "E2E document" ? "document.md" : "presentation.md"
+    const sourcePath = path.join(process.env.ELEF_E2E_LIBRARY_ROOT, deckTitle, sourceFile)
+    return readFile(sourcePath, "utf8")
+  }
+
   async setCaretPosition(position) {
     const selection = await browser.execute(offset => {
       const controller = document.querySelector("#desktop-editor-field")?.editorController

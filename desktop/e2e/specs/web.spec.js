@@ -740,6 +740,11 @@ class WebEditorUi {
   }
 
   async assertPersistedSource(source, workId = this.activeWorkId || process.env.ELEF_E2E_PRESENTATION_ID) {
+    const persisted = await this.readStoredSource(workId)
+    expect(normalizeLineEndings(persisted)).toBe(normalizeLineEndings(source))
+  }
+
+  async readStoredSource(workId = this.activeWorkId || process.env.ELEF_E2E_PRESENTATION_ID) {
     const id = Number(workId)
     const model = String(workId) === String(process.env.ELEF_E2E_DOCUMENT_ID) ? "Document" : "Presentation"
     const serialized = execFileSync("bin/rails", [
@@ -751,7 +756,7 @@ class WebEditorUi {
       encoding: "utf8"
     }).match(/^ELEF_E2E_PERSISTED_SOURCE=(.*)$/m)?.[1]
     expect(serialized).toBeTruthy()
-    expect(normalizeLineEndings(JSON.parse(serialized))).toBe(normalizeLineEndings(source))
+    return JSON.parse(serialized)
   }
 }
 
@@ -886,7 +891,7 @@ class WebLibraryUi {
   async assertAllWorkKindsVisible(presentationTitle, documentTitle) {
     await expect(this.page.getByRole("heading", { name: presentationTitle, exact: true })).toBeVisible()
     await expect(this.page.getByRole("heading", { name: documentTitle, exact: true })).toBeVisible()
-    await expect(this.page.locator("article.library-card")).toHaveCount(5)
+    await expect(this.page.locator("article.library-card")).toHaveCount(6)
   }
 
   async renameWork(title, newTitle) {
@@ -957,7 +962,7 @@ class WebLibraryUi {
   async assertPresentationsOnly(presentationTitle, documentTitle) {
     await expect(this.page.getByRole("heading", { name: presentationTitle, exact: true })).toBeVisible()
     await expect(this.page.getByRole("heading", { name: documentTitle, exact: true })).toHaveCount(0)
-    await expect(this.page.locator("article.library-card")).toHaveCount(3)
+    await expect(this.page.locator("article.library-card")).toHaveCount(4)
   }
 
   async showDocuments() {

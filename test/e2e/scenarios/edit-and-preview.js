@@ -3,6 +3,10 @@ import { insertImageWorkflow } from "./insert-image.js"
 
 export const SAVED_SOURCE = "# Saved by shared scenario\n\nThe editor autosaved this text.\n\nSee [[E2E linked]].\n"
 
+function normalizeLineEndings(source) {
+  return source.replace(/\r\n|\r/g, "\n")
+}
+
 export async function editAndPreviewWorkflow(ui) {
   await ui.openDeck()
   await ui.renameEditorTitle("E2E shared title")
@@ -37,6 +41,10 @@ export async function editAndPreviewWorkflow(ui) {
   await ui.waitForSource(visualSource)
   await ui.waitForSaved(visualSource)
   const savedPresentationSource = await ui.readSource()
+  const savedPresentationStoredSource = await ui.readStoredSource()
+  if (normalizeLineEndings(savedPresentationStoredSource) !== normalizeLineEndings(savedPresentationSource)) {
+    throw new Error("The saved presentation source differs from the stored source")
+  }
   await ui.waitForPreview("The visual editor changed this text.")
 
   await ui.openDeck("E2E document")
@@ -46,20 +54,32 @@ export async function editAndPreviewWorkflow(ui) {
   await ui.waitForSource(updatedDocument)
   await ui.waitForSaved(updatedDocument)
   const savedDocumentSource = await ui.readSource()
+  const savedDocumentStoredSource = await ui.readStoredSource()
+  if (normalizeLineEndings(savedDocumentStoredSource) !== normalizeLineEndings(savedDocumentSource)) {
+    throw new Error("The saved document source differs from the stored source")
+  }
   await ui.refreshPreview()
   await ui.showVisualMode()
   await ui.assertDocumentLinkPreview("E2E linked")
   await ui.openDeck()
   await ui.waitForSource(savedPresentationSource)
   const reopenedPresentation = await ui.readSource()
-  if (reopenedPresentation !== savedPresentationSource) {
-    throw new Error(`The presentation source changed after closing and reopening it: expected ${JSON.stringify(savedPresentationSource)}, got ${JSON.stringify(reopenedPresentation)}`)
+  if (normalizeLineEndings(reopenedPresentation) !== normalizeLineEndings(savedPresentationSource)) {
+    throw new Error(`The presentation source content changed after closing and reopening it: expected ${JSON.stringify(savedPresentationSource)}, got ${JSON.stringify(reopenedPresentation)}`)
+  }
+  const reopenedPresentationStoredSource = await ui.readStoredSource()
+  if (reopenedPresentationStoredSource !== savedPresentationStoredSource) {
+    throw new Error("The stored presentation source changed after closing and reopening it")
   }
   await ui.openDeck("E2E document")
   await ui.waitForSource(savedDocumentSource)
   const reopenedDocument = await ui.readSource()
-  if (reopenedDocument !== savedDocumentSource) {
-    throw new Error(`The document source changed after closing and reopening it: expected ${JSON.stringify(savedDocumentSource)}, got ${JSON.stringify(reopenedDocument)}`)
+  if (normalizeLineEndings(reopenedDocument) !== normalizeLineEndings(savedDocumentSource)) {
+    throw new Error(`The document source content changed after closing and reopening it: expected ${JSON.stringify(savedDocumentSource)}, got ${JSON.stringify(reopenedDocument)}`)
+  }
+  const reopenedDocumentStoredSource = await ui.readStoredSource()
+  if (reopenedDocumentStoredSource !== savedDocumentStoredSource) {
+    throw new Error("The stored document source changed after closing and reopening it")
   }
   await ui.openDeck()
 }

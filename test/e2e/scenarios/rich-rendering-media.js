@@ -23,6 +23,7 @@ export async function richRenderingMediaWorkflow(ui) {
 
   await ui.enterPresentationMode()
   await ui.assertPresentationSlide(0, "Rich rendering and media sample")
+  await ui.movePresentation("ArrowRight")
   await ui.assertPresentationSlide(1, "Art sample")
   await ui.exitPresentationMode()
 
