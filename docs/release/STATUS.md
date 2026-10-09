@@ -10,7 +10,7 @@ This file is the persistent requirement-to-evidence map for [the approved releas
 - **Physical Mac:** this session runs on Omarchy Linux x86-64, not Apple Silicon macOS. **BLOCKED_EXTERNAL:** Gate B Mac install/update/rollback needs an actual Apple Silicon Mac. Hosted ARM64 CI can satisfy Gate A only.
 - **Local build:** `npm run build --prefix desktop/frontend` was attempted before edits and stopped because `desktop/frontend/node_modules/esbuild` is absent. No test or build has passed in this session yet; install locked dependencies and rerun.
 - **Observed implementation:** Stable already uses Tauri ID `com.elef.desktop` and app-data `library-root.json`; native update staging/recovery exists. Current production updater points to GitHub `releases/latest`, Linux targets AppImage, the desktop runtime imports visual editor/document-link/document-graph controllers, and several required CI jobs skip `push` events.
-- **Current commit:** none. The documentation baseline is being recorded now; subsequent milestones will be committed separately. PR target: `main`, subject to owner review. No merge will be performed by this work.
+- **Current commit:** `56151d2c2cd5b73e10b23c51b1aa876c76958d0f` (`Record desktop release constitution baseline`). PR target: `main`, subject to owner review. No merge will be performed by this work.
 
 ## Requirement map
 
@@ -77,6 +77,6 @@ This file is the persistent requirement-to-evidence map for [the approved releas
 
 | Commit | Change | Checks and result |
 |---|---|---|
-| (none yet) | Captured constitution and initial requirement map from the supplied request. | Baseline inspection only. `npm run build --prefix desktop/frontend` failed before compilation because `esbuild` is not installed. No tests passed. |
+| `56151d2` | Captured the supplied constitution and initial requirement map. | `git diff --check` and a Python document check passed (9 numbered sections, 46 mapped requirement rows; exit 0). Baseline `npm run build --prefix desktop/frontend` failed before compilation because `esbuild` is not installed. |
 
 Update this file after each coherent milestone. Record exact commit, command, exit status, and evidence location. Do not change a status to `VERIFIED` without a passing acceptance result on the stated source SHA and platform.
