@@ -37,6 +37,24 @@ requiring the pull-request-only job. When the endgame restores a mergeable
 PR, later runs may return to pull-request evidence with no rule change needed
 (the gate already accepts both shapes).
 
+## Local-testing posture (owner order, phases 7-12)
+
+Remote CI is advisory until the endgame; phases do not wait for green CI.
+Each phase CHECK is proven with local verification instead:
+
+- the phase gate (`bin/check phase N`) green in an isolated checkout,
+- the affected tier green, plus every suite the container can run honestly
+  (client, JavaScript, Rails unit, and system/browser suites via the local
+  Chromium),
+- dispatch CI runs continue in the background and their outcomes are recorded,
+  but a red or pending remote job never blocks CHECK, review, or PASS.
+
+Evidence files carry a `ci_deferred` flag (pointing here) plus a
+`local_verification` block recording each local run exactly as it ran
+(command, exit, head, duration). macOS-native and signed-binary behavior,
+which the container cannot exercise, re-validates in the endgame matrix
+before any merge.
+
 ## Endgame scope (post-Phase-12 PASS)
 
 1. Reconcile `dev`'s accumulated features into v9 (port new dev-built

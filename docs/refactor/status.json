@@ -282,7 +282,7 @@
       "tier": "phase"
     }
   ],
-  "next_action": "Owner approved dev-reconciliation deferral with dispatch+SHA attestation equivalence. Re-validate gate correction, dispatch CI on correction commit, run-gate 7, CHECK, review round 1.",
+  "next_action": "Local-testing posture active. Correction commit pushed; re-verify post-commit, write local evidence, run-gate 7, CHECK, review round 1.",
   "pending_human_gates": [],
   "phase_base_sha": "873904da32953b513b89b073b331ce692c84cb0a",
   "phase_contract_sha256": "59bdd29ab5b49e6f8e8e59472c9dbc3686feef6a16a40dfe74e635795f4f4f86",
