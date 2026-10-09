@@ -548,7 +548,12 @@ assert '"pptx"' in client_export_registry and '"print"' in client_export_registr
 assert "exportPptxModel" in (ROOT / "app/javascript/controllers/pptx_export_host_controller.js").read_text(), (
     "the Rails export adapter must orchestrate through the shared client engine"
 )
-assert '"lib/projection_editability"' in (ROOT / "app/javascript/controllers/visual_editor_controller.js").read_text()
+assert '"lib/presentation_editor_host"' in (ROOT / "app/javascript/controllers/visual_editor_controller.js").read_text(), (
+    "the thin visual-editor adapter must mount through the shared presentation editor host seam"
+)
+assert '"lib/projection_editability"' in (ROOT / "app/javascript/lib/presentation_editor_host.js").read_text(), (
+    "projection editability must flow through the shared presentation editor host seam"
+)
 assert 'pin "lib/projection_editability", to: "lib/projection_editability.js"' in importmap
 assert all(path.is_file() for path in renderer_sources), "renderer sources must stay in shared app/javascript or packages"
 assert "desktop/" not in renderer_build, "Rails renderer generation must not reference desktop files"
