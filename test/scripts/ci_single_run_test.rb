@@ -65,9 +65,11 @@ end
   "npm run test:unit --prefix desktop/e2e" => "desktop-fast",
   "cargo test --manifest-path desktop/Cargo.toml -p elef-core --locked" => "desktop-fast"
 }.each do |command, expected_job|
-  matches = run_steps.select { |_job_name, run| run.include?(command) }
-  abort "#{command} must run exactly once in #{expected_job}, found #{matches.map(&:first)}" unless
-    matches.map(&:first) == [expected_job]
+  matches = run_steps.flat_map do |job_name, run|
+    Array.new(run.scan(Regexp.new(Regexp.escape(command))).length, job_name)
+  end
+  abort "#{command} must run exactly once in #{expected_job}, found #{matches}" unless
+    matches == [expected_job]
 end
 
 abort "the explicit JavaScript file block must stay removed" if
