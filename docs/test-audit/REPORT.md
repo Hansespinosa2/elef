@@ -403,6 +403,8 @@ Manual CI run [38034571864](https://github.com/Hansespinosa2/elef/actions/runs/3
 
 Run `38034571864` used `workflow_dispatch`. The authorization and attestation jobs were skipped as designed, so it is diagnostic evidence, not a PR-attested success. The `96b6f24` PR head had a successful `pull_request_target` hygiene run but no `pull_request` CI run. A genuine PR run on the fixed head is still needed to validate both native platforms and attest the tested tree.
 
+The final adversarial review of pushed commit `1950a4b` found no new defect in the palette-rebinding or native-key changes. I independently verified its two findings: the live CI run list has no run for current PR head `1950a4b`, and the unchanged tag-triggered release workflow can publish without calling the authorization verifier. The PR checks currently show only hygiene (`description` and `normalize`) passing; the required CI and attestation remain absent.
+
 ### System-test parallelism audit
 
 Before the two-worker diagnostic, I checked shared databases, files, service state, editor state, and ports. Rails supplies a separate test database to each worker; `Presentations::FolderSync` already uses `Process.pid`; ActiveStorage disk keys are unique; each Capybara server selected its own ephemeral port; and Rails service/controller state is process-local. The concrete collision was `MediaPdfExportTest` writing `tmp/pdfs/origin-screen.png` and fixed PDF probe names. Both paths now include the worker PID. Three two-worker local system runs passed after this change. The Linux CI job remains at `PARALLEL_WORKERS=1`: local results show a wall-time gain, but the requested repeated hosted CI evidence is unavailable, and parallelism does not reduce total runner compute.
