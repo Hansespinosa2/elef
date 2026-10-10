@@ -862,13 +862,18 @@ class WebLibraryUi {
       has: this.page.getByRole("heading", { name: title, exact: true })
     })
     const action = await this.openCardAction(card, "Present")
-    await Promise.all([
-      this.page.waitForURL(/\/presentations\/\d+\/present$/, {
-        timeout: 30_000,
-        waitUntil: "domcontentloaded"
-      }),
-      action.click()
-    ])
+    const publishResponse = this.page.waitForResponse(response => {
+      const request = response.request()
+      return request.method() === "POST" && /\/presentations\/\d+\/publish$/.test(new URL(response.url()).pathname)
+    })
+    await action.click()
+    const response = await publishResponse
+    expect(response.status()).toBe(302)
+    expect(response.headers().location).toMatch(/\/presentations\/\d+\/present$/)
+    await this.page.waitForURL(/\/presentations\/\d+\/present$/, {
+      timeout: 30_000,
+      waitUntil: "domcontentloaded"
+    })
     await expect(this.page.locator(".presentation-stage")).toBeVisible()
     await this.page.getByRole("link", { name: "Exit", exact: true }).click()
     await expect(this.page.getByText("Saved preview", { exact: true })).toBeVisible()
