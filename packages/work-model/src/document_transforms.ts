@@ -20,6 +20,7 @@ export interface TransformBlock {
   range?: TransformRange | null;
   position_scope?: string | null;
   position_directive_id?: string | null;
+  art?: { source_range?: TransformRange | null } | null;
 }
 
 export interface TransformDirective {
@@ -161,9 +162,15 @@ export function blockOperationStart(
   if (!block) throw new TypeError("Block operations need a block.")
   const range = block.range
   if (!range) throw new TypeError("Block operations need a block range.")
-  if (block.position_scope !== "block" || !block.position_directive_id) return range.start
-  const directive = slide?.directives?.find((candidate) => candidate.id === block.position_directive_id)
-  return directive?.range?.start ?? range.start
+  const starts = [range.start]
+  const artStart = block.art?.source_range?.start
+  if (Number.isInteger(artStart)) starts.push(artStart as number)
+  if (block.position_scope === "block" && block.position_directive_id) {
+    const directive = slide?.directives?.find((candidate) => candidate.id === block.position_directive_id)
+    const directiveStart = directive?.range?.start
+    if (Number.isInteger(directiveStart)) starts.push(directiveStart as number)
+  }
+  return Math.min(...starts)
 }
 
 // The single position_close lookup rule (F6): the first closing directive

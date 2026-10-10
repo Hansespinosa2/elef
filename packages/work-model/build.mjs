@@ -39,8 +39,18 @@ esbuild.buildSync({
 });
 esbuild.buildSync({
   ...shared,
+  entryPoints: [join(here, "src", "art_source.ts")],
+  outfile: join(here, "dist", "art-source.js"),
+});
+esbuild.buildSync({
+  ...shared,
+  entryPoints: [join(here, "src", "slide_position_layout.ts")],
+  outfile: join(here, "dist", "slide-position-layout.js"),
+});
+esbuild.buildSync({
+  ...shared,
   entryPoints: [join(here, "src", "index.ts")],
   outfile: join(here, "dist", "elef-work-model.js"),
   external: ["@elef/work-model/*"],
 });
-console.log("packages/work-model: dist/elef-work-model.js + dist/document-map.js + dist/document-links.js + dist/document-transforms.js built");
+console.log("packages/work-model: dist/elef-work-model.js + dist/document-map.js + dist/document-links.js + dist/document-transforms.js + dist/art-source.js + dist/slide-position-layout.js built");

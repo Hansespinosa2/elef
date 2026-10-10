@@ -87,3 +87,34 @@ export type {
   PortableDocumentLinks,
   ResolvedDocument
 } from "@elef/work-model/document-links"
+export {
+  analyzeArtList,
+  ART_DIAGNOSTICS,
+  markdownBoundaryMap,
+  resolveArtBindings
+} from "@elef/work-model/art-source"
+export type {
+  ArtBinding,
+  ArtBindings,
+  ArtBoundaryMap,
+  ArtDiagnostic,
+  ArtDiagnosticCode,
+  ArtDirective,
+  ArtListAnalysis,
+  ArtListRange,
+  ArtSourceRange,
+  ArtTargetLines
+} from "@elef/work-model/art-source"
+export {
+  NON_TRAILING_BOTTOM_WARNING,
+  slidePositionClasses,
+  slidePositionLayout
+} from "@elef/work-model/slide-position-layout"
+export type {
+  SlideBlockEntry,
+  SlideBottomEntry,
+  SlideMiddleEntry,
+  SlidePositionBlock,
+  SlidePositionEntry,
+  SlidePositionLayout
+} from "@elef/work-model/slide-position-layout"

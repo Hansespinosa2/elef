@@ -21,7 +21,18 @@
     "./document-transforms": {
       "types": "./src/document_transforms.ts",
       "default": "./dist/document-transforms.js"
+    },
+    "./art-source": {
+      "types": "./src/art_source.ts",
+      "default": "./dist/art-source.js"
+    },
+    "./slide-position-layout": {
+      "types": "./src/slide_position_layout.ts",
+      "default": "./dist/slide-position-layout.js"
     }
+  },
+  "dependencies": {
+    "markdown-it": "14.3.2"
   },
   "files": [
     "dist",
