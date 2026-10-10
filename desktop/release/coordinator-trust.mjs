@@ -69,32 +69,16 @@ export async function assertTrustedCoordinatorRevision({ coordinatorSha, mainHis
   return { sha: coordinatorSha, pr: pullRequest.number }
 }
 
-export function assertMainReviewProtection(rulesets, repository) {
-  if (!Array.isArray(rulesets)) throw new TypeError("main review-protection verification needs repository rulesets")
-  if (typeof repository !== "string" || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository)) {
-    throw new TypeError("main review-protection verification needs owner/repository identity")
-  }
-
-  const matching = rulesets.filter(ruleset =>
-    ruleset?.name === "main" &&
-    ruleset.target === "branch" &&
-    ruleset.enforcement === "active" &&
-    ruleset.source_type === "Repository" &&
-    ruleset.source?.toLowerCase() === repository.toLowerCase() &&
-    ruleset.conditions?.ref_name?.include?.includes("refs/heads/main") &&
-    Array.isArray(ruleset.conditions.ref_name.exclude) &&
-    ruleset.conditions.ref_name.exclude.length === 0
-  )
-  if (matching.length !== 1) throw new Error("the active repository main ruleset is missing or ambiguous")
-
-  const reviewRule = matching[0].rules?.find(rule =>
+export function assertMainReviewProtection(rules) {
+  if (!Array.isArray(rules)) throw new TypeError("main review-protection verification needs effective branch rules")
+  const reviewRule = rules.find(rule =>
     rule?.type === "pull_request" &&
     Number.isInteger(rule.parameters?.required_approving_review_count) &&
     rule.parameters.required_approving_review_count >= 1 &&
     rule.parameters.require_code_owner_review === true
   )
   if (!reviewRule) {
-    throw new Error("the active main ruleset must require an approving review and CODEOWNERS review")
+    throw new Error("effective main branch rules must require an approving review and CODEOWNERS review")
   }
   return true
 }

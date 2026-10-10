@@ -10,28 +10,22 @@ const SHA2 = "2".repeat(40)
 const SHA3 = "3".repeat(40)
 const NOW = "2026-10-10T09:00:00.000Z"
 
-test("main coordinator trust requires the active repository ruleset to require approval and CODEOWNERS review", () => {
-  const ruleset = {
-    name: "main",
-    target: "branch",
-    enforcement: "active",
-    source_type: "Repository",
-    source: "owner/elef",
-    conditions: { ref_name: { include: ["refs/heads/main"], exclude: [] } },
-    rules: [{ type: "pull_request", parameters: { required_approving_review_count: 1, require_code_owner_review: true } }]
+test("main coordinator trust requires effective approval and CODEOWNERS review rules", () => {
+  const reviewRule = {
+    type: "pull_request",
+    ruleset_source_type: "Repository",
+    ruleset_source: "owner/elef",
+    parameters: { required_approving_review_count: 1, require_code_owner_review: true }
   }
-  assert.equal(assertMainReviewProtection([ruleset], "OWNER/elef"), true)
+  assert.equal(assertMainReviewProtection([reviewRule]), true)
   for (const invalid of [
-    { ...ruleset, enforcement: "disabled" },
-    { ...ruleset, source: "other/elef" },
-    { ...ruleset, conditions: { ref_name: { include: ["refs/heads/dev"], exclude: [] } } },
-    { ...ruleset, conditions: { ref_name: { include: ["refs/heads/main"], exclude: ["refs/heads/main"] } } },
-    { ...ruleset, rules: [{ type: "pull_request", parameters: { required_approving_review_count: 0, require_code_owner_review: true } }] },
-    { ...ruleset, rules: [{ type: "pull_request", parameters: { required_approving_review_count: 1, require_code_owner_review: false } }] }
+    { ...reviewRule, parameters: { required_approving_review_count: 0, require_code_owner_review: true } },
+    { ...reviewRule, parameters: { required_approving_review_count: 1, require_code_owner_review: false } },
+    { ...reviewRule, type: "required_status_checks" }
   ]) {
-    assert.throws(() => assertMainReviewProtection([invalid], "owner/elef"))
+    assert.throws(() => assertMainReviewProtection([invalid]))
   }
-  assert.throws(() => assertMainReviewProtection([], "owner/elef"), /missing or ambiguous/)
+  assert.throws(() => assertMainReviewProtection([]), /effective main branch rules/)
 })
 
 test("manual release actions require the owner, immutable version tag and Gate-A-passed ledger source", () => {

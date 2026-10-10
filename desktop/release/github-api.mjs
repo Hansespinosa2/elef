@@ -35,18 +35,8 @@ export class GitHubReleaseApi {
   }
 
   async verifyMainReviewProtection() {
-    const repository = `${this.owner}/${this.repository}`
-    const summaries = await this.paginate("/rulesets?includes_parents=true")
-    const matching = summaries.filter(ruleset =>
-      ruleset?.name === "main" &&
-      ruleset.source_type === "Repository" &&
-      ruleset.source?.toLowerCase() === repository.toLowerCase()
-    )
-    if (matching.length !== 1 || !Number.isSafeInteger(matching[0]?.id) || matching[0].id < 1) {
-      throw new Error("the active repository main ruleset is missing or ambiguous")
-    }
-    const ruleset = await this.request(`/rulesets/${matching[0].id}?includes_parents=true`)
-    return assertMainReviewProtection([ruleset], repository)
+    const rules = await this.request("/rules/branches/main")
+    return assertMainReviewProtection(rules)
   }
 
   async pullRequestsForCommit(sha) {
