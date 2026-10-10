@@ -5,7 +5,7 @@ module Source
     PORTABLE_DOCUMENT_KEY = "elef_document_key".freeze
     PORTABLE_DOCUMENT_ALIASES = "elef_aliases".freeze
     Position = Data.define(:horizontal, :vertical, :vertical_explicit)
-    Block = Data.define(:markdown, :position)
+    Block = Data.define(:markdown, :position, :art)
     Region = Data.define(:blocks)
     MarginSettings = Data.define(:section, :subsection, :footnote, :slide_count)
     Slide = Data.define(:id, :index, :markdown, :layout, :blocks, :title, :regions, :section, :subsection, :footnote, :warnings)
@@ -28,7 +28,7 @@ module Source
       structure = Source::JavascriptRenderer.work_structure(source, source_name: source_name, mode: mode)
       slides = structure[:slides].map.with_index do |slide, index|
         blocks = slide[:blocks].map do |block|
-          Block.new(markdown: block[:markdown], position: position_from(block[:position]))
+          Block.new(markdown: block[:markdown], position: position_from(block[:position]), art: block[:art])
         end
         Slide.new(
           id: "#{source_name}-#{index + 1}",
@@ -39,7 +39,7 @@ module Source
           title: slide[:title],
           regions: slide[:regions].map do |region|
             Region.new(blocks: region.map do |block|
-              Block.new(markdown: block[:markdown], position: position_from(block[:position]))
+              Block.new(markdown: block[:markdown], position: position_from(block[:position]), art: block[:art])
             end)
           end,
           section: slide[:section],
