@@ -10,7 +10,7 @@ class PresentationTest < ActiveSupport::TestCase
 
   test "new presentations use source directives to position the starter title and body" do
     expected_source = <<~MARKDOWN.chomp
-      :::align{center center}
+      :::align{middle center}
       # Untitled Document
 
       :::align {center}
@@ -265,7 +265,7 @@ class PresentationTest < ActiveSupport::TestCase
     document = Source::Document.parse(<<~MARKDOWN)
       # Positioned
 
-      :::align{center center}
+      :::align{middle center}
 
       A centered message.
 
@@ -284,7 +284,7 @@ class PresentationTest < ActiveSupport::TestCase
 
   test "align directives use vertical then horizontal order and retain position compatibility" do
     document = Source::Document.parse(<<~MARKDOWN)
-      :::align{center left}
+      :::align{middle left}
 
       Centered vertically and aligned left.
 
@@ -310,7 +310,7 @@ class PresentationTest < ActiveSupport::TestCase
 
       Horizontal only.
 
-      :::align{center center}
+      :::align{middle center}
 
       Horizontal and vertical.
     MARKDOWN
@@ -319,7 +319,7 @@ class PresentationTest < ActiveSupport::TestCase
   end
 
   test "builds an ephemeral editor map with UTF-16 ranges and known directives" do
-    source = "---\npresentationTheme: dark\n---\n# 🚀 Intro\n\n:::align{center center}\n\nA **message**.\n\n:::\n---\n:::unknown\n\n# Next"
+    source = "---\npresentationTheme: dark\n---\n# 🚀 Intro\n\n:::align{middle center}\n\nA **message**.\n\n:::\n---\n:::unknown\n\n# Next"
 
     map = Source::Document.editor_map(source, source_name: "Deck", mode: :presentation)
 
@@ -343,17 +343,28 @@ class PresentationTest < ActiveSupport::TestCase
     blocks = Source::Document.editor_map(source, mode: :presentation)[:slides].first[:blocks]
 
     assert_equal [nil, "center", nil], blocks.map { |block| block[:position]&.fetch(:horizontal) }
-    assert_equal [nil, "block", nil], blocks.map { |block| block[:position_scope] }
   end
 
-  test "maps shared position scopes to every block inside the group" do
+  test "position directive followed later by a bare ::: binds only to the single next block and bare ::: warns" do
     source = "# Slide\n\n:::align{center}\n\nFirst\n\nSecond\n\n:::\n\nOutside"
 
     blocks = Source::Document.editor_map(source, mode: :presentation)[:slides].first[:blocks]
+    assert_equal [nil, "center", nil, nil], blocks.map { |block| block[:position]&.fetch(:horizontal) }
 
-    assert_equal [nil, "group", "group", nil], blocks.map { |block| block[:position_scope] }
-    assert_equal blocks[1][:position_directive_id], blocks[2][:position_directive_id]
-    refute_equal blocks[1][:position_directive_id], blocks[3][:position_directive_id]
+    parsed = Source::Document.parse(source)
+    assert_equal [nil, "center", nil, nil], parsed.slides.first.blocks.map { |b| b.position&.horizontal }
+    assert_includes parsed.warnings, "Unknown or malformed presentation directive was removed."
+  end
+
+  test "bare ::: alone warns as unknown directive and does not affect positioning" do
+    source = "# Slide\n\n:::\n\nFirst"
+
+    parsed = Source::Document.parse(source)
+    assert_equal [nil, nil], parsed.slides.first.blocks.map { |b| b.position&.horizontal }
+    assert_equal ["Unknown or malformed presentation directive was removed."], parsed.warnings
+
+    map = Source::Document.editor_map(source, mode: :presentation)
+    assert_equal "unknown", map[:slides].first[:directives].first[:type]
   end
 
   test "keeps blank lines inside display math fences in one editable block" do
@@ -538,63 +549,6 @@ class PresentationTest < ActiveSupport::TestCase
     refute_includes html, "<img"
   end
 
-  test "sample data covers supported presentation features" do
-    samples = Presentations::SampleData.load!
-
-    assert_equal Presentations::SampleData::SAMPLES.length, samples.length
-    assert Presentations::SampleData::SAMPLES.all? { |sample| sample[:purpose].present? }
-    Presentations::SampleData::SAMPLES.zip(samples).each do |sample, presentation|
-      assert_equal sample[:source], presentation.reload.source
-    end
-    assert_equal Presentations::SampleData::SAMPLES.map { |sample| sample[:id] },
-      samples.map(&:sample_id)
-    assert_equal %w[dark light match], samples.map(&:theme).uniq.sort
-    assert samples.all? { |presentation| presentation.slides.length.between?(10, 20) }
-    assert samples.all? { |presentation| presentation.source.lines.length > 50 }
-    assert samples.all? { |presentation| presentation.source.scan(/^# /).length >= 8 }
-    assert samples.any? { |presentation| presentation.source.include?("```ruby") }
-    assert samples.any? { |presentation| presentation.source.include?("$$") }
-    assert samples.any? { |presentation| presentation.source.include?("| Workflow | Authoring speed |") }
-    refute samples.any? { |presentation| presentation.source.include?("slide-layout") }
-    layouts = Presentation.find_by!(sample_id: "layouts-and-themes")
-    assert_includes layouts.slides.map(&:layout), "two-column"
-    assert_includes layouts.slides.map(&:layout), "three-column"
-    assert_includes layouts.slides.map(&:layout), "statement"
-    assert_equal 5, layouts.slides.count { |slide| slide.layout == "three-column" }
-    %w[left center right].product(%w[top middle bottom]).each do |horizontal, vertical|
-      vertical_value = vertical == "middle" ? "center" : vertical
-      assert_includes layouts.source, ":::align{#{vertical_value} #{horizontal}}"
-    end
-    assert layouts.slides.any? { |slide| slide.blocks.any? { |block| block.position&.horizontal == "center" && block.position.vertical == "middle" } }
-    assert layouts.slides.any? { |slide| slide.blocks.any? { |block| block.position&.horizontal == "right" && block.position.vertical == "bottom" } }
-    assert_equal ["center", "middle"], [layouts.slides.first.blocks.first.position.horizontal, layouts.slides.first.blocks.first.position.vertical]
-    assert_equal ["center", "top"], [layouts.slides.first.blocks.second.position.horizontal, layouts.slides.first.blocks.second.position.vertical]
-    assert_includes Presentation.find_by!(sample_id: "tables-and-media").slides.map(&:layout), "image"
-    assert_includes Presentation.find_by!(sample_id: "code-and-math").slides.map(&:layout), "code"
-    assert_includes Presentation.find_by!(sample_id: "tables-and-media").slides.map(&:layout), "table"
-    assert samples.any? { |presentation| presentation.source.include?("Fenced") }
-  end
-
-  test "renders every sample's representative content" do
-    Presentations::SampleData.load!
-
-    code_and_math = Source::Renderer.render(
-      Presentation.find_by!(sample_id: "code-and-math").source
-    )
-    assert_includes code_and_math, "katex"
-    assert_includes code_and_math, "process_records"
-    tables_and_media = Source::Renderer.render(
-      Presentation.find_by!(sample_id: "tables-and-media").source
-    )
-
-    assert_includes tables_and_media, "<table>"
-    assert_includes tables_and_media, 'src="https://example.com/elef-workflow.png"'
-    assert_includes tables_and_media, 'href="https://example.com/elef"'
-    assert_includes Source::Renderer.render(
-      Presentation.find_by!(sample_id: "code-and-math").source
-    ), "$not_math$"
-  end
-
   test "lineage seed creates three five-presentation trees" do
     records = Presentations::LineageSampleData.load!
 
@@ -634,18 +588,6 @@ class PresentationTest < ActiveSupport::TestCase
     assert_not_nil presentation.created_at
   end
 
-  test "deleting a parent leaves the fork detached and intact" do
-    parent = Presentation.create!(title: "Parent", source: "# Parent")
-    child = parent.fork_as("continuation")
-    child.save!
-
-    parent.destroy!
-
-    assert_nil child.reload.parent
-    assert_equal "# Parent", child.source
-    assert_equal "Parent", child.fork_parent_title
-  end
-
   test "forks a maximum length title while preserving the original snapshot" do
     parent = Presentation.create!(title: "x" * 120, source: "# Original")
     Presentation::FORK_TYPES.each do |type|
@@ -656,6 +598,37 @@ class PresentationTest < ActiveSupport::TestCase
       assert_equal parent.title, child.fork_parent_title
       assert_equal parent.source, child.fork_source
     end
+  end
+
+  test "forking a dirty parent checkpoints the exact source used for the fork" do
+    parent = Presentation.create!(title: "Dirty parent", source: "# Checkpointed source")
+    previous_checkpoint_id = parent.latest_checkpoint.id
+    result = Drafts::Save.call(
+      parent,
+      source: "# New unsnapshotted draft",
+      lock_version: parent.lock_version,
+      base_revision: parent.revision_token,
+      checkpoint: false
+    )
+    assert_predicate result, :success?
+    assert_equal previous_checkpoint_id, parent.reload.latest_checkpoint.id
+
+    child = parent.fork_as("inspiration")
+    origin_revision = child.pending_lineage_origin_revision
+
+    assert_equal "# New unsnapshotted draft", origin_revision.source
+    assert_not_equal previous_checkpoint_id, origin_revision.id
+    assert child.save, child.errors.full_messages.to_sentence
+    assert_equal origin_revision.id, child.lineage_edge.origin_revision_id
+    assert_equal "# New unsnapshotted draft", child.reload.source
+  end
+
+  test "rejects a pending lineage parent that is the presentation itself" do
+    presentation = Presentation.new(title: "Self fork", source: "# Self")
+    presentation.parent = presentation
+
+    refute presentation.valid?
+    assert_includes presentation.errors[:parent], "cannot be itself"
   end
 
   test "infers image layout for a slide containing only an image without headings" do

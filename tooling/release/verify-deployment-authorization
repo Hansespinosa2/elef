@@ -48,6 +48,7 @@ fi
 
 required_checks=(desktop-fast scan_ruby scan_js test sqlite-test system-test desktop desktop-macos renderer-macos production-smoke development-smoke)
 required_jobs=("${required_checks[@]}" record-ci-attestation)
+required_jobs_json="$(printf '%s\n' "${required_checks[@]}" | jq -R . | jq -s .)"
 
 find_pr_run() {
   local pull_view candidate_run_ids candidate_id candidate_run
@@ -177,9 +178,13 @@ if ! jq -e \
   --argjson pr "$pull_number" \
   --argjson run "$run_id" \
   --argjson attempt "$run_attempt" \
+  --argjson required_jobs "$required_jobs_json" \
   ' .pr_number == $pr
     and .workflow_run_id == $run
     and .run_attempt == $attempt
+    and .schema_version == 2
+    and .required_jobs == $required_jobs
+    and .non_gating_measurements == ["native-performance"]
     and (.tested_sha | type == "string" and test("^[0-9a-f]{40}([0-9a-f]{24})?$"))
     and (.tested_tree | type == "string" and test("^[0-9a-f]{40}([0-9a-f]{24})?$"))' \
   "$attestation" >/dev/null; then

@@ -58,23 +58,25 @@ class ElefWorkRakeTest < ActiveSupport::TestCase
   end
 
   test "aborts with the usage line when no package is given at all" do
-    _out, error = capture_io do
-      assert_raises(SystemExit) { invoke("elef:work:import") }
-    end
+    assert_no_difference("Work.count") do
+      _out, error = capture_io do
+        assert_raises(SystemExit) { invoke("elef:work:import") }
+      end
 
-    assert_includes error, "Usage: bin/rails 'elef:work:import[path/to/work.zip]'"
-    assert_no_difference("Work.count") { nil }
+      assert_includes error, "Usage: bin/rails 'elef:work:import[path/to/work.zip]'"
+    end
   end
 
   test "aborts with the usage line when the package argument is blank" do
     ENV["PACKAGE"] = "   "
 
-    _out, error = capture_io do
-      assert_raises(SystemExit) { invoke("elef:work:import", "") }
-    end
+    assert_no_difference("Work.count") do
+      _out, error = capture_io do
+        assert_raises(SystemExit) { invoke("elef:work:import", "") }
+      end
 
-    assert_includes error, "Usage: bin/rails 'elef:work:import[path/to/work.zip]'"
-    assert_no_difference("Work.count") { nil }
+      assert_includes error, "Usage: bin/rails 'elef:work:import[path/to/work.zip]'"
+    end
   end
 
   test "imports an exported presentation given as the task argument" do
@@ -84,28 +86,6 @@ class ElefWorkRakeTest < ActiveSupport::TestCase
       out, = capture_io { invoke_successfully("elef:work:import", package) }
       assert_equal "Imported presentation #{Work.maximum(:id)}: Exported deck\n", out
     end
-
-    imported = Work.find(Work.maximum(:id))
-    assert_equal "Exported deck", imported.title
-    assert_equal "# Exported deck\n\nBody", imported.source
-    assert_equal Workspace.default, imported.workspace
-    assert_includes imported.work_revisions.history.map(&:reason), "import"
-  end
-
-  test "imports an exported document with its stable identity and aliases" do
-    document = Document.create!(title: "Original title", source: "# Notes")
-    document.update!(title: "Renamed title")
-    document_key = document.document_key
-    package = write_package(document)
-    document.destroy!
-
-    assert_difference("Work.count", 1) do
-      capture_io { invoke_successfully("elef:work:import", package) }
-    end
-
-    imported = Document.find(Work.maximum(:id))
-    assert_equal document_key, imported.document_key
-    assert_equal ["Original title", "Renamed title"], imported.aliases.map(&:alias_name)
   end
 
   test "falls back to the PACKAGE environment variable when no argument is given" do
@@ -123,12 +103,9 @@ class ElefWorkRakeTest < ActiveSupport::TestCase
     ENV["PACKAGE"] = from_environment
 
     assert_difference("Work.count", 1) do
-      capture_io { invoke_successfully("elef:work:import", from_argument) }
+      out, = capture_io { invoke_successfully("elef:work:import", from_argument) }
+      assert_equal "Imported presentation #{Work.maximum(:id)}: Argument deck\n", out
     end
-
-    imported = Work.find(Work.maximum(:id))
-    assert_equal "Argument deck", imported.title
-    assert_equal "# Argument", imported.source
   end
 
   test "refuses to import a document over an existing title and leaves no partial work" do

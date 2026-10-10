@@ -8,6 +8,7 @@ import { desktopCommand } from "./offline-macos.js"
 import { readWebdriverValue, reserveWebdriverPort, webdriverElementPath } from "./webdriver-port.js"
 import { percentile95 } from "@elef/editor-runtime/test-internals"
 import { readFileSync } from "node:fs"
+import { parseLaunchCount } from "./native-benchmark-config.js"
 
 // The render batch is owned by the shared client (LibraryApp); the plain-node
 // benchmark cannot import TS source, so it pins the value here and asserts
@@ -21,6 +22,7 @@ assert.equal(clientBatch, LIBRARY_RENDER_BATCH_SIZE, "benchmark batch size drift
 
 const binary = process.argv[process.argv.indexOf("--binary") + 1]
 const reportOnly = process.argv.includes("--report-runner")
+const launchCount = parseLaunchCount(process.argv.slice(2))
 if (!process.argv.includes("--binary") || !binary || !path.isAbsolute(binary)) {
   throw new Error("Provide --binary with the absolute path to a release build with the webdriver feature.")
 }
@@ -37,7 +39,7 @@ const source = Array.from({ length: 100 }, (_, index) =>
 const samples = { coldStart: [], open100Slides: [], warmLibrary: [] }
 const pause = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds))
 const report = { platform: process.platform, architecture: process.arch, release: os.release(),
-  protocol: `20 fresh release processes; 1000 deck index; first ${LIBRARY_RENDER_BATCH_SIZE} cards; one 50 MiB deck; painted operation timings`,
+  protocol: `${launchCount} fresh release processes; 1000 deck index; first ${LIBRARY_RENDER_BATCH_SIZE} cards; one 50 MiB deck; painted operation timings`,
   samples, inputPreservedRuns: 0 }
 report.renderedLibraryCards = []
 report.bootstrapStageRuns = []
@@ -60,9 +62,9 @@ try {
     }
   }
   const quitRetries = new Map()
-  for (let run = 0; run < 20; run += 1) {
+  for (let run = 0; run < launchCount; run += 1) {
     // A quit-timeout retry relaunches this run index with a fresh process;
-    // its partial samples are truncated so the report keeps exactly 20 runs.
+    // its partial samples are truncated so the report keeps exactly launchCount runs.
     const sampleLengths = {
       coldStart: samples.coldStart.length,
       open100Slides: samples.open100Slides.length,
@@ -180,7 +182,7 @@ try {
           break
         } catch (error) {
           if (typeAttempt >= 3) throw error
-          process.stdout.write(`Native release performance run ${run + 1}/20 typing attempt ${typeAttempt} hit ${String(error?.message).split("\n")[0]}; retyping.\n`)
+          process.stdout.write(`Native release performance run ${run + 1}/${launchCount} typing attempt ${typeAttempt} hit ${String(error?.message).split("\n")[0]}; retyping.\n`)
         }
       }
       await execute("return window.__elefPerformanceTestHooks.close()")
@@ -204,7 +206,7 @@ try {
               encoding: "utf8", timeout: 5_000
             }).trim().split(/\s+/).filter(Boolean)
             for (const win of wins) execFileSync("xdotool", ["windowclose", win], { timeout: 5_000 })
-            process.stdout.write(`Native release performance run ${run + 1}/20 JS close was swallowed; fell back to native close.\n`)
+            process.stdout.write(`Native release performance run ${run + 1}/${launchCount} JS close was swallowed; fell back to native close.\n`)
           } catch {
             // Leave the outcome to the close-guard assertion below.
           }
@@ -212,15 +214,15 @@ try {
       }
       if (!exitResult && (quitRetries.get(run) || 0) < 2) {
         quitRetries.set(run, (quitRetries.get(run) || 0) + 1)
-        process.stdout.write(`Native release performance run ${run + 1}/20 quit attempt timed out after 30 s; retrying with a fresh process.\n`)
+        process.stdout.write(`Native release performance run ${run + 1}/${launchCount} quit attempt timed out after 30 s; retrying with a fresh process.\n`)
         truncateRunSamples()
         run -= 1
         continue
       }
-      process.stdout.write(`Native release performance run ${run + 1}/20 closed after ${Date.now() - quitStart}ms.\n`)
+      process.stdout.write(`Native release performance run ${run + 1}/${launchCount} closed after ${Date.now() - quitStart}ms.\n`)
       assert.deepEqual(exitResult, { code: 0, signal: null }, "The measured process must exit through its native window-close guard")
       report.inputPreservedRuns += 1
-      process.stdout.write(`Native release performance run ${run + 1}/20 completed.\n`)
+      process.stdout.write(`Native release performance run ${run + 1}/${launchCount} completed.\n`)
     } catch (error) {
       throw new Error(`Native release performance run ${run + 1} during ${operation}: ${error.message}; backend: ${backendOutput}`)
     } finally {
@@ -242,10 +244,10 @@ try {
     }
   }
   for (const name of ["library-status", "initial-library-render", "editor-ready", "initial-paint", "native-ready-ack"]) {
-    assert.equal(bootstrapStageSamples.get(name)?.length, 20, `Expected 20 native startup measurements for ${name}`)
+    assert.equal(bootstrapStageSamples.get(name)?.length, launchCount, `Expected ${launchCount} native startup measurements for ${name}`)
   }
   report.p95BootstrapStageMilliseconds = Object.fromEntries([...bootstrapStageSamples]
-    .filter(([, values]) => values.length >= 20)
+    .filter(([, values]) => values.length >= launchCount)
     .map(([name, values]) => [name, percentile95(values)]))
   const openStageSamples = new Map()
   for (const trace of report.openTraceRuns) {
@@ -260,10 +262,10 @@ try {
     }
   }
   for (const name of ["readDeck", "prepareDeck", "editorReady", "loadDocument", "deckViewSetup", "previewRefresh"]) {
-    assert.equal(openStageSamples.get(name)?.length, 20, `Expected 20 native open measurements for ${name}`)
+    assert.equal(openStageSamples.get(name)?.length, launchCount, `Expected ${launchCount} native open measurements for ${name}`)
   }
   report.p95OpenStageMilliseconds = Object.fromEntries([...openStageSamples]
-    .filter(([, values]) => values.length >= 20)
+    .filter(([, values]) => values.length >= launchCount)
     .map(([name, values]) => [name, percentile95(values)]))
   const navigationStageSamples = new Map()
   for (const navigation of report.frontendNavigationRuns) {
@@ -274,7 +276,7 @@ try {
     }
   }
   report.p95NavigationStageMilliseconds = Object.fromEntries([...navigationStageSamples]
-    .filter(([, values]) => values.length >= 20)
+    .filter(([, values]) => values.length >= launchCount)
     .map(([name, values]) => [name, percentile95(values)]))
   const previewStagePairs = [
     ["render", "render-start", "render-ready"],
@@ -300,10 +302,10 @@ try {
     }
   }
   for (const name of ["render", "previewInstall", "previewEvents", "slideOverview", "slideOverviewScale", "slideOverflow"]) {
-    assert.equal(previewStageSamples.get(name)?.length, 20, `Expected 20 native render measurements for ${name}`)
+    assert.equal(previewStageSamples.get(name)?.length, launchCount, `Expected ${launchCount} native render measurements for ${name}`)
   }
   report.p95PreviewStageMilliseconds = Object.fromEntries([...previewStageSamples]
-    .filter(([, values]) => values.length >= 20)
+    .filter(([, values]) => values.length >= launchCount)
     .map(([name, values]) => [name, percentile95(values)]))
 report.budgetsMilliseconds = { coldStart: 1500, open100Slides: 300, warmLibrary: 500 }
 report.misses = Object.entries(report.budgetsMilliseconds).filter(([name, budget]) => report.p95Milliseconds[name] >= budget).map(([name]) => name)

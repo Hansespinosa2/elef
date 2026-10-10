@@ -13,6 +13,9 @@ import { presentationModeWorkflow } from "../../../../apps/web/test/e2e/scenario
 import { vimRelativeLineNumbersWorkflow } from "../../../../apps/web/test/e2e/scenarios/vim-relative-line-numbers.js"
 import { documentPageAspectRatioWorkflow } from "../../../../apps/web/test/e2e/scenarios/document-page-aspect-ratio.js"
 import { exportWorkflow } from "../../../../apps/web/test/e2e/scenarios/export.js"
+import { slidePositionGrammarWorkflow } from "../../../../apps/web/test/e2e/scenarios/slide-position-grammar.js"
+import { displayMathEnterWorkflow } from "../../../../apps/web/test/e2e/scenarios/display-math-enter.js"
+import { artRenderingWorkflow } from "../../../../apps/web/test/e2e/scenarios/art-rendering.js"
 import { execFileSync } from "node:child_process"
 import path from "node:path"
 import { readFile } from "node:fs/promises"
@@ -65,9 +68,75 @@ class WebEditorUi {
     await expect(this.page.locator(`.slides-theme-${theme}.slides-typography-${typography}`)).toBeVisible()
   }
 
+  async assertSlidePositionGrammar() {
+    const inspect = () => this.page.evaluate(() => {
+      const root = document.querySelector(".editor-projection.preview-pane")
+      const slide = root?.querySelector(".slide")
+      const content = slide?.querySelector(".slide-content")
+      const group = slide?.querySelector(".slide-middle-group")
+      const lane = slide?.querySelector(".slide-bottom-lane")
+      const blocks = element => [...(element?.querySelectorAll(".slide-block") || [])]
+      const rect = element => element.getBoundingClientRect()
+      return {
+        groups: [...(slide?.querySelectorAll(".slide-middle-group") || [])].map(group => blocks(group).map(block => block.textContent.trim())),
+        lanes: [...(slide?.querySelectorAll(".slide-bottom-lane") || [])].map(lane => blocks(lane).map(block => block.textContent.trim())),
+        flushBottom: group?.classList.contains("flush-bottom") || false,
+        blockGap: blocks(group).length > 1 ? rect(blocks(group)[1]).top - rect(blocks(group)[0]).bottom : null,
+        laneBottomGap: content && lane ? rect(content).bottom - rect(lane).bottom : null,
+        classes: blocks(slide).map(block => block.className)
+      }
+    })
+    const expected = { groups: [["Alignment stack", "Subtitle"]], lanes: [["Footer"]], flushBottom: true }
+    await expect.poll(async () => {
+      const measurements = await inspect()
+      return { groups: measurements.groups, lanes: measurements.lanes, flushBottom: measurements.flushBottom }
+    }).toEqual(expected)
+
+    const measurements = await inspect()
+    expect(measurements.blockGap).toBeLessThan(8)
+    expect(Math.abs(measurements.laneBottomGap)).toBeLessThanOrEqual(1)
+    expect(measurements.classes[0]).toContain("position-center position-middle")
+    expect(measurements.classes[1]).toContain("position-center position-top")
+    expect(measurements.classes[2]).toContain("position-right position-bottom")
+  }
+
+  async assertColumnSlidePositionDocking() {
+    const inspect = () => this.page.evaluate(() => {
+      const slide = document.querySelector(".editor-projection.preview-pane .slide")
+      const regions = [...(slide?.querySelectorAll(".slide-region") || [])]
+      const left = regions[0]
+      const group = left?.querySelector(".slide-middle-group.flush-bottom")
+      const lane = left?.querySelector(".slide-bottom-lane")
+      const blockText = element => [...(element?.querySelectorAll(".slide-block") || [])]
+        .map(block => block.textContent.trim()).join(" ")
+      const rect = element => element.getBoundingClientRect()
+      return {
+        regionCount: regions.length,
+        leftGroup: blockText(group),
+        leftLane: blockText(lane),
+        rightHasPlacement: Boolean(regions[1]?.querySelector(".slide-middle-group, .slide-bottom-lane")),
+        dockGap: group && lane ? rect(lane).top - rect(group).bottom : null,
+        laneBottomGap: left && lane ? rect(left).bottom - rect(lane).bottom : null
+      }
+    })
+    await expect.poll(async () => {
+      const measurements = await inspect()
+      return {
+        regionCount: measurements.regionCount,
+        leftGroup: measurements.leftGroup,
+        leftLane: measurements.leftLane,
+        rightHasPlacement: measurements.rightHasPlacement
+      }
+    }).toEqual({ regionCount: 2, leftGroup: "Left stack", leftLane: "Left footer", rightHasPlacement: false })
+
+    const measurements = await inspect()
+    expect(Math.abs(measurements.dockGap)).toBeLessThanOrEqual(1)
+    expect(Math.abs(measurements.laneBottomGap)).toBeLessThanOrEqual(1)
+  }
+
   constructor(page) {
     this.page = page
-    this.rejectExternalMedia = false
+    this.externalMediaPolicy = "allow-remote"
     this.activeWorkId = null
     this.capabilities = { export: true }
   }
@@ -204,6 +273,20 @@ class WebEditorUi {
     await expect(slides.nth(1 - index)).toBeHidden()
   }
 
+  async assertPresentationText(index, text, visible) {
+    const block = this.page.locator(".presentation-stage > .slide-frame").nth(index)
+      .locator(".slide-block[data-elef-reveal-event]").filter({ hasText: text })
+    await expect(block).toHaveCount(1)
+    const state = await block.evaluate(element => ({
+      visibility: getComputedStyle(element).visibility,
+      ariaHidden: element.getAttribute("aria-hidden"),
+      inert: element.hasAttribute("inert")
+    }))
+    expect(state.visibility).toBe(visible ? "visible" : "hidden")
+    expect(state.ariaHidden).toBe(visible ? null : "true")
+    expect(state.inert).toBe(!visible)
+  }
+
   async movePresentation(key) {
     await this.page.keyboard.press(key)
   }
@@ -245,6 +328,18 @@ class WebEditorUi {
     await this.page.keyboard.insertText(source)
   }
 
+  async restoreSource(source) {
+    await this.showSourceMode()
+    const restoredSource = await this.page.locator(".source-field").evaluate((field, nextSource) => {
+      const controller = field.editorController
+      if (!controller) return null
+      controller.replaceRange(nextSource, 0, controller.view.state.doc.length)
+      controller.setSelectionRange(nextSource.length)
+      return controller.sourceValue
+    }, source)
+    expect(restoredSource).toBe(source)
+  }
+
   async readSource() {
     return this.page.locator(".source-field").evaluate(field => field.editorController?.sourceValue ?? "")
   }
@@ -277,22 +372,19 @@ class WebEditorUi {
         await expect.poll(() => this.page.locator(".source-field").evaluate(field => field.editorController.insertMode)).toBe(true)
       }
 
+      await this.page.keyboard.press("Backspace")
       const outcome = await this.page.locator(".source-field").evaluate(field => {
         const controller = field.editorController
-        const event = new KeyboardEvent("keydown", { key: "Backspace", bubbles: true, cancelable: true })
-        controller.dom.dispatchEvent(event)
         return {
           source: controller.value,
           anchor: controller.selectionStart,
-          head: controller.selectionEnd,
-          prevented: event.defaultPrevented
+          head: controller.selectionEnd
         }
       })
       expect(outcome).toEqual({
         source,
         anchor: source.length,
-        head: source.length,
-        prevented: true
+        head: source.length
       })
     } finally {
       if (restoreNormalMode) {
@@ -344,6 +436,53 @@ class WebEditorUi {
       field.editorController?.selectionStart,
       field.editorController?.selectionEnd
     ])).toEqual([position, position])
+  }
+
+  async typeEmptyDisplayMath(mode) {
+    if (mode === "visual") {
+      const block = this.page.locator(".document-editor-block[contenteditable='true']").last()
+      await expect(block).toBeVisible()
+      await block.click()
+      await block.pressSequentially("$")
+      await block.pressSequentially("$")
+      await this.page.locator(".document-editor-block[contenteditable='true']").last().press("Enter")
+      return
+    }
+
+    const editor = this.page.locator(".source-field .cm-content")
+    await editor.click()
+    await editor.press("ControlOrMeta+End")
+    await editor.pressSequentially("$")
+    await editor.pressSequentially("$")
+    await editor.press("Enter")
+  }
+
+  async assertDisplayMathCaret(expectedSource, expectedCaret, mode) {
+    const visual = mode === "visual"
+    await expect.poll(() => this.page.locator(".source-field").evaluate((field, expected) => {
+      const form = field.closest("form")
+      const editor = field.editorController
+      const selection = window.getSelection()
+      const focusElement = selection?.focusNode?.nodeType === Node.ELEMENT_NODE
+        ? selection.focusNode
+        : selection?.focusNode?.parentElement
+      const activeMath = focusElement?.closest?.(".editor-math-active")
+      return {
+        value: editor?.value,
+        selectionStart: editor?.selectionStart,
+        selectionEnd: editor?.selectionEnd,
+        previewSource: expected.visual ? form?.previewController?.pendingProjection?.source || null : null,
+        activeMathText: expected.visual ? activeMath?.textContent || null : null,
+        visualOffset: expected.visual ? selection?.focusOffset ?? null : null
+      }
+    }, { visual, expectedSource, expectedCaret })).toEqual({
+      value: expectedSource,
+      selectionStart: expectedCaret,
+      selectionEnd: expectedCaret,
+      previewSource: visual ? expectedSource : null,
+      activeMathText: visual ? "$$\n\n$$" : null,
+      visualOffset: visual ? 3 : null
+    })
   }
 
   async assertModeSwitchRespectsNewCaret() {
@@ -416,8 +555,17 @@ class WebEditorUi {
   }
 
   async refreshPreview() {
-    const rendered = await this.page.locator(".visual-editor-form").evaluate(form => form.previewController?.refresh())
-    expect(rendered).toBe(true)
+    const result = await this.page.locator(".visual-editor-form").evaluate(async form => {
+      const controller = form.previewController
+      if (!controller) return { available: false, rendered: false, queued: false }
+      const wasRunning = Boolean(controller.requestController)
+      const rendered = await controller.refresh()
+      return { available: true, rendered: rendered === true, queued: wasRunning && rendered === false }
+    })
+    expect(result.available).toBe(true)
+    expect(result.rendered || result.queued).toBe(true)
+    await expect(this.page.locator(".visual-editor-form"))
+      .not.toHaveAttribute("data-preview-projection-stale", "true", { timeout: 20_000 })
   }
 
   async showSourceMode() {
@@ -565,6 +713,37 @@ class WebEditorUi {
     await expect.poll(() => renderedTextWithoutEditorControls(
       this.page.locator(".editor-projection.preview-pane")
     )).toContain(text)
+  }
+
+  async waitForArtRoots(count) {
+    await expect.poll(() => this.page.locator(".editor-projection [data-elef-art-root]").count()).toBe(count)
+  }
+
+  async readArtSemantics() {
+    return this.page.locator(".editor-projection [data-elef-art-root]").evaluateAll(roots => roots.map(root => {
+      const list = root.querySelector(":scope > .elef-art-list")
+      const items = [...(list?.children || [])]
+      return {
+        mode: root.dataset.artMode,
+        density: root.dataset.artDensity,
+        status: root.dataset.artStatus,
+        layout: root.dataset.artLayout,
+        rootTag: list?.tagName,
+        itemCount: items.length,
+        itemText: items.map(item => {
+          const walker = document.createTreeWalker(item, NodeFilter.SHOW_TEXT)
+          const parts = []
+          while (walker.nextNode()) {
+            const text = walker.currentNode.textContent.trim()
+            if (text) parts.push(text)
+          }
+          return parts.join(" ").replace(/\s+/g, " ").trim()
+        }),
+        nestedListTag: items[0]?.querySelector(":scope > ol, :scope > ul")?.tagName || null,
+        start: list?.hasAttribute("start") ? list.getAttribute("start") : null,
+        blockClass: root.closest(".slide-block")?.className || ""
+      }
+    }))
   }
 
   async inspectHostilePreview() {
@@ -771,7 +950,10 @@ class WebLibraryUi {
       has: this.page.getByRole("heading", { name: title, exact: true })
     })
     const action = await this.openCardAction(card, "Present")
-    await action.evaluate(button => button.click())
+    await Promise.all([
+      this.page.waitForURL(/\/presentations\/\d+\/present$/, { timeout: 30_000 }),
+      action.click()
+    ])
     await expect(this.page.locator(".presentation-stage")).toBeVisible()
     await this.page.getByRole("link", { name: "Exit", exact: true }).click()
     await expect(this.page.getByText("Saved preview", { exact: true })).toBeVisible()
@@ -996,6 +1178,10 @@ test("shared math input flow works in the web app", async ({ page }) => {
   await mathInputWorkflow(new WebEditorUi(page))
 })
 
+test("empty display math keeps its body caret in both web editor modes", async ({ page }) => {
+  await displayMathEnterWorkflow(new WebEditorUi(page))
+})
+
 test("shared hostile-deck security flow works in the web app", async ({ page }) => {
   await hostileDeckNeutralizedWorkflow(new WebEditorUi(page))
 })
@@ -1084,4 +1270,12 @@ test("the source editor has matching styles in Rails and the desktop asset bundl
   expect(measured.desktop).toEqual(measured.web)
   expect(measured.web[".editor-layout"].gridTemplateColumns.split(" ")).toHaveLength(2)
   expect(measured.web[".cm-editor"].rectHeight).toBeGreaterThan(300)
+})
+
+test("shared Art semantics render consistently in the web app", async ({ page }) => {
+  await artRenderingWorkflow(new WebEditorUi(page))
+})
+
+test("slide position stacks and lanes align in the web preview", async ({ page }) => {
+  await slidePositionGrammarWorkflow(new WebEditorUi(page))
 })

@@ -56,6 +56,51 @@ class BugReports::GithubIssueCreatorTest < ActiveSupport::TestCase
     end
   end
 
+  test "returns an issue link only for HTTPS URLs under the configured GitHub repository" do
+    allowed = "https://github.com/acme/elef/issues/27"
+    disallowed = [
+      "http://github.com/acme/elef/issues/27",
+      "https://github.com.evil.test/acme/elef/issues/27",
+      "https://evil.test/acme/elef/issues/27",
+      "https://github.com/acme/other/issues/27",
+      "https://github.com/acme/elef/pulls/27",
+      "javascript:alert(1)"
+    ]
+
+    result = BugReports::GithubIssueCreator.new(
+      token: "server-secret", repository: "acme/elef",
+      http: FakeHttp.new(response: Response.new("201", { "html_url" => allowed }.to_json))
+    ).call(title: "Bug", body: "Body")
+    assert_predicate result, :success?
+    assert_equal allowed, result.url
+
+    disallowed.each do |url|
+      response = FakeHttp.new(response: Response.new("201", { "html_url" => url }.to_json))
+      result = BugReports::GithubIssueCreator.new(token: "server-secret", repository: "acme/elef", http: response)
+        .call(title: "Bug", body: "Body")
+
+      assert_predicate result, :success?
+      assert_nil result.url, "must not return an untrusted issue URL: #{url}"
+    end
+  end
+
+  test "maps unauthorized missing and temporary upstream responses to distinct safe errors" do
+    [
+      ["401", "rejected the server credentials"],
+      ["404", "repository was not found"],
+      ["500", "temporarily unavailable"],
+      ["503", "temporarily unavailable"]
+    ].each do |code, expected_error|
+      http = FakeHttp.new(response: Response.new(code, { "message" => "private upstream detail" }.to_json))
+      result = BugReports::GithubIssueCreator.new(token: "server-secret", repository: "acme/elef", http: http)
+        .call(title: "Bug", body: "Body")
+
+      refute_predicate result, :success?
+      assert_includes result.error, expected_error
+      refute_includes result.error, "private upstream detail"
+    end
+  end
+
   test "handles missing credentials and invalid repository names without making an API request" do
     http = FakeHttp.new(response: RuntimeError.new("API must not be called"))
     missing = BugReports::GithubIssueCreator.new(token: "", repository: "acme/elef", http: http).call(title: "Bug", body: "Body")
@@ -72,14 +117,22 @@ class BugReports::GithubIssueCreatorTest < ActiveSupport::TestCase
   end
 
   test "returns a useful error for network and malformed API failures" do
-    network_http = FakeHttp.new(response: SocketError.new("offline"))
-    network_result = BugReports::GithubIssueCreator.new(token: "server-secret", repository: "acme/elef", http: network_http).call(title: "Bug", body: "Body")
     malformed_http = FakeHttp.new(response: Response.new("201", "not-json"))
     malformed_result = BugReports::GithubIssueCreator.new(token: "server-secret", repository: "acme/elef", http: malformed_http).call(title: "Bug", body: "Body")
 
-    refute_predicate network_result, :success?
-    assert_includes network_result.error, "could not be reached"
     refute_predicate malformed_result, :success?
     assert_includes malformed_result.error, "unreadable response"
+  end
+
+  test "converts socket and timeout errors to the saved-report fallback message" do
+    [SocketError.new("offline"), Timeout::Error.new("timed out")].each do |error|
+      http = FakeHttp.new(response: error)
+      result = BugReports::GithubIssueCreator.new(token: "server-secret", repository: "acme/elef", http: http)
+        .call(title: "Bug", body: "Body")
+
+      refute_predicate result, :success?
+      assert_includes result.error, "could not be reached"
+      assert_includes result.error, "report is still available"
+    end
   end
 end

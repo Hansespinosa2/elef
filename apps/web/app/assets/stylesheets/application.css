@@ -15,5 +15,6 @@
 @import url("./components/code.css") layer(elef-components);
 @import url("./components/library.css") layer(elef-components);
 @import url("./components/documents.css") layer(elef-components);
+@import url("./components/art.css") layer(elef-components);
 @import url("./components/settings.css") layer(elef-components);
 @import url("./utilities.css") layer(elef-utilities);

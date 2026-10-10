@@ -189,7 +189,7 @@ module Documents
 
           This block demonstrates the first supported alignment combination.
 
-          :::align{center center}
+          :::align{middle center}
 
           ### Center and middle
 

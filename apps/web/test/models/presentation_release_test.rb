@@ -49,7 +49,7 @@ class PresentationReleaseTest < ActiveSupport::TestCase
     assert_includes invalid_release.errors[:source_revision], "must belong to the released work"
   end
 
-  test "tracks stale and current states based on draft source, title, and assets" do
+  test "tracks stale and current states based on draft source and title" do
     assert @release.current?
     refute @release.stale?
 
@@ -70,5 +70,23 @@ class PresentationReleaseTest < ActiveSupport::TestCase
     # Reverting title restores freshness
     @presentation.update!(title: "Release Presentation")
     refute @release.stale?
+  end
+
+  test "marks a release stale when its renderer version is no longer current" do
+    assert_not_predicate @release, :stale?
+
+    @release.update_columns(renderer_version: "retired-renderer")
+
+    assert_predicate @release.reload, :stale?
+  end
+
+  test "marks a release stale when its asset manifest changes" do
+    @presentation.assets.attach(
+      io: StringIO.new("released image bytes"),
+      filename: "released.png",
+      content_type: "image/png"
+    )
+
+    assert_predicate @release.reload, :stale?
   end
 end

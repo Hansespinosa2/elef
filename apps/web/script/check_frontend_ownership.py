@@ -319,7 +319,9 @@ assert "mermaid@11.17.2" in (ROOT / "apps/web/vendor/javascript/mermaid.min.js")
 # required exports make removing a flow from both adapters fail this check too.
 shared_workflows = {
     "appearanceWorkflow",
+    "artRenderingWorkflow",
     "authoringSettingsWorkflow",
+    "displayMathEnterWorkflow",
     "documentLinkCompletionWorkflow",
     "documentPageAspectRatioWorkflow",
     "editAndPreviewWorkflow",
@@ -331,6 +333,7 @@ shared_workflows = {
     "libraryDeepLinksWorkflow",
     "mathInputWorkflow",
     "presentationModeWorkflow",
+    "slidePositionGrammarWorkflow",
     "snippetInsertWorkflow",
     "vimRelativeLineNumbersWorkflow",
 }

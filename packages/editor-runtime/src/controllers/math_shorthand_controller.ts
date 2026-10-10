@@ -783,7 +783,7 @@ export default class extends Controller<HTMLElement> {
         event.preventDefault()
         const separator = editor.lineSeparator || "\n"
         editor.replaceRange(separator + separator, caret, caret)
-        editor.setSelectionRange(caret + separator.length)
+        editor.setSelectionRange(caret + editor.normalizeLineEndings(separator).length)
         return
       }
     }

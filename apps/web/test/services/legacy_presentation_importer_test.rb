@@ -52,6 +52,10 @@ class LegacyPresentationImporterTest < ActiveSupport::TestCase
     assert_equal "# Child source", child_work.source
     assert_equal "inspiration", child_work.fork_type
     assert_equal "Legacy Parent", child_work.fork_parent_title
+    assert_equal "legacy", child_work.published_release.renderer_version
+    assert_equal child_work.latest_checkpoint.id, child_work.published_release.source_revision_id
+    assert_equal time, child_work.published_release.published_at
+    assert_predicate child_work.published_release, :stale?
 
     # Idempotent: repeated calls do not re-import existing IDs
     assert_equal 0, LegacyPresentationImporter.call

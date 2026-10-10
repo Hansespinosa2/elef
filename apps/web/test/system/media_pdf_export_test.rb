@@ -8,7 +8,7 @@ class MediaPdfExportTest < ApplicationSystemTestCase
     visit document_path(origin)
     assert_selector ".document-surface h1", text: "SCREENSHOT ORIGIN"
 
-    screenshot_dir = Rails.root.join("tmp/pdfs")
+    screenshot_dir = Rails.root.join("tmp/pdfs", Process.pid.to_s)
     FileUtils.mkdir_p(screenshot_dir)
     screenshot_path = screenshot_dir.join("origin-screen.png")
     page.save_screenshot(screenshot_path)
@@ -48,7 +48,7 @@ class MediaPdfExportTest < ApplicationSystemTestCase
 
       if (output_dir = ENV["ELEF_PDF_PROBE_OUTPUT"])
         FileUtils.mkdir_p(output_dir)
-        File.binwrite(File.join(output_dir, "#{model.name.downcase}-image-math.pdf"), pdf)
+        File.binwrite(File.join(output_dir, "#{model.name.downcase}-image-math-#{Process.pid}.pdf"), pdf)
       end
     end
   end

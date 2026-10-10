@@ -1,7 +1,7 @@
 class Presentation < Work
   WORK_TYPE = "presentation".freeze
   DEFAULT_SOURCE = <<~MARKDOWN.chomp.freeze
-    :::align{center center}
+    :::align{middle center}
     # Untitled Document
 
     :::align {center}

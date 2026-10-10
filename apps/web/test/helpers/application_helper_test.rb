@@ -100,6 +100,63 @@ class ApplicationHelperTest < ActionView::TestCase
     assert_equal ["Default target"], document_link_titles(workspace: nil)
   end
 
+  test "projects editor source title style margins and same-workspace document links" do
+    workspace = Workspace.create!(name: "Projection workspace", slug: "projection-workspace")
+    target = Document.create!(title: "Target notes", source: "# Target notes", workspace: workspace)
+    target.document_aliases.create!(workspace: workspace, alias_name: "Former target")
+    Document.create!(title: "Unfinished]title", source: "# Not linkable", workspace: workspace)
+    other_workspace = Workspace.create!(name: "Other projection workspace", slug: "other-projection-workspace")
+    Document.create!(title: "Private notes", source: "# Private notes", workspace: other_workspace)
+    presentation = Presentation.create!(title: "Projection deck", workspace: workspace, source: <<~MARKDOWN)
+      ---
+      theme: dark
+      typography: technical
+      show-in-margin:
+        section: true
+        subsection: false
+        footnote: true
+        slideCount: false
+      ---
+      # Saved title
+    MARKDOWN
+    source_override = "# Draft title\n\nSee [[Former target]]."
+    expected_projection = { html: "<p>projected</p>", editor_map: { mode: "presentation" } }
+    captured = {}
+    renderer = lambda do |source, **options|
+      captured[:source] = source
+      captured[:options] = options
+      expected_projection
+    end
+
+    renderer_method = Source::JavascriptRenderer.method(:editor_preview)
+    Source::JavascriptRenderer.define_singleton_method(:editor_preview, &renderer)
+    begin
+      projection = shared_editor_projection(presentation, source: source_override, title: "Draft title")
+    ensure
+      Source::JavascriptRenderer.define_singleton_method(:editor_preview, &renderer_method)
+    end
+
+    assert_same expected_projection, projection
+    assert_equal source_override, captured.fetch(:source)
+    options = captured.fetch(:options)
+    assert_equal "presentation", options.fetch(:kind)
+    assert_equal "Draft title", options.fetch(:title)
+    assert_equal presentation.id, options.fetch(:deck_id)
+    assert_equal({ theme: "dark", typography: "technical" }, options.fetch(:style))
+    assert_equal({ section: true, subsection: false, footnote: true, slide_count: false }, options.fetch(:margin_settings))
+    assert_respond_to options.fetch(:media_resolver), :call
+    assert_equal true, options.fetch(:allow_remote_media)
+    nodes = options.fetch(:document_nodes)
+    assert_equal 1, nodes.length
+    assert_equal target.id.to_s, nodes.first.fetch(:id)
+    assert_equal "Target notes", nodes.first.fetch(:title)
+    assert_equal target.document_key, nodes.first.fetch(:documentKey)
+    assert_equal document_path(target), nodes.first.fetch(:href)
+    assert_includes nodes.first.fetch(:aliases), "Former target"
+    refute_includes nodes.map { |node| node.fetch(:title) }, "Unfinished]title"
+    refute_includes nodes.map { |node| node.fetch(:title) }, "Private notes"
+  end
+
   test "renames the Elef DSL snippet category and leaves every other one alone" do
     assert_equal "Elef directives", snippet_category_label("Elef DSL")
     assert_equal "Layout", snippet_category_label("Layout")

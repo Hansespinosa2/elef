@@ -26,11 +26,44 @@ test("presentation navigation clamps at each end and supports home/end", () => {
   assert.equal(navigation.last(), 2)
 })
 
+test("each next and previous advances one cumulative event before changing slides", () => {
+  const navigation = createPresentationNavigation(3, 0, [2, 0, 1])
+
+  assert.deepEqual([navigation.currentIndex, navigation.revealedEventCount], [0, 0])
+  navigation.next()
+  assert.deepEqual([navigation.currentIndex, navigation.revealedEventCount], [0, 1])
+  navigation.next()
+  assert.deepEqual([navigation.currentIndex, navigation.revealedEventCount], [0, 2])
+  navigation.next()
+  assert.deepEqual([navigation.currentIndex, navigation.revealedEventCount], [1, 0])
+  navigation.next()
+  assert.deepEqual([navigation.currentIndex, navigation.revealedEventCount], [2, 0])
+  navigation.previous()
+  assert.deepEqual([navigation.currentIndex, navigation.revealedEventCount], [1, 0])
+  navigation.previous()
+  assert.deepEqual([navigation.currentIndex, navigation.revealedEventCount], [0, 2])
+  navigation.previous()
+  assert.deepEqual([navigation.currentIndex, navigation.revealedEventCount], [0, 1])
+  navigation.previous()
+  assert.deepEqual([navigation.currentIndex, navigation.revealedEventCount], [0, 0])
+  navigation.previous()
+  assert.deepEqual([navigation.currentIndex, navigation.revealedEventCount], [0, 0])
+})
+
+test("home and end select the first closed and final fully revealed states", () => {
+  const navigation = createPresentationNavigation(2, 0, [3, 2])
+  navigation.last()
+  assert.deepEqual([navigation.currentIndex, navigation.revealedEventCount], [1, 2])
+  navigation.first()
+  assert.deepEqual([navigation.currentIndex, navigation.revealedEventCount], [0, 0])
+})
+
 test("presentation navigation can restore its current index after a preview refresh", () => {
   assert.equal(createPresentationNavigation(3, 1).currentIndex, 1)
   assert.equal(createPresentationNavigation(3, 8).currentIndex, 2)
   assert.equal(createPresentationNavigation(3, -2).currentIndex, 0)
   assert.equal(createPresentationNavigation(3, 1.5).currentIndex, 0)
+  assert.equal(createPresentationNavigation(3, 1, [2, 1, 0], 8).revealedEventCount, 1)
 })
 
 test("presentation navigation refuses empty or invalid slide counts", () => {

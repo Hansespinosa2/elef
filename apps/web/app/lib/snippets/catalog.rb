@@ -37,6 +37,7 @@ module Snippets
       { id: "default-sub", name: "Subscript", trigger: "sub", description: "A subscript", category: "LaTeX", body: "_{${1:index}}", built_in: true },
       { id: "default-mtext", name: "Text in math", trigger: "mtext", description: "Readable text inside math", category: "LaTeX", body: "\\text{${1:text}}", built_in: true },
       { id: "default-align", name: "Align directive", trigger: "align", description: "Align a block horizontally or vertically", category: "Elef DSL", body: ":::align{${1}}", built_in: true },
+      { id: "default-art", name: "Art list", trigger: "art", description: "Render a Markdown list as semantic Art", category: "Elef DSL", body: ":::art", built_in: true },
       { id: "default-sse", name: "Section directive", trigger: "sse", description: "Create a section", category: "Elef DSL", body: ":::section{${1:section name}}", built_in: true },
       { id: "default-sss", name: "Subsection directive", trigger: "sss", description: "Create a subsection", category: "Elef DSL", body: ":::subsection{${1:subsection name}}", built_in: true },
       { id: "default-foot", name: "Footnote directive", trigger: "foot", description: "Add a footnote", category: "Elef DSL", body: ":::footnote{${1:footnote text}}", built_in: true }

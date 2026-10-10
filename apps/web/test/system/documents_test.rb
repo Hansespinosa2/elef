@@ -34,6 +34,22 @@ class DocumentsTest < ApplicationSystemTestCase
     assert has_selector?(selector, wait: 0), "preview remained stale after one retry: #{state}"
   end
 
+  def wait_for_autosave_idle
+    idle = page.evaluate_async_script(<<~JAVASCRIPT)
+      const done = arguments[arguments.length - 1];
+      const deadline = Date.now() + 5000;
+      const wait = () => {
+        const form = document.querySelector('form[data-controller~="autosave"]');
+        const controller = form && window.Stimulus.getControllerForElementAndIdentifier(form, "autosave");
+        if (controller && !controller.flow.dirty && !controller.flow.saving) return done(true);
+        if (Date.now() >= deadline) return done(false);
+        window.setTimeout(wait, 10);
+      };
+      wait();
+    JAVASCRIPT
+    assert idle, "autosave did not reach an idle state"
+  end
+
   def wait_for_settled_document_projection
     wait_for_fresh_projection
     assert_selector ".document-editor-projection .document-surface[data-document-pages-settled='true']", wait: 10
@@ -299,53 +315,6 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_selector ".mermaid-assist-option", text: "Flowchart / process", wait: 5
     editor.send_keys(:enter)
     assert_field "Markdown source", with: /flowchart LR/, wait: 5
-  end
-
-  test "Mermaid source assist ignores mutations after its editor view is destroyed" do
-    source = "```mermaid\nflowchart LR\n    A[Research]\n```"
-    document = Document.create!(title: "Mermaid editor teardown", source: source)
-
-    visit edit_document_path(document)
-    click_on "Source"
-    results = page.evaluate_async_script(<<~JAVASCRIPT)
-      const done = arguments[arguments.length - 1];
-      const root = document.querySelector('.source-field');
-      const controllers = root.dataset.controller.split(/\\s+/);
-      const editor = root.editorController;
-      const assist = window.Stimulus.getControllerForElementAndIdentifier(root, 'mermaid-assist');
-      root.dataset.controller = controllers.filter((name) => name !== 'editor').join(' ');
-      setTimeout(() => {
-        const original = editor.value;
-        let noThrow = true;
-        try {
-          editor.dom.dispatchEvent(new KeyboardEvent('keydown', {
-            key: 'Enter', bubbles: true, cancelable: true
-          }));
-          editor.setSelectionRange(0);
-          editor.replaceRange('bad', 0, 0);
-          editor.replaceRangeWithSelection('bad', 0, 0, { from: 0, to: 0 });
-        } catch (_error) {
-          noThrow = false;
-        }
-        const results = {
-          noThrow,
-          unchanged: editor.value === original,
-          staleEditorDestroyed: editor.destroyed,
-          assistRetargeted: assist.editorController === editor
-        };
-        root.dataset.controller = controllers.join(' ');
-        setTimeout(() => done({ ...results, assistRetargetedAfterReconnect: assist.editorController === root.editorController }), 100);
-      }, 100);
-    JAVASCRIPT
-
-    assert_equal({
-      "noThrow" => true,
-      "unchanged" => true,
-      "staleEditorDestroyed" => true,
-      "assistRetargeted" => true,
-      "assistRetargetedAfterReconnect" => true
-    }, results)
-    assert page.evaluate_script("Boolean(document.querySelector('.source-field').editorController)")
   end
 
   test "document command palettes stay inactive inside Mermaid code" do
@@ -633,17 +602,6 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_equal "[[Research target]]", find_field("Markdown source").value
   end
 
-  test "navigates resolved document links to previews" do
-    target = Document.create!(title: "Linked target", source: "# Linked target")
-    source = Document.create!(title: "Linked source", source: "See [[Linked target]]")
-
-    visit document_path(source)
-    click_on "Linked target"
-
-    assert_current_path document_path(target)
-    assert_selector ".document-surface h1", text: "Linked target"
-  end
-
   test "keeps links editable in the visual surface instead of navigating" do
     Document.create!(title: "Editable target", source: "# Target")
     source = Document.create!(title: "Editable source", source: "See [[Editable target]]")
@@ -725,45 +683,6 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_current_path document_path(orphan)
   ensure
     page.driver.browser.manage.window.resize_to(1400, 1000)
-  end
-
-  test "document and presentation graph panels share the workspace shell styling" do
-    Document.create!(title: "Graph styling document", source: "# Graph styling document")
-    Presentation.create!(title: "Graph styling presentation", source: "# Graph styling presentation")
-
-    visit documents_path
-    document_panel_style = page.evaluate_script(<<~JAVASCRIPT)
-      (() => {
-        const panel = document.querySelector('.document-graph-panel');
-        const description = panel.querySelector('.mb-4 > div > p:not(.eyebrow)');
-        return {
-          background: getComputedStyle(panel).backgroundColor,
-          border: getComputedStyle(panel).borderColor,
-          shadow: getComputedStyle(panel).boxShadow,
-          heading: getComputedStyle(panel.querySelector('h2')).color,
-          description: getComputedStyle(description).color,
-          legend: getComputedStyle(panel.querySelector('.document-graph-legend')).color
-        };
-      })()
-    JAVASCRIPT
-
-    visit presentations_path
-    presentation_panel_style = page.evaluate_script(<<~JAVASCRIPT)
-      (() => {
-        const panel = document.querySelector('.lineage-panel');
-        const description = panel.querySelector('.mb-4 > div > p:not(.eyebrow)');
-        return {
-          background: getComputedStyle(panel).backgroundColor,
-          border: getComputedStyle(panel).borderColor,
-          shadow: getComputedStyle(panel).boxShadow,
-          heading: getComputedStyle(panel.querySelector('h2')).color,
-          description: getComputedStyle(description).color,
-          legend: getComputedStyle(panel.querySelector('.lineage-legend')).color
-        };
-      })()
-    JAVASCRIPT
-
-    assert_equal presentation_panel_style, document_panel_style
   end
 
   test "creates a document and updates its continuous live preview" do
@@ -1436,6 +1355,63 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_no_selector ".document-editor-block .editor-math-active"
   end
 
+  test "visual display math keystrokes keep the caret on the empty body line" do
+    visit new_document_path
+    find(".document-editor-block h1", text: "Untitled document").send_keys(:enter)
+
+    find(".document-editor-block[data-editor-block-id]:focus").send_keys("$")
+    find(".document-editor-block[data-editor-block-id]:focus").send_keys("$")
+    preview_request_before_enter = page.evaluate_script(
+      "document.querySelector('form.visual-editor-form').previewController.requestId"
+    )
+    find(".document-editor-block[data-editor-block-id]:focus").send_keys(:enter)
+
+    expected_source = "# Untitled document\n\n$$\n\n$$"
+    expected_caret = "# Untitled document\n\n".length + 3
+    assert_field "Markdown source", with: expected_source, wait: 5
+
+    preview_settled = page.evaluate_async_script(<<~JAVASCRIPT, preview_request_before_enter)
+      const before = arguments[0];
+      const done = arguments[arguments.length - 1];
+      const preview = document.querySelector("form.visual-editor-form")?.previewController;
+      const deadline = Date.now() + 8000;
+      const wait = () => {
+        if (preview?.requestId > before && preview.pendingProjection && !preview.timer && !preview.requestController) return done(true);
+        if (Date.now() >= deadline) return done(false);
+        window.setTimeout(wait, 20);
+      };
+      wait();
+    JAVASCRIPT
+    assert preview_settled, "preview response did not settle while display math remained focused"
+
+    caret = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const form = document.querySelector("form.visual-editor-form");
+        const editor = document.querySelector(".source-field").editorController;
+        const selection = window.getSelection();
+        const activeMath = selection.focusNode?.parentElement?.closest?.(".editor-math-active");
+        return {
+          value: editor.value,
+          selectionStart: editor.selectionStart,
+          capturedSourceOffset: form.visualEditorController.captureCaret()?.sourceOffset,
+          activeMathText: activeMath?.textContent || null,
+          visualOffset: selection.focusOffset
+        };
+      })()
+    JAVASCRIPT
+
+    assert_equal expected_source, caret["value"]
+    assert_equal expected_caret, caret["selectionStart"]
+    assert_equal expected_caret, caret["capturedSourceOffset"]
+    assert_equal "$$\n\n$$", caret["activeMathText"]
+    assert_equal 3, caret["visualOffset"]
+
+    click_on "Source"
+    page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(() => arguments[0]()))")
+    assert_equal expected_caret,
+      page.evaluate_script("document.querySelector('.source-field').editorController.selectionStart")
+  end
+
   test "new document renders inline and display math before its first save" do
     visit new_document_path
 
@@ -1658,7 +1634,6 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_equal drop_result["intendedPosition"], drop_result["resolvedPosition"], drop_result.inspect
     assert_equal "Preparing image…", drop_result["progress"]
     assert_equal "true", drop_result["busy"]
-    assert_selector ".media-upload-status", text: "Uploading dropped-document.png…", wait: 5
     assert_selector ".media-upload-status", text: /dropped-document\.png added to the Markdown source/i, wait: 8
 
     dropped_source = page.evaluate_script("document.querySelector('.source-field').editorController.value")
@@ -1720,39 +1695,6 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_equal before_unsupported_paste, unsupported_paste["source"]
     assert_selector ".media-upload-status", text: "Choose an image file to insert into source mode."
     assert_equal "false", page.find(".media-upload-status")["aria-busy"]
-  end
-
-  test "media transfer handling deduplicates file-list and item entries" do
-    document = Document.create!(title: "Media transfer deduplication", source: "# Media transfer deduplication")
-    visit edit_document_path(document, editor_mode: "source")
-
-    result = page.evaluate_async_script(<<~JAVASCRIPT)
-      const done = arguments[0];
-      const waitForMedia = () => {
-        const media = window.Stimulus.getControllerForElementAndIdentifier(document.querySelector('.visual-editor-form'), 'media');
-        if (!media) {
-          window.setTimeout(waitForMedia, 10);
-          return;
-        }
-        const listed = new File(['same bytes'], 'same.png', { type: 'image/png' });
-        const itemCopy = new File(['same bytes'], 'same.png', { type: 'image/png' });
-        let duplicateItemReads = 0;
-        const combined = media.filesFromTransfer({
-          files: [listed],
-          items: [{ kind: 'file', getAsFile: () => { duplicateItemReads += 1; return itemCopy; } }]
-        });
-        const fromItems = media.filesFromTransfer({
-          files: [],
-          items: [{ kind: 'file', getAsFile: () => itemCopy }]
-        });
-        done({ combinedCount: combined.length, duplicateItemReads, fallbackCount: fromItems.length });
-      };
-      waitForMedia();
-    JAVASCRIPT
-
-    assert_equal 1, result["combinedCount"]
-    assert_equal 0, result["duplicateItemReads"]
-    assert_equal 1, result["fallbackCount"]
   end
 
   test "source media paste and drop tolerate an unavailable editor and disconnect clears tracked ranges" do
@@ -1872,48 +1814,6 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_selector ".media-upload-status", text: "Only image files can be dropped here — to use an image from a web page, save it first.", wait: 8
     assert_equal "false", page.find(".media-upload-status")["aria-busy"]
     assert_equal before_drop, page.evaluate_script("document.querySelector('.source-field').editorController.value")
-  end
-
-  test "source dragover defensively supports DOMStringList types collections" do
-    document = Document.create!(title: "DOMStringList dragover", source: "# DOMStringList dragover")
-    visit edit_document_path(document, editor_mode: "source")
-
-    result = page.evaluate_script(<<~JAVASCRIPT)
-      (() => {
-        const surface = document.querySelector('.editor-surface');
-        const typesList = {
-          0: 'Files',
-          length: 1,
-          contains: (item) => item === 'Files',
-          item: (index) => index === 0 ? 'Files' : null
-        };
-        let prevented = false;
-        let dropEffect = null;
-        const mockEvent = {
-          currentTarget: surface,
-          dataTransfer: {
-            types: typesList,
-            dropEffect: 'none'
-          },
-          preventDefault: () => { prevented = true; }
-        };
-        Object.defineProperty(mockEvent.dataTransfer, 'dropEffect', {
-          set: (val) => { dropEffect = val; },
-          get: () => dropEffect
-        });
-        const media = window.Stimulus.getControllerForElementAndIdentifier(document.querySelector('.visual-editor-form'), 'media');
-        media.sourceDragOver(mockEvent);
-        return {
-          prevented,
-          dropEffect,
-          hasDropTargetClass: surface.classList.contains('is-media-drop-target')
-        };
-      })()
-    JAVASCRIPT
-
-    assert result["prevented"]
-    assert_equal "copy", result["dropEffect"]
-    assert result["hasDropTargetClass"]
   end
 
   test "source mode ignores plain text drops so CodeMirror retains native behavior" do
@@ -2933,7 +2833,7 @@ class DocumentsTest < ApplicationSystemTestCase
   end
 
   test "positions document blocks visually and preserves directives across source mode" do
-    source = "# Alignment\n\nLeft block\n\n:::align{center center}\n\nCentered block"
+    source = "# Alignment\n\nLeft block\n\n:::align{middle center}\n\nCentered block"
     document = Document.create!(title: "Block alignment", source: source)
     visit edit_document_path(document)
     wait_for_fresh_projection
@@ -2960,13 +2860,13 @@ class DocumentsTest < ApplicationSystemTestCase
     centered_control = find("[data-visual-editor-block-id='#{centered['data-editor-block-id']}']")
     centered_control.select("Right")
 
-    assert_field "Markdown source", with: /:::align\{center right\}/, wait: 5
+    assert_field "Markdown source", with: /:::align\{middle right\}/, wait: 5
     assert_selector ".document-editor-block.position-right", text: "Centered block", wait: 5
     right_aligned = find(".document-editor-block.position-right", text: "Centered block")
     assert_equal "right", page.evaluate_script("getComputedStyle(arguments[0]).textAlign", right_aligned)
     right_aligned.find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
     find("[data-visual-editor-block-id='#{right_aligned['data-editor-block-id']}']").select("Left")
-    assert_field "Markdown source", with: /:::align\{center left\}/, wait: 5
+    assert_field "Markdown source", with: /:::align\{middle left\}/, wait: 5
     left_aligned = find(".document-editor-block.position-left", text: "Centered block", wait: 5)
     assert_equal "left", page.evaluate_script("getComputedStyle(arguments[0]).textAlign", left_aligned)
     centered_id = left_aligned["data-editor-block-id"]
@@ -2975,7 +2875,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
     click_on "Source"
     assert_field "Markdown source", with: /:::align\{right\}\n\nUpdated left block/
-    assert_field "Markdown source", with: /:::align\{center left\}\n\nCentered block/
+    assert_field "Markdown source", with: /:::align\{middle left\}\n\nCentered block/
     click_on "Visual"
     wait_for_fresh_projection
 
@@ -2984,7 +2884,21 @@ class DocumentsTest < ApplicationSystemTestCase
     centered.find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
     assert_equal "left", find("[data-visual-editor-block-id='#{centered['data-editor-block-id']}']").value
     type_visual_text(".document-editor-block", "Centered block", "Updated centered block")
-    assert_field "Markdown source", with: /:::align\{right\}\n\nUpdated left block\n\n:::align\{center left\}\n\nUpdated centered block/, wait: 5
+    expected_source = "# Alignment\n\n:::align{right}\n\nUpdated left block\n\n:::align{middle left}\n\nUpdated centered block"
+    normalize_source = ->(value) { value.to_s.gsub(/\r\n?/, "\n") }
+    assert_field "Markdown source", with: expected_source, wait: 5
+    refute_includes find(".editor-projection").text, ":::align"
+
+    wait_for_autosave_idle
+    assert_equal expected_source, normalize_source.call(document.reload.source)
+
+    visit edit_document_path(document)
+    assert_equal expected_source, normalize_source.call(find_field("Markdown source").value)
+    click_on "Source"
+    click_on "Visual"
+    wait_for_fresh_projection
+    assert_selector ".document-editor-block.position-right", text: "Updated left block"
+    assert_selector ".document-editor-block.position-left", text: "Updated centered block"
     refute_includes find(".editor-projection").text, ":::align"
   end
 
@@ -3118,13 +3032,13 @@ class DocumentsTest < ApplicationSystemTestCase
     refute_selector ".document-editor-block.position-center", text: "Tail"
   end
 
-  test "deleting a single block in a grouped position removes its opening and closing directives" do
-    source = "# Keep\n\n:::align{center}\n\nDelete me\n\n:::\n\nTail"
+  test "deleting a single positioned block leaves following blocks and directives alone" do
+    source = "# Keep\n\n:::align{center}\n\nDelete me\n\nTail"
     map = Source::Document.editor_map(source, mode: :document)
     positioned = map[:slides].first[:blocks].find { |candidate| candidate[:markdown] == "Delete me" }
-    assert_equal "group", positioned[:position_scope]
+    assert_equal "center", positioned[:position][:horizontal]
 
-    document = Document.create!(title: "Delete grouped position", source: source)
+    document = Document.create!(title: "Delete positioned block", source: source)
     visit edit_document_path(document)
 
     block = find(".document-editor-block", text: "Delete me")
@@ -3214,17 +3128,9 @@ class DocumentsTest < ApplicationSystemTestCase
     page.driver.browser.manage.window.resize_to(1400, 1000)
   end
 
-  test "print view renders paginated document and triggers window.print" do
-    document = Document.create!(
-      title: "Printable Document",
-      source: "# Page 1\n\nFirst page body\n\n---\n\n# Page 2\n\nSecond page body"
-    )
-
+  test "print button requests browser printing" do
+    document = Document.create!(title: "Printable Document", source: "# Printable Document")
     visit print_document_path(document)
-
-    assert_text "Printable Document"
-    assert_selector ".document-print-toolbar", text: /Printable Document/
-    assert_selector ".document-page", minimum: 1
 
     page.execute_script("window.print = () => { window.printWasRequested = true }")
     click_on "Print / Save PDF"

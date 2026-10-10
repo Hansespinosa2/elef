@@ -40,7 +40,7 @@ class WorkTest < ActiveSupport::TestCase
   test "documents render position directives without exposing the directive" do
     document = Document.new(
       title: "Positioned notes",
-      source: ":::align{center center}\n\nA centered note."
+      source: ":::align{middle center}\n\nA centered note."
     )
 
     assert_includes document.preview_html, "document-block position-center position-middle"
@@ -50,7 +50,7 @@ class WorkTest < ActiveSupport::TestCase
 
   test "document horizontal positioning does not create a vertical stage" do
     inline = Document.new(title: "Inline position", source: ":::align{left}\n\nA short note.")
-    staged = Document.new(title: "Staged position", source: ":::align{center center}\n\nA staged note.")
+    staged = Document.new(title: "Staged position", source: ":::align{middle center}\n\nA staged note.")
 
     refute_includes inline.preview_html, "position-vertical"
     assert_includes staged.preview_html, "position-vertical"

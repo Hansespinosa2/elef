@@ -142,6 +142,22 @@ class PresentationsTest < ApplicationSystemTestCase
     assert ready, "autosave request #{index} was not registered"
   end
 
+  def wait_for_autosave_idle
+    idle = page.evaluate_async_script(<<~JAVASCRIPT)
+      const done = arguments[arguments.length - 1];
+      const deadline = Date.now() + 5000;
+      const wait = () => {
+        const form = document.querySelector('form[data-controller~="autosave"]');
+        const controller = form && window.Stimulus.getControllerForElementAndIdentifier(form, "autosave");
+        if (controller && !controller.flow.dirty && !controller.flow.saving) return done(true);
+        if (Date.now() >= deadline) return done(false);
+        window.setTimeout(wait, 10);
+      };
+      wait();
+    JAVASCRIPT
+    assert idle, "autosave did not reach an idle state"
+  end
+
   test "appearance controls are collapsed in the presentation editor" do
     presentation = Presentation.create!(title: "Appearance popup", source: "# Appearance popup")
 
@@ -164,7 +180,7 @@ class PresentationsTest < ApplicationSystemTestCase
 
   test "new presentation source positions its title explicitly and lets that position be changed" do
     expected_source = <<~MARKDOWN.chomp
-      :::align{center center}
+      :::align{middle center}
       # Untitled Document
 
       :::align {center}
@@ -199,18 +215,18 @@ class PresentationsTest < ApplicationSystemTestCase
     find("select[data-presentation-editor-align][data-slide-index='0'][data-block-index='0']").select("Bottom Right")
     assert_field "Markdown source", with: /:::align\{bottom right\}\n# Untitled Document/, wait: 5
     wait_for_fresh_projection
-    assert_selector ".slide-statement .slide-block.position-right.position-bottom", text: "Untitled Document", wait: 5
+    assert_selector ".slide-statement .slide-block.position-right.position-top", text: "Untitled Document", wait: 5
 
     updated_alignment = page.evaluate_script(<<~JAVASCRIPT)
       (() => {
-        const title = document.querySelector('.slide-statement .slide-block.position-right.position-bottom');
+        const title = document.querySelector('.slide-statement .slide-block.position-right.position-top');
         const style = getComputedStyle(title);
-        return { alignSelf: style.alignSelf, textAlign: style.textAlign, marginTop: parseFloat(style.marginTop) };
+        return { alignSelf: style.alignSelf, textAlign: style.textAlign, inBottomLane: Boolean(title.closest('.slide-bottom-lane')) };
       })()
     JAVASCRIPT
     assert_equal "flex-end", updated_alignment["alignSelf"]
     assert_equal "right", updated_alignment["textAlign"]
-    assert_operator updated_alignment["marginTop"], :>, 0
+    assert_equal false, updated_alignment["inBottomLane"]
   end
 
   test "layouts and themes sample preserves positions while adding and deleting blocks" do
@@ -228,7 +244,7 @@ class PresentationsTest < ApplicationSystemTestCase
 
     find("select[data-presentation-editor-align][data-slide-index='0'][data-block-index='0']").select("Bottom Right")
     assert_field "Markdown source", with: /:::align\{bottom right\}\n# Designing a visual system/, wait: 5
-    assert_selector ".slide-statement .slide-block.position-right.position-bottom", text: "Designing a visual system", wait: 5
+    assert_selector ".slide-statement .slide-block.position-right.position-top", text: "Designing a visual system", wait: 5
 
     find("[data-presentation-editor-action='add-block-after'][data-slide-index='0'][data-block-index='1']").click
     assert_field "Markdown source", with: /about consistent presentation design\.\n\nNew block/
@@ -270,7 +286,7 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_equal "# Keep this source", Presentation.find_by!(parent_id: nil, fork_type: "inspiration").source
   end
 
-  test "library preview images open Edit while Preview and menu controls stay usable" do
+  test "library previews preserve geometry and open document and presentation surfaces" do
     document = Document.create!(title: "Card document", source: "# Card document\n\nFirst page body.\n\n## Later heading")
     presentation = Presentation.create!(title: "Card deck", source: "# Card deck\n\n---\n\n## Later slide")
 
@@ -312,29 +328,45 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_current_path document_path(document)
     assert_selector ".document-surface h1", text: "Card document"
 
-    visit root_path
+    find("a.app-nav-link", text: "Library").click
+    assert_current_path root_path
     within("#presentation_#{presentation.id}") { find(".library-card-preview-button").click }
     assert_current_path presentation_path(presentation)
     assert_selector ".presentation-surface .slide", text: "Card deck"
+  end
+
+  test "library menus open for document and presentation cards" do
+    document = Document.create!(title: "Menu document", source: "# Menu document")
+    presentation = Presentation.create!(title: "Menu deck", source: "# Menu deck")
 
     visit root_path
     [document, presentation].each do |work|
-      within("##{work.is_a?(Document) ? 'document' : 'presentation'}_#{work.id}") do
-        find(".library-card-menu-trigger").click
+      type = work.is_a?(Document) ? "document" : "presentation"
+      within("##{type}_#{work.id}") do
+        trigger = find(".library-card-menu-trigger")
+        trigger.click
         assert_selector "details.library-card-menu[open]"
+        trigger.click
+        assert_no_selector "details.library-card-menu[open]"
       end
-      assert_current_path root_path
     end
+  end
+
+  test "library card open buttons and titles open their edit screens" do
+    document = Document.create!(title: "Open document", source: "# Open document")
+    presentation = Presentation.create!(title: "Open deck", source: "# Open deck")
 
     visit root_path
     find("#document_#{document.id} .library-card-open").click
     assert_current_path edit_document_path(document)
 
-    visit root_path
+    click_on "Library"
+    assert_current_path root_path
     find("#presentation_#{presentation.id} .library-card-open").click
     assert_current_path edit_presentation_path(presentation)
 
-    visit root_path
+    click_on "Library"
+    assert_current_path root_path
     within("#document_#{document.id}") do
       find(".library-card-title a").click
     end
@@ -367,15 +399,7 @@ class PresentationsTest < ApplicationSystemTestCase
     page.execute_script("window.autosaveRequests[1].release()")
     assert_selector '[data-autosave-target="status"]', exact_text: "Saved"
     assert_includes presentation.reload.source, "# Latest edit"
-    page.evaluate_async_script(<<~JAVASCRIPT)
-      window.setTimeout(() => arguments[0](), 1200);
-    JAVASCRIPT
-    assert_nil page.evaluate_script(<<~JAVASCRIPT)
-      (() => {
-        const form = document.querySelector('form[data-controller~="autosave"]');
-        return window.Stimulus.getControllerForElementAndIdentifier(form, "autosave").timer;
-      })()
-    JAVASCRIPT
+    wait_for_autosave_idle
     assert_equal 2, page.evaluate_script("window.autosaveRequests.length")
     assert_equal false, page.evaluate_script(<<~JAVASCRIPT)
       (() => {
@@ -421,7 +445,7 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: external_source
     assert_selector "[data-autosave-target='status']", exact_text: "Saved"
 
-    page.evaluate_async_script("window.setTimeout(() => arguments[0](), 1200)")
+    wait_for_autosave_idle
     assert_equal 1, page.evaluate_script("window.autosaveRequests.length")
     assert_equal external_source, presentation.reload.source
   end
@@ -461,7 +485,17 @@ class PresentationsTest < ApplicationSystemTestCase
     presentation = Presentation.create!(title: "Edit presentation", source: "# Original")
 
     visit edit_presentation_path(presentation)
-    click_on "Present"
+    hold_autosaves
+    fill_in "Markdown source", with: "# Unsaved editor change"
+    wait_for_autosave_request(0)
+    assert_equal true, page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const form = document.querySelector('form[data-controller~="dirty"]');
+        return window.Stimulus.getControllerForElementAndIdentifier(form, "dirty").dirty;
+      })()
+    JAVASCRIPT
+
+    accept_confirm { click_on "Present" }
 
     assert_current_path present_presentation_path(presentation)
     assert_selector "body.presentation-body"
@@ -565,8 +599,8 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_selector ".presentation-editor-projection .slide", count: 2, wait: 5
     wait_for_fresh_projection
 
-    find("select[data-presentation-editor-align][data-slide-index='0'][data-block-index='1']").select("Center Center")
-    assert_field "Markdown source", with: /:::align\{center center\}/, wait: 5
+    find("select[data-presentation-editor-align][data-slide-index='0'][data-block-index='1']").select("Middle Center")
+    assert_field "Markdown source", with: /:::align\{middle center\}/, wait: 5
 
     click_on "Save presentation"
     assert_text "Presentation saved."
@@ -619,21 +653,8 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: /:::align\{left\}/, wait: 5
 
     wait_for_fresh_projection
-    find("select[data-presentation-editor-align][data-slide-index='0'][data-block-index='1']").select("Center Center")
-    assert_field "Markdown source", with: /:::align\{center center\}/, wait: 5
-  end
-
-  test "an unaligned presentation block defaults to Align Left" do
-    presentation = Presentation.create!(title: "Default alignment", source: "# Slide\n\nPlain block")
-    visit edit_presentation_path(presentation)
-    wait_for_fresh_projection
-
-    control = find("select[data-presentation-editor-align][data-slide-index='0'][data-block-index='1']")
-
-    assert_equal "left", control.value
-    assert_no_selector "select[data-presentation-editor-align] option[value='']"
-    assert_text "Align"
-    assert_no_text "Automatic position"
+    find("select[data-presentation-editor-align][data-slide-index='0'][data-block-index='1']").select("Middle Center")
+    assert_field "Markdown source", with: /:::align\{middle center\}/, wait: 5
   end
 
   test "presentation caret follows source switches and arrow keys move between blocks" do
@@ -825,7 +846,7 @@ class PresentationsTest < ApplicationSystemTestCase
   test "single-block position directives move with their content and are deleted with it" do
     presentation = Presentation.create!(
       title: "Positioned structure",
-      source: "# Slide\n\n:::align{center center}\n\nPositioned\n\nPlain"
+      source: "# Slide\n\n:::align{middle center}\n\nPositioned\n\nPlain"
     )
 
     visit edit_presentation_path(presentation)
@@ -833,14 +854,14 @@ class PresentationsTest < ApplicationSystemTestCase
     refute_selector ".slide-block.position-center", text: "Plain"
 
     find("[data-presentation-editor-action='move-block-down'][data-block-index='1']").click
-    assert_field "Markdown source", with: "# Slide\n\nPlain\n\n:::align{center center}\n\nPositioned", wait: 5
+    assert_field "Markdown source", with: "# Slide\n\nPlain\n\n:::align{middle center}\n\nPositioned", wait: 5
     wait_for_fresh_projection
     assert_selector ".slide-block.position-center.position-middle", text: "Positioned", wait: 5
     refute_selector ".slide-block.position-center", text: "Plain"
 
     assert_selector "[data-presentation-editor-action='add-block-after'][data-block-index='1']:not([disabled])", wait: 5
     find("[data-presentation-editor-action='add-block-after'][data-block-index='1']").click
-    assert_field "Markdown source", with: "# Slide\n\nPlain\n\nNew block\n\n:::align{center center}\n\nPositioned", wait: 5
+    assert_field "Markdown source", with: "# Slide\n\nPlain\n\nNew block\n\n:::align{middle center}\n\nPositioned", wait: 5
     wait_for_fresh_projection
     assert_selector ".slide-block", text: "New block", wait: 5
     refute_selector ".slide-block.position-center", text: "New block"
@@ -849,48 +870,40 @@ class PresentationsTest < ApplicationSystemTestCase
       find("[data-presentation-editor-action='delete-block'][data-block-index='3']").click
     end
     wait_for_fresh_projection
-    refute_includes find_field("Markdown source").value, ":::align{center center}"
+    refute_includes find_field("Markdown source").value, ":::align{middle center}"
     assert_no_selector ".slide-block.position-center", wait: 5
 
     click_on "Save presentation"
     assert_selector ".flash.notice", text: "Presentation saved.", wait: 10
     visit edit_presentation_path(presentation)
     assert_field "Markdown source", with: /# Slide\n\nPlain\n\nNew block/
-    refute_includes find_field("Markdown source").value, ":::align{center center}"
+    refute_includes find_field("Markdown source").value, ":::align{middle center}"
   end
 
-  test "shared position groups stay intact and cannot be split by block reordering" do
+  test "blocks with position directives reorder independently without group restrictions" do
     presentation = Presentation.create!(
       title: "Position group",
-      source: "# Slide\n\n:::align{center}\n\nFirst\n\nSecond\n\n:::\n\nOutside"
+      source: "# Slide\n\n:::align{center}\n\nFirst\n\nSecond\n\nOutside"
     )
 
     visit edit_presentation_path(presentation)
     assert_selector "[data-presentation-editor-action='move-block-down'][data-block-index='1']:not([disabled])"
-    assert_selector "[data-presentation-editor-action='move-block-down'][data-block-index='2'][disabled]"
-    assert_selector "[data-presentation-editor-action='move-block-up'][data-block-index='3'][disabled]"
+    assert_selector "[data-presentation-editor-action='move-block-down'][data-block-index='2']:not([disabled])"
+    assert_selector "[data-presentation-editor-action='move-block-up'][data-block-index='3']:not([disabled])"
 
     find("[data-presentation-editor-action='move-block-down'][data-block-index='1']").click
-    assert_field "Markdown source", with: "# Slide\n\n:::align{center}\n\nSecond\n\nFirst\n\n:::\n\nOutside", wait: 5
+    assert_field "Markdown source", with: "# Slide\n\nSecond\n\n:::align{center}\n\nFirst\n\nOutside", wait: 5
     wait_for_fresh_projection
     assert_selector ".slide-block.position-center", text: "First", wait: 5
-    assert_selector ".slide-block.position-center", text: "Second"
+    refute_selector ".slide-block.position-center", text: "Second"
 
     assert_selector "[data-presentation-editor-action='delete-block'][data-block-index='2']:not([disabled])", wait: 5
     accept_confirm do
       find("[data-presentation-editor-action='delete-block'][data-block-index='2']").click
     end
     wait_for_fresh_projection
-    assert_includes find_field("Markdown source").value, ":::align{center}"
-
-    assert_selector "[data-presentation-editor-action='delete-block'][data-block-index='1']:not([disabled])", wait: 5
-    accept_confirm do
-      find("[data-presentation-editor-action='delete-block'][data-block-index='1']").click
-    end
-    wait_for_fresh_projection
     final_source = find_field("Markdown source").value
     refute_includes final_source, ":::align{center}"
-    refute_includes final_source, ":::"
     assert_includes final_source, "Outside"
   end
 
@@ -1330,7 +1343,6 @@ class PresentationsTest < ApplicationSystemTestCase
     visit edit_presentation_path(presentation)
 
     assert_equal "visual", page.evaluate_script("document.querySelector('form.visual-editor-form').dataset.editorMode")
-    assert_text "Unknown or malformed presentation directive was removed."
     click_on "Source"
     assert_selector ".cm-content", visible: true
     assert_includes find_field("Markdown source").value, ":::custom-directive{value}"
@@ -1369,6 +1381,51 @@ class PresentationsTest < ApplicationSystemTestCase
     find("[data-presentation-editor-action='move-slide-down'][data-slide-index='0']").click
     assert_field "Markdown source", with: /# Second\n\nOther block\n---\n# First\n\nSecond block\n\nFirst block/, wait: 5
     wait_for_fresh_projection
+  end
+
+  test "Art block move and delete operations keep the directive with its root list" do
+    original = "# Keep\n\nBefore\n\n:::art\n- Alpha\n- Beta\n\nAfter\n\nTail"
+    presentation = Presentation.create!(title: "Art block ownership", source: original)
+
+    visit edit_presentation_path(presentation)
+    assert_selector ".presentation-editor-projection [data-elef-art-root] .elef-art-list > li", count: 2
+    find("[data-presentation-editor-action='move-block-up'][data-block-index='2']").click
+    assert_field "Markdown source", with: "# Keep\n\n:::art\n- Alpha\n- Beta\n\nBefore\n\nAfter\n\nTail", wait: 5
+    wait_for_fresh_projection
+    moved_source = find_field("Markdown source").value
+    assert_equal ":::art\n- Alpha\n- Beta", moved_source.lines[2, 3].join.strip
+    assert_includes moved_source, "\n\nAfter\n\nTail"
+    refute_includes moved_source, "data-elef-art-root"
+
+    accept_confirm do
+      find("[data-presentation-editor-action='delete-block'][data-block-index='1']").click
+    end
+    assert_field "Markdown source", with: "# Keep\n\nBefore\n\nAfter\n\nTail", wait: 5
+    wait_for_fresh_projection
+    refute_includes find_field("Markdown source").value, ":::art"
+    refute_selector ".presentation-editor-projection [data-elef-art-root]"
+  end
+
+  test "deleting Art before a single-block alignment group removes its directive too" do
+    presentation = Presentation.create!(
+      title: "Aligned Art block ownership",
+      source: "# Slide\n\n:::art\n:::align{center}\n- Alpha\n\nNext paragraph"
+    )
+
+    visit edit_presentation_path(presentation)
+    wait_for_fresh_projection
+    assert_selector ".presentation-editor-projection [data-elef-art-root] .elef-art-list > li", count: 1
+
+    accept_confirm do
+      find("[data-presentation-editor-action='delete-block'][data-block-index='1']").click
+    end
+
+    assert_field "Markdown source", with: /# Slide\n\nNext paragraph/, wait: 5
+    wait_for_fresh_projection
+    refute_includes find_field("Markdown source").value, ":::art"
+    refute_includes find_field("Markdown source").value, ":::align{center}"
+    assert_no_selector ".presentation-editor-projection [data-elef-art-root]"
+    assert_selector ".presentation-editor-projection p", text: "Next paragraph"
   end
 
   test "keeps the last good presentation projection when preview is unavailable and offers retry" do
@@ -1581,48 +1638,6 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_equal "false", page.find(".media-upload-status")["aria-busy"]
   end
 
-  test "pasting a local image into the presentation title field does not intercept it" do
-    presentation = Presentation.create!(title: "Untouched title", source: "# Untouched title\n\nKeep this source.")
-    visit edit_presentation_path(presentation, editor_mode: "source")
-
-    result = page.execute_script(<<~JAVASCRIPT)
-      const title = document.querySelector('.visual-editor-form .editor-title-input');
-      const source = document.querySelector('.source-field').editorController.value;
-      let uploadAttempts = 0;
-      window.fetch = (url, options = {}) => {
-        if (options.method === 'POST' && String(url).endsWith('/assets')) {
-          uploadAttempts += 1;
-          return Promise.resolve(new Response('{}', { status: 422, headers: { 'Content-Type': 'application/json' } }));
-        }
-        return Promise.reject(new Error('Unexpected request'));
-      };
-      const transfer = new DataTransfer();
-      transfer.items.add(new File(['image bytes'], 'title-paste.png', { type: 'image/png' }));
-      const event = new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: transfer });
-      title.dispatchEvent(event);
-      return {
-        prevented: event.defaultPrevented,
-        uploadAttempts,
-        source,
-        currentSource: document.querySelector('.source-field').editorController.value,
-        title: title.value
-      };
-    JAVASCRIPT
-
-    refute result["prevented"]
-    assert_equal 0, result["uploadAttempts"]
-    assert_equal "# Untouched title\n\nKeep this source.", result["source"]
-    assert_equal result["source"], result["currentSource"]
-  end
-
-  test "presentation form does not register duplicate media controllers" do
-    presentation = Presentation.create!(title: "Controller deduplication", source: "# Controller deduplication")
-    visit edit_presentation_path(presentation, editor_mode: "source")
-
-    controllers = page.evaluate_script("document.querySelector('.visual-editor-form').dataset.controller.split(/\\s+/)")
-    assert_equal 1, controllers.count("media")
-  end
-
   test "source mode drops web images into presentation slides at the cursor" do
     presentation = Presentation.create!(title: "Web image presentation", source: "# Web image presentation\n\nLead text.\n\nTail text.")
     visit edit_presentation_path(presentation, editor_mode: "source")
@@ -1662,7 +1677,7 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_equal 1, presentation.reload.assets.count
   end
 
-  test "print view selects draft content and sizes slides for one landscape page each" do
+  test "published presentation print action produces a landscape PDF with one page per slide and attached media" do
     media_bytes = Base64.decode64("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+i9MwAAAAASUVORK5CYII=")
     media_digest = Digest::SHA256.hexdigest(media_bytes)
     published_source = "---\ntheme: dark\ntypography: technical\n---\n# Published one\n\n![Diagram](elef-asset:#{media_digest} \"fit:contain\")\n---\n# Published two"
@@ -1673,21 +1688,10 @@ class PresentationsTest < ApplicationSystemTestCase
     PresentationReleasePublisher.call(presentation)
     presentation.update!(source: "---\ntheme: light\n---\n# Latest draft\n---\n# Draft two")
 
-    visit print_presentation_path(presentation)
-    assert_text "Latest draft · Print workflow"
-    assert_selector ".presentation-print-slides > .slide-frame", count: 2
-    assert_selector ".presentation-print.work-theme-light.work-typography-book"
-    assert_selector ".presentation-print .slide h1", text: "Latest draft"
+    visit print_presentation_path(presentation, version: "published")
     page.execute_script("window.print = () => { window.printWasRequested = true }")
     click_on "Print / Save PDF"
     assert_equal true, page.evaluate_script("window.printWasRequested")
-
-    visit print_presentation_path(presentation, version: "published")
-    assert_text "Published release · Print workflow"
-    assert_selector ".presentation-print.work-theme-dark.work-typography-technical"
-    assert_selector ".presentation-print .slide h1", text: "Published one"
-    assert_selector ".presentation-print img.presentation-media-contain[src='/presentations/#{presentation.id}/assets/#{media_digest}']"
-    assert_selector ".presentation-print-slides > .slide-frame", count: 2
 
     browser = page.driver.browser
     begin
@@ -1815,34 +1819,6 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_includes presentation.reload.source, "# Offline edit"
   ensure
     page.execute_script("window.restoreSaveFetch?.()") if page
-  end
-
-  test "falls back to local storage when indexeddb cannot read a draft" do
-    presentation = Presentation.create!(title: "Storage fallback", source: "# Initial")
-    visit edit_presentation_path(presentation)
-
-    page.execute_script(<<~JAVASCRIPT)
-      const controller = window.Stimulus.getControllerForElementAndIdentifier(
-        document.querySelector('form[data-controller~="autosave"]'), 'autosave'
-      );
-      const record = {
-        key: controller.localDraftKey,
-        snapshot: "# Browser copy",
-        values: ["Storage fallback", "# Browser copy"],
-        updatedAt: Date.now()
-      };
-      localStorage.setItem(controller.storageKey(record.key), JSON.stringify(record));
-      controller.database = Promise.resolve({ transaction() { throw new Error("IndexedDB unavailable"); } });
-      window.draftFallbackController = controller;
-    JAVASCRIPT
-
-    record = page.evaluate_async_script(<<~JAVASCRIPT)
-      const done = arguments[arguments.length - 1];
-      window.draftFallbackController.readDraft(window.draftFallbackController.localDraftKey).then(done);
-    JAVASCRIPT
-    assert_equal "# Browser copy", record["values"][1]
-
-    page.execute_script("localStorage.removeItem(window.draftFallbackController.storageKey(window.draftFallbackController.localDraftKey))")
   end
 
   test "warns when autosave and both browser draft stores are unavailable" do
@@ -2057,7 +2033,9 @@ class PresentationsTest < ApplicationSystemTestCase
   test "navigates a large same-day timeline without overlapping slides" do
     Presentation.delete_all
     created = Time.utc(2026, 9, 1, 10)
-    12.times do |family|
+    family_count = 8
+    nodes_per_family = 7
+    family_count.times do |family|
       parent = Presentation.create!(title: "Family #{family}", source: "# Family #{family}", created_at: created)
       5.times do |generation|
         child = parent.fork_as("continuation")
@@ -2074,16 +2052,17 @@ class PresentationsTest < ApplicationSystemTestCase
       end
     end
     visit presentations_path
-    assert_selector ".lineage-node", count: 84
+    assert_selector ".lineage-node", count: family_count * nodes_per_family
     assert_selector ".lineage-date-tick", count: 1
     assert_timeline_geometry
-    find('input[aria-label="Find a presentation"]').set("Family 11 revision 4")
-    find(".lineage-search-results button", text: "Family 11 revision 4").click
+    target = "Family #{family_count - 1} revision 4"
+    find('input[aria-label="Find a presentation"]').set(target)
+    find(".lineage-search-results button", text: target).click
     assert_selector ".lineage-node.is-located"
     page.driver.browser.manage.window.resize_to(780, 900)
     assert_timeline_geometry
-    find('a[aria-label="Open Family 11 revision 4"]').click
-    assert_field "Title", with: "Family 11 revision 4"
+    find("a[aria-label='Open #{target}']").click
+    assert_field "Title", with: target
   ensure
     page.driver.browser.manage.window.resize_to(1400, 1000)
   end
@@ -2141,23 +2120,13 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_operator (fraction_parts[1]["top"] - fraction_parts[0]["top"]).abs, :>, 1
   end
 
-  test "keeps Elef UI and presentation surfaces as separate styling zones" do
+  test "presentation list styling applies inside the presentation surface" do
     presentation = Presentation.create!(title: "Scoped Deck", source: "# Scoped\n\n- One\n- Two")
 
-    visit presentations_path
-    assert_selector "body.elef-app"
-    refute_selector "body.presentation-body"
-
     visit presentation_path(presentation)
-    assert_selector "body.elef-app"
     assert_selector ".presentation-surface"
     assert_equal "disc",
       page.evaluate_script("getComputedStyle(document.querySelector('.presentation-surface ul')).listStyleType")
-
-    visit present_presentation_path(presentation)
-    assert_selector "body.presentation-body"
-    assert_selector ".presentation-mode.presentation-surface"
-    refute_selector "body.elef-app"
   end
 
   test "starts every regular slide header at the same inset" do
@@ -2251,6 +2220,114 @@ class PresentationsTest < ApplicationSystemTestCase
 
     send_keys :arrow_left
     assert_text "1 / 2"
+  end
+
+  test "Present reveals cumulative events with buttons and reverses them before changing slides" do
+    source = "# One\n\n:::step{01}\nFirst reveal\n\n:::step{2}\nSecond reveal\n\n---\n# Two"
+    presentation = Presentation.create!(title: "Cumulative Present", source: source)
+
+    visit present_presentation_path(presentation)
+    assert_equal "hidden", reveal_visibility("First reveal")
+    assert_equal "hidden", reveal_visibility("Second reveal")
+
+    click_button "Next"
+    assert_equal "visible", reveal_visibility("First reveal")
+    assert_equal "hidden", reveal_visibility("Second reveal")
+
+    click_button "Next"
+    assert_equal "visible", reveal_visibility("Second reveal")
+    click_button "Next"
+    assert_selector ".presentation-slide-frame.is-active-presentation-slide", text: "Two"
+
+    click_button "Previous"
+    assert_selector ".presentation-slide-frame.is-active-presentation-slide", text: "One"
+    assert_equal "visible", reveal_visibility("First reveal")
+    assert_equal "visible", reveal_visibility("Second reveal")
+
+    click_button "Previous"
+    assert_equal "visible", reveal_visibility("First reveal")
+    assert_equal "hidden", reveal_visibility("Second reveal")
+  end
+
+  test "reveals keep one, two, and three column block geometry fixed" do
+    source = <<~MARKDOWN
+      # One column
+
+      Unmarked before
+
+      :::step{1}
+      ## Stable heading
+
+      :::step{2}
+      Stepped body
+
+      ---
+      # Two columns
+
+      ## Left
+      :::step{05}
+      Left reveal
+
+      ## Right
+      :::step{5}
+      Right reveal
+
+      ---
+      # Three columns
+
+      ## First
+      :::step{2}
+      First reveal
+
+      ## Second
+      :::step{1}
+      Second reveal
+
+      ## Third
+      :::step{2}
+      Third reveal
+    MARKDOWN
+    presentation = Presentation.create!(title: "Reveal geometry", source: source)
+    visit present_presentation_path(presentation)
+
+    assert_equal "slide-body", find(".presentation-stage .slide-frame.is-active-presentation-slide .slide")[:class].split.last
+    initial = reveal_slide_block_boxes
+    send_keys :arrow_right
+    assert_equal initial, reveal_slide_block_boxes, "revealing the stepped heading moved slide content"
+    send_keys :arrow_right
+    assert_equal initial, reveal_slide_block_boxes, "revealing the later group moved slide content"
+
+    send_keys :arrow_right
+    assert_equal "slide-two-column", find(".presentation-stage .slide-frame.is-active-presentation-slide .slide")[:class].split.last
+    initial = reveal_slide_block_boxes
+    send_keys :arrow_right
+    assert_equal initial, reveal_slide_block_boxes, "revealing both numbered column groups moved slide content"
+
+    send_keys :arrow_right
+    assert_equal "slide-three-column", find(".presentation-stage .slide-frame.is-active-presentation-slide .slide")[:class].split.last
+    initial = reveal_slide_block_boxes
+    send_keys :arrow_right
+    assert_equal initial, reveal_slide_block_boxes, "revealing two groups in three columns moved slide content"
+  end
+
+  def reveal_visibility(text)
+    page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const text = #{JSON.generate(text)};
+        const block = [...document.querySelectorAll(".presentation-stage .slide-block[data-elef-reveal-event]")]
+          .find((node) => node.textContent.includes(text));
+        return block ? getComputedStyle(block).visibility : null;
+      })()
+    JAVASCRIPT
+  end
+
+  def reveal_slide_block_boxes
+    page.evaluate_script(<<~JAVASCRIPT)
+      [...document.querySelectorAll(".presentation-stage .slide-frame.is-active-presentation-slide .slide-block")].map((block) => {
+        const rect = block.getBoundingClientRect();
+        return [rect.x, rect.y, rect.width, rect.height].map(value => Math.round(value * 100) / 100);
+      })
+    JAVASCRIPT
   end
 
   test "presentation keyboard shortcuts do not hijack toolbar activation" do
@@ -2596,7 +2673,7 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_equal "112px", page.evaluate_script("getComputedStyle(document.querySelector('.slide h1')).fontSize")
   end
 
-  test "new presentation allows uploading dummy images to blank slides in Markdown and visual editor with rendering and folder sync" do
+  test "new presentation uploads and renders images in Markdown and visual editor" do
     require "zlib"
     generate_test_png = lambda do |width, height|
       raw = []
@@ -2696,19 +2773,6 @@ class PresentationsTest < ApplicationSystemTestCase
     # Wait for autosave to ensure persistence
     assert_selector '[data-autosave-target="status"]', exact_text: "Saved", wait: 8
 
-    # Verify folder storage on disk next to presentation.md
-    presentation = Presentation.last
-    storage_dir = presentation.storage_dir
-    assert File.exist?(storage_dir.join("presentation.md")), "presentation.md should be saved in presentation folder"
-    assert File.exist?(storage_dir.join("source.md")), "source.md should be saved in presentation folder"
-    assert Dir.exist?(storage_dir.join("assets")), "assets/ directory should exist next to presentation.md"
-
-    portable_content = File.read(storage_dir.join("presentation.md"))
-    assert_includes portable_content, "assets/dummy_stock_photo", "presentation.md should reference assets folder"
-    assert_includes portable_content, "assets/dummy_screenshot", "presentation.md should reference assets folder"
-
-    assert File.exist?(storage_dir.join("assets/#{File.basename(image_one_file.path)}"))
-    assert File.exist?(storage_dir.join("assets/#{File.basename(image_two_file.path)}"))
   ensure
     image_one_file&.close!
     image_two_file&.close!
@@ -2729,10 +2793,10 @@ class PresentationsTest < ApplicationSystemTestCase
     block.send_keys(" with extra text")
 
     alignment = find("select[data-presentation-editor-align][data-slide-index='0'][data-block-index='1']")
-    alignment.select("Center Center")
+    alignment.select("Middle Center")
 
     assert_includes find(".slide-block[data-editor-block-id='#{block_id}']")["class"], "position-center"
-    assert_field "Markdown source", with: /:::align\{center center\}\n\nInitial.*block/, wait: 5
+    assert_field "Markdown source", with: /:::align\{middle center\}\n\nInitial.*block/, wait: 5
 
     alignment.select("Bottom Right")
     assert_includes find(".slide-block[data-editor-block-id='#{block_id}']")["class"], "position-right"

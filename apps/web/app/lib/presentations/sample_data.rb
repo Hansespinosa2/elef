@@ -115,7 +115,7 @@ module Presentations
           #{MARKER_KEY}: layouts-and-themes
           theme: dark
           ---
-          :::align{center center}
+          :::align{middle center}
           # Designing a visual system
 
           :::align {center}
@@ -192,7 +192,7 @@ module Presentations
           ---
           # Review the whole arc
 
-          :::align{center center}
+          :::align{middle center}
 
           Before presenting, check the sequence at thumbnail scale:
 
@@ -209,7 +209,7 @@ module Presentations
 
           ## Bullets
 
-          :::align{center center}
+          :::align{middle center}
 
           - Center the important points.
           - Keep the list easy to scan.
@@ -233,7 +233,7 @@ module Presentations
 
           ## Second
 
-          :::align{center center}
+          :::align{middle center}
 
           Compare the alternatives.
 
@@ -273,7 +273,7 @@ module Presentations
 
           ## Middle
 
-          :::align{center left}
+          :::align{middle left}
 
           Middle aligned.
 
@@ -293,7 +293,7 @@ module Presentations
 
           ## Center right
 
-          :::align{center right}
+          :::align{middle right}
 
           Middle-right content.
 

@@ -17,6 +17,9 @@ import { presentationModeWorkflow } from "../../../../apps/web/test/e2e/scenario
 import { vimRelativeLineNumbersWorkflow } from "../../../../apps/web/test/e2e/scenarios/vim-relative-line-numbers.js"
 import { documentPageAspectRatioWorkflow } from "../../../../apps/web/test/e2e/scenarios/document-page-aspect-ratio.js"
 import { exportWorkflow } from "../../../../apps/web/test/e2e/scenarios/export.js"
+import { slidePositionGrammarWorkflow } from "../../../../apps/web/test/e2e/scenarios/slide-position-grammar.js"
+import { displayMathEnterWorkflow } from "../../../../apps/web/test/e2e/scenarios/display-math-enter.js"
+import { artRenderingWorkflow } from "../../../../apps/web/test/e2e/scenarios/art-rendering.js"
 import { createHash } from "node:crypto"
 import { answerMacNativeDialog } from "../mac-native-dialog.js"
 
@@ -80,9 +83,9 @@ function focusDesktopWindow() {
 
 function sendNativeKey(key, { activate = true } = {}) {
   const linuxKeys = {
-    Escape: "Escape", Enter: "Return", ArrowRight: "Right", ArrowLeft: "Left", Home: "Home", End: "End"
+    Escape: "Escape", Enter: "Return", Backspace: "BackSpace", ArrowRight: "Right", ArrowLeft: "Left", Home: "Home", End: "End"
   }
-  const macKeyCodes = { Escape: 53, Enter: 36, ArrowRight: 124, ArrowLeft: 123, Home: 115, End: 119 }
+  const macKeyCodes = { Escape: 53, Enter: 36, Backspace: 51, ArrowRight: 124, ArrowLeft: 123, Home: 115, End: 119 }
   if (process.platform === "linux") {
     if (activate) focusDesktopWindow()
     const nativeKey = linuxKeys[key]
@@ -278,7 +281,7 @@ class DesktopEditorUi {
   }
 
   constructor() {
-    this.rejectExternalMedia = true
+    this.externalMediaPolicy = "reject-remote"
     this.activeDeckTitle = null
     this.capabilities = { export: false }
   }
@@ -304,6 +307,9 @@ class DesktopEditorUi {
 
   async openDeck(title = "E2E seed") {
     if (!(await $("#library-view").isDisplayed())) {
+      if ((await $("#desktop-editor-form").getAttribute("data-editor-mode")) === "visual") {
+        await this.showSourceMode()
+      }
       await $("#back-to-library").click()
       await $("#library-view").waitForDisplayed()
     }
@@ -402,6 +408,16 @@ class DesktopEditorUi {
   }
 
   async enterPresentationMode() {
+    const geometry = await browser.execute(() => {
+      const slide = document.querySelector("#desktop-preview .slide-frame > .slide")
+      if (!slide) return null
+      const style = getComputedStyle(slide)
+      return { width: style.width, height: style.height, overflow: style.overflow }
+    })
+    if (geometry?.width !== "1280px" || geometry.height !== "720px" || geometry.overflow !== "hidden") {
+      throw new Error(`The native presentation preview violated its 16:9 canvas contract: ${JSON.stringify(geometry)}`)
+    }
+
     const started = await browser.executeAsync(done => {
       const start = window.__elefPresentationTestHooks?.start
       if (!start) return done({ error: "The presentation shell is unavailable" })
@@ -444,6 +460,94 @@ class DesktopEditorUi {
     }
     const other = states[1 - index]
     if (!other.hidden || other.active) throw new Error(`Another desktop slide remained visible: ${JSON.stringify(states)}`)
+  }
+
+  async assertPresentationText(index, text, visible) {
+    const state = await browser.execute((slideIndex, content) => {
+      const frame = document.querySelectorAll("#desktop-preview .slide-frame")[slideIndex]
+      const block = [...(frame?.querySelectorAll(".slide-block[data-elef-reveal-event]") || [])]
+        .find(element => element.textContent.includes(content))
+      if (!block) return null
+      return {
+        visibility: getComputedStyle(block).visibility,
+        ariaHidden: block.getAttribute("aria-hidden"),
+        inert: block.hasAttribute("inert")
+      }
+    }, index, text)
+    if (!state) throw new Error(`Could not find reveal block ${JSON.stringify(text)} on slide ${index + 1}`)
+    const expectedVisibility = visible ? "visible" : "hidden"
+    if (state.visibility !== expectedVisibility || state.ariaHidden !== (visible ? null : "true") || state.inert !== !visible) {
+      throw new Error(`Unexpected reveal state for ${JSON.stringify(text)}: ${JSON.stringify(state)}`)
+    }
+  }
+
+  async assertSlidePositionGrammar() {
+    const inspect = () => browser.execute(() => {
+      const root = document.querySelector("#desktop-preview")
+      const slide = root?.querySelector(".slide")
+      const content = slide?.querySelector(".slide-content")
+      const group = slide?.querySelector(".slide-middle-group")
+      const lane = slide?.querySelector(".slide-bottom-lane")
+      const blocks = element => [...(element?.querySelectorAll(".slide-block") || [])]
+      const rect = element => element.getBoundingClientRect()
+      return {
+        groups: [...(slide?.querySelectorAll(".slide-middle-group") || [])].map(group => blocks(group).map(block => block.textContent.trim())),
+        lanes: [...(slide?.querySelectorAll(".slide-bottom-lane") || [])].map(lane => blocks(lane).map(block => block.textContent.trim())),
+        flushBottom: group?.classList.contains("flush-bottom") || false,
+        blockGap: blocks(group).length > 1 ? rect(blocks(group)[1]).top - rect(blocks(group)[0]).bottom : null,
+        laneBottomGap: content && lane ? rect(content).bottom - rect(lane).bottom : null,
+        classes: blocks(slide).map(block => block.className)
+      }
+    })
+    const groups = [["Alignment stack", "Subtitle"]]
+    const lanes = [["Footer"]]
+    await browser.waitUntil(async () => {
+      const measurements = await inspect()
+      return JSON.stringify(measurements.groups) === JSON.stringify(groups) &&
+        JSON.stringify(measurements.lanes) === JSON.stringify(lanes) && measurements.flushBottom
+    }, { timeout: 10_000, timeoutMsg: "The desktop preview did not render the middle stack and bottom lane" })
+
+    const measurements = await inspect()
+    if (measurements.blockGap >= 8 || Math.abs(measurements.laneBottomGap) > 1 ||
+        !measurements.classes[0]?.includes("position-center position-middle") ||
+        !measurements.classes[1]?.includes("position-center position-top") ||
+        !measurements.classes[2]?.includes("position-right position-bottom")) {
+      throw new Error(`Desktop slide position grammar did not match the expected layout: ${JSON.stringify(measurements)}`)
+    }
+  }
+
+  async assertColumnSlidePositionDocking() {
+    const inspect = () => browser.execute(() => {
+      const root = document.querySelector("#desktop-preview")
+      const slide = root?.querySelector(".slide")
+      const regions = [...(slide?.querySelectorAll(".slide-region") || [])]
+      const left = regions[0]
+      const group = left?.querySelector(".slide-middle-group.flush-bottom")
+      const lane = left?.querySelector(".slide-bottom-lane")
+      const blockText = element => [...(element?.querySelectorAll(".slide-block") || [])]
+        .map(block => block.textContent.trim()).join(" ")
+      const rect = element => element.getBoundingClientRect()
+      return {
+        regionCount: regions.length,
+        leftGroup: blockText(group),
+        leftLane: blockText(lane),
+        rightHasPlacement: Boolean(regions[1]?.querySelector(".slide-middle-group, .slide-bottom-lane")),
+        dockGap: group && lane ? rect(lane).top - rect(group).bottom : null,
+        laneBottomGap: left && lane ? rect(left).bottom - rect(lane).bottom : null
+      }
+    })
+    await browser.waitUntil(async () => {
+      const measurements = await inspect()
+      return measurements.regionCount === 2 &&
+        measurements.leftGroup === "Left stack" &&
+        measurements.leftLane === "Left footer" &&
+        !measurements.rightHasPlacement
+    }, { timeout: 10_000, timeoutMsg: "The desktop preview did not render column docking" })
+
+    const measurements = await inspect()
+    if (Math.abs(measurements.dockGap) > 1 || Math.abs(measurements.laneBottomGap) > 1) {
+      throw new Error(`Desktop column docking left a gap: ${JSON.stringify(measurements)}`)
+    }
   }
 
   async movePresentation(key) {
@@ -505,12 +609,19 @@ class DesktopEditorUi {
     if ((await sourceMode.getAttribute("aria-pressed")) !== "true") await sourceMode.click()
     await browser.waitUntil(async () => {
       const mode = await $("#desktop-editor-form").getAttribute("data-editor-mode")
-      return mode === "source" && (await sourceMode.getAttribute("aria-pressed")) === "true"
+      const currentSourceMode = await $("#source-mode")
+      return mode === "source" && (await currentSourceMode.getAttribute("aria-pressed")) === "true"
     }, {
       timeout: 5_000,
       timeoutMsg: "The source editor did not finish restoring after the mode switch"
     })
     await this.waitForEditorModeTransition()
+    await browser.waitUntil(async () => browser.execute(() =>
+      document.querySelector("#desktop-editor-field")?.editorController?.editingMode === "source"
+    ), {
+      timeout: 5_000,
+      timeoutMsg: "The desktop CodeMirror controller did not enter source mode"
+    })
     const editor = await $("#deck-source-editor .cm-content")
     await editor.waitForDisplayed()
     // Tauri's embedded WebDriver cannot reliably focus CodeMirror on CI. Use
@@ -524,21 +635,33 @@ class DesktopEditorUi {
       const mathPalette = globalThis.Stimulus?.getControllerForElementAndIdentifier(field, "math-shortcut-palette")
       // A full-buffer test edit replaces the current authoring context too.
       // End any tab-stop session left by a previous snippet before placing the
-      // caret at the new buffer end and refreshing the palettes.
+      // caret at the new buffer end; the input event refreshes palettes normally.
       snippetPalette?.endStops()
       mathPalette?.endStops()
       controller.replaceRange(nextSource, 0, controller.value.length)
       controller.setSelectionRange(nextSource.length)
-      snippetPalette?.refresh()
-      mathPalette?.refresh()
       return {
         source: controller.sourceValue,
         selectionStart: controller.selectionStart,
-        selectionEnd: controller.selectionEnd
+        selectionEnd: controller.selectionEnd,
+        editingMode: controller.editingMode
       }
     }, source)
-    if (updated?.source !== source || updated.selectionStart !== source.length || updated.selectionEnd !== source.length) {
+    if (updated?.source !== source || updated.selectionStart !== source.length || updated.selectionEnd !== source.length || updated.editingMode !== "source") {
       throw new Error(`The desktop editor did not accept the shared scenario source at the end of the buffer: ${JSON.stringify(updated)}`)
+    }
+  }
+
+  async restoreSource(source) {
+    const restoredSource = await browser.execute(nextSource => {
+      const controller = document.querySelector("#desktop-editor-field")?.editorController
+      if (!controller) return null
+      controller.replaceRange(nextSource, 0, controller.value.length)
+      controller.setSelectionRange(nextSource.length)
+      return controller.sourceValue
+    }, source)
+    if (restoredSource !== source) {
+      throw new Error(`The desktop editor could not restore its original fixture source: ${JSON.stringify(restoredSource)}`)
     }
   }
 
@@ -588,20 +711,17 @@ class DesktopEditorUi {
         })
       }
 
-      const outcome = await browser.execute(() => {
+      focusDesktopWindow()
+      sendNativeKey("Backspace")
+      await browser.waitUntil(async () => browser.execute(expected => {
         const controller = document.querySelector("#desktop-editor-field")?.editorController
-        const event = new KeyboardEvent("keydown", { key: "Backspace", bubbles: true, cancelable: true })
-        controller.dom.dispatchEvent(event)
-        return {
-          source: controller.value,
-          anchor: controller.selectionStart,
-          head: controller.selectionEnd,
-          prevented: event.defaultPrevented
-        }
+        return controller?.value === expected
+          && controller.selectionStart === expected.length
+          && controller.selectionEnd === expected.length
+      }, source), {
+        timeout: 5_000,
+        timeoutMsg: "A real Backspace key did not delete both characters of the empty dollar pair"
       })
-      if (outcome?.source !== source || outcome.anchor !== source.length || outcome.head !== source.length || !outcome.prevented) {
-        throw new Error(`Backspace did not delete both characters of the empty dollar pair: ${JSON.stringify(outcome)}`)
-      }
     } finally {
       if (restoreNormalMode) {
         sendNativeKey("Escape")
@@ -726,6 +846,150 @@ class DesktopEditorUi {
       timeout: 5_000,
       timeoutMsg: `The desktop editor did not restore its caret to source offset ${position}`
     })
+  }
+
+  async typeEmptyDisplayMath(mode) {
+    await browser.execute(() => window.focus())
+    focusDesktopWindow()
+    let target
+    if (mode === "visual") {
+      target = await $("#desktop-preview .document-editor-block[data-editor-empty-block='true'][contenteditable='true']")
+      await target.waitForDisplayed()
+      await target.click()
+      const focus = await browser.execute(() => {
+        const block = document.querySelector("#desktop-preview .document-editor-block[data-editor-empty-block='true']")
+        block?.focus({ preventScroll: true })
+        const selection = window.getSelection()
+        return {
+          active: document.activeElement === block,
+          selectionInsideBlock: Boolean(selection?.focusNode && block?.contains(selection.focusNode))
+        }
+      })
+      if (!focus?.active || !focus.selectionInsideBlock) {
+        throw new Error(`The visual editor did not receive focus before native typing: ${JSON.stringify(focus)}`)
+      }
+    } else {
+      target = await $("#deck-source-editor .cm-content")
+      await target.waitForDisplayed()
+      const focus = await browser.execute(() => {
+        const editor = document.querySelector("#desktop-editor-field")?.editorController
+        editor?.view.focus()
+        return {
+          editorHasFocus: Boolean(editor?.view.hasFocus),
+          contentDomActive: document.activeElement === editor?.view.contentDOM,
+          selectionStart: editor?.selectionStart,
+          valueLength: editor?.value.length
+        }
+      })
+      if (!focus?.editorHasFocus || !focus.contentDomActive) {
+        throw new Error(`CodeMirror did not receive focus before native typing: ${JSON.stringify(focus)}`)
+      }
+      if (focus.selectionStart !== focus.valueLength) {
+        throw new Error(`CodeMirror did not retain the end-of-source caret before native typing: ${JSON.stringify(focus)}`)
+      }
+      const vimState = await browser.execute(() => {
+        const editor = document.querySelector("#desktop-editor-field")?.editorController
+        return {
+          enabled: editor?.vimEnabled === true,
+          insertMode: editor?.vimMode?.startsWith("insert") === true
+        }
+      })
+      if (vimState.enabled && !vimState.insertMode) {
+        typeNativeText("i", { activate: false })
+        await browser.waitUntil(async () => browser.execute(() =>
+          document.querySelector("#desktop-editor-field")?.editorController?.vimMode?.startsWith("insert") === true
+        ), {
+          timeout: 5_000,
+          timeoutMsg: "The source editor did not enter Vim insert mode before display-math input"
+        })
+      }
+    }
+
+    await browser.execute(mode => {
+      const events = []
+      const editor = mode === "source"
+        ? document.querySelector("#desktop-editor-field .cm-content")
+        : document.querySelector("#desktop-preview .document-editor-block[data-editor-empty-block='true']")
+      const handler = event => events.push({
+        key: event.key,
+        trusted: event.isTrusted,
+        inEditor: Boolean(editor && (event.target === editor || editor.contains(event.target)))
+      })
+      document.addEventListener("keydown", handler, true)
+      window.__elefDisplayMathKeys = { events, handler }
+    }, mode)
+    const expectedKeys = ["$", "$", "Enter"]
+    let keys
+    let keyWaitError = null
+    try {
+      typeNativeText("$")
+      typeNativeText("$")
+      sendNativeKey("Enter", { activate: false })
+      try {
+        await browser.waitUntil(async () => {
+          const inputKeys = await browser.execute(() =>
+            (window.__elefDisplayMathKeys?.events || [])
+              .filter(({ key }) => key !== "Shift")
+              .map(({ key }) => key)
+          )
+          return JSON.stringify(inputKeys) === JSON.stringify(expectedKeys)
+        }, {
+          timeout: 2_000,
+          interval: 50,
+          timeoutMsg: "The native Enter key event did not reach the display-math editor"
+        })
+      } catch (error) {
+        keyWaitError = error.message
+      }
+    } finally {
+      keys = await browser.execute(() => {
+        const capture = window.__elefDisplayMathKeys
+        document.removeEventListener("keydown", capture?.handler, true)
+        delete window.__elefDisplayMathKeys
+        return capture?.events || []
+      })
+    }
+    const inputKeys = keys.filter(({ key }) => key !== "Shift")
+    if (JSON.stringify(inputKeys.map(({ key }) => key)) !== JSON.stringify(expectedKeys) ||
+      keys.some(({ trusted, inEditor }) => !trusted || !inEditor)) {
+      const waitDiagnostic = keyWaitError ? `; event wait: ${keyWaitError}` : ""
+      throw new Error(`Display-math input did not reach the editor as the expected trusted keys: ${JSON.stringify(keys)}${waitDiagnostic}`)
+    }
+  }
+
+  async assertDisplayMathCaret(expectedSource, expectedCaret, mode) {
+    const visual = mode === "visual"
+    let actualState
+    try {
+      await browser.waitUntil(async () => {
+        actualState = await browser.execute(() => {
+          const form = document.querySelector("#desktop-editor-form")
+          const editor = document.querySelector("#desktop-editor-field")?.editorController
+          const selection = window.getSelection()
+          const focusElement = selection?.focusNode?.nodeType === Node.ELEMENT_NODE
+            ? selection.focusNode
+            : selection?.focusNode?.parentElement
+          const activeMath = focusElement?.closest?.(".editor-math-active")
+          return {
+            mode: editor?.editingMode,
+            value: editor?.value,
+            selectionStart: editor?.selectionStart,
+            selectionEnd: editor?.selectionEnd,
+            previewSource: form?.previewController?.pendingProjection?.source || null,
+            activeMathText: activeMath?.textContent || null,
+            visualOffset: selection?.focusOffset ?? null
+          }
+        })
+        return actualState?.mode === mode && actualState.value === expectedSource &&
+          actualState.selectionStart === expectedCaret && actualState.selectionEnd === expectedCaret &&
+          (!visual || (actualState.previewSource === expectedSource && actualState.activeMathText === "$$\n\n$$" && actualState.visualOffset === 3))
+      }, {
+        timeout: 10_000,
+        timeoutMsg: `The desktop ${mode} editor did not keep the caret on the empty display-math body line`
+      })
+    } catch (error) {
+      throw new Error(`${error.message}; actual state: ${JSON.stringify(actualState)}`)
+    }
   }
 
   async assertModeSwitchRespectsNewCaret() {
@@ -882,15 +1146,28 @@ class DesktopEditorUi {
     const result = await browser.executeAsync(done => {
       const controller = document.querySelector("#desktop-editor-form")?.previewController
       if (!controller) return done({ error: "The desktop preview controller is unavailable" })
-      controller.refresh().then(rendered => done({ rendered }), error => done({ error: error.message }))
+      const wasRunning = Boolean(controller.requestController)
+      controller.refresh().then(rendered => done({
+        rendered: rendered === true,
+        queued: wasRunning && rendered === false
+      }), error => done({ error: error.message }))
     })
     if (result?.error) throw new Error(result.error)
-    if (!result?.rendered) throw new Error("The desktop preview did not render the latest saved source")
+    if (!result?.rendered && !result?.queued) throw new Error("The desktop preview did not render or queue the latest saved source")
+    await browser.waitUntil(async () => browser.execute(() => {
+      const form = document.querySelector("#desktop-editor-form")
+      return Boolean(form && form.dataset.previewProjectionStale !== "true")
+    }), {
+      timeout: 20_000,
+      interval: 50,
+      timeoutMsg: "The desktop preview did not render the latest saved source"
+    })
   }
 
   async showSourceMode() {
     const sourceMode = await $("#source-mode")
-    if ((await sourceMode.getAttribute("aria-pressed")) !== "true") await sourceMode.click()
+    await sourceMode.waitForDisplayed()
+    if ((await $("#desktop-editor-form").getAttribute("data-editor-mode")) !== "source") await sourceMode.click()
     await browser.waitUntil(async () => (await $("#desktop-editor-form").getAttribute("data-editor-mode")) === "source", {
       timeout: 5_000,
       timeoutMsg: "The source editor did not activate after checking the rendered document link"
@@ -951,6 +1228,40 @@ class DesktopEditorUi {
       })
       throw new Error(`${error.message}; desktop state: ${JSON.stringify(state)}`)
     }
+  }
+
+  async waitForArtRoots(count) {
+    await browser.waitUntil(async () => (await $$("#desktop-preview [data-elef-art-root]")).length === count, {
+      timeout: 10_000,
+      timeoutMsg: `The desktop preview did not render ${count} Art roots`
+    })
+  }
+
+  async readArtSemantics() {
+    return browser.execute(() => [...document.querySelectorAll("#desktop-preview [data-elef-art-root]")].map(root => {
+      const list = root.querySelector(":scope > .elef-art-list")
+      const items = [...(list?.children || [])]
+      return {
+        mode: root.dataset.artMode,
+        density: root.dataset.artDensity,
+        status: root.dataset.artStatus,
+        layout: root.dataset.artLayout,
+        rootTag: list?.tagName,
+        itemCount: items.length,
+        itemText: items.map(item => {
+          const walker = document.createTreeWalker(item, NodeFilter.SHOW_TEXT)
+          const parts = []
+          while (walker.nextNode()) {
+            const text = walker.currentNode.textContent.trim()
+            if (text) parts.push(text)
+          }
+          return parts.join(" ").replace(/\s+/g, " ").trim()
+        }),
+        nestedListTag: items[0]?.querySelector(":scope > ol, :scope > ul")?.tagName || null,
+        start: list?.hasAttribute("start") ? list.getAttribute("start") : null,
+        blockClass: root.closest(".slide-block")?.className || ""
+      }
+    }))
   }
 
   async inspectHostilePreview() {
@@ -1777,6 +2088,10 @@ describe("desktop binary workflows and native boundaries", () => {
     await exportWorkflow(new DesktopEditorUi())
   })
 
+  it("keeps slide position stacks and lanes aligned in the desktop preview", async () => {
+    await slidePositionGrammarWorkflow(new DesktopEditorUi())
+  })
+
   it("updates Vim relative line numbers from CodeMirror cursor positions", async () => {
     await vimRelativeLineNumbersWorkflow(new DesktopEditorUi())
   })
@@ -1927,6 +2242,10 @@ describe("desktop binary workflows and native boundaries", () => {
     await appearanceWorkflow(new DesktopEditorUi())
   })
 
+  it("renders shared Art list semantics in the Tauri binary", async () => {
+    await artRenderingWorkflow(new DesktopEditorUi())
+  })
+
   it("runs the shared external-edit conflict flow in the desktop binary", async () => {
     const ui = new DesktopEditorUi()
     await externalEditConflictWorkflow(ui)
@@ -1968,6 +2287,10 @@ describe("desktop binary workflows and native boundaries", () => {
 
   it("runs the shared math input flow in the desktop binary", async () => {
     await mathInputWorkflow(new DesktopEditorUi())
+  })
+
+  it("keeps the empty display-math body caret in both desktop editor modes", async () => {
+    await displayMathEnterWorkflow(new DesktopEditorUi())
   })
 
   it("saves a manifestless deck with its new identity, original line endings, and isolated undo", async () => {

@@ -12,7 +12,8 @@
   "plugins": {
     "updater": {
       "endpoints": ["http://127.0.0.1:8888/manifest"],
-      "requireSignedVersion": true
+      "requireSignedVersion": true,
+      "dangerousInsecureTransportProtocol": true
     }
   }
 }

@@ -98,6 +98,7 @@ build_fixtures() {
   local tested_tree="${2:-$tree_sha}"
   local run_conclusion="${3:-success}"
   local include_artifact="${4:-true}"
+  local required_jobs='["desktop-fast","scan_ruby","scan_js","test","sqlite-test","system-test","desktop","desktop-macos","renderer-macos","production-smoke","development-smoke"]'
 
   GH_COMMIT_PRS_JSON="$(jq -n --arg sha "$commit_sha" '[{number: 52, merged_at: "2026-09-25T12:00:00Z", merge_commit_sha: $sha, base: {ref: "dev"}}]')"
   GH_PULL_REQUEST_JSON="$(jq -n --arg sha "$commit_sha" '{number: 52, merged_at: "2026-09-25T12:00:00Z", merge_commit_sha: $sha, base: {ref: "dev"}, head: {sha: $sha, ref: "feature/ci"}}')"
@@ -125,12 +126,15 @@ build_fixtures() {
   fi
 
   jq -n \
+    --argjson schema_version 2 \
     --argjson pr_number 52 \
     --argjson workflow_run_id 900 \
     --argjson run_attempt 1 \
+    --argjson required_jobs "$required_jobs" \
+    --argjson non_gating_measurements '["native-performance"]' \
     --arg tested_sha "$commit_sha" \
     --arg tested_tree "$tested_tree" \
-    '{pr_number: $pr_number, workflow_run_id: $workflow_run_id, run_attempt: $run_attempt, tested_sha: $tested_sha, tested_tree: $tested_tree}' \
+    '{schema_version: $schema_version, pr_number: $pr_number, workflow_run_id: $workflow_run_id, run_attempt: $run_attempt, required_jobs: $required_jobs, non_gating_measurements: $non_gating_measurements, tested_sha: $tested_sha, tested_tree: $tested_tree}' \
     > "$GH_ATTESTATION_FIXTURE"
 
   export GH_COMMIT_PRS_JSON GH_PULL_REQUEST_JSON GH_PR_CHECKS_JSON GH_RUN_STATUS_JSON
@@ -148,6 +152,16 @@ assert_rejected() {
 
 build_fixtures
 (cd "$repository" && "$AUTHORIZER")
+
+build_fixtures
+jq '.non_gating_measurements = []' "$GH_ATTESTATION_FIXTURE" > "$temporary_directory/invalid-attestation.json"
+mv "$temporary_directory/invalid-attestation.json" "$GH_ATTESTATION_FIXTURE"
+assert_rejected "an attestation that omits the non-gating benchmark policy"
+
+build_fixtures
+jq '.required_jobs = []' "$GH_ATTESTATION_FIXTURE" > "$temporary_directory/invalid-attestation.json"
+mv "$temporary_directory/invalid-attestation.json" "$GH_ATTESTATION_FIXTURE"
+assert_rejected "an attestation that omits the required CI jobs"
 
 build_fixtures system-test
 assert_rejected "a PR run with a failed required job"

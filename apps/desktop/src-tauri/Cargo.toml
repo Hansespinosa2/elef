@@ -32,3 +32,6 @@ tauri-plugin-updater = "=2.13.0"
 tauri-plugin-wdio = { version = "=1.4.0", optional = true }
 tauri-plugin-wdio-webdriver = { version = "=1.4.0", optional = true }
 tempfile = "3"
+
+[dev-dependencies]
+tauri = { version = "=2.12.1", features = ["test"] }

@@ -137,84 +137,95 @@ module Presentations
     class RemoteImageFetcher
       Image = Data.define(:bytes, :content_type)
       MAX_REDIRECTS = 3
+      DEFAULT_ADDRESS_RESOLVER = ->(host) { Addrinfo.getaddrinfo(host, nil, nil, :STREAM).map(&:ip_address) }
+      DEFAULT_HTTP_FACTORY = ->(host, port, proxy) { Net::HTTP.new(host, port, proxy) }
 
       class << self
         def fetch(url)
-          request(URI.parse(url), redirects: 0)
-        rescue Error
-          raise
-        rescue StandardError
-          raise Error, "A linked image could not be fetched for PPTX export."
-        end
-
-        private
-
-        def request(uri, redirects:)
-          unless uri.is_a?(URI::HTTPS) && uri.hostname.present? && uri.port == 443 && uri.userinfo.nil?
-            raise Error, "Only public HTTPS images on port 443 can be embedded in a PPTX."
-          end
-          raise Error, "A linked image redirects too many times." if redirects > MAX_REDIRECTS
-
-          address = public_address_for(uri.hostname)
-          http = Net::HTTP.new(uri.hostname, uri.port, nil)
-          http.ipaddr = address
-          http.use_ssl = true
-          http.verify_mode = OpenSSL::SSL::VERIFY_PEER
-          http.open_timeout = 3
-          http.read_timeout = 5
-          http.write_timeout = 5 if http.respond_to?(:write_timeout=)
-          http.max_retries = 0 if http.respond_to?(:max_retries=)
-
-          response = nil
-          image = nil
-          http.start do |connection|
-            request = Net::HTTP::Get.new(uri.request_uri)
-            request["Accept"] = "image/png,image/jpeg,image/gif,image/webp,image/svg+xml"
-            request["Accept-Encoding"] = "identity"
-            response = connection.request(request) do |result|
-              if result.is_a?(Net::HTTPRedirection)
-                next
-              end
-              raise Error, "A linked image could not be fetched for PPTX export." unless result.is_a?(Net::HTTPSuccess)
-
-              content_type = result["content-type"].to_s.split(";", 2).first.to_s.downcase
-              body = +"".b
-              if result.content_length && result.content_length > MAX_REMOTE_IMAGE_BYTES
-                raise Error, "A linked image exceeds the 10 MB PPTX export limit."
-              end
-              result.read_body do |chunk|
-                body << chunk
-                raise Error, "A linked image exceeds the 10 MB PPTX export limit." if body.bytesize > MAX_REMOTE_IMAGE_BYTES
-              end
-              image = Image.new(body, content_type)
-            end
-          end
-
-          if response.is_a?(Net::HTTPRedirection)
-            location = response["location"]
-            raise Error, "A linked image redirected without a destination." if location.blank?
-            return request(URI.join(uri.to_s, location), redirects: redirects + 1)
-          end
-
-          image
-        end
-
-        def public_address_for(host)
-          addresses = Addrinfo.getaddrinfo(host, nil, nil, :STREAM).map(&:ip_address).uniq
-          raise Error, "A linked image host could not be resolved." if addresses.empty?
-
-          parsed = addresses.map { |address| IPAddr.new(address) }
-          if parsed.any? { |address| blocked_address?(address) }
-            raise Error, "A linked image host must resolve to public internet addresses."
-          end
-
-          parsed.first.to_s
+          new.fetch(url)
         end
 
         def blocked_address?(address)
           normalized = address.ipv4_mapped? ? address.native : address
           BLOCKED_NETWORKS.any? { |network| network.include?(normalized) }
         end
+      end
+
+      def initialize(address_resolver: DEFAULT_ADDRESS_RESOLVER, http_factory: DEFAULT_HTTP_FACTORY)
+        @address_resolver = address_resolver
+        @http_factory = http_factory
+      end
+
+      def fetch(url)
+        request(URI.parse(url), redirects: 0)
+      rescue Error
+        raise
+      rescue StandardError
+        raise Error, "A linked image could not be fetched for PPTX export."
+      end
+
+      private
+
+      def request(uri, redirects:)
+        unless uri.is_a?(URI::HTTPS) && uri.hostname.present? && uri.port == 443 && uri.userinfo.nil?
+          raise Error, "Only public HTTPS images on port 443 can be embedded in a PPTX."
+        end
+        raise Error, "A linked image redirects too many times." if redirects > MAX_REDIRECTS
+
+        address = public_address_for(uri.hostname)
+        http = @http_factory.call(uri.hostname, uri.port, nil)
+        http.ipaddr = address
+        http.use_ssl = true
+        http.verify_mode = OpenSSL::SSL::VERIFY_PEER
+        http.open_timeout = 3
+        http.read_timeout = 5
+        http.write_timeout = 5 if http.respond_to?(:write_timeout=)
+        http.max_retries = 0 if http.respond_to?(:max_retries=)
+
+        response = nil
+        image = nil
+        http.start do |connection|
+          request = Net::HTTP::Get.new(uri.request_uri)
+          request["Accept"] = "image/png,image/jpeg,image/gif,image/webp,image/svg+xml"
+          request["Accept-Encoding"] = "identity"
+          response = connection.request(request) do |result|
+            if result.is_a?(Net::HTTPRedirection)
+              next
+            end
+            raise Error, "A linked image could not be fetched for PPTX export." unless result.is_a?(Net::HTTPSuccess)
+
+            content_type = result["content-type"].to_s.split(";", 2).first.to_s.downcase
+            body = +"".b
+            if result.content_length && result.content_length > MAX_REMOTE_IMAGE_BYTES
+              raise Error, "A linked image exceeds the 10 MB PPTX export limit."
+            end
+            result.read_body do |chunk|
+              body << chunk
+              raise Error, "A linked image exceeds the 10 MB PPTX export limit." if body.bytesize > MAX_REMOTE_IMAGE_BYTES
+            end
+            image = Image.new(body, content_type)
+          end
+        end
+
+        if response.is_a?(Net::HTTPRedirection)
+          location = response["location"]
+          raise Error, "A linked image redirected without a destination." if location.blank?
+          return request(URI.join(uri.to_s, location), redirects: redirects + 1)
+        end
+
+        image
+      end
+
+      def public_address_for(host)
+        addresses = @address_resolver.call(host).map(&:to_s).uniq
+        raise Error, "A linked image host could not be resolved." if addresses.empty?
+
+        parsed = addresses.map { |address| IPAddr.new(address) }
+        if parsed.any? { |address| self.class.blocked_address?(address) }
+          raise Error, "A linked image host must resolve to public internet addresses."
+        end
+
+        parsed.first.to_s
       end
     end
   end
