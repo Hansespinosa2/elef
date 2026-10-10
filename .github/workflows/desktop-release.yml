@@ -276,7 +276,7 @@ jobs:
             echo "::error title=Unacknowledged Gate A failure::Ledger records failed_gate for exact main SHA $failed_sha; repair this merge with a new owner-approved PR."
           done < <(jq -r '.[]' <<< "$FAILED_NOTIFICATION_SHAS")
 
-      - name: Acknowledge delivered failure alerts with a Pages compare-and-swap
+      - name: Acknowledge emitted failure alerts with a Pages compare-and-swap
         if: needs.reconcile.outputs.failed_notification_shas != '[]'
         env:
           ELEF_RELEASE_STATE_APP_ID: ${{ vars.ELEF_RELEASE_STATE_APP_ID }}

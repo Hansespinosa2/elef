@@ -38,7 +38,7 @@ for (const sha of shas) {
     throw new Error("failed-gate notification acknowledgment was not preserved in the Pages ledger")
   }
 }
-process.stdout.write(`Acknowledged ${shas.length} failed Gate A owner alert(s) in ledger revision ${finalLedger.revision}; Pages commit ${result.commitSha || "unchanged"}.\n`)
+process.stdout.write(`Recorded acknowledgment for ${shas.length} emitted failed Gate A alert(s) in ledger revision ${finalLedger.revision}; Pages commit ${result.commitSha || "unchanged"}.\n`)
 
 function parseShas(value) {
   let shas
