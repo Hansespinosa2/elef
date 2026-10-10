@@ -494,6 +494,38 @@ class DesktopEditorUi {
     }
   }
 
+  async assertColumnSlidePositionDocking() {
+    const inspect = () => browser.execute(() => {
+      const root = document.querySelector("#desktop-preview")
+      const slide = root?.querySelector(".slide")
+      const regions = [...(slide?.querySelectorAll(".slide-region") || [])]
+      const left = regions[0]
+      const group = left?.querySelector(".slide-middle-group.flush-bottom")
+      const lane = left?.querySelector(".slide-bottom-lane")
+      const rect = element => element.getBoundingClientRect()
+      return {
+        regionCount: regions.length,
+        leftGroup: group?.textContent.trim(),
+        leftLane: lane?.textContent.trim(),
+        rightHasPlacement: Boolean(regions[1]?.querySelector(".slide-middle-group, .slide-bottom-lane")),
+        dockGap: group && lane ? rect(lane).top - rect(group).bottom : null,
+        laneBottomGap: left && lane ? rect(left).bottom - rect(lane).bottom : null
+      }
+    })
+    await browser.waitUntil(async () => {
+      const measurements = await inspect()
+      return measurements.regionCount === 2 &&
+        measurements.leftGroup === "Left stack" &&
+        measurements.leftLane === "Left footer" &&
+        !measurements.rightHasPlacement
+    }, { timeout: 10_000, timeoutMsg: "The desktop preview did not render column docking" })
+
+    const measurements = await inspect()
+    if (Math.abs(measurements.dockGap) > 1 || Math.abs(measurements.laneBottomGap) > 1) {
+      throw new Error(`Desktop column docking left a gap: ${JSON.stringify(measurements)}`)
+    }
+  }
+
   async movePresentation(key) {
     await sendPresentationKey(key)
   }

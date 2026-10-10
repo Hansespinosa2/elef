@@ -438,6 +438,32 @@ expect:
     - "vertical gap between title and subtitle < 8px      # the reported bug, fixed"
 ```
 
+### F-17 column docking cancels the region gap [DECIDED]
+
+```yaml
+source: |
+  # Deck title
+
+  ## Left
+
+  :::align{middle center}
+  Left stack
+
+  :::align{bottom center}
+  Left footer
+
+  ## Right
+
+  Right text
+expect:
+  dom:
+    - "left .slide-region contains .slide-middle-group.flush-bottom followed by .slide-bottom-lane"
+    - "right .slide-region has no middle group or lane"
+  geometry:
+    - "gap between flushed stack and lane <= 1px"
+    - "left lane bottom edge == left region bottom edge (±1px)"
+```
+
 ## 7. Implementation map
 
 | Area | File(s) | Change |
@@ -472,7 +498,7 @@ grouping for every fixture. Print output must be verified visually once.
 
 ## 10. Success criteria
 
-1. All 16 fixtures pass as automated tests, in **both** JS and Ruby suites.
+1. Fixtures F-01..F-17 pass as automated tests, in **both** JS and Ruby suites.
 2. The existing system test (`titleCenterY` within 50px of slide center) still passes.
 3. Full test suite green; CI green on the PR.
 4. Behavior matches the mockups for every fixture (spot-check print output once).

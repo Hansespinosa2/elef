@@ -78,6 +78,9 @@ class PresentationAlignmentGrammarTest < ApplicationSystemTestCase
         if fixture.fetch("geometry").any? { |assertion| assertion.include?("group marginTop") }
           assert_in_delta group.fetch("topMargin"), group.fetch("bottomMargin"), 1, "#{id} group margins"
         end
+        if group.fetch("flushBottom") && fixture.fetch("geometry").any? { |assertion| assertion.include?("gap between flushed stack and lane") }
+          assert_in_delta 0, group.fetch("bottomMargin"), 1, "#{id} flushed stack touches its lane"
+        end
       end
       if fixture.fetch("geometry").any? { |assertion| assertion.include?("gap between") || assertion.include?("gaps between") }
         (actual.fetch("groups").flat_map { |group| group.fetch("gaps") } + actual.fetch("lanes").flat_map { |lane| lane.fetch("gaps") }).each do |gap|
@@ -157,9 +160,55 @@ class PresentationAlignmentGrammarTest < ApplicationSystemTestCase
 
     assert geometry.fetch("print"), geometry.inspect
     assert_operator geometry.fetch("stackGap"), :<, 8, geometry.inspect
-    assert_operator geometry.fetch("dockGap"), :<, 8, geometry.inspect
+    assert_in_delta 0, geometry.fetch("dockGap"), 1, geometry.inspect
     assert_in_delta 0, geometry.fetch("laneBottomGap"), 1, geometry.inspect
     assert_in_delta 720, geometry.fetch("slideHeight"), 2, geometry.inspect
+  ensure
+    page&.driver&.browser&.execute_cdp("Emulation.setEmulatedMedia", media: "screen")
+  end
+
+  test "print output cancels the column gap between a docked stack and lane" do
+    source = <<~MARKDOWN
+      # Deck title
+
+      ## Left
+
+      :::align{middle center}
+      Left stack
+
+      :::align{bottom center}
+      Left footer
+
+      ## Right
+
+      Right text
+    MARKDOWN
+    presentation = Presentation.create!(title: "Printed column docking", source: source)
+
+    visit print_presentation_path(presentation)
+    assert_selector ".presentation-print .slide-region .slide-middle-group.flush-bottom", count: 1
+    assert_selector ".presentation-print .slide-region .slide-bottom-lane", count: 1
+
+    browser = page.driver.browser
+    browser.execute_cdp("Emulation.setEmulatedMedia", media: "print")
+    geometry = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const slide = document.querySelector(".presentation-print .slide");
+        const region = slide.querySelector(".slide-region");
+        const group = region.querySelector(".slide-middle-group.flush-bottom");
+        const lane = region.querySelector(".slide-bottom-lane");
+        const rect = (element) => element.getBoundingClientRect();
+        return {
+          print: matchMedia("print").matches,
+          dockGap: rect(lane).top - rect(group).bottom,
+          laneBottomGap: rect(region).bottom - rect(lane).bottom
+        };
+      })()
+    JAVASCRIPT
+
+    assert geometry.fetch("print"), geometry.inspect
+    assert_in_delta 0, geometry.fetch("dockGap"), 1, geometry.inspect
+    assert_in_delta 0, geometry.fetch("laneBottomGap"), 1, geometry.inspect
   ensure
     page&.driver&.browser&.execute_cdp("Emulation.setEmulatedMedia", media: "screen")
   end

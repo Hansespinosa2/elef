@@ -236,6 +236,36 @@ class WebEditorUi {
     expect(measurements.classes[2]).toContain("position-right position-bottom")
   }
 
+  async assertColumnSlidePositionDocking() {
+    const preview = this.page.locator(".editor-projection.preview-pane")
+    const inspect = () => preview.evaluate(root => {
+      const slide = root.querySelector(".slide")
+      const regions = [...(slide?.querySelectorAll(".slide-region") || [])]
+      const left = regions[0]
+      const group = left?.querySelector(".slide-middle-group.flush-bottom")
+      const lane = left?.querySelector(".slide-bottom-lane")
+      const rect = element => element.getBoundingClientRect()
+      return {
+        regionCount: regions.length,
+        leftGroup: group?.textContent.trim(),
+        leftLane: lane?.textContent.trim(),
+        rightHasPlacement: Boolean(regions[1]?.querySelector(".slide-middle-group, .slide-bottom-lane")),
+        dockGap: group && lane ? rect(lane).top - rect(group).bottom : null,
+        laneBottomGap: left && lane ? rect(left).bottom - rect(lane).bottom : null
+      }
+    })
+
+    await expect.poll(inspect).toMatchObject({
+      regionCount: 2,
+      leftGroup: "Left stack",
+      leftLane: "Left footer",
+      rightHasPlacement: false
+    })
+    const measurements = await inspect()
+    expect(Math.abs(measurements.dockGap)).toBeLessThanOrEqual(1)
+    expect(Math.abs(measurements.laneBottomGap)).toBeLessThanOrEqual(1)
+  }
+
   async movePresentation(key) {
     await this.page.keyboard.press(key)
   }

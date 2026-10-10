@@ -96,6 +96,12 @@
       "source": ":::align{middle center}\n# Untitled Document\n\n:::align {center}\nStart writing Markdown here.",
       "expected": { "layout": "statement", "middleGroups": [["Untitled Document", "Start writing Markdown here."]], "bottomLanes": [], "warningPatterns": [], "blockClasses": {} },
       "geometry": ["title block center Y within 50px of slide center Y", "vertical gap between title and subtitle < 8px"]
+    },
+    {
+      "id": "F-17",
+      "source": "# Deck title\n\n## Left\n\n:::align{middle center}\nLeft stack\n\n:::align{bottom center}\nLeft footer\n\n## Right\n\nRight text",
+      "expected": { "layout": "two-column", "middleGroups": [["Left stack"]], "bottomLanes": [["Left footer"]], "regionPlacements": [{ "middleGroups": [["Left stack"]], "bottomLanes": [["Left footer"]] }, { "middleGroups": [], "bottomLanes": [] }], "warningPatterns": [], "flushBottom": true, "blockClasses": {} },
+      "geometry": ["gap between flushed stack and lane <= 1px", "left lane bottom edge == left region bottom edge (±1px)"]
     }
   ]
 }
