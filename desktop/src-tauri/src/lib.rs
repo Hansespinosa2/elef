@@ -1146,7 +1146,7 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     Ok(menu)
 }
 
-pub fn run() {
+pub fn run(context: tauri::Context<tauri::Wry>) {
     let updater = tauri_plugin_updater::Builder::new();
     #[cfg(feature = "webdriver")]
     let updater = match std::env::var("ELEF_E2E_UPDATER_PUBLIC_KEY") {
@@ -1254,7 +1254,7 @@ pub fn run() {
             install_update,
             confirm_app_ready,
         ])
-        .build(tauri::generate_context!())
+        .build(context)
         .expect("error while building Elef Desktop");
 
     app.run(|app, event| {

@@ -8,7 +8,8 @@ export async function hostileDeckNeutralizedWorkflow(ui) {
   const state = await ui.inspectHostilePreview()
   const externalMediaViolation = ui.externalMediaPolicy === "reject-remote"
     ? state.externalMedia.length > 0 || state.remoteRequests.length > 0
-    : !state.externalMedia.includes("https://example.invalid/tracker.png")
+    : !state.externalMedia.includes("https://example.invalid/tracker.png") &&
+      !state.remoteRequests.includes("https://example.invalid/tracker.png")
   if (state.scriptRan || state.eventRan || state.frameRan || state.inlineHandlers.length || state.executableElements.length || state.unsafeLinks.length || state.unsafeMedia.length || externalMediaViolation) {
     throw new Error(`Hostile Markdown violated the ${ui.externalMediaPolicy} host policy: ${JSON.stringify(state)}`)
   }

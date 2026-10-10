@@ -47,7 +47,7 @@
       "verification": [
         "test:test/javascript/renderer.test.js#ART-FIX-10",
         "test:test/system/art_test.rb#rich fixed Sequence stays vertical and eight compact items show no-fit",
-        "test:test/system/presentations_test.rb#saved presentation Art fallback preserves attached media"
+        "test:test/controllers/presentations_controller_test.rb#print output preserves attached media in the Art fallback"
       ]
     },
     "ART-INV-008": {
@@ -173,7 +173,7 @@
         "test:test/javascript/art_source.test.js#ART-BIND-ALIGN-BEFORE",
         "test:test/javascript/art_source.test.js#ART-BIND-POSITION-BEFORE",
         "test:test/e2e/scenarios/art-rendering.js#ART-SRC-008",
-        "test:test/system/art_test.rb#ART-SRC-008 position modifiers stay on an Art block in Rails presentation rendering"
+        "test:test/controllers/presentations_controller_test.rb#presentation rendering keeps position modifiers on the Art block"
       ]
     },
     "ART-SRC-009": {
@@ -561,7 +561,7 @@
       "status": "VERIFIED",
       "verification": [
         "test:test/javascript/renderer.test.js#ART-FIX-10",
-        "test:test/system/presentations_test.rb#saved presentation Art fallback preserves attached media"
+        "test:test/controllers/presentations_controller_test.rb#print output preserves attached media in the Art fallback"
       ]
     },
     "ART-SEC-002": {

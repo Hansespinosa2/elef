@@ -54,14 +54,18 @@ class SqliteCompatibilityTest < ActiveSupport::TestCase
 
     insert_work.call(workspace_id: workspace.id, kind: "document", title: "Unique document")
     assert_raises(ActiveRecord::RecordNotUnique) do
-      insert_work.call(workspace_id: workspace.id, kind: "document", title: "Unique document")
+      connection.transaction(requires_new: true) do
+        insert_work.call(workspace_id: workspace.id, kind: "document", title: "Unique document")
+      end
     end
 
     insert_work.call(workspace_id: workspace.id, kind: "presentation", title: "Shared title")
     insert_work.call(workspace_id: workspace.id, kind: "presentation", title: "Shared title")
 
     assert_raises(ActiveRecord::InvalidForeignKey) do
-      insert_work.call(workspace_id: -1, kind: "presentation", title: "Invalid workspace")
+      connection.transaction(requires_new: true) do
+        insert_work.call(workspace_id: -1, kind: "presentation", title: "Invalid workspace")
+      end
     end
   end
 

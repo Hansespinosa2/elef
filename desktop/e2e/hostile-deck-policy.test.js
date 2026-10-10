@@ -29,6 +29,9 @@ test("the web host declares and permits its remote image source policy", async (
   await hostileDeckNeutralizedWorkflow(host("allow-remote", {
     externalMedia: ["https://example.invalid/tracker.png"]
   }))
+  await hostileDeckNeutralizedWorkflow(host("allow-remote", {
+    remoteRequests: ["https://example.invalid/tracker.png"]
+  }))
 
   await assert.rejects(
     hostileDeckNeutralizedWorkflow(host("allow-remote")),
