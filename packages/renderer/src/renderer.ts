@@ -1,4 +1,4 @@
-/// <reference path="./types/markdown-it.d.ts" />
+/// <reference path="../../work-model/src/types/markdown-it.d.ts" />
 /// <reference path="./types/highlightjs-common.d.ts" />
 import MarkdownIt from "markdown-it"
 import hljs from "highlight.js/lib/common"

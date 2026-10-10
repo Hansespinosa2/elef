@@ -4,7 +4,7 @@
 // with DOM roots, document kind, editor lookup plus preview-toggle seams, and
 // the shared editing-utilities deps object, then delegates lifecycle and
 // actions. The web Stimulus controller is the thin adapter.
-import { blockOperationRange, directiveLineSpan, exciseRange, findPositionCloseAfter, insertAlignDirective } from "@elef/work-model/document-transforms"
+import { blockOperationRange, directiveLineSpan, exciseRange, insertAlignDirective } from "@elef/work-model/document-transforms"
 
 export interface DocumentEditorRange {
   start: number
@@ -19,7 +19,6 @@ export interface DocumentEditorBlock {
   delimiter_range?: DocumentEditorRange
   kind?: string
   empty_placeholder?: boolean
-  position_scope?: string
   position_directive_id?: string
   position?: { horizontal: string; vertical?: string; vertical_explicit?: boolean }
 }
@@ -613,13 +612,7 @@ export class DocumentEditor {
     if (!horizontal) {
       if (!directive) return
 
-      const directives = slide.directives ?? []
-      const directiveIndex = directives.findIndex((candidate) => candidate.id === directive.id)
       const ranges = [directive.range]
-      if (block.position_scope === "group") {
-        const closing = findPositionCloseAfter(directives, directiveIndex)
-        if (closing?.range) ranges.push(closing.range)
-      }
 
       const caret = this.captureCaret()
       const region = this.regionForBlock(block.id)

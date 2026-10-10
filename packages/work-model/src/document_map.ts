@@ -1,3 +1,6 @@
+import { ART_DIAGNOSTICS, resolveArtBindings, type ArtBindings, type ArtBoundaryMap, type ArtDiagnostic } from "./art_source.js"
+import { slidePositionLayout } from "./slide_position_layout.js"
+
 export interface SourceRange {
   start: number;
   end: number;
@@ -32,6 +35,11 @@ export interface FrontMatter {
   bodyStart: number;
 }
 
+export interface MapBlockArt {
+  directive_id: string;
+  source_range: SourceRange;
+}
+
 export interface MapBlock {
   id: string;
   index: number;
@@ -39,7 +47,8 @@ export interface MapBlock {
   markdown: string;
   position?: SourcePosition | null;
   position_directive_id?: string | null;
-  position_scope?: string | null;
+  art?: MapBlockArt;
+  reveal_event?: number;
   range: SourceRange;
   source_range: SourceRange;
   content_range: SourceRange;
@@ -56,6 +65,7 @@ export interface MapDirective {
   source_range: SourceRange;
   editable: boolean;
   scope?: string;
+  art_diagnostic?: string | null;
 }
 
 export interface MapRegion {
@@ -72,6 +82,10 @@ export interface MapRegion {
   empty_placeholder?: boolean;
 }
 
+export interface MapArtDiagnostic extends ArtDiagnostic {
+  slide_id: string;
+}
+
 export interface MapSlide {
   id: string;
   index: number;
@@ -81,6 +95,8 @@ export interface MapSlide {
   delimiter_range: SourceRange | null;
   blocks: MapBlock[];
   directives: MapDirective[];
+  art_diagnostics?: MapArtDiagnostic[];
+  reveal_event_count?: number;
   editable_regions: MapRegion[];
 }
 
@@ -92,18 +108,22 @@ export interface EditorMap {
   front_matter: { range: SourceRange; body_start: number } | null;
   slides: MapSlide[];
   directives: MapDirective[];
+  art_diagnostics?: MapArtDiagnostic[];
   editable_regions: MapRegion[];
 }
 
 export interface ParsedBlock {
   markdown: string;
   position: SourcePosition | null;
+  art?: { directive_id: string };
+  reveal_event?: number;
 }
 
 export interface SlideMetadata {
   layout: string;
   title: string | null;
   blocks: ParsedBlock[];
+  reveal_event_count: number;
   regions: ParsedBlock[][];
   section: string | null;
   subsection: string | null;
@@ -193,9 +213,13 @@ export function buildEditorStructure(
   const warnings: string[] = []
 
   ranges.forEach((range, index) => {
-    const normalizedSection = normalizeSection(source.slice(range.start, range.end).replace(/\r\n?/g, "\n"))
-    const metadata = slideMetadata(normalizedSection, context, mode)
-    const result = editorBlocks(source, range.start, range.end, metadata, index, mode)
+    const sectionSource = source.slice(range.start, range.end)
+    const normalizedSection = sectionSource.replace(/\r\n?/g, "\n")
+    const idPrefix = `slide-${index + 1}-art`
+    const artResolution = resolveArtBindings(sectionSource, { idPrefix })
+    const boundaryMap = artResolution.boundary_map
+    const metadata = slideMetadata(normalizedSection, context, mode, artResolution, boundaryMap)
+    const result = editorBlocks(source, range.start, range.end, metadata, index, mode, artResolution, boundaryMap)
     let blocks = result.blocks
     let regions = result.regions
     if (mode === "document") {
@@ -214,13 +238,27 @@ export function buildEditorStructure(
         : { start: range.delimiterStart, end: range.delimiterEnd },
       blocks,
       directives: result.directives,
+      art_diagnostics: artResolution.diagnostics.map((diagnostic): MapArtDiagnostic => ({
+        ...diagnostic,
+        slide_id: `slide-${index + 1}`,
+        source_range: {
+          start: range.start + diagnostic.source_range.start,
+          end: range.start + diagnostic.source_range.end
+        }
+      })),
       editable_regions: regions
     }
+    if (metadata.reveal_event_count > 0) slideMap.reveal_event_count = metadata.reveal_event_count
     map.slides.push(slideMap)
     map.directives.push(...result.directives)
+    if (slideMap.art_diagnostics?.length) {
+      map.art_diagnostics = [...(map.art_diagnostics ?? []), ...slideMap.art_diagnostics]
+    }
     map.editable_regions.push(...regions)
     parsedSlides.push({ ...metadata, map: slideMap })
     warnings.push(...metadata.warnings)
+    for (const diagnostic of slideMap.art_diagnostics ?? []) warnings.push(artDiagnosticMessage(diagnostic.code))
+    if (!slideMap.art_diagnostics?.length) delete slideMap.art_diagnostics
   })
 
   return {
@@ -452,7 +490,6 @@ function slideSourceRanges(source: string, bodyStart: number): SlideSourceRange[
 interface PendingPosition {
   value: SourcePosition;
   directiveId: string;
-  scoped: boolean;
 }
 
 function editorBlocks(
@@ -461,9 +498,19 @@ function editorBlocks(
   end: number,
   slide: SlideMetadata,
   slideIndex: number,
-  mode: string
+  mode: string,
+  artResolution: ArtBindings,
+  sourceBoundaryMap: ArtBoundaryMap
 ): { blocks: MapBlock[]; directives: MapDirective[]; regions: MapRegion[] } {
   const lines = sourceLines(source, start, end)
+  const artBindings = indexArtBindings(artResolution.bindings, lines.length, start)
+  const artDirectivesByLine = new Map(artResolution.directives.map((directive) => [directive.line, directive]))
+  const boundaryMap = {
+    blockStarts: new Set(sourceBoundaryMap.blockStarts),
+    blockEnds: new Set(sourceBoundaryMap.blockEnds),
+    directiveLines: new Set(sourceBoundaryMap.directiveLines),
+    blankLines: new Set(sourceBoundaryMap.blankLines)
+  }
   const blocks: MapBlock[] = []
   const directives: MapDirective[] = []
   const regions: MapRegion[] = []
@@ -492,20 +539,32 @@ function editorBlocks(
       markdown,
       position: pendingPosition?.value ?? null,
       position_directive_id: pendingPosition?.directiveId ?? null,
-      position_scope: pendingPosition ? (pendingPosition.scoped ? "group" : "block") : null,
       range,
       source_range: { ...range },
       content_range: contentRange
+    }
+    const revealEvent = slide.blocks[blockIndex]?.reveal_event
+    if (revealEvent !== undefined) block.reveal_event = revealEvent
+    const artBinding = artBindings.byTargetStart.get(blockStart)
+    if (artBinding) {
+      block.art = {
+        directive_id: artBinding.directive_id,
+        source_range: {
+          start: start + artBinding.directive_range.start,
+          end: start + artBinding.directive_range.end
+        }
+      }
     }
     const region = editableRegion(markdown, blockStart, id, slideIndex, blockIndex, kind, slide, mode)
     block.editable_region_id = region.id
     blocks.push(block)
     regions.push(region)
     current = []
-    if (pendingPosition && !pendingPosition.scoped) pendingPosition = null
+    pendingPosition = null
   }
 
   lines.forEach((line, lineIndex) => {
+    if (boundaryMap.blockStarts.has(lineIndex) && current.length) flush()
     const incomingFence = fenceMarker(line.text)
     if (fence) {
       current.push(line)
@@ -519,7 +578,10 @@ function editorBlocks(
     }
     if (mathFence) {
       current.push(line)
-      if (displayMathFenceMarker(line.text) === mathFence) mathFence = null
+      if (displayMathFenceMarker(line.text) === mathFence) {
+        mathFence = null
+        if (boundaryMap.blockEnds.has(lineIndex + 1)) flush()
+      }
       return
     }
     const openingMathFence = displayMathFenceOpener(line.text)
@@ -528,66 +590,76 @@ function editorBlocks(
       mathFence = openingMathFence
       return
     }
-    if (!line.text.trim()) {
-      flush()
+    if (boundaryMap.blankLines.has(lineIndex)) {
+      const artBinding = artBindings.byLine[lineIndex]
+      if (artBinding && lineIndex + 1 < artBinding.target_lines.end) current.push(line)
+      else flush()
       return
     }
-    if (/^\s*:::/.test(line.text)) {
+    if (boundaryMap.directiveLines.has(lineIndex)) {
       flush()
       const text = line.text.trim()
-      const directive = editorDirective(line, text, slideIndex, directives.length)
+      const artDirective = artDirectivesByLine.get(lineIndex)
+      const directive = editorDirective(line, text, slideIndex, directives.length, mode)
+      if (artDirective) {
+        directive.id = artDirective.id
+        directive.type = artDirective.type === "art" ? "art" : "art_invalid"
+        directive.art_diagnostic = artDirective.type === "art_invalid" ? ART_DIAGNOSTICS.INVALID_SYNTAX : null
+      }
       directives.push(directive)
       const position = positionFromBlock(text)
       if (position) {
         pendingPosition = {
           value: position,
-          directiveId: directive.id,
-          scoped: positionScopeCloses(lines, lineIndex)
+          directiveId: directive.id
         }
-      } else if (text === ":::" && pendingPosition) {
-        pendingPosition = null
       }
       return
     }
     current.push(line)
+    if (boundaryMap.blockEnds.has(lineIndex + 1)) flush()
   })
   flush()
   if (mode === "document") directives.forEach(directive => { directive.scope = "document" })
   return { blocks, directives, regions }
 }
 
-function editorDirective(line: SourceLine, text: string, slideIndex: number, directiveIndex: number): MapDirective {
+function indexArtBindings(
+  bindings: ArtBindings["bindings"],
+  lineCount: number,
+  sourceOffset = 0
+): { byLine: Array<ArtBindings["bindings"][number] | undefined>; byTargetStart: Map<number, ArtBindings["bindings"][number]> } {
+  const byLine: Array<ArtBindings["bindings"][number] | undefined> = new Array(lineCount)
+  const byTargetStart = new Map<number, ArtBindings["bindings"][number]>()
+  for (const binding of bindings) {
+    byTargetStart.set(sourceOffset + binding.target_range.start, binding)
+    const start = Math.max(0, binding.target_lines.start)
+    const end = Math.min(lineCount, binding.target_lines.end)
+    for (let line = start; line < end; line += 1) byLine[line] = binding
+  }
+  return { byLine, byTargetStart }
+}
+
+interface StepDirectiveResult {
+  kind: "step" | "malformed" | "indented_code"
+  label?: string | null
+}
+
+function editorDirective(line: SourceLine, text: string, slideIndex: number, directiveIndex: number, mode: string): MapDirective {
+  const step = mode === "presentation" ? stepDirective(line.text) : null
   const position = /^:::(align|position)[ \t]*\{([^}]*)\}/.exec(text)
   const margin = /^:::(section|subsection|footnote)\{/.exec(text)
-  const type = text === ":::" ? "position_close" : position ? "position" : margin?.[1] ?? "unknown"
+  const type = step?.kind === "step" ? "step" : step?.kind === "malformed" ? "malformed_step" : position ? "position" : margin?.[1] ?? "unknown"
   const range: SourceRange = { start: line.start, end: line.end }
   return {
     id: `slide-${slideIndex + 1}-directive-${directiveIndex + 1}`,
     type,
-    value: position?.[2]?.trim() ?? null,
+    value: step?.kind === "step" ? (step.label ?? null) : position?.[2]?.trim() ?? null,
     text,
     range,
     source_range: { ...range },
     editable: type === "position"
   }
-}
-
-function positionScopeCloses(lines: SourceLine[], startIndex: number): boolean {
-  let fence: FenceState | null = null
-  for (const line of lines.slice(startIndex + 1)) {
-    const incoming = fenceMarker(line.text)
-    if (fence) {
-      fence = toggleFence(fence, incoming)
-      continue
-    }
-    if (incoming) {
-      fence = incoming
-      continue
-    }
-    if (line.text.trim() === ":::") return true
-    if (/^\s*:::(?:align|position)[ \t]*\{/.test(line.text)) return false
-  }
-  return false
 }
 
 function editableRegion(
@@ -790,25 +862,42 @@ function unsupportedEscapedPunctuation(markdown: string): boolean {
   return false
 }
 
-function slideMetadata(markdown: string, context: MarginContext, mode: string): SlideMetadata {
+function slideMetadata(
+  markdown: string,
+  context: MarginContext,
+  mode: string,
+  artResolution: ArtBindings,
+  sourceBoundaryMap: ArtBoundaryMap
+): SlideMetadata {
   let normalized = markdown.replace(/\r\n?/g, "\n")
+  const reveals = resolveRevealGroups(normalized, mode, artResolution)
   const margin = mode === "presentation"
-    ? parseMarginDirectives(normalized, context)
+    ? parseMarginDirectives(normalized, context, sourceBoundaryMap)
     : { content: normalized, section: null, subsection: null, footnote: null, warnings: [] as string[] }
   normalized = margin.content
-  const parsed = parseBlocks(normalized)
+  const lines = normalized.split("\n")
+  for (const directive of artResolution.directives) {
+    if (directive.type === "art" || directive.type === "art_invalid") lines[directive.line] = ""
+  }
+  for (const line of reveals.directive_lines) lines[line] = ""
+  const parsed = parseBlocks(lines.join("\n"), artResolution, sourceBoundaryMap, reveals)
   const layout = inferLayout(parsed.blocks)
   const title = ["two-column", "three-column"].includes(layout) ? parsed.blocks[0]?.markdown ?? null : null
   const regions = columnRegions(parsed.blocks, layout)
+  const placementWarnings = mode === "presentation"
+    ? (["two-column", "three-column"].includes(layout) ? regions : [parsed.blocks])
+      .flatMap(blocks => slidePositionLayout(blocks).warnings)
+    : []
   return {
     layout,
     title,
     blocks: parsed.blocks,
+    reveal_event_count: parsed.reveal_event_count ?? 0,
     regions,
     section: margin.section,
     subsection: margin.subsection,
     footnote: margin.footnote,
-    warnings: [...margin.warnings, ...parsed.warnings]
+    warnings: [...margin.warnings, ...reveals.warnings, ...parsed.warnings, ...placementWarnings]
   }
 }
 
@@ -816,8 +905,8 @@ type MarginKind = "section" | "subsection" | "footnote"
 
 interface MarginDirectiveNote {
   type: MarginKind;
-  malformed: boolean;
-  value: string;
+  malformed?: boolean;
+  value?: string;
 }
 
 interface MarginParse {
@@ -828,8 +917,10 @@ interface MarginParse {
   warnings: string[];
 }
 
-function parseMarginDirectives(markdown: string, context: MarginContext): MarginParse {
+function parseMarginDirectives(markdown: string, context: MarginContext, sourceBoundaryMap: ArtBoundaryMap): MarginParse {
   const lines = markdown.split("\n")
+  const directiveLines = new Set(sourceBoundaryMap.directiveLines)
+  const blankLines = new Set(sourceBoundaryMap.blankLines)
   const content: string[] = []
   const warnings: string[] = []
   let leading = true
@@ -861,21 +952,22 @@ function parseMarginDirectives(markdown: string, context: MarginContext): Margin
       leading = false
       return
     }
-    const directive = marginDirective(line)
+    const directive = directiveLines.has(index) ? marginDirective(line) : null
     if (directive) {
+      content.push("")
       if (directive.malformed) {
         warnings.push(`Malformed ${directive.type} margin directive was removed.`)
       } else if (directive.type === "footnote") {
-        if (lines.slice(index + 1).every(following => !following.trim())) footnote = directive.value
+        if (lines.slice(index + 1).every((_following, offset) => blankLines.has(index + 1 + offset))) footnote = directive.value ?? null
         else warnings.push("Footnote margin directive must appear at the end of a slide.")
       } else if (leading) {
-        context[directive.type] = directive.value
+        context[directive.type] = directive.value ?? null
       } else {
         warnings.push(`${directive.type[0]?.toUpperCase() ?? ""}${directive.type.slice(1)} margin directive must appear at the beginning of a slide.`)
       }
       return
     }
-    if (line.trim()) leading = false
+    if (!blankLines.has(index)) leading = false
     content.push(line)
   })
   return { content: content.join("\n"), section: context.section, subsection: context.subsection, footnote, warnings }
@@ -898,7 +990,7 @@ function marginDirective(line: string): MarginDirectiveNote | null {
     if (character === undefined) continue
     const next = chars[index + 1]
     if (character === "\\" && (next === "{" || next === "}" || next === "\\")) {
-      value.push(next)
+      if (next !== undefined) value.push(next)
       index += 1
     } else if (character === "{") {
       depth += 1
@@ -907,104 +999,316 @@ function marginDirective(line: string): MarginDirectiveNote | null {
       depth -= 1
       if (depth === 0) {
         return chars.slice(index + 1).join("").trim()
-          ? { type: kind, malformed: true, value: "" }
-          : { type: kind, malformed: false, value: value.join("").trim() }
+          ? { type: kind, malformed: true }
+          : { type: kind, value: value.join("").trim() }
       }
       value.push(character)
     } else {
       value.push(character)
     }
   }
-  return { type: kind, malformed: true, value: "" }
+  return { type: kind, malformed: true }
 }
 
-function parseBlocks(markdown: string): { blocks: ParsedBlock[]; warnings: string[] } {
-  const rawBlocks = markdownBlocks(markdown)
+interface RawMarkdownBlock {
+  markdown: string
+  startLine: number
+  endLine: number
+}
+
+interface RevealGroups {
+  event_by_line: Record<number, number>
+  event_count: number
+  directive_lines: Array<number>
+  warnings: Array<string>
+  lines: Array<string>
+}
+
+function parseBlocks(
+  markdown: string,
+  artResolution: ArtBindings,
+  sourceBoundaryMap: ArtBoundaryMap,
+  reveals: RevealGroups
+): { blocks: ParsedBlock[]; warnings: string[]; reveal_event_count: number } {
+  const rawBlocks = markdownBlocks(markdown, artResolution, sourceBoundaryMap)
+  if (reveals?.directive_lines.length) return parseBlocksWithReveals(rawBlocks, artResolution, reveals)
+
+  return parseBlocksLegacy(rawBlocks, artResolution)
+}
+
+function parseBlocksLegacy(
+  rawBlocks: Array<RawMarkdownBlock>,
+  artResolution: ArtBindings
+): { blocks: ParsedBlock[]; warnings: string[]; reveal_event_count: number } {
   const blocks: ParsedBlock[] = []
   const warnings: string[] = []
+  const artBindingsByStartLine = new Map(artResolution.bindings.map((binding) => [binding.target_lines.start, binding]))
   for (let index = 0; index < rawBlocks.length;) {
-    const block = rawBlocks[index]
-    if (block === undefined) {
-      index += 1
-      continue
-    }
+    const record = rawBlocks[index] as RawMarkdownBlock
+    const block = record.markdown
     const position = positionFromBlock(block)
-    const following = rawBlocks[index + 1]
     if (position) {
-      const closingOffset = rawBlocks.slice(index + 1).indexOf(":::")
-      if (closingOffset >= 0) {
-        const closing = index + 1 + closingOffset
-        for (const grouped of rawBlocks.slice(index + 1, closing)) if (grouped) blocks.push({ markdown: grouped, position })
-        index = closing + 1
-      } else if (following !== undefined) {
-        blocks.push({ markdown: following, position })
+      if (rawBlocks[index + 1] !== undefined) {
+        blocks.push(parsedBlock(rawBlocks[index + 1] as RawMarkdownBlock, position, artBindingsByStartLine, null))
         index += 2
       } else {
-        warnings.push("Alignment directive has no following Markdown block.")
+        warnings.push("Dangling directive: alignment has no following Markdown block.")
         index += 1
       }
     } else if (block === ":::" || block.startsWith(":::")) {
       warnings.push("Unknown or malformed presentation directive was removed.")
       index += 1
     } else {
-      blocks.push({ markdown: block, position: null })
+      blocks.push(parsedBlock(record, null, artBindingsByStartLine, null))
       index += 1
     }
   }
-  return { blocks, warnings }
+  return { blocks, warnings, reveal_event_count: 0 }
 }
 
-function markdownBlocks(markdown: string): string[] {
-  const blocks: string[] = []
-  let current: string[] = []
+function parseBlocksWithReveals(
+  rawBlocks: Array<RawMarkdownBlock>,
+  artResolution: ArtBindings,
+  reveals: RevealGroups
+): { blocks: ParsedBlock[]; warnings: string[]; reveal_event_count: number } {
+  const blocks: ParsedBlock[] = []
+  const warnings: string[] = []
+  const artBindingsByStartLine = new Map(artResolution.bindings.map((binding) => [binding.target_lines.start, binding]))
+  for (let index = 0; index < rawBlocks.length;) {
+    const record = rawBlocks[index] as RawMarkdownBlock
+    if (record.markdown === ":::") {
+      warnings.push("Unknown or malformed presentation directive was removed.")
+      index += 1
+      continue
+    }
+
+    const position = positionFromBlock(record.markdown)
+    if (position) {
+      let selectedPosition = position
+      index += 1
+      while (index < rawBlocks.length) {
+        const nextPosition = positionFromBlock((rawBlocks[index] as RawMarkdownBlock).markdown)
+        if (!nextPosition) break
+        selectedPosition = nextPosition
+        index += 1
+      }
+      if (rawBlocks[index]) {
+        blocks.push(parsedBlock(rawBlocks[index] as RawMarkdownBlock, selectedPosition, artBindingsByStartLine, reveals.event_by_line))
+        index += 1
+      } else {
+        warnings.push("Dangling directive: alignment has no following Markdown block.")
+      }
+      continue
+    }
+
+    if (record.markdown.startsWith(":::")) {
+      warnings.push("Unknown or malformed presentation directive was removed.")
+      index += 1
+      continue
+    }
+
+    blocks.push(parsedBlock(record, null, artBindingsByStartLine, reveals.event_by_line))
+    index += 1
+  }
+  return { blocks, warnings, reveal_event_count: reveals.event_count }
+}
+
+function parsedBlock(
+  record: RawMarkdownBlock,
+  position: SourcePosition | null,
+  artBindingsByStartLine: Map<number, ArtBindings["bindings"][number]>,
+  eventByLine: Record<number, number> | null
+): ParsedBlock {
+  const block: ParsedBlock = { markdown: record.markdown, position }
+  const binding = artBindingsByStartLine.get(record.startLine)
+  if (binding) block.art = { directive_id: binding.directive_id }
+  const revealEvent = eventByLine?.[record.startLine]
+  if (revealEvent !== undefined) block.reveal_event = revealEvent
+  return block
+}
+
+function resolveRevealGroups(markdown: string, mode: string, artResolution: ArtBindings): RevealGroups {
+  const lines = markdown.split("\n")
+  const empty: RevealGroups = { event_by_line: {}, event_count: 0, directive_lines: [], warnings: [], lines }
+  if (mode !== "presentation") return empty
+
+  const directiveLines = new Set(artResolution.boundary_map.directiveLines)
+  const blankLines = new Set(artResolution.boundary_map.blankLines)
+  const artLines = new Set(artResolution.directives.map((directive) => directive.line))
+  const eventByLine: Record<number, number> = {}
+  const consumed: Array<number> = []
+  const warnings: Array<string> = []
+  const pending: Array<{ kind: string; label: string | null; sequence: number }> = []
+  const current: Array<number> = []
+  const eventOrdinals = new Map<string, number>()
+  let stepSequence = 0
+
+  const warnConflicts = (): void => {
+    const labels = new Set(pending.map((step) => (step.label === null ? "plain" : `label:${canonicalStepLabel(step.label)}`)))
+    if (labels.size > 1) warnings.push("Conflicting step directives in one stack; the last valid step directive takes effect.")
+  }
+  const orphan = (): void => {
+    if (!pending.length) return
+    warnConflicts()
+    warnings.push("Step directive has no following contiguous Markdown group; place content immediately below it without a blank line.")
+    pending.length = 0
+  }
+  const flush = (): void => {
+    if (!current.length) return
+    warnConflicts()
+    const step = pending.at(-1)
+    if (step) {
+      const identity = step.label === null ? `plain:${step.sequence}` : `label:${canonicalStepLabel(step.label)}`
+      if (!eventOrdinals.has(identity)) eventOrdinals.set(identity, eventOrdinals.size)
+      const revealEvent = eventOrdinals.get(identity) as number
+      for (const line of current) eventByLine[line] = revealEvent
+    }
+    current.length = 0
+    pending.length = 0
+  }
+
+  lines.forEach((line, lineIndex) => {
+    const step = directiveLines.has(lineIndex) ? stepDirective(line) : null
+    if (step?.kind === "step") {
+      flush()
+      consumed.push(lineIndex)
+      stepSequence += 1
+      pending.push({ kind: step.kind, label: step.label ?? null, sequence: stepSequence })
+      return
+    }
+    if (step?.kind === "malformed") {
+      flush()
+      consumed.push(lineIndex)
+      warnings.push("Malformed step directive was removed; use :::step or :::step{N} on its own line.")
+      return
+    }
+    if (step?.kind === "indented_code") {
+      current.push(lineIndex)
+      return
+    }
+
+    if (blankLines.has(lineIndex)) {
+      flush()
+      orphan()
+      return
+    }
+    if (directiveLines.has(lineIndex)) {
+      if (/^ {0,3}:::[ \t]*$/.test(line)) {
+        flush()
+        orphan()
+        return
+      }
+      const compatible = positionFromBlock(line) || artLines.has(lineIndex) || /^\s*:::(?:section|subsection|footnote)\{/.test(line)
+      if (!compatible) {
+        flush()
+        orphan()
+      }
+      return
+    }
+    current.push(lineIndex)
+  })
+  flush()
+  orphan()
+
+  return { event_by_line: eventByLine, event_count: eventOrdinals.size, directive_lines: consumed, warnings, lines }
+}
+
+function stepDirective(line: string): StepDirectiveResult | null {
+  if (/^ {4,}:::step(?=$|[^A-Za-z0-9_-])/.test(line)) return { kind: "indented_code" }
+  if (!/^[ \t]*:::step(?=$|[^A-Za-z0-9_-])/.test(line)) return null
+  const valid = /^ {0,3}:::step(?:\{([0-9]+)\})?[ \t]*$/.exec(line)
+  return valid ? { kind: "step", label: valid[1] ?? null } : { kind: "malformed" }
+}
+
+function canonicalStepLabel(label: string): string {
+  return label.replace(/^0+/, "") || "0"
+}
+
+function markdownBlocks(markdown: string, artResolution: ArtBindings, sourceBoundaryMap: ArtBoundaryMap): Array<RawMarkdownBlock> {
+  const blocks: Array<RawMarkdownBlock> = []
+  const artBindings = indexArtBindings(artResolution.bindings, markdown.split("\n").length)
+  const boundaryMap = {
+    blockStarts: new Set(sourceBoundaryMap.blockStarts),
+    blockEnds: new Set(sourceBoundaryMap.blockEnds),
+    directiveLines: new Set(sourceBoundaryMap.directiveLines),
+    blankLines: new Set(sourceBoundaryMap.blankLines)
+  }
+  let current: Array<string> = []
+  let currentStartLine: number | null = null
+  let currentEndLine: number | null = null
+  const flush = (): void => {
+    if (!current.length) return
+    blocks.push({ markdown: current.join("\n"), startLine: currentStartLine as number, endLine: currentEndLine as number })
+    current = []
+    currentStartLine = null
+    currentEndLine = null
+  }
+  const pushLine = (line: string, index: number): void => {
+    if (!current.length) currentStartLine = index
+    current.push(line)
+    currentEndLine = index + 1
+  }
   let fence: FenceState | null = null
   let mathFence: string | null = null
-  for (const line of markdown.split("\n")) {
+  for (const [index, line] of markdown.split("\n").entries()) {
+    if (boundaryMap.blockStarts.has(index) && current.length) flush()
     const incoming = fenceMarker(line)
     if (fence) fence = toggleFence(fence, incoming)
     else if (incoming) fence = incoming
     if (!fence && mathFence) {
-      if (displayMathFenceMarker(line) === mathFence) mathFence = null
       current.push(line)
+      if (displayMathFenceMarker(line) === mathFence) {
+        mathFence = null
+        if (boundaryMap.blockEnds.has(index + 1)) flush()
+      }
       continue
     }
     if (!fence) {
       const opening = displayMathFenceOpener(line)
       if (opening) mathFence = opening
     }
-    if (!fence && !mathFence && /^\s*:::/.test(line)) {
-      if (current.length) blocks.push(current.join("\n"))
-      blocks.push(line.trim())
-      current = []
-    } else if (!line.trim() && !fence && !mathFence) {
-      if (current.length) blocks.push(current.join("\n"))
-      current = []
+    if ((line === "" || boundaryMap.blankLines.has(index)) && boundaryMap.directiveLines.has(index)) {
+      // Source resolution has already consumed this directive as metadata.
+      // Its blank placeholder preserves line ownership without creating an
+      // empty rendered block or a second directive interpretation.
+      flush()
+    } else if (!fence && !mathFence && boundaryMap.directiveLines.has(index)) {
+      flush()
+      blocks.push({ markdown: line.trim(), startLine: index, endLine: index + 1 })
+    } else if ((line === "" || boundaryMap.blankLines.has(index)) && !fence && !mathFence) {
+      const artBinding = artBindings.byLine[index]
+      if (artBinding && index + 1 < artBinding.target_lines.end) pushLine(line, index)
+      else flush()
     } else {
-      current.push(line)
+      pushLine(line, index)
     }
+    if (boundaryMap.blockEnds.has(index + 1)) flush()
   }
-  if (current.length) blocks.push(current.join("\n"))
+  flush()
   return blocks
 }
 
 function positionFromBlock(block: string): SourcePosition | null {
   const match = /^\s*:::(align|position)[ \t]*\{([^}]*)\}\s*$/.exec(block)
   if (!match) return null
-  const kind = match[1] ?? ""
   const values = (match[2] ?? "").split(/\s+/).filter(Boolean).map(value => value.toLowerCase())
-  const horizontalWords = POSITION_VOCABULARY.horizontal
-  const verticalWords = POSITION_VOCABULARY.vertical
-  let horizontal = values.find(value => horizontalWords.includes(value))
-  let vertical = values.find(value => verticalWords.includes(value))
-  const first = values[0]
-  const second = values[1]
-  if (kind === "align" && values.length === 2 && first !== undefined && second !== undefined &&
-    (first === "center" || verticalWords.includes(first)) && horizontalWords.includes(second)) {
-    horizontal = second
-    vertical = first === "center" ? "middle" : first
-  }
+  const horizontal = values.find(value => POSITION_VOCABULARY.horizontal.includes(value))
+  const vertical = values.find(value => POSITION_VOCABULARY.vertical.includes(value))
   if (!horizontal && !vertical) return null
   return { horizontal: horizontal || "left", vertical: vertical || "top", vertical_explicit: Boolean(vertical) }
+}
+
+function artDiagnosticMessage(code: string): string {
+  const messages: Record<string, string> = {
+    [ART_DIAGNOSTICS.NO_LIST_TARGET]: "Art needs a root Markdown list immediately after its directive.",
+    [ART_DIAGNOSTICS.INVALID_SYNTAX]: "Art directive syntax is invalid. Use :::art with no arguments.",
+    [ART_DIAGNOSTICS.UNSUPPORTED_CONTENT]: "Art contains unsupported content; the complete Markdown list is shown.",
+    [ART_DIAGNOSTICS.REVEAL_BOUNDARY]: "SmartArt list crosses a reveal boundary; split the Art list or remove the step marker inside it. The complete Markdown list is shown.",
+    [ART_DIAGNOSTICS.NO_FIT]: "Art does not fit the fixed slide; all authored content remains available.",
+    [ART_DIAGNOSTICS.ITEM_TOO_TALL]: "An Art item is taller than a document page and remains intact.",
+    [ART_DIAGNOSTICS.INTERNAL_ERROR]: "Art could not be laid out; the complete Markdown list remains available."
+  }
+  return messages[code] || "Art reported an unknown diagnostic."
 }
 
 function inferLayout(blocks: ParsedBlock[]): string {
@@ -1083,7 +1387,10 @@ function displayMathFenceMarker(line: string): string | null {
 
 function displayMathFenceOpener(line: string): string | null {
   const marker = displayMathFenceMarker(line)
-  return marker === "$$" ? "$$" : marker === "\\[" ? "\\]" : null
+  if (marker === "$$") return "$$"
+  if (marker === "\\[") return "\\]"
+  const inlineDisplayOpener = /^[ \t]{0,3}\$\$[ \t]*(\S.*)$/.exec(line)
+  return inlineDisplayOpener && !inlineDisplayOpener[1]?.includes("$$") ? "$$" : null
 }
 
 function displayMathFenceSource(markdown: string): boolean {
@@ -1104,10 +1411,6 @@ function toggleFence(current: FenceState | null, incoming: FenceState | null): F
   if (!current) return incoming
   if (incoming && incoming.marker === current.marker && incoming.length >= current.length && incoming.closing) return null
   return current
-}
-
-function normalizeSection(value: string): string {
-  return value.replace(/^\n/, "").replace(/\n$/, "")
 }
 
 function sourceLines(source: string, start = 0, end = source.length): SourceLine[] {

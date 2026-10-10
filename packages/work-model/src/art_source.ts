@@ -4,7 +4,8 @@
 // parsing only, no DOM. The boundary map (block starts/ends, directive
 // and blank lines) is shared with Ruby, which consumes blankLines to skip
 // protected lines with the same definition.
-import MarkdownIt, { type MarkdownItArtToken } from "markdown-it"
+/// <reference path="./types/markdown-it.d.ts" />
+import MarkdownIt, { type MarkdownItToken } from "markdown-it"
 
 const listParser = new MarkdownIt({
   html: false,
@@ -101,7 +102,7 @@ export interface ArtBindings {
 export function analyzeArtList(source: unknown): ArtListAnalysis | null {
   if (typeof source !== "string") return null
 
-  let tokens: Array<MarkdownItArtToken>
+  let tokens: Array<MarkdownItToken>
   try {
     tokens = listParser.parse(source, {})
   } catch (_error) {
@@ -116,13 +117,13 @@ export function analyzeArtList(source: unknown): ArtListAnalysis | null {
 }
 
 interface RootListRecord {
-  token: MarkdownItArtToken
+  token: MarkdownItToken
   openIndex: number
   closeIndex: number
   closeType: string
 }
 
-function analyzeArtListTokens(tokens: Array<MarkdownItArtToken>, rootList: RootListRecord): ArtListAnalysis | null {
+function analyzeArtListTokens(tokens: Array<MarkdownItToken>, rootList: RootListRecord): ArtListAnalysis | null {
   const { token: firstBlock, openIndex, closeIndex } = rootList
   if (closeIndex < 0) return null
   const rootLevel = firstBlock.level
@@ -130,7 +131,7 @@ function analyzeArtListTokens(tokens: Array<MarkdownItArtToken>, rootList: RootL
   const rootItems: Array<{ directParagraphs: number; hasNestedList: boolean }> = []
   let unsupported = false
   for (let index = openIndex + 1; index < closeIndex; index += 1) {
-    const token = tokens[index] as MarkdownItArtToken
+    const token = tokens[index] as MarkdownItToken
     if (UNSUPPORTED_BLOCK_TYPES.has(token.type)) unsupported = true
     if (token.type === "inline" && token.children?.some((child) => child.type === "image")) unsupported = true
 
@@ -144,7 +145,7 @@ function analyzeArtListTokens(tokens: Array<MarkdownItArtToken>, rootList: RootL
     let directParagraphs = 0
     let hasNestedList = false
     for (let itemIndex = index + 1; itemIndex < itemClose; itemIndex += 1) {
-      const child = tokens[itemIndex] as MarkdownItArtToken
+      const child = tokens[itemIndex] as MarkdownItToken
       if (UNSUPPORTED_BLOCK_TYPES.has(child.type)) unsupported = true
       if (child.type === "inline" && child.children?.some((inline) => inline.type === "image")) unsupported = true
       if (child.level !== token.level + 1) continue
@@ -169,7 +170,7 @@ function analyzeArtListTokens(tokens: Array<MarkdownItArtToken>, rootList: RootL
   }
 }
 
-function rootListRecords(tokens: Array<MarkdownItArtToken>): Array<RootListRecord> {
+function rootListRecords(tokens: Array<MarkdownItToken>): Array<RootListRecord> {
   const records: Array<RootListRecord> = []
   let active: RootListRecord | null = null
   tokens.forEach((token, index) => {
@@ -193,7 +194,7 @@ function rootListRecords(tokens: Array<MarkdownItArtToken>): Array<RootListRecor
 }
 
 interface MarkdownBoundaryContext {
-  markdownTokens: Array<MarkdownItArtToken>
+  markdownTokens: Array<MarkdownItToken>
   rootListsByStartLine: Map<number, RootListRecord>
   boundaryMap: ArtBoundaryMap
 }
@@ -342,7 +343,7 @@ function isIndentedCodeMarker(line: string): boolean {
   return /^(?: {4,}| *\t)[ \t]*:::/.test(line)
 }
 
-function findItemClose(tokens: Array<MarkdownItArtToken>, start: number, end: number, level: number): number {
+function findItemClose(tokens: Array<MarkdownItToken>, start: number, end: number, level: number): number {
   for (let index = start; index < end; index += 1) {
     if (tokens[index]?.type === "list_item_close" && tokens[index]?.level === level) return index
   }

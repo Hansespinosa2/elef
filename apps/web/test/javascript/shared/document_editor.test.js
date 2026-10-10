@@ -27,13 +27,15 @@ test("empty trailing markers detect only bare list and quote lines", () => {
   assert.equal(editor.hasEmptyTrailingMarker("- item", "quote"), false)
 })
 
-test("document block source ranges include lone group directives", () => {
+test("document block source ranges include the block directive", () => {
+  // No scoped groups: each position directive applies to its single
+  // following block, and a bare ::: is an unknown directive line.
   const editor = new DocumentEditor({})
   const source = ":::align{center}\n\n# Solo\n\n:::\n\nAfter\n"
   editor.map = buildEditorMap(source)
   const [solo, after] = editor.map.slides[0].blocks
   assert.deepEqual(editor.blockSourceRange(after), { from: after.range.start, to: after.range.end })
-  assert.deepEqual(editor.blockSourceRange(solo), { from: 0, to: 30 })
+  assert.deepEqual(editor.blockSourceRange(solo), { from: 0, to: 25 })
 
   const plain = new DocumentEditor({})
   plain.map = buildEditorMap("# T\n\nBody\n")

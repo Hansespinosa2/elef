@@ -22,7 +22,6 @@ function testMap() {
     range: { start, end },
     source_range: { start, end },
     content_range: { start, end },
-    position_scope: "slide",
   });
   // SOURCE layout: "# Alpha"(0..7) "\n\n"(7..9) "First"(9..14) "\n\n"(14..16)
   // "---"(16..19) "\n\n"(19..21) "# Beta"(21..27) "\n\n"(27..29)

@@ -18,7 +18,6 @@ export interface TransformRange {
 
 export interface TransformBlock {
   range?: TransformRange | null;
-  position_scope?: string | null;
   position_directive_id?: string | null;
   art?: { source_range?: TransformRange | null } | null;
 }
@@ -165,7 +164,7 @@ export function blockOperationStart(
   const starts = [range.start]
   const artStart = block.art?.source_range?.start
   if (Number.isInteger(artStart)) starts.push(artStart as number)
-  if (block.position_scope === "block" && block.position_directive_id) {
+  if (block.position_directive_id) {
     const directive = slide?.directives?.find((candidate) => candidate.id === block.position_directive_id)
     const directiveStart = directive?.range?.start
     if (Number.isInteger(directiveStart)) starts.push(directiveStart as number)
@@ -173,20 +172,11 @@ export function blockOperationStart(
   return Math.min(...starts)
 }
 
-// The single position_close lookup rule (F6): the first closing directive
-// after a directive index. Both client editors share it through
-// blockOperationRange (span math) or directly (directive excision).
-export function findPositionCloseAfter(
-  directives: TransformDirective[] | null | undefined,
-  directiveIndex: number
-): TransformDirective | undefined {
-  return (directives || []).slice(directiveIndex + 1).find((candidate) => candidate.type === "position_close")
-}
-
 // Shared block-operation span (F6): the source range a block-level operation
-// (remove, empty-block cleanup) must cover, including the single-block
-// directive or — for a lone group member — the whole directive pair. Both
-// client editors call this instead of restating the group math.
+// (remove, empty-block cleanup) must cover, including the block's position
+// directive. Every position directive applies to its single following
+// block; the grammar has no scoped groups. Both client editors call this
+// instead of restating the span math.
 export function blockOperationRange(
   block: TransformBlock | null | undefined,
   slide: TransformSlide | null | undefined
@@ -194,22 +184,8 @@ export function blockOperationRange(
   if (!block || !slide) return null
   const range = block.range
   if (!range) return null
-  let from = blockOperationStart(slide, block)
-  let to = range.end
-
-  if (block.position_scope === "group") {
-    const groupMembers = (slide.blocks || []).filter((candidate) => candidate.position_directive_id === block.position_directive_id)
-    if (groupMembers.length === 1) {
-      const directives = slide.directives || []
-      const directiveIndex = directives.findIndex((candidate) => candidate.id === block.position_directive_id)
-      const directive = directiveIndex >= 0 ? directives[directiveIndex] : undefined
-      const closing = findPositionCloseAfter(directives, directiveIndex)
-      // Independent halves: a found opener extends the span even when its
-      // closer is missing (malformed input still cleans up the orphan).
-      if (directive?.range) from = directive.range.start
-      if (closing?.range) to = closing.range.end
-    }
-  }
+  const from = blockOperationStart(slide, block)
+  const to = range.end
 
   return { from, to }
 }
@@ -262,19 +238,6 @@ export function moveBlock(
     if (!block.range) return null
     ranged.push({ block, range: block.range })
   }
-  const indexed = blocks[index]
-  const movingGroupId = indexed?.position_scope === "group"
-    ? indexed.position_directive_id
-    : null
-  const low = Math.min(index, target)
-  const high = Math.max(index, target)
-  if (blocks.slice(low, high + 1).some((block) =>
-    block.position_scope === "group" && block.position_directive_id !== movingGroupId
-  )) return null
-  if (movingGroupId && blocks.slice(low, high + 1).some((block) =>
-    block.position_scope !== "group" || block.position_directive_id !== movingGroupId
-  )) return null
-
   const bodies: string[] = []
   const separators: string[] = []
   let firstStart: number | null = null

@@ -10,7 +10,6 @@ import {
   directiveLineSpan,
   exciseRanges,
   expandSnippet,
-  findPositionCloseAfter,
   insertAlignDirective,
   insertBlock,
   mediaInsertText,
@@ -82,22 +81,23 @@ test("block removal collapses the blank line left behind", () => {
   assert.equal(removeBlock(TWO_SLIDES, slide, null), null)
 })
 
-test("block removal of a lone group member takes the directive pair", () => {
+test("block removal of a positioned block takes its directive and leaves the closer line", () => {
+  // The grammar has no scoped groups: a bare ::: is an unknown directive,
+  // and each position directive applies to its single following block.
   const source = ":::align{center}\n\n# Solo\n\n:::\n\nAfter\n"
   const [slide] = mapOf(source)
   assert.ok(slide)
-  assert.equal(slide.blocks.filter((block) => block.position_scope === "group").length, 1)
-  assert.equal(removeBlock(source, slide, slide.blocks[0]), "After\n")
+  assert.equal(slide.blocks[0]?.position_directive_id, slide.directives[0]?.id)
+  assert.equal(removeBlock(source, slide, slide.blocks[0]), ":::\n\nAfter\n")
 })
 
-test("block moves refuse to cross group boundaries", () => {
-  const source = ":::align{center}\n\n# T\n\nBody.\n\n:::\n\nAfter\n"
+test("block moves reorder positioned blocks freely", () => {
+  const source = ":::align{center}\n\n# T\n\nBody.\n\nAfter\n"
   const [slide] = mapOf(source)
   assert.ok(slide)
-  assert.equal(moveBlock(source, slide, 0, 2), null)
   assert.equal(
     moveBlock(source, slide, 0, 1),
-    ":::align{center}\n\nBody.\n\n# T\n\n:::\n\nAfter\n"
+    "Body.\n\n:::align{center}\n\n# T\n\nAfter\n"
   )
   const [plain] = mapOf(TWO_SLIDES)
   assert.ok(plain)
@@ -109,20 +109,19 @@ test("block moves refuse to cross group boundaries", () => {
 })
 
 test("block operation starts include the single-block directive", () => {
-  const [grouped] = mapOf(":::align{center}\n\n# T\n\nBody.\n\n:::\n\nAfter\n")
-  assert.ok(grouped)
-  assert.equal(blockOperationStart(grouped, grouped.blocks[0]), 18)
+  const [positioned] = mapOf(":::align{center}\n\n# T\n\nBody.\n\nAfter\n")
+  assert.ok(positioned)
+  assert.equal(blockOperationStart(positioned, positioned.blocks[0]), 0)
   const [single] = mapOf(":::align{left}\n# T\n")
   assert.ok(single)
-  assert.equal(single.blocks[0]?.position_scope, "block")
   assert.equal(blockOperationStart(single, single.blocks[0]), 0)
 })
 
-test("block operation ranges cover the directive pair for a lone group member", () => {
-  const source = ":::align{center}\n\n# Solo\n\n:::\n\nAfter\n"
+test("block operation ranges cover the directive and the block", () => {
+  const source = ":::align{center}\n\n# Solo\n\nAfter\n"
   const [slide] = mapOf(source)
   assert.ok(slide)
-  assert.deepEqual(blockOperationRange(slide.blocks[0], slide), { from: 0, to: 30 })
+  assert.deepEqual(blockOperationRange(slide.blocks[0], slide), { from: 0, to: 25 })
 })
 
 test("block operation ranges cover the single-block directive and plain blocks", () => {
@@ -134,39 +133,21 @@ test("block operation ranges cover the single-block directive and plain blocks",
   assert.deepEqual(blockOperationRange(plain.blocks[0], plain), { from: 0, to: 6 })
 })
 
-test("block operation ranges stay inside shared groups and refuse missing inputs", () => {
-  const [slide] = mapOf(":::align{center}\n\n# T\n\nBody.\n\n:::\n\nAfter\n")
+test("block operation ranges refuse missing inputs", () => {
+  const [slide] = mapOf(":::align{center}\n\n# T\n\nBody.\n\nAfter\n")
   assert.ok(slide)
-  assert.deepEqual(blockOperationRange(slide.blocks[0], slide), { from: 18, to: 22 })
+  assert.deepEqual(blockOperationRange(slide.blocks[0], slide), { from: 0, to: 22 })
   assert.equal(blockOperationRange(null, slide), null)
   assert.equal(blockOperationRange(slide.blocks[0], null), null)
   assert.equal(blockOperationRange(null, null), null)
 })
 
-test("lone group member without a closer still covers its orphan opener", () => {
-  const [slide] = mapOf(":::align{left}\n# T\n")
+test("block operation starts include an earlier Art directive range", () => {
+  const [slide] = mapOf(":::art\n- A\n- B\n")
   assert.ok(slide)
-  const opener = slide.directives[0]
   const first = slide.blocks[0]
-  assert.ok(opener?.range)
-  assert.ok(first?.range)
-  const block = { ...first, position_scope: "group", position_directive_id: opener.id }
-  const lone = { ...slide, blocks: [block] }
-  const span = blockOperationRange(block, lone)
-  assert.ok(span)
-  assert.equal(span.from, opener.range.start)
-  assert.equal(span.to, first.range.end)
-})
-
-test("findPositionCloseAfter returns the first closer after an index", () => {
-  const [slide] = mapOf(":::align{center}\n\n# T\n\n:::\n")
-  assert.ok(slide)
-  const idx = slide.directives.findIndex((d) => d.type !== "position_close")
-  const closing = findPositionCloseAfter(slide.directives, idx)
-  assert.ok(closing)
-  assert.equal(closing.type, "position_close")
-  assert.equal(findPositionCloseAfter(slide.directives, slide.directives.length), undefined)
-  assert.equal(findPositionCloseAfter(null, 0), undefined)
+  assert.ok(first?.art)
+  assert.equal(blockOperationStart(slide, first), first.art.source_range.start)
 })
 
 test("alignment parsing keeps the presentation grammar", () => {

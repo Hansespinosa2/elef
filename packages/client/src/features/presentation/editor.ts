@@ -37,7 +37,6 @@ export interface PresentationEditorBlock {
   source_range?: EditorSourceRange
   content_range?: EditorSourceRange
   delimiter_range?: EditorSourceRange
-  position_scope?: string
   position_directive_id?: string
   position?: { horizontal: string; vertical: string; vertical_explicit?: boolean }
 }
@@ -546,15 +545,10 @@ export class PresentationEditor {
           preferredBlockId: block.id
         }
       } else {
-        const directives = slide.directives ?? []
-        const directiveIndex = directives.findIndex((candidate) => candidate.id === directive.id)
-        // Immediate-next rule (NOT the shared find-after rule): alignment
-        // removal strips the opener plus an ADJACENT closer only. Unifying
-        // with findPositionCloseAfter would change behavior on non-adjacent
-        // closers, so this hand-rolled lookup stays deliberately.
-        const closing = directives[directiveIndex + 1]
+        // Alignment removal strips the directive line. Position directives
+        // apply to their single following block; the grammar has no
+        // scoped groups or closers.
         const ranges = [directive]
-        if (closing?.type === "position_close") ranges.push(closing)
         ranges.sort((left, right) => right.range.start - left.range.start).forEach((candidate) => {
           let rangeEnd = candidate.range.end
           const lineEnding = source.slice(candidate.range.start, rangeEnd).match(/(?:\r\n|\r|\n)$/)?.[0]
@@ -867,12 +861,7 @@ export class PresentationEditor {
       const delta = control.dataset.presentationEditorAction === "move-block-up" ? -1 : 1
       const neighbor = slide?.blocks?.[index + delta]
       const block = slide?.blocks?.[index]
-      let disabled = !neighbor || !block
-
-      if (neighbor && block && (neighbor.position_scope === "group" || block.position_scope === "group")) {
-        disabled = neighbor.position_scope !== "group" || block.position_scope !== "group" ||
-          neighbor.position_directive_id !== block.position_directive_id
-      }
+      const disabled = !neighbor || !block
 
       if (disabled) {
         if (control.dataset.editorBoundaryDisabled !== "true") control.dataset.editorBoundaryDisabled = "true"
