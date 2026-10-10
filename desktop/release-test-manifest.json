@@ -45,6 +45,12 @@
           "sha": "4796c591fd8a081e622ec5715bb6e7963a109bba",
           "jobs": ["desktop-macos"],
           "result": "The expected source contained mixed LF/CRLF separators; after reopen the same source content was all CRLF. Commit 97237a9 changes the round-trip baseline to the raw saved source before close."
+        },
+        {
+          "run_id": 38007327615,
+          "sha": "80bc5b6e4096ec3513968acf7248df4fe3872bd8",
+          "jobs": ["desktop-macos"],
+          "result": "The edited source was saved and reopened, but the final fixture cleanup compared LF bytes with the editor's CRLF output after reopening. Commit 018882a compares cleanup content with normalized newlines while retaining byte-identical persisted-source checks across the edit's close/reopen. The run did not reach native desktop scenarios."
         }
       ],
       "note": "Use the isolated CI harness; this can start Rails on port 3000 and must not run against the user's occupied development endpoint. A failed run records observed_exit_code=1 but remains unverified until all shared scenarios pass."
@@ -67,6 +73,12 @@
           "sha": "4796c591fd8a081e622ec5715bb6e7963a109bba",
           "jobs": ["desktop-macos"],
           "result": "The packaged-update scenario remained unreachable because the earlier shared web source assertion failed."
+        },
+        {
+          "run_id": 38007327615,
+          "sha": "80bc5b6e4096ec3513968acf7248df4fe3872bd8",
+          "jobs": ["desktop-macos"],
+          "result": "The packaged-update scenario was not reached because the web rich-fixture cleanup assertion failed before native scenarios. Commit 018882a fixes that cleanup assertion; hosted rerun pending."
         }
       ],
       "note": "On macOS, the harness mounts and verifies a test-only Stable-profile N-1 DMG using the production com.elef.desktop identifier, installs the app under a disposable test directory, then stages signed N and exercises cache persistence, feed block/outage, unsafe-save deferral, interrupted installation, safe quit/relaunch and source preservation. The loopback feed uses an ephemeral key and is not a public release test. The test-only WebDriver feature is required for its interruption failpoint. Linux runs download verification only and has no self-installer."
@@ -93,7 +105,8 @@
       "platform": "Linux and macOS hosted; packaged Stable ZIP inspection on macOS",
       "observed_tests_passed": 4,
       "status": "IN_PROGRESS",
-      "note": "Core tests cover all eight checked-in sentinel values, failure-category sanitization, hostile fields during ZIP export, and bounded rotation. Hosted WebDriver builds use a test-only command to write failure-category sentinels and export the app's real ZIP; the post-update Stable N package inspects every entry and verifies the sentinels are absent while version, profile, build SHA, event code, and sanitized result remain actionable."
+      "supporting_commands": ["npm test --prefix desktop/frontend", "npm run test:unit --prefix desktop/e2e"],
+      "note": "Core tests cover all eight checked-in sentinel values, failure-category sanitization, hostile fields during ZIP export, and bounded rotation. The desktop frontend tests verify preview/bootstrap recorders pass only fixed native command names and never forward arbitrary exceptions. The native E2E export calls the no-payload render/startup failure commands, then checks both event codes and internal categories in the ZIP while rejecting every sentinel. Hosted WebDriver builds also write failure-category sentinels through the real event writer; the post-update Stable N package inspects every entry and verifies version, profile, build SHA, event code, and sanitized result remain actionable."
     }
   ],
   "package_pair_generator": {
@@ -142,8 +155,8 @@
       "acceptance_command": "npm test --prefix desktop/e2e",
       "expected_exit_code": 0,
       "observed_exit_code": null,
-      "invariants": ["Preview and presentation retain theme, typography, math, Mermaid, Art, and local media.", "Export/import preserves source and media bytes."],
-      "note": "The web, native desktop, and Stable offline smoke load this exact source and image, inspect preview/presentation rendering, and compare raw source after successful save and reopen where editing applies. The Rust archive fixture test separately verifies the original source and image bytes through .elef export/import. Hosted runtime validation remains pending."
+      "invariants": ["Preview and presentation retain theme, typography, math, Mermaid, Art, and local media.", "The complete intended edit is present in persisted source; the post-save source bytes remain identical across close/reopen.", "Export/import preserves source and media bytes."],
+      "note": "The web, native desktop, and Stable offline smoke load this exact source and image and inspect preview/presentation rendering. The rich edit asserts persisted content matches the intended edit; the resulting raw persisted bytes are then compared exactly after close/reopen. Fixture cleanup compares source content after the editor applies its current line separator. The Rust archive fixture test separately verifies original source and image bytes through .elef export/import. Hosted runtime validation remains pending."
     },
     {
       "id": "historical_file_format",
@@ -201,7 +214,7 @@
       "acceptance_command": "cargo test --manifest-path desktop/Cargo.toml -p elef-core diagnostics::tests --locked && ELEF_E2E_PACKAGED_UPDATES=1 npm test --prefix desktop/e2e",
       "expected_exit_code": 0,
       "observed_exit_code": null,
-      "invariants": ["No sentinel value appears in structured logs or exported diagnostics ZIP, including failure-category inputs and tampered exception, source, title, filename, path, token, secret, and IPC fields.", "The packaged Stable N app exports and inspects the diagnostics ZIP after N-1 to N update; native menu cancellation is exercised separately."]
+      "invariants": ["No sentinel value appears in structured logs or exported diagnostics ZIP, including failure-category inputs and tampered exception, source, title, filename, path, token, secret, and IPC fields.", "Preview/bootstrap failures produce sanitized render/startup event codes without storing exception text.", "The packaged Stable N app exports and inspects the diagnostics ZIP after N-1 to N update; native menu cancellation is exercised separately."]
     }
   ],
   "environment_notes": [
