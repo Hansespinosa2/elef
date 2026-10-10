@@ -7,5 +7,5 @@ Rails.application.config.assets.version = "1.0"
 # Rails.application.config.assets.paths << Emoji.images_path
 
 # Shared Elef packages are served to the browser by logical path so importmap
-# can pin them (e.g. "@elef/work-model" → "work-model/src/index.js").
+# can pin them (e.g. "@elef/work-model" → "work-model/dist/elef-work-model.js").
 Rails.application.config.assets.paths << Rails.root.join("..", "..", "packages")

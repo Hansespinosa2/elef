@@ -4,17 +4,32 @@
   "private": true,
   "type": "module",
   "description": "Pure semantics of an Elef Work (document | presentation): parsing, front matter, directives, structural ranges, links, pure source transforms. No DOM, React, filesystem, network, Rails or Tauri.",
-  "types": "./src/index.js",
+  "types": "./src/index.ts",
   "exports": {
-    ".": "./src/index.js",
-    "./document-map": "./src/document_map.js",
-    "./document-links": "./src/document_links.js",
-    "./document-transforms": "./src/document_transforms.js"
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./dist/elef-work-model.js"
+    },
+    "./document-map": {
+      "types": "./src/document_map.ts",
+      "default": "./dist/document-map.js"
+    },
+    "./document-links": {
+      "types": "./src/document_links.ts",
+      "default": "./dist/document-links.js"
+    },
+    "./document-transforms": {
+      "types": "./src/document_transforms.ts",
+      "default": "./dist/document-transforms.js"
+    }
   },
   "files": [
+    "dist",
     "src"
   ],
   "scripts": {
-    "test": "node --test test/*.test.js"
+    "build": "node build.mjs",
+    "test": "node run-tests.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
   }
 }

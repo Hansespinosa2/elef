@@ -32,8 +32,10 @@ test("document link tokens preserve UTF-16 source ranges and share title validat
   const source = "😀 [[Target]] [[Bad\rTitle]] [[[Triple]]]"
   const tokens = extractDocumentLinkTokens(source)
   assert.deepEqual(tokens.map(({ title }) => title), ["Target"])
-  assert.equal(tokens[0].start, source.indexOf("[[Target]]"))
-  assert.equal(tokens[0].end, source.indexOf("[[Target]]") + "[[Target]]".length)
+  const token = tokens[0]
+  assert.ok(token)
+  assert.equal(token.start, source.indexOf("[[Target]]"))
+  assert.equal(token.end, source.indexOf("[[Target]]") + "[[Target]]".length)
   assert.equal(isLinkableDocumentTitle("Readable title"), true)
   assert.equal(isLinkableDocumentTitle("Title with ]"), false)
   assert.deepEqual(linkableDocumentTitles(["Readable title", "", "Title with `code`"]), ["Readable title"])
@@ -62,8 +64,8 @@ test("web and desktop graph inputs use one resolver for titles, aliases, and sta
     { id: "orphan", title: "Orphan" }
   ])
   assert.deepEqual(graph.edges, [{ source: "source", target: "target-id" }])
-  assert.equal(graph.nodes[1].documentKey, "target-key")
-  assert.deepEqual(graph.nodes[1].aliases, ["Alias"])
+  assert.equal(graph.nodes[1]?.documentKey, "target-key")
+  assert.deepEqual(graph.nodes[1]?.aliases, ["Alias"])
 })
 
 test("graph labels come from shared Markdown heading rules with folder-name fallback", () => {
@@ -83,7 +85,7 @@ test("Rails graph titles remain authoritative when the record title differs from
   const graph = buildDocumentGraph([
     { id: "record-id", title: "Graph orphan with a long mobile document label", source: "# Orphan" }
   ])
-  assert.equal(graph.nodes[0].title, "Graph orphan with a long mobile document label")
+  assert.equal(graph.nodes[0]?.title, "Graph orphan with a long mobile document label")
 })
 
 test("aliases resolve before titles consistently and graph nodes retain stable positions", () => {
@@ -110,13 +112,13 @@ test("portable Markdown front matter resolves stable keys and aliases in the sha
     { id: "manifest-uuid", name: "Target folder", source: targetSource }
   ])
 
-  assert.equal(graph.nodes[1].documentKey, "portable-key")
-  assert.deepEqual(graph.nodes[1].aliases, ["Old title", "Earlier name"])
+  assert.equal(graph.nodes[1]?.documentKey, "portable-key")
+  assert.deepEqual(graph.nodes[1]?.aliases, ["Old title", "Earlier name"])
   assert.deepEqual(graph.edges, [{ source: "source", target: "manifest-uuid" }])
 })
 
 test("duplicate portable keys and aliases stay unresolved instead of selecting the last document", () => {
-  const source = key => `---\nelef_document_key: ${JSON.stringify(key)}\nelef_aliases: ["Shared previous title"]\n---\n`
+  const source = (key: string): string => `---\nelef_document_key: ${JSON.stringify(key)}\nelef_aliases: ["Shared previous title"]\n---\n`
   const resolve = createDocumentLinkResolver([
     { id: "first", title: "First", source: source("shared-key") },
     { id: "second", title: "Second", source: source("shared-key") }
@@ -168,5 +170,5 @@ test("malformed portable Markdown metadata safely falls back to the deck identit
     aliases: []
   })
   const graph = buildDocumentGraph([{ id: "manifest-uuid", name: "Notes", source: "---\nelef_document_key: [bad\n---\n# Notes" }])
-  assert.equal(graph.nodes[0].documentKey, "manifest-uuid")
+  assert.equal(graph.nodes[0]?.documentKey, "manifest-uuid")
 })

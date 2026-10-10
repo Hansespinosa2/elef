@@ -1,21 +1,182 @@
+export interface SourceRange {
+  start: number;
+  end: number;
+}
+
+export interface SourcePosition {
+  horizontal: string;
+  vertical: string;
+  vertical_explicit: boolean;
+}
+
+// Canonical align position vocabulary (F7): the host authoring-registry
+// merge derives its directive grammar from this export instead of
+// restating the word lists, and positionFromBlock below parses from it.
+export const POSITION_VOCABULARY: {
+  readonly horizontal: readonly string[];
+  readonly vertical: readonly string[];
+} = {
+  horizontal: ["left", "center", "right"],
+  vertical: ["top", "middle", "bottom"]
+};
+
+export interface SourceLine {
+  start: number;
+  end: number;
+  text: string;
+}
+
+export interface FrontMatter {
+  lines: SourceLine[];
+  closingLine: number;
+  bodyStart: number;
+}
+
+export interface MapBlock {
+  id: string;
+  index: number;
+  kind: string;
+  markdown: string;
+  position?: SourcePosition | null;
+  position_directive_id?: string | null;
+  position_scope?: string | null;
+  range: SourceRange;
+  source_range: SourceRange;
+  content_range: SourceRange;
+  editable_region_id?: string;
+  empty_placeholder?: boolean;
+}
+
+export interface MapDirective {
+  id: string;
+  type: string;
+  value: string | null;
+  text: string;
+  range: SourceRange;
+  source_range: SourceRange;
+  editable: boolean;
+  scope?: string;
+}
+
+export interface MapRegion {
+  id: string;
+  block_id: string;
+  role: string;
+  kind: string;
+  text: string;
+  range: SourceRange;
+  source_range: SourceRange;
+  content_range: SourceRange;
+  editable: boolean;
+  empty_heading?: boolean;
+  empty_placeholder?: boolean;
+}
+
+export interface MapSlide {
+  id: string;
+  index: number;
+  layout: string;
+  range: SourceRange;
+  source_range: SourceRange;
+  delimiter_range: SourceRange | null;
+  blocks: MapBlock[];
+  directives: MapDirective[];
+  editable_regions: MapRegion[];
+}
+
+export interface EditorMap {
+  version: number;
+  source_name: string;
+  mode: string;
+  source_length: number;
+  front_matter: { range: SourceRange; body_start: number } | null;
+  slides: MapSlide[];
+  directives: MapDirective[];
+  editable_regions: MapRegion[];
+}
+
+export interface ParsedBlock {
+  markdown: string;
+  position: SourcePosition | null;
+}
+
+export interface SlideMetadata {
+  layout: string;
+  title: string | null;
+  blocks: ParsedBlock[];
+  regions: ParsedBlock[][];
+  section: string | null;
+  subsection: string | null;
+  footnote: string | null;
+  warnings: string[];
+}
+
+export interface ParsedSlide extends SlideMetadata {
+  map: MapSlide;
+}
+
+export interface EditorStyle {
+  theme: string;
+  typography: string;
+}
+
+export interface MarginSettings {
+  section: boolean;
+  subsection: boolean;
+  footnote: boolean;
+  slide_count: boolean;
+}
+
+export interface EditorStructure {
+  editorMap: EditorMap;
+  slides: ParsedSlide[];
+  warnings: string[];
+  style: EditorStyle;
+  marginSettings: MarginSettings;
+}
+
+interface SlideSourceRange {
+  start: number;
+  end: number;
+  delimiterStart: number | null;
+  delimiterEnd: number | null;
+}
+
+interface MarginContext {
+  section: string | null;
+  subsection: string | null;
+}
+
+interface FenceState {
+  marker: string;
+  length: number;
+  closing: boolean;
+}
+
 const THEMES = new Set(["light", "dark", "match"])
 const TYPOGRAPHIES = new Set(["book", "modern", "technical"])
 
-export function buildEditorMap(source, { sourceName = "Untitled presentation", mode = "presentation" } = {}) {
+export function buildEditorMap(
+  source: unknown,
+  { sourceName = "Untitled presentation", mode = "presentation" }: { sourceName?: string; mode?: string } = {}
+): EditorMap {
   return buildEditorStructure(source, { sourceName, mode }).editorMap
 }
 
-export function buildEditorStructure(source, { sourceName = "Untitled presentation", mode = "presentation" } = {}) {
+export function buildEditorStructure(
+  source: unknown,
+  { sourceName = "Untitled presentation", mode = "presentation" }: { sourceName?: string; mode?: string } = {}
+): EditorStructure {
   if (typeof source !== "string") throw new TypeError("The selected file did not contain readable text.")
   if (mode !== "presentation" && mode !== "document") throw new TypeError("Unsupported document mode")
 
   const frontMatter = initialFrontMatter(source)
   const bodyStart = frontMatter?.bodyStart ?? 0
-  const ranges = mode === "document"
+  const ranges: SlideSourceRange[] = mode === "document"
     ? [{ start: bodyStart, end: source.length, delimiterStart: null, delimiterEnd: null }]
     : slideSourceRanges(source, bodyStart)
-  const context = { section: null, subsection: null }
-  const map = {
+  const context: MarginContext = { section: null, subsection: null }
+  const map: EditorMap = {
     version: 1,
     source_name: String(sourceName),
     mode,
@@ -28,8 +189,8 @@ export function buildEditorStructure(source, { sourceName = "Untitled presentati
     directives: [],
     editable_regions: []
   }
-  const parsedSlides = []
-  const warnings = []
+  const parsedSlides: ParsedSlide[] = []
+  const warnings: string[] = []
 
   ranges.forEach((range, index) => {
     const normalizedSection = normalizeSection(source.slice(range.start, range.end).replace(/\r\n?/g, "\n"))
@@ -42,13 +203,13 @@ export function buildEditorStructure(source, { sourceName = "Untitled presentati
       blocks = [...blocks, ...empty.map(([block]) => block)].sort((left, right) => left.range.start - right.range.start)
       regions = [...regions, ...empty.map(([, region]) => region)]
     }
-    const slideMap = {
+    const slideMap: MapSlide = {
       id: `slide-${index + 1}`,
       index,
       layout: metadata.layout,
       range: { start: range.start, end: range.end },
       source_range: { start: range.start, end: range.end },
-      delimiter_range: range.delimiterStart === null
+      delimiter_range: range.delimiterStart === null || range.delimiterEnd === null
         ? null
         : { start: range.delimiterStart, end: range.delimiterEnd },
       blocks,
@@ -71,28 +232,31 @@ export function buildEditorStructure(source, { sourceName = "Untitled presentati
   }
 }
 
-export function initialFrontMatter(source) {
+export function initialFrontMatter(source: string): FrontMatter | null {
   const lines = sourceLines(source)
-  if (!lines.length || lines[0].text.replace(/^\uFEFF/, "").replace(/[ \t]+$/, "") !== "---") return null
+  const first = lines[0]
+  if (!first || first.text.replace(/^\uFEFF/, "").replace(/[ \t]+$/, "") !== "---") return null
   const closingIndex = lines.findIndex((line, index) => index > 0 && line.text.replace(/[ \t]+$/, "") === "---")
   if (closingIndex < 0) return null
   const metadataLines = lines.slice(1, closingIndex)
   if (!metadataLines.some(line => /^[A-Za-z_][\w-]*\s*:/.test(line.text))) return null
+  const closing = lines[closingIndex]
+  if (!closing) return null
   return {
     lines,
     closingLine: closingIndex,
-    bodyStart: lines[closingIndex].end
+    bodyStart: closing.end
   }
 }
 
-export function readStyle(source) {
+export function readStyle(source: string): EditorStyle {
   const frontMatter = initialFrontMatter(source)
-  const read = (key, fallback, vocabulary) => {
+  const read = (key: string, fallback: string, vocabulary: Set<string>): string => {
     if (!frontMatter) return fallback
     for (const line of frontMatter.lines.slice(1, frontMatter.closingLine)) {
       const match = new RegExp(`^${key}\\s*:\\s*(.*)$`).exec(line.text)
       if (!match) continue
-      const cleaned = match[1].trim().replace(/\s+#.*$/, "").trim()
+      const cleaned = (match[1] ?? "").trim().replace(/\s+#.*$/, "").trim()
       const unquoted = cleaned.match(/^(['"])(.*)\1$/)?.[2] ?? cleaned
       return vocabulary.has(unquoted) ? unquoted : fallback
     }
@@ -106,7 +270,7 @@ export function readStyle(source) {
 
 // The native appearance adapter persists the same flat metadata fields as
 // Rails. Retain unrelated metadata, body bytes, and the file's line endings.
-export function withAppearanceValue(source, key, value) {
+export function withAppearanceValue(source: unknown, key: string, value: string): string {
   const vocabulary = key === "theme" ? THEMES : key === "typography" ? TYPOGRAPHIES : null
   if (typeof source !== "string" || !vocabulary || (value !== "" && !vocabulary.has(value))) {
     throw new TypeError("Unsupported appearance value")
@@ -114,13 +278,13 @@ export function withAppearanceValue(source, key, value) {
   return withFrontMatterValue(source, key, value === "" ? null : value)
 }
 
-export function withFrontMatterValue(source, key, value) {
+export function withFrontMatterValue(source: unknown, key: string, value: string | null | undefined): string {
   if (typeof source !== "string" || typeof key !== "string" || !key) {
     throw new TypeError("Front matter updates need source text and a key.")
   }
   const remove = value === null || value === undefined
   const front = initialFrontMatter(source)
-  const ending = line => source.slice(line.start + line.text.length, line.end)
+  const ending = (line: SourceLine): string => source.slice(line.start + line.text.length, line.end)
   const eol = front?.lines.map(ending).find(Boolean) || (source.includes("\r\n") ? "\r\n" : "\n")
   if (!front) return remove ? source : `---${eol}${key}: ${value}${eol}---${eol}${source}`
   const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
@@ -135,24 +299,25 @@ export function withFrontMatterValue(source, key, value) {
   }
   if (remove) return source
   const closing = front.lines[front.closingLine]
+  if (!closing) return source
   return source.slice(0, closing.start) + `${key}: ${value}${eol}` + source.slice(closing.start)
 }
 
-export function normalizeThemeValue(value) {
+export function normalizeThemeValue(value: unknown): string {
   return normalizeStyleValue(value, THEMES, "match")
 }
 
-export function normalizeTypographyValue(value) {
+export function normalizeTypographyValue(value: unknown): string {
   return normalizeStyleValue(value, TYPOGRAPHIES, "book")
 }
 
-function normalizeStyleValue(value, vocabulary, fallback) {
+function normalizeStyleValue(value: unknown, vocabulary: Set<string>, fallback: string): string {
   const withoutComment = String(value ?? "").trim().replace(/\s+#.*$/, "").trim()
   const unquoted = withoutComment.match(/^(['"])(.*)\1$/)?.[2] ?? withoutComment
   return vocabulary.has(unquoted) ? unquoted : fallback
 }
 
-export function frontMatterHasKey(source, key) {
+export function frontMatterHasKey(source: unknown, key: string): boolean | null {
   if (typeof source !== "string" || typeof key !== "string" || !key) {
     throw new TypeError("Front matter key lookup needs source text and a key.")
   }
@@ -162,15 +327,16 @@ export function frontMatterHasKey(source, key) {
   return front.lines.slice(1, front.closingLine).some(line => pattern.test(line.text))
 }
 
-export function readStyleOverrides(source) {
+export function readStyleOverrides(source: string): { theme: string | null; typography: string | null } {
   const frontMatter = initialFrontMatter(source)
-  const read = (key, normalizer) => {
+  const read = (key: string, normalizer: (value: unknown) => string): string | null => {
     if (!frontMatter) return null
     for (const line of frontMatter.lines.slice(1, frontMatter.closingLine)) {
       const match = new RegExp(`^${key}\\s*:\\s*(.*)$`).exec(line.text)
       if (!match) continue
-      const normalized = normalizer(match[1])
-      const cleaned = match[1].trim().replace(/\s+#.*$/, "").trim().replace(/^(['"])(.*)\1$/, "$2")
+      const raw = match[1] ?? ""
+      const normalized = normalizer(raw)
+      const cleaned = raw.trim().replace(/\s+#.*$/, "").trim().replace(/^(['"])(.*)\1$/, "$2")
       return normalized === cleaned ? normalized : null
     }
     return null
@@ -181,12 +347,12 @@ export function readStyleOverrides(source) {
   }
 }
 
-export function replaceFirstHeading(source, title) {
+export function replaceFirstHeading(source: unknown, title: unknown): string {
   if (typeof source !== "string") throw new TypeError("The selected file did not contain readable text.")
   const normalizedTitle = String(title ?? "").replace(/[\r\n]/g, " ").trim().replace(/\s+/g, " ")
   const front = initialFrontMatter(source)
   const bodyStart = front?.bodyStart ?? 0
-  let fence = null
+  let fence: FenceState | null = null
   for (const line of sourceLines(source)) {
     if (line.end <= bodyStart) continue
     const incoming = fenceMarker(line.text)
@@ -200,8 +366,9 @@ export function replaceFirstHeading(source, title) {
     }
     const heading = /^([ \t]{0,3}#)(?:[ \t]+|$)/.exec(line.text)
     if (!heading) continue
+    const marker = heading[1] ?? ""
     const ending = source.slice(line.start + line.text.length, line.end)
-    return source.slice(0, line.start) + `${heading[1]} ${normalizedTitle}${ending}` + source.slice(line.end)
+    return source.slice(0, line.start) + `${marker} ${normalizedTitle}${ending}` + source.slice(line.end)
   }
   const body = source.slice(bodyStart)
   const prefix = source.slice(0, bodyStart)
@@ -210,13 +377,13 @@ export function replaceFirstHeading(source, title) {
   return `${prefix}# ${normalizedTitle}${separator}${body}`
 }
 
-export function sourceAnchorLines(source) {
+export function sourceAnchorLines(source: unknown): number[] {
   if (typeof source !== "string") throw new TypeError("The selected file did not contain readable text.")
   const front = initialFrontMatter(source)
   const bodyLine = front ? source.slice(0, front.bodyStart).split("\n").length : 1
-  const rawLines = source.match(/[^\n]*\n?/g).filter(part => part !== "")
-  const anchors = []
-  rawLines.forEach((raw, index) => {
+  const rawLines = source.match(/[^\n]*\n?/g) ?? []
+  const anchors: number[] = []
+  rawLines.filter(part => part !== "").forEach((raw, index) => {
     const text = raw.replace(/[\r\n]+$/, "")
     if (index + 1 < bodyLine || !text.trim() || /^\s*:::/.test(raw)) return
     anchors.push(index + 1)
@@ -224,8 +391,12 @@ export function sourceAnchorLines(source) {
   return anchors.length ? anchors : [bodyLine]
 }
 
-function marginSettings(source) {
-  const settings = { section: true, subsection: true, footnote: true, slide_count: true }
+function isMarginSettingsKey(key: string): key is keyof MarginSettings {
+  return key === "section" || key === "subsection" || key === "footnote" || key === "slide_count"
+}
+
+function marginSettings(source: string): MarginSettings {
+  const settings: MarginSettings = { section: true, subsection: true, footnote: true, slide_count: true }
   const frontMatter = initialFrontMatter(source)
   if (!frontMatter) return settings
   let inSettings = false
@@ -234,8 +405,10 @@ function marginSettings(source) {
       inSettings = true
     } else if (inSettings && /^\s+([A-Za-z][\w-]*)\s*:\s*(true|false)\s*$/.test(line)) {
       const match = /^\s+([A-Za-z][\w-]*)\s*:\s*(true|false)\s*$/.exec(line)
-      const key = match[1].replace(/-([a-z])/g, (_, letter) => `_${letter}`).replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`).replace(/^_/, "")
-      if (Object.hasOwn(settings, key)) settings[key] = match[2] === "true"
+      const name = match?.[1] ?? ""
+      const flag = match?.[2] ?? ""
+      const key = name.replace(/-([a-z])/g, (_, letter: string) => `_${letter}`).replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`).replace(/^_/, "")
+      if (isMarginSettingsKey(key)) settings[key] = flag === "true"
     } else if (/^\S/.test(line)) {
       inSettings = false
     }
@@ -243,11 +416,11 @@ function marginSettings(source) {
   return settings
 }
 
-function slideSourceRanges(source, bodyStart) {
-  const ranges = []
+function slideSourceRanges(source: string, bodyStart: number): SlideSourceRange[] {
+  const ranges: SlideSourceRange[] = []
   let start = bodyStart
-  let fence = null
-  let mathFence = null
+  let fence: FenceState | null = null
+  let mathFence: string | null = null
   for (const line of sourceLines(source, bodyStart)) {
     const incomingFence = fenceMarker(line.text)
     if (fence) {
@@ -276,29 +449,43 @@ function slideSourceRanges(source, bodyStart) {
   return ranges
 }
 
-function editorBlocks(source, start, end, slide, slideIndex, mode) {
-  const lines = sourceLines(source, start, end)
-  const blocks = []
-  const directives = []
-  const regions = []
-  let current = []
-  let pendingPosition = null
-  let fence = null
-  let mathFence = null
+interface PendingPosition {
+  value: SourcePosition;
+  directiveId: string;
+  scoped: boolean;
+}
 
-  const flush = () => {
+function editorBlocks(
+  source: string,
+  start: number,
+  end: number,
+  slide: SlideMetadata,
+  slideIndex: number,
+  mode: string
+): { blocks: MapBlock[]; directives: MapDirective[]; regions: MapRegion[] } {
+  const lines = sourceLines(source, start, end)
+  const blocks: MapBlock[] = []
+  const directives: MapDirective[] = []
+  const regions: MapRegion[] = []
+  let current: SourceLine[] = []
+  let pendingPosition: PendingPosition | null = null
+  let fence: FenceState | null = null
+  let mathFence: string | null = null
+
+  const flush = (): void => {
     if (!current.length) return
     const first = current[0]
     const last = current.at(-1)
+    if (!first || !last) return
     const blockStart = first.start
     const blockEnd = last.end
     const markdown = source.slice(blockStart, blockEnd).replace(/(?:\r\n|\r|\n)$/, "")
     const blockIndex = blocks.length
     const id = `slide-${slideIndex + 1}-block-${blockIndex + 1}`
     const kind = editableBlockKind(markdown)
-    const range = { start: blockStart, end: blockEnd }
-    const contentRange = { start: blockStart, end: blockStart + markdown.length }
-    const block = {
+    const range: SourceRange = { start: blockStart, end: blockEnd }
+    const contentRange: SourceRange = { start: blockStart, end: blockStart + markdown.length }
+    const block: MapBlock = {
       id,
       index: blockIndex,
       kind,
@@ -369,15 +556,15 @@ function editorBlocks(source, start, end, slide, slideIndex, mode) {
   return { blocks, directives, regions }
 }
 
-function editorDirective(line, text, slideIndex, directiveIndex) {
+function editorDirective(line: SourceLine, text: string, slideIndex: number, directiveIndex: number): MapDirective {
   const position = /^:::(align|position)[ \t]*\{([^}]*)\}/.exec(text)
   const margin = /^:::(section|subsection|footnote)\{/.exec(text)
   const type = text === ":::" ? "position_close" : position ? "position" : margin?.[1] ?? "unknown"
-  const range = { start: line.start, end: line.end }
+  const range: SourceRange = { start: line.start, end: line.end }
   return {
     id: `slide-${slideIndex + 1}-directive-${directiveIndex + 1}`,
     type,
-    value: position?.[2].trim() ?? null,
+    value: position?.[2]?.trim() ?? null,
     text,
     range,
     source_range: { ...range },
@@ -385,8 +572,8 @@ function editorDirective(line, text, slideIndex, directiveIndex) {
   }
 }
 
-function positionScopeCloses(lines, startIndex) {
-  let fence = null
+function positionScopeCloses(lines: SourceLine[], startIndex: number): boolean {
+  let fence: FenceState | null = null
   for (const line of lines.slice(startIndex + 1)) {
     const incoming = fenceMarker(line.text)
     if (fence) {
@@ -403,20 +590,29 @@ function positionScopeCloses(lines, startIndex) {
   return false
 }
 
-function editableRegion(markdown, blockStart, blockId, slideIndex, blockIndex, kind, slide, mode) {
+function editableRegion(
+  markdown: string,
+  blockStart: number,
+  blockId: string,
+  slideIndex: number,
+  blockIndex: number,
+  kind: string,
+  slide: SlideMetadata,
+  mode: string
+): MapRegion {
   const id = `slide-${slideIndex + 1}-region-${blockIndex + 1}`
   const editable = clientCanRoundTrip(markdown, kind)
   const heading = /^(\s{0,3})(#+)(\s+)(.+?)(\s*#*\s*)$/s.exec(markdown)
   if (heading) {
-    const contentStart = blockStart + heading[1].length + heading[2].length + heading[3].length
-    const contentEnd = contentStart + heading[4].length
-    const range = { start: blockStart, end: blockStart + markdown.length }
+    const contentStart = blockStart + (heading[1] ?? "").length + (heading[2] ?? "").length + (heading[3] ?? "").length
+    const contentEnd = contentStart + (heading[4] ?? "").length
+    const range: SourceRange = { start: blockStart, end: blockStart + markdown.length }
     return {
       id,
       block_id: blockId,
       role: (mode === "document" && blockIndex === 0) || slide.title === markdown ? "title" : "heading",
       kind: "heading",
-      text: heading[4].trim(),
+      text: (heading[4] ?? "").trim(),
       range,
       source_range: { ...range },
       content_range: { start: contentStart, end: contentEnd },
@@ -425,8 +621,8 @@ function editableRegion(markdown, blockStart, blockId, slideIndex, blockIndex, k
   }
   const emptyHeading = /^(\s{0,3}#)[ \t]*$/.exec(markdown)
   if (emptyHeading) {
-    const offset = blockStart + emptyHeading[0].length
-    const range = { start: blockStart, end: blockStart + markdown.length }
+    const offset = blockStart + (emptyHeading[0] ?? "").length
+    const range: SourceRange = { start: blockStart, end: blockStart + markdown.length }
     return {
       id,
       block_id: blockId,
@@ -440,7 +636,7 @@ function editableRegion(markdown, blockStart, blockId, slideIndex, blockIndex, k
       empty_heading: true
     }
   }
-  const range = { start: blockStart, end: blockStart + markdown.length }
+  const range: SourceRange = { start: blockStart, end: blockStart + markdown.length }
   return {
     id,
     block_id: blockId,
@@ -454,11 +650,12 @@ function editableRegion(markdown, blockStart, blockId, slideIndex, blockIndex, k
   }
 }
 
-function emptyEditorBlocks(source, slideIndex, blocks) {
-  const placeholders = []
+function emptyEditorBlocks(source: string, slideIndex: number, blocks: MapBlock[]): Array<[MapBlock, MapRegion]> {
+  const placeholders: Array<[MapBlock, MapRegion]> = []
   let sequence = 0
   for (const [index, previous] of blocks.slice(0, -1).entries()) {
     const following = blocks[index + 1]
+    if (!following) continue
     const start = previous.content_range.end
     const end = following.range.start
     const separator = source.slice(start, end)
@@ -484,10 +681,10 @@ function emptyEditorBlocks(source, slideIndex, blocks) {
   return placeholders
 }
 
-function emptyEditorBlock(slideIndex, sequence, offset) {
+function emptyEditorBlock(slideIndex: number, sequence: number, offset: number): [MapBlock, MapRegion] {
   const blockId = `slide-${slideIndex + 1}-empty-${sequence}`
   const regionId = `slide-${slideIndex + 1}-empty-region-${sequence}`
-  const range = { start: offset, end: offset }
+  const range: SourceRange = { start: offset, end: offset }
   return [{
     id: blockId,
     index: sequence,
@@ -512,7 +709,7 @@ function emptyEditorBlock(slideIndex, sequence, offset) {
   }]
 }
 
-function editableBlockKind(markdown) {
+function editableBlockKind(markdown: string): string {
   if (headingFor(markdown) || /^\s{0,3}#[ \t]*$/.test(markdown)) return "heading"
   if (fencedCodeSource(markdown) || /^ {4}|^\t/.test(markdown)) return "code"
   if (imageBlock(markdown)) return "image"
@@ -523,7 +720,7 @@ function editableBlockKind(markdown) {
   return "paragraph"
 }
 
-function clientCanRoundTrip(markdown, kind) {
+function clientCanRoundTrip(markdown: string, kind: string): boolean {
   if (kind === "code" && /^\s{0,3}(?:`{3,}|~{3,})[ \t]*mermaid\b/i.test(markdown)) return false
   if (kind === "code" && fencedCodeSource(markdown)) return supportedFencedCode(markdown)
   if (kind === "code" || kind === "rule") return false
@@ -535,21 +732,26 @@ function clientCanRoundTrip(markdown, kind) {
   return !unsupportedBlockSyntax(markdown)
 }
 
-function supportedFencedCode(markdown) {
+function supportedFencedCode(markdown: string): boolean {
   const match = /^([ \t]*)(`{3,}|~{3,})([^\r\n]*?)(\r\n|\n|\r)([\s\S]*?)(\r\n|\n|\r)([`~]{3,})([ \t]*)$/.exec(markdown)
-  return Boolean(match && match[7][0] === match[2][0] && [...match[7]].every(char => char === match[2][0]) && match[7].length >= match[2].length)
+  if (!match) return false
+  const opener = match[2] ?? ""
+  const closer = match[7] ?? ""
+  return opener.length > 0 && closer.length >= opener.length && closer[0] === opener[0] &&
+    [...closer].every(char => char === opener[0])
 }
 
-function supportedTable(markdown) {
+function supportedTable(markdown: string): boolean {
   const lines = markdown.split(/\r?\n/)
-  if (lines.length < 3 || !/^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)*\|?\s*$/.test(lines[1])) return false
-  const columns = tableCellCount(lines[0])
-  return columns > 0 && tableCellCount(lines[1]) === columns && lines.slice(2).every(line => Boolean(line.trim()) && tableCellCount(line) === columns)
+  const second = lines[1] ?? ""
+  if (lines.length < 3 || !/^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)*\|?\s*$/.test(second)) return false
+  const columns = tableCellCount(lines[0] ?? "")
+  return columns > 0 && tableCellCount(second) === columns && lines.slice(2).every(line => Boolean(line.trim()) && tableCellCount(line) === columns)
 }
 
-function tableCellCount(line) {
+function tableCellCount(line: string): number {
   const value = line.trim()
-  const pipes = []
+  const pipes: number[] = []
   let escaped = false
   for (let index = 0; index < value.length; index += 1) {
     if (value[index] === "\\" && !escaped) {
@@ -564,7 +766,7 @@ function tableCellCount(line) {
   return Math.max(pipes.length - leading - trailing + 1, 0)
 }
 
-function unsupportedBlockSyntax(markdown) {
+function unsupportedBlockSyntax(markdown: string): boolean {
   if (/<\s*!--|--\s*>|<\/?[A-Za-z][^>]*>/.test(markdown)) return true
   if (/<\s*(?:https?:\/\/|mailto:)[^>]+>|<\s*[^<>\s@]+@[^<>\s@]+\s*>/i.test(markdown)) return true
   if (/\[[^\]]+\]\s*\[[^\]]*\]|^\s*\[[^\]]+\]:|\[\^[^\]]+\]/m.test(markdown)) return true
@@ -575,7 +777,7 @@ function unsupportedBlockSyntax(markdown) {
   return unsupportedEscapedPunctuation(markdown)
 }
 
-function unsupportedEscapedPunctuation(markdown) {
+function unsupportedEscapedPunctuation(markdown: string): boolean {
   const withoutMath = displayMathFenceSource(markdown)
     ? ""
     : markdown.replace(/(?<!\\)\$\$[\s\S]+?\$\$(?!\$)|(?<![\\$])\$(?!\$|\s)[^$\r\n]+?(?<!\s)\$(?!\$)/g, "")
@@ -588,11 +790,11 @@ function unsupportedEscapedPunctuation(markdown) {
   return false
 }
 
-function slideMetadata(markdown, context, mode) {
+function slideMetadata(markdown: string, context: MarginContext, mode: string): SlideMetadata {
   let normalized = markdown.replace(/\r\n?/g, "\n")
   const margin = mode === "presentation"
     ? parseMarginDirectives(normalized, context)
-    : { content: normalized, section: null, subsection: null, footnote: null, warnings: [] }
+    : { content: normalized, section: null, subsection: null, footnote: null, warnings: [] as string[] }
   normalized = margin.content
   const parsed = parseBlocks(normalized)
   const layout = inferLayout(parsed.blocks)
@@ -610,14 +812,30 @@ function slideMetadata(markdown, context, mode) {
   }
 }
 
-function parseMarginDirectives(markdown, context) {
+type MarginKind = "section" | "subsection" | "footnote"
+
+interface MarginDirectiveNote {
+  type: MarginKind;
+  malformed: boolean;
+  value: string;
+}
+
+interface MarginParse {
+  content: string;
+  section: string | null;
+  subsection: string | null;
+  footnote: string | null;
+  warnings: string[];
+}
+
+function parseMarginDirectives(markdown: string, context: MarginContext): MarginParse {
   const lines = markdown.split("\n")
-  const content = []
-  const warnings = []
+  const content: string[] = []
+  const warnings: string[] = []
   let leading = true
-  let fence = null
-  let mathFence = null
-  let footnote = null
+  let fence: FenceState | null = null
+  let mathFence: string | null = null
+  let footnote: string | null = null
   lines.forEach((line, index) => {
     const incoming = fenceMarker(line)
     if (fence) {
@@ -653,7 +871,7 @@ function parseMarginDirectives(markdown, context) {
       } else if (leading) {
         context[directive.type] = directive.value
       } else {
-        warnings.push(`${directive.type[0].toUpperCase()}${directive.type.slice(1)} margin directive must appear at the beginning of a slide.`)
+        warnings.push(`${directive.type[0]?.toUpperCase() ?? ""}${directive.type.slice(1)} margin directive must appear at the beginning of a slide.`)
       }
       return
     }
@@ -663,46 +881,63 @@ function parseMarginDirectives(markdown, context) {
   return { content: content.join("\n"), section: context.section, subsection: context.subsection, footnote, warnings }
 }
 
-function marginDirective(line) {
+function isMarginKind(value: string): value is MarginKind {
+  return value === "section" || value === "subsection" || value === "footnote"
+}
+
+function marginDirective(line: string): MarginDirectiveNote | null {
   const match = /^\s*:::(section|subsection|footnote)\{/.exec(line)
   if (!match) return null
+  const kind = match[1] ?? ""
+  if (!isMarginKind(kind)) return null
   const chars = [...line.slice(match[0].length)]
-  const value = []
+  const value: string[] = []
   let depth = 1
   for (let index = 0; index < chars.length; index += 1) {
     const character = chars[index]
-    if (character === "\\" && ["{", "}", "\\"].includes(chars[index + 1])) {
-      value.push(chars[index + 1])
+    if (character === undefined) continue
+    const next = chars[index + 1]
+    if (character === "\\" && (next === "{" || next === "}" || next === "\\")) {
+      value.push(next)
       index += 1
     } else if (character === "{") {
       depth += 1
       value.push(character)
     } else if (character === "}") {
       depth -= 1
-      if (depth === 0) return chars.slice(index + 1).join("").trim() ? { type: match[1], malformed: true } : { type: match[1], value: value.join("").trim() }
+      if (depth === 0) {
+        return chars.slice(index + 1).join("").trim()
+          ? { type: kind, malformed: true, value: "" }
+          : { type: kind, malformed: false, value: value.join("").trim() }
+      }
       value.push(character)
     } else {
       value.push(character)
     }
   }
-  return { type: match[1], malformed: true }
+  return { type: kind, malformed: true, value: "" }
 }
 
-function parseBlocks(markdown) {
+function parseBlocks(markdown: string): { blocks: ParsedBlock[]; warnings: string[] } {
   const rawBlocks = markdownBlocks(markdown)
-  const blocks = []
-  const warnings = []
+  const blocks: ParsedBlock[] = []
+  const warnings: string[] = []
   for (let index = 0; index < rawBlocks.length;) {
     const block = rawBlocks[index]
+    if (block === undefined) {
+      index += 1
+      continue
+    }
     const position = positionFromBlock(block)
+    const following = rawBlocks[index + 1]
     if (position) {
       const closingOffset = rawBlocks.slice(index + 1).indexOf(":::")
       if (closingOffset >= 0) {
         const closing = index + 1 + closingOffset
         for (const grouped of rawBlocks.slice(index + 1, closing)) if (grouped) blocks.push({ markdown: grouped, position })
         index = closing + 1
-      } else if (rawBlocks[index + 1] !== undefined) {
-        blocks.push({ markdown: rawBlocks[index + 1], position })
+      } else if (following !== undefined) {
+        blocks.push({ markdown: following, position })
         index += 2
       } else {
         warnings.push("Alignment directive has no following Markdown block.")
@@ -719,11 +954,11 @@ function parseBlocks(markdown) {
   return { blocks, warnings }
 }
 
-function markdownBlocks(markdown) {
-  const blocks = []
-  let current = []
-  let fence = null
-  let mathFence = null
+function markdownBlocks(markdown: string): string[] {
+  const blocks: string[] = []
+  let current: string[] = []
+  let fence: FenceState | null = null
+  let mathFence: string | null = null
   for (const line of markdown.split("\n")) {
     const incoming = fenceMarker(line)
     if (fence) fence = toggleFence(fence, incoming)
@@ -752,36 +987,46 @@ function markdownBlocks(markdown) {
   return blocks
 }
 
-function positionFromBlock(block) {
+function positionFromBlock(block: string): SourcePosition | null {
   const match = /^\s*:::(align|position)[ \t]*\{([^}]*)\}\s*$/.exec(block)
   if (!match) return null
-  const values = match[2].split(/\s+/).filter(Boolean).map(value => value.toLowerCase())
-  let horizontal = values.find(value => ["left", "center", "right"].includes(value))
-  let vertical = values.find(value => ["top", "middle", "bottom"].includes(value))
-  if (match[1] === "align" && values.length === 2 && ["top", "center", "middle", "bottom"].includes(values[0]) && ["left", "center", "right"].includes(values[1])) {
-    horizontal = values[1]
-    vertical = values[0] === "center" ? "middle" : values[0]
+  const kind = match[1] ?? ""
+  const values = (match[2] ?? "").split(/\s+/).filter(Boolean).map(value => value.toLowerCase())
+  const horizontalWords = POSITION_VOCABULARY.horizontal
+  const verticalWords = POSITION_VOCABULARY.vertical
+  let horizontal = values.find(value => horizontalWords.includes(value))
+  let vertical = values.find(value => verticalWords.includes(value))
+  const first = values[0]
+  const second = values[1]
+  if (kind === "align" && values.length === 2 && first !== undefined && second !== undefined &&
+    (first === "center" || verticalWords.includes(first)) && horizontalWords.includes(second)) {
+    horizontal = second
+    vertical = first === "center" ? "middle" : first
   }
   if (!horizontal && !vertical) return null
   return { horizontal: horizontal || "left", vertical: vertical || "top", vertical_explicit: Boolean(vertical) }
 }
 
-function inferLayout(blocks) {
+function inferLayout(blocks: ParsedBlock[]): string {
   const meaningful = blocks.filter(block => block.markdown.trim())
   if (!meaningful.length) return "body"
-  if (meaningful.length === 1 && imageBlock(meaningful[0].markdown)) return "image"
-  if (headingFor(meaningful[0].markdown)?.level === 1) {
+  const first = meaningful[0]
+  if (!first) return "body"
+  if (meaningful.length === 1 && imageBlock(first.markdown)) return "image"
+  if (headingFor(first.markdown)?.level === 1) {
     const following = meaningful.slice(1)
-    const headings = following.map(block => headingFor(block.markdown)).filter(Boolean)
+    const headings = following.map(block => headingFor(block.markdown)).filter((heading): heading is { level: number; text: string } => heading !== null)
     const firstHeadingIndex = following.findIndex(block => headingFor(block.markdown))
     const levels = headings.map(heading => heading.level)
-    if (headings.length >= 2 && headings.length <= 3 && firstHeadingIndex === 0 && new Set(levels).size === 1 && levels[0] > 1) {
+    if (headings.length >= 2 && headings.length <= 3 && firstHeadingIndex === 0 && new Set(levels).size === 1 && (levels[0] ?? 0) > 1) {
       return headings.length === 2 ? "two-column" : "three-column"
     }
   }
-  const contentBlocks = headingFor(meaningful[0].markdown)?.level === 1 ? meaningful.slice(1) : null
+  const contentBlocks = headingFor(first.markdown)?.level === 1 ? meaningful.slice(1) : null
   if (contentBlocks?.length === 1) {
-    const content = contentBlocks[0].markdown
+    const only = contentBlocks[0]
+    if (!only) return "body"
+    const content = only.markdown
     if (imageBlock(content)) return "image"
     if (tableBlock(content)) return "table"
     if (codeBlock(content)) return "code"
@@ -790,74 +1035,83 @@ function inferLayout(blocks) {
   return "body"
 }
 
-function columnRegions(blocks, layout) {
+function columnRegions(blocks: ParsedBlock[], layout: string): ParsedBlock[][] {
   if (!["two-column", "three-column"].includes(layout)) return [blocks]
-  const regions = []
+  const regions: ParsedBlock[][] = []
   for (const block of blocks.slice(1)) {
     if (headingFor(block.markdown)) regions.push([])
-    if (regions.length) regions.at(-1).push(block)
+    if (regions.length) {
+      const current = regions.at(-1)
+      if (current) current.push(block)
+    }
   }
   return regions
 }
 
-function headingFor(markdown) {
+function headingFor(markdown: string): { level: number; text: string } | null {
   const first = sourceLines(markdown)[0]?.text ?? ""
   const match = /^\s{0,3}(#+)\s+(.+?)\s*#*\s*$/.exec(first)
-  return match ? { level: match[1].length, text: match[2].trim() } : null
+  if (!match) return null
+  return { level: (match[1] ?? "").length, text: (match[2] ?? "").trim() }
 }
 
-function imageBlock(markdown) {
+function imageBlock(markdown: string): boolean {
   return /^\s*!\[[^\]]*\]\([^\)]+\)\s*$/s.test(markdown)
 }
 
-function tableBlock(markdown) {
+function tableBlock(markdown: string): boolean {
   const lines = sourceLines(markdown).map(line => line.text)
-  return lines.length >= 2 && lines[0].includes("|") && /^\s*\|?\s*:?-{3,}/.test(lines[1])
+  return lines.length >= 2 && (lines[0] ?? "").includes("|") && /^\s*\|?\s*:?-{3,}/.test(lines[1] ?? "")
 }
 
-function codeBlock(markdown) {
+function codeBlock(markdown: string): boolean {
   const lines = sourceLines(markdown).map(line => line.text)
   const opening = /^\s*([`~]{3,})/.exec(lines[0] ?? "")
   const closing = /^\s*([`~]{3,})\s*$/.exec(lines.at(-1) ?? "")
-  return Boolean(opening && closing && opening[1][0] === closing[1][0] && closing[1].length >= opening[1].length)
+  const openMark = opening?.[1] ?? ""
+  const closeMark = closing?.[1] ?? ""
+  return openMark.length > 0 && closeMark.length >= openMark.length && openMark[0] === closeMark[0]
 }
 
-function fencedCodeSource(markdown) {
+function fencedCodeSource(markdown: string): boolean {
   return Boolean(fenceMarker(sourceLines(markdown)[0]?.text ?? ""))
 }
 
-function displayMathFenceMarker(line) {
+function displayMathFenceMarker(line: string): string | null {
   return /^[ \t]{0,3}(\$\$|\\\[|\\\])[ \t]*$/.exec(line)?.[1] ?? null
 }
 
-function displayMathFenceOpener(line) {
+function displayMathFenceOpener(line: string): string | null {
   const marker = displayMathFenceMarker(line)
   return marker === "$$" ? "$$" : marker === "\\[" ? "\\]" : null
 }
 
-function displayMathFenceSource(markdown) {
+function displayMathFenceSource(markdown: string): boolean {
   const lines = markdown.split(/\r\n|\r|\n/)
   const opener = displayMathFenceOpener(lines[0] ?? "")
-  return Boolean(opener && (lines.length === 1 || displayMathFenceMarker(lines.at(-1)) === opener))
+  return Boolean(opener && (lines.length === 1 || displayMathFenceMarker(lines.at(-1) ?? "") === opener))
 }
 
-function fenceMarker(line) {
+function fenceMarker(line: string): FenceState | null {
   const match = /^\s{0,3}(`{3,}|~{3,})(.*)$/.exec(line)
-  return match ? { marker: match[1][0], length: match[1].length, closing: /^[ \t]*$/.test(match[2]) } : null
+  if (!match) return null
+  const run = match[1] ?? ""
+  const rest = match[2] ?? ""
+  return { marker: run[0] ?? "", length: run.length, closing: /^[ \t]*$/.test(rest) }
 }
 
-function toggleFence(current, incoming) {
+function toggleFence(current: FenceState | null, incoming: FenceState | null): FenceState | null {
   if (!current) return incoming
   if (incoming && incoming.marker === current.marker && incoming.length >= current.length && incoming.closing) return null
   return current
 }
 
-function normalizeSection(value) {
+function normalizeSection(value: string): string {
   return value.replace(/^\n/, "").replace(/\n$/, "")
 }
 
-function sourceLines(source, start = 0, end = source.length) {
-  const lines = []
+function sourceLines(source: string, start = 0, end = source.length): SourceLine[] {
+  const lines: SourceLine[] = []
   let cursor = start
   while (cursor < end) {
     let newline = cursor

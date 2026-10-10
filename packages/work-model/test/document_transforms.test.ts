@@ -3,6 +3,7 @@ import assert from "node:assert/strict"
 import {
   exciseRange,
   addSlide,
+  blockOperationRange,
   blockOperationStart,
   buildEditorMap,
   deleteSlide,
@@ -17,9 +18,10 @@ import {
   parseAlignment,
   removeBlock
 } from "../src/index.js"
+import type { MapSlide } from "../src/index.js"
 
 const TWO_SLIDES = "# One\n\nBody one.\n\n---\n\n# Two\n\nBody two.\n"
-const mapOf = (source) => buildEditorMap(source).slides
+const mapOf = (source: string): MapSlide[] => buildEditorMap(source).slides
 
 test("slide insertion splices before the target or appends after the last", () => {
   const slides = mapOf(TWO_SLIDES)
@@ -59,6 +61,7 @@ test("slide moves keep front matter and reflow trailing blank lines with the sec
 
 test("block insertion honors directive starts and delimiter-aware appends", () => {
   const [slide] = mapOf(TWO_SLIDES)
+  assert.ok(slide)
   assert.equal(
     insertBlock(TWO_SLIDES, slide, 1),
     "# One\n\nNew block\n\nBody one.\n\n---\n\n# Two\n\nBody two.\n"
@@ -72,6 +75,7 @@ test("block insertion honors directive starts and delimiter-aware appends", () =
 
 test("block removal collapses the blank line left behind", () => {
   const [slide] = mapOf(TWO_SLIDES)
+  assert.ok(slide)
   assert.equal(removeBlock(TWO_SLIDES, slide, slide.blocks[0]), "Body one.\n\n---\n\n# Two\n\nBody two.\n")
   assert.equal(removeBlock(TWO_SLIDES, null, slide.blocks[0]), null)
   assert.equal(removeBlock(TWO_SLIDES, slide, null), null)
@@ -80,6 +84,7 @@ test("block removal collapses the blank line left behind", () => {
 test("block removal of a lone group member takes the directive pair", () => {
   const source = ":::align{center}\n\n# Solo\n\n:::\n\nAfter\n"
   const [slide] = mapOf(source)
+  assert.ok(slide)
   assert.equal(slide.blocks.filter((block) => block.position_scope === "group").length, 1)
   assert.equal(removeBlock(source, slide, slide.blocks[0]), "After\n")
 })
@@ -87,12 +92,14 @@ test("block removal of a lone group member takes the directive pair", () => {
 test("block moves refuse to cross group boundaries", () => {
   const source = ":::align{center}\n\n# T\n\nBody.\n\n:::\n\nAfter\n"
   const [slide] = mapOf(source)
+  assert.ok(slide)
   assert.equal(moveBlock(source, slide, 0, 2), null)
   assert.equal(
     moveBlock(source, slide, 0, 1),
     ":::align{center}\n\nBody.\n\n# T\n\n:::\n\nAfter\n"
   )
   const [plain] = mapOf(TWO_SLIDES)
+  assert.ok(plain)
   assert.equal(
     moveBlock(TWO_SLIDES, plain, 0, 1),
     "Body one.\n\n# One\n\n---\n\n# Two\n\nBody two.\n"
@@ -102,10 +109,37 @@ test("block moves refuse to cross group boundaries", () => {
 
 test("block operation starts include the single-block directive", () => {
   const [grouped] = mapOf(":::align{center}\n\n# T\n\nBody.\n\n:::\n\nAfter\n")
+  assert.ok(grouped)
   assert.equal(blockOperationStart(grouped, grouped.blocks[0]), 18)
   const [single] = mapOf(":::align{left}\n# T\n")
-  assert.equal(single.blocks[0].position_scope, "block")
+  assert.ok(single)
+  assert.equal(single.blocks[0]?.position_scope, "block")
   assert.equal(blockOperationStart(single, single.blocks[0]), 0)
+})
+
+test("block operation ranges cover the directive pair for a lone group member", () => {
+  const source = ":::align{center}\n\n# Solo\n\n:::\n\nAfter\n"
+  const [slide] = mapOf(source)
+  assert.ok(slide)
+  assert.deepEqual(blockOperationRange(slide.blocks[0], slide), { from: 0, to: 30 })
+})
+
+test("block operation ranges cover the single-block directive and plain blocks", () => {
+  const [single] = mapOf(":::align{left}\n# T\n")
+  assert.ok(single)
+  assert.deepEqual(blockOperationRange(single.blocks[0], single), { from: 0, to: 19 })
+  const [plain] = mapOf(TWO_SLIDES)
+  assert.ok(plain)
+  assert.deepEqual(blockOperationRange(plain.blocks[0], plain), { from: 0, to: 6 })
+})
+
+test("block operation ranges stay inside shared groups and refuse missing inputs", () => {
+  const [slide] = mapOf(":::align{center}\n\n# T\n\nBody.\n\n:::\n\nAfter\n")
+  assert.ok(slide)
+  assert.deepEqual(blockOperationRange(slide.blocks[0], slide), { from: 18, to: 22 })
+  assert.equal(blockOperationRange(null, slide), null)
+  assert.equal(blockOperationRange(slide.blocks[0], null), null)
+  assert.equal(blockOperationRange(null, null), null)
 })
 
 test("alignment parsing keeps the presentation grammar", () => {

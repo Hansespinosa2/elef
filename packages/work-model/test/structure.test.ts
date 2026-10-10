@@ -5,6 +5,7 @@ import {
   buildEditorMap,
   buildEditorStructure,
   initialFrontMatter,
+  POSITION_VOCABULARY,
   readStyle
 } from "../src/index.js"
 
@@ -19,10 +20,15 @@ test("structure splits presentation slides on thematic breaks outside fences", (
   const { slides, editorMap } = buildEditorStructure(source, { mode: "presentation" })
   assert.equal(slides.length, 2)
   assert.equal(editorMap.slides.length, 2)
-  assert.equal(editorMap.slides[0].id, "slide-1")
-  assert.deepEqual(source.slice(editorMap.slides[0].delimiter_range.start, editorMap.slides[0].delimiter_range.end), "---\n")
-  assert.deepEqual(editorMap.slides[1].delimiter_range, null)
-  assert.equal(source.slice(editorMap.slides[1].range.start, editorMap.slides[1].range.end).trim(), "# Two\n\n```\n---\n```")
+  const first = editorMap.slides[0]
+  const second = editorMap.slides[1]
+  assert.ok(first)
+  assert.ok(second)
+  assert.equal(first.id, "slide-1")
+  assert.ok(first.delimiter_range)
+  assert.deepEqual(source.slice(first.delimiter_range.start, first.delimiter_range.end), "---\n")
+  assert.deepEqual(second.delimiter_range, null)
+  assert.equal(source.slice(second.range.start, second.range.end).trim(), "# Two\n\n```\n---\n```")
 })
 
 test("document mode keeps one slide over the whole body", () => {
@@ -32,12 +38,13 @@ test("document mode keeps one slide over the whole body", () => {
   assert.equal(editorMap.mode, "document")
   assert.equal(editorMap.source_name, "Doc")
   assert.equal(editorMap.source_length, source.length)
-  assert.deepEqual(editorMap.slides[0].delimiter_range, null)
+  assert.deepEqual(editorMap.slides[0]?.delimiter_range, null)
 })
 
 test("front matter reports body start and feeds style", () => {
   const source = "---\ntheme: dark\ntypography: modern\n---\n\n# Hi\n"
   const front = initialFrontMatter(source)
+  assert.ok(front)
   assert.equal(source.slice(front.bodyStart), "\n# Hi\n")
   assert.deepEqual(readStyle(source), { theme: "dark", typography: "modern" })
   assert.equal(initialFrontMatter("# No fence\n"), null)
@@ -53,12 +60,14 @@ test("readStyle ignores unknown values and strips quotes and comments", () => {
 test("blocks carry source ranges that slice the original bytes", () => {
   const source = "# Title\n\nFirst paragraph.\n\nSecond paragraph.\n"
   const { editorMap } = buildEditorStructure(source, { mode: "document" })
-  const blocks = editorMap.slides[0].blocks.filter(block => !block.empty_placeholder)
+  const slide = editorMap.slides[0]
+  assert.ok(slide)
+  const blocks = slide.blocks.filter(block => !block.empty_placeholder)
   assert.ok(blocks.length >= 3)
   for (const block of blocks) {
     assert.equal(typeof block.range.start, "number")
     assert.ok(block.range.start >= 0 && block.range.end <= source.length)
-    assert.ok(source.slice(block.range.start, block.range.end).includes(block.markdown.split("\n")[0]))
+    assert.ok(source.slice(block.range.start, block.range.end).includes(block.markdown.split("\n")[0] ?? ""))
     assert.deepEqual(block.source_range, block.range)
   }
 })
@@ -67,9 +76,22 @@ test("position directives attach to the following block", () => {
   const source = ":::align{center}\n\n# Placed\n"
   const { editorMap } = buildEditorStructure(source, { mode: "presentation" })
   assert.ok(editorMap.directives.length >= 1)
-  const placed = editorMap.slides[0].blocks.find(block => block.markdown.includes("# Placed"))
+  const slide = editorMap.slides[0]
+  assert.ok(slide)
+  const placed = slide.blocks.find(block => block.markdown.includes("# Placed"))
   assert.ok(placed)
   assert.equal(placed.position?.horizontal, "center")
+})
+
+test("position vocabulary is the canonical align grammar", () => {
+  assert.deepEqual(POSITION_VOCABULARY, {
+    horizontal: ["left", "center", "right"],
+    vertical: ["top", "middle", "bottom"]
+  })
+  const { editorMap } = buildEditorStructure(":::align{bottom right}\n\n# Placed\n", { mode: "presentation" })
+  const placed = editorMap.slides[0]?.blocks.find(block => block.markdown.includes("# Placed"))
+  assert.equal(placed?.position?.horizontal, "right")
+  assert.equal(placed?.position?.vertical, "bottom")
 })
 
 test("margin settings default on and read show-in-margin overrides", () => {

@@ -1,4 +1,52 @@
-export function parseDocumentLinkAt(source, start = 0) {
+export interface DocumentLinkToken {
+  title: string;
+  start: number;
+  end: number;
+}
+
+export interface LinkableDocument {
+  id?: unknown;
+  title?: unknown;
+  name?: unknown;
+  source?: unknown;
+  url?: unknown;
+  href?: unknown;
+  aliases?: unknown;
+  documentKey?: unknown;
+  document_key?: unknown;
+}
+
+export interface ResolvedDocument extends LinkableDocument {
+  documentKey: string;
+  aliases: string[];
+}
+
+export interface DocumentGraphNode {
+  id: unknown;
+  title: string;
+  url: string;
+  documentKey: string;
+  aliases: string[];
+  x: number;
+  y: number;
+}
+
+export interface DocumentGraphEdge {
+  source: unknown;
+  target: unknown;
+}
+
+export interface DocumentGraph {
+  nodes: DocumentGraphNode[];
+  edges: DocumentGraphEdge[];
+}
+
+export interface PortableDocumentLinks {
+  documentKey: string | null;
+  aliases: string[];
+}
+
+export function parseDocumentLinkAt(source: string, start = 0): DocumentLinkToken | null {
   if (typeof source !== "string" || !source.startsWith("[[", start) || source.startsWith("[[[", start) ||
       (start > 0 && source[start - 1] === "[")) return null
   const close = source.indexOf("]]", start + 2)
@@ -6,20 +54,25 @@ export function parseDocumentLinkAt(source, start = 0) {
   return { title: source.slice(start + 2, close), start, end: close + 2 }
 }
 
-export function isLinkableDocumentTitle(title) {
+export function isLinkableDocumentTitle(title: unknown): boolean {
   const value = String(title ?? "")
   return value.length > 0 && !/[\]\r\n`]/.test(value)
 }
 
-export function linkableDocumentTitles(titles = []) {
+export function linkableDocumentTitles(titles: readonly unknown[] = []): string[] {
   if (!Array.isArray(titles)) return []
   return titles.map(title => String(title ?? "")).filter(isLinkableDocumentTitle)
 }
 
-export function extractDocumentLinkTokens(source = "") {
+interface CodeFence {
+  character: string;
+  length: number;
+}
+
+export function extractDocumentLinkTokens(source: string = ""): DocumentLinkToken[] {
   if (typeof source !== "string") return []
-  const links = []
-  let fence = null
+  const links: DocumentLinkToken[] = []
+  let fence: CodeFence | null = null
   let lineStart = 0
 
   while (lineStart <= source.length) {
@@ -29,8 +82,10 @@ export function extractDocumentLinkTokens(source = "") {
     const line = source.slice(lineStart, lineEnd)
     const marker = line.match(/^ {0,3}(`{3,}|~{3,})(.*)$/)
     if (marker) {
-      if (!fence) fence = { character: marker[1][0], length: marker[1].length }
-      else if (marker[1][0] === fence.character && marker[1].length >= fence.length && !marker[2].trim()) fence = null
+      const run = marker[1] ?? ""
+      const rest = marker[2] ?? ""
+      if (!fence) fence = { character: run[0] ?? "", length: run.length }
+      else if (run[0] === fence.character && run.length >= fence.length && !rest.trim()) fence = null
     } else if (!fence && !line.startsWith("    ") && !line.startsWith("\t")) {
       let cursor = 0
       while (cursor + 1 < line.length) {
@@ -56,11 +111,11 @@ export function extractDocumentLinkTokens(source = "") {
   return links
 }
 
-export function extractDocumentLinkTitles(source = "") {
+export function extractDocumentLinkTitles(source: string = ""): string[] {
   return extractDocumentLinkTokens(source).map(token => token.title)
 }
 
-export function extractFirstMarkdownHeading(source = "") {
+export function extractFirstMarkdownHeading(source: string = ""): string | null {
   if (typeof source !== "string") return null
   const lines = source.split(/\r\n?|\n/)
   let firstBodyLine = 0
@@ -72,50 +127,54 @@ export function extractFirstMarkdownHeading(source = "") {
     }
   }
 
-  let fence = null
+  let fence: CodeFence | null = null
   for (const line of lines.slice(firstBodyLine)) {
     const marker = line.match(/^\s{0,3}(`{3,}|~{3,})(.*)$/)
     if (marker) {
-      if (!fence) fence = { character: marker[1][0], length: marker[1].length }
-      else if (marker[1][0] === fence.character && marker[1].length >= fence.length && !marker[2].trim()) fence = null
+      const run = marker[1] ?? ""
+      const rest = marker[2] ?? ""
+      if (!fence) fence = { character: run[0] ?? "", length: run.length }
+      else if (run[0] === fence.character && run.length >= fence.length && !rest.trim()) fence = null
       continue
     }
     if (fence) continue
 
     const heading = line.match(/^\s{0,3}#(?!#)\s+(.+?)\s*#*\s*$/)
-    if (heading) return heading[1].trim()
+    if (heading) return (heading[1] ?? "").trim()
   }
   return null
 }
 
-export function parsePortableDocumentLinks(source = "") {
+export function parsePortableDocumentLinks(source: string = ""): PortableDocumentLinks {
   if (typeof source !== "string") return { documentKey: null, aliases: [] }
   const lines = source.split(/\r\n?|\n/)
   if (lines[0]?.replace(/^\uFEFF/, "").trimEnd() !== "---") return { documentKey: null, aliases: [] }
 
   const closingLine = lines.findIndex((line, index) => index > 0 && line.trimEnd() === "---")
   if (closingLine < 0) return { documentKey: null, aliases: [] }
-  const values = new Map()
+  const values = new Map<string, string>()
   for (const line of lines.slice(1, closingLine)) {
     const match = line.match(/^(elef_document_key|elef_aliases)\s*:\s*(.*)$/)
-    if (match && !values.has(match[1])) values.set(match[1], match[2].trim())
+    const key = match?.[1]
+    const raw = match?.[2] ?? ""
+    if (key && !values.has(key)) values.set(key, raw.trim())
   }
 
-  let documentKey = null
+  let documentKey: string | null = null
   try {
     const value = values.get("elef_document_key")
     if (value) {
-      const parsed = JSON.parse(value)
+      const parsed: unknown = JSON.parse(value)
       if (typeof parsed === "string" && parsed.trim()) documentKey = parsed
     }
   } catch (_error) {
     // Invalid optional portable metadata behaves like an absent value.
   }
 
-  let aliases = []
+  let aliases: string[] = []
   try {
-    const parsed = JSON.parse(values.get("elef_aliases") || "null")
-    if (Array.isArray(parsed)) aliases = [...new Set(parsed.filter(value => typeof value === "string" && value.trim()).map(value => value.trim()))]
+    const parsed: unknown = JSON.parse(values.get("elef_aliases") || "null")
+    if (Array.isArray(parsed)) aliases = [...new Set(parsed.filter(value => typeof value === "string" && value.trim()).map(value => (value as string).trim()))]
   } catch (_error) {
     // Invalid optional portable metadata behaves like an absent value.
   }
@@ -123,59 +182,66 @@ export function parsePortableDocumentLinks(source = "") {
   return { documentKey, aliases }
 }
 
-export function createDocumentLinkResolver(documents = []) {
-  const byTitle = new Map()
-  const byAlias = new Map()
-  const ambiguousAliases = new Set()
-  const byKey = new Map()
-  const ambiguousKeys = new Set()
-  const byId = new Map()
+export function createDocumentLinkResolver(documents: readonly LinkableDocument[] = []): (value: unknown) => ResolvedDocument | null {
+  const byTitle = new Map<string, ResolvedDocument>()
+  const byAlias = new Map<string, ResolvedDocument>()
+  const ambiguousAliases = new Set<string>()
+  const byKey = new Map<string, ResolvedDocument>()
+  const ambiguousKeys = new Set<string>()
+  const byId = new Map<string, ResolvedDocument>()
 
   for (const input of documents) {
     const doc = withPortableDocumentLinks(input)
-    if (doc?.title != null) byTitle.set(String(doc.title), doc)
-    if (doc?.id != null) byId.set(String(doc.id), doc)
-    const key = doc?.documentKey ?? doc?.document_key ?? doc?.id
+    if (!doc) continue
+    if (doc.title != null) byTitle.set(String(doc.title), doc)
+    if (doc.id != null) byId.set(String(doc.id), doc)
+    const key = doc.documentKey ?? doc.document_key ?? doc.id
     if (key != null) addUniqueIndex(byKey, ambiguousKeys, key, doc)
-    for (const alias of Array.isArray(doc?.aliases) ? doc.aliases : []) {
+    for (const alias of Array.isArray(doc.aliases) ? doc.aliases : []) {
       if (typeof alias === "string") addUniqueIndex(byAlias, ambiguousAliases, alias, doc)
     }
   }
 
   return value => {
-    const tokenKey = String(value ?? "").split("|", 2)[0]
+    const tokenKey = String(value ?? "").split("|", 2)[0] ?? ""
     const explicitDocumentKey = tokenKey.match(/^document:(.*)$/)
-    if (explicitDocumentKey) return byKey.get(explicitDocumentKey[1]) || null
+    if (explicitDocumentKey) return byKey.get(explicitDocumentKey[1] ?? "") || null
     const explicitId = tokenKey.match(/^id:(.*)$/)
-    if (explicitId) return byId.get(explicitId[1]) || null
+    if (explicitId) return byId.get(explicitId[1] ?? "") || null
     if (ambiguousAliases.has(tokenKey) || ambiguousKeys.has(tokenKey)) return null
     return byAlias.get(tokenKey) || byTitle.get(tokenKey) || byKey.get(tokenKey) || byId.get(tokenKey) || null
   }
 }
 
-export function buildDocumentGraph(documents = []) {
+export function buildDocumentGraph(documents: readonly LinkableDocument[] = []): DocumentGraph {
   if (!Array.isArray(documents)) throw new TypeError("Document graph input must be a list.")
   const entries = documents
     .filter(doc => doc && doc.id != null && (typeof doc.title === "string" || typeof doc.name === "string"))
     .map(doc => withPortableDocumentLinks({
       ...doc,
-      title: doc.title || extractFirstMarkdownHeading(doc.source || "") || doc.name
+      title: doc.title || extractFirstMarkdownHeading(typeof doc.source === "string" ? doc.source : "") || doc.name
     }))
+    .filter((doc): doc is ResolvedDocument => doc !== null)
   const resolve = createDocumentLinkResolver(entries)
-  const nodes = entries.map((doc, index) => ({
-    id: doc.id,
-    title: doc.title,
-    url: doc.url || doc.href || `#deck/${encodeURIComponent(String(doc.id))}`,
-    documentKey: doc.documentKey,
-    aliases: doc.aliases,
-    x: 120 + (index % 4) * 220,
-    y: 100 + Math.floor(index / 4) * 150
-  }))
-  const edges = []
-  const seen = new Set()
+  const nodes: DocumentGraphNode[] = entries.map((doc, index) => {
+    const fallbackUrl = `#deck/${encodeURIComponent(String(doc.id))}`
+    const rawUrl = doc.url || doc.href || fallbackUrl
+    const rawTitle = doc.title
+    return {
+      id: doc.id,
+      title: typeof rawTitle === "string" ? rawTitle : "",
+      url: typeof rawUrl === "string" ? rawUrl : fallbackUrl,
+      documentKey: doc.documentKey,
+      aliases: doc.aliases,
+      x: 120 + (index % 4) * 220,
+      y: 100 + Math.floor(index / 4) * 150
+    }
+  })
+  const edges: DocumentGraphEdge[] = []
+  const seen = new Set<string>()
 
   for (const doc of entries) {
-    for (const title of extractDocumentLinkTitles(doc.source || "")) {
+    for (const title of extractDocumentLinkTitles(typeof doc.source === "string" ? doc.source : "")) {
       const target = resolve(title)
       if (!target) continue
       const key = JSON.stringify([String(doc.id), String(target.id)])
@@ -187,18 +253,20 @@ export function buildDocumentGraph(documents = []) {
   return { nodes, edges }
 }
 
-function withPortableDocumentLinks(doc) {
-  if (!doc || typeof doc !== "object") return doc
-  const portable = parsePortableDocumentLinks(doc.source || "")
+function withPortableDocumentLinks(doc: LinkableDocument | null | undefined): ResolvedDocument | null {
+  if (!doc || typeof doc !== "object") return null
+  const portable = parsePortableDocumentLinks(typeof doc.source === "string" ? doc.source : "")
   const aliases = Array.isArray(doc.aliases) ? doc.aliases : []
+  const fallbackKey = String(doc.id ?? "")
+  const rawKey = portable.documentKey || doc.documentKey || doc.document_key || fallbackKey
   return {
     ...doc,
-    documentKey: portable.documentKey || doc.documentKey || doc.document_key || String(doc.id ?? ""),
+    documentKey: typeof rawKey === "string" ? rawKey : fallbackKey,
     aliases: [...new Set([...aliases, ...portable.aliases])]
   }
 }
 
-function addUniqueIndex(index, ambiguous, value, doc) {
+function addUniqueIndex(index: Map<string, ResolvedDocument>, ambiguous: Set<string>, value: unknown, doc: ResolvedDocument): void {
   const key = String(value).trim()
   if (!key || ambiguous.has(key)) return
   const existing = index.get(key)
@@ -210,7 +278,7 @@ function addUniqueIndex(index, ambiguous, value, doc) {
   }
 }
 
-function inlineCodeContains(line, start, end) {
+function inlineCodeContains(line: string, start: number, end: number): boolean {
   let cursor = 0
   while (cursor < line.length) {
     if (line[cursor] !== "`") {
@@ -237,7 +305,7 @@ function inlineCodeContains(line, start, end) {
   return false
 }
 
-function isEscaped(line, position) {
+function isEscaped(line: string, position: number): boolean {
   let backslashes = 0
   for (let cursor = position - 1; cursor >= 0 && line[cursor] === "\\"; cursor -= 1) backslashes += 1
   return backslashes % 2 === 1
