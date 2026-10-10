@@ -4,6 +4,7 @@ import { execFileSync } from "node:child_process"
 
 import { blockVersions, latestPendingPlatformRelease, parseLedger, selectMinorMilestone, unblockVersions } from "../release/ledger.mjs"
 import { GitHubReleaseApi } from "../release/github-api.mjs"
+import { assertAuthorizedReleaseTagDispatch } from "../release/coordinator-trust.mjs"
 import { reconcileReleaseLedger } from "../release/reconciler.mjs"
 import { writePagesStateFiles } from "../release/pages-state.mjs"
 
@@ -16,9 +17,6 @@ const actor = requiredEnv("GITHUB_ACTOR")
 const eventName = process.env.GITHUB_EVENT_NAME || ""
 const eventRef = process.env.GITHUB_REF || ""
 const action = process.env.DESKTOP_RELEASE_ACTION || "reconcile"
-if (eventName === "workflow_dispatch" && eventRef !== "refs/heads/main") {
-  throw new Error("release workflow dispatch must target the protected main branch")
-}
 const [owner, repositoryName] = repository.split("/")
 if (!owner || !repositoryName) throw new Error("GITHUB_REPOSITORY must use owner/repository form")
 
@@ -37,6 +35,17 @@ const previous = await readOptionalLedger(statePath)
 let ledger = previous
 let reconciliation = null
 let initialized = false
+
+if (eventName === "workflow_dispatch") assertAuthorizedReleaseTagDispatch({
+  actor,
+  repositoryOwner: repoInfo.owner.login,
+  ref: eventRef,
+  refType: requiredEnv("GITHUB_REF_TYPE"),
+  refName: requiredEnv("GITHUB_REF_NAME"),
+  sha: requiredEnv("GITHUB_SHA"),
+  workflowSha: requiredEnv("DESKTOP_WORKFLOW_SHA"),
+  ledger
+})
 
 if (action === "reconcile") {
   reconciliation = await reconcileReleaseLedger({

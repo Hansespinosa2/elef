@@ -1,10 +1,10 @@
 name: Desktop Release Coordinator
 
 on:
-  push:
+  workflow_run:
+    workflows: [ CI ]
+    types: [ completed ]
     branches: [ main ]
-  schedule:
-    - cron: "*/15 * * * *"
   workflow_dispatch:
     inputs:
       action:
@@ -37,7 +37,20 @@ concurrency:
 jobs:
   verify-coordinator:
     name: Verify exact-SHA release coordinator trust
-    if: github.event_name == 'push' || github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    if: >-
+      (
+        github.event_name == 'workflow_run' &&
+        github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_branch == 'main' &&
+        github.event.workflow_run.conclusion == 'success' &&
+        github.sha == github.event.workflow_run.head_sha &&
+        github.workflow_sha == github.event.workflow_run.head_sha
+      ) || (
+        github.event_name == 'workflow_dispatch' &&
+        github.ref_type == 'tag' &&
+        startsWith(github.ref_name, 'desktop-v') &&
+        github.sha == github.workflow_sha
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -63,7 +76,7 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Select the latest trusted verifier, using the event SHA only for initial bootstrap
+      - name: Select the latest trusted verifier, using this exact passing merge only for initial bootstrap
         id: select-verifier
         env:
           GITHUB_SHA: ${{ github.sha }}
@@ -92,12 +105,17 @@ jobs:
           GITHUB_API_URL: ${{ github.api_url }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_SHA: ${{ github.sha }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_REF_TYPE: ${{ github.ref_type }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          DESKTOP_WORKFLOW_SHA: ${{ github.workflow_sha }}
         run: node verifier/desktop/scripts/verify_release_coordinator.mjs current main-history pages
 
   reconcile:
     name: Reconcile desktop release state
     needs: verify-coordinator
-    if: github.event_name == 'push' || github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    if: needs.verify-coordinator.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: desktop-release-state
@@ -164,6 +182,10 @@ jobs:
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           GITHUB_REF: ${{ github.ref }}
+          GITHUB_REF_TYPE: ${{ github.ref_type }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_SHA: ${{ github.sha }}
+          DESKTOP_WORKFLOW_SHA: ${{ github.workflow_sha }}
           ELEF_RELEASE_STATE_PUSH_TOKEN: ${{ steps.pages-writer-token.outputs.token }}
           DESKTOP_RELEASE_ACTION: ${{ github.event.inputs.action || 'reconcile' }}
           DESKTOP_RELEASE_MINOR: ${{ github.event.inputs.minor }}
@@ -238,6 +260,7 @@ jobs:
         with:
           ref: ${{ fromJSON(needs.reconcile.outputs.linux_candidate).main_sha }}
           path: build-source
+          persist-credentials: false
       - name: Check out the current release ledger
         uses: actions/checkout@v7
         with:
@@ -349,6 +372,7 @@ jobs:
         with:
           ref: ${{ fromJSON(needs.reconcile.outputs.macos_candidate).main_sha }}
           path: build-source
+          persist-credentials: false
       - name: Check out the current release ledger
         uses: actions/checkout@v7
         with:

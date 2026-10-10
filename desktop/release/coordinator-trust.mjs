@@ -99,3 +99,22 @@ export function latestTrustedToolingSha(ledger) {
   eligible.sort((left, right) => right.main_order - left.main_order)
   return eligible[0]?.sha || null
 }
+
+export function assertAuthorizedReleaseTagDispatch({ actor, repositoryOwner, ref, refType, refName, sha, workflowSha, ledger }) {
+  if (typeof actor !== "string" || typeof repositoryOwner !== "string" || actor.toLowerCase() !== repositoryOwner.toLowerCase()) {
+    throw new Error("manual release actions require a workflow dispatch by the repository owner")
+  }
+  if (refType !== "tag" || ref !== `refs/tags/${refName}` ||
+      !/^desktop-v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(refName || "") ||
+      !/^[a-f0-9]{40}$/i.test(sha || "") || workflowSha !== sha) {
+    throw new Error("manual release actions must use the workflow file from an immutable desktop release tag")
+  }
+  if (!ledger || !Array.isArray(ledger.releases)) {
+    throw new Error("manual release actions require an initialized release ledger")
+  }
+  const release = ledger.releases.find(item => item.tag === refName)
+  if (!release || release.main_sha !== sha || release.gate !== "passed") {
+    throw new Error("manual action tag must identify a Gate-A-passed release source in the authoritative ledger")
+  }
+  return release
+}

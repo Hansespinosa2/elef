@@ -2,9 +2,17 @@
 
 ## Routine release coordination
 
-`Desktop Release Coordinator` runs after pushes to `main`, on its 15-minute repair schedule, or by manual dispatch on `main`. Use `reconcile` to repair a missed run. Use `minor` only for an explicitly approved next minor series and enter the authorization reason. A PR merge remains the routine release decision; the coordinator does not merge PRs.
+`Desktop Release Coordinator` runs after the `CI` workflow completes successfully on a `main` push. It proceeds only when both the workflow source SHA and current `main` head match that completed CI SHA, so a newer merge defers work until its own exact-SHA Gate A finishes. That later run reconciles the full first-parent history. To repair a missed event, dispatch from a versioned release tag whose source is recorded and Gate-A-passed in the Pages ledger:
+
+```sh
+gh workflow run desktop-release.yml --ref desktop-v0.1.0 -f action=reconcile
+```
+
+Use `minor` only for an explicitly approved next minor series and provide the authorization reason. A PR merge remains the routine release decision; the coordinator does not merge PRs.
 
 For a PR from another author, the latest owner approval must target the final PR head and be submitted before merge. [GitHub does not permit PR authors to approve their own PRs](https://docs.github.com/en/pull-requests/how-tos/review-pull-requests/approving-a-pull-request-with-required-reviews), so for an owner-authored PR the owner's explicit merge is the approval signal; a merge performed by another actor is ineligible. The coordinator verifies this after merge before reserving a version.
+
+The repository-owner CODEOWNERS entries protect the CI workflow, privileged release workflows, trust verifier, and publishing state machine. The `main` ruleset must require at least one approving review and a CODEOWNERS approval for those paths; confirm this before relying on automatic publication. Preserve the owner-authored PR rule by allowing an owner PR-only bypass if GitHub would otherwise prevent the owner from merging their own PR. The coordinator independently checks exact Gate A and owner authorization. The current `main` ruleset has no required reviews, so this external ruleset setting remains a release trust prerequisite until enabled and verified.
 
 The workflow reconciles the actual first-parent `main` history, reruns the exact-SHA gate evidence, and updates `desktop/stable/state.json` and its derived `latest.json` projection in one compare-and-swap commit on `gh-pages`. A reserved version or a successful build is not a public release or an installation result.
 
@@ -25,7 +33,14 @@ The owner-run ruleset check proves the stored rule using an administrator creden
 
 ## Emergency block or unblock
 
-Use `Desktop Release Emergency Controls` on the protected `main` ref. Select `block` or `unblock`, list one or more semantic versions such as `0.1.0`, and give the reason. The workflow checks that the actor is the repository owner, writes the ledger and safe feed through the Pages compare-and-swap publisher, and updates the corresponding GitHub Release notes.
+Dispatch `Desktop Release Emergency Controls` from the latest available version tag, such as `desktop-v0.1.0`. The workflow requires the tagged source and workflow file to be the same Gate-A-passed release commit recorded in the Pages ledger. For example:
+
+```sh
+gh workflow run desktop-release-controls.yml --ref desktop-v0.1.0 \
+  -f action=block -f versions=0.1.0 -f reason="Unsafe release; preparing a fixed version"
+```
+
+Select `block` or `unblock`, list one or more semantic versions, and give the reason. The workflow checks that the actor is the repository owner, writes the ledger and safe feed through the Pages compare-and-swap publisher, and updates the corresponding GitHub Release notes.
 
 Release publication, emergency controls, AUR promotion, and release-note updates use the same workflow-level Actions concurrency group. A block waits for an active coordinator to finish, then records the block and warning while holding that group; publishers queued after the ledger commit reread the state and reject the blocked version. GitHub does not guarantee queue order, so a publishing run already queued ahead of the control run may finish before the block is committed. Treat the block as effective only after the emergency workflow completes. A block cannot recall GitHub/AUR artifacts already published, or packages already fetched or installed. A blocked release note says to stop installing that version and to use a higher owner-approved fixed version when available. Do not reuse the blocked version or delete its artifacts.
 

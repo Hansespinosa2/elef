@@ -2,13 +2,40 @@ import assert from "node:assert/strict"
 import test from "node:test"
 
 import { createLedger, reconcileMain } from "./ledger.mjs"
-import { assertTrustedCoordinatorRevision, latestTrustedToolingSha, selectTrustedCoordinatorRevision } from "./coordinator-trust.mjs"
+import { assertAuthorizedReleaseTagDispatch, assertTrustedCoordinatorRevision, latestTrustedToolingSha, selectTrustedCoordinatorRevision } from "./coordinator-trust.mjs"
 
 const SHA0 = "0".repeat(40)
 const SHA1 = "1".repeat(40)
 const SHA2 = "2".repeat(40)
 const SHA3 = "3".repeat(40)
 const NOW = "2026-10-10T09:00:00.000Z"
+
+test("manual release actions require the owner, immutable version tag and Gate-A-passed ledger source", () => {
+  const release = { version: "0.1.0", tag: "desktop-v0.1.0", main_sha: SHA1, gate: "passed" }
+  const ledger = { releases: [release] }
+  const dispatch = {
+    actor: "OWNER",
+    repositoryOwner: "owner",
+    ref: "refs/tags/desktop-v0.1.0",
+    refType: "tag",
+    refName: "desktop-v0.1.0",
+    sha: SHA1,
+    workflowSha: SHA1,
+    ledger
+  }
+  assert.equal(assertAuthorizedReleaseTagDispatch(dispatch), release)
+  for (const invalid of [
+    { ...dispatch, actor: "other" },
+    { ...dispatch, refType: "branch" },
+    { ...dispatch, ref: "refs/heads/main" },
+    { ...dispatch, refName: "desktop-v0.1.1" },
+    { ...dispatch, workflowSha: SHA2 },
+    { ...dispatch, sha: SHA2 },
+    { ...dispatch, ledger: { releases: [{ ...release, gate: "failed_gate" }] } }
+  ]) {
+    assert.throws(() => assertAuthorizedReleaseTagDispatch(invalid))
+  }
+})
 
 test("coordinator tooling is trusted only at its owner-approved exact-SHA passing main merge", async () => {
   const ledger = createLedger({ lastReconciledMain: SHA0 })

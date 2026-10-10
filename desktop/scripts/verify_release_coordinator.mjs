@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process"
 import path from "node:path"
 
 import { GitHubReleaseApi } from "../release/github-api.mjs"
-import { latestTrustedToolingSha, selectTrustedCoordinatorRevision, assertTrustedCoordinatorRevision } from "../release/coordinator-trust.mjs"
+import { assertAuthorizedReleaseTagDispatch, latestTrustedToolingSha, selectTrustedCoordinatorRevision, assertTrustedCoordinatorRevision } from "../release/coordinator-trust.mjs"
 import { parseLedger } from "../release/ledger.mjs"
 
 const [mode, mainCheckoutArgument, pagesCheckoutArgument] = process.argv.slice(2)
@@ -33,15 +33,34 @@ const github = new GitHubReleaseApi({
   apiUrl: process.env.GITHUB_API_URL || "https://api.github.com"
 })
 const repositoryInfo = await github.repositoryInfo()
-if (mode === "latest" && requiredEnv("GITHUB_ACTOR").toLowerCase() !== repositoryInfo.owner?.login?.toLowerCase()) {
-  throw new Error("emergency release controls require a workflow dispatch by the repository owner")
-}
+const eventName = process.env.GITHUB_EVENT_NAME || ""
+const dispatchTag = eventName === "workflow_dispatch" ? assertAuthorizedReleaseTagDispatch({
+  actor: requiredEnv("GITHUB_ACTOR"),
+  repositoryOwner: repositoryInfo.owner?.login,
+  ref: requiredEnv("GITHUB_REF"),
+  refType: requiredEnv("GITHUB_REF_TYPE"),
+  refName: requiredEnv("GITHUB_REF_NAME"),
+  sha: requiredEnv("GITHUB_SHA"),
+  workflowSha: requiredEnv("DESKTOP_WORKFLOW_SHA"),
+  ledger
+}) : null
 const coordinatorSha = mode === "current" ? requiredEnv("GITHUB_SHA") : latestTrustedToolingSha(ledger)
 if (!coordinatorSha) throw new Error("release ledger contains no Gate-A-passed tooling revision")
 
 const trustArguments = { coordinatorSha, mainHistory, ledger, github, ownerLogin: repositoryInfo.owner?.login }
+let dispatchTooling
+if (dispatchTag) {
+  await assertTrustedCoordinatorRevision({ ...trustArguments, coordinatorSha: dispatchTag.main_sha })
+  dispatchTooling = latestTrustedToolingSha(ledger)
+  if (!dispatchTooling) throw new Error("manual actions need a Gate-A-passed tooling revision in the release ledger")
+}
 const trusted = mode === "current"
-  ? await selectTrustedCoordinatorRevision(trustArguments)
+  ? eventName === "workflow_dispatch"
+    ? await assertTrustedCoordinatorRevision({
+        ...trustArguments,
+        coordinatorSha: dispatchTooling
+      })
+    : await selectTrustedCoordinatorRevision(trustArguments)
   : await assertTrustedCoordinatorRevision(trustArguments)
 
 const output = process.env.GITHUB_OUTPUT

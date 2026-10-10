@@ -29,7 +29,11 @@ concurrency:
 jobs:
   resolve-tooling:
     name: Resolve trusted emergency-control tooling
-    if: github.ref == 'refs/heads/main'
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.ref_type == 'tag' &&
+      startsWith(github.ref_name, 'desktop-v') &&
+      github.sha == github.workflow_sha
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -81,12 +85,22 @@ jobs:
           GITHUB_API_URL: ${{ github.api_url }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_REF_TYPE: ${{ github.ref_type }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_SHA: ${{ github.sha }}
+          DESKTOP_WORKFLOW_SHA: ${{ github.workflow_sha }}
         run: node verifier/desktop/scripts/verify_release_coordinator.mjs latest main-history pages
 
   control:
     name: Update release eligibility under publication lock
     needs: resolve-tooling
-    if: needs.resolve-tooling.result == 'success' && github.ref == 'refs/heads/main'
+    if: >-
+      needs.resolve-tooling.result == 'success' &&
+      github.event_name == 'workflow_dispatch' &&
+      github.ref_type == 'tag' &&
+      startsWith(github.ref_name, 'desktop-v') &&
+      github.sha == github.workflow_sha
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: desktop-release-state
@@ -152,6 +166,10 @@ jobs:
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           GITHUB_REF: ${{ github.ref }}
+          GITHUB_REF_TYPE: ${{ github.ref_type }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_SHA: ${{ github.sha }}
+          DESKTOP_WORKFLOW_SHA: ${{ github.workflow_sha }}
           DESKTOP_RELEASE_ACTION: ${{ inputs.action }}
           DESKTOP_RELEASE_VERSIONS: ${{ inputs.versions }}
           DESKTOP_RELEASE_REASON: ${{ inputs.reason }}
