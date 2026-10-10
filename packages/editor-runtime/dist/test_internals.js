@@ -1,4 +1,4 @@
-// src/lib/authoring_registry_merge.ts
+// packages/editor-runtime/src/lib/authoring_registry_merge.ts
 import { POSITION_VOCABULARY } from "@elef/work-model/document-map";
 function registryKey(entry) {
   return JSON.stringify([entry.namespace || "", String(entry.id)]);
@@ -103,7 +103,7 @@ function mergeAuthoringRegistryEntries(builtInEntries, snippetEntries = [], math
   return [...entries.values()];
 }
 
-// src/lib/client_mounts.ts
+// packages/editor-runtime/src/lib/client_mounts.ts
 var MOUNT_CONTROLLERS = {
   mermaid: "mermaid-diagrams",
   "document-pages": "document-pages",
@@ -159,7 +159,7 @@ function startClientMounts(target = globalThis.document ?? null) {
   return true;
 }
 
-// src/lib/conflict_dialog.ts
+// packages/editor-runtime/src/lib/conflict_dialog.ts
 function presentConflictDialog(dialog, {
   message = "",
   localSource = "",
@@ -182,12 +182,12 @@ function presentConflictDialog(dialog, {
   return true;
 }
 
-// src/lib/editor_controller_lookup.ts
+// packages/editor-runtime/src/lib/editor_controller_lookup.ts
 function editorFor(element) {
   return element?.editorController || null;
 }
 
-// src/lib/editor_ready.ts
+// packages/editor-runtime/src/lib/editor_ready.ts
 function waitForEditorController(field, findController, { timeoutMs = 5e3 } = {}) {
   const available = findController(field);
   if (available?.editorReady === true) return Promise.resolve(available);
@@ -217,7 +217,7 @@ function editorUnavailable() {
   });
 }
 
-// src/lib/editor_source.ts
+// packages/editor-runtime/src/lib/editor_source.ts
 async function applyEditorSource(source, {
   id,
   expectedSource,
@@ -236,7 +236,7 @@ async function applyEditorSource(source, {
   return true;
 }
 
-// src/lib/editor_view.ts
+// packages/editor-runtime/src/lib/editor_view.ts
 import { sanitizePreview as installSanitizedPreview } from "@elef/client/sanitize";
 var EDITOR_VIEW = `
   <section class="editor-shell" aria-label="Visual editor">
@@ -564,7 +564,7 @@ function renderWarnings(list, warnings) {
   }));
 }
 
-// src/lib/renderer_worker.ts
+// packages/editor-runtime/src/lib/renderer_worker.ts
 function renderWorkerMessage(data, renderPreview, renderMarkdownBlock = renderPreview) {
   const { id, input } = data || {};
   try {
@@ -583,7 +583,7 @@ function renderWorkerMessage(data, renderPreview, renderMarkdownBlock = renderPr
   }
 }
 
-// src/controllers/mermaid_runtime.ts
+// packages/editor-runtime/src/controllers/mermaid_runtime.ts
 function mermaidAssetUrl() {
   const importmap = document.querySelector('script[type="importmap"]');
   if (importmap) {
@@ -596,7 +596,7 @@ function mermaidAssetUrl() {
   return document.querySelector('meta[name="elef-mermaid-url"]')?.content || null;
 }
 
-// src/lib/deck_open_flow.ts
+// packages/editor-runtime/src/lib/deck_open_flow.ts
 function createDeckOpenFlow(open) {
   let previous = Promise.resolve();
   return (id) => {
@@ -621,7 +621,7 @@ async function prepareDeckOpen(id, { read, prepare, isDirty, flushSave, getRevis
   }
 }
 
-// src/lib/document_graph_cache.ts
+// packages/editor-runtime/src/lib/document_graph_cache.ts
 function createDocumentGraphCache(loadGraph) {
   let generation = 0;
   let cachedGraph = null;
@@ -658,7 +658,7 @@ function createDocumentGraphCache(loadGraph) {
   return Object.freeze({ get, invalidate });
 }
 
-// src/lib/editor_actions.ts
+// packages/editor-runtime/src/lib/editor_actions.ts
 function editorActionControl(event, action) {
   const control = event.target?.closest?.(`[data-editor-action="${action}"]`);
   return control ?? null;
@@ -673,7 +673,7 @@ function bindEditorAction(root, action, handler, { events = ["click"] } = {}) {
   return () => events.forEach((type) => root.removeEventListener(type, listener));
 }
 
-// src/lib/editor_binding.ts
+// packages/editor-runtime/src/lib/editor_binding.ts
 function createCodeMirrorBinding({
   getEditor,
   getDeckId,
@@ -700,7 +700,7 @@ function createCodeMirrorBinding({
   return { getText, setText, materializeEdits };
 }
 
-// src/lib/editor_document_state.ts
+// packages/editor-runtime/src/lib/editor_document_state.ts
 function createDocumentState(EditorState, source, extensions = []) {
   const lineSeparator = source.match(/\r\n|\r|\n/)?.[0] || "\n";
   return {
@@ -709,7 +709,7 @@ function createDocumentState(EditorState, source, extensions = []) {
   };
 }
 
-// src/lib/feature_flags.ts
+// packages/editor-runtime/src/lib/feature_flags.ts
 var DESKTOP_FEATURE_FLAGS = Object.freeze({
   ELEF_ENABLE_REVISIONS: false,
   ELEF_ENABLE_LINEAGE: false
@@ -733,7 +733,7 @@ function applyDesktopFeatureFlags(root = document, flags = DESKTOP_FEATURE_FLAGS
   }
 }
 
-// src/lib/performance_measurement.ts
+// packages/editor-runtime/src/lib/performance_measurement.ts
 async function measurePaintedAction(action, {
   now = () => performance.now(),
   paint = () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
@@ -751,7 +751,7 @@ function percentile95(samples) {
   return sorted[Math.ceil(samples.length * 0.95) - 1];
 }
 
-// src/lib/preview_request_body.ts
+// packages/editor-runtime/src/lib/preview_request_body.ts
 var PREVIEW_FIELDS = ["source", "title", "theme", "typography"];
 function buildPreviewRequestBody(fields) {
   const body = new FormData();
@@ -762,7 +762,7 @@ function buildPreviewRequestBody(fields) {
   return body;
 }
 
-// src/lib/projection_editability.ts
+// packages/editor-runtime/src/lib/projection_editability.ts
 function setProjectionBlockEditable(block, editable, ariaLabel) {
   setAttribute(block, "contenteditable", String(editable));
   if (editable) {
@@ -786,7 +786,7 @@ function removeAttribute(element, name) {
   if (element.hasAttribute(name)) element.removeAttribute(name);
 }
 
-// src/lib/renderer_worker_client.ts
+// packages/editor-runtime/src/lib/renderer_worker_client.ts
 var RENDER_TIMEOUT_MS = 4e3;
 function createRendererClient({
   WorkerClass = globalThis.Worker,
@@ -882,7 +882,7 @@ function createRendererClient({
   };
 }
 
-// src/lib/request_identity.ts
+// packages/editor-runtime/src/lib/request_identity.ts
 function createRequestGuard() {
   let generation = 0;
   function request() {
@@ -898,7 +898,7 @@ function createRequestGuard() {
   return Object.freeze({ request, isCurrent, invalidate });
 }
 
-// src/lib/vim_line_numbers.ts
+// packages/editor-runtime/src/lib/vim_line_numbers.ts
 function formatLineNumber(number, state, mode) {
   if (mode !== "relative") return String(number);
   const activeLine = state.doc.lineAt(state.selection.main.head).number;

@@ -339,6 +339,14 @@ export class DocumentEditor {
     const editor = this.editorController
     if (!editor) return null
     const source = editor.value.slice(region.content_range.start, region.content_range.end)
+    const activeDisplayMath = container?.closest?.(".editor-math-active.editor-live-math-display")
+    if (focusNode && activeDisplayMath && source === activeDisplayMath.textContent) {
+      const offset = this.deps.visibleOffsetAtPoint(activeDisplayMath, focusNode, selection?.focusOffset ?? 0)
+      if (offset !== null) {
+        return { blockId: current.blockId ?? "", sourceOffset: region.content_range.start + offset }
+      }
+    }
+
     return {
       blockId: current.blockId ?? "",
       sourceOffset: region.content_range.start + this.deps.sourceOffsetForVisibleOffset(source, current.visibleOffset)

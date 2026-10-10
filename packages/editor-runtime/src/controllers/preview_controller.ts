@@ -3,6 +3,12 @@ import { installPreviewHtml } from "../lib/editor_view.js"
 import { buildPreviewRequestBody } from "../lib/preview_request_body.js"
 import { attachCanvasScaling } from "@elef/client"
 
+const ART_WARNING_MESSAGES: Record<string, string> = Object.freeze({
+  ART_NO_FIT: "Art does not fit the fixed slide. All authored content remains available.",
+  ART_ITEM_TOO_TALL: "An Art item is taller than a document page. It remains intact and can be scrolled in the editor.",
+  ART_INTERNAL_ERROR: "Art could not measure its fixed host; the complete Markdown list remains available."
+})
+
 export default class extends Controller<HTMLElement> {
   static targets = ["container", "warnings", "status", "retry"]
   static values = { url: String, delay: { type: Number, default: 300 }, timeout: { type: Number, default: 8000 } }
@@ -23,6 +29,16 @@ export default class extends Controller<HTMLElement> {
     this.projectionFresh = true
     this.serverWarnings = [...this.warningsTarget.querySelectorAll("li")].map((item: any) => item.textContent)
     this.localWarnings = []
+    this.artWarnings = new Map()
+    this.artWarningObserver = typeof MutationObserver === "function"
+      ? new MutationObserver(() => this.syncArtWarnings())
+      : null
+    this.artWarningObserver?.observe(this.containerTarget, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ["data-art-diagnostic"]
+    })
     this.focusoutHandler = (event: any) => {
       // A block's blur handler may mark it read-only before this bubbling
       // listener runs, so identify the editor block independently of its
@@ -38,9 +54,11 @@ export default class extends Controller<HTMLElement> {
     }
     this.localPreviewError = (event: any) => this.handleLocalPreviewError(event)
     this.localPreviewRecovered = () => this.handleLocalPreviewRecovered()
+    this.artDiagnostic = (event: any) => this.handleArtDiagnostic(event)
     this.element.addEventListener("focusout", this.focusoutHandler)
     this.element.addEventListener("elef:live-preview-error", this.localPreviewError)
     this.element.addEventListener("elef:live-preview-recovered", this.localPreviewRecovered)
+    this.element.addEventListener("elef:art-diagnostic", this.artDiagnostic)
   }
 
   // Slide frames carry no Stimulus hooks since the presentation canvas
@@ -65,6 +83,8 @@ export default class extends Controller<HTMLElement> {
     this.element.removeEventListener("focusout", this.focusoutHandler)
     this.element.removeEventListener("elef:live-preview-error", this.localPreviewError)
     this.element.removeEventListener("elef:live-preview-recovered", this.localPreviewRecovered)
+    this.element.removeEventListener("elef:art-diagnostic", this.artDiagnostic)
+    this.artWarningObserver?.disconnect()
     if (this.element.previewController === this) delete this.element.previewController
   }
 
@@ -283,7 +303,7 @@ export default class extends Controller<HTMLElement> {
 
   renderWarnings(warnings: unknown) {
     this.serverWarnings = Array.isArray(warnings) ? warnings : []
-    const visibleWarnings = [...this.localWarnings, ...this.serverWarnings]
+    const visibleWarnings = [...this.localWarnings, ...this.artWarnings.values(), ...this.serverWarnings]
     const list = this.warningsTarget.querySelector("ul")
     list.replaceChildren()
     visibleWarnings.forEach((warning: any) => {
@@ -302,6 +322,22 @@ export default class extends Controller<HTMLElement> {
 
   handleLocalPreviewRecovered() {
     this.localWarnings = []
+    this.renderWarnings(this.serverWarnings)
+  }
+
+  handleArtDiagnostic(event: any) {
+    const root = event.target?.closest?.("[data-elef-art-root]")
+    if (!root) return
+    this.syncArtWarnings()
+  }
+
+  syncArtWarnings() {
+    const current = new Map()
+    this.containerTarget.querySelectorAll("[data-elef-art-root][data-art-diagnostic]").forEach((root: any) => {
+      const message = ART_WARNING_MESSAGES[root.dataset.artDiagnostic]
+      if (message) current.set(root, message)
+    })
+    this.artWarnings = current
     this.renderWarnings(this.serverWarnings)
   }
 

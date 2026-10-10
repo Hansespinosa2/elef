@@ -2,6 +2,11 @@ import { Controller } from "@hotwired/stimulus";
 import { installPreviewHtml } from "../lib/editor_view.js";
 import { buildPreviewRequestBody } from "../lib/preview_request_body.js";
 import { attachCanvasScaling } from "@elef/client";
+const ART_WARNING_MESSAGES = Object.freeze({
+  ART_NO_FIT: "Art does not fit the fixed slide. All authored content remains available.",
+  ART_ITEM_TOO_TALL: "An Art item is taller than a document page. It remains intact and can be scrolled in the editor.",
+  ART_INTERNAL_ERROR: "Art could not measure its fixed host; the complete Markdown list remains available."
+});
 class preview_controller_default extends Controller {
   static targets = ["container", "warnings", "status", "retry"];
   static values = { url: String, delay: { type: Number, default: 300 }, timeout: { type: Number, default: 8e3 } };
@@ -21,6 +26,14 @@ class preview_controller_default extends Controller {
     this.projectionFresh = true;
     this.serverWarnings = [...this.warningsTarget.querySelectorAll("li")].map((item) => item.textContent);
     this.localWarnings = [];
+    this.artWarnings = /* @__PURE__ */ new Map();
+    this.artWarningObserver = typeof MutationObserver === "function" ? new MutationObserver(() => this.syncArtWarnings()) : null;
+    this.artWarningObserver?.observe(this.containerTarget, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ["data-art-diagnostic"]
+    });
     this.focusoutHandler = (event) => {
       if (!event.target.closest?.("[data-editor-block-id]") || !this.containerTarget.contains(event.target)) return;
       queueMicrotask(() => {
@@ -31,9 +44,11 @@ class preview_controller_default extends Controller {
     };
     this.localPreviewError = (event) => this.handleLocalPreviewError(event);
     this.localPreviewRecovered = () => this.handleLocalPreviewRecovered();
+    this.artDiagnostic = (event) => this.handleArtDiagnostic(event);
     this.element.addEventListener("focusout", this.focusoutHandler);
     this.element.addEventListener("elef:live-preview-error", this.localPreviewError);
     this.element.addEventListener("elef:live-preview-recovered", this.localPreviewRecovered);
+    this.element.addEventListener("elef:art-diagnostic", this.artDiagnostic);
   }
   // Slide frames carry no Stimulus hooks since the presentation canvas
   // controller retired; the shared client scaling helper keeps
@@ -54,6 +69,8 @@ class preview_controller_default extends Controller {
     this.element.removeEventListener("focusout", this.focusoutHandler);
     this.element.removeEventListener("elef:live-preview-error", this.localPreviewError);
     this.element.removeEventListener("elef:live-preview-recovered", this.localPreviewRecovered);
+    this.element.removeEventListener("elef:art-diagnostic", this.artDiagnostic);
+    this.artWarningObserver?.disconnect();
     if (this.element.previewController === this) delete this.element.previewController;
   }
   schedule() {
@@ -231,7 +248,7 @@ class preview_controller_default extends Controller {
   }
   renderWarnings(warnings) {
     this.serverWarnings = Array.isArray(warnings) ? warnings : [];
-    const visibleWarnings = [...this.localWarnings, ...this.serverWarnings];
+    const visibleWarnings = [...this.localWarnings, ...this.artWarnings.values(), ...this.serverWarnings];
     const list = this.warningsTarget.querySelector("ul");
     list.replaceChildren();
     visibleWarnings.forEach((warning) => {
@@ -248,6 +265,20 @@ class preview_controller_default extends Controller {
   }
   handleLocalPreviewRecovered() {
     this.localWarnings = [];
+    this.renderWarnings(this.serverWarnings);
+  }
+  handleArtDiagnostic(event) {
+    const root = event.target?.closest?.("[data-elef-art-root]");
+    if (!root) return;
+    this.syncArtWarnings();
+  }
+  syncArtWarnings() {
+    const current = /* @__PURE__ */ new Map();
+    this.containerTarget.querySelectorAll("[data-elef-art-root][data-art-diagnostic]").forEach((root) => {
+      const message = ART_WARNING_MESSAGES[root.dataset.artDiagnostic];
+      if (message) current.set(root, message);
+    });
+    this.artWarnings = current;
     this.renderWarnings(this.serverWarnings);
   }
   setStatus(text) {
