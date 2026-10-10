@@ -6,6 +6,7 @@ import {
   STABLE_PROFILE_DECK_TITLE,
   STABLE_PROFILE_EDITED_SOURCE,
   STABLE_PROFILE_KEYBOARD_SOURCE,
+  STABLE_PROFILE_OPEN_LINK_SOURCE,
   STABLE_PROFILE_SOURCE
 } from "./stable-profile-fixture.js"
 import { RICH_RENDERING_SOURCE, RICH_RENDERING_TITLE } from "../../test/e2e/scenarios/rich-rendering-media.js"
@@ -125,6 +126,14 @@ describe("Stable profile exclusions", () => {
       editor.focus()
     })
     await sendNativeText("[[")
+    await browser.waitUntil(async () => browser.execute(source =>
+      document.querySelector("#desktop-editor-field")?.editorController?.sourceValue === source &&
+        !document.querySelector("[data-document-link-palette-target]"),
+    STABLE_PROFILE_OPEN_LINK_SOURCE), {
+      timeout: 10_000,
+      timeoutMsg: "Stable should pair the literal brackets without opening document-link suggestions"
+    })
+    await sendNativeText("Future Release Notes")
     let keyboardObservation
     try {
       await browser.waitUntil(async () => {

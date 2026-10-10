@@ -101,6 +101,8 @@ const stableE2eSource = await readFile(path.join(e2eRoot, "stable-exclusions.spe
 assert.match(stableE2eSource, /document_graph|document-link-palette|visual-editor|slide-overview/, "Stable runtime exclusions need negative assertions")
 assert.match(stableE2eSource, /sendNativeText\("\[\["\)/,
   "Stable runtime E2E must type the excluded document-link trigger through native keyboard input")
+assert.match(stableE2eSource, /sendNativeText\("Future Release Notes"\)/,
+  "Stable runtime E2E must preserve literal text between its ordinary auto-paired brackets")
 assert.match(stableE2eSource, /editorFocused: editor\?\.view\?\.hasFocus === true/,
   "Stable keyboard failure diagnostics must read CodeMirror's boolean focus state")
 const nativeKeyboardSource = await readFile(path.join(e2eRoot, "native-keyboard.js"), "utf8")
