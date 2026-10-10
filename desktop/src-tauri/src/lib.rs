@@ -184,6 +184,26 @@ fn record_bool_command_result(
 }
 
 #[tauri::command]
+fn record_preview_failure(app: AppHandle) {
+    record_diagnostic(
+        &app,
+        EventCode::Render,
+        EventResult::Failure,
+        Some("internal"),
+    );
+}
+
+#[tauri::command]
+fn record_bootstrap_failure(app: AppHandle) {
+    record_diagnostic(
+        &app,
+        EventCode::Startup,
+        EventResult::Failure,
+        Some("internal"),
+    );
+}
+
+#[tauri::command]
 async fn confirm_app_ready(
     app: AppHandle,
     window: tauri::WebviewWindow,
@@ -1713,6 +1733,8 @@ macro_rules! app_commands {
             resolve_import_conflict,
             confirm_app_ready,
             export_diagnostics,
+            record_preview_failure,
+            record_bootstrap_failure,
             $($extra),*
         ]
     };

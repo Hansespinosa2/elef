@@ -53,6 +53,8 @@ renderer_global = (REPO_ROOT / "app" / "javascript" / "lib" / "renderer_global.j
 renderer_worker = (REPO_ROOT / "desktop" / "frontend" / "src" / "renderer-worker.js").read_text()
 desktop_main = (REPO_ROOT / "desktop" / "frontend" / "src" / "main.js").read_text()
 desktop_application = (REPO_ROOT / "app" / "javascript" / "lib" / "file_library_application.js").read_text()
+preview_transport = (REPO_ROOT / "desktop/frontend/src/preview-transport.js").read_text()
+diagnostic_failures = (REPO_ROOT / "desktop/frontend/src/diagnostic-failures.js").read_text()
 native_render_styles = (REPO_ROOT / "app" / "assets" / "stylesheets" / "file_library_host.css").read_text()
 shared_application_styles = application_stylesheet_sources()
 desktop_frontend_source = REPO_ROOT / "desktop" / "frontend" / "src"
@@ -211,6 +213,13 @@ assert set(e2e_stable_capability["permissions"]) == {
     "allow-export-diagnostics-fixture",
 }, "Stable runtime tests may add WebDriver and read the version without experimental or updater permissions"
 assert "allow-document-graph" not in e2e_stable_capability["permissions"]
+assert 'onFailure: diagnosticFailures.recordPreviewFailure' in desktop_main, "desktop live preview failures must reach the allowlisted diagnostics adapter"
+assert 'recordBootstrapFailure: diagnosticFailures.recordBootstrapFailure' in desktop_main, "desktop bootstrap failures must reach the allowlisted diagnostics adapter"
+assert "onFailure()" in preview_transport, "preview failures must invoke their no-payload diagnostics callback"
+assert '"record_preview_failure"' in diagnostic_failures and '"record_bootstrap_failure"' in diagnostic_failures
+assert "recordBootstrapFailure?.()" in desktop_application, "bootstrap failure reporting must be optional and desktop-injected"
+for command in ("record_preview_failure", "record_bootstrap_failure"):
+    assert re.search(rf"fn {command}\(app: AppHandle\)", app_source), f"{command} must accept no user-controlled payload"
 assert "allow-export-diagnostics-fixture" not in capability["permissions"] + dev_capability["permissions"], "production Stable and Dev must not expose the WebDriver-only diagnostics fixture command"
 assert e2e_config["app"].get("withGlobalTauri") is True, "global Tauri access is enabled only for the test-only WebdriverIO build"
 assert config["app"].get("withGlobalTauri") is not True, "production must not expose the global Tauri API"

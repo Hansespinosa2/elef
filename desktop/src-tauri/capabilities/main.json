@@ -33,6 +33,8 @@
     "allow-pending-open-elef-count",
     "allow-resolve-import-conflict",
     "allow-confirm-app-ready",
-    "allow-export-diagnostics"
+    "allow-export-diagnostics",
+    "allow-record-preview-failure",
+    "allow-record-bootstrap-failure"
   ]
 }

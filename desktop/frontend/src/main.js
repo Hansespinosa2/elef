@@ -6,6 +6,7 @@ import { createCloseFlow } from "./close-flow.js"
 import { createTransportAdapter } from "./transport-adapter.js"
 import { createMediaFetch, mediaUrlsForDeck } from "./media-transport.js"
 import { createPreviewFetch } from "./preview-transport.js"
+import { createDiagnosticFailures } from "./diagnostic-failures.js"
 import { createIdleUpdateCheck } from "./update-flow.js"
 import { createFileLibraryTransport } from "#desktop/file-library-transport"
 import { createDesktopUpdateRuntime } from "#desktop/update-runtime"
@@ -17,6 +18,7 @@ import "../../../app/assets/stylesheets/application.css"
 
 const isStableProfile = __ELEF_DESKTOP_PROFILE__ === "stable"
 const updateRuntime = createDesktopUpdateRuntime({ invoke })
+const diagnosticFailures = createDiagnosticFailures(invoke)
 const desktopFeatures = Object.freeze({
   visualEditing: !isStableProfile,
   presentationEditing: !isStableProfile,
@@ -46,6 +48,7 @@ startFileLibraryApplication({
     globalThis.fetch = createPreviewFetch({
       ...options,
       fetchImpl: mediaFetch,
+      onFailure: diagnosticFailures.recordPreviewFailure,
       onEvent: __ELEF_E2E__ ? event => {
         previewTrace.push(event)
         if (previewTrace.length > 512) previewTrace.shift()
@@ -62,6 +65,7 @@ startFileLibraryApplication({
   featureFlags,
   documentGraphRuntime,
   updateEnabled: updateRuntime.enabled,
+  recordBootstrapFailure: diagnosticFailures.recordBootstrapFailure,
   desktopAuthoringRegistry,
   loadDesktopAuthoringRegistry,
   loadEditorRuntime,

@@ -25,7 +25,7 @@ export function startFileLibraryApplication(platform) {
     mediaUrlsForDeck, checkForUpdate, createIdleUpdateCheck, installPendingUpdate,
     desktopAuthoringRegistry, loadDesktopAuthoringRegistry,
     loadEditorRuntime, loadLibraryRuntime, documentGraphRuntime, features, featureFlags,
-    updateEnabled = true
+    updateEnabled = true, recordBootstrapFailure
   } = platform
 
   const desktopFeatures = Object.freeze({
@@ -149,6 +149,7 @@ export function startFileLibraryApplication(platform) {
   let stagedUpdate = null
   let updateInstalling = false
   let updateChecking = false
+  let closePreparationLocked = false
   let libraryStatusLoaded = false
   let processingOpenedFiles = false
   let openFilesRequested = false
@@ -1054,6 +1055,7 @@ export function startFileLibraryApplication(platform) {
 
   async function handleMenuAction(action) {
     if (action === "quit") return getCurrentWindow().close()
+    if (closePreparationLocked) return
     if (action === "choose-library") return chooseLibrary()
     if (action === "refresh-library") return refreshLibrary()
     if (action === "open-deck") {
@@ -1154,10 +1156,18 @@ export function startFileLibraryApplication(platform) {
     close: () => getCurrentWindow().close(),
     shouldPrepareClose: () => Boolean(stagedUpdate) && !updateChecking,
     prepareClose: applyStagedUpdateOnQuit,
+    setEditingLocked: locked => {
+      closePreparationLocked = locked
+      document.body.inert = locked
+    },
     onError: showError
   }))
 
   window.addEventListener("keydown", event => {
+    if (closePreparationLocked) {
+      event.preventDefault()
+      return
+    }
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
       event.preventDefault()
       elements.search.focus()
@@ -1226,6 +1236,9 @@ export function startFileLibraryApplication(platform) {
         .catch(showError)
       if (updateEnabled) startupUpdateCheck.schedule(10_000)
     }
-  }).catch(showError)
+  }).catch(error => {
+    recordBootstrapFailure?.()
+    showError(error)
+  })
 
 }

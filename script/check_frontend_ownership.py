@@ -445,6 +445,7 @@ desktop_source_reasons = {
     "authoring-registry-loader.js": "loads the library's native authoring-registry commands",
     "bootstrap-flow.js": "orders native app startup and its readiness handshake",
     "close-flow.js": "coordinates native window close with the save transport",
+    "diagnostic-failures.js": "maps preview and bootstrap failures to fixed native event commands without exception data",
     "document-graph-runtime-dev.js": "activates the Rails-owned graph resolver and cache in repository Dev",
     "document-graph-runtime-stable.js": "provides no graph runtime to the excluded Stable profile",
     "editor-runtime-dev.js": "loads the Rails-owned full controller runtime and Dev-only lineage controller",

@@ -8,7 +8,7 @@ const sentinelFixture = JSON.parse(await readFile(
 ))
 const sentinels = Object.values(sentinelFixture)
 
-export async function exportAndVerifyDiagnostics(browser, expectedProfile) {
+export async function exportAndVerifyDiagnostics(browser, expectedProfile, requiredFailureEvents = []) {
   const archivePath = process.env.ELEF_E2E_DIAGNOSTICS_EXPORT_PATH
   assert.ok(archivePath, "the disposable diagnostics archive path must be set")
   await rm(archivePath, { force: true })
@@ -18,10 +18,10 @@ export async function exportAndVerifyDiagnostics(browser, expectedProfile) {
     return await window.__TAURI__.core.invoke("export_diagnostics_fixture")
   })
   assert.equal(exported, true, "the test-only command should export the diagnostics archive")
-  await verifyDiagnosticsArchive(archivePath, expectedProfile)
+  await verifyDiagnosticsArchive(archivePath, expectedProfile, requiredFailureEvents)
 }
 
-export async function verifyDiagnosticsArchive(archivePath, expectedProfile) {
+export async function verifyDiagnosticsArchive(archivePath, expectedProfile, requiredFailureEvents = []) {
   const entries = execFileSync("unzip", ["-Z1", archivePath], { encoding: "utf8" })
     .trim().split("\n").filter(Boolean)
   const files = entries.filter(entry => !entry.endsWith("/"))
@@ -61,4 +61,9 @@ export async function verifyDiagnosticsArchive(archivePath, expectedProfile) {
   )
   assert.ok(redactedFailure, "diagnostics ZIP should include a sanitized failure event")
   assert.equal(redactedFailure.profile, expectedProfile)
+  for (const eventCode of requiredFailureEvents) {
+    assert.ok(events.some(event =>
+      event.event_code === eventCode && event.result === "failure" && event.error_category === "internal"
+    ), `diagnostics ZIP should include a sanitized ${eventCode} failure event`)
+  }
 }

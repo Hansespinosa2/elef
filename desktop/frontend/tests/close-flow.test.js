@@ -17,17 +17,47 @@ test("dirty native close or Quit waits for its save before closing", async () =>
   assert.equal(closes, 1)
 })
 
+test("close locks editing before the save wait so no input can race the dirty snapshot", async () => {
+  let resolve
+  const save = new Promise(done => { resolve = done })
+  const events = []
+  let editingLocked = false
+  let source = "saved snapshot"
+  const request = createCloseFlow({
+    isDirty: () => true,
+    flushSave: async () => {
+      events.push(["flush", source])
+      return save
+    },
+    close: () => events.push(["close"]),
+    setEditingLocked: locked => {
+      editingLocked = locked
+      events.push(["lock", locked])
+    }
+  })
+
+  const closing = request({ preventDefault() {} })
+  if (!editingLocked) source += " plus racing input"
+  assert.equal(editingLocked, true)
+  assert.deepEqual(events, [["lock", true], ["flush", "saved snapshot"]])
+  resolve(true)
+  await closing
+  assert.deepEqual(events, [["lock", true], ["flush", "saved snapshot"], ["close"], ["lock", false]])
+})
+
 test("conflicts and failed saves keep the window open; a clean close proceeds", async () => {
   for (const outcome of [false, new Error("save failed")]) {
     let closes = 0
     const errors = []
+    const locks = []
     const request = createCloseFlow({ isDirty: () => true, flushSave: async () => {
       if (outcome instanceof Error) throw outcome
       return outcome
-    }, close: () => { closes += 1 }, onError: error => errors.push(error) })
+    }, close: () => { closes += 1 }, setEditingLocked: locked => locks.push(locked), onError: error => errors.push(error) })
     await request({ preventDefault() {} })
     assert.equal(closes, 0)
     assert.equal(errors.length, outcome === false ? 0 : 1)
+    assert.deepEqual(locks, [true, false])
   }
   const clean = createCloseFlow({ isDirty: () => false, flushSave: () => assert.fail("clean save"), close: () => assert.fail("recursive close") })
   clean({ preventDefault: () => assert.fail("clean close prevented") })
@@ -54,12 +84,13 @@ test("a staged update intercepts a clean close and relaunches only after the saf
     isDirty: () => false,
     flushSave: () => assert.fail("clean close does not flush"),
     close: () => events.push("close"),
+    setEditingLocked: locked => events.push(locked ? "lock" : "unlock"),
     shouldPrepareClose: () => true,
     prepareClose: async () => { events.push("recheck-and-activate"); return "relaunch" }
   })
   await request({ preventDefault: () => { prevented = true } })
   assert.equal(prevented, true)
-  assert.deepEqual(events, ["recheck-and-activate"])
+  assert.deepEqual(events, ["lock", "recheck-and-activate"])
 })
 
 test("dirty data is flushed before an update can activate, and failed flush leaves the app open", async () => {
@@ -77,13 +108,16 @@ test("dirty data is flushed before an update can activate, and failed flush leav
 
 test("a safe-version recheck that defers installation allows ordinary quit", async () => {
   let closes = 0
+  const locks = []
   const request = createCloseFlow({
     isDirty: () => false,
     flushSave: () => assert.fail("clean close does not flush"),
     close: () => { closes += 1 },
+    setEditingLocked: locked => locks.push(locked),
     shouldPrepareClose: () => true,
     prepareClose: async () => "close"
   })
   await request({ preventDefault() {} })
   assert.equal(closes, 1)
+  assert.deepEqual(locks, [true, false])
 })

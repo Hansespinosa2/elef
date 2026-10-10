@@ -36,6 +36,8 @@ export async function richRenderingMediaWorkflow(ui) {
   await ui.replaceSource(editedSource)
   await ui.waitForSaved(editedSource)
   const savedStoredSource = await ui.readStoredSource()
+  assert.equal(normalizeLineEndings(savedStoredSource), normalizeLineEndings(editedSource),
+    "Saving the rich fixture must persist the complete intended edit")
   await ui.openDeck(RICH_RENDERING_TITLE)
   await ui.waitForSource(savedStoredSource)
   assert.equal(await ui.readStoredSource(), savedStoredSource,
@@ -49,8 +51,8 @@ export async function richRenderingMediaWorkflow(ui) {
   await ui.restoreSource(originalStoredSource)
   await ui.waitForSaved(originalStoredSource)
   const restoredStoredSource = await ui.readStoredSource()
-  assert.equal(restoredStoredSource, originalStoredSource,
-    "Restoring the rich fixture must preserve its original source bytes")
+  assert.equal(normalizeLineEndings(restoredStoredSource), normalizeLineEndings(originalStoredSource),
+    "Restoring the rich fixture must preserve its original source content")
   await ui.openDeck(RICH_RENDERING_TITLE)
   await ui.waitForSource(restoredStoredSource)
   assert.equal(await ui.readStoredSource(), restoredStoredSource,

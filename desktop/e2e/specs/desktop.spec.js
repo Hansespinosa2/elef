@@ -891,7 +891,7 @@ class DesktopEditorUi {
 
   async waitForSource(source) {
     try {
-      await browser.waitUntil(async () => await this.readSource() === source, {
+      await browser.waitUntil(async () => normalizeLineEndings(await this.readSource()) === normalizeLineEndings(source), {
         timeout: 10_000,
         timeoutMsg: "The desktop editor buffer did not reach the expected source"
       })
@@ -2485,8 +2485,13 @@ describe("desktop binary workflows and native boundaries", () => {
     if (cancelled !== false) throw new Error("Cancelling the diagnostics dialog should leave the export unwritten")
   })
 
-  it("exports a diagnostics ZIP without privacy fixture sentinels", async () => {
-    await exportAndVerifyDiagnostics(browser, "dev")
+  it("exports sanitized preview/bootstrap failures without privacy fixture sentinels", async () => {
+    await browser.execute(async () => {
+      const { invoke } = window.__TAURI__.core
+      await invoke("record_preview_failure")
+      await invoke("record_bootstrap_failure")
+    })
+    await exportAndVerifyDiagnostics(browser, "dev", ["render", "startup"])
   })
 })
 

@@ -24,6 +24,8 @@ fn main() {
                 "resolve_import_conflict",
                 "confirm_app_ready",
                 "export_diagnostics",
+                "record_preview_failure",
+                "record_bootstrap_failure",
                 $($extra),*
             ]
         };
