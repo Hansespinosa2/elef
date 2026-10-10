@@ -502,11 +502,13 @@ class DesktopEditorUi {
       const left = regions[0]
       const group = left?.querySelector(".slide-middle-group.flush-bottom")
       const lane = left?.querySelector(".slide-bottom-lane")
+      const blockText = element => [...(element?.querySelectorAll(".slide-block") || [])]
+        .map(block => block.textContent.trim()).join(" ")
       const rect = element => element.getBoundingClientRect()
       return {
         regionCount: regions.length,
-        leftGroup: group?.textContent.trim(),
-        leftLane: lane?.textContent.trim(),
+        leftGroup: blockText(group),
+        leftLane: blockText(lane),
         rightHasPlacement: Boolean(regions[1]?.querySelector(".slide-middle-group, .slide-bottom-lane")),
         dockGap: group && lane ? rect(lane).top - rect(group).bottom : null,
         laneBottomGap: left && lane ? rect(left).bottom - rect(lane).bottom : null
