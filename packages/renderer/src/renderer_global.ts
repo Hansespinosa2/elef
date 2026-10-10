@@ -25,6 +25,7 @@ import {
   withAppearanceValue,
   withFrontMatterValue
 } from "@elef/work-model"
+import { slidePositionLayout } from "@elef/work-model/slide-position-layout"
 
 declare global {
   // Bundle seam for MiniRacer, workers and importmap consumers: untyped by
@@ -54,5 +55,6 @@ globalThis.ElefRenderer = Object.freeze({
   replaceFirstHeading,
   sourceAnchorLines,
   withAppearanceValue,
-  withFrontMatterValue
+  withFrontMatterValue,
+  slidePositionLayout
 })

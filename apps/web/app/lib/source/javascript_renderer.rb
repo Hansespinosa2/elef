@@ -89,6 +89,10 @@ module Source
       ).deep_symbolize_keys
     end
 
+    def slide_position_layout(blocks)
+      context.call("ElefRenderer.slidePositionLayout", Array(blocks)).deep_symbolize_keys
+    end
+
     def read_style(source)
       context.call("ElefRenderer.readStyle", source.to_s).deep_symbolize_keys
     end

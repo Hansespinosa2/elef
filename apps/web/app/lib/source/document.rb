@@ -5,10 +5,14 @@ module Source
     PORTABLE_DOCUMENT_KEY = "elef_document_key".freeze
     PORTABLE_DOCUMENT_ALIASES = "elef_aliases".freeze
     Position = Data.define(:horizontal, :vertical, :vertical_explicit)
-    Block = Data.define(:markdown, :position, :art)
+    Block = Data.define(:markdown, :position, :art, :reveal_event)
+    Slide = Data.define(:id, :index, :markdown, :layout, :blocks, :title, :regions, :section, :subsection, :footnote, :warnings) do
+      def reveal_event_count
+        blocks.filter_map(&:reveal_event).uniq.length
+      end
+    end
     Region = Data.define(:blocks)
     MarginSettings = Data.define(:section, :subsection, :footnote, :slide_count)
-    Slide = Data.define(:id, :index, :markdown, :layout, :blocks, :title, :regions, :section, :subsection, :footnote, :warnings)
     Parsed = Data.define(:source_name, :mode, :theme, :typography, :margin_settings, :slides, :warnings)
     SourceLine = Data.define(:start, :end_pos, :text, :ending)
     FrontMatter = Data.define(:lines, :closing_line, :body_start, :eol)
@@ -27,9 +31,7 @@ module Source
 
       structure = Source::JavascriptRenderer.work_structure(source, source_name: source_name, mode: mode)
       slides = structure[:slides].map.with_index do |slide, index|
-        blocks = slide[:blocks].map do |block|
-          Block.new(markdown: block[:markdown], position: position_from(block[:position]), art: block[:art])
-        end
+        blocks = slide[:blocks].map { |block| build_block(block) }
         Slide.new(
           id: "#{source_name}-#{index + 1}",
           index: index,
@@ -37,11 +39,7 @@ module Source
           layout: slide[:layout],
           blocks: blocks,
           title: slide[:title],
-          regions: slide[:regions].map do |region|
-            Region.new(blocks: region.map do |block|
-              Block.new(markdown: block[:markdown], position: position_from(block[:position]), art: block[:art])
-            end)
-          end,
+          regions: map_regions(slide[:regions], blocks, layout: slide[:layout]),
           section: slide[:section],
           subsection: slide[:subsection],
           footnote: slide[:footnote],
@@ -156,6 +154,60 @@ module Source
         vertical: position[:vertical],
         vertical_explicit: position[:vertical_explicit]
       )
+    end
+
+    def build_block(block)
+      Block.new(
+        markdown: block[:markdown],
+        position: position_from(block[:position]),
+        art: block[:art],
+        reveal_event: block[:reveal_event]
+      )
+    end
+
+    # Regions share block instances with their slide (identity the slide
+    # partials rely on to resolve editor mappings). The shared parser
+    # emits regions as ordered runs over the slide blocks — column
+    # layouts skip the title block — so pair them with a cursor walk and
+    # verify each pairing by value before reusing the instance.
+    def map_regions(region_hashes, blocks, layout:)
+      cursor = %w[two-column three-column].include?(layout) ? 1 : 0
+      Array(region_hashes).map do |region|
+        Region.new(blocks: Array(region).map do |hash|
+          candidate = blocks[cursor]
+          cursor += 1
+          candidate && block_matches?(candidate, hash) ? candidate : build_block(hash)
+        end)
+      end
+    end
+
+    def block_matches?(block, hash)
+      block.markdown == hash[:markdown] &&
+        block.position == position_from(hash[:position]) &&
+        block.art == hash[:art] &&
+        block.reveal_event == hash[:reveal_event]
+    end
+
+    # Slide-position grouping for server-rendered slides. The grouping
+    # itself is computed once by @elef/work-model; this maps the result
+    # onto the shapes the slide partials expect.
+    def position_layout(blocks)
+      payload = Array(blocks).map do |block|
+        position = block.position
+        { position: position && { horizontal: position.horizontal, vertical: position.vertical } }
+      end
+      layout = Source::JavascriptRenderer.slide_position_layout(payload)
+      {
+        entries: layout[:entries].map do |entry|
+          {
+            type: entry[:type].to_sym,
+            start: entry[:start],
+            end: entry[:end],
+            flush_bottom: entry[:flushBottom]
+          }
+        end,
+        verticals: layout[:verticals]
+      }
     end
 
     # JavaScript string offsets are UTF-16 code units; Ruby slices characters.
