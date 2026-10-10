@@ -96,6 +96,7 @@ These hold everywhere and are machine-checked (`tooling/check_boundaries.py`, `a
 - Rails code never imports desktop files or Tauri APIs; desktop code never imports Rails-host JavaScript; the desktop never duplicates shareable views, styles, controllers, or workflows;
 - no package reaches into another package's internals (public entry points only);
 - Work syntax is interpreted exactly once, in `work-model` (rule R8);
+- `editor-runtime` is a narrowed boot API: packages never import it except the renderer seam `editor-chrome`, and no importer names a subpath beyond its exports (rule R12);
 - source writes are atomic with fingerprint checks; see the [desktop data format](desktop/data-format.md) and [ADR-008](desktop/adr/008-safe-writes-and-conflict-detection.md).
 
 ## State ownership
@@ -125,6 +126,7 @@ Ask "which row owns the state or behavior?" and put the change there; add a host
 ## Important contracts
 
 - Deck layout, source selection, manifests, library settings, and archive contents: [desktop data format](desktop/data-format.md).
+- Persisted-format version rules, archive layout, and the deck manifest schema with frozen fixtures: [spec/](../spec/version-rules.md).
 - Desktop request-to-command mapping and host adapters: [desktop transport](desktop/transport-adapter.md).
 - Tauri capabilities, content security policy, path handling, and untrusted content: [desktop security](desktop/security.md).
 - Architecture decisions and their status: [desktop ADR index](desktop/adr/README.md).

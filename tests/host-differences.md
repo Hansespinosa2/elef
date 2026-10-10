@@ -4,10 +4,11 @@ One Elef product, two hosts. Every entry below is a concrete platform or
 capability difference with a verifiable reason. Bare host-name preference
 ("it differs because the hosts differ") is rejected from this file (P10-03).
 
-Capability keys come from `HostCapabilities`
-(`packages/contracts/src/errors.ts:21-28`). Adapter declarations:
+Capability keys come from the `HostCapabilities` interface
+(`packages/contracts/src/errors.ts`). Adapter declarations (the
+`capabilities` object each factory returns):
 
-| key | fake (`tests/host-conformance/adapters/fake-host.js:272-279`) | rails (`apps/web/app/javascript/host/rails-http-host.js:365-372`) | tauri (`apps/desktop/frontend/src/tauri-host.js:377-384`) |
+| key | fake (`createFakeHost`, `tests/host-conformance/adapters/fake-host.js`) | rails (`createRailsHost`, `apps/web/app/javascript/host/rails-http-host.js`) | tauri (`createTauriHost`, `apps/desktop/frontend/src/tauri-host.js`) |
 |---|---|---|---|
 | accounts | false | false | false |
 | collaboration | false | false | false |
@@ -25,9 +26,12 @@ Capability keys come from `HostCapabilities`
   deployed server-side, so no client updater exists or is needed.
 - Supported side: desktop settings show the updater affordance and the native
   updater verification flow runs
-  (`apps/desktop/e2e/specs/desktop.spec.js:1958`, `:2337-2446`).
+  (`apps/desktop/e2e/specs/desktop.spec.js`, test "shows the updater
+  affordance on the updater-capable desktop settings" and
+  `describe("native updater verification")`).
 - Disabled side: the web app shows no updater affordance
-  (`apps/desktop/e2e/specs/web.spec.js:971-976`).
+  (`apps/desktop/e2e/specs/web.spec.js`, test "the web app without an
+  updater capability shows no updater affordance").
 
 ## HD-02 nativeMenus (tauri-only)
 
@@ -56,14 +60,15 @@ Capability keys come from `HostCapabilities`
   (`apps/desktop/e2e/specs/web.spec.js`, "the web app without a localFilesystem
   capability offers no library folder picker": asserts `#change-library`
   count 0 on the library page; the button exists only in the desktop host
-  template `apps/web/app/views/desktop_host.html:27`).
+  template `apps/web/app/views/desktop_host.html`).
 
 ## HD-04 deleteProgrammatic policy (dialog-mediated on desktop)
 
 - Policy (not a capability): `deleteProgrammatic` is `true` for fake
-  (`tests/host-conformance/adapters/fake-host.js:21-23`) and rails
-  (`apps/web/app/javascript/host/rails-http-host.js:6-8`), `false` for tauri
-  (`apps/desktop/frontend/src/tauri-host.js:8-10`).
+  (`fakePolicy` in `tests/host-conformance/adapters/fake-host.js`) and rails
+  (`railsPolicy` in `apps/web/app/javascript/host/rails-http-host.js`),
+  `false` for tauri (`tauriPolicy` in
+  `apps/desktop/frontend/src/tauri-host.js`).
 - Concrete reason: desktop production delete is mediated by a native
   confirmation dialog; automation runs through the harness path instead.
 - Proof: the conformance suite (`tests/host-conformance/suite.js`) skips
@@ -87,7 +92,9 @@ Capability keys come from `HostCapabilities`
 
 - Capability: none (product surface, not a port capability).
 - Concrete reason: the web app delivers export bytes over HTTP download routes
-  (`apps/web/config/routes.rb:45,65`, `apps/web/app/javascript/controllers/pptx_export_host_controller.js`)
+  (the `get :export` member routes on presentations and documents in
+  `apps/web/config/routes.rb`,
+  `apps/web/app/javascript/controllers/pptx_export_host_controller.js`)
   over shared client logic (`packages/client/src/features/export/`); the
   desktop has no export UI and no download transport.
 - Supported side: Rails pptx/pdf export service + system tests
@@ -107,7 +114,8 @@ Capability keys come from `HostCapabilities`
 - Capability: none (one `SearchPort` contract, two implementations).
 - Concrete reason: the desktop must search offline with no server to query, so
   the Tauri adapter filters substring-side over `document_graph` plus deck
-  names (`apps/desktop/frontend/src/tauri-host.js:1-6`); the web adapter queries
+  names (`searchPort.search` in `createTauriHost`,
+  `apps/desktop/frontend/src/tauri-host.js`); the web adapter queries
   the server. Behavior is contract-identical; only the execution locality
   differs.
 - Proof: contract conformance suite green on rails + desktop adapters.

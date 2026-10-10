@@ -6,7 +6,16 @@ Rules (constitution section 4, Phase 01 plan section 8):
       imports inside the package; no node:, @elef/, desktop, tauri or
       filesystem specifiers.
   R2  no deep imports across package internals: nothing outside packages/<name>/
-      may import beneath its public entry (src/index).
+      may import beneath its public entry (src/index). Enforced repo-wide:
+      packages, both hosts, apps/web/test, apps/desktop/e2e and tests/.
+  R12 editor-runtime is a narrowed boot API (ADR-011): editor-runtime
+      sources import only relative sources, @elef/client, @elef/work-model,
+      @elef/contracts and the pinned editor vendor modules; no package
+      imports @elef/editor-runtime except the renderer seam
+      @elef/editor-runtime/editor-chrome; no importer names an
+      @elef/editor-runtime subpath beyond the package's exported
+      subpaths (read from its export map: editor-chrome, test-internals).
+  R13 package sources are TypeScript: zero *.js files under packages/*/src.
   R3  crates/local-store has no Tauri knowledge: no "tauri" string in its
       sources or manifest.
   R4  conformance adapters reach hosts only through injected transports: no
@@ -36,14 +45,16 @@ Rules (constitution section 4, Phase 01 plan section 8):
       compile); a second settings stylesheet is a duplicate owner.
 
 Usage:
-  tooling/check_boundaries.py                 enforce R1-R5 on the repo
-  tooling/check_boundaries.py --self-test     prove R1/R2/R4 reject the
-      deliberate canaries under tooling/canary/ (exit 0 only when every
-      canary is flagged)
+  tooling/check_boundaries.py                 enforce R1-R13 on the repo
+  tooling/check_boundaries.py --self-test     prove every rule rejects its
+      deliberate canary (file fixtures under tooling/canary/ plus staged
+      canaries for R2-repo-wide/R12/R13); exit 0 only when every canary
+      is flagged
 """
 
 from __future__ import annotations
 
+import json
 import re
 import sys
 from pathlib import Path
@@ -70,16 +81,41 @@ def check_contracts() -> list[str]:
     return violations
 
 
+JS_SOURCE_SUFFIXES = (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs")
+JS_EXCLUDED_PARTS = frozenset(
+    {"node_modules", "dist", "dist-e2e", "logs", "test-results", "playwright-report"}
+)
+
+# Scopes outside packages/ whose importers must still respect R2 (F9).
+DEEP_IMPORT_OUTSIDE_SCOPES = (
+    "apps/web/test",
+    "apps/desktop/e2e",
+    "apps/web/app/javascript",
+    "apps/desktop/frontend/src",
+    "tests",
+)
+
+
+def js_sources(scope: Path) -> list[Path]:
+    if not scope.is_dir():
+        return []
+    found = []
+    for suffix in JS_SOURCE_SUFFIXES:
+        found.extend(scope.rglob(f"*{suffix}"))
+    return sorted(
+        source
+        for source in found
+        if JS_EXCLUDED_PARTS.isdisjoint(source.relative_to(scope).parts)
+    )
+
+
 def check_deep_imports() -> list[str]:
     violations = []
     public = {path.parent.parent.name for path in PACKAGES.glob("*/src/index.*")}
     for package in sorted(PACKAGES.iterdir()):
         if not package.is_dir():
             continue
-        sources = sorted(package.rglob("*.ts")) + sorted(package.rglob("*.js"))
-        for source in sources:
-            if "node_modules" in source.parts or "dist" in source.parts:
-                continue
+        for source in js_sources(package):
             for specifier in specifiers(source):
                 if not specifier.startswith("."):
                     continue
@@ -91,6 +127,20 @@ def check_deep_imports() -> list[str]:
                 if len(relative.parts) > 1 and relative.parts[0] in public and relative.parts[0] != package.name:
                     violations.append(
                         f"R2 deep import across packages: {source.relative_to(ROOT)} -> {specifier}"
+                    )
+    for scope_name in DEEP_IMPORT_OUTSIDE_SCOPES:
+        for source in js_sources(ROOT / scope_name):
+            for specifier in specifiers(source):
+                if not specifier.startswith("."):
+                    continue
+                target = (source.parent / specifier).resolve()
+                try:
+                    relative = target.relative_to(PACKAGES)
+                except ValueError:
+                    continue
+                if len(relative.parts) > 1 and relative.parts[0] in public:
+                    violations.append(
+                        f"R2 deep import into package internals: {source.relative_to(ROOT)} -> {specifier}"
                     )
     return violations
 
@@ -293,6 +343,114 @@ def check_client_isolation() -> list[str]:
     return violations
 
 
+# The authorized renderer seam (frozen phase-12 plan, fixed cross-stream seam:
+# S1 creates @elef/editor-runtime/editor-chrome exporting editorChrome,
+# S4 consumes it for the renderer bundle entry). Only the renderer package
+# may import editor-runtime, and only through this seam.
+RENDERER_RUNTIME_SEAM = "@elef/editor-runtime/editor-chrome"
+
+
+def editor_runtime_exported_subpaths() -> frozenset[str]:
+    # R12 pins the narrowed boot API to the package's own export map, so a
+    # reviewed new entry (editor-chrome, test-internals) is allowed without
+    # editing this checker; anything deeper than an export still fails.
+    package = json.loads((PACKAGES / "editor-runtime" / "package.json").read_text())
+    return frozenset(
+        f"@elef/editor-runtime{subpath[1:]}"
+        for subpath in package.get("exports", {})
+        if subpath.startswith("./")
+    )
+EDITOR_RUNTIME_ALLOWED_BARE = (
+    "@elef/client",
+    "@elef/work-model",
+    "@elef/contracts",
+    "@hotwired/stimulus",
+    "codemirror",
+    "@codemirror",
+    "@lezer/highlight",
+    "@replit/codemirror-vim",
+    "katex",
+)
+# Packages that must never consume editor-runtime (contracts is covered by R1).
+RUNTIME_REVERSE_PACKAGES = ("client", "work-model", "renderer")
+
+
+def ts_sources(package: str) -> list[Path]:
+    root = PACKAGES / package / "src"
+    if not root.is_dir():
+        return []
+    return sorted(
+        p
+        for p in list(root.rglob("*.ts")) + list(root.rglob("*.tsx"))
+        if "node_modules" not in p.parts and not p.name.endswith(".d.ts")
+    )
+
+
+def check_editor_runtime_direction() -> list[str]:
+    violations = []
+    for source in ts_sources("editor-runtime"):
+        for specifier in specifiers(source):
+            if specifier.startswith("."):
+                target = (source.parent / specifier).resolve()
+                try:
+                    target.relative_to(PACKAGES / "editor-runtime")
+                except ValueError:
+                    violations.append(
+                        f"R12 editor-runtime escapes its package: {source.relative_to(ROOT)} -> {specifier}"
+                    )
+                continue
+            if any(
+                specifier == allowed or specifier.startswith(f"{allowed}/")
+                for allowed in EDITOR_RUNTIME_ALLOWED_BARE
+            ):
+                continue
+            violations.append(
+                f"R12 editor-runtime imports non-shared {specifier!r}: {source.relative_to(ROOT)}"
+            )
+    for package in RUNTIME_REVERSE_PACKAGES:
+        for source in ts_sources(package):
+            for specifier in specifiers(source):
+                if not specifier.startswith("@elef/editor-runtime"):
+                    continue
+                if package == "renderer" and specifier == RENDERER_RUNTIME_SEAM:
+                    continue
+                violations.append(
+                    f"R12 reverse dependency on editor-runtime: {source.relative_to(ROOT)} -> {specifier}"
+                )
+    subpath_scopes = [PACKAGES / package / "src" for package in sorted(
+        p.name for p in PACKAGES.iterdir() if p.is_dir()
+    )] + [ROOT / scope for scope in DEEP_IMPORT_OUTSIDE_SCOPES]
+    exported = editor_runtime_exported_subpaths()
+    for scope in subpath_scopes:
+        for source in js_sources(scope):
+            for specifier in specifiers(source):
+                if not specifier.startswith("@elef/editor-runtime/"):
+                    continue
+                if specifier in exported:
+                    continue
+                violations.append(
+                    f"R12 editor-runtime deep import beyond exported subpaths: {source.relative_to(ROOT)} -> {specifier}"
+                )
+    return violations
+
+
+def check_no_package_js() -> list[str]:
+    violations = []
+    for package in sorted(PACKAGES.iterdir()):
+        if not package.is_dir():
+            continue
+        root = package / "src"
+        if not root.is_dir():
+            continue
+        for source in sorted(root.rglob("*.js")):
+            if "node_modules" in source.parts:
+                continue
+            violations.append(
+                f"R13 package sources must be TypeScript: {source.relative_to(ROOT)}"
+            )
+    return violations
+
+
 SETTINGS_STYLESHEET_OWNER = Path("apps/web/app/assets/stylesheets/components/settings.css")
 
 # Directory names that never hold a styles owner: generated bundles,
@@ -395,7 +553,54 @@ def run_all() -> list[str]:
         + check_client_host_free()
         + check_client_isolation()
         + check_settings_styles()
+        + check_editor_runtime_direction()
+        + check_no_package_js()
     )
+
+
+# Staged canaries for the repo-wide R2 and the R12/R13 rules, written into
+# the self-test stage programmatically (the scopes they cover have no file
+# fixtures under tooling/canary/).
+STAGED_CANARIES = {
+    # R2 repo-wide: a web test reaching into package internals relatively.
+    "apps/web/test/javascript/canary-deep.js": (
+        "// DELIBERATE CANARY (R2 repo-wide): a test importing beneath a\n"
+        "// package public entry through a relative path.\n"
+        'import { WorkKind } from "../../../../packages/contracts/src/ids.js";\n'
+        "\n"
+        "export const canaryKind = WorkKind;\n"
+    ),
+    # R12: editor-runtime importing a host package outside its closure.
+    "packages/editor-runtime/src/canary-vendor.ts": (
+        "// DELIBERATE CANARY (R12): editor-runtime importing a host package.\n"
+        'import { invoke } from "@tauri-apps/api/core";\n'
+        "\n"
+        "export async function canary(): Promise<void> {\n"
+        '  await invoke("canary");\n'
+        "}\n"
+    ),
+    # R12: a package depending back on editor-runtime.
+    "packages/work-model/src/canary-runtime.ts": (
+        "// DELIBERATE CANARY (R12): a package reversing the editor-runtime\n"
+        "// dependency direction.\n"
+        'import { registerEditorRuntime } from "@elef/editor-runtime";\n'
+        "\n"
+        "export const canary = registerEditorRuntime;\n"
+    ),
+    # R12: a host deep-importing a non-exported editor-runtime subpath.
+    "apps/web/app/javascript/canary-runtime-deep.js": (
+        "// DELIBERATE CANARY (R12): a per-controller deep import beyond the\n"
+        "// exported editor-runtime subpaths.\n"
+        'import { x } from "@elef/editor-runtime/controllers/visual_editor_controller.js";\n'
+        "\n"
+        "export const canary = x;\n"
+    ),
+    # R13: a JavaScript source under a package src/ directory.
+    "packages/client/src/canary-plain.js": (
+        "// DELIBERATE CANARY (R13): package sources must be TypeScript.\n"
+        "export const canary = 1;\n"
+    ),
+}
 
 
 def self_test() -> int:
@@ -424,13 +629,17 @@ def self_test() -> int:
             target = stage / fixture.relative_to(CANARY)
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(fixture, target)
+        for relative, content in sorted(STAGED_CANARIES.items()):
+            target = stage / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(content)
         old_root, old_packages = ROOT, PACKAGES
         ROOT, PACKAGES = stage, stage / "packages"
         try:
             found = run_all()
         finally:
             ROOT, PACKAGES = old_root, old_packages
-    expected = {"R1", "R2", "R4", "R6", "R7", "R8", "R9", "R10", "R11"}
+    expected = {"R1", "R2", "R4", "R6", "R7", "R8", "R9", "R10", "R11", "R12", "R13"}
     seen = {line.split()[0] for line in found}
     missing = expected - seen
     if missing:
@@ -460,7 +669,7 @@ def main(argv: list[str]) -> int:
         print(violation, file=sys.stderr)
     if violations:
         return 1
-    print("Architecture boundaries hold: contracts pure, no deep imports, local-store Tauri-free, adapters transport-injected, packages directed and pure, no Work reinterpretation, client host-free and isolated, settings styles single-owned.")
+    print("Architecture boundaries hold: contracts pure, no deep imports repo-wide, local-store Tauri-free, adapters transport-injected, packages directed and pure, no Work reinterpretation, client host-free and isolated, settings styles single-owned, editor-runtime narrowed, package sources TypeScript.")
     return 0
 
 

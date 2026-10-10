@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { runSuite } from "./suite.js";
+import { CASES, SUITE_VERSION, runSuite } from "./suite.js";
 import { createFakeHost, fakePolicy } from "./adapters/fake-host.js";
 
 const shim = {
@@ -18,4 +18,10 @@ for (const result of results) {
 }
 
 const failed = results.filter((result) => result.outcome === "fail");
+const skipped = results.filter((result) => result.outcome === "skip");
+console.log(
+  `conformance fake: ${results.length - failed.length - skipped.length} passed, ` +
+    `${skipped.length} skipped, ${failed.length} failed ` +
+    `(suite v${SUITE_VERSION}, ${CASES.length} cases)`,
+);
 if (failed.length > 0) process.exitCode = 1;

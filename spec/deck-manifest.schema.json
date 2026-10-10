@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://elef.app/spec/deck-manifest.schema.json",
+  "title": "Elef deck manifest (elef.json)",
+  "description": "Identity file at a deck directory root. Grounded in read_manifest (crates/local-store/src/manifest.rs): only id and schema_version are read; unknown fields are ignored so newer writers stay openable.",
+  "type": "object",
+  "required": ["id", "schema_version"],
+  "additionalProperties": true,
+  "properties": {
+    "id": {
+      "description": "Deck identity (UUID). Serialized hyphenated lowercase by write_manifest_atomic; readers accept any form Uuid::parse_str accepts.",
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    },
+    "schema_version": {
+      "description": "Manifest format version. Current value is MANIFEST_SCHEMA_VERSION (crates/local-store/src/consts.rs). Higher values are read for known fields with a non-blocking notice (manifest_notices in manifest.rs).",
+      "type": "integer",
+      "minimum": 1
+    }
+  }
+}

@@ -3,7 +3,7 @@
 //        ELEF_CONFORMANCE_RAILS_URL=http://127.0.0.1:3100 node tests/host-conformance/run-node.js rails
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { CASES, runSuite } from "./suite.js";
+import { CASES, SUITE_VERSION, runSuite } from "./suite.js";
 import { createFakeHost, fakePolicy } from "./adapters/fake-host.js";
 import { createRailsHost, railsPolicy } from "../../apps/web/app/javascript/host/rails-http-host.js";
 
@@ -45,6 +45,7 @@ const failed = results.filter((result) => result.outcome === "fail");
 const skipped = results.filter((result) => result.outcome === "skip");
 console.log(
   `conformance ${adapter}: ${results.length - failed.length - skipped.length} passed, ` +
-    `${skipped.length} skipped, ${failed.length} failed (suite v${CASES.length} cases)`,
+    `${skipped.length} skipped, ${failed.length} failed ` +
+    `(suite v${SUITE_VERSION}, ${CASES.length} cases)`,
 );
 if (failed.length > 0) process.exitCode = 1;

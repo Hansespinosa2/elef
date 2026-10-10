@@ -668,6 +668,7 @@ REMAINING_STUBS_1 = ("docs", "perf")
 QUICK_COMMANDS_1 = (
     "./node_modules/.bin/tsc -p packages/contracts/tsconfig.test.json",
     "node --test tests/host-conformance/conformance-fake.test.js",
+    "node --test tests/spec/editor-markup-vocabulary.test.js",
     "npm run test:javascript",
     "npm test --prefix packages/work-model",
     "npm test --prefix packages/renderer",
@@ -678,6 +679,7 @@ QUICK_COMMANDS_1 = (
     "python3 apps/web/script/check_frontend_ownership.py",
     "python3 tooling/check_boundaries.py",
     "python3 tooling/check_boundaries.py --self-test",
+    "python3 tooling/check_spec.py",
     "cargo test --manifest-path Cargo.toml -p local-store --locked",
 )
 AFFECTED_RAILS_TESTS = (
@@ -725,6 +727,7 @@ ARCH_COMMANDS_1 = (
     "python3 apps/web/script/check_frontend_ownership.py",
     "python3 tooling/check_boundaries.py",
     "python3 tooling/check_boundaries.py --self-test",
+    "python3 tooling/check_spec.py",
     f"python3 {DESKTOP_PATH_PREFIX}scripts/check_architecture.py",
 )
 

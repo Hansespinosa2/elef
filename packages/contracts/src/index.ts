@@ -26,4 +26,3 @@ export type {
   WorksPort,
 } from "./ports.js";
 export type { ElefHost } from "./host.js";
-export { mountElef } from "./host.js";

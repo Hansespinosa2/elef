@@ -20,9 +20,3 @@ export interface ElefHost {
   transfer: TransferPort;
   createWorkSession(workId: WorkId): Promise<WorkSession>;
 }
-
-export declare function mountElef(
-  hostElement: HTMLElement,
-  host: ElefHost,
-  options?: { initialUrl?: string },
-): { unmount(): void };
