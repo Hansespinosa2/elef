@@ -58,6 +58,10 @@ Non-goals (explicitly deferred/out of scope):
 - No owner-gate execution: H1–H5 stay pending (all five explicitly named in status since DO-7).
 - No new packages/crates/top-level dirs except fork B's editor-runtime package (admission law in writing below) and frozen `spec/` (F5 implements the frozen target, not a new invention).
 
+Settled owner decisions (interview 2026-10-10; recorded here at PLAN, frozen with v2):
+- D1 permanence: `editor-runtime` is PERMANENT v9 architecture (ADR-011 Draft), with a revisit trigger instead of a removal condition. No P12-01 register entry.
+- D2 #148/#149 timing: (a) campaign beautifies its own tree (F6/F7 unify first); the dev port follows after campaign PASS and deletes the single unified implementation then. The port also owns the desktop-`.md` silent-reinterpretation hazard (dev's migration rewrites Postgres rows only). No dev scope enters the campaign.
+
 ## 3. Ownership classification
 | Change | Semantic owner (constitution §4) | Shared or host-specific (+ concrete reason) |
 |---|---|---|
