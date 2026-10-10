@@ -57,9 +57,16 @@ export function sendNativeText(text, { activate = true } = {}) {
     return
   }
   if (process.platform === "darwin") {
-    if (activate) focusDesktopWindow()
     const escaped = text.replaceAll("\\", "\\\\").replaceAll('"', '\\"')
-    execFileSync("osascript", ["-e", `tell application "System Events" to keystroke "${escaped}"`], { timeout: 5_000 })
+    const activateScript = activate
+      ? `set appProcess to first application process whose unix id is ${desktopProcessId()}
+         set frontmost of appProcess to true
+         delay 0.2`
+      : ""
+    execFileSync("osascript", ["-e", `tell application "System Events"
+      ${activateScript}
+      keystroke "${escaped}"
+    end tell`], { timeout: 5_000 })
     return
   }
   throw new Error(`Native text input is unsupported on ${process.platform}`)

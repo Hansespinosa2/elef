@@ -125,12 +125,31 @@ describe("Stable profile exclusions", () => {
       editor.focus()
     })
     await sendNativeText("[[")
-    await browser.waitUntil(async () => browser.execute(source =>
-      document.querySelector("#desktop-editor-field")?.editorController?.sourceValue === source,
-    STABLE_PROFILE_KEYBOARD_SOURCE), {
-      timeout: 10_000,
-      timeoutMsg: "Typing [[ in Stable should leave literal source without opening document-link suggestions"
-    })
+    let keyboardObservation
+    try {
+      await browser.waitUntil(async () => {
+        keyboardObservation = await browser.execute(expected => {
+          const field = document.querySelector("#desktop-editor-field")
+          const editor = field?.editorController
+          const source = editor?.sourceValue || ""
+          return {
+            matchesExpected: source === expected,
+            expectedLength: expected.length,
+            actualLength: source.length,
+            suffixCodePoints: Array.from(source.slice(-4), character => character.codePointAt(0)),
+            editorFocused: editor?.view?.hasFocus() || false,
+            activeElement: document.activeElement?.id || document.activeElement?.tagName || null,
+            linkPaletteCount: document.querySelectorAll("[data-document-link-palette-target]").length
+          }
+        }, STABLE_PROFILE_KEYBOARD_SOURCE)
+        return keyboardObservation.matchesExpected
+      }, {
+        timeout: 10_000,
+        timeoutMsg: "Typing [[ in Stable should leave literal source without opening document-link suggestions"
+      })
+    } catch (error) {
+      throw new Error(`${error.message}; keyboard probe ${JSON.stringify(keyboardObservation)}`, { cause: error })
+    }
     assert.equal(await $("[data-document-link-palette-target]").isExisting(), false)
     await browser.waitUntil(async () => browser.execute(source =>
       document.querySelector("#save-state")?.dataset.state === "saved" &&
