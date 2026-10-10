@@ -66,7 +66,7 @@ export async function runIdentityIsolationSmoke({ e2eRoot, repoRoot, env, isolat
     const appEnv = createDesktopAppEnvironment({
       ...env,
       ELEF_E2E_APP_BINARY: profile.binary,
-      ELEF_E2E_EXPECTED_LIBRARY_ROOT: profile.libraryRoot,
+      ELEF_E2E_IDENTITY_EXPECTED_ROOT: profile.libraryRoot,
       ELEF_E2E_PROFILE: "identity",
       TAURI_WEBDRIVER_PORT: await reserveWebdriverPort()
     }, isolatedDirectories)

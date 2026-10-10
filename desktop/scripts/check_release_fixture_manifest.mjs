@@ -139,6 +139,8 @@ assert.match(identitySmoke, /com\.elef\.desktop\.dev/)
 assert.match(identitySmoke, /Promise\.allSettled\(identityFixtures\.map\(profile => runProfile\(profile\)\)\)/,
   "Stable and Dev must be running concurrently during the identity assertion")
 assert.match(identitySpec, /get_library_status/)
+assert.match(identitySmoke, /ELEF_E2E_IDENTITY_EXPECTED_ROOT: profile\.libraryRoot/)
+assert.match(identitySpec, /process\.env\.ELEF_E2E_IDENTITY_EXPECTED_ROOT/)
 assert.match(stableIdentityConfig, /"identifier": "com\.elef\.desktop"/)
 assert.match(devIdentityConfig, /"identifier": "com\.elef\.desktop\.dev"/)
 
