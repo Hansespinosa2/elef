@@ -862,7 +862,10 @@ class WebLibraryUi {
       has: this.page.getByRole("heading", { name: title, exact: true })
     })
     const action = await this.openCardAction(card, "Present")
-    await action.evaluate(button => button.click())
+    await Promise.all([
+      this.page.waitForURL(/\/presentations\/\d+\/present$/, { timeout: 30_000 }),
+      action.click()
+    ])
     await expect(this.page.locator(".presentation-stage")).toBeVisible()
     await this.page.getByRole("link", { name: "Exit", exact: true }).click()
     await expect(this.page.getByText("Saved preview", { exact: true })).toBeVisible()

@@ -118,13 +118,12 @@ describe("Stable profile exclusions", () => {
       return editor.sourceValue
     }, STABLE_PROFILE_EDITED_SOURCE)
     assert.equal(changed, STABLE_PROFILE_EDITED_SOURCE)
-    const sourceInput = $("#desktop-editor-field .cm-content")
     await browser.execute(() => {
       const editor = document.querySelector("#desktop-editor-field").editorController
       editor.view.dispatch({ selection: { anchor: editor.sourceValue.length } })
       editor.focus()
     })
-    await sourceInput.keys("[[")
+    await browser.keys("[[")
     await browser.waitUntil(async () => browser.execute(source =>
       document.querySelector("#desktop-editor-field")?.editorController?.sourceValue === source,
     STABLE_PROFILE_KEYBOARD_SOURCE), {
