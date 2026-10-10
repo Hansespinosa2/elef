@@ -1,18 +1,21 @@
 // Canonical producer of the committed packages/editor-runtime/dist/ artifacts.
 //
 // Two shapes from one source:
-// - The three package entries (index, preview_chrome, test_internals) ship
-//   as SELF-CONTAINED bundles. Propshaft serves only digested URLs, so a
-//   browser entry with relative imports 404s on every sibling (proven by
-//   the Phase 12 system-test battery). Bare imports stay external: each is
-//   an importmap pin served once and shared. Bundling a second Stimulus,
-//   CodeMirror, or Elef package copy would split framework identity, so the
-//   externals below mirror the pinned shared set (see config/importmap.rb
-//   and the ownership checker's pin-coverage assertion).
+// - The four package entries (index, preview_chrome, test_internals,
+//   worker) ship as SELF-CONTAINED bundles. Propshaft serves only digested
+//   URLs, so a browser entry with relative imports 404s on every sibling
+//   (proven by the Phase 12 system-test battery). Bare imports stay
+//   external: each is an importmap pin served once and shared. Bundling a
+//   second Stimulus, CodeMirror, or Elef package copy would split framework
+//   identity, so the externals below mirror the pinned shared set (see
+//   config/importmap.rb and the ownership checker's pin-coverage
+//   assertion). The worker entry is DOM-free by construction: the desktop
+//   renderer worker bundles it instead of the barrel, whose module-scope
+//   DOM side effects cannot evaluate inside a Web Worker.
 // - Every other module ships as a per-file transpile for the node harnesses
 //   under apps/web/test, which read single controller/lib files as text and
 //   load them through data: URLs. Migrating those harnesses to the
-//   test-internals entry would let dist shrink to the three bundles.
+//   test-internals entry would let dist shrink to the four bundles.
 // The build fails closed when a bundled entry keeps a relative import.
 import { readFileSync, readdirSync } from "node:fs"
 import { dirname, join, relative } from "node:path"
@@ -72,8 +75,14 @@ esbuild.buildSync({
   outfile: join(here, "dist", "test_internals.js"),
   minify: false
 })
+esbuild.buildSync({
+  ...shared,
+  entryPoints: [join(here, "src", "lib", "renderer_worker.ts")],
+  outfile: join(here, "dist", "worker.js"),
+  minify: true
+})
 
-for (const entry of ["index.js", "preview_chrome.js", "test_internals.js"]) {
+for (const entry of ["index.js", "preview_chrome.js", "test_internals.js", "worker.js"]) {
   const output = readFileSync(join(here, "dist", entry), "utf8")
   if (/(?:from\s*|import\()\s*["']\.\.?\//.test(output)) {
     throw new Error(`packages/editor-runtime/dist/${entry} keeps a relative import; the browser cannot resolve it.`)
@@ -89,7 +98,10 @@ function entries(dir) {
   })
 }
 
-const bundled = new Set(["index.ts", "preview_chrome.ts", "test_internals.ts"].map((name) => join(here, "src", name)))
+const bundled = new Set(
+  ["index.ts", "preview_chrome.ts", "test_internals.ts"].map((name) => join(here, "src", name))
+    .concat(join(here, "src", "lib", "renderer_worker.ts"))
+)
 esbuild.buildSync({
   entryPoints: entries(join(here, "src")).filter((entry) => !bundled.has(entry)),
   outdir: join(here, "dist"),

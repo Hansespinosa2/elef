@@ -14,6 +14,10 @@
       "types": "./src/preview_chrome.ts",
       "default": "./dist/preview_chrome.js"
     },
+    "./worker": {
+      "types": "./src/lib/renderer_worker.ts",
+      "default": "./dist/worker.js"
+    },
     "./test-internals": {
       "types": "./src/test_internals.ts",
       "default": "./dist/test_internals.js"

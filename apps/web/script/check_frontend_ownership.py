@@ -511,8 +511,8 @@ assert "loadLibraryRuntime" not in editor_runtime, "no host may keep the retired
 assert "renderGraphView" in desktop_application and "GraphController" in desktop_application, (
     "desktop graph rendering must use the shared client graph module"
 )
-assert 'from "@elef/editor-runtime"' in (ROOT / "apps/desktop/frontend/src/renderer-worker.js").read_text(), (
-    "desktop worker bootstrap must delegate renderer response behavior to the shared editor runtime"
+assert 'from "@elef/editor-runtime/worker"' in (ROOT / "apps/desktop/frontend/src/renderer-worker.js").read_text(), (
+    "desktop worker bootstrap must delegate renderer response behavior to the shared editor runtime's DOM-free worker entry"
 )
 assert 'path.join(frontendRoot, "src/renderer-worker.js")' in build, (
     "desktop must bundle its worker bootstrap with the shared app-owned worker behavior"
