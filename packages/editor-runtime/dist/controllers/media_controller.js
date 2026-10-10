@@ -102,7 +102,7 @@ class media_controller_default extends Controller {
     event.preventDefault();
     event.stopPropagation();
     const target = control ?? event.currentTarget;
-    const index = target instanceof HTMLElement ? target.dataset.slideIndex : void 0;
+    const index = target?.dataset?.slideIndex;
     this.targetSlideIndex = index !== void 0 && index !== "" ? Number(index) : null;
     this.pendingRange = null;
     this.inputTarget.click();
@@ -138,8 +138,7 @@ class media_controller_default extends Controller {
       this.setStatus("Choose an image file to insert into source mode.");
       return;
     }
-    const eventElement = event.target instanceof Element ? event.target : null;
-    const slideElement = document.activeElement?.closest?.("[data-slide-index], [data-editor-slide-id]") || eventElement?.closest?.("[data-slide-index], [data-editor-slide-id]");
+    const slideElement = document.activeElement?.closest?.("[data-slide-index], [data-editor-slide-id]") || event.target?.closest?.("[data-slide-index], [data-editor-slide-id]");
     let targetIndex = null;
     if (slideElement) {
       targetIndex = this.slideIndexFromElement(slideElement);
@@ -157,15 +156,12 @@ class media_controller_default extends Controller {
     }
     event.preventDefault();
     if (transfer) transfer.dropEffect = "copy";
-    const target = event.currentTarget;
-    if (!(target instanceof HTMLElement)) return;
-    target.classList.add("is-media-drop-target");
+    event.currentTarget?.classList?.add("is-media-drop-target");
   }
   sourceDragLeave(event) {
     const target = event.currentTarget;
-    if (!(target instanceof HTMLElement)) return;
-    if (target.contains(event.relatedTarget)) return;
-    target.classList.remove("is-media-drop-target");
+    if (target?.contains(event.relatedTarget)) return;
+    target?.classList?.remove("is-media-drop-target");
   }
   async sourceDrop(event) {
     if (!this.isSourceEditorTarget(event.currentTarget)) return;
@@ -180,8 +176,7 @@ class media_controller_default extends Controller {
     }
     event.preventDefault();
     event.stopPropagation();
-    const target = event.currentTarget;
-    if (target instanceof HTMLElement) target.classList.remove("is-media-drop-target");
+    event.currentTarget?.classList?.remove("is-media-drop-target");
     const position = editor.view.posAtCoords({ x: event.clientX, y: event.clientY });
     const fallback = editor.selectionEnd;
     const range = { from: position ?? fallback, to: position ?? fallback };
@@ -237,13 +232,13 @@ class media_controller_default extends Controller {
     }
   }
   isSourceEditorTarget(target) {
-    const sourceSurface = target instanceof Element ? target.closest(".editor-surface") : null;
+    const sourceSurface = target?.closest?.(".editor-surface");
     const mode = this.editor?.editingMode || this.element.dataset.editorMode;
     return mode === "source" && Boolean(sourceSurface);
   }
   isVisualEditorTarget(target) {
     const mode = this.editor?.editingMode || this.element.dataset.editorMode;
-    return mode === "visual" && Boolean(target instanceof Element ? target.closest(".editor-projection") : null);
+    return mode === "visual" && Boolean(target?.closest?.(".editor-projection"));
   }
   async fileForSourceUpload(file) {
     const declaredType = file.type || "";
@@ -293,24 +288,19 @@ class media_controller_default extends Controller {
     if (!transfer || !Array.from(transfer.types || []).includes("Files")) return;
     event.preventDefault();
     transfer.dropEffect = "copy";
-    const target = event.currentTarget;
-    if (!(target instanceof HTMLElement)) return;
-    target.classList.add("is-media-drop-target");
+    event.currentTarget?.classList?.add("is-media-drop-target");
   }
   dragLeave(event) {
     const target = event.currentTarget;
-    if (!(target instanceof HTMLElement)) return;
-    if (target.contains(event.relatedTarget)) return;
-    target.classList.remove("is-media-drop-target");
+    if (target?.contains(event.relatedTarget)) return;
+    target?.classList?.remove("is-media-drop-target");
   }
   async drop(event) {
     const transfer = event.dataTransfer;
     if (!transfer?.files?.length) return;
     event.preventDefault();
-    const target = event.currentTarget;
-    if (target instanceof HTMLElement) target.classList.remove("is-media-drop-target");
-    const targetElement = event.target instanceof Element ? event.target : null;
-    const slideElement = targetElement?.closest?.("[data-slide-index], [data-editor-slide-id]");
+    event.currentTarget?.classList?.remove("is-media-drop-target");
+    const slideElement = event.target?.closest?.("[data-slide-index], [data-editor-slide-id]");
     const targetIndex = slideElement ? this.slideIndexFromElement(slideElement) : null;
     const editor = this.editor;
     const range = targetIndex !== null ? this.rangeForSlide(targetIndex) : this.rangeAtSelectedSlideEnd(editor);

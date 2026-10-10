@@ -272,15 +272,21 @@ function configureEditorKind(root, kind, { documentTitles = [], sourceName, show
     sourceField.dataset.presentationEditorTarget = "source";
   }
   sourceInput.dataset.action = [...actions].join(" ");
-  root.querySelector(".editor-mode-hint").textContent = isDocument ? "Visual mode keeps Markdown source canonical. Use Source mode for unsupported syntax or to edit LaTeX expressions directly. Type [[ to link another document. In math, type @a, @frac, or @gather; Tab walks multi-slot expressions. Type /diagram to open Mermaid Assist." : "Visual mode keeps Markdown source canonical. Use Source mode for unsupported syntax, inline media, or to edit LaTeX expressions directly. Type /trigger for document structures and :align or :footnote for Elef directives. In math, type @a, @frac, or @gather; Tab walks multi-slot expressions. Type /diagram to open Mermaid Assist. Math transforms such as $x.b.vec.t$ commit with Enter or Tab.";
+  root.querySelector(".editor-mode-hint").textContent = isDocument ? "Visual mode keeps Markdown source canonical. Use Source mode for unsupported syntax or to edit LaTeX expressions directly. Type [[ to link another document. In math, type @a, @frac, or @gather; Tab walks multi-slot expressions. Type /diagram to open Mermaid Assist." : "Visual mode keeps Markdown source canonical. Use Source mode for unsupported syntax, inline media, or to edit LaTeX expressions directly. Type /trigger for document structures and :align, :art, or :footnote for Elef directives. Type [[ to link another document. In math, type @a, @frac, or @gather; Tab walks multi-slot expressions. Type /diagram to open Mermaid Assist. Math transforms such as $x.b.vec.t$ commit with Enter or Tab.";
   root.querySelector('[data-editor-view-target="mediaButton"]').textContent = isDocument ? "Add image" : "Add image or MP4";
   root.querySelector('[data-editor-view-target="mediaInput"]').setAttribute("accept", isDocument ? "image/*" : "image/*,video/mp4");
   root.querySelector('[data-editor-view-target="presentationTools"]').hidden = isDocument;
   root.querySelector('[data-editor-view-target="slideOverview"]').hidden = isDocument;
   root.querySelector("[data-presentation-editor-target='status']").hidden = isDocument;
-  if (formControllers !== void 0) {
-    const form = root.closest("form");
-    if (form) form.dataset.controller = formControllers;
+  const form = root.closest("form");
+  if (form) {
+    form.dataset.visualEditorKindValue = kind;
+    const formActions = new Set((form.dataset.action || "").split(/\s+/).filter(Boolean));
+    const projectionKeydown = "keydown->visual-editor#projectionKeydown";
+    formActions.delete(projectionKeydown);
+    if (isDocument) formActions.add(projectionKeydown);
+    form.dataset.action = [...formActions].join(" ");
+    if (formControllers !== void 0) form.dataset.controller = formControllers;
   }
   return root;
 }

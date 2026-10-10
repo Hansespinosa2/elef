@@ -1,4 +1,4 @@
-// packages/editor-runtime/src/lib/authoring_registry_merge.ts
+// src/lib/authoring_registry_merge.ts
 import { POSITION_VOCABULARY } from "@elef/work-model/document-map";
 function registryKey(entry) {
   return JSON.stringify([entry.namespace || "", String(entry.id)]);
@@ -17,6 +17,7 @@ var DIRECTIVE_SCHEMAS = /* @__PURE__ */ new Map([
       [...POSITION_VOCABULARY.vertical]
     ]
   }],
+  ["art", { grammar: [], argument_count: 0, values: [] }],
   ["section", { grammar: ["text"], argument_count: 1, values: [] }],
   ["subsection", { grammar: ["text"], argument_count: 1, values: [] }],
   ["footnote", { grammar: ["text"], argument_count: 1, values: [] }]
@@ -102,7 +103,7 @@ function mergeAuthoringRegistryEntries(builtInEntries, snippetEntries = [], math
   return [...entries.values()];
 }
 
-// packages/editor-runtime/src/lib/client_mounts.ts
+// src/lib/client_mounts.ts
 var MOUNT_CONTROLLERS = {
   mermaid: "mermaid-diagrams",
   "document-pages": "document-pages"
@@ -157,7 +158,7 @@ function startClientMounts(target = globalThis.document ?? null) {
   return true;
 }
 
-// packages/editor-runtime/src/lib/conflict_dialog.ts
+// src/lib/conflict_dialog.ts
 function presentConflictDialog(dialog, {
   message = "",
   localSource = "",
@@ -180,12 +181,12 @@ function presentConflictDialog(dialog, {
   return true;
 }
 
-// packages/editor-runtime/src/lib/editor_controller_lookup.ts
+// src/lib/editor_controller_lookup.ts
 function editorFor(element) {
   return element?.editorController || null;
 }
 
-// packages/editor-runtime/src/lib/editor_ready.ts
+// src/lib/editor_ready.ts
 function waitForEditorController(field, findController, { timeoutMs = 5e3 } = {}) {
   const available = findController(field);
   if (available?.editorReady === true) return Promise.resolve(available);
@@ -215,7 +216,7 @@ function editorUnavailable() {
   });
 }
 
-// packages/editor-runtime/src/lib/editor_source.ts
+// src/lib/editor_source.ts
 async function applyEditorSource(source, {
   id,
   expectedSource,
@@ -234,7 +235,7 @@ async function applyEditorSource(source, {
   return true;
 }
 
-// packages/editor-runtime/src/lib/editor_view.ts
+// src/lib/editor_view.ts
 import { sanitizePreview as installSanitizedPreview } from "@elef/client/sanitize";
 var EDITOR_VIEW = `
   <section class="editor-shell" aria-label="Visual editor">
@@ -509,15 +510,21 @@ function configureEditorKind(root, kind, { documentTitles = [], sourceName, show
     sourceField.dataset.presentationEditorTarget = "source";
   }
   sourceInput.dataset.action = [...actions].join(" ");
-  root.querySelector(".editor-mode-hint").textContent = isDocument ? "Visual mode keeps Markdown source canonical. Use Source mode for unsupported syntax or to edit LaTeX expressions directly. Type [[ to link another document. In math, type @a, @frac, or @gather; Tab walks multi-slot expressions. Type /diagram to open Mermaid Assist." : "Visual mode keeps Markdown source canonical. Use Source mode for unsupported syntax, inline media, or to edit LaTeX expressions directly. Type /trigger for document structures and :align or :footnote for Elef directives. In math, type @a, @frac, or @gather; Tab walks multi-slot expressions. Type /diagram to open Mermaid Assist. Math transforms such as $x.b.vec.t$ commit with Enter or Tab.";
+  root.querySelector(".editor-mode-hint").textContent = isDocument ? "Visual mode keeps Markdown source canonical. Use Source mode for unsupported syntax or to edit LaTeX expressions directly. Type [[ to link another document. In math, type @a, @frac, or @gather; Tab walks multi-slot expressions. Type /diagram to open Mermaid Assist." : "Visual mode keeps Markdown source canonical. Use Source mode for unsupported syntax, inline media, or to edit LaTeX expressions directly. Type /trigger for document structures and :align, :art, or :footnote for Elef directives. Type [[ to link another document. In math, type @a, @frac, or @gather; Tab walks multi-slot expressions. Type /diagram to open Mermaid Assist. Math transforms such as $x.b.vec.t$ commit with Enter or Tab.";
   root.querySelector('[data-editor-view-target="mediaButton"]').textContent = isDocument ? "Add image" : "Add image or MP4";
   root.querySelector('[data-editor-view-target="mediaInput"]').setAttribute("accept", isDocument ? "image/*" : "image/*,video/mp4");
   root.querySelector('[data-editor-view-target="presentationTools"]').hidden = isDocument;
   root.querySelector('[data-editor-view-target="slideOverview"]').hidden = isDocument;
   root.querySelector("[data-presentation-editor-target='status']").hidden = isDocument;
-  if (formControllers !== void 0) {
-    const form = root.closest("form");
-    if (form) form.dataset.controller = formControllers;
+  const form = root.closest("form");
+  if (form) {
+    form.dataset.visualEditorKindValue = kind;
+    const formActions = new Set((form.dataset.action || "").split(/\s+/).filter(Boolean));
+    const projectionKeydown = "keydown->visual-editor#projectionKeydown";
+    formActions.delete(projectionKeydown);
+    if (isDocument) formActions.add(projectionKeydown);
+    form.dataset.action = [...formActions].join(" ");
+    if (formControllers !== void 0) form.dataset.controller = formControllers;
   }
   return root;
 }
@@ -556,7 +563,7 @@ function renderWarnings(list, warnings) {
   }));
 }
 
-// packages/editor-runtime/src/lib/renderer_worker.ts
+// src/lib/renderer_worker.ts
 function renderWorkerMessage(data, renderPreview, renderMarkdownBlock = renderPreview) {
   const { id, input } = data || {};
   try {
@@ -575,7 +582,7 @@ function renderWorkerMessage(data, renderPreview, renderMarkdownBlock = renderPr
   }
 }
 
-// packages/editor-runtime/src/controllers/mermaid_runtime.ts
+// src/controllers/mermaid_runtime.ts
 function mermaidAssetUrl() {
   const importmap = document.querySelector('script[type="importmap"]');
   if (importmap) {
@@ -588,7 +595,7 @@ function mermaidAssetUrl() {
   return document.querySelector('meta[name="elef-mermaid-url"]')?.content || null;
 }
 
-// packages/editor-runtime/src/lib/deck_open_flow.ts
+// src/lib/deck_open_flow.ts
 function createDeckOpenFlow(open) {
   let previous = Promise.resolve();
   return (id) => {
@@ -613,7 +620,7 @@ async function prepareDeckOpen(id, { read, prepare, isDirty, flushSave, getRevis
   }
 }
 
-// packages/editor-runtime/src/lib/document_graph_cache.ts
+// src/lib/document_graph_cache.ts
 function createDocumentGraphCache(loadGraph) {
   let generation = 0;
   let cachedGraph = null;
@@ -650,7 +657,7 @@ function createDocumentGraphCache(loadGraph) {
   return Object.freeze({ get, invalidate });
 }
 
-// packages/editor-runtime/src/lib/editor_actions.ts
+// src/lib/editor_actions.ts
 function editorActionControl(event, action) {
   const control = event.target?.closest?.(`[data-editor-action="${action}"]`);
   return control ?? null;
@@ -665,7 +672,7 @@ function bindEditorAction(root, action, handler, { events = ["click"] } = {}) {
   return () => events.forEach((type) => root.removeEventListener(type, listener));
 }
 
-// packages/editor-runtime/src/lib/editor_binding.ts
+// src/lib/editor_binding.ts
 function createCodeMirrorBinding({
   getEditor,
   getDeckId,
@@ -692,7 +699,7 @@ function createCodeMirrorBinding({
   return { getText, setText, materializeEdits };
 }
 
-// packages/editor-runtime/src/lib/editor_document_state.ts
+// src/lib/editor_document_state.ts
 function createDocumentState(EditorState, source, extensions = []) {
   const lineSeparator = source.match(/\r\n|\r|\n/)?.[0] || "\n";
   return {
@@ -701,7 +708,7 @@ function createDocumentState(EditorState, source, extensions = []) {
   };
 }
 
-// packages/editor-runtime/src/lib/feature_flags.ts
+// src/lib/feature_flags.ts
 var DESKTOP_FEATURE_FLAGS = Object.freeze({
   ELEF_ENABLE_REVISIONS: false,
   ELEF_ENABLE_LINEAGE: false
@@ -725,7 +732,7 @@ function applyDesktopFeatureFlags(root = document, flags = DESKTOP_FEATURE_FLAGS
   }
 }
 
-// packages/editor-runtime/src/lib/performance_measurement.ts
+// src/lib/performance_measurement.ts
 async function measurePaintedAction(action, {
   now = () => performance.now(),
   paint = () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
@@ -743,7 +750,7 @@ function percentile95(samples) {
   return sorted[Math.ceil(samples.length * 0.95) - 1];
 }
 
-// packages/editor-runtime/src/lib/preview_request_body.ts
+// src/lib/preview_request_body.ts
 var PREVIEW_FIELDS = ["source", "title", "theme", "typography"];
 function buildPreviewRequestBody(fields) {
   const body = new FormData();
@@ -754,7 +761,7 @@ function buildPreviewRequestBody(fields) {
   return body;
 }
 
-// packages/editor-runtime/src/lib/projection_editability.ts
+// src/lib/projection_editability.ts
 function setProjectionBlockEditable(block, editable, ariaLabel) {
   setAttribute(block, "contenteditable", String(editable));
   if (editable) {
@@ -778,7 +785,7 @@ function removeAttribute(element, name) {
   if (element.hasAttribute(name)) element.removeAttribute(name);
 }
 
-// packages/editor-runtime/src/lib/renderer_worker_client.ts
+// src/lib/renderer_worker_client.ts
 var RENDER_TIMEOUT_MS = 4e3;
 function createRendererClient({
   WorkerClass = globalThis.Worker,
@@ -874,7 +881,7 @@ function createRendererClient({
   };
 }
 
-// packages/editor-runtime/src/lib/request_identity.ts
+// src/lib/request_identity.ts
 function createRequestGuard() {
   let generation = 0;
   function request() {
@@ -890,7 +897,7 @@ function createRequestGuard() {
   return Object.freeze({ request, isCurrent, invalidate });
 }
 
-// packages/editor-runtime/src/lib/vim_line_numbers.ts
+// src/lib/vim_line_numbers.ts
 function formatLineNumber(number, state, mode) {
   if (mode !== "relative") return String(number);
   const activeLine = state.doc.lineAt(state.selection.main.head).number;

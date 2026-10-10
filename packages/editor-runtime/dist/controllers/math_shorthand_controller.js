@@ -680,7 +680,7 @@ class math_shorthand_controller_default extends Controller {
         event.preventDefault();
         const separator = editor.lineSeparator || "\n";
         editor.replaceRange(separator + separator, caret, caret);
-        editor.setSelectionRange(caret + separator.length);
+        editor.setSelectionRange(caret + editor.normalizeLineEndings(separator).length);
         return;
       }
     }

@@ -335,16 +335,22 @@ export function configureEditorKind(root: Element | null, kind: string, { docume
 
   ;(root.querySelector(".editor-mode-hint") as Element).textContent = isDocument
     ? "Visual mode keeps Markdown source canonical. Use Source mode for unsupported syntax or to edit LaTeX expressions directly. Type [[ to link another document. In math, type @a, @frac, or @gather; Tab walks multi-slot expressions. Type /diagram to open Mermaid Assist."
-    : "Visual mode keeps Markdown source canonical. Use Source mode for unsupported syntax, inline media, or to edit LaTeX expressions directly. Type /trigger for document structures and :align or :footnote for Elef directives. In math, type @a, @frac, or @gather; Tab walks multi-slot expressions. Type /diagram to open Mermaid Assist. Math transforms such as $x.b.vec.t$ commit with Enter or Tab."
+    : "Visual mode keeps Markdown source canonical. Use Source mode for unsupported syntax, inline media, or to edit LaTeX expressions directly. Type /trigger for document structures and :align, :art, or :footnote for Elef directives. Type [[ to link another document. In math, type @a, @frac, or @gather; Tab walks multi-slot expressions. Type /diagram to open Mermaid Assist. Math transforms such as $x.b.vec.t$ commit with Enter or Tab."
   ;(root.querySelector('[data-editor-view-target="mediaButton"]') as Element).textContent = isDocument ? "Add image" : "Add image or MP4"
   ;(root.querySelector('[data-editor-view-target="mediaInput"]') as Element).setAttribute("accept", isDocument ? "image/*" : "image/*,video/mp4")
   ;(root.querySelector('[data-editor-view-target="presentationTools"]') as HTMLElement).hidden = isDocument
   ;(root.querySelector('[data-editor-view-target="slideOverview"]') as HTMLElement).hidden = isDocument
   ;(root.querySelector("[data-presentation-editor-target='status']") as HTMLElement).hidden = isDocument
 
-  if (formControllers !== undefined) {
-    const form = root.closest("form")
-    if (form) form.dataset.controller = formControllers
+  const form = root.closest("form")
+  if (form) {
+    form.dataset.visualEditorKindValue = kind
+    const formActions = new Set((form.dataset.action || "").split(/\s+/).filter(Boolean))
+    const projectionKeydown = "keydown->visual-editor#projectionKeydown"
+    formActions.delete(projectionKeydown)
+    if (isDocument) formActions.add(projectionKeydown)
+    form.dataset.action = [...formActions].join(" ")
+    if (formControllers !== undefined) form.dataset.controller = formControllers
   }
   return root
 }

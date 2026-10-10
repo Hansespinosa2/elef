@@ -14,10 +14,7 @@ class math_shortcut_palette_controller_default extends Controller {
     this.stops = [];
     this.activeStop = null;
     this.editorController = editorFor(this.element);
-    this.editorReady = () => {
-      this.editorController ||= editorFor(this.element);
-      this.setupEditor();
-    };
+    this.editorReady = () => this.setupEditor();
     this.element.addEventListener("elef:editor-ready", this.editorReady);
     this.editorSelectionChange = () => this.scheduleStopPrune();
     this.editorModeChange = () => this.endStops();
@@ -40,6 +37,16 @@ class math_shortcut_palette_controller_default extends Controller {
     this.endStops();
   }
   setupEditor() {
+    const editor = editorFor(this.element);
+    if (editor !== this.editorController) {
+      if (this.scrollBound) this.editorController?.scrollElement.removeEventListener("scroll", this.positionPalette);
+      if (this.keydownBound) this.editorController?.dom.removeEventListener("keydown", this.handleEditorKeydown, true);
+      this.editorController = editor;
+      this.scrollBound = false;
+      this.keydownBound = false;
+      this.endStops();
+      this.close();
+    }
     if (this.editorController) this.setupAccessibility();
     if (this.editorController && !this.scrollBound) {
       this.editorController.scrollElement.addEventListener("scroll", this.positionPalette);
