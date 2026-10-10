@@ -866,7 +866,7 @@ class WebLibraryUi {
       const request = response.request()
       return request.method() === "POST" && /\/presentations\/\d+\/publish$/.test(new URL(response.url()).pathname)
     })
-    await action.press("Enter")
+    await action.evaluate(button => button.click())
     const response = await publishResponse
     expect(response.status()).toBe(302)
     expect(response.headers().location).toMatch(/\/presentations\/\d+\/present$/)
