@@ -391,6 +391,273 @@ class ArtTest < ApplicationSystemTestCase
     assert three.fetch("items").all? { |width, client_width, height, client_height| width <= client_width + 1 && height <= client_height + 1 }, three.inspect
   end
 
+  test "grouped Art controls stay anchored across Rails and JavaScript renderers" do
+    source = ["# Deck", *%w[left center right].map do |horizontal|
+      title = horizontal.titleize
+      [
+        "## #{title}",
+        ":::align{middle #{horizontal}}\n:::art\n- Stack #{horizontal}",
+        "x",
+        ":::align{bottom #{horizontal}}\n:::art\n- Footer #{horizontal}"
+      ].join("\n\n")
+    end].join("\n\n")
+    presentation = Presentation.create!(title: "Grouped Art controls", source: source)
+
+    visit edit_presentation_path(presentation)
+    assert_selector "form.visual-editor-form:not([data-preview-projection-stale='true'])", wait: 10
+    wait_for_art_settled
+
+    javascript_geometry = grouped_art_control_geometry
+    assert_grouped_art_control_geometry(javascript_geometry)
+    first_art_index = javascript_geometry.first.fetch("blockIndex")
+    first_footer_index = javascript_geometry[1].fetch("blockIndex")
+
+    editor_map = Source::Document.editor_map(source, source_name: presentation.title, mode: :presentation)
+    rails_html = PresentationsController.renderer.render(
+      partial: "presentations/slides",
+      locals: { presentation: presentation, editable: true, editor_map: editor_map }
+    )
+    rails_geometry = page.evaluate_script(<<~JAVASCRIPT, rails_html)
+      (() => {
+        const staging = document.createElement("div");
+        staging.innerHTML = arguments[0];
+        const surface = staging.firstElementChild;
+        surface.style.cssText = "position:fixed;left:0;top:0;width:1280px;height:720px;z-index:99999;pointer-events:none";
+        document.body.append(surface);
+        const result = [...surface.querySelectorAll(".slide-region-block")].filter((region) => region.querySelector("[data-elef-art-root]")).map((region) => {
+          const controls = region.querySelector(":scope > .presentation-editor-block-controls");
+          const select = controls?.querySelector("select[data-presentation-editor-align]");
+          const regionRect = region.getBoundingClientRect();
+          const controlsRect = controls?.getBoundingClientRect();
+          return {
+            classes: region.className.split(/\\s+/).filter(name => name.startsWith("position-")),
+            controlsDirect: controls?.parentElement === region,
+            relative: getComputedStyle(region).position === "relative",
+            absoluteControls: controls && getComputedStyle(controls).position === "absolute",
+            topOffset: controlsRect ? Math.abs(controlsRect.top - regionRect.top) : null,
+            rightOffset: controlsRect ? Math.abs(regionRect.right - controlsRect.right) : null,
+            blockIndex: select?.dataset.blockIndex ?? null,
+            blockId: region.querySelector(":scope > .slide-block")?.dataset.editorBlockId ?? null
+          };
+        });
+        surface.remove();
+        return result;
+      })()
+    JAVASCRIPT
+    assert_grouped_art_control_geometry(rails_geometry)
+
+    first(".presentation-surface.presentation-editor-projection [data-elef-art-root]").hover
+    hover_state = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const root = document.querySelector(".presentation-surface.presentation-editor-projection [data-elef-art-root]");
+        const region = root?.closest(".slide-region-block");
+        const controls = region?.querySelector(":scope > .presentation-editor-block-controls");
+        return { hover: region?.matches(":hover"), opacity: controls && getComputedStyle(controls).opacity, pointerEvents: controls && getComputedStyle(controls).pointerEvents };
+      })()
+    JAVASCRIPT
+    assert_equal true, hover_state.fetch("hover"), hover_state.inspect
+    assert_equal "1", hover_state.fetch("opacity"), hover_state.inspect
+    assert_equal "auto", hover_state.fetch("pointerEvents"), hover_state.inspect
+    first_alignment = first("select[data-presentation-editor-align][data-slide-index='0'][data-block-index='#{first_art_index}']")
+    first_alignment.select("Middle Right")
+    assert_field "Markdown source", with: /:::align\{middle right\}/, wait: 5
+    assert_equal "middle right", first("select[data-presentation-editor-align][data-slide-index='0'][data-block-index='#{first_art_index}']", visible: :all)["value"]
+    assert_selector "form.visual-editor-form:not([data-preview-projection-stale='true'])", wait: 10
+
+    all(".slide-region[data-art-host='fixed'] [data-elef-art-root]")[1].hover
+    first_footer_alignment = first("select[data-presentation-editor-align][data-slide-index='0'][data-block-index='#{first_footer_index}']")
+    first_footer_alignment.select("Bottom Center")
+    assert_field "Markdown source", with: /:::align\{bottom center\}/, wait: 5
+    assert_selector '[data-autosave-target="status"]', exact_text: "Saved", wait: 10
+
+    visit edit_presentation_path(presentation)
+    assert_selector "form.visual-editor-form:not([data-preview-projection-stale='true'])", wait: 10
+    assert_field "Markdown source", with: /:::align\{middle right\}/
+    assert_field "Markdown source", with: /:::align\{bottom center\}/
+    assert_equal "middle right", first("select[data-presentation-editor-align][data-slide-index='0'][data-block-index='#{first_art_index}']", visible: :all)["value"]
+    assert_equal "bottom center", first("select[data-presentation-editor-align][data-slide-index='0'][data-block-index='#{first_footer_index}']", visible: :all)["value"]
+    first_art_block_id = javascript_geometry.first.fetch("blockId")
+    first_footer_block_id = javascript_geometry[1].fetch("blockId")
+    assert_includes find(".slide-block[data-editor-block-id='#{first_art_block_id}']")["class"], "position-right"
+    assert_includes find(".slide-block[data-editor-block-id='#{first_footer_block_id}']")["class"], "position-center"
+  end
+
+  test "titleless body Art controls stay anchored in middle stacks and bottom lanes" do
+    source = [
+      ":::align{middle left}\n:::art\n- Middle Art",
+      ":::align{center}\nMiddle follower",
+      ":::align{bottom right}\n:::art\n- Bottom Art",
+      ":::align{bottom center}\nFooter"
+    ].join("\n\n")
+    presentation = Presentation.create!(title: "Titleless grouped Art", source: source)
+
+    visit edit_presentation_path(presentation)
+    assert_selector "form.visual-editor-form:not([data-preview-projection-stale='true'])", wait: 10
+    wait_for_art_settled
+
+    javascript_geometry = body_grouped_art_control_geometry(".presentation-surface.presentation-editor-projection")
+    assert_body_grouped_art_control_geometry(javascript_geometry)
+
+    editor_map = Source::Document.editor_map(source, source_name: presentation.title, mode: :presentation)
+    rails_html = PresentationsController.renderer.render(
+      partial: "presentations/slides",
+      locals: { presentation: presentation, editable: true, editor_map: editor_map }
+    )
+    rails_geometry = page.evaluate_script(<<~JAVASCRIPT, rails_html)
+      (() => {
+        const staging = document.createElement("div");
+        staging.innerHTML = arguments[0];
+        const surface = staging.firstElementChild;
+        surface.style.cssText = "position:fixed;left:0;top:0;width:1280px;height:720px;z-index:99999;pointer-events:none";
+        document.body.append(surface);
+        const result = [...surface.querySelectorAll(".slide-middle-group > .slide-block-item > .slide-region-block, .slide-bottom-lane > .slide-block-item > .slide-region-block")]
+          .filter((region) => region.querySelector("[data-elef-art-root]"))
+          .map((region) => {
+            const controls = region.querySelector(":scope > .presentation-editor-block-controls");
+            const select = controls?.querySelector("select[data-presentation-editor-align]");
+            const regionRect = region.getBoundingClientRect();
+            const controlsRect = controls?.getBoundingClientRect();
+            return {
+              lane: region.closest(".slide-middle-group") ? "middle" : "bottom",
+              classes: region.className.split(/\\s+/).filter(name => name.startsWith("position-")),
+              controlsDirect: controls?.parentElement === region,
+              relative: getComputedStyle(region).position === "relative",
+              absoluteControls: controls && getComputedStyle(controls).position === "absolute",
+              topOffset: controlsRect ? Math.abs(controlsRect.top - regionRect.top) : null,
+              rightOffset: controlsRect ? Math.abs(regionRect.right - controlsRect.right) : null,
+              blockIndex: select?.dataset.blockIndex ?? null,
+              blockId: region.querySelector(":scope > .slide-block")?.dataset.editorBlockId ?? null
+            };
+          });
+        surface.remove();
+        return result;
+      })()
+    JAVASCRIPT
+    assert_body_grouped_art_control_geometry(rails_geometry)
+
+    first(".presentation-surface.presentation-editor-projection [data-elef-art-root]").hover
+    body_hover = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const root = document.querySelector(".presentation-surface.presentation-editor-projection [data-elef-art-root]");
+        const controls = root?.closest(".slide-region-block")?.querySelector(":scope > .presentation-editor-block-controls");
+        return {opacity: controls && getComputedStyle(controls).opacity, pointerEvents: controls && getComputedStyle(controls).pointerEvents};
+      })()
+    JAVASCRIPT
+    assert_equal "1", body_hover.fetch("opacity"), body_hover.inspect
+    assert_equal "auto", body_hover.fetch("pointerEvents"), body_hover.inspect
+
+    middle_index = javascript_geometry[0].fetch("blockIndex")
+    bottom_index = javascript_geometry[1].fetch("blockIndex")
+    all(".presentation-surface.presentation-editor-projection [data-elef-art-root]")[1].hover
+    bottom_hover = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const select = document.querySelector("select[data-presentation-editor-align][data-block-index='#{bottom_index}']");
+        const controls = select?.closest(".presentation-editor-block-controls");
+        return {opacity: controls && getComputedStyle(controls).opacity, pointerEvents: controls && getComputedStyle(controls).pointerEvents};
+      })()
+    JAVASCRIPT
+    assert_equal "1", bottom_hover.fetch("opacity"), bottom_hover.inspect
+    assert_equal "auto", bottom_hover.fetch("pointerEvents"), bottom_hover.inspect
+
+    all(".presentation-surface.presentation-editor-projection [data-elef-art-root]").first.hover
+    first("select[data-presentation-editor-align][data-block-index='#{middle_index}']").select("Middle Right")
+    assert_field "Markdown source", with: /:::align\{middle right\}/, wait: 5
+    assert_selector '[data-autosave-target="status"]', exact_text: "Saved", wait: 10
+
+    visit edit_presentation_path(presentation)
+    assert_selector "form.visual-editor-form:not([data-preview-projection-stale='true'])", wait: 10
+    assert_field "Markdown source", with: /:::align\{middle right\}/
+    assert_equal "middle right", first("select[data-presentation-editor-align][data-block-index='#{middle_index}']", visible: :all)["value"]
+    assert_equal "bottom right", first("select[data-presentation-editor-align][data-block-index='#{bottom_index}']", visible: :all)["value"]
+  end
+
+  def grouped_art_control_geometry
+    page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector(".presentation-surface.presentation-editor-projection");
+        return [...surface.querySelectorAll(".slide-region-block")].filter((region) => region.querySelector("[data-elef-art-root]")).map((region) => {
+          const controls = region.querySelector(":scope > .presentation-editor-block-controls");
+          const select = controls?.querySelector("select[data-presentation-editor-align]");
+          const regionRect = region.getBoundingClientRect();
+          const controlsRect = controls?.getBoundingClientRect();
+          return {
+            classes: region.className.split(/\\s+/).filter(name => name.startsWith("position-")),
+            controlsDirect: controls?.parentElement === region,
+            relative: getComputedStyle(region).position === "relative",
+            absoluteControls: controls && getComputedStyle(controls).position === "absolute",
+            topOffset: controlsRect ? Math.abs(controlsRect.top - regionRect.top) : null,
+            rightOffset: controlsRect ? Math.abs(regionRect.right - controlsRect.right) : null,
+            blockIndex: select?.dataset.blockIndex ?? null,
+            blockId: region.querySelector(":scope > .slide-block")?.dataset.editorBlockId ?? null
+          };
+        });
+      })()
+    JAVASCRIPT
+  end
+
+  def assert_grouped_art_control_geometry(geometry)
+    assert_equal 6, geometry.length
+    geometry.each_with_index do |entry, index|
+      expected_horizontal = %w[left center right][index / 2]
+      expected_vertical = index.even? ? "middle" : "bottom"
+      assert_includes entry.fetch("classes"), "position-#{expected_horizontal}"
+      assert_includes entry.fetch("classes"), "position-#{expected_vertical}"
+      assert entry.fetch("controlsDirect"), "Art controls must be direct children of their Art region: #{entry.inspect}"
+      assert entry.fetch("relative"), "Art region must establish the controls' positioning context: #{entry.inspect}"
+      assert entry.fetch("absoluteControls"), "Art controls must remain absolutely positioned: #{entry.inspect}"
+      assert_in_delta 0, entry.fetch("topOffset"), 1, entry.inspect
+      assert_in_delta 0, entry.fetch("rightOffset"), 1, entry.inspect
+      block_id_index = entry.fetch("blockId").match(/block-(\d+)\z/)[1].to_i - 1
+      assert_equal block_id_index.to_s, entry.fetch("blockIndex")
+    end
+  end
+
+  def body_grouped_art_control_geometry(surface_selector)
+    page.evaluate_script(<<~JAVASCRIPT, surface_selector)
+      (() => {
+        const surface = document.querySelector(arguments[0]);
+        return [...surface.querySelectorAll(".slide-middle-group > .slide-block-item > .slide-region-block, .slide-bottom-lane > .slide-block-item > .slide-region-block")]
+          .filter((region) => region.querySelector("[data-elef-art-root]"))
+          .map((region) => {
+            const controls = region.querySelector(":scope > .presentation-editor-block-controls");
+            const select = controls?.querySelector("select[data-presentation-editor-align]");
+            const regionRect = region.getBoundingClientRect();
+            const controlsRect = controls?.getBoundingClientRect();
+            return {
+              lane: region.closest(".slide-middle-group") ? "middle" : "bottom",
+              classes: region.className.split(/\\s+/).filter(name => name.startsWith("position-")),
+              controlsDirect: controls?.parentElement === region,
+              relative: getComputedStyle(region).position === "relative",
+              absoluteControls: controls && getComputedStyle(controls).position === "absolute",
+              topOffset: controlsRect ? Math.abs(controlsRect.top - regionRect.top) : null,
+              rightOffset: controlsRect ? Math.abs(regionRect.right - controlsRect.right) : null,
+              blockIndex: select?.dataset.blockIndex ?? null,
+              blockId: region.querySelector(":scope > .slide-block")?.dataset.editorBlockId ?? null
+            };
+          });
+      })()
+    JAVASCRIPT
+  end
+
+  def assert_body_grouped_art_control_geometry(geometry)
+    assert_equal 2, geometry.length
+    geometry.each_with_index do |entry, index|
+      expected_lane = index.zero? ? "middle" : "bottom"
+      expected_horizontal = index.zero? ? "left" : "right"
+      expected_vertical = index.zero? ? "middle" : "bottom"
+      assert_equal expected_lane, entry.fetch("lane"), entry.inspect
+      assert_includes entry.fetch("classes"), "position-#{expected_horizontal}"
+      assert_includes entry.fetch("classes"), "position-#{expected_vertical}"
+      assert entry.fetch("controlsDirect"), "Art controls must be direct children of their Art region: #{entry.inspect}"
+      assert entry.fetch("relative"), "Art region must establish the controls' positioning context: #{entry.inspect}"
+      assert entry.fetch("absoluteControls"), "Art controls must remain absolutely positioned: #{entry.inspect}"
+      assert_in_delta 0, entry.fetch("topOffset"), 1, entry.inspect
+      assert_in_delta 0, entry.fetch("rightOffset"), 1, entry.inspect
+      block_id_index = entry.fetch("blockId").match(/block-(\d+)\z/)[1].to_i - 1
+      assert_equal block_id_index.to_s, entry.fetch("blockIndex")
+    end
+  end
+
   test "a hidden fixed Art host stays pending until it becomes measurable" do
     presentation = Presentation.create!(title: "Hidden Art host", source: ":::art\n- Alpha\n- Beta")
     visit edit_presentation_path(presentation)

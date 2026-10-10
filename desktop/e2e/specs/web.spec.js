@@ -515,8 +515,17 @@ class WebEditorUi {
   }
 
   async refreshPreview() {
-    const rendered = await this.page.locator(".visual-editor-form").evaluate(form => form.previewController?.refresh())
-    expect(rendered).toBe(true)
+    const result = await this.page.locator(".visual-editor-form").evaluate(async form => {
+      const controller = form.previewController
+      if (!controller) return { available: false, rendered: false, queued: false }
+      const wasRunning = Boolean(controller.requestController)
+      const rendered = await controller.refresh()
+      return { available: true, rendered: rendered === true, queued: wasRunning && rendered === false }
+    })
+    expect(result.available).toBe(true)
+    expect(result.rendered || result.queued).toBe(true)
+    await expect(this.page.locator(".visual-editor-form"))
+      .not.toHaveAttribute("data-preview-projection-stale", "true", { timeout: 20_000 })
   }
 
   async showSourceMode() {

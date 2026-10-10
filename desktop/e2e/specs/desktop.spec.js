@@ -1134,10 +1134,22 @@ class DesktopEditorUi {
     const result = await browser.executeAsync(done => {
       const controller = document.querySelector("#desktop-editor-form")?.previewController
       if (!controller) return done({ error: "The desktop preview controller is unavailable" })
-      controller.refresh().then(rendered => done({ rendered }), error => done({ error: error.message }))
+      const wasRunning = Boolean(controller.requestController)
+      controller.refresh().then(rendered => done({
+        rendered: rendered === true,
+        queued: wasRunning && rendered === false
+      }), error => done({ error: error.message }))
     })
     if (result?.error) throw new Error(result.error)
-    if (!result?.rendered) throw new Error("The desktop preview did not render the latest saved source")
+    if (!result?.rendered && !result?.queued) throw new Error("The desktop preview did not render or queue the latest saved source")
+    await browser.waitUntil(async () => browser.execute(() => {
+      const form = document.querySelector("#desktop-editor-form")
+      return Boolean(form && form.dataset.previewProjectionStale !== "true")
+    }), {
+      timeout: 20_000,
+      interval: 50,
+      timeoutMsg: "The desktop preview did not render the latest saved source"
+    })
   }
 
   async showSourceMode() {
