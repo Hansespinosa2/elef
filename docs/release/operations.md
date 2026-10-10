@@ -2,13 +2,13 @@
 
 ## Routine release coordination
 
-`Desktop Release Coordinator` runs whenever the `CI` workflow completes on a `main` push. It proceeds only when both the workflow source SHA and current `main` head match that completed CI SHA, so a newer merge defers work until its own exact-SHA Gate A finishes. A failed or cancelled SHA is checked with the latest previously trusted tooling and recorded as failed; no release is reserved for it. The run reconciles the full first-parent history. To repair a missed event, the repository owner can dispatch from `main`; the preflight requires the exact workflow SHA and verifies owner authorization and exact Gate A before publishing:
+`Desktop Release Coordinator` runs whenever the `CI` workflow completes on a `main` push. It proceeds only when both the workflow source SHA and current `main` head match that completed CI SHA, so a newer merge defers work until its own exact-SHA Gate A finishes. When a previously trusted coordinator exists, a failed or cancelled SHA is checked with that tooling and recorded as failed; no release is reserved for it. The run reconciles the full first-parent history. To repair a missed event, the repository owner can dispatch from `main`; the preflight requires the exact workflow SHA and verifies owner authorization and exact Gate A before publishing:
 
 ```sh
 gh workflow run desktop-release.yml --ref main -f action=reconcile
 ```
 
-This main-ref repair is available before the first version tag exists. If the Pages ledger has no trusted tooling revision yet, the initial bootstrap still requires a passing exact-SHA Gate A; a failed initial bootstrap stays fail-closed until a later owner-approved passing merge can reconcile the history.
+This main-ref repair is available before the first version tag exists. If the Pages ledger has no trusted tooling revision yet, the initial bootstrap still requires a passing exact-SHA Gate A. If that first Gate A fails or is cancelled, the coordinator currently fails closed without immediately recording `failed_gate` or notifying the owner; a later passing merge can reconcile the history. This initial-failure path remains `BLOCKED_DESIGN` until an independently pinned failure-only recorder or immutable bootstrap trust anchor is implemented and reviewed. The remote `main` ruleset must also require approvals and CODEOWNERS review before any bootstrap verifier can be trusted.
 
 Use `minor` only for an explicitly approved next minor series and provide the authorization reason. A PR merge remains the routine release decision; the coordinator does not merge PRs.
 
