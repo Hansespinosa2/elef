@@ -117,3 +117,38 @@ test("buildEditorMap returns the map subset of the structure", () => {
   assert.ok(Array.isArray(map.slides))
   assert.ok(Array.isArray(map.editable_regions))
 })
+
+test("position directive binds to exactly the single next block and bare ::: does not extend scope", () => {
+  const source = "# Slide\n\n:::align{center}\n\nFirst\n\nSecond\n\n:::\n\nOutside"
+  const map = buildEditorMap(source, { mode: "presentation" })
+  const slide = map.slides[0]
+  assert.ok(slide)
+  const blocks = slide.blocks
+
+  assert.equal(blocks.length, 4)
+  assert.equal(blocks[0]?.markdown, "# Slide")
+  assert.equal(blocks[0]?.position, null)
+  assert.equal(blocks[1]?.markdown, "First")
+  assert.deepEqual(blocks[1]?.position, { horizontal: "center", vertical: "top", vertical_explicit: false })
+  assert.equal(blocks[2]?.markdown, "Second")
+  assert.equal(blocks[2]?.position, null)
+  assert.equal(blocks[3]?.markdown, "Outside")
+  assert.equal(blocks[3]?.position, null)
+  assert.equal(blocks[1]?.position_directive_id, slide.directives[0]?.id)
+  assert.equal(blocks[2]?.position_directive_id, null)
+
+  const structure = buildEditorStructure(source, { mode: "presentation" })
+  assert.ok(structure.warnings.includes("Unknown or malformed presentation directive was removed."))
+})
+
+test("bare ::: alone is typed as unknown directive and warns without affecting positioning", () => {
+  const source = "# Slide\n\n:::\n\nFirst"
+  const structure = buildEditorStructure(source, { mode: "presentation" })
+  const map = structure.editorMap
+  const slide = map.slides[0]
+  assert.ok(slide)
+
+  assert.equal(slide.directives[0]?.type, "unknown")
+  assert.equal(slide.blocks[1]?.position, null)
+  assert.deepEqual(structure.warnings, ["Unknown or malformed presentation directive was removed."])
+})

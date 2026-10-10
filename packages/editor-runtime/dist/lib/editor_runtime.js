@@ -1,5 +1,6 @@
 import { application } from "../controllers/application.js";
 import appearanceController from "../controllers/appearance_controller.js";
+import artLayoutController from "../controllers/art_layout_controller.js";
 import documentLinkPaletteController from "../controllers/document_link_palette_controller.js";
 import documentPagesController from "../controllers/document_pages_controller.js";
 import editorController from "../controllers/editor_controller.js";
@@ -47,6 +48,7 @@ function registerEditorRuntime() {
   register("document-pages", documentPagesController);
   register("mermaid-diagrams", mermaidDiagramsController);
   register("snippet-palette", snippetPaletteController);
+  register("art-layout", artLayoutController);
 }
 function register(identifier, controller) {
   application.register(identifier, controller);

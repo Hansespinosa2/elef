@@ -96,3 +96,32 @@ test("composed empty display math retains its exact inner source whitespace for 
     assert.ok(!html.includes(`data-editor-math-source="${opening}`))
   }
 })
+
+// NOTE (dev-sync): T's "exposes Stimulus canvas targets" case is not ported:
+// the campaign retired the presentation-canvas controller (present mode is
+// the framework-free mountPresentation now), so its target hook would be
+// dead markup. data-presentation-editor-target="canvas" remains the live
+// canvas marker, asserted above.
+
+test("editable web projections preserve safe relative image paths and editable captions", () => {
+  for (const kind of ["document", "presentation"]) {
+    const preview = renderPreview({
+      source: "![Diagram](/diagram.svg)",
+      kind,
+      title: "Diagram",
+      deckId: "deck-id",
+      allowRemoteMedia: true
+    })
+
+    assert.match(preview.html, /<img[^>]+src="\/diagram\.svg"[^>]+data-editor-image-source="true" contenteditable="false">/)
+    assert.match(preview.html, /<figcaption class="editor-media-caption"[^>]*>Diagram<\/figcaption>/)
+  }
+
+  const desktop = renderPreview({
+    source: "![Remote diagram](/diagram.svg)",
+    kind: "document",
+    title: "Diagram",
+    deckId: "deck-id"
+  })
+  assert.doesNotMatch(desktop.html, /src="\/diagram\.svg"/)
+})

@@ -1,4 +1,4 @@
-import { collectMediaReferences, renderMarkdownBlock as renderMarkdownBlockCore, renderPreviewCore } from "@elef/renderer"
+import { collectMediaReferences, renderArtBlock, renderMarkdownBlock as renderMarkdownBlockCore, renderPreviewCore } from "@elef/renderer"
 import type { MarkdownBlockOptions, RenderPreviewInput } from "@elef/renderer"
 import { editorChrome } from "@elef/editor-runtime/editor-chrome"
 
@@ -35,6 +35,7 @@ declare global {
 
 globalThis.ElefRenderer = Object.freeze({
   collectMediaReferences,
+  renderArtBlock,
   renderMarkdownBlock,
   renderPreview,
   buildEditorMap,

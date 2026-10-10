@@ -5,7 +5,8 @@
 // attributes through its own mutation observation.
 const MOUNT_CONTROLLERS: Record<string, string> = {
   mermaid: "mermaid-diagrams",
-  "document-pages": "document-pages"
+  "document-pages": "document-pages",
+  "art-layout": "art-layout"
 }
 
 export function clientMountController(token: string): string | null {

@@ -4,10 +4,13 @@ import MarkdownIt from "markdown-it"
 import hljs from "highlight.js/lib/common"
 import katex from "katex"
 import { buildEditorStructure, createDocumentLinkResolver, parseDocumentLinkAt } from "@elef/work-model"
+import { analyzeArtList, ART_DIAGNOSTICS } from "@elef/work-model/art-source"
+import { slidePositionClasses, slidePositionLayout } from "@elef/work-model/slide-position-layout"
 import type {
   EditorMap,
   EditorStyle,
   LinkableDocument,
+  MapArtDiagnostic,
   MapBlock,
   MapDirective,
   MapRegion,
@@ -53,7 +56,7 @@ export interface RendererChrome {
     blockCount: number
     position: SourcePosition | null
   }): string
-  slideBlock(input: { className: string; attributes: string; content: string; controls: string }): string
+  slideBlock(input: { className: string; attributes: string; content: string; controls: string; revealEvent?: number | undefined }): string
   emptySlide(input: { index: number }): string
   slideToolbar(input: { index: number; slideCount: number }): string
   slideFrame(input: {
@@ -63,8 +66,10 @@ export interface RendererChrome {
     topMargin: string
     content: string
     bottomMargin: string
+    artHost?: boolean
+    revealEventCount?: number
   }): string
-  presentationRoot(input: { style: EditorStyle; inner: string }): string
+  presentationRoot(input: { style: EditorStyle; inner: string; artController?: boolean }): string
 }
 
 export interface MarkdownBlockOptions {
@@ -150,6 +155,7 @@ interface RenderSlide {
   delimiter_range: SourceRange | null
   blocks: MapBlock[]
   directives: MapDirective[]
+  art_diagnostics?: MapArtDiagnostic[]
   editable_regions: MapRegion[]
   title: string | null
   regions: ParsedBlock[][]
@@ -157,6 +163,7 @@ interface RenderSlide {
   subsection: string | null
   footnote: string | null
   warnings: string[]
+  reveal_event_count: number
   parsed_blocks: ParsedBlock[]
 }
 
@@ -353,6 +360,44 @@ export function renderMarkdownBlock(source = "", options: MarkdownBlockOptions =
   })
 }
 
+export function renderArtBlock(source: string, env: MarkdownBlockOptions = {}, hostMode = "flowing"): string {
+  if (typeof source !== "string") throw typedError("invalid_input", "Markdown source must be text.")
+  const analysis = analyzeArtList(source)
+  let status = hostMode === "fixed" ? "pending" : "ready"
+  let layout = analysis?.mode === "sequence" ? "sequence-vertical" : "peers-wrap"
+  let diagnostic = ""
+  if (!analysis) {
+    status = "error"
+    layout = "plain-list"
+    diagnostic = ART_DIAGNOSTICS.INTERNAL_ERROR
+  } else if (!analysis.supported) {
+    status = "fallback-unsupported"
+    layout = "plain-list"
+    diagnostic = ART_DIAGNOSTICS.UNSUPPORTED_CONTENT
+  }
+
+  let content = renderMarkdownBlock(source, env)
+  content = content.replace(/<(ul|ol)(?=\s|>)/, (opening: string, tag: string) => {
+    let decorated = /\bclass=/.test(opening)
+      ? opening.replace(/\bclass=(['"])(.*?)\1/, (_match: string, quote: string, value: string) => `class=${quote}${value} elef-art-list${quote}`)
+      : `<${tag} class="elef-art-list"`
+    if (tag === "ul" && !/\brole=/.test(decorated)) {
+      const complete = decorated.endsWith(">")
+      decorated = `${complete ? decorated.slice(0, -1) : decorated} role="list"${complete ? ">" : ""}`
+    }
+    return decorated
+  })
+  const modeAttribute = analysis ? ` data-art-mode="${analysis.mode}"` : ""
+  const densityAttribute = analysis ? ` data-art-density="${analysis.density}"` : ""
+  const diagnosticAttribute = diagnostic ? ` data-art-diagnostic="${diagnostic}"` : ""
+  const settled = status === "pending" ? "false" : "true"
+  return `<section class="elef-art" data-elef-art-root data-art-status="${status}" data-art-layout="${layout}" data-art-settled="${settled}"${modeAttribute}${densityAttribute}${diagnosticAttribute}>${content}</section>`
+}
+
+function equivalentMarkdown(left: string, right: string): boolean {
+  return String(left).replace(/\r\n?/g, "\n") === String(right).replace(/\r\n?/g, "\n")
+}
+
 export function renderPreviewCore({
   source = "",
   kind = "presentation",
@@ -421,13 +466,18 @@ function renderDocument(source: string, slide: RenderSlide | undefined, style: E
       empty = emptyBlocks[emptyIndex]
     }
     const region = mapped ? regions.get(mapped.id) : undefined
-    const valid = mapped !== undefined && region !== undefined && region.editable && mapped.markdown === block.markdown && mapped.editable_region_id === region.id && region.block_id === mapped.id
+    const sourceMatches = mapped?.art ? equivalentMarkdown(mapped.markdown, block.markdown) : mapped?.markdown === block.markdown
+    const valid = mapped !== undefined && region !== undefined && region.editable && sourceMatches && mapped.editable_region_id === region.id && region.block_id === mapped.id
     const positionClass = positionClasses(block.position)
     const attributes = chrome.documentBlockAttributes({ valid, mapped, region, positionClass })
-    const structured = mapped !== undefined && valid && ["list", "quote"].includes(mapped.kind)
+    const structured = mapped !== undefined && valid && !mapped.art && ["list", "quote"].includes(mapped.kind)
       ? editableStructuredSource(block.markdown, mapped.kind)
       : { source: block.markdown, caretToken: null }
-    let rendered = region?.empty_heading ? "<h1><br></h1>" : renderMarkdownBlock(structured.source, env)
+    let rendered = region?.empty_heading
+      ? "<h1><br></h1>"
+      : mapped?.art
+        ? renderArtBlock(block.markdown, env, "flowing")
+        : renderMarkdownBlock(structured.source, env)
     if (mapped !== undefined && valid && structured.caretToken) {
       rendered = emptyStructuredLine(rendered, structured.caretToken, mapped.kind)
     }
@@ -488,27 +538,69 @@ function renderPresentation(source: string, slides: RenderSlide[], style: Editor
     const mappedBlocks = slide.blocks
     const regions = new Map<string, MapRegion>(slide.editable_regions.map((region): [string, MapRegion] => [region.block_id, region]))
     const blocks = slide.parsed_blocks
-    const renderBlock = (block: ParsedBlock, blockIndex: number, title = false): string => {
+    const renderBlock = (
+      block: ParsedBlock,
+      blockIndex: number,
+      title = false,
+      vertical: string | null = null,
+      { wrapInItem = false, wrapInArtRegion = false }: { wrapInItem?: boolean; wrapInArtRegion?: boolean } = {}
+    ): string => {
       const mapped = mappedBlocks[blockIndex]
       const region = mapped ? regions.get(mapped.id) : undefined
-      const valid = mapped !== undefined && region !== undefined && mapped.markdown === block.markdown && mapped.editable_region_id === region.id && region.block_id === mapped.id
-      const className = [title ? "slide-title" : "", "slide-block", positionClasses(block.position)].filter(Boolean).join(" ")
+      const sourceMatches = mapped?.art ? equivalentMarkdown(mapped.markdown, block.markdown) : mapped?.markdown === block.markdown
+      const valid = mapped !== undefined && region !== undefined && sourceMatches && mapped.editable_region_id === region.id && region.block_id === mapped.id
+      const className = [title ? "slide-title" : "", "slide-block", slidePositionClasses(block.position, vertical)].filter(Boolean).join(" ")
       const label = title ? "Editable slide title" : "Editable slide block"
       const attributes = chrome.presentationBlockAttributes({ valid, mapped, region, label })
-      const rendered = renderMarkdownBlock(block.markdown, env)
+      const rendered = mapped?.art
+        ? renderArtBlock(block.markdown, env, "fixed")
+        : renderMarkdownBlock(block.markdown, env)
       const content = valid && mapped !== undefined && mapped.kind === "image"
         ? chrome.mediaFigure({ rendered, alt: /^\s*!\[([^\]]*)\]/.exec(block.markdown)?.[1] || "" })
         : rendered
       const controls = valid ? chrome.presentationBlockControls({ slideIndex: index, blockIndex, blockCount: blocks.length, position: block.position }) : ""
-      return chrome.slideBlock({ className, attributes, content, controls })
+      const blockMarkup = chrome.slideBlock({ className, attributes, content, controls, revealEvent: block.reveal_event })
+      const markup = wrapInArtRegion
+        ? `<div class="slide-region-block ${slidePositionClasses(block.position, vertical)}">${blockMarkup}</div>`
+        : blockMarkup
+      return wrapInItem ? `<div class="slide-block-item">${markup}</div>` : markup
+    }
+    const renderPlacedBlocks = (
+      placedBlocks: ParsedBlock[],
+      globalIndex: (block: ParsedBlock, localIndex: number) => number,
+      { artHost = false, wrapArtBlocksInGroupsOnly = false }: { artHost?: boolean; wrapArtBlocksInGroupsOnly?: boolean } = {}
+    ): string => {
+      const placement = slidePositionLayout(placedBlocks)
+      return placement.entries.map((entry) => {
+        const grouped = entry.type !== "block"
+        const inner = placedBlocks.slice(entry.start, entry.end).map((block, offset) => {
+          const localIndex = entry.start + offset
+          const blockIndex = globalIndex(block, localIndex)
+          return renderBlock(block, blockIndex, false, placement.verticals[localIndex] ?? null, {
+            wrapInItem: grouped,
+            wrapInArtRegion: artHost && (!wrapArtBlocksInGroupsOnly || (grouped && block.art !== undefined))
+          })
+        }).join("")
+        if (entry.type === "middle") return `<div class="slide-middle-group${entry.flushBottom ? " flush-bottom" : ""}">${inner}</div>`
+        if (entry.type === "bottom") return `<div class="slide-bottom-lane">${inner}</div>`
+        return inner
+      }).join("")
     }
     const firstBlock = blocks[0]
-    const titleMarkup = slide.title && firstBlock ? renderBlock(firstBlock, 0, true) : ""
+    const titleMarkup = slide.title && firstBlock ? renderBlock(firstBlock, 0, true, "top") : ""
     const contentBlocks = slide.title ? blocks.slice(1) : blocks
     const contentOffset = slide.title ? 1 : 0
     const slideContent = slide.title
-      ? `<div class="slide-regions">${slide.regions.map(region => `<div class="slide-region">${region.map(block => renderBlock(block, blocks.indexOf(block))).join("")}</div>`).join("")}</div>`
-      : contentBlocks.map((block, blockIndex) => renderBlock(block, blockIndex + contentOffset)).join("")
+      ? `<div class="slide-regions">${slide.regions.map(region => {
+        const regionArtHost = region.some(block => block.art)
+        const hostAttribute = regionArtHost ? ` data-art-host="fixed" data-art-overfull="false"` : ""
+        const regionBlocks = renderPlacedBlocks(region, block => blocks.indexOf(block), { artHost: regionArtHost })
+        return `<div class="slide-region"${hostAttribute}>${regionBlocks}</div>`
+      }).join("")}</div>`
+      : renderPlacedBlocks(contentBlocks, (_block, localIndex) => localIndex + contentOffset, {
+        artHost: contentBlocks.some(block => block.art),
+        wrapArtBlocksInGroupsOnly: true
+      })
     const empty = blocks.length === 0 ? chrome.emptySlide({ index }) : ""
     const toolbar = chrome.slideToolbar({ index, slideCount: slides.length })
     const topMargin = margin.section || margin.subsection
@@ -517,9 +609,11 @@ function renderPresentation(source: string, slides: RenderSlide[], style: Editor
     const bottomMargin = margin.slide_count || margin.footnote
       ? `<div class="slide-margin slide-margin-bottom" aria-hidden="true">${margin.slide_count ? `<span class="slide-margin-count">${index + 1} / ${slides.length}</span>` : ""}${margin.footnote && slide.footnote ? `<span class="slide-margin-footnote" aria-label="Footnote"><span class="slide-margin-footnote-marker">*</span><span class="slide-margin-footnote-text">${renderMarkdownBlock(slide.footnote, env)}</span></span>` : ""}</div>`
       : ""
-    return chrome.slideFrame({ index, layout: slide.layout, toolbar, topMargin, content: `${titleMarkup}${slideContent}${empty}`, bottomMargin })
+    const frameArtHost = !slide.title && contentBlocks.some((block) => block.art)
+    return chrome.slideFrame({ index, layout: slide.layout, toolbar, topMargin, content: `${titleMarkup}${slideContent}${empty}`, bottomMargin, artHost: frameArtHost, revealEventCount: slide.reveal_event_count })
   }).join("")
-  return chrome.presentationRoot({ style, inner: frames })
+  const artController = slides.some((slide) => slide.blocks.some((block) => block.art))
+  return chrome.presentationRoot({ style, inner: frames, artController })
 }
 
 // Default chrome: plain structural wrappers with no editor controls, host
@@ -536,11 +630,11 @@ const bareChrome: RendererChrome = {
   documentRoot: ({ inner }) => `<div class="document">${inner}</div>`,
   presentationBlockAttributes: () => "",
   presentationBlockControls: () => "",
-  slideBlock: ({ className, content }) => `<div class="${className}">${content}</div>`,
+  slideBlock: ({ className, content, revealEvent }) => `<div class="${className}"${revealEvent === undefined ? "" : ` data-elef-reveal-event="${revealEvent}"`}>${content}</div>`,
   emptySlide: () => "",
   slideToolbar: () => "",
-  slideFrame: ({ layout, topMargin, content, bottomMargin }) => `<section class="slide slide-${layout}">${topMargin}${content}${bottomMargin}</section>`,
-  presentationRoot: ({ inner }) => `<div class="presentation">${inner}</div>`
+  slideFrame: ({ layout, topMargin, content, bottomMargin, artHost, revealEventCount }) => `<section class="slide slide-${layout}"${(revealEventCount ?? 0) > 0 ? ` data-elef-reveal-event-count="${revealEventCount}"` : ""}>${topMargin}<div class="slide-content"${artHost ? ` data-art-host="fixed" data-art-overfull="false"` : ""}>${content}</div>${bottomMargin}</section>`,
+  presentationRoot: ({ inner, artController }) => `<div class="presentation"${artController ? ` data-client-mount="art-layout"` : ""}>${inner}</div>`
 }
 
 function positionClasses(position: SourcePosition | null | undefined): string {

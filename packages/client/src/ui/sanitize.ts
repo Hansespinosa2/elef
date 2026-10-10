@@ -26,7 +26,7 @@ const ALLOWED_ACTIONS = new Set([
 // these natively instead of through Stimulus action strings. The legacy
 // entries above stay until the server authoring partials are deleted.
 const ALLOWED_EDITOR_ACTIONS = new Set(["media-choose-slide", "overview-select"]);
-const ALLOWED_CLIENT_MOUNTS = new Set(["mermaid", "document-pages"]);
+const ALLOWED_CLIENT_MOUNTS = new Set(["mermaid", "document-pages", "art-layout"]);
 const ALLOWED_PRESENTATION_ACTIONS = new Set([
   "add-slide-after", "delete-slide", "move-slide-up", "move-slide-down", "add-block-after", "delete-block", "move-block-up", "move-block-down",
 ]);
@@ -86,9 +86,10 @@ function safeAttribute(
   if (lower === "value") {
     return (
       element.tagName === "OPTION" &&
-      /^(?:left|center|right|top left|top center|top right|center left|center center|center right|bottom left|bottom center|bottom right)$/.test(value)
+      /^(?:left|center|right|top left|top center|top right|middle left|middle center|middle right|bottom left|bottom center|bottom right)$/.test(value)
     );
   }
+  if (lower === "start") return element.tagName === "OL" && /^(?:0|[1-9]\d*)$/.test(value);
   if (lower === "contenteditable") return interactive && (value === "true" || value === "false");
   if (["xmlns", "display", "encoding"].includes(lower) && ["MATH", "ANNOTATION"].includes(element.tagName)) return true;
   if (lower === "style") return isSafeKatexStyle(element, value);
@@ -100,7 +101,7 @@ function safeAttribute(
   }
   if (lower === "data-controller") {
     if (interactive) {
-      return value.split(/\s+/).every((controller) => ["mermaid-diagrams", "presentation-canvas", "document-pages"].includes(controller));
+      return value.split(/\s+/).every((controller) => ["mermaid-diagrams", "presentation-canvas", "document-pages", "art-layout"].includes(controller));
     }
     return (
       documentPagination &&
@@ -127,6 +128,16 @@ function safeAttribute(
     );
   }
   if (lower === "data-editor-math-open" || lower === "data-editor-math-close") return MATH_DELIMITERS.has(value);
+  if (lower === "data-elef-art-root") return value === "";
+  if (lower === "data-art-mode") return ["peers", "sequence"].includes(value);
+  if (lower === "data-art-density") return ["compact", "rich"].includes(value);
+  if (lower === "data-art-status") return ["ready", "pending", "fallback-unsupported", "fallback-no-fit", "error"].includes(value);
+  if (lower === "data-art-layout") return ["peers-wrap", "sequence-horizontal", "sequence-vertical", "plain-list"].includes(value);
+  if (lower === "data-art-settled" || lower === "data-art-overfull") return value === "true" || value === "false";
+  if (lower === "data-art-host") return value === "fixed";
+  if (lower === "data-art-diagnostic") return ["ART_NO_LIST_TARGET", "ART_INVALID_SYNTAX", "ART_UNSUPPORTED_CONTENT", "ART_REVEAL_BOUNDARY", "ART_NO_FIT", "ART_ITEM_TOO_TALL", "ART_INTERNAL_ERROR"].includes(value);
+  if (lower === "data-elef-reveal-event") return element.tagName === "DIV" && element.classList.contains("slide-block") && /^(?:0|[1-9]\d*)$/.test(value);
+  if (lower === "data-elef-reveal-event-count") return element.tagName === "SECTION" && element.classList.contains("slide") && /^[1-9]\d*$/.test(value);
   if (lower === "data-presentation-canvas-target") return interactive && element.tagName === "SECTION" && value === "canvas";
   if (lower === "data-presentation-editor-target") {
     return interactive && element.tagName === "DIV" && element.classList.contains("presentation-surface") && value === "canvas";

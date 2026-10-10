@@ -106,6 +106,10 @@ const DEPTHS = [0, 1, 2, 3, 4]
 const DELIMITERS = [".", ")"]
 const STARTS = [0, 1, 3]
 const LOOSE = [false, true]
+const HOST_WIDTHS = [220, 280, 341, 536, 673, 800, 1120]
+const HOST_HEIGHTS = [140, 240, 360, 560]
+const THEMES = ["light", "dark", "paper"]
+const TYPOGRAPHY = ["book", "modern", "technical"]
 
 interface GeneratedCase {
   rootType: string
@@ -116,6 +120,10 @@ interface GeneratedCase {
   delimiter: string
   start: number
   loose: boolean
+  hostWidth: number
+  hostHeight: number
+  theme: string
+  typography: string
 }
 
 function seeded(seed: number): () => number {
@@ -140,7 +148,11 @@ function generatedCases(): Array<GeneratedCase> {
     depth: pick(random, DEPTHS),
     delimiter: pick(random, DELIMITERS),
     start: pick(random, STARTS),
-    loose: pick(random, LOOSE)
+    loose: pick(random, LOOSE),
+    hostWidth: pick(random, HOST_WIDTHS),
+    hostHeight: pick(random, HOST_HEIGHTS),
+    theme: pick(random, THEMES),
+    typography: pick(random, TYPOGRAPHY)
   }))
 }
 

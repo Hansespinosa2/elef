@@ -215,3 +215,12 @@ test("bare projection carries no editor chrome, Stimulus hooks or controls", () 
     assert.doesNotMatch(html, /visual-editor/)
   }
 })
+
+test("shared Markdown rendering preserves styled transpose and inverse atoms", () => {
+  for (const expression of ["\\mathbf{x}^{\\mathsf{T}}", "\\vec{x}^{\\mathsf{T}}", "\\mathbf{x}^{-1}", "\\vec{x}^{-1}"]) {
+    const html = renderMarkdownBlock(`$${expression}$`)
+
+    assert.match(html, /class="katex"/, `${expression} should render as math`)
+    assert.doesNotMatch(html, /class="math-error"/, `${expression} should not produce a math error`)
+  }
+})

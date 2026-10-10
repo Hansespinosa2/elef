@@ -106,7 +106,8 @@ function mergeAuthoringRegistryEntries(builtInEntries, snippetEntries = [], math
 // src/lib/client_mounts.ts
 var MOUNT_CONTROLLERS = {
   mermaid: "mermaid-diagrams",
-  "document-pages": "document-pages"
+  "document-pages": "document-pages",
+  "art-layout": "art-layout"
 };
 function clientMountController(token) {
   return MOUNT_CONTROLLERS[token] ?? null;

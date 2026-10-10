@@ -21,6 +21,10 @@
     "./test-internals": {
       "types": "./src/test_internals.ts",
       "default": "./dist/test_internals.js"
+    },
+    "./art-layout": {
+      "types": "./src/lib/art_layout.ts",
+      "default": "./dist/lib/art_layout.js"
     }
   },
   "files": [
