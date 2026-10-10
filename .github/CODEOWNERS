@@ -14,3 +14,4 @@
 /desktop/scripts/reconcile_desktop_releases.mjs @Hansespinosa2
 /desktop/scripts/record_desktop_platform_failure.mjs @Hansespinosa2
 /desktop/scripts/verify_release_coordinator.mjs @Hansespinosa2
+/desktop/scripts/acknowledge_desktop_gate_failures.mjs @Hansespinosa2

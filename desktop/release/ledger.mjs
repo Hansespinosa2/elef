@@ -85,7 +85,8 @@ export function reconcileMain(ledger, { mainHistory, merges, recoveryEvents = []
       gate: merge.gate,
       version,
       tag,
-      processed_at: now()
+      processed_at: now(),
+      ...(merge.gate === "failed_gate" ? { failure_notification_acknowledged: false } : {})
     })
     changed = true
   }
@@ -107,6 +108,46 @@ export function reconcileMain(ledger, { mainHistory, merges, recoveryEvents = []
   const mainHead = mainHistory.at(-1)
   if (next.last_reconciled_main !== mainHead) {
     next.last_reconciled_main = mainHead
+    changed = true
+  }
+  if (changed) next.revision += 1
+  validateLedger(next)
+  return next
+}
+
+/** Return terminal Gate A failures whose owner alert has not been acknowledged. */
+export function pendingFailedGateNotifications(ledger) {
+  validateLedger(ledger)
+  return ledger.processed_merges
+    .filter(merge => merge.gate === "failed_gate" && merge.failure_notification_acknowledged !== true)
+    .sort((left, right) => left.main_order - right.main_order)
+    .map(merge => merge.sha)
+}
+
+export function isRecordedFailedGate(ledger, sha) {
+  validateLedger(ledger)
+  assert(SHA_PATTERN.test(sha), "failed-gate lookup needs a commit SHA")
+  return ledger.processed_merges.some(merge => merge.sha === sha && merge.gate === "failed_gate")
+}
+
+/** Acknowledge owner alerts only for immutable failed merge records. */
+export function acknowledgeFailedGateNotifications(ledger, shas, { expectedRevision, at = new Date().toISOString() } = {}) {
+  validateLedger(ledger)
+  assertRevision(ledger, expectedRevision)
+  assert(Array.isArray(shas) && shas.length > 0, "failure notification acknowledgment needs at least one SHA")
+  assertNonempty(at, "failure notification acknowledgment needs a timestamp")
+  assert(Number.isFinite(Date.parse(at)), "failure notification acknowledgment needs a valid timestamp")
+
+  const uniqueShas = [...new Set(shas)]
+  for (const sha of uniqueShas) assert(SHA_PATTERN.test(sha), "failure notification acknowledgment needs valid merge SHAs")
+  const next = clone(ledger)
+  let changed = false
+  for (const sha of uniqueShas) {
+    const merge = next.processed_merges.find(item => item.sha === sha)
+    assert(merge?.gate === "failed_gate", `failure notification SHA ${sha} is not a recorded failed Gate A merge`)
+    if (merge.failure_notification_acknowledged === true) continue
+    merge.failure_notification_acknowledged = true
+    merge.failure_notification_acknowledged_at = at
     changed = true
   }
   if (changed) next.revision += 1
@@ -342,8 +383,18 @@ export function validateLedger(ledger) {
     if (merge.gate === "passed") {
       assert(SEMVER_PATTERN.test(merge.version), `passing merge ${merge.sha} needs a reserved version`)
       assert(merge.tag === `desktop-v${merge.version}`, `passing merge ${merge.sha} has an invalid tag`)
+      assert(merge.failure_notification_acknowledged === undefined && merge.failure_notification_acknowledged_at === undefined,
+        `passing merge ${merge.sha} cannot have failed-gate notification state`)
     } else {
       assert(merge.version === null && merge.tag === null, `failed gate ${merge.sha} must not reserve a release version`)
+      assert(merge.failure_notification_acknowledged === undefined || typeof merge.failure_notification_acknowledged === "boolean",
+        `invalid failure notification state for ${merge.sha}`)
+      if (merge.failure_notification_acknowledged === true) {
+        assertNonempty(merge.failure_notification_acknowledged_at, `acknowledged failure ${merge.sha} needs a timestamp`)
+        assert(Number.isFinite(Date.parse(merge.failure_notification_acknowledged_at)), `invalid failure notification timestamp for ${merge.sha}`)
+      } else {
+        assert(merge.failure_notification_acknowledged_at === undefined, `unacknowledged failure ${merge.sha} cannot have an acknowledgment timestamp`)
+      }
     }
   }
 

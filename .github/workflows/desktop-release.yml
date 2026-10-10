@@ -60,6 +60,7 @@ jobs:
     outputs:
       trusted_tool_sha: ${{ steps.verify.outputs.trusted_tool_sha }}
       failure_only: ${{ steps.verify.outputs.failure_only }}
+      failure_sha: ${{ steps.verify.outputs.failure_sha }}
     steps:
       - name: Check out current main history as data
         uses: actions/checkout@v7
@@ -115,6 +116,7 @@ jobs:
           DESKTOP_TRIGGER_EVENT: ${{ github.event.workflow_run.event }}
           DESKTOP_TRIGGER_BRANCH: ${{ github.event.workflow_run.head_branch }}
           DESKTOP_TRIGGER_SHA: ${{ github.event.workflow_run.head_sha }}
+          DESKTOP_RELEASE_ACTION: ${{ github.event.inputs.action || 'reconcile' }}
         run: node verifier/desktop/scripts/verify_release_coordinator.mjs current main-history pages
 
   reconcile:
@@ -134,7 +136,12 @@ jobs:
       linux_candidate: ${{ steps.publish.outputs.linux_candidate }}
       aur_candidate: ${{ steps.publish.outputs.aur_candidate }}
       failure_only: ${{ steps.publish.outputs.failure_only }}
+      failure_sha: ${{ steps.publish.outputs.failure_sha }}
+      failure_sha_recorded: ${{ steps.publish.outputs.failure_sha_recorded }}
+      failed_notification_shas: ${{ steps.publish.outputs.failed_notification_shas }}
       failed_gate_count: ${{ steps.publish.outputs.failed_gate_count }}
+      pending_sha: ${{ steps.publish.outputs.pending_sha }}
+      pending_reason: ${{ steps.publish.outputs.pending_reason }}
       release_action: ${{ github.event.inputs.action || 'reconcile' }}
       control_versions: ${{ github.event.inputs.versions || '' }}
     permissions:
@@ -199,6 +206,7 @@ jobs:
           DESKTOP_RELEASE_VERSIONS: ${{ github.event.inputs.versions }}
           DESKTOP_RELEASE_REASON: ${{ github.event.inputs.reason }}
           DESKTOP_RELEASE_FAILURE_ONLY: ${{ needs.verify-coordinator.outputs.failure_only }}
+          DESKTOP_RELEASE_FAILURE_SHA: ${{ needs.verify-coordinator.outputs.failure_sha }}
         run: node tooling/desktop/scripts/publish_desktop_release_state.mjs pages source
 
   notify-failed-gate:
@@ -207,24 +215,82 @@ jobs:
     if: >-
       always() &&
       needs.reconcile.result == 'success' &&
-      (needs.reconcile.outputs.failure_only == 'true' || needs.reconcile.outputs.failed_gate_count != '0')
+      (
+        (needs.reconcile.outputs.failure_only == 'true' && needs.reconcile.outputs.failure_sha_recorded != 'true') ||
+        needs.reconcile.outputs.failed_notification_shas != '[]'
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    environment: desktop-release-state
     permissions:
-      contents: read
+      contents: write
     steps:
-      - name: Report the recorded terminal Gate A failure
+      - name: Check out trusted release tooling
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.reconcile.outputs.trusted_tool_sha }}
+          path: tooling
+          persist-credentials: false
+
+      - name: Check out the authoritative Pages ledger
+        uses: actions/checkout@v7
+        with:
+          ref: gh-pages
+          path: pages
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Create the short-lived Pages writer token
+        id: pages-writer-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          client-id: ${{ vars.ELEF_RELEASE_STATE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.ELEF_RELEASE_STATE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: elef
+          permission-contents: write
+
+      - name: Report unrecorded and unacknowledged Gate A failures
         env:
           FAILURE_ONLY: ${{ needs.reconcile.outputs.failure_only }}
-          FAILED_GATE_COUNT: ${{ needs.reconcile.outputs.failed_gate_count }}
+          FAILURE_SHA: ${{ needs.reconcile.outputs.failure_sha }}
+          FAILURE_SHA_RECORDED: ${{ needs.reconcile.outputs.failure_sha_recorded }}
+          PENDING_SHA: ${{ needs.reconcile.outputs.pending_sha }}
+          PENDING_REASON: ${{ needs.reconcile.outputs.pending_reason }}
+          FAILED_NOTIFICATION_SHAS: ${{ needs.reconcile.outputs.failed_notification_shas }}
         run: |
-          if [[ "$FAILURE_ONLY" == "true" ]]; then
-            echo "::error::The first exact-SHA Gate A failed. Owner-reviewed main code recorded the failed gate through the failure-only bootstrap; release publication was suppressed."
-          else
-            echo "::error::One or more owner-approved main merges failed exact-SHA Gate A. The ledger records failed_gate and no artifact was made eligible for those merges."
+          if [[ "$FAILURE_ONLY" == "true" && "$FAILURE_SHA_RECORDED" != "true" ]]; then
+            if [[ -n "$PENDING_SHA" ]]; then
+              echo "::error title=Gate A failure not recorded::Failed SHA $FAILURE_SHA is not yet in the ledger; reconciliation is blocked at earlier main SHA $PENDING_SHA ($PENDING_REASON). No platform candidate was emitted."
+            else
+              echo "::error title=Gate A failure not recorded::Failed SHA $FAILURE_SHA is not yet present in the Pages ledger. No platform candidate was emitted."
+            fi
           fi
-          echo "Recorded failed Gate A merge count: $FAILED_GATE_COUNT"
-          exit 1
+          while IFS= read -r failed_sha; do
+            [[ -n "$failed_sha" ]] || continue
+            echo "::error title=Unacknowledged Gate A failure::Ledger records failed_gate for exact main SHA $failed_sha; repair this merge with a new owner-approved PR."
+          done < <(jq -r '.[]' <<< "$FAILED_NOTIFICATION_SHAS")
+
+      - name: Acknowledge delivered failure alerts with a Pages compare-and-swap
+        if: needs.reconcile.outputs.failed_notification_shas != '[]'
+        env:
+          ELEF_RELEASE_STATE_APP_ID: ${{ vars.ELEF_RELEASE_STATE_APP_ID }}
+          ELEF_RELEASE_STATE_PUSH_TOKEN: ${{ steps.pages-writer-token.outputs.token }}
+          GITHUB_API_URL: ${{ github.api_url }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          DESKTOP_FAILED_GATE_NOTIFICATION_SHAS: ${{ needs.reconcile.outputs.failed_notification_shas }}
+        run: node tooling/desktop/scripts/acknowledge_desktop_gate_failures.mjs pages
+
+      - name: Keep the workflow visibly failed after notifying the owner
+        if: >-
+          (needs.reconcile.outputs.failure_only == 'true' && needs.reconcile.outputs.failure_sha_recorded != 'true') ||
+          needs.reconcile.outputs.failed_notification_shas != '[]'
+        run: exit 1
 
   prepare-releases:
     name: Prepare immutable release tags and drafts

@@ -1,9 +1,10 @@
-import { appendFile } from "node:fs/promises"
+import { appendFile, readFile } from "node:fs/promises"
 import { spawnSync } from "node:child_process"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 
 import { publishPagesStateWithRetry } from "../release/pages-publisher.mjs"
+import { isRecordedFailedGate, parseLedger, pendingFailedGateNotifications } from "../release/ledger.mjs"
 import { verifyReleaseStateWriterPolicy } from "../release/release-state-ruleset-api.mjs"
 
 const [pagesRootArgument, sourceRootArgument] = process.argv.slice(2)
@@ -27,6 +28,11 @@ const result = await publishPagesStateWithRetry({
 const reconciliation = result.reconciliation || {}
 const processedMerges = result.processedMerges || []
 const failureOnly = process.env.DESKTOP_RELEASE_FAILURE_ONLY === "true"
+const failureSha = process.env.DESKTOP_RELEASE_FAILURE_SHA || ""
+if (failureOnly && !/^[a-f0-9]{40}$/i.test(failureSha)) throw new Error("failure-only reconciliation needs its exact failed main SHA")
+const committedLedger = parseLedger(await readFile(path.join(pagesRoot, "desktop/stable/state.json"), "utf8"))
+const failureShaRecorded = Boolean(failureSha && isRecordedFailedGate(committedLedger, failureSha))
+const failedNotificationShas = pendingFailedGateNotifications(committedLedger)
 const outputs = {
   initialized: reconciliation.initialized || false,
   revision: reconciliation.revision ?? "",
@@ -41,6 +47,9 @@ const outputs = {
   aur_candidate: !failureOnly && reconciliation.platformCandidates?.aur ? JSON.stringify(reconciliation.platformCandidates.aur) : "",
   failed_gate_count: result.failedGateCount || 0,
   failure_only: failureOnly,
+  failure_sha: failureSha,
+  failure_sha_recorded: failureShaRecorded,
+  failed_notification_shas: failedNotificationShas,
   public_versions: reconciliation.publicVersions || [],
   cas_attempts: result.attempts,
   pages_commit: result.commitSha || ""
@@ -103,6 +112,9 @@ async function writeOutputs(values) {
     `aur_candidate=${values.aur_candidate}`,
     `failed_gate_count=${values.failed_gate_count}`,
     `failure_only=${values.failure_only}`,
+    `failure_sha=${values.failure_sha}`,
+    `failure_sha_recorded=${values.failure_sha_recorded}`,
+    `failed_notification_shas=${JSON.stringify(values.failed_notification_shas)}`,
     `public_versions=${JSON.stringify(values.public_versions)}`,
     `cas_attempts=${values.cas_attempts}`,
     `pages_commit=${values.pages_commit}`
@@ -123,6 +135,12 @@ async function writeSummary({ outputs: values, published, reconciliation: detail
     `- Failed Gate A merges: ${values.failed_gate_count}`
   ]
   if (values.failure_only) lines.push("- Bootstrap mode: failure-only; platform candidate outputs were suppressed.")
+  if (values.failure_only && values.failure_sha_recorded) lines.push(`- Exact failed SHA ${values.failure_sha} is durably recorded as failed_gate.`)
+  if (values.failure_only && !values.failure_sha_recorded) {
+    const blocker = values.pending_sha ? ` Reconciliation is waiting at ${values.pending_sha} (${values.pending_reason}).` : " No matching failed-gate ledger record exists yet."
+    lines.push(`- Exact failed SHA ${values.failure_sha} is not yet recorded; owner notification will report this pending state.${blocker}`)
+  }
+  if (values.failed_notification_shas.length) lines.push(`- Failed-gate owner alerts awaiting acknowledgment: ${values.failed_notification_shas.join(", ")}.`)
   if (detail.initialized) lines.push("- Release ledger initialized at the current main head; earlier merges are not retroactively released.")
   if (detail.pendingSha) lines.push(`- Waiting at main SHA \`${detail.pendingSha}\` (${detail.pendingReason}).`)
   if (detail.unapprovedMerges?.length) {

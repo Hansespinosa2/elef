@@ -2,8 +2,11 @@ import test from "node:test"
 import assert from "node:assert/strict"
 import {
   blockVersions,
+  acknowledgeFailedGateNotifications,
   createLedger,
+  isRecordedFailedGate,
   latestPendingPlatformRelease,
+  pendingFailedGateNotifications,
   parseLedger,
   publishAur,
   publishLinuxAsset,
@@ -60,6 +63,49 @@ test("failed Gate A merges are recorded without an artifact or version reservati
   assert.equal(next.processed_merges[0].version, null)
   assert.equal(next.releases.length, 1)
   assert.equal(next.releases[0].version, "0.1.0")
+})
+
+test("failed-gate alerts survive cancellation after CAS and are acknowledged idempotently", () => {
+  let ledger = createLedger()
+  ledger = reconcileMain(ledger, {
+    mainHistory: [SHA1],
+    merges: [merge(110, SHA1, "failed_gate")],
+    expectedRevision: ledger.revision,
+    now: fixedNow
+  })
+  assert.deepEqual(pendingFailedGateNotifications(ledger), [SHA1])
+  assert.equal(isRecordedFailedGate(ledger, SHA1), true)
+
+  // A retry after the Pages CAS but before notification sees the durable alert.
+  ledger = reconcileMain(ledger, {
+    mainHistory: [SHA1],
+    merges: [merge(110, SHA1, "failed_gate")],
+    expectedRevision: ledger.revision,
+    now: fixedNow
+  })
+  assert.deepEqual(pendingFailedGateNotifications(ledger), [SHA1])
+
+  const revisionBeforeAck = ledger.revision
+  ledger = acknowledgeFailedGateNotifications(ledger, [SHA1], {
+    expectedRevision: revisionBeforeAck,
+    at: NOW
+  })
+  assert.deepEqual(pendingFailedGateNotifications(ledger), [])
+  assert.equal(ledger.processed_merges[0].failure_notification_acknowledged_at, NOW)
+
+  const acknowledged = acknowledgeFailedGateNotifications(ledger, [SHA1], {
+    expectedRevision: ledger.revision,
+    at: NOW
+  })
+  assert.deepEqual(acknowledged, ledger)
+  assert.throws(() => acknowledgeFailedGateNotifications(ledger, [SHA2], {
+    expectedRevision: ledger.revision,
+    at: NOW
+  }), /not a recorded failed Gate A merge/)
+  assert.throws(() => acknowledgeFailedGateNotifications(ledger, [SHA1], {
+    expectedRevision: revisionBeforeAck,
+    at: NOW
+  }), /stale release state revision/)
 })
 
 test("a failed unpublished reservation remains a gap and is never reassigned", () => {

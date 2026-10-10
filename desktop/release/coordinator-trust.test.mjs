@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 
 import { createLedger, reconcileMain } from "./ledger.mjs"
-import { assertAuthorizedMainCoordinatorDispatch, assertAuthorizedReleaseTagDispatch, assertBootstrapFailedGateRecorderRevision, assertMainReviewProtection, assertTrustedCoordinatorRevision, isExactFailedMainWorkflowRun, latestTrustedToolingSha, selectTrustedCoordinatorRevision } from "./coordinator-trust.mjs"
+import { assertAuthorizedMainCoordinatorDispatch, assertAuthorizedReleaseTagDispatch, assertBootstrapFailedGateRecorderRevision, assertMainReviewProtection, assertTrustedCoordinatorRevision, isExactFailedMainReconcileDispatch, isExactFailedMainWorkflowRun, latestTrustedToolingSha, selectTrustedCoordinatorRevision } from "./coordinator-trust.mjs"
 
 const SHA0 = "0".repeat(40)
 const SHA1 = "1".repeat(40)
@@ -181,6 +181,35 @@ test("failure-only bootstrap accepts only a failed exact current-main push workf
     { coordinatorSha: SHA2 }
   ]) {
     assert.equal(isExactFailedMainWorkflowRun({ ...event, ...change }), false, JSON.stringify(change))
+  }
+})
+
+test("owner reconcile dispatch can replay a failed current-main Gate A but minor controls cannot", () => {
+  const dispatch = {
+    mode: "current",
+    eventName: "workflow_dispatch",
+    action: "reconcile",
+    actor: "Hansespinosa2",
+    ownerLogin: "hansespinosa2",
+    ref: "refs/heads/main",
+    refType: "branch",
+    refName: "main",
+    workflowSha: SHA1,
+    coordinatorSha: SHA1
+  }
+  assert.equal(isExactFailedMainReconcileDispatch(dispatch), true)
+  for (const change of [
+    { mode: "latest" },
+    { eventName: "workflow_run" },
+    { action: "minor" },
+    { actor: "other" },
+    { ref: "refs/heads/feature" },
+    { refType: "tag" },
+    { refName: "dev" },
+    { workflowSha: SHA2 },
+    { coordinatorSha: SHA2 }
+  ]) {
+    assert.equal(isExactFailedMainReconcileDispatch({ ...dispatch, ...change }), false, JSON.stringify(change))
   }
 })
 

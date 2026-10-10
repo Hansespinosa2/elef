@@ -97,6 +97,20 @@ export function isExactFailedMainWorkflowRun({ mode, eventName, triggerEvent, tr
     workflowSha === coordinatorSha
 }
 
+/** Owner-triggered replay may record only a failed exact current-main Gate A. */
+export function isExactFailedMainReconcileDispatch({ mode, eventName, action, actor, ownerLogin, ref, refType, refName, workflowSha, coordinatorSha }) {
+  return mode === "current" &&
+    eventName === "workflow_dispatch" &&
+    action === "reconcile" &&
+    typeof actor === "string" &&
+    typeof ownerLogin === "string" &&
+    actor.toLowerCase() === ownerLogin.toLowerCase() &&
+    ref === "refs/heads/main" &&
+    refType === "branch" &&
+    refName === "main" &&
+    workflowSha === coordinatorSha
+}
+
 /**
  * A failed first Gate A has no previously passed release tooling revision to
  * trust. The protected-main owner review is the bootstrap trust anchor for a

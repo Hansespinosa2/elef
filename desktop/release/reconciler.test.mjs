@@ -1,7 +1,7 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 
-import { createLedger, parseLedger, serializeLedger } from "./ledger.mjs"
+import { createLedger, isRecordedFailedGate, parseLedger, pendingFailedGateNotifications, serializeLedger } from "./ledger.mjs"
 import { reconcileReleaseLedger } from "./reconciler.mjs"
 
 const SHA0 = "0".repeat(40)
@@ -72,6 +72,26 @@ test("an unassociated main commit blocks the watermark until its PR record is av
   assert.equal(result.pendingReason, "pr_association_unavailable")
   assert.equal(result.ledger.last_reconciled_main, SHA0)
   assert.equal(result.ledger.releases.length, 0)
+})
+
+test("a later failed Gate A is not reported as recorded while an earlier merge blocks reconciliation", async () => {
+  const github = fakeGitHub({
+    prs: [pull(603, SHA2)],
+    gates: new Map([[SHA2, "failed_gate"]])
+  })
+  const result = await reconcileReleaseLedger({
+    ledger: createLedger({ lastReconciledMain: SHA0 }),
+    mainHistory: [SHA0, SHA1, SHA2],
+    github,
+    ownerLogin: "owner",
+    now: () => NOW
+  })
+
+  assert.equal(result.pendingSha, SHA1)
+  assert.equal(result.pendingReason, "pr_association_unavailable")
+  assert.equal(result.ledger.processed_merges.some(merge => merge.sha === SHA2), false)
+  assert.equal(isRecordedFailedGate(result.ledger, SHA2), false)
+  assert.deepEqual(pendingFailedGateNotifications(result.ledger), [])
 })
 
 test("an incomplete associated PR record blocks the watermark instead of skipping the merge", async () => {
