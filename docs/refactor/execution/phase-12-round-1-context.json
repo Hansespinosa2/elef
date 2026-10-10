@@ -7,7 +7,7 @@
   "phase": 12,
   "round": 1,
   "state": "completed",
-  "identity": "fresh reviewer session 01a12745-e5ee-75d3-8d07-9417b98dab36 (independent subagent)",
+  "identity": "fresh reviewer session 01a12745-e65e-7431-91f3-b74a84da9770 (isolated child, no implementer context)",
   "reviewer_subagent": "01a12745-e5ee-75d3-8d07-9417b98dab36 (Phase 12 independent reviewer, round 1; agent_path main/phase12-round-1-review/27)",
   "session": "reviewer subagent 01a12745-e5ee-75d3-8d07-9417b98dab36 (agent_path main/phase12-round-1-review/27)",
   "report_sha256": "ab162c7aadb66d125b4ecf291f455bd8f49615c5a6b3187ccabec37e031084d1",
