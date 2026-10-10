@@ -137,7 +137,7 @@ describe("Stable profile exclusions", () => {
             expectedLength: expected.length,
             actualLength: source.length,
             suffixCodePoints: Array.from(source.slice(-4), character => character.codePointAt(0)),
-            editorFocused: editor?.view?.hasFocus() || false,
+            editorFocused: editor?.view?.hasFocus === true,
             activeElement: document.activeElement?.id || document.activeElement?.tagName || null,
             linkPaletteCount: document.querySelectorAll("[data-document-link-palette-target]").length
           }
