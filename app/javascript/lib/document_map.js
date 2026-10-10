@@ -1,4 +1,5 @@
 import { ART_DIAGNOSTICS, resolveArtBindings } from "#elef/art-source"
+import { slidePositionLayout } from "#elef/slide-position-layout"
 
 const THEMES = new Set(["light", "dark", "match"])
 const TYPOGRAPHIES = new Set(["book", "modern", "technical"])
@@ -554,6 +555,10 @@ function slideMetadata(markdown, context, mode, artResolution, sourceBoundaryMap
   const layout = inferLayout(parsed.blocks)
   const title = ["two-column", "three-column"].includes(layout) ? parsed.blocks[0]?.markdown ?? null : null
   const regions = columnRegions(parsed.blocks, layout)
+  const placementWarnings = mode === "presentation"
+    ? (["two-column", "three-column"].includes(layout) ? regions : [parsed.blocks])
+      .flatMap(blocks => slidePositionLayout(blocks).warnings)
+    : []
   return {
     layout,
     title,
@@ -563,7 +568,7 @@ function slideMetadata(markdown, context, mode, artResolution, sourceBoundaryMap
     section: margin.section,
     subsection: margin.subsection,
     footnote: margin.footnote,
-    warnings: [...margin.warnings, ...reveals.warnings, ...parsed.warnings]
+    warnings: [...margin.warnings, ...reveals.warnings, ...parsed.warnings, ...placementWarnings]
   }
 }
 
@@ -668,7 +673,7 @@ function parseBlocksLegacy(rawBlocks, artResolution) {
         blocks.push(parsedBlock(rawBlocks[index + 1], position, artBindingsByStartLine, null))
         index += 2
       } else {
-        warnings.push("Alignment directive has no following Markdown block.")
+        warnings.push("Dangling directive: alignment has no following Markdown block.")
         index += 1
       }
     } else if (block === ":::" || block.startsWith(":::")) {
@@ -708,7 +713,7 @@ function parseBlocksWithReveals(rawBlocks, artResolution, reveals) {
         blocks.push(parsedBlock(rawBlocks[index], selectedPosition, artBindingsByStartLine, reveals.event_by_line))
         index += 1
       } else {
-        warnings.push("Alignment directive has no following Markdown block.")
+        warnings.push("Dangling directive: alignment has no following Markdown block.")
       }
       continue
     }

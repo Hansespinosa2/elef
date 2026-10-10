@@ -2,8 +2,11 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import { readFile } from "node:fs/promises"
 
+const layoutSource = (await readFile(new URL("../../app/javascript/lib/slide_position_layout.js", import.meta.url), "utf8"))
+  .replace(/^export /gm, "")
 const source = (await readFile(new URL("../../app/javascript/controllers/pptx_export_controller.js", import.meta.url), "utf8"))
   .replace('import { Controller } from "@hotwired/stimulus"', "class Controller {}")
+  .replace('import { slidePositionClasses, slidePositionLayout } from "#elef/slide-position-layout"', layoutSource)
 const pptx = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`)
 
 const {
@@ -155,7 +158,7 @@ test("gradientBackground returns a base64 svg for every known theme", () => {
 
 test("blockMarkup keeps the html and emits position classes only when positioned", () => {
   assert.equal(blockMarkup({ html: "<p>Hi</p>", position: { horizontal: "start", vertical: "middle" } }), '<div class="slide-block position-start position-middle"><p>Hi</p></div>')
-  assert.equal(blockMarkup({ html: "<p>Hi</p>", position: null }), '<div class="slide-block "><p>Hi</p></div>')
+  assert.equal(blockMarkup({ html: "<p>Hi</p>", position: null }), '<div class="slide-block position-left position-top"><p>Hi</p></div>')
 })
 
 test("slideMarkup renders a title layout with regions and margins", () => {
@@ -171,10 +174,24 @@ test("slideMarkup renders a title layout with regions and margins", () => {
 
   assert.match(markup, /<div class="slide-frame" style="height:720px;width:1280px">/)
   assert.match(markup, /<section class="slide slide-title" aria-label="Slide 2">/)
-  assert.match(markup, /<div class="slide-title slide-block position-start position-end"><h1>Deck<\/h1><\/div>/)
+  assert.match(markup, /<div class="slide-title slide-block position-start position-top"><h1>Deck<\/h1><\/div>/)
   assert.equal(markup.match(/<div class="slide-region">/g).length, 2)
   assert.match(markup, /<span class="slide-margin-subsection">Part<\/span><span class="slide-margin-section">Intro<\/span>/)
   assert.match(markup, /<span class="slide-margin-count">2 \/ 2<\/span>/)
+})
+
+test("PPTX stage groups middle stacks, lanes, docking, and default positions", () => {
+  const markup = slideMarkup(slide({
+    blocks: [
+      { html: "<h1>Title</h1>", position: { horizontal: "center", vertical: "middle" } },
+      { html: "<p>Subtitle</p>", position: null },
+      { html: "<p>Footer</p>", position: { horizontal: "right", vertical: "bottom" } }
+    ]
+  }), model())
+
+  assert.match(markup, /class="slide-middle-group flush-bottom"/)
+  assert.match(markup, /class="slide-bottom-lane"/)
+  assert.match(markup, /<div class="slide-block position-left position-top"><p>Subtitle<\/p><\/div>/)
 })
 
 test("slideMarkup escapes the layout and falls back to an empty-slide placeholder", () => {

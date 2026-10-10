@@ -9,6 +9,7 @@ import { documentLinkCompletionWorkflow, mathInputWorkflow, snippetInsertWorkflo
 import { authoringSettingsWorkflow } from "../../../test/e2e/scenarios/authoring-settings.js"
 import { PIXEL_PNG_MARKDOWN } from "../../../test/e2e/scenarios/media-fixture.js"
 import { presentationModeWorkflow } from "../../../test/e2e/scenarios/presentation-mode.js"
+import { slidePositionGrammarWorkflow } from "../../../test/e2e/scenarios/slide-position-grammar.js"
 import { vimRelativeLineNumbersWorkflow } from "../../../test/e2e/scenarios/vim-relative-line-numbers.js"
 import { documentPageAspectRatioWorkflow } from "../../../test/e2e/scenarios/document-page-aspect-ratio.js"
 import { displayMathEnterWorkflow } from "../../../test/e2e/scenarios/display-math-enter.js"
@@ -35,6 +36,9 @@ async function readApplicationStylesheet() {
 }
 
 const applicationStylesheet = await readApplicationStylesheet()
+const slidePositionFixtures = JSON.parse(
+  await readFile(new URL("../../../docs/align-directives-grammar/fixtures.json", import.meta.url), "utf8")
+).fixtures
 
 function normalizeLineEndings(source) {
   return source.replace(/\r\n|\r/g, "\n")
@@ -198,6 +202,70 @@ class WebEditorUi {
     expect(state.visibility).toBe(visible ? "visible" : "hidden")
     expect(state.ariaHidden).toBe(visible ? null : "true")
     expect(state.inert).toBe(!visible)
+  }
+
+  async assertSlidePositionGrammar() {
+    const preview = this.page.locator(".editor-projection.preview-pane")
+    const inspect = () => preview.evaluate(root => {
+      const slide = root.querySelector(".slide")
+      const content = slide?.querySelector(".slide-content")
+      const group = slide?.querySelector(".slide-middle-group")
+      const lane = slide?.querySelector(".slide-bottom-lane")
+      const blocks = element => [...(element?.querySelectorAll(".slide-block") || [])]
+      const rect = element => element.getBoundingClientRect()
+      return {
+        groups: [...(slide?.querySelectorAll(".slide-middle-group") || [])].map(group => blocks(group).map(block => block.textContent.trim())),
+        lanes: [...(slide?.querySelectorAll(".slide-bottom-lane") || [])].map(lane => blocks(lane).map(block => block.textContent.trim())),
+        flushBottom: group?.classList.contains("flush-bottom") || false,
+        blockGap: blocks(group).length > 1 ? rect(blocks(group)[1]).top - rect(blocks(group)[0]).bottom : null,
+        laneBottomGap: content && lane ? rect(content).bottom - rect(lane).bottom : null,
+        classes: blocks(slide).map(block => block.className)
+      }
+    })
+
+    await expect.poll(inspect).toMatchObject({
+      groups: [["Alignment stack", "Subtitle"]],
+      lanes: [["Footer"]],
+      flushBottom: true
+    })
+    const measurements = await inspect()
+    expect(measurements.blockGap).toBeLessThan(8)
+    expect(Math.abs(measurements.laneBottomGap)).toBeLessThanOrEqual(1)
+    expect(measurements.classes[0]).toContain("position-center position-middle")
+    expect(measurements.classes[1]).toContain("position-center position-top")
+    expect(measurements.classes[2]).toContain("position-right position-bottom")
+  }
+
+  async assertColumnSlidePositionDocking() {
+    const preview = this.page.locator(".editor-projection.preview-pane")
+    const inspect = () => preview.evaluate(root => {
+      const slide = root.querySelector(".slide")
+      const regions = [...(slide?.querySelectorAll(".slide-region") || [])]
+      const left = regions[0]
+      const group = left?.querySelector(".slide-middle-group.flush-bottom")
+      const lane = left?.querySelector(".slide-bottom-lane")
+      const blockText = element => [...(element?.querySelectorAll(".slide-block") || [])]
+        .map(block => block.textContent.trim()).join(" ")
+      const rect = element => element.getBoundingClientRect()
+      return {
+        regionCount: regions.length,
+        leftGroup: blockText(group),
+        leftLane: blockText(lane),
+        rightHasPlacement: Boolean(regions[1]?.querySelector(".slide-middle-group, .slide-bottom-lane")),
+        dockGap: group && lane ? rect(lane).top - rect(group).bottom : null,
+        laneBottomGap: left && lane ? rect(left).bottom - rect(lane).bottom : null
+      }
+    })
+
+    await expect.poll(inspect).toMatchObject({
+      regionCount: 2,
+      leftGroup: "Left stack",
+      leftLane: "Left footer",
+      rightHasPlacement: false
+    })
+    const measurements = await inspect()
+    expect(Math.abs(measurements.dockGap)).toBeLessThanOrEqual(1)
+    expect(Math.abs(measurements.laneBottomGap)).toBeLessThanOrEqual(1)
   }
 
   async movePresentation(key) {
@@ -999,6 +1067,10 @@ test("shared presentation navigation works in the web app", async ({ page }) => 
   await presentationModeWorkflow(new WebEditorUi(page))
 })
 
+test("slide position grammar keeps aligned blocks grouped in the web preview", async ({ page }) => {
+  await slidePositionGrammarWorkflow(new WebEditorUi(page))
+})
+
 test("Vim relative line numbers update from CodeMirror cursor positions", async ({ page }) => {
   await vimRelativeLineNumbersWorkflow(new WebEditorUi(page))
 })
@@ -1097,6 +1169,111 @@ test("shared rendering styles preserve slide layouts and document typography", a
       expect(measured.desktop[".slide-regions"].display).toBe("grid")
       expect(measured.desktop[".slide-regions"].columns.split(" ")).toHaveLength(2)
     }
+  }
+})
+
+test("JS alignment fixture geometry matches the grammar under web and desktop styles", async ({ page }) => {
+  const styles = {
+    web: (await readFile(new URL("../../../app/assets/builds/tailwind.css", import.meta.url), "utf8")) +
+      applicationStylesheet,
+    desktop: (await readFile(new URL("../../../app/assets/stylesheets/file_library_host.css", import.meta.url), "utf8")) +
+      (await readFile(new URL("../../frontend/dist/assets/tailwind.css", import.meta.url), "utf8")) +
+      (await readFile(new URL("../../frontend/dist/assets/app.css", import.meta.url), "utf8"))
+  }
+  const html = slidePositionFixtures.map(fixture => renderPreview({
+    source: fixture.source,
+    title: fixture.id,
+    allowRemoteMedia: false
+  }).html).join("")
+
+  await page.setViewportSize({ width: 1440, height: 900 })
+  for (const [target, css] of Object.entries(styles)) {
+    await page.setContent(`<!doctype html><html><head><style>${css}\n*{box-sizing:border-box}body{margin:0}.fixture-root{width:1280px}</style></head><body><main class="fixture-root">${html}</main></body></html>`)
+    const rendered = await page.evaluate(() => {
+      const rect = element => {
+        const bounds = element.getBoundingClientRect()
+        return { top: bounds.top, bottom: bounds.bottom, left: bounds.left, right: bounds.right, height: bounds.height }
+      }
+      const label = block => block.textContent.trim().replace(/\s+/g, " ")
+      return [...document.querySelectorAll(".slide-frame > .slide")].map(slide => {
+        slide.style.setProperty("--slide-scale", "1")
+        const content = slide.querySelector(".slide-content")
+        const blocks = [...slide.querySelectorAll(".slide-block")]
+        const groups = [...slide.querySelectorAll(".slide-middle-group")]
+        const lanes = [...slide.querySelectorAll(".slide-bottom-lane")]
+        return {
+          blocks: blocks.map(block => ({ label: label(block), ...rect(block) })),
+          regions: [...slide.querySelectorAll(".slide-region")].map(region => ({
+            middleGroups: [...region.querySelectorAll(".slide-middle-group")].map(group => [...group.querySelectorAll(".slide-block")].map(label)),
+            bottomLanes: [...region.querySelectorAll(".slide-bottom-lane")].map(lane => [...lane.querySelectorAll(".slide-block")].map(label))
+          })),
+          content: rect(content),
+          slide: rect(slide),
+          groups: groups.map(group => {
+            const parent = group.parentElement
+            const previous = group.previousElementSibling
+            const next = group.nextElementSibling
+            const innerBlocks = [...group.querySelectorAll(".slide-block")]
+            const previousMargin = previous ? parseFloat(getComputedStyle(previous).marginBottom) || 0 : 0
+            const nextMargin = next ? parseFloat(getComputedStyle(next).marginTop) || 0 : 0
+            return {
+              topMargin: rect(group).top - (previous ? rect(previous).bottom + previousMargin : rect(parent).top),
+              bottomMargin: (next ? rect(next).top - nextMargin : rect(parent).bottom) - rect(group).bottom,
+              gaps: innerBlocks.slice(1).map((block, index) => rect(block).top - rect(innerBlocks[index]).bottom)
+            }
+          }),
+          lanes: lanes.map(lane => {
+            const parent = lane.parentElement
+            const innerBlocks = [...lane.querySelectorAll(".slide-block")]
+            return {
+              bottomGap: rect(parent).bottom - rect(lane).bottom,
+              gaps: innerBlocks.slice(1).map((block, index) => rect(block).top - rect(innerBlocks[index]).bottom)
+            }
+          })
+        }
+      })
+    })
+
+    expect(rendered, `${target} CSS fixture count`).toHaveLength(slidePositionFixtures.length)
+    slidePositionFixtures.forEach((fixture, index) => {
+      const actual = rendered[index]
+      const geometry = fixture.geometry
+      if (fixture.expected.regionPlacements) {
+        expect(actual.regions, `${target} ${fixture.id} per-region placement`).toEqual(fixture.expected.regionPlacements)
+      }
+      if (geometry.some(assertion => assertion.includes("group marginTop"))) {
+        actual.groups.forEach(group => expect(Math.abs(group.topMargin - group.bottomMargin), `${fixture.id} group margins`).toBeLessThanOrEqual(1))
+      }
+      if (geometry.some(assertion => assertion.includes("gap between") || assertion.includes("gaps between"))) {
+        for (const gap of [...actual.groups.flatMap(group => group.gaps), ...actual.lanes.flatMap(lane => lane.gaps)]) {
+          expect(gap, `${fixture.id} snug block gap`).toBeLessThan(8)
+        }
+      }
+      if (geometry.some(assertion => assertion.includes("lane bottom edge"))) {
+        actual.lanes.forEach(lane => expect(Math.abs(lane.bottomGap), `${fixture.id} lane bottom pin`).toBeLessThanOrEqual(1))
+      }
+      if (geometry.some(assertion => assertion.includes("top edge == content top edge"))) {
+        const text = fixture.id === "F-03" ? "Kicker" : "Deck title"
+        const block = actual.blocks.find(candidate => candidate.label.includes(text))
+        expect(block, `${fixture.id} top-pinned block`).toBeTruthy()
+        expect(Math.abs(block.top - actual.content.top), `${fixture.id} top-pinned block`).toBeLessThanOrEqual(1)
+      }
+      if (fixture.id === "F-04") {
+        const block = actual.blocks.find(candidate => candidate.label.includes("Body text"))
+        expect(Math.abs(block.left - actual.content.left), "F-04 default horizontal alignment").toBeLessThanOrEqual(1)
+      }
+      if (fixture.id === "F-09") {
+        const [first, second] = actual.blocks.filter(block => block.label.includes("Left foot") || block.label.includes("Right foot"))
+        expect(second.top, "F-09 footer blocks occupy separate rows").toBeGreaterThan(first.bottom)
+      }
+      if (fixture.id === "F-15") expect(actual.blocks, "F-15 rendered blocks").toHaveLength(1)
+      if (fixture.id === "F-16") {
+        const title = actual.blocks.find(block => block.label.includes("Untitled Document"))
+        const subtitle = actual.blocks.find(block => block.label.includes("Start writing Markdown here."))
+        expect(Math.abs((title.top + title.height / 2) - (actual.slide.top + actual.slide.height / 2)), "F-16 title center").toBeLessThanOrEqual(50)
+        expect(subtitle.top - title.bottom, "F-16 title/subtitle gap").toBeLessThan(8)
+      }
+    })
   }
 })
 

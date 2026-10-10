@@ -4,6 +4,7 @@
   "type": "module",
   "imports": {
     "#elef/preview-sanitizer": "./app/javascript/lib/preview_sanitizer.js",
+    "#elef/slide-position-layout": "./app/javascript/lib/slide_position_layout.js",
     "#elef/art-source": "./app/javascript/lib/art_source.js",
     "#elef/authoring-settings": "./app/javascript/lib/authoring_settings.js",
     "#elef/authoring-registry-write": "./app/javascript/lib/authoring_registry_write.js"

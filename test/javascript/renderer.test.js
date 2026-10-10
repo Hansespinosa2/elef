@@ -386,4 +386,3 @@ test("positionFromBlock treats center as horizontal-only and parses middle as ve
     vertical_explicit: false
   })
 })
-
