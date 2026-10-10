@@ -78,13 +78,15 @@ test("manual reconciliation recovery is owner-only and bound to the exact main w
   }
 })
 
-test("coordinator tooling is trusted only at its owner-approved exact-SHA passing main merge", async () => {
+test("coordinator tooling is trusted at an owner-approved exact-SHA dev-to-main promotion", async () => {
   const ledger = createLedger({ lastReconciledMain: SHA0 })
+  const promotion = { ...pull(101, SHA1), head: { ref: "dev", sha: pull(101, SHA1).head.sha } }
+  const prs = [promotion, pull(102, SHA2)]
   const result = await assertTrustedCoordinatorRevision({
     coordinatorSha: SHA1,
     mainHistory: [SHA0, SHA1, SHA2],
     ledger,
-    github: fakeGitHub([pull(101, SHA1), pull(102, SHA2)], {
+    github: fakeGitHub(prs, {
       gates: new Map([[SHA1, "passed"], [SHA2, null]])
     }),
     ownerLogin: "owner"
@@ -94,7 +96,7 @@ test("coordinator tooling is trusted only at its owner-approved exact-SHA passin
     coordinatorSha: SHA1,
     mainHistory: [SHA0, SHA1, SHA2],
     ledger,
-    github: fakeGitHub([pull(101, SHA1), pull(102, SHA2)], { gates: new Map([[SHA1, "passed"], [SHA2, null]]) }),
+    github: fakeGitHub(prs, { gates: new Map([[SHA1, "passed"], [SHA2, null]]) }),
     ownerLogin: "owner"
   }), { sha: SHA1, pr: 101, selectedFrom: "event" })
 })

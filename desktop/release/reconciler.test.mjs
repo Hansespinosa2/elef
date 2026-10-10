@@ -40,6 +40,43 @@ test("GitHub reconciliation follows first-parent order, records exact PR gates, 
   assert.deepEqual(replayed.processedMerges, [])
 })
 
+test("Dev merges do not reserve releases; an approved dev-to-main promotion uses its exact main SHA", async () => {
+  const devMerge = {
+    ...pull(305, SHA1),
+    base: { ref: "dev" },
+    head: { ref: "feat/desktop-release", sha: "a".repeat(40) }
+  }
+  const devOnly = await reconcileReleaseLedger({
+    ledger: createLedger({ lastReconciledMain: SHA0 }),
+    mainHistory: [SHA0],
+    github: fakeGitHub({ prs: [devMerge], gates: new Map([[SHA1, "passed"]]) }),
+    ownerLogin: "owner",
+    now: () => NOW
+  })
+  assert.equal(devOnly.ledger.last_reconciled_main, SHA0)
+  assert.deepEqual(devOnly.processedMerges, [])
+  assert.deepEqual(devOnly.ledger.releases, [])
+
+  const promotionSha = SHA2
+  const promotion = {
+    ...pull(306, promotionSha),
+    base: { ref: "main" },
+    head: { ref: "dev", sha: "b".repeat(40) }
+  }
+  const promoted = await reconcileReleaseLedger({
+    ledger: createLedger({ lastReconciledMain: SHA0 }),
+    mainHistory: [SHA0, promotionSha],
+    github: fakeGitHub({ prs: [promotion], gates: new Map([[promotionSha, "passed"]]) }),
+    ownerLogin: "owner",
+    now: () => NOW
+  })
+
+  assert.deepEqual(promoted.processedMerges.map(merge => [merge.pr, merge.sha, merge.version]), [
+    [306, promotionSha, "0.1.0"]
+  ])
+  assert.deepEqual(promoted.ledger.releases.map(release => [release.pr, release.main_sha]), [[306, promotionSha]])
+})
+
 test("a pending exact-SHA main gate stops the watermark before that merge", async () => {
   const github = fakeGitHub({
     prs: [pull(401, SHA1), pull(402, SHA3)],

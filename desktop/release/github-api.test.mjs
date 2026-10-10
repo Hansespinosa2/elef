@@ -76,7 +76,7 @@ test("pending checks and failed required jobs fail closed", async () => {
   assert.equal(await api.gateForMainSha(SHA), "failed_gate")
 })
 
-test("owner approval is tied to the latest review of the merged head commit", async () => {
+test("owner approval of a dev-to-main promotion is tied to its latest reviewed head commit", async () => {
   const responses = [
     jsonResponse([
       { user: { login: "owner" }, state: "APPROVED", commit_id: SHA, submitted_at: "2026-10-09T10:00:00Z" },
@@ -93,7 +93,7 @@ test("owner approval is tied to the latest review of the merged head commit", as
     fetchImpl: async () => responses.shift(),
     sleep: async () => {}
   })
-  const pullRequest = { number: 9, base: { ref: "main" }, merged_at: "2026-10-09T12:00:00Z", merge_commit_sha: SHA, head: { sha: SHA } }
+  const pullRequest = { number: 9, base: { ref: "main" }, merged_at: "2026-10-09T12:00:00Z", merge_commit_sha: SHA, head: { ref: "dev", sha: SHA } }
 
   assert.equal(await api.ownerApprovedPullRequest(pullRequest, "OWNER"), false)
   assert.equal(await api.ownerApprovedPullRequest(pullRequest, "owner"), true)
