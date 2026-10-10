@@ -15,7 +15,7 @@
     "tauri_native_runner": "available"
   },
   "frozen_plan_sha256": "b87b2117fa2f37ad4847afc26a484026b961e5ff1f22040def5237cfa09e802c",
-  "head_sha": "0d86df7c1a9d886f9cd8265d3edf6f1865920416",
+  "head_sha": "d3be923958340d28d5901b0bfa7240976d51ced3",
   "last_completed_phase": 11,
   "last_verified_checks": [
     {
@@ -412,9 +412,33 @@
       "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "result_path": "docs/refactor/execution/phase-12-gate-attempts/ed5e666f8f09448e9691d2b32b294109/result.json",
       "selected_gate_path": "docs/refactor/execution/phase-12-gate.json"
+    },
+    {
+      "attempt_id": "426f86ebb8e44e43ac507347da51fccb",
+      "phase": 12,
+      "head": "d3be923958340d28d5901b0bfa7240976d51ced3",
+      "root": "/root/elef",
+      "checkout": "/root/elef/tmp/gates/phase-12-426f86ebb8e44e43ac507347da51fccb",
+      "state": "completed",
+      "started_ns": 1791663626589849114,
+      "status_sha256": "97ac72b987106c651e103d9eb42eefdde50946ad97abd2c6fe83c5de3d09748b",
+      "frozen_plan_sha256": "b87b2117fa2f37ad4847afc26a484026b961e5ff1f22040def5237cfa09e802c",
+      "phase_contract_sha256": "626b04626484ffda893825753e01de5bf4dcd4fe5c7f3b93ca44554ba3311386",
+      "runner_pid": 334,
+      "runner_start": "30579473",
+      "child_pid": 342,
+      "child_start": "30579494",
+      "command": "bin/check phase 12 --json",
+      "exit": 0,
+      "duration_s": 36.457,
+      "tier": "phase",
+      "stdout_sha256": "a08cfad87719b82ea0ab52c55e3f7e83bcb613a592fa343392474e24ba51e05b",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "result_path": "docs/refactor/execution/phase-12-gate-attempts/426f86ebb8e44e43ac507347da51fccb/result.json",
+      "selected_gate_path": "docs/refactor/execution/phase-12-gate.json"
     }
   ],
-  "next_action": "Phase 12 DO repair: fix round-1 findings P12-F01/F02 + N01/N02, re-battery, re-gate, review round 2.",
+  "next_action": "Phase 12 CHECK round 2: request independent review of repair candidate d3be9239.",
   "pending_human_gates": [
     {
       "detail": "production signing/updater keys and offline backups (constitution \u00a78 gate class 1; owner-held release material)",
@@ -439,6 +463,6 @@
   ],
   "phase_base_sha": "15e95a91d8683d32459cfff82b88caa812ff2a22",
   "phase_contract_sha256": "626b04626484ffda893825753e01de5bf4dcd4fe5c7f3b93ca44554ba3311386",
-  "phase_state": "DO",
-  "review_round": 1
+  "phase_state": "CHECK",
+  "review_round": 2
 }
