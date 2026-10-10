@@ -50,7 +50,7 @@
           "run_id": 38007327615,
           "sha": "80bc5b6e4096ec3513968acf7248df4fe3872bd8",
           "jobs": ["desktop-macos"],
-          "result": "The edited source was saved and reopened, but the final fixture cleanup compared LF bytes with the editor's CRLF output after reopening. Commit 018882a compares cleanup content with normalized newlines while retaining byte-identical persisted-source checks across the edit's close/reopen. The run did not reach native desktop scenarios."
+          "result": "The edited source was saved and reopened, but the final fixture cleanup compared LF bytes with the editor's CRLF output after reopening. Commit 018882a compares cleanup content with normalized newlines while retaining byte-identical persisted-source checks across the edit's close/reopen. The Linux desktop job was cancelled when the PR head advanced, so neither native lane established scenario results on this SHA."
         }
       ],
       "note": "Use the isolated CI harness; this can start Rails on port 3000 and must not run against the user's occupied development endpoint. A failed run records observed_exit_code=1 but remains unverified until all shared scenarios pass."
@@ -78,7 +78,7 @@
           "run_id": 38007327615,
           "sha": "80bc5b6e4096ec3513968acf7248df4fe3872bd8",
           "jobs": ["desktop-macos"],
-          "result": "The packaged-update scenario was not reached because the web rich-fixture cleanup assertion failed before native scenarios. Commit 018882a fixes that cleanup assertion; hosted rerun pending."
+          "result": "The packaged-update scenario was not reached because the web rich-fixture cleanup assertion failed before native scenarios. The Linux desktop job was cancelled when the PR head advanced. Commit 018882a fixes that cleanup assertion; hosted rerun pending."
         }
       ],
       "note": "On macOS, the harness mounts and verifies a test-only Stable-profile N-1 DMG using the production com.elef.desktop identifier, installs the app under a disposable test directory, then stages signed N and exercises cache persistence, feed block/outage, unsafe-save deferral, interrupted installation, safe quit/relaunch and source preservation. The loopback feed uses an ephemeral key and is not a public release test. The test-only WebDriver feature is required for its interruption failpoint. Linux runs download verification only and has no self-installer."
