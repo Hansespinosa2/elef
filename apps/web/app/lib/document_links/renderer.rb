@@ -10,7 +10,15 @@ module DocumentLinks
 
       workspace ||= documents&.first&.workspace || Workspace.default
       documents = (documents || Document.where(workspace: workspace).includes(:document_detail, :document_aliases)).to_a
-      nodes = documents.map do |document|
+      Source::JavascriptRenderer.render(
+        source,
+        media_resolver: media_resolver,
+        document_nodes: javascript_document_nodes(documents)
+      ).html_safe
+    end
+
+    def javascript_document_nodes(documents)
+      Array(documents).map do |document|
         {
           id: document.id.to_s,
           title: document.title,
@@ -19,11 +27,6 @@ module DocumentLinks
           href: Rails.application.routes.url_helpers.document_path(document)
         }
       end
-      Source::JavascriptRenderer.render(
-        source,
-        media_resolver: media_resolver,
-        document_nodes: nodes
-      ).html_safe
     end
   end
 end

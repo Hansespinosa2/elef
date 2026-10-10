@@ -1,4 +1,4 @@
-import { ART_DIAGNOSTICS, resolveArtBindings, type ArtBindings, type ArtBoundaryMap, type ArtDiagnostic } from "./art_source.js"
+import { ART_DIAGNOSTICS, analyzeArtList, resolveArtBindings, type ArtBindings, type ArtBoundaryMap, type ArtDiagnostic, type ArtListAnalysis } from "./art_source.js"
 import { slidePositionLayout } from "./slide_position_layout.js"
 
 export interface SourceRange {
@@ -115,7 +115,7 @@ export interface EditorMap {
 export interface ParsedBlock {
   markdown: string;
   position: SourcePosition | null;
-  art?: { directive_id: string };
+  art?: { directive_id: string } & Partial<ArtListAnalysis>;
   reveal_event?: number;
 }
 
@@ -124,6 +124,7 @@ export interface SlideMetadata {
   title: string | null;
   blocks: ParsedBlock[];
   reveal_event_count: number;
+  art_diagnostics: ArtDiagnostic[];
   regions: ParsedBlock[][];
   section: string | null;
   subsection: string | null;
@@ -893,6 +894,7 @@ function slideMetadata(
     title,
     blocks: parsed.blocks,
     reveal_event_count: parsed.reveal_event_count ?? 0,
+    art_diagnostics: artResolution.diagnostics,
     regions,
     section: margin.section,
     subsection: margin.subsection,
@@ -1121,7 +1123,7 @@ function parsedBlock(
 ): ParsedBlock {
   const block: ParsedBlock = { markdown: record.markdown, position }
   const binding = artBindingsByStartLine.get(record.startLine)
-  if (binding) block.art = { directive_id: binding.directive_id }
+  if (binding) block.art = { directive_id: binding.directive_id, ...analyzeArtList(record.markdown) }
   const revealEvent = eventByLine?.[record.startLine]
   if (revealEvent !== undefined) block.reveal_event = revealEvent
   return block

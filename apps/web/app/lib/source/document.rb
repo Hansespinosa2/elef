@@ -6,7 +6,7 @@ module Source
     PORTABLE_DOCUMENT_ALIASES = "elef_aliases".freeze
     Position = Data.define(:horizontal, :vertical, :vertical_explicit)
     Block = Data.define(:markdown, :position, :art, :reveal_event)
-    Slide = Data.define(:id, :index, :markdown, :layout, :blocks, :title, :regions, :section, :subsection, :footnote, :warnings) do
+    Slide = Data.define(:id, :index, :markdown, :layout, :blocks, :title, :regions, :section, :subsection, :footnote, :warnings, :art_diagnostics) do
       def reveal_event_count
         blocks.filter_map(&:reveal_event).uniq.length
       end
@@ -43,7 +43,8 @@ module Source
           section: slide[:section],
           subsection: slide[:subsection],
           footnote: slide[:footnote],
-          warnings: slide[:warnings]
+          warnings: slide[:warnings],
+          art_diagnostics: slide[:art_diagnostics] || []
         )
       end
       Parsed.new(

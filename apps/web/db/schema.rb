@@ -172,7 +172,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_09_165422) do
     t.bigint "workspace_id", null: false
     t.index ["kind"], name: "index_works_on_kind"
     t.index ["sample_id"], name: "index_works_on_sample_id", unique: true
-    t.index ["workspace_id", "title"], name: "index_works_on_workspace_and_document_title", unique: true, where: "((kind)::text = 'document'::text)"
+    t.index ["workspace_id", "title"], name: "index_works_on_workspace_and_document_title", unique: true, where: "kind = 'document'"
     t.index ["workspace_id"], name: "index_works_on_workspace_id"
   end
 
