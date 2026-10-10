@@ -615,8 +615,8 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
   }
 
   // The create dialog is client-owned; the host only requests it. Creation
-  // itself flows through the host adapter, then the navigate seam opens the
-  // new work, matching the old create-then-open sequence.
+  // itself flows through the host adapter, then the navigate adapter opens
+  // the new work, matching the old create-then-open sequence.
   function showCreateDialog(kind = "presentation") {
     mount.querySelector(".library-shared-view")?.dispatchEvent(
       new CustomEvent(CREATE_WORK_EVENT, { detail: { kind } })

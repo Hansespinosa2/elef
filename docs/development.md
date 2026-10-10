@@ -29,7 +29,7 @@ npm ci --prefix apps/desktop/frontend
 npm run tauri:dev --prefix apps/desktop/frontend
 ~~~
 
-The Tauri configuration runs the Rails-owned frontend build before dev and production launches. After changing shared frontend sources, the running desktop app must be relaunched to load the rebuilt bundle.
+The Tauri configuration runs the shared frontend build before dev and production launches. After changing shared frontend sources, the running desktop app must be relaunched to load the rebuilt bundle.
 
 ## Check tiers
 
@@ -68,6 +68,8 @@ python3 apps/desktop/scripts/check_architecture.py
 cargo fmt --manifest-path Cargo.toml --all -- --check
 cargo clippy --manifest-path Cargo.toml --workspace --all-targets -- -D warnings
 ~~~
+
+Package TypeScript holds the strictest bar: `strict` + `exactOptionalPropertyTypes` + `noUncheckedIndexedAccess` (see `tsconfig.base.json`), verified by each package's typecheck. Contortion guard: write explicit narrowing guards instead of `!` assertions; a per-file documented relaxation needs a recorded justification and stays the exception, never the pattern.
 
 ## Web and desktop parity
 

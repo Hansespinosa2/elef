@@ -1,9 +1,9 @@
 # ADR-011: Shared editor shell lives in a neutral package (no host→host)
 
-- Status: Draft (decision interview in progress; NOT accepted)
+- Status: Accepted
 - Date: 2026-10-10
 - Decider: Andres (owner)
-- Confidence: unsettled — see Unresolved below
+- Confidence: settled — owner interview 2026-10-10 plus Phase 12 round-1 review evidence that code, `docs/architecture.md`, and ADR-004 already treat fork B as decided
 
 ## Context
 
@@ -50,7 +50,7 @@ landed in it); no velocity pain exists to justify debt status; a vague
 ## Consequences
 
 - ADR-004 ("Rails `app/` owns shareable product UI") is superseded by this
-  record; its status moves to Superseded when this ADR is accepted.
+  record; its status is Superseded.
 - The package faces the package-admission law in writing (phase-12 plan §3);
   P12-03 reviewer judgment covers six packages. No P12-01 register entry.
 - Two UI frameworks are an explicit, owned, permanent v9 property:
@@ -59,9 +59,12 @@ landed in it); no velocity pain exists to justify debt status; a vague
 - `check_frontend_ownership.py`'s transitional Rails→desktop rule retires,
   replaced by a permanent no-host→host tripwire.
 
-## Unresolved
+## Resolved at acceptance
 
-1. (Campaign scope, recorded in the phase plan, not here) #148/#149 deletion
-   timing, TS strictness bar, package name confirmation, host-TS scope,
-   agent launch.
-2. Final acceptance of this ADR (Draft → Accepted) at plan freeze / review.
+1. Campaign-scope items (settled in the owner interview 2026-10-10,
+   recorded in the frozen phase plan): #148/#149 delete after campaign
+   PASS in the dev port; strictest TS bar for converted code (D3);
+   package name `editor-runtime` (D4a); TypeScript in packages only,
+   hosts stay thin JavaScript glue (D4c); repair agents launched.
+2. This ADR: Draft → Accepted. The transitional Rails→desktop ownership
+   rule is retired and replaced by the permanent no-host→host tripwire.

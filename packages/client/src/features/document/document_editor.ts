@@ -4,7 +4,6 @@
 // with DOM roots, document kind, editor lookup plus preview-toggle seams, and
 // the shared editing-utilities deps object, then delegates lifecycle and
 // actions. The web Stimulus controller is the thin adapter.
-// @ts-ignore: work-model is still untyped JS (S3 converts it); the ignore goes dormant once its types land.
 import { blockOperationRange, directiveLineSpan, exciseRange, findPositionCloseAfter, insertAlignDirective } from "@elef/work-model/document-transforms"
 
 export interface DocumentEditorRange {

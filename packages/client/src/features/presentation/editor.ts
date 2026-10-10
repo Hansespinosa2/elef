@@ -2,11 +2,11 @@
 // directives, projection typing flush, and caret preservation. Ported from the
 // Stimulus-era presentation_editor_controller.js without behavior change.
 // Framework-free: hosts mount it on their editor form and inject the editor
-// seam plus editing utilities (caret math, markdown mapping, live math,
-// projection editability stay host-owned until Phase 09; they are used here
+// seam plus editing utilities (caret math, markdown mapping, live math, and
+// projection editability live in the shared editor runtime and are used here
 // only through the injected deps object so this module never imports host
 // paths). Slide visibility/scaling/present-mode travel live in
-// presentation.js; renderer chrome markup stays byte-identical so the frozen
+// presentation.ts; renderer chrome markup stays byte-identical so the frozen
 // fixtures keep matching.
 //
 // Host interop: the mount publishes itself as
@@ -24,7 +24,6 @@ import {
   moveSlide as moveSlideInSource,
   parseAlignment,
   removeBlock as removeBlockFromSource
-// @ts-ignore: work-model is still untyped JS (S3 converts it); the ignore goes dormant once its types land.
 } from "@elef/work-model/document-transforms"
 
 export interface EditorSourceRange {

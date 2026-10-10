@@ -40,7 +40,7 @@ Web-only pages, host adapters, and shared styles belong under `apps/web/app/`; h
 | Product UI and shared behavior | Mounts `packages/client` through the Stimulus HTTP host adapter; web-only pages stay in Rails views | Mounts the same client bundle through the Tauri host adapter |
 | Persistence | Rails models and PostgreSQL; uploaded media uses Active Storage | Markdown deck folders, local assets, manifests, and .elef library settings |
 | Runtime integration | Rails routes, sessions, and web browser APIs | Tauri transport, Rust commands, native dialogs/menus, filesystem access, lifecycle, updater |
-| Rendering | Shared JavaScript renderer called from Rails through MiniRacer; legacy Ruby renderer remains as an explicit rollback path | The same renderer bundle in a web worker; platform links and media use desktop adapters |
+| Rendering | Shared JavaScript renderer called from Rails through MiniRacer; no Ruby renderer remains | The same renderer bundle in a web worker; platform links and media use desktop adapters |
 
 Markdown is the authored source. Rendered HTML, editor projections, library cards, and graph views are derived. Desktop has no database server and does not require Rails to run.
 
@@ -90,13 +90,14 @@ Each package exists for exactly one reason; anything else is a module inside its
 
 These hold everywhere and are machine-checked (`tooling/check_boundaries.py`, `apps/web/script/check_frontend_ownership.py`):
 
-- imports point one way: contracts ← work-model ← renderer ← client ← editor-runtime ← hosts; nothing imports upward;
+- imports point one way: contracts ← client, work-model ← renderer ← client ← editor-runtime ← hosts (editor-runtime additionally imports work-model directly); the single reviewed exception is the renderer → editor-runtime editor-chrome seam (pinned by R12); nothing else imports upward;
 - `contracts` is dependency-free and frozen; `work-model` is pure (no DOM, no I/O, no host);
 - `local-store` never touches Tauri; Tauri commands stay inside `apps/desktop/frontend/src` adapters;
 - Rails code never imports desktop files or Tauri APIs; desktop code never imports Rails-host JavaScript; the desktop never duplicates shareable views, styles, controllers, or workflows;
 - no package reaches into another package's internals (public entry points only);
 - Work syntax is interpreted exactly once, in `work-model` (rule R8);
 - `editor-runtime` is a narrowed boot API: packages never import it except the renderer seam `editor-chrome`, and no importer names a subpath beyond its exports (rule R12);
+- TypeScript lives in packages only: host JavaScript stays thin glue, typed at the seams through contracts ports and package APIs. Host code that grows real logic moves to its owning package instead of being converted in place;
 - source writes are atomic with fingerprint checks; see the [desktop data format](desktop/data-format.md) and [ADR-008](desktop/adr/008-safe-writes-and-conflict-detection.md).
 
 ## State ownership
@@ -118,7 +119,7 @@ Each mutable state has exactly one owner; anything else reads it through that ow
 
 Ask "which row owns the state or behavior?" and put the change there; add a host adapter only when a concrete platform capability differs.
 
-- **New Work syntax** (a directive, position rule, or boundary): `packages/work-model` (semantics + tests), `packages/renderer` (projection), both hosts inherit; never in a host or the Rails shim.
+- **New Work syntax** (a directive, position rule, or boundary): `packages/work-model` (semantics + tests), `packages/renderer` (projection), both hosts inherit; never in a host or a host adapter.
 - **New editor behavior** (a command, palette, or shortcut): `packages/client` feature slice behind the editor seam; the web Stimulus adapter and the Tauri adapter only mount it.
 - **New native capability** (a dialog, menu, or filesystem picker): `apps/desktop/frontend/src` adapter + Tauri command, capability-declared; the client receives values, never Tauri APIs.
 - **Web-only page or admin surface**: `apps/web/app/` (controller + view); shared styling only from `apps/web/app/assets`.

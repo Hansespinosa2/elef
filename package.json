@@ -5,10 +5,6 @@
   "workspaces": [
     "packages/*"
   ],
-  "imports": {
-    "#elef/authoring-settings": "./apps/web/app/javascript/lib/authoring_settings.js",
-    "#elef/authoring-registry-write": "./apps/web/app/javascript/lib/authoring_registry_write.js"
-  },
   "scripts": {
     "renderer:build": "node packages/renderer/build.mjs",
     "test:javascript": "node --test apps/web/test/javascript/*.test.js apps/web/test/javascript/*.test.mjs apps/web/test/javascript/shared/*.test.js"

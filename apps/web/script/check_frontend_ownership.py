@@ -401,7 +401,7 @@ assert "preview_sanitizer" not in build, "desktop must not keep the retired prev
 assert "controllers/" not in build and "sharedModuleAliases" not in build, "desktop must not keep the retired app-source alias scheme"
 assert 'import "../../../../apps/web/app/assets/stylesheets/application.css"' in desktop_main, "desktop must bundle the Rails-owned application styles"
 assert "startFileLibraryApplication" in desktop_main and "document.querySelector" not in desktop_main, (
-    "the desktop entry point must only wire native services into the Rails-owned application"
+    "the desktop entry point must only wire native services into the shared application"
 )
 assert 'from "@elef/editor-runtime"' in desktop_main, "desktop must consume the shared Stimulus editor runtime package"
 assert "@tauri-apps/" not in desktop_application and "desktop/" not in desktop_application, (
@@ -637,7 +637,7 @@ desktop_source_reasons = {
     "bootstrap-flow.js": "orders native app startup and its readiness handshake",
     "close-flow.js": "coordinates native window close with the save transport",
     "file-library-transport.js": "maps named app operations to the native file-library command surface",
-    "main.js": "boots the Rails-owned application with Tauri services and native lifecycle",
+    "main.js": "boots the shared application with Tauri services and native lifecycle",
     "media-transport.js": "adapts browser media fetches to Tauri IPC and asset protocols",
     "preview-transport.js": "adapts the shared renderer to the desktop preview endpoint",
     "quiet_save_policy.js": "declares desktop quiet-save timing injected into the shared session factory",

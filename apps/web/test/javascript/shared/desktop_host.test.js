@@ -143,7 +143,7 @@ test("Rails and desktop share one sanitized preview insertion path", () => {
   assert.match(editorView, /import \{ sanitizePreview as installSanitizedPreview \} from "@elef\/client\/sanitize"/)
   assert.match(importmap, /pin "@elef\/client\/sanitize", to: "client\/dist\/sanitize\.js"/)
   assert.doesNotMatch(importmap, /preview-sanitizer/)
-  assert.equal(rootPackage.imports["#elef/preview-sanitizer"], undefined)
+  assert.equal((rootPackage.imports || {})["#elef/preview-sanitizer"], undefined)
   assert.doesNotMatch(build, /preview-sanitizer/)
   assert.match(build, /@elef\//)
   assert.match(editorView, /installSanitizedPreview\(container, html, \{ mediaBaseUrl \}\)/)
