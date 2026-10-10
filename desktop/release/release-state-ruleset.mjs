@@ -72,9 +72,22 @@ function validateReleaseStateWriterRulesetShape(ruleset, expected, repository) {
   if (!sameJson(ruleset.conditions, expected.conditions)) {
     throw new Error("the release-state writer ruleset must match only refs/heads/gh-pages")
   }
-  if (!sameJson(ruleset.rules, expected.rules)) {
+  if (!sameJson(normalizeUpdateRuleDefaults(ruleset.rules), expected.rules)) {
     throw new Error("the release-state writer ruleset must restrict branch updates")
   }
+}
+
+function normalizeUpdateRuleDefaults(rules) {
+  if (!Array.isArray(rules)) return rules
+  // GitHub accepts update_allows_fetch_and_merge=false on write, then omits
+  // the default-false parameters object from ruleset readback. Preserve the
+  // strict comparison while recognizing that documented server representation.
+  return rules.map(rule => {
+    if (rule?.type === "update" && !Object.prototype.hasOwnProperty.call(rule, "parameters")) {
+      return { ...rule, parameters: { update_allows_fetch_and_merge: false } }
+    }
+    return rule
+  })
 }
 
 function canonical(value) {

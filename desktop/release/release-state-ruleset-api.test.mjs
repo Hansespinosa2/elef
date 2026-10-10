@@ -89,7 +89,7 @@ test("release publication rejects a duplicate or non-repository matching rule", 
   }), /belong to this repository/)
 })
 
-test("Contents-only ruleset readback uses the administrator-pinned revision when GitHub omits bypass actors", async () => {
+test("Contents-only readback accepts GitHub's omitted false update parameter and pins hidden bypass actors", async () => {
   const hiddenBypass = {
     ...releaseStateWriterRuleset(481516),
     id: 73,
@@ -98,6 +98,7 @@ test("Contents-only ruleset readback uses the administrator-pinned revision when
     updated_at: RULESET_UPDATED_AT
   }
   delete hiddenBypass.bypass_actors
+  hiddenBypass.rules = [{ type: "update" }]
   let callCount = 0
   const input = {
     repository: "Hansespinosa2/elef",

@@ -21,6 +21,17 @@ test("release-state rule restricts only gh-pages to the dedicated writer App", (
   assert.equal(validateReleaseStateWriterRuleset(expected, 481516), true)
 })
 
+test("ruleset readback accepts GitHub's omitted default-false update parameters", () => {
+  const expected = releaseStateWriterRuleset(481516)
+  const apiReadback = { ...expected, rules: [{ type: "update" }] }
+  assert.equal(validateReleaseStateWriterRuleset(apiReadback, 481516), true)
+
+  assert.throws(() => validateReleaseStateWriterRuleset({
+    ...apiReadback,
+    rules: [{ type: "update", parameters: { update_allows_fetch_and_merge: true } }]
+  }, 481516), /restrict branch updates/)
+})
+
 test("release-state ruleset rejects Actions and user bypass actors", () => {
   const expected = releaseStateWriterRuleset(481516)
   for (const bypass of [
