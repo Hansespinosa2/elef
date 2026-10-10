@@ -906,11 +906,29 @@ class DesktopEditorUi {
       document.addEventListener("keydown", handler, true)
       window.__elefDisplayMathKeys = { events, handler }
     }, mode)
+    const expectedKeys = ["$", "$", "Enter"]
     let keys
+    let keyWaitError = null
     try {
       typeNativeText("$")
       typeNativeText("$")
       sendNativeKey("Enter", { activate: false })
+      try {
+        await browser.waitUntil(async () => {
+          const inputKeys = await browser.execute(() =>
+            (window.__elefDisplayMathKeys?.events || [])
+              .filter(({ key }) => key !== "Shift")
+              .map(({ key }) => key)
+          )
+          return JSON.stringify(inputKeys) === JSON.stringify(expectedKeys)
+        }, {
+          timeout: 2_000,
+          interval: 50,
+          timeoutMsg: "The native Enter key event did not reach the display-math editor"
+        })
+      } catch (error) {
+        keyWaitError = error.message
+      }
     } finally {
       keys = await browser.execute(() => {
         const capture = window.__elefDisplayMathKeys
@@ -919,11 +937,11 @@ class DesktopEditorUi {
         return capture?.events || []
       })
     }
-    const expectedKeys = ["$", "$", "Enter"]
     const inputKeys = keys.filter(({ key }) => key !== "Shift")
     if (JSON.stringify(inputKeys.map(({ key }) => key)) !== JSON.stringify(expectedKeys) ||
       keys.some(({ trusted, inEditor }) => !trusted || !inEditor)) {
-      throw new Error(`Display-math input did not reach the editor as the expected trusted keys: ${JSON.stringify(keys)}`)
+      const waitDiagnostic = keyWaitError ? `; event wait: ${keyWaitError}` : ""
+      throw new Error(`Display-math input did not reach the editor as the expected trusted keys: ${JSON.stringify(keys)}${waitDiagnostic}`)
     }
   }
 
