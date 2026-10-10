@@ -16,7 +16,7 @@
   },
   "frozen_plan_sha256": "b87b2117fa2f37ad4847afc26a484026b961e5ff1f22040def5237cfa09e802c",
   "head_sha": "ad8145d5d670ba3f729e763e749560175d512509",
-  "last_completed_phase": 11,
+  "last_completed_phase": 12,
   "last_verified_checks": [
     {
       "attempt_id": "a03b10a585714f3185ca7d32a0777989",
@@ -462,7 +462,7 @@
       "selected_gate_path": "docs/refactor/execution/phase-12-gate.json"
     }
   ],
-  "next_action": "Phase 12 ACT round 3: review PASS (non-driving N04 only); PASS transition, reconstruct 13 checkpoints, then post-PASS dev port.",
+  "next_action": "Phase 12 PASS: reconstruct 13 checkpoints, then post-PASS dev port + conflict-free CI-green open PR (owner merges).",
   "pending_human_gates": [
     {
       "detail": "production signing/updater keys and offline backups (constitution \u00a78 gate class 1; owner-held release material)",
@@ -487,6 +487,6 @@
   ],
   "phase_base_sha": "15e95a91d8683d32459cfff82b88caa812ff2a22",
   "phase_contract_sha256": "626b04626484ffda893825753e01de5bf4dcd4fe5c7f3b93ca44554ba3311386",
-  "phase_state": "ACT",
+  "phase_state": "PASS",
   "review_round": 3
 }
