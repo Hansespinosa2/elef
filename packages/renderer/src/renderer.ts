@@ -416,13 +416,18 @@ export function renderPreviewCore({
   const sourceName = String(title || "Untitled")
   const structure = buildEditorStructure(source, { sourceName, mode })
   const map = structure.editorMap
-  const slides: RenderSlide[] = structure.slides.map(({ map: slideMap, ...metadata }) => ({
-    ...slideMap,
-    ...metadata,
-    parsed_blocks: metadata.blocks,
-    blocks: slideMap.blocks,
-    editable_regions: slideMap.editable_regions
-  }))
+  const slides: RenderSlide[] = structure.slides.map(({ map: slideMap, art_diagnostics: structureDiagnostics, ...metadata }) => {
+    // Rendered slides carry the map diagnostics (absolute ranges); the
+    // structure copy serves the server twin through buildEditorStructure.
+    void structureDiagnostics
+    return {
+      ...slideMap,
+      ...metadata,
+      parsed_blocks: metadata.blocks,
+      blocks: slideMap.blocks,
+      editable_regions: slideMap.editable_regions
+    }
+  })
   const { warnings } = structure
   const style: EditorStyle = {
     ...structure.style,
