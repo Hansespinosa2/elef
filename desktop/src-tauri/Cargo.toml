@@ -7,6 +7,7 @@ edition = "2024"
 publish = false
 
 [features]
+desktop-dev = []
 webdriver = ["dep:tauri-plugin-wdio", "dep:tauri-plugin-wdio-webdriver"]
 
 [lib]

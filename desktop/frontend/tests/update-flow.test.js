@@ -3,58 +3,42 @@ import test from "node:test"
 
 import { checkForDesktopUpdate, createIdleUpdateCheck, installDesktopUpdate } from "../src/update-flow.js"
 
-test("update checks distinguish no update from an announced available update", async () => {
+test("background staging distinguishes no update from a persisted available update", async () => {
   assert.equal(await checkForDesktopUpdate(async () => null), null)
-
-  let progress
-  const result = await checkForDesktopUpdate(async () => ({
-    version: "1.2.0",
-    body: "Fixes"
-  }), async (version, callback) => {
-    assert.equal(version, "1.2.0")
-    callback({ event: "Progress", data: { chunkLength: 10 } })
-    return true
-  })
+  const result = await checkForDesktopUpdate(async () => ({ version: "1.2.0", notes: "Fixes" }))
   assert.deepEqual({ version: result.version, notes: result.notes }, { version: "1.2.0", notes: "Fixes" })
-  await result.install(event => { progress = event })
-  assert.equal(progress.data.chunkLength, 10)
 })
 
-test("abandoned updates release their native resource and failed installations never relaunch", async () => {
-  let released = 0
+test("failed safe-quit revalidation never relaunches", async () => {
   let relaunched = false
-  const error = new Error("Invalid update signature")
-  const update = await checkForDesktopUpdate(async () => ({
-    version: "1.2.0",
-    close: async () => { released += 1 }
-  }), async () => { throw error })
-  await assert.rejects(installDesktopUpdate(update, {
+  const update = { version: "1.2.0" }
+  assert.equal(await installDesktopUpdate(update, {
+    install: async version => {
+      assert.equal(version, "1.2.0")
+      throw new Error("safe version feed unavailable")
+    },
     relaunch: async () => { relaunched = true }
-  }), error)
+  }).catch(() => false), false)
   assert.equal(relaunched, false)
-  await update.dispose()
-  assert.equal(released, 1)
 })
 
-test("unsaved conflicts and cancelled native confirmation prevent installation or relaunch", async () => {
+test("a deferred installer does not relaunch", async () => {
   const calls = []
-  const update = { install: async () => { calls.push("install"); return false } }
+  const update = { version: "1.2.0" }
   const relaunch = async () => calls.push("relaunch")
-  assert.equal(await installDesktopUpdate(update, { prepare: async () => false, relaunch }), false)
-  assert.deepEqual(calls, [])
-  assert.equal(await installDesktopUpdate(update, { relaunch }), false)
+  assert.equal(await installDesktopUpdate(update, { install: async () => { calls.push("install"); return false }, relaunch }), false)
   assert.deepEqual(calls, ["install"])
 })
 
-test("verified updates relaunch after download and installation", async () => {
+test("verified staged updates relaunch after safe-quit installation", async () => {
   const sequence = []
-  const update = { install: async () => sequence.push("installed") }
-  await installDesktopUpdate(update, { relaunch: async () => sequence.push("relaunch") })
-  assert.deepEqual(sequence, ["installed", "relaunch"])
-  await assert.rejects(
-    installDesktopUpdate(null, { relaunch: async () => {} }),
-    error => error.code === "invalid_input"
-  )
+  const update = { version: "1.2.0" }
+  await installDesktopUpdate(update, {
+    install: async version => { sequence.push(`installed:${version}`) },
+    relaunch: async () => sequence.push("relaunch")
+  })
+  assert.deepEqual(sequence, ["installed:1.2.0", "relaunch"])
+  await assert.rejects(installDesktopUpdate(null, { install: async () => {}, relaunch: async () => {} }), error => error.code === "invalid_input")
 })
 
 test("startup update checks wait until the editor is idle and run once", async () => {
@@ -79,6 +63,24 @@ test("startup update checks wait until the editor is idle and run once", async (
   assert.equal(await updateCheck.resume(), true)
   assert.equal(await updateCheck.resume(), false)
   assert.equal(checks, 1)
+})
+
+test("successful update checks repeat after the configured interval", async () => {
+  const timers = []
+  let checks = 0
+  const updateCheck = createIdleUpdateCheck(async () => { checks += 1 }, () => false, {
+    repeatDelayMs: 60_000,
+    setTimer(callback, delay) { timers.push({ callback, delay }); return timers.length },
+    clearTimer() {}
+  })
+  updateCheck.schedule(10)
+  timers[0].callback()
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(checks, 1)
+  assert.equal(timers[1].delay, 60_000)
+  timers[1].callback()
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(checks, 2)
 })
 
 test("manual update checks cancel a pending startup check", () => {

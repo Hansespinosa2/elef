@@ -1,0 +1,20 @@
+# These workflows can receive release-state, signing, and AUR credentials.
+# The release coordinator and its trust/publishing code also define the gate
+# for promoting a merge. Require repository-owner review for changes to them.
+/.github/workflows/ci.yml @Hansespinosa2
+/.github/workflows/desktop-release.yml @Hansespinosa2
+/.github/workflows/desktop-release-controls.yml @Hansespinosa2
+/desktop/release/ @Hansespinosa2
+/desktop/release/gate-failure-notifier.mjs @Hansespinosa2
+/desktop/scripts/check_release_ci.mjs @Hansespinosa2
+/desktop/scripts/finalize_desktop_release_notes.mjs @Hansespinosa2
+/desktop/scripts/prepare_desktop_releases.mjs @Hansespinosa2
+/desktop/scripts/publish_desktop_aur.mjs @Hansespinosa2
+/desktop/scripts/publish_desktop_platform.mjs @Hansespinosa2
+/desktop/scripts/publish_desktop_release_state.mjs @Hansespinosa2
+/desktop/scripts/reconcile_desktop_releases.mjs @Hansespinosa2
+/desktop/scripts/record_desktop_bootstrap_failure.mjs @Hansespinosa2
+/desktop/scripts/record_desktop_platform_failure.mjs @Hansespinosa2
+/desktop/scripts/verify_release_coordinator.mjs @Hansespinosa2
+/desktop/scripts/acknowledge_desktop_gate_failures.mjs @Hansespinosa2
+/desktop/scripts/notify_desktop_gate_failures.mjs @Hansespinosa2

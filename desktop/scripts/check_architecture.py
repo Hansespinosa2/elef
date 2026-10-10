@@ -28,11 +28,17 @@ def command_names(source: str, pattern: str) -> set[str]:
 build_source = (TAURI_ROOT / "build.rs").read_text()
 app_source = (TAURI_ROOT / "src" / "lib.rs").read_text()
 capability = json.loads((TAURI_ROOT / "capabilities" / "main.json").read_text())
+dev_capability = json.loads((TAURI_ROOT / "capabilities" / "main-dev.json").read_text())
+macos_updater_capability = json.loads((TAURI_ROOT / "capabilities" / "macos-updater.json").read_text())
 e2e_capability = json.loads((TAURI_ROOT / "capabilities" / "e2e.json").read_text())
+e2e_stable_capability = json.loads((TAURI_ROOT / "capabilities" / "e2e-stable.json").read_text())
 config = json.loads((TAURI_ROOT / "tauri.conf.json").read_text())
+assert config["bundle"]["macOS"]["signingIdentity"] == "-", "v0.x macOS bundles must use ad-hoc signing, without a Developer ID identity"
 e2e_config = json.loads((TAURI_ROOT / "tauri.e2e.conf.json").read_text())
+e2e_stable_config = json.loads((TAURI_ROOT / "tauri.e2e-stable.conf.json").read_text())
 performance_config = json.loads((TAURI_ROOT / "tauri.performance.conf.json").read_text())
 assert performance_config == {"plugins": {"updater": {"endpoints": ["https://127.0.0.1:8888/manifest"]}}}, "release measurement must keep secure transport and a loopback-only offline check"
+assert config["plugins"]["updater"]["endpoints"] == ["https://hansespinosa2.github.io/elef/desktop/stable/latest.json"], "Stable updater must use the controlled safe-version feed"
 performance_benchmark = (REPO_ROOT / "desktop" / "e2e" / "benchmark-native.mjs").read_text()
 ci_workflow = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text()
 assert 'process.argv.includes("--report-runner")' in performance_benchmark, "hosted native performance must be identified explicitly"
@@ -47,6 +53,8 @@ renderer_global = (REPO_ROOT / "app" / "javascript" / "lib" / "renderer_global.j
 renderer_worker = (REPO_ROOT / "desktop" / "frontend" / "src" / "renderer-worker.js").read_text()
 desktop_main = (REPO_ROOT / "desktop" / "frontend" / "src" / "main.js").read_text()
 desktop_application = (REPO_ROOT / "app" / "javascript" / "lib" / "file_library_application.js").read_text()
+preview_transport = (REPO_ROOT / "desktop/frontend/src/preview-transport.js").read_text()
+diagnostic_failures = (REPO_ROOT / "desktop/frontend/src/diagnostic-failures.js").read_text()
 native_render_styles = (REPO_ROOT / "app" / "assets" / "stylesheets" / "file_library_host.css").read_text()
 shared_application_styles = application_stylesheet_sources()
 desktop_frontend_source = REPO_ROOT / "desktop" / "frontend" / "src"
@@ -124,7 +132,7 @@ assert "renderDocumentGraphView" in graph_controller and "renderDocumentGraphVie
 assert "document-graph-node" not in graph_partial, "Rails must not keep a second document graph node template"
 assert "createElementNS" not in desktop_application and "document-graph-node" not in desktop_application, "desktop must not keep a second document graph node template"
 
-declared = command_names(build_source, r"let app_commands = &\[(.*?)\];")
+declared = command_names(build_source, r"macro_rules! command_list\s*\{.*?=>\s*\{\s*&\[(.*?)\]")
 shared_command_references = sorted(
     f"{source_file.relative_to(REPO_ROOT)} -> {command}"
     for source_file in app_javascript_source.rglob("*.js")
@@ -137,23 +145,34 @@ assert not shared_command_references, (
 )
 assert not re.search(r"\binvoke\s*\(", desktop_application), "Rails-owned application logic must not call raw Tauri IPC"
 handler_match = re.search(
-    r"\.invoke_handler\(tauri::generate_handler!\[(.*?)\]\)",
+    r"macro_rules! app_commands\s*\{.*?=>\s*\{\s*tauri::generate_handler!\[(.*?)\]",
     app_source,
     re.DOTALL,
 )
 if not handler_match:
-    raise AssertionError("could not find Tauri invoke handler")
-registered = set(re.findall(r"^\s*([a-z_]+),\s*$", handler_match.group(1), re.MULTILINE))
+    raise AssertionError("could not find shared Tauri invoke handler command list")
+registered = set(re.findall(r"^\s{12}([a-z_]+),\s*$", handler_match.group(1), re.MULTILINE))
 permissions = set(capability["permissions"])
-allowed = {
-    permission.removeprefix("allow-").replace("-", "_")
-    for permission in permissions
-    if permission.startswith("allow-")
-    and not permission.startswith("core:")
-}
 
-assert declared == registered, f"build ACL and runtime invoke handler differ: {declared ^ registered}"
-assert declared == allowed, f"capability command permissions differ: {declared ^ allowed}"
+def allowed_commands(capability_permissions: set[str]) -> set[str]:
+    return {
+        permission.removeprefix("allow-").replace("-", "_")
+        for permission in capability_permissions
+        if permission.startswith("allow-") and not permission.startswith("core:")
+    }
+
+
+assert declared == registered, f"build ACL and runtime invoke handler common commands differ: {declared ^ registered}"
+assert declared == allowed_commands(permissions), f"Stable capability command permissions differ: {declared ^ allowed_commands(permissions)}"
+assert allowed_commands(set(dev_capability["permissions"])) == declared | {"document_graph"}, "repository Dev must add only its graph command to the common ACL"
+assert allowed_commands(set(macos_updater_capability["permissions"])) == {"stage_update", "install_update"}, "only the macOS updater capability may stage or activate a signed update"
+assert macos_updater_capability["platforms"] == ["macOS"], "updater command permissions must be macOS-only"
+assert "document_graph" not in declared and "install_update" not in declared and "stage_update" not in declared, "profile-specific commands must not enter the common Stable ACL"
+assert "(desktop_dev, has_update_command, webdriver)" in build_source and 'command_list!("document_graph")' in build_source
+assert "export_diagnostics_fixture" in build_source and "#[cfg(feature = \"webdriver\")]\n#[tauri::command]\nasync fn export_diagnostics_fixture" in app_source, "privacy fixture export must exist only in WebDriver command builds"
+assert 'let has_update_command = target_os == "macos" || (desktop_dev && webdriver);' in build_source
+assert re.search(r'#\[cfg\(any\(\s*target_os = "macos",\s*all\(feature = "desktop-dev", feature = "webdriver"\)\s*\)\)\]', app_source), "Linux Stable WebDriver must not compile updater code"
+assert "app_commands!(document_graph)" in app_source and "app_commands!(stage_update, install_update)" in app_source
 assert "core:default" not in permissions, "use only the individual core permissions needed"
 assert {permission for permission in permissions if permission.startswith("core:")} == {
     "core:event:allow-listen",
@@ -165,8 +184,11 @@ assert {permission for permission in permissions if permission.startswith("core:
 }, "grant only events, window close completion, presentation fullscreen, and releasing updater resources"
 assert "await this.destroy();" in (REPO_ROOT / "desktop/frontend/node_modules/@tauri-apps/api/window.js").read_text(), "recheck window permissions when the close-listener implementation changes"
 assert not any(permission.startswith(("fs:", "shell:", "dialog:")) for permission in permissions)
-assert config["app"]["security"]["capabilities"] == ["main-capability"], "production must not attach the E2E WebDriver capability"
-assert e2e_config["app"]["security"]["capabilities"] == ["main-capability", "e2e-webdriver"], "the test build must attach only the production and E2E capabilities"
+assert config["app"]["security"]["capabilities"] == ["main-capability", "macos-updater-capability"], "Stable must attach only its common and macOS-only updater capabilities"
+assert e2e_config["app"]["security"]["capabilities"] == ["main-dev-capability", "e2e-webdriver"], "the test build must use Dev features and the isolated WebDriver capability"
+assert e2e_stable_config["app"]["security"]["capabilities"] == ["main-capability", "macos-updater-capability", "e2e-stable-webdriver"], "Stable runtime tests must use Stable native permissions"
+assert e2e_stable_config["identifier"] == "com.elef.desktop.e2e.stable" and e2e_stable_config["bundle"]["active"] is False
+assert e2e_config["identifier"] == "com.elef.desktop.e2e", "E2E app state must not touch Stable or Dev"
 e2e_updater = e2e_config["plugins"]["updater"]
 assert e2e_updater["endpoints"] == ["http://127.0.0.1:8888/manifest"], "the E2E updater fixture must stay loopback-only"
 assert e2e_updater.get("dangerousInsecureTransportProtocol") is True, "only the release-mode E2E fixture may opt into its loopback HTTP updater"
@@ -174,10 +196,32 @@ assert not performance_config.get("plugins", {}).get("updater", {}).get("dangero
 assert set(e2e_capability["permissions"]) == {
     "wdio:default",
     "wdio-webdriver:default",
+    "allow-stage-update",
+    "allow-install-update",
+    "updater:allow-check",
     "updater:allow-download",
+    "process:allow-restart",
     "core:app:allow-version",
     "core:window:allow-is-fullscreen",
+    "allow-export-diagnostics-fixture",
 }, "only the test-only capability may expose WebdriverIO and fixture downloads"
+assert set(e2e_stable_capability["permissions"]) == {
+    "wdio:default",
+    "wdio-webdriver:default",
+    "core:app:allow-version",
+    "core:window:allow-is-fullscreen",
+    "allow-export-diagnostics-fixture",
+}, "Stable runtime tests may add WebDriver and read the version without experimental or updater permissions"
+assert "allow-document-graph" not in e2e_stable_capability["permissions"]
+assert 'onFailure: diagnosticFailures.recordPreviewFailure' in desktop_main, "desktop live preview failures must reach the allowlisted diagnostics adapter"
+assert 'recordBootstrapFailure: diagnosticFailures.recordBootstrapFailure' in desktop_main, "desktop bootstrap failures must reach the allowlisted diagnostics adapter"
+assert "onFailure()" in preview_transport, "preview failures must invoke their no-payload diagnostics callback"
+assert '"record_preview_failure"' in diagnostic_failures and '"record_bootstrap_failure"' in diagnostic_failures
+assert "recordBootstrapFailure?.()" in desktop_application, "bootstrap failure reporting must be optional and desktop-injected"
+assert app_source.count("record_command_result(&app, EventCode::Import, &result);") == 3, "menu import, OS-open import, and conflict resolution must record allowlisted import outcomes"
+for command in ("record_preview_failure", "record_bootstrap_failure"):
+    assert re.search(rf"fn {command}\(app: AppHandle\)", app_source), f"{command} must accept no user-controlled payload"
+assert "allow-export-diagnostics-fixture" not in capability["permissions"] + dev_capability["permissions"], "production Stable and Dev must not expose the WebDriver-only diagnostics fixture command"
 assert e2e_config["app"].get("withGlobalTauri") is True, "global Tauri access is enabled only for the test-only WebdriverIO build"
 assert config["app"].get("withGlobalTauri") is not True, "production must not expose the global Tauri API"
 production_frontend = (REPO_ROOT / "desktop/frontend/dist/assets/app.js").read_text()
@@ -187,11 +231,14 @@ assert config["plugins"]["updater"].get("requireSignedVersion") is True, "bind u
 assert all(url.startswith("https://") for url in config["plugins"]["updater"]["endpoints"]), "production updater transport must use HTTPS"
 assert not config["plugins"]["updater"].get("dangerousInsecureTransportProtocol"), "production must reject HTTP updater endpoints"
 tauri_manifest = (TAURI_ROOT / "Cargo.toml").read_text()
-assert 'webdriver = ["dep:tauri-plugin-wdio", "dep:tauri-plugin-wdio-webdriver"]' in tauri_manifest, "WebdriverIO plugins must remain opt-in"
+assert 'webdriver = ["dep:tauri-plugin-wdio", "dep:tauri-plugin-wdio-webdriver"]' in tauri_manifest, "WebdriverIO instrumentation must be independently selectable from experimental Dev behavior"
 assert not re.search(r'^default\s*=.*\bwebdriver\b', tauri_manifest, re.MULTILINE), "production's default Cargo features must exclude WebDriver"
 assert '#[cfg(feature = "webdriver")]\n    let builder = builder.plugin(tauri_plugin_wdio_webdriver::init());' in app_source, "production builds must not register the WebDriver plugin"
 assert '#[cfg(feature = "webdriver")]\n    let builder = builder.plugin(tauri_plugin_wdio::init());' in app_source, "the WebdriverIO command plugin must be test-only"
 assert 'frontendDist": "../frontend/dist-e2e"' in (TAURI_ROOT / "tauri.e2e.conf.json").read_text(), "WebdriverIO code must load from the isolated E2E frontend build"
+assert 'frontendDist": "../frontend/dist-e2e-stable"' in (TAURI_ROOT / "tauri.e2e-stable.conf.json").read_text(), "Stable runtime tests must load the separate Stable E2E frontend"
+stable_e2e_spec = (REPO_ROOT / "desktop" / "e2e" / "stable-exclusions.spec.js").read_text()
+assert all(name in stable_e2e_spec for name in ("visual-editor", "document-graph", "document-link-palette", "elefRevisionsEnabled", "elefLineageEnabled")), "Stable E2E must test every excluded runtime surface"
 
 feature_flags = {
     name: value == "true"
@@ -203,7 +250,7 @@ assert feature_flags == {
 }, f"desktop deferred-feature defaults must stay explicitly off: {feature_flags}"
 for flag in feature_flags:
     assert re.search(rf"\| `{flag}` \| off \| on \|", delivery_plan), f"{flag} is missing from the feature register"
-assert "applyDesktopFeatureFlags(document)" in desktop_application, "the Rails-owned application must apply feature flags at startup"
+assert "applyDesktopFeatureFlags(document, featureFlags)" in desktop_application, "the Rails-owned application must apply profile-specific feature flags at startup"
 assert re.search(r"def editor_map\([^)]*\).*?Source::JavascriptRenderer\.editor_map", document_model, re.DOTALL), "Rails editor maps must delegate to the shared JavaScript implementation"
 assert '"ElefRenderer.buildEditorMap"' in javascript_renderer, "the Rails wrapper must call the shared map exported by the renderer bundle"
 assert "buildEditorMap" in renderer_global and "buildEditorStructure" in renderer_global, "the renderer bundle must expose the shared editor map and structure"
@@ -215,14 +262,13 @@ rails_hash = hashlib.sha256(rails_bundle.read_bytes()).hexdigest()
 desktop_hash = hashlib.sha256(desktop_bundle.read_bytes()).hexdigest()
 assert rails_hash == desktop_hash, "Rails and desktop renderer bundle hashes differ; run npm run renderer:build"
 assert not re.search(r"def (?:editor_blocks|editable_region_for_block|utf16_range)\b", document_model), "Rails must not retain a second editor-map implementation"
-assert {
-    permission
-    for permission in permissions
-    if ":" in permission and not permission.startswith("core:")
-} == {
+assert not any(":" in permission for permission in permissions if not permission.startswith("core:")), "Stable common capability must not expose updater plugins"
+assert set(macos_updater_capability["permissions"]) == {
+    "allow-stage-update",
+    "allow-install-update",
     "updater:allow-check",
     "process:allow-restart",
-}, "grant only update checks and restart; installation must use the native confirmed staging command"
+}, "grant only signed macOS update checks, restart, and the native staged-install command"
 
 csp = config["app"]["security"]["csp"]
 directives = {}

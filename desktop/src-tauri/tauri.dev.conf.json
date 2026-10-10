@@ -1,0 +1,32 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Elef Dev",
+  "identifier": "com.elef.desktop.dev",
+  "build": {
+    "frontendDist": "../frontend/dist-dev",
+    "beforeDevCommand": {
+      "script": "cd ../frontend && npm run build -- --profile=dev",
+      "wait": true
+    },
+    "beforeBuildCommand": "cd ../frontend && npm run build -- --profile=dev"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Elef Dev"
+      }
+    ],
+    "security": {
+      "capabilities": ["main-dev-capability"]
+    }
+  },
+  "bundle": {
+    "active": false
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": []
+    }
+  }
+}

@@ -3,7 +3,7 @@ import { editAndPreviewWorkflow, SAVED_SOURCE } from "../../../test/e2e/scenario
 import { appearanceWorkflow } from "../../../test/e2e/scenarios/appearance.js"
 import { libraryAndGraphWorkflow } from "../../../test/e2e/scenarios/library-and-graph.js"
 import { libraryCreateDeleteWorkflow } from "../../../test/e2e/scenarios/library-create-delete.js"
-import { externalEditConflictWorkflow, CONFLICT_EXTERNAL_SOURCE } from "../../../test/e2e/scenarios/external-edit-conflict.js"
+import { externalEditConflictWorkflow, CONFLICT_DECK_NAME, CONFLICT_EXTERNAL_SOURCE } from "../../../test/e2e/scenarios/external-edit-conflict.js"
 import { hostileDeckNeutralizedWorkflow } from "../../../test/e2e/scenarios/hostile-deck.js"
 import { documentLinkCompletionWorkflow, mathInputWorkflow, snippetInsertWorkflow } from "../../../test/e2e/scenarios/authoring-palettes.js"
 import { authoringSettingsWorkflow } from "../../../test/e2e/scenarios/authoring-settings.js"
@@ -13,6 +13,7 @@ import { vimRelativeLineNumbersWorkflow } from "../../../test/e2e/scenarios/vim-
 import { documentPageAspectRatioWorkflow } from "../../../test/e2e/scenarios/document-page-aspect-ratio.js"
 import { displayMathEnterWorkflow } from "../../../test/e2e/scenarios/display-math-enter.js"
 import { artRenderingWorkflow } from "../../../test/e2e/scenarios/art-rendering.js"
+import { richRenderingMediaWorkflow, RICH_RENDERING_TITLE } from "../../../test/e2e/scenarios/rich-rendering-media.js"
 import { execFileSync } from "node:child_process"
 import path from "node:path"
 import { readFile } from "node:fs/promises"
@@ -75,8 +76,10 @@ class WebEditorUi {
     const isDocument = title === "E2E document"
     const id = isDocument
       ? process.env.ELEF_E2E_DOCUMENT_ID
-      : title === "E2E conflict"
+      : title === CONFLICT_DECK_NAME
       ? process.env.ELEF_E2E_CONFLICT_PRESENTATION_ID
+      : title === RICH_RENDERING_TITLE
+        ? process.env.ELEF_E2E_RICH_PRESENTATION_ID
       : title === "E2E hostile"
         ? process.env.ELEF_E2E_HOSTILE_PRESENTATION_ID
         : process.env.ELEF_E2E_PRESENTATION_ID
@@ -236,7 +239,7 @@ class WebEditorUi {
       controller.setSelectionRange(nextSource.length)
       return controller.sourceValue
     }, source)
-    expect(restoredSource).toBe(source)
+    expect(normalizeLineEndings(restoredSource)).toBe(normalizeLineEndings(source))
   }
 
   async readSource() {
@@ -602,6 +605,17 @@ class WebEditorUi {
     )).toBe(true)
   }
 
+  async assertRichRenderingMedia() {
+    const preview = this.page.locator(".editor-projection.preview-pane")
+    await expect(preview.locator(".slides-theme-dark.slides-typography-technical")).toBeVisible()
+    await expect.poll(() => preview.locator(".katex").count()).toBeGreaterThan(0)
+    await expect.poll(() => preview.locator("pre.mermaid svg").count()).toBe(1)
+    await expect.poll(() => preview.locator("[data-elef-art-root]").count()).toBe(1)
+    await expect.poll(() => preview.locator("img").evaluateAll(images =>
+      images.some(image => image.complete && image.naturalWidth > 0)
+    )).toBe(true)
+  }
+
   async waitForPreview(text) {
     await expect.poll(() => renderedTextWithoutEditorControls(
       this.page.locator(".editor-projection.preview-pane")
@@ -726,6 +740,11 @@ class WebEditorUi {
   }
 
   async assertPersistedSource(source, workId = this.activeWorkId || process.env.ELEF_E2E_PRESENTATION_ID) {
+    const persisted = await this.readStoredSource(workId)
+    expect(normalizeLineEndings(persisted)).toBe(normalizeLineEndings(source))
+  }
+
+  async readStoredSource(workId = this.activeWorkId || process.env.ELEF_E2E_PRESENTATION_ID) {
     const id = Number(workId)
     const model = String(workId) === String(process.env.ELEF_E2E_DOCUMENT_ID) ? "Document" : "Presentation"
     const serialized = execFileSync("bin/rails", [
@@ -737,7 +756,7 @@ class WebEditorUi {
       encoding: "utf8"
     }).match(/^ELEF_E2E_PERSISTED_SOURCE=(.*)$/m)?.[1]
     expect(serialized).toBeTruthy()
-    expect(normalizeLineEndings(JSON.parse(serialized))).toBe(normalizeLineEndings(source))
+    return JSON.parse(serialized)
   }
 }
 
@@ -843,7 +862,18 @@ class WebLibraryUi {
       has: this.page.getByRole("heading", { name: title, exact: true })
     })
     const action = await this.openCardAction(card, "Present")
+    const publishResponse = this.page.waitForResponse(response => {
+      const request = response.request()
+      return request.method() === "POST" && /\/presentations\/\d+\/publish$/.test(new URL(response.url()).pathname)
+    })
     await action.evaluate(button => button.click())
+    const response = await publishResponse
+    expect(response.status()).toBe(302)
+    expect(response.headers().location).toMatch(/\/presentations\/\d+\/present$/)
+    await this.page.waitForURL(/\/presentations\/\d+\/present$/, {
+      timeout: 30_000,
+      waitUntil: "domcontentloaded"
+    })
     await expect(this.page.locator(".presentation-stage")).toBeVisible()
     await this.page.getByRole("link", { name: "Exit", exact: true }).click()
     await expect(this.page.getByText("Saved preview", { exact: true })).toBeVisible()
@@ -872,7 +902,7 @@ class WebLibraryUi {
   async assertAllWorkKindsVisible(presentationTitle, documentTitle) {
     await expect(this.page.getByRole("heading", { name: presentationTitle, exact: true })).toBeVisible()
     await expect(this.page.getByRole("heading", { name: documentTitle, exact: true })).toBeVisible()
-    await expect(this.page.locator("article.library-card")).toHaveCount(5)
+    await expect(this.page.locator("article.library-card")).toHaveCount(6)
   }
 
   async renameWork(title, newTitle) {
@@ -943,7 +973,7 @@ class WebLibraryUi {
   async assertPresentationsOnly(presentationTitle, documentTitle) {
     await expect(this.page.getByRole("heading", { name: presentationTitle, exact: true })).toBeVisible()
     await expect(this.page.getByRole("heading", { name: documentTitle, exact: true })).toHaveCount(0)
-    await expect(this.page.locator("article.library-card")).toHaveCount(3)
+    await expect(this.page.locator("article.library-card")).toHaveCount(4)
   }
 
   async showDocuments() {
@@ -1045,6 +1075,10 @@ test("appearance persists through the shared editing flow", async ({ page }) => 
 
 test("shared Art semantics render consistently in the web app", async ({ page }) => {
   await artRenderingWorkflow(new WebEditorUi(page))
+})
+
+test("the rich release fixture renders, presents, saves, and reopens in the web app", async ({ page }) => {
+  await richRenderingMediaWorkflow(new WebEditorUi(page))
 })
 
 test("shared rendering styles preserve slide layouts and document typography", async ({ page }) => {

@@ -33,6 +33,15 @@ test("both hosts receive one library header, search field, and three shared view
   assert.equal(view.graph.hidden, true)
 })
 
+test("Stable removes the document graph panel from its shared library view", () => {
+  const { view } = mount({ filter: "all", graphEnabled: false }, `
+    <template data-library-view-slot="graph"><section data-controller="document-graph">Graph</section></template>
+  `)
+
+  assert.equal(view.graph, null)
+  assert.equal(view.root.querySelector("#document-graph-view, [data-library-tab='graph'], [data-controller='document-graph']"), null)
+})
+
 test("Rails slots populate shared cards, actions, empty action, and the documents graph", () => {
   const { host, view } = mount({ filter: "documents", searchController: true }, `
     <template data-library-view-slot="actions"><button id="library-action">More</button></template>

@@ -19,7 +19,9 @@ const ALLOWED_PRESENTATION_ACTIONS = new Set([
   "add-slide-after", "delete-slide", "move-slide-up", "move-slide-down", "add-block-after", "delete-block", "move-block-up", "move-block-down"
 ])
 
-export function installSanitizedPreview(container, html, { interactive = true, documentPagination = false, mediaBaseUrl = "" } = {}) {
+export function installSanitizedPreview(container, html, {
+  interactive = true, documentPagination = false, mediaBaseUrl = "", visualEditing = true
+} = {}) {
   const trustedMediaBaseUrl = mediaBaseUrl || container.closest?.("form")?.dataset.mediaAssetBaseUrlValue || ""
   const template = container.ownerDocument.createElement("template")
   template.innerHTML = typeof html === "string" ? html : ""
@@ -28,18 +30,26 @@ export function installSanitizedPreview(container, html, { interactive = true, d
   while (walker.nextNode()) elements.push(walker.currentNode)
 
   for (const element of elements) {
-    if (!ALLOWED_ELEMENTS.has(element.tagName) || (!interactive && INTERACTIVE_ELEMENTS.has(element.tagName)) || (element.tagName === "BUTTON" && !safePreviewButton(element, interactive))) {
+    if (!ALLOWED_ELEMENTS.has(element.tagName) ||
+      (!interactive && INTERACTIVE_ELEMENTS.has(element.tagName)) ||
+      (!visualEditing && isVisualEditingControl(element)) ||
+      (element.tagName === "BUTTON" && !safePreviewButton(element, interactive, visualEditing))) {
       element.remove()
       continue
     }
+    if (!visualEditing && element.hasAttribute("contenteditable")) {
+      element.removeAttribute("role")
+      element.removeAttribute("aria-label")
+      element.removeAttribute("aria-multiline")
+    }
     for (const attribute of [...element.attributes]) {
-      if (!safeAttribute(element, attribute.name, attribute.value, interactive, documentPagination, trustedMediaBaseUrl)) element.removeAttribute(attribute.name)
+      if (!safeAttribute(element, attribute.name, attribute.value, interactive, documentPagination, trustedMediaBaseUrl, visualEditing)) element.removeAttribute(attribute.name)
     }
   }
   container.replaceChildren(template.content)
 }
 
-function safeAttribute(element, name, value, interactive, documentPagination, mediaBaseUrl) {
+function safeAttribute(element, name, value, interactive, documentPagination, mediaBaseUrl, visualEditing) {
   const lower = name.toLowerCase()
   if (lower.startsWith("on") || lower === "srcdoc" || lower === "formaction") return false
   if (["class", "role", "alt", "title", "aria-label", "aria-multiline", "aria-readonly", "aria-hidden", "spellcheck", "controls", "playsinline", "preload", "colspan", "rowspan"].includes(lower)) return true
@@ -47,20 +57,20 @@ function safeAttribute(element, name, value, interactive, documentPagination, me
   if (lower === "disabled") return ["BUTTON", "SELECT"].includes(element.tagName) && value === ""
   if (lower === "selected") return element.tagName === "OPTION" && value === ""
   if (lower === "value") return element.tagName === "OPTION" && /^(?:left|center|right|top left|top center|top right|center left|center center|center right|bottom left|bottom center|bottom right)$/.test(value)
-  if (lower === "contenteditable") return interactive && (value === "true" || value === "false")
+  if (lower === "contenteditable") return interactive && visualEditing && (value === "true" || value === "false")
   if (["xmlns", "display", "encoding"].includes(lower) && ["MATH", "ANNOTATION"].includes(element.tagName)) return true
   if (lower === "start") return element.tagName === "OL" && /^(?:0|[1-9]\d*)$/.test(value)
   if (lower === "style") return isSafeKatexStyle(element, value)
   if (lower.startsWith("aria-") && /^[a-z-]+$/.test(lower)) return true
-  if (lower === "data-action") return interactive && ALLOWED_ACTIONS.has(value)
+  if (lower === "data-action") return interactive && visualEditing && ALLOWED_ACTIONS.has(value)
   if (lower === "data-controller") {
     if (interactive) return value.split(/\s+/).every((controller) => ["mermaid-diagrams", "presentation-canvas", "document-pages", "art-layout"].includes(controller))
     return documentPagination && element.parentNode?.nodeType === 11 && element.classList.contains("document-reader") && value === "document-pages mermaid-diagrams"
   }
-  if (lower === "data-presentation-editor-action") return interactive && element.tagName === "BUTTON" && ALLOWED_PRESENTATION_ACTIONS.has(value)
-  if (lower === "data-block-index" || lower === "data-slide-index") return interactive && /^(?:0|[1-9]\d*)$/.test(value)
-  if (lower === "data-presentation-editor-align") return interactive && element.tagName === "SELECT" && value === ""
-  if (lower === "data-visual-editor-block-id") return interactive && element.tagName === "SELECT" && /^[A-Za-z0-9_-]+$/.test(value)
+  if (lower === "data-presentation-editor-action") return interactive && visualEditing && element.tagName === "BUTTON" && ALLOWED_PRESENTATION_ACTIONS.has(value)
+  if (lower === "data-block-index" || lower === "data-slide-index") return interactive && visualEditing && /^(?:0|[1-9]\d*)$/.test(value)
+  if (lower === "data-presentation-editor-align") return interactive && visualEditing && element.tagName === "SELECT" && value === ""
+  if (lower === "data-visual-editor-block-id") return interactive && visualEditing && element.tagName === "SELECT" && /^[A-Za-z0-9_-]+$/.test(value)
   if (lower === "data-editor-image-source") return value === "true"
   if (["data-editor-block-id", "data-editor-region-id"].includes(lower)) return /^[A-Za-z0-9_-]+$/.test(value)
   if (lower === "data-editor-empty-block") return value === "true"
@@ -77,7 +87,7 @@ function safeAttribute(element, name, value, interactive, documentPagination, me
   if (lower === "data-editor-math-source") return element.tagName === "SPAN" && ["katex", "katex-display", "math-error"].some(className => element.classList.contains(className))
   if (lower === "data-editor-math-open" || lower === "data-editor-math-close") return MATH_DELIMITERS.has(value)
   if (lower === "data-presentation-canvas-target") return interactive && element.tagName === "SECTION" && value === "canvas"
-  if (lower === "data-presentation-editor-target") return interactive && element.tagName === "DIV" && element.classList.contains("presentation-surface") && value === "canvas"
+  if (lower === "data-presentation-editor-target") return interactive && visualEditing && element.tagName === "DIV" && element.classList.contains("presentation-surface") && value === "canvas"
   if (lower === "data-document-pages-target") {
     const reader = element.parentElement
     return (interactive || (documentPagination && reader?.parentNode?.nodeType === 11)) && value === "surface" && element.classList.contains("document-surface") && reader?.classList.contains("document-reader")
@@ -89,9 +99,18 @@ function safeAttribute(element, name, value, interactive, documentPagination, me
   return false
 }
 
-function safePreviewButton(element, interactive) {
-  if (!interactive || element.getAttribute("type") !== "button") return false
+function safePreviewButton(element, interactive, visualEditing) {
+  if (!interactive || !visualEditing || element.getAttribute("type") !== "button") return false
   return ALLOWED_PRESENTATION_ACTIONS.has(element.getAttribute("data-presentation-editor-action")) || element.getAttribute("data-action") === "click->media#chooseForSlide"
+}
+
+function isVisualEditingControl(element) {
+  return element.classList?.contains("document-block-position-control") ||
+    element.classList?.contains("presentation-editor-slide-toolbar") ||
+    element.classList?.contains("presentation-editor-block-controls") ||
+    element.hasAttribute("data-presentation-editor-action") ||
+    element.hasAttribute("data-presentation-editor-align") ||
+    element.hasAttribute("data-visual-editor-block-id")
 }
 
 function safeUrl(value) {

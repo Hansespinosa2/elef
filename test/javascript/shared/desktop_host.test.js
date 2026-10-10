@@ -7,7 +7,7 @@ import { parseHTML } from "linkedom"
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..")
 const read = relative => readFile(path.join(root, relative), "utf8")
-const [hostTemplate, shellStyles, applicationStylesheetIndex, application, bootstrap, editorRuntime, build, editorView, libraryView, fileLibraryTransport] = await Promise.all([
+const [hostTemplate, shellStyles, applicationStylesheetIndex, application, bootstrap, editorRuntime, build, editorView, libraryView] = await Promise.all([
   read("app/views/desktop_host.html"),
   read("app/assets/stylesheets/file_library_host.css"),
   read("app/assets/stylesheets/application.css"),
@@ -16,8 +16,7 @@ const [hostTemplate, shellStyles, applicationStylesheetIndex, application, boots
   read("app/javascript/lib/editor_runtime.js"),
   read("desktop/frontend/build.mjs"),
   read("app/javascript/lib/editor_view.js"),
-  read("app/javascript/lib/library_view.js"),
-  read("desktop/frontend/src/file-library-transport.js")
+  read("app/javascript/lib/library_view.js")
 ])
 const applicationPartialPaths = [...applicationStylesheetIndex.matchAll(/@import url\("\.\/([^\"]+)"\) layer\([^\)]+\);/g)]
 const applicationStyles = (await Promise.all(applicationPartialPaths.map(([, path]) => read(`app/assets/stylesheets/${path}`)))).join("\n")
@@ -92,7 +91,12 @@ test("desktop uses the Rails app shell and shared editor width instead of a seco
   assert.doesNotMatch(shellStyles, /\.library-shared-view|\.library-card\s*\{/)
 })
 
-test("the native entry point only wires Tauri APIs into the Rails-owned application", () => {
+test("the native entry point selects profile-specific transport without moving Tauri APIs into Rails", async () => {
+  const [stableTransport, devTransport, baseTransport] = await Promise.all([
+    read("desktop/frontend/src/file-library-transport-stable.js"),
+    read("desktop/frontend/src/file-library-transport.js"),
+    read("desktop/frontend/src/file-library-transport-base.js")
+  ])
   assert.match(bootstrap, /startFileLibraryApplication\(/)
   assert.doesNotMatch(bootstrap, /document\.querySelector|innerHTML|\.textContent|\.classList/)
   assert.doesNotMatch(bootstrap, /desktop-shell\.css|desktop-rendered-content\.css/)
@@ -100,7 +104,11 @@ test("the native entry point only wires Tauri APIs into the Rails-owned applicat
   assert.match(application, /fileLibrary\.listDecks\(\)/)
   assert.doesNotMatch(application, /\binvoke\s*\(/)
   assert.doesNotMatch(application, /["'](?:get_library_status|list_decks|create_deck|save_source|install_update)["']/)
-  assert.match(fileLibraryTransport, /listDecks: \(\) => invoke\("list_decks"\)/)
+  assert.match(build, /"#desktop\/file-library-transport"/)
+  assert.match(baseTransport, /listDecks: \(\) => invoke\("list_decks"\)/)
+  assert.match(stableTransport, /createBaseFileLibraryTransport/)
+  assert.doesNotMatch(stableTransport, /document_graph/)
+  assert.match(devTransport, /readDocumentGraph: \(\) => invoke\("document_graph"\)/)
 })
 
 test("desktop media URLs and fetch interception stay in native transport", async () => {
@@ -127,7 +135,7 @@ test("Rails and desktop share one sanitized preview insertion path", () => {
   assert.match(importmap, /pin "#elef\/preview-sanitizer", to: "lib\/preview_sanitizer\.js"/)
   assert.equal(rootPackage.imports["#elef/preview-sanitizer"], "./app/javascript/lib/preview_sanitizer.js")
   assert.match(build, /preview-sanitizer/)
-  assert.match(editorView, /installSanitizedPreview\(container, html, \{ mediaBaseUrl \}\)/)
+  assert.match(editorView, /installSanitizedPreview\(container, html, \{ mediaBaseUrl, visualEditing \}\)/)
   const previewInstaller = editorView.match(/export function installPreviewHtml\([\s\S]*?\n\}/)?.[0] || ""
   assert.doesNotMatch(previewInstaller, /elefInstallDesktopPreview|innerHTML/)
   assert.doesNotMatch(editorView, /elefInstallDesktopPreview/)
@@ -153,17 +161,25 @@ test("the Rails-owned application references elements present in its host templa
   assert.deepEqual(missing, [])
 })
 
-test("the desktop host defaults to Rails' Visual mode and gates it until preview renders", async () => {
+test("Stable starts in source mode while Dev retains Rails' Visual editing behavior", async () => {
   const sourceForm = document.querySelector("#desktop-editor-form")
-  assert.equal(sourceForm.dataset.editorMode, "visual")
+  assert.equal(sourceForm.dataset.editorMode, "source")
   assert.equal(sourceForm.dataset.controller, undefined)
   assert.ok(document.querySelector("#desktop-editor-mount"))
   assert.match(application, /renderEditorView\(document\.querySelector\("#desktop-editor-mount"\)/)
-  assert.match(application, /mode: "visual"/)
+  assert.match(application, /mode: desktopFeatures\.visualEditing \? "visual" : "source"/)
   assert.match(application, /sourceName: "presentation\[source\]"/)
   assert.match(application, /document\.body\.dataset\.desktopView = "editor"/)
   assert.match(application, /document\.body\.dataset\.desktopView = "library"/)
-  assert.match(application, /editor\.loadDocument\(deck\.source\)[\s\S]*?editor\.setEditingMode\("visual", \{ restoreCaret: false \}\)/)
+  assert.match(application, /editor\.loadDocument\(deck\.source\)[\s\S]*?editor\.setEditingMode\(desktopFeatures\.visualEditing \? "visual" : "source", \{ restoreCaret: false \}\)/)
+  assert.match(bootstrap, /const isStableProfile = __ELEF_DESKTOP_PROFILE__ === "stable"/)
+  assert.match(bootstrap, /visualEditing: !isStableProfile/)
+  assert.match(bootstrap, /documentLinks: !isStableProfile/)
+  assert.match(bootstrap, /ELEF_ENABLE_REVISIONS: !isStableProfile/)
+  assert.match(bootstrap, /ELEF_ENABLE_LINEAGE: !isStableProfile/)
+  assert.match(bootstrap, /from "#desktop\/editor-runtime"/)
+  assert.match(bootstrap, /from "#desktop\/document-graph-runtime"/)
+  assert.match(build, /dist-dev/)
   const editorController = await read("app/javascript/controllers/editor_controller.js")
   assert.match(editorController, /this\.form\?\.dispatchEvent\(new CustomEvent\("elef:editor-mode-change"/)
   assert.match(application, /theme: "dark"/)
@@ -197,7 +213,7 @@ test("the editor host uses the shared editor markup rather than a second copy", 
   assert.match(editorView, /input->document-link-palette#input/)
 })
 
-test("the file-backed host mounts the shared library view and graph", () => {
+test("the file-backed host mounts a shared library view whose graph is profile-gated", () => {
   assert.ok(document.querySelector("#library-view-mount"))
   assert.match(application, /renderLibraryView\(document\.querySelector\("#library-view-mount"\)/)
   assert.match(application, /setLibraryViewTab\(document\.querySelector\("#library-view-mount"\)/)
@@ -206,13 +222,27 @@ test("the file-backed host mounts the shared library view and graph", () => {
   assert.match(libraryView, /id="show-documents" class="library-tab" data-library-tab="documents"/)
   assert.match(libraryView, /id="show-presentations" class="library-tab" data-library-tab="presentations"/)
   assert.match(libraryView, /id="document-graph-view"/)
+  assert.match(application, /graphEnabled: desktopFeatures\.documentGraph/)
+  assert.match(libraryView, /if \(config\.graphEnabled === false\)/)
   assert.doesNotMatch(libraryView, /show-document-graph/)
 })
 
-test("the Rails-owned application loads shared editor and graph controllers on demand", () => {
+test("the Rails runtime keeps its full controllers and desktop profiles use separate adapters", async () => {
+  const [stableRuntime, devRuntime, stableGraphRuntime, devGraphRuntime] = await Promise.all([
+    read("desktop/frontend/src/editor-runtime-stable.js"),
+    read("desktop/frontend/src/editor-runtime-dev.js"),
+    read("desktop/frontend/src/document-graph-runtime-stable.js"),
+    read("desktop/frontend/src/document-graph-runtime-dev.js")
+  ])
   assert.match(application, /loadEditorRuntime\(\)/)
   assert.match(application, /loadLibraryRuntime\(\)/)
-  assert.match(bootstrap, /from "lib\/editor_runtime"/)
+  assert.match(bootstrap, /from "#desktop\/editor-runtime"/)
+  assert.match(stableRuntime, /controllers\/editor_controller/)
+  assert.doesNotMatch(stableRuntime, /visual_editor_controller|presentation_editor_controller|slide_overview_controller|document_link_palette_controller|document_graph_controller/)
+  assert.match(devRuntime, /from "lib\/editor_runtime"/)
+  assert.match(devRuntime, /controllers\/lineage_graph_controller/)
+  assert.match(stableGraphRuntime, /documentGraphRuntime = null/)
+  assert.match(devGraphRuntime, /from "lib\/document_links"/)
   assert.match(editorRuntime, /import\("controllers\/editor_controller"\)/)
   assert.match(editorRuntime, /import\("controllers\/document_graph_controller"\)/)
   assert.doesNotMatch(editorRuntime, /^import\s+\w+Controller\s+from\s+["']controllers\//m)

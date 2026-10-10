@@ -1,6 +1,7 @@
 import { writeFile } from "node:fs/promises"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
+import { SAFE_UPDATE_ENDPOINT } from "../release/constants.mjs"
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url))
 const outputPath = path.resolve(process.argv[2] || path.join(scriptDirectory, "../src-tauri/tauri.release.generated.conf.json"))
@@ -27,7 +28,7 @@ await writeFile(outputPath, `${JSON.stringify({
     updater: {
       pubkey: publicKey,
       requireSignedVersion: true,
-      endpoints: ["https://github.com/Hansespinosa2/elef/releases/latest/download/latest.json"]
+      endpoints: [SAFE_UPDATE_ENDPOINT]
     }
   }
 }, null, 2)}\n`, { mode: 0o600 })

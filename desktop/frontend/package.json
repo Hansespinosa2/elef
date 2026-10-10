@@ -6,7 +6,7 @@
   "scripts": {
     "build": "node build.mjs",
     "test": "node --test tests/*.test.js",
-    "tauri:dev": "cd .. && ./frontend/node_modules/.bin/tauri dev",
+    "tauri:dev": "cd .. && ./frontend/node_modules/.bin/tauri dev --features desktop-dev --config src-tauri/tauri.dev.conf.json",
     "tauri:build": "cd .. && ./frontend/node_modules/.bin/tauri build",
     "tauri": "cd .. && ./frontend/node_modules/.bin/tauri"
   },

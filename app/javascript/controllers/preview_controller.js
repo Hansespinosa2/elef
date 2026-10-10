@@ -10,7 +10,12 @@ const ART_WARNING_MESSAGES = Object.freeze({
 
 export default class extends Controller {
   static targets = ["container", "warnings", "status", "retry"]
-  static values = { url: String, delay: { type: Number, default: 300 }, timeout: { type: Number, default: 8000 } }
+  static values = {
+    url: String,
+    delay: { type: Number, default: 300 },
+    timeout: { type: Number, default: 8000 },
+    visualEditing: { type: Boolean, default: true }
+  }
 
   connect() {
     this.element.previewController = this
@@ -252,7 +257,7 @@ export default class extends Controller {
     this.artWarnings.clear()
     this.renderWarnings(this.serverWarnings)
     recordPreviewTrace("preview-install-start")
-    installPreviewHtml(this.containerTarget, payload.html)
+    installPreviewHtml(this.containerTarget, payload.html, { visualEditing: this.visualEditingValue })
     this.syncArtWarnings()
     recordPreviewTrace("preview-install-ready")
     this.containerTarget.scrollLeft = scrollLeft

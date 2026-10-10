@@ -7,7 +7,7 @@ import { editAndPreviewWorkflow } from "../../../test/e2e/scenarios/edit-and-pre
 import { appearanceWorkflow } from "../../../test/e2e/scenarios/appearance.js"
 import { libraryAndGraphWorkflow } from "../../../test/e2e/scenarios/library-and-graph.js"
 import { libraryCreateDeleteWorkflow } from "../../../test/e2e/scenarios/library-create-delete.js"
-import { externalEditConflictWorkflow, CONFLICT_EXTERNAL_SOURCE } from "../../../test/e2e/scenarios/external-edit-conflict.js"
+import { externalEditConflictWorkflow, CONFLICT_DECK_NAME, CONFLICT_SOURCE_FILE, CONFLICT_EXTERNAL_SOURCE } from "../../../test/e2e/scenarios/external-edit-conflict.js"
 import { hostileDeckNeutralizedWorkflow } from "../../../test/e2e/scenarios/hostile-deck.js"
 import { documentLinkCompletionWorkflow, mathInputWorkflow, snippetInsertWorkflow } from "../../../test/e2e/scenarios/authoring-palettes.js"
 import { authoringSettingsWorkflow } from "../../../test/e2e/scenarios/authoring-settings.js"
@@ -17,8 +17,11 @@ import { vimRelativeLineNumbersWorkflow } from "../../../test/e2e/scenarios/vim-
 import { documentPageAspectRatioWorkflow } from "../../../test/e2e/scenarios/document-page-aspect-ratio.js"
 import { displayMathEnterWorkflow } from "../../../test/e2e/scenarios/display-math-enter.js"
 import { artRenderingWorkflow } from "../../../test/e2e/scenarios/art-rendering.js"
+import { richRenderingMediaWorkflow } from "../../../test/e2e/scenarios/rich-rendering-media.js"
 import { createHash } from "node:crypto"
 import { answerMacNativeDialog } from "../mac-native-dialog.js"
+import { exportAndVerifyDiagnostics } from "../diagnostics-archive.js"
+import { focusDesktopWindow, sendNativeKey } from "../native-keyboard.js"
 
 async function openDesktopAuthoringSettings() {
   await openDesktopSettings()
@@ -48,56 +51,6 @@ async function confirmAuthoringDeletion(expectedName) {
 
 function normalizeLineEndings(source) {
   return source.replace(/\r\n/g, "\n")
-}
-
-function desktopProcessId() {
-  const pids = execFileSync("pgrep", ["-x", "elef-desktop"], { encoding: "utf8", timeout: 5_000 })
-    .trim().split(/\s+/).filter(Boolean)
-  if (pids.length !== 1 || !/^\d+$/.test(pids[0])) {
-    throw new Error(`Expected one desktop application process, found ${pids.length}`)
-  }
-  return Number(pids[0])
-}
-
-function focusDesktopWindow() {
-  const pid = desktopProcessId()
-  if (process.platform === "linux") {
-    const windowIds = execFileSync("xdotool", ["search", "--sync", "--onlyvisible", "--pid", String(pid)], {
-      encoding: "utf8", timeout: 5_000
-    }).trim().split(/\s+/).filter(Boolean)
-    if (!windowIds.length) throw new Error("The desktop application has no visible window")
-    execFileSync("xdotool", ["windowactivate", "--sync", windowIds[0]], { timeout: 5_000 })
-    return
-  }
-  if (process.platform === "darwin") {
-    execFileSync("osascript", ["-e", `tell application "System Events"
-      set frontmost of (first application process whose unix id is ${pid}) to true
-    end tell`], { timeout: 5_000 })
-    return
-  }
-  throw new Error(`Native window activation is unsupported on ${process.platform}`)
-}
-
-function sendNativeKey(key, { activate = true } = {}) {
-  const linuxKeys = {
-    Escape: "Escape", Enter: "Return", ArrowRight: "Right", ArrowLeft: "Left", Home: "Home", End: "End"
-  }
-  const macKeyCodes = { Escape: 53, Enter: 36, ArrowRight: 124, ArrowLeft: 123, Home: 115, End: 119 }
-  if (process.platform === "linux") {
-    if (activate) focusDesktopWindow()
-    const nativeKey = linuxKeys[key]
-    if (!nativeKey) throw new Error(`Unsupported native key ${key}`)
-    execFileSync("xdotool", ["key", "--clearmodifiers", nativeKey], { timeout: 5_000 })
-    return
-  }
-  if (process.platform === "darwin") {
-    if (activate) focusDesktopWindow()
-    const keyCode = macKeyCodes[key]
-    if (keyCode === undefined) throw new Error(`Unsupported native key ${key}`)
-    execFileSync("osascript", ["-e", `tell application "System Events" to key code ${keyCode}`], { timeout: 5_000 })
-    return
-  }
-  throw new Error(`Native keyboard input is unsupported on ${process.platform}`)
 }
 
 async function sendPresentationKey(key) {
@@ -544,7 +497,7 @@ class DesktopEditorUi {
       controller.setSelectionRange(nextSource.length)
       return controller.sourceValue
     }, source)
-    if (restoredSource !== source) {
+    if (normalizeLineEndings(restoredSource) !== normalizeLineEndings(source)) {
       throw new Error(`The desktop editor could not restore its original fixture source: ${JSON.stringify(restoredSource)}`)
     }
   }
@@ -557,6 +510,13 @@ class DesktopEditorUi {
 
   async readSource() {
     return browser.execute(() => document.querySelector("#desktop-editor-field")?.editorController?.sourceValue ?? "")
+  }
+
+  async readStoredSource() {
+    const deckTitle = this.activeDeckTitle || "E2E seed"
+    const sourceFile = deckTitle === "E2E document" ? "document.md" : "presentation.md"
+    const sourcePath = path.join(process.env.ELEF_E2E_LIBRARY_ROOT, deckTitle, sourceFile)
+    return readFile(sourcePath, "utf8")
   }
 
   async setCaretPosition(position) {
@@ -809,7 +769,21 @@ class DesktopEditorUi {
     try {
       typeNativeText("$")
       typeNativeText("$")
+      await browser.waitUntil(async () => browser.execute(() =>
+        window.__elefDisplayMathKeys?.events.filter(({ key }) => key === "$").length === 2
+      ), {
+        timeout: 5_000,
+        interval: 50,
+        timeoutMsg: "Both trusted dollar keys must reach the display-math editor before Enter"
+      })
       sendNativeKey("Enter", { activate: false })
+      await browser.waitUntil(async () => browser.execute(() =>
+        window.__elefDisplayMathKeys?.events.some(({ key }) => key === "Enter") === true
+      ), {
+        timeout: 5_000,
+        interval: 50,
+        timeoutMsg: "The trusted Enter key must reach the display-math editor before capture ends"
+      })
     } finally {
       keys = await browser.execute(() => {
         const capture = window.__elefDisplayMathKeys
@@ -882,7 +856,7 @@ class DesktopEditorUi {
 
   async waitForSource(source) {
     try {
-      await browser.waitUntil(async () => await this.readSource() === source, {
+      await browser.waitUntil(async () => normalizeLineEndings(await this.readSource()) === normalizeLineEndings(source), {
         timeout: 10_000,
         timeoutMsg: "The desktop editor buffer did not reach the expected source"
       })
@@ -932,7 +906,7 @@ class DesktopEditorUi {
       const sourcePath = path.join(process.env.ELEF_E2E_LIBRARY_ROOT, deckTitle, sourceFile)
       await browser.waitUntil(async () => {
         try {
-          return normalizeLineEndings(await readFile(sourcePath, "utf8")) === expectedSource
+          return normalizeLineEndings(await readFile(sourcePath, "utf8")) === normalizeLineEndings(expectedSource)
         } catch (_error) {
           return false
         }
@@ -1094,6 +1068,24 @@ class DesktopEditorUi {
     })
   }
 
+  async assertRichRenderingMedia() {
+    await browser.waitUntil(async () => browser.execute(() => {
+      const preview = document.querySelector("#desktop-preview")
+      const image = [...(preview?.querySelectorAll("img") || [])]
+        .some(candidate => candidate.complete && candidate.naturalWidth > 0)
+      return Boolean(
+        preview?.querySelector(".slides-theme-dark.slides-typography-technical") &&
+        preview.querySelectorAll(".katex").length >= 2 &&
+        preview.querySelector("pre.mermaid svg") &&
+        preview.querySelectorAll("[data-elef-art-root]").length === 1 &&
+        image
+      )
+    }), {
+      timeout: 15_000,
+      timeoutMsg: "The rich release fixture did not render its theme, math, Mermaid, Art, and local image"
+    })
+  }
+
   async readArtSemantics() {
     return browser.execute(() => [...document.querySelectorAll("#desktop-preview [data-elef-art-root]")].map(root => {
       const list = root.querySelector(":scope > .elef-art-list")
@@ -1250,7 +1242,7 @@ class DesktopEditorUi {
   }
 
   async writeExternalSource(source) {
-    await writeFile(path.join(process.env.ELEF_E2E_LIBRARY_ROOT, "E2E conflict", "presentation.md"), source)
+    await writeFile(path.join(process.env.ELEF_E2E_LIBRARY_ROOT, CONFLICT_DECK_NAME, CONFLICT_SOURCE_FILE), source)
   }
 
   async waitForConflict() {
@@ -1286,8 +1278,8 @@ class DesktopEditorUi {
   }
 
   async assertDiskSource(source) {
-    const diskPath = path.join(process.env.ELEF_E2E_LIBRARY_ROOT, "E2E conflict", "presentation.md")
-    await browser.waitUntil(async () => normalizeLineEndings(await readFile(diskPath, "utf8")) === source, {
+    const diskPath = path.join(process.env.ELEF_E2E_LIBRARY_ROOT, CONFLICT_DECK_NAME, CONFLICT_SOURCE_FILE)
+    await browser.waitUntil(async () => (await readFile(diskPath, "utf8")) === source, {
       timeout: 10_000,
       timeoutMsg: "Using the disk version changed the external source bytes"
     })
@@ -1597,8 +1589,8 @@ class DesktopLibraryUi {
       timeout: 10_000,
       timeoutMsg: "The All library view did not show both presentations and documents"
     })
-    if ((await $$(".library-card")).length !== 5) {
-      throw new Error("The All library view did not show all five fixture decks")
+    if ((await $$(".library-card")).length !== 6) {
+      throw new Error("The All library view did not show all six fixture decks")
     }
   }
 
@@ -1708,8 +1700,8 @@ class DesktopLibraryUi {
       timeout: 10_000,
       timeoutMsg: "The presentation filter did not show its presentation"
     })
-    if ((await $$(".library-card")).length !== 3) {
-      throw new Error("The presentation filter did not show the three fixture presentations")
+    if ((await $$(".library-card")).length !== 4) {
+      throw new Error("The presentation filter did not show all four fixture presentations")
     }
     if (await $(`[aria-label='Edit ${documentTitle}']`).isExisting()) {
       throw new Error("The presentation filter still shows a document")
@@ -1776,7 +1768,7 @@ class DesktopLibraryUi {
       const busNames = execFileSync("busctl", ["--user", "list", "--no-legend"], { encoding: "utf8" })
       singleInstanceOwner = busNames
         .split("\n")
-        .find(line => line.startsWith("org.com_elef_desktop.SingleInstance ")) || "not registered"
+        .find(line => line.startsWith("org.com_elef_desktop_e2e.SingleInstance ")) || "not registered"
       if (singleInstanceOwner === "not registered") {
         throw new Error("The running desktop app did not register its Linux single-instance D-Bus name")
       }
@@ -2055,6 +2047,10 @@ describe("desktop binary workflows and native boundaries", () => {
 
   it("runs the shared math input flow in the desktop binary", async () => {
     await mathInputWorkflow(new DesktopEditorUi())
+  })
+
+  it("renders, presents, saves, and reopens the rich release fixture", async () => {
+    await richRenderingMediaWorkflow(new DesktopEditorUi())
   })
 
   it("keeps the empty display-math body caret in both desktop editor modes", async () => {
@@ -2418,47 +2414,86 @@ describe("desktop binary workflows and native boundaries", () => {
     const cancelled = await browser.execute(async () => await window.__elefExportDialog)
     if (cancelled !== false) throw new Error("Cancelling the native export dialog should leave the archive unwritten")
   })
+
+  it("opens and cancels the native diagnostics export dialog", async () => {
+    await browser.execute(() => window.focus())
+    const started = await browser.execute(() => {
+      if (!window.__TAURI__?.core?.invoke) return false
+      window.__elefDiagnosticsExport = window.__TAURI__.core.invoke("export_diagnostics")
+      return true
+    })
+    if (!started) throw new Error("The diagnostics export command could not be started")
+
+    if (process.platform === "darwin") {
+      answerMacNativeDialog("Cancel")
+    } else if (process.platform === "linux") {
+      let dialogId
+      await browser.waitUntil(async () => {
+        try {
+          dialogId = execFileSync("xdotool", ["search", "--onlyvisible", "--name", "Export Elef Diagnostics"], { encoding: "utf8" })
+            .trim().split(/\s+/).at(-1)
+          return Boolean(dialogId)
+        } catch (_error) {
+          return false
+        }
+      }, {
+        timeout: 5_000,
+        timeoutMsg: "The native diagnostics export dialog did not open"
+      })
+      execFileSync("xdotool", ["windowactivate", "--sync", dialogId], { timeout: 5_000 })
+      execFileSync("xdotool", ["key", "--clearmodifiers", "Escape"], { timeout: 5_000 })
+    } else {
+      throw new Error(`Native diagnostics dialog smoke is unsupported on ${process.platform}`)
+    }
+
+    const cancelled = await browser.execute(async () => await window.__elefDiagnosticsExport)
+    if (cancelled !== false) throw new Error("Cancelling the diagnostics dialog should leave the export unwritten")
+  })
+
+  it("exports sanitized preview/bootstrap failures without privacy fixture sentinels", async () => {
+    await browser.execute(async () => {
+      const { invoke } = window.__TAURI__.core
+      await invoke("record_preview_failure")
+      await invoke("record_bootstrap_failure")
+    })
+    await exportAndVerifyDiagnostics(browser, "dev", ["render", "startup", "import"])
+  })
 })
 
 describe("native updater verification", () => {
   for (const mode of ["none", "older", "valid", "bad-signature", "truncated", "version-mismatch"]) {
     it(`handles ${mode} updates without changing the installed binary or deck source`, async () => {
       const binaryPath = process.env.ELEF_E2E_INSTALLED_ARTIFACT || process.env.ELEF_E2E_REAL_APP_BINARY || process.env.ELEF_E2E_APP_BINARY
-      const hash = async filename => createHash("sha256").update(await readFile(filename)).digest("hex")
-      const sourcePath = path.join(process.env.ELEF_E2E_LIBRARY_ROOT, "E2E seed", "presentation.md")
-      const original = { binary: await hash(binaryPath), source: await hash(sourcePath) }
-      const response = await fetch(`http://127.0.0.1:8888/mode?value=${mode}`)
+    const hash = async filename => createHash("sha256").update(await readFile(filename)).digest("hex")
+    const sourcePath = path.join(process.env.ELEF_E2E_LIBRARY_ROOT, "E2E seed", "presentation.md")
+    const original = { binary: await hash(binaryPath), source: await hash(sourcePath) }
+    const clearStagedUpdate = await fetch("http://127.0.0.1:8888/mode?value=none")
+    if (!clearStagedUpdate.ok) throw new Error("Could not clear the prior updater fixture state")
+    const cleared = await browser.execute(async () => {
+      const { invoke, Channel } = window.__TAURI__.core
+      return invoke("stage_update", { onProgress: new Channel() })
+    })
+    if (cleared !== null) throw new Error(`The updater cache did not clear before ${mode}: ${JSON.stringify(cleared)}`)
+    const response = await fetch(`http://127.0.0.1:8888/mode?value=${mode}`)
       if (!response.ok) throw new Error("Could not select the updater fixture")
       try {
         const result = await browser.execute(async () => {
           const { invoke, Channel } = window.__TAURI__.core
-          const metadata = await invoke("plugin:updater|check", { timeout: 5_000 })
-          if (!metadata) return { outcome: "no-update" }
-          let bytesRid
           try {
-            const onEvent = new Channel()
-            bytesRid = await invoke("plugin:updater|download", { rid: metadata.rid, onEvent, timeout: 5_000 })
-            return { outcome: "verified-download", version: metadata.version }
+            const update = await invoke("stage_update", { onProgress: new Channel() })
+            return update ? { outcome: "staged", version: update.version } : { outcome: "no-update" }
           } catch (error) {
-            // The embedded driver reserves a top-level `error` field for its
-            // own execution failures. Keep expected plugin rejection data
-            // under a distinct name so it reaches the scenario assertion.
             return { outcome: "rejected", rejectionReason: String(error) }
-          } finally {
-            if (bytesRid !== undefined) await invoke("plugin:resources|close", { rid: bytesRid })
-            await invoke("plugin:resources|close", { rid: metadata.rid })
           }
         })
         if (["none", "older"].includes(mode)) {
           if (result.outcome !== "no-update") throw new Error(`Expected no update: ${JSON.stringify(result)}`)
         } else if (mode === "valid") {
-          if (result.outcome !== "verified-download" || result.version !== "0.2.0") {
-            throw new Error(`Signed download did not verify: ${JSON.stringify(result)}`)
+          if (result.outcome !== "staged" || result.version !== "0.2.0") {
+            throw new Error(`Signed update was not staged: ${JSON.stringify(result)}`)
           }
         } else {
           if (result.outcome !== "rejected") throw new Error(`Unsafe update was accepted: ${JSON.stringify(result)}`)
-          if (mode === "bad-signature" && !/signature/i.test(result.rejectionReason)) throw new Error(`Wrong signature rejection: ${result.rejectionReason}`)
-          if (mode === "version-mismatch" && !/version/i.test(result.rejectionReason)) throw new Error(`Wrong version rejection: ${result.rejectionReason}`)
         }
         if (await hash(binaryPath) !== original.binary || await hash(sourcePath) !== original.source) {
           throw new Error("Update verification changed the installed binary or deck source")
@@ -2477,57 +2512,4 @@ describe("native updater verification", () => {
     })
   }
 
-  if (process.env.ELEF_E2E_PACKAGED_UPDATES === "1") {
-    it("requires native confirmation and installs signed version N without changing deck bytes", async function () {
-      this.timeout(180_000)
-      const binaryPath = process.env.ELEF_E2E_INSTALLED_ARTIFACT || process.env.ELEF_E2E_REAL_APP_BINARY || process.env.ELEF_E2E_APP_BINARY
-      const sourcePath = path.join(process.env.ELEF_E2E_LIBRARY_ROOT, "E2E seed", "presentation.md")
-      const hash = async filename => createHash("sha256").update(await readFile(filename)).digest("hex")
-      const original = { binary: await hash(binaryPath), source: await hash(sourcePath) }
-      const response = await fetch("http://127.0.0.1:8888/mode?value=package")
-      if (!response.ok) throw new Error("The packaged update fixture is missing")
-      const begin = async () => {
-        await browser.execute(() => {
-          window.focus()
-          window.__elefUpdateInstallation = window.__TAURI__.core.invoke("install_update", {
-            version: "0.2.0", onProgress: new window.__TAURI__.core.Channel()
-          }).then(installed => ({ installed })).catch(error => ({ rejection: error.message || String(error) }))
-        })
-      }
-      const answer = async accept => {
-        if (process.platform === "darwin") {
-          answerMacNativeDialog(accept ? "OK" : "Cancel")
-        } else if (process.platform === "linux") {
-          const dialogId = execFileSync("xdotool", ["search", "--sync", "--onlyvisible", "--name", "^Install Elef update$"], {
-            encoding: "utf8", timeout: 15_000
-          }).trim().split(/\s+/).at(-1)
-          execFileSync("xdotool", ["windowactivate", "--sync", dialogId], { timeout: 5_000 })
-          execFileSync("xdotool", ["key", "--clearmodifiers", accept ? "alt+o" : "Escape"], { timeout: 5_000 })
-        } else throw new Error("Unsupported native updater confirmation platform")
-      }
-      try {
-        await begin()
-        await answer(false)
-        const cancelled = await browser.execute(async () => await window.__elefUpdateInstallation)
-        if (cancelled.installed !== false) throw new Error(`Native cancellation did not cancel: ${JSON.stringify(cancelled)}`)
-        if (await hash(binaryPath) !== original.binary) throw new Error("Cancelling the update changed the installed application")
-        await begin()
-        await answer(true)
-        const installed = await browser.execute(async () => await window.__elefUpdateInstallation)
-        if (installed.installed !== true) throw new Error(`The signed package did not install: ${JSON.stringify(installed)}`)
-        if (await hash(binaryPath) === original.binary) throw new Error("The signed update did not replace the installed application")
-        if (await hash(sourcePath) !== original.source) throw new Error("Installation changed the user's deck bytes")
-        if (!(await $("#back-to-library").isExisting())) throw new Error("The application stopped responding after installation")
-      } catch (error) {
-        try {
-          await fetch("http://127.0.0.1:8888/mode?value=none")
-        } catch (resetError) {
-          console.error("Updater fixture reset also failed:", resetError.cause?.code || resetError.message)
-        }
-        throw new Error(error.message || String(error))
-      }
-      const reset = await fetch("http://127.0.0.1:8888/mode?value=none")
-      if (!reset.ok) throw new Error("The updater fixture did not reset")
-    })
-  }
 })

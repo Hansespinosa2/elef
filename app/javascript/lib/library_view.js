@@ -80,11 +80,12 @@ export function renderLibraryView(container, config = {}) {
   }
 
   const graph = root.querySelector("#document-graph-view")
+  if (config.graphEnabled === false) graph.remove()
   const empty = root.querySelector("#empty-library")
   empty.hidden = !config.empty
   const actions = root.querySelector('[data-library-view-slot="actions"]')
   moveSlot(container, "actions", actions)
-  moveGraphSlot(container, graph)
+  if (config.graphEnabled !== false) moveGraphSlot(container, graph)
   moveSlot(container, "lineage", root.querySelector('[data-library-view-slot="lineage"]'))
   moveSlot(container, "cards", root.querySelector("#deck-list"))
   moveSlot(container, "empty-action", empty.querySelector('[data-library-view-slot="empty-action"]'))

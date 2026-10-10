@@ -1,6 +1,7 @@
 # MiniRacer's pinned libv8-node binary uses glibc 2.38 symbols; Debian Trixie
 # provides a compatible runtime, while Bookworm does not.
-FROM ruby:3.4-trixie
+ARG RUBY_BASE_IMAGE=ruby:3.4-trixie
+FROM ${RUBY_BASE_IMAGE}
 
 ENV APP_HOME=/rails \
     BUNDLE_DEPLOYMENT=1 \

@@ -60,7 +60,29 @@ test("library previews use the shared renderer and the non-interactive sanitizer
     documentNodes: []
   })
   assert.match(calls[2][2], /document-reader/)
-  assert.deepEqual(calls[2][3], { interactive: false, documentPagination: true, mediaBaseUrl: "/media/doc-1" })
+  assert.deepEqual(calls[2][3], {
+    interactive: false,
+    documentPagination: true,
+    mediaBaseUrl: "/media/doc-1",
+    visualEditing: true
+  })
+})
+
+test("Stable library previews remove visual editing controls while preserving the rendered preview", async () => {
+  const { document } = parseHTML("<div id='preview'></div>")
+  const container = document.querySelector("#preview")
+  const html = '<div class="presentation-surface presentation-editor-projection"><section class="slide"><div class="presentation-editor-slide-toolbar"><button type="button" data-presentation-editor-action="delete-slide">Delete</button></div><div class="presentation-editor-block-controls"><button type="button" data-presentation-editor-action="delete-block">Delete</button></div><h1>Notes stay visible</h1></section></div>'
+  const load = createLibraryPreviewLoader({
+    readPreview: async () => ({ source: "# Notes" }),
+    render: async () => ({ html }),
+    install: installSanitizedPreview,
+    visualEditing: false
+  })
+
+  assert.equal(await load(container, { id: "fixture", name: "Notes", kind: "presentation" }), true)
+  assert.equal(container.querySelector(".presentation-editor-slide-toolbar, .presentation-editor-block-controls"), null)
+  assert.equal(container.querySelector("button, [contenteditable]"), null)
+  assert.equal(container.querySelector("h1")?.textContent, "Notes stay visible")
 })
 
 test("large sources show a bounded-preview message without invoking the renderer", async () => {

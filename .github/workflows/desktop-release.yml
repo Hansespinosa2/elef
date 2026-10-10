@@ -1,115 +1,792 @@
-name: Desktop Release
+name: Desktop Release Coordinator
 
 on:
-  push:
-    tags: ["desktop-v*"]
+  workflow_run:
+    workflows: [ CI ]
+    types: [ completed ]
+    branches: [ main ]
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+    inputs:
+      action:
+        description: Owner-authorized reconciliation or minor milestone
+        type: choice
+        options: [ reconcile, minor ]
+        default: reconcile
+        required: true
+      minor:
+        description: New minor milestone, such as 0.2
+        type: string
+        required: false
+      versions:
+        description: Comma or space separated release versions for block/unblock
+        type: string
+        required: false
+      reason:
+        description: Required authorization reason for a control action
+        type: string
+        required: false
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: elef-desktop-release-coordinator
+  cancel-in-progress: false
+  queue: max
 
 jobs:
-  macos:
-    runs-on: macos-15
+  verify-coordinator:
+    name: Verify exact-SHA release coordinator trust
+    if: >-
+      (
+        github.event_name == 'workflow_run' &&
+        github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_branch == 'main' &&
+        github.sha == github.event.workflow_run.head_sha &&
+        github.workflow_sha == github.event.workflow_run.head_sha
+      ) || (
+        github.event_name == 'schedule' &&
+        github.ref_type == 'branch' &&
+        github.ref_name == 'main' &&
+        github.sha == github.workflow_sha
+      ) || (
+        github.event_name == 'workflow_dispatch' &&
+        github.ref_type == 'branch' &&
+        github.ref_name == 'main' &&
+        github.actor == github.repository_owner &&
+        github.sha == github.workflow_sha
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+    outputs:
+      trusted_tool_sha: ${{ steps.verify.outputs.trusted_tool_sha }}
+      failure_only: ${{ steps.verify.outputs.failure_only }}
+      failure_sha: ${{ steps.verify.outputs.failure_sha }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v4
+      - name: Check out current main history as data
+        uses: actions/checkout@v7
         with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            desktop/frontend/package-lock.json
-      - uses: dtolnay/rust-toolchain@stable
-      - run: npm ci
-      - run: npm run renderer:build
-      - run: npm ci --prefix desktop/frontend
-      - name: Prepare signed updater configuration
-        env:
-          TAURI_UPDATER_PUBKEY: ${{ vars.TAURI_UPDATER_PUBKEY }}
-          DESKTOP_RELEASE_TAG: ${{ github.ref_name }}
-        run: node desktop/scripts/prepare-updater-config.mjs
-      - name: Check signing credentials are configured
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: test -n "$TAURI_SIGNING_PRIVATE_KEY" && test -n "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD"
-      - name: Build and publish macOS updater artifacts
-        uses: tauri-apps/tauri-action@73fb865345c54760d875b94642314f8c0c894afa # action-v0.6.1
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        with:
-          projectPath: desktop
-          tauriScript: npm --prefix frontend run tauri --
-          args: --config src-tauri/tauri.release.generated.conf.json --bundles app,dmg
-          tagName: ${{ github.ref_name }}
-          releaseName: Elef Desktop ${{ github.ref_name }}
-          releaseBody: |
-            Updater downloads are signed and verified by Elef before installation.
+          ref: main
+          path: main-history
+          fetch-depth: 0
+          persist-credentials: false
 
-            [Install and use Elef Desktop](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/docs/desktop/install-and-use.md)
-          releaseDraft: true
-          prerelease: false
-          uploadUpdaterJson: true
-
-  linux:
-    needs: macos
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v4
+      - name: Check out the authoritative Pages ledger
+        uses: actions/checkout@v7
         with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            desktop/frontend/package-lock.json
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Install Linux desktop build dependencies
+          ref: gh-pages
+          path: pages
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Select the latest recorded trusted verifier, bootstrapping only when no trust record exists
+        id: select-verifier
+        env:
+          GITHUB_SHA: ${{ github.sha }}
         run: |
-          sudo apt-get update
-          sudo apt-get install --yes build-essential curl file libayatana-appindicator3-dev libdbus-1-dev libgtk-3-dev librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev patchelf wget
-      - run: npm ci
-      - run: npm run renderer:build
-      - run: npm ci --prefix desktop/frontend
-      - name: Prepare signed updater configuration
-        env:
-          TAURI_UPDATER_PUBKEY: ${{ vars.TAURI_UPDATER_PUBKEY }}
-          DESKTOP_RELEASE_TAG: ${{ github.ref_name }}
-        run: node desktop/scripts/prepare-updater-config.mjs
-      - name: Check signing credentials are configured
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: test -n "$TAURI_SIGNING_PRIVATE_KEY" && test -n "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD"
-      - name: Build and publish Linux updater artifacts
-        uses: tauri-apps/tauri-action@73fb865345c54760d875b94642314f8c0c894afa # action-v0.6.1
+          verifier_sha="$(jq -r '[.processed_merges[]? | select(.gate == "passed" and (.sha | test("^[a-f0-9]{40}$"; "i")) and (.main_order | type == "number"))] | sort_by(.main_order) | last | .sha // empty' pages/desktop/stable/state.json)"
+          if [[ -z "$verifier_sha" ]]; then verifier_sha="$GITHUB_SHA"; fi
+          [[ "$verifier_sha" =~ ^[a-fA-F0-9]{40}$ ]]
+          printf 'verifier_sha=%s\n' "$verifier_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Check out the trusted verifier revision
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.select-verifier.outputs.verifier_sha }}
+          path: verifier
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Verify event owner approval and exact-SHA Gate A using trusted code
+        id: verify
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_API_URL: ${{ github.api_url }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_REF_TYPE: ${{ github.ref_type }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          DESKTOP_WORKFLOW_SHA: ${{ github.workflow_sha }}
+          DESKTOP_GATE_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          DESKTOP_TRIGGER_EVENT: ${{ github.event.workflow_run.event }}
+          DESKTOP_TRIGGER_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          DESKTOP_TRIGGER_SHA: ${{ github.event.workflow_run.head_sha }}
+          DESKTOP_RELEASE_ACTION: ${{ github.event.inputs.action || 'reconcile' }}
+        run: node verifier/desktop/scripts/verify_release_coordinator.mjs current main-history pages
+
+  reconcile:
+    name: Reconcile desktop release state
+    needs: verify-coordinator
+    if: needs.verify-coordinator.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: desktop-release-state
+    env:
+      ELEF_RELEASE_STATE_APP_ID: ${{ vars.ELEF_RELEASE_STATE_APP_ID }}
+      ELEF_RELEASE_STATE_RULESET_UPDATED_AT: ${{ vars.ELEF_RELEASE_STATE_RULESET_UPDATED_AT }}
+      GITHUB_API_URL: ${{ github.api_url }}
+      GITHUB_REPOSITORY: ${{ github.repository }}
+    outputs:
+      trusted_tool_sha: ${{ needs.verify-coordinator.outputs.trusted_tool_sha }}
+      macos_candidate: ${{ steps.publish.outputs.macos_candidate }}
+      linux_candidate: ${{ steps.publish.outputs.linux_candidate }}
+      aur_candidate: ${{ steps.publish.outputs.aur_candidate }}
+      failure_only: ${{ steps.publish.outputs.failure_only }}
+      failure_sha: ${{ steps.publish.outputs.failure_sha }}
+      failure_sha_recorded: ${{ steps.publish.outputs.failure_sha_recorded }}
+      failed_notification_shas: ${{ steps.publish.outputs.failed_notification_shas }}
+      failed_gate_count: ${{ steps.publish.outputs.failed_gate_count }}
+      pending_sha: ${{ steps.publish.outputs.pending_sha }}
+      pending_reason: ${{ steps.publish.outputs.pending_reason }}
+      release_action: ${{ github.event.inputs.action || 'reconcile' }}
+      control_versions: ${{ github.event.inputs.versions || '' }}
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Check out verified release tooling
+        if: needs.verify-coordinator.outputs.failure_only != 'true'
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.verify-coordinator.outputs.trusted_tool_sha }}
+          path: tooling
+          persist-credentials: false
+
+      - name: Check out the exact failed main revision for the narrow bootstrap recorder
+        if: needs.verify-coordinator.outputs.failure_only == 'true'
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.verify-coordinator.outputs.failure_sha }}
+          path: source
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check out current main history as reconciliation data
+        if: needs.verify-coordinator.outputs.failure_only != 'true'
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          path: source
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check out the authoritative Pages state branch
+        uses: actions/checkout@v7
+        with:
+          ref: gh-pages
+          path: pages
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Create the short-lived Pages writer token
+        id: pages-writer-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          client-id: ${{ vars.ELEF_RELEASE_STATE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.ELEF_RELEASE_STATE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: elef
+          permission-contents: write
+
+      - name: Reconcile and compare-and-swap publish release state
+        id: publish
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_REF: ${{ github.ref }}
+          GITHUB_REF_TYPE: ${{ github.ref_type }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_SHA: ${{ github.sha }}
+          DESKTOP_WORKFLOW_SHA: ${{ github.workflow_sha }}
+          ELEF_RELEASE_STATE_PUSH_TOKEN: ${{ steps.pages-writer-token.outputs.token }}
+          DESKTOP_RELEASE_ACTION: ${{ github.event.inputs.action || 'reconcile' }}
+          DESKTOP_RELEASE_MINOR: ${{ github.event.inputs.minor }}
+          DESKTOP_RELEASE_VERSIONS: ${{ github.event.inputs.versions }}
+          DESKTOP_RELEASE_REASON: ${{ github.event.inputs.reason }}
+          DESKTOP_RELEASE_FAILURE_ONLY: ${{ needs.verify-coordinator.outputs.failure_only }}
+          DESKTOP_RELEASE_FAILURE_SHA: ${{ needs.verify-coordinator.outputs.failure_sha }}
+          DESKTOP_GATE_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          DESKTOP_TRIGGER_EVENT: ${{ github.event.workflow_run.event }}
+          DESKTOP_TRIGGER_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          DESKTOP_TRIGGER_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          if [[ "$DESKTOP_RELEASE_FAILURE_ONLY" == "true" ]]; then
+            node source/desktop/scripts/record_desktop_bootstrap_failure.mjs pages source
+          else
+            node tooling/desktop/scripts/publish_desktop_release_state.mjs pages source
+          fi
+
+  notify-failed-gate:
+    name: Notify on terminal Gate A failures
+    needs: reconcile
+    if: >-
+      always() &&
+      needs.reconcile.result == 'success' &&
+      (
+        (needs.reconcile.outputs.failure_only == 'true' && needs.reconcile.outputs.failure_sha_recorded != 'true') ||
+        needs.reconcile.outputs.failed_notification_shas != '[]'
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: desktop-release-state
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Check out trusted release tooling
+        if: needs.reconcile.outputs.failure_only != 'true'
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.reconcile.outputs.trusted_tool_sha }}
+          path: tooling
+          persist-credentials: false
+
+      - name: Check out exact failure-only notification tooling
+        if: needs.reconcile.outputs.failure_only == 'true'
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.reconcile.outputs.failure_sha }}
+          path: tooling
+          persist-credentials: false
+
+      - name: Check out the authoritative Pages ledger
+        uses: actions/checkout@v7
+        with:
+          ref: gh-pages
+          path: pages
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Create the short-lived Pages writer token
+        id: pages-writer-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          client-id: ${{ vars.ELEF_RELEASE_STATE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.ELEF_RELEASE_STATE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: elef
+          permission-contents: write
+
+      - name: Report unrecorded and unacknowledged Gate A failures
+        env:
+          FAILURE_ONLY: ${{ needs.reconcile.outputs.failure_only }}
+          FAILURE_SHA: ${{ needs.reconcile.outputs.failure_sha }}
+          FAILURE_SHA_RECORDED: ${{ needs.reconcile.outputs.failure_sha_recorded }}
+          PENDING_SHA: ${{ needs.reconcile.outputs.pending_sha }}
+          PENDING_REASON: ${{ needs.reconcile.outputs.pending_reason }}
+          FAILED_NOTIFICATION_SHAS: ${{ needs.reconcile.outputs.failed_notification_shas }}
+        run: |
+          if [[ "$FAILURE_ONLY" == "true" && "$FAILURE_SHA_RECORDED" != "true" ]]; then
+            if [[ -n "$PENDING_SHA" ]]; then
+              echo "::error title=Gate A failure not recorded::Failed SHA $FAILURE_SHA is not yet in the ledger; reconciliation is blocked at earlier main SHA $PENDING_SHA ($PENDING_REASON). No platform candidate was emitted."
+            else
+              echo "::error title=Gate A failure not recorded::Failed SHA $FAILURE_SHA is not yet present in the Pages ledger. No platform candidate was emitted."
+            fi
+          fi
+          while IFS= read -r failed_sha; do
+            [[ -n "$failed_sha" ]] || continue
+            echo "::error title=Unacknowledged Gate A failure::Ledger records failed_gate for exact main SHA $failed_sha; repair this merge with a new owner-approved PR."
+          done < <(jq -r '.[]' <<< "$FAILED_NOTIFICATION_SHAS")
+
+      - name: Create or confirm owner-assigned Gate A issue notices
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_API_URL: ${{ github.api_url }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
+          GITHUB_SERVER_URL: ${{ github.server_url }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          DESKTOP_FAILED_GATE_NOTIFICATION_SHAS: ${{ needs.reconcile.outputs.failed_notification_shas }}
+          DESKTOP_RELEASE_FAILURE_ONLY: ${{ needs.reconcile.outputs.failure_only }}
+          DESKTOP_RELEASE_FAILURE_SHA: ${{ needs.reconcile.outputs.failure_sha }}
+          DESKTOP_RELEASE_FAILURE_SHA_RECORDED: ${{ needs.reconcile.outputs.failure_sha_recorded }}
+          DESKTOP_RELEASE_PENDING_SHA: ${{ needs.reconcile.outputs.pending_sha }}
+          DESKTOP_RELEASE_PENDING_REASON: ${{ needs.reconcile.outputs.pending_reason }}
+        run: node tooling/desktop/scripts/notify_desktop_gate_failures.mjs
+
+      - name: Acknowledge owner-assigned issue notices with a Pages compare-and-swap
+        if: needs.reconcile.outputs.failed_notification_shas != '[]'
+        env:
+          ELEF_RELEASE_STATE_APP_ID: ${{ vars.ELEF_RELEASE_STATE_APP_ID }}
+          ELEF_RELEASE_STATE_RULESET_UPDATED_AT: ${{ vars.ELEF_RELEASE_STATE_RULESET_UPDATED_AT }}
+          ELEF_RELEASE_STATE_PUSH_TOKEN: ${{ steps.pages-writer-token.outputs.token }}
+          GITHUB_API_URL: ${{ github.api_url }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          DESKTOP_FAILED_GATE_NOTIFICATION_SHAS: ${{ needs.reconcile.outputs.failed_notification_shas }}
+        run: node tooling/desktop/scripts/acknowledge_desktop_gate_failures.mjs pages
+
+      - name: Keep the workflow visibly failed after notifying the owner
+        if: >-
+          (needs.reconcile.outputs.failure_only == 'true' && needs.reconcile.outputs.failure_sha_recorded != 'true') ||
+          needs.reconcile.outputs.failed_notification_shas != '[]'
+        run: exit 1
+
+  prepare-releases:
+    name: Prepare immutable release tags and drafts
+    needs: reconcile
+    if: needs.reconcile.outputs.failure_only != 'true' && needs.reconcile.outputs.release_action != 'block' && needs.reconcile.outputs.release_action != 'unblock'
+    runs-on: ubuntu-latest
+    environment: desktop-release-state
+    permissions:
+      contents: write
+    steps:
+      - name: Check out release source and scripts
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.reconcile.outputs.trusted_tool_sha }}
+          path: tooling
+          persist-credentials: false
+      - name: Check out the current release ledger
+        uses: actions/checkout@v7
+        with:
+          ref: gh-pages
+          path: pages
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Ensure each candidate has one immutable tag and draft release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          MACOS_CANDIDATE: ${{ needs.reconcile.outputs.macos_candidate }}
+          LINUX_CANDIDATE: ${{ needs.reconcile.outputs.linux_candidate }}
+        run: node tooling/desktop/scripts/prepare_desktop_releases.mjs pages
+
+  linux-release:
+    name: Build and publish Arch x86-64 release
+    needs: [ reconcile, prepare-releases ]
+    if: needs.reconcile.outputs.failure_only != 'true' && needs.reconcile.outputs.linux_candidate != '' && needs.reconcile.outputs.release_action != 'block' && needs.reconcile.outputs.release_action != 'unblock'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment: desktop-release-state
+    env:
+      ELEF_RELEASE_STATE_APP_ID: ${{ vars.ELEF_RELEASE_STATE_APP_ID }}
+      ELEF_RELEASE_STATE_RULESET_UPDATED_AT: ${{ vars.ELEF_RELEASE_STATE_RULESET_UPDATED_AT }}
+      GITHUB_API_URL: ${{ github.api_url }}
+      GITHUB_REPOSITORY: ${{ github.repository }}
+    permissions:
+      contents: write
+    outputs:
+      release_version: ${{ steps.publish.outputs.release_version }}
+      aur_candidate: ${{ steps.publish.outputs.aur_candidate }}
+    steps:
+      - name: Check out release tooling
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.reconcile.outputs.trusted_tool_sha }}
+          path: tooling
+          persist-credentials: false
+      - name: Check out the reserved release source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ fromJSON(needs.reconcile.outputs.linux_candidate).main_sha }}
+          path: build-source
+          persist-credentials: false
+      - name: Check out the current release ledger
+        uses: actions/checkout@v7
+        with:
+          ref: gh-pages
+          path: pages
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build and smoke the immutable Arch package in the pinned Arch container
+        id: build
+        env:
+          ELEF_BUILD_SHA: ${{ fromJSON(needs.reconcile.outputs.linux_candidate).main_sha }}
+          DESKTOP_RELEASE_VERSION: ${{ fromJSON(needs.reconcile.outputs.linux_candidate).version }}
+        run: |
+          set -o pipefail
+          mkdir -p "$GITHUB_WORKSPACE/build-source/desktop/target"
+          docker run --rm --pull=always \
+            --platform linux/amd64 \
+            --volume "$GITHUB_WORKSPACE/build-source:/workspace" \
+            --workdir /workspace \
+            --env ELEF_BUILD_SHA \
+            --env DESKTOP_RELEASE_VERSION \
+            ghcr.io/archlinux/archlinux@sha256:ed261ac99d13e9636940e88df26ccd22b0d8d1c2139699870f0427c765352689 \
+            bash desktop/scripts/arch_package_ci.sh 2>&1 | tee "$GITHUB_WORKSPACE/build-source/desktop/target/arch-release-gate.log"
+      - name: Verify archive checksum and source provenance
+        id: prepare-assets
+        env:
+          RELEASE_VERSION: ${{ fromJSON(needs.reconcile.outputs.linux_candidate).version }}
+          RELEASE_SOURCE_SHA: ${{ fromJSON(needs.reconcile.outputs.linux_candidate).main_sha }}
+          RELEASE_PR: ${{ fromJSON(needs.reconcile.outputs.linux_candidate).pr }}
+        run: |
+          node tooling/desktop/scripts/prepare_linux_release_assets.mjs \
+            "$RELEASE_VERSION" "$RELEASE_SOURCE_SHA" "$RELEASE_PR" \
+            "$GITHUB_WORKSPACE/build-source/desktop/target/arch-release" \
+            "$GITHUB_WORKSPACE/build-source/desktop/target/arch-release/assets.json"
+      - name: Create the short-lived Pages writer token
+        id: pages-writer-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          client-id: ${{ vars.ELEF_RELEASE_STATE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.ELEF_RELEASE_STATE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: elef
+          permission-contents: write
+      - name: Publish validated Linux assets and record the ledger transition
+        id: publish
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          ELEF_RELEASE_STATE_PUSH_TOKEN: ${{ steps.pages-writer-token.outputs.token }}
+        run: node tooling/desktop/scripts/publish_desktop_platform.mjs pages build-source/desktop/target/arch-release/assets.json
+      - name: Create a Pages writer token for the failure ledger update
+        if: failure()
+        id: pages-writer-failure-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          client-id: ${{ vars.ELEF_RELEASE_STATE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.ELEF_RELEASE_STATE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: elef
+          permission-contents: write
+      - name: Record a sanitized Linux platform failure
+        if: failure()
+        env:
+          RELEASE_VERSION: ${{ fromJSON(needs.reconcile.outputs.linux_candidate).version }}
+          ELEF_RELEASE_STATE_PUSH_TOKEN: ${{ steps.pages-writer-failure-token.outputs.token || steps.pages-writer-token.outputs.token }}
+        run: |
+          category=publication_failed
+          if [[ "${{ steps.build.outcome }}" == failure ]]; then category=build_failed; fi
+          if [[ "${{ steps.prepare-assets.outcome }}" == failure ]]; then category=asset_verification_failed; fi
+          node tooling/desktop/scripts/record_desktop_platform_failure.mjs pages "$RELEASE_VERSION" linux_asset "$category"
+      - name: Preserve Arch release build evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: arch-release-${{ fromJSON(needs.reconcile.outputs.linux_candidate).version }}
+          path: |
+            build-source/desktop/target/arch-release/assets.json
+            build-source/desktop/target/arch-release/build-inputs.txt
+            build-source/desktop/target/arch-release-gate.log
+          if-no-files-found: ignore
+
+  macos-release:
+    name: Build and publish Apple Silicon macOS release
+    needs: [ reconcile, prepare-releases ]
+    if: needs.reconcile.outputs.failure_only != 'true' && needs.reconcile.outputs.macos_candidate != '' && needs.reconcile.outputs.release_action != 'block' && needs.reconcile.outputs.release_action != 'unblock'
+    runs-on: macos-15
+    timeout-minutes: 90
+    environment: desktop-release-signing
+    env:
+      ELEF_RELEASE_STATE_APP_ID: ${{ vars.ELEF_RELEASE_STATE_APP_ID }}
+      ELEF_RELEASE_STATE_RULESET_UPDATED_AT: ${{ vars.ELEF_RELEASE_STATE_RULESET_UPDATED_AT }}
+      GITHUB_API_URL: ${{ github.api_url }}
+      GITHUB_REPOSITORY: ${{ github.repository }}
+    permissions:
+      contents: write
+    outputs:
+      release_version: ${{ steps.publish.outputs.release_version }}
+    steps:
+      - name: Check out release tooling
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.reconcile.outputs.trusted_tool_sha }}
+          path: tooling
+          persist-credentials: false
+      - name: Check out the reserved release source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ fromJSON(needs.reconcile.outputs.macos_candidate).main_sha }}
+          path: build-source
+          persist-credentials: false
+      - name: Check out the current release ledger
+        uses: actions/checkout@v7
+        with:
+          ref: gh-pages
+          path: pages
+          persist-credentials: false
+      - name: Confirm Apple Silicon runner
+        run: test "$(uname -m)" = arm64
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            build-source/package-lock.json
+            build-source/desktop/frontend/package-lock.json
+      - name: Set up Ruby and install the locked bundle
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: build-source/.ruby-version
+          bundler-cache: true
+          working-directory: build-source
+      - name: Install locked Rails and desktop frontend dependencies
+        run: |
+          cd build-source && npm ci
+          cd desktop/frontend && npm ci
+      - name: Build Rails-owned offline styles and renderer
+        run: |
+          cd build-source
+          bin/rails tailwindcss:build
+          npm run renderer:build
+          git diff --exit-code -- app/assets/builds/tailwind.css vendor/javascript/elef-renderer.bundle.js vendor/javascript/art_source.bundle.js
+      - name: Prepare versioned signed updater configuration
+        env:
+          DESKTOP_RELEASE_TAG: ${{ fromJSON(needs.reconcile.outputs.macos_candidate).tag }}
+          TAURI_UPDATER_PUBKEY: ${{ vars.TAURI_UPDATER_PUBKEY }}
+        run: node tooling/desktop/scripts/prepare-updater-config.mjs "$GITHUB_WORKSPACE/build-source/desktop/src-tauri/tauri.release.generated.conf.json"
+      - name: Build ad-hoc signed Apple Silicon DMG and Tauri updater archive
+        id: build
+        env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        with:
-          projectPath: desktop
-          tauriScript: npm --prefix frontend run tauri --
-          args: --config src-tauri/tauri.release.generated.conf.json --bundles appimage
-          tagName: ${{ github.ref_name }}
-          releaseName: Elef Desktop ${{ github.ref_name }}
-          releaseBody: |
-            Updater downloads are signed and verified by Elef before installation.
-
-            [Install and use Elef Desktop](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/docs/desktop/install-and-use.md)
-          releaseDraft: true
-          prerelease: false
-          uploadUpdaterJson: true
-
-  publish:
-    needs: linux
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Publish the complete signed release
+          TAURI_UPDATER_PUBKEY: ${{ vars.TAURI_UPDATER_PUBKEY }}
+          APPLE_SIGNING_IDENTITY: '-'
+        run: npm run tauri:build --prefix build-source/desktop/frontend -- --config src-tauri/tauri.release.generated.conf.json --bundles app,dmg
+      - name: Verify ad-hoc app signature and DMG integrity
+        id: package-check
+        run: |
+          app_path="$(find build-source/desktop/src-tauri/target/release/bundle/macos -maxdepth 1 -type d -name '*.app' -print -quit)"
+          dmg_path="$(find build-source/desktop/src-tauri/target/release/bundle/dmg -maxdepth 1 -type f -name '*.dmg' -print -quit)"
+          test -d "$app_path"
+          test -f "$dmg_path"
+          codesign --verify --deep --strict --verbose=2 "$app_path"
+          codesign -dv --verbose=4 "$app_path" 2> build-source/desktop/target/macos-codesign.txt
+          grep -F 'Signature=adhoc' build-source/desktop/target/macos-codesign.txt
+          hdiutil verify "$dmg_path"
+      - name: Verify updater signature and prepare immutable asset metadata
+        id: prepare-assets
         env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          RELEASE_TAG: ${{ github.ref_name }}
-        run: gh release edit "$RELEASE_TAG" --draft=false
+          TAURI_UPDATER_PUBKEY: ${{ vars.TAURI_UPDATER_PUBKEY }}
+          CARGO_TARGET_DIR: ${{ github.workspace }}/build-source/desktop/target/signature-verifier
+          RELEASE_VERSION: ${{ fromJSON(needs.reconcile.outputs.macos_candidate).version }}
+          RELEASE_SOURCE_SHA: ${{ fromJSON(needs.reconcile.outputs.macos_candidate).main_sha }}
+          RELEASE_PR: ${{ fromJSON(needs.reconcile.outputs.macos_candidate).pr }}
+        run: |
+          node tooling/desktop/scripts/prepare_macos_release_assets.mjs \
+            "$RELEASE_VERSION" "$RELEASE_SOURCE_SHA" "$RELEASE_PR" \
+            "$GITHUB_WORKSPACE/build-source/desktop/src-tauri/target/release/bundle" \
+            "$GITHUB_WORKSPACE/build-source/desktop/target/macos-release/assets.json"
+      - name: Create the short-lived Pages writer token
+        id: pages-writer-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          client-id: ${{ vars.ELEF_RELEASE_STATE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.ELEF_RELEASE_STATE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: elef
+          permission-contents: write
+      - name: Publish verified macOS assets and record the ledger transition
+        id: publish
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          TAURI_UPDATER_PUBKEY: ${{ vars.TAURI_UPDATER_PUBKEY }}
+          CARGO_TARGET_DIR: ${{ github.workspace }}/build-source/desktop/target/signature-verifier
+          ELEF_RELEASE_STATE_PUSH_TOKEN: ${{ steps.pages-writer-token.outputs.token }}
+        run: node tooling/desktop/scripts/publish_desktop_platform.mjs pages build-source/desktop/target/macos-release/assets.json
+      - name: Create a Pages writer token for the failure ledger update
+        if: failure()
+        id: pages-writer-failure-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          client-id: ${{ vars.ELEF_RELEASE_STATE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.ELEF_RELEASE_STATE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: elef
+          permission-contents: write
+      - name: Record a sanitized macOS platform failure
+        if: failure()
+        env:
+          RELEASE_VERSION: ${{ fromJSON(needs.reconcile.outputs.macos_candidate).version }}
+          ELEF_RELEASE_STATE_PUSH_TOKEN: ${{ steps.pages-writer-failure-token.outputs.token || steps.pages-writer-token.outputs.token }}
+        run: |
+          category=publication_failed
+          if [[ "${{ steps.build.outcome }}" == failure ]]; then category=build_failed; fi
+          if [[ "${{ steps.prepare-assets.outcome }}" == failure ]]; then category=signature_invalid; fi
+          node tooling/desktop/scripts/record_desktop_platform_failure.mjs pages "$RELEASE_VERSION" macos "$category"
+      - name: Preserve macOS release build evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: macos-release-${{ fromJSON(needs.reconcile.outputs.macos_candidate).version }}
+          path: |
+            build-source/desktop/target/macos-release/assets.json
+            build-source/desktop/target/macos-codesign.txt
+          if-no-files-found: ignore
+
+  aur-release:
+    name: Publish validated Linux asset to the selected AUR package
+    needs: [ reconcile, prepare-releases, linux-release ]
+    if: >-
+      always() &&
+      needs.reconcile.outputs.failure_only != 'true' &&
+      needs.prepare-releases.result == 'success' &&
+      (
+        needs.reconcile.outputs.aur_candidate != '' ||
+        (needs.linux-release.result == 'success' && needs.linux-release.outputs.aur_candidate != '')
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: desktop-aur-publishing
+    env:
+      ELEF_RELEASE_STATE_APP_ID: ${{ vars.ELEF_RELEASE_STATE_APP_ID }}
+      ELEF_RELEASE_STATE_RULESET_UPDATED_AT: ${{ vars.ELEF_RELEASE_STATE_RULESET_UPDATED_AT }}
+      GITHUB_API_URL: ${{ github.api_url }}
+      GITHUB_REPOSITORY: ${{ github.repository }}
+    permissions:
+      contents: write
+    outputs:
+      release_version: ${{ steps.publish.outputs.release_version }}
+    steps:
+      - name: Check out release tooling
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.reconcile.outputs.trusted_tool_sha }}
+          path: tooling
+          persist-credentials: false
+      - name: Check out the current release ledger
+        uses: actions/checkout@v7
+        with:
+          ref: gh-pages
+          path: pages
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Select the newest AUR candidate
+        env:
+          AUR_CANDIDATE: ${{ needs.linux-release.outputs.aur_candidate || needs.reconcile.outputs.aur_candidate }}
+        run: |
+          test -n "$AUR_CANDIDATE"
+          printf '%s\n' "$AUR_CANDIDATE" > "$GITHUB_WORKSPACE/aur-candidate.json"
+      - name: Verify the public GitHub archive and prepare PKGBUILD
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          AUR_ACCOUNT_NAME: ${{ vars.AUR_ACCOUNT_NAME }}
+        run: node tooling/desktop/scripts/prepare_desktop_aur.mjs pages "$GITHUB_WORKSPACE/aur-candidate.json" "$GITHUB_WORKSPACE/aur-package"
+      - name: Generate .SRCINFO as an unprivileged user in the pinned Arch environment
+        run: |
+          docker run --rm --pull=always \
+            --platform linux/amd64 \
+            --volume "$GITHUB_WORKSPACE/aur-package:/pkg" \
+            ghcr.io/archlinux/archlinux@sha256:ed261ac99d13e9636940e88df26ccd22b0d8d1c2139699870f0427c765352689 \
+            bash -euc '
+              useradd --create-home builder
+              chown -R builder:builder /pkg
+              runuser -u builder -- bash -euc "cd /pkg && makepkg --printsrcinfo > .SRCINFO"
+              test -s /pkg/.SRCINFO
+            '
+      - name: Create the short-lived Pages writer token
+        id: pages-writer-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          client-id: ${{ vars.ELEF_RELEASE_STATE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.ELEF_RELEASE_STATE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: elef
+          permission-contents: write
+      - name: Publish PKGBUILD and .SRCINFO over pinned AUR SSH
+        id: publish
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          AUR_ACCOUNT_NAME: ${{ vars.AUR_ACCOUNT_NAME }}
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          AUR_SSH_KNOWN_HOSTS: ${{ vars.AUR_SSH_KNOWN_HOSTS }}
+          ELEF_RELEASE_STATE_PUSH_TOKEN: ${{ steps.pages-writer-token.outputs.token }}
+        run: node tooling/desktop/scripts/publish_desktop_aur.mjs pages "$GITHUB_WORKSPACE/aur-candidate.json" "$GITHUB_WORKSPACE/aur-package"
+      - name: Create a Pages writer token for the failure ledger update
+        if: failure()
+        id: pages-writer-failure-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          client-id: ${{ vars.ELEF_RELEASE_STATE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.ELEF_RELEASE_STATE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: elef
+          permission-contents: write
+      - name: Record a sanitized AUR publication failure
+        if: failure()
+        env:
+          RELEASE_CANDIDATE: ${{ needs.linux-release.outputs.aur_candidate || needs.reconcile.outputs.aur_candidate }}
+          ELEF_RELEASE_STATE_PUSH_TOKEN: ${{ steps.pages-writer-failure-token.outputs.token || steps.pages-writer-token.outputs.token }}
+        run: |
+          version="$(node -e 'process.stdout.write(JSON.parse(process.env.RELEASE_CANDIDATE).version)')"
+          node tooling/desktop/scripts/record_desktop_platform_failure.mjs pages "$version" aur aur_push_failed
+      - name: Preserve generated AUR metadata evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: aur-package-metadata
+          path: |
+            aur-package/PKGBUILD
+            aur-package/.SRCINFO
+            aur-package/release-metadata.json
+          if-no-files-found: ignore
+
+  finalize-release-notes:
+    name: Finalize release status and safety notes
+    needs: [ reconcile, prepare-releases, linux-release, macos-release, aur-release ]
+    if: always() && needs.reconcile.outputs.failure_only != 'true' && (needs.reconcile.outputs.macos_candidate != '' || needs.reconcile.outputs.linux_candidate != '' || needs.reconcile.outputs.aur_candidate != '' || needs.reconcile.outputs.release_action == 'block' || needs.reconcile.outputs.release_action == 'unblock')
+    runs-on: ubuntu-latest
+    environment: desktop-release-state
+    permissions:
+      contents: write
+    steps:
+      - name: Check out release tooling
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.reconcile.outputs.trusted_tool_sha }}
+          path: tooling
+          persist-credentials: false
+      - name: Check out the latest authoritative ledger
+        uses: actions/checkout@v7
+        with:
+          ref: gh-pages
+          path: pages
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Publish current partial, complete, or blocked notes
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          MACOS_CANDIDATE: ${{ needs.reconcile.outputs.macos_candidate }}
+          LINUX_CANDIDATE: ${{ needs.reconcile.outputs.linux_candidate }}
+          AUR_CANDIDATE: ${{ needs.reconcile.outputs.aur_candidate }}
+          MACOS_RELEASE_VERSION: ${{ needs.macos-release.outputs.release_version }}
+          LINUX_RELEASE_VERSION: ${{ needs.linux-release.outputs.release_version }}
+          AUR_RELEASE_VERSION: ${{ needs.aur-release.outputs.release_version }}
+          DESKTOP_RELEASE_ACTION: ${{ needs.reconcile.outputs.release_action }}
+          DESKTOP_RELEASE_VERSIONS: ${{ needs.reconcile.outputs.control_versions }}
+        run: node tooling/desktop/scripts/finalize_desktop_release_notes.mjs pages

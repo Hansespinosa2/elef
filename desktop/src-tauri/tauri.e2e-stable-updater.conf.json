@@ -1,0 +1,28 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Elef",
+  "identifier": "com.elef.desktop",
+  "app": {
+    "withGlobalTauri": true,
+    "security": {
+      "capabilities": ["main-capability", "macos-updater-capability", "e2e-stable-webdriver"]
+    }
+  },
+  "build": {
+    "frontendDist": "../frontend/dist-e2e-stable"
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["app", "dmg"],
+    "macOS": {
+      "signingIdentity": "-"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": ["http://127.0.0.1:8888/manifest"],
+      "requireSignedVersion": true,
+      "dangerousInsecureTransportProtocol": true
+    }
+  }
+}

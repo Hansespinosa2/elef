@@ -1,0 +1,186 @@
+name: Desktop Release Emergency Controls
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: Emergency central release action
+        type: choice
+        options: [ block, unblock ]
+        required: true
+      versions:
+        description: Comma or space separated release versions
+        type: string
+        required: true
+      reason:
+        description: Required owner authorization reason
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  # Serialize the whole emergency action with all release publishers and note writers.
+  group: elef-desktop-release-coordinator
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  resolve-tooling:
+    name: Resolve trusted emergency-control tooling
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.ref_type == 'tag' &&
+      startsWith(github.ref_name, 'desktop-v') &&
+      github.sha == github.workflow_sha
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+    outputs:
+      trusted_tool_sha: ${{ steps.verify.outputs.trusted_tool_sha }}
+    steps:
+      - name: Check out current main history as data
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          path: main-history
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check out the authoritative Pages ledger
+        uses: actions/checkout@v7
+        with:
+          ref: gh-pages
+          path: pages
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Select the latest recorded trusted release tooling
+        id: select-verifier
+        run: |
+          verifier_sha="$(jq -r '[.processed_merges[]? | select(.gate == "passed" and (.sha | test("^[a-f0-9]{40}$"; "i")) and (.main_order | type == "number"))] | sort_by(.main_order) | last | .sha // empty' pages/desktop/stable/state.json)"
+          [[ "$verifier_sha" =~ ^[a-fA-F0-9]{40}$ ]]
+          printf 'verifier_sha=%s\n' "$verifier_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Check out the trusted verifier revision
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.select-verifier.outputs.verifier_sha }}
+          path: verifier
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Verify owner dispatch and select the latest Gate-A-passed tooling
+        id: verify
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_API_URL: ${{ github.api_url }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_REF_TYPE: ${{ github.ref_type }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_SHA: ${{ github.sha }}
+          DESKTOP_WORKFLOW_SHA: ${{ github.workflow_sha }}
+        run: node verifier/desktop/scripts/verify_release_coordinator.mjs latest main-history pages
+
+  control:
+    name: Update release eligibility under publication lock
+    needs: resolve-tooling
+    if: >-
+      needs.resolve-tooling.result == 'success' &&
+      github.event_name == 'workflow_dispatch' &&
+      github.ref_type == 'tag' &&
+      startsWith(github.ref_name, 'desktop-v') &&
+      github.sha == github.workflow_sha
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: desktop-release-state
+    env:
+      ELEF_RELEASE_STATE_APP_ID: ${{ vars.ELEF_RELEASE_STATE_APP_ID }}
+      ELEF_RELEASE_STATE_RULESET_UPDATED_AT: ${{ vars.ELEF_RELEASE_STATE_RULESET_UPDATED_AT }}
+      GITHUB_API_URL: ${{ github.api_url }}
+      GITHUB_REPOSITORY: ${{ github.repository }}
+    permissions:
+      contents: write
+      pull-requests: read
+    steps:
+      - name: Check out verified release tooling
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.resolve-tooling.outputs.trusted_tool_sha }}
+          path: tooling
+          persist-credentials: false
+
+      - name: Check out current main history as control data
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          path: source
+          fetch-depth: 0
+
+      - name: Check out the authoritative Pages state branch
+        uses: actions/checkout@v7
+        with:
+          ref: gh-pages
+          path: pages
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Validate emergency action inputs
+        env:
+          DESKTOP_RELEASE_ACTION: ${{ inputs.action }}
+          DESKTOP_RELEASE_VERSIONS: ${{ inputs.versions }}
+          DESKTOP_RELEASE_REASON: ${{ inputs.reason }}
+        run: |
+          case "$DESKTOP_RELEASE_ACTION" in block|unblock) ;; *) exit 2 ;; esac
+          test -n "$DESKTOP_RELEASE_VERSIONS"
+          test -n "$DESKTOP_RELEASE_REASON"
+
+      - name: Create the short-lived Pages writer token
+        id: pages-writer-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          client-id: ${{ vars.ELEF_RELEASE_STATE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.ELEF_RELEASE_STATE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: elef
+          permission-contents: write
+
+      - name: Compare-and-swap the block ledger and safe feed
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_REF: ${{ github.ref }}
+          GITHUB_REF_TYPE: ${{ github.ref_type }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_SHA: ${{ github.sha }}
+          DESKTOP_WORKFLOW_SHA: ${{ github.workflow_sha }}
+          DESKTOP_RELEASE_ACTION: ${{ inputs.action }}
+          DESKTOP_RELEASE_VERSIONS: ${{ inputs.versions }}
+          DESKTOP_RELEASE_REASON: ${{ inputs.reason }}
+          ELEF_RELEASE_STATE_PUSH_TOKEN: ${{ steps.pages-writer-token.outputs.token }}
+        run: node tooling/desktop/scripts/publish_desktop_release_state.mjs pages source
+
+      - name: Publish current release warning and recovery guidance
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          DESKTOP_RELEASE_ACTION: ${{ inputs.action }}
+          DESKTOP_RELEASE_VERSIONS: ${{ inputs.versions }}
+        run: node tooling/desktop/scripts/finalize_desktop_release_notes.mjs pages

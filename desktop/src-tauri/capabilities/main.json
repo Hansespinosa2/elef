@@ -19,7 +19,6 @@
     "allow-read-authoring-registries",
     "allow-write-authoring-registry",
     "allow-list-decks",
-    "allow-document-graph",
     "allow-create-deck",
     "allow-open-deck",
     "allow-read-deck-preview",
@@ -33,9 +32,9 @@
     "allow-import-opened-elef",
     "allow-pending-open-elef-count",
     "allow-resolve-import-conflict",
-    "allow-install-update",
-    "updater:allow-check",
-    "process:allow-restart",
-    "allow-confirm-app-ready"
+    "allow-confirm-app-ready",
+    "allow-export-diagnostics",
+    "allow-record-preview-failure",
+    "allow-record-bootstrap-failure"
   ]
 }

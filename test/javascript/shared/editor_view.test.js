@@ -72,6 +72,33 @@ test("shared editor view exposes the same editing controls and targets to both h
   assert.equal(root.querySelector("[data-autosave-target='retry']").hasAttribute("data-action"), false)
 })
 
+test("Stable editor removes experimental controls and keeps literal double-bracket source", () => {
+  const source = "# Keep this source\n\n[[unresolved directive]]"
+  const { root } = mount({
+    kind: "document",
+    mode: "source",
+    source,
+    documentTitles: ["Other document"],
+    showTitle: true,
+    desktopFeatures: {
+      visualEditing: false,
+      presentationEditing: false,
+      slideOverview: false,
+      documentLinks: false
+    }
+  })
+  const form = root.closest("form")
+
+  assert.equal(root.querySelector("[data-editor-target='input']").value, source)
+  assert.equal(root.querySelector("[data-editor-target='visualButton'], [data-editor-target='sourceButton']"), null)
+  assert.equal(root.querySelector("[data-visual-editor-target='projection']"), null)
+  assert.equal(root.querySelector(".presentation-editor-tools, .slide-overview"), null)
+  assert.equal(root.querySelector("[data-document-link-palette-target], [data-action*='document-link-palette#']"), null)
+  assert.doesNotMatch(form.dataset.controller || "", /visual-editor|presentation-editor|slide-overview|document-link-palette/)
+  assert.doesNotMatch(form.dataset.action || "", /visual-editor#projectionKeydown|slide-overview#/)
+  assert.equal(root.querySelector("[data-editor-view-target='editingMode']").textContent, "Source")
+})
+
 test("Rails and desktop install previews through the same sanitized DOM sink", () => {
   const { document } = parseHTML("<main id='preview'></main>")
   const preview = document.querySelector("#preview")
@@ -180,7 +207,7 @@ test("switching deck kinds updates the shared editor controls and controller tar
   assert.equal(root.querySelector("[data-editor-view-target='titleField']").hidden, false)
   assert.equal(sourceInput.name, "presentation[source]")
   assert.doesNotMatch(sourceField.dataset.controller, /document-link-palette/)
-  assert.equal(sourceField.dataset.documentLinkPaletteTitlesValue, "[]")
+  assert.equal(sourceField.dataset.documentLinkPaletteTitlesValue, undefined)
   assert.equal(sourceField.dataset.presentationEditorTarget, "source")
   assert.equal(sourceInput.dataset.documentLinkPaletteTarget, undefined)
   assert.doesNotMatch(sourceInput.dataset.action, /document-link-palette/)

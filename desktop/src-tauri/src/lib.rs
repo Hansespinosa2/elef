@@ -3,10 +3,17 @@ use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
+#[cfg(feature = "desktop-dev")]
+use elef_core::DocumentGraphDocument;
+#[cfg(any(
+    target_os = "macos",
+    all(feature = "desktop-dev", feature = "webdriver")
+))]
+use elef_core::StagedUpdateStore;
+use elef_core::diagnostics::{DiagnosticEvent, EventCode, EventProfile, EventResult};
 use elef_core::{
-    AuthoringRegistries, CoreError, DeckPreview, DeckSummary, DocumentGraphDocument,
-    ImportResolution, ImportResult, Library, LibraryConfig, OpenDeck, SaveResult, SourceSnapshot,
-    UploadedAsset,
+    AuthoringRegistries, CoreError, DeckPreview, DeckSummary, ImportResolution, ImportResult,
+    Library, LibraryConfig, OpenDeck, SaveResult, SourceSnapshot, UploadedAsset,
 };
 use serde::Serialize;
 use tauri::RunEvent;
@@ -15,6 +22,10 @@ use tauri::ipc::{InvokeBody, Request as IpcRequest};
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+#[cfg(any(
+    target_os = "macos",
+    all(feature = "desktop-dev", feature = "webdriver")
+))]
 use tauri_plugin_updater::UpdaterExt;
 
 #[derive(Default)]
@@ -23,6 +34,10 @@ struct DesktopState {
     root: RwLock<Option<PathBuf>>,
     pending_import: std::sync::Mutex<Option<PathBuf>>,
     open_files: std::sync::Mutex<VecDeque<PathBuf>>,
+    #[cfg(any(
+        target_os = "macos",
+        all(feature = "desktop-dev", feature = "webdriver")
+    ))]
     update_installing: std::sync::atomic::AtomicBool,
     app_ready: std::sync::atomic::AtomicBool,
 }
@@ -124,16 +139,97 @@ impl From<CoreError> for CommandError {
     }
 }
 
+fn record_diagnostic(
+    app: &AppHandle,
+    event_code: EventCode,
+    result: EventResult,
+    error_code: Option<&str>,
+) {
+    let Ok(data_dir) = app.path().app_data_dir() else {
+        return;
+    };
+    let event = DiagnosticEvent::new(event_code, result, error_code, event_profile());
+    let _ = elef_core::diagnostics::append_event(&data_dir.join("logs"), &event);
+}
+
+fn event_profile() -> EventProfile {
+    if cfg!(feature = "desktop-dev") {
+        EventProfile::Dev
+    } else {
+        EventProfile::Stable
+    }
+}
+
+fn record_command_result<T>(
+    app: &AppHandle,
+    event_code: EventCode,
+    result: &Result<T, CommandError>,
+) {
+    match result {
+        Ok(_) => record_diagnostic(app, event_code, EventResult::Success, None),
+        Err(error) => record_diagnostic(app, event_code, EventResult::Failure, Some(error.code)),
+    }
+}
+
+fn record_bool_command_result(
+    app: &AppHandle,
+    event_code: EventCode,
+    result: &Result<bool, CommandError>,
+) {
+    match result {
+        Ok(true) => record_diagnostic(app, event_code, EventResult::Success, None),
+        Ok(false) => record_diagnostic(app, event_code, EventResult::Deferred, None),
+        Err(error) => record_diagnostic(app, event_code, EventResult::Failure, Some(error.code)),
+    }
+}
+
+#[tauri::command]
+fn record_preview_failure(app: AppHandle) {
+    record_diagnostic(
+        &app,
+        EventCode::Render,
+        EventResult::Failure,
+        Some("internal"),
+    );
+}
+
+#[tauri::command]
+fn record_bootstrap_failure(app: AppHandle) {
+    record_diagnostic(
+        &app,
+        EventCode::Startup,
+        EventResult::Failure,
+        Some("internal"),
+    );
+}
+
 #[tauri::command]
 async fn confirm_app_ready(
     app: AppHandle,
     window: tauri::WebviewWindow,
     state: State<'_, DesktopState>,
 ) -> Result<usize, CommandError> {
-    let url = window.url().map_err(|_| update_install_error())?;
+    let url = match window.url() {
+        Ok(url) => url,
+        Err(_) => {
+            record_diagnostic(
+                &app,
+                EventCode::Startup,
+                EventResult::Failure,
+                Some("internal"),
+            );
+            return Err(update_install_error());
+        }
+    };
     let local_origin = url.scheme() == "tauri" && url.host_str() == Some("localhost")
         || matches!(url.scheme(), "http" | "https") && url.host_str() == Some("tauri.localhost");
     if window.label() != "main" || !local_origin {
+        record_diagnostic(
+            &app,
+            EventCode::Startup,
+            EventResult::Failure,
+            Some("unsupported"),
+        );
         return Err(CommandError::new(
             "unsupported",
             "Application readiness was rejected.",
@@ -146,6 +242,10 @@ async fn confirm_app_ready(
     {
         return Ok(0);
     }
+    #[cfg(any(
+        target_os = "macos",
+        all(feature = "desktop-dev", feature = "webdriver")
+    ))]
     let removed = if let Ok((live, _)) = installed_application(&app) {
         // Readiness is acknowledged only after successful frontend/editor boot.
         // Failure leaves the previous complete installation available.
@@ -160,17 +260,35 @@ async fn confirm_app_ready(
     } else {
         0
     };
+    #[cfg(not(any(
+        target_os = "macos",
+        all(feature = "desktop-dev", feature = "webdriver")
+    )))]
+    let removed = 0;
+    record_diagnostic(&app, EventCode::Startup, EventResult::Success, None);
     Ok(removed)
 }
 
+#[cfg(any(
+    target_os = "macos",
+    all(feature = "desktop-dev", feature = "webdriver")
+))]
 struct UpdateLease<'a>(&'a std::sync::atomic::AtomicBool);
 
+#[cfg(any(
+    target_os = "macos",
+    all(feature = "desktop-dev", feature = "webdriver")
+))]
 impl Drop for UpdateLease<'_> {
     fn drop(&mut self) {
         self.0.store(false, std::sync::atomic::Ordering::Release);
     }
 }
 
+#[cfg(any(
+    target_os = "macos",
+    all(feature = "desktop-dev", feature = "webdriver")
+))]
 fn installed_application(app: &AppHandle) -> Result<(PathBuf, PathBuf), CommandError> {
     #[cfg(target_os = "linux")]
     if let Some(path) = app.env().appimage {
@@ -235,12 +353,192 @@ async fn confirm_native_action(
         .map_err(|_| CommandError::new("internal", "The confirmation could not be opened.", true))
 }
 
+#[cfg(any(
+    target_os = "macos",
+    all(feature = "desktop-dev", feature = "webdriver")
+))]
 #[tauri::command]
 async fn install_update(
     app: AppHandle,
     state: State<'_, DesktopState>,
     version: String,
+) -> Result<bool, CommandError> {
+    let result = install_update_inner(app.clone(), state, version).await;
+    record_bool_command_result(&app, EventCode::UpdateActivation, &result);
+    result
+}
+
+#[cfg(any(
+    target_os = "macos",
+    all(feature = "desktop-dev", feature = "webdriver")
+))]
+#[tauri::command]
+async fn stage_update(
+    app: AppHandle,
+    state: State<'_, DesktopState>,
     on_progress: tauri::ipc::Channel<serde_json::Value>,
+) -> Result<Option<StagedUpdateInfo>, CommandError> {
+    let result = stage_update_inner(app.clone(), state, on_progress).await;
+    match &result {
+        Ok(Some(_)) => record_diagnostic(&app, EventCode::UpdateStage, EventResult::Success, None),
+        Ok(None) => record_diagnostic(&app, EventCode::UpdateStage, EventResult::Deferred, None),
+        Err(error) => record_diagnostic(
+            &app,
+            EventCode::UpdateStage,
+            EventResult::Failure,
+            Some(error.code),
+        ),
+    }
+    result
+}
+
+#[cfg(any(
+    target_os = "macos",
+    all(feature = "desktop-dev", feature = "webdriver")
+))]
+#[derive(Debug, Serialize)]
+struct StagedUpdateInfo {
+    version: String,
+    notes: String,
+}
+
+#[cfg(any(
+    target_os = "macos",
+    all(feature = "desktop-dev", feature = "webdriver")
+))]
+async fn stage_update_inner(
+    app: AppHandle,
+    state: State<'_, DesktopState>,
+    on_progress: tauri::ipc::Channel<serde_json::Value>,
+) -> Result<Option<StagedUpdateInfo>, CommandError> {
+    if state
+        .update_installing
+        .compare_exchange(
+            false,
+            true,
+            std::sync::atomic::Ordering::Acquire,
+            std::sync::atomic::Ordering::Relaxed,
+        )
+        .is_err()
+    {
+        return Err(CommandError::new(
+            "invalid_input",
+            "An update is already being installed.",
+            false,
+        ));
+    }
+    let _lease = UpdateLease(&state.update_installing);
+    let _ = installed_application(&app)?;
+    let store = staged_update_store(&app)?;
+    let updater = app
+        .updater_builder()
+        .timeout(std::time::Duration::from_secs(120))
+        .build()
+        .map_err(|_| update_check_error())?;
+    let update = updater.check().await.map_err(|_| {
+        record_diagnostic(
+            &app,
+            EventCode::UpdateCheck,
+            EventResult::Failure,
+            Some("unavailable"),
+        );
+        update_check_error()
+    })?;
+    let Some(update) = update else {
+        let clear_store = store.clone();
+        tauri::async_runtime::spawn_blocking(move || clear_store.clear())
+            .await
+            .map_err(|_| update_stage_error())?
+            .map_err(|_| update_stage_error())?;
+        record_diagnostic(&app, EventCode::UpdateCheck, EventResult::Success, None);
+        return Ok(None);
+    };
+    record_diagnostic(&app, EventCode::UpdateCheck, EventResult::Success, None);
+    let version = update.version.clone();
+    let notes = update.body.clone().unwrap_or_default();
+
+    // Reuse a verified cache after a restart instead of downloading the same
+    // archive again. The signed manifest remains the authority for eligibility.
+    let cached = tauri::async_runtime::spawn_blocking({
+        let store = store.clone();
+        move || store.load()
+    })
+    .await
+    .map_err(|_| update_stage_error())?;
+    match cached {
+        Ok(Some(cached)) => {
+            let valid_manifest = same_staged_update(&update, &cached.metadata);
+            let public_key = updater_public_key(&app)?;
+            let metadata = cached.metadata;
+            let payload = cached.payload;
+            let valid_signature = if valid_manifest {
+                tauri::async_runtime::spawn_blocking(move || {
+                    elef_core::staged_update::verify_signature(
+                        &payload,
+                        &metadata.signature,
+                        &public_key,
+                        &metadata.version,
+                    )
+                    .is_ok()
+                })
+                .await
+                .unwrap_or(false)
+            } else {
+                false
+            };
+            if valid_manifest && valid_signature {
+                return Ok(Some(StagedUpdateInfo { version, notes }));
+            }
+            let clear_store = store.clone();
+            tauri::async_runtime::spawn_blocking(move || clear_store.clear())
+                .await
+                .map_err(|_| update_stage_error())?
+                .map_err(|_| update_stage_error())?;
+        }
+        Ok(None) => {}
+        Err(_) => {
+            // A corrupt/incomplete cache is discarded before a fresh verified
+            // download is staged. The live app and library are untouched.
+            let clear_store = store.clone();
+            tauri::async_runtime::spawn_blocking(move || clear_store.clear())
+                .await
+                .map_err(|_| update_stage_error())?
+                .map_err(|_| update_stage_error())?;
+        }
+    }
+
+    let signature = update.signature.clone();
+    let download_url = update.download_url.to_string();
+    let _ = on_progress.send(serde_json::json!({"event": "Started"}));
+    let progress = on_progress.clone();
+    let bytes = update
+        .download(
+            move |chunk_length, content_length| {
+                let _ = progress.send(serde_json::json!({"event": "Progress", "data": {"chunkLength": chunk_length, "contentLength": content_length}}));
+            },
+            || {},
+        )
+        .await
+        .map_err(|_| update_stage_error())?;
+    let _ = on_progress.send(serde_json::json!({"event": "Finished"}));
+    let version_for_store = version.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        store.save(&version_for_store, &signature, &download_url, &bytes)
+    })
+    .await
+    .map_err(|_| update_stage_error())?
+    .map_err(|_| update_stage_error())?;
+    Ok(Some(StagedUpdateInfo { version, notes }))
+}
+
+#[cfg(any(
+    target_os = "macos",
+    all(feature = "desktop-dev", feature = "webdriver")
+))]
+async fn install_update_inner(
+    app: AppHandle,
+    state: State<'_, DesktopState>,
+    version: String,
 ) -> Result<bool, CommandError> {
     if version.len() > 64
         || version.is_empty()
@@ -266,22 +564,47 @@ async fn install_update(
     {
         return Err(CommandError::new(
             "invalid_input",
-            "An update is already being installed.",
+            "An update operation is already running.",
             false,
         ));
     }
     let _lease = UpdateLease(&state.update_installing);
-    let (live, relative_executable) = installed_application(&app)?;
-    let confirmed = confirm_native_action(
-        &app,
-        format!("Install Elef {version}? Elef will restart after installation."),
-        "Install Elef update",
-        MessageDialogKind::Info,
-    )
-    .await?;
-    if !confirmed {
+    let store = staged_update_store(&app)?;
+    let staged_update = tauri::async_runtime::spawn_blocking({
+        let store = store.clone();
+        move || store.load()
+    })
+    .await
+    .map_err(|_| update_install_error())?
+    .map_err(|_| update_install_error())?;
+    let Some(staged_update) = staged_update else {
+        return Ok(false);
+    };
+    if staged_update.metadata.version != version {
         return Ok(false);
     }
+
+    // Check the controlled feed before making a second copy of the installed app.
+    let eligible = app
+        .updater_builder()
+        .timeout(std::time::Duration::from_secs(120))
+        .build()
+        .map_err(|_| update_check_error())?
+        .check()
+        .await
+        .map_err(|_| update_check_error())?;
+    let Some(eligible) = eligible else {
+        let clear_store = store.clone();
+        let _ = tauri::async_runtime::spawn_blocking(move || clear_store.clear()).await;
+        return Ok(false);
+    };
+    if !same_staged_update(&eligible, &staged_update.metadata) {
+        let clear_store = store.clone();
+        let _ = tauri::async_runtime::spawn_blocking(move || clear_store.clear()).await;
+        return Ok(false);
+    }
+
+    let (live, relative_executable) = installed_application(&app)?;
     let stage = tauri::async_runtime::spawn_blocking(move || {
         elef_core::update_install::UpdateStage::new(&live)
     })
@@ -299,37 +622,158 @@ async fn install_update(
         .timeout(std::time::Duration::from_secs(120))
         .build()
         .map_err(|_| update_install_error())?;
-    // Re-read the configured release endpoint. IPC cannot supply a URL, key,
-    // destination, signature or arbitrary package bytes.
-    let update = updater
-        .check()
-        .await
-        .map_err(|_| update_install_error())?
-        .ok_or_else(|| {
-            CommandError::new("not_found", "This update is no longer available.", false)
-        })?;
-    if update.version != version {
-        return Err(CommandError::new(
-            "conflict",
-            "The available update changed. Check for updates again.",
-            false,
-        ));
+    // Recheck the safe feed immediately before activation. IPC cannot supply a
+    // URL, key, destination, signature, or arbitrary package bytes.
+    let update = updater.check().await.map_err(|_| update_check_error())?;
+    let Some(update) = update else {
+        let clear_store = store.clone();
+        let _ = tauri::async_runtime::spawn_blocking(move || clear_store.clear()).await;
+        return Ok(false);
+    };
+    if !same_staged_update(&update, &staged_update.metadata) {
+        let clear_store = store.clone();
+        let _ = tauri::async_runtime::spawn_blocking(move || clear_store.clear()).await;
+        return Ok(false);
     }
-    let _ = on_progress.send(serde_json::json!({"event": "Started"}));
-    let progress = on_progress.clone();
-    let bytes = update.download(move |chunk_length, content_length| {
-        let _ = progress.send(serde_json::json!({"event": "Progress", "data": {"chunkLength": chunk_length, "contentLength": content_length}}));
-    }, || {}).await.map_err(|_| update_install_error())?;
-    let _ = on_progress.send(serde_json::json!({"event": "Finished"}));
-    tauri::async_runtime::spawn_blocking(move || {
+
+    let public_key = updater_public_key(&app)?;
+    let signature = staged_update.metadata.signature.clone();
+    let expected_version = staged_update.metadata.version.clone();
+    let payload = staged_update.payload;
+    let stage = tauri::async_runtime::spawn_blocking(move || {
+        elef_core::staged_update::verify_signature(
+            &payload,
+            &signature,
+            &public_key,
+            &expected_version,
+        )
+        .map_err(|_| update_integrity_error())?;
         // Tauri installs only into the private copy. It never touches the live app.
-        update.install(bytes).map_err(|_| update_install_error())?;
-        stage.activate().map_err(|_| update_install_error())?;
-        Ok::<_, CommandError>(())
+        update
+            .install(payload)
+            .map_err(|_| update_install_error())?;
+        #[cfg(feature = "webdriver")]
+        interrupt_update_install_for_e2e();
+        Ok::<_, CommandError>(stage)
     })
     .await
     .map_err(|_| update_install_error())??;
+
+    // Installation has only modified the disposable copy. Check the central
+    // safe feed again immediately before the atomic app-bundle swap.
+    let latest = app
+        .updater_builder()
+        .timeout(std::time::Duration::from_secs(120))
+        .build()
+        .map_err(|_| update_check_error())?
+        .check()
+        .await
+        .map_err(|_| update_check_error())?;
+    if !latest
+        .as_ref()
+        .is_some_and(|latest| same_staged_update(latest, &staged_update.metadata))
+    {
+        let clear_store = store.clone();
+        let _ = tauri::async_runtime::spawn_blocking(move || clear_store.clear()).await;
+        return Ok(false);
+    }
+    tauri::async_runtime::spawn_blocking(move || stage.activate())
+        .await
+        .map_err(|_| update_install_error())?
+        .map_err(|_| update_install_error())?;
+    let _ = tauri::async_runtime::spawn_blocking(move || store.clear()).await;
     Ok(true)
+}
+
+#[cfg(any(
+    target_os = "macos",
+    all(feature = "desktop-dev", feature = "webdriver")
+))]
+fn staged_update_store(app: &AppHandle) -> Result<StagedUpdateStore, CommandError> {
+    let cache = app
+        .path()
+        .app_cache_dir()
+        .map_err(|_| update_stage_error())?;
+    Ok(StagedUpdateStore::new(cache.join("updates")))
+}
+
+#[cfg(any(
+    target_os = "macos",
+    all(feature = "desktop-dev", feature = "webdriver")
+))]
+fn updater_public_key(app: &AppHandle) -> Result<String, CommandError> {
+    #[cfg(feature = "webdriver")]
+    let e2e_override = std::env::var("ELEF_E2E_UPDATER_PUBLIC_KEY").ok();
+    #[cfg(not(feature = "webdriver"))]
+    let e2e_override: Option<String> = None;
+    if let Some(public_key) = e2e_override {
+        return Ok(public_key);
+    }
+    app.config()
+        .plugins
+        .0
+        .get("updater")
+        .and_then(|updater| updater.get("pubkey"))
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_owned)
+        .ok_or_else(update_integrity_error)
+}
+
+#[cfg(any(
+    target_os = "macos",
+    all(feature = "desktop-dev", feature = "webdriver")
+))]
+fn same_staged_update(
+    update: &tauri_plugin_updater::Update,
+    staged: &elef_core::staged_update::StagedUpdateMetadata,
+) -> bool {
+    update.version == staged.version
+        && update.signature == staged.signature
+        && update.download_url.as_str() == staged.download_url
+}
+
+#[cfg(any(
+    target_os = "macos",
+    all(feature = "desktop-dev", feature = "webdriver")
+))]
+fn update_check_error() -> CommandError {
+    CommandError::new(
+        "unavailable",
+        "The safe update feed could not be checked.",
+        true,
+    )
+}
+
+#[cfg(any(
+    target_os = "macos",
+    all(feature = "desktop-dev", feature = "webdriver")
+))]
+fn update_stage_error() -> CommandError {
+    CommandError::new("io_error", "The verified update could not be staged.", true)
+}
+
+#[cfg(any(
+    target_os = "macos",
+    all(feature = "desktop-dev", feature = "webdriver")
+))]
+fn update_integrity_error() -> CommandError {
+    CommandError::new(
+        "integrity",
+        "The staged update did not pass integrity verification.",
+        false,
+    )
+}
+
+#[cfg(all(
+    feature = "webdriver",
+    any(target_os = "macos", feature = "desktop-dev")
+))]
+fn interrupt_update_install_for_e2e() {
+    if std::env::var_os("ELEF_E2E_INTERRUPT_UPDATE_AFTER_STAGE_INSTALL").is_some() {
+        // Test-only abrupt exit after the updater has modified its disposable
+        // copy and before UpdateStage can exchange it with the live app.
+        std::process::exit(86);
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -404,6 +848,7 @@ fn list_decks(state: State<'_, DesktopState>) -> Result<Vec<DeckSummary>, Comman
     Ok(state.current_library()?.list_decks()?)
 }
 
+#[cfg(feature = "desktop-dev")]
 #[tauri::command]
 fn document_graph(
     state: State<'_, DesktopState>,
@@ -421,16 +866,29 @@ fn create_deck(
 }
 
 #[tauri::command]
-fn open_deck(state: State<'_, DesktopState>, id: String) -> Result<OpenDeck, CommandError> {
-    Ok(state.current_library()?.open_deck(&id)?)
+fn open_deck(
+    app: AppHandle,
+    state: State<'_, DesktopState>,
+    id: String,
+) -> Result<OpenDeck, CommandError> {
+    let result = state
+        .current_library()
+        .and_then(|library| library.open_deck(&id).map_err(CommandError::from));
+    record_command_result(&app, EventCode::Open, &result);
+    result
 }
 
 #[tauri::command]
 fn read_deck_preview(
+    app: AppHandle,
     state: State<'_, DesktopState>,
     id: String,
 ) -> Result<DeckPreview, CommandError> {
-    Ok(state.current_library()?.read_deck_preview(&id)?)
+    let result = state
+        .current_library()
+        .and_then(|library| library.read_deck_preview(&id).map_err(CommandError::from));
+    record_command_result(&app, EventCode::Render, &result);
+    result
 }
 
 #[tauri::command]
@@ -512,6 +970,17 @@ async fn export_elef_impl(
     id: String,
     use_native_dialog: bool,
 ) -> Result<bool, CommandError> {
+    let result = export_elef_inner(&app, state, id, use_native_dialog).await;
+    record_bool_command_result(&app, EventCode::Export, &result);
+    result
+}
+
+async fn export_elef_inner(
+    app: &AppHandle,
+    state: State<'_, DesktopState>,
+    id: String,
+    use_native_dialog: bool,
+) -> Result<bool, CommandError> {
     let library = state.current_library()?;
     let deck = library.deck_summary(&id)?;
     #[cfg(feature = "webdriver")]
@@ -586,57 +1055,66 @@ async fn import_elef(
     app: AppHandle,
     state: State<'_, DesktopState>,
 ) -> Result<Option<ImportResult>, CommandError> {
-    let Some(selection) = app
-        .dialog()
-        .file()
-        .set_title("Import Elef deck")
-        .add_filter("Elef deck", &["elef"])
-        .blocking_pick_file()
-    else {
-        return Ok(None);
-    };
-    let archive_path = selection
-        .into_path()
-        .map_err(|_| CommandError::new("invalid_input", "Choose a local file.", false))?;
-    let library = state.current_library()?;
-    import_archive(&state, &library, archive_path)
+    let result = (|| {
+        let Some(selection) = app
+            .dialog()
+            .file()
+            .set_title("Import Elef deck")
+            .add_filter("Elef deck", &["elef"])
+            .blocking_pick_file()
+        else {
+            return Ok(None);
+        };
+        let archive_path = selection
+            .into_path()
+            .map_err(|_| CommandError::new("invalid_input", "Choose a local file.", false))?;
+        let library = state.current_library()?;
+        import_archive(&state, &library, archive_path)
+    })();
+    record_command_result(&app, EventCode::Import, &result);
+    result
 }
 
 #[tauri::command]
 fn import_opened_elef(
+    app: AppHandle,
     state: State<'_, DesktopState>,
 ) -> Result<Option<ImportResult>, CommandError> {
-    if state
-        .open_files
-        .lock()
-        .expect("opened file queue poisoned")
-        .is_empty()
-    {
-        return Ok(None);
-    }
-    let library = state.current_library()?;
-    let archive_path = state
-        .open_files
-        .lock()
-        .expect("opened file queue poisoned")
-        .pop_front();
-    let Some(archive_path) = archive_path else {
-        return Ok(None);
-    };
-    if state
-        .pending_import
-        .lock()
-        .expect("pending import lock poisoned")
-        .is_some()
-    {
-        state
+    let result = (|| {
+        if state
             .open_files
             .lock()
             .expect("opened file queue poisoned")
-            .push_front(archive_path);
-        return Ok(None);
-    }
-    import_archive(&state, &library, archive_path)
+            .is_empty()
+        {
+            return Ok(None);
+        }
+        let library = state.current_library()?;
+        let archive_path = state
+            .open_files
+            .lock()
+            .expect("opened file queue poisoned")
+            .pop_front();
+        let Some(archive_path) = archive_path else {
+            return Ok(None);
+        };
+        if state
+            .pending_import
+            .lock()
+            .expect("pending import lock poisoned")
+            .is_some()
+        {
+            state
+                .open_files
+                .lock()
+                .expect("opened file queue poisoned")
+                .push_front(archive_path);
+            return Ok(None);
+        }
+        import_archive(&state, &library, archive_path)
+    })();
+    record_command_result(&app, EventCode::Import, &result);
+    result
 }
 
 #[tauri::command]
@@ -668,6 +1146,16 @@ fn import_archive(
 
 #[tauri::command]
 async fn resolve_import_conflict(
+    app: AppHandle,
+    state: State<'_, DesktopState>,
+    resolution: String,
+) -> Result<Option<ImportResult>, CommandError> {
+    let result = resolve_import_conflict_inner(app.clone(), state, resolution).await;
+    record_command_result(&app, EventCode::Import, &result);
+    result
+}
+
+async fn resolve_import_conflict_inner(
     app: AppHandle,
     state: State<'_, DesktopState>,
     resolution: String,
@@ -771,14 +1259,130 @@ fn write_elef_archive(
 
 #[tauri::command]
 fn save_source(
+    app: AppHandle,
     state: State<'_, DesktopState>,
     id: String,
     source: String,
     base_hash: String,
 ) -> Result<SaveResult, CommandError> {
-    Ok(state
-        .current_library()?
-        .save_source(&id, &source, &base_hash)?)
+    let result = state.current_library().and_then(|library| {
+        library
+            .save_source(&id, &source, &base_hash)
+            .map_err(CommandError::from)
+    });
+    record_command_result(&app, EventCode::Save, &result);
+    result
+}
+
+#[tauri::command]
+async fn export_diagnostics(app: AppHandle) -> Result<bool, CommandError> {
+    let result = export_diagnostics_inner(&app).await;
+    record_bool_command_result(&app, EventCode::DiagnosticsExport, &result);
+    result
+}
+
+async fn export_diagnostics_inner(app: &AppHandle) -> Result<bool, CommandError> {
+    let Some(selection) = app
+        .dialog()
+        .file()
+        .set_title("Export Elef Diagnostics")
+        .set_file_name("elef-diagnostics.zip")
+        .add_filter("ZIP archive", &["zip"])
+        .blocking_save_file()
+    else {
+        return Ok(false);
+    };
+    let destination = selection
+        .into_path()
+        .map_err(|_| CommandError::new("invalid_input", "Choose a local file.", false))?;
+    let log_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| CommandError::new("io_error", "Diagnostics are unavailable.", true))?
+        .join("logs");
+    tauri::async_runtime::spawn_blocking(move || {
+        elef_core::diagnostics::export_diagnostics(&log_dir, &destination)
+            .map_err(|_| CommandError::new("io_error", "Diagnostics could not be exported.", true))
+    })
+    .await
+    .map_err(|_| CommandError::new("internal", "Diagnostics could not be exported.", true))??;
+    Ok(true)
+}
+
+/// Test-only path that exercises the real diagnostics writer and ZIP exporter
+/// without opening a native save panel. It is compiled only in WebDriver builds.
+#[cfg(feature = "webdriver")]
+#[tauri::command]
+async fn export_diagnostics_fixture(app: AppHandle) -> Result<bool, CommandError> {
+    let result = export_diagnostics_fixture_inner(&app).await;
+    record_bool_command_result(&app, EventCode::DiagnosticsExport, &result);
+    result
+}
+
+#[cfg(feature = "webdriver")]
+async fn export_diagnostics_fixture_inner(app: &AppHandle) -> Result<bool, CommandError> {
+    let destination = std::env::var_os("ELEF_E2E_DIAGNOSTICS_EXPORT_PATH")
+        .map(PathBuf::from)
+        .ok_or_else(|| {
+            CommandError::new(
+                "invalid_input",
+                "Diagnostics export fixture is unavailable.",
+                false,
+            )
+        })?;
+    let log_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| CommandError::new("io_error", "Diagnostics are unavailable.", true))?
+        .join("logs");
+    let hostile_failure: Result<(), CommandError> = Err(CommandError::with_details(
+        "ELF_PRIVACY_EXCEPTION_94A72C",
+        "ELF_PRIVACY_SOURCE_7F1E9B",
+        true,
+        serde_json::json!({
+            "title": "ELF_PRIVACY_TITLE_2D83AC",
+            "filename": "ELF_PRIVACY_FILENAME_9130DE",
+            "path": "/tmp/ELF_PRIVACY_PATH_6C4A20",
+            "token": "ELF_PRIVACY_TOKEN_0B7F11",
+            "secret": "ELF_PRIVACY_SECRET_E35D92",
+            "ipc_payload": "ELF_PRIVACY_IPC_118F05"
+        }),
+    ));
+    record_command_result(app, EventCode::Save, &hostile_failure);
+    let import_failure: Result<(), CommandError> = Err(CommandError::new(
+        "io_error",
+        "The import fixture is unavailable.",
+        true,
+    ));
+    record_command_result(app, EventCode::Import, &import_failure);
+    let profile = event_profile();
+    let exported = tauri::async_runtime::spawn_blocking(move || -> std::io::Result<()> {
+        let sentinels: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../test/fixtures/desktop/release/redaction-sentinels.json"
+        ))
+        .map_err(|_| std::io::Error::other("diagnostics fixture is invalid"))?;
+        let fields = sentinels
+            .as_object()
+            .ok_or_else(|| std::io::Error::other("diagnostics fixture is invalid"))?;
+        for value in fields.values() {
+            let sentinel = value
+                .as_str()
+                .ok_or_else(|| std::io::Error::other("diagnostics fixture is invalid"))?;
+            let event = DiagnosticEvent::new(
+                EventCode::Save,
+                EventResult::Failure,
+                Some(sentinel),
+                profile,
+            );
+            elef_core::diagnostics::append_event(&log_dir, &event)?;
+        }
+        elef_core::diagnostics::export_diagnostics(&log_dir, &destination)
+    })
+    .await
+    .map_err(|_| CommandError::new("internal", "Diagnostics could not be exported.", true))?;
+    exported
+        .map_err(|_| CommandError::new("io_error", "Diagnostics could not be exported.", true))?;
+    Ok(true)
 }
 
 fn asset_protocol_response(
@@ -944,6 +1548,13 @@ fn persisted_root_path(app: &AppHandle) -> Result<PathBuf, tauri::Error> {
     Ok(app.path().app_data_dir()?.join("library-root.json"))
 }
 
+fn read_persisted_library_root(path: &Path) -> Option<PathBuf> {
+    let bytes = fs::read(path).ok()?;
+    let config = serde_json::from_slice::<serde_json::Value>(&bytes).ok()?;
+    let root = config.get("library_root")?.as_str()?;
+    Some(PathBuf::from(root))
+}
+
 fn persist_library_root(app: &AppHandle, root: &str) -> Result<(), CommandError> {
     let path = persisted_root_path(app).map_err(|_| {
         CommandError::new("io_error", "Could not store the library preference.", true)
@@ -965,19 +1576,10 @@ fn restore_library_root(app: &AppHandle, state: &DesktopState) {
     let Ok(path) = persisted_root_path(app) else {
         return;
     };
-    let Ok(bytes) = fs::read(path) else {
+    let Some(root) = read_persisted_library_root(&path) else {
         return;
     };
-    let Ok(config) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
-        return;
-    };
-    let Some(root) = config
-        .get("library_root")
-        .and_then(serde_json::Value::as_str)
-    else {
-        return;
-    };
-    let _ = state.use_library(PathBuf::from(root));
+    let _ = state.use_library(root);
 }
 
 fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
@@ -1099,6 +1701,7 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let minimize = PredefinedMenuItem::minimize(app, None)?;
     let close = PredefinedMenuItem::close_window(app, None)?;
     let window = Submenu::with_items(app, "Window", true, &[&minimize, &close])?;
+    #[cfg(all(target_os = "macos", not(feature = "desktop-dev")))]
     let check_updates = MenuItem::with_id(
         app,
         "check-for-updates",
@@ -1106,11 +1709,28 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
         true,
         None::<&str>,
     )?;
-    let help = if cfg!(target_os = "macos") {
-        Submenu::with_items(app, "Help", true, &[&check_updates])?
-    } else {
-        Submenu::with_items(app, "Help", true, &[&about, &settings, &check_updates])?
-    };
+    let export_diagnostics = MenuItem::with_id(
+        app,
+        "export-diagnostics",
+        "Export Diagnostics…",
+        true,
+        None::<&str>,
+    )?;
+    let help_separator = PredefinedMenuItem::separator(app)?;
+    #[cfg(all(target_os = "macos", not(feature = "desktop-dev")))]
+    let help = Submenu::with_items(
+        app,
+        "Help",
+        true,
+        &[&check_updates, &help_separator, &export_diagnostics],
+    )?;
+    #[cfg(not(all(target_os = "macos", not(feature = "desktop-dev"))))]
+    let help = Submenu::with_items(
+        app,
+        "Help",
+        true,
+        &[&about, &settings, &help_separator, &export_diagnostics],
+    )?;
 
     let menu = if cfg!(target_os = "macos") {
         Menu::with_items(
@@ -1131,16 +1751,54 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     Ok(menu)
 }
 
+macro_rules! app_commands {
+    ($($extra:ident),* $(,)?) => {
+        tauri::generate_handler![
+            choose_library_root,
+            get_library_status,
+            read_library_config,
+            write_library_config,
+            read_authoring_registries,
+            write_authoring_registry,
+            list_decks,
+            create_deck,
+            open_deck,
+            read_deck_preview,
+            read_source_snapshot,
+            rename_deck,
+            delete_deck,
+            save_source,
+            upload_asset,
+            export_elef,
+            import_elef,
+            import_opened_elef,
+            pending_open_elef_count,
+            resolve_import_conflict,
+            confirm_app_ready,
+            export_diagnostics,
+            record_preview_failure,
+            record_bootstrap_failure,
+            $($extra),*
+        ]
+    };
+}
+
 pub fn run() {
+    #[cfg(any(
+        target_os = "macos",
+        all(feature = "desktop-dev", feature = "webdriver")
+    ))]
     let updater = tauri_plugin_updater::Builder::new();
-    #[cfg(feature = "webdriver")]
+    #[cfg(all(
+        feature = "webdriver",
+        any(target_os = "macos", feature = "desktop-dev")
+    ))]
     let updater = match std::env::var("ELEF_E2E_UPDATER_PUBLIC_KEY") {
         Ok(public_key) => updater.pubkey(public_key),
         Err(_) => updater,
     };
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.set_focus();
@@ -1150,7 +1808,14 @@ pub fn run() {
             if added > 0 {
                 let _ = app.emit("desktop-open-elef", ());
             }
-        }))
+        }));
+
+    #[cfg(any(
+        target_os = "macos",
+        all(feature = "desktop-dev", feature = "webdriver")
+    ))]
+    let builder = builder
+        .plugin(tauri_plugin_process::init())
         .plugin(updater.build());
 
     #[cfg(feature = "webdriver")]
@@ -1158,7 +1823,7 @@ pub fn run() {
     #[cfg(feature = "webdriver")]
     let builder = builder.plugin(tauri_plugin_wdio::init());
 
-    let app = builder
+    let builder = builder
         .register_asynchronous_uri_scheme_protocol("elefasset", |context, request, responder| {
             responder.respond(asset_protocol_response(context.app_handle(), &request));
         })
@@ -1190,7 +1855,11 @@ pub fn run() {
             let id = event.id().as_ref();
             match id {
                 "open-deck" | "refresh-library" | "save" | "export-elef" | "import-elef"
-                | "print" | "settings" | "check-for-updates" => {
+                | "print" | "settings" | "export-diagnostics" => {
+                    let _ = app.emit("desktop-menu-action", id);
+                }
+                #[cfg(all(target_os = "macos", not(feature = "desktop-dev")))]
+                "check-for-updates" => {
                     let _ = app.emit("desktop-menu-action", id);
                 }
                 "quit" => {
@@ -1213,32 +1882,47 @@ pub fn run() {
                 }
                 _ => {}
             }
-        })
-        .invoke_handler(tauri::generate_handler![
-            choose_library_root,
-            get_library_status,
-            read_library_config,
-            write_library_config,
-            read_authoring_registries,
-            write_authoring_registry,
-            list_decks,
-            document_graph,
-            create_deck,
-            open_deck,
-            read_deck_preview,
-            read_source_snapshot,
-            rename_deck,
-            delete_deck,
-            save_source,
-            upload_asset,
-            export_elef,
-            import_elef,
-            import_opened_elef,
-            pending_open_elef_count,
-            resolve_import_conflict,
-            install_update,
-            confirm_app_ready,
-        ])
+        });
+
+    #[cfg(all(feature = "desktop-dev", feature = "webdriver"))]
+    let builder = builder.invoke_handler(app_commands!(
+        document_graph,
+        stage_update,
+        install_update,
+        export_diagnostics_fixture
+    ));
+    #[cfg(all(feature = "desktop-dev", not(feature = "webdriver")))]
+    let builder = builder.invoke_handler(app_commands!(document_graph));
+    #[cfg(all(
+        not(feature = "desktop-dev"),
+        target_os = "macos",
+        feature = "webdriver"
+    ))]
+    let builder = builder.invoke_handler(app_commands!(
+        stage_update,
+        install_update,
+        export_diagnostics_fixture
+    ));
+    #[cfg(all(
+        not(feature = "desktop-dev"),
+        target_os = "macos",
+        not(feature = "webdriver")
+    ))]
+    let builder = builder.invoke_handler(app_commands!(stage_update, install_update));
+    #[cfg(all(
+        not(feature = "desktop-dev"),
+        not(target_os = "macos"),
+        feature = "webdriver"
+    ))]
+    let builder = builder.invoke_handler(app_commands!(export_diagnostics_fixture));
+    #[cfg(all(
+        not(feature = "desktop-dev"),
+        not(target_os = "macos"),
+        not(feature = "webdriver")
+    ))]
+    let builder = builder.invoke_handler(app_commands!());
+
+    let app = builder
         .build(tauri::generate_context!())
         .expect("error while building Elef Desktop");
 
@@ -1306,6 +1990,70 @@ fn queue_open_files(state: &DesktopState, paths: impl IntoIterator<Item = PathBu
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pre_release_app_state_fixture_restores_existing_library_without_resetting_selection() {
+        const LIBRARY_ROOT_TOKEN: &str = "${ELEF_RELEASE_FIXTURE_LIBRARY_ROOT}";
+        const LEGACY_DECK_ID: &str = "550e8400-e29b-41d4-a716-446655440000";
+        let fixture_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../test/fixtures/desktop/release/pre-release-app-state");
+        let temp = tempfile::tempdir().expect("create isolated legacy app-state fixture");
+        let library_root = temp.path().join("Selected library");
+        let legacy_deck = library_root.join("Legacy presentation");
+        fs::create_dir_all(&legacy_deck).expect("create fixture deck directory");
+        fs::copy(
+            fixture_root.join("Selected library/Legacy presentation/presentation.md"),
+            legacy_deck.join("presentation.md"),
+        )
+        .expect("copy legacy presentation source");
+        fs::copy(
+            fixture_root.join("Selected library/Legacy presentation/elef.json"),
+            legacy_deck.join("elef.json"),
+        )
+        .expect("copy legacy deck identity");
+
+        let app_data_dir = temp.path().join("com.elef.desktop");
+        fs::create_dir_all(&app_data_dir).expect("create Stable app-data fixture");
+        let state_path = app_data_dir.join("library-root.json");
+        let template = fs::read_to_string(fixture_root.join("library-root.json.template"))
+            .expect("read pre-release Stable state template");
+        assert!(template.contains(LIBRARY_ROOT_TOKEN));
+        let serialized_state =
+            template.replace(LIBRARY_ROOT_TOKEN, &library_root.to_string_lossy());
+        fs::write(&state_path, serialized_state.as_bytes()).expect("seed pre-release Stable state");
+
+        let restored_root = read_persisted_library_root(&state_path)
+            .expect("restore the existing selected-library preference");
+        assert_eq!(restored_root, library_root);
+        let state = DesktopState::default();
+        state
+            .use_library(restored_root.clone())
+            .expect("open the library selected by the previous Stable release");
+        let canonical_library_root =
+            fs::canonicalize(&library_root).expect("canonicalize the opened library root");
+        assert_eq!(
+            state
+                .root
+                .read()
+                .expect("read selected library root")
+                .as_ref(),
+            Some(&canonical_library_root)
+        );
+        let library = state.current_library().expect("restored library is active");
+        let deck = library
+            .open_deck(LEGACY_DECK_ID)
+            .expect("open the existing presentation without migrating its identity");
+        let expected_source = fs::read_to_string(
+            fixture_root.join("Selected library/Legacy presentation/presentation.md"),
+        )
+        .expect("read expected presentation source");
+        assert_eq!(deck.source, expected_source);
+        assert_eq!(
+            fs::read(&state_path).expect("read persisted selection after launch"),
+            serialized_state.as_bytes(),
+            "launch must not reset or rewrite the existing app-state file"
+        );
+    }
 
     #[test]
     fn cli_open_file_queue_accepts_arguments_with_or_without_argv_zero() {

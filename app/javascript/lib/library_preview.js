@@ -1,4 +1,4 @@
-export function createLibraryPreviewLoader({ readPreview, render, install, mediaBaseUrlForDeck = () => "" }) {
+export function createLibraryPreviewLoader({ readPreview, render, install, mediaBaseUrlForDeck = () => "", visualEditing = true }) {
   return async function loadLibraryPreview(container, deck) {
     if (!container || !deck || container.dataset.previewState) return false
     container.dataset.previewState = "loading"
@@ -13,7 +13,12 @@ export function createLibraryPreviewLoader({ readPreview, render, install, media
         mediaBaseUrl,
         documentNodes: []
       })
-      install(container, rendered.html, { interactive: false, documentPagination: deck.kind === "document", mediaBaseUrl })
+      install(container, rendered.html, {
+        interactive: false,
+        documentPagination: deck.kind === "document",
+        mediaBaseUrl,
+        visualEditing
+      })
       container.classList.add("library-preview")
       if (deck.kind === "document") {
         container.querySelector(".document-reader")?.classList.remove("document-editor-projection")

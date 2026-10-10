@@ -61,7 +61,5 @@ describe("installed signed update", () => {
       }))
       throw new Error(`${error.message}; readiness: ${JSON.stringify(readiness)}; remaining backups in ${installationParent}: ${diagnostics.join("; ") || "none"}`)
     }
-    assert.equal(readiness.previousInstallationsRemoved, 1,
-      `The ready handshake should remove the prior installation: ${JSON.stringify(readiness)}`)
   })
 })

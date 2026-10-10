@@ -1,0 +1,13 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "e2e-stable-webdriver",
+  "description": "Local WebDriver server for Stable-profile exclusion tests.",
+  "windows": ["main"],
+  "permissions": [
+    "wdio:default",
+    "wdio-webdriver:default",
+    "core:app:allow-version",
+    "core:window:allow-is-fullscreen",
+    "allow-export-diagnostics-fixture"
+  ]
+}

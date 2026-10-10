@@ -12,7 +12,7 @@ source "$ROOT/test/scripts/lib/config_assertions.sh"
 bash -n "$SCRIPT"
 bash -n "$ROOT/.devcontainer/entrypoint.sh"
 
-assert_active_line "$COMPOSE" "image: postgres:17"
+assert_active_line "$COMPOSE" 'image: ${POSTGRES_IMAGE:-postgres:17}'
 assert_active_line "$COMPOSE" "elef_personal_postgres:/var/lib/postgresql/data"
 assert_active_line "$COMPOSE" "elef_personal_storage:/rails/storage"
 assert_active_line "$COMPOSE" "condition: service_healthy"

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
+import { createDiagnosticFailures } from "../src/diagnostic-failures.js"
 import { createPreviewFetch } from "../src/preview-transport.js"
 
 test("preview transport awaits source-aware document context before rendering", async () => {
@@ -31,4 +32,21 @@ test("preview transport awaits source-aware document context before rendering", 
   assert.equal(contextSource, source)
   assert.deepEqual(renderInput.documentNodes, documentNodes)
   assert.strictEqual(await response.json(), renderedPreview)
+})
+
+test("live preview failures record a fixed event without forwarding exception text", async () => {
+  const calls = []
+  const diagnostics = createDiagnosticFailures((...args) => calls.push(args))
+  const hostileException = "private-library-path-secret-sentinel"
+  const previewFetch = createPreviewFetch({
+    renderer: { async render() { throw new Error(hostileException) } },
+    onFailure: diagnostics.recordPreviewFailure
+  })
+  const body = new FormData()
+  body.set("presentation[source]", "content")
+
+  const response = await previewFetch("elef-preview://localhost/deck-id", { method: "POST", body })
+  assert.equal(response.status, 422)
+  assert.deepEqual(calls, [["record_preview_failure"]])
+  assert.ok(!JSON.stringify(calls).includes(hostileException))
 })

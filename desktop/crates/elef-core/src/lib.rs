@@ -15,7 +15,11 @@ use uuid::Uuid;
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, DateTime, ZipArchive, ZipWriter};
 
+pub mod diagnostics;
+pub mod staged_update;
 pub mod update_install;
+
+pub use staged_update::StagedUpdateStore;
 
 #[cfg(unix)]
 use std::os::unix::fs::OpenOptionsExt;
@@ -2200,6 +2204,127 @@ mod tests {
         );
         fs::remove_file(path.join("document.md")).unwrap();
         assert_eq!(choose_source_file(&path).unwrap().as_deref(), Some("a.md"));
+    }
+
+    #[test]
+    fn release_compatibility_fixtures_open_save_and_archive_round_trip_source_bytes() {
+        let fixtures = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../..")
+            .join("test/fixtures/desktop/release");
+        let cases = [
+            (
+                "Basic document",
+                "document.md",
+                fixtures.join("basic-document.md"),
+                false,
+                false,
+            ),
+            (
+                "Basic presentation",
+                "presentation.md",
+                fixtures.join("basic-presentation.md"),
+                false,
+                false,
+            ),
+            (
+                "Rich rendering media",
+                "presentation.md",
+                fixtures.join("rich-rendering-media.md"),
+                true,
+                false,
+            ),
+            (
+                "Unsupported source",
+                "document.md",
+                fixtures.join("unknown-directives.md"),
+                false,
+                false,
+            ),
+            (
+                "Historical presentation",
+                "talk.md",
+                fixtures.join("historical-no-manifest/Legacy presentation/talk.md"),
+                false,
+                true,
+            ),
+        ];
+
+        for (name, source_file, fixture_source, with_media, historical) in cases {
+            let source_bytes = fs::read(&fixture_source).unwrap();
+            let temp = TempDir::new().unwrap();
+            let library_root = temp.path().join("library");
+            let deck_path = library_root.join(name);
+            fs::create_dir_all(&deck_path).unwrap();
+            fs::write(deck_path.join(source_file), &source_bytes).unwrap();
+            if !historical {
+                fs::write(
+                    deck_path.join(MANIFEST_FILE),
+                    br#"{"id":"550e8400-e29b-41d4-a716-446655440000","schema_version":1}"#,
+                )
+                .unwrap();
+            }
+            if with_media {
+                let image_directory = deck_path.join("images");
+                fs::create_dir(&image_directory).unwrap();
+                fs::copy(
+                    fixtures.join("images/release-pixel.png"),
+                    image_directory.join("release-pixel.png"),
+                )
+                .unwrap();
+            }
+
+            let library = Library::open(&library_root).unwrap();
+            let summary = library
+                .list_decks()
+                .unwrap()
+                .into_iter()
+                .find(|deck| deck.name == name)
+                .unwrap();
+            let opened = library.open_deck(&summary.id).unwrap();
+            assert_eq!(
+                opened.source.as_bytes(),
+                source_bytes,
+                "open changed {name} source"
+            );
+            let saved = library
+                .save_source(&opened.id, &opened.source, &opened.content_hash)
+                .unwrap();
+            let reopened = library.open_deck(&opened.id).unwrap();
+            assert_eq!(
+                reopened.source.as_bytes(),
+                source_bytes,
+                "save/reopen changed {name} source"
+            );
+            assert_eq!(saved.content_hash, reopened.content_hash);
+
+            let archive_path = temp.path().join("fixture.elef");
+            let mut archive = Cursor::new(Vec::new());
+            library.export_elef(&opened.id, &mut archive).unwrap();
+            fs::write(&archive_path, archive.into_inner()).unwrap();
+            let imported_root = temp.path().join("imported-library");
+            fs::create_dir(&imported_root).unwrap();
+            let imported_library = Library::open(&imported_root).unwrap();
+            let imported = imported_library.import_elef(&archive_path, None).unwrap();
+            let imported_snapshot = imported_library
+                .read_source_snapshot(&imported.deck.id)
+                .unwrap();
+            assert_eq!(
+                imported_snapshot.source.as_bytes(),
+                source_bytes,
+                "archive import changed {name} source"
+            );
+            if with_media {
+                assert_eq!(
+                    fs::read(
+                        imported_root
+                            .join(&imported.deck.name)
+                            .join("images/release-pixel.png")
+                    )
+                    .unwrap(),
+                    fs::read(fixtures.join("images/release-pixel.png")).unwrap()
+                );
+            }
+        }
     }
 
     #[test]

@@ -1,0 +1,99 @@
+export const RELEASE_STATE_RULESET_NAME = "desktop-release-state-writer"
+
+export function releaseStateWriterRuleset(appId) {
+  const integrationId = Number(appId)
+  if (!Number.isSafeInteger(integrationId) || integrationId < 1) {
+    throw new TypeError("release-state writer App ID must be a positive integer")
+  }
+
+  return {
+    name: RELEASE_STATE_RULESET_NAME,
+    target: "branch",
+    enforcement: "active",
+    bypass_actors: [{ actor_id: integrationId, actor_type: "Integration", bypass_mode: "always" }],
+    conditions: {
+      ref_name: {
+        include: ["refs/heads/gh-pages"],
+        exclude: []
+      }
+    },
+    rules: [{ type: "update", parameters: { update_allows_fetch_and_merge: false } }]
+  }
+}
+
+export function validateReleaseStateWriterRuleset(ruleset, appId, repository) {
+  const expected = releaseStateWriterRuleset(appId)
+  validateReleaseStateWriterRulesetShape(ruleset, expected, repository)
+  if (!sameJson(ruleset.bypass_actors, expected.bypass_actors)) {
+    throw new Error("only the configured release-state writer App may bypass the update rule")
+  }
+  return true
+}
+
+/**
+ * Runtime readback for the Contents-only writer App. GitHub can omit
+ * bypass_actors for callers without ruleset write access, so pin the exact
+ * administrator-verified updated_at value when that field is hidden.
+ */
+export function validateReleaseStateWriterRulesetReadback(ruleset, appId, repository, expectedUpdatedAt) {
+  const expected = releaseStateWriterRuleset(appId)
+  validateReleaseStateWriterRulesetShape(ruleset, expected, repository)
+  if (typeof expectedUpdatedAt !== "string" || !Number.isFinite(Date.parse(expectedUpdatedAt)) || ruleset.updated_at !== expectedUpdatedAt) {
+    throw new Error("the release-state writer ruleset changed since administrator verification")
+  }
+  if (Object.prototype.hasOwnProperty.call(ruleset, "bypass_actors")) {
+    if (!sameJson(ruleset.bypass_actors, expected.bypass_actors)) {
+      throw new Error("only the configured release-state writer App may bypass the update rule")
+    }
+  }
+  return true
+}
+
+export function validateReleaseStateRulesetCollection(rulesets, appId, repository) {
+  if (!Array.isArray(rulesets)) throw new TypeError("repository rulesets must be an array")
+  const matching = rulesets.filter(ruleset => ruleset?.name === RELEASE_STATE_RULESET_NAME)
+  if (matching.length !== 1) throw new Error("exactly one desktop release-state writer ruleset must be active")
+  return validateReleaseStateWriterRuleset(matching[0], appId, repository)
+}
+
+function sameJson(left, right) {
+  return JSON.stringify(canonical(left)) === JSON.stringify(canonical(right))
+}
+
+function validateReleaseStateWriterRulesetShape(ruleset, expected, repository) {
+  if (!ruleset || ruleset.name !== expected.name || ruleset.target !== "branch" || ruleset.enforcement !== "active") {
+    throw new Error("the active desktop release-state writer ruleset is missing")
+  }
+  if (repository) {
+    if (ruleset.source_type !== "Repository" || ruleset.source?.toLowerCase() !== repository.toLowerCase()) {
+      throw new Error("the release-state writer ruleset must belong to this repository")
+    }
+  }
+  if (!sameJson(ruleset.conditions, expected.conditions)) {
+    throw new Error("the release-state writer ruleset must match only refs/heads/gh-pages")
+  }
+  if (!sameJson(normalizeUpdateRuleDefaults(ruleset.rules), expected.rules)) {
+    throw new Error("the release-state writer ruleset must restrict branch updates")
+  }
+}
+
+function normalizeUpdateRuleDefaults(rules) {
+  if (!Array.isArray(rules)) return rules
+  // GitHub accepts update_allows_fetch_and_merge=false on write, then omits
+  // the default-false parameters object from ruleset readback. Preserve the
+  // strict comparison while recognizing that documented server representation.
+  return rules.map(rule => {
+    if (rule?.type === "update" && !Object.prototype.hasOwnProperty.call(rule, "parameters")) {
+      return { ...rule, parameters: { update_allows_fetch_and_merge: false } }
+    }
+    return rule
+  })
+}
+
+function canonical(value) {
+  if (Array.isArray(value)) return value.map(canonical)
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])]))
+  }
+  return value
+}
