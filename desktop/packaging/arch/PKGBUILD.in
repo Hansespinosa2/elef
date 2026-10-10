@@ -25,4 +25,7 @@ sha256sums=('@SHA256@')
 
 package() {
   tar --zstd -xf "${srcdir}/elef-${pkgver}-x86_64.tar.zst" -C "${pkgdir}"
+  install -Dm644 "${pkgdir}/usr/share/licenses/elef/LICENSE" "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+  rm "${pkgdir}/usr/share/licenses/elef/LICENSE"
+  rmdir "${pkgdir}/usr/share/licenses/elef"
 }

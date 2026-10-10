@@ -34,6 +34,8 @@ test("AUR PKGBUILD pins the exact immutable asset checksum and runtime dependenc
   const fallback = await renderArchPkgbuild({ version, sha256, packageName: "elef-desktop-bin" })
   assert.match(fallback, /^pkgname=elef-desktop-bin$/m)
   assert.match(fallback, /^install=elef-desktop-bin\.install$/m)
+  assert.match(fallback, /install -Dm644 .*\/licenses\/elef\/LICENSE.*\/licenses\/\$\{pkgname\}\/LICENSE/)
+  assert.match(fallback, /rmdir .*\/licenses\/elef/)
   await assert.rejects(renderArchPkgbuild({ version, sha256, packageName: "unrelated-bin" }))
 })
 
@@ -65,7 +67,7 @@ test("native archive has deterministic Arch paths, mode, hash, and source proven
       "usr/share/applications/elef.desktop",
       "usr/share/icons/hicolor/512x512/apps/elef.png",
       "usr/share/mime/packages/elef.xml",
-      "usr/share/licenses/elef-bin/LICENSE",
+      "usr/share/licenses/elef/LICENSE",
       "usr/share/elef/version.json"
     ]) assert.ok(archiveList.stdout.split("\n").includes(archivePath), `${archivePath} is missing from the archive`)
     assert.doesNotMatch(archiveList.stdout, /AppImage/)

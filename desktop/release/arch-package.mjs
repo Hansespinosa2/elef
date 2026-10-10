@@ -78,7 +78,7 @@ export async function packageArchArchive({ version, binaryPath, outputDirectory,
       mkdir(path.join(userShare, "applications"), { recursive: true }),
       mkdir(path.join(userShare, "icons/hicolor/512x512/apps"), { recursive: true }),
       mkdir(path.join(userShare, "mime/packages"), { recursive: true }),
-      mkdir(path.join(userShare, "licenses/elef-bin"), { recursive: true }),
+      mkdir(path.join(userShare, "licenses/elef"), { recursive: true }),
       mkdir(path.join(userShare, "elef"), { recursive: true })
     ])
     await copyFile(binary, userBinary)
@@ -86,7 +86,7 @@ export async function packageArchArchive({ version, binaryPath, outputDirectory,
     await copyFile(path.join(archPackagingRoot, "elef.desktop"), path.join(userShare, "applications/elef.desktop"))
     await copyFile(path.join(archPackagingRoot, "elef.xml"), path.join(userShare, "mime/packages/elef.xml"))
     await copyFile(path.join(repositoryRoot, "desktop/src-tauri/icons/icon.png"), path.join(userShare, "icons/hicolor/512x512/apps/elef.png"))
-    await copyFile(path.join(repositoryRoot, "LICENSE"), path.join(userShare, "licenses/elef-bin/LICENSE"))
+    await copyFile(path.join(repositoryRoot, "LICENSE"), path.join(userShare, "licenses/elef/LICENSE"))
     await writeFile(path.join(userShare, "elef/version.json"), `${JSON.stringify({
       version,
       build_sha: buildSha.toLowerCase(),

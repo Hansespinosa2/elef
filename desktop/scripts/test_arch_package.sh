@@ -5,23 +5,35 @@ if [[ "${EUID}" -ne 0 ]]; then
   echo "Run the Arch package gate inside its disposable Arch container as root." >&2
   exit 2
 fi
-if [[ "$#" -ne 2 ]]; then
-  echo "Usage: test_arch_package.sh <version> <archive>" >&2
+if [[ "$#" -ne 5 ]]; then
+  echo "Usage: test_arch_package.sh <n-1-version> <n-1-archive> <n-version> <n-archive> <package-name>" >&2
   exit 2
 fi
 
-version="$1"
-archive="$(realpath "$2")"
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-archive_name="elef-${version}-x86_64.tar.zst"
-if [[ "$(basename "$archive")" != "$archive_name" ]]; then
-  echo "Expected ${archive_name}, got $(basename "$archive")." >&2
+previous_version="$1"
+previous_archive="$(realpath "$2")"
+version="$3"
+archive="$(realpath "$4")"
+package_name="$5"
+if [[ ! "$package_name" =~ ^(elef-bin|elef-desktop-bin)$ ]]; then
+  echo "Unsupported Elef AUR package name: ${package_name}." >&2
   exit 2
 fi
-for command in makepkg pacman readelf ldd xdotool xvfb-run dbus-run-session openbox python3 runuser useradd; do
+previous_archive_name="elef-${previous_version}-x86_64.tar.zst"
+archive_name="elef-${version}-x86_64.tar.zst"
+if [[ "$(basename "$previous_archive")" != "$previous_archive_name" || "$(basename "$archive")" != "$archive_name" ]]; then
+  echo "The N-1 and N archives must match their immutable versioned asset names." >&2
+  exit 2
+fi
+for command in makepkg pacman vercmp readelf ldd bsdtar xdotool xvfb-run dbus-run-session openbox python3 runuser useradd; do
   command -v "$command" >/dev/null || { echo "Arch package gate needs ${command}." >&2; exit 2; }
 done
+if [[ "$(vercmp "$previous_version" "$version")" != "-1" ]]; then
+  echo "The N-1 package version must be ordered before N by the Arch version comparator." >&2
+  exit 2
+fi
 
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 pacman -Qq nodejs npm base-devel webkit2gtk-4.1 libsoup3 gtk3 cairo gdk-pixbuf2 glib2 pango desktop-file-utils shared-mime-info hicolor-icon-theme >/dev/null
 if ! id builder >/dev/null 2>&1; then
   useradd --create-home --shell /bin/bash builder
@@ -32,13 +44,14 @@ chmod 755 "$temporary_root"
 server_pid=""
 cleanup() {
   if [[ -n "$server_pid" ]]; then kill "$server_pid" 2>/dev/null || true; fi
-  pacman -Rns --noconfirm elef-bin >/dev/null 2>&1 || true
+  pacman -Rns --noconfirm "$package_name" >/dev/null 2>&1 || true
   rm -rf "$temporary_root"
 }
 trap cleanup EXIT
 
 asset_root="${temporary_root}/assets"
 mkdir -p "$asset_root"
+cp "$previous_archive" "${asset_root}/${previous_archive_name}"
 cp "$archive" "${asset_root}/${archive_name}"
 python3 "${repo_root}/desktop/scripts/arch_asset_server.py" "$asset_root" "${temporary_root}/port" &
 server_pid=$!
@@ -51,28 +64,57 @@ if [[ ! -s "${temporary_root}/port" ]]; then
   exit 1
 fi
 port="$(cat "${temporary_root}/port")"
-source_url="http://127.0.0.1:${port}/${archive_name}"
-checksum="$(sha256sum "$archive" | cut -d ' ' -f 1)"
-package_root="${temporary_root}/package-v1"
-mkdir -p "$package_root"
-node "${repo_root}/desktop/scripts/render_arch_pkgbuild.mjs" "$version" "$checksum" "${package_root}/PKGBUILD" "$source_url"
-cp "${repo_root}/desktop/packaging/arch/elef-bin.install" "$package_root/elef-bin.install"
-chown -R builder:builder "$package_root"
 
 run_as_builder() {
   runuser -u builder -- bash -c 'cd "$1" && makepkg --printsrcinfo > .SRCINFO && makepkg --syncdeps --noconfirm' _ "$1"
 }
-run_as_builder "$package_root"
-srcinfo="${package_root}/.SRCINFO"
-grep -F "pkgname = elef-bin" "$srcinfo"
-grep -F "pkgver = ${version}" "$srcinfo"
-grep -F "sha256sums = ${checksum}" "$srcinfo"
-for dependency in cairo desktop-file-utils gdk-pixbuf2 glib2 gtk3 hicolor-icon-theme libsoup3 pango shared-mime-info webkit2gtk-4.1; do
-  grep -F "depends = ${dependency}" "$srcinfo"
-  pacman -Qq "$dependency" >/dev/null
-done
-package_v1="$(find "$package_root" -maxdepth 1 -type f -name 'elef-bin-*.pkg.tar.zst' -print -quit)"
-[[ -n "$package_v1" ]]
+
+built_package_file=""
+build_arch_package() {
+  local package_version="$1"
+  local filename="$2"
+  local package_root="$3"
+  local checksum source_url srcinfo
+  checksum="$(sha256sum "${asset_root}/${filename}" | cut -d ' ' -f 1)"
+  source_url="http://127.0.0.1:${port}/${filename}"
+  mkdir -p "$package_root"
+  node "${repo_root}/desktop/scripts/render_arch_pkgbuild.mjs" \
+    "$package_version" "$checksum" "${package_root}/PKGBUILD" "$source_url" "$package_name"
+  cp "${repo_root}/desktop/packaging/arch/elef-bin.install" "${package_root}/${package_name}.install"
+  chown -R builder:builder "$package_root"
+  run_as_builder "$package_root"
+
+  srcinfo="${package_root}/.SRCINFO"
+  grep -F "pkgname = ${package_name}" "$srcinfo"
+  grep -F "pkgver = ${package_version}" "$srcinfo"
+  grep -F "source = ${filename}::${source_url}" "$srcinfo"
+  grep -F "sha256sums = ${checksum}" "$srcinfo"
+  for dependency in cairo desktop-file-utils gdk-pixbuf2 glib2 gtk3 hicolor-icon-theme libsoup3 pango shared-mime-info webkit2gtk-4.1; do
+    grep -F "depends = ${dependency}" "$srcinfo"
+    pacman -Qq "$dependency" >/dev/null
+  done
+  built_package_file="$(find "$package_root" -maxdepth 1 -type f -name "${package_name}-${package_version}-*.pkg.tar.zst" -print -quit)"
+  [[ -n "$built_package_file" ]]
+  if ! bsdtar -tf "$built_package_file" | grep -Fxq "usr/share/licenses/${package_name}/LICENSE"; then
+    echo "${package_name} package does not own its correctly named license path." >&2
+    exit 1
+  fi
+}
+
+previous_checksum="$(sha256sum "$previous_archive" | cut -d ' ' -f 1)"
+checksum="$(sha256sum "$archive" | cut -d ' ' -f 1)"
+if [[ "$previous_checksum" == "$checksum" ]]; then
+  echo "The N-1 and N versioned archives must have distinct bytes and checksums." >&2
+  exit 1
+fi
+previous_build_info="$(bsdtar -xOf "$previous_archive" usr/share/elef/version.json)"
+current_build_info="$(bsdtar -xOf "$archive" usr/share/elef/version.json)"
+node -e 'const [oldInfo, newInfo] = process.argv.slice(1).map(JSON.parse); if (oldInfo.version === newInfo.version || oldInfo.build_sha !== newInfo.build_sha || oldInfo.platform !== "linux" || newInfo.platform !== "linux") process.exit(1)' "$previous_build_info" "$current_build_info"
+
+build_arch_package "$previous_version" "$previous_archive_name" "${temporary_root}/package-n-1"
+package_v1="$built_package_file"
+build_arch_package "$version" "$archive_name" "${temporary_root}/package-n"
+package_v2="$built_package_file"
 
 binary_in_package="${temporary_root}/elef"
 bsdtar -xOf "$package_v1" usr/bin/elef > "$binary_in_package"
@@ -88,18 +130,34 @@ for library in "${linked_libraries[@]}"; do
   pacman -Qo "$resolved_library"
 done
 
-pacman -U --noconfirm "$package_v1"
-pacman -Qkk elef-bin
-for required_file in /usr/bin/elef /usr/share/applications/elef.desktop /usr/share/icons/hicolor/512x512/apps/elef.png /usr/share/mime/packages/elef.xml /usr/share/licenses/elef-bin/LICENSE; do
-  test -f "$required_file"
-done
+verify_installed_package() {
+  local expected_version="$1"
+  local installed_version
+  installed_version="$(pacman -Q "$package_name" | awk '{print $2}')"
+  if [[ "$installed_version" != "${expected_version}-1" ]]; then
+    echo "Expected ${package_name} ${expected_version}-1, found ${installed_version}." >&2
+    exit 1
+  fi
+  pacman -Qkk "$package_name"
+  test -f /usr/bin/elef
+  test -f /usr/share/applications/elef.desktop
+  test -f /usr/share/icons/hicolor/512x512/apps/elef.png
+  test -f /usr/share/mime/packages/elef.xml
+  test -f "/usr/share/licenses/${package_name}/LICENSE"
+  test ! -e /usr/share/licenses/elef/LICENSE
+  for other_package in elef-bin elef-desktop-bin; do
+    if [[ "$other_package" != "$package_name" ]]; then
+      test ! -e "/usr/share/licenses/${other_package}/LICENSE"
+    fi
+  done
+}
+
 hash_package_owned_files() {
   local output_file="$1"
-  pacman -Qlq elef-bin | while IFS= read -r package_file; do
+  pacman -Qlq "$package_name" | while IFS= read -r package_file; do
     if [[ -f "$package_file" ]]; then sha256sum "$package_file"; fi
   done > "$output_file"
 }
-hash_package_owned_files "${temporary_root}/package-files-before-launch.sha256"
 
 run_native_smoke() {
   local label="$1"
@@ -127,8 +185,6 @@ run_native_smoke() {
       done
       if [[ -z "$window_id" ]]; then cat "$HOME/elef.log"; echo "Elef did not create a visible window." >&2; exit 1; fi
       xdotool windowactivate --sync "$window_id"
-      # The WebView can become visible before its menu listeners are attached.
-      # Let the frontend finish bootstrapping before sending the native Quit.
       sleep 5
       xdotool key --clearmodifiers ctrl+q
       for attempt in $(seq 1 100); do
@@ -142,33 +198,25 @@ run_native_smoke() {
   echo "Arch package launch/quit smoke passed (${label})."
 }
 
-run_native_smoke install
-hash_package_owned_files "${temporary_root}/package-files-after-launch.sha256"
-diff -u "${temporary_root}/package-files-before-launch.sha256" "${temporary_root}/package-files-after-launch.sha256"
+pacman -U --noconfirm "$package_v1"
+verify_installed_package "$previous_version"
+hash_package_owned_files "${temporary_root}/package-files-before-n-1-launch.sha256"
+run_native_smoke n-1-install
+hash_package_owned_files "${temporary_root}/package-files-after-n-1-launch.sha256"
+diff -u "${temporary_root}/package-files-before-n-1-launch.sha256" "${temporary_root}/package-files-after-n-1-launch.sha256"
 
-# Exercise an Arch package-manager upgrade without changing the tested binary.
-# A real upstream release increments pkgver and points at its own immutable
-# archive; pkgrel=2 proves the same install/replace path and file ownership.
-upgrade_root="${temporary_root}/package-v2"
-mkdir -p "$upgrade_root"
-sed 's/^pkgrel=1$/pkgrel=2/' "${package_root}/PKGBUILD" > "${upgrade_root}/PKGBUILD"
-cp "${repo_root}/desktop/packaging/arch/elef-bin.install" "$upgrade_root/elef-bin.install"
-chown -R builder:builder "$upgrade_root"
-run_as_builder "$upgrade_root"
-package_v2="$(find "$upgrade_root" -maxdepth 1 -type f -name 'elef-bin-*.pkg.tar.zst' -print -quit)"
-[[ -n "$package_v2" ]]
 pacman -U --noconfirm "$package_v2"
-test "$(pacman -Q elef-bin | awk '{print $2}')" = "${version}-2"
-pacman -Qkk elef-bin
-run_native_smoke upgrade
-pacman -Qkk elef-bin
-hash_package_owned_files "${temporary_root}/package-files-after-upgrade-launch.sha256"
-diff -u "${temporary_root}/package-files-before-launch.sha256" "${temporary_root}/package-files-after-upgrade-launch.sha256"
+verify_installed_package "$version"
+hash_package_owned_files "${temporary_root}/package-files-before-n-launch.sha256"
+run_native_smoke n-upgrade
+hash_package_owned_files "${temporary_root}/package-files-after-n-launch.sha256"
+diff -u "${temporary_root}/package-files-before-n-launch.sha256" "${temporary_root}/package-files-after-n-launch.sha256"
 
-pacman -Rns --noconfirm elef-bin
+pacman -Rns --noconfirm "$package_name"
 test ! -e /usr/bin/elef
-if pacman -Qq elef-bin >/dev/null 2>&1; then
-  echo "elef-bin remained registered after uninstall." >&2
+test ! -e "/usr/share/licenses/${package_name}/LICENSE"
+if pacman -Qq "$package_name" >/dev/null 2>&1; then
+  echo "${package_name} remained registered after uninstall." >&2
   exit 1
 fi
-echo "Arch package install, launch, pkgrel upgrade, and uninstall passed in a clean Arch container."
+echo "Arch ${package_name} N-1/N package install, launch, upgrade, and uninstall passed in a clean container."

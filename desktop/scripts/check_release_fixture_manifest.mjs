@@ -81,6 +81,18 @@ for (const fixture of manifest.fixtures) {
 }
 
 const fixtureMap = new Map(manifest.fixtures.map(fixture => [fixture.id, fixture]))
+const packagePairFixture = fixtureMap.get("n_minus_1_n_package_pair")
+const archPackagePair = packagePairFixture.arch_linux_acceptance
+assert.equal(archPackagePair.command, "bash desktop/scripts/arch_package_ci.sh", "the Linux N-1/N package pair must name its hosted Arch acceptance command")
+assert.equal(archPackagePair.expected_exit_code, 0, "the Arch package pair must expect success")
+assert.ok(archPackagePair.observed_exit_code === null || Number.isInteger(archPackagePair.observed_exit_code), "the Arch package-pair result must be null or an observed exit code")
+assert.ok(["TODO", "IN_PROGRESS", "VERIFIED"].includes(archPackagePair.status), "the Arch package-pair result has an invalid status")
+if (archPackagePair.status === "VERIFIED") assert.equal(archPackagePair.observed_exit_code, archPackagePair.expected_exit_code, "the Arch package pair cannot be VERIFIED without a passing result")
+assert.deepEqual(archPackagePair.paths, [
+  "desktop/target/arch-release/elef-<n-1>-x86_64.tar.zst",
+  "desktop/target/arch-release/elef-<n>-x86_64.tar.zst"
+], "the Arch fixture must identify both versioned native archives")
+assert.ok(archPackagePair.invariants.some(invariant => invariant.includes("both elef-bin and elef-desktop-bin")), "the Arch package pair must verify both approved AUR names")
 const basicDocument = await readFixtureText("basic_document")
 const basicPresentation = await readFixtureText("basic_presentation")
 const richSample = await readFixtureText("rich_rendering_media")

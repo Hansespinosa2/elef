@@ -70,9 +70,23 @@ mkdir -p desktop/target/arch-release
 npm ci --prefix desktop/frontend
 npm run build --prefix desktop/frontend
 version="${DESKTOP_RELEASE_VERSION:-$(node -e 'process.stdout.write(JSON.parse(require("node:fs").readFileSync("desktop/src-tauri/tauri.conf.json", "utf8")).version)')}"
-DESKTOP_RELEASE_VERSION="$version" node desktop/scripts/prepare-linux-release-config.mjs
-ELEF_BUILD_SHA="$ELEF_BUILD_SHA" npm run tauri:build --prefix desktop/frontend -- --no-bundle --config src-tauri/tauri.linux-release.generated.conf.json
 output_directory="${repo_root}/desktop/target/arch-release"
-ELEF_BUILD_SHA="$ELEF_BUILD_SHA" node desktop/scripts/package_arch_archive.mjs "$version" desktop/target/release/elef-desktop "$output_directory"
-bash desktop/scripts/test_arch_package.sh "$version" "${output_directory}/elef-${version}-x86_64.tar.zst"
+previous_version="$(node -e '
+const [major, minor, patch] = process.argv[1].split(".").map(Number)
+if (patch > 0) process.stdout.write(`${major}.${minor}.${patch - 1}`)
+else if (minor > 0) process.stdout.write(`${major}.${minor - 1}.999`)
+else if (major > 0) process.stdout.write(`${major - 1}.999.999`)
+else process.exit(1)
+' "$version")"
+for package_version in "$previous_version" "$version"; do
+  DESKTOP_RELEASE_VERSION="$package_version" node desktop/scripts/prepare-linux-release-config.mjs
+  ELEF_BUILD_SHA="$ELEF_BUILD_SHA" npm run tauri:build --prefix desktop/frontend -- --no-bundle --config src-tauri/tauri.linux-release.generated.conf.json
+  ELEF_BUILD_SHA="$ELEF_BUILD_SHA" node desktop/scripts/package_arch_archive.mjs "$package_version" desktop/target/release/elef-desktop "$output_directory"
+done
+
+for package_name in elef-bin elef-desktop-bin; do
+  bash desktop/scripts/test_arch_package.sh \
+    "$previous_version" "${output_directory}/elef-${previous_version}-x86_64.tar.zst" \
+    "$version" "${output_directory}/elef-${version}-x86_64.tar.zst" "$package_name"
+done
 echo "Arch package gate passed for ${version} at source ${ELEF_BUILD_SHA}."

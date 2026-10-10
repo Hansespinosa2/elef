@@ -333,6 +333,10 @@ export async function runPackagedUpdateSmoke(env, { packageMode = "package" } = 
       try { relaunchedSession = await createSession(app.port); return true } catch (_error) { return false }
     }, "The relaunched N application did not start", 65_000)
     await confirmSessionReady(app.port, relaunchedSession)
+    const previousInstallationsRemoved = await execute(app.port, relaunchedSession,
+      `return window.__elefPerformanceTestHooks?.previousInstallationsRemoved`)
+    assert.equal(previousInstallationsRemoved, 1,
+      "the first successful N relaunch must remove exactly its receipt-matched N-1 installation backup")
     const relaunchedState = await execute(app.port, relaunchedSession, `
       return {
         version: await window.__TAURI__.core.invoke("plugin:app|version"),

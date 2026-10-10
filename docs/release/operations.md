@@ -21,6 +21,8 @@ After creating and installing the App:
 
 The App ID passed to the setup command is its numeric integration ID, not its Client ID. Until the App is installed, the Client ID variable and environment secrets are configured, and the update-only ruleset is verified, GitHub Pages hosting is available but automatic ledger publication remains **BLOCKED_EXTERNAL**. The scripts fail closed when the dedicated push token is missing.
 
+The owner-run ruleset check proves the stored rule using an administrator credential; it does not prove what the restricted writer App can read. The trusted coordinator verifies the complete ruleset, including the sole App bypass actor, with the App's short-lived `Contents: write` token before any ledger mutation. That preflight must pass after App installation and before automatic publication is treated as operational. If GitHub does not return the bypass actor to that token, keep the workflow fail-closed and resolve the permission/API visibility constraint without silently broadening the App's requested scope.
+
 ## Emergency block or unblock
 
 Use `Desktop Release Emergency Controls` on the protected `main` ref. Select `block` or `unblock`, list one or more semantic versions such as `0.1.0`, and give the reason. The workflow checks that the actor is the repository owner, writes the ledger and safe feed through the Pages compare-and-swap publisher, and updates the corresponding GitHub Release notes.
