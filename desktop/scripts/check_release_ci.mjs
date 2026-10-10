@@ -73,6 +73,7 @@ for (const [name, dockerfile] of [["production", productionDockerfile], ["develo
 }
 
 assert.match(releaseWorkflow, /workflow_run:\n\s+workflows: \[ CI \]\n\s+types: \[ completed \]\n\s+branches: \[ main \]/, "release coordination must start after the main CI workflow completes")
+assert.match(releaseWorkflow, /schedule:\n\s+- cron: '17 \* \* \* \*'/, "release reconciliation must periodically repair missed main events")
 assert.match(releaseWorkflow, /workflow_dispatch:/, "owner release controls and on-demand reconciliation must be available")
 assert.match(releaseWorkflow, /github\.event_name == 'workflow_run'[\s\S]*github\.sha == github\.event\.workflow_run\.head_sha[\s\S]*github\.workflow_sha == github\.event\.workflow_run\.head_sha/, "successful and failed main CI completions must bind to their exact main workflow revision")
 assert.doesNotMatch(releaseWorkflow, /workflow_run\.conclusion == 'success'/, "failed exact-SHA main CI completions must reach trusted reconciliation")
@@ -86,6 +87,7 @@ assert.doesNotMatch(releaseWorkflow, /^\s+pull_request:/m, "release credentials 
 const coordinatorVerifier = jobBlock(releaseWorkflow, "verify-coordinator")
 const reconcileJob = jobBlock(releaseWorkflow, "reconcile")
 assert.match(coordinatorVerifier, /actions: read\n\s+contents: read\n\s+pull-requests: read/, "the exact-SHA trust preflight must use read-only GitHub permissions")
+assert.match(coordinatorVerifier, /github\.event_name == 'schedule'[\s\S]*github\.ref_type == 'branch'[\s\S]*github\.ref_name == 'main'[\s\S]*github\.sha == github\.workflow_sha/, "scheduled reconciliation must use the exact workflow revision on protected main")
 assert.match(coordinatorVerifier, /ref: main\n\s+path: main-history\n\s+fetch-depth: 0/, "trust verification must inspect complete main history separately from its code")
 assert.match(coordinatorVerifier, /Select the latest recorded trusted verifier[\s\S]*steps\.select-verifier\.outputs\.verifier_sha/, "the trust verifier must come from the latest trusted ledger SHA when one exists")
 assert.match(coordinatorVerifierScript, /assertBootstrapFailedGateRecorderRevision/, "the first failed exact-SHA Gate A must have an owner-reviewed, failure-only bootstrap path")
