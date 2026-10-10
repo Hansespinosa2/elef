@@ -4,7 +4,7 @@ import { chmod, copyFile, mkdir, readFile, realpath, writeFile } from "node:fs/p
 import path from "node:path"
 import { reserveWebdriverPort } from "./webdriver-port.js"
 import { createDesktopAppEnvironment } from "./desktop-app-environment.js"
-import { desktopAppEnvironment } from "./offline-macos.js"
+import { offlineMacAppLauncherScript } from "./offline-macos.js"
 
 const profiles = [
   {
@@ -82,11 +82,17 @@ export async function runIdentityIsolationSmoke({ e2eRoot, repoRoot, env, isolat
       "APPIMAGE"
     ]) delete appEnv[variable]
 
-    const launchedEnv = desktopAppEnvironment(appEnv)
+    if (process.platform === "darwin" && process.env.ELEF_E2E_OFFLINE === "1") {
+      const launcher = path.join(temporaryRoot, `launch-${profile.name.toLowerCase()}-offline.sh`)
+      await writeFile(launcher, offlineMacAppLauncherScript(profile.binary), { mode: 0o755 })
+      await chmod(launcher, 0o755)
+      appEnv.ELEF_E2E_APP_BINARY = launcher
+    }
+
     const result = await new Promise((resolve, reject) => {
       const child = spawn(webdriver, ["run", "wdio.conf.js"], {
         cwd: e2eRoot,
-        env: launchedEnv,
+        env: appEnv,
         stdio: "inherit"
       })
       child.once("error", reject)
