@@ -702,7 +702,11 @@ fn staged_update_store(app: &AppHandle) -> Result<StagedUpdateStore, CommandErro
     all(feature = "desktop-dev", feature = "webdriver")
 ))]
 fn updater_public_key(app: &AppHandle) -> Result<String, CommandError> {
-    if let Ok(public_key) = std::env::var("ELEF_E2E_UPDATER_PUBLIC_KEY") {
+    #[cfg(feature = "webdriver")]
+    let e2e_override = std::env::var("ELEF_E2E_UPDATER_PUBLIC_KEY").ok();
+    #[cfg(not(feature = "webdriver"))]
+    let e2e_override: Option<String> = None;
+    if let Some(public_key) = e2e_override {
         return Ok(public_key);
     }
     app.config()

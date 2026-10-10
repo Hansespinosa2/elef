@@ -78,6 +78,7 @@ assert.match(nativeSource, /#\[cfg\(feature = "desktop-dev"\)\]\s+#\[tauri::comm
 assert.match(nativeSource, /#\[cfg\(any\(\s*target_os = "macos",\s*all\(feature = "desktop-dev", feature = "webdriver"\)\s*\)\)\]\s+#\[tauri::command\]\s+async fn install_update/)
 assert.match(nativeSource, /#\[cfg\(all\(\s*feature = "webdriver",\s*any\(target_os = "macos", feature = "desktop-dev"\)\s*\)\)\]\s+fn interrupt_update_install_for_e2e\(\)/, "the interrupted-install failpoint must compile only into updater-enabled WebDriver tests")
 assert.match(nativeSource, /#\[cfg\(feature = "webdriver"\)\]\s+interrupt_update_install_for_e2e\(\);/, "production updater activation must not call the test-only failpoint")
+assert.match(nativeSource, /#\[cfg\(feature = "webdriver"\)\]\s+let e2e_override = std::env::var\("ELEF_E2E_UPDATER_PUBLIC_KEY"\)\.ok\(\);\s+#\[cfg\(not\(feature = "webdriver"\)\)\]\s+let e2e_override: Option<String> = None;\s+if let Some\(public_key\) = e2e_override/, "the environment-supplied updater key must be unavailable in release builds")
 assert.match(buildRsSource, /desktop_dev, has_update_command/)
 assert.match(nativeSource, /app\.path\(\)\.app_data_dir\(\)\?\.join\("library-root\.json"\)/)
 assert.match(nativeSource, /tauri_plugin_single_instance::init/)
