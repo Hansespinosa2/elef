@@ -1,8 +1,9 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { parseHTML } from "linkedom"
-import { bindEditorAction, editorActionControl } from "../../../app/javascript/lib/editor_actions.js"
-import { clientMountController, startClientMounts, translateClientMounts, translateElementMounts } from "../../../app/javascript/lib/client_mounts.js"
+
+import { bindEditorAction, editorActionControl, translateElementMounts, clientMountController, startClientMounts, translateClientMounts } from "@elef/editor-runtime/test-internals"
+
 
 function setup(html) {
   const { document } = parseHTML(`<html><body>${html}</body></html>`)

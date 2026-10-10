@@ -8,7 +8,7 @@ const output = path.join(repoRoot, "apps/web/vendor/javascript/elef-renderer.bun
 await mkdir(path.dirname(output), { recursive: true })
 
 await build({
-  entryPoints: [path.join(repoRoot, "apps/web/app/javascript/lib/renderer_global.js")],
+  entryPoints: [path.join(repoRoot, "apps/web/script/renderer_bundle_entry.js")],
   bundle: true,
   format: "iife",
   target: "es2022",

@@ -24,19 +24,19 @@ const codemirrorState = await importVendoredModule("@codemirror--state.js", {
   "@marijn/find-cluster-break": findClusterBreak.url
 })
 
-const source = (await readFile(new URL("../../app/javascript/controllers/math_shorthand_controller.js", import.meta.url), "utf8"))
+const source = (await readFile(new URL("../../../../packages/editor-runtime/dist/controllers/math_shorthand_controller.js", import.meta.url), "utf8"))
   .replace('import { Controller } from "@hotwired/stimulus"', "class Controller {}")
   .replace('import { syntaxTree } from "@codemirror/language"', "const syntaxTree = (state) => state.tree")
-  .replace('import { editorFor } from "lib/editor_controller_lookup"', "const editorFor = () => null")
+  .replace('import { editorFor } from "../lib/editor_controller_lookup.js"', "const editorFor = () => null")
 const math = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`)
 globalThis.__mathTestHelpers = math
-const paletteSource = (await readFile(new URL("../../app/javascript/controllers/math_shortcut_palette_controller.js", import.meta.url), "utf8"))
+const paletteSource = (await readFile(new URL("../../../../packages/editor-runtime/dist/controllers/math_shortcut_palette_controller.js", import.meta.url), "utf8"))
   .replace('import { Controller } from "@hotwired/stimulus"', "class Controller {}")
-  .replace('import { editorFor } from "lib/editor_controller_lookup"', "const editorFor = () => null")
-  .replace('import { application } from "controllers/application"', "const application = { getControllerForElementAndIdentifier: () => null }")
-  .replace('import { editorInsideMath, expandMathShorthand, mathShorthandAtEditor, parseMathShorthand } from "controllers/math_shorthand_controller"', "const { editorInsideMath, expandMathShorthand, mathShorthandAtEditor, parseMathShorthand } = globalThis.__mathTestHelpers")
-  .replace('import { authoringRegistryFor } from "controllers/authoring_registry"', "const authoringRegistryFor = () => []")
-  .replace('import { snippetStopsEffect } from "controllers/snippet_stops"', "const snippetStopsEffect = { of: (value) => value }")
+  .replace('import { editorFor } from "../lib/editor_controller_lookup.js"', "const editorFor = () => null")
+  .replace('import { application } from "./application.js"', "const application = { getControllerForElementAndIdentifier: () => null }")
+  .replace('import { editorInsideMath, expandMathShorthand, mathShorthandAtEditor, parseMathShorthand } from "./math_shorthand_controller.js"', "const { editorInsideMath, expandMathShorthand, mathShorthandAtEditor, parseMathShorthand } = globalThis.__mathTestHelpers")
+  .replace('import { authoringRegistryFor } from "./authoring_registry.js"', "const authoringRegistryFor = () => []")
+  .replace('import { snippetStopsEffect } from "./snippet_stops.js"', "const snippetStopsEffect = { of: (value) => value }")
 const mathPalette = await import(`data:text/javascript;base64,${Buffer.from(paletteSource).toString("base64")}`)
 delete globalThis.__mathTestHelpers
 

@@ -23,12 +23,12 @@ export class DocumentEditor {
   restoreCaret() { this.calls.push("restoreCaret"); return true }
 }
 `).toString("base64")}`
-const source = (await readFile(path.join(root, "apps/web/app/javascript/controllers/visual_editor_controller.js"), "utf8"))
+const source = (await readFile(path.join(root, "packages/editor-runtime/dist/controllers/visual_editor_controller.js"), "utf8"))
   .replace('import { Controller } from "@hotwired/stimulus"', "class Controller {}")
   .replace('import { DocumentEditor } from "@elef/client"', `import { DocumentEditor } from "${clientStubUrl}"`)
-  .replace(/^import \{[^}]*\} from "lib\/editor_controller_lookup";?$/m, "const editorFor = () => null")
-  .replace(/^import \{[^}]*\} from "lib\/editor_view";?$/m, "const enableVisualModeAfterPreview = () => ({}); const enableVisualModeFromInstalledPreview = () => ({})")
-  .replace(/^import \{[^}]*\} from "lib\/presentation_editor_host";?$/m, 'const documentEditorDeps = () => ({ marker: "deps" })')
+  .replace(/^import \{[^}]*\} from "..\/lib\/editor_controller_lookup.js";?$/m, "const editorFor = () => null")
+  .replace(/^import \{[^}]*\} from "..\/lib\/editor_view.js";?$/m, "const enableVisualModeAfterPreview = () => ({}); const enableVisualModeFromInstalledPreview = () => ({})")
+  .replace(/^import \{[^}]*\} from "..\/lib\/presentation_editor_host.js";?$/m, 'const documentEditorDeps = () => ({ marker: "deps" })')
 const adapter = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`)
 
 test("the visual-editor adapter wires the shared feature with host seams", () => {

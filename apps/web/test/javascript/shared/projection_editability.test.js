@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import { parseHTML } from "linkedom"
 
-import { setProjectionBlockEditable } from "../../../app/javascript/lib/projection_editability.js"
+import { setProjectionBlockEditable } from "@elef/editor-runtime/test-internals"
 
 test("projection editability preserves the accessible state without repeating DOM writes", () => {
   const { document } = parseHTML("<div contenteditable=\"true\" role=\"textbox\" aria-label=\"Editable slide block\" aria-multiline=\"true\" spellcheck=\"true\"></div>")

@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import { parseHTML } from "linkedom"
 import { renderPreviewCore } from "@elef/renderer"
-import { editorChrome } from "../../../../../packages/editor-runtime/dist/preview_chrome.js"
+import { editorChrome } from "@elef/editor-runtime/editor-chrome"
 import { sanitizePreview as installSanitizedPreview } from "@elef/client/sanitize"
 import { CASES, runChecks } from "./preview_sanitizer_cases.js"
 

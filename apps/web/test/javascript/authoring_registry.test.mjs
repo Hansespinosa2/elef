@@ -3,7 +3,7 @@ import test from "node:test"
 import { readFile } from "node:fs/promises"
 import { parseHTML } from "linkedom"
 
-const source = await readFile(new URL("../../app/javascript/controllers/authoring_registry.js", import.meta.url), "utf8")
+const source = await readFile(new URL("../../../../packages/editor-runtime/dist/controllers/authoring_registry.js", import.meta.url), "utf8")
 const registryModule = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`)
 
 test("both palettes can share one cached editor registry", () => {

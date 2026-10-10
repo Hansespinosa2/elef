@@ -1,6 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { createDeckOpenFlow } from "../../../app/javascript/lib/deck_open_flow.js"
+import { createDeckOpenFlow } from "@elef/editor-runtime/test-internals"
 
 test("concurrent deck opens cannot replace editor state in reverse read order", async () => {
   let resolve

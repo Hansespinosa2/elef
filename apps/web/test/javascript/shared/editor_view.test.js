@@ -1,7 +1,8 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { parseHTML } from "linkedom"
-import { configureEditorKind, enableVisualModeAfterPreview, enableVisualModeFromInstalledPreview, installPreviewHtml, mountEditorHosts, renderEditorView } from "../../../app/javascript/lib/editor_view.js"
+
+import { configureEditorKind, enableVisualModeAfterPreview, enableVisualModeFromInstalledPreview, installPreviewHtml, renderEditorView, mountEditorHosts } from "@elef/editor-runtime/test-internals"
 
 function mount(config) {
   const { document } = parseHTML("<form><div id='mount'></div></form>")

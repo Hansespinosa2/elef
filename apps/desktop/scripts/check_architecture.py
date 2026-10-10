@@ -39,14 +39,14 @@ assert 'process.argv.includes("--report-runner")' in performance_benchmark, "hos
 assert 'report.budgetMode = reportOnly ? "runner-report-only" : "enforced"' in performance_benchmark
 assert 'assert.deepEqual(report.misses, [], "Native release application performance exceeded its budgets")' in performance_benchmark, "target-device performance runs must keep hard budget assertions"
 assert ci_workflow.count("benchmark-native.mjs --binary") == 2 and ci_workflow.count("--report-runner") == 2, "both hosted benchmark jobs must report their measurements without claiming target-device enforcement"
-feature_flags_source = (REPO_ROOT / "apps" / "web" / "app" / "javascript" / "lib" / "feature_flags.js").read_text()
+feature_flags_source = (REPO_ROOT / "packages" / "editor-runtime" / "src" / "lib" / "feature_flags.ts").read_text()
 delivery_plan = (REPO_ROOT / "docs" / "desktop" / "delivery-plan.md").read_text()
 document_model = (REPO_ROOT / "apps" / "web" / "app" / "lib" / "source" / "document.rb").read_text()
 javascript_renderer = (REPO_ROOT / "apps" / "web" / "app" / "lib" / "source" / "javascript_renderer.rb").read_text()
-renderer_global = (REPO_ROOT / "apps" / "web" / "app" / "javascript" / "lib" / "renderer_global.js").read_text()
+renderer_global = (REPO_ROOT / "apps" / "web" / "script" / "renderer_bundle_entry.js").read_text()
 renderer_worker = (REPO_ROOT / "apps" / "desktop" / "frontend" / "src" / "renderer-worker.js").read_text()
 desktop_main = (REPO_ROOT / "apps" / "desktop" / "frontend" / "src" / "main.js").read_text()
-desktop_application = (REPO_ROOT / "apps" / "web" / "app" / "javascript" / "lib" / "file_library_application.js").read_text()
+desktop_application = (REPO_ROOT / "packages" / "editor-runtime" / "src" / "lib" / "file_library_application.ts").read_text()
 native_render_styles = (REPO_ROOT / "apps" / "web" / "app" / "assets" / "stylesheets" / "file_library_host.css").read_text()
 shared_application_styles = application_stylesheet_sources()
 desktop_frontend_source = REPO_ROOT / "apps" / "desktop" / "frontend" / "src"
@@ -81,7 +81,7 @@ shared_library_sources.append(
     (REPO_ROOT / "packages" / "client" / "src" / "features" / "graph" / "graphController.ts").read_text()
 )
 assert 'import "../../../../apps/web/app/assets/stylesheets/application.css"' in desktop_main, "desktop must bundle Rails rendering and authoring styles"
-assert 'lib/performance_measurement' in desktop_application, "desktop performance UI must reuse the Rails-owned browser measurement helper"
+assert '"./performance_measurement.js"' in desktop_application, "desktop performance UI must reuse the shared browser measurement helper"
 assert (REPO_ROOT / "apps" / "desktop" / "frontend" / "src" / "performance-measurement.js").exists() is False, "desktop must not own a second performance measurement helper"
 assert not re.search(r"^\.(?:slide-frame|slide-content|presentation-surface|document-surface|katex)(?:\s|\{|:)", native_render_styles, re.MULTILINE), "the Rails-owned host stylesheet must not duplicate rendered-content styles"
 shared_library_classes = set()
@@ -248,7 +248,7 @@ assert feature_flags == {
 }, f"desktop deferred-feature defaults must stay explicitly off: {feature_flags}"
 for flag in feature_flags:
     assert re.search(rf"\| `{flag}` \| off \| on \|", delivery_plan), f"{flag} is missing from the feature register"
-assert "applyDesktopFeatureFlags(document)" in desktop_application, "the Rails-owned application must apply feature flags at startup"
+assert "applyDesktopFeatureFlags(document)" in desktop_application, "the shared application must apply feature flags at startup"
 assert re.search(r"def editor_map\([^)]*\).*?Source::JavascriptRenderer\.editor_map", document_model, re.DOTALL), "Rails editor maps must delegate to the shared JavaScript implementation"
 assert '"ElefRenderer.buildEditorMap"' in javascript_renderer, "the Rails wrapper must call the shared map exported by the renderer bundle"
 assert "buildEditorMap" in renderer_global and "buildEditorStructure" in renderer_global, "the renderer bundle must expose the shared editor map and structure"

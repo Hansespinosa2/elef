@@ -6,7 +6,6 @@
     "packages/*"
   ],
   "imports": {
-    "#elef/preview-sanitizer": "./apps/web/app/javascript/lib/preview_sanitizer.js",
     "#elef/authoring-settings": "./apps/web/app/javascript/lib/authoring_settings.js",
     "#elef/authoring-registry-write": "./apps/web/app/javascript/lib/authoring_registry_write.js"
   },

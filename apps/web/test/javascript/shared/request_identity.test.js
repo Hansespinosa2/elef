@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { createRequestGuard } from "../../../app/javascript/lib/request_identity.js"
+import { createRequestGuard } from "@elef/editor-runtime/test-internals"
 
 test("a superseded request token is stale while the newest stays current", () => {
   const guard = createRequestGuard()

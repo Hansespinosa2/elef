@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Enforce Rails ownership of shared frontend code and one-way desktop reuse."""
+"""Enforce host boundary ownership: Rails owns app source, shared product code
+lives in neutral packages, and neither host imports the other's files."""
 
 import hashlib
 import json
@@ -63,6 +64,35 @@ assert not desktop_ui_files, (
     + ", ".join(sorted(desktop_ui_files))
 )
 
+# Permanent no-host→host tripwire (Phase 12 DO-8, ADR-011): the Stimulus
+# editor shell moved to packages/editor-runtime, consumed through its narrowed
+# boot API. Desktop frontend sources must never import Rails-host JavaScript
+# again, and the retired transitional alias schemes (#elef/*, bare
+# controllers/* and lib/*) must stay deleted. Asset packaging (host template,
+# stylesheets, registry JSON) is not a module import and stays allowed.
+retired_specifier_schemes = ("#elef/", "controllers/", "lib/")
+desktop_host_import_violations = []
+for path in (ROOT / "apps/desktop/frontend/src").rglob("*.js"):
+    for specifier in MODULE_SPECIFIER.findall(path.read_text()):
+        if specifier.startswith(retired_specifier_schemes):
+            desktop_host_import_violations.append(f"{path.relative_to(ROOT)} uses retired alias {specifier}")
+        elif specifier.startswith(("./", "../")):
+            target = (path.parent / specifier).resolve()
+            probes = [target] if target.suffix else [target.with_suffix(".js"), target.with_suffix(".ts")]
+            for probe in probes:
+                if probe.suffix not in {".js", ".mjs", ".cjs", ".ts"}:
+                    continue
+                try:
+                    probe.relative_to(app_frontend)
+                except ValueError:
+                    continue
+                desktop_host_import_violations.append(f"{path.relative_to(ROOT)} imports host file {specifier}")
+                break
+assert not desktop_host_import_violations, (
+    "Desktop frontend modules must not import Rails-host JavaScript (use @elef/editor-runtime): "
+    + ", ".join(desktop_host_import_violations)
+)
+
 frontend_import_violations = []
 for path in app_frontend.rglob("*.js"):
     source = path.read_text()
@@ -96,8 +126,8 @@ build = (ROOT / "apps/desktop/frontend/build.mjs").read_text()
 desktop_main = (ROOT / "apps/desktop/frontend/src/main.js").read_text()
 tauri_config = json.loads((ROOT / "apps/desktop/src-tauri/tauri.conf.json").read_text())
 desktop_scripts = json.loads((ROOT / "apps/desktop/frontend/package.json").read_text())["scripts"]
-desktop_application = (ROOT / "apps/web/app/javascript/lib/file_library_application.js").read_text()
-work_session = (ROOT / "packages/client/src/session/work_session.js").read_text()
+desktop_application = (ROOT / "packages/editor-runtime/src/lib/file_library_application.ts").read_text()
+work_session = (ROOT / "packages/client/src/session/work_session.ts").read_text()
 client_library_app = (ROOT / "packages/client/src/features/library/LibraryApp.tsx").read_text()
 client_library_card = (ROOT / "packages/client/src/features/library/LibraryCard.tsx").read_text()
 client_library_filtering = (ROOT / "packages/client/src/features/library/filtering.ts").read_text()
@@ -108,20 +138,19 @@ assert "globalThis.fetch =" not in desktop_application, (
     "The shared frontend must not replace the host fetch implementation"
 )
 shared_styles = application_stylesheet_sources()
-client_presentation = (ROOT / "packages/client/src/features/presentation/presentation.js").read_text()
+client_presentation = (ROOT / "packages/client/src/features/presentation/presentation.ts").read_text()
 importmap = (ROOT / "apps/web/config/importmap.rb").read_text()
 renderer_build = (ROOT / "apps/web/script/build_renderer.mjs").read_text()
 renderer_sources = (
     ROOT / "packages/renderer/src/renderer.js",
-    ROOT / "packages/work-model/src/document_links.js",
-    ROOT / "packages/work-model/src/document_map.js",
-    ROOT / "apps/web/app/javascript/lib/renderer_global.js",
+    ROOT / "packages/work-model/src/document_links.ts",
+    ROOT / "packages/work-model/src/document_map.ts",
 )
-editor_runtime = (ROOT / "apps/web/app/javascript/lib/editor_runtime.js").read_text()
+editor_runtime = (ROOT / "packages/editor-runtime/src/lib/editor_runtime.ts").read_text()
 math_modules = (
-    ROOT / "apps/web/app/javascript/controllers/live_preview.js",
-    ROOT / "apps/web/app/javascript/controllers/editor_math.js",
-    ROOT / "apps/web/app/javascript/controllers/editor_markdown.js",
+    ROOT / "packages/editor-runtime/src/controllers/live_preview.ts",
+    ROOT / "packages/editor-runtime/src/controllers/editor_math.ts",
+    ROOT / "packages/editor-runtime/src/controllers/editor_markdown.ts",
 )
 
 # Rails browser imports resolve through importmap, while desktop esbuild resolves
@@ -167,13 +196,12 @@ assert not missing_shared_alias_pins, (
     "Every shared Elef module alias must be pinned in the Rails importmap: "
     + ", ".join(missing_shared_alias_pins)
 )
-# renderer_global.js is the esbuild bundle entry (apps/web/script/build_renderer.mjs), never
-# served through the importmap, so its package imports resolve via node_modules.
-BUNDLED_ONLY = {app_frontend / "lib/renderer_global.js"}
+# The renderer bundle entry lives in apps/web/script (see build_renderer.mjs), outside
+# the served tree: every @elef/* specifier under app/javascript is importmap-
+# served and must be pinned.
 frontend_package_imports = {
     specifier
     for path in app_frontend.rglob("*.js")
-    if path not in BUNDLED_ONLY
     for specifier in MODULE_SPECIFIER.findall(path.read_text())
     if specifier.startswith("@elef/")
 }
@@ -181,9 +209,9 @@ rails_package_pins = set(re.findall(r'^pin "(@elef/[^\"]+)"', importmap, re.MULT
 # The work-model barrel is browser-loaded through the importmap, which does
 # not rewrite relative specifiers: the barrel must use self-referential bare
 # imports, and every barrel subpath must be pinned.
-work_model_barrel = (ROOT / "packages/work-model/src/index.js").read_text()
+work_model_barrel = (ROOT / "packages/work-model/src/index.ts").read_text()
 assert '"./' not in work_model_barrel and '"../' not in work_model_barrel, (
-    "packages/work-model/src/index.js must not use relative imports (browser-loaded)"
+    "packages/work-model/src/index.ts must not use relative imports (browser-loaded)"
 )
 for subpath in ("@elef/work-model/document-map", "@elef/work-model/document-links"):
     assert subpath in rails_package_pins, f"work-model barrel subpath must be pinned: {subpath}"
@@ -367,14 +395,16 @@ assert '"apps/web/app/assets/builds/tailwind.css"' in build, "desktop must packa
 assert (ROOT / "apps/web/app/assets/builds/tailwind.css").is_file(), "shared utility CSS must be present in a clean checkout"
 assert '"apps/web/vendor/javascript/elef-renderer.bundle.js"' in build, "desktop must package the Rails-owned renderer artifact"
 assert "bin/rails" not in build and "execFileSync" not in build, "desktop packaging must not boot Rails"
-assert "apps/web/app/javascript" in build, "desktop bundling must resolve frontend code from app/javascript"
+assert "manifest.exports" in build, "desktop bundling must resolve shared editor code as workspace packages"
+assert "preview_sanitizer" not in build, "desktop must not keep the retired preview-sanitizer alias"
+assert "controllers/" not in build and "sharedModuleAliases" not in build, "desktop must not keep the retired app-source alias scheme"
 assert 'import "../../../../apps/web/app/assets/stylesheets/application.css"' in desktop_main, "desktop must bundle the Rails-owned application styles"
 assert "startFileLibraryApplication" in desktop_main and "document.querySelector" not in desktop_main, (
     "the desktop entry point must only wire native services into the Rails-owned application"
 )
-assert 'from "lib/editor_runtime"' in desktop_main, "desktop must consume the Rails-owned Stimulus controller runtime"
+assert 'from "@elef/editor-runtime"' in desktop_main, "desktop must consume the shared Stimulus editor runtime package"
 assert "@tauri-apps/" not in desktop_application and "desktop/" not in desktop_application, (
-    "the Rails-owned file-library application must depend on injected host services, not desktop code"
+    "the shared file-library application must depend on injected host services, not desktop code"
 )
 assert "script/build_renderer.mjs" not in build, "desktop must consume the renderer build, not own it"
 assert "createWorkSession" in desktop_application and '"lib/work_session"' not in desktop_application, (
@@ -425,7 +455,7 @@ assert '"apps/web/app/views/shared/_authoring_settings_dialog.html.erb"' not in 
 )
 assert '"lib/library_card"' not in desktop_application, "desktop must not keep the retired card renderer"
 assert "export function cardDomId" in client_library_card, "desktop library cards must be owned by the shared client"
-assert '"lib/editor_controller_lookup"' in desktop_application, "desktop editor lookup must use the app-owned controller helper"
+assert '"./editor_controller_lookup.js"' in desktop_application, "desktop editor lookup must use the package-owned controller helper"
 assert '"@elef/work-model"' in desktop_application and "buildDocumentGraph" in desktop_application, (
     "desktop graph construction must consume the shared work-model resolver"
 )
@@ -438,7 +468,7 @@ assert "markdown_document_links" not in (ROOT / "crates/local-store/src/lib.rs")
 assert "markdown_document_title" not in (ROOT / "crates/local-store/src/lib.rs").read_text(), (
     "desktop core must return source and folder name; Rails-owned JavaScript derives Markdown graph labels"
 )
-assert "extractFirstMarkdownHeading" in (ROOT / "packages/work-model/src/document_links.js").read_text(), (
+assert "extractFirstMarkdownHeading" in (ROOT / "packages/work-model/src/document_links.ts").read_text(), (
     "document graph labels must use the shared work-model Markdown rules"
 )
 assert "transport.readRegistries" in client_authoring_dialog, (
@@ -466,14 +496,14 @@ assert '"controllers/presentation_canvas_controller"' not in editor_runtime, (
     "the retired Stimulus presentation canvas controller must not load on demand"
 )
 assert "splitting: true" in build, "desktop must emit lazy ESM chunks instead of parsing every editor controller at launch"
-assert 'import("controllers/editor_controller")' in editor_runtime, "the heavy shared editor controller must load on demand"
+assert 'import("../controllers/editor_controller.js")' in editor_runtime, "the heavy shared editor controller must load on demand"
 assert 'import("controllers/document_graph_controller")' not in editor_runtime, "the retired Stimulus graph controller must not load on demand"
 assert "loadLibraryRuntime" not in editor_runtime, "no host may keep the retired graph controller loader"
 assert "renderGraphView" in desktop_application and "GraphController" in desktop_application, (
     "desktop graph rendering must use the shared client graph module"
 )
-assert '"lib/renderer_worker"' in (ROOT / "apps/desktop/frontend/src/renderer-worker.js").read_text(), (
-    "desktop worker bootstrap must delegate renderer response behavior to app/javascript"
+assert 'from "@elef/editor-runtime"' in (ROOT / "apps/desktop/frontend/src/renderer-worker.js").read_text(), (
+    "desktop worker bootstrap must delegate renderer response behavior to the shared editor runtime"
 )
 assert 'path.join(frontendRoot, "src/renderer-worker.js")' in build, (
     "desktop must bundle its worker bootstrap with the shared app-owned worker behavior"
@@ -502,8 +532,8 @@ assert 'lib/presentation_navigation' not in importmap, (
 assert '"./navigation.js"' in client_presentation, (
     "the client presentation controller must consume key mapping from the shared navigation module"
 )
-assert 'pin "lib/editor_controller_lookup", to: "lib/editor_controller_lookup.js"' in importmap, (
-    "Rails must resolve the shared editor controller lookup"
+assert 'pin "@elef/editor-runtime", to: "editor-runtime/dist/index.js"' in importmap, (
+    "Rails must resolve the shared editor runtime (the controller lookup ships inside its dist)"
 )
 assert '"lib/presentation_navigation"' not in client_presentation, "the shared controller must not keep host-owned key mapping"
 for shared_module in (
@@ -511,8 +541,15 @@ for shared_module in (
     "feature_flags", "performance_measurement", "renderer_worker_client",
     "request_identity", "editor_binding",
 ):
-    assert f'"lib/{shared_module}"' in desktop_application, f"desktop application must consume apps/web/app/javascript/lib/{shared_module}.js"
-editor_binding = (ROOT / "apps/web/app/javascript/lib/editor_binding.js").read_text()
+    assert f'"./{shared_module}.js"' in desktop_application, f"desktop application must consume packages/editor-runtime/src/lib/{shared_module}.ts"
+desktop_boot = (ROOT / "apps/desktop/frontend/src/main.js").read_text()
+assert '"@elef/editor-runtime"' in desktop_boot, (
+    "desktop boot must consume the shared editor runtime package"
+)
+assert '"lib/' not in desktop_boot and "'lib/" not in desktop_boot, (
+    "desktop boot must not import host-owned lib modules"
+)
+editor_binding = (ROOT / "packages/editor-runtime/src/lib/editor_binding.ts").read_text()
 assert '"./editor_source.js"' in editor_binding, (
     "the CodeMirror binding must apply sources through the shared guarded path"
 )
@@ -526,7 +563,7 @@ assert '"@elef/renderer"' in preview_core_entry and "renderPreviewCore" in previ
 assert 'pin "@elef/client/preview-core", to: "client/dist/preview-core.js"' in importmap, (
     "Rails must serve the deferred preview renderer entry"
 )
-client_presentation_editor = (ROOT / "packages/client/src/features/presentation/editor.js").read_text()
+client_presentation_editor = (ROOT / "packages/client/src/features/presentation/editor.ts").read_text()
 assert '"lib/projection_editability"' not in client_presentation_editor, (
     "the client presentation editor must receive editing utilities through injection, not host imports"
 )
@@ -536,32 +573,36 @@ assert not (ROOT / "apps/web/app/javascript/controllers/presentation_editor_cont
 assert '"controllers/presentation_editor_controller"' not in editor_runtime, (
     "the retired Stimulus presentation editor must not load on demand"
 )
-assert "mountHostPresentationEditor" in (ROOT / "apps/web/app/javascript/lib/presentation_editor_host.js").read_text(), (
+assert "mountHostPresentationEditor" in (ROOT / "packages/editor-runtime/src/lib/presentation_editor_host.ts").read_text(), (
     "both hosts must mount the client presentation editor through the shared host seam"
 )
 assert not (ROOT / "apps/web/app/javascript/controllers/pptx_export_controller.js").is_file(), (
     "the retired Stimulus PPTX export controller must be absent"
 )
-client_export_registry = (ROOT / "packages/client/src/features/export/registry.js").read_text()
+client_export_registry = (ROOT / "packages/client/src/features/export/registry.ts").read_text()
 assert '"pptx"' in client_export_registry and '"print"' in client_export_registry and '"elef"' in client_export_registry, (
     "the client export registry must declare every user-facing format in one place"
 )
 assert "exportPptxModel" in (ROOT / "apps/web/app/javascript/controllers/pptx_export_host_controller.js").read_text(), (
     "the Rails export adapter must orchestrate through the shared client engine"
 )
-assert '"lib/presentation_editor_host"' in (ROOT / "apps/web/app/javascript/controllers/visual_editor_controller.js").read_text(), (
+assert '"../lib/presentation_editor_host.js"' in (ROOT / "packages/editor-runtime/src/controllers/visual_editor_controller.ts").read_text(), (
     "the thin visual-editor adapter must mount through the shared presentation editor host seam"
 )
-assert '"lib/projection_editability"' in (ROOT / "apps/web/app/javascript/lib/presentation_editor_host.js").read_text(), (
+assert '"./projection_editability.js"' in (ROOT / "packages/editor-runtime/src/lib/presentation_editor_host.ts").read_text(), (
     "projection editability must flow through the shared presentation editor host seam"
 )
-assert 'pin "lib/projection_editability", to: "lib/projection_editability.js"' in importmap
+assert 'pin "@elef/editor-runtime/editor-chrome", to: "editor-runtime/dist/preview_chrome.js"' in importmap, (
+    "Rails must serve the shared editor chrome entry"
+)
+assert 'pin "lib/' not in importmap, "retired host-owned lib pins must not linger in the Rails importmap"
 assert all(path.is_file() for path in renderer_sources), "renderer sources must stay in shared apps/web/app/javascript or packages"
 assert "desktop/" not in renderer_build, "Rails renderer generation must not reference desktop files"
-bundle_entry = (ROOT / "apps/web/app/javascript/lib/renderer_global.js").read_text()
-assert (ROOT / "apps/web/app/javascript/lib/preview_chrome.js").is_file(), "editor chrome must live in the app-side preview_chrome module"
-assert '"./preview_chrome.js"' in bundle_entry and "editorChrome" in bundle_entry, (
-    "the bundle entry must compose bare projection with editor chrome"
+bundle_entry = (ROOT / "apps/web/script/renderer_bundle_entry.js").read_text()
+assert not (ROOT / "apps/web/app/javascript/lib/preview_chrome.js").is_file(), "editor chrome moved to the shared editor runtime package"
+assert (ROOT / "packages/editor-runtime/src/preview_chrome.ts").is_file(), "editor chrome must live in the shared editor runtime package"
+assert '"@elef/editor-runtime/editor-chrome"' in bundle_entry and "editorChrome" in bundle_entry, (
+    "the bundle entry must compose bare projection with package-owned editor chrome"
 )
 for bridge_function in (
     "parsePortableDocumentLinks", "extractFirstMarkdownHeading", "frontMatterHasKey",

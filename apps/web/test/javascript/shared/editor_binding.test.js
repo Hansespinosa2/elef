@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { createCodeMirrorBinding } from "../../../app/javascript/lib/editor_binding.js"
+import { createCodeMirrorBinding } from "@elef/editor-runtime/test-internals"
 
 function setup({ editor = null, deckId = "deck-1", source = "live source", fallback = "fallback source" } = {}) {
   let materialized = 0

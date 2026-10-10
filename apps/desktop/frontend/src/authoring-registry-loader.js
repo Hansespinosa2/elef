@@ -1,7 +1,6 @@
 import { invoke } from "@tauri-apps/api/core"
 import builtInRegistry from "../../../../apps/web/app/javascript/data/default_authoring_registry.json"
-import { mergeAuthoringRegistryEntries } from "lib/authoring_registry_merge"
-import { applyAuthoringRegistryToEditor } from "controllers/authoring_registry"
+import { applyAuthoringRegistryToEditor, mergeAuthoringRegistryEntries } from "@elef/editor-runtime"
 
 let currentRegistry = builtInRegistry
 

@@ -1,6 +1,6 @@
 import { Controller } from "@hotwired/stimulus"
 import { mountPresentation } from "@elef/client"
-import { mountHostPresentationEditor } from "lib/presentation_editor_host"
+import { mountHostPresentationEditor } from "@elef/editor-runtime"
 
 // Rails host mount for the shared client presentation features. All slide
 // behavior (present-mode navigation/keyboard/fullscreen/scaling, visual slide

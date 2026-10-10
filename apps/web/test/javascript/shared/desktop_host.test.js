@@ -11,11 +11,11 @@ const [hostTemplate, shellStyles, applicationStylesheetIndex, application, boots
   read("apps/web/app/views/desktop_host.html"),
   read("apps/web/app/assets/stylesheets/file_library_host.css"),
   read("apps/web/app/assets/stylesheets/application.css"),
-  read("apps/web/app/javascript/lib/file_library_application.js"),
+  read("packages/editor-runtime/src/lib/file_library_application.ts"),
   read("apps/desktop/frontend/src/main.js"),
-  read("apps/web/app/javascript/lib/editor_runtime.js"),
+  read("packages/editor-runtime/src/lib/editor_runtime.ts"),
   read("apps/desktop/frontend/build.mjs"),
-  read("apps/web/app/javascript/lib/editor_view.js"),
+  read("packages/editor-runtime/src/lib/editor_view.ts"),
   read("packages/client/src/features/library/LibraryApp.tsx"),
   read("apps/desktop/frontend/src/file-library-transport.js")
 ])
@@ -25,9 +25,9 @@ const clientAuthoringDialog = await read("packages/client/src/features/settings/
 const page = hostTemplate
 const importmap = await read("apps/web/config/importmap.rb")
 const rootPackage = JSON.parse(await read("package.json"))
-const appearanceController = await read("apps/web/app/javascript/controllers/appearance_controller.js")
+const appearanceController = await read("packages/editor-runtime/src/controllers/appearance_controller.ts")
 const autosaveController = await read("apps/web/app/javascript/controllers/autosave_controller.js")
-const workSession = await read("packages/client/src/session/work_session.js")
+const workSession = await read("packages/client/src/session/work_session.ts")
 const quietSavePolicy = await read("apps/desktop/frontend/src/quiet_save_policy.js")
 const { document } = parseHTML(page)
 // The empty-library call to action is client-owned now; the host template
@@ -127,9 +127,9 @@ test("Rails and desktop consume the same client-owned save state machine", () =>
   assert.match(autosaveController, /createSession\(\)/)
   assert.doesNotMatch(autosaveController, /createSaveFlow/)
   assert.match(application, /import \{ createWorkSession, createTitleSaveFlow \} from "@elef\/client"/)
-  assert.match(workSession, /import \{ createSaveFlow \} from "\.\/save_flow\.js"/)
-  assert.match(autosaveController, /import \{ presentConflictDialog \} from "lib\/conflict_dialog"/)
-  assert.match(application, /import \{ presentConflictDialog \} from "lib\/conflict_dialog"/)
+  assert.match(workSession, /import \{[^}]*createSaveFlow[^}]*\} from "\.\/save_flow\.js"/)
+  assert.match(autosaveController, /import \{ presentConflictDialog \} from "@elef\/editor-runtime"/)
+  assert.match(application, /import \{ presentConflictDialog \} from "\.\/conflict_dialog\.js"/)
   assert.doesNotMatch(bootstrap, /createSaveFlow|conflict-dialog|autosave#schedule/)
   assert.match(bootstrap, /quietSavePolicy: createQuietSavePolicy\(\)/)
   assert.match(application, /quietSavePolicy\.saveDelay/)
@@ -140,10 +140,12 @@ test("Rails and desktop consume the same client-owned save state machine", () =>
 })
 
 test("Rails and desktop share one sanitized preview insertion path", () => {
-  assert.match(editorView, /import \{ installSanitizedPreview \} from "#elef\/preview-sanitizer"/)
-  assert.match(importmap, /pin "#elef\/preview-sanitizer", to: "lib\/preview_sanitizer\.js"/)
-  assert.equal(rootPackage.imports["#elef/preview-sanitizer"], "./apps/web/app/javascript/lib/preview_sanitizer.js")
-  assert.match(build, /preview-sanitizer/)
+  assert.match(editorView, /import \{ sanitizePreview as installSanitizedPreview \} from "@elef\/client\/sanitize"/)
+  assert.match(importmap, /pin "@elef\/client\/sanitize", to: "client\/dist\/sanitize\.js"/)
+  assert.doesNotMatch(importmap, /preview-sanitizer/)
+  assert.equal(rootPackage.imports["#elef/preview-sanitizer"], undefined)
+  assert.doesNotMatch(build, /preview-sanitizer/)
+  assert.match(build, /@elef\//)
   assert.match(editorView, /installSanitizedPreview\(container, html, \{ mediaBaseUrl \}\)/)
   const previewInstaller = editorView.match(/export function installPreviewHtml\([\s\S]*?\n\}/)?.[0] || ""
   assert.doesNotMatch(previewInstaller, /elefInstallDesktopPreview|innerHTML/)
@@ -174,14 +176,14 @@ test("the desktop host defaults to Rails' Visual mode and gates it until preview
   assert.match(application, /document\.body\.dataset\.desktopView = "editor"/)
   assert.match(application, /document\.body\.dataset\.desktopView = "library"/)
   assert.match(application, /editor\.loadDocument\(deck\.source\)[\s\S]*?editor\.setEditingMode\("visual", \{ restoreCaret: false \}\)/)
-  const editorController = await read("apps/web/app/javascript/controllers/editor_controller.js")
+  const editorController = await read("packages/editor-runtime/src/controllers/editor_controller.ts")
   assert.match(editorController, /this\.form\?\.dispatchEvent\(new CustomEvent\("elef:editor-mode-change"/)
   assert.match(application, /theme: "dark"/)
   assert.match(application, /void openDeck\(target\.workId\)/)
   assert.match(application, /presentWork: work => \{[\s\S]*?startPresentation\(\)/)
   assert.match(application, /configureEditorKind\(elements\.editorField\.closest\("\.editor-shell"\), isDocument \? "document" : "presentation"/)
   assert.doesNotMatch(application, /elements\.editorInput\.name = isDocument/)
-  assert.match(editorView, /export function configureEditorKind\(root, kind/)
+  assert.match(editorView, /export function configureEditorKind\(root:/)
   assert.match(editorView, /visualButton\.disabled = Boolean\(config\.visualDisabled\)/)
 })
 
@@ -239,13 +241,13 @@ test("both hosts render the graph through the shared client module, never Stimul
 })
 
 test("the Rails-owned application loads shared editor controllers on demand; the graph lives in the client", () => {
-  assert.match(application, /loadEditorRuntime\(\)/)
+  assert.match(application, /registerEditorRuntime\(\)/)
   assert.doesNotMatch(application, /loadLibraryRuntime\(\)/)
-  assert.match(bootstrap, /from "lib\/editor_runtime"/)
-  assert.match(editorRuntime, /import\("controllers\/editor_controller"\)/)
+  assert.match(bootstrap, /from "@elef\/editor-runtime"/)
+  assert.match(editorRuntime, /import\("\.\.\/controllers\/editor_controller\.js"\)/)
   assert.doesNotMatch(editorRuntime, /document_graph_controller/)
   assert.doesNotMatch(editorRuntime, /loadLibraryRuntime/)
-  assert.doesNotMatch(editorRuntime, /^import\s+\w+Controller\s+from\s+["']controllers\//m)
+  assert.doesNotMatch(editorRuntime, /^import\s+\w+Controller\s+from\s+["']/m)
   assert.match(build, /splitting:\s*true/)
 })
 
@@ -256,14 +258,14 @@ test("Markdown appearance persistence is shared and absent from desktop orchestr
 })
 
 test("structural source operations commit through the bound session", async () => {
-  const editorController = await read("apps/web/app/javascript/controllers/editor_controller.js")
-  const clientEditor = await read("packages/client/src/features/presentation/editor.js")
-  const visualEditor = await read("apps/web/app/javascript/controllers/visual_editor_controller.js")
-  const documentEditor = await read("packages/client/src/features/document/document_editor.js")
-  const overview = await read("apps/web/app/javascript/controllers/slide_overview_controller.js")
-  const overviewFeature = await read("packages/client/src/features/overview/overview.js")
+  const editorController = await read("packages/editor-runtime/src/controllers/editor_controller.ts")
+  const clientEditor = await read("packages/client/src/features/presentation/editor.ts")
+  const visualEditor = await read("packages/editor-runtime/src/controllers/visual_editor_controller.ts")
+  const documentEditor = await read("packages/client/src/features/document/document_editor.ts")
+  const overview = await read("packages/editor-runtime/src/controllers/slide_overview_controller.ts")
+  const overviewFeature = await read("packages/client/src/features/overview/overview.ts")
   // The adapter exposes one session commit entry point with a direct fallback.
-  assert.match(editorController, /commitSource\(source, \{ caret \} = \{\}\)/)
+  assert.match(editorController, /commitSource\(source:/)
   assert.match(editorController, /this\.session && !this\.session\.disposed/)
   // Whole-buffer structural replacements funnel through it (direct replace
   // survives only as the no-session fallback inside those two call sites)…
@@ -286,8 +288,8 @@ test("structural source operations commit through the bound session", async () =
 })
 
 test("document reload reapplies editor preferences and readiness follows connection", async () => {
-  const controller = await read("apps/web/app/javascript/controllers/editor_controller.js")
-  const load = controller.slice(controller.indexOf("  loadDocument(source)"), controller.indexOf("  setExternalValue(value)"))
+  const controller = await read("packages/editor-runtime/src/controllers/editor_controller.ts")
+  const load = controller.slice(controller.indexOf("  loadDocument(source:"), controller.indexOf("  setExternalValue(value:"))
   for (const method of ["vimCompartment.reconfigure", "applyLineNumbers", "applyCursorStyle", "refreshFrontmatterRange", "setEditingMode", "syncMetadataToggle"]) {
     assert.ok(load.includes(method), `New documents must reapply ${method}`)
   }

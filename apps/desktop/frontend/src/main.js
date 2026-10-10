@@ -14,11 +14,9 @@ import { createTauriHost } from "./tauri-host.js"
 import { createTauriAuthoringTransport } from "./tauri-authoring-transport.js"
 import { createDesktopUpdaterSeam } from "./update-flow.js"
 import builtInRegistry from "../../../../apps/web/app/javascript/data/default_authoring_registry.json"
-import { mergeAuthoringRegistryEntries } from "lib/authoring_registry_merge"
+import { mergeAuthoringRegistryEntries, registerEditorRuntime, startFileLibraryApplication } from "@elef/editor-runtime"
 import { createQuietSavePolicy } from "./quiet_save_policy.js"
 import { desktopAuthoringRegistry, loadDesktopAuthoringRegistry } from "./authoring-registry-loader.js"
-import { loadEditorRuntime } from "lib/editor_runtime"
-import { startFileLibraryApplication } from "lib/file_library_application"
 import "../../../../apps/web/app/assets/stylesheets/application.css"
 
 const fileLibrary = createFileLibraryTransport({ invoke })
@@ -62,5 +60,5 @@ startFileLibraryApplication({
   }),
   updaterSeam: createDesktopUpdaterSeam({ check: () => checkUpdater({ timeout: 10_000 }) }),
   quietSavePolicy: createQuietSavePolicy(),
-  loadEditorRuntime
+  registerEditorRuntime
 })

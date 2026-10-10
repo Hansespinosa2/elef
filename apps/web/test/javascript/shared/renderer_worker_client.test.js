@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { createRendererClient } from "../../../app/javascript/lib/renderer_worker_client.js"
+import { createRendererClient } from "@elef/editor-runtime/test-internals"
 
 class FakeWorker {
   static last = null

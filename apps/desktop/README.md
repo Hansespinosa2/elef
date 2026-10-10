@@ -1,6 +1,6 @@
 # Elef Desktop
 
-This directory contains the Tauri shell and file-backed runtime. Shared product UI and behavior live under apps/web/app/; the desktop build consumes them. See the [architecture map](../../docs/architecture.md) and [development guide](../../docs/development.md).
+This directory contains the Tauri shell and file-backed runtime. Shared product UI and behavior live in `packages/client` (React) and `packages/editor-runtime` (Stimulus editor shell); both hosts consume those packages through their public entries, and no host imports from the other host. See the [architecture map](../../docs/architecture.md) and [development guide](../../docs/development.md).
 
 ## Local use
 
@@ -13,7 +13,7 @@ npm run build
 npm run tauri:dev
 ~~~
 
-These commands run from apps/desktop/frontend. The configured Tauri dev and production hooks build the Rails-owned frontend before opening the app.
+These commands run from apps/desktop/frontend. The configured Tauri dev and production hooks build the shared packages before opening the app.
 
 ## Structure
 

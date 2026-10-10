@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { parseHTML } from "linkedom"
-import { buildPreviewRequestBody } from "../../../app/javascript/lib/preview_request_body.js"
+import { buildPreviewRequestBody } from "@elef/editor-runtime/test-internals"
 
 test("preview requests include only Rails preview attributes, not the full editor form", () => {
   const { document } = parseHTML(`<form>

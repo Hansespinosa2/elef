@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 
 import { createSaveFlow } from "@elef/client"
-import { applyEditorSource } from "../../../../../packages/editor-runtime/dist/lib/editor_source.js"
+import { applyEditorSource } from "@elef/editor-runtime/test-internals"
 
 const hash = letter => letter.repeat(64)
 

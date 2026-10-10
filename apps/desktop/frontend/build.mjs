@@ -5,27 +5,14 @@ import { build } from "esbuild"
 
 const frontendRoot = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(frontendRoot, "../../..")
-const sharedFrontendRoot = path.join(repoRoot, "apps/web/app/javascript")
 const e2eBuild = process.env.ELEF_E2E_BUILD === "1"
 const output = path.join(frontendRoot, e2eBuild ? "dist-e2e" : "dist")
 const assets = path.join(output, "assets")
-const sharedModuleAliases = {
-  "#elef/preview-sanitizer": "lib/preview_sanitizer.js"
-}
-
 await rm(output, { recursive: true, force: true })
 await mkdir(assets, { recursive: true })
 const appSourceAlias = {
   name: "app-source-alias",
   setup(context) {
-    context.onResolve({ filter: /^#elef\// }, ({ path: importPath }) => {
-      const sharedModule = sharedModuleAliases[importPath]
-      if (!sharedModule) return
-      return { path: path.join(sharedFrontendRoot, sharedModule) }
-    })
-    context.onResolve({ filter: /^(?:controllers|lib)\// }, ({ path: importPath }) => ({
-      path: path.join(sharedFrontendRoot, `${importPath}.js`)
-    }))
     context.onResolve({ filter: /^[^./]/ }, async (args) => {
       if (args.pluginData?.desktopSharedDependencyResolution) return
       // Monorepo packages are first-party source, not declared dependencies:
@@ -49,12 +36,12 @@ const appSourceAlias = {
         if (!entry) throw new Error(`Workspace package @elef/${workspaceMatch[1]} has no export ${subpath}.`)
         return { path: path.join(repoRoot, "packages", workspaceMatch[1], entry) }
       }
-      const relativeImporter = path.relative(sharedFrontendRoot, args.importer)
+      // Bare third-party imports inside shared packages (Stimulus, CodeMirror,
+      // KaTeX…) resolve from the desktop's own node_modules, which declares
+      // them.
       const relativePackageImporter = path.relative(path.join(repoRoot, "packages"), args.importer)
-      const sharedImporter = !(relativeImporter.startsWith("..") || path.isAbsolute(relativeImporter))
-        || !(relativePackageImporter.startsWith("..") || path.isAbsolute(relativePackageImporter))
+      const sharedImporter = !(relativePackageImporter.startsWith("..") || path.isAbsolute(relativePackageImporter))
       if (!sharedImporter) return
-      if (args.path.startsWith("controllers/") || args.path.startsWith("lib/")) return
 
       const result = await context.resolve(args.path, {
         resolveDir: frontendRoot,
@@ -63,12 +50,12 @@ const appSourceAlias = {
       })
       if (result.errors.length) {
         const details = result.errors.map((error) => error.text).join("\n")
-        throw new Error(`Rails-owned frontend dependency ${args.path} is unavailable to the desktop build:\n${details}`)
+        throw new Error(`Shared-package dependency ${args.path} is unavailable to the desktop build:\n${details}`)
       }
       const resolved = result.path
       const relativeDependency = path.relative(path.join(frontendRoot, "node_modules"), resolved)
       if (relativeDependency.startsWith("..") || path.isAbsolute(relativeDependency)) {
-        throw new Error(`Rails-owned frontend dependency ${args.path} must be declared by apps/desktop/frontend/package.json.`)
+        throw new Error(`Shared-package dependency ${args.path} must be declared by apps/desktop/frontend/package.json.`)
       }
       return { path: resolved }
     })

@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import { readFile } from "node:fs/promises"
 
-const moduleSource = await readFile(new URL("../../app/javascript/controllers/editor_markdown.js", import.meta.url), "utf8")
+const moduleSource = await readFile(new URL("../../../../packages/editor-runtime/dist/controllers/editor_markdown.js", import.meta.url), "utf8")
 assert.match(moduleSource, /^import katex from "katex"/)
 assert.doesNotMatch(moduleSource, /globalThis\.katex/)
 const source = moduleSource.replace('import katex from "katex"', "const katex = { renderToString: () => '<span class=katex>x^2</span>' }")

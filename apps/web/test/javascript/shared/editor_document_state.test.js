@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import { EditorState } from "@codemirror/state"
 import { history, undo } from "@codemirror/commands"
-import { createDocumentState } from "../../../app/javascript/lib/editor_document_state.js"
+import { createDocumentState } from "@elef/editor-runtime/test-internals"
 
 test("opening another deck creates a fresh undo boundary", () => {
   let state = createDocumentState(EditorState, "deck A", [history()]).state

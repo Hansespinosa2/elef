@@ -1,11 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { parseHTML } from "linkedom"
-import {
-  applyDesktopFeatureFlags,
-  desktopFeatureEnabled,
-  DESKTOP_FEATURE_FLAGS
-} from "../../../app/javascript/lib/feature_flags.js"
+import { applyDesktopFeatureFlags, desktopFeatureEnabled, DESKTOP_FEATURE_FLAGS } from "@elef/editor-runtime/test-internals"
 
 test("revision and lineage features default off for desktop", () => {
   assert.deepEqual(DESKTOP_FEATURE_FLAGS, {

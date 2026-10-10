@@ -1,5 +1,5 @@
 import "./renderer.bundle.js"
-import { renderWorkerMessage } from "lib/renderer_worker"
+import { renderWorkerMessage } from "@elef/editor-runtime"
 
 const { renderPreview, renderMarkdownBlock } = self.ElefRenderer
 

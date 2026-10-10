@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { formatLineNumber } from "../../../app/javascript/lib/vim_line_numbers.js"
+import { formatLineNumber } from "@elef/editor-runtime/test-internals"
 
 const state = {
   doc: {

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { createDocumentGraphCache } from "../../../app/javascript/lib/document_graph_cache.js"
+import { createDocumentGraphCache } from "@elef/editor-runtime/test-internals"
 
 function deferred() {
   let resolve

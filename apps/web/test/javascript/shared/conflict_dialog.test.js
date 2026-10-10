@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { parseHTML } from "linkedom"
-import { presentConflictDialog } from "../../../app/javascript/lib/conflict_dialog.js"
+import { presentConflictDialog } from "@elef/editor-runtime/test-internals"
 
 test("shared conflict presentation fills host markup with text and preserves its native dialog state", () => {
   const { document } = parseHTML(`

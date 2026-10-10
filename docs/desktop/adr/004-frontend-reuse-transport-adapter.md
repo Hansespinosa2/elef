@@ -1,10 +1,15 @@
 # ADR-004: Reuse the Rails-owned frontend through desktop adapters
 
-- Status: Proposed
-- Date: 2026-09-30 (revised 2026-10-01)
+- Status: Superseded by [ADR-011](011-neutral-editor-runtime-package.md)
+- Date: 2026-09-30 (revised 2026-10-01; superseded 2026-10-10)
 - Decider: Andres
 - Confidence: medium-high
-- Accepted when: supported shared authoring flows pass in Rails and the real desktop app
+
+> Superseded: shared product UI no longer lives under Rails `app/`.
+> Shared interactive UI lives in `packages/client` (React) and
+> `packages/editor-runtime` (Stimulus editor shell); both hosts consume
+> those packages and no host imports from the other host. See ADR-011 for
+> the v9 steady state. The record below is kept for history.
 
 ## Context
 

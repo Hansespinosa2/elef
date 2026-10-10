@@ -2,9 +2,9 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import { readFile } from "node:fs/promises"
 
-const source = (await readFile(new URL("../../app/javascript/controllers/document_link_palette_controller.js", import.meta.url), "utf8"))
+const source = (await readFile(new URL("../../../../packages/editor-runtime/dist/controllers/document_link_palette_controller.js", import.meta.url), "utf8"))
   .replace('import { Controller } from "@hotwired/stimulus"', "class Controller {}")
-  .replace('import { editorFor } from "lib/editor_controller_lookup"', "const editorFor = () => null")
+  .replace('import { editorFor } from "../lib/editor_controller_lookup.js"', "const editorFor = () => null")
 const palette = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`)
 
 const { insideCode, insideInlineCode, rankLinkTitles, scoreLinkTitle } = palette

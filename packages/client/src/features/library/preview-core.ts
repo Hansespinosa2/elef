@@ -9,7 +9,9 @@
 // A failed load degrades to the card's "unavailable" state, never a crash.
 export { renderPreviewCore } from "@elef/renderer";
 export type {
-  ClientPreviewInput,
-  ClientPreviewOutput,
-  ClientPreviewStyle,
+  RendererPreviewInput as ClientPreviewInput,
+  RendererPreviewOutput as ClientPreviewOutput,
 } from "@elef/renderer";
+// ClientPreviewStyle keeps this entry's shipped type names stable; the shape
+// itself is work-model's EditorStyle, owned there.
+export type { EditorStyle as ClientPreviewStyle } from "@elef/work-model";

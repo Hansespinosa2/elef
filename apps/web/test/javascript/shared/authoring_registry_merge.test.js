@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import { readFile } from "node:fs/promises"
 import test from "node:test"
-import { mergeAuthoringRegistryEntries } from "../../../app/javascript/lib/authoring_registry_merge.js"
+import { mergeAuthoringRegistryEntries } from "@elef/editor-runtime/test-internals"
 
 const builtIns = JSON.parse(await readFile(new URL("../../../app/javascript/data/default_authoring_registry.json", import.meta.url), "utf8"))
 

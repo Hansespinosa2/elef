@@ -1,7 +1,7 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 import { renderMarkdownBlock as renderBlockCore, renderPreviewCore } from "@elef/renderer"
-import { editorChrome } from "../../app/javascript/lib/preview_chrome.js"
+import { editorChrome } from "@elef/editor-runtime/editor-chrome"
 
 // Composed output: bare projection + editor chrome, exactly as the shipped
 // bundle serves it. Chrome assertions live here (not in the package) because

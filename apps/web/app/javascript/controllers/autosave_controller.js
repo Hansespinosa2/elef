@@ -1,9 +1,9 @@
 import { Controller } from "@hotwired/stimulus"
 import { createWorkSession } from "@elef/client"
-import { editorFor } from "lib/editor_controller_lookup"
-import { applyEditorSource } from "lib/editor_source"
-import { waitForEditorController } from "lib/editor_ready"
-import { presentConflictDialog } from "lib/conflict_dialog"
+import { editorFor } from "@elef/editor-runtime"
+import { applyEditorSource } from "@elef/editor-runtime"
+import { waitForEditorController } from "@elef/editor-runtime"
+import { presentConflictDialog } from "@elef/editor-runtime"
 
 const DATABASE_NAME = "elef-drafts"
 const DATABASE_VERSION = 1

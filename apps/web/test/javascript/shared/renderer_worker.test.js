@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { renderWorkerMessage } from "../../../app/javascript/lib/renderer_worker.js"
+import { renderWorkerMessage } from "@elef/editor-runtime/test-internals"
 
 test("renderer worker returns the renderer result with its request id", () => {
   const input = { source: "# Shared" }

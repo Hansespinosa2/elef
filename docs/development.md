@@ -49,6 +49,7 @@ Rails suites need ambient `PGPASSWORD` for the local PostgreSQL test database (s
 |---|---|
 | Rails-owned JavaScript (host adapters, web-only behavior) | npm run test:javascript |
 | Host-neutral client UI or behavior | npm test --prefix packages/client |
+| Shared Stimulus editor shell (`packages/editor-runtime`) | npm run typecheck --prefix packages/editor-runtime, then npm run test:javascript |
 | Pure Work semantics or transforms | npm test --prefix packages/work-model |
 | Desktop transport/native frontend adapter | npm test --prefix apps/desktop/frontend |
 | E2E harness helpers | npm run test:unit --prefix apps/desktop/e2e |

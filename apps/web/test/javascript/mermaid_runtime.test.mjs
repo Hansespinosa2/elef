@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { mermaidAssetUrl } from "../../app/javascript/controllers/mermaid_runtime.js"
+import { mermaidAssetUrl } from "@elef/editor-runtime/test-internals"
 
 test("Mermaid asset resolution prefers the Rails importmap", () => {
   globalThis.document = {
