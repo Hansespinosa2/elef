@@ -438,7 +438,7 @@
       "selected_gate_path": "docs/refactor/execution/phase-12-gate.json"
     }
   ],
-  "next_action": "Phase 12 CHECK round 2: request independent review of repair candidate d3be9239.",
+  "next_action": "Phase 12 ACT round 2: collect FAIL report (P12-F03), return to DO for repair.",
   "pending_human_gates": [
     {
       "detail": "production signing/updater keys and offline backups (constitution \u00a78 gate class 1; owner-held release material)",
@@ -463,6 +463,6 @@
   ],
   "phase_base_sha": "15e95a91d8683d32459cfff82b88caa812ff2a22",
   "phase_contract_sha256": "626b04626484ffda893825753e01de5bf4dcd4fe5c7f3b93ca44554ba3311386",
-  "phase_state": "CHECK",
+  "phase_state": "ACT",
   "review_round": 2
 }
