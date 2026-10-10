@@ -11,6 +11,7 @@ import {
   publishAur,
   publishLinuxAsset,
   publishMacos,
+  recordFailedGateMerge,
   recordPlatformFailure,
   reconcileMain,
   safeMacosManifest,
@@ -23,6 +24,58 @@ const SHA1 = "a".repeat(40)
 const SHA2 = "b".repeat(40)
 const SHA3 = "c".repeat(40)
 const NOW = "2026-10-09T12:00:00.000Z"
+
+test("failure-only bootstrap records one failed merge without reserving or publishing anything", () => {
+  const initial = createLedger({ lastReconciledMain: SHA1 })
+  const mainHistory = [SHA1, SHA2]
+  const recorded = recordFailedGateMerge(initial, {
+    mainHistory,
+    sha: SHA2,
+    pr: 107,
+    expectedRevision: initial.revision,
+    at: NOW
+  })
+
+  assert.equal(recorded.last_reconciled_main, SHA1)
+  assert.deepEqual(recorded.reserved_versions, [])
+  assert.deepEqual(recorded.releases, [])
+  assert.equal(recorded.processed_merges.length, 1)
+  assert.deepEqual(recorded.processed_merges[0], {
+    sha: SHA2,
+    pr: 107,
+    main_order: 1,
+    gate: "failed_gate",
+    version: null,
+    tag: null,
+    processed_at: NOW,
+    failure_notification_acknowledged: false
+  })
+  assert.equal(isRecordedFailedGate(recorded, SHA2), true)
+  assert.deepEqual(pendingFailedGateNotifications(recorded), [SHA2])
+
+  const retry = recordFailedGateMerge(recorded, {
+    mainHistory,
+    sha: SHA2,
+    pr: 107,
+    expectedRevision: recorded.revision,
+    at: NOW
+  })
+  assert.deepEqual(retry, recorded)
+  assert.throws(() => recordFailedGateMerge(recorded, {
+    mainHistory,
+    sha: SHA1,
+    pr: 107,
+    expectedRevision: recorded.revision,
+    at: NOW
+  }), /current main head/)
+  assert.throws(() => recordFailedGateMerge(recorded, {
+    mainHistory,
+    sha: SHA2,
+    pr: 108,
+    expectedRevision: recorded.revision,
+    at: NOW
+  }), /different immutable result/)
+})
 
 test("reconciliation reserves releases in first-parent main order and ignores duplicate events", () => {
   const start = createLedger()

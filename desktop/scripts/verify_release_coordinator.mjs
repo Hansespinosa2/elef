@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process"
 import path from "node:path"
 
 import { GitHubReleaseApi } from "../release/github-api.mjs"
-import { assertAuthorizedMainCoordinatorDispatch, assertAuthorizedReleaseTagDispatch, assertBootstrapFailedGateRecorderRevision, isExactFailedMainReconcileDispatch, isExactFailedMainWorkflowRun, latestTrustedToolingSha, selectTrustedCoordinatorRevision, assertTrustedCoordinatorRevision } from "../release/coordinator-trust.mjs"
+import { assertAuthorizedMainCoordinatorDispatch, assertAuthorizedReleaseTagDispatch, assertBootstrapFailedGateRecorderRevision, isExactFailedMainReconcileDispatch, isExactFailedMainWorkflowRun, isExactMainReconciliationSchedule, latestTrustedToolingSha, selectTrustedCoordinatorRevision, assertTrustedCoordinatorRevision } from "../release/coordinator-trust.mjs"
 import { parseLedger } from "../release/ledger.mjs"
 
 const [mode, mainCheckoutArgument, pagesCheckoutArgument] = process.argv.slice(2)
@@ -92,9 +92,18 @@ const failedReconcileDispatch = isExactFailedMainReconcileDispatch({
   workflowSha: process.env.DESKTOP_WORKFLOW_SHA,
   coordinatorSha
 })
+const scheduledMainReconcile = isExactMainReconciliationSchedule({
+  mode,
+  eventName,
+  ref: process.env.GITHUB_REF,
+  refType: process.env.GITHUB_REF_TYPE,
+  refName: process.env.GITHUB_REF_NAME,
+  workflowSha: process.env.DESKTOP_WORKFLOW_SHA,
+  coordinatorSha
+})
 
 let trusted
-const bootstrapFailureOnly = (failedWorkflowRun || failedReconcileDispatch) &&
+const bootstrapFailureOnly = (failedWorkflowRun || failedReconcileDispatch || scheduledMainReconcile) &&
   !latestTrustedToolingSha(ledger) &&
   await github.gateForMainSha(coordinatorSha) === "failed_gate"
 

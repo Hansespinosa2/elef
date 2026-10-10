@@ -111,6 +111,16 @@ export function isExactFailedMainReconcileDispatch({ mode, eventName, action, ac
     workflowSha === coordinatorSha
 }
 
+/** Scheduled repair may bootstrap only an exact workflow revision on protected main. */
+export function isExactMainReconciliationSchedule({ mode, eventName, ref, refType, refName, workflowSha, coordinatorSha }) {
+  return mode === "current" &&
+    eventName === "schedule" &&
+    ref === "refs/heads/main" &&
+    refType === "branch" &&
+    refName === "main" &&
+    workflowSha === coordinatorSha
+}
+
 /**
  * A failed first Gate A has no previously passed release tooling revision to
  * trust. The protected-main owner review is the bootstrap trust anchor for a

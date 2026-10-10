@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 
 import { createLedger, reconcileMain } from "./ledger.mjs"
-import { assertAuthorizedMainCoordinatorDispatch, assertAuthorizedReleaseTagDispatch, assertBootstrapFailedGateRecorderRevision, assertMainReviewProtection, assertTrustedCoordinatorRevision, isExactFailedMainReconcileDispatch, isExactFailedMainWorkflowRun, latestTrustedToolingSha, selectTrustedCoordinatorRevision } from "./coordinator-trust.mjs"
+import { assertAuthorizedMainCoordinatorDispatch, assertAuthorizedReleaseTagDispatch, assertBootstrapFailedGateRecorderRevision, assertMainReviewProtection, assertTrustedCoordinatorRevision, isExactFailedMainReconcileDispatch, isExactFailedMainWorkflowRun, isExactMainReconciliationSchedule, latestTrustedToolingSha, selectTrustedCoordinatorRevision } from "./coordinator-trust.mjs"
 
 const SHA0 = "0".repeat(40)
 const SHA1 = "1".repeat(40)
@@ -212,6 +212,30 @@ test("owner reconcile dispatch can replay a failed current-main Gate A but minor
     { coordinatorSha: SHA2 }
   ]) {
     assert.equal(isExactFailedMainReconcileDispatch({ ...dispatch, ...change }), false, JSON.stringify(change))
+  }
+})
+
+test("scheduled main reconciliation can bootstrap only the exact current-main workflow revision", () => {
+  const schedule = {
+    mode: "current",
+    eventName: "schedule",
+    ref: "refs/heads/main",
+    refType: "branch",
+    refName: "main",
+    workflowSha: SHA1,
+    coordinatorSha: SHA1
+  }
+  assert.equal(isExactMainReconciliationSchedule(schedule), true)
+  for (const change of [
+    { mode: "latest" },
+    { eventName: "workflow_run" },
+    { ref: "refs/heads/feature" },
+    { refType: "tag" },
+    { refName: "dev" },
+    { workflowSha: SHA2 },
+    { coordinatorSha: SHA2 }
+  ]) {
+    assert.equal(isExactMainReconciliationSchedule({ ...schedule, ...change }), false, JSON.stringify(change))
   }
 })
 

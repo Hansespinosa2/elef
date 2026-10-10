@@ -154,17 +154,28 @@ jobs:
       control_versions: ${{ github.event.inputs.versions || '' }}
     permissions:
       actions: read
-      contents: write
+      contents: read
       pull-requests: read
     steps:
       - name: Check out verified release tooling
+        if: needs.verify-coordinator.outputs.failure_only != 'true'
         uses: actions/checkout@v7
         with:
           ref: ${{ needs.verify-coordinator.outputs.trusted_tool_sha }}
           path: tooling
           persist-credentials: false
 
+      - name: Check out the exact failed main revision for the narrow bootstrap recorder
+        if: needs.verify-coordinator.outputs.failure_only == 'true'
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.verify-coordinator.outputs.failure_sha }}
+          path: source
+          fetch-depth: 0
+          persist-credentials: false
+
       - name: Check out current main history as reconciliation data
+        if: needs.verify-coordinator.outputs.failure_only != 'true'
         uses: actions/checkout@v7
         with:
           ref: main
@@ -215,7 +226,16 @@ jobs:
           DESKTOP_RELEASE_REASON: ${{ github.event.inputs.reason }}
           DESKTOP_RELEASE_FAILURE_ONLY: ${{ needs.verify-coordinator.outputs.failure_only }}
           DESKTOP_RELEASE_FAILURE_SHA: ${{ needs.verify-coordinator.outputs.failure_sha }}
-        run: node tooling/desktop/scripts/publish_desktop_release_state.mjs pages source
+          DESKTOP_GATE_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          DESKTOP_TRIGGER_EVENT: ${{ github.event.workflow_run.event }}
+          DESKTOP_TRIGGER_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          DESKTOP_TRIGGER_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          if [[ "$DESKTOP_RELEASE_FAILURE_ONLY" == "true" ]]; then
+            node source/desktop/scripts/record_desktop_bootstrap_failure.mjs pages source
+          else
+            node tooling/desktop/scripts/publish_desktop_release_state.mjs pages source
+          fi
 
   notify-failed-gate:
     name: Notify on terminal Gate A failures
@@ -235,9 +255,18 @@ jobs:
       issues: write
     steps:
       - name: Check out trusted release tooling
+        if: needs.reconcile.outputs.failure_only != 'true'
         uses: actions/checkout@v7
         with:
           ref: ${{ needs.reconcile.outputs.trusted_tool_sha }}
+          path: tooling
+          persist-credentials: false
+
+      - name: Check out exact failure-only notification tooling
+        if: needs.reconcile.outputs.failure_only == 'true'
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.reconcile.outputs.failure_sha }}
           path: tooling
           persist-credentials: false
 

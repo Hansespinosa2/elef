@@ -115,6 +115,46 @@ export function reconcileMain(ledger, { mainHistory, merges, recoveryEvents = []
   return next
 }
 
+/** Record one terminal failed Gate A without reconciling, reserving, or advancing the main watermark. */
+export function recordFailedGateMerge(ledger, { mainHistory, sha, pr, expectedRevision, at = new Date().toISOString() } = {}) {
+  validateLedger(ledger)
+  assertRevision(ledger, expectedRevision)
+  assert(Array.isArray(mainHistory) && mainHistory.length > 0, "failed-gate recording needs first-parent main history")
+  assert(mainHistory.at(-1) === sha, "failed-gate recording must target the current main head")
+  assert(SHA_PATTERN.test(sha), "failed-gate recording needs a commit SHA")
+  assert(Number.isInteger(pr) && pr > 0, "failed-gate recording needs its merged pull request number")
+  assertNonempty(at, "failed-gate recording needs a timestamp")
+  assert(Number.isFinite(Date.parse(at)), "failed-gate recording needs a valid timestamp")
+  const mainOrder = mainHistory.indexOf(sha)
+  assert(mainOrder >= 0 && mainHistory.indexOf(sha, mainOrder + 1) < 0, "failed-gate SHA must appear once in main history")
+  const watermarkIndex = mainHistory.indexOf(ledger.last_reconciled_main)
+  assert(watermarkIndex >= 0 && watermarkIndex <= mainOrder, "failed-gate recording needs a valid main watermark")
+
+  const previous = ledger.processed_merges.find(merge => merge.sha === sha)
+  if (previous) {
+    assert(previous.pr === pr && previous.gate === "failed_gate" && previous.version === null && previous.tag === null,
+      `main SHA ${sha} already has a different immutable result`)
+    return clone(ledger)
+  }
+  assert(!ledger.processed_merges.some(merge => merge.pr === pr), `PR #${pr} already has a different main merge SHA`)
+  assert(watermarkIndex !== mainOrder, "main watermark already includes this SHA without its failed-gate record")
+
+  const next = clone(ledger)
+  next.processed_merges.push({
+    sha,
+    pr,
+    main_order: mainOrder,
+    gate: "failed_gate",
+    version: null,
+    tag: null,
+    processed_at: at,
+    failure_notification_acknowledged: false
+  })
+  next.revision += 1
+  validateLedger(next)
+  return next
+}
+
 /** Return terminal Gate A failures whose owner alert has not been acknowledged. */
 export function pendingFailedGateNotifications(ledger) {
   validateLedger(ledger)
