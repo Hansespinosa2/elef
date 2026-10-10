@@ -45,7 +45,7 @@ class WebEditorUi {
 
   async assertSlidePositionGrammar() {
     const inspect = () => this.page.evaluate(() => {
-      const root = document.querySelector("#desktop-preview")
+      const root = document.querySelector(".editor-projection.preview-pane")
       const slide = root?.querySelector(".slide")
       const content = slide?.querySelector(".slide-content")
       const group = slide?.querySelector(".slide-middle-group")
@@ -77,7 +77,7 @@ class WebEditorUi {
 
   async assertColumnSlidePositionDocking() {
     const inspect = () => this.page.evaluate(() => {
-      const slide = document.querySelector("#desktop-preview .slide")
+      const slide = document.querySelector(".editor-projection.preview-pane .slide")
       const regions = [...(slide?.querySelectorAll(".slide-region") || [])]
       const left = regions[0]
       const group = left?.querySelector(".slide-middle-group.flush-bottom")
