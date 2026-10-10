@@ -863,7 +863,10 @@ class WebLibraryUi {
     })
     const action = await this.openCardAction(card, "Present")
     await Promise.all([
-      this.page.waitForURL(/\/presentations\/\d+\/present$/, { timeout: 30_000 }),
+      this.page.waitForURL(/\/presentations\/\d+\/present$/, {
+        timeout: 30_000,
+        waitUntil: "domcontentloaded"
+      }),
       action.click()
     ])
     await expect(this.page.locator(".presentation-stage")).toBeVisible()
