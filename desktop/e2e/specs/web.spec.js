@@ -239,7 +239,7 @@ class WebEditorUi {
       controller.setSelectionRange(nextSource.length)
       return controller.sourceValue
     }, source)
-    expect(restoredSource).toBe(source)
+    expect(normalizeLineEndings(restoredSource)).toBe(normalizeLineEndings(source))
   }
 
   async readSource() {

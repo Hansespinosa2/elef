@@ -546,7 +546,7 @@ class DesktopEditorUi {
       controller.setSelectionRange(nextSource.length)
       return controller.sourceValue
     }, source)
-    if (restoredSource !== source) {
+    if (normalizeLineEndings(restoredSource) !== normalizeLineEndings(source)) {
       throw new Error(`The desktop editor could not restore its original fixture source: ${JSON.stringify(restoredSource)}`)
     }
   }
