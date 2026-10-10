@@ -403,7 +403,7 @@ Manual CI run [38034571864](https://github.com/Hansespinosa2/elef/actions/runs/3
 
 Run `38034571864` used `workflow_dispatch`. The authorization and attestation jobs were skipped as designed, so it is diagnostic evidence, not a PR-attested success. The `96b6f24` PR head had a successful `pull_request_target` hygiene run but no `pull_request` CI run. A genuine PR run on the fixed head is still needed to validate both native platforms and attest the tested tree.
 
-The final adversarial review of pushed commit `1950a4b` found no new defect in the palette-rebinding or native-key changes. I independently verified its two findings: the live CI run list has no run for current PR head `1950a4b`, and the unchanged tag-triggered release workflow can publish without calling the authorization verifier. The PR checks currently show only hygiene (`description` and `normalize`) passing; the required CI and attestation remain absent.
+The final adversarial review of pushed code commit `1950a4b` found no new defect in the palette-rebinding or native-key changes. I independently verified its two findings: the live CI run list has no PR-triggered CI run for the code fix or subsequent report-only commits, and the unchanged tag-triggered release workflow can publish without calling the authorization verifier. The latest PR checks show only hygiene (`description` and `normalize`) passing; the required CI and attestation remain absent.
 
 ### System-test parallelism audit
 
