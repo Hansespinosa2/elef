@@ -100,6 +100,16 @@ test("pptx engine renders slide markup and transfer blobs", async () => {
   assert.ok(html.includes("1 / 1"));
   assert.equal(blockMarkup({ position: { horizontal: "center", vertical: "top" }, html: "<p>Hi</p>" }),
     '<div class="slide-block position-center position-top"><p>Hi</p></div>');
+  assert.equal(blockMarkup({ position: null, html: "<p>Hi</p>" }),
+    '<div class="slide-block position-left position-top"><p>Hi</p></div>');
+
+  const firstSlide = model.slides[0];
+  assert.ok(firstSlide);
+  const titled = slideMarkup(
+    { ...firstSlide, title_position: { horizontal: "start", vertical: "end" } },
+    model,
+  );
+  assert.match(titled, /<div class="slide-title slide-block position-start position-top"><h1>Title<\/h1><\/div>/);
 
   const blob = dataUriToBlob("data:text/plain;base64,aGk=");
   assert.equal(blob.type, "text/plain");
@@ -107,6 +117,28 @@ test("pptx engine renders slide markup and transfer blobs", async () => {
 
   const svg = gradientBackground("dark");
   assert.ok(svg.startsWith("data:image/svg+xml;base64,"));
+});
+
+test("PPTX stage groups middle stacks, lanes, docking, and default positions", () => {
+  const model = testModel();
+  const base = model.slides[0];
+  assert.ok(base);
+  const markup = slideMarkup(
+    {
+      ...base,
+      title_html: null,
+      blocks: [
+        { html: "<h1>Title</h1>", position: { horizontal: "center", vertical: "middle" } },
+        { html: "<p>Subtitle</p>", position: null },
+        { html: "<p>Footer</p>", position: { horizontal: "right", vertical: "bottom" } },
+      ],
+    },
+    model,
+  );
+
+  assert.match(markup, /class="slide-middle-group flush-bottom"/);
+  assert.match(markup, /class="slide-bottom-lane"/);
+  assert.match(markup, /<div class="slide-block position-left position-top"><p>Subtitle<\/p><\/div>/);
 });
 
 test("pptx orchestration builds the blob and cleans the stage", async () => {

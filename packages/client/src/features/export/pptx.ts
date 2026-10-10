@@ -4,6 +4,7 @@
 // JSON endpoint, draft form posts) and the download button/status stay
 // host-owned in the web export adapter. PPTX byte output must not drift; see
 // apps/web/test/system/pptx_export_test.rb and the engine unit tests.
+import { slidePositionClasses, slidePositionLayout } from "@elef/work-model/slide-position-layout"
 
 export type PptxConstructor = new () => any
 
@@ -202,10 +203,10 @@ export function slideMarkup(slide: PptxSlide | undefined, model: PptxModel): str
     ? `<div class="slide-margin slide-margin-top" aria-hidden="true">${margin.subsection ? `<span class="slide-margin-subsection">${escapeHtml(slide.subsection || "")}</span>` : ""}${margin.section ? `<span class="slide-margin-section">${escapeHtml(slide.section || "")}</span>` : ""}</div>`
     : ""
   const titlePosition = slide.title_position
-  const titleClasses = titlePosition ? `position-${titlePosition.horizontal} position-${titlePosition.vertical}` : ""
+  const titleClasses = slidePositionClasses(titlePosition, slide.title_html ? "top" : null)
   const content = slide.title_html
-    ? `<div class="slide-content"><div class="slide-title slide-block ${titleClasses}">${slide.title_html}</div><div class="slide-regions">${slide.regions.map((region) => `<div class="slide-region">${region.map(blockMarkup).join("")}</div>`).join("")}</div></div>`
-    : `<div class="slide-content">${slide.blocks.length ? slide.blocks.map(blockMarkup).join("") : '<p class="empty-slide">Empty slide</p>'}</div>`
+    ? `<div class="slide-content"><div class="slide-title slide-block ${titleClasses}">${slide.title_html}</div><div class="slide-regions">${slide.regions.map((region) => `<div class="slide-region">${positionedBlockMarkup(region)}</div>`).join("")}</div></div>`
+    : `<div class="slide-content">${slide.blocks.length ? positionedBlockMarkup(slide.blocks) : '<p class="empty-slide">Empty slide</p>'}</div>`
   const footnote = margin.footnote && slide.footnote_html
     ? `<span class="slide-margin-footnote"><span class="slide-margin-footnote-marker">*</span><span class="slide-margin-footnote-text">${slide.footnote_html}</span></span>`
     : ""
@@ -216,9 +217,27 @@ export function slideMarkup(slide: PptxSlide | undefined, model: PptxModel): str
 }
 
 export function blockMarkup(block: PptxRegionBlock): string {
-  const position = block.position
-  const classes = position ? `position-${position.horizontal} position-${position.vertical}` : ""
+  const classes = slidePositionClasses(block.position)
   return `<div class="slide-block ${classes}">${block.html}</div>`
+}
+
+function positionedBlockMarkup(blocks: Array<PptxRegionBlock>): string {
+  const placement = slidePositionLayout(blocks)
+  return placement.entries.map((entry) => {
+    const grouped = entry.type !== "block"
+    const content = blocks.slice(entry.start, entry.end).map((block, offset) => {
+      const index = entry.start + offset
+      const vertical = placement.verticals[index] ?? "top"
+      const position = block.position
+        ? { ...block.position, vertical }
+        : { horizontal: "left", vertical }
+      const markup = blockMarkup({ ...block, position })
+      return grouped ? `<div class="slide-block-item">${markup}</div>` : markup
+    }).join("")
+    if (entry.type === "middle") return `<div class="slide-middle-group${entry.flushBottom ? " flush-bottom" : ""}">${content}</div>`
+    if (entry.type === "bottom") return `<div class="slide-bottom-lane">${content}</div>`
+    return content
+  }).join("")
 }
 
 const HTML_ESCAPES: Record<string, string> = {
