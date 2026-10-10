@@ -2,18 +2,30 @@
 
 **Reviewed:** 2026-10-10, read-only.
 
-**Release branch:** `feat/desktop-release-constitution`, PR [#147](https://github.com/Hansespinosa2/elef/pull/147), targeting `main`.
+**Release branch:** `feat/desktop-release-constitution`, PR [#147](https://github.com/Hansespinosa2/elef/pull/147), currently targeting `main`; owner-directed integration is Dev-first after #136.
 **Refactor branch:** [#136](https://github.com/Hansespinosa2/elef/pull/136), `feat/refactor-desktop-and-web`, targeting `dev`.
+
+## Addendum — Dev-first route and live recheck (2026-10-10)
+
+The owner clarified that #147 must wait for #136, then release work should enter `dev` and later reach `main` only in an owner-approved promotion. No merge is authorized now. This supersedes the earlier recommendation to keep #147 main-targeted through integration.
+
+The coordinator is compatible with that route. Its release workflow listens for completed CI on `main`, its CI gate tests the exact main push SHA, and its reconciler records approved PR merges from first-parent `main` history. Therefore the `dev` merge is an integration step; the later `dev`→`main` PR and its resulting main merge SHA are the release unit. `main` currently follows this promotion pattern: head `41d89fa` is PR #145 from `dev`. Use GitHub's merge-commit method for promotion, consistent with #145 and the one-PR/one-main-merge ledger model; do not rebase-merge the promotion because that places its individual commits on first-parent history.
+
+Live read-only recheck found #136 open and draft at head `83d7959b34e4041c7416d5d640eb1c7ef9f720a0`, based on old `dev` SHA `26d6ad247e5b55dfa63589d16af9a8f250f2c51c`. It was `mergeable=false` / `dirty`, about 130 commits behind current `dev` `769cc79028813d0d4fd0651952739d9008626847`, and 307 commits ahead of its base. Its visible checks were only PR-hygiene `description` and `normalize`; product Gate A was not demonstrated on that exact head. A read-only merge preview against current `dev` reported 98 conflict records. A separate combined refactor/release preview reported 172 records. These are preview conflict records, not a claim that each is a manual content conflict; no merge or rebase was attempted.
+
+The current #147 head was `f36294fcda99eb20d2cf2f777ae28dd7f826d580`, still open against `main`. Its checks were still running at the recheck. Do not rewrite or replay its release history now. After #136 is fully reviewed and merged into `dev`, fetch the actual resulting `dev` SHA, redo the merge preview against that exact SHA, merge that `dev` into the #147 integration head, resolve and test the combined tree, then retarget #147 to `dev` (or open a dev-based continuation PR if a base change makes the review unclear). This preserves commit ancestry without replaying the release branch's roughly 156 commits. Recalculate the merge topology and conflict set after #136 lands.
+
+The #136 blockers remain binding: its save/snapshot behavior must preserve the existing save/close contract, and its shared-code move must preserve the constitution's Rails ownership and Stable/Dev isolation requirements or be explicitly resolved by the owner before adoption. After an owner-approved merge of the integrated release work to `dev`, create an owner-reviewed `dev`→`main` promotion PR. Require all Gate A jobs on its exact resulting main SHA; only then may the coordinator reserve or publish a release.
+
+The GitHub App, Actions variables/secrets, branch rulesets, and Pages configuration are repository-level settings, so changing the code PR's base does not require recreating them. The update-only App bypass remains scoped to `gh-pages`; verify the Pages source is still the `gh-pages` root immediately before first publication (the earlier Settings UI showed a feature-branch source, while later API/readback reported `gh-pages`).
 
 ## Recommendation
 
-Do not rebase or merge #147 onto #136 now. Keep the release PR based on `main` and open for owner review. #136 is a draft with a dirty merge state, an unfinished final phase, and unresolved conflicts with the release contract. Continue only release work that does not duplicate or conflict with the active host/package moves. When #136 passes its own gates and its conflicts with this constitution have an explicit resolution, integrate by porting/reconciling the release work against the approved refactor result and rerun the combined release gate.
-
-Do not use the unmerged `dev` feature branch as the base of a `main`-targeted release PR. If product sequencing changes to `dev` first, decide that as an owner-approved target change and defer stable publication until the approved code reaches `main`.
+Wait for #136. Then integrate #147 once against the refactor as merged into `dev`, using a merge-based operation rather than replaying the release commits. After review and owner approval in `dev`, promote `dev` to `main` with an owner-approved merge-commit PR. Stable publication remains gated on the exact main promotion SHA and full post-merge Gate A.
 
 ## Branch state and size
 
-At review time, #136 was open and draft, with `mergeable=false` / `mergeable_state=dirty`, no review decision, base SHA `26d6ad247e5b55dfa63589d16af9a8f250f2c51c`, and head SHA `509043579cc3f33b716241756f984504816977d9`. Current `dev` was at `769cc79028813d0d4fd0651952739d9008626847`; the shared base was 130 commits behind current `dev`, while #136 had 306 commits beyond that base. Its latest commit reports eight known S1-skew failures.
+At the initial review snapshot, #136 was open and draft, with `mergeable=false` / `mergeable_state=dirty`, no review decision, base SHA `26d6ad247e5b55dfa63589d16af9a8f250f2c51c`, and head SHA `509043579cc3f33b716241756f984504816977d9`. Current `dev` was at `769cc79028813d0d4fd0651952739d9008626847`; the shared base was 130 commits behind current `dev`, while #136 had 306 commits beyond that base. Its latest commit at that snapshot reported eight known S1-skew failures. The live recheck is recorded in the addendum above.
 
 The PR changes 1,030 files (about 53.7k additions and 12.1k deletions). Its main areas are the Rails host rehome under `apps/web`, Tauri host under `apps/desktop`, shared `packages/*`, the Rust `crates/local-store` split, and the refactor campaign itself. The phase ledger says phases 0–11 are complete, but phase 12 remains `DO`; its next action is serial integration of six workstreams, followed by two full check passes and a fresh review.
 
@@ -33,15 +45,16 @@ The PR has architectural coherence and substantial completed work, but that does
 
 ## Answers to the sequencing questions
 
-1. **Rebase #147 onto #136?** No. They diverged from an old `dev` base; #136 is dirty against current `dev`, and the overlap includes workflow, host, renderer, tests, and native files. Rebasing now would entangle a main-targeted release with an unfinished refactor campaign.
-2. **Continue release work or wait?** Keep #147 open against `main`. Its exact head `cad2f9a347be2d898c80ac8ca89fcd6bf06f1745` has a successful 12-job Gate A run plus attestation (`38056552438`); the PR is open and mergeable. Keep avoiding changes in paths actively being moved by #136 until integration. Do not merge; owner approval is required.
-3. **Is #136 ready to incorporate?** No. It is still draft, dirty, at Phase 12 `DO`, behind current `dev`, and reports known failures. Its save behavior and shared-code ownership changes also conflict with this release's binding requirements.
+1. **Rebase #147 onto #136?** Do not rebase or integrate now. After #136 lands in `dev`, merge the updated `dev` into the #147 integration head, resolve conflicts, then retarget #147 to `dev`. This retains ancestry and avoids replaying roughly 156 release commits. Recompute the conflict preview against the actual merge SHA.
+2. **Continue release work or wait?** Continue only independent release work; wait for #136 before integration. Leave #147 on `main` for now as the owner requested. At the live recheck, #147 head `f36294f` had current checks still running (`38059167814`); the older successful run on `cad2f9a` does not validate the latest code. No merges are authorized now.
+3. **Is #136 ready to incorporate?** No. The live recheck still found a draft, dirty PR, with product Gate A not demonstrated on its exact head and 98 conflict records against current `dev`. Its save behavior and shared-code ownership changes still need reconciliation with the binding constitution.
 
 ## Integration entry criteria
 
 Before integrating #136 with release work:
 
-- Phase 12 is marked pass; the branch is reconciled with the then-current `dev`, and the repeated full checks and fresh independent review pass on the exact candidate SHA.
+- Phase 12 is marked pass; #136 is reconciled with current `dev`, and repeated full checks plus fresh independent review pass on its exact candidate SHA before the owner merges it to `dev`.
 - Owner resolves the save/close and shared-ownership conflicts without silently weakening the release constitution. If the refactor is changed to preserve those requirements, verify that on its candidate SHA.
-- Owner chooses the promotion sequence. For a `main`-targeted release, first promote the approved refactor through the protected-main process, then port/rebase release changes onto that resulting `main` SHA. For a `dev`-first product path, explicitly retarget/defer the release and keep Stable publication gated on promotion to `main`.
-- Re-run the combined exact-SHA Gate A: all repository checks, both profiles, Rails behavior/ownership, fixtures and unsupported-source round trips, app identity/storage, offline operation, Arch packaging, and packaged macOS update/install paths. Separate PR results do not prove the combined tree.
+- After #136 lands, merge its resulting `dev` into the #147 integration head, resolve path moves/conflicts, and retarget #147 to `dev` (or create a dev-based continuation PR if a base change obscures review). Run all required checks on the combined tree and obtain owner approval before merging into `dev`.
+- After the integrated release is in `dev`, prepare an owner-reviewed `dev`→`main` promotion PR and use a merge commit. Run all 12 required Gate A jobs on the exact resulting main SHA. That promotion PR and SHA are the release unit; no release is eligible from the Dev merge alone.
+- Preserve the product profile split in code: shared Rails/web and repository Dev retain experimental behavior, while the desktop Stable build excludes the contracted capabilities. Git branch names do not implement those UI/profile toggles.
