@@ -103,10 +103,10 @@ class SourceLanguageBoundariesTest < ActiveSupport::TestCase
     assert_includes html, "katex"
   end
 
-  test "document graph resolution is provided by the Rails-owned renderer bundle" do
+  test "document graph resolution is provided by the shared renderer bundle" do
     graph = read("app/lib/document_links/graph.rb")
     renderer = read("app/lib/source/javascript_renderer.rb")
-    bundle = read("app/javascript/lib/renderer_global.js")
+    bundle = read("../../packages/renderer/src/renderer_global.ts")
 
     assert_includes graph, "Source::JavascriptRenderer.document_graph"
     assert_includes renderer, 'context.call("ElefRenderer.buildDocumentGraph"'

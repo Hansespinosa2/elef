@@ -455,9 +455,10 @@ SETTINGS_STYLESHEET_OWNER = Path("apps/web/app/assets/stylesheets/components/set
 
 # Directory names that never hold a styles owner: generated bundles,
 # vendored code, staged canary fixtures, and disposable review/gate
-# checkouts (which duplicate the whole tree, owner included).
+# checkouts or tool worktrees (which duplicate the whole tree, owner
+# included).
 SETTINGS_STYLE_EXCLUDED_PARTS = frozenset(
-    {"node_modules", "dist", "dist-e2e", "builds", "tmp", ".git", "canary"}
+    {"node_modules", "dist", "dist-e2e", "builds", "tmp", ".git", "canary", ".muse"}
 )
 
 
