@@ -1,12 +1,9 @@
-import { appendFile, readFile } from "node:fs/promises"
+import { appendFile } from "node:fs/promises"
 import { execFileSync } from "node:child_process"
 import path from "node:path"
 
 import { GitHubReleaseApi } from "../release/github-api.mjs"
-import { assertBootstrapFailedGateRecorderRevision, isExactFailedMainReconcileDispatch, isExactFailedMainWorkflowRun, isExactMainReconciliationSchedule } from "../release/coordinator-trust.mjs"
-import { isRecordedFailedGate, parseLedger, pendingFailedGateNotifications, recordFailedGateMerge } from "../release/ledger.mjs"
-import { publishPagesStateWithRetry } from "../release/pages-publisher.mjs"
-import { writePagesStateFiles } from "../release/pages-state.mjs"
+import { recordFailedGateBootstrap } from "../release/failed-gate-bootstrap.mjs"
 import { verifyReleaseStateWriterPolicy } from "../release/release-state-ruleset-api.mjs"
 
 const [pagesRootArgument, sourceRootArgument] = process.argv.slice(2)
@@ -39,94 +36,50 @@ const api = new GitHubReleaseApi({
   apiUrl: process.env.GITHUB_API_URL || "https://api.github.com"
 })
 const repositoryInfo = await api.repositoryInfo()
-const eventName = process.env.GITHUB_EVENT_NAME || ""
-const eventArguments = {
-  mode: "current",
-  eventName,
-  ref: process.env.GITHUB_REF,
-  refType: process.env.GITHUB_REF_TYPE,
-  refName: process.env.GITHUB_REF_NAME,
-  workflowSha: process.env.DESKTOP_WORKFLOW_SHA,
-  coordinatorSha
-}
-const eligibleEvent = isExactFailedMainWorkflowRun({
-  ...eventArguments,
-  triggerEvent: process.env.DESKTOP_TRIGGER_EVENT,
-  triggerBranch: process.env.DESKTOP_TRIGGER_BRANCH,
-  triggerSha: process.env.DESKTOP_TRIGGER_SHA,
-  gateConclusion: process.env.DESKTOP_GATE_CONCLUSION
-}) || isExactFailedMainReconcileDispatch({
-  ...eventArguments,
-  action: process.env.DESKTOP_RELEASE_ACTION || "reconcile",
-  actor: process.env.GITHUB_ACTOR,
-  ownerLogin: repositoryInfo.owner?.login
-}) || isExactMainReconciliationSchedule(eventArguments)
-if (!eligibleEvent) throw new Error("event is not eligible for exact-main failure-only recording")
-
 const mainHistory = git(sourceRoot, ["rev-list", "--first-parent", "--reverse", failureSha])
   .trim()
   .split(/\r?\n/)
   .filter(Boolean)
-const statePath = path.join(pagesRoot, "desktop/stable/state.json")
-let resultRecord = null
-const result = await publishPagesStateWithRetry({
+
+const result = await recordFailedGateBootstrap({
   pagesRoot,
-  reconcile: async () => {
-    await verifyReleaseStateWriterPolicy({
-      repository,
-      appId: requiredEnv("ELEF_RELEASE_STATE_APP_ID"),
-      token: requiredEnv("ELEF_RELEASE_STATE_PUSH_TOKEN"),
-      expectedUpdatedAt: requiredEnv("ELEF_RELEASE_STATE_RULESET_UPDATED_AT"),
-      apiUrl: process.env.GITHUB_API_URL
-    })
-    const currentMainRef = await api.request("/git/ref/heads/main")
-    if (currentMainRef?.object?.sha?.toLowerCase() !== failureSha.toLowerCase()) {
-      throw new Error("failed-gate bootstrap source is no longer the current main head")
-    }
-    const ledger = parseLedger(await readFile(statePath, "utf8"))
-    const verified = await assertBootstrapFailedGateRecorderRevision({
-      coordinatorSha: failureSha,
-      mainHistory,
-      ledger,
-      github: api,
-      ownerLogin: repositoryInfo.owner?.login
-    })
-    const next = recordFailedGateMerge(ledger, {
-      mainHistory,
-      sha: failureSha,
-      pr: verified.pr,
-      expectedRevision: ledger.revision
-    })
-    await writePagesStateFiles(pagesRoot, next)
-    resultRecord = {
-      sha: failureSha,
-      pr: verified.pr,
-      revision: next.revision,
-      failedShaRecorded: isRecordedFailedGate(next, failureSha),
-      failedNotificationShas: pendingFailedGateNotifications(next)
-    }
-    return resultRecord
-  }
+  failureSha,
+  coordinatorSha,
+  ownerLogin: repositoryInfo.owner?.login,
+  event: {
+    eventName: process.env.GITHUB_EVENT_NAME || "",
+    ref: process.env.GITHUB_REF,
+    refType: process.env.GITHUB_REF_TYPE,
+    refName: process.env.GITHUB_REF_NAME,
+    workflowSha: process.env.DESKTOP_WORKFLOW_SHA,
+    triggerEvent: process.env.DESKTOP_TRIGGER_EVENT,
+    triggerBranch: process.env.DESKTOP_TRIGGER_BRANCH,
+    triggerSha: process.env.DESKTOP_TRIGGER_SHA,
+    gateConclusion: process.env.DESKTOP_GATE_CONCLUSION,
+    action: process.env.DESKTOP_RELEASE_ACTION || "reconcile",
+    actor: process.env.GITHUB_ACTOR
+  },
+  mainHistory,
+  github: api,
+  getCurrentMainSha: async () => (await api.request("/git/ref/heads/main"))?.object?.sha,
+  verifyWriterPolicy: () => verifyReleaseStateWriterPolicy({
+    repository,
+    appId: requiredEnv("ELEF_RELEASE_STATE_APP_ID"),
+    token: requiredEnv("ELEF_RELEASE_STATE_PUSH_TOKEN"),
+    expectedUpdatedAt: requiredEnv("ELEF_RELEASE_STATE_RULESET_UPDATED_AT"),
+    apiUrl: process.env.GITHUB_API_URL
+  })
 })
 
-const finalLedger = parseLedger(await readFile(statePath, "utf8"))
-const failureShaRecorded = isRecordedFailedGate(finalLedger, failureSha)
-if (!failureShaRecorded) throw new Error("the exact failed Gate A record was not preserved in the Pages ledger")
-const outputs = {
-  macos_candidate: "",
-  linux_candidate: "",
-  aur_candidate: "",
-  failure_only: "true",
-  failure_sha: failureSha,
-  failure_sha_recorded: "true",
-  failed_notification_shas: pendingFailedGateNotifications(finalLedger),
-  failed_gate_count: resultRecord ? 1 : 0,
-  pending_sha: "",
-  pending_reason: ""
-}
-await writeOutputs(outputs)
-await writeSummary({ outputs, pr: resultRecord?.pr, revision: finalLedger.revision, published: result.published, commitSha: result.commitSha })
-process.stdout.write(`Recorded only failed Gate A for ${failureSha}; no release candidates were created; Pages ledger revision ${finalLedger.revision}.\n`)
+await writeOutputs(result.outputs)
+await writeSummary({
+  outputs: result.outputs,
+  pr: result.record?.pr,
+  revision: result.ledger.revision,
+  published: result.publication.published,
+  commitSha: result.publication.commitSha
+})
+process.stdout.write(`Recorded only failed Gate A for ${failureSha}; no release candidates were created; Pages ledger revision ${result.ledger.revision}.\n`)
 
 function git(repositoryPath, args) {
   try {
