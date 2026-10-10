@@ -299,3 +299,16 @@ test("document reload reapplies editor preferences and readiness follows connect
   assert.ok(ready > controller.indexOf("this.collapseFrontmatter()"))
   assert.ok(ready < controller.indexOf('new CustomEvent("elef:editor-ready"'))
 })
+
+test("Rails and desktop resolve the same Art source semantics", async () => {
+  const [documentMap, importmap, workModelManifest] = await Promise.all([
+    read("packages/work-model/src/document_map.ts"),
+    read("apps/web/config/importmap.rb"),
+    read("packages/work-model/package.json")
+  ])
+  assert.match(documentMap, /from "\.\/art_source\.js"/)
+  assert.match(importmap, /pin "@elef\/work-model\/art-source", to: "work-model\/dist\/art-source\.js"/)
+  assert.equal(JSON.parse(workModelManifest).exports["./art-source"].default, "./dist/art-source.js")
+  assert.ok(build.includes("workspaceMatch"), "desktop build resolves workspace @elef subpaths")
+  assert.ok(build.includes("manifest.exports?.[subpath]"), "desktop build follows package export maps")
+})

@@ -1,8 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { act } from "react";
+import { createRoot } from "react-dom/client";
+import { parseHTML } from "linkedom";
 import type { ElefHost, WorkId, WorkSummary } from "@elef/contracts";
 import { CREATE_WORK_EVENT } from "../src/features/library/LibraryApp.js";
+import { LibraryCard } from "../src/features/library/LibraryCard.js";
 import type { ElefMountOptions } from "../src/index.js";
 import {
   click,
@@ -83,6 +86,40 @@ test("search box filters cards client-side with a no-results state", async () =>
     );
   } finally {
     shell.unmount();
+  }
+});
+
+test("card warnings render hostile text inert with a note role", async () => {
+  const host = typedHost();
+  const warnings = ['<script>run()</script><img src="x" onerror="run()">'];
+  const work: WorkSummary = {
+    id: "deck-unsafe" as WorkId,
+    workspaceId: ws("ws-1"),
+    title: "Unsafe deck",
+    kind: "presentation",
+    warnings,
+  };
+  const { document } = parseHTML('<html><body><div id="card"></div></body></html>');
+  const view = (document as unknown as { defaultView?: unknown }).defaultView;
+  (globalThis as Record<string, unknown>)["window"] = view ?? { document };
+  (globalThis as Record<string, unknown>)["document"] = document;
+  const element = document.getElementById("card") as unknown as HTMLElement;
+  const root = createRoot(element);
+  await act(async () => {
+    root.render(
+      <LibraryCard host={host} work={work} documentNodes={[]} options={{}} onChanged={() => {}} />,
+    );
+  });
+  await settled();
+  try {
+    assert.equal(element.querySelector("script, img, [onerror]"), null);
+    const note = element.querySelector(".deck-warning");
+    assert.equal(note?.textContent, warnings[0]);
+    assert.equal(note?.getAttribute("role"), "note");
+  } finally {
+    await act(async () => {
+      root.unmount();
+    });
   }
 });
 

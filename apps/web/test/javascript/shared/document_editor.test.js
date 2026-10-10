@@ -58,6 +58,45 @@ test("document map shifting pins the edited block start", () => {
   assert.deepEqual([first.range.start, first.range.end], [0, 6])
 })
 
+test("visual source edits preserve the edited block start and shift shared map entries once", () => {
+  const edited = { id: "block-1", range: { start: 10, end: 14 }, source_range: { start: 8, end: 12 } }
+  const after = { range: { start: 14, end: 20 } }
+  const editor = new DocumentEditor({})
+  editor.map = {
+    source_length: 20,
+    slides: [{ blocks: [edited, after] }],
+    editable_regions: [edited]
+  }
+
+  editor.shiftMapAfterEdit(10, 14, 2, "block-1")
+
+  assert.equal(editor.map.source_length, 18)
+  assert.deepEqual(edited.range, { start: 10, end: 12 })
+  assert.deepEqual(edited.source_range, { start: 8, end: 12 })
+  assert.deepEqual(after.range, { start: 12, end: 18 })
+})
+
+test("presentation source edits shift nested slide ranges and leave directives alone", () => {
+  // The retired presentation editor shifted with older no-pin rules; the
+  // unified editor pins only the edited block start, so an unedited block
+  // starting inside a replacement collapses to the edit start.
+  const block = { range: { start: 12, end: 14 }, content_range: { start: 14, end: 20 } }
+  const editor = new DocumentEditor({})
+  editor.map = {
+    source_length: 20,
+    slides: [{ range: { start: 4, end: 18 }, blocks: [block] }],
+    directives: [{ range: { start: 0, end: 10 } }]
+  }
+
+  editor.shiftMapAfterEdit(10, 14, 2)
+
+  assert.equal(editor.map.source_length, 18)
+  assert.deepEqual(editor.map.slides[0].range, { start: 4, end: 16 })
+  assert.deepEqual(block.range, { start: 10, end: 12 })
+  assert.deepEqual(block.content_range, { start: 12, end: 18 })
+  assert.deepEqual(editor.map.directives[0].range, { start: 0, end: 10 })
+})
+
 test("structured continuation appends the list marker through the editor seam", () => {
   const calls = []
   const editor = new DocumentEditor({})

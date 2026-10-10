@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { WorkSummary } from "@elef/contracts";
-import { sameWorks } from "../src/features/library/filtering.js";
+import { filterWorks, sameWorks } from "../src/features/library/filtering.js";
 import { ws } from "./helpers.js";
 
 function work(id: string, overrides: Partial<WorkSummary> = {}): WorkSummary {
@@ -40,4 +40,35 @@ test("sameWorks normalizes missing optional fields", () => {
   const explicitUndefined = { updatedAt: undefined, warnings: undefined } as unknown as Partial<WorkSummary>;
   assert.equal(sameWorks([work("a")], [work("a", explicitUndefined)]), true);
   assert.equal(sameWorks([work("a", { warnings: [] })], [work("a")]), true);
+});
+
+test("filterWorks matches titles case- and diacritics-insensitively", () => {
+  const works = [
+    work("a", { title: "Café Deck", kind: "presentation" }),
+    work("b", { title: "Meeting Notes", kind: "document" }),
+  ];
+  assert.deepEqual(
+    filterWorks(works, "all", "CAFE\u0301").map((entry) => entry.id),
+    [works[0]?.id],
+  );
+  assert.deepEqual(filterWorks(works, "all", "no matching deck"), []);
+  assert.deepEqual(
+    filterWorks(works, "all", "").map((entry) => entry.id),
+    [works[0]?.id, works[1]?.id],
+  );
+});
+
+test("filterWorks scopes by kind before matching the query", () => {
+  const works = [
+    work("a", { title: "Shared Title", kind: "presentation" }),
+    work("b", { title: "Shared Title", kind: "document" }),
+  ];
+  assert.deepEqual(
+    filterWorks(works, "presentations", "shared").map((entry) => entry.id),
+    [works[0]?.id],
+  );
+  assert.deepEqual(
+    filterWorks(works, "documents", "shared").map((entry) => entry.id),
+    [works[1]?.id],
+  );
 });
