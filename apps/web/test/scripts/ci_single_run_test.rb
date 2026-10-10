@@ -62,9 +62,9 @@ end
 
 {
   "npm run test:javascript" => "desktop-fast",
-  "npm test --prefix desktop/frontend" => "desktop-fast",
-  "npm run test:unit --prefix desktop/e2e" => "desktop-fast",
-  "cargo test --manifest-path desktop/Cargo.toml -p elef-core --locked" => "desktop-fast"
+  "npm test --prefix apps/desktop/frontend" => "desktop-fast",
+  "npm run test:unit --prefix apps/desktop/e2e" => "desktop-fast",
+  "cargo test --manifest-path Cargo.toml -p local-store --locked" => "desktop-fast"
 }.each do |command, expected_job|
   matches = run_steps.flat_map do |job_name, run|
     Array.new(run.scan(Regexp.new(Regexp.escape(command))).length, job_name)
@@ -76,7 +76,7 @@ end
 abort "the explicit JavaScript file block must stay removed" if
   workflow.to_s.include?("node test/javascript/")
 
-runner_source = File.read(File.expand_path("../../desktop/e2e/run.mjs", __dir__))
+runner_source = File.read(File.expand_path("../../../../apps/desktop/e2e/run.mjs", __dir__))
 abort "the runner must keep one sequential shared-web phase" unless
   runner_source.scan('["test", "--project=web"]').length == 1 &&
     runner_source.include?('env.ELEF_E2E_SKIP_WEB !== "1"')
@@ -105,7 +105,7 @@ abort "PR SQLite must run only the documented differential matrix" unless
   sqlite_run.fetch("run", "").include?("bin/rails test test/sqlite_compatibility_test.rb") &&
     !sqlite_run.fetch("run", "").include?("db:test:prepare test")
 
-sqlite_workflow = YAML.load_file(File.expand_path("../../.github/workflows/sqlite-compatibility.yml", __dir__))
+sqlite_workflow = YAML.load_file(File.expand_path("../../../../.github/workflows/sqlite-compatibility.yml", __dir__))
 sqlite_events = sqlite_workflow["on"] || sqlite_workflow[true]
 full_sqlite_commands = sqlite_workflow.fetch("jobs").values.flat_map { |job| job.fetch("steps", []) }.filter_map { |step| step["run"] }
 abort "the full SQLite suite must run on dev pushes, on a schedule, and manually" unless
@@ -113,7 +113,7 @@ abort "the full SQLite suite must run on dev pushes, on a schedule, and manually
     sqlite_events.key?("workflow_dispatch") &&
     full_sqlite_commands.any? { |run| run.include?("bin/rails db:test:prepare test") }
 
-performance_workflow = YAML.load_file(File.expand_path("../../.github/workflows/native-performance.yml", __dir__))
+performance_workflow = YAML.load_file(File.expand_path("../../../../.github/workflows/native-performance.yml", __dir__))
 performance_events = performance_workflow["on"] || performance_workflow[true]
 abort "native performance must remain outside PR authorization" unless
   performance_events.dig("push", "branches") == ["dev"] && performance_events.key?("schedule") &&
@@ -130,7 +130,7 @@ abort "the attestation must name the required CI jobs and non-gating measurement
     attestation_run.include?("required_jobs: $required_jobs") &&
     attestation_run.include?("non_gating_measurements: $non_gating_measurements") &&
     attestation_run.include?('["native-performance"]')
-verifier = File.read(File.expand_path("../../scripts/verify-deployment-authorization", __dir__))
+verifier = File.read(File.expand_path("../../../../tooling/release/verify-deployment-authorization", __dir__))
 abort "the verifier must validate the benchmark policy and required-job manifest" unless
   verifier.include?(".schema_version == 2") &&
     verifier.include?(".required_jobs == $required_jobs") &&

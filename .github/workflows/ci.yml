@@ -151,7 +151,9 @@ jobs:
           RAILS_ENV: test
           ELEF_USE_SQLITE: "1"
         working-directory: apps/web
-        run: bin/rails db:test:prepare test
+        run: |
+          bin/rails db:test:prepare
+          bin/rails test test/sqlite_compatibility_test.rb
 
   system-test:
     if: github.event_name != 'push'
@@ -281,10 +283,6 @@ jobs:
         run: npm run renderer:build
       - name: Verify the shared renderer bundles are current
         run: git diff --exit-code -- packages/renderer/dist/elef-renderer.bundle.js packages/renderer/dist/elef-renderer.js
-      - name: Test shared frontend modules
-        run: npm run test:javascript
-      - name: Test desktop frontend adapters
-        run: npm test --prefix apps/desktop/frontend
       - name: Bundle the desktop frontend
         run: npm run build --prefix apps/desktop/frontend
       - name: Check command allowlist and CSP
@@ -472,10 +470,6 @@ jobs:
         run: npm run renderer:build
       - name: Verify the shared renderer bundles are current
         run: git diff --exit-code -- packages/renderer/dist/elef-renderer.bundle.js packages/renderer/dist/elef-renderer.js
-      - name: Test shared frontend modules
-        run: npm run test:javascript
-      - name: Test desktop frontend adapters
-        run: npm test --prefix apps/desktop/frontend
       - name: Bundle the desktop frontend
         run: npm run build --prefix apps/desktop/frontend
       - name: Check command allowlist and CSP
