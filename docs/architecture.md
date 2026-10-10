@@ -49,7 +49,7 @@ Markdown is the authored source. Rendered HTML, editor projections, library card
 | Path | Owns |
 |---|---|
 | apps/web/app/controllers, apps/web/app/models, apps/web/app/services, apps/web/app/lib | Rails request handling, persistence, domain services, and server-side integrations |
-| apps/web/app/views, apps/web/app/javascript, apps/web/app/assets | Web-only pages and shells, thin web host adapters (`controllers/`, `host/`), remaining host-integration modules (`lib/`), shared styles, and desktop host template |
+| apps/web/app/views, apps/web/app/javascript, apps/web/app/assets | Web-only pages and shells, thin web host adapters (`controllers/`, `host/`), shared styles, and desktop host template |
 | apps/web/app/lib/source, packages/work-model, packages/renderer | Rails renderer bridge, shared Work semantics, and shared Markdown-to-HTML projection |
 | packages/client | Host-neutral interactive UI (React): the sole owner of library, settings, source/visual editor, slide overview, presentation, graph, and export UI, mounted by both hosts via `mountElef` with a host adapter |
 | packages/editor-runtime | Shared Stimulus editor shell (controllers, editor `lib`, desktop bootstrap), consumed through its narrowed boot API (`registerEditorRuntime`, `mountEditorHosts`, `startFileLibraryApplication`, mount tokens); strict TypeScript |
@@ -57,13 +57,13 @@ Markdown is the authored source. Rendered HTML, editor projections, library card
 | crates/local-store | Tauri-independent deck discovery, manifests, safe writes, media, and .elef archives |
 | apps/desktop/src-tauri | Tauri commands, capability boundary, native menu/window integration, and application lifecycle |
 | apps/desktop/frontend/src | Tauri bootstrap and native adapters for file-library commands, editor transport, media, lifecycle, and updates |
-| apps/web/test/e2e/scenarios | Rails-owned user flows shared by the Playwright web runner and WebdriverIO Tauri runner |
+| apps/web/test/e2e/scenarios | Shared user flows run by the Playwright web runner and WebdriverIO Tauri runner |
 | apps/web/test/ | Rails model, service, request, JavaScript, architecture, and browser system tests |
 | .github/workflows | CI, desktop release packaging, and deployment automation |
 
 apps/desktop/frontend/build.mjs resolves `@elef/editor-runtime` (and the `@elef/client` bundle) as workspace packages, packages apps/web/app/views/desktop_host.html and Rails-owned styles, and copies the renderer bundle built by packages/renderer/build.mjs. Tauri's configured dev and build hooks use that same frontend build. No Rails server is started by the desktop shell.
 
-The Rails-owned application calls named library services. Tauri command names and raw IPC stay inside `apps/desktop/frontend/src` adapters; Rails-owned frontend code does not invoke Tauri commands.
+The shared application calls named library services. Tauri command names and raw IPC stay inside `apps/desktop/frontend/src` adapters; Rails-owned frontend code does not invoke Tauri commands.
 
 The desktop media adapter also owns its preview, upload, and deck-asset URL schemes and installs the webview fetch bridge. Shared frontend modules receive those URLs as opaque values; Rails-owned JavaScript does not name desktop protocols or replace `fetch`.
 

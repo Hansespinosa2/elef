@@ -235,7 +235,7 @@ assert "loadKatex" not in editor_runtime and "globalThis.katex" not in editor_ru
 )
 
 assert tauri_config["build"]["beforeDevCommand"]["script"] == tauri_config["build"]["beforeBuildCommand"], (
-    "Tauri dev and production launches must build the same Rails-owned frontend"
+    "Tauri dev and production launches must build the same shared frontend"
 )
 assert tauri_config["build"]["beforeDevCommand"]["wait"] is True, (
     "Tauri dev must wait for the frontend build before loading static assets"
@@ -359,7 +359,7 @@ for runner in ("web", "desktop"):
         re.MULTILINE,
     ):
         assert (shared_scenario_root / module).is_file(), (
-            f"{runner} runner imports a missing Rails-owned scenario: {module}"
+            f"{runner} runner imports a missing shared scenario: {module}"
         )
         imports[module] = set(re.findall(r"\b([A-Za-z_$][\w$]*Workflow)\b", clause))
     calls = Counter(re.findall(r"\bawait\s+([A-Za-z_$][\w$]*Workflow)\s*\(", source))
@@ -387,7 +387,7 @@ for runner_source in (ROOT / "apps/desktop/e2e/run.mjs",):
         if "scenarios/" in specifier:
             resolved = (runner_source.parent / specifier).resolve()
             assert resolved.is_relative_to(shared_scenario_root) and resolved.is_file(), (
-                f"desktop E2E helpers must consume Rails-owned scenarios: {specifier}"
+                f"desktop E2E helpers must consume shared scenarios: {specifier}"
             )
 
 assert 'path.join(repoRoot, "apps/web/app/views/desktop_host.html")' in build, "the Rails-owned host template must be packaged by the desktop build"
@@ -467,7 +467,7 @@ assert "markdown_document_links" not in (ROOT / "crates/local-store/src/lib.rs")
     "desktop core must not keep a parallel document-link parser"
 )
 assert "markdown_document_title" not in (ROOT / "crates/local-store/src/lib.rs").read_text(), (
-    "desktop core must return source and folder name; Rails-owned JavaScript derives Markdown graph labels"
+    "desktop core must return source and folder name; shared work-model derives Markdown graph labels"
 )
 assert "extractFirstMarkdownHeading" in (ROOT / "packages/work-model/src/document_links.ts").read_text(), (
     "document graph labels must use the shared work-model Markdown rules"

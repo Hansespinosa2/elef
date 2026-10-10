@@ -184,7 +184,7 @@ assert not shared_command_references, (
     "Rails-owned frontend must call named platform services; keep Tauri command names in desktop adapters: "
     + ", ".join(shared_command_references)
 )
-assert not re.search(r"\binvoke\s*\(", desktop_application), "Rails-owned application logic must not call raw Tauri IPC"
+assert not re.search(r"\binvoke\s*\(", desktop_application), "Shared application logic must not call raw Tauri IPC"
 handler_match = re.search(
     r"\.invoke_handler\(tauri::generate_handler!\[(.*?)\]\)",
     app_source,

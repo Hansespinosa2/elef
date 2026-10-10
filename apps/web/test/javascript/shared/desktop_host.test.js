@@ -100,7 +100,7 @@ test("desktop uses the Rails app shell and shared editor width instead of a seco
   assert.doesNotMatch(shellStyles, /\.library-shared-view|\.library-card\s*\{/)
 })
 
-test("the native entry point only wires Tauri APIs into the Rails-owned application", () => {
+test("the native entry point only wires Tauri APIs into the shared application", () => {
   assert.match(bootstrap, /startFileLibraryApplication\(/)
   assert.doesNotMatch(bootstrap, /document\.querySelector|innerHTML|\.textContent|\.classList/)
   assert.doesNotMatch(bootstrap, /desktop-shell\.css|desktop-rendered-content\.css/)
@@ -153,7 +153,7 @@ test("Rails and desktop share one sanitized preview insertion path", () => {
   assert.doesNotMatch(application, /elefInstallDesktopPreview/)
 })
 
-test("the Rails-owned application references elements present in its host template", () => {
+test("the shared application references elements present in its host template", () => {
   const ids = new Set([...application.matchAll(/document\.querySelector\(["']#([\w-]+)/g)].map(match => match[1]))
   const dynamicallyRendered = new Set([
     "desktop-editor-field", "desktop-editor-title", "deck-source", "visual-mode", "desktop-preview", "library-count",
@@ -240,7 +240,7 @@ test("both hosts render the graph through the shared client module, never Stimul
   assert.doesNotMatch(graphPartial, /data-controller/)
 })
 
-test("the Rails-owned application registers shared editor controllers synchronously from the bundle; the graph lives in the client", () => {
+test("the shared application registers shared editor controllers synchronously from the bundle; the graph lives in the client", () => {
   assert.match(application, /registerEditorRuntime\(\)/)
   assert.doesNotMatch(application, /loadLibraryRuntime\(\)/)
   assert.match(bootstrap, /from "@elef\/editor-runtime"/)

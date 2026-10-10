@@ -1,15 +1,15 @@
 # Desktop integration boundary
 
-packages/client owns the shared product workflows and user interface; shared host-integration modules live in apps/web/app/javascript/lib. Desktop packages those sources and provides native services at the boundary. The desktop does not boot Rails or reproduce Rails persistence.
+packages/client owns the shared product workflows and user interface; the shared Stimulus editor shell and desktop bootstrap live in packages/editor-runtime. Both hosts consume the package through its narrowed boot API; no host imports from the other host. The desktop does not boot Rails or reproduce Rails persistence.
 
 ## Flow
 
-1. The shared application starts from apps/web/app/javascript/lib/file_library_application.js.
+1. The shared application starts from packages/editor-runtime (`startFileLibraryApplication`).
 2. The web host supplies Rails routes and browser persistence. The desktop entry point in apps/desktop/frontend/src/main.js injects named file-library services and Tauri lifecycle services.
 3. Shared Stimulus controllers and modules call the same fetch-shaped interfaces in both hosts.
 4. Desktop adapters translate the relevant requests to named Tauri commands, a local rendering worker, or the asset protocol.
 5. Rust commands validate arguments and delegate filesystem operations to crates/local-store.
-6. Shared workflows and scenarios remain in Rails-owned test source at `apps/web/test/e2e/scenarios/`; desktop keeps only the Playwright and WebdriverIO runner adapters.
+6. Shared workflows and scenarios remain in shared test source at `apps/web/test/e2e/scenarios/`; desktop keeps only the Playwright and WebdriverIO runner adapters.
 
 The shared application never calls raw Tauri `invoke()` or names Rust commands. `apps/desktop/frontend/src/file-library-transport.js` maps file-library operations to commands; editor saves, media, updater, and lifecycle stay in their corresponding desktop adapters.
 

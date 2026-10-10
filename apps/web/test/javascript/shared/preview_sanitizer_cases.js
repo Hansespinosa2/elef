@@ -1,7 +1,6 @@
 // Shared sanitizer corpus: every hostile/structural case the preview sink
-// must handle, defined once and executed against both the Rails-owned lib
-// implementation and the @elef/client port (parity). Each case lists install
-// steps plus DOM checks in a fixed DSL:
+// must handle, defined once and executed against the single @elef/client
+// implementation. Each case lists install steps plus DOM checks in a fixed DSL:
 //
 //   { select?, index?, attribute?, equals?, absent?, text?, textAbsent?, exists?, count? }
 //     select: querySelector(All) target (required except container text checks)

@@ -78,7 +78,7 @@ const frontendResult = await build({
 })
 
 // CodeMirror extensions use instanceof checks across package boundaries. A second
-// copy of one of these packages makes extensions created by the Rails-owned
+// copy of one of these packages makes extensions created by the shared-runtime
 // controllers incompatible with the editor instance created by the desktop.
 const runtimeIdentityPackages = new Set([
   ...Object.keys(frontendResult.metafile.inputs)
