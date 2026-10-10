@@ -80,9 +80,9 @@ function focusDesktopWindow() {
 
 function sendNativeKey(key, { activate = true } = {}) {
   const linuxKeys = {
-    Escape: "Escape", Enter: "Return", ArrowRight: "Right", ArrowLeft: "Left", Home: "Home", End: "End"
+    Escape: "Escape", Enter: "Return", Backspace: "BackSpace", ArrowRight: "Right", ArrowLeft: "Left", Home: "Home", End: "End"
   }
-  const macKeyCodes = { Escape: 53, Enter: 36, ArrowRight: 124, ArrowLeft: 123, Home: 115, End: 119 }
+  const macKeyCodes = { Escape: 53, Enter: 36, Backspace: 51, ArrowRight: 124, ArrowLeft: 123, Home: 115, End: 119 }
   if (process.platform === "linux") {
     if (activate) focusDesktopWindow()
     const nativeKey = linuxKeys[key]
@@ -534,6 +534,12 @@ class DesktopEditorUi {
       timeoutMsg: "The source editor did not finish restoring after the mode switch"
     })
     await this.waitForEditorModeTransition()
+    await browser.waitUntil(async () => browser.execute(() =>
+      document.querySelector("#desktop-editor-field")?.editorController?.editingMode === "source"
+    ), {
+      timeout: 5_000,
+      timeoutMsg: "The desktop CodeMirror controller did not enter source mode"
+    })
     const editor = await $("#deck-source-editor .cm-content")
     await editor.waitForDisplayed()
     // Tauri's embedded WebDriver cannot reliably focus CodeMirror on CI. Use
@@ -547,20 +553,19 @@ class DesktopEditorUi {
       const mathPalette = globalThis.Stimulus?.getControllerForElementAndIdentifier(field, "math-shortcut-palette")
       // A full-buffer test edit replaces the current authoring context too.
       // End any tab-stop session left by a previous snippet before placing the
-      // caret at the new buffer end and refreshing the palettes.
+      // caret at the new buffer end; the input event refreshes palettes normally.
       snippetPalette?.endStops()
       mathPalette?.endStops()
       controller.replaceRange(nextSource, 0, controller.value.length)
       controller.setSelectionRange(nextSource.length)
-      snippetPalette?.refresh()
-      mathPalette?.refresh()
       return {
         source: controller.sourceValue,
         selectionStart: controller.selectionStart,
-        selectionEnd: controller.selectionEnd
+        selectionEnd: controller.selectionEnd,
+        editingMode: controller.editingMode
       }
     }, source)
-    if (updated?.source !== source || updated.selectionStart !== source.length || updated.selectionEnd !== source.length) {
+    if (updated?.source !== source || updated.selectionStart !== source.length || updated.selectionEnd !== source.length || updated.editingMode !== "source") {
       throw new Error(`The desktop editor did not accept the shared scenario source at the end of the buffer: ${JSON.stringify(updated)}`)
     }
   }

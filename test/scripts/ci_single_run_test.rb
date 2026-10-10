@@ -77,6 +77,20 @@ runner_source = File.read(File.expand_path("../../desktop/e2e/run.mjs", __dir__)
 abort "the runner must keep one sequential shared-web phase" unless
   runner_source.scan('["test", "--project=web"]').length == 1 &&
     runner_source.include?('env.ELEF_E2E_SKIP_WEB !== "1"')
+web_phase = runner_source.index('const webResult = spawnSync(playwright, ["test", "--project=web"]')
+native_phase = runner_source.index('const desktopResult = spawnSync(webdriverio, ["run", "wdio.conf.js"]')
+updater_gate = native_phase && runner_source.index('if (env.ELEF_E2E_PACKAGED_UPDATES === "1") {', native_phase)
+updater_phase = updater_gate && runner_source.index('const upgradedResult = spawnSync(webdriverio, ["run", "wdio.conf.js"]', updater_gate)
+final_source_assertion = runner_source.index('assert.equal(normalizeLineEndings(desktopSource), expectedDesktopSource)')
+abort "the runner must preserve web, native, updater, and final source assertion order" unless
+  web_phase && native_phase && updater_gate && updater_phase && final_source_assertion &&
+    web_phase < native_phase && native_phase < updater_gate && updater_gate < updater_phase &&
+    updater_phase < final_source_assertion
+abort "web and desktop scenarios must retain their shared final-source parity gate" unless
+  runner_source.include?('const expectedDesktopSource = expectedSharedSource') &&
+    runner_source.include?('const expectedWebSource = expectedSharedSource') &&
+    runner_source.include?('assert.equal(normalizeLineEndings(desktopSource), expectedDesktopSource)') &&
+    runner_source.include?('assert.equal(normalizeLineEndings(JSON.parse(savedSource)), expectedWebSource)')
 mac_desktop_run = jobs.fetch("desktop-macos").fetch("steps").find do |step|
   step.fetch("name", "").include?("macOS native and updater scenarios")
 end

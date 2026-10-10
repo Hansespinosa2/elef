@@ -24,7 +24,12 @@ function replaceGlobal(name, value) {
 }
 
 const CommandPaletteController = await loadController("command_palette")
-const SnippetPaletteController = await loadController("snippet_palette")
+const SnippetPaletteController = await loadController("snippet_palette", {
+  "lib/editor_controller_lookup": "const editorFor = element => element.currentEditor\n"
+})
+const MathShortcutPaletteController = await loadController("math_shortcut_palette", {
+  "lib/editor_controller_lookup": "const editorFor = element => element.currentEditor\n"
+})
 const DocumentPagesController = await loadController("document_pages")
 const LineageGraphController = await loadController("lineage_graph")
 const MermaidDiagramsController = await loadController("mermaid_diagrams", {
@@ -111,6 +116,56 @@ test("snippet scoring prefers an exact alias to a partial name match", () => {
 
   assert.equal(score, 9500)
 })
+
+for (const [name, PaletteController] of [
+  ["snippet", SnippetPaletteController],
+  ["math shortcut", MathShortcutPaletteController]
+]) {
+  test(`${name} palette rebinds editor events when the editor instance changes`, () => {
+    const editor = () => {
+      const listeners = new Map()
+      const listen = (target) => ({
+        addEventListener(type, listener, capture) {
+          listeners.set(`${target}:${type}:${Boolean(capture)}`, listener)
+        },
+        removeEventListener(type, listener, capture) {
+          const key = `${target}:${type}:${Boolean(capture)}`
+          if (listeners.get(key) === listener) listeners.delete(key)
+        }
+      })
+      return {
+        listeners,
+        dom: listen("dom"),
+        scrollElement: listen("scroll")
+      }
+    }
+    const previousEditor = editor()
+    const nextEditor = editor()
+    const controller = new PaletteController()
+    let stopsCleared = 0
+    let paletteClosed = 0
+    Object.assign(controller, {
+      element: { currentEditor: previousEditor },
+      editorController: previousEditor,
+      positionPalette() {},
+      setupAccessibility() {},
+      endStops() { stopsCleared += 1 },
+      close() { paletteClosed += 1 },
+      schedule() {}
+    })
+
+    controller.setupEditor()
+    controller.element.currentEditor = nextEditor
+    controller.setupEditor()
+
+    assert.equal(previousEditor.listeners.size, 0)
+    assert.ok(nextEditor.listeners.has("scroll:scroll:false"))
+    assert.ok([...nextEditor.listeners.keys()].some(key => key.startsWith("dom:keydown:")))
+    assert.equal(controller.editorController, nextEditor)
+    assert.equal(stopsCleared, 1)
+    assert.equal(paletteClosed, 1)
+  })
+}
 
 test("document page units keep a heading with its following block and source anchors", () => {
   const block = (tagName, sourceAnchor = false) => ({
