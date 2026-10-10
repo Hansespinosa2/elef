@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: Release control action
+        description: Owner-authorized reconciliation or minor milestone
         type: choice
         options: [ reconcile, minor ]
         default: reconcile
@@ -42,13 +42,13 @@ jobs:
         github.event_name == 'workflow_run' &&
         github.event.workflow_run.event == 'push' &&
         github.event.workflow_run.head_branch == 'main' &&
-        github.event.workflow_run.conclusion == 'success' &&
         github.sha == github.event.workflow_run.head_sha &&
         github.workflow_sha == github.event.workflow_run.head_sha
       ) || (
         github.event_name == 'workflow_dispatch' &&
-        github.ref_type == 'tag' &&
-        startsWith(github.ref_name, 'desktop-v') &&
+        github.ref_type == 'branch' &&
+        github.ref_name == 'main' &&
+        github.actor == github.repository_owner &&
         github.sha == github.workflow_sha
       )
     runs-on: ubuntu-latest
@@ -76,7 +76,7 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Select the latest trusted verifier, using this exact passing merge only for initial bootstrap
+      - name: Select the latest recorded trusted verifier, bootstrapping only when no trust record exists
         id: select-verifier
         env:
           GITHUB_SHA: ${{ github.sha }}

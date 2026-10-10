@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process"
 import path from "node:path"
 
 import { GitHubReleaseApi } from "../release/github-api.mjs"
-import { assertAuthorizedReleaseTagDispatch, latestTrustedToolingSha, selectTrustedCoordinatorRevision, assertTrustedCoordinatorRevision } from "../release/coordinator-trust.mjs"
+import { assertAuthorizedMainCoordinatorDispatch, assertAuthorizedReleaseTagDispatch, latestTrustedToolingSha, selectTrustedCoordinatorRevision, assertTrustedCoordinatorRevision } from "../release/coordinator-trust.mjs"
 import { parseLedger } from "../release/ledger.mjs"
 
 const [mode, mainCheckoutArgument, pagesCheckoutArgument] = process.argv.slice(2)
@@ -34,16 +34,29 @@ const github = new GitHubReleaseApi({
 })
 const repositoryInfo = await github.repositoryInfo()
 const eventName = process.env.GITHUB_EVENT_NAME || ""
-const dispatchTag = eventName === "workflow_dispatch" ? assertAuthorizedReleaseTagDispatch({
-  actor: requiredEnv("GITHUB_ACTOR"),
-  repositoryOwner: repositoryInfo.owner?.login,
-  ref: requiredEnv("GITHUB_REF"),
-  refType: requiredEnv("GITHUB_REF_TYPE"),
-  refName: requiredEnv("GITHUB_REF_NAME"),
-  sha: requiredEnv("GITHUB_SHA"),
-  workflowSha: requiredEnv("DESKTOP_WORKFLOW_SHA"),
-  ledger
-}) : null
+let dispatchTag = null
+if (eventName === "workflow_dispatch" && mode === "latest") {
+  dispatchTag = assertAuthorizedReleaseTagDispatch({
+    actor: requiredEnv("GITHUB_ACTOR"),
+    repositoryOwner: repositoryInfo.owner?.login,
+    ref: requiredEnv("GITHUB_REF"),
+    refType: requiredEnv("GITHUB_REF_TYPE"),
+    refName: requiredEnv("GITHUB_REF_NAME"),
+    sha: requiredEnv("GITHUB_SHA"),
+    workflowSha: requiredEnv("DESKTOP_WORKFLOW_SHA"),
+    ledger
+  })
+} else if (eventName === "workflow_dispatch" && mode === "current") {
+  assertAuthorizedMainCoordinatorDispatch({
+    actor: requiredEnv("GITHUB_ACTOR"),
+    repositoryOwner: repositoryInfo.owner?.login,
+    ref: requiredEnv("GITHUB_REF"),
+    refType: requiredEnv("GITHUB_REF_TYPE"),
+    refName: requiredEnv("GITHUB_REF_NAME"),
+    sha: requiredEnv("GITHUB_SHA"),
+    workflowSha: requiredEnv("DESKTOP_WORKFLOW_SHA")
+  })
+}
 const coordinatorSha = mode === "current" ? requiredEnv("GITHUB_SHA") : latestTrustedToolingSha(ledger)
 if (!coordinatorSha) throw new Error("release ledger contains no Gate-A-passed tooling revision")
 
@@ -55,7 +68,7 @@ if (dispatchTag) {
   if (!dispatchTooling) throw new Error("manual actions need a Gate-A-passed tooling revision in the release ledger")
 }
 const trusted = mode === "current"
-  ? eventName === "workflow_dispatch"
+  ? dispatchTag
     ? await assertTrustedCoordinatorRevision({
         ...trustArguments,
         coordinatorSha: dispatchTooling

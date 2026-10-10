@@ -118,3 +118,13 @@ export function assertAuthorizedReleaseTagDispatch({ actor, repositoryOwner, ref
   }
   return release
 }
+
+export function assertAuthorizedMainCoordinatorDispatch({ actor, repositoryOwner, ref, refType, refName, sha, workflowSha }) {
+  if (typeof actor !== "string" || typeof repositoryOwner !== "string" || actor.toLowerCase() !== repositoryOwner.toLowerCase()) {
+    throw new Error("manual reconciliation requires a workflow dispatch by the repository owner")
+  }
+  if (refType !== "branch" || ref !== "refs/heads/main" || refName !== "main" ||
+      !/^[a-f0-9]{40}$/i.test(sha || "") || workflowSha !== sha) {
+    throw new Error("manual reconciliation must use the exact workflow revision from protected main")
+  }
+}

@@ -2,11 +2,13 @@
 
 ## Routine release coordination
 
-`Desktop Release Coordinator` runs after the `CI` workflow completes successfully on a `main` push. It proceeds only when both the workflow source SHA and current `main` head match that completed CI SHA, so a newer merge defers work until its own exact-SHA Gate A finishes. That later run reconciles the full first-parent history. To repair a missed event, dispatch from a versioned release tag whose source is recorded and Gate-A-passed in the Pages ledger:
+`Desktop Release Coordinator` runs whenever the `CI` workflow completes on a `main` push. It proceeds only when both the workflow source SHA and current `main` head match that completed CI SHA, so a newer merge defers work until its own exact-SHA Gate A finishes. A failed or cancelled SHA is checked with the latest previously trusted tooling and recorded as failed; no release is reserved for it. The run reconciles the full first-parent history. To repair a missed event, the repository owner can dispatch from `main`; the preflight requires the exact workflow SHA and verifies owner authorization and exact Gate A before publishing:
 
 ```sh
-gh workflow run desktop-release.yml --ref desktop-v0.1.0 -f action=reconcile
+gh workflow run desktop-release.yml --ref main -f action=reconcile
 ```
+
+This main-ref repair is available before the first version tag exists. If the Pages ledger has no trusted tooling revision yet, the initial bootstrap still requires a passing exact-SHA Gate A; a failed initial bootstrap stays fail-closed until a later owner-approved passing merge can reconcile the history.
 
 Use `minor` only for an explicitly approved next minor series and provide the authorization reason. A PR merge remains the routine release decision; the coordinator does not merge PRs.
 

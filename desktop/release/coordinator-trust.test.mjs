@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 
 import { createLedger, reconcileMain } from "./ledger.mjs"
-import { assertAuthorizedReleaseTagDispatch, assertTrustedCoordinatorRevision, latestTrustedToolingSha, selectTrustedCoordinatorRevision } from "./coordinator-trust.mjs"
+import { assertAuthorizedMainCoordinatorDispatch, assertAuthorizedReleaseTagDispatch, assertTrustedCoordinatorRevision, latestTrustedToolingSha, selectTrustedCoordinatorRevision } from "./coordinator-trust.mjs"
 
 const SHA0 = "0".repeat(40)
 const SHA1 = "1".repeat(40)
@@ -34,6 +34,29 @@ test("manual release actions require the owner, immutable version tag and Gate-A
     { ...dispatch, ledger: { releases: [{ ...release, gate: "failed_gate" }] } }
   ]) {
     assert.throws(() => assertAuthorizedReleaseTagDispatch(invalid))
+  }
+})
+
+test("manual reconciliation recovery is owner-only and bound to the exact main workflow revision", () => {
+  const dispatch = {
+    actor: "Hansespinosa2",
+    repositoryOwner: "hansespinosa2",
+    ref: "refs/heads/main",
+    refType: "branch",
+    refName: "main",
+    sha: SHA1,
+    workflowSha: SHA1
+  }
+  assert.doesNotThrow(() => assertAuthorizedMainCoordinatorDispatch(dispatch))
+  for (const invalid of [
+    { ...dispatch, actor: "other" },
+    { ...dispatch, ref: "refs/tags/desktop-v0.1.0" },
+    { ...dispatch, refType: "tag" },
+    { ...dispatch, refName: "dev" },
+    { ...dispatch, workflowSha: SHA2 },
+    { ...dispatch, sha: "invalid" }
+  ]) {
+    assert.throws(() => assertAuthorizedMainCoordinatorDispatch(invalid))
   }
 })
 

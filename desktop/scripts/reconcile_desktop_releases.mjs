@@ -4,7 +4,7 @@ import { execFileSync } from "node:child_process"
 
 import { blockVersions, latestPendingPlatformRelease, parseLedger, selectMinorMilestone, unblockVersions } from "../release/ledger.mjs"
 import { GitHubReleaseApi } from "../release/github-api.mjs"
-import { assertAuthorizedReleaseTagDispatch } from "../release/coordinator-trust.mjs"
+import { assertAuthorizedMainCoordinatorDispatch, assertAuthorizedReleaseTagDispatch } from "../release/coordinator-trust.mjs"
 import { reconcileReleaseLedger } from "../release/reconciler.mjs"
 import { writePagesStateFiles } from "../release/pages-state.mjs"
 
@@ -36,16 +36,19 @@ let ledger = previous
 let reconciliation = null
 let initialized = false
 
-if (eventName === "workflow_dispatch") assertAuthorizedReleaseTagDispatch({
-  actor,
-  repositoryOwner: repoInfo.owner.login,
-  ref: eventRef,
-  refType: requiredEnv("GITHUB_REF_TYPE"),
-  refName: requiredEnv("GITHUB_REF_NAME"),
-  sha: requiredEnv("GITHUB_SHA"),
-  workflowSha: requiredEnv("DESKTOP_WORKFLOW_SHA"),
-  ledger
-})
+if (eventName === "workflow_dispatch") {
+  const dispatch = {
+    actor,
+    repositoryOwner: repoInfo.owner.login,
+    ref: eventRef,
+    refType: requiredEnv("GITHUB_REF_TYPE"),
+    refName: requiredEnv("GITHUB_REF_NAME"),
+    sha: requiredEnv("GITHUB_SHA"),
+    workflowSha: requiredEnv("DESKTOP_WORKFLOW_SHA")
+  }
+  if (dispatch.refType === "tag") assertAuthorizedReleaseTagDispatch({ ...dispatch, ledger })
+  else assertAuthorizedMainCoordinatorDispatch(dispatch)
+}
 
 if (action === "reconcile") {
   reconciliation = await reconcileReleaseLedger({
