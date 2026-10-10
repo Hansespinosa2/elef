@@ -15,12 +15,12 @@
 # Personal instance backup bundles can contain the complete database and files.
 /backups/
 
-# Ignore old/local JavaScript dependency installs.
-/node_modules
+# Ignore old/local JavaScript dependency installs (root and nested: npm
+# workspaces nest a package's node_modules when hoisting would break a
+# version constraint, e.g. packages/editor-runtime).
+node_modules/
 /target
 /apps/desktop/target
-/apps/desktop/frontend/node_modules
-/apps/desktop/e2e/node_modules
 /apps/desktop/frontend/dist
 /apps/desktop/frontend/dist-e2e
 /packages/contracts/dist
